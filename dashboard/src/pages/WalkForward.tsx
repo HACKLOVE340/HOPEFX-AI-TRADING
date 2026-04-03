@@ -30,35 +30,36 @@ interface WFSummary {
   message?: string
 }
 
-const MOCK: WFSummary = {
-  windows: [
-    { window_id: 1, train_start: '2021-01', train_end: '2022-06', test_start: '2022-07', test_end: '2022-12', in_sample_sharpe: 1.82, out_sample_sharpe: 1.54, in_sample_accuracy: 71.2, out_sample_accuracy: 68.0, trades: 48, passed: true },
-    { window_id: 2, train_start: '2021-07', train_end: '2023-01', test_start: '2023-02', test_end: '2023-07', in_sample_sharpe: 1.91, out_sample_sharpe: 1.61, in_sample_accuracy: 72.4, out_sample_accuracy: 67.5, trades: 52, passed: true },
-    { window_id: 3, train_start: '2022-01', train_end: '2023-06', test_start: '2023-07', test_end: '2023-12', in_sample_sharpe: 1.76, out_sample_sharpe: 1.38, in_sample_accuracy: 70.1, out_sample_accuracy: 65.2, trades: 44, passed: true },
-    { window_id: 4, train_start: '2022-07', train_end: '2024-01', test_start: '2024-02', test_end: '2024-07', in_sample_sharpe: 1.95, out_sample_sharpe: 0.92, in_sample_accuracy: 73.8, out_sample_accuracy: 61.4, trades: 38, passed: false },
-    { window_id: 5, train_start: '2023-01', train_end: '2024-06', test_start: '2024-07', test_end: '2024-12', in_sample_sharpe: 1.88, out_sample_sharpe: 1.71, in_sample_accuracy: 71.9, out_sample_accuracy: 69.3, trades: 56, passed: true },
-  ],
-  avg_oos_sharpe: 1.43,
-  avg_oos_accuracy: 66.3,
-  pass_rate: 80.0,
-  total_trades: 238,
-  status: 'complete',
-}
-
 export default function WalkForward() {
-  const [data, setData] = useState<WFSummary>(MOCK)
+  const [data, setData] = useState<WFSummary | null>(null)
   const [loading, setLoading] = useState(false)
+  const [runError, setRunError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const loadLatest = async () => {
+      try {
+        const res = await axios.get('/api/backtesting/walk-forward/latest')
+        if (res.data) setData(res.data)
+      } catch {
+        try {
+          const res = await axios.get('/api/backtesting/walk-forward')
+          if (res.data) setData(res.data)
+        } catch {
+          // No existing results — show empty state
+        }
+      }
+    }
+    loadLatest()
+  }, [])
 
   const runWalkForward = async () => {
     setLoading(true)
-    setData(prev => ({ ...prev, status: 'running' }))
+    setRunError(null)
     try {
       const res = await axios.post('/api/backtesting/walk-forward', { symbol: 'XAU_USD', timeframe: 'H1' })
       setData(res.data)
     } catch {
-      // Fall back to mock data in demo mode
-      await new Promise(r => setTimeout(r, 1500))
-      setData(MOCK)
+      setRunError('Walk-forward analysis failed. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -81,57 +82,71 @@ export default function WalkForward() {
         </button>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: 'Avg OOS Sharpe',   value: data.avg_oos_sharpe.toFixed(2),  good: data.avg_oos_sharpe >= 1.0 },
-          { label: 'Avg OOS Accuracy', value: `${data.avg_oos_accuracy.toFixed(1)}%`, good: data.avg_oos_accuracy >= 60 },
-          { label: 'Pass Rate',        value: `${data.pass_rate.toFixed(0)}%`,  good: data.pass_rate >= 70 },
-          { label: 'Total Trades',     value: data.total_trades.toString(),     good: data.total_trades >= 200 },
-        ].map(({ label, value, good }) => (
-          <div key={label} className="bg-slate-900 rounded-xl border border-slate-800 p-4">
-            <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">{label}</div>
-            <div className={`text-2xl font-bold ${good ? 'text-green-400' : 'text-amber-400'}`}>{value}</div>
-          </div>
-        ))}
-      </div>
+      {runError && (
+        <div style={{ background: '#450a0a', border: '1px solid #dc262633', borderRadius: 8, padding: '12px 16px', color: '#f87171' }}>
+          ❌ {runError}
+        </div>
+      )}
 
-      {/* Window table */}
-      <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-800">
-          <h2 className="text-sm font-semibold text-slate-300">Window Results</h2>
+      {data ? (
+        <>
+          {/* Summary cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { label: 'Avg OOS Sharpe',   value: data.avg_oos_sharpe.toFixed(2),  good: data.avg_oos_sharpe >= 1.0 },
+              { label: 'Avg OOS Accuracy', value: `${data.avg_oos_accuracy.toFixed(1)}%`, good: data.avg_oos_accuracy >= 60 },
+              { label: 'Pass Rate',        value: `${data.pass_rate.toFixed(0)}%`,  good: data.pass_rate >= 70 },
+              { label: 'Total Trades',     value: data.total_trades.toString(),     good: data.total_trades >= 200 },
+            ].map(({ label, value, good }) => (
+              <div key={label} className="bg-slate-900 rounded-xl border border-slate-800 p-4">
+                <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">{label}</div>
+                <div className={`text-2xl font-bold ${good ? 'text-green-400' : 'text-amber-400'}`}>{value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Window table */}
+          <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-800">
+              <h2 className="text-sm font-semibold text-slate-300">Window Results</h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-800">
+                    {['Window', 'Train Period', 'Test Period', 'IS Sharpe', 'OOS Sharpe', 'IS Acc', 'OOS Acc', 'Trades', 'Pass'].map(h => (
+                      <th key={h} className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.windows.map(w => (
+                    <tr key={w.window_id} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                      <td className="px-4 py-3 text-slate-300 font-medium">#{w.window_id}</td>
+                      <td className="px-4 py-3 text-slate-400 text-xs">{w.train_start} → {w.train_end}</td>
+                      <td className="px-4 py-3 text-slate-400 text-xs">{w.test_start} → {w.test_end}</td>
+                      <td className="px-4 py-3 text-slate-300">{w.in_sample_sharpe.toFixed(2)}</td>
+                      <td className={`px-4 py-3 font-semibold ${w.out_sample_sharpe >= 1.0 ? 'text-green-400' : 'text-amber-400'}`}>{w.out_sample_sharpe.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-slate-300">{w.in_sample_accuracy.toFixed(1)}%</td>
+                      <td className={`px-4 py-3 font-semibold ${w.out_sample_accuracy >= 65 ? 'text-green-400' : 'text-amber-400'}`}>{w.out_sample_accuracy.toFixed(1)}%</td>
+                      <td className="px-4 py-3 text-slate-300">{w.trades}</td>
+                      <td className="px-4 py-3">
+                        {w.passed
+                          ? <CheckCircle className="w-4 h-4 text-green-400" />
+                          : <XCircle className="w-4 h-4 text-red-400" />}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="bg-slate-900 rounded-xl border border-slate-800 p-12 text-center">
+          <p className="text-slate-400">No walk-forward results yet. Click <strong className="text-slate-300">Run Walk-Forward</strong> to start.</p>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-800">
-                {['Window', 'Train Period', 'Test Period', 'IS Sharpe', 'OOS Sharpe', 'IS Acc', 'OOS Acc', 'Trades', 'Pass'].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data.windows.map(w => (
-                <tr key={w.window_id} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
-                  <td className="px-4 py-3 text-slate-300 font-medium">#{w.window_id}</td>
-                  <td className="px-4 py-3 text-slate-400 text-xs">{w.train_start} → {w.train_end}</td>
-                  <td className="px-4 py-3 text-slate-400 text-xs">{w.test_start} → {w.test_end}</td>
-                  <td className="px-4 py-3 text-slate-300">{w.in_sample_sharpe.toFixed(2)}</td>
-                  <td className={`px-4 py-3 font-semibold ${w.out_sample_sharpe >= 1.0 ? 'text-green-400' : 'text-amber-400'}`}>{w.out_sample_sharpe.toFixed(2)}</td>
-                  <td className="px-4 py-3 text-slate-300">{w.in_sample_accuracy.toFixed(1)}%</td>
-                  <td className={`px-4 py-3 font-semibold ${w.out_sample_accuracy >= 65 ? 'text-green-400' : 'text-amber-400'}`}>{w.out_sample_accuracy.toFixed(1)}%</td>
-                  <td className="px-4 py-3 text-slate-300">{w.trades}</td>
-                  <td className="px-4 py-3">
-                    {w.passed
-                      ? <CheckCircle className="w-4 h-4 text-green-400" />
-                      : <XCircle className="w-4 h-4 text-red-400" />}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      )}
 
       {/* Interpretation */}
       <div className="bg-slate-900 rounded-xl border border-slate-800 p-6">

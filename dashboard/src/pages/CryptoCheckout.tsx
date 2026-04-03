@@ -25,30 +25,10 @@ interface DepositAddress {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const PLANS: Plan[] = [
-  { id: 'starter',  name: 'Starter',  price_usd: 29,  features: ['1 strategy', '5 symbols', 'Paper trading'] },
-  { id: 'pro',      name: 'Pro',      price_usd: 79,  features: ['10 strategies', '20 symbols', 'Live trading', 'Backtesting'] },
-  { id: 'elite',    name: 'Elite',    price_usd: 199, features: ['Unlimited strategies', 'All symbols', 'Priority support', 'API access'] },
-];
-
 const CRYPTO_META: Record<CryptoOption, { name: string; color: string; icon: string; networks?: USDTNetwork[] }> = {
   BTC:  { name: 'Bitcoin',  color: '#f7931a', icon: '₿' },
   ETH:  { name: 'Ethereum', color: '#627eea', icon: 'Ξ' },
   USDT: { name: 'Tether',   color: '#26a17b', icon: '₮', networks: ['TRC20', 'ERC20', 'BEP20'] },
-};
-
-// Approximate rates — in production fetch from /api/crypto/rates
-const MOCK_RATES: Record<CryptoOption, number> = {
-  BTC:  0.000016,   // 1 USD ≈ 0.000016 BTC  (~$62,500/BTC)
-  ETH:  0.00033,    // 1 USD ≈ 0.00033 ETH   (~$3,000/ETH)
-  USDT: 1.0,
-};
-
-// Mock deposit addresses (backend generates real ones)
-const MOCK_ADDRESSES: Record<CryptoOption, string> = {
-  BTC:  'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
-  ETH:  '0x742d35Cc6634C0532925a3b8D4C9C3A5e2b4f8d1',
-  USDT: 'TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE',
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -125,9 +105,10 @@ interface CryptoCheckoutProps {
 
 const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
   const [step, setStep] = useState<CheckoutStep>('select');
-  const [selectedPlan, setSelectedPlan] = useState<Plan>(
-    PLANS.find((p) => p.id === initialPlanId) ?? PLANS[1]
-  );
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [plansLoading, setPlansLoading] = useState(true);
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const [liveRates, setLiveRates] = useState<Record<CryptoOption, number> | null>(null);
   const [selectedCrypto, setSelectedCrypto] = useState<CryptoOption>('BTC');
   const [usdtNetwork, setUsdtNetwork] = useState<USDTNetwork>('TRC20');
   const [depositInfo, setDepositInfo] = useState<DepositAddress | null>(null);
@@ -139,7 +120,34 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
   // Cleanup polling on unmount
   useEffect(() => () => { if (pollingTimer) clearInterval(pollingTimer); }, [pollingTimer]);
 
+  useEffect(() => {
+    fetch('/api/billing/plans')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d?.plans && d.plans.length > 0) {
+          setPlans(d.plans);
+          setSelectedPlan(d.plans.find((p: Plan) => p.id === initialPlanId) ?? d.plans[1] ?? d.plans[0]);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setPlansLoading(false));
+  }, [initialPlanId]);
+
+  useEffect(() => {
+    fetch('/api/crypto/rates')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d?.rates) {
+          setLiveRates(d.rates);
+        } else {
+          setLiveRates({ BTC: 0, ETH: 0, USDT: 1.0 });
+        }
+      })
+      .catch(() => setLiveRates({ BTC: 0, ETH: 0, USDT: 1.0 }));
+  }, []);
+
   const fetchDepositAddress = useCallback(async () => {
+    if (!selectedPlan) return;
     setLoadingAddress(true);
     try {
       const network = selectedCrypto === 'USDT' ? usdtNetwork : undefined;
@@ -159,33 +167,10 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
         const data = await res.json();
         setDepositInfo(data);
       } else {
-        // Fallback mock
-        const rate = MOCK_RATES[selectedCrypto];
-        const amount = selectedPlan.price_usd * rate;
-        const address = MOCK_ADDRESSES[selectedCrypto];
-        setDepositInfo({
-          address,
-          qr_code: address,
-          network: selectedCrypto === 'USDT' ? usdtNetwork : selectedCrypto.toLowerCase(),
-          min_deposit: amount,
-          confirmations_required: selectedCrypto === 'BTC' ? 3 : 12,
-          amount_crypto: amount,
-          expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-        });
+        setDepositInfo(null);
       }
     } catch (_) {
-      const rate = MOCK_RATES[selectedCrypto];
-      const amount = selectedPlan.price_usd * rate;
-      const address = MOCK_ADDRESSES[selectedCrypto];
-      setDepositInfo({
-        address,
-        qr_code: address,
-        network: selectedCrypto === 'USDT' ? usdtNetwork : selectedCrypto.toLowerCase(),
-        min_deposit: amount,
-        confirmations_required: selectedCrypto === 'BTC' ? 3 : 12,
-        amount_crypto: amount,
-        expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-      });
+      setDepositInfo(null);
     } finally {
       setLoadingAddress(false);
     }
@@ -225,6 +210,15 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
 
   // ── Step: Select plan + crypto ────────────────────────────────────────────
   if (step === 'select') {
+    if (plansLoading) {
+      return (
+        <div style={styles.page}>
+          <h1 style={styles.heading}>Crypto Checkout</h1>
+          <p style={{ color: '#94a3b8' }}>Loading plans…</p>
+        </div>
+      );
+    }
+
     return (
       <div style={styles.page}>
         <h1 style={styles.heading}>Crypto Checkout</h1>
@@ -233,11 +227,11 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
         <section style={styles.section}>
           <h2 style={styles.sectionTitle}>1. Choose a plan</h2>
           <div style={styles.planGrid}>
-            {PLANS.map((p) => (
+            {plans.map((p) => (
               <PlanCard
                 key={p.id}
                 plan={p}
-                selected={selectedPlan.id === p.id}
+                selected={selectedPlan?.id === p.id}
                 onSelect={() => setSelectedPlan(p)}
               />
             ))}
@@ -278,23 +272,44 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
           )}
         </section>
 
-        <div style={styles.summaryBar}>
-          <div>
-            <span style={styles.summaryPlan}>{selectedPlan.name}</span>
-            <span style={styles.summaryPrice}> — ${selectedPlan.price_usd}/mo</span>
-            <span style={styles.summaryCrypto}>
-              {' '}≈ {fmtCrypto(selectedPlan.price_usd * MOCK_RATES[selectedCrypto], selectedCrypto)}
-            </span>
+        {selectedPlan && (
+          <div style={styles.summaryBar}>
+            <div>
+              <span style={styles.summaryPlan}>{selectedPlan.name}</span>
+              <span style={styles.summaryPrice}> — ${selectedPlan.price_usd}/mo</span>
+              <span style={styles.summaryCrypto}>
+                {liveRates
+                  ? ` ≈ ${fmtCrypto(selectedPlan.price_usd * liveRates[selectedCrypto], selectedCrypto)}`
+                  : ' ≈ …'}
+              </span>
+            </div>
+            <button onClick={handleProceed} style={styles.proceedBtn}>
+              {loadingAddress ? 'Generating address…' : `Pay with ${meta.name} →`}
+            </button>
           </div>
-          <button onClick={handleProceed} style={styles.proceedBtn}>
-            {loadingAddress ? 'Generating address…' : `Pay with ${meta.name} →`}
-          </button>
-        </div>
+        )}
       </div>
     );
   }
 
   // ── Step: Show deposit address ────────────────────────────────────────────
+  if (step === 'address' && !depositInfo) {
+    return (
+      <div style={styles.page}>
+        <button onClick={() => setStep('select')} style={styles.backBtn}>← Back</button>
+        <h1 style={styles.heading}>Send Payment</h1>
+        {loadingAddress ? (
+          <p style={{ color: '#94a3b8' }}>Generating address…</p>
+        ) : (
+          <div style={styles.addressErrorBanner}>
+            <span>❌ Could not generate deposit address. Please try again.</span>
+            <button onClick={fetchDepositAddress} style={styles.proceedBtn}>Retry</button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (step === 'address' && depositInfo) {
     const expiresIn = Math.max(0, Math.round((new Date(depositInfo.expires_at).getTime() - Date.now()) / 60000));
     return (
@@ -311,7 +326,7 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
                 {fmtCrypto(depositInfo.amount_crypto, selectedCrypto)}
               </div>
               <div style={{ fontSize: 13, color: '#64748b' }}>
-                ≈ ${fmt(selectedPlan.price_usd)} · {depositInfo.network.toUpperCase()} network
+                ≈ ${fmt(selectedPlan?.price_usd ?? 0)} · {depositInfo.network.toUpperCase()} network
               </div>
             </div>
           </div>
@@ -390,7 +405,7 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
             Payment confirmed!
           </h2>
           <p style={{ color: '#94a3b8', marginBottom: 24 }}>
-            Your <strong style={{ color: '#f8fafc' }}>{selectedPlan.name}</strong> subscription is now active.
+            Your <strong style={{ color: '#f8fafc' }}>{selectedPlan?.name ?? 'selected'}</strong> subscription is now active.
           </p>
           <button onClick={() => setStep('select')} style={styles.proceedBtn}>
             Back to checkout
@@ -501,6 +516,11 @@ const styles: Record<string, React.CSSProperties> = {
   successCard: {
     background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
     padding: '48px 32px', textAlign: 'center',
+  },
+  addressErrorBanner: {
+    background: '#450a0a', border: '1px solid #dc262633', borderRadius: 10,
+    padding: '16px 20px', color: '#f87171', display: 'flex',
+    alignItems: 'center', justifyContent: 'space-between', gap: 16,
   },
 };
 
