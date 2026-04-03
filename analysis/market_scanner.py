@@ -556,9 +556,8 @@ class MarketScanner:
         if above:
             if price > ma:
                 return True, {"direction": "bullish", "price": price, "ma": ma, "period": period}
-        else:
-            if price < ma:
-                return True, {"direction": "bearish", "price": price, "ma": ma, "period": period}
+        elif price < ma:
+            return True, {"direction": "bearish", "price": price, "ma": ma, "period": period}
         return False, {}
 
     def _check_momentum(self, params: dict, ctx: dict) -> tuple:
@@ -586,10 +585,9 @@ class MarketScanner:
             # Previous: macd below signal; Current: macd above signal
             if prev_macd <= prev_signal and macd > signal:
                 return True, {"direction": "bullish", "macd": macd, "signal": signal}
-        else:
-            # Previous: macd above signal; Current: macd below signal
-            if prev_macd >= prev_signal and macd < signal:
-                return True, {"direction": "bearish", "macd": macd, "signal": signal}
+        # Previous: macd above signal; Current: macd below signal
+        elif prev_macd >= prev_signal and macd < signal:
+            return True, {"direction": "bearish", "macd": macd, "signal": signal}
         return False, {}
 
     def _check_trend(self, ctx: dict, *, uptrend: bool, data: dict | None = None) -> tuple:
@@ -609,9 +607,8 @@ class MarketScanner:
         if uptrend:
             if sma_short > sma_long:
                 return True, {"direction": "bullish", "sma_short": sma_short, "sma_long": sma_long}
-        else:
-            if sma_short < sma_long:
-                return True, {"direction": "bearish", "sma_short": sma_short, "sma_long": sma_long}
+        elif sma_short < sma_long:
+            return True, {"direction": "bearish", "sma_short": sma_short, "sma_long": sma_long}
         return False, {}
 
     def _check_new_extreme(self, params: dict, data: dict, ctx: dict, *, new_high: bool) -> tuple:

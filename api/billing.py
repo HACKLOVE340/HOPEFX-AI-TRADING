@@ -615,7 +615,7 @@ async def process_refund(
         from monetization.stripe_live import get_stripe_client
         import stripe as _stripe_sdk
 
-        client = get_stripe_client()
+        get_stripe_client()
         stripe_key = __import__("os").getenv("STRIPE_SECRET_KEY", "")
         if stripe_key:
             _stripe_sdk.api_key = stripe_key
@@ -656,7 +656,7 @@ async def get_affiliate_stats(user=None) -> dict:
     lookups where possible.
     """
     try:
-        from monetization.affiliate import affiliate_manager, AffiliateStatus
+        from monetization.affiliate import affiliate_manager
 
         raw = affiliate_manager.get_stats()
         affiliates = affiliate_manager.get_all_affiliates()

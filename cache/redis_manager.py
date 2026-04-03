@@ -60,6 +60,8 @@ def _deserialize(raw: bytes) -> Any:
 class RedisCacheManager:
     """Production-ready Redis cache with JSON serialization."""
 
+    _DEFAULT_REDIS_PORT = 6379
+
     def __init__(self, host: str = "localhost", port: int = 6379, db: int = 0):
         if not REDIS_AVAILABLE:
             raise ImportError("redis package required: pip install redis")
@@ -71,7 +73,7 @@ class RedisCacheManager:
         default_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
         uses_defaults = (
             host == "localhost"
-            and port == 6379
+            and port == self._DEFAULT_REDIS_PORT
             and db == 0
             and "localhost:6379" in default_url
         )

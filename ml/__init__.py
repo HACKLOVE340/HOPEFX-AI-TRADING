@@ -308,8 +308,6 @@ class StackingEnsemblePredictor:
         return self._meta.predict_proba(meta_X)
 
     def predict(self, X) -> "_Any":
-        import numpy as np
-
         proba = self.predict_proba(X)
         return (proba[:, 1] >= 0.5).astype(int)
 

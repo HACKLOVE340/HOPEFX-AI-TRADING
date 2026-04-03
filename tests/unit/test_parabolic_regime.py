@@ -19,9 +19,8 @@ Covers:
 from __future__ import annotations
 
 import json
-import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -320,7 +319,6 @@ class TestStackingEnsemblePredictor:
 
     @pytest.fixture
     def predictor(self):
-        from sklearn.calibration import CalibratedClassifierCV
         from sklearn.linear_model import LogisticRegression
         from sklearn.preprocessing import StandardScaler
         from sklearn.ensemble import RandomForestClassifier
@@ -430,7 +428,7 @@ class TestLoadFromRegistry:
         pkl_path = tmp_path / "test.pkl"
         joblib.dump(est, pkl_path)
 
-        reg_path = self._make_registry(tmp_path, pkl_path, "sklearn_estimator")
+        self._make_registry(tmp_path, pkl_path, "sklearn_estimator")
         orig_saved = ml_module._SAVED
         orig_cs = ml_module._CHECKSUM_FILE
         ml_module._SAVED = tmp_path
@@ -462,7 +460,7 @@ class TestLoadFromRegistry:
         pkl_path = tmp_path / "stacking.pkl"
         joblib.dump(payload, pkl_path)
 
-        reg_path = self._make_registry(tmp_path, pkl_path, "stacking_dict")
+        self._make_registry(tmp_path, pkl_path, "stacking_dict")
         orig_saved = ml_module._SAVED
         ml_module._SAVED = tmp_path
         try:
