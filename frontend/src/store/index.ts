@@ -40,6 +40,8 @@ interface AuthSlice {
   token:           string | null;
   user:            User | null;
   isAuthenticated: boolean;
+  plan:            import('../lib/subscription').Plan;
+  setPlan:         (plan: import('../lib/subscription').Plan) => void;
   setAuth:         (token: string, user: User) => void;
   clearAuth:       () => void;
 }
@@ -130,12 +132,16 @@ export const useStore = create<AppStore>()(
         token:           null,
         user:            null,
         isAuthenticated: false,
+        plan:            'free' as import('../lib/subscription').Plan,
 
         setAuth: (token, user) =>
           set({ token, user, isAuthenticated: true }, false, 'auth/setAuth'),
 
         clearAuth: () =>
-          set({ token: null, user: null, isAuthenticated: false }, false, 'auth/clearAuth'),
+          set({ token: null, user: null, isAuthenticated: false, plan: 'free' }, false, 'auth/clearAuth'),
+
+        setPlan: (plan) =>
+          set({ plan }, false, 'auth/setPlan'),
 
         // ── Prices ────────────────────────────────────────────────────────────
         prices:       {},
@@ -277,3 +283,4 @@ export const selectPerformanceSummary = (s: AppStore) => s.performanceSummary;
 export const selectKillSwitch         = (s: AppStore) => s.account?.kill_switch ?? false;
 export const selectDataQualityScore   = (s: AppStore) =>
   s.orchestratorHealth?.quality_score ?? null;
+export const selectPlan               = (s: AppStore) => s.plan;
