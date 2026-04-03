@@ -21,7 +21,8 @@ export type SuperAdminTab =
   | 'reporting'
   | 'nuclear-controls'
   | 'rate-limiting'
-  | 'audit-trail';
+  | 'audit-trail'
+  | 'security-infra';
 
 export interface PlatformOverview {
   total_users: number;
@@ -314,4 +315,100 @@ export interface RateLimitRule {
   scope: 'global' | 'per_user' | 'per_ip';
   enabled: boolean;
   current_hits: number;
+}
+
+// ── Prop Firm Breach Tracking ─────────────────────────────────────────────────
+
+export interface PropBreach {
+  breach_id: string;
+  user_id: string;
+  username: string;
+  account_id: string;
+  breach_type: 'daily_loss' | 'max_drawdown' | 'position_size' | 'news_trading' | 'weekend_hold';
+  threshold: number;
+  actual_value: number;
+  severity: 'warning' | 'breach' | 'disqualified';
+  status: 'open' | 'reviewed' | 'resolved' | 'disqualified';
+  detected_at: string;
+  resolved_at: string | null;
+  notes: string | null;
+}
+
+export interface DrawdownStats {
+  current_drawdown_pct: number;
+  max_drawdown_pct: number;
+  peak_equity: number;
+  trough_equity: number;
+  accounts_in_drawdown: number;
+  accounts_near_limit: number;
+  drawdown_distribution: { bucket: string; count: number }[];
+}
+
+// ── Financial — Chargebacks, Tax, Reconciliation, Affiliates ─────────────────
+
+export interface Chargeback {
+  chargeback_id: string;
+  payment_id: string;
+  user_id: string;
+  username: string;
+  amount: number;
+  currency: string;
+  reason: string;
+  status: 'open' | 'won' | 'lost' | 'pending_evidence';
+  provider: string;
+  opened_at: string;
+  resolved_at: string | null;
+}
+
+export interface TaxReport {
+  report_id: string;
+  period: string;
+  jurisdiction: string;
+  total_revenue: number;
+  taxable_amount: number;
+  tax_rate_pct: number;
+  tax_owed: number;
+  currency: string;
+  status: 'draft' | 'filed' | 'paid' | 'overdue';
+  due_date: string;
+  filed_at: string | null;
+}
+
+export interface ReconciliationRecord {
+  recon_id: string;
+  period: string;
+  provider: string;
+  expected_amount: number;
+  actual_amount: number;
+  discrepancy: number;
+  currency: string;
+  status: 'matched' | 'discrepancy' | 'pending' | 'resolved';
+  created_at: string;
+  resolved_at: string | null;
+}
+
+export interface AffiliateStats {
+  total_affiliates: number;
+  active_affiliates: number;
+  total_commissions_paid: number;
+  commissions_pending: number;
+  total_referrals: number;
+  conversions_mtd: number;
+  currency: string;
+  top_affiliates: {
+    affiliate_id: string;
+    username: string;
+    referrals: number;
+    conversions: number;
+    commission_earned: number;
+    commission_pending: number;
+  }[];
+}
+
+// ── Bulk User Operations ──────────────────────────────────────────────────────
+
+export interface BulkUserResult {
+  succeeded: string[];
+  failed: { user_id: string; reason: string }[];
+  total: number;
 }
