@@ -244,6 +244,20 @@ export const superadminApi = {
   refundPayment:     (id: string, reason: string) => api.post(`/superadmin/financial/payments/${id}/refund`, { reason }),
   affiliateStats:    ()                        => api.get('/superadmin/financial/affiliates'),
 
+  // Chargebacks
+  chargebacks:       (params?: Record<string, string | number>) => api.get('/superadmin/financial/chargebacks', { params }),
+  updateChargeback:  (id: string, body: Record<string, unknown>) => api.patch(`/superadmin/financial/chargebacks/${id}`, body),
+
+  // Tax reports
+  taxReports:        (params?: Record<string, string | number>) => api.get('/superadmin/financial/tax-reports', { params }),
+  createTaxReport:   (body: Record<string, unknown>)            => api.post('/superadmin/financial/tax-reports', body),
+  updateTaxReport:   (id: string, body: Record<string, unknown>) => api.patch(`/superadmin/financial/tax-reports/${id}`, body),
+
+  // Reconciliation
+  reconciliationRecords: (params?: Record<string, string | number>) => api.get('/superadmin/financial/reconciliation', { params }),
+  runReconciliation:     (body: Record<string, unknown>)             => api.post('/superadmin/financial/reconciliation/run', body),
+  resolveReconciliation: (id: string, notes?: string)               => api.patch(`/superadmin/financial/reconciliation/${id}`, { notes }),
+
   // Security
   securityEvents:    (params?: Record<string, string>) => api.get('/superadmin/security/events', { params }),
   blockedIPs:        ()                        => api.get('/superadmin/security/blocked-ips'),
