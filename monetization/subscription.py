@@ -28,8 +28,13 @@ import logging
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
+try:
+    from enum import StrEnum
+except ImportError:
+    from enum import Enum
+    class StrEnum(str, Enum):  # Python 3.10 compat
+        pass
 UTC = timezone.utc
-from enum import StrEnum
 from typing import Any
 
 from .pricing import SubscriptionTier, pricing_manager

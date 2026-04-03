@@ -37,7 +37,6 @@ Constraints enforced
 Usage
 -----
     from portfolio.rebalancer import DynamicRebalancer
-
     rebalancer = DynamicRebalancer(method="risk_parity")
     rebalancer.update_strategy_returns("smc_ict", returns_series)
     rebalancer.update_strategy_returns("mean_reversion", returns_series)
@@ -54,12 +53,18 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 UTC = timezone.utc
-from enum import StrEnum
 from typing import Any
 
 import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
+
+try:
+    from enum import StrEnum
+except ImportError:
+    from enum import Enum
+    class StrEnum(str, Enum):  # Python 3.10 compat
+        pass
 
 logger = logging.getLogger(__name__)
 

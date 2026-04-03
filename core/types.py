@@ -24,6 +24,12 @@ else:
 from typing import Literal, NewType
 
 from pydantic import BaseModel, Field, field_validator
+try:
+    from enum import StrEnum
+except ImportError:
+    from enum import Enum
+    class StrEnum(str, Enum):  # Python 3.10 compat
+        pass
 
 # Domain types
 Symbol = NewType("Symbol", str)
