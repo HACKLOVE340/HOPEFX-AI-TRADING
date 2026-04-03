@@ -148,7 +148,16 @@ class ExecutionReport:
 
     @property
     def success(self) -> bool:
-        return self.status in (ExecutionStatus.FILLED, ExecutionStatus.PARTIAL)
+        # SUBMITTED is treated as success: async and paper-trading brokers return
+        # SUBMITTED when the order is accepted by the broker without waiting for
+        # an exchange fill acknowledgement.  Excluding it would make the circuit
+        # breaker never record a success for the paper-trading path and would
+        # prevent the signal→order callback chain from firing.
+        return self.status in (
+            ExecutionStatus.FILLED,
+            ExecutionStatus.PARTIAL,
+            ExecutionStatus.SUBMITTED,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -539,7 +548,12 @@ class ExecutionEngine:
                     return self._clone_request_with_price(
                         request,
                         tick.mid,
-                        {"dl_mid": tick.mid, "dl_source": tick.source.value, "dl_confidence": tick.confidence},
+                        {
+                            "dl_mid": tick.mid,
+                            # tick.source may be an enum or a plain string; handle both.
+                            "dl_source": getattr(tick.source, "value", str(tick.source)),
+                            "dl_confidence": tick.confidence,
+                        },
                     )
         except Exception as exc:
             logger.debug("Data-layer enrichment skipped: %s", exc)
