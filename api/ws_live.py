@@ -704,7 +704,7 @@ async def ws_live(websocket: WebSocket) -> None:
 
     Auth flow:
       1. Server accepts connection and sends { "type": "connected" }
-      2. Client sends { "type": "auth", "token": "Bearer <jwt>" }
+async def _ws_auth_gate(cid: str, websocket: WebSocket) -> bool:
          within AUTH_TIMEOUT_SECONDS, or connection is closed (4001).
       3. Server sends { "type": "auth_ok", "user_id": "..." }
       4. Client subscribes to channels and receives live data.
