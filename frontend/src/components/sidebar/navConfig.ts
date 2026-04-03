@@ -78,11 +78,10 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/settings',     label: 'Settings',       icon: '⚙️', group: 'account',   plan: 'free',    featureKey: 'settings'     },
 
   // ── Admin (admin/superadmin only) ─────────────────────────────────────────
-  { path: '/admin',        label: 'Admin Panel',    icon: '🔧', group: 'admin',      adminOnly: true },
+  { path: '/superadmin',   label: 'Admin Panel',    icon: '🔧', group: 'admin',      adminOnly: true },
   { path: '/audit',        label: 'Audit Log',      icon: '🔍', group: 'admin',      adminOnly: true },
   { path: '/security',     label: 'Security Ops',   icon: '🛡️', group: 'admin',      adminOnly: true },
   { path: '/auto-heal',    label: 'Auto-Heal',      icon: '🩺', group: 'admin',      adminOnly: true },
-  { path: '/whitelabel',   label: 'Whitelabel',     icon: '🏷️', group: 'admin',      adminOnly: true },
 
   // ── Super Admin (superadmin only) ─────────────────────────────────────────
   { path: '/superadmin',   label: 'Master Control', icon: '⚡', group: 'superadmin', superAdminOnly: true },
