@@ -152,7 +152,7 @@ class MemoryMappedEventStore:
         self.file_counter += 1
         with Path(filename).open("wb") as f:
             f.write(b"\x00" * self.max_file_size)
-        self.current_file = Path(filename).open("r+b")
+        self.current_file = Path(filename).open("r+b")  # noqa: SIM115 — kept open for mmap lifetime
         self.current_mmap = mmap.mmap(self.current_file.fileno(), self.max_file_size)
         self.current_offset = 0
 

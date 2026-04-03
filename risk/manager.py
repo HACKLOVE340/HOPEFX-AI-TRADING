@@ -916,56 +916,6 @@ class RiskManager:
 
         return result
 
-    def validate_trade(
-        self,
-        symbol: str,
-        quantity: float = 0.0,
-        direction: str = "buy",
-        *,
-        size: float | None = None,
-        side: str | None = None,
-    ) -> tuple[bool, str]:
-        """Return (allowed, reason) for a proposed trade.
-
-        Accepts both ``quantity``/``direction`` and ``size``/``side`` kwargs
-        for backwards compatibility with callers using either convention.
-
-        Checks halt state, drawdown limits, and open-position cap.
-        Does not perform full sizing — use assess() for that.
-        """
-        # Normalise aliases
-        qty = size if size is not None else quantity
-        _ = side or direction  # direction unused in checks but accepted
-
-        if self._halt:
-            return False, f"halted:{self._halt_reason}"
-        if self._state.daily_drawdown >= self._config.max_daily_loss_pct:
-            return False, f"daily_drawdown:{self._state.daily_drawdown * 100:.2f}%"
-        if self._state.current_drawdown >= self._config.max_drawdown_pct:
-            return False, f"drawdown:{self._state.current_drawdown * 100:.2f}%"
-        if self._state.open_positions >= self._config.max_open_positions:
-            return False, f"max_positions:{self._config.max_open_positions}"
-        if qty <= 0:
-            return False, "quantity_zero"
-        # Hard cap: reject if size exceeds max_position_size_pct of equity
-        max_qty = self._config.max_position_size_pct * self._state.peak_equity
-        if max_qty > 0 and qty > max_qty:
-            return False, f"size_exceeds_limit:{qty:.2f}>{max_qty:.2f}"
-        return True, "approved"
-
-    def check_drawdown(self) -> DrawdownCheckResult:
-        """Return a DrawdownCheckResult with current drawdown metrics."""
-        dd = self._state.current_drawdown
-        daily_dd = self._state.daily_drawdown
-        passed = dd < self._config.max_drawdown_pct and daily_dd < self._config.max_daily_loss_pct
-        return DrawdownCheckResult(
-            passed=passed,
-            current_drawdown=dd,
-            daily_drawdown=daily_dd,
-            max_drawdown_pct=self._config.max_drawdown_pct,
-            max_daily_loss_pct=self._config.max_daily_loss_pct,
-        )
-
     # ── Equity / position updates ─────────────────────────────────────────────
 
     def on_fill(self, symbol: str, direction: str, quantity: float, fill_price: float) -> None:
@@ -1372,38 +1322,6 @@ class RiskManager:
             volatility=volatility,
         )
 
-    # ── can_open_position ─────────────────────────────────────────────────────
-
-    def can_open_position(self, size: float) -> tuple:
-        """
-        Quick pre-trade gate: returns (True, "approved") or (False, reason).
-
-        Checks:
-        - Trading not halted
-        - Open-position count below limit
-        - Daily loss not exceeded
-        - Drawdown not exceeded
-        """
-        if self._halt or self._trading_halted:
-            return False, f"halted:{self._halt_reason}"
-
-        n_open = len(self._open_positions_list) + self._state.open_positions
-        if n_open >= self._config.max_open_positions:
-            return False, f"max_positions:{self._config.max_open_positions}"
-
-        if self._state.daily_drawdown >= self._config.max_daily_loss_pct:
-            return False, f"daily_loss_limit:{self._state.daily_drawdown * 100:.2f}%"
-
-        if self.current_drawdown >= self._config.max_drawdown_pct:
-            return False, f"drawdown_limit:{self.current_drawdown * 100:.2f}%"
-
-        equity = self._state.account_equity
-        max_size = equity * self._config.max_position_size_pct
-        if size > max_size:
-            return False, f"size_too_large:{size:.2f}>{max_size:.2f}"
-
-        return True, "approved"
-
     # ── VaR ───────────────────────────────────────────────────────────────────
 
     def value_at_risk(self) -> float:
@@ -1669,7 +1587,7 @@ class RiskManager:
             return RiskLevel.MEDIUM
         return RiskLevel.LOW
 
-    def check_drawdown(  # pylint: disable=function-redefined
+    def check_drawdown(
         self,
         equity_curve: Any | None = None,
         max_dd: float | None = None,
@@ -1866,40 +1784,6 @@ class RiskManager:
         if equity_at_entry > 0:
             self._returns_history.append(pnl / equity_at_entry)
 
-    def check_risk_limits(self) -> tuple:
-        """Check all active risk limits and return (passed: bool, reason: str).
-
-        Evaluates drawdown, daily loss, open-position count, and kill-switch
-        state.  Returns (True, "ok") when all limits are within bounds.
-        """
-        cfg = self._config
-        state = self._state
-
-        if self._halt:
-            return (False, f"trading halted: {self._halt_reason}")
-
-        if state.current_drawdown > cfg.max_drawdown_pct:
-            return (
-                False,
-                f"drawdown {state.current_drawdown * 100:.2f}% exceeds limit {cfg.max_drawdown_pct * 100:.1f}%",
-            )
-
-        daily_loss_pct = abs(state.daily_pnl) / state.account_equity if state.account_equity > 0 else 0.0
-        if state.daily_pnl < 0 and daily_loss_pct > cfg.daily_loss_limit_pct:
-            return (
-                False,
-                f"daily loss {daily_loss_pct * 100:.2f}% exceeds limit {cfg.daily_loss_limit_pct * 100:.1f}%",
-            )
-
-        max_pos = getattr(cfg, "max_open_positions", _MAX_OPEN_POSITIONS)
-        if state.open_positions >= max_pos:
-            return (
-                False,
-                f"open positions {state.open_positions} at limit {max_pos}",
-            )
-
-        return (True, "ok")
-
     def metrics(self) -> dict[str, Any]:
         return {
             "account_equity": round(self._state.account_equity, 2),
@@ -1972,9 +1856,7 @@ class RiskManager:
         if self._dd_tracker is not None:
             self._dd_tracker.update(equity=self._state.account_equity)
 
-    # ── Extended validate_trade ───────────────────────────────────────────────
-
-    def validate_trade(  # type: ignore[override]  # pylint: disable=function-redefined
+    def validate_trade(
         self,
         symbol: str,
         quantity: float = 0.0,
@@ -2013,9 +1895,7 @@ class RiskManager:
             return False, "quantity_zero"
         return True, "approved"
 
-    # ── Extended check_risk_limits (returns violations list) ─────────────────
-
-    def check_risk_limits(self) -> tuple[bool, list[str]]:  # type: ignore[override]  # pylint: disable=function-redefined
+    def check_risk_limits(self) -> tuple[bool, list[str]]:
         """Return (within_limits: bool, violations: List[str]).
 
         Evaluates drawdown, daily loss, open-position count, and halt state.
@@ -2046,9 +1926,7 @@ class RiskManager:
 
         return (len(violations) == 0, violations)
 
-    # ── can_open_position (extended — human-readable reasons) ─────────────────
-
-    def can_open_position(self, size: float) -> tuple[bool, str]:  # type: ignore[override]  # pylint: disable=function-redefined
+    def can_open_position(self, size: float) -> tuple[bool, str]:
         """Return (True, 'approved') or (False, human-readable reason)."""
         if self._halt or self._trading_halted:
             return False, f"halted:{self._halt_reason}"
