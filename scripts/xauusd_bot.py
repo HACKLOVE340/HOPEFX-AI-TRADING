@@ -5,6 +5,7 @@
 # No commercial use without explicit permission.
 
 # File 2: scripts/xauusd_bot.py - REAL working version (not aspirational)
+from pathlib import Path
 
 xauusd_bot_content = '''#!/usr/bin/env python3
 """

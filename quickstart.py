@@ -4,6 +4,7 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 # File 19: Create a quickstart script for one-command setup
+from pathlib import Path
 
 quickstart_content = '''#!/usr/bin/env python3
 """
