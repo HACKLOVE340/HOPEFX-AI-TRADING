@@ -8,14 +8,13 @@
 Market Data Validation - FIA 3.1 Market Data Reasonability Checks
 """
 
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from dataclasses import dataclass
-from enum import Enum
 import logging
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from enum import Enum
+
+import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -176,7 +175,8 @@ class MarketDataValidator:
         # Log critical issues
         critical_issues = [i for i in issues if i["severity"] == "critical"]
         if critical_issues:
-            logger.critical(f"Critical data quality issues for {symbol}: {critical_issues}")
+            logger.critical("Critical data quality issues for %s: %s", symbol, critical_issues)
+
 
         return result
 

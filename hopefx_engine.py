@@ -33,14 +33,15 @@ All credentials are read from environment variables (see .env.example).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import signal
 import sys
 from collections import deque
+from typing import ClassVar
 
 import pandas as pd
-import contextlib
 
 # ── logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -80,8 +81,8 @@ def validate_startup_environment() -> list[str]:
     - Python version >= 3.10
     """
 
-    warnings: list[str] = []
-    errors: list[str] = []
+    warnings: ClassVar[list[str]] = []
+    errors: ClassVar[list[str]] = []
     is_production = os.environ.get("APP_ENV", "production") == "production"
     is_test = os.environ.get("APP_ENV", "") == "test"
 

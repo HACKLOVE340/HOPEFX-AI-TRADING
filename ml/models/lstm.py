@@ -96,7 +96,8 @@ class LSTMPricePredictor(BaseMLModel):
             )
 
             self.model = model
-            self.logger.info(f"LSTM model built with architecture: {self.lstm_units}")
+            self.logger.info("LSTM model built with architecture: %s", self.lstm_units)
+
 
         except ImportError:
             self.logger.error(
@@ -104,7 +105,8 @@ class LSTMPricePredictor(BaseMLModel):
             )
             raise
         except Exception as e:
-            self.logger.error(f"Error building LSTM model: {e}")
+            self.logger.error("Error building LSTM model: %s", e)
+
             raise
 
     def _prepare_sequences(self, data: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -249,7 +251,8 @@ class LSTMPricePredictor(BaseMLModel):
             }
 
         except Exception as e:
-            self.logger.error(f"Error training LSTM: {e}")
+            self.logger.error("Error training LSTM: %s", e)
+
             raise
 
     def predict(self, X: np.ndarray) -> np.ndarray:
@@ -286,7 +289,8 @@ class LSTMPricePredictor(BaseMLModel):
             return predictions.flatten()
 
         except Exception as e:
-            self.logger.error(f"Error making LSTM predictions: {e}")
+            self.logger.error("Error making LSTM predictions: %s", e)
+
             raise
 
     def predict_next(self, recent_data: np.ndarray, steps: int = 1) -> np.ndarray:

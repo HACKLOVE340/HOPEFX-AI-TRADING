@@ -27,10 +27,8 @@ GET  /api/data-layer/ml-features     — complete ML feature set
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, ClassVar
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -88,7 +86,7 @@ async def get_sentiment() -> dict[str, Any]:
         health = orch.health()
         sentiment_health = health.get("sentiment", {})
 
-        recent_articles: list = []
+        recent_articles: ClassVar[list] = []
         try:
             articles = orch._sentiment.get_recent_articles(hours=1.0, min_relevance=0.1)
             recent_articles = [
@@ -126,7 +124,7 @@ async def get_macro() -> dict[str, Any]:
         macro_impact = orch.get_macro_impact_score()
         is_blackout = orch.is_blackout_window()
 
-        upcoming: list = []
+        upcoming: ClassVar[list] = []
         try:
             events = orch._calendar.get_upcoming_events(hours_ahead=24)
             upcoming = [
@@ -145,7 +143,7 @@ async def get_macro() -> dict[str, Any]:
         except Exception as exc:
             logger.debug("data_layer API: upcoming events error: %s", exc)
 
-        macro_snapshot: dict = {}
+        macro_snapshot: ClassVar[dict] = {}
         try:
             macro_snapshot = orch._macro_bridge.snapshot()
         except Exception as exc:

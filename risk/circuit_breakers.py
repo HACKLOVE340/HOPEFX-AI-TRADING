@@ -14,12 +14,10 @@ import json
 import logging
 import threading
 from collections import deque
-from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from enum import Enum
 from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from enum import Enum
 
 import redis
 
@@ -131,7 +129,8 @@ class CircuitBreaker:
                 await self._check_risk_limits()
                 await asyncio.sleep(1)  # Check every second
             except Exception as e:
-                logger.error(f"Risk monitoring error: {e}")
+                logger.error("Risk monitoring error: %s", e)
+
                 await asyncio.sleep(5)
 
     async def _check_risk_limits(self):
@@ -214,7 +213,8 @@ class CircuitBreaker:
             self.breach_history.append(breach)
             self._persist_state()
 
-            logger.critical(f"🚨 CIRCUIT BREAKER TRIGGERED: {reason} - {message}")
+            logger.critical("🚨 CIRCUIT BREAKER TRIGGERED: %s - %s", reason, message)
+
 
             # Execute kill switch
             await self._execute_kill_switch(reason)
@@ -224,10 +224,12 @@ class CircuitBreaker:
                 try:
                     self.on_breach(breach)
                 except Exception as e:
-                    logger.error(f"Breach callback error: {e}")
+                    logger.error("Breach callback error: %s", e)
+
 
             # Schedule recovery attempt
-            asyncio.create_task(self._schedule_recovery())
+            _t = asyncio.create_task(self._schedule_recovery())
+            _t.add_done_callback(lambda _: None)
 
     async def _execute_kill_switch(self, reason: str):
         """
@@ -252,9 +254,11 @@ class CircuitBreaker:
                 for position in positions:
                     try:
                         self.broker.close_position(position, order_type="MARKET")
-                        logger.info(f"Closed position: {position}")
+                        logger.info("Closed position: %s", position)
+
                     except Exception as e:
-                        logger.error(f"Failed to close position {position}: {e}")
+                        logger.error("Failed to close position %s: %s", position, e)
+
 
                 # Verify closure
                 await asyncio.sleep(1)
@@ -267,7 +271,8 @@ class CircuitBreaker:
                 )
 
             except Exception as e:
-                logger.error(f"Kill switch attempt {attempt + 1} failed: {e}")
+                logger.error("Kill switch attempt %s failed: %s", attempt + 1, e)
+
                 await asyncio.sleep(1)
 
         # Final verification
@@ -305,7 +310,8 @@ class CircuitBreaker:
             self.limits.max_position_size_pct *= 0.5
 
             # Schedule full recovery check
-            asyncio.create_task(self._check_recovery())
+            _t = asyncio.create_task(self._check_recovery())
+            _t.add_done_callback(lambda _: None)
 
     async def _check_recovery(self):
         """Check if conditions allow full recovery"""
@@ -325,7 +331,8 @@ class CircuitBreaker:
                 # Re-open circuit
                 self.state = CircuitState.OPEN
                 logger.warning("🔴 Recovery failed - circuit breaker re-opened")
-                asyncio.create_task(self._schedule_recovery())
+                _t = asyncio.create_task(self._schedule_recovery())
+                _t.add_done_callback(lambda _: None)
 
     def pre_trade_check(self, order: dict) -> tuple[bool, str | None]:
         """
@@ -390,7 +397,8 @@ class CircuitBreaker:
             self._override_reason = reason if enable else None
 
             action = "ENABLED" if enable else "DISABLED"
-            logger.critical(f"🔧 MANUAL OVERRIDE {action} by {authorized_by}: {reason}")
+            logger.critical("🔧 MANUAL OVERRIDE %s by %s: %s", action, authorized_by, reason)
+
 
             audit_record = {
                 "timestamp": datetime.now(UTC).isoformat(),
@@ -405,7 +413,8 @@ class CircuitBreaker:
 
             if not enable:
                 # Re-evaluate state
-                asyncio.create_task(self._check_risk_limits())
+                _t = asyncio.create_task(self._check_risk_limits())
+                _t.add_done_callback(lambda _: None)
 
     def _persist_state(self):
         """Persist state to Redis for recovery"""
@@ -422,7 +431,8 @@ class CircuitBreaker:
                 self.redis.hset("circuit_breaker:state", mapping=state_data)
                 self.redis.expire("circuit_breaker:state", 86400)  # 24h TTL
             except Exception as e:
-                logger.error(f"Failed to persist state: {e}")
+                logger.error("Failed to persist state: %s", e)
+
 
     def _load_state(self):
         """Load previous state from Redis"""
@@ -437,7 +447,8 @@ class CircuitBreaker:
                 self.consecutive_losses = int(data.get(b"consecutive_losses", 0))
                 logger.info("Loaded previous risk state from Redis")
         except Exception as e:
-            logger.error(f"Failed to load state: {e}")
+            logger.error("Failed to load state: %s", e)
+
 
     def _calculate_daily_pnl(self) -> float:
         """Calculate today's P&L"""
@@ -474,7 +485,8 @@ class CircuitBreaker:
 
     def _send_emergency_alert(self, message: str):
         """Send emergency notification through all channels"""
-        logger.critical(f"EMERGENCY ALERT: {message}")
+        logger.critical("EMERGENCY ALERT: %s", message)
+
         # Implement actual notification (SMS, phone call, etc.)
 
     def get_status(self) -> dict:

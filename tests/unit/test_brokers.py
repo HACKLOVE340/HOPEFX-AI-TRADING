@@ -9,7 +9,7 @@ Unit tests for Broker connectors.
 
 import pytest
 
-from brokers.base import OrderType, OrderSide, OrderStatus
+from brokers.base import OrderSide, OrderStatus, OrderType
 
 
 @pytest.mark.unit

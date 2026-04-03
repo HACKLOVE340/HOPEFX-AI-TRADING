@@ -21,11 +21,9 @@ Key components:
 
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from enum import Enum
-from typing import Any, Dict, List, Optional  # noqa: F401
+from datetime import UTC, datetime, timedelta
+from enum import StrEnum
+from typing import Any
 
 _logger = logging.getLogger(__name__)
 
@@ -50,7 +48,7 @@ def _generate_referral_code() -> str:
 # ---------------------------------------------------------------------------
 
 
-class TenantStatus(str, Enum):
+class TenantStatus(StrEnum):
     """Lifecycle status for a white-label tenant."""
 
     PENDING = "pending"
@@ -60,7 +58,7 @@ class TenantStatus(str, Enum):
     TERMINATED = "terminated"
 
 
-class FeatureFlag(str, Enum):
+class FeatureFlag(StrEnum):
     """Platform feature flags that can be enabled per tenant."""
 
     TRADING = "trading"
@@ -78,7 +76,7 @@ class FeatureFlag(str, Enum):
     MOBILE = "mobile"
 
 
-class ResellerTier(str, Enum):
+class ResellerTier(StrEnum):
     """Reseller partnership tier."""
 
     STANDARD = "standard"

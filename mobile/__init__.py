@@ -13,11 +13,11 @@ data sources (broker, db, orchestrator). Without wiring they operate in
 a safe degraded mode — no mocks, no synthetic data.
 """
 
+from .analytics import MobileAnalytics
 from .api import MobileAPI
 from .auth import MobileAuth
 from .push_notifications import PushNotificationManager
 from .trading import MobileTradingEngine
-from .analytics import MobileAnalytics
 
 # Unwired singletons — callers should instantiate with app_state for production
 try:

@@ -15,14 +15,14 @@ Submodules:
     router    — FastAPI router exposing explanations via REST API
 """
 
+from explainability.explainer import AIExplainer
 from explainability.models import (
-    ExplanationType,
-    FeatureContribution,
     DecisionNode,
     Explanation,
+    ExplanationType,
+    FeatureContribution,
     ModelPerformanceExplanation,
 )
-from explainability.explainer import AIExplainer
 from explainability.router import create_explainability_router
 
 __all__ = [

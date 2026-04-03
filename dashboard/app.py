@@ -3,8 +3,8 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
-from fastapi import FastAPI, HTTPException
 import plotly.graph_objs as go
+from fastapi import FastAPI, HTTPException
 
 
 # DashboardDataManager manages market data

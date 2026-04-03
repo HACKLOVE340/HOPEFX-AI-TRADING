@@ -19,8 +19,8 @@ Advanced analysis tools for trading including:
 
 # Core analysis imports (may not be available in all environments)
 try:
-    from analysis.patterns.chart_patterns import ChartPatternDetector
     from analysis.patterns.candlestick import CandlestickPatternDetector
+    from analysis.patterns.chart_patterns import ChartPatternDetector
     from analysis.patterns.support_resistance import SupportResistanceDetector
 except ImportError:
     # Patterns module not fully implemented
@@ -30,14 +30,14 @@ except ImportError:
 
 try:
     from analysis.market_analysis import (
+        ConfluenceAnalysis,
+        MarketRegime,
         MarketRegimeDetector,
         MultiTimeframeAnalyzer,
-        SessionAnalyzer,
-        MarketRegime,
-        TradingSession,
         RegimeAnalysis,
-        ConfluenceAnalysis,
         SessionAnalysis,
+        SessionAnalyzer,
+        TradingSession,
     )
 except ImportError:
     MarketRegimeDetector = None
@@ -50,104 +50,105 @@ except ImportError:
     SessionAnalysis = None
 
 # Order flow analysis - NEW
-from analysis.order_flow import (
-    OrderFlowAnalyzer,
-    VolumeProfile,
-    VolumeProfileLevel,
-    OrderFlowAnalysis,
-    Footprint,
-    Trade,
-    get_order_flow_analyzer,
-    create_order_flow_router,
-)
-
-# Market scanner - NEW
-from analysis.market_scanner import (
-    MarketScanner,
-    ScanCriteriaType,
-    ScanCriteria,
-    ScanResult,
-    MarketOpportunity,
-    SignalDirection as ScannerSignalDirection,
-    get_market_scanner,
-    create_scanner_router,
-)
-
-# Institutional flow detection - NEW
-from analysis.institutional_flow import (
-    InstitutionalFlowDetector,
-    InstitutionalTrade,
-    FlowSignal,
-    SmartMoneyDirection,
-    get_institutional_detector,
-)
-
 # Advanced order flow - NEW
 from analysis.advanced_order_flow import (
     AdvancedOrderFlowAnalyzer,
     AggressionMetrics,
-    VolumeCluster,
     DeltaDivergence,
     OrderFlowOscillator,
     StackedImbalance,
+    VolumeCluster,
     get_advanced_order_flow_analyzer,
+)
+
+# Institutional flow detection - NEW
+from analysis.institutional_flow import (
+    FlowSignal,
+    InstitutionalFlowDetector,
+    InstitutionalTrade,
+    SmartMoneyDirection,
+    get_institutional_detector,
+)
+
+# Market scanner - NEW
+from analysis.market_scanner import (
+    MarketOpportunity,
+    MarketScanner,
+    ScanCriteria,
+    ScanCriteriaType,
+    ScanResult,
+    create_scanner_router,
+    get_market_scanner,
+)
+from analysis.market_scanner import (
+    SignalDirection as ScannerSignalDirection,
+)
+from analysis.order_flow import (
+    Footprint,
+    OrderFlowAnalysis,
+    OrderFlowAnalyzer,
+    Trade,
+    VolumeProfile,
+    VolumeProfileLevel,
+    create_order_flow_router,
+    get_order_flow_analyzer,
 )
 
 # Order flow dashboard - NEW
 from analysis.order_flow_dashboard import (
     OrderFlowDashboard,
-    get_order_flow_dashboard,
     create_dashboard_router,
+    get_order_flow_dashboard,
 )
 
 __all__ = [
-    # Pattern detection (optional)
-    "ChartPatternDetector",
-    "CandlestickPatternDetector",
-    "SupportResistanceDetector",
-    # Market analysis (optional)
-    "MarketRegimeDetector",
-    "MultiTimeframeAnalyzer",
-    "SessionAnalyzer",
-    "MarketRegime",
-    "TradingSession",
-    "RegimeAnalysis",
-    "ConfluenceAnalysis",
-    "SessionAnalysis",
-    # Order flow analysis (NEW)
-    "OrderFlowAnalyzer",
-    "VolumeProfile",
-    "VolumeProfileLevel",
-    "OrderFlowAnalysis",
-    "Footprint",
-    "Trade",
-    "get_order_flow_analyzer",
-    "create_order_flow_router",
-    # Market scanner (NEW)
-    "MarketScanner",
-    "ScanCriteriaType",
-    "ScanCriteria",
-    "ScanResult",
-    "MarketOpportunity",
-    "ScannerSignalDirection",
-    "get_market_scanner",
-    "create_scanner_router",
-    # Institutional flow (NEW)
-    "InstitutionalFlowDetector",
-    "InstitutionalTrade",
-    "FlowSignal",
-    "SmartMoneyDirection",
-    "get_institutional_detector",
     # Advanced order flow (NEW)
     "AdvancedOrderFlowAnalyzer",
     "AggressionMetrics",
-    "VolumeCluster",
+    "CandlestickPatternDetector",
+    # Pattern detection (optional)
+    "ChartPatternDetector",
+    "ConfluenceAnalysis",
     "DeltaDivergence",
-    "OrderFlowOscillator",
-    "StackedImbalance",
-    "get_advanced_order_flow_analyzer",
+    "FlowSignal",
+    "Footprint",
+    # Institutional flow (NEW)
+    "InstitutionalFlowDetector",
+    "InstitutionalTrade",
+    "MarketOpportunity",
+    "MarketRegime",
+    # Market analysis (optional)
+    "MarketRegimeDetector",
+    # Market scanner (NEW)
+    "MarketScanner",
+    "MultiTimeframeAnalyzer",
+    "OrderFlowAnalysis",
+    # Order flow analysis (NEW)
+    "OrderFlowAnalyzer",
     # Dashboard (NEW)
     "OrderFlowDashboard",
-    "get_order_flow_dashboard",
+    "OrderFlowOscillator",
+    "RegimeAnalysis",
+    "ScanCriteria",
+    "ScanCriteriaType",
+    "ScanResult",
+    "ScannerSignalDirection",
+    "SessionAnalysis",
+    "SessionAnalyzer",
+    "SmartMoneyDirection",
+    "StackedImbalance",
+    "SupportResistanceDetector",
+    "Trade",
+    "TradingSession",
+    "VolumeCluster",
+    "VolumeProfile",
+    "VolumeProfileLevel",
     "create_dashboard_router",
+    "create_order_flow_router",
+    "create_scanner_router",
+    "get_advanced_order_flow_analyzer",
+    "get_institutional_detector",
+    "get_market_scanner",
+    "get_order_flow_analyzer",
+    "get_order_flow_dashboard",
 ]

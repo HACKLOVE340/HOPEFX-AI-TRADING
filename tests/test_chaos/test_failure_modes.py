@@ -11,10 +11,11 @@ broker errors, missing data, kill switch activation, and metric
 collection failures.
 """
 
-import pytest
+import contextlib
 import tempfile
 from pathlib import Path
-import contextlib
+
+import pytest
 
 
 class TestBrokerFailureModes:
@@ -68,7 +69,7 @@ class TestRiskManagerFailureModes:
     """RiskManager handles edge-case inputs without crashing."""
 
     def _risk(self):
-        from risk.manager import RiskManager, RiskConfig
+        from risk.manager import RiskConfig, RiskManager
 
         return RiskManager(
             config=RiskConfig(

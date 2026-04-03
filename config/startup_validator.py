@@ -29,6 +29,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from typing import ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -300,7 +301,7 @@ def validate_environment(*, strict: bool = True) -> None:
     Raises:
         StartupValidationError: when strict=False and validation fails.
     """
-    errors: list[str] = []
+    errors: ClassVar[list[str]] = []
     dev_mode = _is_dev()
 
     _validate_jwt(errors)

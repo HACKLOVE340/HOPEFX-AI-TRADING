@@ -8,13 +8,19 @@
 Tests for validation module.
 """
 
-import pytest
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from validation import OrderValidator, Order, PropFirmValidator, validate_order_safe  # pylint: disable=no-name-in-module
+from validation import (  # pylint: disable=no-name-in-module
+    Order,
+    OrderValidator,
+    PropFirmValidator,
+    validate_order_safe,
+)
 
 
 class TestOrderValidator:

@@ -14,20 +14,18 @@ Tests for all security modules including:
 """
 
 import os
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 from utils.security import (
+    AuditEventType,
+    CredentialRotationTracker,
     LogSanitizer,
     SecurityAuditor,
-    CredentialRotationTracker,
     SecurityConfigValidator,
-    AuditEventType,
+    check_security_setup,
     generate_secure_key,
     generate_secure_salt,
-    check_security_setup,
 )
 
 

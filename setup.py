@@ -3,7 +3,7 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 with open("README.md", encoding="utf-8") as fh:
     long_description = fh.read()

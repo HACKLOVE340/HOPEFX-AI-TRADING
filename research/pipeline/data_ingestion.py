@@ -32,10 +32,9 @@ import hashlib
 import logging
 import random
 import time
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import ClassVar
 
 import feedparser  # pip install feedparser
 import numpy as np
@@ -276,7 +275,7 @@ def fetch_intraday(
         return pd.read_parquet(cache_path)
 
     window = _INTRADAY_WINDOW_DAYS.get(interval, 60)
-    chunks: list[pd.DataFrame] = []
+    chunks: ClassVar[list[pd.DataFrame]] = []
     chunk_end = end_dt
 
     while (end_dt - chunk_end).days < lookback_days:

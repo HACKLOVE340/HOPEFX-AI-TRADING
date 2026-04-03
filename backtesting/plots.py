@@ -55,7 +55,8 @@ class PerformancePlotter:
 
         if filename:
             plt.savefig(filename)
-            logger.info(f"Equity curve saved to {filename}")
+            logger.info("Equity curve saved to %s", filename)
+
         else:
             plt.show()
 
@@ -81,7 +82,8 @@ class PerformancePlotter:
 
         if filename:
             plt.savefig(filename)
-            logger.info(f"Drawdown plot saved to {filename}")
+            logger.info("Drawdown plot saved to %s", filename)
+
         else:
             plt.show()
 

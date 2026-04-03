@@ -15,9 +15,9 @@ Verifies that each module:
 """
 
 import os
-import pytest
 from unittest.mock import patch
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -150,7 +150,7 @@ class TestTransparencyModule:
         assert len(paths) >= 4
 
     def test_engine_record_execution(self):
-        from transparency import ExecutionTransparencyEngine, FOREX_PIP_MULTIPLIER
+        from transparency import FOREX_PIP_MULTIPLIER, ExecutionTransparencyEngine
 
         engine = ExecutionTransparencyEngine()
         requested = 1950.0
@@ -241,7 +241,7 @@ class TestTeamsModule:
         assert summary["member_count"] >= 1  # Owner is a member
 
     def test_engine_has_permission(self):
-        from teams import TeamManager, Permission
+        from teams import Permission, TeamManager
 
         manager = TeamManager()
         team = manager.create_team(
@@ -347,6 +347,7 @@ class TestReplayModule:
 
     def test_engine_create_session(self):
         from datetime import datetime
+
         from replay import ChartReplayEngine
 
         engine = ChartReplayEngine()
@@ -363,6 +364,7 @@ class TestReplayModule:
 
     def test_engine_play_pause_stop(self):
         from datetime import datetime
+
         from replay import ChartReplayEngine
 
         engine = ChartReplayEngine()
@@ -378,6 +380,7 @@ class TestReplayModule:
 
     def test_engine_get_session_summary(self):
         from datetime import datetime
+
         from replay import ChartReplayEngine
 
         engine = ChartReplayEngine()
@@ -416,8 +419,9 @@ class TestMLModule:
         assert len(paths) >= 2
 
     def test_feature_engineer_create_features(self):
-        import pandas as pd
         import numpy as np
+        import pandas as pd
+
         from ml import TechnicalFeatureEngineer
 
         engineer = TechnicalFeatureEngineer()

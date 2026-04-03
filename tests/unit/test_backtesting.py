@@ -7,14 +7,15 @@
 Tests for the backtesting module.
 """
 
-import pytest
-import pandas as pd
-import numpy as np
 from datetime import datetime, timedelta
 
-from backtesting.portfolio import Portfolio
-from backtesting.events import FillEvent, EventType
+import numpy as np
+import pandas as pd
+import pytest
+
+from backtesting.events import EventType, FillEvent
 from backtesting.metrics import PerformanceMetrics
+from backtesting.portfolio import Portfolio
 
 
 class TestPortfolio:

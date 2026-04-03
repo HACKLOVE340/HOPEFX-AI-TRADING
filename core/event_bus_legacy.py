@@ -10,15 +10,13 @@ Connects all components with sub-microsecond latency
 
 import asyncio
 import mmap
-import os
 import struct
 import threading
 from collections import defaultdict
-from dataclasses import dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
 from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
 
 import lz4.frame
 import msgpack
@@ -80,7 +78,7 @@ class MemoryMappedEventStore:
         self._lock = threading.RLock()
         self._index = defaultdict(list)
         self._sequence = 0
-        os.makedirs(base_path, exist_ok=True)
+        Path(base_path).mkdir(parents=True, exist_ok=True)
         self._rotate_file()
 
     def _rotate_file(self):
@@ -92,7 +90,7 @@ class MemoryMappedEventStore:
         self.file_counter += 1
         with open(filename, "wb") as f:
             f.write(b"\x00" * self.max_file_size)
-        self.current_file = open(filename, "r+b")  # noqa: SIM115 — kept open for mmap lifetime
+        self.current_file = open(filename, "r+b")
         self.current_mmap = mmap.mmap(self.current_file.fileno(), self.max_file_size)
         self.current_offset = 0
 
@@ -139,7 +137,7 @@ class MemoryMappedEventStore:
 
     def _read_at(self, file_num: int, offset: int):
         filename = f"{self.base_path}events_{file_num:06d}.bin"
-        if not os.path.exists(filename):
+        if not Path(filename).exists():
             return None
         with open(filename, "rb") as f:
             f.seek(offset)

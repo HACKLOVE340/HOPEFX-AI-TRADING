@@ -11,11 +11,11 @@ Covers uncovered code paths in:
 - notifications/manager.py: notification channels, console logging, etc.
 """
 
-import pytest
-from unittest.mock import MagicMock, patch
-import logging
 import contextlib
+import logging
+from unittest.mock import MagicMock, patch
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Risk Manager extended tests
@@ -27,7 +27,7 @@ class TestRiskManagerExtended:
 
     @pytest.fixture
     def risk_mgr(self):
-        from risk import RiskManager, RiskConfig
+        from risk import RiskConfig, RiskManager
 
         config = RiskConfig(
             max_risk_per_trade=2.0,
@@ -281,7 +281,7 @@ class TestNotificationManagerExtended:
             mgr._send_console("Test critical", NotificationLevel.CRITICAL)
 
     def test_notify_console_channel(self, mgr):
-        from notifications.manager import NotificationLevel, NotificationChannel
+        from notifications.manager import NotificationChannel, NotificationLevel
 
         # Ensure CONSOLE is in enabled_channels
         if NotificationChannel.CONSOLE not in mgr.enabled_channels:
@@ -289,7 +289,7 @@ class TestNotificationManagerExtended:
         mgr.send("Test", level=NotificationLevel.INFO, channels=[NotificationChannel.CONSOLE])
 
     def test_notify_multiple_channels(self, mgr):
-        from notifications.manager import NotificationLevel, NotificationChannel
+        from notifications.manager import NotificationChannel, NotificationLevel
 
         if NotificationChannel.CONSOLE not in mgr.enabled_channels:
             mgr.enabled_channels.append(NotificationChannel.CONSOLE)
@@ -362,7 +362,7 @@ class TestNotificationManagerExtended:
             mock_urlopen.assert_not_called()
 
     def test_notify_error_handling(self, mgr):
-        from notifications.manager import NotificationLevel, NotificationChannel
+        from notifications.manager import NotificationChannel, NotificationLevel
 
         """Notification handler errors should not crash."""
         if NotificationChannel.CONSOLE not in mgr.enabled_channels:

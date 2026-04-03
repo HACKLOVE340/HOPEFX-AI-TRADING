@@ -40,12 +40,11 @@ Usage
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import numpy as np
@@ -53,7 +52,6 @@ import pandas as pd
 from sklearn.decomposition import PCA
 from sklearn.linear_model import Ridge
 from sklearn.preprocessing import StandardScaler
-import contextlib
 
 logger = logging.getLogger(__name__)
 

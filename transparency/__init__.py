@@ -16,15 +16,15 @@ Submodules:
     router — FastAPI router (/api/transparency/*)
 """
 
+from transparency.engine import (
+    FOREX_PIP_MULTIPLIER,
+    METAL_PIP_MULTIPLIER,
+    ExecutionTransparencyEngine,
+)
 from transparency.models import (
     ExecutionQuality,
     ExecutionRecord,
     ExecutionReport,
-)
-from transparency.engine import (
-    ExecutionTransparencyEngine,
-    FOREX_PIP_MULTIPLIER,
-    METAL_PIP_MULTIPLIER,
 )
 from transparency.router import create_transparency_router
 

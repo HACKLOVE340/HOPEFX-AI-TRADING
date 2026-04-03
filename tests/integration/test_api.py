@@ -26,6 +26,7 @@ os.environ.setdefault("SECURITY_JWT_SECRET", "test-secret-key-for-integration-te
 
 try:
     from fastapi.testclient import TestClient
+
     from app import app
 
     _import_error = None
@@ -72,7 +73,7 @@ def client():
     )
     # Instantiate without entering the lifespan context so Redis/DB timeouts
     # do not block the test suite.
-    yield TestClient(app, raise_server_exceptions=False)
+    return TestClient(app, raise_server_exceptions=False)
 
 
 @pytest.mark.integration

@@ -37,10 +37,8 @@ import logging
 import os
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from typing import Any
+from datetime import UTC, datetime, timedelta
+from typing import Any, ClassVar
 
 import aiohttp
 
@@ -175,7 +173,7 @@ class MacroCalendarEngine:
 
     def _init_prometheus(self) -> None:
         try:
-            from prometheus_client import Gauge, REGISTRY
+            from prometheus_client import REGISTRY, Gauge
 
             def _gauge(name: str, doc: str):
                 try:
@@ -198,7 +196,8 @@ class MacroCalendarEngine:
 
     async def start(self) -> None:
         self._running = True
-        asyncio.create_task(self._refresh_loop(), name="macro_calendar_refresh")
+        _t = asyncio.create_task(self._refresh_loop(), name="macro_calendar_refresh")
+        _t.add_done_callback(lambda _: None)
         logger.info("MacroCalendarEngine started")
 
     async def stop(self) -> None:
@@ -269,7 +268,7 @@ class MacroCalendarEngine:
             logger.warning("Finnhub calendar fetch error: %s", exc)
             return []
 
-        events: list[MacroEvent] = []
+        events: ClassVar[list[MacroEvent]] = []
         for item in data.get("economicCalendar", []):
             name = item.get("event", "")
             country = item.get("country", "")
@@ -277,7 +276,7 @@ class MacroCalendarEngine:
 
             time_str = item.get("time", "")
             try:
-                scheduled = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+                scheduled = datetime.fromisoformat(time_str)
             except Exception:  # nosec B112 - skip malformed calendar entry
                 continue
 

@@ -20,9 +20,7 @@ Author: HOPEFX Development Team
 import abc
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import requests
@@ -142,7 +140,8 @@ class NewsAPIProvider(NewsProvider):
             data = response.json()
 
             if data.get("status") != "ok":
-                self.logger.error(f"NewsAPI error: {data.get('message')}")
+                self.logger.error("NewsAPI error: %s", data.get('message'))
+
                 return []
 
             articles = []
@@ -150,17 +149,21 @@ class NewsAPIProvider(NewsProvider):
                 try:
                     articles.append(self.format_article(article))
                 except Exception as e:
-                    self.logger.warning(f"Error formatting article: {e}")
+                    self.logger.warning("Error formatting article: %s", e)
+
                     continue
 
-            self.logger.info(f"Retrieved {len(articles)} articles from NewsAPI")
+            self.logger.info("Retrieved %s articles from NewsAPI", len(articles))
+
             return articles
 
         except requests.exceptions.RequestException as e:
-            self.logger.error(f"NewsAPI request failed: {e}")
+            self.logger.error("NewsAPI request failed: %s", e)
+
             return []
         except Exception as e:
-            self.logger.error(f"NewsAPI error: {e}")
+            self.logger.error("NewsAPI error: %s", e)
+
             return []
 
     def format_article(self, raw_article: Any, **kwargs) -> NewsArticle:
@@ -169,7 +172,7 @@ class NewsAPIProvider(NewsProvider):
             title=raw_article.get("title", ""),
             description=raw_article.get("description", ""),
             source=raw_article.get("source", {}).get("name", "Unknown"),
-            published_at=datetime.fromisoformat(raw_article.get("publishedAt", "").replace("Z", "+00:00")),
+            published_at=datetime.fromisoformat(raw_article.get("publishedAt", "")),
             url=raw_article.get("url", ""),
             author=raw_article.get("author"),
             content=raw_article.get("content"),
@@ -225,7 +228,8 @@ class AlphaVantageNewsProvider(NewsProvider):
             data = response.json()
 
             if "Error Message" in data:
-                self.logger.error(f"Alpha Vantage error: {data['Error Message']}")
+                self.logger.error("Alpha Vantage error: %s", data['Error Message'])
+
                 return []
 
             articles = []
@@ -233,17 +237,21 @@ class AlphaVantageNewsProvider(NewsProvider):
                 try:
                     articles.append(self.format_article(item))
                 except Exception as e:
-                    self.logger.warning(f"Error formatting article: {e}")
+                    self.logger.warning("Error formatting article: %s", e)
+
                     continue
 
-            self.logger.info(f"Retrieved {len(articles)} articles from Alpha Vantage")
+            self.logger.info("Retrieved %s articles from Alpha Vantage", len(articles))
+
             return articles
 
         except requests.exceptions.RequestException as e:
-            self.logger.error(f"Alpha Vantage request failed: {e}")
+            self.logger.error("Alpha Vantage request failed: %s", e)
+
             return []
         except Exception as e:
-            self.logger.error(f"Alpha Vantage error: {e}")
+            self.logger.error("Alpha Vantage error: %s", e)
+
             return []
 
     def format_article(self, raw_article: Any, **kwargs) -> NewsArticle:
@@ -262,7 +270,7 @@ class AlphaVantageNewsProvider(NewsProvider):
             url=raw_article.get("url", ""),
             author=", ".join(raw_article.get("authors", [])),
             sentiment=sentiment_score,
-            symbols=symbols if symbols else None,
+            symbols=symbols or None,
         )
 
 
@@ -307,7 +315,8 @@ class RSSFeedProvider(NewsProvider):
 
         for feed_name in feeds:
             if feed_name not in self.feeds:
-                self.logger.warning(f"Feed '{feed_name}' not found")
+                self.logger.warning("Feed '%s' not found", feed_name)
+
                 continue
 
             try:
@@ -323,16 +332,20 @@ class RSSFeedProvider(NewsProvider):
                         if article.published_at >= cutoff_time:
                             all_articles.append(article)
                     except Exception as e:
-                        self.logger.warning(f"Error formatting RSS entry: {e}")
+                        self.logger.warning("Error formatting RSS entry: %s", e)
+
                         continue
 
-                self.logger.info(f"Retrieved articles from {feed_name}")
+                self.logger.info("Retrieved articles from %s", feed_name)
+
 
             except Exception as e:
-                self.logger.error(f"Error parsing RSS feed {feed_name}: {e}")
+                self.logger.error("Error parsing RSS feed %s: %s", feed_name, e)
+
                 continue
 
-        self.logger.info(f"Retrieved {len(all_articles)} articles from RSS feeds")
+        self.logger.info("Retrieved %s articles from RSS feeds", len(all_articles))
+
         return all_articles
 
     def format_article(self, raw_article: Any, source: str = "", **kwargs) -> NewsArticle:
@@ -415,7 +428,8 @@ class MultiSourceAggregator:
                 all_articles.extend(articles)
 
             except Exception as e:
-                self.logger.error(f"Error fetching from {provider.__class__.__name__}: {e}")
+                self.logger.error("Error fetching from %s: %s", provider.__class__.__name__, e)
+
                 continue
 
         if deduplicate:
@@ -424,7 +438,8 @@ class MultiSourceAggregator:
         # Sort by published date (newest first)
         all_articles.sort(key=lambda x: x.published_at, reverse=True)
 
-        self.logger.info(f"Aggregated {len(all_articles)} unique articles")
+        self.logger.info("Aggregated %s unique articles", len(all_articles))
+
         return all_articles
 
     def _deduplicate(self, articles: list[NewsArticle]) -> list[NewsArticle]:

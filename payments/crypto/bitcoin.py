@@ -16,14 +16,12 @@ In production this secret must be stored in a secrets manager (Vault, AWS
 Secrets Manager, etc.) and injected at runtime — never committed to source.
 """
 
+import hashlib
 import logging
 import os
 import time
-import hashlib
 from dataclasses import dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from decimal import Decimal
 
 try:

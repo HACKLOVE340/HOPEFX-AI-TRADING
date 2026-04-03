@@ -26,7 +26,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
@@ -166,7 +165,7 @@ class TestRedisPath:
         assert result is None
 
     def test_redis_set_calls_setex_with_ttl(self):
-        from ml.live_inference import _FeatureCache, _CACHE_TTL
+        from ml.live_inference import _CACHE_TTL, _FeatureCache
 
         cache = _FeatureCache()
         cache._connected = True

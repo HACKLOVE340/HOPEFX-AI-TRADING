@@ -12,9 +12,7 @@ Captures price discrepancies across multiple venues
 import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from decimal import Decimal
 
 
@@ -109,7 +107,7 @@ class ArbitrageDetector:
     async def update_prices(self):
         """Fetch prices from all exchanges"""
         tasks = []
-        for _name, ex in self.exchanges.items():
+        for ex in self.exchanges.values():
             for symbol in ["BTCUSD", "ETHUSD", "XAUUSD"]:
                 tasks.append(self._fetch_price(ex, symbol))
 
@@ -309,7 +307,7 @@ class CrossExchangeEngine:
     def add_exchange(self, connector: ExchangeConnector):
         self.detector.add_exchange(connector)
 
-    async def run(self, symbols: list[str] = None):
+    async def run(self, symbols: list[str] | None = None):
         """Main arbitrage loop"""
         if symbols is None:
             symbols = ["BTCUSD", "ETHUSD", "XAUUSD"]

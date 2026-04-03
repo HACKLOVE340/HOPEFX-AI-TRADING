@@ -10,15 +10,14 @@ Automated backup, failover, and state restoration
 """
 
 import asyncio
-import json
 import gzip
-from typing import TYPE_CHECKING
-from dataclasses import dataclass, asdict
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from pathlib import Path
 import hashlib
+import json
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import TYPE_CHECKING
+
 import aiofiles
 
 if TYPE_CHECKING:
@@ -181,7 +180,7 @@ class FailoverManager:
         # In production, use proper consensus (etcd, Consul)
 
         # Assume highest node ID wins
-        all_nodes = sorted([self.node_id] + self.peers)
+        all_nodes = sorted([self.node_id, *self.peers])
         self.is_primary = all_nodes[-1] == self.node_id
 
         if self.is_primary:
@@ -198,7 +197,7 @@ class FailoverManager:
 
             # Check if primary is alive
             if not self.is_primary:
-                primary = max([self.node_id] + self.peers)  # Assume highest is primary
+                primary = max([self.node_id, *self.peers])  # Assume highest is primary
                 if primary != self.node_id:
                     last_seen = self.last_peer_heartbeat.get(primary)
                     if last_seen and (datetime.now(UTC) - last_seen).seconds > self.failover_timeout:

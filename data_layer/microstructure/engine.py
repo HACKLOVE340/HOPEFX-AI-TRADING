@@ -37,14 +37,11 @@ Session reset at UTC midnight resets cumulative delta and VWAP.
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
 from collections import deque
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-
-import os
+from datetime import UTC, datetime
 
 import numpy as np
 

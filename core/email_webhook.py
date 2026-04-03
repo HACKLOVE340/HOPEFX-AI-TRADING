@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import ClassVar
 
 from fastapi import FastAPI, HTTPException, Request
 
@@ -41,13 +42,14 @@ def _verify_sendgrid_signature(
     """
     try:
         import base64
+
+        from cryptography.exceptions import InvalidSignature
         from cryptography.hazmat.primitives.asymmetric.ec import (
             ECDSA,
             EllipticCurvePublicKey,
         )
         from cryptography.hazmat.primitives.hashes import SHA256
         from cryptography.hazmat.primitives.serialization import load_der_public_key
-        from cryptography.exceptions import InvalidSignature
 
         der = base64.b64decode(public_key_b64)
         pub_key: EllipticCurvePublicKey = load_der_public_key(der)  # type: ignore[assignment]
@@ -123,7 +125,7 @@ def register_email_webhook(app: FastAPI) -> None:
             "unsubscribe",
             "group_unsubscribe",
         }
-        suppressed: list[str] = []
+        suppressed: ClassVar[list[str]] = []
 
         for event in events:
             event_type = event.get("event", "")
@@ -132,9 +134,10 @@ def register_email_webhook(app: FastAPI) -> None:
                 continue
 
             try:
-                from database.models import EmailSuppression
                 from sqlalchemy.orm import sessionmaker
+
                 from app import app_state
+                from database.models import EmailSuppression
 
                 if app_state.db_engine:
                     _Session = sessionmaker(bind=app_state.db_engine)

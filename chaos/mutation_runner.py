@@ -54,9 +54,7 @@ import subprocess  # nosec B404 - list-form call with sys.executable; no shell=T
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -219,8 +217,8 @@ class MutationTestRunner:
             # Parse mutmut results
             return await self._parse_mutmut_results()
 
-        except Exception as exc:
-            logger.error("mutmut run failed: %s", exc, exc_info=True)
+        except Exception:
+            logger.exception("mutmut run failed: %s")
             return self._empty_report("mutmut", error="mutmut run failed — check server logs")
 
     async def _parse_mutmut_results(self) -> MutationReport:
@@ -256,8 +254,8 @@ class MutationTestRunner:
                 duration_s=0.0,
                 engine="mutmut",
             )
-        except Exception as exc:
-            logger.error("mutmut results parse failed: %s", exc, exc_info=True)
+        except Exception:
+            logger.exception("mutmut results parse failed: %s")
             return self._empty_report("mutmut", error="mutmut results parse failed — check server logs")
 
     # ── Built-in AST mutator ──────────────────────────────────────────────────

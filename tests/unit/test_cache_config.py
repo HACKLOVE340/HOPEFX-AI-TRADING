@@ -17,8 +17,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from cache.market_data_cache import (
-    CacheStatistics,
     CachedTickData,
+    CacheStatistics,
     MarketDataCache,
     OHLCVData,
     Timeframe,

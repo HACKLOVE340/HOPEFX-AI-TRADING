@@ -11,9 +11,7 @@ Complete SQLAlchemy models for all entities
 import enum
 import logging
 import uuid
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 
 def _utcnow() -> datetime:
@@ -25,17 +23,17 @@ logger = logging.getLogger(__name__)
 
 try:
     from sqlalchemy import (
-        Column,
-        Integer,
         BigInteger,
-        String,
-        Float,
         Boolean,
+        Column,
         DateTime,
-        ForeignKey,
         Enum,
-        Text,
+        Float,
+        ForeignKey,
         Index,
+        Integer,
+        String,
+        Text,
         UniqueConstraint,
     )
     from sqlalchemy.sql import func

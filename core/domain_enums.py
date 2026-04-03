@@ -8,16 +8,16 @@ Trading domain enumerations.
 Institutional-grade type safety.
 """
 
-from enum import Enum, IntEnum
+from enum import IntEnum, StrEnum
 
 
-class TradeDirection(str, Enum):
+class TradeDirection(StrEnum):
     LONG = "LONG"
     SHORT = "SHORT"
     FLAT = "FLAT"
 
 
-class OrderType(str, Enum):
+class OrderType(StrEnum):
     MARKET = "MARKET"
     LIMIT = "LIMIT"
     STOP = "STOP"
@@ -26,7 +26,7 @@ class OrderType(str, Enum):
     OCO = "OCO"  # One-Cancels-Other
 
 
-class OrderStatus(str, Enum):
+class OrderStatus(StrEnum):
     PENDING = "PENDING"
     SUBMITTED = "SUBMITTED"
     PARTIAL_FILL = "PARTIAL_FILL"
@@ -36,7 +36,7 @@ class OrderStatus(str, Enum):
     EXPIRED = "EXPIRED"
 
 
-class TimeInForce(str, Enum):
+class TimeInForce(StrEnum):
     GTC = "GTC"  # Good Till Cancelled
     IOC = "IOC"  # Immediate Or Cancel
     FOK = "FOK"  # Fill Or Kill
@@ -44,7 +44,7 @@ class TimeInForce(str, Enum):
     DAY = "DAY"
 
 
-class PositionStatus(str, Enum):
+class PositionStatus(StrEnum):
     OPEN = "OPEN"
     CLOSED = "CLOSED"
     HEDGED = "HEDGED"
@@ -57,7 +57,7 @@ class SignalStrength(IntEnum):
     VERY_STRONG = 4
 
 
-class PropFirm(str, Enum):
+class PropFirm(StrEnum):
     FTMO = "FTMO"
     MY_FOREX_FUNDS = "MFF"
     THE5ERS = "THE5ERS"
@@ -65,7 +65,7 @@ class PropFirm(str, Enum):
     NONE = "NONE"
 
 
-class DataFrequency(str, Enum):
+class DataFrequency(StrEnum):
     TICK = "TICK"
     SECOND_1 = "1S"
     MINUTE_1 = "1M"
@@ -77,7 +77,7 @@ class DataFrequency(str, Enum):
     DAILY = "1D"
 
 
-class BrokerType(str, Enum):
+class BrokerType(StrEnum):
     OANDA = "OANDA"
     INTERACTIVE_BROKERS = "IBKR"
     META_TRADER_5 = "MT5"
@@ -86,7 +86,7 @@ class BrokerType(str, Enum):
     PAPER = "PAPER"
 
 
-class StrategyState(str, Enum):
+class StrategyState(StrEnum):
     INITIALIZING = "INITIALIZING"
     ACTIVE = "ACTIVE"
     PAUSED = "PAUSED"

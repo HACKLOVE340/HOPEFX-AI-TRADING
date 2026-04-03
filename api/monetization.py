@@ -918,7 +918,7 @@ async def stripe_webhook(payload: dict[str, Any] = Body(...)):
 # ==========================
 
 from monetization.marketplace_submission import submission_manager
-from monetization.revenue_split import revenue_engine, TransactionType
+from monetization.revenue_split import TransactionType, revenue_engine
 
 
 class SubmitStrategyRequest(BaseModel):

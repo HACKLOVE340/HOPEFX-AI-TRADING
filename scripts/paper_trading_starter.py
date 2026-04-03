@@ -44,9 +44,7 @@ import os
 import signal
 import sys
 import time
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -117,8 +115,8 @@ def send_telegram(token: str, chat_id: str, text: str) -> bool:
         logger.warning("Telegram not configured — skipping alert")
         return False
     try:
-        import urllib.request
         import urllib.parse
+        import urllib.request
 
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         data = urllib.parse.urlencode({"chat_id": chat_id, "text": text, "parse_mode": "HTML"}).encode()

@@ -19,15 +19,13 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import UTC
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
-from datetime import timezone
-
-UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 

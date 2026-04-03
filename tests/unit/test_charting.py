@@ -10,7 +10,7 @@ Tests for the charting module.
 import pytest
 
 from charting.chart_engine import Chart, ChartEngine, ChartType
-from charting.indicators import Indicator, SMA, EMA, RSI, IndicatorLibrary
+from charting.indicators import EMA, RSI, SMA, Indicator, IndicatorLibrary
 
 
 class TestChartType:

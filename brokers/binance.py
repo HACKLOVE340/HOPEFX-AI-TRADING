@@ -13,9 +13,7 @@ import hashlib
 import hmac
 import logging
 import time
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import requests
@@ -108,11 +106,13 @@ class BinanceConnector(BrokerConnector):
 
             self.connected = True
             env = "testnet" if self.testnet else "live"
-            logger.info(f"Connected to Binance ({env})")
+            logger.info("Connected to Binance (%s)", env)
+
             return True
 
         except Exception as e:
-            logger.error(f"Failed to connect to Binance: {e}")
+            logger.error("Failed to connect to Binance: %s", e)
+
             self.connected = False
             return False
 
@@ -130,7 +130,8 @@ class BinanceConnector(BrokerConnector):
             logger.info("Disconnected from Binance")
             return True
         except Exception as e:
-            logger.error(f"Error disconnecting from Binance: {e}")
+            logger.error("Error disconnecting from Binance: %s", e)
+
             return False
 
     def place_order(  # pylint: disable=arguments-differ
@@ -210,14 +211,16 @@ class BinanceConnector(BrokerConnector):
                 metadata=result,
             )
 
-            logger.info(f"Order placed: {order.id} - {side.value} {quantity} {symbol}")
+            logger.info("Order placed: %s - %s %s %s", order.id, side.value, quantity, symbol)
+
             return order
 
         except Exception as e:
-            logger.error(f"Failed to place order: {e}")
+            logger.error("Failed to place order: %s", e)
+
             return None
 
-    def cancel_order(self, order_id: str, symbol: str = None) -> bool:
+    def cancel_order(self, order_id: str, symbol: str | None = None) -> bool:
         """
         Cancel an open order.
 
@@ -253,14 +256,16 @@ class BinanceConnector(BrokerConnector):
             )
             response.raise_for_status()
 
-            logger.info(f"Order cancelled: {order_id}")
+            logger.info("Order cancelled: %s", order_id)
+
             return True
 
         except Exception as e:
-            logger.error(f"Failed to cancel order {order_id}: {e}")
+            logger.error("Failed to cancel order %s: %s", order_id, e)
+
             return False
 
-    def get_order(self, order_id: str, symbol: str = None) -> Order | None:
+    def get_order(self, order_id: str, symbol: str | None = None) -> Order | None:
         """
         Get order details.
 
@@ -314,7 +319,8 @@ class BinanceConnector(BrokerConnector):
             return order
 
         except Exception as e:
-            logger.error(f"Failed to get order {order_id}: {e}")
+            logger.error("Failed to get order %s: %s", order_id, e)
+
             return None
 
     def get_positions(self) -> list[Position]:
@@ -368,7 +374,8 @@ class BinanceConnector(BrokerConnector):
             return positions
 
         except Exception as e:
-            logger.error(f"Failed to get positions: {e}")
+            logger.error("Failed to get positions: %s", e)
+
             return []
 
     def close_position(self, symbol: str, quantity: float | None = None) -> bool:
@@ -408,11 +415,12 @@ class BinanceConnector(BrokerConnector):
                     break
 
             if balance <= 0:
-                logger.warning(f"No balance to close for {symbol}")
+                logger.warning("No balance to close for %s", symbol)
+
                 return False
 
             # Sell quantity (or all)
-            sell_qty = quantity if quantity else balance
+            sell_qty = quantity or balance
 
             # Create trading pair (assume USDT for now)
             trading_pair = f"{symbol}USDT"
@@ -426,13 +434,15 @@ class BinanceConnector(BrokerConnector):
             )
 
             if order:
-                logger.info(f"Position closed: {symbol}")
+                logger.info("Position closed: %s", symbol)
+
                 return True
 
             return False
 
         except Exception as e:
-            logger.error(f"Failed to close position {symbol}: {e}")
+            logger.error("Failed to close position %s: %s", symbol, e)
+
             return False
 
     def get_account_info(self) -> AccountInfo | None:
@@ -486,7 +496,8 @@ class BinanceConnector(BrokerConnector):
             return info
 
         except Exception as e:
-            logger.error(f"Failed to get account info: {e}")
+            logger.error("Failed to get account info: %s", e)
+
             return None
 
     def get_market_data(
@@ -538,7 +549,8 @@ class BinanceConnector(BrokerConnector):
             return candles
 
         except Exception as e:
-            logger.error(f"Failed to get market data for {symbol}: {e}")
+            logger.error("Failed to get market data for %s: %s", symbol, e)
+
             return None
 
     def _generate_signature(self, params: dict) -> str:

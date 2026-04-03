@@ -17,10 +17,8 @@ Author: HOPEFX Development Team
 
 import logging
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from enum import Enum
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 
@@ -280,7 +278,8 @@ class EconomicCalendar:
         for event in sample_events:
             self.add_event(event)
 
-        self.logger.info(f"Created {len(sample_events)} sample events")
+        self.logger.info("Created %s sample events", len(sample_events))
+
         return sample_events
 
     def update_event_actual(self, title: str, actual: float, scheduled_time: datetime | None = None):
@@ -288,10 +287,12 @@ class EconomicCalendar:
         for event in self.events:
             if event.title == title and (scheduled_time is None or event.scheduled_time == scheduled_time):
                 event.actual = actual
-                self.logger.info(f"Updated {title}: actual={actual}")
+                self.logger.info("Updated %s: actual=%s", title, actual)
+
                 return event
 
-        self.logger.warning(f"Event not found: {title}")
+        self.logger.warning("Event not found: %s", title)
+
         return None
 
     def get_event_summary(self, days_ahead: int = 7) -> dict:

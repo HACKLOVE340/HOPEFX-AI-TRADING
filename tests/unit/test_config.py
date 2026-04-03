@@ -7,17 +7,18 @@
 Tests for the config management module.
 """
 
-import pytest
 import os
 
+import pytest
+
 from config.config_manager import (
-    EncryptionManager,
-    ConfigManager,
     APIConfig,
-    DatabaseConfig,
-    TradingConfig,
-    LoggingConfig,
     AppConfig,
+    ConfigManager,
+    DatabaseConfig,
+    EncryptionManager,
+    LoggingConfig,
+    TradingConfig,
 )
 
 
@@ -286,7 +287,6 @@ class TestConfigManager:
         """Set up encryption environment variables."""
         os.environ["CONFIG_ENCRYPTION_KEY"] = "test-encryption-key-for-testing-purposes"
         os.environ["CONFIG_SALT"] = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"
-        yield
 
     def test_config_manager_initialization(self):
         """Test ConfigManager initialization."""

@@ -7,9 +7,7 @@
 Tests for Order Flow Dashboard (analysis/order_flow_dashboard.py)
 """
 
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 
@@ -18,12 +16,12 @@ class TestOrderFlowDashboard:
 
     def _make_dashboard(self):
         """Create a dashboard with fresh service instances."""
-        from analysis.order_flow import OrderFlowAnalyzer
-        from analysis.institutional_flow import InstitutionalFlowDetector
         from analysis.advanced_order_flow import AdvancedOrderFlowAnalyzer
-        from data.time_and_sales import TimeAndSalesService
-        from data.depth_of_market import DepthOfMarketService
+        from analysis.institutional_flow import InstitutionalFlowDetector
+        from analysis.order_flow import OrderFlowAnalyzer
         from analysis.order_flow_dashboard import OrderFlowDashboard
+        from data.depth_of_market import DepthOfMarketService
+        from data.time_and_sales import TimeAndSalesService
 
         return OrderFlowDashboard(
             order_flow_analyzer=OrderFlowAnalyzer(),
@@ -203,10 +201,10 @@ class TestOrderFlowDashboard:
             "poc": None,
         }
 
-        from analysis.institutional_flow import InstitutionalFlowDetector
         from analysis.advanced_order_flow import AdvancedOrderFlowAnalyzer
-        from data.time_and_sales import TimeAndSalesService
+        from analysis.institutional_flow import InstitutionalFlowDetector
         from data.depth_of_market import DepthOfMarketService
+        from data.time_and_sales import TimeAndSalesService
 
         dashboard = OrderFlowDashboard(
             order_flow_analyzer=broken,

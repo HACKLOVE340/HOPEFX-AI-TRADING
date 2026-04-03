@@ -20,13 +20,11 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import UTC
+from http import HTTPStatus
 
 from fastapi import APIRouter
 from pydantic import BaseModel
-from datetime import timezone
-from http import HTTPStatus
-
-UTC = timezone.utc
 
 _HTTP_OK = HTTPStatus.OK.value
 _HTTP_UNAUTHORIZED = HTTPStatus.UNAUTHORIZED.value
@@ -457,8 +455,8 @@ async def broker_status():
             "checked_at": checked_at,
         }
 
-    except Exception as exc:
-        logger.exception("broker_status: unexpected error: %s", exc)
+    except Exception:
+        logger.exception("broker_status: unexpected error: %s")
         return {
             "broker": {"connected": False, "broker_type": "unknown", "error": "Unavailable — check server logs"},
             "data_feed": {"active": False, "source": "unknown"},
@@ -555,8 +553,8 @@ async def stamp_oanda_clock(req: StampOandaRequest):
             ),
             "clock": status,
         }
-    except Exception as exc:
-        logger.exception("stamp_oanda_clock: %s", exc)
+    except Exception:
+        logger.exception("stamp_oanda_clock: %s")
         from fastapi import HTTPException
 
         raise HTTPException(status_code=500, detail="Internal error — check server logs") from None

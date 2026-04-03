@@ -54,14 +54,13 @@ import math
 import os
 import re
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
-UTC = timezone.utc
 logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -237,7 +236,8 @@ class AntivirusScanner:
         self._connect_clamd()
         self.mount_router(app)
         self._running = True
-        asyncio.create_task(self._scan_loop(), name="av-scanner")
+        _t = asyncio.create_task(self._scan_loop(), name="av-scanner")
+        _t.add_done_callback(lambda _: None)
         logger.info("AntivirusScanner: started (YARA=%s, ClamAV=%s)", YARA_AVAILABLE, CLAMD_AVAILABLE)
 
     def _load_yara_rules(self) -> None:

@@ -50,17 +50,16 @@ import logging
 import os
 import threading
 from dataclasses import dataclass
+from datetime import UTC
+from pathlib import Path
 from typing import Any
 
 import numpy as np
-from datetime import timezone
-
-UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 
-_MODEL_DIR = os.path.join(os.path.dirname(__file__), "saved_models", "rl")
-os.makedirs(_MODEL_DIR, exist_ok=True)
+_MODEL_DIR = os.path.join(Path(__file__).parent, "saved_models", "rl")
+Path(_MODEL_DIR).mkdir(parents=True, exist_ok=True)
 
 _WINDOW = 50  # observation window (must match vector_store._WINDOW)
 _FEATURE_DIM = 32
@@ -336,8 +335,8 @@ class RLAgent:
 
     def __init__(self, model_name: str = "hopefx_ppo"):
         self.model_name = model_name
-        self.model_path = os.path.join(_MODEL_DIR, f"{model_name}.zip")
-        self._model: Any = None
+        self.model_path = Path(_MODEL_DIR) / f"{model_name}.zip"
+        self._model: Any | None = None
 
     # ── training ──────────────────────────────────────────────────────────────
 
@@ -370,7 +369,7 @@ class RLAgent:
             clip_range=0.2,
             ent_coef=0.01,
             verbose=verbose,
-            tensorboard_log=os.path.join(_MODEL_DIR, "tb_logs"),
+            tensorboard_log=Path(_MODEL_DIR) / "tb_logs",
         )
         self._model.learn(total_timesteps=timesteps)
         self._model.save(self.model_path)
@@ -378,7 +377,7 @@ class RLAgent:
 
     def load(self) -> bool:
         """Load a previously saved model. Returns True if successful."""
-        if not os.path.exists(self.model_path):
+        if not Path(self.model_path).exists():
             logger.warning("No saved model at %s", self.model_path)
             return False
         try:
@@ -507,10 +506,10 @@ class RLAgentTrainer:
 
     def __init__(
         self,
-        candle_source: Any = None,
+        candle_source: Any | None = None,
         model_name: str = "hopefx_ppo",
         # Backwards-compat alias — remove after all call sites are updated.
-        oanda_stream: Any = None,
+        oanda_stream: Any | None = None,
     ):
         if candle_source is None and oanda_stream is not None:
             logger.warning("RLAgentTrainer: 'oanda_stream' parameter is deprecated — use 'candle_source' instead.")

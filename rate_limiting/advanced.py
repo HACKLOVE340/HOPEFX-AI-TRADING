@@ -50,15 +50,15 @@ logger = logging.getLogger(__name__)
 # ── Import config ─────────────────────────────────────────────────────────────
 try:
     from rate_limiting_configuration import (
-        AUTH_RATE,
-        TRADING_RATE,
-        MARKET_DATA_RATE,
         ADMIN_RATE,
-        WEBSOCKET_RATE,
+        AUTH_RATE,
         BACKTEST_RATE,
-        WITHDRAWAL_RATE,
-        REDIS_URL,
         KEY_PREFIX,
+        MARKET_DATA_RATE,
+        REDIS_URL,
+        TRADING_RATE,
+        WEBSOCKET_RATE,
+        WITHDRAWAL_RATE,
     )
 except ImportError:
     AUTH_RATE = "10 per minute"
@@ -89,7 +89,7 @@ def _parse_rate(rate_str: str) -> tuple:
 
     Only the first clause is used when multiple are joined with "; ".
     """
-    first = rate_str.split(";")[0].strip()
+    first = rate_str.split(";", maxsplit=1)[0].strip()
     parts = first.lower().split()
     if len(parts) != 3 or parts[1] != "per":
         raise ValueError(f"Invalid rate string: {rate_str!r}")
@@ -216,7 +216,7 @@ def rate_limit_dependency(rate_str: str, key_func: Callable | None = None):
         ):
             ...
     """
-    from fastapi import Request, HTTPException, status
+    from fastapi import HTTPException, Request, status
 
     try:
         limit, window = _parse_rate(rate_str)

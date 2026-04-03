@@ -28,10 +28,9 @@ import logging
 import lzma
 import os
 import struct
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import ClassVar
 
 import aiohttp
 import pandas as pd
@@ -193,7 +192,7 @@ class DukascopyFetcher:
                 data = await resp.read()
                 if data:
                     self._save_cache(symbol, hour, data)
-                return data if data else None
+                return data or None
         except TimeoutError:
             logger.warning("Dukascopy timeout: %s", url)
             return None
@@ -262,7 +261,7 @@ class DukascopyFetcher:
         and UTC DatetimeIndex.
         """
         # Enumerate all hours in range
-        hours: list[datetime] = []
+        hours: ClassVar[list[datetime]] = []
         cur = start.replace(minute=0, second=0, microsecond=0, tzinfo=UTC)
         end_utc = end.replace(tzinfo=UTC) if end.tzinfo is None else end
 

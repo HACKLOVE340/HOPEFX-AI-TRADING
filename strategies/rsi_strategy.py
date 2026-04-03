@@ -10,9 +10,7 @@ This strategy uses RSI to identify overbought and oversold conditions.
 """
 
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
@@ -216,7 +214,8 @@ class RSIStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            self.logger.error(f"Error generating RSI signal: {e}")
+            self.logger.error("Error generating RSI signal: %s", e)
+
             return {
                 "type": "HOLD",
                 "confidence": 0.0,

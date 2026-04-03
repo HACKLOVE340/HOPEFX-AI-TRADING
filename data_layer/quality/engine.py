@@ -25,20 +25,17 @@ All decisions are logged with structured fields and written to the lineage store
 
 from __future__ import annotations
 
+import contextlib
 import logging
+import os
 import threading
 import time
 from collections import deque
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-
-import os
+from datetime import UTC, datetime
 
 import numpy as np
 
 from data_layer.types import FeedSource, GoldTick, QualityReport, TickQuality
-import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +132,7 @@ class DataQualityEngine:
 
     def _init_prometheus(self) -> None:
         try:
-            from prometheus_client import Counter, Gauge, Histogram, REGISTRY
+            from prometheus_client import REGISTRY, Counter, Gauge, Histogram
 
             def _counter(name: str, doc: str, labels=None):
                 try:

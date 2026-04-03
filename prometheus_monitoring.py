@@ -37,11 +37,15 @@ logger = logging.getLogger(__name__)
 
 try:
     from prometheus_client import (
-        Counter as PromCounter,
-        Gauge as PromGauge,
+        CONTENT_TYPE_LATEST,
         REGISTRY,
         generate_latest,
-        CONTENT_TYPE_LATEST,
+    )
+    from prometheus_client import (
+        Counter as PromCounter,
+    )
+    from prometheus_client import (
+        Gauge as PromGauge,
     )
 
     _PROM_AVAILABLE = True
@@ -169,7 +173,7 @@ def _sync_counter_collector(name: str, collector) -> None:
 
 def _sync_all_collectors(registry) -> None:
     """Iterate registry collectors and push each into prometheus_client."""
-    from infrastructure.metrics import Gauge, Counter
+    from infrastructure.metrics import Counter, Gauge
 
     for name, collector in list(registry._collectors.items()):
         if isinstance(collector, Gauge):

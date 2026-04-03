@@ -16,15 +16,13 @@ This module provides:
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from decimal import Decimal
-from typing import Any
-from enum import Enum
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from enum import StrEnum
+from typing import Any
 
-from .pricing import SubscriptionTier, BillingCycle
+from .pricing import BillingCycle, SubscriptionTier
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +31,7 @@ logger = logging.getLogger(__name__)
 # is not installed.
 # ---------------------------------------------------------------------------
 try:
-    from prometheus_client import Gauge, Counter  # type: ignore
+    from prometheus_client import Counter, Gauge  # type: ignore
 
     _PROM_MRR = Gauge(
         "hopefx_mrr_usd",
@@ -78,7 +76,7 @@ except ImportError:
     logger.debug("prometheus_client not installed — monetization metrics disabled")
 
 
-class RevenueSource(str, Enum):
+class RevenueSource(StrEnum):
     """Revenue source categories"""
 
     SUBSCRIPTION = "subscription"
@@ -88,7 +86,7 @@ class RevenueSource(str, Enum):
     ONE_TIME = "one_time"
 
 
-class TimePeriod(str, Enum):
+class TimePeriod(StrEnum):
     """Time period for analytics"""
 
     DAILY = "daily"
@@ -212,7 +210,8 @@ class RevenueAnalytics:
         # Update daily snapshot
         self._update_daily_snapshot(entry)
 
-        logger.info(f"Recorded revenue: {source.value} - ${amount}")
+        logger.info("Recorded revenue: %s - $%s", source.value, amount)
+
         return entry
 
     def record_subscription_event(

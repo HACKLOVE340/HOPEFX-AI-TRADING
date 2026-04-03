@@ -30,10 +30,11 @@ import os
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Any
-from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -508,8 +509,8 @@ class FIXAdapter:
         self._pending_lock = threading.Lock()
 
         # quickfix objects (set in start())
-        self._initiator: Any = None
-        self._session_id: Any = None
+        self._initiator: Any | None = None
+        self._session_id: Any | None = None
         self._app: _QuickfixApp | None = None
 
         # Heartbeat thread
@@ -518,7 +519,7 @@ class FIXAdapter:
         self._running = False
 
         # pyfixmsg socket state (set in _connect_pyfixmsg)
-        self._pyfixmsg_sock: Any = None
+        self._pyfixmsg_sock: Any | None = None
         self._pyfixmsg_seq: int = 1
 
     # ------------------------------------------------------------------
@@ -654,7 +655,7 @@ class FIXAdapter:
             password=self._password,
         )
 
-        if os.path.exists(self.config_file):
+        if Path(self.config_file).exists():
             settings = fix.SessionSettings(self.config_file)
         else:
             # Build minimal in-memory settings
@@ -681,7 +682,7 @@ class FIXAdapter:
                 tmp.write(settings_str)
                 tmp_name = tmp.name
             settings = fix.SessionSettings(tmp_name)
-            os.unlink(tmp_name)
+            Path(tmp_name).unlink()
 
         store_factory = fix.FileStoreFactory(settings)
         log_factory = fix.FileLogFactory(settings)

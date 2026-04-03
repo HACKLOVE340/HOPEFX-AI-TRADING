@@ -8,17 +8,16 @@ HOPEFX Backtesting Engine - Event-Driven Architecture
 Production-grade backtesting with transaction cost modeling
 """
 
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from dataclasses import dataclass, field
-from typing import Any
-from collections.abc import Callable
-from enum import Enum
 import json
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from enum import Enum
 from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
 
 
 class OrderType(Enum):
@@ -779,7 +778,7 @@ class CSVDataHandler:
     def __init__(self, filepath: str, date_format: str = "%Y-%m-%d %H:%M:%S"):
         self.filepath = filepath
         self.date_format = date_format
-        self.data: pd.DataFrame = None
+        self.data: pd.DataFrame | None = None
 
     def load(self):
         """Load CSV data"""

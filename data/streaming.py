@@ -18,11 +18,9 @@ import logging
 import threading
 import time
 from collections import defaultdict, deque
-from datetime import datetime, timezone
-
-UTC = timezone.utc
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from enum import Enum
 
 logger = logging.getLogger(__name__)
@@ -312,7 +310,7 @@ class StreamingService:
 
             # Aggregate into bars
             completed_bars = []
-            for _tf, aggregator in self._aggregators.items():
+            for aggregator in self._aggregators.values():
                 bar = aggregator.add_tick(tick)
                 if bar is not None:
                     self._bars[tick.symbol][bar.timeframe].append(bar)
@@ -500,8 +498,9 @@ def create_streaming_router(service: StreamingService):
     Returns:
         FastAPI APIRouter
     """
-    from fastapi import APIRouter, WebSocket, WebSocketDisconnect
     import json
+
+    from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
     router = APIRouter(prefix="/api/stream", tags=["Streaming"])
 
@@ -525,7 +524,7 @@ def create_streaming_router(service: StreamingService):
     @router.websocket("/{symbol}/ws")
     async def websocket_stream(websocket: WebSocket, symbol: str):
         """WebSocket endpoint for real-time tick streaming."""
-        from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+        from rate_limiting.websocket_limiter import get_client_ip, get_ws_limiter
 
         limiter = get_ws_limiter()
         client_ip = get_client_ip(websocket)

@@ -24,9 +24,7 @@ import logging
 import os
 import warnings
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -677,9 +675,9 @@ class MLPipeline:
 
             fold = WalkForwardFold(
                 fold_idx=i,
-                train_start=list(train_idx)[0],
+                train_start=next(iter(train_idx)),
                 train_end=list(train_idx)[-1],
-                test_start=list(test_idx)[0],
+                test_start=next(iter(test_idx)),
                 test_end=list(test_idx)[-1],
                 accuracy=acc,
                 auc=auc,

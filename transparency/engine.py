@@ -5,12 +5,10 @@
 # No commercial use without explicit permission.
 """transparency/engine.py — ExecutionTransparencyEngine."""
 
-from typing import Any
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
 import logging
 import statistics
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 # Pip multipliers: 1 pip = 0.0001 for FX pairs, 0.01 for metals/indices
 
@@ -129,7 +127,8 @@ class ExecutionTransparencyEngine:
         )
 
         self.executions.append(execution)
-        logger.info(f"Recorded execution {execution.execution_id}: slippage={slippage_pips:.2f} pips")
+        logger.info("Recorded execution %s: slippage=%s pips", execution.execution_id, slippage_pips)
+
         return execution
 
     def generate_report(
@@ -235,7 +234,8 @@ class ExecutionTransparencyEngine:
         )
 
         self.reports[report.report_id] = report
-        logger.info(f"Generated report {report.report_id}: {len(filtered)} executions analyzed")
+        logger.info("Generated report %s: %s executions analyzed", report.report_id, len(filtered))
+
         return report
 
     def _calculate_quality(self, avg_slippage: float, avg_latency: float, avg_fill_ratio: float) -> ExecutionQuality:

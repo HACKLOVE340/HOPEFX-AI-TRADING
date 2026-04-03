@@ -17,14 +17,13 @@ tests/unit/test_risk_properties.py
   8. update_equity never produces negative current_drawdown
 """
 
-import numpy as np
 from pathlib import Path
 
-from hypothesis import given, settings, assume
+import numpy as np
+from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
-from risk.manager import RiskManager, RiskConfig
-
+from risk.manager import RiskConfig, RiskManager
 
 # ---------------------------------------------------------------------------
 # Shared strategy for valid price inputs

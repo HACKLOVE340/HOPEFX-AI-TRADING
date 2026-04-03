@@ -7,14 +7,14 @@
 Tests for the cache module.
 """
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from cache.market_data_cache import (
-    Timeframe,
-    OHLCVData,
     CachedTickData,
     CacheStatistics,
     MarketDataCache,
+    OHLCVData,
+    Timeframe,
 )
 
 

@@ -11,9 +11,7 @@ and adds MCC integration.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 

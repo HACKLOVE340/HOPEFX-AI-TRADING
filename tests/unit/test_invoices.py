@@ -7,11 +7,10 @@
 Tests for Invoice Generation System
 """
 
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from datetime import datetime, timedelta, timezone
 
-UTC = timezone.utc
-from monetization.invoices import Invoice, InvoiceStatus, InvoiceGenerator
+from monetization.invoices import Invoice, InvoiceGenerator, InvoiceStatus
 from monetization.pricing import SubscriptionTier
 
 

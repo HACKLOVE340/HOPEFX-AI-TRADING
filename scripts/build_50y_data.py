@@ -32,7 +32,7 @@ import json
 import logging
 import sys
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -379,7 +379,7 @@ def full_stats(df: pd.DataFrame) -> dict:
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> int:
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
     logger.info("=" * 60)
     logger.info("Building 50Y XAUUSD dataset  target: %s → %s", TARGET_START, today)
     logger.info("=" * 60)
@@ -448,7 +448,7 @@ def main() -> int:
             coverage[label] = {"rows": 0, "from": None, "to": None}
 
     report = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "dataset": str(OUTPUT_50Y.relative_to(PROJECT_ROOT)),
         "full_stats": stats,
         "crisis_periods": crisis,

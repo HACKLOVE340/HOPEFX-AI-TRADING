@@ -25,7 +25,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import math
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
@@ -33,7 +33,6 @@ from pydantic import BaseModel
 
 from api.auth import TokenPayload, get_current_user
 
-UTC = timezone.utc
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/pnl", tags=["P&L Dashboard"])

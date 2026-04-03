@@ -77,8 +77,7 @@ async def _try_cluster(
 ) -> Any | None:
     """Attempt Redis Cluster connection. Returns client or None."""
     try:
-        from redis.asyncio.cluster import RedisCluster
-        from redis.asyncio.cluster import ClusterNode
+        from redis.asyncio.cluster import ClusterNode, RedisCluster
 
         hosts = _parse_hosts(hosts_str)
         startup_nodes = [ClusterNode(h, p) for h, p in hosts]
@@ -281,8 +280,8 @@ async def get_health() -> dict[str, Any]:
                 logger.debug("Suppressed exception: %s", _exc)
 
         return info
-    except Exception as exc:
-        logger.error("Redis health check failed: %s", exc, exc_info=True)
+    except Exception:
+        logger.exception("Redis health check failed: %s")
         return {"mode": _connection_mode, "connected": False, "error": "Redis unavailable — check server logs"}
 
 

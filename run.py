@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -52,7 +53,6 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-import contextlib
 
 # ── logging setup (overridden by --log flag after arg parse) ──────────────────
 logging.basicConfig(
@@ -296,8 +296,9 @@ async def _run_trading(args: argparse.Namespace) -> None:
     )
 
     try:
-        from hopefx_engine import HopeFXEngine
         import signal as _signal
+
+        from hopefx_engine import HopeFXEngine
 
         engine = HopeFXEngine()
         loop = asyncio.get_running_loop()
@@ -319,6 +320,7 @@ async def _run_api() -> None:
     """Start the FastAPI server with uvicorn."""
     try:
         import uvicorn
+
         from app import app as fastapi_app
 
         config = uvicorn.Config(

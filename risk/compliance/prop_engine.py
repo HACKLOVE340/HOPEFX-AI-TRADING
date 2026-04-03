@@ -33,13 +33,11 @@ from __future__ import annotations
 import json
 import logging
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, time, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, time
 from enum import Enum, auto
 from pathlib import Path
-from collections.abc import Callable
 
 import requests
 

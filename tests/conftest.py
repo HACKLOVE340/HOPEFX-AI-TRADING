@@ -21,18 +21,17 @@ os.environ.setdefault(
     "test-only-jwt-secret-key-minimum-32-chars!!",
 )
 
-import pytest
 import asyncio
-import numpy as np
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-UTC = timezone.utc
+import numpy as np
+import pytest
 
 # Import core components for testing
 from brokers import PaperTradingBroker
-from risk.manager import RiskManager, RiskConfig
+from data.real_time_price_engine import OHLCV, Tick
+from risk.manager import RiskConfig, RiskManager
 from strategies.manager import StrategyManager
-from data.real_time_price_engine import Tick, OHLCV
 
 
 @pytest.fixture
@@ -280,7 +279,8 @@ def test_config():
 @pytest.fixture
 def mock_broker():
     """Lightweight synchronous mock broker for unit tests."""
-    from unittest.mock import MagicMock, AsyncMock as _AsyncMock
+    from unittest.mock import AsyncMock as _AsyncMock
+    from unittest.mock import MagicMock
 
     broker = MagicMock()
     broker.get_account_info = _AsyncMock(

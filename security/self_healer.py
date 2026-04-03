@@ -28,7 +28,8 @@ Start from connect_to_life.py or global_fortress.py::
 
     from security.self_healer import SelfHealer
     healer = SelfHealer()
-    asyncio.create_task(healer.run())
+    _t = asyncio.create_task(healer.run())
+    _t.add_done_callback(lambda _: None)
 
 The FastAPI sub-router is mounted automatically when ``mount_router`` is
 called with the app instance.
@@ -37,6 +38,7 @@ called with the app instance.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import difflib
 import hashlib
 import json
@@ -44,15 +46,13 @@ import logging
 import os
 import shutil
 import subprocess  # nosec B404 — used only for git rollback with a fixed command list
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from pydantic import BaseModel
-import contextlib
 
-UTC = timezone.utc
 logger = logging.getLogger(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -280,7 +280,8 @@ class SelfHealer:
     Usage::
 
         healer = SelfHealer()
-        asyncio.create_task(healer.run())
+        _t = asyncio.create_task(healer.run())
+        _t.add_done_callback(lambda _: None)
         healer.mount_router(app)
     """
 
@@ -625,5 +626,6 @@ async def start_healer(app: FastAPI) -> None:
     """
     healer = get_healer()
     healer.mount_router(app)
-    asyncio.create_task(healer.run(), name="self-healer")
+    _t = asyncio.create_task(healer.run(), name="self-healer")
+    _t.add_done_callback(lambda _: None)
     logger.info("SelfHealer: background task started")

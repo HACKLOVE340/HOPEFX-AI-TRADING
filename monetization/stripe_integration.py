@@ -27,11 +27,9 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from .pricing import BillingCycle, SubscriptionTier
@@ -52,7 +50,7 @@ except ImportError:
 # ── Webhook event types ───────────────────────────────────────────────────────
 
 
-class StripeWebhookEvent(str, Enum):
+class StripeWebhookEvent(StrEnum):
     PAYMENT_INTENT_SUCCEEDED = "payment_intent.succeeded"
     PAYMENT_INTENT_FAILED = "payment_intent.payment_failed"
     CHECKOUT_SESSION_COMPLETED = "checkout.session.completed"

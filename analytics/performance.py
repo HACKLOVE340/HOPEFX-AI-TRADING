@@ -14,14 +14,13 @@ Comprehensive performance analytics including:
 - Risk metrics visualization data
 """
 
-from typing import Any
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from enum import Enum
-import numpy as np
 import logging
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from enum import Enum
+from typing import Any
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -207,7 +206,8 @@ class PerformanceAnalytics:
         # Initialize with starting point
         self._record_equity_point(initial_equity, 0, 0)
 
-        logger.info(f"Performance Analytics initialized with equity: ${initial_equity:,.2f}")
+        logger.info("Performance Analytics initialized with equity: $%s", initial_equity)
+
 
     def record_trade(self, trade: TradeRecord):
         """Record a completed trade."""
@@ -227,7 +227,8 @@ class PerformanceAnalytics:
             drawdown,
         )
 
-        logger.debug(f"Trade recorded: {trade.id} - PnL: ${trade.pnl:,.2f}")
+        logger.debug("Trade recorded: %s - PnL: $%s", trade.id, trade.pnl)
+
 
     def _record_equity_point(self, equity: float, open_pnl: float, drawdown: float):
         """Record a point on the equity curve."""
@@ -365,7 +366,7 @@ class PerformanceAnalytics:
             monthly_returns=monthly_returns,
         )
 
-    def compare_strategies(self, strategies: list[str] = None) -> dict[str, StrategyPerformance]:
+    def compare_strategies(self, strategies: list[str] | None = None) -> dict[str, StrategyPerformance]:
         """
         Compare performance across strategies.
 
@@ -376,7 +377,7 @@ class PerformanceAnalytics:
             Dict of strategy name to StrategyPerformance
         """
         if strategies is None:
-            strategies = list(set(t.strategy for t in self.trades))
+            strategies = list({t.strategy for t in self.trades})
 
         results = {}
 
@@ -405,7 +406,7 @@ class PerformanceAnalytics:
             avg_duration = np.mean(durations) if durations else 0
 
             # Days trading
-            unique_days = set(t.exit_time.date() for t in strategy_trades)
+            unique_days = {t.exit_time.date() for t in strategy_trades}
             trades_per_day = total / len(unique_days) if unique_days else 0
 
             results[strategy] = StrategyPerformance(

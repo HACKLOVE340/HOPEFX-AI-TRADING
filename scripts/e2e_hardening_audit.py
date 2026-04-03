@@ -32,9 +32,7 @@ import ast
 import pathlib
 import re
 import sys
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 # Ensure repo root is on sys.path so data_layer imports work when the
 # script is run from scripts/ or from the repo root.
@@ -107,7 +105,7 @@ sub_modules = (
     "data_layer.replay.",
 )
 
-for path in sorted(pathlib.Path(".").rglob("*.py")):
+for path in sorted(pathlib.Path().rglob("*.py")):
     ps = str(path)
     if "__pycache__" in ps or ".git" in ps:
         continue
@@ -500,7 +498,7 @@ else:
 section("12. Code quality: no bare except:pass")
 
 bare_excepts = []
-for path in sorted(pathlib.Path(".").rglob("*.py")):
+for path in sorted(pathlib.Path().rglob("*.py")):
     ps = str(path)
     if "__pycache__" in ps or ".git" in ps:
         continue
@@ -529,7 +527,7 @@ section("13. Code quality: no mock/stub/fake in production paths")
 mock_in_prod = []
 # Exclude test files, example files, and audit/validation scripts themselves
 _MOCK_EXCLUDE = ("test", "example", "e2e_hardening_audit", "e2e_production_validation")
-for path in sorted(pathlib.Path(".").rglob("*.py")):
+for path in sorted(pathlib.Path().rglob("*.py")):
     ps = str(path)
     if "__pycache__" in ps or ".git" in ps:
         continue
@@ -693,7 +691,7 @@ section("17. Functional: MicrostructureEngine session reset (no deadlock)")
 
 try:
     from data_layer.microstructure.engine import MicrostructureEngine
-    from data_layer.types import GoldTick, FeedSource, TickQuality
+    from data_layer.types import FeedSource, GoldTick, TickQuality
 
     micro_eng = MicrostructureEngine()
 
@@ -735,7 +733,7 @@ section("18. Functional: NormalizationPipeline tick_to_ohlcv unit volume")
 
 try:
     from data_layer.normalization.pipeline import normalization_pipeline
-    from data_layer.types import GoldTick, FeedSource, TickQuality
+    from data_layer.types import FeedSource, GoldTick, TickQuality
 
     ticks = [
         GoldTick(

@@ -10,10 +10,10 @@ Provides copy trading, strategy marketplace, and community features.
 """
 
 from .copy_trading import CopyTradingEngine
-from .marketplace import StrategyMarketplace
-from .profiles import TraderProfileManager as ProfileManager
 from .leaderboards import PerformanceLeaderboard as LeaderboardManager
+from .marketplace import StrategyMarketplace
 from .performance import PerformanceTracker
+from .profiles import TraderProfileManager as ProfileManager
 
 copy_trading_engine = CopyTradingEngine()
 marketplace = StrategyMarketplace()

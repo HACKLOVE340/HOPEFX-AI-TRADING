@@ -41,15 +41,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import os
 import sys
 import time
 import traceback
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
-import contextlib
 
 # Ensure project root is on sys.path regardless of where the script is invoked.
 # This script lives in scripts/ — add the parent directory (project root).
@@ -317,8 +315,9 @@ def check_dqe() -> str:
 
 @check("NormalizationPipeline: OHLCV cleaning, tick normalisation")
 def check_normalization() -> str:
-    import pandas as pd
     import numpy as np
+    import pandas as pd
+
     from data_layer.orchestrator import orchestrator
 
     norm = orchestrator._norm
@@ -488,8 +487,8 @@ def check_inference() -> str:
 @check("Risk: RiskManager + Gatekeeper wired to orchestrator")
 def check_risk() -> str:
     from data_layer.orchestrator import orchestrator
-    from risk.manager import RiskManager
     from risk.gatekeeper import gatekeeper
+    from risk.manager import RiskManager
 
     rm = RiskManager(orchestrator=orchestrator, lineage_store=orchestrator._lineage)
     # RiskManager stores orchestrator as _orch (see risk/manager.py)

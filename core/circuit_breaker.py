@@ -43,9 +43,9 @@ import asyncio
 import functools
 import logging
 import time
+from collections.abc import Callable
 from enum import IntEnum
 from typing import Any
-from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 

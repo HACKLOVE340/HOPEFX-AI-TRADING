@@ -30,22 +30,21 @@ Usage
     engine = ProductionDataEngine()
     engine.subscribe(brain)
     engine.subscribe(risk_manager)
-    asyncio.create_task(engine.start())
+    _t = asyncio.create_task(engine.start())
+    _t.add_done_callback(lambda _: None)
 """
 
 import asyncio
+import contextlib
 import logging
 import os
 from collections import deque
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import aiohttp
 import yaml
-import contextlib
 
 logger = logging.getLogger(__name__)
 

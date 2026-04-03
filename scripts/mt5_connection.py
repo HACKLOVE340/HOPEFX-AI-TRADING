@@ -10,9 +10,10 @@ try:
 except ImportError as e:
     raise SystemExit(f"MetaTrader5 not available (Windows-only): {e}") from e
 
-import time
 import logging
 import os
+import time
+
 from dotenv import load_dotenv
 
 # Load environment variables from .env file

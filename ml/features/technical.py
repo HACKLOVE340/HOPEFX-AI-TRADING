@@ -73,7 +73,8 @@ class TechnicalFeatureEngineer:
         # Store feature names (excluding OHLCV)
         self.feature_names = [col for col in df.columns if col not in required]
 
-        self.logger.info(f"Created {len(self.feature_names)} features")
+        self.logger.info("Created %s features", len(self.feature_names))
+
 
         return df
 

@@ -14,11 +14,11 @@ import functools
 import logging
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Any, TypeVar
-from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 

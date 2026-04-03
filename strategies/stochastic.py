@@ -9,9 +9,7 @@ Stochastic Oscillator Trading Strategy
 This strategy uses the Stochastic Oscillator to identify overbought/oversold conditions.
 """
 
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
@@ -204,7 +202,8 @@ class StochasticStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            self.logger.error(f"Error generating Stochastic signal: {e}")
+            self.logger.error("Error generating Stochastic signal: %s", e)
+
             return {
                 "type": "HOLD",
                 "confidence": 0.0,

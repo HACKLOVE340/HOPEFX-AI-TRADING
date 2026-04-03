@@ -49,10 +49,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 
 import numpy as np
 from scipy import stats as _stats
@@ -67,7 +65,7 @@ MEAN_DRIFT_SIGMA = 2.0  # mean drift beyond this many sigma → warning
 MIN_SAMPLES = 30  # minimum samples for meaningful comparison
 
 
-class ValidationStatus(str, Enum):
+class ValidationStatus(StrEnum):
     PASSED = "passed"
     WARNING = "warning"
     FAILED = "failed"

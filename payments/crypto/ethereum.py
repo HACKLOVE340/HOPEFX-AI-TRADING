@@ -9,12 +9,10 @@ Ethereum Payment Integration
 Handles Ethereum (ETH) deposits and withdrawals.
 """
 
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from decimal import Decimal
-import logging
 import hashlib
+import logging
+from datetime import UTC, datetime
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +39,8 @@ class EthereumClient:
                 "created_at": datetime.now(UTC).isoformat(),
             }
 
-            logger.info(f"Generated Ethereum address for user {user_id}")
+            logger.info("Generated Ethereum address for user %s", user_id)
+
 
             return {
                 "address": address,
@@ -51,14 +50,16 @@ class EthereumClient:
                 "confirmations_required": self.REQUIRED_CONFIRMATIONS,
             }
         except Exception as e:
-            logger.error(f"Error generating Ethereum address: {e}")
+            logger.error("Error generating Ethereum address: %s", e)
+
             raise
 
     def process_deposit(self, user_id: str, amount: Decimal, tx_hash: str, confirmations: int = 0) -> dict | None:
         """Process Ethereum deposit"""
         try:
             if amount < self.MIN_DEPOSIT:
-                logger.warning(f"ETH deposit below minimum: {amount}")
+                logger.warning("ETH deposit below minimum: %s", amount)
+
                 return None
 
             status = "confirmed" if confirmations >= self.REQUIRED_CONFIRMATIONS else "pending"
@@ -73,11 +74,13 @@ class EthereumClient:
             }
 
             self.transactions[tx_hash] = transaction
-            logger.info(f"ETH deposit processed: {tx_hash} - {amount} ETH")
+            logger.info("ETH deposit processed: %s - %s ETH", tx_hash, amount)
+
 
             return transaction
         except Exception as e:
-            logger.error(f"Error processing ETH deposit: {e}")
+            logger.error("Error processing ETH deposit: %s", e)
+
             return None
 
     def process_withdrawal(self, user_id: str, amount: Decimal, destination: str) -> dict:
@@ -100,7 +103,8 @@ class EthereumClient:
                 "status": "broadcasting",
             }
         except Exception as e:
-            logger.error(f"Error processing ETH withdrawal: {e}")
+            logger.error("Error processing ETH withdrawal: %s", e)
+
             raise
 
 

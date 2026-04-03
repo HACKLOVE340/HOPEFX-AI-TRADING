@@ -19,13 +19,11 @@ Inspired by top platforms: TradingView, cTrader, MT5
 import asyncio
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
-from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -181,9 +179,11 @@ class WebSocketManager:
             try:
                 callback(connection_id, self._connection_info[connection_id])
             except Exception as e:
-                logger.error(f"Error in connect callback: {e}")
+                logger.error("Error in connect callback: %s", e)
 
-        logger.info(f"WebSocket registered: {connection_id}")
+
+        logger.info("WebSocket registered: %s", connection_id)
+
         return connection_id
 
     def unregister_connection(self, connection_id: str):
@@ -212,9 +212,11 @@ class WebSocketManager:
             try:
                 callback(connection_id)
             except Exception as e:
-                logger.error(f"Error in disconnect callback: {e}")
+                logger.error("Error in disconnect callback: %s", e)
 
-        logger.info(f"WebSocket unregistered: {connection_id}")
+
+        logger.info("WebSocket unregistered: %s", connection_id)
+
 
     def get_connection_info(self, connection_id: str) -> ConnectionInfo | None:
         """Get information about a connection."""
@@ -240,14 +242,16 @@ class WebSocketManager:
             True if subscribed successfully
         """
         if connection_id not in self._connections:
-            logger.warning(f"Connection not found: {connection_id}")
+            logger.warning("Connection not found: %s", connection_id)
+
             return False
 
         info = self._connection_info[connection_id]
 
         # Check subscription limit
         if len(info.subscriptions) >= self._max_subscriptions:
-            logger.warning(f"Max subscriptions reached for {connection_id}")
+            logger.warning("Max subscriptions reached for %s", connection_id)
+
             return False
 
         # Add to channel
@@ -268,7 +272,8 @@ class WebSocketManager:
             ),
         )
 
-        logger.debug(f"Subscribed {connection_id} to {channel}")
+        logger.debug("Subscribed %s to %s", connection_id, channel)
+
         return True
 
     async def unsubscribe(self, connection_id: str, channel: str) -> bool:
@@ -316,7 +321,8 @@ class WebSocketManager:
         if connection_id in self._connection_info:
             self._connection_info[connection_id].subscriptions.discard(channel)
 
-        logger.debug(f"Unsubscribed {connection_id} from {channel}")
+        logger.debug("Unsubscribed %s from %s", connection_id, channel)
+
         return True
 
     def get_channel_subscribers(self, channel: str) -> set[str]:
@@ -432,7 +438,8 @@ class WebSocketManager:
                 # Tornado WebSocket
                 websocket.write_message(message.to_json())
             else:
-                logger.error(f"Unknown WebSocket type for {connection_id}")
+                logger.error("Unknown WebSocket type for %s", connection_id)
+
                 return
 
             # Update stats
@@ -441,7 +448,8 @@ class WebSocketManager:
                 self._connection_info[connection_id].messages_sent += 1
 
         except Exception as e:
-            logger.error(f"Error sending to {connection_id}: {e}")
+            logger.error("Error sending to %s: %s", connection_id, e)
+
             # Connection may be dead, unregister it
             self.unregister_connection(connection_id)
 
@@ -466,7 +474,8 @@ class WebSocketManager:
         try:
             data = json.loads(message)
         except json.JSONDecodeError:
-            logger.warning(f"Invalid JSON from {connection_id}")
+            logger.warning("Invalid JSON from %s", connection_id)
+
             return {"error": "Invalid JSON"}
 
         # Update stats
@@ -510,7 +519,8 @@ class WebSocketManager:
             try:
                 callback(connection_id, data)
             except Exception as e:
-                logger.error(f"Error in message callback: {e}")
+                logger.error("Error in message callback: %s", e)
+
 
         return None
 
@@ -562,7 +572,8 @@ class WebSocketManager:
                 elapsed = (now - info.last_heartbeat).total_seconds()
                 if elapsed > timeout:
                     dead_connections.append(conn_id)
-                    logger.warning(f"Connection timeout: {conn_id}")
+                    logger.warning("Connection timeout: %s", conn_id)
+
 
             # Clean up dead connections
             for conn_id in dead_connections:
@@ -712,7 +723,7 @@ def create_websocket_router(manager: WebSocketManager):
     @router.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):
         """Main WebSocket endpoint."""
-        from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+        from rate_limiting.websocket_limiter import get_client_ip, get_ws_limiter
 
         limiter = get_ws_limiter()
         client_ip = get_client_ip(websocket)
@@ -748,7 +759,8 @@ def create_websocket_router(manager: WebSocketManager):
         except WebSocketDisconnect:
             manager.unregister_connection(connection_id)
         except Exception as e:
-            logger.error(f"WebSocket error: {e}")
+            logger.error("WebSocket error: %s", e)
+
             manager.unregister_connection(connection_id)
         finally:
             await limiter.release(client_ip)

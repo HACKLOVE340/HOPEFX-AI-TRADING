@@ -20,7 +20,6 @@ from __future__ import annotations
 import sys
 from unittest.mock import MagicMock, patch
 
-
 # ---------------------------------------------------------------------------
 # Helpers — build a minimal sentry_sdk mock
 # ---------------------------------------------------------------------------
@@ -120,6 +119,7 @@ class TestInitSentryWithDSN:
             },
         ):
             import importlib
+
             import monitoring.sentry_config as sc
 
             importlib.reload(sc)
@@ -144,6 +144,7 @@ class TestInitSentryWithDSN:
         }
         with patch.dict(sys.modules, integration_mocks):
             import importlib
+
             import monitoring.sentry_config as sc
 
             importlib.reload(sc)
@@ -179,6 +180,7 @@ class TestInitSentryWithDSN:
             },
         ):
             import importlib
+
             import monitoring.sentry_config as sc
 
             importlib.reload(sc)
@@ -196,6 +198,7 @@ class TestInitSentryWithDSN:
 class TestScrubDict:
     def setup_method(self):
         import importlib
+
         import monitoring.sentry_config as sc
 
         importlib.reload(sc)
@@ -252,6 +255,7 @@ class TestScrubDict:
 class TestBeforeSend:
     def setup_method(self):
         import importlib
+
         import monitoring.sentry_config as sc
 
         importlib.reload(sc)
@@ -313,6 +317,7 @@ class TestBeforeSend:
 class TestBeforeSendTransaction:
     def setup_method(self):
         import importlib
+
         import monitoring.sentry_config as sc
 
         importlib.reload(sc)
@@ -339,6 +344,7 @@ class TestCaptureMLFallbackEvent:
         sdk_mock = _make_sentry_mock()
         with patch.dict(sys.modules, {"sentry_sdk": sdk_mock}):
             import importlib
+
             import monitoring.sentry_config as sc
 
             importlib.reload(sc)
@@ -362,6 +368,7 @@ class TestCaptureMLFallbackEvent:
         saved = sys.modules.pop("sentry_sdk", None)
         try:
             import importlib
+
             import monitoring.sentry_config as sc
 
             importlib.reload(sc)

@@ -49,7 +49,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -57,7 +57,6 @@ import numpy as np
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
-UTC = timezone.utc
 logger = logging.getLogger(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────────

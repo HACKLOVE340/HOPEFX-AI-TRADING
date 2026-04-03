@@ -11,20 +11,17 @@ based on user subscriptions and access codes.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from enum import StrEnum
 
-UTC = timezone.utc
-from enum import Enum
-
-from .pricing import SubscriptionTier, pricing_manager
-from .subscription import subscription_manager, SubscriptionStatus
 from .access_codes import access_code_generator
-
+from .pricing import SubscriptionTier, pricing_manager
+from .subscription import SubscriptionStatus, subscription_manager
 
 logger = logging.getLogger(__name__)
 
 
-class ValidationResult(str, Enum):
+class ValidationResult(StrEnum):
     """Validation result enumeration"""
 
     VALID = "valid"
@@ -231,7 +228,8 @@ class LicenseValidator:
             # Clear entire cache
             self._validation_cache.clear()
 
-        logger.info(f"Cleared validation cache for user: {user_id or 'all'}")
+        logger.info("Cleared validation cache for user: %s", user_id or 'all')
+
 
 
 # Global license validator instance

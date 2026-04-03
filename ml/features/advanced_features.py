@@ -80,7 +80,8 @@ class AdvancedFeatureEngineer:
         # Remove NaN values
         features_df = features_df.dropna()
 
-        logger.info(f"Engineered {len(features_df.columns)} features")
+        logger.info("Engineered %s features", len(features_df.columns))
+
         return features_df
 
     def _add_price_features(self, df: pd.DataFrame) -> pd.DataFrame:

@@ -15,13 +15,11 @@ import sys
 import threading
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(Path(__file__).parent)))
 
 from cache.market_data_cache import MarketDataCache
 from config.config_manager import ConfigManager

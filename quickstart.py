@@ -152,7 +152,7 @@ if __name__ == "__main__":
     sys.exit(main())
 '''
 
-with open("/mnt/kimi/output/hopefx_upgrade/quickstart.py", "w") as f:
+with Path("/mnt/kimi/output/hopefx_upgrade/quickstart.py").open("w") as f:
     f.write(quickstart_content)
 
 print("✅ quickstart.py created - One-command setup and demo")

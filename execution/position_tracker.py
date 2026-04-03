@@ -12,9 +12,7 @@ import asyncio
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +72,8 @@ class PositionTracker:
         async with self._lock:
             self.positions[position.id] = position
             self._price_subscriptions[position.symbol].append(position.id)
-            logger.info(f"Position added: {position.id} ({position.symbol})")
+            logger.info("Position added: %s (%s)", position.id, position.symbol)
+
             return True
 
     async def update_position(self, position_id: str, **updates) -> bool:

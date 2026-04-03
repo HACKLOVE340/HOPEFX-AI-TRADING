@@ -39,7 +39,7 @@ except Exception as _router_import_err:  # pragma: no cover
     router = _APIRouter(prefix="/api/auth", tags=["Authentication"])
     logger.warning("auth.router unavailable, using empty fallback router: %s", _router_import_err)
 
-__all__ = ["router", "TokenPayload", "get_current_user", "require_role"]
+__all__ = ["TokenPayload", "get_current_user", "require_role", "router"]
 
 # Role hierarchy: higher index = more privileged
 _ROLE_RANK: dict = {"user": 0, "trader": 1, "admin": 2, "superadmin": 3}

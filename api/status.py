@@ -19,9 +19,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter
@@ -51,6 +49,7 @@ def _get_redis():
     """Return a Redis client or None if unavailable."""
     try:
         import os as _os
+
         import redis as _redis
 
         url = _os.getenv("REDIS_URL", "redis://localhost:6379/0")

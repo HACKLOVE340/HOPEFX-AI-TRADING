@@ -33,6 +33,7 @@ Usage
 import asyncio
 import logging
 import os
+from typing import ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -166,7 +167,7 @@ class IBKRBroker:
         if not self._assert_connected("get_account_info"):
             return None
         summary = self._ib.accountSummary(account=self._account or "")
-        result: dict = {}
+        result: ClassVar[dict] = {}
         for item in summary:
             result[item.tag] = item.value
         # Normalise the most common fields.
@@ -304,8 +305,8 @@ class IBKRBroker:
                 "status": trade.orderStatus.status,
                 "comment": "OK",
             }
-        except Exception as exc:
-            logger.error("IBKRBroker.place_order failed: %s", exc, exc_info=True)
+        except Exception:
+            logger.exception("IBKRBroker.place_order failed: %s")
             return {"success": False, "order_id": 0, "comment": "Order failed — check server logs"}
 
     async def cancel_order(self, order_id: int) -> dict:
@@ -324,8 +325,8 @@ class IBKRBroker:
             await asyncio.sleep(0.1)
             logger.info("IBKR order cancelled | order_id=%s", order_id)
             return {"success": True, "comment": "OK"}
-        except Exception as exc:
-            logger.error("IBKRBroker.cancel_order failed: %s", exc, exc_info=True)
+        except Exception:
+            logger.exception("IBKRBroker.cancel_order failed: %s")
             return {"success": False, "comment": "Cancel failed — check server logs"}
 
     async def close_position(

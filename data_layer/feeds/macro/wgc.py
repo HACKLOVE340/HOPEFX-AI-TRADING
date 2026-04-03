@@ -51,7 +51,7 @@ import asyncio
 import io
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -59,7 +59,6 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-UTC = timezone.utc
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
@@ -459,7 +458,7 @@ class WGCFeed:
         logger.info(
             "WGC: fetched %d series: %s",
             len(loaded),
-            loaded if loaded else "(none — check cache dir or download manually)",
+            loaded or "(none — check cache dir or download manually)",
         )
         return results
 

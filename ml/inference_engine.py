@@ -37,11 +37,9 @@ import logging
 import os
 import time
 from collections import deque
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
@@ -101,7 +99,7 @@ def _init_prometheus():
             return self._C()
 
     try:
-        from prometheus_client import Counter, Gauge, Histogram, REGISTRY
+        from prometheus_client import REGISTRY, Counter, Gauge, Histogram
 
         def _counter(name, doc, labels=None):
             try:
@@ -550,7 +548,7 @@ class InferenceEngine:
             live_means = buffer_arr.mean(axis=0)
 
             max_z = 0.0
-            drifted_features: list[str] = []
+            drifted_features: ClassVar[list[str]] = []
 
             for i, feat_name in enumerate(col_names):
                 if feat_name not in train_stats:

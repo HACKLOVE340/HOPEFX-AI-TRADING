@@ -29,9 +29,7 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -136,7 +134,7 @@ def run_pipeline(
 
     _spec = _ilu.spec_from_file_location(
         "ml_training_module",
-        os.path.join(os.path.dirname(__file__), "training.py"),
+        os.path.join(Path(__file__).parent, "training.py"),
     )
     _mod = _ilu.module_from_spec(_spec)
     _spec.loader.exec_module(_mod)
@@ -146,7 +144,7 @@ def run_pipeline(
 
     # Sanitise symbol for directory name (e.g. XAU_USD → XAU_USD)
     safe_sym = symbol.replace("=", "").replace("/", "").replace("\\", "")
-    out_dir = os.path.join(model_dir, safe_sym)
+    out_dir = Path(model_dir) / safe_sym
     Path(out_dir).mkdir(parents=True, exist_ok=True)
 
     logger.info("Training models for %s → %s (%d bars)", symbol, out_dir, len(df))
@@ -172,7 +170,7 @@ def run_pipeline(
             "metrics": {k: v for k, v in (info.get("metrics") or {}).items() if isinstance(v, int | float)},
         }
 
-    manifest_path = os.path.join(out_dir, "manifest.json")
+    manifest_path = Path(out_dir) / "manifest.json"
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
     logger.info("Manifest written: %s", manifest_path)
@@ -230,8 +228,8 @@ def main():
                 m = info.get("metrics") or {}
                 acc = m.get("accuracy", m.get("rmse", "n/a"))
                 logger.info("  %-20s %-15s metric=%s", sym, name, acc)
-        except Exception as exc:
-            logger.error("Failed for %s: %s", sym, exc, exc_info=True)
+        except Exception:
+            logger.exception("Failed for %s: %s", sym)
             all_ok = False
 
     if not all_ok:

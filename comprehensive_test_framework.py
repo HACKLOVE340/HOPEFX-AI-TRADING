@@ -11,17 +11,16 @@ Unit | Integration | E2E | Performance | Chaos Engineering
 """
 
 import asyncio
-import pytest
-import numpy as np
-import pandas as pd
-from typing import Any
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from dataclasses import dataclass
-from enum import Enum
 import logging
 import time
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from enum import Enum
+from typing import Any
+
+import numpy as np
+import pandas as pd
+import pytest
 
 # Import components to test
 try:
@@ -30,14 +29,15 @@ try:
         TickData,
         TransactionCostModel,
     )
-    from enhanced_realtime_engine import MultiSourceAggregator, MockProvider
     from enhanced_ml_predictor import EnhancedMLPredictor, FeatureEngineering
-    from enhanced_smart_router import SmartOrderRouter, Order, OrderSide, OrderType
+    from enhanced_realtime_engine import MockProvider, MultiSourceAggregator
+    from enhanced_smart_router import Order, OrderSide, OrderType, SmartOrderRouter
 
     COMPONENTS_AVAILABLE = True
 except ImportError as e:
     COMPONENTS_AVAILABLE = False
-    logging.warning(f"Component imports failed: {e}")
+    logger.warning("Component imports failed: %s", e)
+
 
 logger = logging.getLogger(__name__)
 
@@ -473,7 +473,8 @@ class PerformanceTests:
         duration = time.time() - start
 
         throughput = len(ticks) / duration
-        logger.info(f"Backtest throughput: {throughput:.0f} ticks/sec")
+        logger.info("Backtest throughput: %s ticks/sec", throughput)
+
 
         assert throughput > 1000  # Minimum 1000 ticks/sec  # nosec B101
 
@@ -496,7 +497,8 @@ class PerformanceTests:
             latencies.append((time.time() - start) * 1000)
 
         avg_latency = np.mean(latencies)
-        logger.info(f"Prediction latency: {avg_latency:.2f} ms")
+        logger.info("Prediction latency: %s ms", avg_latency)
+
 
         assert avg_latency < 100  # Sub-100ms  # nosec B101
 
@@ -526,7 +528,8 @@ class PerformanceTests:
         task.cancel()
 
         rate = received / 5
-        logger.info(f"Data ingestion rate: {rate:.0f} ticks/sec")
+        logger.info("Data ingestion rate: %s ticks/sec", rate)
+
 
         assert rate > 10  # At least 10 consensus ticks/sec  # nosec B101
 
@@ -743,7 +746,8 @@ class ComprehensiveTestFramework:
 
         with open(filepath, "w") as f:
             json.dump(self._generate_report(0), f, indent=2, default=str)
-        logger.info(f"Test report exported to {filepath}")
+        logger.info("Test report exported to %s", filepath)
+
 
 
 # =============================================================================
@@ -799,5 +803,6 @@ if __name__ == "__main__":
         print(f"\nExit code: {exit_code}")
 
     except Exception as e:
-        logger.error(f"Test framework error: {e}")
+        logger.error("Test framework error: %s", e)
+
         raise

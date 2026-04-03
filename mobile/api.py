@@ -25,9 +25,7 @@ import asyncio
 import logging
 import os
 import uuid
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import bcrypt
@@ -317,8 +315,8 @@ class MobileAPIServer:
                 )
             except HTTPException:
                 raise
-            except Exception as exc:
-                logger.error("Registration failed: %s", exc, exc_info=True)
+            except Exception:
+                logger.exception("Registration failed: %s")
                 raise HTTPException(status_code=500, detail="Registration failed") from None
 
         @self.app.post("/api/v2/auth/login", response_model=AuthToken, tags=["Auth"])
@@ -339,8 +337,8 @@ class MobileAPIServer:
                 )
             except HTTPException:
                 raise
-            except Exception as exc:
-                logger.error("Login failed: %s", exc, exc_info=True)
+            except Exception:
+                logger.exception("Login failed: %s")
                 raise HTTPException(status_code=500, detail="Login failed") from None
 
         @self.app.post("/api/v2/auth/refresh", response_model=AuthToken, tags=["Auth"])
@@ -384,8 +382,8 @@ class MobileAPIServer:
                 return account
             except HTTPException:
                 raise
-            except Exception as exc:
-                logger.error("Failed to fetch account for %s: %s", user_id, exc, exc_info=True)
+            except Exception:
+                logger.exception("Failed to fetch account for %s: %s", user_id)
                 raise HTTPException(status_code=500, detail="Failed to fetch account") from None
 
     # ── Trading ──────────────────────────────────────────────────────────────
@@ -408,8 +406,8 @@ class MobileAPIServer:
                 )
             except HTTPException:
                 raise
-            except Exception as exc:
-                logger.error("Failed to fetch quote for %s: %s", symbol, exc, exc_info=True)
+            except Exception:
+                logger.exception("Failed to fetch quote for %s: %s", symbol)
                 raise HTTPException(status_code=500, detail="Failed to fetch quote") from None
 
         @self.app.post("/api/v2/orders", response_model=dict[str, Any], tags=["Trading"])
@@ -477,8 +475,8 @@ class MobileAPIServer:
                 }
             except HTTPException:
                 raise
-            except Exception as exc:
-                logger.error("Order placement failed for %s: %s", user_id, exc, exc_info=True)
+            except Exception:
+                logger.exception("Order placement failed for %s: %s", user_id)
                 raise HTTPException(status_code=500, detail="Order placement failed") from None
 
         @self.app.get("/api/v2/trades", response_model=list[TradeData], tags=["Trading"])
@@ -507,8 +505,8 @@ class MobileAPIServer:
                 ]
             except HTTPException:
                 raise
-            except Exception as exc:
-                logger.error("Failed to fetch trades for %s: %s", user_id, exc, exc_info=True)
+            except Exception:
+                logger.exception("Failed to fetch trades for %s: %s", user_id)
                 raise HTTPException(status_code=500, detail="Failed to fetch trades") from None
 
         @self.app.post("/api/v2/trades/{trade_id}/close", tags=["Trading"])
@@ -537,8 +535,8 @@ class MobileAPIServer:
                 }
             except HTTPException:
                 raise
-            except Exception as exc:
-                logger.error("Failed to close trade %s: %s", trade_id, exc, exc_info=True)
+            except Exception:
+                logger.exception("Failed to close trade %s: %s", trade_id)
                 raise HTTPException(status_code=500, detail="Failed to close trade") from None
 
     # ── Performance ──────────────────────────────────────────────────────────
@@ -579,8 +577,8 @@ class MobileAPIServer:
         ):
             try:
                 return []
-            except Exception as exc:
-                logger.error("Failed to fetch news: %s", exc, exc_info=True)
+            except Exception:
+                logger.exception("Failed to fetch news: %s")
                 raise HTTPException(status_code=500, detail="Failed to fetch news") from None
 
     # ── Notifications ────────────────────────────────────────────────────────
@@ -597,8 +595,8 @@ class MobileAPIServer:
                 return NotificationPreferences(**prefs) if prefs else NotificationPreferences()
             except HTTPException:
                 raise
-            except Exception as exc:
-                logger.error("Failed to fetch prefs for %s: %s", user_id, exc, exc_info=True)
+            except Exception:
+                logger.exception("Failed to fetch prefs for %s: %s", user_id)
                 raise HTTPException(status_code=500, detail="Failed to fetch preferences") from None
 
         @self.app.post("/api/v2/notifications/preferences", tags=["Notifications"])
@@ -612,8 +610,8 @@ class MobileAPIServer:
                 return {"status": "updated"}
             except HTTPException:
                 raise
-            except Exception as exc:
-                logger.error("Failed to update prefs for %s: %s", user_id, exc, exc_info=True)
+            except Exception:
+                logger.exception("Failed to update prefs for %s: %s", user_id)
                 raise HTTPException(status_code=500, detail="Failed to update preferences") from None
 
     # ── WebSocket ────────────────────────────────────────────────────────────
@@ -626,7 +624,7 @@ class MobileAPIServer:
             token: str = Query(...),
         ):
             """Real-time quote stream. Requires a valid access JWT as ?token=."""
-            from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+            from rate_limiting.websocket_limiter import get_client_ip, get_ws_limiter
 
             limiter = get_ws_limiter()
             client_ip = get_client_ip(websocket)
@@ -664,8 +662,8 @@ class MobileAPIServer:
                     await asyncio.sleep(0.5)
             except WebSocketDisconnect:
                 logger.debug("WebSocket quotes disconnected")
-            except Exception as exc:
-                logger.error("WebSocket quotes error: %s", exc, exc_info=True)
+            except Exception:
+                logger.exception("WebSocket quotes error: %s")
                 await websocket.close()
             finally:
                 await limiter.release(client_ip)
@@ -678,7 +676,7 @@ class MobileAPIServer:
             """Real-time trade update stream. Requires a valid access JWT as ?token=.
             user_id is extracted from the verified token — never trusted from query string.
             """
-            from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+            from rate_limiting.websocket_limiter import get_client_ip, get_ws_limiter
 
             limiter = get_ws_limiter()
             client_ip = get_client_ip(websocket)
@@ -704,8 +702,8 @@ class MobileAPIServer:
                         await websocket.send_text("pong")
             except WebSocketDisconnect:
                 logger.debug("WebSocket trades disconnected for %s", user_id)
-            except Exception as exc:
-                logger.error("WebSocket trades error for %s: %s", user_id, exc, exc_info=True)
+            except Exception:
+                logger.exception("WebSocket trades error for %s: %s", user_id)
             finally:
                 conns = self.active_connections.get(user_id, [])
                 if websocket in conns:
@@ -732,7 +730,7 @@ class MobileAPI:
     def __init__(
         self,
         compression_enabled: bool = True,
-        app_state: Any = None,
+        app_state: Any | None = None,
         **kwargs: Any,
     ) -> None:
         self.compression_enabled = compression_enabled

@@ -10,9 +10,7 @@ This strategy uses MACD indicator for trend-following signals.
 """
 
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
@@ -243,7 +241,8 @@ class MACDStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            self.logger.error(f"Error generating MACD signal: {e}")
+            self.logger.error("Error generating MACD signal: %s", e)
+
             return {
                 "type": "HOLD",
                 "confidence": 0.0,

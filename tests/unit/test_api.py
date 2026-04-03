@@ -15,25 +15,24 @@ Tests for:
 """
 
 import json
-import pytest
 import tempfile
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 # ============================================================
 # api/trading.py
 # ============================================================
-
 from api.trading import (
-    StrategyCreateRequest,
     PositionSizeRequest,
     PositionSizeResponse,
+    StrategyCreateRequest,
+)
+from api.trading import (
     router as trading_router,
 )
 
@@ -207,18 +206,20 @@ class TestTradingEndpoints:
 # api/admin.py
 # ============================================================
 
-from api.admin import (
-    log_activity,
-    _load_persisted_risk_settings,
-    _check_module,
-    _activity_log,
-    router as admin_router,
-)
-
-
 import os as _os
 import time as _time
+
 import jwt as _jwt
+
+from api.admin import (
+    _activity_log,
+    _check_module,
+    _load_persisted_risk_settings,
+    log_activity,
+)
+from api.admin import (
+    router as admin_router,
+)
 
 
 def _admin_token() -> str:
@@ -395,11 +396,11 @@ class TestAdminEndpoints:
 # ============================================================
 
 from api.signals import (
-    TradingSignal,
-    SignalStrength,
-    SignalDirection,
-    SignalAnalytics,
     RealTimeSignalService,
+    SignalAnalytics,
+    SignalDirection,
+    SignalStrength,
+    TradingSignal,
 )
 
 
@@ -803,18 +804,18 @@ class TestCalculateStrength:
 # ============================================================
 
 from api.monetization import (
-    PricingTierResponse,
-    SubscribeRequest,
-    SubscribeResponse,
     ActivateCodeRequest,
     ActivateCodeResponse,
-    AffiliateSignupRequest,
     AffiliateResponse,
+    AffiliateSignupRequest,
+    PartnerSignupRequest,
+    PricingTierResponse,
     ReferralRequest,
+    ReviewRequest,
     StrategyListRequest,
     StrategyPurchaseRequest,
-    ReviewRequest,
-    PartnerSignupRequest,
+    SubscribeRequest,
+    SubscribeResponse,
     WhiteLabelRequest,
 )
 
@@ -1067,11 +1068,11 @@ class TestMonetizationEndpoints:
 # ============================================================
 
 from api.websocket_server import (
+    ConnectionInfo,
     WebSocketManager,
     WebSocketMessage,
-    ConnectionInfo,
-    get_websocket_manager,
     create_websocket_router,
+    get_websocket_manager,
 )
 
 

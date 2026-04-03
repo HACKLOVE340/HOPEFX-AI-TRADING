@@ -46,12 +46,10 @@ import logging
 import os
 import time
 import uuid
-from dataclasses import dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from typing import Any
 from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +61,8 @@ try:
         Future,
         LimitOrder,
         MarketOrder,
-        StopOrder,
         StopLimitOrder,
+        StopOrder,
     )
 
     _IB_AVAILABLE = True
@@ -281,8 +279,8 @@ class IBKRBroker:
 
             return fill_result
 
-        except Exception as exc:
-            logger.error("IBKRBroker place_order: %s", exc, exc_info=True)
+        except Exception:
+            logger.exception("IBKRBroker place_order: %s")
             return {"status": "rejected", "reason": "Order failed — check server logs", "broker": "ibkr"}
 
     def _build_gold_contract(self, symbol: str, use_futures: bool = False) -> Any:

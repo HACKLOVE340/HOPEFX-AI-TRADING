@@ -55,8 +55,8 @@ def client() -> Generator[TestClient, None, None]:
     app = FastAPI()
 
     from api.admin import router as admin_router
-    from api.brain import router as brain_router
     from api.alerts import router as alerts_router
+    from api.brain import router as brain_router
 
     app.include_router(admin_router)
     app.include_router(brain_router)

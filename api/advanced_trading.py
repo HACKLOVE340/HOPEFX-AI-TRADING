@@ -38,9 +38,7 @@ import logging
 import math
 import random
 import uuid
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -248,6 +246,7 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
     Raises ValueError when no real data is available.
     """
     import pathlib
+
     import pandas as pd
 
     sym_key = symbol.upper().replace("/", "_").replace("-", "_")

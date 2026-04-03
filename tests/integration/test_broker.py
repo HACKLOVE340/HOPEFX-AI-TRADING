@@ -17,9 +17,8 @@ from __future__ import annotations
 
 import pytest
 
-from brokers.paper_trading import PaperTradingBroker
 from brokers.base import OrderSide, OrderType
-
+from brokers.paper_trading import PaperTradingBroker
 
 # ── Lifecycle ─────────────────────────────────────────────────────────────────
 

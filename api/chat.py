@@ -23,14 +23,12 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import UTC
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
-from datetime import timezone
-
-UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 
@@ -111,8 +109,8 @@ async def ai_chat(
 
     try:
         response_text = await agent.chat(body.message)
-    except Exception as exc:
-        logger.error("LLM chat error: %s", exc, exc_info=True)
+    except Exception:
+        logger.exception("LLM chat error: %s")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="AI response failed — check server logs",
@@ -163,7 +161,7 @@ async def chat_status(user: TokenPayload = Depends(get_current_user)):
     llm_available = False
     llm_error: str | None = None
     try:
-        import brain.llm_agent  # availability check only  # noqa: F401  # pylint: disable=unused-import
+        import brain.llm_agent  # availability check only  # pylint: disable=unused-import
 
         llm_available = True
     except ImportError as exc:

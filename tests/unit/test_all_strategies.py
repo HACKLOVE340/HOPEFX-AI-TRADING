@@ -8,12 +8,11 @@ Comprehensive strategy tests for all trading strategies.
 This file aims to increase test coverage to 80%+.
 """
 
-import pytest
-import pandas as pd
-import numpy as np
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-UTC = timezone.utc
+import numpy as np
+import pandas as pd
+import pytest
 
 from strategies.base import StrategyConfig
 
@@ -281,7 +280,7 @@ class TestStrategyManagerComprehensive:
         manager.register_strategy(strat2)
 
         count = 0
-        for _name, strategy in manager.strategies.items():
+        for strategy in manager.strategies.values():
             count += 1
             assert strategy is not None
 

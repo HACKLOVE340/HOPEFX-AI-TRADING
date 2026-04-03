@@ -13,13 +13,11 @@ Comprehensive tests for Phases 17-26 modules:
 - Phase 25: TeamManager (teams) - uncovered paths
 """
 
-import pytest
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
-import numpy as np
 
+import numpy as np
+import pytest
 
 # ===========================================================================
 # Phase 18: Chart Replay Engine - extended tests
@@ -954,7 +952,7 @@ class TestTeamsExtended:
         assert result is False
 
     def test_viewer_cannot_execute_trades(self, manager, team_with_owner):
-        from teams import UserRole, Permission
+        from teams import Permission, UserRole
 
         inv = manager.invite_member(team_with_owner.team_id, "view@x.com", UserRole.VIEWER, "owner1")
         manager.accept_invitation(inv.token, "viewer2", "View 2")

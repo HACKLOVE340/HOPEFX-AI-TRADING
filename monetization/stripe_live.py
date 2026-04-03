@@ -45,10 +45,8 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from decimal import Decimal, ROUND_HALF_UP
+from datetime import UTC, datetime
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 import requests
@@ -477,7 +475,7 @@ class StripeProductionClient:
 
         except Exception as exc:
             error_code = getattr(getattr(exc, "error", None), "code", "stripe_error")
-            logger.error("Stripe PaymentIntent failed: %s", exc, exc_info=True)
+            logger.exception("Stripe PaymentIntent failed: %s")
             return PaymentResult(
                 success=False,
                 payment_intent_id=None,

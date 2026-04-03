@@ -14,17 +14,15 @@ PRODUCTION VERSION with all critical fixes:
 """
 
 import asyncio
+import contextlib
+import copy
 import logging
 import time
-from typing import Any
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from enum import Enum
 from collections import deque
-import copy
-import contextlib
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from enum import Enum
+from typing import Any
 
 try:
     import numpy as np
@@ -32,7 +30,7 @@ try:
     NUMPY_AVAILABLE = True
 except ImportError:
     NUMPY_AVAILABLE = False
-    logging.warning("NumPy not available, using fallback calculations")
+    logger.warning("NumPy not available, using fallback calculations")
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +116,8 @@ class CircuitBreaker:
         async with self._lock:
             if self.failure_count > 0:
                 self.failure_count -= 1
-                logger.debug(f"Circuit breaker: failure count decreased to {self.failure_count}")
+                logger.debug("Circuit breaker: failure count decreased to %s", self.failure_count)
+
 
             if self.failure_count == 0 and self.is_open:
                 self.is_open = False
@@ -239,7 +238,8 @@ class HOPEFXBrain:
             missing.append("price_engine")
 
         if missing:
-            logger.error(f"CRITICAL: Missing components: {', '.join(missing)}")
+            logger.error("CRITICAL: Missing components: %s", ', '.join(missing))
+
         else:
             logger.info("All critical components injected into Brain")
 
@@ -292,7 +292,7 @@ class HOPEFXBrain:
         except asyncio.CancelledError:
             logger.info("Brain dominate loop cancelled")
         except Exception as e:
-            logger.critical(f"Brain critical error: {e}", exc_info=True)
+            logger.critical("Brain critical error: %s", e, exc_info=True)
             await self._execute_emergency_stop()
         finally:
             await self._cleanup()
@@ -341,7 +341,8 @@ class HOPEFXBrain:
         }
         self.error_history.append(error_info)
 
-        logger.exception(f"Error in brain cycle {self._cycle_count}: {error}")
+        logger.exception("Error in brain cycle %s: %s", self._cycle_count)
+
 
         # Record failure
         await self._circuit_breaker.record_failure()
@@ -387,7 +388,8 @@ class HOPEFXBrain:
                         logger.error("Broker timeout getting account info")
                         raise
                     except Exception as e:
-                        logger.error(f"Error getting account info: {e}")
+                        logger.error("Error getting account info: %s", e)
+
                         raise
 
                 # Get positions (with timeout)
@@ -412,7 +414,8 @@ class HOPEFXBrain:
                         self.state.active_positions = {}
                         self.state.open_trades_count = 0
                     except Exception as e:
-                        logger.error(f"Error getting positions: {e}")
+                        logger.error("Error getting positions: %s", e)
+
                         self.state.active_positions = {}
 
                 # Get pending orders (with timeout)
@@ -434,11 +437,13 @@ class HOPEFXBrain:
                         logger.error("Broker timeout getting orders")
                         self.state.pending_orders = []
                     except Exception as e:
-                        logger.error(f"Error getting orders: {e}")
+                        logger.error("Error getting orders: %s", e)
+
                         self.state.pending_orders = []
 
             except Exception as e:
-                logger.error(f"State update error: {e}")
+                logger.error("State update error: %s", e)
+
                 raise  # Re-raise to trigger circuit breaker
 
     async def _analyze_market_regimes(self):
@@ -476,7 +481,8 @@ class HOPEFXBrain:
                         )
 
             except Exception as e:
-                logger.error(f"Regime detection error for {symbol}: {e}")
+                logger.error("Regime detection error for %s: %s", symbol, e)
+
 
     async def _detect_regime(self, symbol: str) -> MarketRegime:
         """Detect market regime using price action - ROBUST VERSION"""
@@ -486,7 +492,8 @@ class HOPEFXBrain:
         try:
             ohlcv = self.price_engine.get_ohlcv(symbol, "1h", limit=24)
         except Exception as e:
-            logger.warning(f"Failed to get OHLCV for {symbol}: {e}")
+            logger.warning("Failed to get OHLCV for %s: %s", symbol, e)
+
             return MarketRegime.UNKNOWN
 
         if len(ohlcv) < 20:
@@ -503,7 +510,8 @@ class HOPEFXBrain:
             return self._detect_regime_python(closes, highs, lows)
 
         except Exception as e:
-            logger.error(f"Error in regime calculation for {symbol}: {e}")
+            logger.error("Error in regime calculation for %s: %s", symbol, e)
+
             return MarketRegime.UNKNOWN
 
     def _detect_regime_numpy(self, closes, highs, lows) -> MarketRegime:
@@ -598,7 +606,8 @@ class HOPEFXBrain:
             margin_ratio = margin_used / equity if equity > 0 else 0
 
             if margin_ratio > 0.8:
-                logger.warning(f"HIGH MARGIN USAGE: {margin_ratio:.2%}")
+                logger.warning("HIGH MARGIN USAGE: %s", margin_ratio)
+
                 await self._reduce_exposure()
                 await self._safe_notify(
                     "warning",
@@ -606,13 +615,15 @@ class HOPEFXBrain:
                     {"margin_ratio": margin_ratio, "equity": equity},
                 )
             elif margin_ratio > 0.5:
-                logger.info(f"Moderate margin usage: {margin_ratio:.2%}")
+                logger.info("Moderate margin usage: %s", margin_ratio)
+
 
             # Check daily loss limit
             if balance > 0:
                 daily_loss_pct = abs(daily_pnl) / balance
                 if daily_loss_pct > 0.05:  # 5% daily loss
-                    logger.critical(f"DAILY LOSS LIMIT REACHED: {daily_loss_pct:.2%}")
+                    logger.critical("DAILY LOSS LIMIT REACHED: %s", daily_loss_pct)
+
                     await self._safe_notify(
                         "critical",
                         f"Daily loss limit reached: {daily_loss_pct:.2%}",
@@ -624,11 +635,13 @@ class HOPEFXBrain:
             if hasattr(self.risk_manager, "current_drawdown"):
                 dd = self.risk_manager.current_drawdown
                 if dd > 0.10:  # 10% drawdown
-                    logger.critical(f"MAX DRAWDOWN REACHED: {dd:.2%}")
+                    logger.critical("MAX DRAWDOWN REACHED: %s", dd)
+
                     await self._execute_emergency_stop()
 
         except Exception as e:
-            logger.error(f"Risk assessment error: {e}")
+            logger.error("Risk assessment error: %s", e)
+
 
     async def _check_emergency_conditions(self) -> bool:
         """Check if emergency stop is needed - ROBUST"""
@@ -642,7 +655,8 @@ class HOPEFXBrain:
 
             # Check catastrophic loss (50% of initial balance)
             if balance > 0 and equity < balance * 0.5:
-                logger.critical(f"CATASTROPHIC LOSS: Equity ${equity:,.2f} < 50% of Balance ${balance:,.2f}")
+                logger.critical("CATASTROPHIC LOSS: Equity $%s < 50% of Balance $%s", equity, balance)
+
                 return True
 
             # Check for data feed staleness
@@ -654,9 +668,11 @@ class HOPEFXBrain:
                         if last_tick:
                             stale_time = time.time() - last_tick.timestamp
                             if stale_time > stale_threshold:
-                                logger.warning(f"Stale data for {symbol}: {stale_time:.0f}s old")
+                                logger.warning("Stale data for %s: %ss old", symbol, stale_time)
+
                     except Exception as e:
-                        logger.error(f"Error checking data staleness for {symbol}: {e}")
+                        logger.error("Error checking data staleness for %s: %s", symbol, e)
+
 
             # Check for too many consecutive errors
             if self._circuit_breaker.failure_count > 10:
@@ -664,7 +680,8 @@ class HOPEFXBrain:
                 return True
 
         except Exception as e:
-            logger.error(f"Emergency check error: {e}")
+            logger.error("Emergency check error: %s", e)
+
 
         return False
 
@@ -681,19 +698,23 @@ class HOPEFXBrain:
             for attempt in range(3):
                 try:
                     closed_positions = await asyncio.wait_for(self.broker.close_all_positions(), timeout=10.0)
-                    logger.info(f"Closed {len(closed_positions)} positions")
+                    logger.info("Closed %s positions", len(closed_positions))
+
                     break
                 except Exception as e:
-                    logger.error(f"Attempt {attempt + 1} failed to close positions: {e}")
+                    logger.error("Attempt %s failed to close positions: %s", attempt + 1, e)
+
                     await asyncio.sleep(1)
 
         # Cancel all orders
         if self.broker:
             try:
                 cancelled_orders = await asyncio.wait_for(self.broker.cancel_all_orders(), timeout=5.0)
-                logger.info(f"Cancelled {len(cancelled_orders)} orders")
+                logger.info("Cancelled %s orders", len(cancelled_orders))
+
             except Exception as e:
-                logger.error(f"Error cancelling orders: {e}")
+                logger.error("Error cancelling orders: %s", e)
+
 
         # Notify
         await self._safe_notify(
@@ -731,12 +752,15 @@ class HOPEFXBrain:
                 try:
                     success = await asyncio.wait_for(self.broker.close_position(pos["id"]), timeout=5.0)
                     if success:
-                        logger.info(f"Reduced exposure: closed position {pos['id']}")
+                        logger.info("Reduced exposure: closed position %s", pos['id'])
+
                 except Exception as e:
-                    logger.error(f"Error reducing position {pos['id']}: {e}")
+                    logger.error("Error reducing position %s: %s", pos['id'], e)
+
 
         except Exception as e:
-            logger.error(f"Error in reduce_exposure: {e}")
+            logger.error("Error in reduce_exposure: %s", e)
+
 
     async def _make_strategy_decisions(self):
         """Execute strategy logic - WITH TIMEOUTS AND CONCURRENCY CONTROL"""
@@ -772,7 +796,8 @@ class HOPEFXBrain:
         except TimeoutError:
             logger.warning("Strategy decision timeout")
         except Exception as e:
-            logger.error(f"Strategy decision error: {e}")
+            logger.error("Strategy decision error: %s", e)
+
 
     def _publish_to_signal_service(self, signal: dict) -> None:
         """
@@ -831,15 +856,18 @@ class HOPEFXBrain:
 
                 # Validate signal
                 if not all([action, symbol, size]):
-                    logger.warning(f"Invalid signal (missing fields): {signal}")
+                    logger.warning("Invalid signal (missing fields): %s", signal)
+
                     return
 
                 if action not in ("buy", "sell", "close"):
-                    logger.warning(f"Unknown action: {action}")
+                    logger.warning("Unknown action: %s", action)
+
                     return
 
                 if size <= 0:
-                    logger.warning(f"Invalid size: {size}")
+                    logger.warning("Invalid size: %s", size)
+
                     return
 
                 # Execute
@@ -870,14 +898,17 @@ class HOPEFXBrain:
                     if position_id:
                         success = await asyncio.wait_for(self.broker.close_position(position_id), timeout=10.0)
                         if success:
-                            logger.info(f"Closed position {position_id}")
+                            logger.info("Closed position %s", position_id)
+
 
             except TimeoutError:
-                logger.error(f"Signal execution timeout: {signal.get('symbol')}")
-            except Exception as e:
-                logger.error(f"Signal execution error: {e}")
+                logger.error("Signal execution timeout: %s", signal.get('symbol'))
 
-    async def _safe_notify(self, level: str, message: str, data: dict = None):
+            except Exception as e:
+                logger.error("Signal execution error: %s", e)
+
+
+    async def _safe_notify(self, level: str, message: str, data: dict | None = None):
         """Safe notification with error handling"""
         if not self.notification_manager:
             return
@@ -885,7 +916,8 @@ class HOPEFXBrain:
         try:
             await asyncio.wait_for(self.notification_manager.send_alert(level, message, data), timeout=3.0)
         except Exception as e:
-            logger.error(f"Notification failed: {e}")
+            logger.error("Notification failed: %s", e)
+
 
     async def _log_periodic_state(self):
         """Log periodic state summary"""
@@ -905,7 +937,8 @@ class HOPEFXBrain:
                 f"Circuit: {'OPEN' if self._circuit_breaker.is_open else 'CLOSED'}"
             )
         except Exception as e:
-            logger.error(f"Error logging state: {e}")
+            logger.error("Error logging state: %s", e)
+
 
     async def _pause_trading(self):
         """Pause trading but keep monitoring"""
@@ -938,14 +971,16 @@ class HOPEFXBrain:
             logger.info("Trading resumed")
             await self._safe_notify("info", "Trading resumed", {})
 
-        asyncio.create_task(_resume())
+        _t = asyncio.create_task(_resume())
+        _t.add_done_callback(lambda _: None)
 
     def emergency_stop(self):
         """Manual emergency stop — sets flag synchronously, schedules cleanup async."""
         logger.info("Manual emergency stop triggered")
         self._emergency_stop = True
         with contextlib.suppress(RuntimeError):
-            asyncio.create_task(self._execute_emergency_stop())
+            _t = asyncio.create_task(self._execute_emergency_stop())
+            _t.add_done_callback(lambda _: None)
 
     async def shutdown(self):
         """Graceful shutdown"""

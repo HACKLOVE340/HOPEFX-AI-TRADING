@@ -24,11 +24,11 @@ Total output: 230+ features when combined with build_advanced_features().
 
 from __future__ import annotations
 
+import contextlib
 import logging
 
 import numpy as np
 import pandas as pd
-import contextlib
 
 logger = logging.getLogger(__name__)
 

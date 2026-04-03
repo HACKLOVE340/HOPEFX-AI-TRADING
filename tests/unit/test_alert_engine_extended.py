@@ -808,7 +808,7 @@ class TestCreateAlertRouter:
     """Tests for the FastAPI alert router."""
 
     def test_create_alert_router(self):
-        from notifications.alert_engine import create_alert_router, AlertEngine
+        from notifications.alert_engine import AlertEngine, create_alert_router
 
         engine = AlertEngine()
         router = create_alert_router(engine)
@@ -818,8 +818,9 @@ class TestCreateAlertRouter:
         assert "/api/alerts/" in route_paths or any("alerts" in p for p in route_paths)
 
     def test_alert_router_has_routes(self):
-        from notifications.alert_engine import create_alert_router, AlertEngine
         from fastapi import FastAPI
+
+        from notifications.alert_engine import AlertEngine, create_alert_router
 
         engine = AlertEngine()
         router = create_alert_router(engine)

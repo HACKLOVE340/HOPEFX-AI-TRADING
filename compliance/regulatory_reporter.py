@@ -58,9 +58,7 @@ import logging
 import os
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -579,8 +577,8 @@ class RegulatoryReporter:
 
         except ImportError:
             # aiohttp not installed — use urllib (sync, wrapped in executor)
-            import urllib.request
             import urllib.error
+            import urllib.request
 
             def _sync_post():
                 from urllib.parse import urlparse as _urlparse

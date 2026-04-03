@@ -12,13 +12,11 @@ Tests for:
 - SupportResistanceDetector / PriceLevel  (analysis/patterns/support_resistance.py)
 """
 
-import pytest
+from datetime import UTC, datetime
+
 import numpy as np
 import pandas as pd
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-
+import pytest
 
 # ================================================================
 # HELPERS
@@ -123,15 +121,15 @@ class TestChartPattern:
     def _make_pattern(self, **kwargs):
         from analysis.patterns.chart_patterns import ChartPattern
 
-        defaults = dict(
-            pattern_type="double_top",
-            direction="bearish",
-            confidence=0.75,
-            start_index=10,
-            end_index=30,
-            key_levels={"neckline": 1980.0, "target": 1960.0},
-            description="Test double top pattern",
-        )
+        defaults = {
+            "pattern_type": "double_top",
+            "direction": "bearish",
+            "confidence": 0.75,
+            "start_index": 10,
+            "end_index": 30,
+            "key_levels": {"neckline": 1980.0, "target": 1960.0},
+            "description": "Test double top pattern",
+        }
         defaults.update(kwargs)
         return ChartPattern(**defaults)
 
@@ -442,15 +440,15 @@ class TestCandlestickPattern:
     def _make_pattern(self, **kwargs):
         from analysis.patterns.candlestick import CandlestickPattern
 
-        defaults = dict(
-            pattern_name="Hammer",
-            pattern_type="reversal",
-            direction="bullish",
-            confidence=0.78,
-            index=5,
-            candles_count=1,
-            description="Hammer candlestick at index 5",
-        )
+        defaults = {
+            "pattern_name": "Hammer",
+            "pattern_type": "reversal",
+            "direction": "bullish",
+            "confidence": 0.78,
+            "index": 5,
+            "candles_count": 1,
+            "description": "Hammer candlestick at index 5",
+        }
         defaults.update(kwargs)
         return CandlestickPattern(**defaults)
 
@@ -781,16 +779,16 @@ class TestPriceLevel:
     def _make_level(self, **kwargs):
         from analysis.patterns.support_resistance import PriceLevel
 
-        defaults = dict(
-            price=2000.0,
-            level_type="support",
-            strength=0.8,
-            touch_count=3,
-            last_touch=datetime(2024, 1, 15, tzinfo=UTC),
-            method="swing",
-            is_active=True,
-            description="Test support level",
-        )
+        defaults = {
+            "price": 2000.0,
+            "level_type": "support",
+            "strength": 0.8,
+            "touch_count": 3,
+            "last_touch": datetime(2024, 1, 15, tzinfo=UTC),
+            "method": "swing",
+            "is_active": True,
+            "description": "Test support level",
+        }
         defaults.update(kwargs)
         return PriceLevel(**defaults)
 
@@ -956,8 +954,8 @@ class TestSupportResistanceDetector:
     def test_detect_levels_price_levels_are_price_level_instances(self):
         """Each item in detect_levels() lists is a PriceLevel."""
         from analysis.patterns.support_resistance import (
-            SupportResistanceDetector,
             PriceLevel,
+            SupportResistanceDetector,
         )
 
         det = SupportResistanceDetector()
@@ -1104,8 +1102,8 @@ class TestSupportResistanceDetector:
     def test_classify_level_support(self):
         """classify_level() returns 'support' for level below current price."""
         from analysis.patterns.support_resistance import (
-            SupportResistanceDetector,
             PriceLevel,
+            SupportResistanceDetector,
         )
 
         det = SupportResistanceDetector(config={"sensitivity": 0.001})
@@ -1124,8 +1122,8 @@ class TestSupportResistanceDetector:
     def test_classify_level_resistance(self):
         """classify_level() returns 'resistance' for level above current price."""
         from analysis.patterns.support_resistance import (
-            SupportResistanceDetector,
             PriceLevel,
+            SupportResistanceDetector,
         )
 
         det = SupportResistanceDetector(config={"sensitivity": 0.001})
@@ -1144,8 +1142,8 @@ class TestSupportResistanceDetector:
     def test_classify_level_pivot(self):
         """classify_level() returns 'pivot' when level is within sensitivity band."""
         from analysis.patterns.support_resistance import (
-            SupportResistanceDetector,
             PriceLevel,
+            SupportResistanceDetector,
         )
 
         sensitivity = 0.005

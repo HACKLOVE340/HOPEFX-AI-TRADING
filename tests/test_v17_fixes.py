@@ -15,12 +15,10 @@ Run with:
 from __future__ import annotations
 
 import os
+from datetime import UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from datetime import timezone
-
-UTC = timezone.utc
 
 # ---------------------------------------------------------------------------
 # Ensure test env vars are set before any app module is imported

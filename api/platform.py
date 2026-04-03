@@ -50,9 +50,7 @@ import logging
 import os
 import secrets
 import uuid
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
@@ -78,7 +76,7 @@ _flag_overrides: dict[str, dict[str, bool]] = {}  # flag_name → {user_id: bool
 
 # ── Admin role guard ──────────────────────────────────────────────────────────
 
-_ADMIN_USERS: set = set(u.strip() for u in os.getenv("ADMIN_USER_IDS", "admin").split(",") if u.strip())
+_ADMIN_USERS: set = {u.strip() for u in os.getenv("ADMIN_USER_IDS", "admin").split(",") if u.strip()}
 
 
 def _require_admin(user: TokenPayload) -> TokenPayload:
@@ -312,8 +310,8 @@ async def get_user_trades(
     _require_admin(admin)
     trades: list[dict] = []
     try:
-        from database.models import Trade
         from database.connection import get_db
+        from database.models import Trade
 
         # Query real trades if DB is available
         db = next(get_db())
@@ -352,6 +350,7 @@ async def impersonate_user(
 
     try:
         import time
+
         import jwt as _jwt
 
         jwt_secret = os.getenv("SECURITY_JWT_SECRET", "")

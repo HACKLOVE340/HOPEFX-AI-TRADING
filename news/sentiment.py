@@ -15,9 +15,9 @@ Author: HOPEFX Development Team
 """
 
 import logging
+import re
 from dataclasses import dataclass
 from enum import Enum
-import re
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +126,8 @@ class SentimentAnalyzer:
             )
 
         except Exception as e:
-            self.logger.error(f"Error analyzing sentiment: {e}")
+            self.logger.error("Error analyzing sentiment: %s", e)
+
             # Return neutral sentiment on error
             return SentimentScore(
                 polarity=0.0,
@@ -261,7 +262,8 @@ class FinancialSentimentAnalyzer:
             return self._keyword_analysis(combined_text)
 
         except Exception as e:
-            self.logger.error(f"Error in financial sentiment analysis: {e}")
+            self.logger.error("Error in financial sentiment analysis: %s", e)
+
             return SentimentScore(
                 polarity=0.0,
                 subjectivity=0.5,

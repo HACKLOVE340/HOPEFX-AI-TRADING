@@ -10,9 +10,10 @@ Helper functions for HOPEFX Ultimate
 
 import asyncio
 import time
+from collections.abc import Callable
 from functools import wraps
 from typing import Any
-from collections.abc import Callable
+
 import psutil
 
 try:

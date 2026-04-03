@@ -49,11 +49,9 @@ import logging
 import os
 import threading
 import time
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from typing import Any
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -166,7 +164,7 @@ class HeartbeatService:
         chat_id: str = _TELEGRAM_CHAT_ID,
         interval_hours: float = _HEARTBEAT_INTERVAL_HOURS,
         get_status_fn: Callable[[], dict[str, Any]] | None = None,
-        app_state: Any = None,
+        app_state: Any | None = None,
     ) -> None:
         self._token = token
         self._chat_ids = [c.strip() for c in chat_id.split(",") if c.strip()]
@@ -323,7 +321,7 @@ _heartbeat: HeartbeatService | None = None
 
 def start_heartbeat(
     get_status_fn: Callable[[], dict[str, Any]] | None = None,
-    app_state: Any = None,
+    app_state: Any | None = None,
     token: str = _TELEGRAM_TOKEN,
     chat_id: str = _TELEGRAM_CHAT_ID,
     interval_hours: float = _HEARTBEAT_INTERVAL_HOURS,

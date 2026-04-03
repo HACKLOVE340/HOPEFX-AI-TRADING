@@ -10,9 +10,7 @@ A simple trend-following strategy based on moving average crossovers.
 """
 
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 from .base import BaseStrategy, Signal, SignalType, StrategyConfig

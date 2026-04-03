@@ -45,9 +45,7 @@ import os
 import time
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import aiohttp
@@ -359,14 +357,12 @@ class OANDABroker:
             except TimeoutError:
                 last_error = "timeout"
                 logger.warning("OANDABroker: order timeout (attempt %d/%d)", attempt, _MAX_RETRIES)
-            except Exception as exc:  # pylint: disable=broad-exception-caught
+            except Exception:  # pylint: disable=broad-exception-caught
                 last_error = "order_error"
-                logger.error(
-                    "OANDABroker: order error (attempt %d/%d): %s",
+                logger.exception(
+                    "OANDABroker: order error (attempt %d/%d)",
                     attempt,
                     _MAX_RETRIES,
-                    exc,
-                    exc_info=True,
                 )
 
             if attempt < _MAX_RETRIES:
@@ -476,8 +472,8 @@ class OANDABroker:
                 if resp.status in (200, 201):
                     return {"status": "closed", "symbol": symbol, "raw": data}
                 return {"status": "rejected", "reason": str(data), "symbol": symbol}
-        except Exception as exc:  # pylint: disable=broad-exception-caught
-            logger.error("OANDABroker close_position %s: %s", symbol, exc, exc_info=True)
+        except Exception:  # pylint: disable=broad-exception-caught
+            logger.exception("OANDABroker close_position %s: %s")
             return {"status": "rejected", "reason": "Close failed — check server logs"}
 
     # ── Ping ──────────────────────────────────────────────────────────────────
@@ -540,12 +536,22 @@ OandaAPI = OANDABroker
 # Wraps the OANDA v20 REST API with requests.Session (no async).
 
 from brokers.base import (
-    OrderType as _OrderType,
-    OrderSide as _OrderSide,
-    OrderStatus as _OrderStatus,
-    Order as _Order,
-    Position as _Position,
     AccountInfo as _AccountInfo,
+)
+from brokers.base import (
+    Order as _Order,
+)
+from brokers.base import (
+    OrderSide as _OrderSide,
+)
+from brokers.base import (
+    OrderStatus as _OrderStatus,
+)
+from brokers.base import (
+    OrderType as _OrderType,
+)
+from brokers.base import (
+    Position as _Position,
 )
 
 

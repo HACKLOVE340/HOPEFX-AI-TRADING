@@ -13,9 +13,7 @@ Tests for:
 - Delta/Cumulative Delta
 """
 
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 
 
 class TestTrade:

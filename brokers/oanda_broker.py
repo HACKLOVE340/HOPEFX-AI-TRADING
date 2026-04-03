@@ -299,8 +299,8 @@ class OandaBroker:
                 error_msg = data.get("errorMessage", str(data))
                 logger.warning("OANDA order failed | status=%s | error=%s", resp.status, error_msg)
                 return {"success": False, "order_id": None, "comment": error_msg}
-        except aiohttp.ClientError as exc:
-            logger.error("OandaBroker.place_order network error: %s", exc, exc_info=True)
+        except aiohttp.ClientError:
+            logger.exception("OandaBroker.place_order network error: %s")
             return {"success": False, "order_id": None, "comment": "Network error — check server logs"}
 
     async def close_trade(self, trade_id: str, units: str | None = "ALL") -> dict:
@@ -326,8 +326,8 @@ class OandaBroker:
                     return {"success": True, "comment": "OK", "data": data}
                 error_msg = data.get("errorMessage", "Close rejected")
                 return {"success": False, "comment": error_msg}
-        except aiohttp.ClientError as exc:
-            logger.error("OandaBroker.close_trade network error: %s", exc, exc_info=True)
+        except aiohttp.ClientError:
+            logger.exception("OandaBroker.close_trade network error: %s")
             return {"success": False, "comment": "Network error — check server logs"}
 
     async def cancel_order(self, order_id: str) -> dict:
@@ -346,8 +346,8 @@ class OandaBroker:
                     "success": False,
                     "comment": data.get("errorMessage", "Cancel rejected"),
                 }
-        except aiohttp.ClientError as exc:
-            logger.error("OandaBroker.cancel_order network error: %s", exc, exc_info=True)
+        except aiohttp.ClientError:
+            logger.exception("OandaBroker.cancel_order network error: %s")
             return {"success": False, "comment": "Network error — check server logs"}
 
     async def get_tick(self, instrument: str = "XAU_USD") -> dict | None:

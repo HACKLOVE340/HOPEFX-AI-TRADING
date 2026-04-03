@@ -11,11 +11,11 @@ wired (app_state/broker/orchestrator), falling back to empty structures
 when not wired — same pattern as MobileAPI.
 """
 
-from typing import Dict, List, Optional, Any  # noqa: F401
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -66,8 +66,8 @@ class DashboardService:
     def __init__(
         self,
         config: dict[str, Any] | None = None,
-        app_state: Any = None,
-        orchestrator: Any = None,
+        app_state: Any | None = None,
+        orchestrator: Any | None = None,
     ):
         self.config = config or {}
         self._app_state = app_state

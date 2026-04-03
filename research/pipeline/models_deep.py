@@ -51,8 +51,7 @@ logger = logging.getLogger(__name__)
 # ── PyTorch (preferred; lighter than TF for this use-case) ───────────────────
 try:
     import torch
-    from torch import nn
-    from torch import optim
+    from torch import nn, optim
     from torch.utils.data import DataLoader, TensorDataset
 
     TORCH_AVAILABLE = True
@@ -62,7 +61,7 @@ except ImportError:
 
 # ── TensorFlow / Keras fallback ───────────────────────────────────────────────
 try:
-    import tensorflow as tf  # noqa: F401
+    import tensorflow as tf
 
     TF_AVAILABLE = True
 except ImportError:
@@ -661,7 +660,7 @@ class DeepPredictor:
 
         Returns a dict with keys: accuracy, auc, f1, n_samples.
         """
-        from sklearn.metrics import accuracy_score, roc_auc_score, f1_score
+        from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
         proba = self.predict(X)
         preds = (proba >= threshold).astype(int)

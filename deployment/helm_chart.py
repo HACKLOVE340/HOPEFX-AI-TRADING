@@ -34,6 +34,7 @@ import argparse
 import logging
 import textwrap
 from pathlib import Path
+from typing import ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -399,7 +400,7 @@ def generate_chart(output_dir: str = "helm/hopefx") -> list[str]:
     Returns a list of written file paths.
     """
     base = Path(output_dir)
-    written: list[str] = []
+    written: ClassVar[list[str]] = []
 
     for rel_path, content in FILES.items():
         target = base / rel_path

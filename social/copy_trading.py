@@ -6,9 +6,7 @@
 """Copy trading engine."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from decimal import Decimal
 
 
@@ -60,7 +58,7 @@ class CopyTradingEngine:
     def sync_trade(self, trade_id: str, leader_id: str) -> dict[str, str]:
         """Propagate a leader trade to all active followers. Returns {copy_id: follower_id}."""
         result = {}
-        for _key, rel in self.relationships.items():
+        for rel in self.relationships.values():
             if rel.leader_id == leader_id and rel.is_active:
                 copy_id = f"COPY_{trade_id}_{rel.follower_id}"
                 result[copy_id] = rel.follower_id
@@ -91,7 +89,7 @@ async def _copy_trade(
     leader_trade: dict,
     follower_config: dict,
     follower_balance: float = 100_000.0,
-    balance: float = None,
+    balance: float | None = None,
 ) -> dict:
     """Copy a leader trade proportionally, respecting follower risk limits."""
     if balance is not None:

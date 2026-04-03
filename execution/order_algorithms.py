@@ -32,12 +32,10 @@ import asyncio
 import logging
 import os
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from typing import Any
 from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -247,7 +245,7 @@ class TWAPExecutor:
         )
     """
 
-    def __init__(self, router: Any = None, lineage_store: Any = None) -> None:
+    def __init__(self, router: Any | None = None, lineage_store: Any | None = None) -> None:
         self._router = router
         self._lineage = lineage_store
         self._child_orders: list[ChildOrder] = []
@@ -379,7 +377,7 @@ class VWAPExecutor:
         )
     """
 
-    def __init__(self, router: Any = None, lineage_store: Any = None) -> None:
+    def __init__(self, router: Any | None = None, lineage_store: Any | None = None) -> None:
         self._router = router
         self._lineage = lineage_store
 

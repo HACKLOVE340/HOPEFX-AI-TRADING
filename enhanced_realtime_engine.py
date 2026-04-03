@@ -24,22 +24,21 @@ License: Proprietary - Institutional Use Only
 """
 
 import asyncio
-import aiohttp
-import websockets
-from dataclasses import dataclass, field
-from typing import Any
-from collections.abc import Callable, AsyncIterator
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from enum import Enum, IntEnum, auto
-from collections import deque, defaultdict
-import logging
 import json
-import numpy as np
-import time
+import logging
 import random
+import time
 from abc import ABC, abstractmethod
+from collections import defaultdict, deque
+from collections.abc import AsyncIterator, Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from enum import Enum, IntEnum, auto
+from typing import Any
+
+import aiohttp
+import numpy as np
+import websockets
 
 # Optional high-performance libraries
 try:
@@ -50,7 +49,7 @@ except ImportError:
     REDIS_AVAILABLE = False
 
 try:
-    import zmq  # noqa: F401
+    import zmq
     ZMQ_AVAILABLE = True
 except ImportError:
     ZMQ_AVAILABLE = False
@@ -305,11 +304,13 @@ class DataProvider(ABC):
         for callback in self._callbacks:
             try:
                 if asyncio.iscoroutinefunction(callback):
-                    asyncio.create_task(callback(tick))
+                    _t = asyncio.create_task(callback(tick))
+                    _t.add_done_callback(lambda _: None)
                 else:
                     callback(tick)
             except Exception as e:
-                logger.error(f"Callback error in {self.name}: {e}")
+                logger.error("Callback error in %s: %s", self.name, e)
+
 
     async def start(self):
         """Start with automatic reconnection"""
@@ -335,12 +336,14 @@ class DataProvider(ABC):
                             await self._notify(tick)
 
             except Exception as e:
-                logger.error(f"{self.name} error: {e}")
+                logger.error("%s error: %s", self.name, e)
+
                 self.metrics.record_error(str(e))
 
             if self._running:
                 self.metrics.state = ConnectionState.RECONNECTING
-                logger.info(f"{self.name} reconnecting in {self.current_reconnect_delay}s...")
+                logger.info("%s reconnecting in %ss...", self.name, self.current_reconnect_delay)
+
                 await asyncio.sleep(self.current_reconnect_delay)
                 self.current_reconnect_delay = min(self.current_reconnect_delay * 1.5, self.max_reconnect_delay)
                 self.metrics.record_reconnection()
@@ -376,11 +379,13 @@ class PolygonProvider(DataProvider):
                 logger.info("Polygon authenticated successfully")
                 return True
 
-            logger.error(f"Polygon auth failed: {auth_result}")
+            logger.error("Polygon auth failed: %s", auth_result)
+
             return False
 
         except Exception as e:
-            logger.error(f"Polygon connect failed: {e}")
+            logger.error("Polygon connect failed: %s", e)
+
             return False
 
     async def subscribe(self, symbols: list[str]) -> bool:
@@ -398,7 +403,8 @@ class PolygonProvider(DataProvider):
         sub_msg = {"action": "subscribe", "params": ",".join(channels)}
         await self.ws.send(json.dumps(sub_msg))
 
-        logger.info(f"Polygon subscribed to {len(symbols)} symbols")
+        logger.info("Polygon subscribed to %s symbols", len(symbols))
+
         return True
 
     async def stream(self) -> AsyncIterator[MarketTick]:
@@ -449,7 +455,8 @@ class PolygonProvider(DataProvider):
                 logger.warning("Polygon heartbeat timeout")
                 raise
             except Exception as e:
-                logger.error(f"Polygon stream error: {e}")
+                logger.error("Polygon stream error: %s", e)
+
                 raise
 
     async def disconnect(self):
@@ -492,7 +499,7 @@ class OandaProvider(DataProvider):
                     data = json.loads(line)
 
                     if data.get("type") == "PRICE":
-                        tick_time = datetime.fromisoformat(data["time"].replace("Z", "+00:00"))
+                        tick_time = datetime.fromisoformat(data["time"])
                         receive_time = datetime.now(UTC)
 
                         # Calculate latency
@@ -513,7 +520,8 @@ class OandaProvider(DataProvider):
                         yield tick
 
                 except Exception as e:
-                    logger.error(f"OANDA parse error: {e}")
+                    logger.error("OANDA parse error: %s", e)
+
 
     async def disconnect(self):
         if self.session:
@@ -539,7 +547,8 @@ class BinanceProvider(DataProvider):
             return True
 
         except Exception as e:
-            logger.error(f"Binance connect failed: {e}")
+            logger.error("Binance connect failed: %s", e)
+
             return False
 
     async def subscribe(self, symbols: list[str]) -> bool:
@@ -567,7 +576,8 @@ class BinanceProvider(DataProvider):
                 yield tick
 
             except Exception as e:
-                logger.error(f"Binance stream error: {e}")
+                logger.error("Binance stream error: %s", e)
+
                 raise
 
     async def disconnect(self):
@@ -696,7 +706,8 @@ class ConsensusAggregator:
             try:
                 self.redis = redis.from_url(redis_url)
             except Exception as e:
-                logger.warning(f"Redis unavailable: {e}")
+                logger.warning("Redis unavailable: %s", e)
+
 
         # State
         self.providers: dict[str, DataProvider] = {}
@@ -721,7 +732,8 @@ class ConsensusAggregator:
     def add_provider(self, provider: DataProvider):
         """Add data source to aggregation"""
         if len(self.providers) >= self.max_sources:
-            logger.warning(f"Max sources ({self.max_sources}) reached")
+            logger.warning("Max sources (%s) reached", self.max_sources)
+
             return
 
         self.providers[provider.name] = provider
@@ -730,7 +742,8 @@ class ConsensusAggregator:
         # Initialize venue score
         self.venue_scores[provider.name] = 1.0
 
-        logger.info(f"Added provider: {provider.name} (priority={provider.priority}, weight={provider.weight})")
+        logger.info("Added provider: %s (priority=%s, weight=%s)", provider.name, provider.priority, provider.weight)
+
 
     async def _process_tick(self, tick: MarketTick):
         """Process incoming tick from any provider"""
@@ -884,18 +897,21 @@ class ConsensusAggregator:
             )
             await self.redis.setex(key, 60, value)  # 60 second TTL
         except Exception as e:
-            logger.error(f"Redis cache error: {e}")
+            logger.error("Redis cache error: %s", e)
+
 
     async def _notify_consensus(self, tick: MarketTick):
         """Notify all consensus subscribers"""
         for callback in self._consensus_callbacks:
             try:
                 if asyncio.iscoroutinefunction(callback):
-                    asyncio.create_task(callback(tick))
+                    _t = asyncio.create_task(callback(tick))
+                    _t.add_done_callback(lambda _: None)
                 else:
                     callback(tick)
             except Exception as e:
-                logger.error(f"Consensus callback error: {e}")
+                logger.error("Consensus callback error: %s", e)
+
 
     def on_consensus(self, callback: Callable[[MarketTick], Any]):
         """Subscribe to consensus ticks"""

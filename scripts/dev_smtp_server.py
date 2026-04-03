@@ -33,16 +33,14 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from email import message_from_bytes
 from pathlib import Path
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.smtp import AuthResult, LoginPassword
-import contextlib
 
 ROOT = Path(__file__).resolve().parent.parent
 LOG_PATH = ROOT / "logs" / "dev_email.log"

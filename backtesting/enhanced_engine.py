@@ -39,23 +39,21 @@ _ATR_FALLBACK_VOL = 0.001  # fallback volatility when realized variance is zero
 # ── Risk check severity constants ─────────────────────────────────────────────
 _CIRCUIT_BREAKER_HALT_LEVEL = 2  # circuit_breaker_level at which trading halts
 
-from dataclasses import dataclass, field
-from typing import Any
-from collections.abc import Callable
-from enum import Enum, IntEnum, auto
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from collections import deque, defaultdict
-import logging
-import json
 import gzip
+import json
+import logging
 import warnings
+from collections import defaultdict, deque
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from enum import Enum, IntEnum, auto
+from typing import Any
 
 # Performance libraries — imported for availability checks; used conditionally
 try:
-    import numba  # pylint: disable=unused-import  # noqa: F401
-    from numba import jit, prange, njit, cuda  # pylint: disable=unused-import  # noqa: F401
+    import numba  # pylint: disable=unused-import
+    from numba import cuda, jit, njit, prange  # pylint: disable=unused-import
 
     NUMBA_AVAILABLE = True
 except ImportError:
@@ -63,16 +61,16 @@ except ImportError:
     warnings.warn("Numba unavailable - performance degraded", stacklevel=2)
 
 try:
-    import cupy as cp  # pylint: disable=unused-import  # noqa: F401
-    from cupy.cuda import Device  # pylint: disable=unused-import  # noqa: F401
+    import cupy as cp  # pylint: disable=unused-import
+    from cupy.cuda import Device  # pylint: disable=unused-import
 
     CUDA_AVAILABLE = True
 except ImportError:
     CUDA_AVAILABLE = False
 
 try:
-    from scipy import stats, optimize, interpolate  # pylint: disable=unused-import  # noqa: F401
-    from scipy.optimize import minimize, differential_evolution  # pylint: disable=unused-import  # noqa: F401
+    from scipy import interpolate, optimize, stats  # pylint: disable=unused-import
+    from scipy.optimize import differential_evolution, minimize  # pylint: disable=unused-import
 
     SCIPY_AVAILABLE = True
 except ImportError:
@@ -1123,7 +1121,8 @@ class InstitutionalRiskManager:
         # Callbacks for emergency actions
         self.emergency_callbacks: list[Callable] = []
 
-        logger.info(f"RiskManager initialized: ${initial_capital:,.2f} capital")
+        logger.info("RiskManager initialized: $%s capital", initial_capital)
+
 
     def register_emergency_callback(self, callback: Callable):
         """Register callback for kill switch activation"""
@@ -1365,10 +1364,14 @@ class InstitutionalRiskManager:
 
         logger.critical("=" * 70)
         logger.critical("KILL SWITCH ACTIVATED")
-        logger.critical(f"Reason: {reason}")
-        logger.critical(f"Daily P&L: ${self.daily_pnl:,.2f}")
-        logger.critical(f"Current Capital: ${self.current_capital:,.2f}")
-        logger.critical(f"Drawdown: {(self.peak_capital - self.current_capital) / self.peak_capital:.2%}")
+        logger.critical("Reason: %s", reason)
+
+        logger.critical("Daily P&L: $%s", self.daily_pnl)
+
+        logger.critical("Current Capital: $%s", self.current_capital)
+
+        logger.critical("Drawdown: %s", (self.peak_capital - self.current_capital) / self.peak_capital)
+
         logger.critical("=" * 70)
 
         # Execute emergency callbacks
@@ -1376,7 +1379,8 @@ class InstitutionalRiskManager:
             try:
                 callback(reason, self.daily_pnl, self.current_capital)
             except (RuntimeError, ValueError, AttributeError) as e:
-                logger.error(f"Emergency callback failed: {e}")
+                logger.error("Emergency callback failed: %s", e)
+
 
         self._log_risk_event(f"Kill switch: {reason}", RiskEventSeverity.KILL_SWITCH)
 
@@ -1500,8 +1504,10 @@ class EnhancedBacktestEngine:
         # Slippage model parameters based on execution quality
         self.latency_model = self._get_latency_model()
 
-        logger.info(f"BacktestEngine initialized: ${initial_capital:,.2f}")
-        logger.info(f"Execution quality: {execution_quality.name}")
+        logger.info("BacktestEngine initialized: $%s", initial_capital)
+
+        logger.info("Execution quality: %s", execution_quality.name)
+
         if self.enable_gpu:
             logger.info("GPU acceleration enabled")
 
@@ -2175,7 +2181,8 @@ class EnhancedBacktestEngine:
             with open(filepath, "w", encoding="utf-8") as f:
                 json.dump(state, f, default=str, indent=2)
 
-        logger.info(f"State saved to {filepath} ({'compressed' if compress else 'raw'})")
+        logger.info("State saved to %s (%s)", filepath, 'compressed' if compress else 'raw')
+
 
     def load_state(self, filepath: str):
         """Load engine state from disk"""
@@ -2201,7 +2208,8 @@ class EnhancedBacktestEngine:
             )
             self.positions[symbol] = pos
 
-        logger.info(f"State loaded from {filepath}")
+        logger.info("State loaded from %s", filepath)
+
         return state
 
 

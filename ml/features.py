@@ -149,7 +149,7 @@ class FeatureEngineer:
     - Cross-asset relationships
     """
 
-    def __init__(self, lookback_periods: list[int] = None):
+    def __init__(self, lookback_periods: list[int] | None = None):
         self.lookback_periods = lookback_periods or [5, 10, 20, 50]
         self._feature_cache: dict[str, deque] = {}
         self._cache_size = 1000
@@ -269,7 +269,8 @@ class FeatureEngineer:
             return feature_vector
 
         except Exception as e:
-            logger.error(f"Feature extraction error for {symbol}: {e}")
+            logger.error("Feature extraction error for %s: %s", symbol, e)
+
             return None
 
     def get_feature_importance(self, model: Any) -> dict[str, float]:
@@ -372,7 +373,8 @@ class SignalEnsemble:
                 total_weight += weight
 
             except Exception as e:
-                logger.error(f"Model {name} prediction error: {e}")
+                logger.error("Model %s prediction error: %s", name, e)
+
 
         if total_weight == 0:
             return {"action": "hold", "confidence": 0, "probability": 0.5}

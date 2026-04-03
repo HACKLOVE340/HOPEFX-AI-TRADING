@@ -5,16 +5,14 @@
 # No commercial use without explicit permission.
 """explainability/explainer.py — AIExplainer: SHAP-based signal explanation."""
 
-from typing import Any
-from datetime import datetime, timezone
-
-UTC = timezone.utc
 import logging
+from datetime import UTC, datetime
+from typing import Any
 
 from explainability.models import (
-    FeatureContribution,
     DecisionNode,
     Explanation,
+    FeatureContribution,
     ModelPerformanceExplanation,
 )
 
@@ -125,7 +123,8 @@ class AIExplainer:
         )
 
         self.explanation_history.append(explanation)
-        logger.info(f"Generated explanation {explanation_id}")
+        logger.info("Generated explanation %s", explanation_id)
+
         return explanation
 
     def _calculate_feature_importance(
@@ -152,7 +151,8 @@ class AIExplainer:
                             )
                         )
         except Exception as e:
-            logger.warning(f"Could not extract feature importances: {e}")
+            logger.warning("Could not extract feature importances: %s", e)
+
 
         # If no contributions from model, use simple sensitivity analysis
         if not contributions:
@@ -283,7 +283,8 @@ class AIExplainer:
 
                     node = tree.children_left[node] if decision == "left" else tree.children_right[node]
         except Exception as e:
-            logger.debug(f"Could not extract decision path: {e}")
+            logger.debug("Could not extract decision path: %s", e)
+
 
         return path
 
@@ -304,7 +305,8 @@ class AIExplainer:
                 proba = 0.7  # Simulated probability
                 half_width = (1 - proba) * 0.3
         except Exception as e:
-            logger.debug(f"Could not calculate confidence interval: {e}")
+            logger.debug("Could not calculate confidence interval: %s", e)
+
 
         lower = max(0, prediction - half_width)
         upper = min(1, prediction + half_width)
@@ -383,7 +385,7 @@ class AIExplainer:
             recall = float(meta.get("oos_recall", 0.0))
             f1 = float(meta.get("oos_f1", 0.0))
             total = int(stats.get("predict_count", 0))
-            correct = int(round(accuracy * total)) if total else 0
+            correct = round(accuracy * total) if total else 0
 
             if total == 0:
                 # Return a default explanation with simulated baseline data so

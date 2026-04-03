@@ -36,6 +36,7 @@ import json
 import logging
 import re
 from pathlib import Path
+from typing import ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -276,7 +277,7 @@ class NuclearWordMapScorer:
 
         # ── Step 1: WORDMAP keyword matching ─────────────────────────────────
         category_scores: dict[str, float] = {}
-        matched_terms: list[dict] = []
+        matched_terms: ClassVar[list[dict]] = []
 
         for category, terms in self._keywords.items():
             cat_score = 0.0

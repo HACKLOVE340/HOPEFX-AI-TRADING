@@ -279,7 +279,6 @@ class RealTimeRiskMonitor:
 import logging as _logging
 from pathlib import Path as _Path
 
-
 _gpu_logger = _logging.getLogger(__name__)
 
 try:

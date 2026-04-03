@@ -11,10 +11,11 @@ Portfolio construction, correlation analysis, optimization, and risk contributio
 
 from __future__ import annotations
 
-import numpy as np
-import pandas as pd
 from dataclasses import dataclass
 from typing import Any
+
+import numpy as np
+import pandas as pd
 
 
 @dataclass

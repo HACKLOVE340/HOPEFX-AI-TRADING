@@ -41,9 +41,7 @@ Bug fixes vs prior version
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
 import pandas as pd

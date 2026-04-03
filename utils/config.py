@@ -10,9 +10,9 @@ Configuration Management
 - Profile support
 """
 
+import json
 import os
 from dataclasses import dataclass
-import json
 
 
 @dataclass

@@ -52,10 +52,8 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
 import numpy as np
@@ -68,7 +66,7 @@ logger = logging.getLogger(__name__)
 # ── Enums & data structures ───────────────────────────────────────────────────
 
 
-class OptimMethod(str, Enum):
+class OptimMethod(StrEnum):
     MEAN_VARIANCE = "mean_variance"
     RISK_PARITY = "risk_parity"
     EQUAL_WEIGHT = "equal_weight"

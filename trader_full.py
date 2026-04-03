@@ -40,11 +40,11 @@ Streaming API keys (at least one required for live ticks):
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import signal
 from typing import Any
-import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -309,7 +309,8 @@ class RiskManager:
 
     def setup(self) -> None:
         try:
-            from risk.manager import RiskManager as _RM, RiskConfig
+            from risk.manager import RiskConfig
+            from risk.manager import RiskManager as _RM
 
             self._rm = _RM(config=RiskConfig(), initial_balance=self._balance)
             logger.info("RiskManager: initialised with balance=%.2f", self._balance)
@@ -337,8 +338,8 @@ class RiskManager:
                 "size": result.recommended_size,
                 "reason": result.reason,
             }
-        except Exception as exc:
-            logger.error("RiskManager.approve_trade: %s", exc, exc_info=True)
+        except Exception:
+            logger.exception("RiskManager.approve_trade: %s")
             return {"approved": False, "reason": "Risk check failed — check server logs"}
 
 
@@ -422,7 +423,8 @@ class AlertManager:
             try:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
-                    asyncio.create_task(self._bot.send_message(self._chat_id, message))
+                    _t = asyncio.create_task(self._bot.send_message(self._chat_id, message))
+                    _t.add_done_callback(lambda _: None)
             except Exception as exc:
                 logger.warning("AlertManager.send telegram: %s", exc)
 

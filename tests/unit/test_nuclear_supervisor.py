@@ -200,6 +200,7 @@ class TestNuclearHopeFXSupervisor:
         Severity >= 9 always fires regardless of cooldown (safety override).
         """
         import time as _time
+
         import brain.nuclear_supervisor as _ns_mod
 
         supervisor._cooldown_seconds = 9999  # very long cooldown

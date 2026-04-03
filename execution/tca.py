@@ -32,14 +32,12 @@ import logging
 import math
 import os
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
 from typing import Any
-from collections.abc import Callable
 
 import numpy as np
 
@@ -197,8 +195,8 @@ class MarketContextProvider:
         """Lazy-load the Redis market data cache."""
         if self._redis_cache is None:
             try:
-                from market_data.redis_cache import MarketDataCache
                 from cache.redis_client import get_sync_redis
+                from market_data.redis_cache import MarketDataCache
 
                 r = get_sync_redis()
                 if r is not None:

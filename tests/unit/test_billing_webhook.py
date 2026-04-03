@@ -13,10 +13,10 @@ All external calls (Stripe SDK, HTTP) are mocked.
 
 from __future__ import annotations
 
-import pytest
-from unittest.mock import MagicMock, patch
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
 
+import pytest
 
 # ── Stripe webhook ────────────────────────────────────────────────────────────
 
@@ -29,6 +29,7 @@ class TestStripeWebhook:
         try:
             from fastapi import FastAPI
             from fastapi.testclient import TestClient
+
             from api.billing import router
 
             app = FastAPI()
@@ -183,6 +184,7 @@ class TestFreeTierActivation:
         try:
             from fastapi import FastAPI
             from fastapi.testclient import TestClient
+
             from api.billing import router
 
             app = FastAPI()

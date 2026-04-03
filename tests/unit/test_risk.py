@@ -7,13 +7,14 @@
 Unit tests for risk management.
 """
 
-import pytest
 from decimal import Decimal
 
+import pytest
+
 from core.domain_models import Account
-from risk.manager import RiskManager, RiskConfig
-from risk.position_sizing import PositionSizer
 from kill_switch import KillSwitch
+from risk.manager import RiskConfig, RiskManager
+from risk.position_sizing import PositionSizer
 
 
 @pytest.fixture

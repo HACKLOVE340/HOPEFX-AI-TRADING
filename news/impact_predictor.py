@@ -237,7 +237,8 @@ class ImpactPredictor:
             )
 
         except Exception as e:
-            self.logger.error(f"Error predicting impact: {e}")
+            self.logger.error("Error predicting impact: %s", e)
+
             # Return low impact on error
             return MarketImpact(
                 level=ImpactLevel.LOW,

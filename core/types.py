@@ -7,19 +7,16 @@
 
 from __future__ import annotations
 
-import uuid
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from decimal import Decimal
 import sys
+import uuid
+from datetime import UTC, datetime
+from decimal import Decimal
 
 if sys.version_info >= (3, 11):
     from enum import StrEnum
 else:
-    from enum import Enum
 
-    class StrEnum(str, Enum):  # type: ignore[no-redef]
+    class StrEnum(StrEnum):
         """Backport of StrEnum for Python < 3.11."""
 
 

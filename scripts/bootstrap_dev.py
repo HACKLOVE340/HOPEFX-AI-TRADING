@@ -122,12 +122,14 @@ def _seed_admin() -> str:
     if not admin_password:
         raise RuntimeError(f"{_ADMIN_PASSWORD_KEY} not found in environment. Run bootstrap_dev.py to regenerate .env.")
 
-    from database.models import Base
-    from database.user_models import User, UserRole, UserStatus
-    from auth.service import hash_password
+    import uuid
+
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    import uuid
+
+    from auth.service import hash_password
+    from database.models import Base
+    from database.user_models import User, UserRole, UserStatus
 
     db_url = os.environ["DATABASE_URL"]
     connect_args = {"check_same_thread": False} if db_url.startswith("sqlite") else {}

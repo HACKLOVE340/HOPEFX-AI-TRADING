@@ -21,9 +21,7 @@ Identifies classic chart patterns in price series:
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 try:
     import pandas as pd  # type: ignore[import]

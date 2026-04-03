@@ -62,16 +62,14 @@ Or as a standalone process:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import signal
 import time
-from typing import Any
 from collections.abc import Callable
-from datetime import timezone
-
-UTC = timezone.utc
-import contextlib
+from datetime import UTC
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -311,7 +309,8 @@ class ExecutionSystem:
 
         def _handle_shutdown(sig_name: str) -> None:
             logger.warning("ExecutionSystem: received %s — initiating shutdown", sig_name)
-            asyncio.create_task(self.stop())
+            _t = asyncio.create_task(self.stop())
+            _t.add_done_callback(lambda _: None)
 
         try:
             loop.add_signal_handler(signal.SIGTERM, lambda: _handle_shutdown("SIGTERM"))

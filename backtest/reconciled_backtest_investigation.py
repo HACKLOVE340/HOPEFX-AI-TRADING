@@ -44,9 +44,7 @@ import json
 import logging
 import sys
 import warnings
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 

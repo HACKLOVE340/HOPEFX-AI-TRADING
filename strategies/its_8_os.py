@@ -19,15 +19,12 @@ Inner Circle Trader methodology:
 """
 
 import logging
-from datetime import datetime, time, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, time
 from typing import Any
 
 import numpy as np
 
 from .base import BaseStrategy, Signal, SignalType, StrategyConfig
-
 
 # ── Module constants ─────────────────────────────────────────────────────────
 _RSI_NEUTRAL = 50
@@ -99,7 +96,8 @@ class ITS8OSStrategy(BaseStrategy):
         self.manipulation_detected = False
         self.amd_phase = "accumulation"  # accumulation, manipulation, distribution
 
-        logger.info(f"ITS-8-OS Strategy initialized for {config.symbol}")
+        logger.info("ITS-8-OS Strategy initialized for %s", config.symbol)
+
 
     def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
         """
@@ -171,7 +169,8 @@ class ITS8OSStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            logger.error(f"Error in ITS-8-OS analysis: {e}")
+            logger.error("Error in ITS-8-OS analysis: %s", e)
+
             return {"error": str(e)}
 
     def generate_signal(self, analysis: dict[str, Any]) -> Signal | None:
@@ -244,7 +243,8 @@ class ITS8OSStrategy(BaseStrategy):
             return None
 
         except Exception as e:
-            logger.error(f"Error generating ITS-8-OS signal: {e}")
+            logger.error("Error generating ITS-8-OS signal: %s", e)
+
             return None
 
     def _analyze_amd_pattern(self, prices: list[dict]) -> dict[str, Any]:
@@ -300,7 +300,8 @@ class ITS8OSStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            logger.error(f"Error analyzing AMD: {e}")
+            logger.error("Error analyzing AMD: %s", e)
+
             return {"phase": "unknown", "signal": "neutral", "score": 0.0}
 
     def _analyze_power_of_3(self, prices: list[dict]) -> dict[str, Any]:
@@ -345,7 +346,8 @@ class ITS8OSStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            logger.error(f"Error analyzing Power of 3: {e}")
+            logger.error("Error analyzing Power of 3: %s", e)
+
             return {"detected": False, "signal": "neutral", "score": 0.0}
 
     def _analyze_judas_swing(self, prices: list[dict]) -> dict[str, Any]:
@@ -389,7 +391,8 @@ class ITS8OSStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            logger.error(f"Error analyzing Judas Swing: {e}")
+            logger.error("Error analyzing Judas Swing: %s", e)
+
             return {"detected": False, "signal": "neutral", "score": 0.0}
 
     def _analyze_kill_zones(self, current_time: datetime) -> dict[str, Any]:
@@ -421,7 +424,8 @@ class ITS8OSStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            logger.error(f"Error analyzing kill zones: {e}")
+            logger.error("Error analyzing kill zones: %s", e)
+
             return {
                 "in_kill_zone": False,
                 "active_zone": None,
@@ -469,7 +473,8 @@ class ITS8OSStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            logger.error(f"Error analyzing Turtle Soup: {e}")
+            logger.error("Error analyzing Turtle Soup: %s", e)
+
             return {"detected": False, "signal": "neutral", "score": 0.0}
 
     def _analyze_silver_bullet(
@@ -534,7 +539,8 @@ class ITS8OSStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            logger.error(f"Error analyzing Silver Bullet: {e}")
+            logger.error("Error analyzing Silver Bullet: %s", e)
+
             return {"detected": False, "signal": "neutral", "score": 0.0}
 
     def _analyze_ote(self, prices: list[dict]) -> dict[str, Any]:
@@ -574,7 +580,8 @@ class ITS8OSStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            logger.error(f"Error analyzing OTE: {e}")
+            logger.error("Error analyzing OTE: %s", e)
+
             return {"in_ote_zone": False, "signal": "neutral", "score": 0.0}
 
     def _analyze_session(
@@ -635,7 +642,8 @@ class ITS8OSStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            logger.error(f"Error analyzing session: {e}")
+            logger.error("Error analyzing session: %s", e)
+
             return {"session": "unknown", "signal": "neutral", "score": 0.0}
 
     def _calculate_confluence(self, setup_results: dict[str, dict]) -> dict[str, Any]:
@@ -678,7 +686,8 @@ class ITS8OSStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            logger.error(f"Error calculating confluence: {e}")
+            logger.error("Error calculating confluence: %s", e)
+
             return {
                 "bullish_score": 0.0,
                 "bearish_score": 0.0,

@@ -129,7 +129,8 @@ class MessageThrottler:
             level=ThrottleLevel.THROTTLED,
             cooldown_until=now + cooldown,
         )
-        logger.warning(f"Throttling activated for {cooldown}s")
+        logger.warning("Throttling activated for %ss", cooldown)
+
 
     def _calculate_level(self) -> ThrottleLevel:
         """Calculate current throttle level"""

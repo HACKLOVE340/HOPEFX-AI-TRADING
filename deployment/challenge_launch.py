@@ -49,11 +49,9 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 logging.basicConfig(
     level=logging.INFO,
@@ -316,7 +314,7 @@ async def leaderboard_cmd(interaction: discord.Interaction):
         return
 
     # Best result per tester
-    rows: list[dict] = []
+    rows: ClassVar[list[dict]] = []
     for uid, t in testers.items():
         if not t.get("results"):
             continue

@@ -51,10 +51,9 @@ import json
 import logging
 import sys
 import warnings
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import ClassVar
 
 import numpy as np
 import pandas as pd
@@ -429,14 +428,14 @@ def _detect_sharpe_outliers(symbol_results: list[dict]) -> tuple[list[str], list
 
     Returns (outlier_symbols, reasons) — parallel lists.
     """
-    outliers: list[str] = []
-    reasons: list[str] = []
+    outliers: ClassVar[list[str]] = []
+    reasons: ClassVar[list[str]] = []
     for r in symbol_results:
         sym = r.get("symbol", "?")
         sharpe = r.get("sharpe", 0.0)
         win_rate = r.get("win_rate", 0.0)
         n = r.get("n_trades", 0)
-        flags: list[str] = []
+        flags: ClassVar[list[str]] = []
         if sharpe > 5.0:
             flags.append(f"Sharpe={sharpe:.2f} > 5.0 (implausible for daily bars)")
         if win_rate > 0.75 and n > 50:
@@ -468,9 +467,9 @@ def _pool_pnls(symbol_results: list[dict], exclude: list[str] | None = None) -> 
     import os as _os
 
     exclude_set = set(exclude or [])
-    all_pnls: list[float] = []
+    all_pnls: ClassVar[list[float]] = []
     n_total = 0
-    skipped_symbols: list[str] = []
+    skipped_symbols: ClassVar[list[str]] = []
     _is_production = _os.getenv("APP_ENV", "production").lower() == "production"
 
     for r in symbol_results:
@@ -669,8 +668,8 @@ def run_backtest(
                 smoke=smoke,
             )
             symbol_results.append(result)
-        except Exception as exc:
-            logger.error("Backtest failed for %s: %s", display_name, exc, exc_info=True)
+        except Exception:
+            logger.exception("Backtest failed for %s: %s", display_name)
             symbol_results.append({"symbol": display_name, "error": "Backtest failed — check server logs", "n_trades": 0})
 
     pooled = compute_pooled_metrics(symbol_results, target_n=target_n)

@@ -36,7 +36,7 @@ from __future__ import annotations
 import math
 import os
 import time
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
@@ -105,7 +105,7 @@ def fetch_ohlcv_paginated(
     Returns a DataFrame with columns: [open, high, low, close, volume].
     Index is a UTC-aware DatetimeIndex.
     """
-    all_bars: list[list] = []
+    all_bars: ClassVar[list[list]] = []
     fetch_since = since_ms
 
     while len(all_bars) < max_bars:
@@ -251,8 +251,8 @@ def run_backtest(
     bar_idx = 0
 
     records = []
-    trade_pnls: list[float] = []
-    hold_bars: list[int] = []
+    trade_pnls: ClassVar[list[float]] = []
+    hold_bars: ClassVar[list[int]] = []
 
     for _ts, row in df.iterrows():
         trade_pnl = 0.0
@@ -482,8 +482,8 @@ def run_multi_symbol_backtest(
     )
     since_ms = exchange.parse8601(since_iso)
 
-    all_test_pnls: list[float] = []
-    all_train_pnls: list[float] = []
+    all_test_pnls: ClassVar[list[float]] = []
+    all_train_pnls: ClassVar[list[float]] = []
     symbol_results: dict[str, dict] = {}
 
     for sym in symbols:
@@ -495,6 +495,7 @@ def run_multi_symbol_backtest(
             # checks when fewer than MIN_SOURCES sources are available.
             try:
                 import asyncio as _asyncio
+
                 from backtest.data_validator import fetch_validated_ohlcv
 
                 df = _asyncio.run(

@@ -72,6 +72,8 @@ if TYPE_CHECKING:
     import pandas as pd
 
 # ── Component imports ─────────────────────────────────────────────────────────
+import contextlib
+
 from data_layer.cache.redis_store import DataLayerRedisStore, dl_redis_store
 from data_layer.calendar.engine import MacroCalendarEngine, macro_calendar_engine
 from data_layer.feeds.gold.manager import GoldFeedManager
@@ -86,7 +88,6 @@ from data_layer.quality.engine import DataQualityEngine, dqe
 from data_layer.replay.engine import MarketReplayEngine, market_replay_engine
 from data_layer.sentiment.engine import NewsSentimentEngine, news_sentiment_engine
 from data_layer.types import FeedSource, GoldTick, QualityReport, TickQuality
-import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +139,7 @@ class MarketDataOrchestrator:
 
     def _init_prometheus(self) -> None:
         try:
-            from prometheus_client import Counter, Gauge, REGISTRY
+            from prometheus_client import REGISTRY, Counter, Gauge
 
             def _gauge(name: str, doc: str):
                 try:

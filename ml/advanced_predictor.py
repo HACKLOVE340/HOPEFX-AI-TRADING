@@ -222,7 +222,8 @@ class AdvancedPredictor:
         expected_digest: str | None = None
         source = "unknown"
         try:
-            from ml.model_registry import get_registry, sha256_file as _sha256
+            from ml.model_registry import get_registry
+            from ml.model_registry import sha256_file as _sha256
 
             reg = get_registry()
             # Check active version first
@@ -719,7 +720,7 @@ class HybridEnsemblePredictor:
     def _check_components(self) -> None:
         """Probe which components are available without loading models."""
         try:
-            import xgboost  # noqa: F401  # pylint: disable=unused-import
+            import xgboost  # pylint: disable=unused-import
 
             self._has_xgb = True
         except ImportError:
@@ -727,7 +728,7 @@ class HybridEnsemblePredictor:
             logger.warning("HybridEnsemble: xgboost not available")
 
         try:
-            import torch  # noqa: F401  # pylint: disable=unused-import
+            import torch  # pylint: disable=unused-import
 
             self._has_lstm = True
         except ImportError:
@@ -735,7 +736,7 @@ class HybridEnsemblePredictor:
             logger.debug("HybridEnsemble: torch not available — LSTM disabled")
 
         try:
-            import stable_baselines3  # noqa: F401  # pylint: disable=unused-import
+            import stable_baselines3  # pylint: disable=unused-import
 
             self._has_rl = True
         except ImportError:

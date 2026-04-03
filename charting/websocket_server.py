@@ -53,13 +53,13 @@ import json
 import logging
 import os
 import time
-from typing import Any
+from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)
 
 # ── Optional FastAPI / WebSockets ─────────────────────────────────────────────
 try:
-    from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+    from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import JSONResponse
 
@@ -69,7 +69,7 @@ except ImportError:
     logger.warning("FastAPI not installed — nuclear WebSocket server disabled")
 
 # ── Internal imports ──────────────────────────────────────────────────────────
-from charting.nuclear_ai_chart_engine import get_chart_engine, NuclearAIChartEngine
+from charting.nuclear_ai_chart_engine import NuclearAIChartEngine, get_chart_engine
 
 NUCLEAR_WS_PORT: int = int(os.environ.get("NUCLEAR_WS_PORT", "8001"))
 HEARTBEAT_INTERVAL_S: int = 30
@@ -104,7 +104,7 @@ class NuclearConnectionManager:
         if not self._connections:
             return
         payload = json.dumps(message, default=str)
-        dead: set[WebSocket] = set()
+        dead: ClassVar[set[WebSocket]] = set()
         async with self._lock:
             connections = set(self._connections)
         for ws in connections:
@@ -145,7 +145,8 @@ def _sync_broadcast_callback(state: dict) -> None:
     try:
         loop = asyncio.get_event_loop()
         if loop.is_running():
-            loop.create_task(_async_broadcast(state))
+            _t = loop.create_task(_async_broadcast(state))
+            _t.add_done_callback(lambda _: None)
     except RuntimeError:
         pass  # No event loop — standalone mode
 
@@ -193,7 +194,7 @@ def mount_nuclear_routes(app: Any, engine: NuclearAIChartEngine | None = None) -
 
     @app.websocket("/ws/nuclear")
     async def nuclear_ws_endpoint(ws: WebSocket):
-        from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+        from rate_limiting.websocket_limiter import get_client_ip, get_ws_limiter
 
         limiter = get_ws_limiter()
         client_ip = get_client_ip(ws)
@@ -407,7 +408,8 @@ def create_standalone_app() -> Any:
 
     @app.on_event("startup")
     async def _startup():
-        asyncio.create_task(engine.start())
+        _t = asyncio.create_task(engine.start())
+        _t.add_done_callback(lambda _: None)
         logger.info("Nuclear chart engine started on app startup.")
 
     @app.on_event("shutdown")

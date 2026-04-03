@@ -35,9 +35,7 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Ensure project root is on the path regardless of where the script is called from
@@ -213,8 +211,7 @@ def retrain(
 
     # Also update the regime router manifest with new accuracy data
     try:
-        from strategies.regime_router import update_regime_performance
-        from strategies.regime_router import detect_regime
+        from strategies.regime_router import detect_regime, update_regime_performance
 
         regime, _ = detect_regime(df)
         for name, info in results.items():
@@ -365,7 +362,7 @@ Examples:
                 print(f"  {name:<20} accuracy={acc}  f1={f1}")
                 print(f"  {'':20} saved → {path}")
         except Exception as exc:
-            logger.error("Failed for %s: %s", sym, exc, exc_info=True)
+            logger.exception("Failed for %s: %s", sym)
             all_ok = False
 
     if not all_ok:

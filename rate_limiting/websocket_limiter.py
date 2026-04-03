@@ -64,11 +64,11 @@ WS_RATE_WINDOW_SECONDS         — sliding window for rate cap (default: 60)
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import time
 from collections import defaultdict, deque
-import contextlib
 
 logger = logging.getLogger(__name__)
 

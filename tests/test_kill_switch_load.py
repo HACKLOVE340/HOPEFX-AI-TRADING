@@ -91,6 +91,7 @@ class TestOrderBlockingUnderLoad:
     def test_check_kill_switch_raises_503_when_active(self, tmp_path):
         """_check_kill_switch() must raise HTTP 503 when the switch is active."""
         from fastapi import HTTPException
+
         import api.trading as trading_mod
 
         ks = _make_ks(tmp_path)
@@ -122,6 +123,7 @@ class TestOrderBlockingUnderLoad:
     async def test_50_concurrent_orders_all_blocked(self, tmp_path):
         """50 concurrent place_order calls must all get 503 when switch is active."""
         from fastapi import HTTPException
+
         import api.trading as trading_mod
 
         ks = _make_ks(tmp_path)

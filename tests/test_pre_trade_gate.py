@@ -10,8 +10,9 @@ Pre-trade gate unit tests — verifies every block condition and the
 no-fallback invariant.
 """
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 from risk.pre_trade_gate import (
     GateOrder,
@@ -19,7 +20,6 @@ from risk.pre_trade_gate import (
     RiskManagerError,
     TradeBlockedError,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

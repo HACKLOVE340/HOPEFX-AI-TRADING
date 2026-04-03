@@ -29,9 +29,7 @@ import abc
 import logging
 import math
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 

@@ -34,11 +34,9 @@ Environment variables:
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from typing import Any
 from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +65,7 @@ class TelegramBot:
         self,
         token: str | None = None,
         allowed_chat_ids: list[int] | None = None,
-        app_state: Any = None,
+        app_state: Any | None = None,
     ):
         self.token = token or os.getenv("TELEGRAM_BOT_TOKEN", "")
         raw_ids = os.getenv("TELEGRAM_CHAT_ID", os.getenv("TELEGRAM_ALLOWED_IDS", ""))

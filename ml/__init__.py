@@ -50,17 +50,16 @@ import json as _json
 import logging as _logging
 from pathlib import Path as _Path
 from typing import Any as _Any
-from typing import Optional as _Optional  # noqa: F401
 
 _ml_logger = _logging.getLogger(__name__)
 _SAVED = _Path(__file__).parent / "saved_models"
 _CHECKSUM_FILE = _SAVED / "model_checksums.json"
 
 # Loaded model instances (None until first call to get_active_model())
-_macro_xgb: _Any = None
-_macro_rf: _Any = None
-_baseline_xgb: _Any = None
-_baseline_rf: _Any = None
+_macro_xgb: _Any | None = None
+_macro_rf: _Any | None = None
+_baseline_xgb: _Any | None = None
+_baseline_rf: _Any | None = None
 _model_version: str = "none"
 
 
@@ -281,6 +280,7 @@ def _load_models() -> None:
     # Post Discord alert so community operators are notified immediately
     try:
         import asyncio as _asyncio
+
         from notifications.discord_bot import discord_signal_bot
 
         async def _post_discord_fallback():
@@ -294,7 +294,8 @@ def _load_models() -> None:
         try:
             loop = _asyncio.get_event_loop()
             if loop.is_running():
-                loop.create_task(_post_discord_fallback())
+                _t = loop.create_task(_post_discord_fallback())
+                _t.add_done_callback(lambda _: None)
             else:
                 loop.run_until_complete(_post_discord_fallback())
         except RuntimeError:

@@ -35,14 +35,12 @@ import asyncio
 import logging
 import os
 from collections import deque
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
 
-from core.event_bus import bus, CH_TICK
+from core.event_bus import CH_TICK, bus
 
 logger = logging.getLogger(__name__)
 

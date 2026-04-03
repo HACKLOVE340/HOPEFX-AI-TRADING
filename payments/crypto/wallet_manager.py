@@ -9,8 +9,8 @@ Crypto Wallet Manager
 Manages hot/cold wallet separation and multi-currency support.
 """
 
-from decimal import Decimal
 import logging
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -47,11 +47,13 @@ class CryptoWalletManager:
             if self.hot_wallet_balances.get(currency, 0) >= amount:
                 self.hot_wallet_balances[currency] -= amount
                 self.cold_wallet_balances[currency] += amount
-                logger.info(f"Moved {amount} {currency} to cold storage")
+                logger.info("Moved %s %s to cold storage", amount, currency)
+
                 return True
             return False
         except Exception as e:
-            logger.error(f"Error moving to cold storage: {e}")
+            logger.error("Error moving to cold storage: %s", e)
+
             return False
 
     def move_to_hot_wallet(self, currency: str, amount: Decimal) -> bool:
@@ -60,11 +62,13 @@ class CryptoWalletManager:
             if self.cold_wallet_balances.get(currency, 0) >= amount:
                 self.cold_wallet_balances[currency] -= amount
                 self.hot_wallet_balances[currency] += amount
-                logger.info(f"Moved {amount} {currency} to hot wallet")
+                logger.info("Moved %s %s to hot wallet", amount, currency)
+
                 return True
             return False
         except Exception as e:
-            logger.error(f"Error moving to hot wallet: {e}")
+            logger.error("Error moving to hot wallet: %s", e)
+
             return False
 
 

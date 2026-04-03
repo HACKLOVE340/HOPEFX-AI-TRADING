@@ -22,12 +22,11 @@ from unittest.mock import patch
 
 import pytest
 
-from brokers.paper_trading import PaperTradingBroker
 from brokers.base import OrderSide, OrderType
+from brokers.paper_trading import PaperTradingBroker
 from infrastructure.metrics import get_metrics_registry
 from kill_switch import KillSwitch
-from risk.manager import RiskManager, RiskConfig
-
+from risk.manager import RiskConfig, RiskManager
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -595,6 +594,7 @@ class TestPrometheusMonitoringIntegration:
     )
     def test_setup_on_fastapi_app(self):
         from fastapi import FastAPI
+
         import prometheus_monitoring
 
         app = FastAPI()
@@ -608,6 +608,7 @@ class TestPrometheusMonitoringIntegration:
     )
     def test_idempotent_setup(self):
         from fastapi import FastAPI
+
         import prometheus_monitoring
 
         app = FastAPI()

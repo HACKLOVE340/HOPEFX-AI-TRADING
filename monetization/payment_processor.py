@@ -28,17 +28,15 @@ from __future__ import annotations
 import logging
 import os
 import uuid
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from decimal import Decimal
-from enum import Enum
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from enum import StrEnum
 
-from .pricing import SubscriptionTier
-from .subscription import subscription_manager, SubscriptionStatus
 from .access_codes import access_code_generator
 from .invoices import invoice_generator
+from .pricing import SubscriptionTier
+from .subscription import SubscriptionStatus, subscription_manager
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +57,7 @@ _DUNNING_DELAYS_HOURS = [24, 72, 168]
 _MAX_RETRIES = len(_DUNNING_DELAYS_HOURS)
 
 
-class PaymentStatus(str, Enum):
+class PaymentStatus(StrEnum):
     PENDING = "pending"
     PROCESSING = "processing"
     SUCCEEDED = "succeeded"
@@ -309,8 +307,8 @@ class PaymentProcessor:
             )
             return True
 
-        except Exception as exc:
-            logger.error("Payment processing failed for %s: %s", payment_id, exc, exc_info=True)
+        except Exception:
+            logger.exception("Payment processing failed for %s: %s", payment_id)
             payment.mark_failed("Payment processing error — check server logs")
             self._handle_payment_failed(
                 {

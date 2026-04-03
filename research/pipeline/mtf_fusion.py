@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from typing import ClassVar
 
 import numpy as np
 import pandas as pd
@@ -584,12 +585,12 @@ class MTFFusionStore:
                 h4 = self._h4_df
             if d1 is None and h4 is None:
                 return default
-            result: dict = {}
+            result: ClassVar[dict] = {}
             if d1 is not None and not d1.empty:
                 result.update({f"d_{k}": v for k, v in d1.iloc[-1].to_dict().items()})
             if h4 is not None and not h4.empty:
                 result.update({f"h_{k}": v for k, v in h4.iloc[-1].to_dict().items()})
-            return result if result else default
+            return result or default
         except Exception:  # pylint: disable=broad-exception-caught
             return default
 

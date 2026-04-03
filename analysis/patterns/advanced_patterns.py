@@ -13,13 +13,13 @@ Advanced Candlestick & Chart Pattern Recognition
 """
 
 import logging
-from typing import Any
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
+
 import numpy as np
 import pandas as pd
 from scipy.signal import argrelextrema
-
 
 # ── Module constants ─────────────────────────────────────────────────────────
 _MIN_PATTERN_BARS = 3
@@ -180,11 +180,13 @@ class AdvancedPatternDetector:
             # Sort by confidence
             patterns.sort(key=lambda x: x.confidence, reverse=True)
 
-            logger.info(f"Detected {len(patterns)} patterns with confidence >= {min_confidence}")
+            logger.info("Detected %s patterns with confidence >= %s", len(patterns), min_confidence)
+
             return patterns
 
         except Exception as e:
-            logger.error(f"Error detecting patterns: {e}")
+            logger.error("Error detecting patterns: %s", e)
+
             return []
 
     def _detect_head_shoulders(
@@ -262,7 +264,8 @@ class AdvancedPatternDetector:
                     patterns.append(pattern)
 
         except Exception as e:
-            logger.error(f"Error detecting head & shoulders: {e}")
+            logger.error("Error detecting head & shoulders: %s", e)
+
 
         return patterns
 
@@ -360,7 +363,8 @@ class AdvancedPatternDetector:
                             patterns.append(pattern)
 
         except Exception as e:
-            logger.error(f"Error detecting double patterns: {e}")
+            logger.error("Error detecting double patterns: %s", e)
+
 
         return patterns
 
@@ -458,7 +462,8 @@ class AdvancedPatternDetector:
                     patterns.append(pattern)
 
         except Exception as e:
-            logger.error(f"Error detecting triangles: {e}")
+            logger.error("Error detecting triangles: %s", e)
+
 
         return patterns
 
@@ -529,7 +534,8 @@ class AdvancedPatternDetector:
                     patterns.append(pattern)
 
         except Exception as e:
-            logger.error(f"Error detecting wedges: {e}")
+            logger.error("Error detecting wedges: %s", e)
+
 
         return patterns
 
@@ -607,7 +613,8 @@ class AdvancedPatternDetector:
                             patterns.append(pattern)
 
         except Exception as e:
-            logger.error(f"Error detecting flags/pennants: {e}")
+            logger.error("Error detecting flags/pennants: %s", e)
+
 
         return patterns
 
@@ -668,7 +675,8 @@ class AdvancedPatternDetector:
                     patterns.append(pattern)
 
         except Exception as e:
-            logger.error(f"Error detecting rectangles: {e}")
+            logger.error("Error detecting rectangles: %s", e)
+
 
         return patterns
 
@@ -815,7 +823,8 @@ class AdvancedPatternDetector:
                     patterns.append(pattern)
 
         except Exception as e:
-            logger.error(f"Error detecting harmonic patterns: {e}")
+            logger.error("Error detecting harmonic patterns: %s", e)
+
 
         return patterns
 
@@ -861,7 +870,8 @@ class AdvancedPatternDetector:
                     patterns.append(pattern)
 
         except Exception as e:
-            logger.error(f"Error detecting support/resistance: {e}")
+            logger.error("Error detecting support/resistance: %s", e)
+
 
         return patterns
 

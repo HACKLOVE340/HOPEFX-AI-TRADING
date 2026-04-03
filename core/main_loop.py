@@ -40,13 +40,11 @@ import os
 import pathlib
 import signal
 import sys
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 from dotenv import load_dotenv
 
-from core.event_bus import bus, CH_BREACH
+from core.event_bus import CH_BREACH, bus
 from data.market_ingest import MarketIngest
 from data.news_calendar_feed import NewsCalendarFeed
 from execution.fix_router import FIXRouter

@@ -20,9 +20,7 @@ import json as _json
 import logging
 import os
 import time
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path as _Path
 from typing import Any
 
@@ -396,7 +394,7 @@ async def _run_standard_risk_check(order: "OrderRequest", user_id: str) -> None:
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error("Risk check error (blocking order for safety): user=%s %s", user_id, exc, exc_info=True)
+        logger.exception("Risk check error (blocking order for safety): user=%s %s", user_id, exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Risk check unavailable — order rejected for safety",
@@ -419,7 +417,7 @@ async def _run_cvar_gate(user_id: str) -> None:
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error("CVaR pre-trade check error (blocking order for safety): user=%s %s", user_id, exc, exc_info=True)
+        logger.exception("CVaR pre-trade check error (blocking order for safety): user=%s %s", user_id, exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="CVaR risk check unavailable — order rejected for safety",
@@ -476,8 +474,8 @@ async def _route_to_broker(order: "OrderRequest") -> Any:
         return result
     except HTTPException:
         raise
-    except Exception as exc:
-        logger.error("Broker order submission failed: %s", exc, exc_info=True)
+    except Exception:
+        logger.exception("Broker order submission failed: %s")
         try:
             from core.metrics import ORDERS_TOTAL
 
@@ -579,6 +577,7 @@ def _notify_paper_gate_and_online_learner(order: "OrderRequest", result: Any) ->
 
     try:
         import pandas as _pd
+
         from core.signal_engine import notify_fill as _notify_fill
 
         _features = _pd.DataFrame(
@@ -650,7 +649,7 @@ def _check_subscription_gate(user_id: str) -> None:
         return
 
     try:
-        from monetization.subscription import subscription_manager, plan_gate
+        from monetization.subscription import plan_gate, subscription_manager
 
         sub = subscription_manager.get_user_subscription(user_id)
         user_plan = sub.tier.value if (sub and sub.is_active() and hasattr(sub.tier, "value")) else "free"
@@ -1382,8 +1381,8 @@ def _make_strategy_router():
 # Register the sub-router on the module-level router
 try:
     router.include_router(_make_strategy_router())
-except Exception as exc:
-    logger.error("Failed to register strategy sub-router: %s", exc, exc_info=True)
+except Exception:
+    logger.exception("Failed to register strategy sub-router: %s")
 
 
 # ── Regime status endpoint ────────────────────────────────────────────────────
@@ -1415,6 +1414,7 @@ async def get_regime_status():
         # Try to detect regime from live price data
         if broker is not None and hasattr(broker, "get_ohlcv"):
             import asyncio
+
             import pandas as pd
 
             _get = broker.get_ohlcv("XAUUSD", limit=100)
@@ -1493,6 +1493,6 @@ async def run_stress_test(
             leverage=leverage,
             max_loss_pct=max_loss_pct,
         )
-    except Exception as exc:
-        _logger.error("Stress test failed: %s", exc, exc_info=True)
+    except Exception:
+        _logger.exception("Stress test failed: %s")
         raise HTTPException(status_code=500, detail="Stress test failed — check server logs") from None

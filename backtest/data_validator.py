@@ -63,9 +63,7 @@ import asyncio
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 import numpy as np
 import pandas as pd

@@ -33,13 +33,10 @@ Single-tick operations are pure Python for minimal latency.
 from __future__ import annotations
 
 import logging
-from datetime import timezone
-
-UTC = timezone.utc
+import os
+from datetime import UTC
 
 import numpy as np
-import os
-
 import pandas as pd
 
 from data_layer.types import GoldTick

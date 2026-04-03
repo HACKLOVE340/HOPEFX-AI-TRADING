@@ -27,14 +27,12 @@ Usage
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from pathlib import Path
 from collections.abc import Callable
-import contextlib
+from datetime import UTC, datetime
+from pathlib import Path
 
 # FastAPI Request imported at module scope so route annotations resolve correctly
 # under Pydantic v2 (inner-function imports create unresolvable ForwardRefs).
@@ -514,7 +512,8 @@ class KillSwitch:
 
             try:
                 loop = asyncio.get_running_loop()
-                loop.create_task(_redis_bus.publish_breach(payload))
+                _t = loop.create_task(_redis_bus.publish_breach(payload))
+                _t.add_done_callback(lambda _: None)
                 logger.info("Kill switch breach event scheduled on Redis CH_BREACH")
                 return
             except RuntimeError:
@@ -544,7 +543,8 @@ class KillSwitch:
                 )
                 try:
                     loop = asyncio.get_running_loop()
-                    loop.create_task(self._event_bus.publish(event))
+                    _t = loop.create_task(self._event_bus.publish(event))
+                    _t.add_done_callback(lambda _: None)
                 except RuntimeError:
                     import inspect as _inspect
 
@@ -570,7 +570,8 @@ class KillSwitch:
         the kill switch on Pod A does not affect Pods B and C.
         """
         try:
-            from core.event_bus import bus as _redis_bus, CH_BREACH
+            from core.event_bus import CH_BREACH
+            from core.event_bus import bus as _redis_bus
         except ImportError:
             logger.warning("Kill switch: could not import Redis EventBus — cross-pod propagation disabled")
             return
@@ -649,7 +650,8 @@ class KillSwitch:
             return
 
         try:
-            from kubernetes_asyncio import client as k8s_client, config as k8s_config
+            from kubernetes_asyncio import client as k8s_client
+            from kubernetes_asyncio import config as k8s_config
 
             await k8s_config.load_incluster_config()
             v1 = k8s_client.CoreV1Api()
@@ -727,6 +729,8 @@ class KillSwitch:
             try:
                 from kubernetes_asyncio import (
                     client as k8s_client,
+                )
+                from kubernetes_asyncio import (
                     config as k8s_config,
                 )
 
@@ -747,11 +751,13 @@ class KillSwitch:
 
         try:
             loop = asyncio.get_running_loop()
-            loop.create_task(_async_patch(), name="kill_switch_k8s_patch")
+            _t = loop.create_task(_async_patch(), name="kill_switch_k8s_patch")
+            _t.add_done_callback(lambda _: None)
         except RuntimeError:
             # No running loop — use sync kubernetes client
             try:
-                from kubernetes import client as k8s_sync, config as k8s_sync_config
+                from kubernetes import client as k8s_sync
+                from kubernetes import config as k8s_sync_config
 
                 k8s_sync_config.load_incluster_config()
                 v1 = k8s_sync.CoreV1Api()
@@ -839,8 +845,8 @@ def create_kill_switch_router(ks: KillSwitch):
     including the router, or use the dependency injection shown below.
     """
     try:
-        from fastapi import APIRouter, HTTPException, Depends
-        from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+        from fastapi import APIRouter, Depends, HTTPException
+        from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
     except ImportError:
         logger.warning("FastAPI not available — kill switch router not created")
         return None

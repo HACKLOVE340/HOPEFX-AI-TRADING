@@ -150,5 +150,6 @@ def initialize_secure_config():
         config_manager.initialize()
         return config_manager
     except SecureConfigError as e:
-        logger.critical(f"Configuration error: {e}")
+        logger.critical("Configuration error: %s", e)
+
         sys.exit(1)  # HARD FAIL - No insecure fallbacks

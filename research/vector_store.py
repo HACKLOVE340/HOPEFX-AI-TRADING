@@ -33,8 +33,8 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -221,7 +221,7 @@ class MarketVectorStore:
         self.collection_name = collection
         self._client = None
         self._collection = None
-        os.makedirs(persist_dir, exist_ok=True)
+        Path(persist_dir).mkdir(parents=True, exist_ok=True)
 
     def _ensure_connected(self) -> None:
         if self._collection is not None:

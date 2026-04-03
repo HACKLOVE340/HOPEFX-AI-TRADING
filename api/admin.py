@@ -561,8 +561,8 @@ def save_settings(
             log_activity(f"Settings updated by {user.sub}: {list(payload.keys())}")
             return {"status": "ok", "saved": list(payload.keys())}
         return {"status": "error", "detail": "Config store write failed"}
-    except Exception as exc:
-        logger.error("save_settings failed: %s", exc, exc_info=True)
+    except Exception:
+        logger.exception("save_settings failed: %s")
         return {"status": "error", "detail": "Settings save failed — check server logs"}
 
 

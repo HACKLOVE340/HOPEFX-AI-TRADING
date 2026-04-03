@@ -87,7 +87,7 @@ def _safe_webhook_url(url: str, label: str) -> str:
     Raises HTTPException(400) if the URL is empty, not HTTPS, or targets a
     host not in ``_WEBHOOK_ALLOWED_HOSTS``.
     """
-    from urllib.parse import quote, urlencode, parse_qsl
+    from urllib.parse import parse_qsl, quote, urlencode
 
     if not url:
         raise HTTPException(

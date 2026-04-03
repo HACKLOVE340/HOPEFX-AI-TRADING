@@ -9,10 +9,10 @@ Tests for the analytics module.
 
 import numpy as np
 
+from analytics.options import OptionsAnalyzer
 from analytics.portfolio import PortfolioOptimizer
 from analytics.risk import RiskAnalyzer
 from analytics.simulations import SimulationEngine
-from analytics.options import OptionsAnalyzer
 
 
 class TestPortfolioOptimizer:

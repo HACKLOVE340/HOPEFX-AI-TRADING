@@ -24,7 +24,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 
@@ -161,7 +160,7 @@ class TestAnomalyWeightStore:
 
     def test_weight_is_down_weight_factor_on_anomaly(self):
         """When anomaly is detected, weight must equal down_weight_factor exactly."""
-        from research.pipeline.anomaly import AnomalyWeightStore, AnomalyWeighter
+        from research.pipeline.anomaly import AnomalyWeighter, AnomalyWeightStore
 
         store = AnomalyWeightStore(down_weight_factor=0.3)
         # Manually inject a fitted weighter that always returns a very negative score

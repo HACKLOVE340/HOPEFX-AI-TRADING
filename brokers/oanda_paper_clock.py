@@ -35,11 +35,9 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +129,7 @@ class OandaPaperClock:
 
         # Parse to compute live_gate_opens
         try:
-            started_dt = datetime.fromisoformat(started_utc_str.replace("Z", "+00:00"))
+            started_dt = datetime.fromisoformat(started_utc_str)
             if started_dt.tzinfo is None:
                 started_dt = started_dt.replace(tzinfo=UTC)
         except Exception:
@@ -204,7 +202,7 @@ class OandaPaperClock:
 
         # ── Prometheus ────────────────────────────────────────────────────────
         try:
-            from core.metrics import SHARPE_N_TRADES, SHARPE_RATIO, SHARPE_GATE_PASSED
+            from core.metrics import SHARPE_GATE_PASSED, SHARPE_N_TRADES, SHARPE_RATIO
 
             SHARPE_N_TRADES.set(status["n_trades"])
             SHARPE_RATIO.set(status["sharpe"])
@@ -293,7 +291,7 @@ class OandaPaperClock:
             # PENDING placeholder — clock is pre-seeded but no real connection yet
             if data.get("requires_real_account", False):
                 started_str = data.get("started_utc", "")
-                started_dt = datetime.fromisoformat(started_str.replace("Z", "+00:00"))
+                started_dt = datetime.fromisoformat(started_str)
                 if started_dt.tzinfo is None:
                     started_dt = started_dt.replace(tzinfo=UTC)
                 now = datetime.now(UTC)
@@ -321,7 +319,7 @@ class OandaPaperClock:
                 }
 
             started_str = data.get("started_utc", "")
-            started_dt = datetime.fromisoformat(started_str.replace("Z", "+00:00"))
+            started_dt = datetime.fromisoformat(started_str)
             if started_dt.tzinfo is None:
                 started_dt = started_dt.replace(tzinfo=UTC)
             now = datetime.now(UTC)
@@ -417,7 +415,7 @@ def validate_oanda_account_at_startup() -> dict[str, Any]:
     """
     clock = get_clock()
     status = clock.status()
-    warnings: list = []
+    warnings: ClassVar[list] = []
 
     account_id = status.get("account_id") or "PENDING"
     pending = status.get("pending_real_account", False) or account_id == "PENDING"

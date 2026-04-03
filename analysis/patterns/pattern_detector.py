@@ -13,9 +13,10 @@ Advanced Candlestick & Chart Pattern Recognition
 """
 
 import logging
-from typing import Any
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
+
 import numpy as np
 import pandas as pd
 from scipy.signal import argrelextrema
