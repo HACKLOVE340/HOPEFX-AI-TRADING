@@ -76,7 +76,7 @@ const CryptoCheckout = React.lazy(() => import('./pages/CryptoCheckout'));
 const Settings       = React.lazy(() => import('./pages/Settings'));
 const TwoFactorSetup = React.lazy(() => import('./pages/TwoFactorSetup'));
 
-// ── Admin-only ────────────────────────────────────────────────────────────────
+// ── Admin-only (redirects to /superadmin — legacy routes preserved for links) ─
 const AdminPanel        = React.lazy(() => import('./pages/AdminPanel'));
 const AuditLog          = React.lazy(() => import('./pages/AuditLog'));
 const SecurityDashboard = React.lazy(() => import('./pages/SecurityDashboard'));
@@ -281,12 +281,12 @@ const AppShell: React.FC = () => {
             <Route path="/settings"     element={wrap(gated('settings',     <Settings />))} />
             <Route path="/2fa-setup"    element={wrap(<AuthGuard><TwoFactorSetup /></AuthGuard>)} />
 
-            {/* Admin-only */}
-            <Route path="/admin"        element={wrap(adminOnly(<AdminPanel />))} />
+            {/* Legacy admin routes — redirect to /superadmin (single system) */}
+            <Route path="/admin"        element={<Navigate to="/superadmin" replace />} />
             <Route path="/audit"        element={wrap(adminOnly(<AuditLog />))} />
             <Route path="/security"     element={wrap(adminOnly(<SecurityDashboard />))} />
             <Route path="/auto-heal"    element={wrap(adminOnly(<AutoHealDashboard />))} />
-            <Route path="/whitelabel"   element={wrap(adminOnly(<WhitelabelAdmin />))} />
+            <Route path="/whitelabel"   element={<Navigate to="/superadmin" replace />} />
 
             {/* Superadmin-only */}
             <Route path="/superadmin"   element={wrap(superAdminOnly(<SuperAdminDashboard />))} />
