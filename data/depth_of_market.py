@@ -17,13 +17,11 @@ Inspired by: MT5, Bookmap, NinjaTrader DOM features
 """
 
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from dataclasses import dataclass, field, asdict
-from collections import deque
-from enum import Enum
 import threading
+from collections import deque
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
+from enum import Enum
 
 logger = logging.getLogger(__name__)
 
@@ -305,7 +303,8 @@ class DepthOfMarketService:
                 self._history[symbol] = deque(maxlen=self._history_size)
             self._history[symbol].append(order_book)
 
-            logger.debug(f"Order book updated: {symbol}, seq={self._sequence}")
+            logger.debug("Order book updated: %s, seq=%s", symbol, self._sequence)
+
 
     def update_level(self, symbol: str, side: OrderBookSide, price: float, size: float):
         """
@@ -319,7 +318,8 @@ class DepthOfMarketService:
         """
         with self._lock:
             if symbol not in self._order_books:
-                logger.warning(f"No order book for {symbol}")
+                logger.warning("No order book for %s", symbol)
+
                 return
 
             order_book = self._order_books[symbol]

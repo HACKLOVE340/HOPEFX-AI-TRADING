@@ -7,9 +7,9 @@
 Tests for the ML module.
 """
 
-import pytest
 import numpy as np
 import pandas as pd
+import pytest
 
 from ml.features.technical import TechnicalFeatureEngineer
 

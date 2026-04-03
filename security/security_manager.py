@@ -18,9 +18,7 @@ import os
 import secrets
 import threading
 import time
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +84,8 @@ class SecurityManager:
         self.request_log[user_id] = [req_time for req_time in self.request_log[user_id] if req_time > cutoff]
 
         if len(self.request_log[user_id]) >= self.rate_limit_requests:
-            logger.warning(f"Rate limit exceeded for {user_id}")
+            logger.warning("Rate limit exceeded for %s", user_id)
+
             return False
 
         self.request_log[user_id].append(now)

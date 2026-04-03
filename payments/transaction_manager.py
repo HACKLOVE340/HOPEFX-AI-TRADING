@@ -10,15 +10,13 @@ Handles complete transaction lifecycle including recording, validation,
 status tracking, reversal, and reporting.
 """
 
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+import logging
+import uuid
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from enum import Enum
 from typing import Any
-from dataclasses import dataclass, field
-import logging
-import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -152,11 +150,13 @@ class TransactionManager:
                 self.user_transactions[user_id] = []
             self.user_transactions[user_id].append(transaction_id)
 
-            logger.info(f"Transaction recorded: {transaction_id} for user {user_id}")
+            logger.info("Transaction recorded: %s for user %s", transaction_id, user_id)
+
             return transaction
 
         except Exception as e:
-            logger.error(f"Error recording transaction: {e}")
+            logger.error("Error recording transaction: %s", e)
+
             raise
 
     def update_transaction_status(
@@ -179,7 +179,8 @@ class TransactionManager:
         try:
             transaction = self.transactions.get(transaction_id)
             if not transaction:
-                logger.error(f"Transaction not found: {transaction_id}")
+                logger.error("Transaction not found: %s", transaction_id)
+
                 return False
 
             transaction.status = status
@@ -190,11 +191,13 @@ class TransactionManager:
             elif status == TransactionStatus.FAILED:
                 transaction.failed_reason = failed_reason
 
-            logger.info(f"Transaction {transaction_id} status updated to {status.value}")
+            logger.info("Transaction %s status updated to %s", transaction_id, status.value)
+
             return True
 
         except Exception as e:
-            logger.error(f"Error updating transaction status: {e}")
+            logger.error("Error updating transaction status: %s", e)
+
             return False
 
     def complete_transaction(self, transaction_id: str) -> bool:
@@ -212,7 +215,8 @@ class TransactionManager:
             return False
 
         if transaction.status != TransactionStatus.PENDING:
-            logger.error(f"Cannot cancel non-pending transaction: {transaction_id}")
+            logger.error("Cannot cancel non-pending transaction: %s", transaction_id)
+
             return False
 
         return self.update_transaction_status(transaction_id, TransactionStatus.CANCELLED)
@@ -233,11 +237,13 @@ class TransactionManager:
         try:
             original = self.transactions.get(transaction_id)
             if not original:
-                logger.error(f"Transaction not found for reversal: {transaction_id}")
+                logger.error("Transaction not found for reversal: %s", transaction_id)
+
                 return None
 
             if original.status != TransactionStatus.COMPLETED:
-                logger.error(f"Can only reverse completed transactions: {transaction_id}")
+                logger.error("Can only reverse completed transactions: %s", transaction_id)
+
                 return None
 
             # Create reversal transaction (opposite type)
@@ -269,11 +275,13 @@ class TransactionManager:
             original.metadata["reversed_by"] = reversal.transaction_id
             original.metadata["reversal_reason"] = reason
 
-            logger.info(f"Transaction {transaction_id} reversed with {reversal.transaction_id}")
+            logger.info("Transaction %s reversed with %s", transaction_id, reversal.transaction_id)
+
             return reversal
 
         except Exception as e:
-            logger.error(f"Error reversing transaction: {e}")
+            logger.error("Error reversing transaction: %s", e)
+
             return None
 
     def get_transaction(self, transaction_id: str) -> Transaction | None:

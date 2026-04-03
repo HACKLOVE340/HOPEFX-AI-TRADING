@@ -11,9 +11,11 @@ ExecutionRequest validation.
 """
 
 import asyncio
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
+
+from brokers.base import Order, OrderSide, OrderStatus, OrderType
 from execution.engine import (
     EngineCircuitBreaker,
     ExecutionEngine,
@@ -21,8 +23,6 @@ from execution.engine import (
     ExecutionRequest,
     ExecutionStatus,
 )
-from brokers.base import Order, OrderSide, OrderStatus, OrderType
-
 
 # ---------------------------------------------------------------------------
 # ExecutionRequest validation

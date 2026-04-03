@@ -8,11 +8,12 @@ Unit tests for core components.
 """
 
 import asyncio
+
 import pytest
 
-from core.exceptions import HopeFXError, RiskViolation
 from config.settings import Settings
-from core.event_bus import EventBus, MemoryMappedEventStore, DomainEvent
+from core.event_bus import DomainEvent, EventBus, MemoryMappedEventStore
+from core.exceptions import HopeFXError, RiskViolation
 
 
 @pytest.mark.asyncio

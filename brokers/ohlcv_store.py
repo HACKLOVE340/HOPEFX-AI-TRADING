@@ -39,9 +39,7 @@ from __future__ import annotations
 import logging
 import os
 from collections import deque
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd

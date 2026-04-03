@@ -40,7 +40,7 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import joblib
 import numpy as np
@@ -891,7 +891,7 @@ def walk_forward_regime_eval(
     from sklearn.model_selection import TimeSeriesSplit
 
     tscv = TimeSeriesSplit(n_splits=n_splits, gap=1)
-    fold_results: list[dict] = []
+    fold_results: ClassVar[list[dict]] = []
 
     for fold, (train_idx, test_idx) in enumerate(tscv.split(X)):
         X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]

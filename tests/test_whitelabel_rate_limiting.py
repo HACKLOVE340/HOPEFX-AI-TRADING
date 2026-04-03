@@ -23,16 +23,15 @@ from __future__ import annotations
 import time
 
 import pytest
-from starlette.requests import Request
-from starlette.testclient import TestClient
 from starlette.applications import Starlette
-from starlette.routing import Route
+from starlette.requests import Request
 from starlette.responses import PlainTextResponse
+from starlette.routing import Route
+from starlette.testclient import TestClient
 
 from whitelabel.api_auth import _key_store, register_api_key
 from whitelabel.config import TierName
 from whitelabel.rate_limiting import WhitelabelRateLimitMiddleware, _counters
-
 
 # ---------------------------------------------------------------------------
 # Helpers

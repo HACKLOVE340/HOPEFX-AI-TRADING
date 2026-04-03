@@ -36,9 +36,9 @@ Usage:
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal
-from collections.abc import Callable
 
 import numpy as np
 import pandas as pd
@@ -51,10 +51,10 @@ logger = logging.getLogger(__name__)
 @dataclass
 class _Param:
     kind: str  # "int" | "float" | "categorical" | "bool"
-    low: Any = None
-    high: Any = None
-    choices: Any = None
-    step: Any = None
+    low: Any | None = None
+    high: Any | None = None
+    choices: Any | None = None
+    step: Any | None = None
     log: bool = False  # log-scale for float/int
 
 
@@ -66,7 +66,7 @@ class ParamSpace:
         return _Param("int", low=low, high=high, step=step)
 
     @staticmethod
-    def float(low: float, high: float, step: float = None, log: bool = False) -> _Param:
+    def float(low: float, high: float, step: float | None = None, log: bool = False) -> _Param:
         return _Param("float", low=low, high=high, step=step, log=log)
 
     @staticmethod
@@ -525,8 +525,8 @@ def create_hyperopt_router():
                         "duration_seconds": result.duration_seconds,
                     },
                 }
-            except Exception as exc:
-                logger.error("Hyperopt job %s failed: %s", job_id, exc, exc_info=True)
+            except Exception:
+                logger.exception("Hyperopt job %s failed: %s", job_id)
                 _jobs[job_id] = {"status": "error", "result": {"error": "Optimisation failed — check server logs"}}
 
         background_tasks.add_task(_run)

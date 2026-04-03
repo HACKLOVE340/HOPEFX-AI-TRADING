@@ -12,13 +12,11 @@ Institutional-grade OMS with order lifecycle management
 import asyncio
 import logging
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum, auto
-from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -183,7 +181,8 @@ class OrderLifecycleManager:
         success = self._transition(order, OrderStatus.PENDING_NEW)
         if success:
             # Simulate async submission
-            asyncio.create_task(self._async_submit(order))
+            _t = asyncio.create_task(self._async_submit(order))
+            _t.add_done_callback(lambda _: None)
         return success
 
     async def _async_submit(self, order: Order):

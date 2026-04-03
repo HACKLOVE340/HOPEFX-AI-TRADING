@@ -22,7 +22,8 @@ Integration
 Start the brain in connect_to_life.py::
 
     from security.global_fortress import start_brain
-    asyncio.create_task(start_brain(app))
+    _t = asyncio.create_task(start_brain(app))
+    _t.add_done_callback(lambda _: None)
 
 The sub-router is mounted automatically when ``start_brain`` is called.
 """
@@ -34,10 +35,9 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from typing import Any
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, ClassVar
 
 import httpx
 import numpy as np
@@ -108,13 +108,13 @@ def _get_rl_agent() -> Any | None:
             from stable_baselines3 import PPO
 
             model_path = os.path.join(
-                os.path.dirname(__file__),
+                Path(__file__).parent,
                 "..",
                 "ml",
                 "rl_models",
                 "nuclear_decision_ppo.zip",
             )
-            if os.path.exists(model_path):
+            if Path(model_path).exists():
                 _rl_agent = PPO.load(model_path)
                 logger.info("HOPEFXBrain: RL agent loaded from %s", model_path)
             else:
@@ -198,8 +198,8 @@ class HOPEFXBrain:
                 await self.trace_attacks()
                 await self.auto_heal()
                 await self._sync_flashpoint_iocs()
-            except Exception as exc:
-                logger.error("HOPEFXBrain loop error: %s", exc, exc_info=True)
+            except Exception:
+                logger.exception("HOPEFXBrain loop error: %s")
             await asyncio.sleep(SCAN_INTERVAL)
 
     # ── Endpoint scanner ──────────────────────────────────────────────────────
@@ -210,7 +210,7 @@ class HOPEFXBrain:
         Routes that return non-2xx are flagged in Redis for alerting.
         """
         redis = await _get_redis()
-        flagged: list[str] = []
+        flagged: ClassVar[list[str]] = []
 
         for route in self.app.routes:
             path: str = getattr(route, "path", "")
@@ -393,7 +393,7 @@ class HOPEFXBrain:
         redis = await _get_redis()
 
         # Drain up to 10 vulnerability entries per cycle
-        raw_entries: list[str] = []
+        raw_entries: ClassVar[list[str]] = []
         if redis:
             raw_entries = await redis.lrange("scan:vuln_queue", 0, 9)
             if raw_entries:
@@ -733,7 +733,8 @@ async def start_brain(app: FastAPI) -> HOPEFXBrain:
     Call from connect_to_life.py lifespan or startup_event::
 
         from security.global_fortress import start_brain
-        asyncio.create_task(start_brain(app))
+        _t = asyncio.create_task(start_brain(app))
+        _t.add_done_callback(lambda _: None)
     """
     global _brain_instance
     if _brain_instance is not None:
@@ -755,7 +756,8 @@ async def start_brain(app: FastAPI) -> HOPEFXBrain:
         asyncio.get_event_loop().run_in_executor(None, _get_encoder)
 
     # Start the eternal loop
-    asyncio.create_task(brain.monitor_24_7(), name="hopefx-brain-24-7")
+    _t = asyncio.create_task(brain.monitor_24_7(), name="hopefx-brain-24-7")
+    _t.add_done_callback(lambda _: None)
     logger.info("HOPEFXBrain: 24/7 monitor task created")
 
     return brain

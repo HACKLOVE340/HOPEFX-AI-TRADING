@@ -98,13 +98,11 @@ import logging
 import os
 import socket
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from enum import Enum
-from typing import Any
 from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +141,7 @@ except Exception:
     _PROM_OK = False
 
 
-class Role(str, Enum):
+class Role(StrEnum):
     PRIMARY = "primary"
     STANDBY = "standby"
 

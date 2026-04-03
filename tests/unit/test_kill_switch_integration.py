@@ -16,14 +16,10 @@ tests/unit/test_kill_switch_integration.py
 """
 
 import json
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-
-from risk.manager import RiskManager, RiskConfig
-
+from risk.manager import RiskConfig, RiskManager
 
 # ---------------------------------------------------------------------------
 # Helpers

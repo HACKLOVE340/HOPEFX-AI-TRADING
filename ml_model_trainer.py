@@ -3,11 +3,11 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
-import pandas as pd
 import joblib
+import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.model_selection import cross_val_score, train_test_split
 
 # pandas_ta requires Python >=3.12; use the `ta` library on Python 3.10.
 try:
@@ -53,6 +53,7 @@ def _bbands(close):
 # Load historical XAUUSD data.
 # Set DATA_PATH env var or pass --data argument; defaults to data/XAU_USD_H1.csv.
 import os
+
 _DATA_PATH = os.environ.get("DATA_PATH", "data/XAU_USD_H1.csv")
 data = pd.read_csv(_DATA_PATH)
 

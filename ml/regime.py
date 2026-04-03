@@ -7,12 +7,12 @@
 
 from __future__ import annotations
 
-import joblib
 from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
 from typing import Any
 
+import joblib
 import numpy as np
 import structlog
 from hmmlearn.hmm import GaussianHMM
@@ -201,7 +201,8 @@ class RegimeDetector:
             self.model_path,
         )
 
-        logger.info(f"Regime model trained: {self._regime_map}")
+        logger.info("Regime model trained: %s", self._regime_map)
+
 
     def get_regime_statistics(self) -> dict[str, Any]:
         """Get statistics for each regime."""

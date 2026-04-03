@@ -31,9 +31,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -49,20 +47,20 @@ from sklearn.metrics import (
 )
 from sklearn.preprocessing import StandardScaler
 
+from research.pipeline.anomaly import AnomalyWeighter
 from research.pipeline.data_ingestion import (
     attach_sentiment,
     fetch_daily,
     fetch_intraday,
     fetch_rss_sentiment,
 )
-from research.pipeline.feature_engineering import build_feature_matrix, add_targets
-from research.pipeline.mtf_fusion import MTFFusion
+from research.pipeline.feature_engineering import add_targets, build_feature_matrix
 from research.pipeline.models_deep import DeepPredictor, make_sequences
 from research.pipeline.models_ensemble import EnsemblePredictor
-from research.pipeline.anomaly import AnomalyWeighter
-from research.pipeline.synthetic import RegimeSynthesizer, label_regimes
-from research.pipeline.online_learning import IncrementalXGBoost, DriftDetector
+from research.pipeline.mtf_fusion import MTFFusion
+from research.pipeline.online_learning import DriftDetector, IncrementalXGBoost
 from research.pipeline.regime_models import RegimeRouter
+from research.pipeline.synthetic import RegimeSynthesizer, label_regimes
 
 logger = logging.getLogger(__name__)
 

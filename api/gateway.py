@@ -31,9 +31,7 @@ order requests through the main app's TradeExecutor so pre-trade risk checks
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, WebSocket
@@ -314,8 +312,8 @@ class APIGateway:
 
             except HTTPException:
                 raise
-            except Exception as exc:
-                logger.exception("Gateway order execution error: %s", exc)
+            except Exception:
+                logger.exception("Gateway order execution error: %s")
                 raise HTTPException(
                     status_code=500,
                     detail="Order execution failed — check server logs",
@@ -324,7 +322,7 @@ class APIGateway:
         # WebSocket for real-time data
         @self.app.websocket("/ws/v1/stream")
         async def websocket_stream(websocket: WebSocket):
-            from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+            from rate_limiting.websocket_limiter import get_client_ip, get_ws_limiter
 
             limiter = get_ws_limiter()
             client_ip = get_client_ip(websocket)

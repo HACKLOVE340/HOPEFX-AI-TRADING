@@ -25,47 +25,40 @@ Version: 1.2.0
 """
 
 import logging
-from typing import Optional  # noqa: F401
-
-from .providers import (
-    NewsProvider,
-    NewsAPIProvider,
-    AlphaVantageNewsProvider,
-    RSSFeedProvider,
-    MultiSourceAggregator,
-)
-
-from .sentiment import SentimentAnalyzer, FinancialSentimentAnalyzer, SentimentScore
-
-from .impact_predictor import ImpactPredictor, ImpactLevel, MarketImpact
+from datetime import UTC
 
 from .economic_calendar import EconomicCalendar, EconomicEvent, EventImportance
-
 from .geopolitical_risk import (
+    CountryRisk,
+    CustomDataLayerConfig,
+    GeopoliticalEvent,
+    GeopoliticalEventType,
+    GeopoliticalRiskAssessment,
     # Core Classes
     GeopoliticalRiskProvider,
-    GeopoliticalEvent,
-    GeopoliticalRiskAssessment,
-    GeopoliticalEventType,
-    RiskSeverity,
     GoldImpact,
-    CountryRisk,
+    RiskSeverity,
+    WorldMonitorAPIClient,
     # World Monitor Integration
     WorldMonitorIntegration,
-    WorldMonitorAPIClient,
     WorldMonitorSelfHostConfig,
-    CustomDataLayerConfig,
+    create_self_hosted_setup,
+    get_api_client,
+    get_custom_layer_config,
     # Convenience Functions
     get_geopolitical_provider,
     get_gold_geopolitical_signal,
-    get_api_client,
     get_gold_signal_from_api,
-    create_self_hosted_setup,
-    get_custom_layer_config,
 )
-from datetime import timezone
-
-UTC = timezone.utc
+from .impact_predictor import ImpactLevel, ImpactPredictor, MarketImpact
+from .providers import (
+    AlphaVantageNewsProvider,
+    MultiSourceAggregator,
+    NewsAPIProvider,
+    NewsProvider,
+    RSSFeedProvider,
+)
+from .sentiment import FinancialSentimentAnalyzer, SentimentAnalyzer, SentimentScore
 
 logger = logging.getLogger(__name__)
 
@@ -276,44 +269,44 @@ def create_news_router():
 
 
 __all__ = [
-    # Providers
-    "NewsProvider",
-    "NewsAPIProvider",
     "AlphaVantageNewsProvider",
-    "RSSFeedProvider",
-    "MultiSourceAggregator",
-    # Sentiment
-    "SentimentAnalyzer",
-    "FinancialSentimentAnalyzer",
-    "SentimentScore",
-    # Impact Prediction
-    "ImpactPredictor",
-    "ImpactLevel",
-    "MarketImpact",
+    "CountryRisk",
+    "CustomDataLayerConfig",
     # Economic Calendar
     "EconomicCalendar",
     "EconomicEvent",
     "EventImportance",
+    "FinancialSentimentAnalyzer",
+    "GeopoliticalEvent",
+    "GeopoliticalEventType",
+    "GeopoliticalRiskAssessment",
     # Geopolitical Risk (World Monitor Integration)
     "GeopoliticalRiskProvider",
-    "GeopoliticalEvent",
-    "GeopoliticalRiskAssessment",
-    "GeopoliticalEventType",
-    "RiskSeverity",
     "GoldImpact",
-    "CountryRisk",
-    "WorldMonitorIntegration",
+    "ImpactLevel",
+    # Impact Prediction
+    "ImpactPredictor",
+    "MarketImpact",
+    "MultiSourceAggregator",
+    "NewsAPIProvider",
+    # Providers
+    "NewsProvider",
+    "RSSFeedProvider",
+    "RiskSeverity",
+    # Sentiment
+    "SentimentAnalyzer",
+    "SentimentScore",
     "WorldMonitorAPIClient",
+    "WorldMonitorIntegration",
     "WorldMonitorSelfHostConfig",
-    "CustomDataLayerConfig",
-    "get_geopolitical_provider",
-    "get_gold_geopolitical_signal",
-    "get_api_client",
-    "get_gold_signal_from_api",
-    "create_self_hosted_setup",
-    "get_custom_layer_config",
     # Router factory
     "create_news_router",
+    "create_self_hosted_setup",
+    "get_api_client",
+    "get_custom_layer_config",
+    "get_geopolitical_provider",
+    "get_gold_geopolitical_signal",
+    "get_gold_signal_from_api",
 ]
 
 # Module metadata

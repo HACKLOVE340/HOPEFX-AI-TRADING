@@ -29,12 +29,10 @@ import os
 import threading
 import time
 import traceback
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from typing import Any
 from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from typing import Any
 
 from brokers.base import (
     AccountInfo,
@@ -59,8 +57,8 @@ except ImportError:
 # ib_insync — required for this connector
 try:
     from ib_insync import (  # type: ignore[import]
-        IB,
         CFD,
+        IB,
         Commodity,
         Contract,
         Future,
@@ -68,7 +66,6 @@ try:
         MarketOrder,
         StopOrder,
         Trade,
-
     )
 
     IB_AVAILABLE = True

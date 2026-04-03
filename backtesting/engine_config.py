@@ -26,13 +26,13 @@ Imports
 The legacy shim at backtest/engine.py re-exports from here.
 """
 
+import json
 import logging
 import os
-from typing import Any
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-import json
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -177,7 +177,8 @@ class HistoricalDataLoader:
         except FileNotFoundError:
             raise  # propagate the explicit error above
         except Exception as e:
-            logger.error(f"Failed to load data for {symbol}: {e}")
+            logger.error("Failed to load data for %s: %s", symbol, e)
+
             raise
 
 
@@ -456,7 +457,8 @@ class BacktestEngine:
         Args:
             progress_callback: Called with (current_step, total_steps, current_time)
         """
-        logger.info(f"Starting backtest: {self.config.start_date} to {self.config.end_date}")
+        logger.info("Starting backtest: %s to %s", self.config.start_date, self.config.end_date)
+
 
         # Load data for all symbols
         all_data: dict[str, pd.DataFrame] = {}
@@ -464,13 +466,14 @@ class BacktestEngine:
             df = await self.data_loader.load_data(symbol, "1h", self.config.start_date, self.config.end_date)
             if df is not None:
                 all_data[symbol] = df
-                logger.info(f"Loaded {len(df)} bars for {symbol}")
+                logger.info("Loaded %s bars for %s", len(df), symbol)
+
 
         if not all_data:
             raise ValueError("No data loaded for backtest")
 
         # Combine timestamps
-        all_timestamps = sorted(set(ts for df in all_data.values() for ts in df["timestamp"]))
+        all_timestamps = sorted({ts for df in all_data.values() for ts in df["timestamp"]})
 
         total_steps = len(all_timestamps)
 
@@ -505,7 +508,8 @@ class BacktestEngine:
                         self._process_signal(signal, timestamp, current_prices, current_bars)
 
                 except Exception as e:
-                    logger.error(f"Strategy error at {timestamp}: {e}")
+                    logger.error("Strategy error at %s: %s", timestamp, e)
+
 
             # Progress callback
             if progress_callback and i % 100 == 0:
@@ -514,7 +518,8 @@ class BacktestEngine:
         # Calculate results
         self.results = self._calculate_results()
 
-        logger.info(f"Backtest complete: {self.results.total_trades} trades")
+        logger.info("Backtest complete: %s trades", self.results.total_trades)
+
 
         return self.results
 
@@ -1120,7 +1125,8 @@ NOTE: Sharpe is trade-level (corrected). Bar-level Sharpe is inflated
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, default=str)
 
-        logger.info(f"Backtest results exported to {filepath}")
+        logger.info("Backtest results exported to %s", filepath)
+
 
 
 # Convenience functions

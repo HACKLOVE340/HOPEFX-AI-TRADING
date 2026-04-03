@@ -22,11 +22,8 @@ import asyncio
 import logging
 import os
 import sys
-from typing import Any
-from datetime import timezone
-
-UTC = timezone.utc
-
+from datetime import UTC
+from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -210,7 +207,7 @@ async def init_database(s: Any) -> Any:
     # SQLite does not support pool_size / max_overflow — only pass them for
     # PostgreSQL/MySQL connections.
     is_sqlite = conn_str.startswith("sqlite")
-    engine_kwargs: dict = {}
+    engine_kwargs: ClassVar[dict] = {}
     if not is_sqlite:
         engine_kwargs["pool_size"] = int(os.getenv("DB_POOL_SIZE", str(s.config.database.connection_pool_size)))
         engine_kwargs["max_overflow"] = int(os.getenv("DB_POOL_MAX_OVERFLOW", str(s.config.database.max_overflow)))
@@ -648,7 +645,8 @@ async def init_price_engine(s: Any) -> Any:
             # Store on app_state so nuclear_price_bridge and health checks can
             # inspect it; run() is launched as a background task.
             s.nuclear_streamer = streamer
-            asyncio.create_task(streamer.run(), name="nuclear_streamer")
+            _t = asyncio.create_task(streamer.run(), name="nuclear_streamer")
+            _t.add_done_callback(lambda _: None)
             logger.info(
                 "init_price_engine: NuclearStreamer started — symbol=%s finnhub=%s twelvedata=%s polygon=%s",
                 primary_symbol,
@@ -1209,7 +1207,7 @@ async def init_deep_ensemble_store(s: Any) -> Any:
             p_value_gate=float(os.getenv("DEEP_ENSEMBLE_PVAL_GATE", "0.001")),
             deep_weight=float(os.getenv("DEEP_ENSEMBLE_WEIGHT", "0.20")),
             seq_len=int(os.getenv("DEEP_ENSEMBLE_SEQ_LEN", "60")),
-            scaler_path=scaler_path if os.path.exists(scaler_path) else None,
+            scaler_path=scaler_path if Path(scaler_path).exists() else None,
         )
 
         activated = store.load()
@@ -1514,8 +1512,9 @@ async def init_daily_online_learner(s: Any) -> Any:
         ATR to price range over the last 20 bars.  Returns None on error.
         """
         try:
-            import pandas as pd
             from pathlib import Path as _Path
+
+            import pandas as pd
 
             csv_path = _Path(f"data/{symbol}_H1.csv")
             if not csv_path.exists():
@@ -1565,8 +1564,9 @@ def build_component_registry(app, feature_flags):
     lifespan handler.
     """
     from functools import partial
-    from core.component_registry import ComponentRegistry
+
     import core.startup_factories as F
+    from core.component_registry import ComponentRegistry
 
     registry = ComponentRegistry()
 
@@ -1768,8 +1768,8 @@ async def init_chaos_controller(s: Any) -> Any | None:
         )
         return controller
 
-    except Exception as exc:
-        logger.error("init_chaos_controller failed: %s", exc, exc_info=True)
+    except Exception:
+        logger.exception("init_chaos_controller failed: %s")
         return None
 
 
@@ -1830,8 +1830,8 @@ async def init_hot_standby(s: Any) -> Any | None:
         )
         return replicator
 
-    except Exception as exc:
-        logger.error("init_hot_standby failed: %s", exc, exc_info=True)
+    except Exception:
+        logger.exception("init_hot_standby failed: %s")
         return None
 
 

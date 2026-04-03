@@ -11,10 +11,8 @@ LSTM, XGBoost, Random Forest with model saving/loading, hyperparameter tuning, e
 import json
 import logging
 import warnings
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-
-UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 from typing import Any
@@ -335,7 +333,7 @@ class LSTMModel:
         self,
         sequence_length: int = 60,
         n_features: int = 10,
-        lstm_units: list[int] = None,
+        lstm_units: list[int] | None = None,
         dropout_rate: float = 0.2,
         learning_rate: float = 0.001,
         model_name: str = "lstm_model",
@@ -1199,7 +1197,7 @@ class MLEvaluationReport:
 # Convenience function for full ML pipeline
 def train_ml_pipeline(
     df: pd.DataFrame,
-    model_types: list[str] = None,
+    model_types: list[str] | None = None,
     prediction_horizon: int = 1,
     test_size: float = 0.2,
     model_dir: str = "ml/models",

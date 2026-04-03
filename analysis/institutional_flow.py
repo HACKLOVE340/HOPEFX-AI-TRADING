@@ -17,10 +17,8 @@ Identifies institutional vs retail trading activity through:
 
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 
 logger = logging.getLogger(__name__)
 

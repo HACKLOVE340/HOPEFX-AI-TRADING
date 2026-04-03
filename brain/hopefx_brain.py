@@ -62,10 +62,8 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -81,7 +79,7 @@ except ImportError:
 # ── Regime ────────────────────────────────────────────────────────────────────
 
 
-class Regime(str, Enum):
+class Regime(StrEnum):
     TRENDING_UP = "trending_up"
     TRENDING_DOWN = "trending_down"
     RANGING = "ranging"
@@ -277,7 +275,7 @@ class HOPEFXBrain:
 
             if not getattr(flags, "LSTM_SIGNAL_ENABLED", False):
                 return None
-            from ml.lstm_signal_layer import get_lstm_signal_layer, LSTM_SIGNAL_WEIGHT
+            from ml.lstm_signal_layer import LSTM_SIGNAL_WEIGHT, get_lstm_signal_layer
 
             if LSTM_SIGNAL_WEIGHT <= 0.0:
                 return None
@@ -647,9 +645,9 @@ class HOPEFXBrain:
         if lstm_layer is not None and lstm_layer.is_available():
             try:
                 from ml.lstm_signal_layer import (
-                    LSTM_SIGNAL_WEIGHT,
-                    LSTM_ABSTAIN_LOW,
                     LSTM_ABSTAIN_HIGH,
+                    LSTM_ABSTAIN_LOW,
+                    LSTM_SIGNAL_WEIGHT,
                 )
 
                 lstm_result = lstm_layer.predict(ohlcv, macro_df=macro_df, symbol=symbol)

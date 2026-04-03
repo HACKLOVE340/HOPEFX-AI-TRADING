@@ -9,14 +9,13 @@
 Unit tests for Risk Manager - FIA 2024 Compliant
 """
 
+from datetime import UTC, datetime
+
 import pytest
-from datetime import datetime, timezone
 
-UTC = timezone.utc
-
-from risk.manager import RiskManager, RiskConfig, RiskLevel
+from database.models import Account, Position, Trade
 from risk.advanced_analytics import RiskAnalytics
-from database.models import Trade, Position, Account
+from risk.manager import RiskConfig, RiskLevel, RiskManager
 
 
 class TestRiskManager:
@@ -262,7 +261,7 @@ class TestTradingWorkflow:
         """
         # Verify the core trading cycle using real components:
         # RiskManager → position sizing → kill-switch integration
-        from execution import PaperExecutor, Order
+        from execution import Order, PaperExecutor
 
         # Use a $1M account so position sizing produces a non-trivial lot count
         # at XAUUSD prices (~$1950/oz).  max_position_size_pct=0.02 → $20k max

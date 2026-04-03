@@ -80,6 +80,7 @@ import os
 import time
 from collections import deque
 from collections.abc import Callable
+from typing import ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -403,7 +404,7 @@ class NuclearAIChartEngine:
             self._nuclear_sup = _get_nuclear_supervisor()
 
         # Get supervisor state
-        sup_status: dict = {}
+        sup_status: ClassVar[dict] = {}
         if self._nuclear_sup:
             try:
                 sup_status = self._nuclear_sup.get_status()
@@ -480,7 +481,7 @@ class NuclearAIChartEngine:
         )
 
         # Enrich with structured explainability engine output
-        explain_detail: dict = {}
+        explain_detail: ClassVar[dict] = {}
         if self._explainer is None:
             self._explainer = _get_explainer()
         if self._explainer is not None:
@@ -554,7 +555,7 @@ class NuclearAIChartEngine:
         if severity == 0 and not trading_paused:
             return "All clear. No geopolitical risk detected. Normal trading conditions."
 
-        parts: list[str] = []
+        parts: ClassVar[list[str]] = []
 
         # RL decision
         agent_type = "RL agent (PPO)" if rl_loaded else "Rule-based fallback"
@@ -685,7 +686,7 @@ class NuclearAIChartEngine:
         mid = price_data.get("mid", self._last_price or 2650.0)
         severity = nuclear_data.get("severity", 0)
         now_s = int(time.time())
-        path: list[dict] = []
+        path: ClassVar[list[dict]] = []
 
         # Base drift per minute (annualised vol ~15% for gold)
         base_vol_per_min = mid * 0.0001  # ~0.01% per minute

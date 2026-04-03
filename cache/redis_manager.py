@@ -15,8 +15,8 @@ DataFrame.to_json / pd.read_json.
 
 import json
 import logging
-from typing import Any
 from datetime import timedelta
+from typing import Any
 
 logger = logging.getLogger(__name__)
 

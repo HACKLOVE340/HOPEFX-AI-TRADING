@@ -9,9 +9,10 @@ Parameter Optimizer for Backtesting
 Optimizes strategy parameters using grid search and other methods.
 """
 
-import logging
 import itertools
+import logging
 from typing import Any
+
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -35,7 +36,8 @@ class ParameterOptimizer:
         self.data_handler = data_handler
         self.initial_capital = initial_capital
 
-        logger.info(f"Initialized parameter optimizer for {strategy_class.__name__}")
+        logger.info("Initialized parameter optimizer for %s", strategy_class.__name__)
+
 
     def grid_search(self, param_grid: dict[str, list[Any]], metric: str = "sharpe_ratio") -> dict:
         """
@@ -55,7 +57,8 @@ class ParameterOptimizer:
         param_values = list(param_grid.values())
         combinations = list(itertools.product(*param_values))
 
-        logger.info(f"Testing {len(combinations)} parameter combinations...")
+        logger.info("Testing %s parameter combinations...", len(combinations))
+
 
         results = []
         best_score = float("-inf")
@@ -96,12 +99,15 @@ class ParameterOptimizer:
                     best_score = score
                     best_params = params
 
-                logger.debug(f"Params: {params}, {metric}: {score:.4f}")
+                logger.debug("Params: %s, %s: %s", params, metric, score)
+
 
             except Exception as e:
-                logger.error(f"Error testing params {params}: {e}")
+                logger.error("Error testing params %s: %s", params, e)
 
-        logger.info(f"Best {metric}: {best_score:.4f} with params: {best_params}")
+
+        logger.info("Best %s: %s with params: %s", metric, best_score, best_params)
+
 
         return {
             "best_params": best_params,

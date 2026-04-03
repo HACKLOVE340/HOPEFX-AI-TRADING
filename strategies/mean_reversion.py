@@ -10,9 +10,7 @@ This strategy trades when price deviates significantly from its mean,
 expecting it to revert back to the average.
 """
 
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
@@ -144,7 +142,8 @@ class MeanReversionStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            self.logger.error(f"Error generating signal: {e}")
+            self.logger.error("Error generating signal: %s", e)
+
             return {
                 "type": "HOLD",
                 "confidence": 0.0,

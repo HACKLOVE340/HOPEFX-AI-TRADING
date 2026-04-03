@@ -354,8 +354,8 @@ def train(
 
     # progress_bar requires tqdm+rich; degrade gracefully if absent
     try:
-        import tqdm  # noqa: F401  # pylint: disable=unused-import
-        import rich  # noqa: F401  # pylint: disable=unused-import
+        import rich  # pylint: disable=unused-import
+        import tqdm  # pylint: disable=unused-import
 
         _progress_bar = True
     except ImportError:

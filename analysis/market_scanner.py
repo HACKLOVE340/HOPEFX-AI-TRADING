@@ -17,15 +17,13 @@ Inspired by: TradeStation RadarScreen, TradingView Screener, TC2000
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from typing import Any
-from collections.abc import Callable
-from dataclasses import dataclass, field
-from enum import Enum
 import threading
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from enum import Enum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -251,7 +249,8 @@ class MarketScanner:
             for symbol in symbols:
                 if symbol not in self._symbols:
                     self._symbols.append(symbol)
-        logger.info(f"Added {len(symbols)} symbols to scanner")
+        logger.info("Added %s symbols to scanner", len(symbols))
+
 
     def remove_symbol(self, symbol: str):
         """Remove a symbol from scanning."""
@@ -418,7 +417,8 @@ class MarketScanner:
                         results.append(result)
                 except Exception as e:
                     symbol = futures[future]
-                    logger.error(f"Error scanning {symbol}: {e}")
+                    logger.error("Error scanning %s: %s", symbol, e)
+
 
         return results
 
@@ -795,7 +795,8 @@ class MarketScanner:
                 try:
                     callback(opportunity)
                 except Exception as e:
-                    logger.error(f"Opportunity callback error: {e}")
+                    logger.error("Opportunity callback error: %s", e)
+
 
     def get_opportunities(
         self,

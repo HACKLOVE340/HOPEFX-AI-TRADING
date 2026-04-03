@@ -26,8 +26,8 @@ import logging
 import threading
 import time
 import traceback
-from dataclasses import dataclass
 from collections.abc import Callable
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 

@@ -669,7 +669,7 @@ def build_advanced_features(
     exclude = {"open", "high", "low", "close", "volume", "_target"}
     feature_cols = [c for c in d.columns if c not in exclude]
 
-    d = d[feature_cols + ["_target"]]
+    d = d[[*feature_cols, "_target"]]
     d = d.replace([np.inf, -np.inf], np.nan).dropna()
 
     X = d[feature_cols]

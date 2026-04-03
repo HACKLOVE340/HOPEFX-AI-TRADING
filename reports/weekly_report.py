@@ -51,9 +51,7 @@ import os
 import smtplib
 import uuid
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
@@ -564,8 +562,8 @@ async def _run_weekly_report_job() -> None:
             report.sharpe_ratio,
             report.data_source,
         )
-    except Exception as exc:
-        logger.error("Weekly report job failed: %s", exc, exc_info=True)
+    except Exception:
+        logger.exception("Weekly report job failed: %s")
 
 
 async def _load_trade_data() -> tuple:

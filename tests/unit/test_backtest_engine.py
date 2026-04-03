@@ -19,9 +19,10 @@ tests/unit/test_backtest_engine.py
   10. _max_consecutive correctly counts streaks
 """
 
-import pytest
-import numpy as np
 from datetime import datetime, timedelta
+
+import numpy as np
+import pytest
 
 from backtest.engine import (
     BacktestConfig,
@@ -29,7 +30,6 @@ from backtest.engine import (
     BacktestResult,
     SimulatedBroker,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

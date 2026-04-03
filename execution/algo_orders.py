@@ -36,7 +36,8 @@ Usage
     from execution.algo_orders import AlgoOrderManager, get_algo_manager
 
     manager = get_algo_manager()
-    asyncio.create_task(manager.run())
+    _t = asyncio.create_task(manager.run())
+    _t.add_done_callback(lambda _: None)
 
     # Submit a TWAP order (100 lots over 10 minutes, 10 slices)
     algo_id = await manager.submit_twap(
@@ -83,13 +84,11 @@ import os
 import time
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
-from collections.abc import Callable
 
 import numpy as np
 

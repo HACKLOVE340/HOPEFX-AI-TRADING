@@ -10,14 +10,12 @@ Strategy listings, pricing engine, subscription management, license validation
 
 import json
 import secrets
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from typing import Any
-from pathlib import Path
-from dataclasses import dataclass, field
-from enum import Enum
 import sqlite3
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from enum import Enum
+from pathlib import Path
+from typing import Any
 
 try:
     import stripe
@@ -976,8 +974,8 @@ class StrategyMarketplace:
 
     def purchase_strategy(
         self,
-        buyer_id: str = None,
-        strategy_id: str = None,
+        buyer_id: str | None = None,
+        strategy_id: str | None = None,
         payment_method: str = "wallet",
     ) -> _Purchase | None:
         # Handle reversed positional call: purchase_strategy(strategy_id, buyer_id)
@@ -1085,7 +1083,7 @@ class StrategyMarketplace:
         category=None,
         price=0,
         tags=None,
-        creator_id: str = None,
+        creator_id: str | None = None,
     ) -> dict:
         """Accept either a StrategyListing object or keyword args."""
         # Resolve creator_id from positional arg or keyword

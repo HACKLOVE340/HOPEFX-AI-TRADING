@@ -258,6 +258,7 @@ async def change_password(body: ChangePasswordBody, request: Request):
 
     try:
         import bcrypt
+
         from database.connection import get_db_manager
         from database.models import User
 

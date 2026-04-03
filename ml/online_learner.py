@@ -104,7 +104,7 @@ class OnlineLearner:
     Adapts to new data while preserving knowledge of past regimes.
     """
 
-    def __init__(self, model: nn.Module = None, learning_rate: float = 1e-4):
+    def __init__(self, model: nn.Module | None = None, learning_rate: float = 1e-4):
         self.model = model
         if model is not None:
             self.optimizer = torch.optim.AdamW(
@@ -679,8 +679,9 @@ class SklearnOnlineLearner:
         }
 
     def _save(self) -> None:
-        import joblib as _jl
         import pathlib as _pl
+
+        import joblib as _jl
 
         path = _pl.Path(self.persist_path)
         _assert_safe_model_path(path)
@@ -694,8 +695,9 @@ class SklearnOnlineLearner:
         The path must resolve inside the project's ``ml/saved_models`` directory
         to prevent loading arbitrary pickles from attacker-controlled locations.
         """
-        import joblib as _jl
         import pathlib as _pl
+
+        import joblib as _jl
 
         p = _pl.Path(path)
         _assert_safe_model_path(p)
@@ -730,6 +732,7 @@ _learner_registry: dict[str, SklearnOnlineLearner] = {}
 # Characters allowed in a symbol name used to build a model filename.
 # Restricts to alphanumeric, underscore, and hyphen — no path separators.
 import re as _re
+
 _SYMBOL_RE = _re.compile(r"^[A-Za-z0-9_\-]{1,32}$")
 
 
@@ -838,7 +841,7 @@ class XGBoostOnlineModel:
         self._eval_fraction = eval_fraction
         self._random_state = random_state
 
-        self._model: Any = None
+        self._model: Any | None = None
         self._is_trained: bool = False
         self.metadata: ModelMetadata | None = None
 
@@ -860,9 +863,9 @@ class XGBoostOnlineModel:
         return meta
 
     def _fit_sync(self, X: np.ndarray, y: np.ndarray) -> ModelMetadata:
-        from xgboost import XGBClassifier
-        from sklearn.model_selection import train_test_split
         from sklearn.metrics import roc_auc_score
+        from sklearn.model_selection import train_test_split
+        from xgboost import XGBClassifier
 
         n_samples, n_features = X.shape
         X_train, X_val, y_train, y_val = train_test_split(

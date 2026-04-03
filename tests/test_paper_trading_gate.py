@@ -28,9 +28,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -42,7 +40,6 @@ from research.pipeline.paper_trading_gate import (
     PHASE3_MIN_FILLS,
     PaperTradingGate,
 )
-
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
 
@@ -236,6 +233,7 @@ def api_client(tmp_path_factory):
     """TestClient with status router mounted."""
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
+
     from api.status import router
 
     app = FastAPI()

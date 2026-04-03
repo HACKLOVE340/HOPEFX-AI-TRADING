@@ -10,9 +10,7 @@ This strategy uses Exponential Moving Average crossovers for signals.
 Similar to MA Crossover but more responsive to recent price changes.
 """
 
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
@@ -161,7 +159,8 @@ class EMAcrossoverStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            self.logger.error(f"Error generating EMA crossover signal: {e}")
+            self.logger.error("Error generating EMA crossover signal: %s", e)
+
             return {
                 "type": "HOLD",
                 "confidence": 0.0,

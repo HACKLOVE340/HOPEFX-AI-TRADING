@@ -51,7 +51,8 @@ Usage
     from ml.sharpe_circuit_breaker import get_sharpe_cb
 
     cb = get_sharpe_cb()
-    asyncio.create_task(cb.run())
+    _t = asyncio.create_task(cb.run())
+    _t.add_done_callback(lambda _: None)
 
     # In trade executor, after every fill:
     cb.record_trade(pnl=42.5, model_version="advanced_oos_v4")
@@ -72,9 +73,7 @@ import math
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 import numpy as np
 

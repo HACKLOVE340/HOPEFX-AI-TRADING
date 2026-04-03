@@ -17,21 +17,20 @@ Provides a single get_complete_analysis() method for a full snapshot.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import ClassVar
 
-UTC = timezone.utc
-
-from analysis.order_flow import OrderFlowAnalyzer, get_order_flow_analyzer
-from analysis.institutional_flow import (
-    InstitutionalFlowDetector,
-    get_institutional_detector,
-)
 from analysis.advanced_order_flow import (
     AdvancedOrderFlowAnalyzer,
     get_advanced_order_flow_analyzer,
 )
-from data.time_and_sales import TimeAndSalesService, get_time_and_sales_service
+from analysis.institutional_flow import (
+    InstitutionalFlowDetector,
+    get_institutional_detector,
+)
+from analysis.order_flow import OrderFlowAnalyzer, get_order_flow_analyzer
 from data.depth_of_market import DepthOfMarketService, get_dom_service
+from data.time_and_sales import TimeAndSalesService, get_time_and_sales_service
 
 logger = logging.getLogger(__name__)
 
@@ -197,7 +196,7 @@ class OrderFlowDashboard:
 
     def _build_summary(self, analysis: dict) -> dict:
         """Build a high-level summary from the full analysis."""
-        signals: list[str] = []
+        signals: ClassVar[list[str]] = []
         bias = "neutral"
         strength = "weak"
 
@@ -407,7 +406,7 @@ class OrderFlowDashboard:
         Returns:
             'bullish', 'bearish', or 'neutral'
         """
-        votes: list[str] = []
+        votes: ClassVar[list[str]] = []
 
         if self._dom is not None:
             try:

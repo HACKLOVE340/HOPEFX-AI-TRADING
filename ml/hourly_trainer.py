@@ -41,9 +41,7 @@ import asyncio
 import logging
 import os
 import time
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -141,8 +139,8 @@ class HourlyTrainer:
                 await self._run_cycle()
             except asyncio.CancelledError:
                 break
-            except Exception as exc:
-                logger.error("HourlyTrainer cycle error: %s", exc, exc_info=True)
+            except Exception:
+                logger.exception("HourlyTrainer cycle error: %s")
 
             elapsed = time.monotonic() - cycle_start
             sleep_secs = max(0.0, self.interval_secs - elapsed)

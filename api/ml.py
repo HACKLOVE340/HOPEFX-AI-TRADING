@@ -23,14 +23,13 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-
-UTC = timezone.utc
 
 from api.auth import TokenPayload, get_current_user, require_role
 
@@ -114,6 +113,7 @@ def _get_predictor():
 
     try:
         import pathlib
+
         import joblib
 
         path = pathlib.Path(__file__).parent.parent / "ml" / "saved_models" / "xgb_macro.pkl"
@@ -526,7 +526,7 @@ async def predict(
     # Admin role bypasses the plan gate (internal tooling / ops access).
     if getattr(user, "role", "") != "admin":
         try:
-            from monetization.subscription import subscription_manager, plan_gate
+            from monetization.subscription import plan_gate, subscription_manager
 
             sub = subscription_manager.get_user_subscription(user.sub)
             user_plan = sub.tier.value if (sub and sub.is_active() and hasattr(sub.tier, "value")) else "free"
@@ -710,12 +710,12 @@ async def trigger_retrain(
             import sys
 
             script = os.path.join(
-                os.path.dirname(__file__),
+                Path(__file__).parent,
                 "..",
                 "ml",
                 "train_with_macro.py",
             )
-            if os.path.exists(script):
+            if Path(script).exists():
                 subprocess.run(  # nosec B603 B607 - list-form call with sys.executable; no shell=True, no user input
                     [sys.executable, script, "--years", "8"],
                     timeout=3600,
@@ -1073,8 +1073,9 @@ async def rl_train(
     Requires: admin role.
     """
     try:
-        from ml.rl_agent import RLAgent, ForexTradingEnv
         import asyncio
+
+        from ml.rl_agent import ForexTradingEnv, RLAgent
 
         # Load candles from the data layer
         df = _load_ohlcv_for_symbol(req.symbol, req.candles)
@@ -1129,9 +1130,10 @@ async def rl_walk_forward(
     Requires: admin role.
     """
     try:
-        from ml.rl_agent import walk_forward_eval
         import asyncio
         from dataclasses import asdict
+
+        from ml.rl_agent import walk_forward_eval
 
         df = _load_ohlcv_for_symbol(req.symbol, req.candles)
         candles_list = df.to_dict("records")
@@ -1168,10 +1170,10 @@ async def rl_status(user: TokenPayload = Depends(get_current_user)) -> dict:
     from ml.rl_agent import _MODEL_DIR
 
     models = []
-    if os.path.isdir(_MODEL_DIR):
+    if Path(_MODEL_DIR).is_dir():
         for fname in sorted(os.listdir(_MODEL_DIR)):
             if fname.endswith(".zip"):
-                fpath = os.path.join(_MODEL_DIR, fname)
+                fpath = Path(_MODEL_DIR) / fname
                 models.append(
                     {
                         "name": fname,

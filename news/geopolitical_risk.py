@@ -38,15 +38,14 @@ This module is particularly valuable for XAU/USD (Gold) trading since:
 Author: HOPEFX Development Team
 """
 
-import logging
-from typing import Any
-from dataclasses import dataclass, field
-from enum import Enum
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-import requests
 import json
+import logging
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from enum import Enum
+from typing import Any
+
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -352,7 +351,8 @@ class GeopoliticalRiskProvider:
         # Historical events for trend analysis
         self.event_history = []
 
-        logger.info(f"GeopoliticalRiskProvider initialized with layers: {self.data_layers}")
+        logger.info("GeopoliticalRiskProvider initialized with layers: %s", self.data_layers)
+
 
     def get_current_events(self, force_refresh: bool = False) -> list[GeopoliticalEvent]:
         """
@@ -401,7 +401,8 @@ class GeopoliticalRiskProvider:
             self.event_history = [e for e in self.event_history if e.timestamp > cutoff]
 
         except Exception as e:
-            logger.error(f"Error fetching geopolitical events: {e}")
+            logger.error("Error fetching geopolitical events: %s", e)
+
             # Return cached data if available
             events = self._cache.get("events", [])
 
@@ -667,7 +668,7 @@ class GeopoliticalRiskProvider:
                 # Parse timestamp
                 raw_ts = props.get("date") or props.get("timestamp") or props.get("updated")
                 try:
-                    ts = datetime.fromisoformat(str(raw_ts).replace("Z", "+00:00"))
+                    ts = datetime.fromisoformat(str(raw_ts))
                     if ts.tzinfo is None:
                         ts = ts.replace(tzinfo=UTC)
                 except (TypeError, ValueError):
@@ -741,14 +742,14 @@ class GeopoliticalRiskProvider:
         impact_score += severity_impact.get(event.severity, 0)
 
         # Region impact (gold-sensitive regions)
-        for _region_key, countries in self.GOLD_SENSITIVE_REGIONS.items():
+        for countries in self.GOLD_SENSITIVE_REGIONS.values():
             if any(country in countries for country in event.countries):
                 impact_score += 1
                 break
 
         # Check for high-impact keywords
         text = f"{event.title} {event.description}".lower()
-        for _category, keywords in self.HIGH_IMPACT_KEYWORDS.items():
+        for keywords in self.HIGH_IMPACT_KEYWORDS.values():
             if any(keyword in text for keyword in keywords):
                 impact_score += 1
                 break
@@ -786,7 +787,7 @@ class GeopoliticalRiskProvider:
             score += 15
 
         # Adjust by region significance
-        for _region_key, countries in self.GOLD_SENSITIVE_REGIONS.items():
+        for countries in self.GOLD_SENSITIVE_REGIONS.values():
             if any(country in countries for country in event.countries):
                 score += 10
                 break
@@ -934,7 +935,7 @@ class GeopoliticalRiskProvider:
         # Region-specific recommendations
         conflict_events = [e for e in events if e.event_type == GeopoliticalEventType.CONFLICT]
         if conflict_events:
-            regions = set(e.region for e in conflict_events)
+            regions = {e.region for e in conflict_events}
             recommendations.append(f"Active conflicts in {', '.join(regions)} - Monitor for escalation")
 
         # Sanctions recommendations
@@ -1216,7 +1217,8 @@ class WorldMonitorAPIClient:
         self._cache_timestamps: dict[str, datetime] = {}
         self.cache_ttl = self.config.get("cache_ttl", 300)  # 5 minutes
 
-        logger.info(f"WorldMonitorAPIClient initialized with base_url: {self.base_url}")
+        logger.info("WorldMonitorAPIClient initialized with base_url: %s", self.base_url)
+
 
     def _make_request(self, endpoint: str, params: dict | None = None) -> dict | None:
         """
@@ -1242,10 +1244,12 @@ class WorldMonitorAPIClient:
             return response.json()
 
         except requests.exceptions.RequestException as e:
-            logger.warning(f"World Monitor API request failed: {endpoint} - {e}")
+            logger.warning("World Monitor API request failed: %s - %s", endpoint, e)
+
             return None
         except json.JSONDecodeError as e:
-            logger.warning(f"World Monitor API response not JSON: {endpoint} - {e}")
+            logger.warning("World Monitor API response not JSON: %s - %s", endpoint, e)
+
             return None
 
     def _get_cached_or_fetch(self, layer: str, params: dict | None = None) -> dict | None:
@@ -1263,7 +1267,8 @@ class WorldMonitorAPIClient:
         # Fetch from API
         endpoint = self.API_ENDPOINTS.get(layer)
         if not endpoint:
-            logger.warning(f"Unknown layer: {layer}")
+            logger.warning("Unknown layer: %s", layer)
+
             return None
 
         data = self._make_request(endpoint, params)

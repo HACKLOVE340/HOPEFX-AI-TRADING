@@ -24,9 +24,7 @@ Phase chain (Phases 1–4 are optional and gated by feature flags):
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any, Optional
 
 import pandas as pd
@@ -114,7 +112,7 @@ def _get_deep_ensemble_store() -> Any | None:
             logger.debug("DeepEnsembleStore init failed: %s", exc)
             _deep_ensemble_store = False  # type: ignore[assignment]
     # Return None for the sentinel (False) so callers get a clean None
-    return _deep_ensemble_store if _deep_ensemble_store else None
+    return _deep_ensemble_store or None
 
 
 def _get_online_learner_store() -> Any | None:
@@ -180,7 +178,7 @@ _AUTO_TRADE = os.getenv("SIGNAL_ENGINE_AUTO_TRADE", "false").lower() == "true"
 
 async def _fetch_market_data(
     symbol: str,
-    app_state: Any = None,
+    app_state: Any | None = None,
 ) -> dict[str, Any] | None:
     """
     Fetch latest OHLCV data for a symbol from the broker's market data feed.
@@ -405,7 +403,7 @@ def _fetch_macro_df(
 
 def _fetch_mtf_df(
     ohlcv_df: "pd.DataFrame",
-    app_state: Any = None,
+    app_state: Any | None = None,
 ) -> Any | None:
     """
     Fetch MTF regime features from MTFFusionStore if available and enabled.
@@ -623,7 +621,7 @@ def _compute_ml_probability(
     data: dict[str, Any],
     symbol: str,
     base_confidence: float,
-    app_state: Any = None,
+    app_state: Any | None = None,
 ) -> tuple:
     """
     Compute ML probability using the best available model.
@@ -708,7 +706,7 @@ def _enrich_signal_with_factors(
     signal_payload: dict[str, Any],
     positions: dict[str, float],
     total_pnl: float,
-    app_state: Any = None,
+    app_state: Any | None = None,
 ) -> dict[str, Any]:
     """
     Append live factor attribution to a signal payload.

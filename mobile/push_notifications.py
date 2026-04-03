@@ -34,6 +34,7 @@ import base64
 import json
 import logging
 import os
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -75,7 +76,7 @@ def _load_firebase_admin() -> Any | None:
         # Option 2: path to service-account JSON file
         if cred is None:
             json_path = os.getenv("FIREBASE_CREDENTIALS_JSON", "")
-            if json_path and os.path.isfile(json_path):
+            if json_path and Path(json_path).is_file():
                 cred = credentials.Certificate(json_path)
                 logger.info("FCM: using service-account JSON at %s", json_path)
 

@@ -70,7 +70,7 @@ def setup_tracing(app=None) -> bool:
         from opentelemetry.sdk.resources import Resource
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import BatchSpanProcessor
-        from opentelemetry.sdk.trace.sampling import TraceIdRatioBased, ParentBased
+        from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased
     except ImportError as exc:
         logger.warning(
             "OpenTelemetry SDK not installed — tracing disabled. "

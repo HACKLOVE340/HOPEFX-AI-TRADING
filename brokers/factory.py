@@ -127,10 +127,11 @@ class BrokerFactory:
                 exc,
             )
         cls._brokers[name.lower()] = broker_class
-        logger.info(f"Broker registered: {name}")
+        logger.info("Broker registered: %s", name)
+
 
     @classmethod
-    def create_broker(cls, name: str = None, config: dict = None):
+    def create_broker(cls, name: str | None = None, config: dict | None = None):
         """
         Create a broker instance by name (case-insensitive).
 

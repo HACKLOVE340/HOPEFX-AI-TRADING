@@ -14,9 +14,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -52,6 +50,7 @@ class TestGitHubPRPublisher:
     @pytest.mark.asyncio
     async def test_full_pipeline_success(self):
         import base64
+
         import security.github_pr_publisher as pr_mod
 
         # Patch module-level constants (read at import time, not from env)
@@ -101,6 +100,7 @@ class TestGitHubPRPublisher:
     @pytest.mark.asyncio
     async def test_http_error_returns_error_status(self):
         import httpx
+
         import security.github_pr_publisher as pr_mod
 
         async def fake_get_branch_sha(client, repo, branch):
@@ -445,7 +445,7 @@ class TestFixesRouter:
 
     @pytest.mark.asyncio
     async def test_approve_fix_triggers_pr_pipeline(self):
-        from api.security.fixes import approve_fix, ApproveFixRequest
+        from api.security.fixes import ApproveFixRequest, approve_fix
 
         mock_request = MagicMock()
         record = self._make_pending_record()
@@ -488,8 +488,9 @@ class TestFixesRouter:
 
     @pytest.mark.asyncio
     async def test_approve_fix_404_when_not_found(self):
-        from api.security.fixes import approve_fix, ApproveFixRequest
         from fastapi import HTTPException
+
+        from api.security.fixes import ApproveFixRequest, approve_fix
 
         mock_request = MagicMock()
         mock_redis = AsyncMock()
@@ -506,7 +507,7 @@ class TestFixesRouter:
 
     @pytest.mark.asyncio
     async def test_approve_fix_handles_pr_error_gracefully(self):
-        from api.security.fixes import approve_fix, ApproveFixRequest
+        from api.security.fixes import ApproveFixRequest, approve_fix
 
         mock_request = MagicMock()
         record = self._make_pending_record()
@@ -535,7 +536,7 @@ class TestFixesRouter:
 
     @pytest.mark.asyncio
     async def test_decline_fix_archives_record(self):
-        from api.security.fixes import decline_fix, DeclineFixRequest
+        from api.security.fixes import DeclineFixRequest, decline_fix
 
         mock_request = MagicMock()
         record = self._make_pending_record()
@@ -565,8 +566,9 @@ class TestFixesRouter:
 
     @pytest.mark.asyncio
     async def test_decline_fix_404_when_not_found(self):
-        from api.security.fixes import decline_fix, DeclineFixRequest
         from fastapi import HTTPException
+
+        from api.security.fixes import DeclineFixRequest, decline_fix
 
         mock_request = MagicMock()
         mock_redis = AsyncMock()
@@ -583,7 +585,7 @@ class TestFixesRouter:
 
     @pytest.mark.asyncio
     async def test_push_scan_entry_queues_to_redis(self):
-        from api.security.fixes import push_scan_entry, ScanEntryRequest
+        from api.security.fixes import ScanEntryRequest, push_scan_entry
 
         mock_request = MagicMock()
         mock_redis = AsyncMock()
@@ -654,8 +656,9 @@ class TestFixesRouter:
 
     @pytest.mark.asyncio
     async def test_non_admin_cannot_approve(self):
-        from api.security.fixes import approve_fix, ApproveFixRequest
         from fastapi import HTTPException
+
+        from api.security.fixes import ApproveFixRequest, approve_fix
 
         mock_request = MagicMock()
 

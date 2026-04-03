@@ -54,9 +54,7 @@ import json
 import logging
 import sys
 import warnings
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import joblib
@@ -77,6 +75,7 @@ MODEL_DIR = ROOT / "ml" / "saved_models"
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 import os as _os
+from typing import ClassVar
 
 # When HOPEFX_CI=1 (set by tests/conftest.py) use minimal model params so
 # every test that trains a model finishes well within the 20 s timeout.
@@ -825,7 +824,7 @@ def oos_eval_advanced(
         auc = 0.5
 
     n = len(y_oos)
-    k = int(round(acc * n))
+    k = round(acc * n)
     binom_result = binomtest(k, n, p=0.5, alternative="greater")
     p_value = float(binom_result.pvalue)
 
@@ -1061,7 +1060,7 @@ def main():
     X_oos, y_oos = None, None
 
     if args.oos_years > 0:
-        oos_n = int(round(args.oos_years * 252))  # ~252 trading days/year
+        oos_n = round(args.oos_years * 252)  # ~252 trading days/year
         # Cap at 40% of data so the training set always has at least 60%.
         # 8yr OOS on 50yr data = ~16%, well within this limit.
         oos_n = min(oos_n, int(len(X) * 0.40))
@@ -1117,7 +1116,7 @@ def main():
         logger.info("Top features: %s", list(importance.keys())[:10])
 
     # ── Held-out OOS evaluation ───────────────────────────────────────────────
-    oos_metrics: dict = {}
+    oos_metrics: ClassVar[dict] = {}
     if X_oos is not None:
         logger.info("\n=== Held-out OOS evaluation (%d bars) ===", oos_n)
         oos_metrics = oos_eval_advanced(X_cv, y_cv, X_oos, y_oos)

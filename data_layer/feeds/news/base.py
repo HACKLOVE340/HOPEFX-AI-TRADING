@@ -110,7 +110,7 @@ class NewsFeedBase(ABC):
             await asyncio.sleep(self._min_interval_s - elapsed)
         self._last_call_ts = time.monotonic()
 
-    async def _get(self, url: str, params: dict = None, headers: dict = None) -> dict:
+    async def _get(self, url: str, params: dict | None = None, headers: dict | None = None) -> dict:
         import asyncio
 
         await self._rate_limit()

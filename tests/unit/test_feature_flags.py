@@ -8,8 +8,9 @@ Tests for config/feature_flags.py
 """
 
 import os
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 from config.feature_flags import FeatureFlags, FeatureStatus, flags
 

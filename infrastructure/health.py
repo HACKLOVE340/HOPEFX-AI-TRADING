@@ -12,13 +12,11 @@ import asyncio
 import logging
 import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
-from collections.abc import Callable
 
 import psutil
 
@@ -120,7 +118,8 @@ class HealthChecker:
     def register_check(self, name: str, check_fn: Callable):
         """Register a health check"""
         self._checks[name] = check_fn
-        logger.info(f"Registered health check: {name}")
+        logger.info("Registered health check: %s", name)
+
 
     async def run_check(self, name: str) -> HealthCheck:
         """Run single health check"""
@@ -473,16 +472,19 @@ class HealthChecker:
 
                 # Log if unhealthy
                 if health.status != HealthStatus.HEALTHY:
-                    logger.warning(f"Health check: {health.status.value}")
+                    logger.warning("Health check: %s", health.status.value)
+
                     for check in health.checks:
                         if check.status != HealthStatus.HEALTHY:
-                            logger.warning(f"  {check.name}: {check.status.value} - {check.message}")
+                            logger.warning("  %s: %s - %s", check.name, check.status.value, check.message)
+
 
                 # Wait for next check
                 await asyncio.sleep(self._check_interval)
 
             except Exception as e:
-                logger.error(f"Health monitoring error: {e}")
+                logger.error("Health monitoring error: %s", e)
+
                 await asyncio.sleep(5)
 
     def stop_monitoring(self):
@@ -556,11 +558,16 @@ async def start_health_server(
     site = web.TCPSite(runner, host, port)
     await site.start()
 
-    logger.info(f"Health server started on http://{host}:{port}")
-    logger.info(f"  - Health:  http://{host}:{port}/health")
-    logger.info(f"  - Ready:   http://{host}:{port}/ready")
-    logger.info(f"  - Live:    http://{host}:{port}/live")
-    logger.info(f"  - Metrics: http://{host}:{port}/metrics")
+    logger.info("Health server started on http://%s:%s", host, port)
+
+    logger.info("  - Health:  http://%s:%s/health", host, port)
+
+    logger.info("  - Ready:   http://%s:%s/ready", host, port)
+
+    logger.info("  - Live:    http://%s:%s/live", host, port)
+
+    logger.info("  - Metrics: http://%s:%s/metrics", host, port)
+
 
     return runner
 

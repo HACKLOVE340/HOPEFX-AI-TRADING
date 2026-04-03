@@ -18,15 +18,13 @@ Inspired by: TradingView alerts, MT5 alerts, cTrader alerts
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from typing import Any
-from collections.abc import Callable
-from dataclasses import dataclass, field
-from enum import Enum
 import threading
 import uuid
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from enum import Enum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -399,7 +397,8 @@ class AlertEngine:
             type_key = condition_type.value
             self._stats["alerts_by_type"][type_key] = self._stats["alerts_by_type"].get(type_key, 0) + 1
 
-            logger.info(f"Alert created: {alert_id} - {name} for {symbol}")
+            logger.info("Alert created: %s - %s for %s", alert_id, name, symbol)
+
             return alert
 
     def create_complex_alert(
@@ -437,7 +436,8 @@ class AlertEngine:
                 self._alerts_by_symbol[symbol] = []
             self._alerts_by_symbol[symbol].append(alert_id)
 
-            logger.info(f"Complex alert created: {alert_id} with {len(conditions)} conditions")
+            logger.info("Complex alert created: %s with %s conditions", alert_id, len(conditions))
+
             return alert
 
     def update_alert(self, alert_id: str, **updates) -> Alert | None:
@@ -452,7 +452,8 @@ class AlertEngine:
                 if hasattr(alert, key):
                     setattr(alert, key, value)
 
-            logger.info(f"Alert updated: {alert_id}")
+            logger.info("Alert updated: %s", alert_id)
+
             return alert
 
     def delete_alert(self, alert_id: str) -> bool:
@@ -470,7 +471,8 @@ class AlertEngine:
                 ]
 
             del self._alerts[alert_id]
-            logger.info(f"Alert deleted: {alert_id}")
+            logger.info("Alert deleted: %s", alert_id)
+
             return True
 
     def pause_alert(self, alert_id: str) -> bool:
@@ -743,7 +745,8 @@ class AlertEngine:
         self._stats["total_triggers"] += 1
         self._stats["triggers_by_symbol"][alert.symbol] = self._stats["triggers_by_symbol"].get(alert.symbol, 0) + 1
 
-        logger.info(f"Alert triggered: {alert.id} - {alert.name}")
+        logger.info("Alert triggered: %s - %s", alert.id, alert.name)
+
         return trigger
 
     def _generate_message(self, alert: Alert, trigger_value: float, condition: AlertCondition) -> str:
@@ -782,7 +785,8 @@ class AlertEngine:
             try:
                 handler(trigger)
             except Exception as e:
-                logger.error(f"Notification handler error: {e}")
+                logger.error("Notification handler error: %s", e)
+
 
     # ================================================================
     # HISTORY & STATISTICS
@@ -835,7 +839,8 @@ class AlertEngine:
                 market_data = await data_provider()
                 self.check_alerts(market_data)
             except Exception as e:
-                logger.error(f"Alert monitoring error: {e}")
+                logger.error("Alert monitoring error: %s", e)
+
 
             await asyncio.sleep(interval_seconds)
 

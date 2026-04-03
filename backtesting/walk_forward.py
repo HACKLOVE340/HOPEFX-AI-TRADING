@@ -10,12 +10,13 @@ Prevents overfitting with rolling train/test splits
 """
 
 import logging
-import pandas as pd
-import numpy as np
-from typing import Any
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
+
+import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 

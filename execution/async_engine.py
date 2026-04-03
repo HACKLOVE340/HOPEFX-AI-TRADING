@@ -12,16 +12,13 @@ latency optimization, and fill simulation.
 import asyncio
 import logging
 import time
+import uuid
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum, auto
 from typing import Any
-from collections.abc import Callable
-
-import uuid
 
 import aiohttp
 import numpy as np
@@ -152,7 +149,8 @@ class AsyncExecutionEngine:
             task = asyncio.create_task(self._price_feed_loop(name))
             self._tasks.add(task)
 
-        logger.info(f"Initialized {len(self.brokers)} broker connections")
+        logger.info("Initialized %s broker connections", len(self.brokers))
+
 
     async def submit_order(self, order: Order, priority: int = 5) -> str:
         """
@@ -175,7 +173,8 @@ class AsyncExecutionEngine:
             if not allowed:
                 order.status = OrderStatus.REJECTED
                 order.metadata["reject_reason"] = reason
-                logger.warning(f"Order {order.id} rejected: {reason}")
+                logger.warning("Order %s rejected: %s", order.id, reason)
+
                 return order.id
 
             # Select best venue
@@ -191,17 +190,20 @@ class AsyncExecutionEngine:
                 self.latency_stats["submit"].append(latency)
 
                 if latency > 100:
-                    logger.warning(f"High submission latency: {latency:.1f}ms")
+                    logger.warning("High submission latency: %sms", latency)
+
 
             except TimeoutError:
-                logger.error(f"Order submission timeout: {order.id}")
+                logger.error("Order submission timeout: %s", order.id)
+
                 order.status = OrderStatus.REJECTED
                 order.metadata["reject_reason"] = "timeout"
 
                 # Try backup venue
                 backup = self._get_backup_venue(venue)
                 if backup:
-                    logger.info(f"Retrying on backup venue: {backup}")
+                    logger.info("Retrying on backup venue: %s", backup)
+
                     await self._submit_to_venue(order, backup)
 
         return order.id
@@ -236,7 +238,8 @@ class AsyncExecutionEngine:
                 return True
 
             except (OSError, ValueError, RuntimeError, AttributeError) as e:
-                logger.error(f"Cancel failed for {order_id}: {e}")
+                logger.error("Cancel failed for %s: %s", order_id, e)
+
                 return False
 
     async def modify_order(
@@ -300,7 +303,8 @@ class AsyncExecutionEngine:
 
         # Submit all concurrently
         order_ids = await self.batch_submit(orders)
-        logger.info(f"Flattened {len(orders)} positions")
+        logger.info("Flattened %s positions", len(orders))
+
 
         return [oid for oid in order_ids if not isinstance(oid, Exception)]
 
@@ -312,7 +316,7 @@ class AsyncExecutionEngine:
 
         # Fetch fresh
         positions = []
-        for venue, _broker in self.brokers.items():
+        for venue in self.brokers.keys():
             try:
                 pos = await self._rate_limited_request(venue, "get_positions")
                 for p in pos:
@@ -320,7 +324,8 @@ class AsyncExecutionEngine:
                     self.position_cache[p["symbol"]] = p
                     positions.append(p)
             except (OSError, ValueError, RuntimeError, AttributeError) as e:
-                logger.error(f"Failed to get positions from {venue}: {e}")
+                logger.error("Failed to get positions from %s: %s", venue, e)
+
 
         self._position_cache_time = time.time()
         return positions
@@ -392,7 +397,8 @@ class AsyncExecutionEngine:
                 # Limit not hit - simulate partial fill probability
                 if self._rng.random() < 0.3:  # 30% chance of no fill
                     order.status = OrderStatus.SUBMITTED
-                    asyncio.create_task(self._delayed_fill_simulation(order))
+                    _t = asyncio.create_task(self._delayed_fill_simulation(order))
+                    _t.add_done_callback(lambda _: None)
                     return
                 fill_price = order.price
 
@@ -482,13 +488,15 @@ class AsyncExecutionEngine:
                 try:
                     self.on_fill(fill)
                 except (RuntimeError, ValueError, AttributeError) as e:
-                    logger.error(f"Fill callback error: {e}")
+                    logger.error("Fill callback error: %s", e)
+
 
             if self.on_order_update:
                 try:
                     self.on_order_update(order)
                 except (RuntimeError, ValueError, AttributeError) as e:
-                    logger.error(f"Order update callback error: {e}")
+                    logger.error("Order update callback error: %s", e)
+
 
     async def _monitor_fills(self, order: Order):
         """Monitor for fills from live broker"""
@@ -529,7 +537,8 @@ class AsyncExecutionEngine:
                     await self._apply_fill(order, fill)
 
             except (OSError, ValueError, RuntimeError, AttributeError) as e:
-                logger.error(f"Fill monitoring error: {e}")
+                logger.error("Fill monitoring error: %s", e)
+
 
             await asyncio.sleep(check_interval)
 
@@ -610,7 +619,8 @@ class AsyncExecutionEngine:
                 await asyncio.sleep(0.1)  # 10Hz update
 
             except (OSError, ValueError, RuntimeError, AttributeError) as e:
-                logger.error(f"Price feed error: {e}")
+                logger.error("Price feed error: %s", e)
+
                 await asyncio.sleep(1)
 
     async def _rate_limited_request(self, venue: str, method: str, *args) -> Any:

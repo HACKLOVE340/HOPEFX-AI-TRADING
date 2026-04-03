@@ -53,7 +53,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-_ROOT = os.path.dirname(os.path.dirname(__file__))
+_ROOT = os.path.dirname(Path(__file__).parent)
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
@@ -439,9 +439,10 @@ class TestStatusEndpoints:
     def client(self):
         os.environ.setdefault("SECURITY_JWT_SECRET", "test-secret-key-32chars-minimum!!")
         os.environ.setdefault("APP_ENV", "development")
-        from fastapi.testclient import TestClient
-        from api.status import router
         from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.status import router
 
         app = FastAPI()
         app.include_router(router)

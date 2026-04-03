@@ -24,10 +24,10 @@ stored in Redis (falls back to in-memory if Redis unavailable).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 
-class TierName(str, Enum):
+class TierName(StrEnum):
     STARTER = "starter"
     GROWTH = "growth"
     ENTERPRISE = "enterprise"

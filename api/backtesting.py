@@ -20,13 +20,10 @@ import io
 import logging
 import pathlib
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-UTC = timezone.utc
-
 import pandas as pd
-
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -283,7 +280,7 @@ def _fetch_ohlcv(symbol: str, start: str, end: str, freq: str) -> pd.DataFrame:
     # Also try generic symbol-based names.
     # sym_upper has already been sanitised to [A-Za-z0-9_] by _re.sub above;
     # _safe_csv_path applies a second allowlist check before any path is used.
-    candidates = candidates + [sym_upper + "_H1", sym_upper + "_D", sym_upper]
+    candidates = [*candidates, sym_upper + "_H1", sym_upper + "_D", sym_upper]
 
     for stem in candidates:
         # _safe_csv_path enforces _STEM_RE (alphanumeric + underscore only,
@@ -596,8 +593,8 @@ async def run_multi_symbol_backtest(
                 extended=req.extended,
             ),
         )
-    except Exception as exc:  # pylint: disable=broad-exception-caught
-        logger.exception("Multi-symbol backtest failed: %s", exc)
+    except Exception:  # pylint: disable=broad-exception-caught
+        logger.exception("Multi-symbol backtest failed: %s")
         raise HTTPException(status_code=500, detail="Backtest failed — check server logs") from None
 
     pooled = report.get("pooled", {})
@@ -824,8 +821,8 @@ async def run_replay_backtest(
                     "completed_at": datetime.now(UTC).isoformat(),
                 },
             )
-        except Exception as exc:  # pylint: disable=broad-exception-caught
-            logger.error("Replay backtest %s failed: %s", run_id, exc, exc_info=True)
+        except Exception:  # pylint: disable=broad-exception-caught
+            logger.exception("Replay backtest %s failed: %s", run_id)
             _persist_result(run_id, {"run_id": run_id, "status": "error", "error": "Task failed — check server logs"})
 
     _persist_result(run_id, {"run_id": run_id, "status": "running"})
@@ -856,8 +853,8 @@ async def run_regime_stress_test(
     async def _run():
         try:
             from backtesting.replay_connector import (
-                RegimeShiftStressTester,
                 STRESS_REGIMES,
+                RegimeShiftStressTester,
             )
 
             strategy_fn = _resolve_strategy(req.strategy)
@@ -911,8 +908,8 @@ async def run_regime_stress_test(
                     "completed_at": datetime.now(UTC).isoformat(),
                 },
             )
-        except Exception as exc:  # pylint: disable=broad-exception-caught
-            logger.error("Regime stress %s failed: %s", run_id, exc, exc_info=True)
+        except Exception:  # pylint: disable=broad-exception-caught
+            logger.exception("Regime stress %s failed: %s", run_id)
             _persist_result(run_id, {"run_id": run_id, "status": "error", "error": "Task failed — check server logs"})
 
     _persist_result(run_id, {"run_id": run_id, "status": "running"})

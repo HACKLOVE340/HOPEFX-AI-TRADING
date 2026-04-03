@@ -5,24 +5,22 @@
 # No commercial use without explicit permission.
 """nocode/builder.py — No-code strategy builder logic."""
 
-from typing import Any
-from datetime import datetime, timezone
-
-UTC = timezone.utc
 import logging
 import re
+from datetime import UTC, datetime
+from typing import Any
 
 from nocode.models import (
-    NoCodeStrategy,
-    StrategyRule,
+    ActionType,
     Condition,
     ConditionGroup,
-    TradingAction,
+    ConditionOperator,
     Indicator,
     IndicatorType,
-    ConditionOperator,
     LogicOperator,
-    ActionType,
+    NoCodeStrategy,
+    StrategyRule,
+    TradingAction,
 )
 
 logger = logging.getLogger(__name__)
@@ -104,7 +102,8 @@ class NoCodeStrategyBuilder:
 
         self.templates["ma_crossover"] = ma_strategy
 
-        logger.info(f"Created {len(self.templates)} strategy templates")
+        logger.info("Created %s strategy templates", len(self.templates))
+
 
     def create_strategy(self, name: str, description: str, symbol: str, timeframe: str) -> NoCodeStrategy:
         """
@@ -131,7 +130,8 @@ class NoCodeStrategyBuilder:
         )
 
         self.strategies[strategy_id] = strategy
-        logger.info(f"Created strategy: {name}")
+        logger.info("Created strategy: %s", name)
+
         return strategy
 
     def add_rule(
@@ -157,7 +157,8 @@ class NoCodeStrategyBuilder:
         """
         strategy = self.strategies.get(strategy_id)
         if not strategy:
-            logger.error(f"Strategy not found: {strategy_id}")
+            logger.error("Strategy not found: %s", strategy_id)
+
             return None
 
         # Parse conditions
@@ -205,7 +206,8 @@ class NoCodeStrategyBuilder:
         strategy.rules.append(rule)
         strategy.updated_at = datetime.now(UTC)
 
-        logger.info(f"Added rule '{name}' to strategy {strategy_id}")
+        logger.info("Added rule '%s' to strategy %s", name, strategy_id)
+
         return rule
 
     def _parse_indicator(self, ind_def: dict[str, Any]) -> Indicator:
@@ -280,7 +282,8 @@ class NoCodeStrategyBuilder:
                     action={"type": "SELL", "position_size": 1.0},
                 )
 
-        logger.info(f"Parsed strategy from plain English: {len(strategy.rules)} rules")
+        logger.info("Parsed strategy from plain English: %s rules", len(strategy.rules))
+
         return strategy
 
     def _parse_conditions(self, text: str, action: str) -> list[dict[str, Any]]:
@@ -354,7 +357,7 @@ Generated: {datetime.now(UTC).isoformat()}
 """
 
 from strategies.base import BaseStrategy, Signal, SignalType, StrategyConfig
-from typing import Dict, Any
+from typing import Any
 
 class {self._to_class_name(strategy.name)}(BaseStrategy):
     """
@@ -367,7 +370,7 @@ class {self._to_class_name(strategy.name)}(BaseStrategy):
         self.symbol = "{strategy.symbol}"
         self.timeframe = "{strategy.timeframe}"
 
-    def analyze(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
         """Analyze market data."""
         analysis = {{'analyzed': True}}
 
@@ -378,7 +381,7 @@ class {self._to_class_name(strategy.name)}(BaseStrategy):
 
         return analysis
 
-    def generate_signal(self, analysis: Dict[str, Any]) -> Signal:
+    def generate_signal(self, analysis: dict[str, Any]) -> Signal:
         """Generate trading signal based on analysis."""
 '''
 

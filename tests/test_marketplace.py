@@ -4,7 +4,8 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 import pytest
-from social.marketplace import StrategyMarketplace, StrategyListing
+
+from social.marketplace import StrategyListing, StrategyMarketplace
 
 
 class TestStrategyMarketplace:

@@ -10,23 +10,21 @@ Multi-channel alerts with rate limiting, batching, and templating
 
 import abc
 import asyncio
+import json
 import logging
 import os
 import time
-import json
-from typing import Any
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
+from typing import Any
 
 try:
     import requests
 except ImportError:
     requests = None  # type: ignore
-from enum import Enum
 import contextlib
+from enum import Enum
 
 try:
     import aiohttp
@@ -37,8 +35,8 @@ except ImportError:
 
 try:
     import smtplib
-    from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
 
     SMTP_AVAILABLE = True
 except ImportError:
@@ -47,8 +45,8 @@ except ImportError:
 try:
     from sendgrid import SendGridAPIClient
     from sendgrid.helpers.mail import (
-        Mail,
         HtmlContent,
+        Mail,
     )
 
     SENDGRID_AVAILABLE = True
@@ -136,7 +134,8 @@ class NotificationChannel(abc.ABC):
             try:
                 return await send_fn()
             except Exception as e:
-                logger.error(f"{self.name} send failed (attempt {attempt + 1}): {e}")
+                logger.error("%s send failed (attempt %s): %s", self.name, attempt + 1, e)
+
                 if attempt < max_retries - 1:
                     await asyncio.sleep(2**attempt)
         return False
@@ -157,7 +156,8 @@ class DiscordChannel(NotificationChannel):
             return False
 
         if not self._check_rate_limit(notification.level.value):
-            logger.debug(f"Discord rate limited for {notification.level.value}")
+            logger.debug("Discord rate limited for %s", notification.level.value)
+
             return False
 
         # Color based on level
@@ -194,9 +194,11 @@ class DiscordChannel(NotificationChannel):
                 ) as response,
             ):
                 if response.status in [200, 204]:
-                    logger.debug(f"Discord notification sent: {notification.title}")
+                    logger.debug("Discord notification sent: %s", notification.title)
+
                     return True
-                logger.error(f"Discord error {response.status}: {await response.text()}")
+                logger.error("Discord error %s: %s", response.status, await response.text())
+
                 return False
 
         return await self._send_with_retry(_send)
@@ -257,9 +259,11 @@ class TelegramChannel(NotificationChannel):
                 session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=10)) as response,
             ):
                 if response.status == 200:
-                    logger.debug(f"Telegram notification sent: {notification.title}")
+                    logger.debug("Telegram notification sent: %s", notification.title)
+
                     return True
-                logger.error(f"Telegram error {response.status}: {await response.text()}")
+                logger.error("Telegram error %s: %s", response.status, await response.text())
+
                 return False
 
         return await self._send_with_retry(_send)
@@ -497,7 +501,7 @@ class NotificationManager:
     - Deduplication
     """
 
-    def __init__(self, config: dict[str, Any] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         self.config = config or {}
         self.channels: dict[str, NotificationChannel] = {}
         self._notification_queue: asyncio.Queue = asyncio.Queue()
@@ -562,7 +566,8 @@ class NotificationManager:
         if self.config.get("environment") == "development":
             self.channels["console"] = ConsoleChannel({"enabled": True})
 
-        logger.info(f"Notification channels initialized: {list(self.channels.keys())}")
+        logger.info("Notification channels initialized: %s", list(self.channels.keys()))
+
 
     async def start(self):
         """Start notification processor"""
@@ -589,7 +594,7 @@ class NotificationManager:
         level: str,
         title: str,
         message: str = "",
-        data: dict[str, Any] = None,
+        data: dict[str, Any] | None = None,
         channels: list[str] | None = None,
         bypass_rate_limit: bool = False,
     ) -> bool:
@@ -620,7 +625,8 @@ class NotificationManager:
         # Deduplication check (simple)
         content_hash = hash((title, message, str(sorted((data or {}).items()))))
         if content_hash in self._processed_ids:
-            logger.debug(f"Duplicate notification suppressed: {title}")
+            logger.debug("Duplicate notification suppressed: %s", title)
+
             return False
 
         # Add to queue
@@ -649,10 +655,12 @@ class NotificationManager:
                         success = await asyncio.wait_for(channel.send(notification), timeout=10.0)
 
                         if not success:
-                            logger.warning(f"Failed to send to {channel_name}")
+                            logger.warning("Failed to send to %s", channel_name)
+
 
                     except Exception as e:
-                        logger.error(f"Error sending to {channel_name}: {e}")
+                        logger.error("Error sending to %s: %s", channel_name, e)
+
 
                 self._notification_queue.task_done()
 
@@ -661,7 +669,8 @@ class NotificationManager:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Notification processor error: {e}")
+                logger.error("Notification processor error: %s", e)
+
 
     # ------------------------------------------------------------------
     # Sync API (used by tests)
@@ -671,8 +680,8 @@ class NotificationManager:
         self,
         message: str,
         level: "NotificationLevel" = None,
-        channels: list[str] = None,
-        metadata: dict = None,
+        channels: list[str] | None = None,
+        metadata: dict | None = None,
     ) -> None:
         """Synchronous send — dispatches to each requested channel, swallowing errors."""
         targets = channels if channels is not None else self.enabled_channels
@@ -687,7 +696,8 @@ class NotificationManager:
                 elif ch == NotificationChannel.EMAIL:
                     self._send_email(message, level, metadata)
             except Exception as exc:
-                logger.error(f"Notification channel {ch} error: {exc}")
+                logger.error("Notification channel %s error: %s", ch, exc)
+
         # Record in history
         self.notification_history.append(
             {
@@ -703,11 +713,11 @@ class NotificationManager:
         symbol: str,
         price: float,
         quantity: float = 0,
-        action: str = None,
-        side: str = None,
-        trade_id: str = None,
-        pnl: float = None,
-        channels: list[str] = None,
+        action: str | None = None,
+        side: str | None = None,
+        trade_id: str | None = None,
+        pnl: float | None = None,
+        channels: list[str] | None = None,
         **kwargs,
     ) -> None:
         """Send a trade notification."""
@@ -731,11 +741,11 @@ class NotificationManager:
         self,
         symbol: str,
         signal_type: str,
-        strategy: str = None,
-        price: float = None,
-        confidence: float = None,
-        strength: float = None,
-        channels: list[str] = None,
+        strategy: str | None = None,
+        price: float | None = None,
+        confidence: float | None = None,
+        strength: float | None = None,
+        channels: list[str] | None = None,
         **kwargs,
     ) -> None:
         """Send a trading signal notification."""
@@ -769,7 +779,7 @@ class NotificationManager:
         }.get(lvl, logger.info)
         log_fn(f"[NOTIFICATION] {message}")
 
-    def _send_discord(self, message: str, level: "NotificationLevel" = None, metadata: dict = None) -> None:
+    def _send_discord(self, message: str, level: "NotificationLevel" = None, metadata: dict | None = None) -> None:
         """Send message to Discord webhook (sync)."""
         if requests is None:
             logger.warning("requests not installed; cannot send Discord notification")
@@ -792,9 +802,10 @@ class NotificationManager:
             resp = requests.post(webhook_url, json=payload, timeout=5)
             resp.raise_for_status()
         except Exception as exc:
-            logger.error(f"Discord send failed: {exc}")
+            logger.error("Discord send failed: %s", exc)
 
-    def _send_telegram(self, message: str, level: "NotificationLevel" = None, metadata: dict = None) -> None:
+
+    def _send_telegram(self, message: str, level: "NotificationLevel" = None, metadata: dict | None = None) -> None:
         """Send message via Telegram Bot API (sync)."""
         if requests is None:
             logger.warning("requests not installed; cannot send Telegram notification")
@@ -813,9 +824,10 @@ class NotificationManager:
             resp = requests.post(url, json=payload, timeout=5)
             resp.raise_for_status()
         except Exception as exc:
-            logger.error(f"Telegram send failed: {exc}")
+            logger.error("Telegram send failed: %s", exc)
 
-    def _send_email(self, message: str, level: "NotificationLevel" = None, metadata: dict = None) -> None:
+
+    def _send_email(self, message: str, level: "NotificationLevel" = None, metadata: dict | None = None) -> None:
         """Send email notification — SendGrid primary, SMTP fallback (sync)."""
         to_addr = self.config.get("smtp_to") or self.config.get("email_to") or self.config.get("smtp_username", "")
         if not to_addr:

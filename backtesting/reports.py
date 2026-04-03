@@ -73,4 +73,5 @@ class ReportGenerator:
         with open(filename, "w", encoding="utf-8") as f:
             f.write(report)
 
-        logger.info(f"Report saved to {filename}")
+        logger.info("Report saved to %s", filename)
+

@@ -251,8 +251,9 @@ class AnomalyWeighter:
 
     @classmethod
     def load(cls, path: str | Path) -> AnomalyWeighter:
-        import joblib
         import pickle  # nosec B403 - joblib tried first; pickle only for legacy fallback
+
+        import joblib
 
         path = Path(path)
         if not path.exists():

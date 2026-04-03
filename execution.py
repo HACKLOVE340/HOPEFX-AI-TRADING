@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from validation import OrderValidator, Order  # pylint: disable=no-name-in-module
+from validation import Order, OrderValidator  # pylint: disable=no-name-in-module
 
 logger = logging.getLogger("execution")
 
@@ -178,7 +178,8 @@ class PaperExecutor:
             )
 
             if not validation.valid:
-                logger.error(f"Order {order_id} rejected: {validation.reason}")
+                logger.error("Order %s rejected: %s", order_id, validation.reason)
+
                 return ExecutionResult(
                     order_id=order_id,
                     status=OrderStatus.REJECTED,
@@ -194,11 +195,11 @@ class PaperExecutor:
 
         # Determine fill price
         if order.side == "buy":
-            base_price = ask if ask else current_price + 0.02
+            base_price = ask or current_price + 0.02
             slippage = self._calculate_slippage(order.symbol, order.side, order.qty, base_price, volatility)
             fill_price = base_price + slippage
         else:
-            base_price = bid if bid else current_price - 0.02
+            base_price = bid or current_price - 0.02
             slippage = self._calculate_slippage(order.symbol, order.side, order.qty, base_price, volatility)
             fill_price = base_price - slippage
 
@@ -271,7 +272,8 @@ class PaperExecutor:
                     del self.positions[order.symbol]
                 else:
                     old_pos["qty"] -= close_qty
-                logger.info(f"Closed short {order.symbol} qty={close_qty} P&L=${pnl:.2f}")
+                logger.info("Closed short %s qty=%s P&L=$%s", order.symbol, close_qty, pnl)
+
             else:
                 # Open or add to long — deduct cash
                 self.cash -= total_cost
@@ -517,7 +519,8 @@ class SmartOrderRouter:
         self._excluded_until[name] = 0.0
         if is_default or self.default_broker is None:
             self.default_broker = name
-        logger.info(f"SmartOrderRouter: registered broker '{name}' (fee={fee_bps}bps, spread={spread_bps}bps)")
+        logger.info("SmartOrderRouter: registered broker '%s' (fee=%sbps, spread=%sbps)", name, fee_bps, spread_bps)
+
 
     def _score_broker(self, name: str) -> float:
         """Compute routing score for a broker (higher = preferred)."""
@@ -575,7 +578,8 @@ class SmartOrderRouter:
         for name in ranked:
             broker = self.brokers[name]
             if not hasattr(broker, "submit_order"):
-                logger.warning(f"SmartOrderRouter: broker '{name}' has no submit_order — skipping")
+                logger.warning("SmartOrderRouter: broker '%s' has no submit_order — skipping", name)
+
                 continue
 
             t0 = time.monotonic()
@@ -591,7 +595,8 @@ class SmartOrderRouter:
             except Exception as exc:
                 latency_ms = (time.monotonic() - t0) * 1000
                 self._update_metrics(name, latency_ms, False)
-                logger.warning(f"SmartOrderRouter: broker '{name}' raised {exc!r} — trying next")
+                logger.warning("SmartOrderRouter: broker '%s' raised %s — trying next", name, exc)
+
                 last_error = exc
 
         raise RuntimeError(f"SmartOrderRouter: all brokers failed. Last error: {last_error}")

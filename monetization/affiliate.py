@@ -17,20 +17,18 @@ This module handles:
 import logging
 import secrets
 import string
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from decimal import Decimal
-from typing import Any
-from enum import Enum
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from enum import StrEnum
+from typing import Any
 
 from .pricing import SubscriptionTier
 
 logger = logging.getLogger(__name__)
 
 
-class AffiliateStatus(str, Enum):
+class AffiliateStatus(StrEnum):
     """Affiliate status enumeration"""
 
     PENDING = "pending"
@@ -39,7 +37,7 @@ class AffiliateStatus(str, Enum):
     TERMINATED = "terminated"
 
 
-class AffiliateLevel(str, Enum):
+class AffiliateLevel(StrEnum):
     """Affiliate tier levels"""
 
     BRONZE = "bronze"  # 10% commission
@@ -48,7 +46,7 @@ class AffiliateLevel(str, Enum):
     PLATINUM = "platinum"  # 25% commission
 
 
-class ReferralStatus(str, Enum):
+class ReferralStatus(StrEnum):
     """Referral status enumeration"""
 
     PENDING = "pending"
@@ -57,7 +55,7 @@ class ReferralStatus(str, Enum):
     EXPIRED = "expired"
 
 
-class PayoutStatus(str, Enum):
+class PayoutStatus(StrEnum):
     """Payout status enumeration"""
 
     PENDING = "pending"
@@ -133,12 +131,14 @@ class Affiliate:
         """Approve affiliate application"""
         self.status = AffiliateStatus.ACTIVE
         self.approved_at = datetime.now(UTC)
-        logger.info(f"Affiliate {self.affiliate_id} approved")
+        logger.info("Affiliate %s approved", self.affiliate_id)
+
 
     def suspend(self) -> None:
         """Suspend affiliate account"""
         self.status = AffiliateStatus.SUSPENDED
-        logger.info(f"Affiliate {self.affiliate_id} suspended")
+        logger.info("Affiliate %s suspended", self.affiliate_id)
+
 
     def check_level_upgrade(self) -> AffiliateLevel | None:
         """Check if affiliate qualifies for level upgrade"""
@@ -155,7 +155,8 @@ class Affiliate:
         if list(AffiliateLevel).index(new_level) > list(AffiliateLevel).index(self.level):
             old_level = self.level
             self.level = new_level
-            logger.info(f"Affiliate {self.affiliate_id} upgraded from {old_level.value} to {new_level.value}")
+            logger.info("Affiliate %s upgraded from %s to %s", self.affiliate_id, old_level.value, new_level.value)
+
             return True
         return False
 
@@ -265,19 +266,22 @@ class Payout:
         """Process payout"""
         self.status = PayoutStatus.PROCESSING
         self.transaction_id = transaction_id
-        logger.info(f"Payout {self.payout_id} processing: {transaction_id}")
+        logger.info("Payout %s processing: %s", self.payout_id, transaction_id)
+
 
     def complete(self) -> None:
         """Mark payout as completed"""
         self.status = PayoutStatus.COMPLETED
         self.processed_at = datetime.now(UTC)
-        logger.info(f"Payout {self.payout_id} completed")
+        logger.info("Payout %s completed", self.payout_id)
+
 
     def fail(self, reason: str) -> None:
         """Mark payout as failed"""
         self.status = PayoutStatus.FAILED
         self.notes = reason
-        logger.error(f"Payout {self.payout_id} failed: {reason}")
+        logger.error("Payout %s failed: %s", self.payout_id, reason)
+
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary"""
@@ -349,7 +353,8 @@ class AffiliateManager:
         self._affiliate_codes[code] = affiliate_id
         self._user_affiliates[user_id] = affiliate_id
 
-        logger.info(f"Created affiliate {affiliate_id} with code {code}")
+        logger.info("Created affiliate %s with code %s", affiliate_id, code)
+
         return affiliate
 
     def get_affiliate(self, affiliate_id: str) -> Affiliate | None:
@@ -390,13 +395,15 @@ class AffiliateManager:
 
         affiliate = self.get_affiliate_by_code(affiliate_code)
         if not affiliate or not affiliate.is_active():
-            logger.warning(f"Invalid or inactive affiliate code: {affiliate_code}")
+            logger.warning("Invalid or inactive affiliate code: %s", affiliate_code)
+
             return None
 
         # Check if user was already referred
         for referral in self._referrals.values():
             if referral.referred_user_id == referred_user_id:
-                logger.info(f"User {referred_user_id} already has referral tracking")
+                logger.info("User %s already has referral tracking", referred_user_id)
+
                 return referral
 
         referral_id = f"REF-{uuid.uuid4().hex[:12].upper()}"
@@ -408,7 +415,8 @@ class AffiliateManager:
         )
 
         self._referrals[referral_id] = referral
-        logger.info(f"Created referral {referral_id} for affiliate {affiliate.affiliate_id}")
+        logger.info("Created referral %s for affiliate %s", referral_id, affiliate.affiliate_id)
+
 
         return referral
 
@@ -431,12 +439,14 @@ class AffiliateManager:
                 break
 
         if not referral:
-            logger.info(f"No active referral found for user {referred_user_id}")
+            logger.info("No active referral found for user %s", referred_user_id)
+
             return None
 
         affiliate = self.get_affiliate(referral.affiliate_id)
         if not affiliate or not affiliate.is_active():
-            logger.warning(f"Affiliate {referral.affiliate_id} not active")
+            logger.warning("Affiliate %s not active", referral.affiliate_id)
+
             return None
 
         # Calculate and apply commission
@@ -481,7 +491,8 @@ class AffiliateManager:
         pending = self._calculate_pending_commission(affiliate_id)
 
         if pending < self.MIN_PAYOUT:
-            logger.warning(f"Payout below minimum: ${pending} < ${self.MIN_PAYOUT}")
+            logger.warning("Payout below minimum: $%s < $%s", pending, self.MIN_PAYOUT)
+
             return None
 
         payout_id = f"PAY-{uuid.uuid4().hex[:12].upper()}"
@@ -499,7 +510,8 @@ class AffiliateManager:
         for ref in self.get_affiliate_referrals(affiliate_id, ReferralStatus.CONVERTED):
             ref.mark_paid()
 
-        logger.info(f"Created payout request {payout_id} for ${pending}")
+        logger.info("Created payout request %s for $%s", payout_id, pending)
+
         return payout
 
     def _calculate_pending_commission(self, affiliate_id: str) -> Decimal:

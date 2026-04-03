@@ -16,14 +16,11 @@ Integration tests for the payments layer:
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-
 
 # ── DB fixtures ───────────────────────────────────────────────────────────────
 
@@ -36,8 +33,9 @@ def db_engine():
     Uses render_as_batch=True-compatible table creation.
     BigInteger maps to INTEGER in SQLite which supports autoincrement.
     """
-    from database.models import Base
     from sqlalchemy import event as sa_event
+
+    from database.models import Base
 
     engine = create_engine(
         "sqlite:///:memory:",
@@ -111,8 +109,9 @@ class TestCryptoPaymentModel:
 
     def test_payment_id_is_unique(self, db_session):
         """Duplicate payment_id raises IntegrityError."""
-        from database.models import CryptoPayment
         from sqlalchemy.exc import IntegrityError
+
+        from database.models import CryptoPayment
 
         data = self._make_payment("PAY_unique_001")
         db_session.add(CryptoPayment(**data))
@@ -273,8 +272,9 @@ class TestConfigStoreModel:
 
     def test_config_key_is_unique(self, db_session):
         """Duplicate config key raises IntegrityError."""
-        from database.models import ConfigStore
         from sqlalchemy.exc import IntegrityError
+
+        from database.models import ConfigStore
 
         db_session.add(ConfigStore(key="unique_key_test", value_json='{"a":1}'))
         db_session.flush()

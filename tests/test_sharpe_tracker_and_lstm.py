@@ -20,8 +20,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from ml.train_advanced import SharpeProgressTracker, sharpe_gate_check, _sharpe_se
-
+from ml.train_advanced import SharpeProgressTracker, _sharpe_se, sharpe_gate_check
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -315,9 +314,10 @@ class TestLSTMSignalLayerWithMockModel:
 
     def _make_layer_with_mock(self, proba: float):
         """Return a loaded LSTMSignalLayer backed by a mock predictor."""
-        from ml.lstm_signal_layer import LSTMSignalLayer
-        import tempfile
         import pathlib
+        import tempfile
+
+        from ml.lstm_signal_layer import LSTMSignalLayer
 
         # Create a dummy file so _load() passes the existence check
         with tempfile.NamedTemporaryFile(suffix=".pt", delete=False) as tmp:

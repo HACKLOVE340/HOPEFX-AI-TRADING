@@ -67,6 +67,7 @@ def _write_meta(path: Path, payload: dict) -> None:
 class TestKillSwitchGate:
     def test_active_kill_switch_raises_503(self, tmp_path):
         from fastapi import HTTPException
+
         import api.trading as trading_mod
         from kill_switch import KillSwitch
 
@@ -98,8 +99,9 @@ class TestKillSwitchGate:
 
     def test_kill_switch_checked_before_rate_limit(self, tmp_path):
         """Kill switch must fire before rate-limit logic (order of guards)."""
-        import api.trading as trading_mod
         from fastapi import HTTPException
+
+        import api.trading as trading_mod
         from kill_switch import KillSwitch
 
         ks = KillSwitch(flag_file=tmp_path / "ks.flag", deactivation_token="tok")
@@ -129,6 +131,7 @@ class TestSharpeGate:
 
     def test_gate_not_passed_blocks_live_orders(self, tmp_path, monkeypatch):
         from fastapi import HTTPException
+
         import api.trading as trading_mod
 
         monkeypatch.setenv("BROKER_TYPE", "live")
@@ -156,6 +159,7 @@ class TestSharpeGate:
     def test_missing_meta_file_blocks_live_orders(self, tmp_path, monkeypatch):
         """No meta file = gate not passed (fail-closed)."""
         from fastapi import HTTPException
+
         import api.trading as trading_mod
 
         monkeypatch.setenv("BROKER_TYPE", "live")
@@ -171,6 +175,7 @@ class TestSharpeGate:
     def test_gate_detail_includes_trade_count(self, tmp_path, monkeypatch):
         """Error detail must tell the operator how many trades they have."""
         from fastapi import HTTPException
+
         import api.trading as trading_mod
 
         monkeypatch.setenv("BROKER_TYPE", "live")
@@ -199,6 +204,7 @@ class TestCIModelGuard:
 
     def test_ci_model_blocks_live_orders(self, tmp_path, monkeypatch):
         from fastapi import HTTPException
+
         import api.trading as trading_mod
 
         monkeypatch.setenv("BROKER_TYPE", "live")
@@ -228,6 +234,7 @@ class TestCIModelGuard:
         """train_advanced.py must write ci_mode=True when HOPEFX_CI=1."""
         monkeypatch.setenv("HOPEFX_CI", "1")
         import importlib
+
         import ml.train_advanced as ta
 
         importlib.reload(ta)
@@ -237,6 +244,7 @@ class TestCIModelGuard:
         """train_advanced.py must write ci_mode=False when HOPEFX_CI=0."""
         monkeypatch.setenv("HOPEFX_CI", "0")
         import importlib
+
         import ml.train_advanced as ta
 
         importlib.reload(ta)

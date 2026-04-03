@@ -102,7 +102,7 @@ class DataLayerRedisStore:
 
     def _init_prometheus(self) -> None:
         try:
-            from prometheus_client import Counter, Gauge, REGISTRY
+            from prometheus_client import REGISTRY, Counter, Gauge
 
             def _counter(name: str, doc: str) -> Counter:
                 try:
@@ -146,8 +146,9 @@ class DataLayerRedisStore:
         # ── Sentinel path ────────────────────────────────────────────────────
         if sentinel_hosts_raw:
             try:
-                import redis as _redis_lib
                 from redis.sentinel import Sentinel  # type: ignore[import]
+
+                import redis as _redis_lib
 
                 sentinels = []
                 for _part in sentinel_hosts_raw.split(","):

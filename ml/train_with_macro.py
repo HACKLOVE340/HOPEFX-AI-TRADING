@@ -55,9 +55,7 @@ import json
 import logging
 import sys
 import warnings
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -471,7 +469,7 @@ def oos_eval(
     acc = accuracy_score(y_oos, preds)
     f1 = f1_score(y_oos, preds, zero_division=0)
     n = len(y_oos)
-    k = int(round(acc * n))
+    k = round(acc * n)
 
     # Accuracy SE: sqrt(p*(1-p)/n)
     acc_se = float(np.sqrt(acc * (1 - acc) / max(n, 1)))
@@ -612,7 +610,7 @@ def main():
     X_oos, y_oos = None, None
 
     if args.oos_years > 0:
-        oos_n = int(round(args.oos_years * 252))  # ~252 trading days/year
+        oos_n = round(args.oos_years * 252)  # ~252 trading days/year
         oos_n = min(oos_n, len(X) // 4)  # cap at 25% of data
         if oos_n < 100:
             # < 100 bars gives accuracy SE > ±0.05 — not meaningful for production.

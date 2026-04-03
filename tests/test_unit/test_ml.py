@@ -6,8 +6,9 @@
 """Unit tests for ML components."""
 
 import asyncio
-import pytest
+
 import numpy as np
+import pytest
 
 try:
     from ml.online_learner import XGBoostOnlineModel  # type: ignore[import]
@@ -17,7 +18,7 @@ try:
 except ImportError:
     try:
         # Fallback: check if xgboost is available at all
-        import xgboost  # noqa: F401
+        import xgboost
 
         HAS_ML_DEPS = False  # modules exist but classes may differ
     except ImportError:
@@ -72,7 +73,8 @@ def test_drift_detection():
 @pytest.mark.hypothesis
 def test_feature_store_consistency():
     """Property-based test for feature store."""
-    from hypothesis import given, strategies as st
+    from hypothesis import given
+    from hypothesis import strategies as st
 
     @given(st.lists(st.floats(allow_nan=False, allow_infinity=False), min_size=10, max_size=100))
     def features_computed_correctly(prices):

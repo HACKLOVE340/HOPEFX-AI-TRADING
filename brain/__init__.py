@@ -18,7 +18,7 @@ Legacy components:
     brain.llm_agent        — LLMAgent (GPT-4 strategy generation)
 """
 
-from brain.hopefx_brain import HOPEFXBrain, get_brain, Regime, BrainDecision
+from brain.hopefx_brain import BrainDecision, HOPEFXBrain, Regime, get_brain
 from brain.nuclear_supervisor import NuclearHopeFXSupervisor, get_nuclear_supervisor
 
 __all__ = [

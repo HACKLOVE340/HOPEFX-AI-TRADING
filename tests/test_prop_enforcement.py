@@ -168,8 +168,9 @@ class TestRiskManagerPropEnforcement:
 
 class TestBrainRespectsPropHalt:
     def test_brain_returns_hold_when_risk_halted(self):
-        import pandas as pd
         import numpy as np
+        import pandas as pd
+
         from brain.hopefx_brain import HOPEFXBrain
         from risk.manager import RiskManager
 
@@ -198,8 +199,9 @@ class TestBrainRespectsPropHalt:
         assert "risk_halted" in decision.reason
 
     def test_brain_kill_switch_returns_hold(self):
-        import pandas as pd
         import numpy as np
+        import pandas as pd
+
         from brain.hopefx_brain import HOPEFXBrain
 
         brain = HOPEFXBrain()

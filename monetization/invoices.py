@@ -11,19 +11,16 @@ Invoices include access codes and are sent to users upon payment confirmation.
 """
 
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 
 from .pricing import SubscriptionTier, pricing_manager
-
 
 logger = logging.getLogger(__name__)
 
 
-class InvoiceStatus(str, Enum):
+class InvoiceStatus(StrEnum):
     """Invoice status enumeration"""
 
     DRAFT = "draft"
@@ -80,18 +77,21 @@ class Invoice:
         """Mark invoice as paid"""
         self.status = InvoiceStatus.PAID
         self.paid_at = datetime.now(UTC)
-        logger.info(f"Invoice {self.invoice_number} marked as paid")
+        logger.info("Invoice %s marked as paid", self.invoice_number)
+
 
     def mark_cancelled(self) -> None:
         """Mark invoice as cancelled"""
         self.status = InvoiceStatus.CANCELLED
         self.cancelled_at = datetime.now(UTC)
-        logger.info(f"Invoice {self.invoice_number} cancelled")
+        logger.info("Invoice %s cancelled", self.invoice_number)
+
 
     def mark_refunded(self) -> None:
         """Mark invoice as refunded"""
         self.status = InvoiceStatus.REFUNDED
-        logger.info(f"Invoice {self.invoice_number} refunded")
+        logger.info("Invoice %s refunded", self.invoice_number)
+
 
     def is_overdue(self) -> bool:
         """Check if invoice is overdue"""
@@ -178,7 +178,8 @@ class InvoiceGenerator:
 
         self._invoices[invoice_id] = invoice
 
-        logger.info(f"Created invoice {invoice_number} for ${amount} ({tier.value})")
+        logger.info("Created invoice %s for $%s (%s)", invoice_number, amount, tier.value)
+
         return invoice
 
     def create_commission_invoice(self, user_id: str, commission_amount: Decimal, period: str = "Monthly") -> Invoice:
@@ -207,7 +208,8 @@ class InvoiceGenerator:
 
         self._invoices[invoice_id] = invoice
 
-        logger.info(f"Created commission invoice {invoice_number} for ${commission_amount}")
+        logger.info("Created commission invoice %s for $%s", invoice_number, commission_amount)
+
         return invoice
 
     def get_invoice(self, invoice_id: str) -> Invoice | None:
@@ -310,18 +312,19 @@ class InvoiceGenerator:
         try:
             # Try to import reportlab if available
             try:
+                from io import BytesIO
+
+                from reportlab.lib import colors
                 from reportlab.lib.pagesizes import letter
+                from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
                 from reportlab.lib.units import inch
                 from reportlab.platypus import (
+                    Paragraph,
                     SimpleDocTemplate,
+                    Spacer,
                     Table,
                     TableStyle,
-                    Paragraph,
-                    Spacer,
                 )
-                from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-                from reportlab.lib import colors
-                from io import BytesIO
 
                 # Create PDF buffer
                 buffer = BytesIO()
@@ -431,7 +434,8 @@ class InvoiceGenerator:
                 pdf_bytes = buffer.getvalue()
                 buffer.close()
 
-                logger.info(f"Generated PDF for invoice {invoice.invoice_number} ({len(pdf_bytes)} bytes)")
+                logger.info("Generated PDF for invoice %s (%s bytes)", invoice.invoice_number, len(pdf_bytes))
+
                 return pdf_bytes
 
             except ImportError:
@@ -462,7 +466,8 @@ Amount: ${invoice.amount:.2f} {invoice.currency}
                 return pdf_content.encode("utf-8")
 
         except Exception as e:
-            logger.error(f"Error generating PDF for invoice {invoice.invoice_number}: {e}")
+            logger.error("Error generating PDF for invoice %s: %s", invoice.invoice_number, e)
+
             return None
 
 

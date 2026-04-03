@@ -30,7 +30,8 @@ Usage
     # Start the relay background task at startup:
     from core.outbox import OutboxRelay
     relay = OutboxRelay()
-    asyncio.create_task(relay.run())
+    _t = asyncio.create_task(relay.run())
+    _t.add_done_callback(lambda _: None)
 """
 
 from __future__ import annotations
@@ -39,9 +40,7 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)

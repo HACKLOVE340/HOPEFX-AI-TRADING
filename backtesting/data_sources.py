@@ -18,6 +18,7 @@ import abc
 import logging
 import os
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -55,7 +56,8 @@ class YahooFinanceSource(DataSource):
             raise ImportError("yfinance is required for YahooFinanceSource")
 
         self.interval = interval
-        logger.info(f"Initialized Yahoo Finance source with {interval} interval")
+        logger.info("Initialized Yahoo Finance source with %s interval", interval)
+
 
     def get_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """Download data from Yahoo Finance."""
@@ -64,7 +66,8 @@ class YahooFinanceSource(DataSource):
             df = ticker.history(start=start_date, end=end_date, interval=self.interval)
 
             if df.empty:
-                logger.warning(f"No data returned from Yahoo Finance for {symbol}")
+                logger.warning("No data returned from Yahoo Finance for %s", symbol)
+
                 return pd.DataFrame()
 
             # Standardize column names
@@ -74,11 +77,13 @@ class YahooFinanceSource(DataSource):
             if df.index.tz is not None:
                 df.index = df.index.tz_localize(None)
 
-            logger.info(f"Downloaded {len(df)} bars for {symbol} from Yahoo Finance")
+            logger.info("Downloaded %s bars for %s from Yahoo Finance", len(df), symbol)
+
             return df
 
         except Exception as e:
-            logger.error(f"Error downloading {symbol} from Yahoo Finance: {e}")
+            logger.error("Error downloading %s from Yahoo Finance: %s", symbol, e)
+
             return pd.DataFrame()
 
 
@@ -95,7 +100,8 @@ class CSVDataSource(DataSource):
         """
         self.data_dir = data_dir
         self.date_column = date_column
-        logger.info(f"Initialized CSV source from {data_dir}")
+        logger.info("Initialized CSV source from %s", data_dir)
+
 
     def get_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """Load data from CSV file."""
@@ -109,13 +115,14 @@ class CSVDataSource(DataSource):
 
             filepath = None
             for pattern in patterns:
-                path = os.path.join(self.data_dir, pattern)
-                if os.path.exists(path):
+                path = Path(self.data_dir) / pattern
+                if Path(path).exists():
                     filepath = path
                     break
 
             if filepath is None:
-                logger.error(f"CSV file not found for {symbol} in {self.data_dir}")
+                logger.error("CSV file not found for %s in %s", symbol, self.data_dir)
+
                 return pd.DataFrame()
 
             # Load CSV
@@ -131,11 +138,13 @@ class CSVDataSource(DataSource):
             # Standardize column names
             df.columns = [col.lower() for col in df.columns]
 
-            logger.info(f"Loaded {len(df)} bars for {symbol} from CSV")
+            logger.info("Loaded %s bars for %s from CSV", len(df), symbol)
+
             return df
 
         except Exception as e:
-            logger.error(f"Error loading CSV for {symbol}: {e}")
+            logger.error("Error loading CSV for %s: %s", symbol, e)
+
             return pd.DataFrame()
 
 
@@ -163,7 +172,8 @@ class BrokerDataSource(DataSource):
             return pd.DataFrame()
 
         except Exception as e:
-            logger.error(f"Error getting data from broker for {symbol}: {e}")
+            logger.error("Error getting data from broker for %s: %s", symbol, e)
+
             return pd.DataFrame()
 
 
@@ -187,7 +197,7 @@ class AlphaVantageSource(DataSource):
 
     BASE_URL = "https://www.alphavantage.co/query"
 
-    def __init__(self, api_key: str = None):
+    def __init__(self, api_key: str | None = None):
         """
         Initialize Alpha Vantage source.
 
@@ -237,7 +247,8 @@ class AlphaVantageSource(DataSource):
 
             if data_key not in data:
                 error_msg = data.get("Note", data.get("Error Message", "Unknown error"))
-                logger.error(f"Alpha Vantage error: {error_msg}")
+                logger.error("Alpha Vantage error: %s", error_msg)
+
                 return pd.DataFrame()
 
             # Parse data
@@ -255,14 +266,16 @@ class AlphaVantageSource(DataSource):
             # Filter by date range
             df = df[(df.index >= start_date) & (df.index <= end_date)]
 
-            logger.info(f"Downloaded {len(df)} bars for {symbol} from Alpha Vantage")
+            logger.info("Downloaded %s bars for %s from Alpha Vantage", len(df), symbol)
+
             return df
 
         except ImportError:
             logger.error("requests library required for Alpha Vantage")
             return pd.DataFrame()
         except Exception as e:
-            logger.error(f"Error downloading {symbol} from Alpha Vantage: {e}")
+            logger.error("Error downloading %s from Alpha Vantage: %s", symbol, e)
+
             return pd.DataFrame()
 
     def get_forex(
@@ -279,8 +292,8 @@ class AlphaVantageSource(DataSource):
         self,
         symbol: str,
         market: str = "USD",
-        start_date: datetime = None,
-        end_date: datetime = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
     ) -> pd.DataFrame:
         """
         Get cryptocurrency data.
@@ -311,7 +324,8 @@ class AlphaVantageSource(DataSource):
             data_key = "Time Series (Digital Currency Daily)"
             if data_key not in data:
                 error_msg = data.get("Note", data.get("Error Message", "Unknown error"))
-                logger.error(f"Alpha Vantage crypto error: {error_msg}")
+                logger.error("Alpha Vantage crypto error: %s", error_msg)
+
                 return pd.DataFrame()
 
             # Parse data
@@ -342,14 +356,16 @@ class AlphaVantageSource(DataSource):
             if end_date:
                 result = result[result.index <= end_date]
 
-            logger.info(f"Downloaded {len(result)} bars for {symbol}/{market} crypto from Alpha Vantage")
+            logger.info("Downloaded %s bars for %s/%s crypto from Alpha Vantage", len(result), symbol, market)
+
             return result
 
         except ImportError:
             logger.error("requests library required for Alpha Vantage")
             return pd.DataFrame()
         except Exception as e:
-            logger.error(f"Error downloading crypto {symbol} from Alpha Vantage: {e}")
+            logger.error("Error downloading crypto %s from Alpha Vantage: %s", symbol, e)
+
             return pd.DataFrame()
 
 
@@ -399,7 +415,8 @@ class CoinGeckoSource(DataSource):
             data = response.json()
 
             if "prices" not in data:
-                logger.error(f"CoinGecko error: {data.get('error', 'Unknown error')}")
+                logger.error("CoinGecko error: %s", data.get('error', 'Unknown error'))
+
                 return pd.DataFrame()
 
             # Parse price data
@@ -428,14 +445,16 @@ class CoinGeckoSource(DataSource):
             # Filter by date range
             df = df[(df.index >= start_date) & (df.index <= end_date)]
 
-            logger.info(f"Downloaded {len(df)} bars for {symbol} from CoinGecko")
+            logger.info("Downloaded %s bars for %s from CoinGecko", len(df), symbol)
+
             return df
 
         except ImportError:
             logger.error("requests library required for CoinGecko")
             return pd.DataFrame()
         except Exception as e:
-            logger.error(f"Error downloading {symbol} from CoinGecko: {e}")
+            logger.error("Error downloading %s from CoinGecko: %s", symbol, e)
+
             return pd.DataFrame()
 
     def get_coin_list(self) -> list[dict[str, str]]:
@@ -446,7 +465,8 @@ class CoinGeckoSource(DataSource):
             response = requests.get(f"{self.BASE_URL}/coins/list", timeout=30)
             return response.json()
         except Exception as e:
-            logger.error(f"Error getting coin list: {e}")
+            logger.error("Error getting coin list: %s", e)
+
             return []
 
 
@@ -461,7 +481,7 @@ class ExchangeRateSource(DataSource):
 
     BASE_URL = "https://api.exchangerate-api.com/v4/latest"
 
-    def __init__(self, api_key: str = None):
+    def __init__(self, api_key: str | None = None):
         """
         Initialize Exchange Rate source.
 
@@ -492,12 +512,14 @@ class ExchangeRateSource(DataSource):
             data = response.json()
 
             if "rates" not in data:
-                logger.error(f"Exchange Rate API error for {symbol}")
+                logger.error("Exchange Rate API error for %s", symbol)
+
                 return pd.DataFrame()
 
             rate = data["rates"].get(quote)
             if rate is None:
-                logger.error(f"Currency {quote} not found in Exchange Rate API")
+                logger.error("Currency %s not found in Exchange Rate API", quote)
+
                 return pd.DataFrame()
 
             # Create single-row dataframe with current rate
@@ -511,14 +533,16 @@ class ExchangeRateSource(DataSource):
                 index=[pd.Timestamp.now()],
             )
 
-            logger.info(f"Got current rate for {symbol}: {rate}")
+            logger.info("Got current rate for %s: %s", symbol, rate)
+
             return df
 
         except ImportError:
             logger.error("requests library required for Exchange Rate API")
             return pd.DataFrame()
         except Exception as e:
-            logger.error(f"Error getting rate for {symbol}: {e}")
+            logger.error("Error getting rate for %s: %s", symbol, e)
+
             return pd.DataFrame()
 
     def get_all_rates(self, base: str = "USD") -> dict[str, float]:
@@ -531,7 +555,8 @@ class ExchangeRateSource(DataSource):
             data = response.json()
             return data.get("rates", {})
         except Exception as e:
-            logger.error(f"Error getting all rates: {e}")
+            logger.error("Error getting all rates: %s", e)
+
             return {}
 
 
@@ -598,7 +623,7 @@ class DataManager:
     # Pre-computed normalized forex pairs for efficient lookup
     _NORMALIZED_FOREX_PAIRS: set | None = None
 
-    def __init__(self, alpha_vantage_key: str = None, cache_dir: str = None):
+    def __init__(self, alpha_vantage_key: str | None = None, cache_dir: str | None = None):
         """
         Initialize data manager.
 
@@ -611,7 +636,7 @@ class DataManager:
 
         # Initialize normalized forex pairs set (cached)
         if DataManager._NORMALIZED_FOREX_PAIRS is None:
-            DataManager._NORMALIZED_FOREX_PAIRS = set(p.replace("/", "") for p in self.FOREX_PAIRS)
+            DataManager._NORMALIZED_FOREX_PAIRS = {p.replace("/", "") for p in self.FOREX_PAIRS}
 
         # Initialize sources
         self.sources = {}
@@ -630,14 +655,15 @@ class DataManager:
         # Exchange Rate API (always available for current rates)
         self.sources["exchangerate"] = ExchangeRateSource()
 
-        logger.info(f"DataManager initialized with sources: {list(self.sources.keys())}")
+        logger.info("DataManager initialized with sources: %s", list(self.sources.keys()))
+
 
     def get_data(
         self,
         symbol: str,
         start_date: datetime,
         end_date: datetime,
-        preferred_source: str = None,
+        preferred_source: str | None = None,
     ) -> pd.DataFrame:
         """
         Get historical data for any symbol.
@@ -671,7 +697,7 @@ class DataManager:
 
     def _is_crypto(self, symbol: str) -> bool:
         """Check if symbol is cryptocurrency."""
-        base = symbol.split("/")[0] if "/" in symbol else symbol
+        base = symbol.split("/", maxsplit=1)[0] if "/" in symbol else symbol
         return base in self.CRYPTO_SYMBOLS
 
     def _is_forex(self, symbol: str) -> bool:
@@ -700,7 +726,8 @@ class DataManager:
             if not df.empty:
                 return df
 
-        logger.warning(f"No data found for crypto symbol {symbol}")
+        logger.warning("No data found for crypto symbol %s", symbol)
+
         return pd.DataFrame()
 
     def _get_forex_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
@@ -722,7 +749,8 @@ class DataManager:
             if not df.empty:
                 return df
 
-        logger.warning(f"No data found for forex symbol {symbol}")
+        logger.warning("No data found for forex symbol %s", symbol)
+
         return pd.DataFrame()
 
     def _get_stock_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
@@ -739,7 +767,8 @@ class DataManager:
             if not df.empty:
                 return df
 
-        logger.warning(f"No data found for stock symbol {symbol}")
+        logger.warning("No data found for stock symbol %s", symbol)
+
         return pd.DataFrame()
 
     def get_available_sources(self) -> list[str]:

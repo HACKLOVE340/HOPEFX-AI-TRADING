@@ -84,8 +84,9 @@ def test_fetch_gold_ohlcv_uses_cache(tmp_path):
 
 def test_fetch_gold_ohlcv_cache_missing_falls_back(tmp_path, monkeypatch):
     """fetch_gold_ohlcv falls back to download when cache file missing."""
-    from ml.train_advanced import fetch_gold_ohlcv
     import yfinance as yf
+
+    from ml.train_advanced import fetch_gold_ohlcv
 
     fake_dates = pd.date_range("2024-01-01", periods=50, freq="B")
     fake_df = pd.DataFrame(

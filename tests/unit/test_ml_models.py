@@ -27,13 +27,13 @@ from sklearn.linear_model import LogisticRegression
 from ml.features.technical import TechnicalFeatureEngineer
 from ml.models.base import BaseMLModel
 from ml.models.ensemble import (
-    EnsemblePredictor,
     EnsemblePrediction,
+    EnsemblePredictor,
     ModelPrediction,
 )
 from ml.models.lstm import LSTMPricePredictor
 from ml.models.random_forest import RandomForestTradingClassifier
-
+from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Helpers / Fixtures shared across test classes
@@ -199,11 +199,11 @@ class TestBaseMLModel:
         model.training_history = [{"epoch": 1}]
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            path = os.path.join(tmpdir, "model.pkl")
+            path = Path(tmpdir) / "model.pkl"
             model.save(path)
 
             # Verify metadata JSON was written
-            meta_path = os.path.join(tmpdir, "model_metadata.json")
+            meta_path = Path(tmpdir) / "model_metadata.json"
             assert os.path.exists(meta_path)
             with open(meta_path, encoding="utf-8") as f:
                 meta = json.load(f)

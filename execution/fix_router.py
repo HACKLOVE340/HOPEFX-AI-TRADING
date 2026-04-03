@@ -31,18 +31,16 @@ import asyncio
 import logging
 import os
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-UTC = timezone.utc
-
-from core.event_bus import bus, CH_ORDER, CH_BREACH
+from core.event_bus import CH_BREACH, CH_ORDER, bus
 from execution.fix_adapter import (
     FIXAdapter,
-    FIXOrder,
-    FIXSide,
-    FIXOrdType,
-    FIXFillReport,
     FIXExecType,
+    FIXFillReport,
+    FIXOrder,
+    FIXOrdType,
+    FIXSide,
 )
 
 logger = logging.getLogger(__name__)
@@ -162,7 +160,8 @@ class FIXRouter:
             self._fix_available,
         )
         # Listen for kill/breach events in background
-        asyncio.create_task(self._breach_listener())
+        _t = asyncio.create_task(self._breach_listener())
+        _t.add_done_callback(lambda _: None)
         # Main order consumer
         await self._order_consumer()
 

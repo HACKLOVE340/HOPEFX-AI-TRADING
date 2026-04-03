@@ -5,12 +5,12 @@
 # No commercial use without explicit permission.
 """nocode/models.py — Data models for the no-code strategy builder."""
 
-from typing import Any
+import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-import logging
-import json
+from typing import Any
 
 logger = logging.getLogger(__name__)
 

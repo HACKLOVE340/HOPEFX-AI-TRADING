@@ -11,9 +11,7 @@ Supports stocks, options, futures, forex, and more.
 """
 
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 try:
@@ -23,7 +21,6 @@ try:
         Future,
         LimitOrder,
         MarketOrder,
-
         Stock,
         StopOrder,
     )
@@ -31,7 +28,7 @@ try:
     IB_AVAILABLE = True
 except ImportError:
     IB_AVAILABLE = False
-    logging.warning("ib_insync package not installed. IB connector will not work.")
+    logger.warning("ib_insync package not installed. IB connector will not work.")
 
 from .base import (
     AccountInfo,
@@ -111,13 +108,16 @@ class InteractiveBrokersConnector(BrokerConnector):
             if accounts:
                 if not self.account:
                     self.account = accounts[0]
-                logger.info(f"Connected to IB account: {self.account}")
-                logger.info(f"Mode: {'PAPER' if self.paper else 'LIVE'}")
+                logger.info("Connected to IB account: %s", self.account)
+
+                logger.info("Mode: %s", 'PAPER' if self.paper else 'LIVE')
+
 
             return True
 
         except Exception as e:
-            logger.error(f"IB connection error: {e}")
+            logger.error("IB connection error: %s", e)
+
             return False
 
     def disconnect(self) -> bool:
@@ -128,7 +128,8 @@ class InteractiveBrokersConnector(BrokerConnector):
             logger.info("Disconnected from IB")
             return True
         except Exception as e:
-            logger.error(f"IB disconnect error: {e}")
+            logger.error("IB disconnect error: %s", e)
+
             return False
 
     def place_order(  # pylint: disable=arguments-differ
@@ -185,7 +186,8 @@ class InteractiveBrokersConnector(BrokerConnector):
             elif order_type == OrderType.STOP:
                 ib_order = StopOrder(action, quantity, price)
             else:
-                logger.error(f"Unsupported order type: {order_type}")
+                logger.error("Unsupported order type: %s", order_type)
+
                 return None
 
             # Place order
@@ -207,11 +209,13 @@ class InteractiveBrokersConnector(BrokerConnector):
                 metadata={"ib_order_id": trade.order.orderId},
             )
 
-            logger.info(f"IB order placed: {symbol} {side.value} {quantity}")
+            logger.info("IB order placed: %s %s %s", symbol, side.value, quantity)
+
             return order
 
         except Exception as e:
-            logger.error(f"IB place order error: {e}")
+            logger.error("IB place order error: %s", e)
+
             return None
 
     def cancel_order(self, order_id: str) -> bool:
@@ -224,14 +228,17 @@ class InteractiveBrokersConnector(BrokerConnector):
             for trade in self.ib.trades():
                 if str(trade.order.orderId) == order_id:
                     self.ib.cancelOrder(trade.order)
-                    logger.info(f"Cancelled order: {order_id}")
+                    logger.info("Cancelled order: %s", order_id)
+
                     return True
 
-            logger.warning(f"Order not found: {order_id}")
+            logger.warning("Order not found: %s", order_id)
+
             return False
 
         except Exception as e:
-            logger.error(f"IB cancel order error: {e}")
+            logger.error("IB cancel order error: %s", e)
+
             return False
 
     def get_order(self, order_id: str) -> Order | None:
@@ -245,7 +252,8 @@ class InteractiveBrokersConnector(BrokerConnector):
                     return self._ib_trade_to_order(trade)
             return None
         except Exception as e:
-            logger.error(f"IB get order error: {e}")
+            logger.error("IB get order error: %s", e)
+
             return None
 
     def get_positions(self, symbol: str | None = None) -> list[Position]:
@@ -283,7 +291,8 @@ class InteractiveBrokersConnector(BrokerConnector):
             return result
 
         except Exception as e:
-            logger.error(f"IB get positions error: {e}")
+            logger.error("IB get positions error: %s", e)
+
             return []
 
     def close_position(self, symbol: str, quantity: float | None = None) -> bool:
@@ -294,13 +303,14 @@ class InteractiveBrokersConnector(BrokerConnector):
         try:
             positions = self.get_positions(symbol)
             if not positions:
-                logger.warning(f"No position found for {symbol}")
+                logger.warning("No position found for %s", symbol)
+
                 return False
 
             for position in positions:
                 # Create closing order
                 close_side = OrderSide.SELL if position.side == "LONG" else OrderSide.BUY
-                close_qty = quantity if quantity else position.quantity
+                close_qty = quantity or position.quantity
 
                 # Place closing order
                 self.place_order(
@@ -310,11 +320,13 @@ class InteractiveBrokersConnector(BrokerConnector):
                     order_type=OrderType.MARKET,
                 )
 
-            logger.info(f"Closed position: {symbol}")
+            logger.info("Closed position: %s", symbol)
+
             return True
 
         except Exception as e:
-            logger.error(f"IB close position error: {e}")
+            logger.error("IB close position error: %s", e)
+
             return False
 
     def get_account_info(self) -> AccountInfo | None:
@@ -352,7 +364,8 @@ class InteractiveBrokersConnector(BrokerConnector):
             )
 
         except Exception as e:
-            logger.error(f"IB get account info error: {e}")
+            logger.error("IB get account info error: %s", e)
+
             return None
 
     def get_market_data(  # pylint: disable=arguments-differ
@@ -397,7 +410,8 @@ class InteractiveBrokersConnector(BrokerConnector):
             return candles
 
         except Exception as e:
-            logger.error(f"IB get market data error: {e}")
+            logger.error("IB get market data error: %s", e)
+
             return None
 
     def _ib_trade_to_order(self, trade) -> Order:

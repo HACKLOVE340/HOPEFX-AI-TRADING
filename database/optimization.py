@@ -7,8 +7,9 @@
 
 ## Query Analysis & Performance Monitoring
 
-import time
 import logging
+import time
+
 from sqlalchemy import create_engine, text
 
 logging.basicConfig(level=logging.INFO)

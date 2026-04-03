@@ -326,8 +326,8 @@ class AdaptiveBlendWeights:
         primary_prob : Primary model probability.
         online_prob  : Online learner probability.
         """
-        primary_correct = float(int(round(primary_prob)) == label)
-        online_correct = float(int(round(online_prob)) == label)
+        primary_correct = float(round(primary_prob) == label)
+        online_correct = float(round(online_prob) == label)
 
         self._primary_correct.append(primary_correct)
         self._online_correct.append(online_correct)

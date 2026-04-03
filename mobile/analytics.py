@@ -24,9 +24,7 @@ from __future__ import annotations
 import logging
 import threading
 from collections import defaultdict
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -47,8 +45,8 @@ class MobileAnalytics:
 
     def __init__(
         self,
-        app_state: Any = None,
-        db: Any = None,
+        app_state: Any | None = None,
+        db: Any | None = None,
         enable_background_flush: bool = False,
     ) -> None:
         self._app_state = app_state
@@ -262,8 +260,8 @@ class MobileAnalytics:
 
             logger.debug("MobileAnalytics: flushed %d events to DB", len(events))
             return len(events)
-        except Exception as exc:
-            logger.error("MobileAnalytics: flush failed: %s", exc, exc_info=True)
+        except Exception:
+            logger.exception("MobileAnalytics: flush failed: %s")
             # Re-buffer events on failure to avoid data loss
             with self._lock:
                 self._buffer = events + self._buffer

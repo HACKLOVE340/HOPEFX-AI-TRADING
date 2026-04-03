@@ -28,7 +28,6 @@ router = APIRouter(prefix="/api/performance", tags=["Performance"])
 
 from pathlib import Path as _Path
 
-
 # ── models ────────────────────────────────────────────────────────────────────
 
 
@@ -212,6 +211,7 @@ async def get_latest_weekly_report():
     Returns 404 if no report has been generated yet.
     """
     import json as _json
+
     from fastapi import HTTPException
     from fastapi.responses import JSONResponse
 

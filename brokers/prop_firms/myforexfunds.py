@@ -50,7 +50,8 @@ class MyForexFundsConnector(MT5Connector):
         """Initialize MyForexFunds connector."""
         if "server" not in config:
             config["server"] = self.MFF_SERVERS[0]
-            logger.info(f"Auto-selected MyForexFunds server: {config['server']}")
+            logger.info("Auto-selected MyForexFunds server: %s", config['server'])
+
 
         super().__init__(config)
 

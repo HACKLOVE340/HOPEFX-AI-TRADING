@@ -44,6 +44,7 @@ Usage
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -51,11 +52,8 @@ import time
 from abc import ABC, abstractmethod
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any, Callable
-import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -287,7 +285,7 @@ class OandaTickSource(TickSource):
                 ask = float(asks[0]["price"])
                 ts_str = msg.get("time", "")
                 try:
-                    ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                    ts = datetime.fromisoformat(ts_str)
                 except Exception:
                     ts = datetime.now(UTC)
 

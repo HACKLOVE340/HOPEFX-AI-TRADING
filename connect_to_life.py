@@ -55,6 +55,7 @@ Optional:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -62,13 +63,10 @@ import pathlib
 import signal
 import sys
 import time
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, ClassVar
 
 from dotenv import load_dotenv
-import contextlib
 
 # ── Nuclear chart engine (optional — graceful degradation if unavailable) ─────
 _chart_engine = None
@@ -297,7 +295,8 @@ class LifeSupervisor:
 
         # Start nuclear chart engine tick loop as a background task
         if self._chart_engine is not None:
-            asyncio.create_task(self._chart_engine.start(), name="nuclear-chart-engine")
+            _t = asyncio.create_task(self._chart_engine.start(), name="nuclear-chart-engine")
+            _t.add_done_callback(lambda _: None)
             logger.info("NuclearAIChartEngine tick loop started")
 
         # Start HOPEFXBrain — 24/7 security engine (global_fortress)
@@ -635,7 +634,7 @@ class LifeSupervisor:
     async def _checkpoint(self) -> None:
         """Persist final status to disk for post-restart recovery."""
         status = self._read_status()
-        nuclear_state: dict = {}
+        nuclear_state: ClassVar[dict] = {}
         if self._nuclear_supervisor is not None:
             try:
                 nuclear_state = self._nuclear_supervisor.get_status()

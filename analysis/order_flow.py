@@ -19,12 +19,10 @@ Inspired by: Bookmap, Sierra Chart, OrderFlow.pro
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from dataclasses import dataclass
-from collections import defaultdict
 import math
+from collections import defaultdict
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 logger = logging.getLogger(__name__)
 

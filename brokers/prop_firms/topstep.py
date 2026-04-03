@@ -28,7 +28,8 @@ class TopstepTraderConnector(MT5Connector):
             config["server"] = self.TOPSTEP_SERVERS[0]
         super().__init__(config)
         self.account_type = config.get("account_type", "combine")
-        logger.info(f"TopstepTrader initialized: {self.account_type} account")
+        logger.info("TopstepTrader initialized: %s account", self.account_type)
+
 
     def get_topstep_rules(self) -> dict[str, Any]:
         return {

@@ -18,13 +18,10 @@ from __future__ import annotations
 import json
 import pathlib
 import sys
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -277,6 +274,7 @@ class TestInitBrokerSelection:
             sys.modules["brokers.paper_trading"] = MagicMock(PaperTradingBroker=MockPaperClass)
             try:
                 import importlib
+
                 import core.startup_factories as sf
 
                 importlib.reload(sf)
@@ -313,6 +311,7 @@ class TestInitBrokerSelection:
             sys.modules["brokers.paper_trading"] = MagicMock(PaperTradingBroker=MockPaperClass)
             try:
                 import importlib
+
                 import core.startup_factories as sf
 
                 importlib.reload(sf)

@@ -13,10 +13,10 @@ import logging
 import threading
 import time
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
-from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -457,7 +457,8 @@ class MetricsRegistry:
             self.get_collector("system_memory_percent").set(memory.percent)
             self.get_collector("system_disk_free_gb").set(disk.free / 1024 / 1024 / 1024)
         except Exception as e:
-            logger.error(f"Error updating system metrics: {e}")
+            logger.error("Error updating system metrics: %s", e)
+
 
     def register_custom_collector(self, collector_fn: Callable):
         """Register a custom metrics collector function"""
@@ -484,7 +485,8 @@ class MetricsRegistry:
                 custom_metrics = collector_fn()
                 metrics["collectors"].update(custom_metrics)
             except Exception as e:
-                logger.error(f"Custom collector error: {e}")
+                logger.error("Custom collector error: %s", e)
+
 
         return metrics
 
@@ -497,7 +499,7 @@ class MetricsRegistry:
             lines.append(f"# TYPE {name} {collector.metric_type.value}")
 
             if isinstance(collector, Counter) or isinstance(collector, Gauge):
-                for _label_key, values in collector.get_all_values().items():
+                for values in collector.get_all_values().values():
                     if values:
                         labels = values[-1].labels
                         label_str = ",".join([f'{k}="{v}"' for k, v in labels.items()])
@@ -534,7 +536,8 @@ class MetricsRegistry:
                 self.update_system_metrics()
                 await asyncio.sleep(interval)
 
-        asyncio.create_task(collect())
+        _t = asyncio.create_task(collect())
+        _t.add_done_callback(lambda _: None)
 
     def clear(self):
         """Clear all metrics (use with caution)"""

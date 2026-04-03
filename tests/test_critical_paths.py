@@ -20,14 +20,12 @@ that the CI 90% coverage gate enforces.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from decimal import Decimal
 from pathlib import Path
 
-
 import numpy as np
 import pytest
-import contextlib
-
 
 # ── kill_switch.py ────────────────────────────────────────────────────────────
 
@@ -308,7 +306,7 @@ class TestAlgoOrders:
 
     @pytest.mark.asyncio
     async def test_algo_manager_cancel(self):
-        from execution.algo_orders import AlgoOrderManager, TWAPOrder, AlgoStatus
+        from execution.algo_orders import AlgoOrderManager, AlgoStatus, TWAPOrder
 
         mgr = AlgoOrderManager()
 
@@ -441,6 +439,7 @@ class TestCompliance:
         os.environ["KYC_PROVIDER"] = "mock"
         # Re-import to pick up env var
         import importlib
+
         import compliance.kyc_provider as _kyc_mod
 
         importlib.reload(_kyc_mod)
@@ -459,6 +458,7 @@ class TestCompliance:
 
         os.environ["KYC_PROVIDER"] = "mock"
         import importlib
+
         import compliance.kyc_provider as _kyc_mod
 
         importlib.reload(_kyc_mod)
@@ -475,6 +475,7 @@ class TestCompliance:
 
         os.environ["KYC_PROVIDER"] = "mock"
         import importlib
+
         import compliance.kyc_provider as _kyc_mod
 
         importlib.reload(_kyc_mod)
@@ -569,9 +570,10 @@ class TestSharpeCircuitBreaker:
 
     @pytest.mark.asyncio
     async def test_circuit_trips_on_bad_sharpe(self):
-        from ml.sharpe_circuit_breaker import SharpeCircuitBreaker, CircuitState
-        import ml.sharpe_circuit_breaker as _scb_mod
         import collections
+
+        import ml.sharpe_circuit_breaker as _scb_mod
+        from ml.sharpe_circuit_breaker import CircuitState, SharpeCircuitBreaker
 
         cb = SharpeCircuitBreaker()
 

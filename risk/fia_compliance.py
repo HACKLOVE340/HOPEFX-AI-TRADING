@@ -10,12 +10,10 @@ Reference: FIA 2024 Automated Trading Risk Controls Report
 """
 
 import logging
-from dataclasses import dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from enum import Enum
 from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from enum import Enum
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +31,7 @@ class RiskCheckResult:
     rule: str
     message: str
     timestamp: datetime
-    metadata: dict = None
+    metadata: dict | None = None
 
 
 class FIAComplianceManager:
@@ -172,7 +170,8 @@ class FIAComplianceManager:
                 try:
                     callback(daily_pnl, loss_pct)
                 except Exception as e:
-                    logger.error(f"Kill switch callback error: {e}")
+                    logger.error("Kill switch callback error: %s", e)
+
 
             return RiskCheckResult(
                 status=RiskControlStatus.KILL_SWITCH,

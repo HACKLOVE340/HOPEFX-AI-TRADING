@@ -11,11 +11,9 @@ Production-grade observability with Prometheus/Grafana integration
 
 import asyncio
 from collections import defaultdict
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
 from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 import numpy as np
 
@@ -45,7 +43,7 @@ class MetricsCollector:
         self,
         name: str,
         value: float,
-        labels: dict[str, str] = None,
+        labels: dict[str, str] | None = None,
         metric_type: str = "gauge",
     ):
         """Record a metric"""
@@ -112,7 +110,7 @@ class HealthChecker:
         self.status: dict[str, str] = {}
         self.last_check: dict[str, datetime] = {}
 
-    def register(self, name: str, check_func: Callable, depends_on: list[str] = None):
+    def register(self, name: str, check_func: Callable, depends_on: list[str] | None = None):
         """Register a health check"""
         self.checks[name] = check_func
         self.dependencies[name] = depends_on or []

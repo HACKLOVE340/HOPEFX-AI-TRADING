@@ -12,11 +12,9 @@ Advanced Copy Trading Engine
 - Commission splitting
 """
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
 import uuid
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from enum import Enum
 
 

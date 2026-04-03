@@ -56,8 +56,7 @@ logger = logging.getLogger(__name__)
 
 try:
     import torch
-    from torch import nn
-    from torch import optim
+    from torch import nn, optim
 
     TORCH_AVAILABLE = True
 except ImportError:

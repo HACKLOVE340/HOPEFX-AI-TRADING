@@ -32,7 +32,7 @@ import json
 import logging
 import sys
 import warnings
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -242,8 +242,8 @@ def purged_walk_forward_cv(
 # ── Model training ────────────────────────────────────────────────────────────
 
 def train_xgboost(X_train, y_train, X_test, y_test):
-    from xgboost import XGBClassifier
     from sklearn.calibration import CalibratedClassifierCV
+    from xgboost import XGBClassifier
 
     model = XGBClassifier(
         n_estimators=500,
@@ -271,8 +271,8 @@ def train_xgboost(X_train, y_train, X_test, y_test):
 
 
 def train_random_forest(X_train, y_train):
-    from sklearn.ensemble import RandomForestClassifier
     from sklearn.calibration import CalibratedClassifierCV
+    from sklearn.ensemble import RandomForestClassifier
 
     model = RandomForestClassifier(
         n_estimators=300,
@@ -324,8 +324,8 @@ def train_lightgbm(X_train, y_train, X_test, y_test):
 
 def train_stacking_ensemble(X_train, y_train, X_test, y_test):
     """Train XGB + RF + LGB base learners, then a logistic meta-learner."""
-    from sklearn.linear_model import LogisticRegression
     from sklearn.calibration import CalibratedClassifierCV
+    from sklearn.linear_model import LogisticRegression
 
     logger.info("Training XGBoost base learner…")
     xgb = train_xgboost(X_train, y_train, X_test, y_test)
@@ -375,7 +375,7 @@ def shap_feature_selection(model, X: pd.DataFrame, top_k: int = 150) -> list[str
 # ── Evaluation ────────────────────────────────────────────────────────────────
 
 def evaluate(model_or_ensemble, X_test, y_test, base_learners=None):
-    from sklearn.metrics import accuracy_score, roc_auc_score, f1_score
+    from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
     if base_learners is not None:
         meta_X = np.column_stack([m.predict_proba(X_test)[:, 1] for m in base_learners])
@@ -486,9 +486,9 @@ def main() -> int:
         Xte = X_train_sel.iloc[te_idx]
         yte = y_train.iloc[te_idx]
 
-        from xgboost import XGBClassifier
         from sklearn.calibration import CalibratedClassifierCV
         from sklearn.metrics import accuracy_score, roc_auc_score
+        from xgboost import XGBClassifier
 
         fold_xgb = XGBClassifier(
             n_estimators=300, max_depth=5, learning_rate=0.05,
@@ -571,7 +571,7 @@ def main() -> int:
     # Save meta JSON
     meta = {
         "model_file": "ml/saved_models/mtf_ensemble.pkl",
-        "trained_at": datetime.now(timezone.utc).isoformat(),
+        "trained_at": datetime.now(UTC).isoformat(),
         "horizon": HORIZON,
         "oos_years": OOS_YEARS,
         "n_features": len(selected_features),

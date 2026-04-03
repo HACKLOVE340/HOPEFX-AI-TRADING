@@ -9,9 +9,7 @@ Breakout/Momentum Trading Strategy
 This strategy identifies and trades breakouts from consolidation periods.
 """
 
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
@@ -210,7 +208,8 @@ class BreakoutStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            self.logger.error(f"Error generating breakout signal: {e}")
+            self.logger.error("Error generating breakout signal: %s", e)
+
             return {
                 "type": "HOLD",
                 "confidence": 0.0,

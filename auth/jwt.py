@@ -7,9 +7,7 @@ import base64
 import hashlib
 import logging
 import os
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from passlib.context import CryptContext

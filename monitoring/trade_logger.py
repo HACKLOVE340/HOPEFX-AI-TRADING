@@ -53,9 +53,7 @@ import logging
 import os
 import threading
 import time
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 
 logger = logging.getLogger(__name__)

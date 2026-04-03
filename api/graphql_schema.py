@@ -28,9 +28,7 @@ import asyncio
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 
 def _utcnow() -> datetime:
@@ -39,6 +37,7 @@ def _utcnow() -> datetime:
 
 
 from collections.abc import AsyncGenerator
+from typing import ClassVar
 
 import strawberry
 from strawberry.fastapi import GraphQLRouter
@@ -453,7 +452,7 @@ class Query:
 
             pred = get_predictor()
             history = getattr(pred, "signal_history", None) or []
-            results: list[Signal] = []
+            results: ClassVar[list[Signal]] = []
             for sig in history[: min(limit, len(history))]:
                 results.append(
                     Signal(
@@ -559,7 +558,7 @@ class Query:
                         peak = max(peak, cum)
                         max_dd = max(max_dd, peak - cum)
                     # Best symbol by total PnL
-                    sym_pnl: dict = {}
+                    sym_pnl: ClassVar[dict] = {}
                     for t in trades:
                         s = t.get("symbol", "XAU/USD")
                         sym_pnl[s] = sym_pnl.get(s, 0.0) + float(t.get("pnl", 0))

@@ -14,16 +14,14 @@ Advanced market analysis tools:
 - Institutional flow detection
 """
 
+import logging
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, time
+from enum import Enum
 from typing import Any
+
 import numpy as np
 import pandas as pd
-from dataclasses import dataclass, field
-from datetime import datetime, time, timezone
-
-UTC = timezone.utc
-from enum import Enum
-import logging
-
 
 # ── Module constants ─────────────────────────────────────────────────────────
 _RSI_OVERBOUGHT = 80
@@ -232,7 +230,8 @@ class MarketRegimeDetector:
             return analysis
 
         except Exception as e:
-            logger.error(f"Error detecting regime: {e}")
+            logger.error("Error detecting regime: %s", e)
+
             return self._default_analysis()
 
     def _calculate_atr(self, prices: pd.DataFrame) -> pd.Series:
@@ -444,7 +443,7 @@ class MultiTimeframeAnalyzer:
     - Entry timing based on MTF analysis
     """
 
-    def __init__(self, timeframes: list[str] = None, config: dict | None = None):
+    def __init__(self, timeframes: list[str] | None = None, config: dict | None = None):
         """
         Initialize MTF analyzer.
 
@@ -468,7 +467,8 @@ class MultiTimeframeAnalyzer:
             "MN1": 0.35,
         }
 
-        logger.info(f"MTF Analyzer initialized with timeframes: {self.timeframes}")
+        logger.info("MTF Analyzer initialized with timeframes: %s", self.timeframes)
+
 
     def analyze_confluence(self, data_by_timeframe: dict[str, pd.DataFrame]) -> ConfluenceAnalysis:
         """
@@ -537,7 +537,8 @@ class MultiTimeframeAnalyzer:
             )
 
         except Exception as e:
-            logger.error(f"Error in confluence analysis: {e}")
+            logger.error("Error in confluence analysis: %s", e)
+
             return self._default_confluence()
 
     def _analyze_single_timeframe(self, tf: str, data: pd.DataFrame) -> TimeframeAnalysis:
@@ -651,7 +652,7 @@ class MultiTimeframeAnalyzer:
             ]
             if len(matching) >= 2:
                 avg_level = np.mean([s["level"] for s in matching])
-                tfs = list(set(s["timeframe"] for s in matching))
+                tfs = list({s["timeframe"] for s in matching})
                 if not any(abs(cl["level"] - avg_level) < avg_level * 0.003 for cl in confluence_levels):
                     confluence_levels.append(
                         {
@@ -671,7 +672,7 @@ class MultiTimeframeAnalyzer:
             ]
             if len(matching) >= 2:
                 avg_level = np.mean([r["level"] for r in matching])
-                tfs = list(set(r["timeframe"] for r in matching))
+                tfs = list({r["timeframe"] for r in matching})
                 if not any(abs(cl["level"] - avg_level) < avg_level * 0.003 for cl in confluence_levels):
                     confluence_levels.append(
                         {
@@ -757,7 +758,7 @@ class SessionAnalyzer:
         """Initialize session analyzer."""
         logger.info("Session Analyzer initialized")
 
-    def get_current_session(self, utc_time: datetime = None) -> list[TradingSession]:
+    def get_current_session(self, utc_time: datetime | None = None) -> list[TradingSession]:
         """Get currently active trading sessions."""
         if utc_time is None:
             utc_time = datetime.now(UTC)
@@ -774,7 +775,7 @@ class SessionAnalyzer:
 
         return active_sessions
 
-    def analyze_session(self, session: TradingSession, utc_time: datetime = None) -> SessionAnalysis:
+    def analyze_session(self, session: TradingSession, utc_time: datetime | None = None) -> SessionAnalysis:
         """Analyze a specific trading session."""
         if utc_time is None:
             utc_time = datetime.now(UTC)

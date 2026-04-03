@@ -308,8 +308,8 @@ def check_disk_space() -> None:
     """Warn if free disk space is below the recommended minimum (20 GB)."""
     print("\n── Disk space ────────────────────────────────────────────────")
     try:
-        _stat = pathlib.Path(".").stat()
-        usage = pathlib.Path(".").resolve()
+        _stat = pathlib.Path().stat()
+        usage = pathlib.Path().resolve()
         import shutil
 
         total, _, free = shutil.disk_usage(usage)

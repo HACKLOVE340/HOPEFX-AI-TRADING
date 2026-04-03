@@ -26,9 +26,7 @@ import logging
 import os
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 
 import jwt
 
@@ -180,7 +178,6 @@ def decrypt_totp_secret(stored: str) -> str:
 # the same scheme verified at login — previously this module used pbkdf2_sha256
 # while auth.jwt used bcrypt, causing "hash could not be identified" on login.
 from auth.jwt import hash_password, verify_password
-
 
 # ── TOTP (2FA) ───────────────────────────────────────────────────────────────
 try:

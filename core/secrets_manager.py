@@ -67,7 +67,8 @@ Usage
 
     # Start background refresh at startup:
     from core.secrets_manager import secrets
-    asyncio.create_task(secrets.refresh_loop())
+    _t = asyncio.create_task(secrets.refresh_loop())
+    _t.add_done_callback(lambda _: None)
 """
 
 from __future__ import annotations
@@ -75,10 +76,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -235,7 +234,7 @@ class SecretsManager:
 
     # ── Rotation callbacks ────────────────────────────────────────────────────
 
-    _rotation_callbacks: list = []
+    _rotation_callbacks: ClassVar[list] = []
 
     def on_rotation(self, callback) -> None:
         """
@@ -326,8 +325,9 @@ class SecretsManager:
     async def _fetch_aws(self) -> dict[str, str]:
         """Fetch secrets from AWS Secrets Manager."""
         try:
-            import boto3
             import json as _json
+
+            import boto3
         except ImportError:
             logger.warning("SecretsManager: boto3 not installed — falling back to env vars. pip install boto3")
             return self._fetch_env()

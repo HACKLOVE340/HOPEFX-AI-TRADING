@@ -13,9 +13,7 @@ Unit tests for TCA module:
 from __future__ import annotations
 
 import enum
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock
 
@@ -24,7 +22,7 @@ import pytest
 # ── Python 3.10 StrEnum shim ─────────────────────────────────────────────────
 if not hasattr(enum, "StrEnum"):
 
-    class _StrEnum(str, enum.Enum):
+    class _StrEnum(StrEnum):
         pass
 
     enum.StrEnum = _StrEnum  # type: ignore[attr-defined]
@@ -347,14 +345,14 @@ class TestFillSimulator:
 
     def test_batch_simulate(self):
         signals = [
-            dict(
-                signal_price=2000.0,
-                side="BUY",
-                quantity=10,
-                bar_high=2005.0,
-                bar_low=1995.0,
-                bar_volume=5000,
-            )
+            {
+                "signal_price": 2000.0,
+                "side": "BUY",
+                "quantity": 10,
+                "bar_high": 2005.0,
+                "bar_low": 1995.0,
+                "bar_volume": 5000,
+            }
             for _ in range(5)
         ]
         fills = self.sim.simulate_fills_batch(signals, adv=10000, volatility_daily=0.012)
@@ -448,7 +446,7 @@ class TestMarketContextProvider:
 class TestTCAEngine:
     def setup_method(self):
         # Patch StrEnum before importing tca module
-        from execution.tca import TCAEngine, MarketContextProvider
+        from execution.tca import MarketContextProvider, TCAEngine
 
         ctx = MarketContextProvider()
         self.engine = TCAEngine(market_context=ctx)

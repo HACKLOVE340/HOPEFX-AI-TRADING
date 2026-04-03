@@ -75,8 +75,9 @@ def check_env_vars():
 
 
 def check_database():
-    from database.connection import engine
     from sqlalchemy import text
+
+    from database.connection import engine
 
     with engine.connect() as conn:
         conn.execute(text("SELECT 1"))
@@ -106,8 +107,9 @@ def check_auth_service():
 
 
 def check_jwt():
-    from auth.jwt import create_access_token, verify_token
     from fastapi import HTTPException
+
+    from auth.jwt import create_access_token, verify_token
 
     token = create_access_token({"sub": "test@hopefx.io", "type": "access"})
     assert token, "Token is empty"
@@ -304,7 +306,7 @@ def check_env_example():
 
 def check_graphql():
     try:
-        from api.graphql_schema import graphql_router  # noqa: F401
+        from api.graphql_schema import graphql_router
 
         return "GraphQL router importable"
     except ImportError as e:

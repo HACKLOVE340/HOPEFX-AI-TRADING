@@ -22,12 +22,13 @@ try:
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False
-    logging.warning("FastAPI not available, API server disabled")
+    logger.warning("FastAPI not available, API server disabled")
+
+import contextlib
 
 from infrastructure.health import HealthStatus, get_health_checker
 from infrastructure.logging import get_logger
 from infrastructure.metrics import get_metrics_registry
-import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +89,8 @@ def create_api_app(trading_app=None) -> Any | None:
     async def lifespan(_app: FastAPI):
         logger.info("API server starting...")
         if trading_app:
-            asyncio.create_task(health_checker.start_monitoring())
+            _t = asyncio.create_task(health_checker.start_monitoring())
+            _t.add_done_callback(lambda _: None)
 
         # ── NuclearStreamer — live tick stream → EventBus → WebSocket clients ──
         # Streams XAUUSD from Finnhub / Twelve Data / Polygon concurrently.
@@ -107,8 +109,8 @@ def create_api_app(trading_app=None) -> Any | None:
 
         if _has_any_stream_key:
             try:
+                from core.event_bus import CH_TICK, bus
                 from data_feed import NuclearStreamer
-                from core.event_bus import bus, CH_TICK
 
                 class _EventBusSubscriber:
                     """Bridge: forwards NuclearStreamer ticks onto the EventBus."""
@@ -140,6 +142,7 @@ def create_api_app(trading_app=None) -> Any | None:
         _scheduler = None
         try:
             from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore
+
             from reports.weekly_report import schedule_weekly_report
 
             _scheduler = AsyncIOScheduler()
@@ -408,8 +411,8 @@ def _register_system_routes(app, trading_app, require_admin):
 
     @app.get("/api/v1/logs/recent")
     async def get_recent_logs(lines: int = 100, user=Depends(require_admin)):
-        import os as _os
         import json as _json
+        import os as _os
         from pathlib import Path as _Path
 
         log_dir = _os.getenv("LOG_DIR", "logs")
@@ -475,9 +478,13 @@ async def start_api_server(host: str = "0.0.0.0", port: int = 8000, trading_app=
 
     server = uvicorn.Server(config)
 
-    logger.info(f"API server starting on http://{host}:{port}")
-    logger.info(f"  - API docs: http://{host}:{port}/docs")
-    logger.info(f"  - Health:   http://{host}:{port}/health")
-    logger.info(f"  - Metrics:  http://{host}:{port}/metrics")
+    logger.info("API server starting on http://%s:%s", host, port)
+
+    logger.info("  - API docs: http://%s:%s/docs", host, port)
+
+    logger.info("  - Health:   http://%s:%s/health", host, port)
+
+    logger.info("  - Metrics:  http://%s:%s/metrics", host, port)
+
 
     await server.serve()

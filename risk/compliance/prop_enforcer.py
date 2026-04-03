@@ -47,13 +47,12 @@ import json
 import logging
 import os
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, time as dtime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
+from datetime import time as dtime
 from enum import Enum, auto
 from pathlib import Path
-from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -383,8 +382,8 @@ class PropEnforcer:
         if not token or not chat_id:
             return
         try:
-            import urllib.request
             import urllib.parse
+            import urllib.request
 
             emoji = {
                 "DAILY_DD": "🔴",

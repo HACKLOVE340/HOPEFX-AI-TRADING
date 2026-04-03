@@ -19,13 +19,11 @@ import logging
 import threading
 import uuid
 from collections import deque
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any, Optional
-from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -432,9 +430,9 @@ class RealTimeSignalService:
 
     def get_active_signals(
         self,
-        symbol: str = None,
-        direction: SignalDirection = None,
-        min_strength: SignalStrength = None,
+        symbol: str | None = None,
+        direction: SignalDirection | None = None,
+        min_strength: SignalStrength | None = None,
     ) -> list[TradingSignal]:
         """
         Get active (non-expired) signals.
@@ -515,7 +513,7 @@ class RealTimeSignalService:
         direction: SignalDirection | None = None,
         min_confidence: float = 0.5,
         min_strength: SignalStrength = SignalStrength.MODERATE,
-        notify_channels: list[str] = None,
+        notify_channels: list[str] | None = None,
     ) -> SignalAlert:
         """Create a signal alert."""
         alert = SignalAlert(
@@ -530,7 +528,8 @@ class RealTimeSignalService:
         with self._lock:
             self.alerts[alert.id] = alert
 
-        logger.info(f"Alert created: {alert.id} for {symbol}")
+        logger.info("Alert created: %s for %s", alert.id, symbol)
+
         return alert
 
     def _check_alerts(self, signal: TradingSignal):
@@ -564,7 +563,8 @@ class RealTimeSignalService:
                 {"alert": asdict(alert), "signal": signal.to_dict()},
             )
 
-            logger.info(f"Alert triggered: {alert.id} by signal {signal.id}")
+            logger.info("Alert triggered: %s by signal %s", alert.id, signal.id)
+
 
     def delete_alert(self, alert_id: str):
         """Delete an alert."""
@@ -572,7 +572,7 @@ class RealTimeSignalService:
             if alert_id in self.alerts:
                 del self.alerts[alert_id]
 
-    def get_alerts(self, symbol: str = None) -> list[SignalAlert]:
+    def get_alerts(self, symbol: str | None = None) -> list[SignalAlert]:
         """Get all alerts, optionally filtered by symbol."""
         alerts = list(self.alerts.values())
         if symbol:
@@ -590,7 +590,8 @@ class RealTimeSignalService:
         Callback receives (event_type: str, data: dict)
         """
         self.subscribers.append(callback)
-        logger.debug(f"New subscriber added. Total: {len(self.subscribers)}")
+        logger.debug("New subscriber added. Total: %s", len(self.subscribers))
+
 
     def unsubscribe(self, callback: Callable):
         """Unsubscribe from signal events."""
@@ -609,7 +610,8 @@ class RealTimeSignalService:
             try:
                 callback(event_type, event)
             except Exception as e:
-                logger.error(f"Error in subscriber callback: {e}")
+                logger.error("Error in subscriber callback: %s", e)
+
 
     # ============================================================
     # HISTORY & ANALYTICS
@@ -617,7 +619,7 @@ class RealTimeSignalService:
 
     def get_signal_history(
         self,
-        symbol: str = None,
+        symbol: str | None = None,
         hours: int = 24,
     ) -> list[TradingSignal]:
         """Get signal history."""
@@ -646,7 +648,7 @@ class RealTimeSignalService:
                 ),
                 "active_alerts": len([a for a in self.alerts.values() if a.active]),
                 "symbols_with_signals": list(
-                    set(s.symbol for s in self.active_signals.values()),
+                    {s.symbol for s in self.active_signals.values()},
                 ),
                 "direction_distribution": {
                     "buy": len(
@@ -679,7 +681,7 @@ class RealTimeSignalService:
 
     def get_websocket_channels(self) -> list[str]:
         """Get available WebSocket channels."""
-        symbols = set(s.symbol for s in self.active_signals.values())
+        symbols = {s.symbol for s in self.active_signals.values()}
         channels = [f"signals:{sym}" for sym in symbols]
         channels.append("signals:all")
         channels.append("alerts")
@@ -904,8 +906,8 @@ def create_signals_router():
             return {"signal": signal.to_dict()}
         except HTTPException:
             raise
-        except Exception as e:
-            logger.error("Signal generation failed: %s", e, exc_info=True)
+        except Exception:
+            logger.exception("Signal generation failed: %s")
             raise HTTPException(
                 status_code=500,
                 detail="Signal generation failed",

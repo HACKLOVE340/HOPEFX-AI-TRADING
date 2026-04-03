@@ -42,20 +42,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+from collections.abc import AsyncIterator
 from datetime import datetime, timedelta
 from typing import Any
-from collections.abc import AsyncIterator
 
 import pandas as pd
 
 from data_layer.normalization.pipeline import normalization_pipeline
 from data_layer.replay.dukascopy import (
     DukascopyFetcher,
-    dukascopy_fetcher,
     _parse_timeframe,
+    dukascopy_fetcher,
 )
-import os
-
 from data_layer.types import FeedSource, GoldTick
 
 logger = logging.getLogger(__name__)
@@ -89,7 +88,7 @@ class MarketReplayEngine:
         end: datetime,
         symbol: str = _DEFAULT_SYMBOL,
         timeframe_minutes=_DEFAULT_TF_MIN,
-        timeframe: str = None,
+        timeframe: str | None = None,
         normalize: bool = True,
     ) -> pd.DataFrame:
         """

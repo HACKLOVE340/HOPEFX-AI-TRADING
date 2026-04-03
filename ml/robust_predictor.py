@@ -13,10 +13,9 @@ import logging
 import warnings
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
 import joblib
@@ -156,18 +155,21 @@ class RobustPredictor:
 
         Returns training metrics and validation statistics.
         """
-        logger.info(f"Starting robust training with {len(X)} samples")
+        logger.info("Starting robust training with %s samples", len(X))
+
 
         # 1. Feature engineering and selection
         X_features = self._engineer_features(X)
         self.selected_features = self._select_features(X_features, y)
         X_selected = X_features[self.selected_features]
 
-        logger.info(f"Selected {len(self.selected_features)} features")
+        logger.info("Selected %s features", len(self.selected_features))
+
 
         # 2. Regime detection
         regimes = self.regime_detector.detect(X)
-        logger.info(f"Detected regimes: {pd.Series(regimes).value_counts().to_dict()}")
+        logger.info("Detected regimes: %s", pd.Series(regimes).value_counts().to_dict())
+
 
         # 3. Walk-forward validation with purging
         cv_results = self._walk_forward_validation(
@@ -180,7 +182,8 @@ class RobustPredictor:
         # 4. Check for overfitting
         overfitting_score = self._calculate_overfitting(cv_results)
         if overfitting_score > 0.3:  # Train vs test performance gap
-            logger.warning(f"High overfitting detected: {overfitting_score:.2f}")
+            logger.warning("High overfitting detected: %s", overfitting_score)
+
             self._apply_stronger_regularization()
 
         # 5. Train final models on all data (with embargo)
@@ -189,7 +192,8 @@ class RobustPredictor:
 
         # 6. Feature stability check
         stability = self._check_feature_stability()
-        logger.info(f"Feature stability: {stability:.2f}")
+        logger.info("Feature stability: %s", stability)
+
 
         self.last_retrain = datetime.now(UTC)
 
@@ -821,7 +825,7 @@ class RobustPredictor:
         if self.config.meta_model == "logistic":
             # Generate meta-features
             meta_features = []
-            for _name, model in self.models.items():
+            for model in self.models.values():
                 if hasattr(model, "predict_proba"):
                     probs = model.predict_proba(X)[:, 1]
                 else:
@@ -841,7 +845,7 @@ class RobustPredictor:
         predictions = []
         probabilities = []
 
-        for _name, model in models.items():
+        for model in models.values():
             if hasattr(model, "predict_proba"):
                 proba = model.predict_proba(X)
                 predictions.append(np.argmax(proba, axis=1))
@@ -861,7 +865,7 @@ class RobustPredictor:
         """Aggregate feature importance across ensemble"""
         importance = {}
 
-        for _name, model in models.items():
+        for model in models.values():
             if hasattr(model, "feature_importances_"):
                 imp = model.feature_importances_
                 for i, feat in enumerate(self.selected_features):
@@ -923,26 +927,25 @@ class RobustPredictor:
         ``state.joblib`` manifest records config, feature list, and metadata.
         Returns the manifest path on success.
         """
-        import os
 
-        os.makedirs(path, exist_ok=True)
+        Path(path).mkdir(parents=True, exist_ok=True)
 
         # Save each ensemble member individually
         saved_members: dict[str, str] = {}
         for name, model in self.models.items():
-            member_path = os.path.join(path, f"{name}.joblib")
+            member_path = Path(path) / f"{name}.joblib"
             joblib.dump(model, member_path)
             saved_members[name] = member_path
 
         # Save meta-model
         meta_path = None
         if self.meta_model is not None:
-            meta_path = os.path.join(path, "meta_model.joblib")
+            meta_path = Path(path) / "meta_model.joblib"
             joblib.dump(self.meta_model, meta_path)
 
         # Save scalers
         for name, scaler in self.scalers.items():
-            joblib.dump(scaler, os.path.join(path, f"scaler_{name}.joblib"))
+            joblib.dump(scaler, Path(path) / f"scaler_{name}.joblib")
 
         state = {
             "config": self.config,
@@ -954,7 +957,7 @@ class RobustPredictor:
             "thresholds": self._current_thresholds(),
             "thresholds_calibrated": self._thresholds_calibrated,
         }
-        manifest = os.path.join(path, "state.joblib")
+        manifest = Path(path) / "state.joblib"
         joblib.dump(state, manifest)
         logger.info("RobustPredictor saved to %s (%d members)", path, len(saved_members))
         return manifest
@@ -966,10 +969,9 @@ class RobustPredictor:
         Loads the manifest then each ensemble member from its recorded path.
         Raises FileNotFoundError if the manifest is missing.
         """
-        import os
 
-        manifest = os.path.join(path, "state.joblib")
-        if not os.path.exists(manifest):
+        manifest = Path(path) / "state.joblib"
+        if not Path(manifest).exists():
             raise FileNotFoundError(f"RobustPredictor manifest not found: {manifest}")
 
         state = joblib.load(manifest)  # nosec B301 - manifest path is hardcoded to saved_models
@@ -990,20 +992,20 @@ class RobustPredictor:
         # Load ensemble members
         self.models = {}
         for name, member_path in state.get("saved_members", {}).items():
-            if os.path.exists(member_path):
+            if Path(member_path).exists():
                 self.models[name] = joblib.load(member_path)  # nosec B301 - member_path from saved state
             else:
                 logger.warning("RobustPredictor: member %s not found at %s", name, member_path)
 
         # Load meta-model
         meta_path = state.get("meta_model_path")
-        if meta_path and os.path.exists(meta_path):
+        if meta_path and Path(meta_path).exists():
             self.meta_model = joblib.load(meta_path)  # nosec B301 - meta_path from saved state
 
         # Load scalers
         for name in self.config.ensemble_methods:
-            scaler_path = os.path.join(path, f"scaler_{name}.joblib")
-            if os.path.exists(scaler_path):
+            scaler_path = Path(path) / f"scaler_{name}.joblib"
+            if Path(scaler_path).exists():
                 self.scalers[name] = joblib.load(scaler_path)  # nosec B301 - scaler_path from saved state
 
         logger.info(

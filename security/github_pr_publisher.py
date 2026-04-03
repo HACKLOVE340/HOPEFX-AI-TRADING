@@ -43,9 +43,7 @@ import logging
 import os
 import re
 import textwrap
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -456,8 +454,8 @@ class GitHubPRPublisher:
                     "status": "error",
                     "error": f"GitHub API error {exc.response.status_code}: {error_body}",
                 }
-            except Exception as exc:
-                logger.error("Auto-heal PR failed: %s", exc, exc_info=True)
+            except Exception:
+                logger.exception("Auto-heal PR failed: %s")
                 return {"status": "error", "error": "PR creation failed — check server logs"}
 
 

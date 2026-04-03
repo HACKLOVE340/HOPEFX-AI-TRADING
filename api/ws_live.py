@@ -52,9 +52,8 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
+from typing import ClassVar
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -171,7 +170,7 @@ class LiveConnectionManager:
         Send to all connections subscribed to channel.
         Empty subscription set = subscribed to all channels.
         """
-        dead: list[str] = []
+        dead: ClassVar[list[str]] = []
         for cid, subs in list(self._subscriptions.items()):
             if channel in subs or not subs:
                 ws = self._connections.get(cid)
@@ -189,7 +188,7 @@ class LiveConnectionManager:
         Send a message only to connections belonging to a specific user.
         Used for per-user channels: account updates, position fills, alerts.
         """
-        dead: list[str] = []
+        dead: ClassVar[list[str]] = []
         for cid, uid in list(self._user_ids.items()):
             if uid != user_id:
                 continue
@@ -347,7 +346,7 @@ async def _eventbus_tick_broadcaster() -> None:
     (Redis unavailable) so the dashboard always shows something.
     """
     try:
-        from core.event_bus import bus, CH_TICK
+        from core.event_bus import CH_TICK, bus
 
         await bus.connect()
         logger.info("WS live: connected to EventBus — streaming real ticks.")
@@ -439,6 +438,7 @@ def _compute_atr_sl_tp(
     if atr is None:
         try:
             import pathlib
+
             import pandas as _pd
 
             broker_sym = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
@@ -489,7 +489,7 @@ async def _eventbus_signal_broadcaster() -> None:
     subscribed to the 'signals' channel.
     """
     try:
-        from core.event_bus import bus, CH_SIGNAL
+        from core.event_bus import CH_SIGNAL, bus
 
         await bus.connect()
         async for msg in bus.subscribe(CH_SIGNAL):
@@ -564,7 +564,7 @@ async def _price_broadcaster_live_only() -> None:
     a broker is connected (e.g. paper broker with market_prices populated).
     Sends no_live_feed when no live price is available for a symbol.
     """
-    _no_feed_warned: set[str] = set()
+    _no_feed_warned: ClassVar[set[str]] = set()
     while True:
         await asyncio.sleep(1)
         if _manager.connection_count == 0:
@@ -623,7 +623,7 @@ async def _heartbeat_broadcaster() -> None:
         await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
         if _manager.connection_count == 0:
             continue
-        dead: list[str] = []
+        dead: ClassVar[list[str]] = []
         for cid in list(_manager._connections.keys()):
             misses = _manager.record_hb_miss(cid)
             if misses > HEARTBEAT_MISS_LIMIT:
@@ -648,9 +648,12 @@ async def _heartbeat_broadcaster() -> None:
 def start_broadcasters() -> None:
     """Start background tasks (call once from app lifespan)."""
     loop = asyncio.get_event_loop()
-    loop.create_task(_price_broadcaster())
-    loop.create_task(_heartbeat_broadcaster())
-    loop.create_task(_eventbus_signal_broadcaster())
+    _t = loop.create_task(_price_broadcaster())
+    _t.add_done_callback(lambda _: None)
+    _t = loop.create_task(_heartbeat_broadcaster())
+    _t.add_done_callback(lambda _: None)
+    _t = loop.create_task(_eventbus_signal_broadcaster())
+    _t.add_done_callback(lambda _: None)
     logger.info("WS live broadcasters started (EventBus → broker poll → no_live_feed)")
 
 
@@ -679,7 +682,7 @@ async def ws_live(websocket: WebSocket) -> None:
       Max WS_MAX_CONNECTIONS_PER_MINUTE new connections per IP per minute (default 20).
       Excess connections are rejected with close code 1008 before accept().
     """
-    from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+    from rate_limiting.websocket_limiter import get_client_ip, get_ws_limiter
 
     limiter = get_ws_limiter()
     client_ip = get_client_ip(websocket)

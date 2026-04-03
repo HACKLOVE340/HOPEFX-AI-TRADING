@@ -23,13 +23,10 @@ Covered modules
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # connect_to_life — DrawdownMonitor
@@ -75,7 +72,7 @@ class TestEventBus:
     @pytest.mark.asyncio
     async def test_local_fallback_publish_subscribe(self):
         """When Redis is unavailable the local bus delivers messages."""
-        from core.event_bus import EventBus, CH_TICK
+        from core.event_bus import CH_TICK, EventBus
 
         bus = EventBus()
         # Force degraded mode (no Redis)
@@ -97,7 +94,7 @@ class TestEventBus:
     @pytest.mark.asyncio
     async def test_publish_retries_then_falls_back(self):
         """publish() exhausts retries and routes to local fallback."""
-        from core.event_bus import EventBus, CH_SIGNAL
+        from core.event_bus import CH_SIGNAL, EventBus
 
         bus = EventBus()
         # Simulate Redis that always fails
@@ -172,7 +169,8 @@ class TestStalenessGuard:
     @pytest.mark.asyncio
     async def test_breach_fires_when_stale(self):
         import time
-        from data.market_ingest import _StalenessGuard, STALE_TIMEOUT_S
+
+        from data.market_ingest import STALE_TIMEOUT_S, _StalenessGuard
 
         guard = _StalenessGuard()
         # Wind back the last tick time past the timeout
@@ -403,7 +401,8 @@ class TestFaultGuard:
     @pytest.mark.asyncio
     async def test_recovers_to_half_open_after_timeout(self):
         import time
-        from utils.fault_guard import FaultGuard, FAILURE_THRESHOLD, RECOVER_S
+
+        from utils.fault_guard import FAILURE_THRESHOLD, RECOVER_S, FaultGuard
 
         fg = FaultGuard()
         fg.register("test_module")
@@ -442,6 +441,7 @@ class TestFaultGuard:
     @pytest.mark.asyncio
     async def test_stale_heartbeat_publishes_breach(self):
         import time
+
         from utils.fault_guard import HEARTBEAT_TIMEOUT_S
 
         fg = self._make()

@@ -9,13 +9,14 @@
 Tests for execution module.
 """
 
-import pytest
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from execution import PaperExecutor, SmartOrderRouter, Order, OrderStatus  # pylint: disable=no-name-in-module
+from execution import Order, OrderStatus, PaperExecutor, SmartOrderRouter  # pylint: disable=no-name-in-module
 
 
 class TestPaperExecutor:

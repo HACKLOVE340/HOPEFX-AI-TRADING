@@ -44,9 +44,10 @@ import sys
 import time
 import traceback
 import warnings
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from collections.abc import Callable
+from typing import ClassVar
 
 # ── Environment bootstrap ─────────────────────────────────────────────────────
 # Must happen before any app module is imported so startup validators see
@@ -390,7 +391,7 @@ def stage_online_learning() -> str:
 
 
 def stage_brain_signal() -> str:
-    from brain.hopefx_brain import HOPEFXBrain, BrainDecision
+    from brain.hopefx_brain import BrainDecision, HOPEFXBrain
 
     _ensure_ohlcv()
     brain = HOPEFXBrain()
@@ -422,7 +423,7 @@ def stage_brain_signal() -> str:
 
 
 def stage_risk_sizing() -> str:
-    from risk.manager import RiskManager, RiskConfig
+    from risk.manager import RiskConfig, RiskManager
 
     _ensure_ohlcv()
     rm = RiskManager(
@@ -442,7 +443,7 @@ def stage_risk_sizing() -> str:
         confidence = 0.72
         probability = 0.65
         data_quality = 1.0
-        features: dict = {}
+        features: ClassVar[dict] = {}
         tick_mid = last_close
         tick_spread = 1.0
 
@@ -488,8 +489,9 @@ def stage_risk_sizing() -> str:
 
 def stage_order_execution() -> str:
     import asyncio
+
+    from brokers.base import OrderSide, OrderStatus, OrderType
     from brokers.paper_trading import PaperTradingBroker
-    from brokers.base import OrderSide, OrderType, OrderStatus
 
     _ensure_ohlcv()
     broker = PaperTradingBroker(initial_balance=100_000.0)
@@ -538,8 +540,9 @@ def stage_order_execution() -> str:
 
 def stage_position_accounting() -> str:
     import asyncio
-    from brokers.paper_trading import PaperTradingBroker
+
     from brokers.base import OrderSide, OrderType
+    from brokers.paper_trading import PaperTradingBroker
 
     _ensure_ohlcv()
     broker = PaperTradingBroker(initial_balance=50_000.0)
@@ -594,6 +597,7 @@ def stage_position_accounting() -> str:
 
 def stage_kill_switch_gate() -> str:
     import tempfile
+
     from brain.hopefx_brain import HOPEFXBrain
     from kill_switch import KillSwitch
 

@@ -32,10 +32,8 @@ import random
 import time
 import uuid
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 
 import aiohttp
 
@@ -49,7 +47,7 @@ _CB_OPEN_AFTER_ERRORS = int(os.getenv("FEED_CB_OPEN_ERRORS", "5"))
 _CB_HALF_OPEN_AFTER_S = float(os.getenv("FEED_CB_HALF_OPEN_S", "60.0"))
 
 
-class CircuitState(str, Enum):
+class CircuitState(StrEnum):
     CLOSED = "closed"
     OPEN = "open"
     HALF_OPEN = "half_open"
@@ -82,7 +80,7 @@ class GoldFeedBase(ABC):
 
     def _init_prometheus(self) -> None:
         try:
-            from prometheus_client import Counter, Gauge, Histogram, REGISTRY
+            from prometheus_client import REGISTRY, Counter, Gauge, Histogram
 
             src = self.name.value
 

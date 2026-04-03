@@ -12,14 +12,12 @@ Abstract base class for all ML models in the trading framework.
 import json
 import logging
 import os
-import joblib
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import joblib
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -174,7 +172,8 @@ class BaseMLModel(ABC):
             compress=3,
         )
 
-        self.logger.info(f"Model saved to {filepath}")
+        self.logger.info("Model saved to %s", filepath)
+
 
     # Allowed base directory for model files — prevents path traversal
     _MODEL_BASE_DIR: Path = Path(os.environ.get("MODEL_BASE_DIR", "models")).resolve()
@@ -213,7 +212,8 @@ class BaseMLModel(ABC):
             with open(metadata_path, encoding="utf-8") as f:
                 self.metadata = json.load(f)
 
-        self.logger.info(f"Model loaded from {filepath}")
+        self.logger.info("Model loaded from %s", filepath)
+
 
     def get_feature_importance(self) -> dict[str, float] | None:
         """

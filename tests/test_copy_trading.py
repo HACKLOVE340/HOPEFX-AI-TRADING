@@ -9,10 +9,11 @@ Unit tests for social/copy_trading.py.
 Tests use the real CopyTradingEngine from the production module — no mocks.
 """
 
-import pytest
 from decimal import Decimal
 
-from social.copy_trading import CopyTradingEngine, CopyRelationship, RiskLimitExceededError
+import pytest
+
+from social.copy_trading import CopyRelationship, CopyTradingEngine, RiskLimitExceededError
 
 
 class TestCopyRelationship:

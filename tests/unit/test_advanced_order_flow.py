@@ -7,9 +7,7 @@
 Tests for Advanced Order Flow Analyzer (analysis/advanced_order_flow.py)
 """
 
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 
 
 class TestAggressionMetrics:

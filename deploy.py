@@ -110,8 +110,8 @@ class DeploymentManager:
 
     def check_health(self, environment: str) -> bool:
         """Poll the health endpoint until 200 or retries exhausted."""
-        import urllib.request
         import urllib.error
+        import urllib.request
 
         url = HEALTH_ENDPOINTS.get(environment, "")
         if not url:

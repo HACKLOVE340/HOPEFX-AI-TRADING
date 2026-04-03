@@ -9,9 +9,9 @@ Tests for the social trading module.
 
 from decimal import Decimal
 
-from social.copy_trading import CopyTradingEngine, CopyRelationship
-from social.leaderboards import LeaderboardManager, LeaderboardEntry
-from social.performance import PerformanceTracker, PerformanceMetric
+from social.copy_trading import CopyRelationship, CopyTradingEngine
+from social.leaderboards import LeaderboardEntry, LeaderboardManager
+from social.performance import PerformanceMetric, PerformanceTracker
 
 
 class TestCopyRelationship:

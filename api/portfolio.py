@@ -39,8 +39,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from api.auth import get_current_user, require_role
-from api.auth import TokenPayload
+from api.auth import TokenPayload, get_current_user, require_role
 
 logger = logging.getLogger(__name__)
 
@@ -188,7 +187,7 @@ async def factor_exposures(
         return {"exposures": {}, "note": "No symbols fitted yet — engine may still be warming up"}
     return {
         "exposures": {sym: exp.to_dict() for sym, exp in exposures.items()},
-        "factor_names": list(exposures.values())[0].betas.keys() if exposures else [],
+        "factor_names": next(iter(exposures.values())).betas.keys() if exposures else [],
     }
 
 

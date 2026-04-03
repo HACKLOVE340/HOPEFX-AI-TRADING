@@ -16,13 +16,13 @@ Covers:
 """
 
 import logging
-import pytest
-import pandas as pd
+from unittest.mock import MagicMock, patch
+
 import numpy as np
-from unittest.mock import patch, MagicMock
+import pandas as pd
+import pytest
 
 from strategies.base import BaseStrategy, StrategyConfig, StrategyStatus
-
 
 # ---------------------------------------------------------------------------
 # Helper: create a concrete old-style strategy instance
@@ -496,7 +496,7 @@ class TestBollingerBandsSignalPaths:
         # but price stays in the middle (0.1 < percent_b < 0.9)
         base_prices = [1900.0 + np.random.uniform(-2, 2) for _ in range(24)]
         # Final price at exactly the mean (percent_b ≈ 0.5)
-        prices = base_prices + [sum(base_prices[-20:]) / 20]
+        prices = [*base_prices, sum(base_prices[-20:]) / 20]
         df = _df(prices)
         result = strat.generate_signal(df)
         assert result["type"] == "HOLD"

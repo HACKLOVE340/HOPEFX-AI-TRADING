@@ -32,15 +32,13 @@ Endpoints
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from api.auth import get_current_user, require_role, TokenPayload
+from api.auth import TokenPayload, get_current_user, require_role
 
 logger = logging.getLogger(__name__)
 
@@ -296,8 +294,8 @@ async def partial_fit(
             None,
             functools.partial(learner.partial_fit, bars),
         )
-    except Exception as exc:
-        logger.exception("partial_fit failed for %s: %s", req.symbol, exc)
+    except Exception:
+        logger.exception("partial_fit failed for %s: %s", req.symbol)
         raise HTTPException(
             status_code=500,
             detail="Online learning update failed — check server logs",

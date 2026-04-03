@@ -24,7 +24,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -74,6 +73,7 @@ class TestMTFFusionStore:
         monkeypatch.setenv("FEATURE_MTF_FUSION", "false")
         # Reload flags to pick up env change
         import importlib
+
         import config.feature_flags as ff
 
         importlib.reload(ff)
@@ -92,6 +92,7 @@ class TestMTFFusionStore:
         """When FEATURE_MTF_FUSION=true, _fetch_mtf_df() tries the store."""
         monkeypatch.setenv("FEATURE_MTF_FUSION", "true")
         import importlib
+
         import config.feature_flags as ff
 
         importlib.reload(ff)
@@ -136,6 +137,7 @@ class TestAnomalyWeightStore:
         """When FEATURE_ANOMALY_WEIGHTING=false, _get_anomaly_store() returns None."""
         monkeypatch.setenv("FEATURE_ANOMALY_WEIGHTING", "false")
         import importlib
+
         import config.feature_flags as ff
 
         importlib.reload(ff)
@@ -184,6 +186,7 @@ class TestOnlineLearnerStore:
         """When FEATURE_ONLINE_LEARNING=false, _get_online_learner_store() returns None."""
         monkeypatch.setenv("FEATURE_ONLINE_LEARNING", "false")
         import importlib
+
         import config.feature_flags as ff
 
         importlib.reload(ff)
@@ -207,6 +210,7 @@ class TestOnlineLearnerStore:
         """notify_fill() must be a no-op when FEATURE_ONLINE_LEARNING=false."""
         monkeypatch.setenv("FEATURE_ONLINE_LEARNING", "false")
         import importlib
+
         import config.feature_flags as ff
 
         importlib.reload(ff)
@@ -252,6 +256,7 @@ class TestDeepEnsembleStore:
         """When FEATURE_DEEP_ENSEMBLE=false, _get_deep_ensemble_store() returns None."""
         monkeypatch.setenv("FEATURE_DEEP_ENSEMBLE", "false")
         import importlib
+
         import config.feature_flags as ff
 
         importlib.reload(ff)
@@ -267,6 +272,7 @@ class TestDeepEnsembleStore:
     def test_oos_gate_blocks_low_accuracy_model(self, tmp_path):
         """Model with OOS accuracy below gate must not activate."""
         import json
+
         from research.pipeline.models_ensemble import DeepEnsembleStore
 
         # Write a fake model file and metadata with low accuracy
@@ -294,6 +300,7 @@ class TestDeepEnsembleStore:
     def test_oos_gate_blocks_high_pvalue_model(self, tmp_path):
         """Model with p-value above gate must not activate."""
         import json
+
         from research.pipeline.models_ensemble import DeepEnsembleStore
 
         model_file = tmp_path / "deep.pt"
@@ -366,6 +373,7 @@ class TestSignalEngineFullChain:
         """Phase 2: anomaly weight < 1.0 must move probability toward 0.5."""
         monkeypatch.setenv("FEATURE_ANOMALY_WEIGHTING", "true")
         import importlib
+
         import config.feature_flags as ff
 
         importlib.reload(ff)
@@ -419,6 +427,7 @@ class TestSignalEngineFullChain:
             monkeypatch.setenv(flag, "false")
 
         import importlib
+
         import config.feature_flags as ff
 
         importlib.reload(ff)
@@ -452,6 +461,7 @@ class TestDeepPredictorInterface:
     def test_raises_runtime_error_when_torch_available_false(self):
         """DeepPredictor must raise RuntimeError when TORCH_AVAILABLE=False."""
         import importlib
+
         import research.pipeline.models_deep as md
 
         importlib.reload(md)

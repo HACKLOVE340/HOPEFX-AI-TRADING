@@ -40,14 +40,14 @@ os.environ.setdefault("SECURITY_JWT_SECRET", "dev_secret_for_admin_seed_script_3
 os.environ.setdefault("DATABASE_URL", "sqlite:///hopefx.db")
 
 # ── Imports ───────────────────────────────────────────────────────────────────
-from database.models import Base
-from database.user_models import User, UserRole, UserStatus
+from sqlalchemy import create_engine
 
 # Use the same hash_password as AuthService (auth.service uses pbkdf2_sha256 via passlib).
 # auth.jwt uses bcrypt — a different scheme. Using the wrong one causes
 # "hash could not be identified" at login time.
 from auth.service import hash_password
-from sqlalchemy import create_engine
+from database.models import Base
+from database.user_models import User, UserRole, UserStatus
 
 
 def _get_engine():

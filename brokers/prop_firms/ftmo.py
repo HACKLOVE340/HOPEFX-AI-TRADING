@@ -16,9 +16,7 @@ import hmac
 import json
 import logging
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -189,7 +187,8 @@ class FTMOBroker:
             logger.error("FTMO API timeout")
             raise RuntimeError("FTMO API request timed out") from None
         except Exception as e:
-            logger.error(f"Failed to fetch FTMO metrics: {e}")
+            logger.error("Failed to fetch FTMO metrics: %s", e)
+
             raise
 
     async def place_order(
@@ -264,7 +263,8 @@ class FTMOBroker:
                 return await resp.json()
 
         except Exception as e:
-            logger.error(f"Failed to place FTMO order: {e}")
+            logger.error("Failed to place FTMO order: %s", e)
+
             raise
 
     async def get_trade_history(
@@ -295,7 +295,8 @@ class FTMOBroker:
                 return df
 
         except Exception as e:
-            logger.error(f"Failed to fetch trade history: {e}")
+            logger.error("Failed to fetch trade history: %s", e)
+
             raise
 
     async def check_violation(self) -> tuple[bool, str | None]:
@@ -337,7 +338,8 @@ class FTMOBroker:
                     raise RuntimeError(await resp.json())
                 return await resp.json()
         except Exception as e:
-            logger.error(f"Payout request failed: {e}")
+            logger.error("Payout request failed: %s", e)
+
             raise
 
 

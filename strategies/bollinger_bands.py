@@ -11,9 +11,7 @@ and potential reversals.
 """
 
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
@@ -240,7 +238,8 @@ class BollingerBandsStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            self.logger.error(f"Error generating Bollinger Bands signal: {e}")
+            self.logger.error("Error generating Bollinger Bands signal: %s", e)
+
             return {
                 "type": "HOLD",
                 "confidence": 0.0,
