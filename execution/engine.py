@@ -320,174 +320,195 @@ class ExecutionEngine:
         Execute a trading request end-to-end.
 
         Flow:
-          1. Kill-switch check
-          2. Circuit breaker check
+          1. Data-layer safety check + price enrichment
+          2. Kill-switch / engine-stopped / circuit-breaker guards
           3. Pre-trade gate (risk checks)
-          4. Order submission to broker
-          5. TCA recording
-          6. Redis state persistence
-          7. Fill callbacks
+          4. Algo routing (TWAP/VWAP/Iceberg for large orders)
+          5. Sharpe circuit-breaker model gate
+          6. TCA signal-price capture
+          7. Broker submission
+          8. Post-fill processing (Redis, TCA fill, callbacks, Sharpe record)
 
-        Returns ExecutionReport — never raises (all exceptions are caught
-        and returned as ERROR status reports).
+        Returns ExecutionReport — never raises.
         """
         t0 = time.monotonic()
         self._total_orders += 1
 
-        # ── 0. Data layer safety check ────────────────────────────────────────
-        # Block execution if the data layer reports unsafe conditions
-        # (no live feed, extreme macro impact, blackout window).
-        # This is belt-and-suspenders — gatekeeper already checks this.
+        request = self._enrich_price_from_data_layer(request, t0)
+        if isinstance(request, ExecutionReport):
+            return request  # data-layer block
+
+        request = self._enrich_price_from_tick_feed(request)
+
+        block = self._check_pre_submission_guards(request, t0)
+        if block is not None:
+            return block
+
+        block = await self._check_pre_trade_gate(request, t0)
+        if block is not None:
+            return block
+
+        algo_report = await self._try_algo_routing(request, t0)
+        if algo_report is not None:
+            return algo_report
+
+        block = self._check_sharpe_circuit_breaker(request, t0)
+        if block is not None:
+            return block
+
+        self._record_tca_signal_price(request)
+
+        return await self._submit_and_process(request, t0)
+
+    # ------------------------------------------------------------------
+    # execute() sub-steps — each ≤ 30 lines, independently testable
+    # ------------------------------------------------------------------
+
+    def _enrich_price_from_data_layer(
+        self, request: ExecutionRequest, t0: float
+    ) -> "ExecutionRequest | ExecutionReport":
+        """
+        Check data-layer safety and inject the current mid-price when absent.
+
+        Returns a blocked ExecutionReport when the data layer signals unsafe
+        conditions. Returns the (possibly enriched) request otherwise.
+        Data-layer unavailability is non-fatal — execution proceeds without enrichment.
+        """
         try:
             from data_layer.orchestrator import orchestrator
 
             if orchestrator._started and not orchestrator.is_safe_to_trade():
                 self._total_blocks += 1
                 return self._blocked_report(
-                    request,
-                    "[DATA_LAYER] Unsafe trading conditions (blackout/no feed)",
-                    t0,
+                    request, "[DATA_LAYER] Unsafe trading conditions (blackout/no feed)", t0
                 )
-            # Enrich request with current market price if not set
+
             if request.price is None and request.order_type == "MARKET":
                 tick = orchestrator.get_latest_tick(request.symbol)
                 if tick and tick.mid > 0:
-                    request = ExecutionRequest(
-                        symbol=request.symbol,
-                        side=request.side,
-                        quantity=request.quantity,
-                        order_type=request.order_type,
-                        price=tick.mid,
-                        stop_price=request.stop_price,
-                        stop_loss=request.stop_loss,
-                        take_profit=request.take_profit,
-                        strategy_id=request.strategy_id,
-                        request_id=request.request_id,
-                        metadata={
-                            **request.metadata,
-                            "dl_mid": tick.mid,
-                            "dl_source": tick.source.value,
-                            "dl_confidence": tick.confidence,
-                        },
+                    return self._clone_request_with_price(
+                        request,
+                        tick.mid,
+                        {"dl_mid": tick.mid, "dl_source": tick.source.value, "dl_confidence": tick.confidence},
                     )
-        except Exception as _exc:
-            logger.debug("Suppressed exception: %s", _exc)  # data layer unavailable — proceed without enrichment
+        except Exception as exc:
+            logger.debug("Data-layer enrichment skipped: %s", exc)
+        return request
 
-        # ── 0b. TickFeed price enrichment ─────────────────────────────────────
-        # If the data layer did not supply a price, fall back to the TickFeed
-        # last-tick cache (updated by TickFeedManager bridge on every tick).
-        # This is the lowest-latency price source — no REST call required.
-        if request.price is None and request.order_type == "MARKET":
-            tf_tick = self._last_ticks.get(request.symbol)
-            if tf_tick is not None and hasattr(tf_tick, "mid") and tf_tick.mid > 0:
-                mid = tf_tick.mid
-                request = ExecutionRequest(
-                    symbol=request.symbol,
-                    side=request.side,
-                    quantity=request.quantity,
-                    order_type=request.order_type,
-                    price=mid,
-                    stop_price=request.stop_price,
-                    stop_loss=request.stop_loss,
-                    take_profit=request.take_profit,
-                    strategy_id=request.strategy_id,
-                    request_id=request.request_id,
-                    metadata={
-                        **request.metadata,
-                        "tf_mid": mid,
-                        "tf_source": getattr(tf_tick, "source", "tick_feed"),
-                        "tf_ts": tf_tick.timestamp.isoformat() if hasattr(tf_tick, "timestamp") else "",
-                    },
-                )
-                logger.debug(
-                    "ExecutionEngine: price enriched from TickFeed — %s mid=%.5f",
-                    request.symbol,
-                    mid,
-                )
+    def _enrich_price_from_tick_feed(self, request: ExecutionRequest) -> ExecutionRequest:
+        """
+        Inject the TickFeed last-tick mid-price for MARKET orders without a price.
 
-        # ── 1. Kill switch ────────────────────────────────────────────────────
+        The TickFeed cache is the lowest-latency price source — no REST call needed.
+        Returns the request unchanged when no tick is available.
+        """
+        if request.price is not None or request.order_type != "MARKET":
+            return request
+        tf_tick = self._last_ticks.get(request.symbol)
+        if tf_tick is None or not hasattr(tf_tick, "mid") or tf_tick.mid <= 0:
+            return request
+        mid = tf_tick.mid
+        logger.debug("ExecutionEngine: price enriched from TickFeed — %s mid=%.5f", request.symbol, mid)
+        return self._clone_request_with_price(
+            request,
+            mid,
+            {
+                "tf_mid": mid,
+                "tf_source": getattr(tf_tick, "source", "tick_feed"),
+                "tf_ts": tf_tick.timestamp.isoformat() if hasattr(tf_tick, "timestamp") else "",
+            },
+        )
+
+    @staticmethod
+    def _clone_request_with_price(
+        request: ExecutionRequest, price: float, extra_meta: dict[str, Any]
+    ) -> ExecutionRequest:
+        """Return a new ExecutionRequest with the given price and merged metadata."""
+        return ExecutionRequest(
+            symbol=request.symbol,
+            side=request.side,
+            quantity=request.quantity,
+            order_type=request.order_type,
+            price=price,
+            stop_price=request.stop_price,
+            stop_loss=request.stop_loss,
+            take_profit=request.take_profit,
+            strategy_id=request.strategy_id,
+            request_id=request.request_id,
+            metadata={**request.metadata, **extra_meta},
+        )
+
+    def _check_pre_submission_guards(
+        self, request: ExecutionRequest, t0: float
+    ) -> "ExecutionReport | None":
+        """
+        Check kill-switch and engine-stopped state synchronously.
+
+        The circuit-breaker check (async) is handled in _check_pre_trade_gate().
+        Returns a blocked ExecutionReport on the first failed guard, or None.
+        """
         if self._kill_switch and self._kill_switch.is_active():
             reason = getattr(self._kill_switch, "_reason", "kill switch active")
             self._total_blocks += 1
-            return self._blocked_report(
-                request,
-                f"[KILL_SWITCH] {reason}",
-                t0,
-            )
+            return self._blocked_report(request, f"[KILL_SWITCH] {reason}", t0)
 
-        # ── 2. Engine not running ─────────────────────────────────────────────
         if not self._running:
             self._total_blocks += 1
             return self._blocked_report(request, "[ENGINE_STOPPED]", t0)
 
-        # ── 3. Circuit breaker ────────────────────────────────────────────────
+        return None
+
+    async def _check_pre_trade_gate(
+        self, request: ExecutionRequest, t0: float
+    ) -> "ExecutionReport | None":
+        """
+        Run circuit-breaker check then pre-trade risk gate.
+
+        Returns a blocked report on failure, None when all checks pass.
+        """
         try:
             await self._circuit_breaker.check()
         except RuntimeError as exc:
             self._total_blocks += 1
             return self._blocked_report(request, f"[CIRCUIT_BREAKER] {exc}", t0)
 
-        # ── 4. Pre-trade gate ─────────────────────────────────────────────────
         try:
-            gate_result = await self._run_pre_trade_gate(request)
+            gate_reason = await self._run_pre_trade_gate(request)
         except Exception as exc:
-            # Gate itself errored — block the trade
             self._total_blocks += 1
-            logger.error(
-                "ExecutionEngine: pre-trade gate error for %s: %s",
-                request.request_id,
-                exc,
-            )
+            logger.error("ExecutionEngine: pre-trade gate error for %s: %s", request.request_id, exc)
             self._capture_sentry(exc)
-            return self._blocked_report(
-                request,
-                f"[GATE_ERROR] {exc}",
-                t0,
-            )
+            return self._blocked_report(request, f"[GATE_ERROR] {exc}", t0)
 
-        if gate_result is not None:
-            # gate_result is a block reason string
+        if gate_reason is not None:
             self._total_blocks += 1
-            return self._blocked_report(request, gate_result, t0)
+            return self._blocked_report(request, gate_reason, t0)
 
-        # ── 4a. Algo order routing (TWAP/VWAP/Iceberg for large orders) ──────
-        # Large orders are routed through the algo layer to minimise impact.
-        # The algo manager returns None for small orders (plain market order).
+        return None
+
+    async def _try_algo_routing(
+        self, request: ExecutionRequest, t0: float
+    ) -> "ExecutionReport | None":
+        """
+        Route large orders through the algo layer (TWAP/VWAP/Iceberg).
+
+        Returns a SUBMITTED report when the order is handed off, None for
+        small orders that should proceed as plain market orders.
+        """
         try:
             from execution.algo_orders import get_algo_manager
 
-            _algo_mgr = get_algo_manager()
-            # Wire broker submit function if not already set
-            if _algo_mgr._broker_submit is None and self._broker_manager is not None:
+            algo_mgr = get_algo_manager()
+            if algo_mgr._broker_submit is None:
+                algo_mgr.set_broker_submit_fn(self._make_algo_broker_fn())
 
-                async def _broker_fn(**kwargs):
-                    from execution.engine import ExecutionRequest as _ER
-
-                    _req = _ER(
-                        symbol=kwargs["symbol"],
-                        side=kwargs["side"],
-                        quantity=kwargs["quantity"],
-                        order_type=kwargs.get("order_type", "MARKET"),
-                        strategy_id=kwargs.get("metadata", {}).get("strategy_id", "algo"),
-                        metadata=kwargs.get("metadata", {}),
-                    )
-                    _rep = await self._submit_to_broker(_req, time.monotonic())
-                    return {
-                        "success": _rep.success,
-                        "fill_price": _rep.average_price,
-                        "filled_quantity": _rep.filled_quantity,
-                    }
-
-                _algo_mgr.set_broker_submit_fn(_broker_fn)
-
-            algo_id = await _algo_mgr.submit_auto(
+            algo_id = await algo_mgr.submit_auto(
                 symbol=request.symbol,
                 side=request.side,
                 total_quantity=request.quantity,
                 strategy_id=request.strategy_id,
             )
             if algo_id is not None:
-                # Order handed off to algo layer — return immediately with PENDING
                 latency_ms = (time.monotonic() - t0) * 1000.0
                 return ExecutionReport(
                     request_id=request.request_id,
@@ -496,101 +517,159 @@ class ExecutionEngine:
                     message=f"[ALGO] Order routed to algo layer (id={algo_id})",
                     metadata={"algo_id": algo_id},
                 )
-        except Exception as _algo_exc:
-            logger.debug("Algo order routing check failed: %s", _algo_exc)
+        except Exception as exc:
+            logger.debug("Algo order routing check failed: %s", exc)
+        return None
 
-        # ── 4b. Sharpe circuit breaker check ─────────────────────────────────
-        # Gate the model out if its rolling live Sharpe has degraded below threshold.
+    def _make_algo_broker_fn(self):
+        """Return an async broker-submit callable for the algo manager."""
+
+        async def _broker_fn(**kwargs):
+            req = ExecutionRequest(
+                symbol=kwargs["symbol"],
+                side=kwargs["side"],
+                quantity=kwargs["quantity"],
+                order_type=kwargs.get("order_type", "MARKET"),
+                strategy_id=kwargs.get("metadata", {}).get("strategy_id", "algo"),
+                metadata=kwargs.get("metadata", {}),
+            )
+            rep = await self._submit_to_broker(req, time.monotonic())
+            return {
+                "success": rep.success,
+                "fill_price": rep.average_price,
+                "filled_quantity": rep.filled_quantity,
+            }
+
+        return _broker_fn
+
+    def _check_sharpe_circuit_breaker(
+        self, request: ExecutionRequest, t0: float
+    ) -> "ExecutionReport | None":
+        """
+        Gate the model out when its rolling live Sharpe is below threshold.
+
+        Returns a blocked report when the model is gated, None otherwise.
+        Sharpe CB unavailability is non-fatal — execution proceeds.
+        """
         model_version = request.metadata.get("model_version") or request.strategy_id
-        if model_version:
-            try:
-                from ml.sharpe_circuit_breaker import get_sharpe_cb
+        if not model_version:
+            return None
+        try:
+            from ml.sharpe_circuit_breaker import get_sharpe_cb
 
-                if get_sharpe_cb().is_open(model_version):
-                    self._total_blocks += 1
-                    return self._blocked_report(
-                        request,
-                        f"[SHARPE_CIRCUIT_OPEN] Model '{model_version}' gated — rolling Sharpe below threshold",
-                        t0,
-                    )
-            except Exception as _scb_exc:
-                logger.debug("SharpeCircuitBreaker check failed: %s", _scb_exc)
-
-        # ── 5. TCA: record signal price before broker submission ─────────────
-        # Captures the expected price at signal time so post-fill slippage
-        # can be computed as fill_price - signal_price.
-        _signal_price = request.metadata.get("signal_price") or request.price or 0.0
-        if _signal_price > 0:
-            try:
-                from execution.tca_recorder import get_tca_recorder
-
-                get_tca_recorder().record_signal(
-                    request_id=request.request_id,
-                    symbol=request.symbol,
-                    side=request.side,
-                    signal_price=float(_signal_price),
-                    quantity=request.quantity,
-                    model_version=request.metadata.get("model_version", "unknown"),
+            if get_sharpe_cb().is_open(model_version):
+                self._total_blocks += 1
+                return self._blocked_report(
+                    request,
+                    f"[SHARPE_CIRCUIT_OPEN] Model '{model_version}' gated — rolling Sharpe below threshold",
+                    t0,
                 )
-            except Exception as _tca_exc:
-                logger.debug("TCA record_signal failed: %s", _tca_exc)
+        except Exception as exc:
+            logger.debug("SharpeCircuitBreaker check failed: %s", exc)
+        return None
 
-        # ── 6. Submit to broker ───────────────────────────────────────────────
+    def _record_tca_signal_price(self, request: ExecutionRequest) -> None:
+        """
+        Capture the signal price in TCA before broker submission.
+
+        Slippage = fill_price − signal_price, computed post-fill in _record_tca().
+        Non-fatal — TCA unavailability must never block order submission.
+        """
+        signal_price = float(request.metadata.get("signal_price") or request.price or 0.0)
+        if signal_price <= 0:
+            return
+        try:
+            from execution.tca_recorder import get_tca_recorder
+
+            get_tca_recorder().record_signal(
+                request_id=request.request_id,
+                symbol=request.symbol,
+                side=request.side,
+                signal_price=signal_price,
+                quantity=request.quantity,
+                model_version=request.metadata.get("model_version", "unknown"),
+            )
+        except Exception as exc:
+            logger.debug("TCA record_signal failed: %s", exc)
+
+    async def _submit_and_process(
+        self, request: ExecutionRequest, t0: float
+    ) -> ExecutionReport:
+        """
+        Submit to broker and run all post-fill processing.
+
+        On broker error: records circuit-breaker failure, increments error
+        counter, and returns an ERROR report — never raises.
+        On fill success: persists to Redis, records TCA fill, fires callbacks,
+        updates Sharpe CB, and warns on latency breach.
+        """
         try:
             report = await self._submit_to_broker(request, t0)
         except Exception as exc:
-            tb = traceback.format_exc()
             logger.error(
                 "ExecutionEngine: broker submission error for %s: %s\n%s",
                 request.request_id,
                 exc,
-                tb,
+                traceback.format_exc(),
             )
             self._capture_sentry(exc)
             await self._circuit_breaker.record_failure()
             self._total_errors += 1
-            latency_ms = (time.monotonic() - t0) * 1000.0
             return ExecutionReport(
                 request_id=request.request_id,
                 status=ExecutionStatus.ERROR,
-                latency_ms=latency_ms,
+                latency_ms=(time.monotonic() - t0) * 1000.0,
                 message="[BROKER_ERROR] Order submission failed — check server logs",
             )
 
-        # ── 6. Post-fill processing ───────────────────────────────────────────
         if report.success:
-            await self._circuit_breaker.record_success()
-            self._total_fills += 1
-            self._record_latency(report.latency_ms)
-            await self._persist_to_redis(request, report)
-            await self._record_tca(request, report)
-            await self._notify_callbacks(report)
-
-            # ── Sharpe circuit breaker: record P&L for live model gating ─────
-            # strategy_id carries the model version when set by the signal layer.
-            model_version = request.metadata.get("model_version") or request.strategy_id
-            if model_version:
-                pnl = report.metadata.get("realised_pnl", 0.0)
-                try:
-                    from ml.sharpe_circuit_breaker import get_sharpe_cb
-
-                    get_sharpe_cb().record_trade(pnl=pnl, model_version=model_version)
-                except Exception as _scb_exc:
-                    logger.debug("SharpeCircuitBreaker record failed: %s", _scb_exc)
-
-            if report.latency_ms > self._max_latency_ms:
-                logger.warning(
-                    "ExecutionEngine: latency %.2fms exceeds target %.0fms | symbol=%s request_id=%s",
-                    report.latency_ms,
-                    self._max_latency_ms,
-                    request.symbol,
-                    request.request_id,
-                )
+            await self._handle_fill_success(request, report)
         else:
             await self._circuit_breaker.record_failure()
             self._total_errors += 1
 
         return report
+
+    async def _handle_fill_success(
+        self, request: ExecutionRequest, report: ExecutionReport
+    ) -> None:
+        """Run all post-fill side-effects for a successful order."""
+        await self._circuit_breaker.record_success()
+        self._total_fills += 1
+        self._record_latency(report.latency_ms)
+        await self._persist_to_redis(request, report)
+        await self._record_tca(request, report)
+        await self._notify_callbacks(report)
+        self._update_sharpe_circuit_breaker(request, report)
+        self._warn_on_latency_breach(request, report)
+
+    def _update_sharpe_circuit_breaker(
+        self, request: ExecutionRequest, report: ExecutionReport
+    ) -> None:
+        """Record trade P&L in the Sharpe circuit breaker for live model gating."""
+        model_version = request.metadata.get("model_version") or request.strategy_id
+        if not model_version:
+            return
+        pnl = report.metadata.get("realised_pnl", 0.0)
+        try:
+            from ml.sharpe_circuit_breaker import get_sharpe_cb
+
+            get_sharpe_cb().record_trade(pnl=pnl, model_version=model_version)
+        except Exception as exc:
+            logger.debug("SharpeCircuitBreaker record failed: %s", exc)
+
+    def _warn_on_latency_breach(
+        self, request: ExecutionRequest, report: ExecutionReport
+    ) -> None:
+        """Log a warning when fill latency exceeds the configured target."""
+        if report.latency_ms > self._max_latency_ms:
+            logger.warning(
+                "ExecutionEngine: latency %.2fms exceeds target %.0fms | symbol=%s request_id=%s",
+                report.latency_ms,
+                self._max_latency_ms,
+                request.symbol,
+                request.request_id,
+            )
 
     # ------------------------------------------------------------------
     # Pre-trade gate
