@@ -10,8 +10,7 @@ This strategy uses Exponential Moving Average crossovers for signals.
 Similar to MA Crossover but more responsive to recent price changes.
 """
 
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
@@ -47,12 +46,10 @@ class EMAcrossoverStrategy(BaseStrategy):
         super().__init__(name, symbol, config)
         self.fast_period = fast_period
         self.slow_period = slow_period
-        self.logger.info(
-            f"EMA Crossover Strategy initialized: "
-            f"fast={fast_period}, slow={slow_period}",
-        )
+        self.logger.info("EMA Crossover Strategy initialized: fast=%s, slow=%s", fast_period, slow_period)
 
-    def generate_signal(self, market_data: pd.DataFrame) -> dict[str, Any]:
+    def generate_signal(self, analysis: pd.DataFrame) -> dict[str, Any]:  # type: ignore[override]
+        market_data = analysis
         """
         Generate trading signal based on EMA crossover.
 
@@ -97,12 +94,10 @@ class EMAcrossoverStrategy(BaseStrategy):
             if prev_fast <= prev_slow and current_fast > current_slow:
                 signal_type = "BUY"
                 confidence = 0.80
-                reason = (
-                    f"Bullish EMA crossover: {current_fast:.5f} > {current_slow:.5f}"
-                )
+                reason = f"Bullish EMA crossover: {current_fast:.5f} > {current_slow:.5f}"
 
                 # Higher confidence if EMAs are converging with momentum
-                if ema_diff < 0.001:  # noqa: PLR2004
+                if ema_diff < 0.001:
                     confidence = min(0.95, confidence + 0.10)
                     reason += " (strong momentum)"
 
@@ -110,12 +105,10 @@ class EMAcrossoverStrategy(BaseStrategy):
             elif prev_fast >= prev_slow and current_fast < current_slow:
                 signal_type = "SELL"
                 confidence = 0.80
-                reason = (
-                    f"Bearish EMA crossover: {current_fast:.5f} < {current_slow:.5f}"
-                )
+                reason = f"Bearish EMA crossover: {current_fast:.5f} < {current_slow:.5f}"
 
                 # Higher confidence if EMAs are converging with momentum
-                if ema_diff < 0.001:  # noqa: PLR2004
+                if ema_diff < 0.001:
                     confidence = min(0.95, confidence + 0.10)
                     reason += " (strong momentum)"
 
@@ -147,9 +140,7 @@ class EMAcrossoverStrategy(BaseStrategy):
                     reason = "Downtrend weakening"
 
             if signal_type == "HOLD":
-                reason = (
-                    f"No clear signal: Fast={current_fast:.5f}, Slow={current_slow:.5f}"
-                )
+                reason = f"No clear signal: Fast={current_fast:.5f}, Slow={current_slow:.5f}"
 
             return {
                 "type": signal_type,
@@ -166,7 +157,8 @@ class EMAcrossoverStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            self.logger.error(f"Error generating EMA crossover signal: {e}")
+            self.logger.error("Error generating EMA crossover signal: %s", e)
+
             return {
                 "type": "HOLD",
                 "confidence": 0.0,

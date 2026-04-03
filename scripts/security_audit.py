@@ -39,7 +39,7 @@ def scan_file(filepath: Path) -> list[tuple[int, str, str]]:
     issues = []
 
     try:
-        with open(filepath, encoding="utf-8") as f:
+        with Path(filepath).open(encoding="utf-8") as f:
             content = f.read()
             lines = content.split("\n")
     except (OSError, UnicodeDecodeError):
@@ -73,12 +73,12 @@ def check_env_file() -> list[str]:
         # Check if .env is in .gitignore
         gitignore = Path(".gitignore")
         if gitignore.exists():
-            with open(gitignore) as f:
+            with Path(gitignore).open(encoding="utf-8") as f:
                 if ".env" not in f.read():
                     issues.append("CRITICAL: .env not in .gitignore")
 
         # Check for default/example values
-        with open(env_file) as f:
+        with Path(env_file).open(encoding="utf-8") as f:
             content = f.read()
             if "your-" in content or "example" in content.lower():
                 issues.append("WARNING: .env contains placeholder values")
@@ -122,7 +122,7 @@ def main() -> int:
     # Check CORS
     api_main = Path("src/hopefx/api/main.py")
     if api_main.exists():
-        content = api_main.read_text()
+        content = api_main.read_text(encoding="utf-8")
         if 'allow_methods=["*"]' in content:
             all_issues.append("CORS allows all methods (security risk)")
             print("  ❌ CORS allow_methods=[*] detected")
@@ -133,7 +133,7 @@ def main() -> int:
     # Check for debug mode
     settings_file = Path("src/hopefx/config/settings.py")
     if settings_file.exists():
-        content = settings_file.read_text()
+        content = settings_file.read_text(encoding="utf-8")
         if "debug: bool = True" in content:
             all_issues.append("Debug mode default is True")
             print("  ❌ Debug mode defaults to True")
@@ -152,12 +152,11 @@ def main() -> int:
     if critical:
         print("\n❌ AUDIT FAILED - Fix critical issues before deployment")
         return 1
-    elif warnings:
+    if warnings:
         print("\n⚠️  AUDIT PASSED WITH WARNINGS")
         return 0
-    else:
-        print("\n✅ AUDIT PASSED - No security issues found")
-        return 0
+    print("\n✅ AUDIT PASSED - No security issues found")
+    return 0
 
 
 if __name__ == "__main__":

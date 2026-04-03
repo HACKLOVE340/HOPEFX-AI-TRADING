@@ -16,14 +16,13 @@ This module provides:
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
-from decimal import Decimal
-from typing import Any
-from enum import Enum
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from enum import StrEnum
+from typing import Any
 
-from .pricing import SubscriptionTier, BillingCycle
+from .pricing import BillingCycle, SubscriptionTier
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +31,7 @@ logger = logging.getLogger(__name__)
 # is not installed.
 # ---------------------------------------------------------------------------
 try:
-    from prometheus_client import Gauge, Counter  # type: ignore
+    from prometheus_client import Counter, Gauge  # type: ignore
 
     _PROM_MRR = Gauge(
         "hopefx_mrr_usd",
@@ -77,7 +76,7 @@ except ImportError:
     logger.debug("prometheus_client not installed — monetization metrics disabled")
 
 
-class RevenueSource(str, Enum):
+class RevenueSource(StrEnum):
     """Revenue source categories"""
 
     SUBSCRIPTION = "subscription"
@@ -87,7 +86,7 @@ class RevenueSource(str, Enum):
     ONE_TIME = "one_time"
 
 
-class TimePeriod(str, Enum):
+class TimePeriod(StrEnum):
     """Time period for analytics"""
 
     DAILY = "daily"
@@ -211,7 +210,8 @@ class RevenueAnalytics:
         # Update daily snapshot
         self._update_daily_snapshot(entry)
 
-        logger.info(f"Recorded revenue: {source.value} - ${amount}")
+        logger.info("Recorded revenue: %s - $%s", source.value, amount)
+
         return entry
 
     def record_subscription_event(
@@ -351,9 +351,7 @@ class RevenueAnalytics:
                     source=source or RevenueSource.SUBSCRIPTION,
                     amount=total_amount,
                     count=len(period_entries),
-                    metadata={
-                        "breakdown": {k: float(v) for k, v in source_breakdown.items()}
-                    },
+                    metadata={"breakdown": {k: float(v) for k, v in source_breakdown.items()}},
                 )
             )
 
@@ -369,11 +367,7 @@ class RevenueAnalytics:
         subscription_entries = [
             e
             for e in self._entries.values()
-            if (
-                e.source == RevenueSource.SUBSCRIPTION
-                and e.created_at >= start_date
-                and e.created_at <= as_of
-            )
+            if (e.source == RevenueSource.SUBSCRIPTION and e.created_at >= start_date and e.created_at <= as_of)
         ]
 
         return sum(e.amount for e in subscription_entries)
@@ -393,19 +387,11 @@ class RevenueAnalytics:
         previous_mrr = self.get_mrr(now - timedelta(days=30))
 
         # MRR growth rate
-        mrr_growth = (
-            float((current_mrr - previous_mrr) / previous_mrr * 100)
-            if previous_mrr > 0
-            else 0.0
-        )
+        mrr_growth = float((current_mrr - previous_mrr) / previous_mrr * 100) if previous_mrr > 0 else 0.0
 
         # Calculate churn from subscription events
-        total_subs = len(
-            [e for e in self._subscription_events if e["event_type"] == "new"]
-        )
-        cancelled = len(
-            [e for e in self._subscription_events if e["event_type"] == "cancel"]
-        )
+        total_subs = len([e for e in self._subscription_events if e["event_type"] == "new"])
+        cancelled = len([e for e in self._subscription_events if e["event_type"] == "cancel"])
         churn_rate = (cancelled / total_subs * 100) if total_subs > 0 else 0.0
 
         # Estimate LTV (simplified)
@@ -435,15 +421,9 @@ class RevenueAnalytics:
         events = self._subscription_events
 
         if start_date:
-            events = [
-                e
-                for e in events
-                if datetime.fromisoformat(e["timestamp"]) >= start_date
-            ]
+            events = [e for e in events if datetime.fromisoformat(e["timestamp"]) >= start_date]
         if end_date:
-            events = [
-                e for e in events if datetime.fromisoformat(e["timestamp"]) <= end_date
-            ]
+            events = [e for e in events if datetime.fromisoformat(e["timestamp"]) <= end_date]
 
         new_subs = len([e for e in events if e["event_type"] == "new"])
         cancelled = len([e for e in events if e["event_type"] == "cancel"])
@@ -453,23 +433,11 @@ class RevenueAnalytics:
         # Tier distribution
         tier_dist = {}
         for tier in SubscriptionTier:
-            tier_dist[tier.value] = len(
-                [
-                    e
-                    for e in events
-                    if e["event_type"] == "new" and e["tier"] == tier.value
-                ]
-            )
+            tier_dist[tier.value] = len([e for e in events if e["event_type"] == "new" and e["tier"] == tier.value])
 
         # Average subscription value
-        sub_entries = [
-            e for e in self._entries.values() if e.source == RevenueSource.SUBSCRIPTION
-        ]
-        avg_value = (
-            sum(e.amount for e in sub_entries) / len(sub_entries)
-            if sub_entries
-            else Decimal("0.00")
-        )
+        sub_entries = [e for e in self._entries.values() if e.source == RevenueSource.SUBSCRIPTION]
+        avg_value = sum(e.amount for e in sub_entries) / len(sub_entries) if sub_entries else Decimal("0.00")
 
         return SubscriptionMetrics(
             total_subscriptions=new_subs,
@@ -548,9 +516,7 @@ class RevenueAnalytics:
             for idx, (user_id, amount) in enumerate(sorted_users[:limit])
         ]
 
-    def get_cohort_analysis(
-        self, cohort_period: TimePeriod = TimePeriod.MONTHLY
-    ) -> dict[str, Any]:
+    def get_cohort_analysis(self, cohort_period: TimePeriod = TimePeriod.MONTHLY) -> dict[str, Any]:
         """Get cohort analysis for subscription retention"""
         # Group users by signup cohort
         cohorts: dict[str, list[str]] = {}
@@ -676,9 +642,7 @@ class RevenueAnalytics:
         for i in range(30):
             date = now - timedelta(days=i)
             date_key = date.strftime("%Y-%m-%d")
-            snapshot = self._daily_snapshots.get(
-                date_key, {"total_revenue": Decimal("0.00"), "transaction_count": 0}
-            )
+            snapshot = self._daily_snapshots.get(date_key, {"total_revenue": Decimal("0.00"), "transaction_count": 0})
             daily_revenue.append(
                 {
                     "date": date_key,
@@ -695,10 +659,7 @@ class RevenueAnalytics:
             "ltv_cac_ratio": growth.ltv_cac_ratio,
             "daily_revenue": list(reversed(daily_revenue)),
             "revenue_by_source": {
-                k: float(v)
-                for k, v in self.get_revenue_by_source(
-                    now - timedelta(days=30), now
-                ).items()
+                k: float(v) for k, v in self.get_revenue_by_source(now - timedelta(days=30), now).items()
             },
         }
 
@@ -743,9 +704,7 @@ class RevenueAnalytics:
             except Exception as exc:
                 logger.debug("analytics.payment_failure_metric_failed: %s", exc)
 
-    def record_affiliate_commission(
-        self, amount: float, affiliate_id: str = ""
-    ) -> None:
+    def record_affiliate_commission(self, amount: float, affiliate_id: str = "") -> None:
         """
         Record an affiliate commission payout.
 

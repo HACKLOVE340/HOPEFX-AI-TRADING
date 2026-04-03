@@ -29,8 +29,7 @@ import abc
 import logging
 import math
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -88,9 +87,7 @@ _PLAN_ORDER = ["trial", "starter", "professional", "enterprise", "elite"]
 def _plan_satisfies(user_plan: str, required_plan: str) -> bool:
     """Return True if user_plan meets or exceeds required_plan."""
     try:
-        return _PLAN_ORDER.index(user_plan.lower()) >= _PLAN_ORDER.index(
-            required_plan.lower()
-        )
+        return _PLAN_ORDER.index(user_plan.lower()) >= _PLAN_ORDER.index(required_plan.lower())
     except ValueError:
         return False
 
@@ -112,9 +109,7 @@ class Signal:
     stop_loss: float
     take_profit: float
     timeframe: str
-    timestamp: float = field(
-        default_factory=lambda: datetime.now(UTC).timestamp()
-    )
+    timestamp: float = field(default_factory=lambda: datetime.now(UTC).timestamp())
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
@@ -200,18 +195,14 @@ class BaseStrategy(abc.ABC):
         # Profit factor = gross profit / gross loss
         gross_profit = sum(p for p in self._pnl_history if p > 0)
         gross_loss = abs(sum(p for p in self._pnl_history if p < 0))
-        m["profit_factor"] = (
-            round(gross_profit / gross_loss, 4) if gross_loss else float("inf")
-        )
+        m["profit_factor"] = round(gross_profit / gross_loss, 4) if gross_loss else float("inf")
 
         # Sharpe ratio (annualised, assuming hourly bars)
-        if len(self._pnl_history) >= 2:  # noqa: PLR2004
+        if len(self._pnl_history) >= 2:
             arr = np.array(self._pnl_history)
             mean_r = float(np.mean(arr))
             std_r = float(np.std(arr, ddof=1))
-            m["sharpe_ratio"] = (
-                round(mean_r / std_r * math.sqrt(8760), 4) if std_r > 0 else 0.0
-            )
+            m["sharpe_ratio"] = round(mean_r / std_r * math.sqrt(8760), 4) if std_r > 0 else 0.0
 
         # Max drawdown
         equity = np.cumsum(np.array(self._pnl_history))
@@ -232,9 +223,7 @@ class TrendFollowingStrategy(BaseStrategy):
         super().__init__("TrendFollowing", config)
         self.fast_period: int = self.config.get("fast_period", 20)
         self.slow_period: int = self.config.get("slow_period", 50)
-        self.trend_strength_threshold: float = self.config.get(
-            "trend_strength_threshold", 0.3
-        )
+        self.trend_strength_threshold: float = self.config.get("trend_strength_threshold", 0.3)
 
     async def generate_signals(
         self,
@@ -275,11 +264,9 @@ class TrendFollowingStrategy(BaseStrategy):
                     },
                 )
                 self.performance_metrics["signals_generated"] += 1
-                self.performance_metrics["last_signal_at"] = datetime.now(
-                    UTC
-                ).isoformat()
+                self.performance_metrics["last_signal_at"] = datetime.now(UTC).isoformat()
                 return [sig]
-            elif fast_ma < slow_ma and market_regime == "trending_down":
+            if fast_ma < slow_ma and market_regime == "trending_down":
                 sig = Signal(
                     symbol=symbol,
                     action="sell",
@@ -296,9 +283,7 @@ class TrendFollowingStrategy(BaseStrategy):
                     },
                 )
                 self.performance_metrics["signals_generated"] += 1
-                self.performance_metrics["last_signal_at"] = datetime.now(
-                    UTC
-                ).isoformat()
+                self.performance_metrics["last_signal_at"] = datetime.now(UTC).isoformat()
                 return [sig]
             return []
         except Exception as exc:
@@ -379,9 +364,7 @@ class MeanReversionStrategy(BaseStrategy):
 
             if signals:
                 self.performance_metrics["signals_generated"] += len(signals)
-                self.performance_metrics["last_signal_at"] = datetime.now(
-                    UTC
-                ).isoformat()
+                self.performance_metrics["last_signal_at"] = datetime.now(UTC).isoformat()
             return signals
         except Exception as exc:
             logger.error("MeanReversion.generate_signals %s: %s", symbol, exc)
@@ -431,11 +414,9 @@ class BreakoutStrategy(BaseStrategy):
                     },
                 )
                 self.performance_metrics["signals_generated"] += 1
-                self.performance_metrics["last_signal_at"] = datetime.now(
-                    UTC
-                ).isoformat()
+                self.performance_metrics["last_signal_at"] = datetime.now(UTC).isoformat()
                 return [sig]
-            elif current < support * (1 - self.breakout_threshold):
+            if current < support * (1 - self.breakout_threshold):
                 sig = Signal(
                     symbol=symbol,
                     action="sell",
@@ -452,9 +433,7 @@ class BreakoutStrategy(BaseStrategy):
                     },
                 )
                 self.performance_metrics["signals_generated"] += 1
-                self.performance_metrics["last_signal_at"] = datetime.now(
-                    UTC
-                ).isoformat()
+                self.performance_metrics["last_signal_at"] = datetime.now(UTC).isoformat()
                 return [sig]
             return []
         except Exception as exc:
@@ -487,9 +466,7 @@ class StrategyManager:
             self._initialize_default_strategies()
 
     def _initialize_default_strategies(self) -> None:
-        self.register_strategy(
-            TrendFollowingStrategy({"fast_period": 20, "slow_period": 50})
-        )
+        self.register_strategy(TrendFollowingStrategy({"fast_period": 20, "slow_period": 50}))
         self.register_strategy(MeanReversionStrategy({"period": 20, "std_dev": 2.0}))
         self.register_strategy(BreakoutStrategy({"lookback_period": 20}))
 
@@ -591,11 +568,27 @@ class StrategyManager:
 
             try:
                 ohlcv = price_engine.get_ohlcv(symbol, "1h", limit=100)
-                if not ohlcv or len(ohlcv) < 50:  # noqa: PLR2004
+                if not ohlcv or len(ohlcv) < 50:
                     logger.debug("strategy.skip_no_data symbol=%s", symbol)
                     continue
             except Exception as exc:
                 logger.warning("strategy.price_data_error symbol=%s: %s", symbol, exc)
+                continue
+
+            # Guard: verify the last bar has a real price before passing to
+            # strategies. A zero or missing close price would produce zero-price
+            # signals that reach the execution engine as zero-price orders.
+            try:
+                last_close = float(getattr(ohlcv[-1], "close", 0) or 0)
+            except (TypeError, ValueError, IndexError):
+                last_close = 0.0
+            if last_close <= 0:
+                logger.error(
+                    "strategy.skip_zero_price symbol=%s last_close=%.6f — "
+                    "price_engine returned bars with no valid close price",
+                    symbol,
+                    last_close,
+                )
                 continue
 
             for strategy in self.strategies.values():
@@ -624,7 +617,17 @@ class StrategyManager:
                         price_data=ohlcv,
                         market_regime=regime_value,
                     )
-                    all_signals.extend(s.to_dict() for s in signals)
+                    # Filter zero-price signals — a strategy returning
+                    # entry_price=0 would produce a zero-price broker order.
+                    valid = [s for s in signals if s.entry_price > 0]
+                    if len(valid) < len(signals):
+                        logger.error(
+                            "strategy.zero_price_signal name=%s symbol=%s count=%d — discarded",
+                            strategy.name,
+                            symbol,
+                            len(signals) - len(valid),
+                        )
+                    all_signals.extend(s.to_dict() for s in valid)
                 except Exception as exc:
                     logger.error(
                         "strategy.error name=%s symbol=%s: %s",
@@ -657,9 +660,7 @@ class StrategyManager:
             return s.performance_metrics if s else {}
         return {n: s.performance_metrics for n, s in self.strategies.items()}
 
-    def update_strategy_performance(
-        self, strategy_name: str, trade_result: dict
-    ) -> None:
+    def update_strategy_performance(self, strategy_name: str, trade_result: dict) -> None:
         s = self.strategies.get(strategy_name)
         if s:
             s.update_performance(trade_result)
@@ -691,19 +692,9 @@ class StrategyManager:
     def performance_summary(self) -> dict:
         """Aggregate performance across all registered strategies."""
         total = len(self.strategies)
-        active = sum(
-            1
-            for s in self.strategies.values()
-            if self._strategy_status(s) == StrategyStatus.RUNNING
-        )
-        total_pnl = sum(
-            self._strategy_metrics(s).get("total_pnl", 0.0)
-            for s in self.strategies.values()
-        )
-        total_signals = sum(
-            self._strategy_metrics(s).get("signals_generated", 0)
-            for s in self.strategies.values()
-        )
+        active = sum(1 for s in self.strategies.values() if self._strategy_status(s) == StrategyStatus.RUNNING)
+        total_pnl = sum(self._strategy_metrics(s).get("total_pnl", 0.0) for s in self.strategies.values())
+        total_signals = sum(self._strategy_metrics(s).get("signals_generated", 0) for s in self.strategies.values())
         return {
             "total_strategies": total,
             "active_strategies": active,
@@ -713,9 +704,7 @@ class StrategyManager:
                 n: {
                     "status": self._strategy_status(s).value,
                     "enabled": self._strategy_enabled(s),
-                    "signals_generated": self._strategy_metrics(s).get(
-                        "signals_generated", 0
-                    ),
+                    "signals_generated": self._strategy_metrics(s).get("signals_generated", 0),
                     "win_rate": self._strategy_metrics(s).get("win_rate", 0.0),
                     "total_pnl": self._strategy_metrics(s).get("total_pnl", 0.0),
                 }

@@ -35,9 +35,7 @@ from whitelabel.config import get_tier_config
 logger = logging.getLogger(__name__)
 
 # In-memory counters: key_hash → {window: (count, reset_ts)}
-_counters: dict[str, dict[str, list]] = defaultdict(
-    lambda: {"min": [0, 0.0], "day": [0, 0.0]}
-)
+_counters: dict[str, dict[str, list]] = defaultdict(lambda: {"min": [0, 0.0], "day": [0, 0.0]})
 
 
 class WhitelabelRateLimitMiddleware(BaseHTTPMiddleware):
@@ -78,12 +76,12 @@ class WhitelabelRateLimitMiddleware(BaseHTTPMiddleware):
         c = _counters[key_hash]
 
         # Minute window
-        if now - c["min"][1] >= 60.0:  # noqa: PLR2004
+        if now - c["min"][1] >= 60.0:
             c["min"] = [0, now]
         c["min"][0] += 1
 
         # Day window
-        if now - c["day"][1] >= 86400.0:  # noqa: PLR2004
+        if now - c["day"][1] >= 86400.0:
             c["day"] = [0, now]
         c["day"][0] += 1
 
@@ -115,14 +113,8 @@ class WhitelabelRateLimitMiddleware(BaseHTTPMiddleware):
 
         # Add rate-limit headers to the response
         response = await call_next(request)
-        response.headers["X-RateLimit-Limit-Minute"] = str(
-            tier_config.requests_per_minute
-        )
-        response.headers["X-RateLimit-Remaining-Minute"] = str(
-            max(0, tier_config.requests_per_minute - c["min"][0])
-        )
+        response.headers["X-RateLimit-Limit-Minute"] = str(tier_config.requests_per_minute)
+        response.headers["X-RateLimit-Remaining-Minute"] = str(max(0, tier_config.requests_per_minute - c["min"][0]))
         response.headers["X-RateLimit-Limit-Day"] = str(tier_config.requests_per_day)
-        response.headers["X-RateLimit-Remaining-Day"] = str(
-            max(0, tier_config.requests_per_day - c["day"][0])
-        )
+        response.headers["X-RateLimit-Remaining-Day"] = str(max(0, tier_config.requests_per_day - c["day"][0]))
         return response

@@ -53,8 +53,7 @@ import logging
 import os
 import threading
 import time
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -80,9 +79,7 @@ def _init_prometheus():
         balance_gauge = Gauge("hopefx_balance_usd", "Current closed balance (USD)")
         daily_pnl_gauge = Gauge("hopefx_daily_pnl_usd", "Today's realised P&L (USD)")
         fills_counter = Counter("hopefx_total_fills", "Total fills since process start")
-        slippage_gauge = Gauge(
-            "hopefx_avg_slippage_pips", "Rolling average slippage (pips)"
-        )
+        slippage_gauge = Gauge("hopefx_avg_slippage_pips", "Rolling average slippage (pips)")
         positions_gauge = Gauge("hopefx_open_positions", "Number of open positions")
         drawdown_gauge = Gauge("hopefx_drawdown_pct", "Current drawdown % from HWM")
         return {
@@ -144,7 +141,7 @@ def _append_csv(path: Path, headers: list, row: dict) -> None:
     """Append one row to a CSV file, writing headers if the file is new."""
     path.parent.mkdir(parents=True, exist_ok=True)
     write_header = not path.exists() or path.stat().st_size == 0
-    with open(path, "a", newline="", encoding="utf-8") as f:
+    with Path(path).open("a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=headers, extrasaction="ignore")
         if write_header:
             writer.writeheader()
@@ -326,14 +323,10 @@ class TradeLogger:
         # Update trailing HWM for drawdown calculation
         with self._lock:
             self._hwm = max(self._hwm, equity)
-            drawdown_pct = (
-                (self._hwm - equity) / self._hwm * 100 if self._hwm > 0 else 0.0
-            )
+            drawdown_pct = (self._hwm - equity) / self._hwm * 100 if self._hwm > 0 else 0.0
             self._equity = equity
             self._balance = balance
-            self._daily_pnl = (
-                daily_pnl if daily_pnl is not None else (balance - self._balance)
-            )
+            self._daily_pnl = daily_pnl if daily_pnl is not None else (balance - self._balance)
             self._open_positions = open_positions
             self._drawdown_pct = drawdown_pct
 
@@ -375,9 +368,7 @@ class TradeLogger:
 
     # ── Background equity snapshotter ─────────────────────────────────────────
 
-    def start_equity_snapshotter(
-        self, get_equity_fn, interval: float = _EQUITY_SNAPSHOT_INTERVAL
-    ) -> threading.Thread:
+    def start_equity_snapshotter(self, get_equity_fn, interval: float = _EQUITY_SNAPSHOT_INTERVAL) -> threading.Thread:
         """
         Start a background thread that calls get_equity_fn() every `interval` seconds
         and logs the result.
@@ -443,14 +434,14 @@ class TradeLogger:
             target_n = self._sharpe_target_n
 
         n = len(pnls)
-        se = 1.0 / math.sqrt(2.0 * max(n - 1, 1)) if n >= 2 else float("inf")  # noqa: PLR2004
+        se = 1.0 / math.sqrt(2.0 * max(n - 1, 1)) if n >= 2 else float("inf")
         target_se = 1.0 / math.sqrt(2.0 * (target_n - 1))
         n_needed = max(0, target_n - n)
         pct_complete = min(100.0, n / target_n * 100.0)
 
         # Trade-level Sharpe: mean(pnl) / std(pnl) * sqrt(252)
         sharpe = 0.0
-        if n >= 2:  # noqa: PLR2004
+        if n >= 2:
             import statistics
 
             mean_pnl = statistics.mean(pnls)
@@ -473,11 +464,7 @@ class TradeLogger:
     @property
     def stats(self) -> dict:
         with self._lock:
-            avg_slip = (
-                sum(self._slippage_history) / len(self._slippage_history)
-                if self._slippage_history
-                else 0.0
-            )
+            avg_slip = sum(self._slippage_history) / len(self._slippage_history) if self._slippage_history else 0.0
         sp = self.sharpe_progress()
         return {
             "fill_count": self._fill_count,

@@ -13,9 +13,9 @@ import logging
 import warnings
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
 import joblib
@@ -125,9 +125,7 @@ class RobustPredictor:
         self.last_retrain: datetime | None = None
 
         # Stability checks
-        self.feature_stability_threshold = (
-            0.6  # Pearson correlation of importance across folds
-        )
+        self.feature_stability_threshold = 0.6  # Pearson correlation of importance across folds
 
         # ── Confidence thresholds ─────────────────────────────────────────────
         # Default heuristic thresholds (uncalibrated).
@@ -157,18 +155,21 @@ class RobustPredictor:
 
         Returns training metrics and validation statistics.
         """
-        logger.info(f"Starting robust training with {len(X)} samples")
+        logger.info("Starting robust training with %s samples", len(X))
+
 
         # 1. Feature engineering and selection
         X_features = self._engineer_features(X)
         self.selected_features = self._select_features(X_features, y)
         X_selected = X_features[self.selected_features]
 
-        logger.info(f"Selected {len(self.selected_features)} features")
+        logger.info("Selected %s features", len(self.selected_features))
+
 
         # 2. Regime detection
         regimes = self.regime_detector.detect(X)
-        logger.info(f"Detected regimes: {pd.Series(regimes).value_counts().to_dict()}")
+        logger.info("Detected regimes: %s", pd.Series(regimes).value_counts().to_dict())
+
 
         # 3. Walk-forward validation with purging
         cv_results = self._walk_forward_validation(
@@ -180,8 +181,9 @@ class RobustPredictor:
 
         # 4. Check for overfitting
         overfitting_score = self._calculate_overfitting(cv_results)
-        if overfitting_score > 0.3:  # Train vs test performance gap  # noqa: PLR2004
-            logger.warning(f"High overfitting detected: {overfitting_score:.2f}")
+        if overfitting_score > 0.3:  # Train vs test performance gap
+            logger.warning("High overfitting detected: %s", overfitting_score)
+
             self._apply_stronger_regularization()
 
         # 5. Train final models on all data (with embargo)
@@ -190,7 +192,8 @@ class RobustPredictor:
 
         # 6. Feature stability check
         stability = self._check_feature_stability()
-        logger.info(f"Feature stability: {stability:.2f}")
+        logger.info("Feature stability: %s", stability)
+
 
         self.last_retrain = datetime.now(UTC)
 
@@ -397,7 +400,7 @@ class RobustPredictor:
                     proba = model.predict_proba(last_clean)[0]
                     # proba[1] = P(up), proba[0] = P(down)
                     prob_up = float(proba[1]) if len(proba) > 1 else float(proba[0])
-                    pred = 1 if prob_up >= 0.5 else 0  # noqa: PLR2004
+                    pred = 1 if prob_up >= 0.5 else 0
                 else:
                     pred = int(model.predict(last_clean)[0])
                     prob_up = float(pred)
@@ -503,7 +506,7 @@ class RobustPredictor:
         oos_probabilities = np.asarray(oos_probabilities, dtype=float)
         oos_outcomes = np.asarray(oos_outcomes, dtype=float)
 
-        if len(oos_probabilities) < 30:  # noqa: PLR2004
+        if len(oos_probabilities) < 30:
             logger.warning(
                 "calibrate_thresholds: only %d OOS samples — need ≥30 for reliable "
                 "calibration. Default thresholds unchanged.",
@@ -533,7 +536,7 @@ class RobustPredictor:
         bullish_high = self._bullish_high_threshold
         for b in bin_stats:
             if (
-                b["n"] >= 5  # noqa: PLR2004
+                b["n"] >= 5
                 and not np.isnan(b["precision"])
                 and b["precision"] >= min_precision
             ):
@@ -541,7 +544,7 @@ class RobustPredictor:
                 break
         for b in bin_stats:
             if (
-                b["n"] >= 5  # noqa: PLR2004
+                b["n"] >= 5
                 and not np.isnan(b["precision"])
                 and b["precision"] >= min(min_precision + 0.10, 0.70)
             ):
@@ -553,7 +556,7 @@ class RobustPredictor:
         bearish_high = self._bearish_high_threshold
         for b in reversed(bin_stats):
             if (
-                b["n"] >= 5  # noqa: PLR2004
+                b["n"] >= 5
                 and not np.isnan(b["precision"])
                 and (1.0 - b["precision"]) >= min_precision
             ):
@@ -561,7 +564,7 @@ class RobustPredictor:
                 break
         for b in reversed(bin_stats):
             if (
-                b["n"] >= 5  # noqa: PLR2004
+                b["n"] >= 5
                 and not np.isnan(b["precision"])
                 and (1.0 - b["precision"]) >= min(min_precision + 0.10, 0.70)
             ):
@@ -639,9 +642,7 @@ class RobustPredictor:
             Regime.UNKNOWN: 0.0,
         }
 
-        return (
-            base_return * regime_multipliers.get(regime, 1.0) * (probability - 0.5) * 2
-        )
+        return base_return * regime_multipliers.get(regime, 1.0) * (probability - 0.5) * 2
 
     def _engineer_features(self, X: pd.DataFrame) -> pd.DataFrame:
         """
@@ -657,14 +658,10 @@ class RobustPredictor:
         # ── Price-based features (lagged) ─────────────────────────────────────
         for lag in [1, 2, 5, 10, 20]:
             features[f"return_lag_{lag}"] = X["close"].pct_change(lag).shift(1)
-            features[f"volatility_{lag}"] = (
-                X["close"].pct_change(fill_method=None).rolling(lag).std().shift(1)
-            )
+            features[f"volatility_{lag}"] = X["close"].pct_change(fill_method=None).rolling(lag).std().shift(1)
 
         # ── Technical indicators (past data only) ─────────────────────────────
-        features["sma_ratio"] = (
-            X["close"].rolling(10).mean() / X["close"].rolling(30).mean()
-        ).shift(1)
+        features["sma_ratio"] = (X["close"].rolling(10).mean() / X["close"].rolling(30).mean()).shift(1)
         features["rsi"] = self._calculate_rsi(X["close"], 14).shift(1)
 
         # ATR (14-bar)
@@ -678,29 +675,23 @@ class RobustPredictor:
                 axis=1,
             ).max(axis=1)
             features["atr_14"] = tr.rolling(14).mean().shift(1)
-            features["atr_ratio"] = features["atr_14"] / X["close"].rolling(
-                14
-            ).mean().shift(1)
+            features["atr_ratio"] = features["atr_14"] / X["close"].rolling(14).mean().shift(1)
 
         # Bollinger band position
         roll_mean = X["close"].rolling(20).mean()
         roll_std = X["close"].rolling(20).std()
-        features["bb_position"] = ((X["close"] - roll_mean) / (roll_std + 1e-9)).shift(
-            1
-        )
+        features["bb_position"] = ((X["close"] - roll_mean) / (roll_std + 1e-9)).shift(1)
 
         # MACD signal
         ema12 = X["close"].ewm(span=12, adjust=False).mean()
         ema26 = X["close"].ewm(span=26, adjust=False).mean()
         macd = ema12 - ema26
-        features["macd_signal"] = (macd - macd.ewm(span=9, adjust=False).mean()).shift(
-            1
-        )
+        features["macd_signal"] = (macd - macd.ewm(span=9, adjust=False).mean()).shift(1)
 
         # Hurst exponent proxy (rolling R/S over 40 bars)
         def _rolling_hurst(prices: pd.Series, window: int = 40) -> pd.Series:
             def _hurst(x: np.ndarray) -> float:
-                if len(x) < 10:  # noqa: PLR2004
+                if len(x) < 10:
                     return 0.5
                 lags = range(2, min(len(x) // 2, 10))
                 rs_vals = []
@@ -712,7 +703,7 @@ class RobustPredictor:
                     s = np.std(sub, ddof=1)
                     if s > 0:
                         rs_vals.append(np.log(r / s))
-                if len(rs_vals) < 2:  # noqa: PLR2004
+                if len(rs_vals) < 2:
                     return 0.5
                 log_lags = np.log(list(lags[: len(rs_vals)]))
                 return float(np.clip(np.polyfit(log_lags, rs_vals, 1)[0], 0.0, 1.0))
@@ -733,9 +724,7 @@ class RobustPredictor:
 
         # ── Volume features ───────────────────────────────────────────────────
         if "volume" in X.columns:
-            features["volume_sma_ratio"] = (
-                X["volume"] / X["volume"].rolling(20).mean()
-            ).shift(1)
+            features["volume_sma_ratio"] = (X["volume"] / X["volume"].rolling(20).mean()).shift(1)
 
         # ── Time features ─────────────────────────────────────────────────────
         if hasattr(X.index, "hour"):
@@ -764,7 +753,7 @@ class RobustPredictor:
         # Remove highly correlated features first
         corr_matrix = X.corr().abs()
         upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
-        to_drop = [column for column in upper.columns if any(upper[column] > 0.95)]  # noqa: PLR2004
+        to_drop = [column for column in upper.columns if any(upper[column] > 0.95)]
         X_filtered = X.drop(columns=to_drop)
 
         # Select top k by mutual information
@@ -788,13 +777,11 @@ class RobustPredictor:
         self.config.reg_alpha *= 2
         self.config.reg_lambda *= 2
         self.config.max_depth = max(3, self.config.max_depth - 1)
-        logger.info(
-            f"Increased regularization: alpha={self.config.reg_alpha}, depth={self.config.max_depth}",
-        )
+        logger.info("Increased regularization: alpha=%s, depth=%s", self.config.reg_alpha, self.config.max_depth)
 
     def _check_feature_stability(self) -> float:
         """Check if feature importance is stable across folds"""
-        if len(self.feature_importance_history) < 2:  # noqa: PLR2004
+        if len(self.feature_importance_history) < 2:
             return 1.0
 
         # Calculate correlation of importance rankings across folds
@@ -836,7 +823,7 @@ class RobustPredictor:
         if self.config.meta_model == "logistic":
             # Generate meta-features
             meta_features = []
-            for _name, model in self.models.items():
+            for model in self.models.values():
                 if hasattr(model, "predict_proba"):
                     probs = model.predict_proba(X)[:, 1]
                 else:
@@ -856,7 +843,7 @@ class RobustPredictor:
         predictions = []
         probabilities = []
 
-        for _name, model in models.items():
+        for model in models.values():
             if hasattr(model, "predict_proba"):
                 proba = model.predict_proba(X)
                 predictions.append(np.argmax(proba, axis=1))
@@ -868,7 +855,7 @@ class RobustPredictor:
 
         # Average probabilities
         avg_proba = np.mean(probabilities, axis=0)
-        final_pred = (avg_proba > 0.5).astype(int)  # noqa: PLR2004
+        final_pred = (avg_proba > 0.5).astype(int)
 
         return final_pred, avg_proba
 
@@ -876,7 +863,7 @@ class RobustPredictor:
         """Aggregate feature importance across ensemble"""
         importance = {}
 
-        for _name, model in models.items():
+        for model in models.values():
             if hasattr(model, "feature_importances_"):
                 imp = model.feature_importances_
                 for i, feat in enumerate(self.selected_features):
@@ -908,27 +895,24 @@ class RobustPredictor:
 
     def should_retrain(self, recent_performance: list[float]) -> bool:
         """Determine if model needs retraining based on performance decay"""
-        if len(recent_performance) < 30:  # noqa: PLR2004
+        if len(recent_performance) < 30:
             return False
 
         # Check for significant performance decay
         recent_mean = np.mean(recent_performance[-30:])
         historical_mean = (
             np.mean(recent_performance[-90:])
-            if len(recent_performance) >= 90  # noqa: PLR2004
+            if len(recent_performance) >= 90
             else np.mean(recent_performance)
         )
 
         if recent_mean < historical_mean * 0.7:  # 30% decay
-            logger.warning(
-                f"Performance decay detected: {recent_mean:.3f} vs {historical_mean:.3f}",
-            )
+            logger.warning("Performance decay detected: %s vs %s", recent_mean, historical_mean)
             return True
 
         # Check time since last train
         return bool(
-            self.last_retrain
-            and (datetime.now(UTC) - self.last_retrain).days > 7  # noqa: PLR2004
+            self.last_retrain and (datetime.now(UTC) - self.last_retrain).days > 7
         )
 
     def save(self, path: str) -> str:
@@ -939,26 +923,25 @@ class RobustPredictor:
         ``state.joblib`` manifest records config, feature list, and metadata.
         Returns the manifest path on success.
         """
-        import os
 
-        os.makedirs(path, exist_ok=True)
+        Path(path).mkdir(parents=True, exist_ok=True)
 
         # Save each ensemble member individually
         saved_members: dict[str, str] = {}
         for name, model in self.models.items():
-            member_path = os.path.join(path, f"{name}.joblib")
+            member_path = Path(path) / f"{name}.joblib"
             joblib.dump(model, member_path)
             saved_members[name] = member_path
 
         # Save meta-model
         meta_path = None
         if self.meta_model is not None:
-            meta_path = os.path.join(path, "meta_model.joblib")
+            meta_path = Path(path) / "meta_model.joblib"
             joblib.dump(self.meta_model, meta_path)
 
         # Save scalers
         for name, scaler in self.scalers.items():
-            joblib.dump(scaler, os.path.join(path, f"scaler_{name}.joblib"))
+            joblib.dump(scaler, Path(path) / f"scaler_{name}.joblib")
 
         state = {
             "config": self.config,
@@ -970,11 +953,9 @@ class RobustPredictor:
             "thresholds": self._current_thresholds(),
             "thresholds_calibrated": self._thresholds_calibrated,
         }
-        manifest = os.path.join(path, "state.joblib")
+        manifest = Path(path) / "state.joblib"
         joblib.dump(state, manifest)
-        logger.info(
-            "RobustPredictor saved to %s (%d members)", path, len(saved_members)
-        )
+        logger.info("RobustPredictor saved to %s (%d members)", path, len(saved_members))
         return manifest
 
     def load(self, path: str) -> None:
@@ -984,13 +965,12 @@ class RobustPredictor:
         Loads the manifest then each ensemble member from its recorded path.
         Raises FileNotFoundError if the manifest is missing.
         """
-        import os
 
-        manifest = os.path.join(path, "state.joblib")
-        if not os.path.exists(manifest):
+        manifest = Path(path) / "state.joblib"
+        if not Path(manifest).exists():
             raise FileNotFoundError(f"RobustPredictor manifest not found: {manifest}")
 
-        state = joblib.load(manifest)
+        state = joblib.load(manifest)  # nosec B301 - manifest path is hardcoded to saved_models
         self.config = state["config"]
         self.selected_features = state["selected_features"]
         self.feature_importance_history = state.get("feature_importance_history", [])
@@ -1000,39 +980,29 @@ class RobustPredictor:
         # Restore calibrated thresholds
         thresholds = state.get("thresholds", {})
         if thresholds:
-            self._bullish_high_threshold = thresholds.get(
-                "bullish_high", self._bullish_high_threshold
-            )
-            self._bullish_med_threshold = thresholds.get(
-                "bullish_med", self._bullish_med_threshold
-            )
-            self._bearish_high_threshold = thresholds.get(
-                "bearish_high", self._bearish_high_threshold
-            )
-            self._bearish_med_threshold = thresholds.get(
-                "bearish_med", self._bearish_med_threshold
-            )
+            self._bullish_high_threshold = thresholds.get("bullish_high", self._bullish_high_threshold)
+            self._bullish_med_threshold = thresholds.get("bullish_med", self._bullish_med_threshold)
+            self._bearish_high_threshold = thresholds.get("bearish_high", self._bearish_high_threshold)
+            self._bearish_med_threshold = thresholds.get("bearish_med", self._bearish_med_threshold)
 
         # Load ensemble members
         self.models = {}
         for name, member_path in state.get("saved_members", {}).items():
-            if os.path.exists(member_path):
-                self.models[name] = joblib.load(member_path)
+            if Path(member_path).exists():
+                self.models[name] = joblib.load(member_path)  # nosec B301 - member_path from saved state
             else:
-                logger.warning(
-                    "RobustPredictor: member %s not found at %s", name, member_path
-                )
+                logger.warning("RobustPredictor: member %s not found at %s", name, member_path)
 
         # Load meta-model
         meta_path = state.get("meta_model_path")
-        if meta_path and os.path.exists(meta_path):
-            self.meta_model = joblib.load(meta_path)
+        if meta_path and Path(meta_path).exists():
+            self.meta_model = joblib.load(meta_path)  # nosec B301 - meta_path from saved state
 
         # Load scalers
         for name in self.config.ensemble_methods:
-            scaler_path = os.path.join(path, f"scaler_{name}.joblib")
-            if os.path.exists(scaler_path):
-                self.scalers[name] = joblib.load(scaler_path)
+            scaler_path = Path(path) / f"scaler_{name}.joblib"
+            if Path(scaler_path).exists():
+                self.scalers[name] = joblib.load(scaler_path)  # nosec B301 - scaler_path from saved state
 
         logger.info(
             "RobustPredictor loaded from %s (%d members, calibrated=%s)",
@@ -1054,11 +1024,7 @@ class RegimeDetector:
         """Detect regime for each time point"""
         returns = X["close"].pct_change(fill_method=None)
         volatility = returns.rolling(self.lookback).std()
-        trend = (
-            X["close"]
-            .rolling(self.lookback)
-            .apply(lambda x: np.polyfit(range(len(x)), x, 1)[0])
-        )
+        trend = X["close"].rolling(self.lookback).apply(lambda x: np.polyfit(range(len(x)), x, 1)[0])
 
         regimes = []
         for i in range(len(X)):
@@ -1096,9 +1062,9 @@ class RegimeDetector:
             adx = float(last["regime_trend_str"])
             if np.isnan(hurst) or np.isnan(adx):
                 return Regime.UNKNOWN
-            if adx > 0.25 and hurst > 0.55:  # noqa: PLR2004
+            if adx > 0.25 and hurst > 0.55:
                 return Regime.TRENDING
-            if adx < 0.20 and hurst < 0.45:  # noqa: PLR2004
+            if adx < 0.20 and hurst < 0.45:
                 return Regime.MEAN_REVERTING
             return Regime.UNKNOWN
 

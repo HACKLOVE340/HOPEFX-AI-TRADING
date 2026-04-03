@@ -119,18 +119,10 @@ class EnsembleModel:
 
     def __init__(self, **kwargs):
         self.rf = RandomForestModel(
-            **{
-                k: v
-                for k, v in kwargs.items()
-                if k in ("n_estimators", "max_depth", "random_state")
-            },
+            **{k: v for k, v in kwargs.items() if k in ("n_estimators", "max_depth", "random_state")},
         )
         self.gb = GradientBoostingModel(
-            **{
-                k: v
-                for k, v in kwargs.items()
-                if k in ("n_estimators", "learning_rate", "max_depth", "random_state")
-            },
+            **{k: v for k, v in kwargs.items() if k in ("n_estimators", "learning_rate", "max_depth", "random_state")},
         )
         self.is_fitted = False
 
@@ -143,7 +135,7 @@ class EnsembleModel:
     def predict(self, X) -> np.ndarray:
         rf_p = self.rf.predict_proba(X)[:, 1]
         gb_p = self.gb.predict_proba(X)[:, 1]
-        return (((rf_p + gb_p) / 2) >= 0.5).astype(int)  # noqa: PLR2004
+        return (((rf_p + gb_p) / 2) >= 0.5).astype(int)
 
     def predict_proba(self, X) -> np.ndarray:
         rf_p = self.rf.predict_proba(X)

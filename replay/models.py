@@ -5,11 +5,11 @@
 # No commercial use without explicit permission.
 """replay/models.py — Data models for chart replay."""
 
-from typing import Any
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 

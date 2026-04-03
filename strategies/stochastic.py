@@ -9,8 +9,7 @@ Stochastic Oscillator Trading Strategy
 This strategy uses the Stochastic Oscillator to identify overbought/oversold conditions.
 """
 
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
@@ -52,10 +51,7 @@ class StochasticStrategy(BaseStrategy):
         self.d_period = d_period
         self.oversold = oversold
         self.overbought = overbought
-        self.logger.info(
-            f"Stochastic Strategy initialized: k={k_period}, d={d_period}, "
-            f"oversold={oversold}, overbought={overbought}",
-        )
+        self.logger.info("Stochastic Strategy initialized: k=%s, d=%s, oversold=%s, overbought=%s", k_period, d_period, oversold, overbought)
 
     def calculate_stochastic(self, market_data: pd.DataFrame) -> tuple:
         """
@@ -82,7 +78,8 @@ class StochasticStrategy(BaseStrategy):
 
         return k_percent, d_percent
 
-    def generate_signal(self, market_data: pd.DataFrame) -> dict[str, Any]:
+    def generate_signal(self, analysis: pd.DataFrame) -> dict[str, Any]:  # type: ignore[override]
+        market_data = analysis
         """
         Generate trading signal based on Stochastic Oscillator.
 
@@ -148,11 +145,7 @@ class StochasticStrategy(BaseStrategy):
 
             # SELL signals
             # 1. Bearish crossover in overbought region
-            elif (
-                current_k > self.overbought
-                and prev_k >= prev_d
-                and current_k < current_d
-            ):
+            elif current_k > self.overbought and prev_k >= prev_d and current_k < current_d:
                 signal_type = "SELL"
                 confidence = 0.85
                 reason = f"Bearish crossover in overbought: %K={current_k:.1f} crossed below %D={current_d:.1f}"
@@ -170,25 +163,21 @@ class StochasticStrategy(BaseStrategy):
                 reason = f"Exiting overbought zone: %K={current_k:.1f}"
 
             # Divergence signals (weaker)
-            elif current_k > 50:  # noqa: PLR2004
+            elif current_k > 50:
                 # In bullish territory
                 if prev_k > prev_d and current_k < current_d:
                     # Bearish crossover above 50
                     signal_type = "SELL"
                     confidence = 0.55
-                    reason = (
-                        f"Bearish crossover: %K={current_k:.1f} < %D={current_d:.1f}"
-                    )
+                    reason = f"Bearish crossover: %K={current_k:.1f} < %D={current_d:.1f}"
 
-            elif current_k < 50:  # noqa: PLR2004
+            elif current_k < 50:
                 # In bearish territory
                 if prev_k < prev_d and current_k > current_d:
                     # Bullish crossover below 50
                     signal_type = "BUY"
                     confidence = 0.55
-                    reason = (
-                        f"Bullish crossover: %K={current_k:.1f} > %D={current_d:.1f}"
-                    )
+                    reason = f"Bullish crossover: %K={current_k:.1f} > %D={current_d:.1f}"
 
             if signal_type == "HOLD":
                 reason = f"Stochastic neutral: %K={current_k:.1f}, %D={current_d:.1f}"
@@ -210,7 +199,8 @@ class StochasticStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            self.logger.error(f"Error generating Stochastic signal: {e}")
+            self.logger.error("Error generating Stochastic signal: %s", e)
+
             return {
                 "type": "HOLD",
                 "confidence": 0.0,

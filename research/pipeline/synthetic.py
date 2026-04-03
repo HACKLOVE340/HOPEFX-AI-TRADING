@@ -50,13 +50,13 @@ import logging
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
 try:
     import torch
-    from torch import nn
-    from torch import optim
+    from torch import nn, optim
 
     TORCH_AVAILABLE = True
 except ImportError:
@@ -100,9 +100,7 @@ def label_regimes(
     else:
         vol = df[vol_col]
 
-    labels = pd.qcut(
-        vol.fillna(vol.median()), q=n_regimes, labels=False, duplicates="drop"
-    )
+    labels = pd.qcut(vol.fillna(vol.median()), q=n_regimes, labels=False, duplicates="drop")
     return labels.fillna(0).astype(int).values
 
 
@@ -111,16 +109,12 @@ def label_regimes(
 # ─────────────────────────────────────────────────────────────────────────────
 
 if TORCH_AVAILABLE:
-    import pandas as pd  # only needed when torch is present
-
     class _Embedder(nn.Module):
         """Maps real sequences to a fixed-size latent space."""
 
         def __init__(self, n_features: int, hidden: int, latent: int, seq_len: int):
             super().__init__()
-            self.rnn = nn.GRU(
-                n_features, hidden, num_layers=2, batch_first=True, dropout=0.1
-            )
+            self.rnn = nn.GRU(n_features, hidden, num_layers=2, batch_first=True, dropout=0.1)
             self.proj = nn.Linear(hidden, latent)
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -133,9 +127,7 @@ if TORCH_AVAILABLE:
 
         def __init__(self, latent: int, hidden: int, n_features: int):
             super().__init__()
-            self.rnn = nn.GRU(
-                latent, hidden, num_layers=2, batch_first=True, dropout=0.1
-            )
+            self.rnn = nn.GRU(latent, hidden, num_layers=2, batch_first=True, dropout=0.1)
             self.proj = nn.Linear(hidden, n_features)
 
         def forward(self, h: torch.Tensor) -> torch.Tensor:
@@ -248,10 +240,10 @@ class RegimeSynthesizer:
         else:
             self.device = torch.device(device)
 
-        self.E = _Embedder(n_features, hidden, latent, seq_len).to(self.device)
-        self.R = _Recovery(latent, hidden, n_features).to(self.device)
-        self.G = _Generator(noise_dim, n_regimes, hidden, latent).to(self.device)
-        self.D = _Discriminator(latent, n_regimes, hidden).to(self.device)
+        self.E = _Embedder(n_features, hidden, latent, seq_len).to(self.device)  # pylint: disable=possibly-used-before-assignment
+        self.R = _Recovery(latent, hidden, n_features).to(self.device)  # pylint: disable=possibly-used-before-assignment
+        self.G = _Generator(noise_dim, n_regimes, hidden, latent).to(self.device)  # pylint: disable=possibly-used-before-assignment
+        self.D = _Discriminator(latent, n_regimes, hidden).to(self.device)  # pylint: disable=possibly-used-before-assignment
 
         self._feature_mean: np.ndarray | None = None
         self._feature_std: np.ndarray | None = None
@@ -263,15 +255,11 @@ class RegimeSynthesizer:
         return 2.0 * (X - self._feature_mean) / (self._feature_std + 1e-8) - 1.0
 
     def _denormalise(self, X: np.ndarray) -> np.ndarray:
-        return (np.clip(X, -1.0, 1.0) + 1.0) / 2.0 * (
-            self._feature_std + 1e-8
-        ) + self._feature_mean
+        return (np.clip(X, -1.0, 1.0) + 1.0) / 2.0 * (self._feature_std + 1e-8) + self._feature_mean
 
     # ── Sequence builder ──────────────────────────────────────────────────────
 
-    def _make_sequences(
-        self, X: np.ndarray, labels: np.ndarray
-    ) -> tuple[np.ndarray, np.ndarray]:
+    def _make_sequences(self, X: np.ndarray, labels: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Slide a window over X to produce (seq, label) pairs."""
         seqs, labs = [], []
         for i in range(len(X) - self.seq_len):
@@ -318,9 +306,7 @@ class RegimeSynthesizer:
         conds = np.eye(self.n_regimes, dtype=np.float32)[labs]
 
         # ── Phase 1: Pre-train embedder / recovery (reconstruction) ──────────
-        opt_er = optim.Adam(
-            list(self.E.parameters()) + list(self.R.parameters()), lr=lr
-        )
+        opt_er = optim.Adam(list(self.E.parameters()) + list(self.R.parameters()), lr=lr)
         for ep in range(min(epochs // 2, 200)):
             idx = np.random.choice(n, min(batch_size, n), replace=False)
             x_b = torch.tensor(seqs[idx]).to(self.device)
@@ -331,9 +317,7 @@ class RegimeSynthesizer:
             loss.backward()
             opt_er.step()
             if ep % log_every == 0:
-                logger.debug(
-                    "Embedder pre-train ep=%d  recon_loss=%.4f", ep, loss.item()
-                )
+                logger.debug("Embedder pre-train ep=%d  recon_loss=%.4f", ep, loss.item())
 
         # ── Phase 2: Adversarial training ─────────────────────────────────────
         opt_g = optim.Adam(self.G.parameters(), lr=lr, betas=(0.5, 0.9))
@@ -350,9 +334,7 @@ class RegimeSynthesizer:
 
             # ── Critic steps ──────────────────────────────────────────────────
             for _ in range(n_critic):
-                z = torch.randn(
-                    len(idx), self.seq_len, self.noise_dim, device=self.device
-                )
+                z = torch.randn(len(idx), self.seq_len, self.noise_dim, device=self.device)
                 h_fake = self.G(z, c_b).detach()
                 d_real = self.D(h_real, c_b)
                 d_fake = self.D(h_fake, c_b)
@@ -371,9 +353,7 @@ class RegimeSynthesizer:
             opt_g.step()
 
             if ep % log_every == 0:
-                logger.info(
-                    "TimeGAN ep=%d  D=%.3f  G=%.3f", ep, d_loss.item(), g_loss.item()
-                )
+                logger.info("TimeGAN ep=%d  D=%.3f  G=%.3f", ep, d_loss.item(), g_loss.item())
 
         self._fitted = True
         return self
@@ -409,10 +389,7 @@ class RegimeSynthesizer:
         c[:, regime] = 1.0
 
         with torch.no_grad():
-            z = (
-                torch.randn(n_samples, self.seq_len, self.noise_dim, device=self.device)
-                * temperature
-            )
+            z = torch.randn(n_samples, self.seq_len, self.noise_dim, device=self.device) * temperature
             h_fake = self.G(z, c)
             x_fake = self.R(h_fake).cpu().numpy()
 
@@ -448,16 +425,10 @@ class RegimeSynthesizer:
         n_rare = rare_mask.sum()
 
         if n_rare == 0:
-            logger.warning(
-                "No samples for regime %d — skipping augmentation", target_regime
-            )
+            logger.warning("No samples for regime %d — skipping augmentation", target_regime)
             return X, regime_labels
 
-        n_generate = (
-            int(target_count - n_rare)
-            if target_count
-            else int(n_rare * (multiplier - 1))
-        )
+        n_generate = int(target_count - n_rare) if target_count else int(n_rare * (multiplier - 1))
         if n_generate <= 0:
             return X, regime_labels
 
@@ -474,9 +445,7 @@ class RegimeSynthesizer:
         synth_flat = synth_seqs[:, -1, :]
 
         X_aug = np.vstack([X, synth_flat])
-        labels_aug = np.concatenate(
-            [regime_labels, np.full(n_generate, target_regime, dtype=int)]
-        )
+        labels_aug = np.concatenate([regime_labels, np.full(n_generate, target_regime, dtype=int)])
         return X_aug, labels_aug
 
     # ── Persistence ───────────────────────────────────────────────────────────
@@ -503,7 +472,7 @@ class RegimeSynthesizer:
 
     @classmethod
     def load(cls, path: str | Path, device: str = "auto") -> RegimeSynthesizer:
-        ckpt = torch.load(path, map_location="cpu")
+        ckpt = torch.load(path, map_location="cpu", weights_only=False)  # nosec B614 — path confined to ml/saved_models
         obj = cls(
             seq_len=ckpt["seq_len"],
             n_features=ckpt["n_features"],

@@ -10,7 +10,7 @@ Tests for the charting module.
 import pytest
 
 from charting.chart_engine import Chart, ChartEngine, ChartType
-from charting.indicators import Indicator, SMA, EMA, RSI, IndicatorLibrary
+from charting.indicators import EMA, RSI, SMA, Indicator, IndicatorLibrary
 
 
 class TestChartType:
@@ -52,7 +52,7 @@ class TestChart:
 
         assert len(chart.indicators) == 1
         assert chart.indicators[0]["name"] == "SMA"
-        assert chart.indicators[0]["params"]["period"] == 20  # noqa: PLR2004
+        assert chart.indicators[0]["params"]["period"] == 20
 
     def test_add_multiple_indicators(self):
         """Test adding multiple indicators."""
@@ -62,7 +62,7 @@ class TestChart:
         chart.add_indicator("EMA", period=50)
         chart.add_indicator("RSI", period=14)
 
-        assert len(chart.indicators) == 3  # noqa: PLR2004
+        assert len(chart.indicators) == 3
 
     def test_render_chart(self):
         """Test rendering chart."""
@@ -131,12 +131,12 @@ class TestIndicator:
         indicator = SMA("SMA", 20)
 
         assert indicator.name == "SMA"
-        assert indicator.period == 20  # noqa: PLR2004
+        assert indicator.period == 20
 
     def test_base_indicator_is_abstract(self):
         """Indicator is an ABC — instantiating it directly raises TypeError."""
         with pytest.raises(TypeError):
-            Indicator("test", 10)  # type: ignore[abstract]
+            Indicator("test", 10)  # type: ignore[abstract]  # pylint: disable=abstract-class-instantiated
 
     def test_incomplete_subclass_raises_type_error(self):
         """A subclass that omits calculate() raises TypeError at construction."""
@@ -145,7 +145,7 @@ class TestIndicator:
             pass  # calculate not implemented
 
         with pytest.raises(TypeError):
-            IncompleteIndicator("test", 10)  # type: ignore[abstract]
+            IncompleteIndicator("test", 10)  # type: ignore[abstract]  # pylint: disable=abstract-class-instantiated  # pylint: disable=abstract-class-instantiated
 
 
 class TestSMA:
@@ -158,10 +158,10 @@ class TestSMA:
 
         result = sma.calculate(data)
 
-        assert len(result) == 3  # noqa: PLR2004
-        assert result[0] == 2.0  # (1+2+3)/3  # noqa: PLR2004
-        assert result[1] == 3.0  # (2+3+4)/3  # noqa: PLR2004
-        assert result[2] == 4.0  # (3+4+5)/3  # noqa: PLR2004
+        assert len(result) == 3
+        assert result[0] == 2.0  # (1+2+3)/3
+        assert result[1] == 3.0  # (2+3+4)/3
+        assert result[2] == 4.0  # (3+4+5)/3
 
     def test_sma_insufficient_data(self):
         """Test SMA with insufficient data."""
@@ -180,7 +180,7 @@ class TestSMA:
         result = sma.calculate(data)
 
         assert len(result) == 1
-        assert result[0] == 2.0  # noqa: PLR2004
+        assert result[0] == 2.0
 
 
 class TestEMA:
@@ -195,7 +195,7 @@ class TestEMA:
 
         assert len(result) > 0
         # First value is SMA
-        assert result[0] == 2.0  # (1+2+3)/3  # noqa: PLR2004
+        assert result[0] == 2.0  # (1+2+3)/3
 
     def test_ema_insufficient_data(self):
         """Test EMA with insufficient data."""
@@ -214,7 +214,7 @@ class TestEMA:
         result = ema.calculate(data)
 
         # Each EMA value should be influenced by previous values
-        assert len(result) == 3  # noqa: PLR2004
+        assert len(result) == 3
 
 
 class TestRSI:
@@ -230,7 +230,7 @@ class TestRSI:
 
         assert len(result) > 0
         # RSI should be high (>50) in uptrend
-        assert result[-1] > 50  # noqa: PLR2004
+        assert result[-1] > 50
 
     def test_rsi_range(self):
         """Test RSI values are in valid range (0-100)."""
@@ -240,7 +240,7 @@ class TestRSI:
         result = rsi.calculate(data)
 
         for value in result:
-            assert 0 <= value <= 100  # noqa: PLR2004
+            assert 0 <= value <= 100
 
     def test_rsi_insufficient_data(self):
         """Test RSI with insufficient data."""
@@ -271,7 +271,7 @@ class TestIndicatorLibrary:
         sma = library.get_indicator("SMA", period=20)
 
         assert isinstance(sma, SMA)
-        assert sma.period == 20  # noqa: PLR2004
+        assert sma.period == 20
 
     def test_get_indicator_unknown(self):
         """Test getting unknown indicator raises error."""

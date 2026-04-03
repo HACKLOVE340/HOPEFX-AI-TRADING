@@ -25,10 +25,11 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 
 import pytest
 
-_ROOT = os.path.dirname(os.path.dirname(__file__))
+_ROOT = os.path.dirname(Path(__file__).parent)
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
@@ -45,12 +46,11 @@ def test_app_imports_with_only_jwt_secret(monkeypatch):
     """App must import and register routes with only SECURITY_JWT_SECRET."""
     _jwt(monkeypatch)
     import importlib
+
     import app as _app
 
     importlib.reload(_app)  # re-run module-level code with patched env
-    assert (
-        len(_app.app.routes) > 100  # noqa: PLR2004
-    ), f"Expected >100 routes, got {len(_app.app.routes)}"
+    assert len(_app.app.routes) > 100, f"Expected >100 routes, got {len(_app.app.routes)}"
 
 
 # ── 2-3. SQLite vs PostgreSQL engine kwargs ───────────────────────────────────
@@ -113,9 +113,9 @@ def test_router_has_api_prefix(module, expected_prefix, monkeypatch):
 
     mod = importlib.import_module(module)
     paths = [r.path for r in mod.router.routes if hasattr(r, "path")]
-    assert any(
-        p.startswith(expected_prefix) for p in paths
-    ), f"{module} has no routes starting with {expected_prefix}. Found: {paths[:5]}"
+    assert any(p.startswith(expected_prefix) for p in paths), (
+        f"{module} has no routes starting with {expected_prefix}. Found: {paths[:5]}"
+    )
 
 
 # ── 5. Auth router prefix ─────────────────────────────────────────────────────
@@ -127,9 +127,9 @@ def test_auth_router_prefix(monkeypatch):
     from auth.router import router
 
     paths = [r.path for r in router.routes if hasattr(r, "path")]
-    assert all(
-        p.startswith("/api/auth/") for p in paths
-    ), f"Non-/api/auth paths: {[p for p in paths if not p.startswith('/api/auth/')]}"
+    assert all(p.startswith("/api/auth/") for p in paths), (
+        f"Non-/api/auth paths: {[p for p in paths if not p.startswith('/api/auth/')]}"
+    )
 
 
 # ── 6-8. Startup validator edge cases ────────────────────────────────────────
@@ -138,11 +138,9 @@ def test_auth_router_prefix(monkeypatch):
 def test_change_me_placeholder_rejected_in_dev(monkeypatch):
     """CHANGE_ME placeholder rejected even in development mode."""
     monkeypatch.setenv("APP_ENV", "development")
-    monkeypatch.setenv(
-        "SECURITY_JWT_SECRET", "CHANGE_ME_generate_a_random_48_char_secret"
-    )
+    monkeypatch.setenv("SECURITY_JWT_SECRET", "CHANGE_ME_generate_a_random_48_char_secret")
 
-    from config.startup_validator import validate_environment, StartupValidationError
+    from config.startup_validator import StartupValidationError, validate_environment
 
     with pytest.raises(StartupValidationError):
         validate_environment(strict=False)
@@ -153,7 +151,7 @@ def test_short_secret_rejected(monkeypatch):
     monkeypatch.setenv("APP_ENV", "development")
     monkeypatch.setenv("SECURITY_JWT_SECRET", "tooshort")
 
-    from config.startup_validator import validate_environment, StartupValidationError
+    from config.startup_validator import StartupValidationError, validate_environment
 
     with pytest.raises(StartupValidationError) as exc_info:
         validate_environment(strict=False)
@@ -169,7 +167,7 @@ def test_production_redis_url_required_not_redis_host(monkeypatch):
     monkeypatch.setenv("REDIS_HOST", "localhost")  # old-style — not enough
     monkeypatch.delenv("REDIS_URL", raising=False)
 
-    from config.startup_validator import validate_environment, StartupValidationError
+    from config.startup_validator import StartupValidationError, validate_environment
 
     with pytest.raises(StartupValidationError) as exc_info:
         validate_environment(strict=False)
@@ -184,7 +182,7 @@ def test_production_redis_url_required_not_redis_host(monkeypatch):
 
 def test_macro_store_singleton_importable():
     """ml.macro_store.macro_store singleton must be importable and functional."""
-    from ml.macro_store import macro_store, MacroStore
+    from ml.macro_store import MacroStore, macro_store
 
     assert isinstance(macro_store, MacroStore)
     # Must accept updates without error
@@ -200,6 +198,7 @@ def test_leaderboard_route_in_app(monkeypatch):
     """GET /api/social/leaderboard must be registered in the main app."""
     _jwt(monkeypatch)
     import importlib
+
     import app as _app
 
     importlib.reload(_app)

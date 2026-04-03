@@ -32,11 +32,10 @@ import asyncio
 import logging
 import os
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
-from typing import Any
 from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -51,12 +50,8 @@ _MIN_SLICE_LOTS = float(os.getenv("MIN_SLICE_LOTS", "0.001"))
 try:
     from prometheus_client import Counter, Gauge
 
-    _prom_child_orders = Counter(
-        "hopefx_exec_child_orders_total", "Child orders sent", ["algo"]
-    )
-    _prom_partial_fills = Counter(
-        "hopefx_exec_partial_fills_total", "Partial fills received"
-    )
+    _prom_child_orders = Counter("hopefx_exec_child_orders_total", "Child orders sent", ["algo"])
+    _prom_partial_fills = Counter("hopefx_exec_partial_fills_total", "Partial fills received")
     _prom_fill_rate = Gauge("hopefx_exec_fill_rate", "Rolling fill rate (0-1)")
     _prom_avg_slip = Gauge("hopefx_exec_avg_slippage_bps", "Rolling avg slippage bps")
     _PROM_OK = True
@@ -95,7 +90,7 @@ _XAUUSD_VOLUME_PROFILE_RAW = [
 _total = sum(_XAUUSD_VOLUME_PROFILE_RAW)
 # Normalise so the profile always sums to exactly 1.0
 _XAUUSD_VOLUME_PROFILE = [v / _total for v in _XAUUSD_VOLUME_PROFILE_RAW]
-if abs(sum(_XAUUSD_VOLUME_PROFILE) - 1.0) >= 1e-9:  # noqa: PLR2004
+if abs(sum(_XAUUSD_VOLUME_PROFILE) - 1.0) >= 1e-9:
     raise ValueError("Volume profile must sum to 1")
 
 
@@ -132,11 +127,7 @@ class PartialFillState:
     def add_fill(self, lots: float, price: float) -> None:
         self.fills.append((lots, price))
         total_lots = self.filled_lots + lots
-        self.avg_price = (
-            (self.avg_price * self.filled_lots + price * lots) / total_lots
-            if total_lots > 0
-            else price
-        )
+        self.avg_price = (self.avg_price * self.filled_lots + price * lots) / total_lots if total_lots > 0 else price
         self.filled_lots = total_lots
 
     @property
@@ -175,9 +166,7 @@ class PartialFillAggregator:
         self._states: dict[str, PartialFillState] = {}
         self._callbacks: list[Callable[[PartialFillState], None]] = []
 
-    def register(
-        self, parent_id: str, symbol: str, side: str, target_lots: float
-    ) -> None:
+    def register(self, parent_id: str, symbol: str, side: str, target_lots: float) -> None:
         self._states[parent_id] = PartialFillState(
             parent_id=parent_id,
             symbol=symbol,
@@ -185,9 +174,7 @@ class PartialFillAggregator:
             target_lots=target_lots,
         )
 
-    def record_fill(
-        self, parent_id: str, lots: float, price: float
-    ) -> PartialFillState | None:
+    def record_fill(self, parent_id: str, lots: float, price: float) -> PartialFillState | None:
         state = self._states.get(parent_id)
         if state is None:
             logger.warning("PartialFillAggregator: unknown parent_id=%s", parent_id)
@@ -258,7 +245,7 @@ class TWAPExecutor:
         )
     """
 
-    def __init__(self, router: Any = None, lineage_store: Any = None) -> None:
+    def __init__(self, router: Any | None = None, lineage_store: Any | None = None) -> None:
         self._router = router
         self._lineage = lineage_store
         self._child_orders: list[ChildOrder] = []
@@ -333,9 +320,7 @@ class TWAPExecutor:
                         total_cost += fp * slice_lots
                     else:
                         failed_slices += 1
-                        logger.warning(
-                            "TWAP slice %d/%d failed: %s", i + 1, slices, result
-                        )
+                        logger.warning("TWAP slice %d/%d failed: %s", i + 1, slices, result)
                 except Exception as exc:
                     failed_slices += 1
                     child.status = "failed"
@@ -366,7 +351,7 @@ class TWAPExecutor:
         return {
             "parent_id": parent_id,
             "algo": "twap",
-            "status": "filled" if fill_rate > 0.99 else "partial",  # noqa: PLR2004
+            "status": "filled" if fill_rate > 0.99 else "partial",
             "filled_lots": round(filled_lots, 4),
             "target_lots": total_lots,
             "fill_rate": round(fill_rate, 4),
@@ -392,7 +377,7 @@ class VWAPExecutor:
         )
     """
 
-    def __init__(self, router: Any = None, lineage_store: Any = None) -> None:
+    def __init__(self, router: Any | None = None, lineage_store: Any | None = None) -> None:
         self._router = router
         self._lineage = lineage_store
 
@@ -469,7 +454,7 @@ class VWAPExecutor:
         return {
             "parent_id": parent_id,
             "algo": "vwap",
-            "status": "filled" if fill_rate > 0.99 else "partial",  # noqa: PLR2004
+            "status": "filled" if fill_rate > 0.99 else "partial",
             "filled_lots": round(filled_lots, 4),
             "target_lots": total_lots,
             "fill_rate": round(fill_rate, 4),

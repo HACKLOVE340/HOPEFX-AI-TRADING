@@ -22,6 +22,7 @@ Endpoints:
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import logging
 import secrets
@@ -29,8 +30,6 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-
-import contextlib
 
 from api.auth import TokenPayload, get_current_user
 from whitelabel import (
@@ -120,12 +119,8 @@ def _tenant_to_dict(t: Any) -> dict:
             "company_name": getattr(t.theme, "company_name", t.name),
         },
         "custom_domain": getattr(t, "custom_domain", None),
-        "created_at": t.created_at.isoformat()
-        if getattr(t, "created_at", None)
-        else None,
-        "expires_at": t.expires_at.isoformat()
-        if getattr(t, "expires_at", None)
-        else None,
+        "created_at": t.created_at.isoformat() if getattr(t, "created_at", None) else None,
+        "expires_at": t.expires_at.isoformat() if getattr(t, "expires_at", None) else None,
         "has_api_key": t.tenant_id in _api_keys,
     }
 

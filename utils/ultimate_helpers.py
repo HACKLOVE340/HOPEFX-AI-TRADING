@@ -10,9 +10,10 @@ Helper functions for HOPEFX Ultimate
 
 import asyncio
 import time
+from collections.abc import Callable
 from functools import wraps
 from typing import Any
-from collections.abc import Callable
+
 import psutil
 
 try:
@@ -76,15 +77,9 @@ class PerformanceProfiler:
         return {
             "cpu_percent": psutil.cpu_percent(interval=1),
             "memory_percent": psutil.virtual_memory().percent,
-            "disk_io": psutil.disk_io_counters()._asdict()
-            if psutil.disk_io_counters()
-            else {},
-            "gpu_memory": torch.cuda.memory_allocated() / 1e9
-            if HAS_TORCH and torch.cuda.is_available()
-            else 0,
-            "gpu_memory_cached": torch.cuda.memory_reserved() / 1e9
-            if HAS_TORCH and torch.cuda.is_available()
-            else 0,
+            "disk_io": psutil.disk_io_counters()._asdict() if psutil.disk_io_counters() else {},
+            "gpu_memory": torch.cuda.memory_allocated() / 1e9 if HAS_TORCH and torch.cuda.is_available() else 0,
+            "gpu_memory_cached": torch.cuda.memory_reserved() / 1e9 if HAS_TORCH and torch.cuda.is_available() else 0,
         }
 
     def log(self, component: str, metric: str, value: float):

@@ -11,11 +11,11 @@ Covers uncovered code paths in:
 - notifications/manager.py: notification channels, console logging, etc.
 """
 
-import pytest
-from unittest.mock import MagicMock, patch
-import logging
 import contextlib
+import logging
+from unittest.mock import MagicMock, patch
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Risk Manager extended tests
@@ -27,7 +27,7 @@ class TestRiskManagerExtended:
 
     @pytest.fixture
     def risk_mgr(self):
-        from risk import RiskManager, RiskConfig
+        from risk import RiskConfig, RiskManager
 
         config = RiskConfig(
             max_risk_per_trade=2.0,
@@ -43,21 +43,15 @@ class TestRiskManagerExtended:
     # --- Position sizing methods ---
 
     def test_calculate_position_size_fixed_method(self, risk_mgr):
-        result = risk_mgr.calculate_position_size(
-            "XAUUSD", 1950.0, method="fixed", amount=5000.0
-        )
+        result = risk_mgr.calculate_position_size("XAUUSD", 1950.0, method="fixed", amount=5000.0)
         assert result.size > 0
 
     def test_calculate_position_size_percent_method(self, risk_mgr):
-        result = risk_mgr.calculate_position_size(
-            "XAUUSD", 1950.0, method="percent", percent=0.02
-        )
+        result = risk_mgr.calculate_position_size("XAUUSD", 1950.0, method="percent", percent=0.02)
         assert result.size > 0
 
     def test_calculate_position_size_risk_method_with_stop(self, risk_mgr):
-        result = risk_mgr.calculate_position_size(
-            "XAUUSD", 1950.0, method="risk", stop_loss=1930.0
-        )
+        result = risk_mgr.calculate_position_size("XAUUSD", 1950.0, method="risk", stop_loss=1930.0)
         assert result.size > 0
 
     def test_calculate_position_size_risk_method_no_stop(self, risk_mgr):
@@ -66,16 +60,12 @@ class TestRiskManagerExtended:
 
     def test_calculate_position_size_risk_zero_distance(self, risk_mgr):
         """Cover risk method with stop == entry (zero distance)."""
-        result = risk_mgr.calculate_position_size(
-            "XAUUSD", 1950.0, method="risk", stop_loss=1950.0
-        )
+        result = risk_mgr.calculate_position_size("XAUUSD", 1950.0, method="risk", stop_loss=1950.0)
         assert result.size > 0
 
     def test_calculate_position_size_unknown_method(self, risk_mgr):
         """Cover else branch for unknown method."""
-        result = risk_mgr.calculate_position_size(
-            "XAUUSD", 1950.0, method="unknown_method"
-        )
+        result = risk_mgr.calculate_position_size("XAUUSD", 1950.0, method="unknown_method")
         assert result.size > 0
 
     def test_calculate_position_size_with_price_alias(self, risk_mgr):
@@ -88,15 +78,13 @@ class TestRiskManagerExtended:
     # --- can_open_position ---
 
     def test_can_open_position_approved(self, risk_mgr):
-        can_open, reason = risk_mgr.can_open_position(1000.0)
+        can_open, _ = risk_mgr.can_open_position(1000.0)
         assert can_open is True
 
     def test_can_open_position_max_positions(self, risk_mgr):
         # Fill up positions
         for i in range(5):
-            risk_mgr.open_positions.append(
-                {"id": str(i), "symbol": "XAUUSD", "size": 100.0}
-            )
+            risk_mgr.open_positions.append({"id": str(i), "symbol": "XAUUSD", "size": 100.0})
         can_open, reason = risk_mgr.can_open_position(100.0)
         assert can_open is False
         assert "Max open positions" in reason
@@ -129,33 +117,33 @@ class TestRiskManagerExtended:
     def test_close_position_updates_balance(self, risk_mgr):
         risk_mgr.open_positions = [{"id": "POS001", "symbol": "XAUUSD"}]
         risk_mgr.close_position("POS001", pnl=500.0)
-        assert risk_mgr.current_balance == 50500.0  # noqa: PLR2004
+        assert risk_mgr.current_balance == 50500.0
         assert len(risk_mgr.open_positions) == 0
 
     def test_close_position_updates_peak_balance(self, risk_mgr):
         risk_mgr.open_positions = [{"id": "POS001"}]
         risk_mgr.close_position("POS001", pnl=2000.0)
-        assert risk_mgr.peak_balance == 52000.0  # noqa: PLR2004
+        assert risk_mgr.peak_balance == 52000.0
 
     # --- validate_trade ---
 
     def test_validate_trade_valid(self, risk_mgr):
-        is_valid, reason = risk_mgr.validate_trade("XAUUSD", 100.0, "BUY")
+        is_valid, _ = risk_mgr.validate_trade("XAUUSD", 100.0, "BUY")
         assert is_valid is True
 
     def test_validate_trade_max_positions(self, risk_mgr):
         for i in range(5):
             risk_mgr.open_positions.append({"id": str(i)})
-        is_valid, reason = risk_mgr.validate_trade("XAUUSD", 100.0, "BUY")
+        is_valid, _ = risk_mgr.validate_trade("XAUUSD", 100.0, "BUY")
         assert is_valid is False
 
     def test_validate_trade_size_too_large(self, risk_mgr):
-        is_valid, reason = risk_mgr.validate_trade("XAUUSD", 99999999.0, "BUY")
+        is_valid, _ = risk_mgr.validate_trade("XAUUSD", 99999999.0, "BUY")
         assert is_valid is False
 
     def test_validate_trade_daily_loss(self, risk_mgr):
         risk_mgr.daily_pnl = -3000.0
-        is_valid, reason = risk_mgr.validate_trade("XAUUSD", 100.0, "BUY")
+        is_valid, _ = risk_mgr.validate_trade("XAUUSD", 100.0, "BUY")
         assert is_valid is False
 
     # --- check_risk_limits ---
@@ -182,37 +170,37 @@ class TestRiskManagerExtended:
 
     def test_calculate_stop_loss_buy(self, risk_mgr):
         stop = risk_mgr.calculate_stop_loss(1950.0, "BUY", percent=2.0)
-        assert stop < 1950.0  # noqa: PLR2004
-        assert abs(stop - 1950.0 * 0.98) < 0.01  # noqa: PLR2004
+        assert stop < 1950.0
+        assert abs(stop - 1950.0 * 0.98) < 0.01
 
     def test_calculate_stop_loss_sell(self, risk_mgr):
         stop = risk_mgr.calculate_stop_loss(1950.0, "SELL", percent=2.0)
-        assert stop > 1950.0  # noqa: PLR2004
+        assert stop > 1950.0
 
     def test_calculate_stop_loss_long(self, risk_mgr):
         stop = risk_mgr.calculate_stop_loss(1950.0, "LONG")
-        assert stop < 1950.0  # noqa: PLR2004
+        assert stop < 1950.0
 
     def test_calculate_stop_loss_short(self, risk_mgr):
         stop = risk_mgr.calculate_stop_loss(1950.0, "SHORT")
-        assert stop > 1950.0  # noqa: PLR2004
+        assert stop > 1950.0
 
     def test_calculate_stop_loss_default_percent(self, risk_mgr):
         stop = risk_mgr.calculate_stop_loss(1950.0, "BUY")
         expected = 1950.0 * (1 - 2.0 / 100.0)
-        assert abs(stop - expected) < 0.01  # noqa: PLR2004
+        assert abs(stop - expected) < 0.01
 
     def test_calculate_take_profit_buy(self, risk_mgr):
         tp = risk_mgr.calculate_take_profit(1950.0, "BUY", percent=4.0)
-        assert tp > 1950.0  # noqa: PLR2004
+        assert tp > 1950.0
 
     def test_calculate_take_profit_sell(self, risk_mgr):
         tp = risk_mgr.calculate_take_profit(1950.0, "SELL", percent=4.0)
-        assert tp < 1950.0  # noqa: PLR2004
+        assert tp < 1950.0
 
     def test_calculate_take_profit_long(self, risk_mgr):
         tp = risk_mgr.calculate_take_profit(1950.0, "LONG")
-        assert tp > 1950.0  # noqa: PLR2004
+        assert tp > 1950.0
 
     # --- reset_daily_pnl / update_daily_pnl ---
 
@@ -230,7 +218,7 @@ class TestRiskManagerExtended:
 
     def test_update_daily_pnl(self, risk_mgr):
         risk_mgr.update_daily_pnl(200.0)
-        assert risk_mgr.daily_pnl == 200.0  # noqa: PLR2004
+        assert risk_mgr.daily_pnl == 200.0
 
     # --- get_risk_metrics / get_status ---
 
@@ -239,7 +227,7 @@ class TestRiskManagerExtended:
         assert "current_balance" in metrics
         assert "daily_pnl" in metrics
         assert "current_drawdown" in metrics
-        assert metrics["current_balance"] == 50000.0  # noqa: PLR2004
+        assert metrics["current_balance"] == 50000.0
 
     def test_get_status(self, risk_mgr):
         status = risk_mgr.get_status()
@@ -293,17 +281,15 @@ class TestNotificationManagerExtended:
             mgr._send_console("Test critical", NotificationLevel.CRITICAL)
 
     def test_notify_console_channel(self, mgr):
-        from notifications.manager import NotificationLevel, NotificationChannel
+        from notifications.manager import NotificationChannel, NotificationLevel
 
         # Ensure CONSOLE is in enabled_channels
         if NotificationChannel.CONSOLE not in mgr.enabled_channels:
             mgr.enabled_channels.append(NotificationChannel.CONSOLE)
-        mgr.send(
-            "Test", level=NotificationLevel.INFO, channels=[NotificationChannel.CONSOLE]
-        )
+        mgr.send("Test", level=NotificationLevel.INFO, channels=[NotificationChannel.CONSOLE])
 
     def test_notify_multiple_channels(self, mgr):
-        from notifications.manager import NotificationLevel, NotificationChannel
+        from notifications.manager import NotificationChannel, NotificationLevel
 
         if NotificationChannel.CONSOLE not in mgr.enabled_channels:
             mgr.enabled_channels.append(NotificationChannel.CONSOLE)
@@ -352,7 +338,10 @@ class TestNotificationManagerExtended:
 
         mgr.config["discord_webhook_url"] = "https://discord.com/api/webhooks/test"
         # Simulate ImportError on requests, fallback to urllib
-        with patch("requests.post", side_effect=ImportError("no requests")), patch("urllib.request.urlopen") as mock_urlopen:
+        with (
+            patch("requests.post", side_effect=ImportError("no requests")),
+            patch("urllib.request.urlopen") as mock_urlopen,
+        ):
             mock_urlopen.return_value = MagicMock()
             # Should not raise; either uses urllib fallback or logs an error
             with contextlib.suppress(Exception):
@@ -363,14 +352,17 @@ class TestNotificationManagerExtended:
         from notifications.manager import NotificationLevel
 
         mgr.config["discord_webhook_url"] = "http://discord.com/api/webhooks/test"
-        with patch("requests.post", side_effect=ImportError("no requests")), patch("urllib.request.urlopen") as mock_urlopen:
+        with (
+            patch("requests.post", side_effect=ImportError("no requests")),
+            patch("urllib.request.urlopen") as mock_urlopen,
+        ):
             with caplog.at_level(logging.ERROR):
                 mgr._send_discord("Test", NotificationLevel.INFO, None)
             # urlopen must NOT be called because http scheme is rejected
             mock_urlopen.assert_not_called()
 
     def test_notify_error_handling(self, mgr):
-        from notifications.manager import NotificationLevel, NotificationChannel
+        from notifications.manager import NotificationChannel, NotificationLevel
 
         """Notification handler errors should not crash."""
         if NotificationChannel.CONSOLE not in mgr.enabled_channels:

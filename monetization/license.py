@@ -11,19 +11,17 @@ based on user subscriptions and access codes.
 """
 
 import logging
-from datetime import datetime, timezone
-UTC = timezone.utc
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 
-from .pricing import SubscriptionTier, pricing_manager
-from .subscription import subscription_manager, SubscriptionStatus
 from .access_codes import access_code_generator
-
+from .pricing import SubscriptionTier, pricing_manager
+from .subscription import SubscriptionStatus, subscription_manager
 
 logger = logging.getLogger(__name__)
 
 
-class ValidationResult(str, Enum):
+class ValidationResult(StrEnum):
     """Validation result enumeration"""
 
     VALID = "valid"
@@ -87,13 +85,11 @@ class LicenseValidator:
         cache_key = f"{user_id}:{feature_name}"
         if cache_key in self._validation_cache:
             cache_entry = self._validation_cache[cache_key]
-            if (
-                datetime.now(UTC) - cache_entry["timestamp"]
-            ).seconds < self._cache_duration:
+            if (datetime.now(UTC) - cache_entry["timestamp"]).seconds < self._cache_duration:
                 return cache_entry["has_access"]
 
         # Validate subscription
-        result, message = self.validate_subscription(user_id)
+        result, _ = self.validate_subscription(user_id)
         if result != ValidationResult.VALID:
             self._update_cache(cache_key, False)
             return False
@@ -200,9 +196,7 @@ class LicenseValidator:
             "days_remaining": subscription.days_remaining(),
             "features": features,
             "limits": limits,
-            "commission_rate": float(
-                pricing_manager.get_commission_rate(subscription.tier)
-            ),
+            "commission_rate": float(pricing_manager.get_commission_rate(subscription.tier)),
         }
 
     def can_upgrade_tier(self, user_id: str, new_tier: SubscriptionTier) -> bool:
@@ -227,16 +221,15 @@ class LicenseValidator:
         """Clear validation cache"""
         if user_id:
             # Clear only user's cache
-            keys_to_remove = [
-                k for k in self._validation_cache if k.startswith(f"{user_id}:")
-            ]
+            keys_to_remove = [k for k in self._validation_cache if k.startswith(f"{user_id}:")]
             for key in keys_to_remove:
                 del self._validation_cache[key]
         else:
             # Clear entire cache
             self._validation_cache.clear()
 
-        logger.info(f"Cleared validation cache for user: {user_id or 'all'}")
+        logger.info("Cleared validation cache for user: %s", user_id or 'all')
+
 
 
 # Global license validator instance

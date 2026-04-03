@@ -32,11 +32,11 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import sys
 import tempfile
 from pathlib import Path
-import contextlib
 
 # ---------------------------------------------------------------------------
 # Load .env if present
@@ -46,10 +46,10 @@ try:
 
     load_dotenv(override=False)
 except ImportError:
-    pass
+    ...  # nosec B110
 
 PROJECT_ROOT = Path(__file__).parent.parent
-_PASS = "  ✓"
+_PASS = "  ✓"  # nosec B105 — status symbol, not a password
 _FAIL = "  ✗"
 
 
@@ -63,11 +63,12 @@ def run(verbose: bool = False) -> int:
 
     # ── Check alembic is installed ────────────────────────────────────────────
     try:
-        from alembic import command as alembic_command
         from alembic.config import Config as AlembicConfig
-        from alembic.script import ScriptDirectory
         from alembic.runtime.migration import MigrationContext  # noqa: F401
+        from alembic.script import ScriptDirectory
         from sqlalchemy import create_engine, inspect, text
+
+        from alembic import command as alembic_command
 
         print(f"{_PASS}  alembic + sqlalchemy importable")
     except ImportError as exc:
@@ -134,9 +135,7 @@ def run(verbose: bool = False) -> int:
                 failures += 1
             else:
                 with engine.connect() as conn:
-                    row = conn.execute(
-                        text("SELECT version_num FROM alembic_version")
-                    ).fetchone()
+                    row = conn.execute(text("SELECT version_num FROM alembic_version")).fetchone()
                     current = row[0] if row else None
                 head_rev = script.get_current_head()
                 if current == head_rev:
@@ -184,9 +183,7 @@ def run(verbose: bool = False) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Alembic migration smoke test")
-    parser.add_argument(
-        "--verbose", "-v", action="store_true", help="List each revision before running"
-    )
+    parser.add_argument("--verbose", "-v", action="store_true", help="List each revision before running")
     args = parser.parse_args()
     sys.exit(run(verbose=args.verbose))
 

@@ -16,13 +16,11 @@ Integration tests for the payments layer:
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-
 
 # ── DB fixtures ───────────────────────────────────────────────────────────────
 
@@ -35,8 +33,9 @@ def db_engine():
     Uses render_as_batch=True-compatible table creation.
     BigInteger maps to INTEGER in SQLite which supports autoincrement.
     """
-    from database.models import Base
     from sqlalchemy import event as sa_event
+
+    from database.models import Base
 
     engine = create_engine(
         "sqlite:///:memory:",
@@ -102,20 +101,17 @@ class TestCryptoPaymentModel:
         db_session.add(record)
         db_session.flush()
 
-        retrieved = (
-            db_session.query(CryptoPayment)
-            .filter(CryptoPayment.payment_id == "PAY_create_001")
-            .first()
-        )
+        retrieved = db_session.query(CryptoPayment).filter(CryptoPayment.payment_id == "PAY_create_001").first()
         assert retrieved is not None
         assert retrieved.currency == "BTC"
-        assert retrieved.amount_usd == 99.0  # noqa: PLR2004
+        assert retrieved.amount_usd == 99.0
         assert retrieved.status == "pending"
 
     def test_payment_id_is_unique(self, db_session):
         """Duplicate payment_id raises IntegrityError."""
-        from database.models import CryptoPayment
         from sqlalchemy.exc import IntegrityError
+
+        from database.models import CryptoPayment
 
         data = self._make_payment("PAY_unique_001")
         db_session.add(CryptoPayment(**data))
@@ -139,7 +135,7 @@ class TestCryptoPaymentModel:
         assert d["currency"] == "BTC"
         assert d["status"] == "pending"
         assert d["confirmations"] == 0
-        assert d["confirmations_required"] == 3  # noqa: PLR2004
+        assert d["confirmations_required"] == 3
         assert "expires_at" in d
 
     def test_update_payment_status(self, db_session):
@@ -156,13 +152,9 @@ class TestCryptoPaymentModel:
         record.confirmed_at = datetime.now(UTC)
         db_session.flush()
 
-        updated = (
-            db_session.query(CryptoPayment)
-            .filter(CryptoPayment.payment_id == "PAY_update_001")
-            .first()
-        )
+        updated = db_session.query(CryptoPayment).filter(CryptoPayment.payment_id == "PAY_update_001").first()
         assert updated.status == "complete"
-        assert updated.confirmations == 3  # noqa: PLR2004
+        assert updated.confirmations == 3
         assert updated.confirmed_at is not None
 
     def test_webhook_payload_stored_as_json(self, db_session):
@@ -180,11 +172,7 @@ class TestCryptoPaymentModel:
         db_session.add(record)
         db_session.flush()
 
-        retrieved = (
-            db_session.query(CryptoPayment)
-            .filter(CryptoPayment.payment_id == "PAY_webhook_001")
-            .first()
-        )
+        retrieved = db_session.query(CryptoPayment).filter(CryptoPayment.payment_id == "PAY_webhook_001").first()
         stored = json.loads(retrieved.webhook_payload)
         assert stored["tx_hash"] == "0xabc"
 
@@ -207,11 +195,7 @@ class TestOutboxEventModel:
         db_session.add(event)
         db_session.flush()
 
-        retrieved = (
-            db_session.query(OutboxEvent)
-            .filter(OutboxEvent.event_type == "KILL_SWITCH")
-            .first()
-        )
+        retrieved = db_session.query(OutboxEvent).filter(OutboxEvent.event_type == "KILL_SWITCH").first()
         assert retrieved is not None
         assert retrieved.channel == "hopefx:breach"
         assert retrieved.published_at is None
@@ -234,11 +218,7 @@ class TestOutboxEventModel:
         event.published_at = datetime.now(UTC)
         db_session.flush()
 
-        retrieved = (
-            db_session.query(OutboxEvent)
-            .filter(OutboxEvent.event_type == "AML_BLOCK")
-            .first()
-        )
+        retrieved = db_session.query(OutboxEvent).filter(OutboxEvent.event_type == "AML_BLOCK").first()
         assert retrieved.published_at is not None
 
     def test_unpublished_events_query(self, db_session):
@@ -263,11 +243,7 @@ class TestOutboxEventModel:
         db_session.add_all([published, unpublished])
         db_session.flush()
 
-        pending = (
-            db_session.query(OutboxEvent)
-            .filter(OutboxEvent.published_at.is_(None))
-            .all()
-        )
+        pending = db_session.query(OutboxEvent).filter(OutboxEvent.published_at.is_(None)).all()
         event_types = [e.event_type for e in pending]
         assert "KILL_SWITCH" in event_types
         assert "ORDER_FILL" not in event_types
@@ -289,19 +265,16 @@ class TestConfigStoreModel:
         db_session.add(record)
         db_session.flush()
 
-        retrieved = (
-            db_session.query(ConfigStore)
-            .filter(ConfigStore.key == "risk_settings")
-            .first()
-        )
+        retrieved = db_session.query(ConfigStore).filter(ConfigStore.key == "risk_settings").first()
         assert retrieved is not None
         value = json.loads(retrieved.value_json)
-        assert value["max_risk_per_trade"] == 2.0  # noqa: PLR2004
+        assert value["max_risk_per_trade"] == 2.0
 
     def test_config_key_is_unique(self, db_session):
         """Duplicate config key raises IntegrityError."""
-        from database.models import ConfigStore
         from sqlalchemy.exc import IntegrityError
+
+        from database.models import ConfigStore
 
         db_session.add(ConfigStore(key="unique_key_test", value_json='{"a":1}'))
         db_session.flush()
@@ -324,14 +297,10 @@ class TestConfigStoreModel:
         record.value_json = json.dumps({"enabled": True, "minutes_before": 15})
         db_session.flush()
 
-        updated = (
-            db_session.query(ConfigStore)
-            .filter(ConfigStore.key == "auto_pause_config")
-            .first()
-        )
+        updated = db_session.query(ConfigStore).filter(ConfigStore.key == "auto_pause_config").first()
         value = json.loads(updated.value_json)
         assert value["enabled"] is True
-        assert value["minutes_before"] == 15  # noqa: PLR2004
+        assert value["minutes_before"] == 15
 
 
 # ── Rate feed integration test ────────────────────────────────────────────────
@@ -373,4 +342,4 @@ class TestRateFeedIntegration:
 
             rates = await get_rates(force_refresh=True)
 
-        assert abs(rates.get("USDT", 0) - 1.0) < 0.01  # noqa: PLR2004
+        assert abs(rates.get("USDT", 0) - 1.0) < 0.01

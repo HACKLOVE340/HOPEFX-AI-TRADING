@@ -54,9 +54,7 @@ class CognitiveEngine:
         Returns:
             "uptrend", "downtrend", or "sideways"
         """
-        close = (
-            self.data["close"] if "close" in self.data.columns else self.data.iloc[:, 3]
-        )
+        close = self.data["close"] if "close" in self.data.columns else self.data.iloc[:, 3]
         ema_short = close.ewm(span=short_window, adjust=False).mean()
         ema_long = close.ewm(span=long_window, adjust=False).mean()
 
@@ -89,9 +87,7 @@ class CognitiveEngine:
         Returns:
             RSI value as a float.
         """
-        close = (
-            self.data["close"] if "close" in self.data.columns else self.data.iloc[:, 3]
-        )
+        close = self.data["close"] if "close" in self.data.columns else self.data.iloc[:, 3]
         delta = close.diff()
         gain = delta.clip(lower=0).rolling(period).mean()
         loss = (-delta.clip(upper=0)).rolling(period).mean()
@@ -108,9 +104,7 @@ class CognitiveEngine:
         Returns:
             Band-width ratio (higher → more volatile).
         """
-        close = (
-            self.data["close"] if "close" in self.data.columns else self.data.iloc[:, 3]
-        )
+        close = self.data["close"] if "close" in self.data.columns else self.data.iloc[:, 3]
         rolling_mean = close.rolling(period).mean()
         rolling_std = close.rolling(period).std()
         upper = rolling_mean + 2 * rolling_std
@@ -139,9 +133,7 @@ class CognitiveEngine:
         )
         return self.support, self.resistance
 
-    def perform_sentiment_analysis(
-        self, sentiment_score: float | None = None
-    ) -> float:
+    def perform_sentiment_analysis(self, sentiment_score: float | None = None) -> float:
         """
         Integrate external sentiment score (−1 = very bearish, +1 = very bullish).
 
@@ -174,8 +166,8 @@ class CognitiveEngine:
         support, resistance = self.detect_support_resistance()
 
         # Compute a simple signal strength in [0, 1]
-        bullish = (trend == "uptrend") and (momentum > 55)  # noqa: PLR2004
-        bearish = (trend == "downtrend") and (momentum < 45)  # noqa: PLR2004
+        bullish = (trend == "uptrend") and (momentum > 55)
+        bearish = (trend == "downtrend") and (momentum < 45)
         strength = 0.75 if (bullish or bearish) else 0.25
 
         return {

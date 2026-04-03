@@ -9,10 +9,10 @@ Tests for the analytics module.
 
 import numpy as np
 
+from analytics.options import OptionsAnalyzer
 from analytics.portfolio import PortfolioOptimizer
 from analytics.risk import RiskAnalyzer
 from analytics.simulations import SimulationEngine
-from analytics.options import OptionsAnalyzer
 
 
 class TestPortfolioOptimizer:
@@ -39,7 +39,7 @@ class TestPortfolioOptimizer:
 
         # Weights should sum to approximately 1
         total_weight = sum(result["weights"].values())
-        assert abs(total_weight - 1.0) < 0.01  # noqa: PLR2004
+        assert abs(total_weight - 1.0) < 0.01
 
     def test_optimize_portfolio_with_method(self):
         """Test portfolio optimization with specific method."""
@@ -61,7 +61,7 @@ class TestPortfolioOptimizer:
 
         frontier = optimizer.efficient_frontier(assets, returns, num_portfolios=50)
 
-        assert len(frontier) == 50  # noqa: PLR2004
+        assert len(frontier) == 50
         assert all("risk" in p and "return" in p for p in frontier)
 
 
@@ -81,11 +81,9 @@ class TestRiskAnalyzer:
         np.random.seed(42)
         returns = list(np.random.randn(100) * 0.02)
 
-        var_95 = analyzer.calculate_var(
-            returns, confidence_level=0.95, method="historical"
-        )
+        var_95 = analyzer.calculate_var(returns, confidence_level=0.95, method="historical")
 
-        assert isinstance(var_95, (float, np.floating))
+        assert isinstance(var_95, float | np.floating)
         assert var_95 < 0  # VaR should be negative for losses
 
     def test_calculate_var_parametric(self):
@@ -95,11 +93,9 @@ class TestRiskAnalyzer:
         np.random.seed(42)
         returns = list(np.random.randn(100) * 0.02)
 
-        var_95 = analyzer.calculate_var(
-            returns, confidence_level=0.95, method="parametric"
-        )
+        var_95 = analyzer.calculate_var(returns, confidence_level=0.95, method="parametric")
 
-        assert isinstance(var_95, (float, np.floating))
+        assert isinstance(var_95, float | np.floating)
 
     def test_calculate_cvar(self):
         """Test CVaR (Expected Shortfall) calculation."""
@@ -109,9 +105,7 @@ class TestRiskAnalyzer:
         returns = list(np.random.randn(100) * 0.02)
 
         cvar = analyzer.calculate_cvar(returns, confidence_level=0.95)
-        var = analyzer.calculate_var(
-            returns, confidence_level=0.95, method="historical"
-        )
+        var = analyzer.calculate_var(returns, confidence_level=0.95, method="historical")
 
         # CVaR should be at least as negative as VaR (worse case)
         assert cvar <= var
@@ -122,9 +116,7 @@ class TestRiskAnalyzer:
 
         weights = np.array([0.4, 0.3, 0.3])
         # Simple covariance matrix
-        cov_matrix = np.array(
-            [[0.04, 0.01, 0.01], [0.01, 0.02, 0.005], [0.01, 0.005, 0.03]]
-        )
+        cov_matrix = np.array([[0.04, 0.01, 0.01], [0.01, 0.02, 0.005], [0.01, 0.005, 0.03]])
 
         result = analyzer.risk_attribution(weights, cov_matrix)
 
@@ -147,7 +139,6 @@ class TestSimulationEngine:
         engine = SimulationEngine()
 
         # Provide a realistic trade P&L sequence (100 trades, small random returns)
-        import numpy as np
 
         rng = np.random.default_rng(42)
         trade_pnls = list(rng.normal(50, 200, 100).tolist())
@@ -164,13 +155,12 @@ class TestSimulationEngine:
         assert "var_99" in result
         assert "paths" in result
         # paths is truncated to 100 entries max
-        assert len(result["paths"]) <= 1000  # noqa: PLR2004
+        assert len(result["paths"]) <= 1000
 
     def test_monte_carlo_simulation_statistics(self):
         """Test Monte Carlo simulation statistics are reasonable."""
         engine = SimulationEngine()
 
-        import numpy as np
 
         rng = np.random.default_rng(7)
         trade_pnls = list(rng.normal(100, 500, 200).tolist())
@@ -207,7 +197,7 @@ class TestSimulationEngine:
         assert "best_parameters" in result
         assert "fitness_score" in result
         assert "generations" in result
-        assert result["generations"] == 20  # noqa: PLR2004
+        assert result["generations"] == 20
         assert result["fitness_score"] >= 0
 
 
@@ -294,10 +284,10 @@ class TestOptionsAnalyzer:
         analyzer = OptionsAnalyzer()
 
         # CDF(0) should be 0.5
-        assert abs(analyzer._norm_cdf(0) - 0.5) < 0.001  # noqa: PLR2004
+        assert abs(analyzer._norm_cdf(0) - 0.5) < 0.001
 
         # CDF(-infinity) should approach 0
-        assert analyzer._norm_cdf(-10) < 0.001  # noqa: PLR2004
+        assert analyzer._norm_cdf(-10) < 0.001
 
         # CDF(+infinity) should approach 1
-        assert analyzer._norm_cdf(10) > 0.999  # noqa: PLR2004
+        assert analyzer._norm_cdf(10) > 0.999

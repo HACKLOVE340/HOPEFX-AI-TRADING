@@ -38,6 +38,7 @@ import textwrap
 import traceback
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import openai
@@ -56,7 +57,6 @@ def _load_recent_candles_from_csv(
     RAG context can still be populated from historical data.
     """
     try:
-        from pathlib import Path
         import pandas as pd
 
         csv_path = Path("data") / f"{symbol}_H1.csv"
@@ -117,7 +117,7 @@ import pandas as pd
 import numpy as np
 import ta
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Any
 from strategies.base import BaseStrategy, Signal, SignalType, StrategyConfig
 import contextlib
 
@@ -131,7 +131,7 @@ class GeneratedStrategy(BaseStrategy):
             timeframe="H1",
         ))
 
-    def analyze(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
         candles = data.get("candles", [])
         if len(candles) < 50:
             return {"signal": "hold"}
@@ -140,7 +140,7 @@ class GeneratedStrategy(BaseStrategy):
         rsi = ta.momentum.RSIIndicator(close, window=14).rsi().iloc[-1]
         return {"rsi": rsi, "price": float(close.iloc[-1])}
 
-    def generate_signal(self, analysis: Dict[str, Any]) -> Optional[Signal]:
+    def generate_signal(self, analysis: dict[str, Any]) -> Optional[Signal]:
         rsi   = analysis.get("rsi", 50)
         price = analysis.get("price", 0.0)
         if rsi < 35:
@@ -212,8 +212,8 @@ class BacktestResult:
         if self.error:
             return f"Backtest failed: {self.error}"
         return (
-            f"Sharpe={self.sharpe:.3f}  Return={self.total_return*100:.2f}%  "
-            f"MaxDD={self.max_drawdown*100:.2f}%  WinRate={self.win_rate*100:.1f}%  "
+            f"Sharpe={self.sharpe:.3f}  Return={self.total_return * 100:.2f}%  "
+            f"MaxDD={self.max_drawdown * 100:.2f}%  WinRate={self.win_rate * 100:.1f}%  "
             f"Trades={self.trades}"
         )
 
@@ -278,13 +278,13 @@ def _compile_strategy(code: str) -> tuple[Any | None, str | None]:
         cls = getattr(module, "GeneratedStrategy", None)
         if cls is None:
             return None, "No class named 'GeneratedStrategy' found"
-        instance = cls()
+        instance = cls()  # pylint: disable=not-callable
         return instance, None
     except (ImportError, AttributeError, SyntaxError, RuntimeError) as exc:
         return None, f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
     finally:
         with contextlib.suppress(OSError):
-            os.unlink(tmp_path)
+            Path(tmp_path).unlink()
 
 
 # ── quick backtest ────────────────────────────────────────────────────────────
@@ -305,12 +305,13 @@ def _run_backtest(
     """
     try:
         import numpy as np
-        import pandas as pd  # noqa: F401
+
         from strategies.base import SignalType
     except ImportError as exc:
-        return BacktestResult(0, 0, 0, 0, 0, error=str(exc))
+        logger.error("Backtest dependency missing: %s", exc)
+        return BacktestResult(0, 0, 0, 0, 0, error="Missing dependency — check server logs")
 
-    if len(candles) < 60:  # noqa: PLR2004
+    if len(candles) < 60:
         return BacktestResult(0, 0, 0, 0, 0, error="Not enough candle data")
 
     balance = initial_balance
@@ -337,15 +338,15 @@ def _run_backtest(
         if position != 0 and (
             (position > 0 and sig_type == SignalType.SELL) or (position < 0 and sig_type == SignalType.BUY)
         ):
-                pnl = position * (price - entry_price)
-                pnl -= abs(position) * price * commission
-                balance += pnl
-                if pnl > 0:
-                    wins += 1
-                else:
-                    losses += 1
-                position = 0.0
-                entry_price = 0.0
+            pnl = position * (price - entry_price)
+            pnl -= abs(position) * price * commission
+            balance += pnl
+            if pnl > 0:
+                wins += 1
+            else:
+                losses += 1
+            position = 0.0
+            entry_price = 0.0
 
         # open new position
         if position == 0 and sig_type in (SignalType.BUY, SignalType.SELL):
@@ -393,7 +394,7 @@ class LLMAgent:
     model          : OpenAI model name (default: gpt-4o)
     max_iterations : How many refinement loops before giving up
     target_sharpe  : Minimum acceptable Sharpe ratio
-    candle_fetcher : Async callable(symbol, timeframe, count) → List[Dict]
+    candle_fetcher : Async callable(symbol, timeframe, count) → List[dict]
                      If None, the agent skips live backtesting.
     """
 
@@ -408,10 +409,7 @@ class LLMAgent:
     ):
         key = api_key or os.environ.get("OPENAI_API_KEY", "")
         if not key:
-            raise ValueError(
-                "OpenAI API key required — set OPENAI_API_KEY env var "
-                "or pass api_key= to LLMAgent()"
-            )
+            raise ValueError("OpenAI API key required — set OPENAI_API_KEY env var or pass api_key= to LLMAgent()")
         self._client = openai.AsyncOpenAI(api_key=key)
         self.model = model
         self.max_iterations = max_iterations
@@ -447,9 +445,7 @@ class LLMAgent:
         if self.candle_fetcher:
             try:
                 candles = await self.candle_fetcher(symbol, timeframe, candle_count)
-                logger.info(
-                    "Fetched %d candles for %s %s", len(candles), symbol, timeframe
-                )
+                logger.info("Fetched %d candles for %s %s", len(candles), symbol, timeframe)
             except (OSError, ValueError, RuntimeError, AttributeError) as exc:
                 logger.warning("Candle fetch failed: %s — backtesting disabled", exc)
 
@@ -496,8 +492,7 @@ class LLMAgent:
                 bt = None
 
             result = AgentResult(
-                success=bt is None
-                or (bt.error is None and bt.sharpe >= self.target_sharpe),
+                success=bt is None or (bt.error is None and bt.sharpe >= self.target_sharpe),
                 strategy_code=code,
                 strategy_name="GeneratedStrategy",
                 backtest=bt,
@@ -506,9 +501,7 @@ class LLMAgent:
             )
 
             # track best so far
-            if best_result is None or (
-                bt and best_result.backtest and bt.sharpe > best_result.backtest.sharpe
-            ):
+            if best_result is None or (bt and best_result.backtest and bt.sharpe > best_result.backtest.sharpe):
                 best_result = result
 
             if result.success:
@@ -557,7 +550,7 @@ class LLMAgent:
         # ── History trimming — keep system prompt + last N turns ──────────────
         max_msgs = 1 + _CHAT_MAX_HISTORY_TURNS * 2  # system + (user+assistant)*N
         if len(self._history) > max_msgs:
-            self._history = [self._history[0]] + self._history[-(max_msgs - 1) :]
+            self._history = [self._history[0], *self._history[-(max_msgs - 1):]]
 
         # ── Live market context injection ─────────────────────────────────────
         live_context = self._build_live_context()
@@ -574,13 +567,8 @@ class LLMAgent:
 
         if ephemeral_parts:
             ephemeral_msg = "\n\n".join(ephemeral_parts)
-            messages_with_context = list(self._history) + [
-                {"role": "system", "content": ephemeral_msg},
-                {"role": "user", "content": message},
-            ]
-            response_text, error = await self._call_llm_with_messages(
-                messages_with_context
-            )
+            messages_with_context = [*list(self._history), {"role": "system", "content": ephemeral_msg}, {"role": "user", "content": message}]
+            response_text, error = await self._call_llm_with_messages(messages_with_context)
             if not error:
                 # Persist the exchange without the ephemeral context
                 self._history.append({"role": "user", "content": message})
@@ -623,9 +611,9 @@ class LLMAgent:
                 if engine is not None:
                     h = engine.health()
                     lines.append(
-                        f"\nML Engine: model={h.get('model_version','?')} "
-                        f"predictions={h.get('predict_count',0)} "
-                        f"fallbacks={h.get('fallback_count',0)}"
+                        f"\nML Engine: model={h.get('model_version', '?')} "
+                        f"predictions={h.get('predict_count', 0)} "
+                        f"fallbacks={h.get('fallback_count', 0)}"
                     )
             except (AttributeError, RuntimeError) as _exc:
                 logger.debug("Suppressed exception: %s", _exc)
@@ -684,9 +672,7 @@ class LLMAgent:
 
     # ── internals ─────────────────────────────────────────────────────────────
 
-    async def _call_llm_with_messages(
-        self, messages: list[dict[str, str]]
-    ) -> tuple[str, str | None]:
+    async def _call_llm_with_messages(self, messages: list[dict[str, str]]) -> tuple[str, str | None]:
         """Call GPT-4 with an explicit message list (used for RAG injection)."""
         try:
             response = await self._client.chat.completions.create(
@@ -771,27 +757,24 @@ def create_agent(
             "Create a mean-reversion strategy on XAUUSD using Bollinger Bands"
         )
     """
-    import logging as _logging
-
-    _log = _logging.getLogger(__name__)
+    _log = logging.getLogger(__name__)
 
     # Resolve deprecated alias.
     if candle_source is None and oanda_stream is not None:
-        _log.warning(
-            "create_agent: 'oanda_stream' parameter is deprecated — "
-            "use 'candle_source' instead."
-        )
+        _log.warning("create_agent: 'oanda_stream' parameter is deprecated — use 'candle_source' instead.")
         candle_source = oanda_stream
 
-    fetcher = None
+    candle_fetcher = None
     if candle_source is not None:
 
-        async def fetcher(symbol: str, timeframe: str, count: int) -> list[dict]:
+        async def _fetcher(symbol: str, timeframe: str, count: int) -> list[dict]:
             return await candle_source.get_candles(symbol, timeframe, count)
+
+        candle_fetcher = _fetcher
 
     return LLMAgent(
         api_key=api_key,
         model=model,
-        candle_fetcher=fetcher,
+        candle_fetcher=candle_fetcher,
         **kwargs,
     )

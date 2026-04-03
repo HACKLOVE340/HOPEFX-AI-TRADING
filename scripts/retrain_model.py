@@ -35,8 +35,7 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Ensure project root is on the path regardless of where the script is called from
@@ -129,12 +128,10 @@ def _log_to_mlflow(symbol: str, model_name: str, metrics: dict, params: dict) ->
         import mlflow
 
         mlflow.set_tracking_uri(uri)
-        with mlflow.start_run(
-            run_name=f"{symbol}_{model_name}_{datetime.now().strftime('%Y%m%d_%H%M')}"
-        ):
+        with mlflow.start_run(run_name=f"{symbol}_{model_name}_{datetime.now().strftime('%Y%m%d_%H%M')}"):
             mlflow.log_params(params)
             for k, v in metrics.items():
-                if isinstance(v, (int, float)):
+                if isinstance(v, int | float):
                     mlflow.log_metric(k, v)
         logger.info("MLflow: logged %s/%s to %s", symbol, model_name, uri)
     except Exception as exc:
@@ -154,11 +151,8 @@ def retrain(
     """Load data, train models, save weights, return results dict."""
     df = _load_csv(symbol, csv_path, years)
 
-    if len(df) < 100:  # noqa: PLR2004
-        raise ValueError(
-            f"Only {len(df)} bars available for {symbol} — need at least 100. "
-            "Run the backfill first."
-        )
+    if len(df) < 100:
+        raise ValueError(f"Only {len(df)} bars available for {symbol} — need at least 100. Run the backfill first.")
 
     # Resolve ml/training.py directly (avoids ml/training/ package shadowing)
     import importlib.util as _ilu
@@ -176,9 +170,7 @@ def retrain(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info("=" * 60)
-    logger.info(
-        "Training %s for %s (%d bars) → %s", model_types, symbol, len(df), out_dir
-    )
+    logger.info("Training %s for %s (%d bars) → %s", model_types, symbol, len(df), out_dir)
     logger.info("=" * 60)
 
     results = train_ml_pipeline(
@@ -208,19 +200,18 @@ def retrain(
         _log_to_mlflow(
             symbol,
             name,
-            {k: v for k, v in m.items() if isinstance(v, (int, float))},
+            {k: v for k, v in m.items() if isinstance(v, int | float)},
             {"symbol": symbol, "model": name, "bars": len(df), "years": years},
         )
 
     manifest_path = out_dir / "manifest.json"
-    with open(manifest_path, "w") as f:
+    with Path(manifest_path).open("w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
     logger.info("Manifest written: %s", manifest_path)
 
     # Also update the regime router manifest with new accuracy data
     try:
-        from strategies.regime_router import update_regime_performance
-        from strategies.regime_router import detect_regime
+        from strategies.regime_router import detect_regime, update_regime_performance
 
         regime, _ = detect_regime(df)
         for name, info in results.items():
@@ -276,10 +267,7 @@ Examples:
     parser.add_argument(
         "--model",
         default="rf,xgb",
-        help=(
-            "Comma-separated model types or 'all'. "
-            "Options: rf, xgb, lstm, random_forest, xgboost (default: rf,xgb)"
-        ),
+        help=("Comma-separated model types or 'all'. Options: rf, xgb, lstm, random_forest, xgboost (default: rf,xgb)"),
     )
     parser.add_argument(
         "--csv",
@@ -347,10 +335,7 @@ Examples:
     if args.model.lower() == "all":
         model_types = ["random_forest", "xgboost", "lstm"]
     else:
-        model_types = [
-            _ALIASES.get(m.strip().lower(), m.strip().lower())
-            for m in args.model.split(",")
-        ]
+        model_types = [_ALIASES.get(m.strip().lower(), m.strip().lower()) for m in args.model.split(",")]
 
     logger.info("Symbols:   %s", symbols)
     logger.info("Models:    %s", model_types)
@@ -367,7 +352,7 @@ Examples:
                 csv_path=args.csv,
                 years=args.years,
             )
-            print(f"\n{'='*50}")
+            print(f"\n{'=' * 50}")
             print(f"Results for {sym}:")
             for name, info in results.items():
                 m = info.get("metrics") or {}
@@ -376,8 +361,8 @@ Examples:
                 path = info.get("model_path", "")
                 print(f"  {name:<20} accuracy={acc}  f1={f1}")
                 print(f"  {'':20} saved → {path}")
-        except Exception as exc:
-            logger.error("Failed for %s: %s", sym, exc, exc_info=True)
+        except Exception:
+            logger.exception("Failed for %s: %s", sym)
             all_ok = False
 
     if not all_ok:

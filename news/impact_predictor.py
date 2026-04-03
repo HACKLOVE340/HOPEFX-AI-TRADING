@@ -237,7 +237,8 @@ class ImpactPredictor:
             )
 
         except Exception as e:
-            self.logger.error(f"Error predicting impact: {e}")
+            self.logger.error("Error predicting impact: %s", e)
+
             # Return low impact on error
             return MarketImpact(
                 level=ImpactLevel.LOW,
@@ -262,14 +263,10 @@ class ImpactPredictor:
 
         return EventCategory.OTHER
 
-    def _calculate_impact_level(
-        self, text: str, category: EventCategory
-    ) -> ImpactLevel:
+    def _calculate_impact_level(self, text: str, category: EventCategory) -> ImpactLevel:
         """Calculate impact level based on keywords and category"""
         # Count high-impact keywords
-        high_impact_count = sum(
-            1 for keyword in self.HIGH_IMPACT_KEYWORDS if keyword in text
-        )
+        high_impact_count = sum(1 for keyword in self.HIGH_IMPACT_KEYWORDS if keyword in text)
 
         # Category-based base impact
         category_impact = {
@@ -287,20 +284,17 @@ class ImpactPredictor:
         score = category_impact.get(category, 1) + high_impact_count
 
         # Map score to impact level
-        if score >= 6:  # noqa: PLR2004
+        if score >= 6:
             return ImpactLevel.VERY_HIGH
-        elif score >= 4:  # noqa: PLR2004
+        if score >= 4:
             return ImpactLevel.HIGH
-        elif score >= 3:  # noqa: PLR2004
+        if score >= 3:
             return ImpactLevel.MEDIUM
-        elif score >= 2:  # noqa: PLR2004
+        if score >= 2:
             return ImpactLevel.LOW
-        else:
-            return ImpactLevel.VERY_LOW
+        return ImpactLevel.VERY_LOW
 
-    def _calculate_confidence(
-        self, text: str, category: EventCategory, sentiment_score: float | None
-    ) -> float:
+    def _calculate_confidence(self, text: str, category: EventCategory, sentiment_score: float | None) -> float:
         """Calculate confidence in prediction"""
         confidence = 0.5  # Base confidence
 
@@ -313,16 +307,12 @@ class ImpactPredictor:
             confidence += 0.1
 
         # Increase confidence if high-impact keywords present
-        keyword_count = sum(
-            1 for keyword in self.HIGH_IMPACT_KEYWORDS if keyword in text
-        )
+        keyword_count = sum(1 for keyword in self.HIGH_IMPACT_KEYWORDS if keyword in text)
         confidence += min(keyword_count * 0.1, 0.2)
 
         return min(confidence, 1.0)
 
-    def _estimate_volatility(
-        self, impact_level: ImpactLevel, category: EventCategory
-    ) -> float:
+    def _estimate_volatility(self, impact_level: ImpactLevel, category: EventCategory) -> float:
         """Estimate expected volatility (as percentage)"""
         # Base volatility by impact level
         volatility_map = {
@@ -348,12 +338,11 @@ class ImpactPredictor:
         if sentiment_score is None:
             return None
 
-        if sentiment_score > 0.1:  # noqa: PLR2004
+        if sentiment_score > 0.1:
             return "bullish"
-        elif sentiment_score < -0.1:  # noqa: PLR2004
+        if sentiment_score < -0.1:
             return "bearish"
-        else:
-            return None
+        return None
 
     def _estimate_timeframe(self, category: EventCategory) -> str:
         """Estimate impact timeframe"""
@@ -361,11 +350,10 @@ class ImpactPredictor:
         if category in [EventCategory.CENTRAL_BANK, EventCategory.GEOPOLITICAL]:
             return "medium_term"
         # Economic data has short-term impact
-        elif category == EventCategory.ECONOMIC_DATA:
+        if category == EventCategory.ECONOMIC_DATA:
             return "short_term"
         # Most others are intraday
-        else:
-            return "intraday"
+        return "intraday"
 
     def batch_predict(self, articles: list[dict]) -> list[MarketImpact]:
         """
@@ -389,9 +377,7 @@ class ImpactPredictor:
 
         return impacts
 
-    def get_high_impact_events(
-        self, articles: list[dict], min_level: ImpactLevel = ImpactLevel.HIGH
-    ) -> list[dict]:
+    def get_high_impact_events(self, articles: list[dict], min_level: ImpactLevel = ImpactLevel.HIGH) -> list[dict]:
         """Filter articles for high-impact events"""
         high_impact = []
 

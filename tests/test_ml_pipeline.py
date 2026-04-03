@@ -23,7 +23,6 @@ from ml.pipeline import (
     XGBoostPredictor,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -79,7 +78,7 @@ class TestFeatureEngineer:
     def test_feature_count(self):
         result = self.fe.compute(self.df)
         feature_cols = [c for c in result.columns if c != "y"]
-        assert len(feature_cols) >= 10  # at least 10 features  # noqa: PLR2004
+        assert len(feature_cols) >= 10  # at least 10 features
 
     def test_no_look_ahead_bias(self):
         """
@@ -105,7 +104,7 @@ class TestFeatureEngineer:
     def test_rsi_bounded(self):
         result = self.fe.compute(self.df)
         assert (result["rsi_14"] >= 0).all()
-        assert (result["rsi_14"] <= 100).all()  # noqa: PLR2004
+        assert (result["rsi_14"] <= 100).all()
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +165,7 @@ class TestWalkForwardValidator:
     def test_correct_number_of_folds(self):
         validator = WalkForwardValidator(n_folds=5)
         splits = validator.split(200)
-        assert len(splits) == 5  # noqa: PLR2004
+        assert len(splits) == 5
 
     def test_train_expands_each_fold(self):
         validator = WalkForwardValidator(n_folds=4)
@@ -226,7 +225,7 @@ class TestXGBoostPredictor:
         predictor = XGBoostPredictor()
         predictor.fit(self.X, self.y)
         imps = predictor.get_feature_importances()
-        assert abs(sum(imps.values()) - 1.0) < 0.01  # noqa: PLR2004
+        assert abs(sum(imps.values()) - 1.0) < 0.01
 
     def test_predict_before_fit_raises(self):
         predictor = XGBoostPredictor()
@@ -266,7 +265,7 @@ class TestMLPipeline:
         assert 0.0 <= report.oos_accuracy <= 1.0
         assert 0.0 <= report.mean_auc <= 1.0
         assert 0.0 <= report.p_value <= 1.0
-        assert report.n_folds == 3  # noqa: PLR2004
+        assert report.n_folds == 3
         assert report.n_total_oos_samples > 0
 
     def test_feature_importances_populated(self, tmp_path):
@@ -304,7 +303,7 @@ class TestMLPipeline:
             # If it runs, gates must fail on such tiny data
             assert not (report.passes_accuracy_gate and report.passes_pvalue_gate)
         except (ValueError, Exception):
-            pass  # also acceptable — WalkForwardValidator may reject
+            ...  # nosec B110
 
     def test_very_small_dataset_raises(self, tmp_path):
         # 10 rows is definitely too small for any fold

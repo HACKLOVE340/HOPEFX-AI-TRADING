@@ -58,9 +58,7 @@ _KELLY_FRACTION = float(os.getenv("KELLY_FRACTION", "0.25"))  # quarter-Kelly
 _ATR_MULT = float(os.getenv("SL_ATR_MULT", "1.5"))  # ATR multiplier for SL
 _MIN_LOTS = float(os.getenv("MIN_LOTS", "0.01"))
 _MAX_LOTS = float(os.getenv("MAX_LOTS", "10.0"))
-_SIZING_METHOD = os.getenv(
-    "POSITION_SIZING_METHOD", "volatility"
-)  # volatility|kelly|fixed
+_SIZING_METHOD = os.getenv("POSITION_SIZING_METHOD", "volatility")  # volatility|kelly|fixed
 
 
 class PositionSizer:
@@ -106,9 +104,7 @@ class PositionSizer:
             if method == "kelly":
                 size = self._kelly_size(symbol, account_equity, entry_price, confidence)
             elif method == "volatility":
-                size = self._volatility_size(
-                    account_equity, entry_price, stop_loss, ohlcv
-                )
+                size = self._volatility_size(account_equity, entry_price, stop_loss, ohlcv)
             else:
                 size = self._fixed_size(account_equity, entry_price)
         except Exception as exc:
@@ -217,7 +213,7 @@ class PositionSizer:
     def _atr_distance(entry: float, ohlcv: Any | None) -> float:
         """Compute ATR(14) distance for SL fallback."""
         try:
-            if ohlcv is not None and len(ohlcv) >= 15:  # noqa: PLR2004
+            if ohlcv is not None and len(ohlcv) >= 15:
                 h = ohlcv["high"].values[-15:].astype(float)
                 l = ohlcv["low"].values[-15:].astype(float)
                 c = ohlcv["close"].values[-15:].astype(float)
@@ -225,7 +221,7 @@ class PositionSizer:
                     h[1:] - l[1:],
                     np.maximum(abs(h[1:] - c[:-1]), abs(l[1:] - c[:-1])),
                 )
-                if len(tr) >= 14:  # noqa: PLR2004
+                if len(tr) >= 14:
                     return float(np.mean(tr[-14:])) * _ATR_MULT
         except Exception as _exc:
             logger.debug("Suppressed exception: %s", _exc)

@@ -8,7 +8,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import axios from 'axios';
+import { api } from '../hooks/useApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -22,19 +22,17 @@ export interface FixRecord {
 
 // ── API helpers ───────────────────────────────────────────────────────────────
 
-const API_BASE = import.meta.env.VITE_API_URL ?? '';
-
 async function fetchFixes(): Promise<FixRecord[]> {
-  const { data } = await axios.get<FixRecord[]>(`${API_BASE}/api/security/fixes`);
+  const { data } = await api.get<FixRecord[]>('/security/fixes');
   return data;
 }
 
 async function approveFix(endpoint: string): Promise<void> {
-  await axios.post(`${API_BASE}/api/security/fixes/approve`, { endpoint });
+  await api.post('/security/fixes/approve', { endpoint });
 }
 
 async function declineFix(endpoint: string): Promise<void> {
-  await axios.post(`${API_BASE}/api/security/fixes/decline`, { endpoint });
+  await api.post('/security/fixes/decline', { endpoint });
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────

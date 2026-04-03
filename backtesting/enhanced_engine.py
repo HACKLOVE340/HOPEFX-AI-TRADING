@@ -29,32 +29,32 @@ import numpy as np
 _ENGINE_RNG = np.random.default_rng()
 
 # ── Execution simulation constants ────────────────────────────────────────────
-_SLIPPAGE_NOISE_FRAC    = 0.20    # std-dev of slippage noise as fraction of impact
-_MIN_VOLUME_FLOOR       = 1_000   # minimum volume denominator for participation rate
-_LIMIT_FILL_LATENCY_SEC = 0.001   # simulated latency for limit-order fills (1 ms)
-_ORDER_ID_TIME_SCALE    = 1e6     # nanosecond timestamp scale for order ID suffix
-_FILL_TOLERANCE         = 0.0001  # size tolerance for considering an order fully filled
-_ATR_FALLBACK_VOL       = 0.001   # fallback volatility when realized variance is zero
+_SLIPPAGE_NOISE_FRAC = 0.20  # std-dev of slippage noise as fraction of impact
+_MIN_VOLUME_FLOOR = 1_000  # minimum volume denominator for participation rate
+_LIMIT_FILL_LATENCY_SEC = 0.001  # simulated latency for limit-order fills (1 ms)
+_ORDER_ID_TIME_SCALE = 1e6  # nanosecond timestamp scale for order ID suffix
+_FILL_TOLERANCE = 0.0001  # size tolerance for considering an order fully filled
+_ATR_FALLBACK_VOL = 0.001  # fallback volatility when realized variance is zero
 
 # ── Risk check severity constants ─────────────────────────────────────────────
-_CIRCUIT_BREAKER_HALT_LEVEL = 2   # circuit_breaker_level at which trading halts
+_CIRCUIT_BREAKER_HALT_LEVEL = 2  # circuit_breaker_level at which trading halts
 
-from dataclasses import dataclass, field
-from typing import Any
-from collections.abc import Callable
-from enum import Enum, IntEnum, auto
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
-from collections import deque, defaultdict
-import logging
-import json
 import gzip
+import json
+import logging
 import warnings
+from collections import defaultdict, deque
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from enum import Enum, IntEnum, auto
+from pathlib import Path
+from typing import Any
 
-# Performance libraries
+# Performance libraries — imported for availability checks; used conditionally
 try:
-    import numba  # noqa: F401
-    from numba import jit, prange, njit, cuda  # noqa: F401
+    import numba  # pylint: disable=unused-import  # noqa: F401
+    from numba import cuda, jit, njit, prange  # pylint: disable=unused-import  # noqa: F401
 
     NUMBA_AVAILABLE = True
 except ImportError:
@@ -62,25 +62,23 @@ except ImportError:
     warnings.warn("Numba unavailable - performance degraded", stacklevel=2)
 
 try:
-    import cupy as cp  # noqa: F401
-    from cupy.cuda import Device  # noqa: F401
+    import cupy as cp  # pylint: disable=unused-import  # noqa: F401
+    from cupy.cuda import Device  # pylint: disable=unused-import  # noqa: F401
 
     CUDA_AVAILABLE = True
 except ImportError:
     CUDA_AVAILABLE = False
 
 try:
-    from scipy import stats, optimize, interpolate  # noqa: F401
-    from scipy.optimize import minimize, differential_evolution  # noqa: F401
+    from scipy import interpolate, optimize, stats  # pylint: disable=unused-import  # noqa: F401
+    from scipy.optimize import differential_evolution, minimize  # pylint: disable=unused-import  # noqa: F401
 
     SCIPY_AVAILABLE = True
 except ImportError:
     SCIPY_AVAILABLE = False
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s | %(name)s | %(levelname)s | %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(name)s | %(levelname)s | %(message)s")
 logger = logging.getLogger("HOPEFX.Backtest")
 
 
@@ -206,9 +204,7 @@ class NanosecondTimestamp:
 
     def to_datetime(self) -> datetime:
         """Convert to UTC datetime (microsecond precision)."""
-        return datetime.fromtimestamp(
-            self.seconds + self.nanoseconds / 1e9, tz=UTC
-        )
+        return datetime.fromtimestamp(self.seconds + self.nanoseconds / 1e9, tz=UTC)
 
     def __float__(self) -> float:
         return self.seconds + self.nanoseconds / 1e9
@@ -254,9 +250,7 @@ class TickData:
         if self.bid >= self.ask:
             raise ValueError(f"Negative spread: bid={self.bid} >= ask={self.ask}")
         if self.ask - self.bid > self.mid * 0.1:  # >10% spread
-            warnings.warn(
-                f"Extreme spread detected: {(self.ask-self.bid)/self.mid:.2%}", stacklevel=2
-            )
+            warnings.warn(f"Extreme spread detected: {(self.ask - self.bid) / self.mid:.2%}", stacklevel=2)
 
     @property
     def mid(self) -> float:
@@ -350,12 +344,8 @@ class TransactionCostModel:
     #
     # These are best-available public estimates. For production use, calibrate
     # against your own execution data using calibrate_from_executions().
-    temporary_impact_coefficient: float = (
-        0.050  # η — XAUUSD calibrated (was 0.142 equity default)
-    )
-    permanent_impact_coefficient: float = (
-        0.100  # γ — XAUUSD calibrated (was 0.314 equity default)
-    )
+    temporary_impact_coefficient: float = 0.050  # η — XAUUSD calibrated (was 0.142 equity default)
+    permanent_impact_coefficient: float = 0.100  # γ — XAUUSD calibrated (was 0.314 equity default)
     decay_exponent: float = 0.55  # β — XAUUSD calibrated (was 0.6 equity default)
 
     # Advanced features
@@ -376,9 +366,7 @@ class TransactionCostModel:
     # overnight_rate_short_annual.
     overnight_rate_annual: float = 0.004  # 0.40% p.a. — XAUUSD long swap (default)
     overnight_rate_long_annual: float = 0.004  # 0.40% p.a. — long position carry cost
-    overnight_rate_short_annual: float = (
-        -0.002
-    )  # −0.20% p.a. — short position (receive)
+    overnight_rate_short_annual: float = -0.002  # −0.20% p.a. — short position (receive)
 
     def calculate_market_impact(
         self,
@@ -397,18 +385,12 @@ class TransactionCostModel:
             raise ValueError(f"Invalid participation rate: {participation_rate}")
 
         # Base Almgren-Chriss model
-        temp_impact = (
-            self.temporary_impact_coefficient
-            * daily_volatility
-            * (participation_rate**self.decay_exponent)
-        )
+        temp_impact = self.temporary_impact_coefficient * daily_volatility * (participation_rate**self.decay_exponent)
 
-        perm_impact = (
-            self.permanent_impact_coefficient * daily_volatility * participation_rate
-        )
+        perm_impact = self.permanent_impact_coefficient * daily_volatility * participation_rate
 
         # Adjust for order flow toxicity (VPIN-like)
-        if self.use_order_flow_toxicity and order_flow_toxicity > 0.5:  # noqa: PLR2004
+        if self.use_order_flow_toxicity and order_flow_toxicity > 0.5:
             # Toxic flow = higher impact
             toxicity_multiplier = 1 + (order_flow_toxicity - 0.5) * 2
             temp_impact *= toxicity_multiplier
@@ -418,7 +400,7 @@ class TransactionCostModel:
             "permanent_bps": perm_impact * 10000,
             "total_bps": (temp_impact + perm_impact) * 10000,
             "temporary_decay_time": self._estimate_decay_time(participation_rate),
-            "is_toxic": order_flow_toxicity > 0.7,  # noqa: PLR2004
+            "is_toxic": order_flow_toxicity > 0.7,
         }
 
     def _estimate_decay_time(self, participation_rate: float) -> timedelta:
@@ -478,10 +460,8 @@ class TransactionCostModel:
         If fewer than min_samples are provided, returns the current parameters
         unchanged with a warning.
         """
-        import warnings as _w
-
         if len(executions) < min_samples:
-            _w.warn(
+            warnings.warn(
                 f"calibrate_from_executions: only {len(executions)} samples "
                 f"(need >= {min_samples}). Parameters unchanged.",
                 RuntimeWarning,
@@ -498,14 +478,11 @@ class TransactionCostModel:
             }
 
         try:
-            import numpy as _np
             from scipy.optimize import curve_fit as _curve_fit
 
-            x_arr = _np.array([e["participation_rate"] for e in executions])
-            s_arr = _np.array([e["daily_volatility"] for e in executions])
-            y_arr = (
-                _np.array([e["observed_impact_bps"] for e in executions]) / 10000
-            )  # → fraction
+            x_arr = np.array([e["participation_rate"] for e in executions])
+            s_arr = np.array([e["daily_volatility"] for e in executions])
+            y_arr = np.array([e["observed_impact_bps"] for e in executions]) / 10000  # → fraction
 
             def _model(X, eta, gamma, beta):
                 x, s = X
@@ -524,12 +501,12 @@ class TransactionCostModel:
                 maxfev=5000,
             )
             eta_fit, gamma_fit, beta_fit = popt
-            perr = _np.sqrt(_np.diag(pcov))
+            perr = np.sqrt(np.diag(pcov))
 
             # Goodness of fit
             y_pred = _model((x_arr, s_arr), *popt)
-            ss_res = _np.sum((y_arr - y_pred) ** 2)
-            ss_tot = _np.sum((y_arr - _np.mean(y_arr)) ** 2)
+            ss_res = np.sum((y_arr - y_pred) ** 2)
+            ss_tot = np.sum((y_arr - np.mean(y_arr)) ** 2)
             r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
 
             self.temporary_impact_coefficient = float(eta_fit)
@@ -558,11 +535,9 @@ class TransactionCostModel:
 
         except (ValueError, RuntimeError, TypeError) as exc:
             logger.warning("calibrate_from_executions failed: %s", exc)
-            return {"calibrated": False, "error": str(exc)}
+            return {"calibrated": False, "error": "Calibration failed — check server logs"}
 
-    def total_cost(
-        self, order_size: float, price: float, is_maker: bool = False, **kwargs
-    ) -> dict[str, float]:
+    def total_cost(self, order_size: float, price: float, is_maker: bool = False, **kwargs) -> dict[str, float]:
         """Calculate all-in transaction cost"""
         notional = abs(order_size) * price
 
@@ -706,15 +681,9 @@ class Position:
             "total_pnl": self.realized_pnl + self.unrealized_pnl,
             "mfe": self.max_favorable_excursion,
             "mae": self.max_adverse_excursion,
-            "mfe_ratio": self.max_favorable_excursion / abs(self.realized_pnl)
-            if self.realized_pnl != 0
-            else 0,
-            "mae_ratio": self.max_adverse_excursion / abs(self.realized_pnl)
-            if self.realized_pnl != 0
-            else 0,
-            "efficiency": self.realized_pnl / self.max_favorable_excursion
-            if self.max_favorable_excursion > 0
-            else 0,
+            "mfe_ratio": self.max_favorable_excursion / abs(self.realized_pnl) if self.realized_pnl != 0 else 0,
+            "mae_ratio": self.max_adverse_excursion / abs(self.realized_pnl) if self.realized_pnl != 0 else 0,
+            "efficiency": self.realized_pnl / self.max_favorable_excursion if self.max_favorable_excursion > 0 else 0,
         }
 
 
@@ -782,18 +751,8 @@ class TradeRecord:
 
     @property
     def net_pnl(self) -> float:
-        slippage_cost = (
-            (self.entry_slippage_bps + self.exit_slippage_bps)
-            / 10000
-            * self.filled_size
-            * self.entry_price
-        )
-        return (
-            self.gross_pnl
-            - self.entry_commission
-            - self.exit_commission
-            - slippage_cost
-        )
+        slippage_cost = (self.entry_slippage_bps + self.exit_slippage_bps) / 10000 * self.filled_size * self.entry_price
+        return self.gross_pnl - self.entry_commission - self.exit_commission - slippage_cost
 
     @property
     def return_pct(self) -> float:
@@ -906,7 +865,7 @@ class MarketMicrostructureAnalyzer:
 
     def _update_microstructure_metrics(self):
         """Update spread and impact metrics"""
-        if len(self.ticks) < 20:  # noqa: PLR2004
+        if len(self.ticks) < 20:
             return
 
         recent_ticks = list(self.ticks)[-20:]
@@ -919,13 +878,11 @@ class MarketMicrostructureAnalyzer:
 
         # Realized spread vs quoted spread
         quoted_spreads = [t.spread_bps for t in recent_ticks]
-        self.price_impact = (
-            np.mean(quoted_spreads) - self.effective_spread if quoted_spreads else 0
-        )
+        self.price_impact = np.mean(quoted_spreads) - self.effective_spread if quoted_spreads else 0
 
     def _update_toxicity_metrics(self):
         """Calculate VPIN-like order flow toxicity"""
-        if len(self.trade_flow) < 50:  # noqa: PLR2004
+        if len(self.trade_flow) < 50:
             return
 
         recent_flow = list(self.trade_flow)[-50:]
@@ -942,7 +899,7 @@ class MarketMicrostructureAnalyzer:
 
     def _detect_regime(self):
         """Detect current market regime using multiple classifiers"""
-        if len(self.ticks) < 50:  # noqa: PLR2004
+        if len(self.ticks) < 50:
             self.current_regime = MarketRegime.UNKNOWN
             return
 
@@ -950,31 +907,29 @@ class MarketMicrostructureAnalyzer:
         self._extract_regime_features()
 
         # Rule-based classification (ML could be added)
-        volatility = (
-            np.sqrt(self.realized_variance) if self.realized_variance > 0 else 0
-        )
+        volatility = np.sqrt(self.realized_variance) if self.realized_variance > 0 else 0
 
         # Trend detection via Hurst
         self._calculate_hurst()
 
         # Classify
-        if volatility > 0.05:  # >5% realized vol  # noqa: PLR2004
+        if volatility > 0.05:  # >5% realized vol
             if self.realized_skewness < -1:
                 self.current_regime = MarketRegime.HIGH_VOLATILITY_BREAKOUT
             else:
                 self.current_regime = MarketRegime.HIGH_VOLATILITY_MEAN_REVERSION
-        elif self.hurst_exponent > 0.6:  # noqa: PLR2004
+        elif self.hurst_exponent > 0.6:
             if self.returns and np.mean(list(self.returns)[-10:]) > 0:
                 self.current_regime = MarketRegime.TRENDING_STRONG_BULL
             else:
                 self.current_regime = MarketRegime.TRENDING_STRONG_BEAR
-        elif self.hurst_exponent > 0.5:  # noqa: PLR2004
+        elif self.hurst_exponent > 0.5:
             self.current_regime = (
                 MarketRegime.TRENDING_WEAK_BULL
                 if (self.returns and np.mean(list(self.returns)[-10:]) > 0)
                 else MarketRegime.TRENDING_WEAK_BEAR
             )
-        elif volatility < 0.01:  # noqa: PLR2004
+        elif volatility < 0.01:
             self.current_regime = MarketRegime.RANGING_NARROW
         else:
             self.current_regime = MarketRegime.RANGING_WIDE
@@ -1070,9 +1025,7 @@ class MarketMicrostructureAnalyzer:
         rec["regime"] = self.current_regime.name
         rec["confidence"] = self.regime_confidence
         rec["toxicity"] = self.order_flow_toxicity
-        rec["realized_vol"] = (
-            np.sqrt(self.realized_variance) if self.realized_variance > 0 else 0
-        )
+        rec["realized_vol"] = np.sqrt(self.realized_variance) if self.realized_variance > 0 else 0
 
         return rec
 
@@ -1169,7 +1122,8 @@ class InstitutionalRiskManager:
         # Callbacks for emergency actions
         self.emergency_callbacks: list[Callable] = []
 
-        logger.info(f"RiskManager initialized: ${initial_capital:,.2f} capital")
+        logger.info("RiskManager initialized: $%s capital", initial_capital)
+
 
     def register_emergency_callback(self, callback: Callable):
         """Register callback for kill switch activation"""
@@ -1182,28 +1136,40 @@ class InstitutionalRiskManager:
 
     def _check_position_size(self, symbol: str, side: "OrderSide", size: float, price: float) -> dict | None:
         """FIA 1.1: Reject if projected notional exceeds position limit."""
-        current  = self.positions.get(symbol, Position(symbol, side))
-        delta    = size if side == OrderSide.BUY else -size
+        current = self.positions.get(symbol, Position(symbol, side))
+        delta = size if side == OrderSide.BUY else -size
         proj_not = abs(current.size + delta) * price
-        limit    = self.current_capital * self.limits["position"]
-        return self._failed_check("POSITION_SIZE", limit, proj_not, RiskEventSeverity.CRITICAL) if proj_not > limit else None
+        limit = self.current_capital * self.limits["position"]
+        return (
+            self._failed_check("POSITION_SIZE", limit, proj_not, RiskEventSeverity.CRITICAL)
+            if proj_not > limit
+            else None
+        )
 
     def _check_leverage(self, notional: float) -> dict | None:
         """Reject if projected total exposure exceeds leverage limit."""
         current_exp = sum(abs(p.size * p.avg_entry_price) for p in self.positions.values())
-        proj_exp    = current_exp + notional
-        max_exp     = self.current_capital * self.limits["leverage"]
-        return self._failed_check("LEVERAGE", max_exp, proj_exp, RiskEventSeverity.CRITICAL) if proj_exp > max_exp else None
+        proj_exp = current_exp + notional
+        max_exp = self.current_capital * self.limits["leverage"]
+        return (
+            self._failed_check("LEVERAGE", max_exp, proj_exp, RiskEventSeverity.CRITICAL)
+            if proj_exp > max_exp
+            else None
+        )
 
     def _check_var_limit(self, symbol: str, size: float, price: float) -> dict | None:
         """Warn if projected VaR exceeds the configured limit."""
-        current_var  = self.calculate_var(0.95)
+        current_var = self.calculate_var(0.95)
         projected_var = self._estimate_var_change(symbol, size, price)
-        var_limit    = self.current_capital * self.limits["var"]
+        var_limit = self.current_capital * self.limits["var"]
         if current_var + projected_var > var_limit:
-            return {"check": "VAR_LIMIT", "passed": False,
-                    "current_var": current_var, "projected_var": projected_var,
-                    "severity": RiskEventSeverity.WARNING}
+            return {
+                "check": "VAR_LIMIT",
+                "passed": False,
+                "current_var": current_var,
+                "projected_var": projected_var,
+                "severity": RiskEventSeverity.WARNING,
+            }
         return None
 
     def check_pre_trade_risk(
@@ -1231,11 +1197,16 @@ class InstitutionalRiskManager:
             return False, "DAILY_LOSS_LIMIT", {"severity": RiskEventSeverity.KILL_SWITCH}
 
         notional = size * price
-        checks   = list(filter(None, [
-            self._check_position_size(symbol, side, size, price),
-            self._check_leverage(notional),
-            self._check_var_limit(symbol, size, price),
-        ]))
+        checks = list(
+            filter(
+                None,
+                [
+                    self._check_position_size(symbol, side, size, price),
+                    self._check_leverage(notional),
+                    self._check_var_limit(symbol, size, price),
+                ],
+            )
+        )
 
         critical = [c for c in checks if c["severity"] == RiskEventSeverity.CRITICAL]
         warnings = [c for c in checks if c["severity"] == RiskEventSeverity.WARNING]
@@ -1254,9 +1225,7 @@ class InstitutionalRiskManager:
         Intraday risk monitoring - continuous checks.
         """
         # Update drawdown
-        current_drawdown = (
-            self.peak_capital - self.current_capital
-        ) / self.peak_capital
+        current_drawdown = (self.peak_capital - self.current_capital) / self.peak_capital
 
         # Circuit breaker levels
         if current_drawdown > self.limits["drawdown"]:
@@ -1279,10 +1248,8 @@ class InstitutionalRiskManager:
             )
 
         # Check for unusual trading patterns
-        if self.daily_trades > 1000:  # >1000 trades/day is unusual  # noqa: PLR2004
-            self._log_risk_event(
-                "High trade frequency detected", RiskEventSeverity.WARNING
-            )
+        if self.daily_trades > 1000:  # >1000 trades/day is unusual
+            self._log_risk_event("High trade frequency detected", RiskEventSeverity.WARNING)
 
         return True, "OK"
 
@@ -1304,13 +1271,11 @@ class InstitutionalRiskManager:
         # Check intraday risk
         self.check_intraday_risk(timestamp)
 
-    def calculate_var(
-        self, confidence: float = 0.95, method: str = "historical"
-    ) -> float:
+    def calculate_var(self, confidence: float = 0.95, method: str = "historical") -> float:
         """
         Calculate Value at Risk using specified method.
         """
-        if len(self.returns_history) < 30:  # noqa: PLR2004
+        if len(self.returns_history) < 30:
             # Not enough data - use parametric fallback
             return self.current_capital * 0.02  # Conservative 2%
 
@@ -1318,11 +1283,11 @@ class InstitutionalRiskManager:
 
         if method == "historical":
             return np.percentile(returns, (1 - confidence) * 100) * self.current_capital
-        elif method == "parametric" and SCIPY_AVAILABLE:
+        if method == "parametric" and SCIPY_AVAILABLE:
             mu, sigma = np.mean(returns), np.std(returns)
             z_score = stats.norm.ppf(1 - confidence)
             return (mu + z_score * sigma) * self.current_capital
-        elif method == "cornish_fisher" and SCIPY_AVAILABLE:
+        if method == "cornish_fisher" and SCIPY_AVAILABLE:
             # Adjust for skewness and kurtosis
             z = stats.norm.ppf(1 - confidence)
             s = stats.skew(returns)
@@ -1337,18 +1302,14 @@ class InstitutionalRiskManager:
         var = self.calculate_var(confidence)
         returns = np.array(self.returns_history)
         cvar_returns = returns[returns * self.current_capital <= var]
-        return (
-            np.mean(cvar_returns) * self.current_capital
-            if len(cvar_returns) > 0
-            else var
-        )
+        return np.mean(cvar_returns) * self.current_capital if len(cvar_returns) > 0 else var
 
     def calculate_kelly_criterion(self) -> float:
         """
         Calculate optimal Kelly fraction based on trade history.
         f* = (bp - q) / b
         """
-        if len(self.trade_history) < 20:  # noqa: PLR2004
+        if len(self.trade_history) < 20:
             return self.kelly_fraction  # Default
 
         wins = [t.net_pnl for t in self.trade_history if t.net_pnl > 0]
@@ -1404,12 +1365,14 @@ class InstitutionalRiskManager:
 
         logger.critical("=" * 70)
         logger.critical("KILL SWITCH ACTIVATED")
-        logger.critical(f"Reason: {reason}")
-        logger.critical(f"Daily P&L: ${self.daily_pnl:,.2f}")
-        logger.critical(f"Current Capital: ${self.current_capital:,.2f}")
-        logger.critical(
-            f"Drawdown: {(self.peak_capital - self.current_capital) / self.peak_capital:.2%}"
-        )
+        logger.critical("Reason: %s", reason)
+
+        logger.critical("Daily P&L: $%s", self.daily_pnl)
+
+        logger.critical("Current Capital: $%s", self.current_capital)
+
+        logger.critical("Drawdown: %s", (self.peak_capital - self.current_capital) / self.peak_capital)
+
         logger.critical("=" * 70)
 
         # Execute emergency callbacks
@@ -1417,7 +1380,8 @@ class InstitutionalRiskManager:
             try:
                 callback(reason, self.daily_pnl, self.current_capital)
             except (RuntimeError, ValueError, AttributeError) as e:
-                logger.error(f"Emergency callback failed: {e}")
+                logger.error("Emergency callback failed: %s", e)
+
 
         self._log_risk_event(f"Kill switch: {reason}", RiskEventSeverity.KILL_SWITCH)
 
@@ -1431,12 +1395,7 @@ class InstitutionalRiskManager:
             "daily_pnl": self.daily_pnl,
         }
         self.risk_events.append(event)
-        logger.log(
-            logging.CRITICAL
-            if severity >= RiskEventSeverity.CRITICAL
-            else logging.WARNING,
-            f"Risk Event [{severity.name}]: {message}",
-        )
+        logger.log("Risk Event [%s]: %s", severity.name, message, logging.CRITICAL if severity >= RiskEventSeverity.CRITICAL else logging.WARNING)
 
     def _estimate_var_change(self, symbol: str, size: float, price: float) -> float:
         """Estimate how VaR changes with new position"""
@@ -1447,9 +1406,7 @@ class InstitutionalRiskManager:
     def get_risk_report(self) -> dict[str, Any]:
         """Generate comprehensive risk report"""
         current_drawdown = (
-            (self.peak_capital - self.current_capital) / self.peak_capital
-            if self.peak_capital > 0
-            else 0
+            (self.peak_capital - self.current_capital) / self.peak_capital if self.peak_capital > 0 else 0
         )
 
         return {
@@ -1464,20 +1421,14 @@ class InstitutionalRiskManager:
             "limits": self.limits,
             "utilization": {
                 "position": max(
-                    (abs(p.size * p.avg_entry_price) / self.current_capital)
-                    for p in self.positions.values()
+                    (abs(p.size * p.avg_entry_price) / self.current_capital) for p in self.positions.values()
                 )
                 if self.positions
                 else 0,
-                "leverage": sum(
-                    abs(p.size * p.avg_entry_price) for p in self.positions.values()
-                )
-                / self.current_capital
+                "leverage": sum(abs(p.size * p.avg_entry_price) for p in self.positions.values()) / self.current_capital
                 if self.current_capital > 0
                 else 0,
-                "daily_loss": abs(self.daily_pnl) / self.current_capital
-                if self.current_capital > 0
-                else 0,
+                "daily_loss": abs(self.daily_pnl) / self.current_capital if self.current_capital > 0 else 0,
             },
             "risk_metrics": {
                 "var_95": self.calculate_var(0.95),
@@ -1498,6 +1449,194 @@ class InstitutionalRiskManager:
                 for symbol, pos in self.positions.items()
             },
         }
+
+
+# =============================================================================
+# =============================================================================
+# PERFORMANCE REPORT HELPERS
+# Module-level functions extracted from get_performance_report() so each
+# metric section is independently testable without instantiating the engine.
+# =============================================================================
+
+# Annualisation factor: minute bars assumed (252 trading days × 390 min/day).
+_ANNUAL_BARS = 252 * 390
+
+
+def _compute_drawdown_series(
+    equity_curve: list[tuple],
+    initial_capital: float,
+) -> tuple[float, list[dict]]:
+    """
+    Compute maximum drawdown and completed drawdown periods from an equity curve.
+
+    Returns (max_drawdown_fraction, drawdown_periods_list).
+    max_drawdown_fraction is in [0, 1]; multiply by 100 for percentage.
+    """
+    peak = initial_capital
+    max_dd = 0.0
+    dd_start = None
+    dd_periods: list[dict] = []
+
+    for ts, eq in equity_curve:
+        if eq > peak:
+            if dd_start is not None:
+                ts_dt = ts.to_datetime() if hasattr(ts, "to_datetime") else datetime.now(UTC)
+                if (ts_dt - dd_start).total_seconds() > 0:
+                    dd_periods.append({
+                        "start": dd_start.isoformat(),
+                        "end": ts_dt.isoformat(),
+                        "max_dd": max_dd,
+                    })
+            peak = eq
+            max_dd = 0.0
+            dd_start = None
+        else:
+            dd = (peak - eq) / peak if peak > 0 else 0.0
+            if dd > max_dd:
+                max_dd = dd
+                if dd_start is None:
+                    dd_start = ts.to_datetime() if hasattr(ts, "to_datetime") else datetime.now(UTC)
+
+    return max_dd, dd_periods
+
+
+def _calculate_sortino(returns: "np.ndarray", target: float = 0.0) -> float:
+    """Sortino ratio: excess return over target divided by downside deviation."""
+    downside = returns[returns < target]
+    if len(downside) == 0:
+        return 0.0
+    downside_std = float(np.std(downside))
+    return float((np.mean(returns) - target) / downside_std) if downside_std > 0 else 0.0
+
+
+def _calculate_calmar(returns: "np.ndarray", max_dd: float) -> float:
+    """Calmar ratio: annualised return divided by maximum drawdown."""
+    if max_dd <= 0 or len(returns) == 0:
+        return 0.0
+    annual_return = float(np.mean(returns)) * _ANNUAL_BARS
+    return annual_return / max_dd
+
+
+def _build_report_metadata(engine: "EnhancedBacktestEngine") -> dict[str, Any]:
+    """Build the metadata section of the performance report."""
+    return {
+        "generated_at": datetime.now(UTC).isoformat(),
+        "initial_capital": engine.initial_capital,
+        "final_capital": engine.capital,
+        "total_return_pct": (engine.capital - engine.initial_capital) / engine.initial_capital * 100,
+        "backtest_periods": len(engine.equity_curve),
+        "execution_quality": engine.execution_quality.name,
+    }
+
+
+def _build_trade_statistics(trades: list, pnls: list[float]) -> dict[str, Any]:
+    """Compute win/loss counts, profit factor, payoff ratio, and P&L distribution."""
+    wins = [p for p in pnls if p > 0]
+    losses = [p for p in pnls if p < 0]
+    return {
+        "total_trades": len(trades),
+        "winning_trades": len(wins),
+        "losing_trades": len(losses),
+        "win_rate": len(wins) / len(trades) if trades else 0,
+        "profit_factor": abs(sum(wins) / sum(losses)) if losses else float("inf"),
+        "payoff_ratio": abs(float(np.mean(wins)) / float(np.mean(losses))) if wins and losses else 0,
+        "total_pnl": sum(pnls),
+        "avg_trade_pnl": float(np.mean(pnls)),
+        "avg_win": float(np.mean(wins)) if wins else 0,
+        "avg_loss": float(np.mean(losses)) if losses else 0,
+        "largest_win": max(wins) if wins else 0,
+        "largest_loss": min(losses) if losses else 0,
+        "std_dev_pnl": float(np.std(pnls)),
+    }
+
+
+def _build_time_analysis(trades: list) -> dict[str, Any]:
+    """Compute trade duration statistics in seconds and minutes."""
+    durations = [t.duration_seconds for t in trades]
+    return {
+        "avg_duration_sec": float(np.mean(durations)) if durations else 0,
+        "avg_duration_min": float(np.mean(durations)) / 60 if durations else 0,
+        "max_duration_sec": max(durations) if durations else 0,
+        "min_duration_sec": min(durations) if durations else 0,
+    }
+
+
+def _build_risk_metrics(
+    returns: list[float],
+    equity_returns: "np.ndarray",
+    max_dd: float,
+    dd_periods: list[dict],
+    current_capital: float,
+    risk_manager: "InstitutionalRiskManager",
+) -> dict[str, Any]:
+    """
+    Compute Sharpe, Sortino, Calmar, VaR, CVaR, skewness, and kurtosis.
+
+    All ratio metrics use the annualisation factor _ANNUAL_BARS (minute bars).
+    """
+    eq_std = float(np.std(equity_returns)) if len(equity_returns) > 1 else 0.0
+    eq_mean = float(np.mean(equity_returns)) if len(equity_returns) > 1 else 0.0
+    sharpe = (eq_mean / eq_std * np.sqrt(_ANNUAL_BARS)) if eq_std > 0 else 0.0
+    annual_vol = eq_std * np.sqrt(_ANNUAL_BARS) if len(equity_returns) > 1 else 0.0
+
+    ret_arr = np.array(returns)
+    var_95 = float(np.percentile(ret_arr, 5)) if len(returns) > 10 else 0.0
+    cvar_95 = float(np.mean(ret_arr[ret_arr <= var_95])) if len(returns) > 10 else 0.0
+
+    skewness = float(stats.skew(returns)) if SCIPY_AVAILABLE and len(returns) > 2 else 0.0
+    kurtosis = float(stats.kurtosis(returns)) if SCIPY_AVAILABLE and len(returns) > 2 else 0.0
+
+    current_dd_pct = (
+        (risk_manager.peak_capital - current_capital) / risk_manager.peak_capital * 100
+        if risk_manager.peak_capital > 0
+        else 0.0
+    )
+
+    return {
+        "max_drawdown_pct": max_dd * 100,
+        "max_drawdown_periods": dd_periods,
+        "current_drawdown_pct": current_dd_pct,
+        "volatility_annual": annual_vol,
+        "sharpe_ratio": float(sharpe),
+        "sortino_ratio": _calculate_sortino(equity_returns),
+        "calmar_ratio": _calculate_calmar(equity_returns, max_dd),
+        "var_95": var_95,
+        "cvar_95": cvar_95,
+        "skewness": skewness,
+        "kurtosis": kurtosis,
+    }
+
+
+def _build_execution_quality(
+    execution_log: list[dict],
+    positions: dict,
+    initial_capital: float,
+    cost_model: "TransactionCostModel",
+) -> dict[str, Any]:
+    """Aggregate slippage, latency, commission, and overnight financing costs."""
+    total_financing = sum(p.total_financing_paid for p in positions.values())
+    total_cost = sum(e["costs"].get("total_cost", 0) for e in execution_log if "costs" in e)
+    return {
+        "avg_slippage_bps": float(np.mean([e.get("slippage_bps", 0) for e in execution_log])) if execution_log else 0,
+        "avg_latency_ms": float(np.mean([e.get("latency_ms", 0) for e in execution_log])) if execution_log else 0,
+        "total_commission": sum(e["costs"].get("commission", 0) for e in execution_log if "costs" in e),
+        "total_slippage_cost": sum(e["costs"].get("market_impact", 0) for e in execution_log if "costs" in e),
+        "cost_drag_pct": (total_cost / initial_capital * 100) if initial_capital > 0 else 0,
+        "total_financing_paid": total_financing,
+        "financing_drag_pct": (total_financing / initial_capital * 100) if initial_capital > 0 else 0,
+        "overnight_rate_annual_pct": getattr(cost_model, "overnight_rate_annual", 0.004) * 100,
+    }
+
+
+def _build_mfe_mae_analysis(trades: list) -> dict[str, Any]:
+    """Compute MFE/MAE efficiency metrics across all closed trades."""
+    total_mae = sum(t.mae for t in trades)
+    return {
+        "avg_mfe_pct": float(np.mean([t.mfe_pct for t in trades])),
+        "avg_mae_pct": float(np.mean([t.mae_pct for t in trades])),
+        "avg_efficiency": float(np.mean([t.net_pnl / t.mfe if t.mfe > 0 else 0 for t in trades])),
+        "profit_factor_mfe": sum(t.mfe for t in trades) / total_mae if total_mae > 0 else 0,
+    }
 
 
 # =============================================================================
@@ -1551,8 +1690,10 @@ class EnhancedBacktestEngine:
         # Slippage model parameters based on execution quality
         self.latency_model = self._get_latency_model()
 
-        logger.info(f"BacktestEngine initialized: ${initial_capital:,.2f}")
-        logger.info(f"Execution quality: {execution_quality.name}")
+        logger.info("BacktestEngine initialized: $%s", initial_capital)
+
+        logger.info("Execution quality: %s", execution_quality.name)
+
         if self.enable_gpu:
             logger.info("GPU acceleration enabled")
 
@@ -1577,11 +1718,7 @@ class EnhancedBacktestEngine:
 
     def _annual_financing_rate(self, position: "Position") -> float:
         """Return the annual overnight financing rate for a position side."""
-        is_long = (
-            position.side.name == "BUY"
-            if hasattr(position.side, "name")
-            else str(position.side) == "BUY"
-        )
+        is_long = position.side.name == "BUY" if hasattr(position.side, "name") else str(position.side) == "BUY"
         default_annual = getattr(self.cost_model, "overnight_rate_annual", 0.004)
         if is_long:
             return getattr(self.cost_model, "overnight_rate_long_annual", default_annual)
@@ -1597,16 +1734,16 @@ class EnhancedBacktestEngine:
         for symbol, position in self.positions.items():
             if position.size == 0:
                 continue
-            current_price  = self._get_position_price(symbol, tick, position)
-            notional       = abs(position.size) * current_price
-            annual_rate    = self._annual_financing_rate(position)
-            per_bar_rate   = annual_rate / 365.0 / bars_per_day
+            current_price = self._get_position_price(symbol, tick, position)
+            notional = abs(position.size) * current_price
+            annual_rate = self._annual_financing_rate(position)
+            per_bar_rate = annual_rate / 365.0 / bars_per_day
             financing_cost = notional * per_bar_rate
 
             if financing_cost != 0.0:
-                self.capital                   -= financing_cost
-                position.total_financing_paid  += financing_cost
-                total_financing                += financing_cost
+                self.capital -= financing_cost
+                position.total_financing_paid += financing_cost
+                total_financing += financing_cost
 
             position.update_mfe_mae(current_price, tick.timestamp)
         return total_financing
@@ -1672,17 +1809,11 @@ class EnhancedBacktestEngine:
 
             # Mark to market
             if position.side == OrderSide.BUY:
-                mark_price = (
-                    mark_tick.bid if symbol == mark_tick.symbol else current_price
-                )
+                mark_price = mark_tick.bid if symbol == mark_tick.symbol else current_price
             else:
-                mark_price = (
-                    mark_tick.ask if symbol == mark_tick.symbol else current_price
-                )
+                mark_price = mark_tick.ask if symbol == mark_tick.symbol else current_price
 
-            position.update_mfe_mae(
-                mark_price, self.current_time or NanosecondTimestamp.now()
-            )
+            position.update_mfe_mae(mark_price, self.current_time or NanosecondTimestamp.now())
             equity += position.unrealized_pnl
 
         return equity
@@ -1709,9 +1840,7 @@ class EnhancedBacktestEngine:
         current_price = history[-1]
 
         # Pre-trade risk check
-        allowed, reason, risk_meta = self.risk_manager.check_pre_trade_risk(
-            symbol, side, size, current_price, {}
-        )
+        allowed, reason, _ = self.risk_manager.check_pre_trade_risk(symbol, side, size, current_price, {})
 
         if not allowed:
             return False, reason, None
@@ -1737,36 +1866,33 @@ class EnhancedBacktestEngine:
 
         return True, "OK", order_id
 
-    def _resolve_market_fill(
-        self, order: dict, tick: "TickData", size: float
-    ) -> tuple[float, float, float]:
+    def _resolve_market_fill(self, order: dict, tick: "TickData", size: float) -> tuple[float, float, float]:
         """
         Compute fill price, slippage, and latency for a market order.
 
         Returns (fill_price, slippage_bps, latency_sec).
         """
-        is_buy      = order["side"] == OrderSide.BUY
-        base_price  = tick.ask if is_buy else tick.bid
-        volatility  = (
-            self.microstructure.realized_variance ** 0.5
+        is_buy = order["side"] == OrderSide.BUY
+        base_price = tick.ask if is_buy else tick.bid
+        volatility = (
+            self.microstructure.realized_variance**0.5
             if self.microstructure.realized_variance > 0
             else _ATR_FALLBACK_VOL
         )
         participation = abs(size) / max(tick.volume, _MIN_VOLUME_FLOOR)
-        impact        = self.cost_model.calculate_market_impact(
-            abs(size), participation, volatility, self.microstructure.order_flow_toxicity,
+        impact = self.cost_model.calculate_market_impact(
+            abs(size),
+            participation,
+            volatility,
+            self.microstructure.order_flow_toxicity,
         )
-        slippage_bps = impact["temporary_bps"] + _ENGINE_RNG.normal(
-            0, impact["temporary_bps"] * _SLIPPAGE_NOISE_FRAC
-        )
-        sign       = 1 if is_buy else -1
+        slippage_bps = impact["temporary_bps"] + _ENGINE_RNG.normal(0, impact["temporary_bps"] * _SLIPPAGE_NOISE_FRAC)
+        sign = 1 if is_buy else -1
         fill_price = base_price * (1 + sign * slippage_bps / 10_000)
-        latency    = _ENGINE_RNG.normal(self.latency_model["mean"], self.latency_model["std"])
+        latency = _ENGINE_RNG.normal(self.latency_model["mean"], self.latency_model["std"])
         return fill_price, slippage_bps, latency
 
-    def _resolve_limit_fill(
-        self, order: dict, tick: "TickData"
-    ) -> tuple[float, float, float]:
+    def _resolve_limit_fill(self, order: dict, tick: "TickData") -> tuple[float, float, float]:
         """
         Validate and return fill parameters for a limit order.
 
@@ -1774,7 +1900,7 @@ class EnhancedBacktestEngine:
         Raises ValueError when the limit is not yet marketable.
         """
         is_buy = order["side"] == OrderSide.BUY
-        lp     = order["limit_price"]
+        lp = order["limit_price"]
         if is_buy and lp < tick.ask:
             raise ValueError("Limit below ask")
         if not is_buy and lp > tick.bid:
@@ -1798,9 +1924,14 @@ class EnhancedBacktestEngine:
 
         if is_closing:
             trade = self._close_position(
-                position, size, fill_price, tick.timestamp,
-                costs.get("slippage_bps", 0.0), costs["total_cost"],
-                order["side"], order_id,
+                position,
+                size,
+                fill_price,
+                tick.timestamp,
+                costs.get("slippage_bps", 0.0),
+                costs["total_cost"],
+                order["side"],
+                order_id,
             )
             if trade:
                 self.closed_trades.append(trade)
@@ -1816,23 +1947,24 @@ class EnhancedBacktestEngine:
             return
 
         if position.size == 0:
-            position.side            = order["side"]
+            position.side = order["side"]
             position.avg_entry_price = fill_price
             position.entry_timestamp = tick.timestamp
-            position.size            = remaining
+            position.size = remaining
         else:
-            total_size               = position.size + remaining
-            position.avg_entry_price = (
-                position.size * position.avg_entry_price + remaining * fill_price
-            ) / total_size
+            total_size = position.size + remaining
+            position.avg_entry_price = (position.size * position.avg_entry_price + remaining * fill_price) / total_size
             position.size = total_size
 
         position.total_commission_paid += costs["commission"]
-        position.total_slippage_paid   += costs["market_impact"]
+        position.total_slippage_paid += costs["market_impact"]
         position.add_trade(
-            trade_size=remaining, trade_price=fill_price,
-            commission=costs["commission"], slippage=costs["market_impact"],
-            timestamp=tick.timestamp, is_opening=True,
+            trade_size=remaining,
+            trade_price=fill_price,
+            commission=costs["commission"],
+            slippage=costs["market_impact"],
+            timestamp=tick.timestamp,
+            is_opening=True,
         )
 
     def _update_order_status(self, order_id: str, order: dict, size: float) -> None:
@@ -1852,7 +1984,7 @@ class EnhancedBacktestEngine:
             return False, {"error": "Order not found"}
 
         order = self.open_orders[order_id]
-        size  = fill_size or order["size"]
+        size = fill_size or order["size"]
         if abs(size) > abs(order["size"]):
             size = order["size"] if order["size"] > 0 else -abs(order["size"])
 
@@ -1860,24 +1992,26 @@ class EnhancedBacktestEngine:
         try:
             if order["type"] == "market":
                 fill_price, slippage_bps, latency = self._resolve_market_fill(order, tick, size)
-                volatility    = (
-                    self.microstructure.realized_variance ** 0.5
+                volatility = (
+                    self.microstructure.realized_variance**0.5
                     if self.microstructure.realized_variance > 0
                     else _ATR_FALLBACK_VOL
                 )
                 participation = abs(size) / max(tick.volume, _MIN_VOLUME_FLOOR)
             elif order["type"] == "limit" and order.get("limit_price"):
                 fill_price, slippage_bps, latency = self._resolve_limit_fill(order, tick)
-                volatility    = _ATR_FALLBACK_VOL
+                volatility = _ATR_FALLBACK_VOL
                 participation = 0.0
             else:
                 return False, {"error": "Invalid order type"}
         except ValueError as exc:
-            return False, {"error": str(exc), "status": "pending"}
+            logger.warning("Order fill resolution failed: %s", exc)
+            return False, {"error": "Invalid order parameters", "status": "pending"}
 
         # ── Calculate transaction costs ────────────────────────────────────
         costs = self.cost_model.total_cost(
-            size, fill_price,
+            size,
+            fill_price,
             participation_rate=participation,
             daily_volatility=volatility,
             order_flow_toxicity=self.microstructure.order_flow_toxicity,
@@ -1887,35 +2021,40 @@ class EnhancedBacktestEngine:
         # ── Ensure position exists ─────────────────────────────────────────
         if order["symbol"] not in self.positions:
             self.positions[order["symbol"]] = Position(
-                symbol=order["symbol"], side=order["side"], size=0.0, avg_entry_price=0.0,
+                symbol=order["symbol"],
+                side=order["side"],
+                size=0.0,
+                avg_entry_price=0.0,
             )
         position = self.positions[order["symbol"]]
 
         self._apply_fill_to_position(order, position, size, fill_price, costs, tick, order_id)
         self._update_order_status(order_id, order, size)
 
-        self.execution_log.append({
-            "timestamp":   float(tick.timestamp),
-            "order_id":    order_id,
-            "symbol":      order["symbol"],
-            "side":        order["side"].name if isinstance(order["side"], OrderSide) else order["side"],
-            "size":        size,
-            "price":       fill_price,
-            "slippage_bps": slippage_bps,
-            "costs":       costs,
-            "latency_sec": latency,
-            "regime":      self.microstructure.current_regime.name,
-        })
+        self.execution_log.append(
+            {
+                "timestamp": float(tick.timestamp),
+                "order_id": order_id,
+                "symbol": order["symbol"],
+                "side": order["side"].name if isinstance(order["side"], OrderSide) else order["side"],
+                "size": size,
+                "price": fill_price,
+                "slippage_bps": slippage_bps,
+                "costs": costs,
+                "latency_sec": latency,
+                "regime": self.microstructure.current_regime.name,
+            }
+        )
 
         return True, {
-            "filled":         True,
-            "fill_price":     fill_price,
-            "fill_size":      size,
-            "slippage_bps":   slippage_bps,
-            "costs":          costs,
-            "position_size":  position.size,
+            "filled": True,
+            "fill_price": fill_price,
+            "fill_size": size,
+            "slippage_bps": slippage_bps,
+            "costs": costs,
+            "position_size": position.size,
             "unrealized_pnl": position.unrealized_pnl,
-            "latency_ms":     latency * 1000,
+            "latency_ms": latency * 1000,
         }
 
     def _close_position(
@@ -1971,9 +2110,7 @@ class EnhancedBacktestEngine:
             entry_volatility=self.microstructure.realized_variance**0.5,
             exit_volatility=self.microstructure.realized_variance**0.5,
             entry_spread_bps=0,
-            exit_spread_bps=(exit_price - position.avg_entry_price)
-            / position.avg_entry_price
-            * 10000
+            exit_spread_bps=(exit_price - position.avg_entry_price) / position.avg_entry_price * 10000
             if position.avg_entry_price
             else 0,
             mfe=position.max_favorable_excursion,
@@ -1981,238 +2118,58 @@ class EnhancedBacktestEngine:
             mfe_pct=position.max_favorable_excursion / position.avg_entry_price * 100
             if position.avg_entry_price
             else 0,
-            mae_pct=position.max_adverse_excursion / position.avg_entry_price * 100
-            if position.avg_entry_price
-            else 0,
+            mae_pct=position.max_adverse_excursion / position.avg_entry_price * 100 if position.avg_entry_price else 0,
         )
 
         # Update position
         position.realized_pnl += net_pnl
-        position.size = position.size + (
-            closing_size if position.size > 0 else -closing_size
-        )
+        position.size = position.size + (closing_size if position.size > 0 else -closing_size)
 
-        if is_full_close or abs(position.size) < 0.0001:  # noqa: PLR2004
+        if is_full_close or abs(position.size) < 0.0001:
             # Archive position
-            position.closing_trades.append(
-                {"trade_id": trade.trade_id, "exit_price": exit_price, "pnl": net_pnl}
-            )
+            position.closing_trades.append({"trade_id": trade.trade_id, "exit_price": exit_price, "pnl": net_pnl})
 
         return trade
 
     def get_performance_report(self) -> dict[str, Any]:
-        """Generate comprehensive institutional-grade performance report"""
+        """Generate comprehensive institutional-grade performance report."""
         if not self.closed_trades:
             return {"error": "No completed trades"}
 
         trades = self.closed_trades
         pnls = [t.net_pnl for t in trades]
         returns = [t.return_pct for t in trades]
-
-        # Basic statistics
-        wins = [p for p in pnls if p > 0]
-        losses = [p for p in pnls if p < 0]
-
-        # Time analysis
-        durations = [t.duration_seconds for t in trades]
-
-        # Equity curve analysis
         equity_values = [e[1] for e in self.equity_curve]
-        [e[0] for e in self.equity_curve]
+        equity_returns = (
+            np.diff(equity_values) / equity_values[:-1] if len(equity_values) > 1 else np.array([])
+        )
+        max_dd, dd_periods = _compute_drawdown_series(self.equity_curve, self.initial_capital)
 
-        # Calculate returns
-        equity_returns = np.diff(equity_values) / equity_values[:-1] if len(equity_values) > 1 else np.array([])
-
-        # Drawdown calculation
-        peak = self.initial_capital
-        max_dd = 0.0
-        dd_start = None
-        dd_periods = []
-
-        for ts, eq in self.equity_curve:
-            if eq > peak:
-                if dd_start and (ts.to_datetime() - dd_start).total_seconds() > 0:
-                    dd_periods.append(
-                        {
-                            "start": dd_start.isoformat()
-                            if isinstance(dd_start, datetime)
-                            else str(dd_start),
-                            "end": ts.to_datetime().isoformat()
-                            if hasattr(ts, "to_datetime")
-                            else str(ts),
-                            "max_dd": max_dd,
-                        }
-                    )
-                peak = eq
-                max_dd = 0.0
-                dd_start = None
-            else:
-                dd = (peak - eq) / peak
-                if dd > max_dd:
-                    max_dd = dd
-                    if dd_start is None:
-                        dd_start = (
-                            ts.to_datetime()
-                            if hasattr(ts, "to_datetime")
-                            else datetime.now(UTC)
-                        )
-
-        # Advanced metrics
-        def calculate_sortino(returns, target=0):
-            downside = [r for r in returns if r < target]
-            if not downside:
-                return 0.0
-            return (
-                (np.mean(returns) - target) / np.std(downside)
-                if np.std(downside) > 0
-                else 0.0
-            )
-
-        def calculate_calmar(returns, max_dd):
-            if max_dd <= 0:
-                return 0.0
-            annual_return = np.mean(returns) * 252 * 390  # Assuming minute bars
-            return annual_return / max_dd
-
-        report = {
-            "metadata": {
-                "generated_at": datetime.now(UTC).isoformat(),
-                "initial_capital": self.initial_capital,
-                "final_capital": self.capital,
-                "total_return_pct": (self.capital - self.initial_capital)
-                / self.initial_capital
-                * 100,
-                "backtest_periods": len(self.equity_curve),
-                "execution_quality": self.execution_quality.name,
-            },
-            "trade_statistics": {
-                "total_trades": len(trades),
-                "winning_trades": len(wins),
-                "losing_trades": len(losses),
-                "win_rate": len(wins) / len(trades) if trades else 0,
-                "profit_factor": abs(sum(wins) / sum(losses))
-                if losses
-                else float("inf"),
-                "payoff_ratio": abs(np.mean(wins) / np.mean(losses))
-                if wins and losses
-                else 0,
-                "total_pnl": sum(pnls),
-                "avg_trade_pnl": np.mean(pnls),
-                "avg_win": np.mean(wins) if wins else 0,
-                "avg_loss": np.mean(losses) if losses else 0,
-                "largest_win": max(wins) if wins else 0,
-                "largest_loss": min(losses) if losses else 0,
-                "std_dev_pnl": np.std(pnls),
-            },
-            "time_analysis": {
-                "avg_duration_sec": np.mean(durations),
-                "avg_duration_min": np.mean(durations) / 60,
-                "max_duration_sec": max(durations) if durations else 0,
-                "min_duration_sec": min(durations) if durations else 0,
-            },
-            "risk_metrics": {
-                "max_drawdown_pct": max_dd * 100,
-                "max_drawdown_periods": dd_periods,
-                "current_drawdown_pct": (self.risk_manager.peak_capital - self.capital)
-                / self.risk_manager.peak_capital
-                * 100
-                if self.risk_manager.peak_capital > 0
-                else 0,
-                "volatility_annual": np.std(equity_returns) * np.sqrt(252 * 390)
-                if len(equity_returns) > 1
-                else 0,
-                "sharpe_ratio": np.mean(equity_returns)
-                / np.std(equity_returns)
-                * np.sqrt(252 * 390)
-                if len(equity_returns) > 1 and np.std(equity_returns) > 0
-                else 0,
-                "sortino_ratio": calculate_sortino(equity_returns),
-                "calmar_ratio": calculate_calmar(equity_returns, max_dd),
-                "var_95": np.percentile(returns, 5) if len(returns) > 10 else 0,  # noqa: PLR2004
-                "cvar_95": np.mean(
-                    [r for r in returns if r <= np.percentile(returns, 5)]
-                )
-                if len(returns) > 10  # noqa: PLR2004
-                else 0,
-                "skewness": stats.skew(returns)
-                if SCIPY_AVAILABLE and len(returns) > 2  # noqa: PLR2004
-                else 0,
-                "kurtosis": stats.kurtosis(returns)
-                if SCIPY_AVAILABLE and len(returns) > 2  # noqa: PLR2004
-                else 0,
-            },
-            "execution_quality": {
-                "avg_slippage_bps": np.mean(
-                    [e.get("slippage_bps", 0) for e in self.execution_log]
-                ),
-                "avg_latency_ms": np.mean(
-                    [e.get("latency_ms", 0) for e in self.execution_log]
-                ),
-                "total_commission": sum(
-                    e["costs"].get("commission", 0)
-                    for e in self.execution_log
-                    if "costs" in e
-                ),
-                "total_slippage_cost": sum(
-                    e["costs"].get("market_impact", 0)
-                    for e in self.execution_log
-                    if "costs" in e
-                ),
-                "cost_drag_pct": (
-                    sum(
-                        e["costs"].get("total_cost", 0)
-                        for e in self.execution_log
-                        if "costs" in e
-                    )
-                    / self.initial_capital
-                )
-                * 100
-                if self.initial_capital > 0
-                else 0,
-                # Overnight financing totals across all positions (open + closed)
-                "total_financing_paid": sum(
-                    p.total_financing_paid for p in self.positions.values()
-                ),
-                "financing_drag_pct": (
-                    sum(p.total_financing_paid for p in self.positions.values())
-                    / self.initial_capital
-                    * 100
-                )
-                if self.initial_capital > 0
-                else 0,
-                "overnight_rate_annual_pct": getattr(
-                    self.cost_model, "overnight_rate_annual", 0.004
-                )
-                * 100,
-            },
+        return {
+            "metadata": _build_report_metadata(self),
+            "trade_statistics": _build_trade_statistics(trades, pnls),
+            "time_analysis": _build_time_analysis(trades),
+            "risk_metrics": _build_risk_metrics(
+                returns, equity_returns, max_dd, dd_periods, self.capital, self.risk_manager
+            ),
+            "execution_quality": _build_execution_quality(
+                self.execution_log, self.positions, self.initial_capital, self.cost_model
+            ),
             "regime_performance": self._analyze_regime_performance(),
-            "mfe_mae_analysis": {
-                "avg_mfe_pct": np.mean([t.mfe_pct for t in trades]),
-                "avg_mae_pct": np.mean([t.mae_pct for t in trades]),
-                "avg_efficiency": np.mean(
-                    [t.net_pnl / t.mfe if t.mfe > 0 else 0 for t in trades]
-                ),
-                "profit_factor_mfe": sum(t.mfe for t in trades)
-                / sum(t.mae for t in trades)
-                if sum(t.mae for t in trades) > 0
-                else 0,
-            },
+            "mfe_mae_analysis": _build_mfe_mae_analysis(trades),
             "risk_manager_report": self.risk_manager.get_risk_report(),
             "monthly_returns": self._calculate_monthly_returns(),
             "equity_curve_sample": [
                 {"timestamp": float(ts), "equity": eq}
-                for ts, eq in self.equity_curve[-100:]  # Last 100 points
+                for ts, eq in self.equity_curve[-100:]
             ],
         }
 
-        return report
-
     def _analyze_regime_performance(self) -> dict[str, dict]:
-        """Analyze performance by market regime"""
-        regime_stats = defaultdict(
+        """Aggregate trade P&L and win-rate by entry market regime."""
+        regime_stats: dict[str, dict] = defaultdict(
             lambda: {"trades": 0, "pnl": 0.0, "wins": 0, "losses": 0}
         )
-
         for trade in self.closed_trades:
             regime = trade.entry_regime.name
             regime_stats[regime]["trades"] += 1
@@ -2224,39 +2181,30 @@ class EnhancedBacktestEngine:
 
         return {
             regime: {
-                "total_trades": stats["trades"],
-                "total_pnl": stats["pnl"],
-                "win_rate": stats["wins"] / stats["trades"]
-                if stats["trades"] > 0
-                else 0,
-                "avg_pnl": stats["pnl"] / stats["trades"] if stats["trades"] > 0 else 0,
+                "total_trades": s["trades"],
+                "total_pnl": s["pnl"],
+                "win_rate": s["wins"] / s["trades"] if s["trades"] > 0 else 0,
+                "avg_pnl": s["pnl"] / s["trades"] if s["trades"] > 0 else 0,
             }
-            for regime, stats in regime_stats.items()
+            for regime, s in regime_stats.items()
         }
 
     def _calculate_monthly_returns(self) -> dict[str, float]:
-        """Calculate monthly returns from equity curve"""
+        """Compute month-over-month equity returns from the equity curve."""
         if not self.equity_curve:
             return {}
-
-        monthly_equity = {}
+        monthly_equity: dict[str, float] = {}
         for ts, eq in self.equity_curve:
-            dt = (
-                ts.to_datetime()
-                if hasattr(ts, "to_datetime")
-                else datetime.fromtimestamp(float(ts))
-            )
-            month_key = dt.strftime("%Y-%m")
-            monthly_equity[month_key] = eq  # Last equity of month
+            dt = ts.to_datetime() if hasattr(ts, "to_datetime") else datetime.fromtimestamp(float(ts))
+            monthly_equity[dt.strftime("%Y-%m")] = eq  # last equity value wins per month
 
-        months = sorted(monthly_equity.keys())
-        returns = {}
-        for i, month in enumerate(months[1:], 1):
-            prev_eq = monthly_equity[months[i - 1]]
-            curr_eq = monthly_equity[month]
-            returns[month] = (curr_eq - prev_eq) / prev_eq if prev_eq > 0 else 0
-
-        return returns
+        months = sorted(monthly_equity)
+        return {
+            month: (monthly_equity[month] - monthly_equity[months[i - 1]]) / monthly_equity[months[i - 1]]
+            if monthly_equity[months[i - 1]] > 0
+            else 0.0
+            for i, month in enumerate(months[1:], 1)
+        }
 
     def save_state(self, filepath: str, compress: bool = True):
         """Save complete engine state to disk"""
@@ -2270,9 +2218,7 @@ class EnhancedBacktestEngine:
             "positions": {
                 symbol: {
                     "symbol": pos.symbol,
-                    "side": pos.side.name
-                    if isinstance(pos.side, OrderSide)
-                    else pos.side,
+                    "side": pos.side.name if isinstance(pos.side, OrderSide) else pos.side,
                     "size": pos.size,
                     "avg_entry": pos.avg_entry_price,
                     "realized_pnl": pos.realized_pnl,
@@ -2282,9 +2228,7 @@ class EnhancedBacktestEngine:
                 for symbol, pos in self.positions.items()
             },
             "closed_trades": [t.to_dict() for t in self.closed_trades],
-            "equity_curve": [
-                {"timestamp": float(ts), "equity": eq} for ts, eq in self.equity_curve
-            ],
+            "equity_curve": [{"timestamp": float(ts), "equity": eq} for ts, eq in self.equity_curve],
             "risk_manager_state": self.risk_manager.get_risk_report(),
             "execution_log": self.execution_log[-1000:],  # Last 1000 executions
         }
@@ -2293,12 +2237,11 @@ class EnhancedBacktestEngine:
             with gzip.open(filepath, "wt") as f:
                 json.dump(state, f, default=str, indent=2)
         else:
-            with open(filepath, "w") as f:
+            with Path(filepath).open("w", encoding="utf-8") as f:
                 json.dump(state, f, default=str, indent=2)
 
-        logger.info(
-            f"State saved to {filepath} ({'compressed' if compress else 'raw'})"
-        )
+        logger.info("State saved to %s (%s)", filepath, 'compressed' if compress else 'raw')
+
 
     def load_state(self, filepath: str):
         """Load engine state from disk"""
@@ -2324,7 +2267,8 @@ class EnhancedBacktestEngine:
             )
             self.positions[symbol] = pos
 
-        logger.info(f"State loaded from {filepath}")
+        logger.info("State loaded from %s", filepath)
+
         return state
 
 
@@ -2405,9 +2349,7 @@ def generate_test_data(n_ticks: int = 10000, symbol: str = "XAUUSD") -> list[Tic
     return ticks
 
 
-def _load_real_ticks(
-    symbol: str = "XAUUSD", max_bars: int = 5000
-) -> list["TickData"] | None:
+def _load_real_ticks(symbol: str = "XAUUSD", max_bars: int = 5000) -> list["TickData"] | None:
     """
     Attempt to load real OHLCV data via real_data_backtest.py and convert to
     TickData objects for use by the backtest engine.
@@ -2421,14 +2363,10 @@ def _load_real_ticks(
         rdb = importlib.import_module("real_data_backtest")
         import ccxt as _ccxt
 
-        exchange = _ccxt.binance(
-            {"enableRateLimit": True, "options": {"defaultType": "spot"}}
-        )
+        exchange = _ccxt.binance({"enableRateLimit": True, "options": {"defaultType": "spot"}})
         since_ms = exchange.parse8601("2022-01-01T00:00:00Z")
-        df = rdb.fetch_ohlcv_paginated(
-            exchange, "XAU/USDT", "1h", since_ms=since_ms, max_bars=max_bars
-        )
-        if df is None or len(df) < 100:  # noqa: PLR2004
+        df = rdb.fetch_ohlcv_paginated(exchange, "XAU/USDT", "1h", since_ms=since_ms, max_bars=max_bars)
+        if df is None or len(df) < 100:
             return None
 
         ticks: list[TickData] = []
@@ -2484,10 +2422,7 @@ def run_comprehensive_backtest(use_real_data: bool = True):
         ticks = _load_real_ticks(max_bars=5000)
         if ticks:
             print(f"    Loaded {len(ticks)} real ticks")
-            print(
-                f"    Time range: {ticks[0].timestamp.to_datetime()} "
-                f"to {ticks[-1].timestamp.to_datetime()}"
-            )
+            print(f"    Time range: {ticks[0].timestamp.to_datetime()} to {ticks[-1].timestamp.to_datetime()}")
         else:
             if _is_production:
                 raise RuntimeError(
@@ -2495,9 +2430,7 @@ def run_comprehensive_backtest(use_real_data: bool = True):
                     "Install ccxt and ensure network access to Binance. "
                     "Do not use synthetic data for production backtests."
                 )
-            print(
-                "    Real data unavailable — falling back to SYNTHETIC data (non-production only)."
-            )
+            print("    Real data unavailable — falling back to SYNTHETIC data (non-production only).")
             print("    *** WARNING: Results are NOT valid for strategy evaluation. ***")
 
     if ticks is None:
@@ -2518,10 +2451,7 @@ def run_comprehensive_backtest(use_real_data: bool = True):
         data_source = "synthetic"
         ticks = generate_test_data(n_ticks=5000)
         print(f"    Generated {len(ticks)} synthetic ticks")
-        print(
-            f"    Time range: {ticks[0].timestamp.to_datetime()} "
-            f"to {ticks[-1].timestamp.to_datetime()}"
-        )
+        print(f"    Time range: {ticks[0].timestamp.to_datetime()} to {ticks[-1].timestamp.to_datetime()}")
 
     print(f"    Data source: {data_source}")
 
@@ -2557,9 +2487,7 @@ def run_comprehensive_backtest(use_real_data: bool = True):
             self.slow = slow
             self.prices = deque(maxlen=slow + 10)
 
-        def generate_signal(
-            self, tick: TickData, regime: MarketRegime
-        ) -> tuple[OrderSide, float] | None:
+        def generate_signal(self, tick: TickData, regime: MarketRegime) -> tuple[OrderSide, float] | None:
             self.prices.append(tick.mid)
 
             if len(self.prices) < self.slow:
@@ -2579,7 +2507,7 @@ def run_comprehensive_backtest(use_real_data: bool = True):
 
             if fast_ma > slow_ma * (1 + threshold):
                 return (OrderSide.BUY, 0.8)  # 80% confidence
-            elif fast_ma < slow_ma * (1 - threshold):
+            if fast_ma < slow_ma * (1 - threshold):
                 return (OrderSide.SELL, 0.8)
 
             return None
@@ -2602,13 +2530,11 @@ def run_comprehensive_backtest(use_real_data: bool = True):
             side, confidence = signal
 
             # Risk-based position sizing
-            if confidence > 0.7:  # noqa: PLR2004
+            if confidence > 0.7:
                 size = position_size * confidence
 
                 # Check if we need to reverse
-                if (side == OrderSide.BUY and position < 0) or (
-                    side == OrderSide.SELL and position > 0
-                ):
+                if (side == OrderSide.BUY and position < 0) or (side == OrderSide.SELL and position > 0):
                     # Close existing position
                     close_side = OrderSide.SELL if position > 0 else OrderSide.BUY
                     success, order_id = engine.submit_order(
@@ -2624,9 +2550,7 @@ def run_comprehensive_backtest(use_real_data: bool = True):
 
                 # Open new position
                 if position == 0:
-                    success, order_id = engine.submit_order(
-                        "XAUUSD", side, size, "market", strategy_id="ma_crossover"
-                    )
+                    success, order_id = engine.submit_order("XAUUSD", side, size, "market", strategy_id="ma_crossover")
                     if success:
                         fill_result = engine.execute_order(order_id, tick)
                         if fill_result[0]:
@@ -2634,9 +2558,7 @@ def run_comprehensive_backtest(use_real_data: bool = True):
 
         # Progress update
         if i % 1000 == 0:
-            print(
-                f"    Processed {i}/{len(ticks)} ticks | Equity: ${engine.capital:,.2f}"
-            )
+            print(f"    Processed {i}/{len(ticks)} ticks | Equity: ${engine.capital:,.2f}")
 
     # Generate report
     print("\n[4] Generating performance report...")

@@ -14,13 +14,13 @@ Comprehensive performance analytics including:
 - Risk metrics visualization data
 """
 
-from typing import Any
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
-from enum import Enum
-import numpy as np
 import logging
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from enum import Enum
+from typing import Any
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -206,9 +206,8 @@ class PerformanceAnalytics:
         # Initialize with starting point
         self._record_equity_point(initial_equity, 0, 0)
 
-        logger.info(
-            f"Performance Analytics initialized with equity: ${initial_equity:,.2f}"
-        )
+        logger.info("Performance Analytics initialized with equity: $%s", initial_equity)
+
 
     def record_trade(self, trade: TradeRecord):
         """Record a completed trade."""
@@ -222,21 +221,18 @@ class PerformanceAnalytics:
 
         # Record equity point
         drawdown = self.high_water_mark - self.current_equity
-        drawdown / self.high_water_mark if self.high_water_mark > 0 else 0
-
         self._record_equity_point(
             self.current_equity,
             0,  # Open PnL would be tracked separately
             drawdown,
         )
 
-        logger.debug(f"Trade recorded: {trade.id} - PnL: ${trade.pnl:,.2f}")
+        logger.debug("Trade recorded: %s - PnL: $%s", trade.id, trade.pnl)
+
 
     def _record_equity_point(self, equity: float, open_pnl: float, drawdown: float):
         """Record a point on the equity curve."""
-        drawdown_pct = (
-            drawdown / self.high_water_mark if self.high_water_mark > 0 else 0
-        )
+        drawdown_pct = drawdown / self.high_water_mark if self.high_water_mark > 0 else 0
 
         point = EquityPoint(
             timestamp=datetime.now(UTC),
@@ -256,16 +252,12 @@ class PerformanceAnalytics:
             self.daily_equity.append((datetime.now(UTC), equity))
 
             # Calculate daily return
-            if len(self.daily_equity) >= 2:  # noqa: PLR2004
+            if len(self.daily_equity) >= 2:
                 prev_equity = self.daily_equity[-2][1]
-                daily_return = (
-                    (equity - prev_equity) / prev_equity if prev_equity > 0 else 0
-                )
+                daily_return = (equity - prev_equity) / prev_equity if prev_equity > 0 else 0
                 self.daily_returns.append(daily_return)
 
-    def get_performance_report(
-        self, period: MetricPeriod = MetricPeriod.ALL_TIME
-    ) -> PerformanceReport:
+    def get_performance_report(self, period: MetricPeriod = MetricPeriod.ALL_TIME) -> PerformanceReport:
         """
         Generate comprehensive performance report.
 
@@ -315,11 +307,7 @@ class PerformanceAnalytics:
         sharpe = self._calculate_sharpe_ratio(filtered_trades)
         sortino = self._calculate_sortino_ratio(filtered_trades)
         max_dd, max_dd_pct = self._calculate_max_drawdown(period)
-        calmar = (
-            (total_return_pct * 365 / max(1, (now - start_date).days)) / max_dd_pct
-            if max_dd_pct > 0
-            else 0
-        )
+        calmar = (total_return_pct * 365 / max(1, (now - start_date).days)) / max_dd_pct if max_dd_pct > 0 else 0
 
         # Daily metrics
         period_returns = self._get_period_returns(start_date)
@@ -378,9 +366,7 @@ class PerformanceAnalytics:
             monthly_returns=monthly_returns,
         )
 
-    def compare_strategies(
-        self, strategies: list[str] = None
-    ) -> dict[str, StrategyPerformance]:
+    def compare_strategies(self, strategies: list[str] | None = None) -> dict[str, StrategyPerformance]:
         """
         Compare performance across strategies.
 
@@ -391,7 +377,7 @@ class PerformanceAnalytics:
             Dict of strategy name to StrategyPerformance
         """
         if strategies is None:
-            strategies = list(set(t.strategy for t in self.trades))
+            strategies = list({t.strategy for t in self.trades})
 
         results = {}
 
@@ -420,7 +406,7 @@ class PerformanceAnalytics:
             avg_duration = np.mean(durations) if durations else 0
 
             # Days trading
-            unique_days = set(t.exit_time.date() for t in strategy_trades)
+            unique_days = {t.exit_time.date() for t in strategy_trades}
             trades_per_day = total / len(unique_days) if unique_days else 0
 
             results[strategy] = StrategyPerformance(
@@ -434,20 +420,14 @@ class PerformanceAnalytics:
                 avg_loss=avg_loss,
                 largest_win=max((t.pnl for t in winners), default=0),
                 largest_loss=min((t.pnl for t in losers), default=0),
-                profit_factor=gross_profit / gross_loss
-                if gross_loss > 0
-                else float("inf"),
-                expectancy=(win_count / total * avg_win)
-                - (loss_count / total * avg_loss)
-                if total > 0
-                else 0,
+                profit_factor=gross_profit / gross_loss if gross_loss > 0 else float("inf"),
+                expectancy=(win_count / total * avg_win) - (loss_count / total * avg_loss) if total > 0 else 0,
                 sharpe_ratio=self._calculate_sharpe_ratio(strategy_trades),
                 sortino_ratio=self._calculate_sortino_ratio(strategy_trades),
                 max_drawdown=self._calculate_strategy_max_drawdown(strategy_trades),
                 avg_trade_duration_minutes=avg_duration,
                 trades_per_day=trades_per_day,
-                recovery_factor=total_pnl
-                / self._calculate_strategy_max_drawdown(strategy_trades)
+                recovery_factor=total_pnl / self._calculate_strategy_max_drawdown(strategy_trades)
                 if self._calculate_strategy_max_drawdown(strategy_trades) > 0
                 else 0,
             )
@@ -475,13 +455,9 @@ class PerformanceAnalytics:
                 }
                 for p in self.equity_curve
             ]
-        elif interval == "daily":
-            return [
-                {"timestamp": dt.isoformat(), "equity": eq}
-                for dt, eq in self.daily_equity
-            ]
-        else:
-            return []
+        if interval == "daily":
+            return [{"timestamp": dt.isoformat(), "equity": eq} for dt, eq in self.daily_equity]
+        return []
 
     def get_trade_distribution(self) -> dict[str, Any]:
         """Get trade distribution data for charting."""
@@ -553,18 +529,12 @@ class PerformanceAnalytics:
             "hourly": {
                 "pnl": hourly_pnl,
                 "count": hourly_count,
-                "avg_pnl": {
-                    h: hourly_pnl[h] / hourly_count[h] if hourly_count[h] > 0 else 0
-                    for h in hourly_pnl
-                },
+                "avg_pnl": {h: hourly_pnl[h] / hourly_count[h] if hourly_count[h] > 0 else 0 for h in hourly_pnl},
             },
             "daily": {
                 "pnl": daily_pnl,
                 "count": daily_count,
-                "avg_pnl": {
-                    d: daily_pnl[d] / daily_count[d] if daily_count[d] > 0 else 0
-                    for d in daily_pnl
-                },
+                "avg_pnl": {d: daily_pnl[d] / daily_count[d] if daily_count[d] > 0 else 0 for d in daily_pnl},
                 "labels": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
             },
         }
@@ -577,28 +547,24 @@ class PerformanceAnalytics:
         """Get start datetime for a period."""
         if period == MetricPeriod.DAY:
             return now - timedelta(days=1)
-        elif period == MetricPeriod.WEEK:
+        if period == MetricPeriod.WEEK:
             return now - timedelta(weeks=1)
-        elif period == MetricPeriod.MONTH:
+        if period == MetricPeriod.MONTH:
             return now - timedelta(days=30)
-        elif period == MetricPeriod.QUARTER:
+        if period == MetricPeriod.QUARTER:
             return now - timedelta(days=90)
-        elif period == MetricPeriod.YEAR:
+        if period == MetricPeriod.YEAR:
             return now - timedelta(days=365)
-        else:  # ALL_TIME
-            return datetime.min
+        # ALL_TIME
+        return datetime.min
 
     def _get_period_returns(self, start_date: datetime) -> list[float]:
         """Get daily returns for a period."""
-        return [
-            r
-            for (dt, _), r in zip(self.daily_equity[:-1], self.daily_returns, strict=False)
-            if dt >= start_date
-        ]
+        return [r for (dt, _), r in zip(self.daily_equity[:-1], self.daily_returns, strict=False) if dt >= start_date]
 
     def _calculate_sharpe_ratio(self, trades: list[TradeRecord]) -> float:
         """Calculate Sharpe ratio for trades."""
-        if len(trades) < 2:  # noqa: PLR2004
+        if len(trades) < 2:
             return 0.0
 
         returns = [t.pnl_percent for t in trades]
@@ -617,7 +583,7 @@ class PerformanceAnalytics:
 
     def _calculate_sortino_ratio(self, trades: list[TradeRecord]) -> float:
         """Calculate Sortino ratio for trades."""
-        if len(trades) < 2:  # noqa: PLR2004
+        if len(trades) < 2:
             return 0.0
 
         returns = [t.pnl_percent for t in trades]
@@ -711,7 +677,7 @@ class PerformanceAnalytics:
 
     def _calculate_skewness(self, values: list[float]) -> float:
         """Calculate skewness of distribution."""
-        if len(values) < 3:  # noqa: PLR2004
+        if len(values) < 3:
             return 0.0
         n = len(values)
         mean = np.mean(values)
@@ -722,16 +688,16 @@ class PerformanceAnalytics:
 
     def _calculate_kurtosis(self, values: list[float]) -> float:
         """Calculate kurtosis of distribution."""
-        if len(values) < 4:  # noqa: PLR2004
+        if len(values) < 4:
             return 0.0
         n = len(values)
         mean = np.mean(values)
         std = np.std(values)
         if std == 0:
             return 0.0
-        return ((n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3))) * sum(
-            ((x - mean) / std) ** 4 for x in values
-        ) - (3 * (n - 1) ** 2) / ((n - 2) * (n - 3))
+        return ((n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3))) * sum(((x - mean) / std) ** 4 for x in values) - (
+            3 * (n - 1) ** 2
+        ) / ((n - 2) * (n - 3))
 
     def get_summary(self) -> dict[str, Any]:
         """Get quick performance summary."""
@@ -742,15 +708,13 @@ class PerformanceAnalytics:
         return {
             "current_equity": self.current_equity,
             "total_return": self.current_equity - self.initial_equity,
-            "total_return_pct": (self.current_equity - self.initial_equity)
-            / self.initial_equity,
+            "total_return_pct": (self.current_equity - self.initial_equity) / self.initial_equity,
             "total_trades": total_trades,
             "win_rate": winners / total_trades if total_trades > 0 else 0,
             "total_pnl": total_pnl,
             "high_water_mark": self.high_water_mark,
             "current_drawdown": self.high_water_mark - self.current_equity,
-            "current_drawdown_pct": (self.high_water_mark - self.current_equity)
-            / self.high_water_mark
+            "current_drawdown_pct": (self.high_water_mark - self.current_equity) / self.high_water_mark
             if self.high_water_mark > 0
             else 0,
         }

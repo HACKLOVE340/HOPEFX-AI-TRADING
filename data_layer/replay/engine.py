@@ -42,20 +42,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+from collections.abc import AsyncIterator
 from datetime import datetime, timedelta
 from typing import Any
-from collections.abc import AsyncIterator
 
 import pandas as pd
 
 from data_layer.normalization.pipeline import normalization_pipeline
 from data_layer.replay.dukascopy import (
     DukascopyFetcher,
-    dukascopy_fetcher,
     _parse_timeframe,
+    dukascopy_fetcher,
 )
-import os
-
 from data_layer.types import FeedSource, GoldTick
 
 logger = logging.getLogger(__name__)
@@ -89,7 +88,7 @@ class MarketReplayEngine:
         end: datetime,
         symbol: str = _DEFAULT_SYMBOL,
         timeframe_minutes=_DEFAULT_TF_MIN,
-        timeframe: str = None,
+        timeframe: str | None = None,
         normalize: bool = True,
     ) -> pd.DataFrame:
         """
@@ -320,7 +319,6 @@ class MarketReplayEngine:
         Returns a pd.DataFrame with OHLCV + all ML features, or None on error.
         """
         try:
-            from data_layer.normalization.pipeline import normalization_pipeline
             from ml.features_extended import build_extended_features_with_data_layer
 
             logger.info(
@@ -395,7 +393,6 @@ class MarketReplayEngine:
         import inspect
 
         try:
-            from data_layer.normalization.pipeline import normalization_pipeline
 
             ohlcv = await self.build_ohlcv_dataframe(
                 symbol=symbol,
@@ -410,9 +407,7 @@ class MarketReplayEngine:
             count = 0
 
             for ts, bar in ohlcv.iterrows():
-                self._replay_cursor = (
-                    ts.to_pydatetime() if hasattr(ts, "to_pydatetime") else ts
-                )
+                self._replay_cursor = ts.to_pydatetime() if hasattr(ts, "to_pydatetime") else ts
                 features = self.get_replay_features(as_of=self._replay_cursor)
 
                 if callback is not None:
@@ -441,9 +436,7 @@ class MarketReplayEngine:
             logger.error("MarketReplayEngine.replay_bar_by_bar error: %s", exc)
             return 0
 
-    def get_feature_snapshot(
-        self, as_of: datetime | None = None
-    ) -> dict[str, float]:
+    def get_feature_snapshot(self, as_of: datetime | None = None) -> dict[str, float]:
         """
         Return a complete ML feature snapshot at a given time.
 
@@ -468,12 +461,8 @@ class MarketReplayEngine:
     def health(self) -> dict:
         return {
             "is_replaying": self._is_replaying,
-            "replay_cursor": self._replay_cursor.isoformat()
-            if self._replay_cursor
-            else None,
-            "ticks_loaded": len(self._replay_ticks)
-            if self._replay_ticks is not None
-            else 0,
+            "replay_cursor": self._replay_cursor.isoformat() if self._replay_cursor else None,
+            "ticks_loaded": len(self._replay_ticks) if self._replay_ticks is not None else 0,
         }
 
 

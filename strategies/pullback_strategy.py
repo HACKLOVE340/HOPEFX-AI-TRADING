@@ -52,8 +52,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import numpy as np
@@ -72,14 +71,10 @@ _RSI_PERIOD = int(os.getenv("PULLBACK_RSI_PERIOD", "14"))
 _RSI_OVERSOLD = float(os.getenv("PULLBACK_RSI_OVERSOLD", "40"))  # long entry zone
 _RSI_OVERBOUGHT = float(os.getenv("PULLBACK_RSI_OVERBOUGHT", "60"))  # short entry zone
 _ATR_PERIOD = int(os.getenv("PULLBACK_ATR_PERIOD", "14"))
-_ATR_PULLBACK_MULT = float(
-    os.getenv("PULLBACK_ATR_PULLBACK_MULT", "1.5")
-)  # max pullback depth
+_ATR_PULLBACK_MULT = float(os.getenv("PULLBACK_ATR_PULLBACK_MULT", "1.5"))  # max pullback depth
 _SL_ATR_MULT = float(os.getenv("PULLBACK_SL_ATR_MULT", "1.5"))
 _TP_ATR_MULT = float(os.getenv("PULLBACK_TP_ATR_MULT", "3.0"))
-_VOL_CONFIRM_MULT = float(
-    os.getenv("PULLBACK_VOL_CONFIRM_MULT", "1.2")
-)  # vol > 1.2× avg
+_VOL_CONFIRM_MULT = float(os.getenv("PULLBACK_VOL_CONFIRM_MULT", "1.2"))  # vol > 1.2× avg
 _VWAP_FILTER = os.getenv("PULLBACK_VWAP_FILTER", "true").lower() == "true"
 _MIN_BARS = int(os.getenv("PULLBACK_MIN_BARS", "220"))  # need 200 bars for EMA(200)
 _MIN_CONFIDENCE = float(os.getenv("PULLBACK_MIN_CONFIDENCE", "0.60"))
@@ -143,6 +138,7 @@ class PullbackStrategy(BaseStrategy):
         self.tp_atr_mult = tp_atr_mult
         self.vol_confirm_mult = vol_confirm_mult
         self.vwap_filter = vwap_filter
+        self._bar_buffer: list = []
 
         logger.info(
             "PullbackStrategy '%s' initialised: symbol=%s ema=%d/%d adx_min=%.0f "
@@ -161,7 +157,8 @@ class PullbackStrategy(BaseStrategy):
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def generate_signal(self, market_data: pd.DataFrame) -> dict[str, Any]:
+    def generate_signal(self, analysis: pd.DataFrame) -> dict[str, Any]:  # type: ignore[override]
+        market_data = analysis
         """
         Analyse OHLCV data and return a signal dict.
 
@@ -198,9 +195,7 @@ class PullbackStrategy(BaseStrategy):
 
         df = self._prepare(market_data)
         if df is None or len(df) < _MIN_BARS:
-            hold["reason"] = (
-                f"need {_MIN_BARS} bars, got {len(market_data) if market_data is not None else 0}"
-            )
+            hold["reason"] = f"need {_MIN_BARS} bars, got {len(market_data) if market_data is not None else 0}"
             return hold
 
         indicators = self._compute_indicators(df)
@@ -239,9 +234,9 @@ class PullbackStrategy(BaseStrategy):
             "size": 0,  # sized by RiskManager.filter_signals()
         }
 
-    def analyze(self, market_data: pd.DataFrame) -> dict[str, Any]:
+    def analyze(self, data: pd.DataFrame) -> dict[str, Any]:  # type: ignore[override]
         """Alias for generate_signal — satisfies BaseStrategy ABC."""
-        return self.generate_signal(market_data)
+        return self.generate_signal(data)
 
     def on_bar(self, bar: dict[str, Any]) -> Signal | None:
         """
@@ -251,9 +246,6 @@ class PullbackStrategy(BaseStrategy):
         generate_signal().  Returns None when no signal is generated.
         """
         # Accumulate bars in internal buffer
-        if not hasattr(self, "_bar_buffer"):
-            self._bar_buffer: list = []
-
         self._bar_buffer.append(bar)
         # Keep only the last _MIN_BARS + 50 bars to bound memory
         if len(self._bar_buffer) > _MIN_BARS + 50:
@@ -338,9 +330,7 @@ class PullbackStrategy(BaseStrategy):
             # ── VWAP(20) ──────────────────────────────────────────────────────
             typical = (h + l + c) / 3.0
             vwap_num = (typical * v.replace(0, np.nan).fillna(0)).rolling(20).sum()
-            vwap_den = (
-                v.replace(0, np.nan).fillna(0).rolling(20).sum().replace(0, np.nan)
-            )
+            vwap_den = v.replace(0, np.nan).fillna(0).rolling(20).sum().replace(0, np.nan)
             vwap_20 = (vwap_num / vwap_den).fillna(c)
 
             # ── Swing high/low (20-bar) ───────────────────────────────────────
@@ -354,22 +344,16 @@ class PullbackStrategy(BaseStrategy):
             last_atr = float(atr.iloc[-1])
             last_adx = float(adx.iloc[-1])
             last_rsi = float(rsi.iloc[-1])
-            prev_rsi = float(rsi.iloc[-2]) if len(rsi) >= 2 else last_rsi  # noqa: PLR2004
+            prev_rsi = float(rsi.iloc[-2]) if len(rsi) >= 2 else last_rsi
             last_vol = float(v.iloc[-1])
-            last_vol_ma = (
-                float(vol_ma20.iloc[-1]) if not np.isnan(vol_ma20.iloc[-1]) else 1.0
-            )
+            last_vol_ma = float(vol_ma20.iloc[-1]) if not np.isnan(vol_ma20.iloc[-1]) else 1.0
             last_vwap = float(vwap_20.iloc[-1])
             last_swing_high = float(swing_high_20.iloc[-1])
             last_swing_low = float(swing_low_20.iloc[-1])
 
             # Pullback depth: distance from EMA_fast to close, in ATR units
-            pullback_depth_long = (
-                (last_ema_fast - last_close) / last_atr if last_atr > 0 else 0.0
-            )
-            pullback_depth_short = (
-                (last_close - last_ema_fast) / last_atr if last_atr > 0 else 0.0
-            )
+            pullback_depth_long = (last_ema_fast - last_close) / last_atr if last_atr > 0 else 0.0
+            pullback_depth_short = (last_close - last_ema_fast) / last_atr if last_atr > 0 else 0.0
 
             return {
                 "last_close": last_close,
@@ -452,9 +436,7 @@ class PullbackStrategy(BaseStrategy):
         # 5. Volume confirmation (weight 0.10)
         if ind["vol_confirmed"]:
             long_score += 0.10
-            long_reasons.append(
-                f"vol={ind['volume']:.0f}>{self.vol_confirm_mult:.1f}×avg"
-            )
+            long_reasons.append(f"vol={ind['volume']:.0f}>{self.vol_confirm_mult:.1f}×avg")
 
         # 6. VWAP filter (optional, weight 0.05 bonus)
         if self.vwap_filter:
@@ -496,9 +478,7 @@ class PullbackStrategy(BaseStrategy):
         # 4. RSI momentum turn
         if ind["prev_rsi"] > self.rsi_overbought and ind["rsi"] < ind["prev_rsi"]:
             short_score += 0.15
-            short_reasons.append(
-                f"RSI turn down ({ind['prev_rsi']:.1f}→{ind['rsi']:.1f})"
-            )
+            short_reasons.append(f"RSI turn down ({ind['prev_rsi']:.1f}→{ind['rsi']:.1f})")
         elif ind["rsi"] > self.rsi_overbought:
             short_score += 0.08
             short_reasons.append(f"RSI overbought ({ind['rsi']:.1f})")
@@ -508,9 +488,7 @@ class PullbackStrategy(BaseStrategy):
         # 5. Volume confirmation
         if ind["vol_confirmed"]:
             short_score += 0.10
-            short_reasons.append(
-                f"vol={ind['volume']:.0f}>{self.vol_confirm_mult:.1f}×avg"
-            )
+            short_reasons.append(f"vol={ind['volume']:.0f}>{self.vol_confirm_mult:.1f}×avg")
 
         # 6. VWAP filter
         if self.vwap_filter:
@@ -528,9 +506,7 @@ class PullbackStrategy(BaseStrategy):
     # ── Technical indicator helpers ───────────────────────────────────────────
 
     @staticmethod
-    def _atr(
-        high: pd.Series, low: pd.Series, close: pd.Series, period: int
-    ) -> pd.Series:
+    def _atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int) -> pd.Series:
         """Average True Range."""
         prev_close = close.shift(1)
         tr = pd.concat(
@@ -553,9 +529,7 @@ class PullbackStrategy(BaseStrategy):
         return (100 - 100 / (1 + rs)).fillna(50.0)
 
     @staticmethod
-    def _adx(
-        high: pd.Series, low: pd.Series, close: pd.Series, period: int
-    ) -> pd.Series:
+    def _adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int) -> pd.Series:
         """
         Average Directional Index (Wilder smoothing).
 
@@ -585,16 +559,8 @@ class PullbackStrategy(BaseStrategy):
 
         # Wilder smoothing
         atr_w = tr.ewm(alpha=1 / period, adjust=False).mean()
-        di_plus = (
-            100
-            * dm_plus.ewm(alpha=1 / period, adjust=False).mean()
-            / atr_w.replace(0, np.nan)
-        )
-        di_minus = (
-            100
-            * dm_minus.ewm(alpha=1 / period, adjust=False).mean()
-            / atr_w.replace(0, np.nan)
-        )
+        di_plus = 100 * dm_plus.ewm(alpha=1 / period, adjust=False).mean() / atr_w.replace(0, np.nan)
+        di_minus = 100 * dm_minus.ewm(alpha=1 / period, adjust=False).mean() / atr_w.replace(0, np.nan)
 
         dx_denom = (di_plus + di_minus).replace(0, np.nan)
         dx = 100 * (di_plus - di_minus).abs() / dx_denom

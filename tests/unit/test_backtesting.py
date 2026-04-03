@@ -7,14 +7,15 @@
 Tests for the backtesting module.
 """
 
-import pytest
-import pandas as pd
-import numpy as np
 from datetime import datetime, timedelta
 
-from backtesting.portfolio import Portfolio
-from backtesting.events import FillEvent, EventType
+import numpy as np
+import pandas as pd
+import pytest
+
+from backtesting.events import EventType, FillEvent
 from backtesting.metrics import PerformanceMetrics
+from backtesting.portfolio import Portfolio
 
 
 class TestPortfolio:
@@ -24,9 +25,9 @@ class TestPortfolio:
         """Test portfolio initialization with default capital."""
         portfolio = Portfolio()
 
-        assert portfolio.initial_capital == 100000.0  # noqa: PLR2004
-        assert portfolio.cash == 100000.0  # noqa: PLR2004
-        assert portfolio.equity == 100000.0  # noqa: PLR2004
+        assert portfolio.initial_capital == 100000.0
+        assert portfolio.cash == 100000.0
+        assert portfolio.equity == 100000.0
         assert len(portfolio.positions) == 0
         assert len(portfolio.trade_history) == 0
 
@@ -34,9 +35,9 @@ class TestPortfolio:
         """Test portfolio initialization with custom capital."""
         portfolio = Portfolio(initial_capital=50000.0)
 
-        assert portfolio.initial_capital == 50000.0  # noqa: PLR2004
-        assert portfolio.cash == 50000.0  # noqa: PLR2004
-        assert portfolio.equity == 50000.0  # noqa: PLR2004
+        assert portfolio.initial_capital == 50000.0
+        assert portfolio.cash == 50000.0
+        assert portfolio.equity == 50000.0
 
     def test_portfolio_empty_equity_curve(self):
         """Test that initial portfolio has empty equity curve."""
@@ -128,10 +129,10 @@ class TestPerformanceMetrics:
             initial_capital=100000.0,
         )
 
-        assert metrics.initial_capital == 100000.0  # noqa: PLR2004
-        assert metrics.risk_free_rate == 0.02  # noqa: PLR2004
-        assert len(metrics.equity_curve) == 30  # noqa: PLR2004
-        assert len(metrics.trade_history) == 5  # noqa: PLR2004
+        assert metrics.initial_capital == 100000.0
+        assert metrics.risk_free_rate == 0.02
+        assert len(metrics.equity_curve) == 30
+        assert len(metrics.trade_history) == 5
 
     def test_calculate_total_return(self, sample_equity_curve, sample_trade_history):
         """Test total return calculation."""
@@ -195,7 +196,7 @@ class TestPerformanceMetrics:
         win_rate = metrics.calculate_win_rate()
 
         assert isinstance(win_rate, float)
-        assert 0 <= win_rate <= 100  # Win rate is percentage  # noqa: PLR2004
+        assert 0 <= win_rate <= 100  # Win rate is percentage
 
     def test_calculate_win_rate_empty(self):
         """Test win rate with no trades."""
@@ -219,7 +220,7 @@ class TestPerformanceMetrics:
 
         total = metrics.calculate_total_trades()
 
-        assert total == 5  # noqa: PLR2004
+        assert total == 5
 
     def test_calculate_all_metrics(self, sample_equity_curve, sample_trade_history):
         """Test calculating all metrics at once."""
@@ -275,8 +276,8 @@ class TestBacktestEvents:
         )
 
         assert fill.symbol == "EUR/USD"
-        assert fill.quantity == 1000  # noqa: PLR2004
+        assert fill.quantity == 1000
         assert fill.direction == "BUY"
-        assert fill.fill_price == 1.0850  # noqa: PLR2004
-        assert fill.commission == 0.50  # noqa: PLR2004
+        assert fill.fill_price == 1.0850
+        assert fill.commission == 0.50
         assert fill.type == EventType.FILL

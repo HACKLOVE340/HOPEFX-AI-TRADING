@@ -15,8 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -29,7 +28,6 @@ from connect_to_life import (
     LifeSupervisor,
     _telegram,
 )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Telegram helper
@@ -53,9 +51,7 @@ class TestTelegramHelper:
     async def test_swallows_network_error(self):
         """aiohttp errors must not propagate."""
         with patch("aiohttp.ClientSession") as mock_session:
-            mock_session.return_value.__aenter__ = AsyncMock(
-                side_effect=OSError("network down")
-            )
+            mock_session.return_value.__aenter__ = AsyncMock(side_effect=OSError("network down"))
             # Should not raise
             await _telegram("tok", "chat", "msg")
 
@@ -78,9 +74,7 @@ class TestDailyReporter:
 
         # Simulate hour != 0
         now = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
-        with patch("connect_to_life.datetime") as mock_dt, patch(
-            "connect_to_life._telegram", fake_telegram
-        ):
+        with patch("connect_to_life.datetime") as mock_dt, patch("connect_to_life._telegram", fake_telegram):
             mock_dt.now.return_value = now
             await reporter.maybe_send({"equity": 100_000})
 
@@ -95,9 +89,7 @@ class TestDailyReporter:
             sent.append(text)
 
         now = datetime(2025, 1, 15, 0, 0, 0, tzinfo=UTC)
-        with patch("connect_to_life.datetime") as mock_dt, patch(
-            "connect_to_life._telegram", fake_telegram
-        ):
+        with patch("connect_to_life.datetime") as mock_dt, patch("connect_to_life._telegram", fake_telegram):
             mock_dt.now.return_value = now
             await reporter.maybe_send(
                 {
@@ -123,9 +115,7 @@ class TestDailyReporter:
             sent.append(text)
 
         now = datetime(2025, 1, 15, 0, 0, 0, tzinfo=UTC)
-        with patch("connect_to_life.datetime") as mock_dt, patch(
-            "connect_to_life._telegram", fake_telegram
-        ):
+        with patch("connect_to_life.datetime") as mock_dt, patch("connect_to_life._telegram", fake_telegram):
             mock_dt.now.return_value = now
             await reporter.maybe_send({"equity": 100_000})
             await reporter.maybe_send({"equity": 100_000})  # second call same day
@@ -156,7 +146,7 @@ class TestReadStatus:
         sup = self._make_supervisor()
         sup._engine = None
         status = sup._read_status()
-        assert status["equity"] == 50_000.0  # noqa: PLR2004
+        assert status["equity"] == 50_000.0
         assert status["drawdown_pct"] == 0.0
         assert status["fill_count"] == 0
 
@@ -166,7 +156,7 @@ class TestReadStatus:
         mock_engine._get_status.side_effect = RuntimeError("engine not ready")
         sup._engine = mock_engine
         status = sup._read_status()
-        assert status["equity"] == 50_000.0  # noqa: PLR2004
+        assert status["equity"] == 50_000.0
 
     def test_merges_fill_count_from_trade_logger(self):
         sup = self._make_supervisor()
@@ -185,8 +175,8 @@ class TestReadStatus:
         sup._engine = mock_engine
 
         status = sup._read_status()
-        assert status["equity"] == 102_000.0  # noqa: PLR2004
-        assert status["fill_count"] == 7  # noqa: PLR2004
+        assert status["equity"] == 102_000.0
+        assert status["fill_count"] == 7
 
     def test_returns_engine_status_when_healthy(self):
         sup = self._make_supervisor()
@@ -203,7 +193,7 @@ class TestReadStatus:
         sup._engine = mock_engine
 
         status = sup._read_status()
-        assert status["drawdown_pct"] == 2.0  # noqa: PLR2004
+        assert status["drawdown_pct"] == 2.0
         assert status["broker"] == "paper"
 
 

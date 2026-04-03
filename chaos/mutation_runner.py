@@ -54,8 +54,7 @@ import subprocess  # nosec B404 - list-form call with sys.executable; no shell=T
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -106,9 +105,7 @@ class MutationReport:
     duration_s: float
     engine: str  # "mutmut" | "builtin_ast"
     mutants: list[MutantResult] = field(default_factory=list)
-    generated_at: str = field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
-    )
+    generated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def summary(self) -> str:
         icon = "✓" if self.passed else "✗"
@@ -147,10 +144,7 @@ class MutationTestRunner:
         if self._mutmut_available():
             report = await self._run_mutmut()
         else:
-            logger.warning(
-                "mutmut not installed — using built-in AST mutator. "
-                "Install with: pip install mutmut"
-            )
+            logger.warning("mutmut not installed — using built-in AST mutator. Install with: pip install mutmut")
             report = await self._run_builtin_ast()
 
         report.duration_s = time.monotonic() - t0
@@ -166,8 +160,7 @@ class MutationTestRunner:
         logger.info(report.summary())
         if not report.passed:
             logger.warning(
-                "Mutation score %.1f%% below minimum %.1f%% — "
-                "add tests to cover surviving mutants",
+                "Mutation score %.1f%% below minimum %.1f%% — add tests to cover surviving mutants",
                 report.score * 100,
                 self._min_score * 100,
             )
@@ -215,9 +208,7 @@ class MutationTestRunner:
                 stderr=asyncio.subprocess.PIPE,
             )
             try:
-                stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(), timeout=self._timeout_s
-                )
+                _, _ = await asyncio.wait_for(proc.communicate(), timeout=self._timeout_s)
             except TimeoutError:
                 proc.kill()
                 logger.error("mutmut timed out after %.0fs", self._timeout_s)
@@ -226,9 +217,9 @@ class MutationTestRunner:
             # Parse mutmut results
             return await self._parse_mutmut_results()
 
-        except Exception as exc:
-            logger.error("mutmut run failed: %s", exc)
-            return self._empty_report("mutmut", error=str(exc))
+        except Exception:
+            logger.exception("mutmut run failed: %s")
+            return self._empty_report("mutmut", error="mutmut run failed — check server logs")
 
     async def _parse_mutmut_results(self) -> MutationReport:
         """Parse mutmut result database via `mutmut results`."""
@@ -263,9 +254,9 @@ class MutationTestRunner:
                 duration_s=0.0,
                 engine="mutmut",
             )
-        except Exception as exc:
-            logger.error("mutmut results parse failed: %s", exc)
-            return self._empty_report("mutmut", error=str(exc))
+        except Exception:
+            logger.exception("mutmut results parse failed: %s")
+            return self._empty_report("mutmut", error="mutmut results parse failed — check server logs")
 
     # ── Built-in AST mutator ──────────────────────────────────────────────────
 
@@ -383,17 +374,17 @@ class MutationTestRunner:
                 )
 
             # Off-by-one on small integer literals
-            elif isinstance(node, ast.Constant) and isinstance(node.value, int) and 0 < abs(node.value) <= 100:  # noqa: PLR2004
-                    mutants.append(
-                        {
-                            "line": node.lineno,
-                            "op": f"const_{node.value}_to_{node.value + 1}",
-                            "node_type": "Constant",
-                            "original": node.value,
-                            "replacement": node.value + 1,
-                            "description": f"line {node.lineno}: {node.value} → {node.value + 1}",
-                        }
-                    )
+            elif isinstance(node, ast.Constant) and isinstance(node.value, int) and 0 < abs(node.value) <= 100:
+                mutants.append(
+                    {
+                        "line": node.lineno,
+                        "op": f"const_{node.value}_to_{node.value + 1}",
+                        "node_type": "Constant",
+                        "original": node.value,
+                        "replacement": node.value + 1,
+                        "description": f"line {node.lineno}: {node.value} → {node.value + 1}",
+                    }
+                )
 
         # Cap per-file mutants to avoid combinatorial explosion
         return mutants[:20]
@@ -464,7 +455,7 @@ class MutationTestRunner:
                 lines[target_line] = lines[target_line].replace(orig_tok, repl_tok, 1)
             return "\n".join(lines)
 
-        elif node_type == "Constant":
+        if node_type == "Constant":
             lines = source.splitlines()
             target_line = mutant.get("line", 1) - 1
             if 0 <= target_line < len(lines):
@@ -517,7 +508,7 @@ class MutationTestRunner:
                     for m in report.mutants
                 ],
             }
-            self._report_path.write_text(json.dumps(data, indent=2))
+            self._report_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
             logger.info("Mutation report saved to %s", self._report_path)
         except Exception as exc:
             logger.error("Failed to save mutation report: %s", exc)

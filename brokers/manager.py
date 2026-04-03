@@ -34,8 +34,7 @@ from __future__ import annotations
 import logging
 import threading
 import traceback
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 from brokers.base import (
@@ -210,17 +209,13 @@ class BrokerManager:
             self._brokers[name.lower()] = broker
             self._consecutive_failures[name.lower()] = 0
             self._last_errors[name.lower()] = None
-        logger.info(
-            "BrokerManager: registered broker '%s' (%s)", name, type(broker).__name__
-        )
+        logger.info("BrokerManager: registered broker '%s' (%s)", name, type(broker).__name__)
 
     def set_active(self, name: str) -> None:
         """Switch the active broker by name."""
         with self._lock:
             if name.lower() not in self._brokers:
-                raise ValueError(
-                    f"Broker '{name}' not registered. Available: {list(self._brokers)}"
-                )
+                raise ValueError(f"Broker '{name}' not registered. Available: {list(self._brokers)}")
             self._active_name = name.lower()
         logger.info("BrokerManager: active broker set to '%s'.", name)
 
@@ -283,9 +278,7 @@ class BrokerManager:
         try:
             ok = broker.connect()
             if ok:
-                logger.info(
-                    "BrokerManager: primary broker '%s' connected.", self._active_name
-                )
+                logger.info("BrokerManager: primary broker '%s' connected.", self._active_name)
             return ok
         except Exception as exc:
             logger.error("BrokerManager: primary connect failed: %s", exc)
@@ -391,9 +384,7 @@ class BrokerManager:
         try:
             positions = broker.get_positions()
         except Exception as exc:
-            logger.error(
-                "BrokerManager.close_all_positions: get_positions failed: %s", exc
-            )
+            logger.error("BrokerManager.close_all_positions: get_positions failed: %s", exc)
             self._capture_sentry(exc)
             return {}
 
@@ -466,9 +457,7 @@ class BrokerManager:
             try:
                 connected = broker.is_connected()
             except Exception as exc:
-                logger.error(
-                    "BrokerManager.heartbeat: '%s' is_connected() raised: %s", name, exc
-                )
+                logger.error("BrokerManager.heartbeat: '%s' is_connected() raised: %s", name, exc)
                 connected = False
 
             # Detect mode (paper vs live)
@@ -556,9 +545,7 @@ class BrokerManager:
         """Increment failure counter for active broker and log."""
         with self._lock:
             name = self._active_name or "unknown"
-            self._consecutive_failures[name] = (
-                self._consecutive_failures.get(name, 0) + 1
-            )
+            self._consecutive_failures[name] = self._consecutive_failures.get(name, 0) + 1
             self._last_errors[name] = str(exc)
             failures = self._consecutive_failures[name]
 
@@ -577,8 +564,7 @@ class BrokerManager:
             with self._lock:
                 if "paper" in self._brokers and self._active_name != "paper":
                     logger.critical(
-                        "BrokerManager: %d consecutive failures on '%s'. "
-                        "Auto-failing over to paper trading.",
+                        "BrokerManager: %d consecutive failures on '%s'. Auto-failing over to paper trading.",
                         failures,
                         name,
                     )
@@ -586,8 +572,7 @@ class BrokerManager:
                     if _SENTRY:
                         try:
                             sentry_sdk.capture_message(
-                                f"BrokerManager auto-failover: {name} → paper "
-                                f"after {failures} failures",
+                                f"BrokerManager auto-failover: {name} → paper after {failures} failures",
                                 level="critical",
                             )
                         except Exception as _exc:

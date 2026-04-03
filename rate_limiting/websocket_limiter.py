@@ -46,7 +46,8 @@ Usage
         allowed, reason = await limiter.check_and_register(ws, client_ip)
         if not allowed:
             await ws.close(code=1008, reason=reason)
-            return
+
+Return
         await ws.accept()
         try:
             ...
@@ -63,6 +64,7 @@ WS_RATE_WINDOW_SECONDS         — sliding window for rate cap (default: 60)
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import time
@@ -76,8 +78,8 @@ _MAX_CONNS_PER_MINUTE = int(os.getenv("WS_MAX_CONNECTIONS_PER_MINUTE", "20"))
 _RATE_WINDOW_S = int(os.getenv("WS_RATE_WINDOW_SECONDS", "60"))
 
 # Redis key prefixes
-_KEY_CONNS = "hopefx:ws:conns:"    # INCR/DECR — current open connections
-_KEY_RATE  = "hopefx:ws:rate:"     # sorted set — timestamps of recent connects
+_KEY_CONNS = "hopefx:ws:conns:"  # INCR/DECR — current open connections
+_KEY_RATE = "hopefx:ws:rate:"  # sorted set — timestamps of recent connects
 
 
 class WebSocketConnectionLimiter:
@@ -93,7 +95,7 @@ class WebSocketConnectionLimiter:
         self._connected = False
         # In-process fallback state
         self._open_conns: dict[str, int] = defaultdict(int)
-        self._rate_window: dict[str, deque] = defaultdict(lambda: deque())
+        self._rate_window: dict[str, deque] = defaultdict(deque)
         self._lock = asyncio.Lock()
 
     # ── Redis connection ──────────────────────────────────────────────────────
@@ -104,6 +106,7 @@ class WebSocketConnectionLimiter:
         self._connected = True
         try:
             import redis.asyncio as aioredis
+
             redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
             self._redis = aioredis.from_url(
                 redis_url,
@@ -139,15 +142,9 @@ class WebSocketConnectionLimiter:
             recent_rate = int(results[1] or 0)
 
             if current_conns >= _MAX_CONNS_PER_IP:
-                return False, (
-                    f"Too many concurrent connections from this IP "
-                    f"(max {_MAX_CONNS_PER_IP})"
-                )
+                return False, (f"Too many concurrent connections from this IP (max {_MAX_CONNS_PER_IP})")
             if recent_rate >= _MAX_CONNS_PER_MINUTE:
-                return False, (
-                    f"Connection rate limit exceeded "
-                    f"(max {_MAX_CONNS_PER_MINUTE} per {_RATE_WINDOW_S}s)"
-                )
+                return False, (f"Connection rate limit exceeded (max {_MAX_CONNS_PER_MINUTE} per {_RATE_WINDOW_S}s)")
 
             # Register: increment open count + add timestamp to rate window
             pipe2 = self._redis.pipeline()
@@ -187,15 +184,9 @@ class WebSocketConnectionLimiter:
             recent_rate = len(window)
 
             if current_conns >= _MAX_CONNS_PER_IP:
-                return False, (
-                    f"Too many concurrent connections from this IP "
-                    f"(max {_MAX_CONNS_PER_IP})"
-                )
+                return False, (f"Too many concurrent connections from this IP (max {_MAX_CONNS_PER_IP})")
             if recent_rate >= _MAX_CONNS_PER_MINUTE:
-                return False, (
-                    f"Connection rate limit exceeded "
-                    f"(max {_MAX_CONNS_PER_MINUTE} per {_RATE_WINDOW_S}s)"
-                )
+                return False, (f"Connection rate limit exceeded (max {_MAX_CONNS_PER_MINUTE} per {_RATE_WINDOW_S}s)")
 
             self._open_conns[ip] += 1
             window.append(now)
@@ -232,9 +223,7 @@ class WebSocketConnectionLimiter:
             allowed, reason = await self._redis_check_and_register(client_ip)
             if allowed is not None:  # None = Redis error, fall through
                 if not allowed:
-                    logger.warning(
-                        "WS connection rejected for %s: %s", client_ip, reason
-                    )
+                    logger.warning("WS connection rejected for %s: %s", client_ip, reason)
                 return allowed, reason
 
         # In-process fallback
@@ -254,11 +243,9 @@ class WebSocketConnectionLimiter:
         Must be called in the finally block of every WebSocket handler.
         """
         if self._redis is not None:
-            try:
+            with contextlib.suppress(Exception):
                 await self._redis_release(client_ip)
                 return
-            except Exception:
-                pass
         await self._local_release(client_ip)
 
     def stats(self) -> dict:
@@ -274,6 +261,7 @@ class WebSocketConnectionLimiter:
 
 # ── IP extraction helper ──────────────────────────────────────────────────────
 
+
 def get_client_ip(websocket) -> str:
     """
     Extract the real client IP from a FastAPI WebSocket object.
@@ -285,19 +273,15 @@ def get_client_ip(websocket) -> str:
     trusted = {ip.strip() for ip in trusted_raw.split(",") if ip.strip()}
 
     direct_ip = ""
-    try:
+    with contextlib.suppress(Exception):
         if websocket.client:
             direct_ip = websocket.client.host or ""
-    except Exception:
-        pass
 
     if direct_ip in trusted:
         # Connection is from a trusted proxy — honour X-Forwarded-For
         forwarded = ""
-        try:
+        with contextlib.suppress(Exception):
             forwarded = websocket.headers.get("x-forwarded-for", "")
-        except Exception:
-            pass
         if forwarded:
             return forwarded.split(",")[0].strip()
 

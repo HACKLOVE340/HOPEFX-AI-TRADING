@@ -32,9 +32,8 @@ import random
 import time
 import uuid
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
-UTC = timezone.utc
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 
 import aiohttp
 
@@ -48,7 +47,7 @@ _CB_OPEN_AFTER_ERRORS = int(os.getenv("FEED_CB_OPEN_ERRORS", "5"))
 _CB_HALF_OPEN_AFTER_S = float(os.getenv("FEED_CB_HALF_OPEN_S", "60.0"))
 
 
-class CircuitState(str, Enum):
+class CircuitState(StrEnum):
     CLOSED = "closed"
     OPEN = "open"
     HALF_OPEN = "half_open"
@@ -81,7 +80,7 @@ class GoldFeedBase(ABC):
 
     def _init_prometheus(self) -> None:
         try:
-            from prometheus_client import Counter, Gauge, Histogram, REGISTRY
+            from prometheus_client import REGISTRY, Counter, Gauge, Histogram
 
             src = self.name.value
 
@@ -177,15 +176,15 @@ class GoldFeedBase(ABC):
             except Exception as _exc:
                 logger.debug("Suppressed exception: %s", _exc)
         if self._consecutive_errors >= _CB_OPEN_AFTER_ERRORS and self._cb_state != CircuitState.OPEN:
-                self._cb_state = CircuitState.OPEN
-                self._cb_opened_at = time.monotonic()
-                logger.error(
-                    "%s circuit: OPEN after %d consecutive errors",
-                    self.name.value,
-                    self._consecutive_errors,
-                )
-                if self._prom_cb_state:
-                    self._prom_cb_state.set(1)
+            self._cb_state = CircuitState.OPEN
+            self._cb_opened_at = time.monotonic()
+            logger.error(
+                "%s circuit: OPEN after %d consecutive errors",
+                self.name.value,
+                self._consecutive_errors,
+            )
+            if self._prom_cb_state:
+                self._prom_cb_state.set(1)
 
     # ── Rate limiting ─────────────────────────────────────────────────────────
 
@@ -205,9 +204,7 @@ class GoldFeedBase(ABC):
     ) -> dict:
         """Authenticated GET with exponential backoff and circuit breaker."""
         if not self._check_circuit():
-            raise RuntimeError(
-                f"{self.name.value} circuit breaker OPEN — skipping call"
-            )
+            raise RuntimeError(f"{self.name.value} circuit breaker OPEN — skipping call")
 
         await self._rate_limit()
         session = await self._get_session()
@@ -219,7 +216,7 @@ class GoldFeedBase(ABC):
                 async with session.get(url, params=params, headers=headers) as resp:
                     self._total_calls += 1
 
-                    if resp.status == 429:  # noqa: PLR2004
+                    if resp.status == 429:
                         retry_after = float(resp.headers.get("Retry-After", backoff))
                         wait = min(retry_after + random.uniform(0, 1.0), 120.0)  # nosec B311 - retry jitter, not cryptographic
                         logger.warning(
@@ -237,7 +234,7 @@ class GoldFeedBase(ABC):
                         self._on_error("auth", msg=msg)
                         raise RuntimeError(f"{self.name.value}: {msg}")
 
-                    if resp.status >= 500:  # noqa: PLR2004
+                    if resp.status >= 500:
                         raise aiohttp.ClientResponseError(
                             resp.request_info,
                             resp.history,
@@ -264,7 +261,7 @@ class GoldFeedBase(ABC):
                     exc,
                     wait,
                 )
-                if attempt < 3:  # noqa: PLR2004
+                if attempt < 3:
                     await asyncio.sleep(wait)
                     backoff = min(backoff * 2, 30.0)
                 else:
@@ -279,9 +276,7 @@ class GoldFeedBase(ABC):
         """Fetch the current XAU/USD price. Must return a GoldTick."""
         ...
 
-    async def fetch_ohlcv(
-        self, timeframe: str = "1h", limit: int = 200
-    ) -> list[OHLCVBar]:
+    async def fetch_ohlcv(self, timeframe: str = "1h", limit: int = 200) -> list[OHLCVBar]:
         """Fetch historical OHLCV bars. Override in adapters that support it."""
         return []
 

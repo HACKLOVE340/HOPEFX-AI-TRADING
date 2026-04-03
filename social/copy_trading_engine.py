@@ -13,12 +13,11 @@ Advanced Copy Trading & Social Trading Engine
 """
 
 import logging
-from typing import Any
-from dataclasses import dataclass, field
-from enum import Enum
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
 import uuid
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from enum import Enum
+from typing import Any
 
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -173,7 +172,8 @@ class AdvancedCopyTradingEngine:
             subscription_price=subscription_price,
         )
 
-        logger.info(f"Registered trader: {username} (ID: {trader.trader_id})")
+        logger.info("Registered trader: %s (ID: %s)", username, trader.trader_id)
+
         return trader
 
     def subscribe_to_trader(
@@ -194,12 +194,11 @@ class AdvancedCopyTradingEngine:
             risk_per_trade=risk_per_trade,
         )
 
-        logger.info(f"Follower {follower_id} subscribed to {trader_id}")
+        logger.info("Follower %s subscribed to %s", follower_id, trader_id)
+
         return config
 
-    def broadcast_signal(
-        self, signal: SignalMessage, followers: list[FollowerConfig]
-    ) -> dict[str, dict[str, Any]]:
+    def broadcast_signal(self, signal: SignalMessage, followers: list[FollowerConfig]) -> dict[str, dict[str, Any]]:
         """
         Broadcast trading signal to all followers
 
@@ -236,9 +235,7 @@ class AdvancedCopyTradingEngine:
                 lot_size = self._calculate_lot_size(signal, follower)
 
                 # Adjust risk
-                adjusted_signal = self._adjust_signal_for_follower(
-                    signal, follower, lot_size
-                )
+                adjusted_signal = self._adjust_signal_for_follower(signal, follower, lot_size)
 
                 # Place order via broker
                 if self.broker:
@@ -264,16 +261,13 @@ class AdvancedCopyTradingEngine:
                     }
 
             except Exception as e:
-                logger.error(
-                    f"Failed to process signal for {follower.follower_id}: {e}"
-                )
+                logger.error("Failed to process signal for %s: %s", follower.follower_id, e)
+
                 results[follower.follower_id] = {"status": "error", "error": str(e)}
 
         return results
 
-    def _calculate_lot_size(
-        self, signal: SignalMessage, follower: FollowerConfig
-    ) -> float:
+    def _calculate_lot_size(self, signal: SignalMessage, follower: FollowerConfig) -> float:
         """Calculate appropriate lot size for follower"""
 
         if follower.allocation_strategy == TradeAllocationStrategy.PROPORTIONAL:
@@ -281,16 +275,16 @@ class AdvancedCopyTradingEngine:
             ratio = follower.account_balance / signal.lot_size  # Base trader lot
             return signal.lot_size * ratio
 
-        elif follower.allocation_strategy == TradeAllocationStrategy.FIXED_LOTS:
+        if follower.allocation_strategy == TradeAllocationStrategy.FIXED_LOTS:
             return signal.lot_size
 
-        elif follower.allocation_strategy == TradeAllocationStrategy.PERCENTAGE:
+        if follower.allocation_strategy == TradeAllocationStrategy.PERCENTAGE:
             # Risk fixed percentage of follower account
             max_risk = follower.account_balance * follower.risk_per_trade
             price_diff = abs(signal.entry_price - signal.stop_loss)
             return max_risk / price_diff if price_diff > 0 else 0.1
 
-        elif follower.allocation_strategy == TradeAllocationStrategy.RISK_BASED:
+        if follower.allocation_strategy == TradeAllocationStrategy.RISK_BASED:
             # Calculate based on risk tolerance
             max_risk = follower.account_balance * follower.risk_per_trade
             price_diff = abs(signal.entry_price - signal.stop_loss)
@@ -304,8 +298,7 @@ class AdvancedCopyTradingEngine:
             max_concurrent_risk = follower.account_balance * 0.05
             return min(lot_size, max_concurrent_risk / price_diff)
 
-        else:
-            return signal.lot_size
+        return signal.lot_size
 
     def _adjust_signal_for_follower(
         self, signal: SignalMessage, follower: FollowerConfig, lot_size: float
@@ -327,9 +320,7 @@ class AdvancedCopyTradingEngine:
 
         return adjusted
 
-    def _check_trade_correlation(
-        self, signal: SignalMessage, follower: FollowerConfig
-    ) -> bool:
+    def _check_trade_correlation(self, signal: SignalMessage, follower: FollowerConfig) -> bool:
         """Check if follower already has correlated trades"""
 
         # Calculate correlation with existing positions
@@ -345,23 +336,21 @@ class AdvancedCopyTradingEngine:
 
         return False
 
-    def close_copy_trade(
-        self, follower_id: str, trader_id: str, signal_id: str
-    ) -> bool:
+    def close_copy_trade(self, follower_id: str, trader_id: str, signal_id: str) -> bool:
         """Close copied trade"""
 
         if signal_id not in self.active_signals:
-            logger.warning(f"Signal {signal_id} not found")
+            logger.warning("Signal %s not found", signal_id)
+
             return False
 
         signal = self.active_signals.pop(signal_id)
 
-        logger.info(f"Closed copy trade for follower {follower_id}: {signal.symbol}")
+        logger.info("Closed copy trade for follower %s: %s", follower_id, signal.symbol)
+
         return True
 
-    def get_follower_performance(
-        self, follower_id: str, days: int = 30
-    ) -> dict[str, Any]:
+    def get_follower_performance(self, follower_id: str, days: int = 30) -> dict[str, Any]:
         """Get performance metrics for follower"""
 
         return {

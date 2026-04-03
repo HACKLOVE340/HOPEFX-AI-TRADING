@@ -20,8 +20,7 @@ GET  /api/calendar/auto-pause       — get current auto-pause config
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Query
@@ -89,106 +88,106 @@ def _seed_calendar():
 
     seed_events = [
         # Today / tomorrow
-        dict(
-            title="US Non-Farm Payrolls",
-            event_type=EventType.EMPLOYMENT,
-            importance=EventImportance.CRITICAL,
-            hours=2,
-            country="US",
-            currency="USD",
-            forecast=185.0,
-            previous=175.0,
-        ),
-        dict(
-            title="US CPI (YoY)",
-            event_type=EventType.INFLATION,
-            importance=EventImportance.HIGH,
-            hours=6,
-            country="US",
-            currency="USD",
-            forecast=3.1,
-            previous=3.2,
-        ),
-        dict(
-            title="FOMC Meeting Minutes",
-            event_type=EventType.CENTRAL_BANK,
-            importance=EventImportance.CRITICAL,
-            hours=26,
-            country="US",
-            currency="USD",
-            forecast=None,
-            previous=None,
-        ),
-        dict(
-            title="ECB Interest Rate Decision",
-            event_type=EventType.CENTRAL_BANK,
-            importance=EventImportance.CRITICAL,
-            hours=30,
-            country="EU",
-            currency="EUR",
-            forecast=4.5,
-            previous=4.5,
-        ),
-        dict(
-            title="UK GDP (QoQ)",
-            event_type=EventType.GDP,
-            importance=EventImportance.HIGH,
-            hours=48,
-            country="UK",
-            currency="GBP",
-            forecast=0.2,
-            previous=0.1,
-        ),
-        dict(
-            title="US Retail Sales (MoM)",
-            event_type=EventType.RETAIL_SALES,
-            importance=EventImportance.MEDIUM,
-            hours=52,
-            country="US",
-            currency="USD",
-            forecast=0.3,
-            previous=-0.1,
-        ),
-        dict(
-            title="US Initial Jobless Claims",
-            event_type=EventType.EMPLOYMENT,
-            importance=EventImportance.MEDIUM,
-            hours=72,
-            country="US",
-            currency="USD",
-            forecast=215.0,
-            previous=220.0,
-        ),
-        dict(
-            title="BOJ Rate Decision",
-            event_type=EventType.CENTRAL_BANK,
-            importance=EventImportance.HIGH,
-            hours=96,
-            country="JP",
-            currency="JPY",
-            forecast=-0.1,
-            previous=-0.1,
-        ),
-        dict(
-            title="US PPI (MoM)",
-            event_type=EventType.INFLATION,
-            importance=EventImportance.MEDIUM,
-            hours=120,
-            country="US",
-            currency="USD",
-            forecast=0.2,
-            previous=0.3,
-        ),
-        dict(
-            title="Michigan Consumer Sentiment",
-            event_type=EventType.CONSUMER_CONFIDENCE,
-            importance=EventImportance.LOW,
-            hours=144,
-            country="US",
-            currency="USD",
-            forecast=68.0,
-            previous=67.4,
-        ),
+        {
+            "title": "US Non-Farm Payrolls",
+            "event_type": EventType.EMPLOYMENT,
+            "importance": EventImportance.CRITICAL,
+            "hours": 2,
+            "country": "US",
+            "currency": "USD",
+            "forecast": 185.0,
+            "previous": 175.0,
+        },
+        {
+            "title": "US CPI (YoY)",
+            "event_type": EventType.INFLATION,
+            "importance": EventImportance.HIGH,
+            "hours": 6,
+            "country": "US",
+            "currency": "USD",
+            "forecast": 3.1,
+            "previous": 3.2,
+        },
+        {
+            "title": "FOMC Meeting Minutes",
+            "event_type": EventType.CENTRAL_BANK,
+            "importance": EventImportance.CRITICAL,
+            "hours": 26,
+            "country": "US",
+            "currency": "USD",
+            "forecast": None,
+            "previous": None,
+        },
+        {
+            "title": "ECB Interest Rate Decision",
+            "event_type": EventType.CENTRAL_BANK,
+            "importance": EventImportance.CRITICAL,
+            "hours": 30,
+            "country": "EU",
+            "currency": "EUR",
+            "forecast": 4.5,
+            "previous": 4.5,
+        },
+        {
+            "title": "UK GDP (QoQ)",
+            "event_type": EventType.GDP,
+            "importance": EventImportance.HIGH,
+            "hours": 48,
+            "country": "UK",
+            "currency": "GBP",
+            "forecast": 0.2,
+            "previous": 0.1,
+        },
+        {
+            "title": "US Retail Sales (MoM)",
+            "event_type": EventType.RETAIL_SALES,
+            "importance": EventImportance.MEDIUM,
+            "hours": 52,
+            "country": "US",
+            "currency": "USD",
+            "forecast": 0.3,
+            "previous": -0.1,
+        },
+        {
+            "title": "US Initial Jobless Claims",
+            "event_type": EventType.EMPLOYMENT,
+            "importance": EventImportance.MEDIUM,
+            "hours": 72,
+            "country": "US",
+            "currency": "USD",
+            "forecast": 215.0,
+            "previous": 220.0,
+        },
+        {
+            "title": "BOJ Rate Decision",
+            "event_type": EventType.CENTRAL_BANK,
+            "importance": EventImportance.HIGH,
+            "hours": 96,
+            "country": "JP",
+            "currency": "JPY",
+            "forecast": -0.1,
+            "previous": -0.1,
+        },
+        {
+            "title": "US PPI (MoM)",
+            "event_type": EventType.INFLATION,
+            "importance": EventImportance.MEDIUM,
+            "hours": 120,
+            "country": "US",
+            "currency": "USD",
+            "forecast": 0.2,
+            "previous": 0.3,
+        },
+        {
+            "title": "Michigan Consumer Sentiment",
+            "event_type": EventType.CONSUMER_CONFIDENCE,
+            "importance": EventImportance.LOW,
+            "hours": 144,
+            "country": "US",
+            "currency": "USD",
+            "forecast": 68.0,
+            "previous": 67.4,
+        },
     ]
 
     for ev in seed_events:
@@ -394,7 +393,7 @@ async def get_fomc_calendar(upcoming_only: bool = True) -> list[FomcEvent]:
     for date_str in _FOMC_DATES:
         dt = datetime.fromisoformat(f"{date_str}T18:00:00+00:00")
         delta_min = int((dt - now).total_seconds() / 60)
-        if upcoming_only and delta_min < -60:  # noqa: PLR2004
+        if upcoming_only and delta_min < -60:
             continue
         events.append(
             FomcEvent(
@@ -402,7 +401,7 @@ async def get_fomc_calendar(upcoming_only: bool = True) -> list[FomcEvent]:
                 time_utc="18:00",
                 minutes_until=max(0, delta_min),
                 is_next=False,
-                is_within_2h=abs(delta_min) <= 120,  # noqa: PLR2004
+                is_within_2h=abs(delta_min) <= 120,
             ),
         )
 
@@ -410,7 +409,7 @@ async def get_fomc_calendar(upcoming_only: bool = True) -> list[FomcEvent]:
     upcoming = [e for e in events if e.minutes_until > 0]
     if upcoming:
         upcoming[0] = FomcEvent(**{**upcoming[0].model_dump(), "is_next": True})
-        events = [upcoming[0]] + events[1:]
+        events = [upcoming[0], *events[1:]]
 
     return events
 
@@ -463,9 +462,7 @@ async def set_fomc_regime(body: FomcRegimeOverride) -> FomcRegimeStatus:
     try:
         from core.config_store import config_store
 
-        config_store.set(
-            "fomc_regime_override", _fomc_regime_override, changed_by="fomc_api"
-        )
+        config_store.set("fomc_regime_override", _fomc_regime_override, changed_by="fomc_api")
     except Exception as exc:
         logger.warning("FOMC regime persist failed (non-fatal): %s", exc)
 
@@ -489,9 +486,7 @@ async def get_fomc_regime() -> FomcRegimeStatus:
             if stored:
                 _fomc_regime_override.update(stored)
         except Exception as exc:
-            logger.warning(
-                "FOMC regime load from config_store failed (non-fatal): %s", exc
-            )
+            logger.warning("FOMC regime load from config_store failed (non-fatal): %s", exc)
 
     # Auto-expire
     if _fomc_regime_override.get("active") and _fomc_regime_override.get("expires_at"):

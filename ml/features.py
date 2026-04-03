@@ -149,7 +149,7 @@ class FeatureEngineer:
     - Cross-asset relationships
     """
 
-    def __init__(self, lookback_periods: list[int] = None):
+    def __init__(self, lookback_periods: list[int] | None = None):
         self.lookback_periods = lookback_periods or [5, 10, 20, 50]
         self._feature_cache: dict[str, deque] = {}
         self._cache_size = 1000
@@ -193,14 +193,11 @@ class FeatureEngineer:
                 # Price position in range
                 period_high = np.max(highs[-period:])
                 period_low = np.min(lows[-period:])
-                features[f"price_position_{period}"] = (current_price - period_low) / (
-                    period_high - period_low + 1e-10
-                )
+                features[f"price_position_{period}"] = (current_price - period_low) / (period_high - period_low + 1e-10)
 
                 # Volume trend
                 features[f"volume_trend_{period}"] = (
-                    np.mean(volumes[-period:]) / np.mean(volumes[-period * 2 : -period])
-                    - 1
+                    np.mean(volumes[-period:]) / np.mean(volumes[-period * 2 : -period]) - 1
                 )
 
             # 2. Technical indicators
@@ -220,16 +217,12 @@ class FeatureEngineer:
                 features["bb_upper"] = upper[-1]
                 features["bb_middle"] = middle[-1]
                 features["bb_lower"] = lower[-1]
-                features["bb_position"] = (current_price - lower[-1]) / (
-                    upper[-1] - lower[-1] + 1e-10
-                )
+                features["bb_position"] = (current_price - lower[-1]) / (upper[-1] - lower[-1] + 1e-10)
 
             # ATR
             atr = TechnicalIndicators.atr(highs, lows, closes)
             features["atr"] = atr[-1] if len(atr) > 0 else 0
-            features["atr_pct"] = (
-                features["atr"] / current_price if current_price > 0 else 0
-            )
+            features["atr_pct"] = features["atr"] / current_price if current_price > 0 else 0
 
             # 3. Market microstructure features (if order book provided)
             if order_book:
@@ -248,35 +241,23 @@ class FeatureEngineer:
                     # Order book imbalance
                     bid_volume = sum(b[1] for b in bids[:5])
                     ask_volume = sum(a[1] for a in asks[:5])
-                    features["ob_imbalance"] = (bid_volume - ask_volume) / (
-                        bid_volume + ask_volume + 1e-10
-                    )
+                    features["ob_imbalance"] = (bid_volume - ask_volume) / (bid_volume + ask_volume + 1e-10)
 
             # 4. Pattern features
             # Candlestick patterns
-            features["body_size"] = abs(closes[-1] - opens[-1]) / (
-                highs[-1] - lows[-1] + 1e-10
-            )
-            features["upper_shadow"] = (highs[-1] - max(opens[-1], closes[-1])) / (
-                highs[-1] - lows[-1] + 1e-10
-            )
-            features["lower_shadow"] = (min(opens[-1], closes[-1]) - lows[-1]) / (
-                highs[-1] - lows[-1] + 1e-10
-            )
+            features["body_size"] = abs(closes[-1] - opens[-1]) / (highs[-1] - lows[-1] + 1e-10)
+            features["upper_shadow"] = (highs[-1] - max(opens[-1], closes[-1])) / (highs[-1] - lows[-1] + 1e-10)
+            features["lower_shadow"] = (min(opens[-1], closes[-1]) - lows[-1]) / (highs[-1] - lows[-1] + 1e-10)
 
             # Trend strength
-            if len(closes) >= 20:  # noqa: PLR2004
+            if len(closes) >= 20:
                 slope = np.polyfit(range(20), closes[-20:], 1)[0]
-                features["trend_slope"] = (
-                    slope / current_price if current_price > 0 else 0
-                )
+                features["trend_slope"] = slope / current_price if current_price > 0 else 0
 
             # Create feature vector
             feature_vector = FeatureVector(
                 symbol=symbol,
-                timestamp=ohlcv_data[-1].timestamp
-                if hasattr(ohlcv_data[-1], "timestamp")
-                else 0,
+                timestamp=ohlcv_data[-1].timestamp if hasattr(ohlcv_data[-1], "timestamp") else 0,
                 features=features,
             )
 
@@ -288,7 +269,8 @@ class FeatureEngineer:
             return feature_vector
 
         except Exception as e:
-            logger.error(f"Feature extraction error for {symbol}: {e}")
+            logger.error("Feature extraction error for %s: %s", symbol, e)
+
             return None
 
     def get_feature_importance(self, model: Any) -> dict[str, float]:
@@ -308,9 +290,7 @@ class FeatureEngineer:
             raise ValueError("A trained model must be supplied; no model provided.")
 
         # XGBoostPredictor wrapper (ml/pipeline.py)
-        if hasattr(model, "get_feature_importances") and callable(
-            model.get_feature_importances
-        ):
+        if hasattr(model, "get_feature_importances") and callable(model.get_feature_importances):
             return model.get_feature_importances()
 
         # sklearn / XGBoost / LightGBM native attribute
@@ -318,22 +298,20 @@ class FeatureEngineer:
             importances = model.feature_importances_
             names = (
                 self.feature_names
-                if hasattr(self, "feature_names")
-                and len(self.feature_names) == len(importances)
+                if hasattr(self, "feature_names") and len(self.feature_names) == len(importances)
                 else [str(i) for i in range(len(importances))]
             )
             return dict(zip(names, importances.tolist(), strict=False))
 
         raise ValueError(
-            f"Model of type {type(model).__name__!r} does not expose "
-            "feature_importances_ or get_feature_importances()."
+            f"Model of type {type(model).__name__!r} does not expose feature_importances_ or get_feature_importances()."
         )
 
     def detect_anomalies(self, symbol: str, threshold: float = 3.0) -> list[dict]:
         """
         Detect anomalous market conditions
         """
-        if symbol not in self._feature_cache or len(self._feature_cache[symbol]) < 100:  # noqa: PLR2004
+        if symbol not in self._feature_cache or len(self._feature_cache[symbol]) < 100:
             return []
 
         recent = list(self._feature_cache[symbol])[-100:]
@@ -355,7 +333,7 @@ class FeatureEngineer:
                         "z_score": z_score,
                         "mean": mean,
                         "std": std,
-                        "severity": "high" if z_score > 5 else "medium",  # noqa: PLR2004
+                        "severity": "high" if z_score > 5 else "medium",
                     },
                 )
 
@@ -395,7 +373,8 @@ class SignalEnsemble:
                 total_weight += weight
 
             except Exception as e:
-                logger.error(f"Model {name} prediction error: {e}")
+                logger.error("Model %s prediction error: %s", name, e)
+
 
         if total_weight == 0:
             return {"action": "hold", "confidence": 0, "probability": 0.5}
@@ -403,9 +382,9 @@ class SignalEnsemble:
         ensemble_prob = weighted_sum / total_weight
 
         # Determine action
-        if ensemble_prob > 0.7:  # noqa: PLR2004
+        if ensemble_prob > 0.7:
             action = "buy"
-        elif ensemble_prob < 0.3:  # noqa: PLR2004
+        elif ensemble_prob < 0.3:
             action = "sell"
         else:
             action = "hold"
@@ -438,15 +417,12 @@ class SignalEnsemble:
         if hasattr(model, "predict_proba") and callable(model.predict_proba):
             proba = model.predict_proba(X)
             # sklearn returns shape (1, n_classes); take P(class=1)
-            prob = float(proba[0, 1]) if proba.ndim == 2 else float(proba[0])  # noqa: PLR2004
+            prob = float(proba[0, 1]) if proba.ndim == 2 else float(proba[0])
         elif hasattr(model, "predict") and callable(model.predict):
             raw = model.predict(X)
             prob = float(raw[0])
         else:
-            raise TypeError(
-                f"Model of type {type(model).__name__!r} exposes neither "
-                "predict_proba() nor predict()."
-            )
+            raise TypeError(f"Model of type {type(model).__name__!r} exposes neither predict_proba() nor predict().")
 
         return {
             "probability": prob,

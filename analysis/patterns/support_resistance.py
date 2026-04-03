@@ -18,8 +18,7 @@ significant buying or selling pressure:
 import logging
 import math
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +37,7 @@ class PriceLevel:
     description: str = ""
 
     def to_dict(self) -> dict:
-        last_touch_str = (
-            self.last_touch.isoformat() if self.last_touch is not None else None
-        )
+        last_touch_str = self.last_touch.isoformat() if self.last_touch is not None else None
         return {
             "price": self.price,
             "level_type": self.level_type,
@@ -235,7 +232,7 @@ def _build_psychological_levels(
 
         # Rough proximity check
         dist_ratio = abs(price - current_price) / current_price
-        if dist_ratio > 0.10:  # noqa: PLR2004
+        if dist_ratio > 0.10:
             continue
 
         touches = _count_touches(price, closes, closes, tolerance)
@@ -399,8 +396,7 @@ class SupportResistanceDetector:
         round_number_increment = float(cfg.get("round_number_increment", 50.0))
         if round_number_increment <= 0:
             raise ValueError(
-                "round_number_increment must be greater than 0 to compute "
-                "round-number support/resistance levels."
+                "round_number_increment must be greater than 0 to compute round-number support/resistance levels."
             )
         self.round_number_increment: float = round_number_increment
         # Legacy attributes kept for backward compatibility
@@ -694,7 +690,7 @@ class SupportResistanceDetector:
             return []
 
         closes = df[cols["close"]].tolist()
-        if len(closes) < 20:  # noqa: PLR2004
+        if len(closes) < 20:
             return []
 
         ma20 = sum(closes[-20:]) / 20.0

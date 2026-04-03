@@ -8,12 +8,11 @@
 import logging
 import threading
 import time
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
-from typing import Any
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from typing import Any, ClassVar
 
-from replay.models import ReplaySpeed, ReplayState, ReplaySession, ReplayBar
+from replay.models import ReplayBar, ReplaySession, ReplaySpeed, ReplayState
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +86,8 @@ class ChartReplayEngine:
         # Load historical data
         self._load_data(session)
 
-        logger.info(f"Created replay session: {session_id} for {symbol}")
+        logger.info("Created replay session: %s for %s", session_id, symbol)
+
         return session
 
     def _load_data(self, session: ReplaySession):
@@ -100,9 +100,8 @@ class ChartReplayEngine:
             bars = self._generate_sample_data(session)
             self.data_cache[data_key] = bars
 
-        logger.info(
-            f"Loaded {len(self.data_cache.get(data_key, []))} bars for {data_key}"
-        )
+        logger.info("Loaded %s bars for %s", len(self.data_cache.get(data_key, [])), data_key)
+
 
     def _generate_sample_data(self, session: ReplaySession) -> list[ReplayBar]:
         """
@@ -194,10 +193,7 @@ class ChartReplayEngine:
             }
             interval = _TF_MAP.get(session.timeframe, "1d")
 
-            logger.info(
-                f"Fetching {ticker} [{interval}] "
-                f"{session.start_date.date()} → {session.end_date.date()} via yfinance"
-            )
+            logger.info("Fetching %s [%s] %s → %s via yfinance", ticker, interval, session.start_date.date(), session.end_date.date())
             df = yf.download(
                 ticker,
                 start=session.start_date,
@@ -208,10 +204,11 @@ class ChartReplayEngine:
             )
 
             if df is None or df.empty:
-                logger.warning(f"yfinance returned no data for {ticker}")
+                logger.warning("yfinance returned no data for %s", ticker)
+
                 return []
 
-            bars: list[ReplayBar] = []
+            bars: ClassVar[list[ReplayBar]] = []
             for ts, row in df.iterrows():
                 bars.append(
                     ReplayBar(
@@ -224,16 +221,16 @@ class ChartReplayEngine:
                     )
                 )
 
-            logger.info(f"Loaded {len(bars)} bars from yfinance for {ticker}")
+            logger.info("Loaded %s bars from yfinance for %s", len(bars), ticker)
+
             return bars
 
         except ImportError:
             logger.warning("yfinance not installed — using simulated replay data.")
             return []
         except Exception as exc:
-            logger.warning(
-                f"yfinance fetch failed ({exc}) — using simulated replay data."
-            )
+            logger.warning("yfinance fetch failed (%s) — using simulated replay data.", exc)
+
             return []
 
     def play(self, session_id: str | None = None) -> bool:
@@ -250,13 +247,12 @@ class ChartReplayEngine:
         self._stop_flag.clear()
 
         # Start replay thread
-        self._replay_thread = threading.Thread(
-            target=self._replay_loop, args=(session,), daemon=True
-        )
+        self._replay_thread = threading.Thread(target=self._replay_loop, args=(session,), daemon=True)
         self._replay_thread.start()
 
         self._trigger_callback("on_state_change", session, ReplayState.PLAYING)
-        logger.info(f"Started replay: {session.session_id}")
+        logger.info("Started replay: %s", session.session_id)
+
         return True
 
     def pause(self, session_id: str | None = None) -> bool:
@@ -269,7 +265,8 @@ class ChartReplayEngine:
         self._stop_flag.set()
 
         self._trigger_callback("on_state_change", session, ReplayState.PAUSED)
-        logger.info(f"Paused replay: {session.session_id}")
+        logger.info("Paused replay: %s", session.session_id)
+
         return True
 
     def stop(self, session_id: str | None = None) -> bool:
@@ -282,7 +279,8 @@ class ChartReplayEngine:
         self._stop_flag.set()
 
         self._trigger_callback("on_state_change", session, ReplayState.FINISHED)
-        logger.info(f"Stopped replay: {session.session_id}")
+        logger.info("Stopped replay: %s", session.session_id)
+
         return True
 
     def set_speed(self, speed: ReplaySpeed, session_id: str | None = None) -> bool:
@@ -292,7 +290,8 @@ class ChartReplayEngine:
             return False
 
         session.speed = speed
-        logger.info(f"Set replay speed to {speed.name}")
+        logger.info("Set replay speed to %s", speed.name)
+
         return True
 
     def seek(self, target_date: datetime, session_id: str | None = None) -> bool:
@@ -306,7 +305,8 @@ class ChartReplayEngine:
             return False
 
         session.current_date = target_date
-        logger.info(f"Seeked to {target_date}")
+        logger.info("Seeked to %s", target_date)
+
         return True
 
     def place_practice_order(
@@ -339,9 +339,7 @@ class ChartReplayEngine:
         if not current_bar:
             return None
 
-        execution_price = (
-            price if order_type == "LIMIT" and price else current_bar.close
-        )
+        execution_price = price if order_type == "LIMIT" and price else current_bar.close
 
         trade = {
             "trade_id": f"trade_{len(session.trades) + 1}",
@@ -361,14 +359,15 @@ class ChartReplayEngine:
         self._update_position(session, trade)
 
         self._trigger_callback("on_trade", session, trade)
-        logger.info(f"Practice trade executed: {side} {size} @ {execution_price}")
+        logger.info("Practice trade executed: %s %s @ %s", side, size, execution_price)
+
         return trade
 
     def _get_session(self, session_id: str | None) -> ReplaySession | None:
         """Get session by ID or active session."""
         if session_id:
             return self.sessions.get(session_id)
-        elif self.active_session_id:
+        if self.active_session_id:
             return self.sessions.get(self.active_session_id)
         return None
 
@@ -401,9 +400,7 @@ class ChartReplayEngine:
                 existing_pos["size"] -= trade["size"]
                 if existing_pos["size"] <= 0:
                     existing_pos["status"] = "CLOSED"
-                    pnl = (trade["price"] - existing_pos["entry_price"]) * abs(
-                        existing_pos["size"]
-                    )
+                    pnl = (trade["price"] - existing_pos["entry_price"]) * abs(existing_pos["size"])
                     if existing_pos["side"] == "SELL":
                         pnl = -pnl
                     existing_pos["pnl"] = pnl
@@ -466,7 +463,8 @@ class ChartReplayEngine:
             try:
                 callback(*args)
             except Exception as e:
-                logger.error(f"Callback error: {e}")
+                logger.error("Callback error: %s", e)
+
 
     def get_session_summary(self, session_id: str | None = None) -> dict[str, Any]:
         """Get summary of replay session."""
@@ -486,10 +484,7 @@ class ChartReplayEngine:
             "initial_balance": session.initial_balance,
             "current_balance": session.current_balance,
             "pnl": session.current_balance - session.initial_balance,
-            "pnl_percent": ((session.current_balance / session.initial_balance) - 1)
-            * 100,
+            "pnl_percent": ((session.current_balance / session.initial_balance) - 1) * 100,
             "total_trades": len(session.trades),
-            "open_positions": len(
-                [p for p in session.positions if p["status"] == "OPEN"]
-            ),
+            "open_positions": len([p for p in session.positions if p["status"] == "OPEN"]),
         }

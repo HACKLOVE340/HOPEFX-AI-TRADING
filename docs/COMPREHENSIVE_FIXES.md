@@ -1,6 +1,6 @@
 # Comprehensive Fixes Documentation
 
-> Last updated: 2026-07-14 (v1.17). Reflects all fixes through DIAGNOSTIC_REPORT.md V14 +
+> Last updated: 2026-04-01 (v1.17). Reflects all fixes through DIAGNOSTIC_REPORT.md V14 +
 > post-diagnostic session + July 2026 documentation sprint + July 2026 code sprint.
 
 This document summarises all major fixes made across the HOPEFX-AI-TRADING project,
@@ -289,4 +289,4 @@ Every API example includes the `Authorization: Bearer $TOKEN` header.
 
 ---
 
-*Last updated: 2026-07-14 (v1.17)*
+*Last updated: 2026-04-01 (v1.17)*

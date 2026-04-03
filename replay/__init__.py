@@ -15,13 +15,13 @@ Submodules:
     router — FastAPI router (/api/replay/*)
 """
 
+from replay.engine import ChartReplayEngine
 from replay.models import (
+    ReplayBar,
+    ReplaySession,
     ReplaySpeed,
     ReplayState,
-    ReplaySession,
-    ReplayBar,
 )
-from replay.engine import ChartReplayEngine
 from replay.router import create_replay_router
 
 __all__ = [

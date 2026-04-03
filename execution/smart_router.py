@@ -38,10 +38,8 @@ import os
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
-
 
 from execution.algo_orders import AlgoOrderManager, get_algo_manager
 
@@ -72,9 +70,7 @@ _ORDER_TIMEOUT_S = float(os.getenv("ROUTER_ORDER_TIMEOUT_S", "5.0"))
 _MAX_SPREAD_BPS = float(os.getenv("ROUTER_MAX_SPREAD_BPS", "50.0"))
 
 # ── sentiment thresholds ──────────────────────────────────────────────────────
-_SENT_BLACKOUT_THRESH = float(
-    os.getenv("ROUTER_SENT_BLACKOUT", "0.80")
-)  # |score| > this → block
+_SENT_BLACKOUT_THRESH = float(os.getenv("ROUTER_SENT_BLACKOUT", "0.80"))  # |score| > this → block
 _IMPACT_BLACKOUT = float(os.getenv("ROUTER_IMPACT_BLACKOUT", "0.75"))
 
 
@@ -122,9 +118,9 @@ class BrokerState:
 
     def check_circuit_reset(self) -> None:
         if self.circuit_open and time.monotonic() - self.circuit_open_at > _CB_RESET_S:
-                self.circuit_open = False
-                self.error_times = []
-                logger.warning("Circuit breaker RESET for broker=%s", self.broker_id)
+            self.circuit_open = False
+            self.error_times = []
+            logger.warning("Circuit breaker RESET for broker=%s", self.broker_id)
 
     def routing_score(
         self,
@@ -211,6 +207,9 @@ class SmartRouter:
         # orders flow through the same broker selection logic.
         self._algo.set_broker_submit_fn(self._submit_child_order)
 
+        # Pending algo orders: algo_id → order_request
+        self._pending_algo_orders: dict[str, Any] = {}
+
     def add_broker(self, broker_id: str, broker_instance: Any) -> None:
         """Register a broker. Broker must implement place_order(order_dict)."""
         self._brokers[broker_id] = broker_instance
@@ -253,9 +252,7 @@ class SmartRouter:
         # Unwind orders bypass sentiment/impact gates — they are unconditional.
         is_unwind = bool(order_request.get("is_unwind", False))
         if not is_unwind:
-            gate_result = self._pre_route_gate(
-                spread_bps, sentiment_score, impact_score, direction, ofi
-            )
+            gate_result = self._pre_route_gate(spread_bps, sentiment_score, impact_score, direction, ofi)
             if gate_result is not None:
                 return {"status": "rejected", "reason": gate_result, "broker": "none"}
 
@@ -325,7 +322,6 @@ class SmartRouter:
         )
 
         # Store the original order context so child fills can reference it
-        self._pending_algo_orders = getattr(self, "_pending_algo_orders", {})
 
         algo_id = await self._algo.submit_auto(
             symbol=symbol,
@@ -338,8 +334,7 @@ class SmartRouter:
             # submit_auto returned None — quantity fell below threshold
             # (shouldn't happen here, but handle gracefully)
             logger.warning(
-                "AlgoOrderManager.submit_auto returned None for qty=%.2f — "
-                "falling through to market order",
+                "AlgoOrderManager.submit_auto returned None for qty=%.2f — falling through to market order",
                 quantity,
             )
             ranked = self._rank_brokers(direction, 0.0, 0.0)
@@ -438,11 +433,7 @@ class SmartRouter:
             if broker_id in self._states:
                 latency_ms = float(result.get("latency_ms", 100.0))
                 fill_price = float(result.get("fill_price", order_request["mid_price"]))
-                expected = (
-                    order_request["ask"]
-                    if direction == "long"
-                    else order_request["bid"]
-                )
+                expected = order_request["ask"] if direction == "long" else order_request["bid"]
                 slippage_bps = abs(fill_price - expected) / max(expected, 1e-9) * 10_000
                 self._states[broker_id].record_fill(latency_ms, slippage_bps)
 
@@ -489,10 +480,10 @@ class SmartRouter:
             return f"macro_impact_blackout:{impact_score:.3f}"
 
         # OFI strongly against direction — adverse microstructure
-        if direction == "long" and ofi < -0.70:  # noqa: PLR2004
+        if direction == "long" and ofi < -0.70:
             logger.warning("Router: OFI=%.3f strongly against long — rejecting", ofi)
             return f"adverse_ofi:{ofi:.3f}"
-        if direction == "short" and ofi > 0.70:  # noqa: PLR2004
+        if direction == "short" and ofi > 0.70:
             logger.warning("Router: OFI=%.3f strongly against short — rejecting", ofi)
             return f"adverse_ofi:{ofi:.3f}"
 
@@ -538,9 +529,7 @@ class SmartRouter:
 
                 if result.get("status") == "filled":
                     self._total_filled += 1
-                    fill_price = float(
-                        result.get("fill_price", order_request.get("mid_price", 0))
-                    )
+                    fill_price = float(result.get("fill_price", order_request.get("mid_price", 0)))
                     expected = order_request.get(
                         "ask" if order_request.get("direction") == "long" else "bid",
                         fill_price,
@@ -615,15 +604,15 @@ class SmartRouter:
         if not state:
             return "only_available"
         reasons = []
-        if state.ema_latency_ms < 50:  # noqa: PLR2004
+        if state.ema_latency_ms < 50:
             reasons.append("low_latency")
-        if state.fill_rate > 0.97:  # noqa: PLR2004
+        if state.fill_rate > 0.97:
             reasons.append("high_fill_rate")
-        if state.avg_slippage_bps < 3:  # noqa: PLR2004
+        if state.avg_slippage_bps < 3:
             reasons.append("low_slippage")
-        if abs(ofi) > 0.3:  # noqa: PLR2004
+        if abs(ofi) > 0.3:
             reasons.append(f"ofi_aligned:{ofi:.2f}")
-        if abs(sentiment) < 0.2:  # noqa: PLR2004
+        if abs(sentiment) < 0.2:
             reasons.append("neutral_sentiment")
         return ",".join(reasons) if reasons else "best_composite_score"
 

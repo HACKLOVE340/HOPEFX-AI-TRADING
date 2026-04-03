@@ -43,8 +43,7 @@ import logging
 import os
 import re
 import textwrap
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -96,7 +95,7 @@ def _resolve_file_path(endpoint: str) -> str | None:
             return path
     # Heuristic: /api/foo/bar → api/foo.py
     parts = endpoint.strip("/").split("/")
-    if len(parts) >= 2 and parts[0] == "api":  # noqa: PLR2004
+    if len(parts) >= 2 and parts[0] == "api":
         return f"api/{parts[1]}.py"
     return None
 
@@ -106,9 +105,7 @@ def _resolve_file_path(endpoint: str) -> str | None:
 
 def _headers() -> dict[str, str]:
     if not GITHUB_TOKEN:
-        raise RuntimeError(
-            "GITHUB_TOKEN is not set. Configure it to enable the auto-heal PR pipeline."
-        )
+        raise RuntimeError("GITHUB_TOKEN is not set. Configure it to enable the auto-heal PR pipeline.")
     return {
         "Authorization": f"Bearer {GITHUB_TOKEN}",
         "Accept": "application/vnd.github+json",
@@ -138,18 +135,14 @@ def _repo() -> str:
             return match.group(1)
     except Exception as exc:
         logger.debug("Auto-detect repo failed: %s", exc)
-    raise RuntimeError(
-        "GITHUB_REPO is not set and could not be auto-detected from git remote."
-    )
+    raise RuntimeError("GITHUB_REPO is not set and could not be auto-detected from git remote.")
 
 
-async def _get_file(
-    client: httpx.AsyncClient, repo: str, path: str
-) -> dict[str, Any] | None:
+async def _get_file(client: httpx.AsyncClient, repo: str, path: str) -> dict[str, Any] | None:
     """Fetch file metadata and content from GitHub. Returns None if not found."""
     url = f"{_GITHUB_API}/repos/{repo}/contents/{path}"
     resp = await client.get(url, headers=_headers(), params={"ref": GITHUB_BASE_BRANCH})
-    if resp.status_code == 404:  # noqa: PLR2004
+    if resp.status_code == 404:
         return None
     resp.raise_for_status()
     return resp.json()
@@ -163,9 +156,7 @@ async def _get_branch_sha(client: httpx.AsyncClient, repo: str, branch: str) -> 
     return resp.json()["object"]["sha"]
 
 
-async def _create_branch(
-    client: httpx.AsyncClient, repo: str, branch: str, sha: str
-) -> None:
+async def _create_branch(client: httpx.AsyncClient, repo: str, branch: str, sha: str) -> None:
     """Create a new branch pointing at *sha*."""
     url = f"{_GITHUB_API}/repos/{repo}/git/refs"
     resp = await client.post(
@@ -173,7 +164,7 @@ async def _create_branch(
         headers=_headers(),
         json={"ref": f"refs/heads/{branch}", "sha": sha},
     )
-    if resp.status_code == 422:  # noqa: PLR2004
+    if resp.status_code == 422:
         # Branch already exists — acceptable (idempotent retry)
         logger.warning("Branch %s already exists — reusing", branch)
         return
@@ -229,9 +220,7 @@ async def _create_pr(
     return resp.json()
 
 
-async def _add_label(
-    client: httpx.AsyncClient, repo: str, pr_number: int, label: str
-) -> None:
+async def _add_label(client: httpx.AsyncClient, repo: str, pr_number: int, label: str) -> None:
     """Add a label to a PR (creates the label if it doesn't exist)."""
     # Ensure label exists
     label_url = f"{_GITHUB_API}/repos/{repo}/labels"
@@ -259,9 +248,7 @@ def _apply_patch(original_content: str, original_snippet: str, fix_snippet: str)
         return original_content.replace(original_snippet, fix_snippet, 1)
 
     # Snippet not found — append as a clearly marked block for manual review
-    logger.warning(
-        "Auto-heal: original snippet not found verbatim — appending fix as comment block"
-    )
+    logger.warning("Auto-heal: original snippet not found verbatim — appending fix as comment block")
     separator = "\n\n" + "#" * 72 + "\n"
     note = (
         "# AUTO-HEAL FIX (snippet not found verbatim — apply manually)\n"
@@ -375,7 +362,8 @@ class GitHubPRPublisher:
         try:
             repo = _repo()
         except RuntimeError as exc:
-            return {"status": "error", "error": str(exc)}
+            logger.error("GitHub PR publisher repo config error: %s", exc)
+            return {"status": "error", "error": "GitHub repository not configured — check server logs"}
 
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             try:
@@ -395,9 +383,7 @@ class GitHubPRPublisher:
                         raw_bytes = base64.b64decode(file_data["content"])
                         current_content = raw_bytes.decode("utf-8", errors="replace")
                         file_sha = file_data["sha"]
-                        patched_content = _apply_patch(
-                            current_content, original_code, fix_code
-                        )
+                        patched_content = _apply_patch(current_content, original_code, fix_code)
                     else:
                         # File not found on GitHub — create it with the fix
                         patched_content = fix_code
@@ -409,9 +395,7 @@ class GitHubPRPublisher:
                     # No file mapping — create a standalone patch file
                     file_path = f"security/patches/{ts_tag}-{slug}.py"
                     patched_content = (
-                        f"# Auto-heal patch for endpoint: {endpoint}\n"
-                        f"# Generated: {ts_str}\n\n"
-                        f"{fix_code}\n"
+                        f"# Auto-heal patch for endpoint: {endpoint}\n# Generated: {ts_str}\n\n{fix_code}\n"
                     )
 
                 # 4. Commit the patched file
@@ -433,12 +417,8 @@ class GitHubPRPublisher:
 
                 # 5. Open PR
                 pr_title = f"fix(auto-heal): security patch for {endpoint}"
-                pr_body = _build_pr_body(
-                    endpoint, file_path, original_code, fix_code, approved_by, ts_str
-                )
-                pr = await _create_pr(
-                    client, repo, branch_name, GITHUB_BASE_BRANCH, pr_title, pr_body
-                )
+                pr_body = _build_pr_body(endpoint, file_path, original_code, fix_code, approved_by, ts_str)
+                pr = await _create_pr(client, repo, branch_name, GITHUB_BASE_BRANCH, pr_title, pr_body)
 
                 # 6. Label the PR
                 if GITHUB_PR_LABEL:
@@ -474,9 +454,9 @@ class GitHubPRPublisher:
                     "status": "error",
                     "error": f"GitHub API error {exc.response.status_code}: {error_body}",
                 }
-            except Exception as exc:
-                logger.error("Auto-heal PR failed: %s", exc, exc_info=True)
-                return {"status": "error", "error": str(exc)}
+            except Exception:
+                logger.exception("Auto-heal PR failed: %s")
+                return {"status": "error", "error": "PR creation failed — check server logs"}
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────

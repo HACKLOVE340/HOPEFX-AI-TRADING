@@ -3,15 +3,15 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
-from setuptools import setup, find_packages
+from pathlib import Path
 
-with open("README.md", encoding="utf-8") as fh:
+from setuptools import find_packages, setup
+
+with Path("README.md").open(encoding="utf-8") as fh:
     long_description = fh.read()
 
-with open("requirements.txt", encoding="utf-8") as fh:
-    requirements = [
-        line.strip() for line in fh if line.strip() and not line.startswith("#")
-    ]
+with Path("requirements.txt").open(encoding="utf-8") as fh:
+    requirements = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
 
 setup(
     name="hopefx-ai-trading",

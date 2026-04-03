@@ -8,8 +8,10 @@ Unit Tests for Backtesting Engine
 """
 
 import unittest
+
 import numpy as np
 import pandas as pd
+
 from backtesting.backtest_engine import BacktestEngine
 
 

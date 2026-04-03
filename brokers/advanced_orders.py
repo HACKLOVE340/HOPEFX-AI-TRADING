@@ -17,13 +17,12 @@ Professional order management system supporting:
 
 import logging
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum
 from threading import Lock
 from typing import Any
-from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -217,9 +216,7 @@ class ConditionalOrder:
             "condition_logic": self.condition_logic,
             "status": self.status.value,
             "evaluation_count": self.evaluation_count,
-            "last_evaluated": self.last_evaluated.isoformat()
-            if self.last_evaluated
-            else None,
+            "last_evaluated": self.last_evaluated.isoformat() if self.last_evaluated else None,
             "created_at": self.created_at.isoformat(),
         }
 
@@ -272,7 +269,7 @@ class AdvancedOrderManager:
     - Thread-safe operations
     """
 
-    def __init__(self, broker_callback: Callable = None, config: dict | None = None):
+    def __init__(self, broker_callback: Callable | None = None, config: dict | None = None):
         """
         Initialize advanced order manager.
 
@@ -335,7 +332,8 @@ class AdvancedOrderManager:
             self.orders[order.id] = order
             self.stats["total_orders"] += 1
 
-        logger.info(f"Created order: {order.id} - {side.value} {quantity} {symbol}")
+        logger.info("Created order: %s - %s %s %s", order.id, side.value, quantity, symbol)
+
         return order
 
     def create_trailing_stop(
@@ -378,7 +376,8 @@ class AdvancedOrderManager:
             self.stats["total_orders"] += 1
 
         logger.info(
-            f"Created trailing stop: {order.id} - {side.value} {quantity} {symbol}",
+            "Created trailing stop: %s - %s %s %s",
+            order.id, side.value, quantity, symbol,
         )
         return order
 
@@ -443,7 +442,8 @@ class AdvancedOrderManager:
             self.orders[stop_order.id] = stop_order
             self.stats["total_orders"] += 2
 
-        logger.info(f"Created OCO order: {oco.id} - TP@{limit_price}, SL@{stop_price}")
+        logger.info("Created OCO order: %s - TP@%s, SL@%s", oco.id, limit_price, stop_price)
+
         return oco
 
     def create_bracket_order(
@@ -529,8 +529,8 @@ class AdvancedOrderManager:
             self.stats["total_orders"] += 3
 
         logger.info(
-            f"Created bracket order: {bracket.id} - "
-            f"Entry@{entry_price or 'MARKET'}, SL@{stop_loss_price}, TP@{take_profit_price}",
+            "Created bracket order: %s - Entry@%s, SL@%s, TP@%s",
+            bracket.id, entry_price or "MARKET", stop_loss_price, take_profit_price,
         )
         return bracket
 
@@ -574,7 +574,8 @@ class AdvancedOrderManager:
             self.stats["total_orders"] += 1
 
         logger.info(
-            f"Created conditional order: {conditional.id} with {len(conditions)} conditions",
+            "Created conditional order: %s with %s conditions",
+            conditional.id, len(conditions),
         )
         return conditional
 
@@ -604,9 +605,7 @@ class AdvancedOrderManager:
             ScaledOrder
         """
         # Calculate price levels
-        price_step = (
-            (end_price - start_price) / (num_levels - 1) if num_levels > 1 else 0
-        )
+        price_step = (end_price - start_price) / (num_levels - 1) if num_levels > 1 else 0
         prices = [start_price + (i * price_step) for i in range(num_levels)]
 
         # Calculate quantities based on distribution
@@ -659,7 +658,8 @@ class AdvancedOrderManager:
                 self.orders[child.id] = child
             self.stats["total_orders"] += len(child_orders)
 
-        logger.info(f"Created scaled order: {scaled.id} with {num_levels} levels")
+        logger.info("Created scaled order: %s with %s levels", scaled.id, num_levels)
+
         return scaled
 
     def update_trailing_stop(
@@ -685,15 +685,9 @@ class AdvancedOrderManager:
 
             # Check activation
             if order.activation_price:
-                if (
-                    order.side == OrderSide.SELL
-                    and current_price < order.activation_price
-                ):
+                if order.side == OrderSide.SELL and current_price < order.activation_price:
                     return None  # Not yet activated
-                if (
-                    order.side == OrderSide.BUY
-                    and current_price > order.activation_price
-                ):
+                if order.side == OrderSide.BUY and current_price > order.activation_price:
                     return None
 
             # Update highest/lowest price
@@ -711,7 +705,8 @@ class AdvancedOrderManager:
 
                     order.stop_price = new_stop
                     order.updated_at = datetime.now(UTC)
-                    logger.debug(f"Updated trailing stop {order_id}: {new_stop}")
+                    logger.debug("Updated trailing stop %s: %s", order_id, new_stop)
+
                     return new_stop
 
             elif current_price < order.lowest_price:
@@ -726,7 +721,8 @@ class AdvancedOrderManager:
 
                 order.stop_price = new_stop
                 order.updated_at = datetime.now(UTC)
-                logger.debug(f"Updated trailing stop {order_id}: {new_stop}")
+                logger.debug("Updated trailing stop %s: %s", order_id, new_stop)
+
                 return new_stop
 
         return None
@@ -783,8 +779,8 @@ class AdvancedOrderManager:
             # Apply logic
             if conditional.condition_logic == "AND":
                 return all(results) if results else False
-            else:  # OR
-                return any(results) if results else False
+            # OR
+            return any(results) if results else False
 
     def handle_order_fill(self, order_id: str, fill_price: float, fill_quantity: float):
         """
@@ -820,7 +816,8 @@ class AdvancedOrderManager:
             if order.parent_id in self.bracket_orders:
                 self._handle_bracket_fill(order.parent_id, order_id)
 
-        logger.info(f"Order filled: {order_id} - {fill_quantity}@{fill_price}")
+        logger.info("Order filled: %s - %s@%s", order_id, fill_quantity, fill_price)
+
 
     def _handle_oco_fill(self, oco_id: str, filled_order_id: str):
         """Handle OCO order fill - cancel the other order."""
@@ -835,7 +832,8 @@ class AdvancedOrderManager:
         oco.status = OrderStatus.FILLED
         self.stats["oco_triggered"] += 1
 
-        logger.info(f"OCO triggered: {oco_id} - Cancelled {other_order.id}")
+        logger.info("OCO triggered: %s - Cancelled %s", oco_id, other_order.id)
+
 
     def _handle_bracket_fill(self, bracket_id: str, filled_order_id: str):
         """Handle bracket order fill."""
@@ -846,20 +844,23 @@ class AdvancedOrderManager:
             bracket.position_filled = True
             bracket.stop_loss_order.status = OrderStatus.OPEN
             bracket.take_profit_order.status = OrderStatus.OPEN
-            logger.info(f"Bracket entry filled: {bracket_id} - SL and TP activated")
+            logger.info("Bracket entry filled: %s - SL and TP activated", bracket_id)
+
 
         # If SL or TP filled, cancel the other
         elif filled_order_id == bracket.stop_loss_order.id:
             bracket.take_profit_order.status = OrderStatus.CANCELLED
             bracket.status = OrderStatus.FILLED
             self.stats["brackets_completed"] += 1
-            logger.info(f"Bracket completed: {bracket_id} - SL hit")
+            logger.info("Bracket completed: %s - SL hit", bracket_id)
+
 
         elif filled_order_id == bracket.take_profit_order.id:
             bracket.stop_loss_order.status = OrderStatus.CANCELLED
             bracket.status = OrderStatus.FILLED
             self.stats["brackets_completed"] += 1
-            logger.info(f"Bracket completed: {bracket_id} - TP hit")
+            logger.info("Bracket completed: %s - TP hit", bracket_id)
+
 
     def cancel_order(self, order_id: str) -> bool:
         """Cancel an order."""
@@ -875,21 +876,18 @@ class AdvancedOrderManager:
             order.updated_at = datetime.now(UTC)
             self.stats["cancelled_orders"] += 1
 
-            logger.info(f"Order cancelled: {order_id}")
+            logger.info("Order cancelled: %s", order_id)
+
             return True
 
     def get_order(self, order_id: str) -> Order | None:
         """Get order by ID."""
         return self.orders.get(order_id)
 
-    def get_open_orders(self, symbol: str = None) -> list[Order]:
+    def get_open_orders(self, symbol: str | None = None) -> list[Order]:
         """Get all open orders, optionally filtered by symbol."""
         with self._lock:
-            open_orders = [
-                o
-                for o in self.orders.values()
-                if o.status in [OrderStatus.PENDING, OrderStatus.OPEN]
-            ]
+            open_orders = [o for o in self.orders.values() if o.status in [OrderStatus.PENDING, OrderStatus.OPEN]]
             if symbol:
                 open_orders = [o for o in open_orders if o.symbol == symbol]
             return open_orders
@@ -900,25 +898,13 @@ class AdvancedOrderManager:
             return {
                 **self.stats,
                 "active_orders": len(
-                    [
-                        o
-                        for o in self.orders.values()
-                        if o.status in [OrderStatus.PENDING, OrderStatus.OPEN]
-                    ],
+                    [o for o in self.orders.values() if o.status in [OrderStatus.PENDING, OrderStatus.OPEN]],
                 ),
                 "active_oco": len(
-                    [
-                        o
-                        for o in self.oco_orders.values()
-                        if o.status == OrderStatus.PENDING
-                    ],
+                    [o for o in self.oco_orders.values() if o.status == OrderStatus.PENDING],
                 ),
                 "active_brackets": len(
-                    [
-                        b
-                        for b in self.bracket_orders.values()
-                        if b.status in [OrderStatus.PENDING, OrderStatus.OPEN]
-                    ],
+                    [b for b in self.bracket_orders.values() if b.status in [OrderStatus.PENDING, OrderStatus.OPEN]],
                 ),
                 "trailing_stops": len(self.trailing_stops),
                 "conditional_orders": len(self.conditional_orders),

@@ -44,8 +44,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum, auto
 
 from core.event_bus import bus
@@ -117,10 +116,7 @@ class _ProtectContext:
                 logger.info("FaultGuard [%s]: OPEN → HALF_OPEN (probe)", self._module)
             else:
                 remaining = RECOVER_S - elapsed
-                raise RuntimeError(
-                    f"FaultGuard [{self._module}]: circuit OPEN — "
-                    f"recover in {remaining:.0f} s"
-                )
+                raise RuntimeError(f"FaultGuard [{self._module}]: circuit OPEN — recover in {remaining:.0f} s")
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
@@ -135,9 +131,7 @@ class _ProtectContext:
                 ms.state = _State.CLOSED
                 ms.probe_in_flight = False
                 ms.total_recoveries += 1
-                logger.info(
-                    "FaultGuard [%s]: HALF_OPEN → CLOSED (recovered)", self._module
-                )
+                logger.info("FaultGuard [%s]: HALF_OPEN → CLOSED (recovered)", self._module)
         else:
             # Failure
             ms.failures += 1
@@ -153,11 +147,8 @@ class _ProtectContext:
                     self._module,
                     exc_val,
                 )
-                asyncio.create_task(
-                    self._guard._publish_breach(
-                        self._module, "probe_failed", str(exc_val)
-                    )
-                )
+                _t = asyncio.create_task(self._guard._publish_breach(self._module, "probe_failed", str(exc_val)))
+                _t.add_done_callback(lambda _: None)
 
             elif ms.failures >= FAILURE_THRESHOLD and ms.state == _State.CLOSED:
                 ms.state = _State.OPEN
@@ -276,9 +267,7 @@ class FaultGuard:
                     age,
                     HEARTBEAT_TIMEOUT_S,
                 )
-                await self._publish_breach(
-                    name, "heartbeat_timeout", f"No heartbeat for {age:.0f} s"
-                )
+                await self._publish_breach(name, "heartbeat_timeout", f"No heartbeat for {age:.0f} s")
 
     # ── breach publisher ──────────────────────────────────────────────────────
 

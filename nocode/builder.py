@@ -5,23 +5,22 @@
 # No commercial use without explicit permission.
 """nocode/builder.py — No-code strategy builder logic."""
 
-from typing import Any
-from datetime import datetime, timezone
-UTC = timezone.utc
 import logging
 import re
+from datetime import UTC, datetime
+from typing import Any
 
 from nocode.models import (
-    NoCodeStrategy,
-    StrategyRule,
+    ActionType,
     Condition,
     ConditionGroup,
-    TradingAction,
+    ConditionOperator,
     Indicator,
     IndicatorType,
-    ConditionOperator,
     LogicOperator,
-    ActionType,
+    NoCodeStrategy,
+    StrategyRule,
+    TradingAction,
 )
 
 logger = logging.getLogger(__name__)
@@ -66,9 +65,7 @@ class NoCodeStrategyBuilder:
         self.add_rule(
             rsi_strategy.strategy_id,
             name="Buy on RSI Oversold",
-            conditions=[
-                {"left": {"type": "RSI", "period": 14}, "operator": "<", "right": 30}
-            ],
+            conditions=[{"left": {"type": "RSI", "period": 14}, "operator": "<", "right": 30}],
             action={"type": "BUY", "position_size": 1.0},
         )
 
@@ -76,9 +73,7 @@ class NoCodeStrategyBuilder:
         self.add_rule(
             rsi_strategy.strategy_id,
             name="Sell on RSI Overbought",
-            conditions=[
-                {"left": {"type": "RSI", "period": 14}, "operator": ">", "right": 70}
-            ],
+            conditions=[{"left": {"type": "RSI", "period": 14}, "operator": ">", "right": 70}],
             action={"type": "SELL", "position_size": 1.0},
         )
 
@@ -107,11 +102,10 @@ class NoCodeStrategyBuilder:
 
         self.templates["ma_crossover"] = ma_strategy
 
-        logger.info(f"Created {len(self.templates)} strategy templates")
+        logger.info("Created %s strategy templates", len(self.templates))
 
-    def create_strategy(
-        self, name: str, description: str, symbol: str, timeframe: str
-    ) -> NoCodeStrategy:
+
+    def create_strategy(self, name: str, description: str, symbol: str, timeframe: str) -> NoCodeStrategy:
         """
         Create a new no-code strategy.
 
@@ -136,7 +130,8 @@ class NoCodeStrategyBuilder:
         )
 
         self.strategies[strategy_id] = strategy
-        logger.info(f"Created strategy: {name}")
+        logger.info("Created strategy: %s", name)
+
         return strategy
 
     def add_rule(
@@ -162,7 +157,8 @@ class NoCodeStrategyBuilder:
         """
         strategy = self.strategies.get(strategy_id)
         if not strategy:
-            logger.error(f"Strategy not found: {strategy_id}")
+            logger.error("Strategy not found: %s", strategy_id)
+
             return None
 
         # Parse conditions
@@ -170,7 +166,7 @@ class NoCodeStrategyBuilder:
         for i, cond in enumerate(conditions):
             left_ind = self._parse_indicator(cond["left"])
 
-            if isinstance(cond["right"], (int, float)):
+            if isinstance(cond["right"], int | float):
                 right_ind = cond["right"]
             else:
                 right_ind = self._parse_indicator(cond["right"])
@@ -187,9 +183,7 @@ class NoCodeStrategyBuilder:
             )
 
         # Create condition group
-        condition_group = ConditionGroup(
-            conditions=parsed_conditions, logic=LogicOperator[logic]
-        )
+        condition_group = ConditionGroup(conditions=parsed_conditions, logic=LogicOperator[logic])
 
         # Parse action
         trading_action = TradingAction(
@@ -212,7 +206,8 @@ class NoCodeStrategyBuilder:
         strategy.rules.append(rule)
         strategy.updated_at = datetime.now(UTC)
 
-        logger.info(f"Added rule '{name}' to strategy {strategy_id}")
+        logger.info("Added rule '%s' to strategy %s", name, strategy_id)
+
         return rule
 
     def _parse_indicator(self, ind_def: dict[str, Any]) -> Indicator:
@@ -238,9 +233,7 @@ class NoCodeStrategyBuilder:
         }
         return op_map.get(op_str, ConditionOperator.GREATER_THAN)
 
-    def parse_plain_english(
-        self, description: str, symbol: str, timeframe: str
-    ) -> NoCodeStrategy | None:
+    def parse_plain_english(self, description: str, symbol: str, timeframe: str) -> NoCodeStrategy | None:
         """
         Parse a plain English strategy description.
 
@@ -289,7 +282,8 @@ class NoCodeStrategyBuilder:
                     action={"type": "SELL", "position_size": 1.0},
                 )
 
-        logger.info(f"Parsed strategy from plain English: {len(strategy.rules)} rules")
+        logger.info("Parsed strategy from plain English: %s rules", len(strategy.rules))
+
         return strategy
 
     def _parse_conditions(self, text: str, action: str) -> list[dict[str, Any]]:
@@ -363,7 +357,7 @@ Generated: {datetime.now(UTC).isoformat()}
 """
 
 from strategies.base import BaseStrategy, Signal, SignalType, StrategyConfig
-from typing import Dict, Any
+from typing import Any
 
 class {self._to_class_name(strategy.name)}(BaseStrategy):
     """
@@ -376,7 +370,7 @@ class {self._to_class_name(strategy.name)}(BaseStrategy):
         self.symbol = "{strategy.symbol}"
         self.timeframe = "{strategy.timeframe}"
 
-    def analyze(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
         """Analyze market data."""
         analysis = {{'analyzed': True}}
 
@@ -387,7 +381,7 @@ class {self._to_class_name(strategy.name)}(BaseStrategy):
 
         return analysis
 
-    def generate_signal(self, analysis: Dict[str, Any]) -> Signal:
+    def generate_signal(self, analysis: dict[str, Any]) -> Signal:
         """Generate trading signal based on analysis."""
 '''
 
@@ -454,9 +448,7 @@ class {self._to_class_name(strategy.name)}(BaseStrategy):
             for tid, t in self.templates.items()
         ]
 
-    def create_from_template(
-        self, template_id: str, name: str, symbol: str, timeframe: str
-    ) -> NoCodeStrategy | None:
+    def create_from_template(self, template_id: str, name: str, symbol: str, timeframe: str) -> NoCodeStrategy | None:
         """Create a new strategy from a template."""
         template = self.templates.get(template_id)
         if not template:

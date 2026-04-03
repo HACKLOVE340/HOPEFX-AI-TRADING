@@ -4,17 +4,18 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 # tests/unit/test_risk_manager.py
+# pylint: disable=not-callable
 """
 Unit tests for Risk Manager - FIA 2024 Compliant
 """
 
-import pytest
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 
-from risk.manager import RiskManager, RiskLevel
+import pytest
+
+from database.models import Account, Position, Trade
 from risk.advanced_analytics import RiskAnalytics
-from database.models import Trade, Position, Account
+from risk.manager import RiskConfig, RiskLevel, RiskManager
 
 
 class TestRiskManager:
@@ -64,16 +65,12 @@ class TestRiskManager:
 
         # Valid price (within 2%)
         valid_order = {"price": 1.0870}  # 0.18% deviation
-        result = risk_manager.check_price_tolerance(
-            valid_order, current_price, tolerance=0.02
-        )
+        result = risk_manager.check_price_tolerance(valid_order, current_price, tolerance=0.02)
         assert result.passed is True
 
         # Invalid price (outside tolerance)
         invalid_order = {"price": 1.1200}  # 3.2% deviation
-        result = risk_manager.check_price_tolerance(
-            invalid_order, current_price, tolerance=0.02
-        )
+        result = risk_manager.check_price_tolerance(invalid_order, current_price, tolerance=0.02)
         assert result.passed is False
         assert "Price tolerance" in result.message
 
@@ -84,17 +81,11 @@ class TestRiskManager:
         account_value = 100000
 
         # Should not trigger at 2.8%
-        assert (
-            risk_manager.check_kill_switch(daily_pnl, account_value, threshold=0.03)
-            is False
-        )
+        assert risk_manager.check_kill_switch(daily_pnl, account_value, threshold=0.03) is False
 
         # Should trigger at 3.1%
         daily_pnl = -3100
-        assert (
-            risk_manager.check_kill_switch(daily_pnl, account_value, threshold=0.03)
-            is True
-        )
+        assert risk_manager.check_kill_switch(daily_pnl, account_value, threshold=0.03) is True
         assert risk_manager.kill_switch_active is True
 
     def test_max_drawdown_protection(self, risk_manager):
@@ -155,7 +146,7 @@ class TestRiskAnalytics:
         var_95 = analytics.calculate_var(returns, confidence=0.95)
         # VaR should be negative (loss)
         assert var_95 < 0
-        assert -0.03 < var_95 < -0.01  # Reasonable range  # noqa: PLR2004
+        assert -0.03 < var_95 < -0.01  # Reasonable range
 
     def test_expected_shortfall(self, analytics):
         """Test Conditional VaR (Expected Shortfall)"""
@@ -191,7 +182,6 @@ class TestRiskAnalytics:
 Integration tests for broker connectivity and order execution
 """
 
-import pytest
 from unittest.mock import Mock, patch
 
 from brokers.oanda import OandaBroker
@@ -252,7 +242,6 @@ class TestOandaIntegration:
 End-to-end trading workflow tests
 """
 
-import pytest
 
 
 class TestTradingWorkflow:
@@ -272,8 +261,7 @@ class TestTradingWorkflow:
         """
         # Verify the core trading cycle using real components:
         # RiskManager → position sizing → kill-switch integration
-        from risk.manager import RiskManager, RiskConfig
-        from execution import PaperExecutor, Order
+        from execution import Order, PaperExecutor
 
         # Use a $1M account so position sizing produces a non-trivial lot count
         # at XAUUSD prices (~$1950/oz).  max_position_size_pct=0.02 → $20k max

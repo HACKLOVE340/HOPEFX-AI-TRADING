@@ -37,7 +37,7 @@ try:
 
     load_dotenv(ROOT / ".env", override=False)
 except ImportError:
-    pass
+    ...  # nosec B110
 
 # ── Result types ──────────────────────────────────────────────────────────────
 GREEN = "GREEN"
@@ -70,13 +70,14 @@ def check_env_vars():
         if not os.getenv(var, "").strip():
             missing.append(var)
     if missing:
-        raise Exception(f"Missing required env vars: {missing}")
+        raise OSError(f"Missing required env vars: {missing}")
     return "All required env vars present"
 
 
 def check_database():
-    from database.connection import engine
     from sqlalchemy import text
+
+    from database.connection import engine
 
     with engine.connect() as conn:
         conn.execute(text("SELECT 1"))
@@ -106,8 +107,9 @@ def check_auth_service():
 
 
 def check_jwt():
-    from auth.jwt import create_access_token, verify_token
     from fastapi import HTTPException
+
+    from auth.jwt import create_access_token, verify_token
 
     token = create_access_token({"sub": "test@hopefx.io", "type": "access"})
     assert token, "Token is empty"
@@ -151,7 +153,7 @@ def check_redis():
         socket_connect_timeout=2,
     )
     r.ping()
-    return f"Redis connected at {os.getenv('REDIS_HOST','localhost')}:{os.getenv('REDIS_PORT','6379')}"
+    return f"Redis connected at {os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_PORT', '6379')}"
 
 
 def check_api_trading_router():
@@ -197,7 +199,7 @@ def check_ml_model():
     model_path = ROOT / "ml" / "saved_models" / "advanced_oos.pkl"
     if not model_path.exists():
         raise AssertionError("advanced_oos.pkl not found (will train on first run)")
-    model = joblib.load(model_path)
+    model = joblib.load(model_path)  # nosec B301 - model_path is hardcoded to ml/saved_models
     return f"ML model loaded: {type(model).__name__}"
 
 
@@ -258,9 +260,7 @@ def check_startup_validator():
 def check_dashboard_built():
     dist = ROOT / "dashboard" / "dist"
     if not dist.exists():
-        raise AssertionError(
-            "dashboard/dist/ not built — run: cd dashboard && npm run build"
-        )
+        raise AssertionError("dashboard/dist/ not built — run: cd dashboard && npm run build")
     index = dist / "index.html"
     if not index.exists():
         raise AssertionError("dashboard/dist/index.html missing")
@@ -270,7 +270,7 @@ def check_dashboard_built():
 def check_frontend_src():
     src = ROOT / "frontend" / "src"
     if not src.exists():
-        raise Exception("frontend/src/ missing")
+        raise FileNotFoundError("frontend/src/ missing")
     pages = list((src / "pages").glob("*.tsx")) if (src / "pages").exists() else []
     return f"frontend/src present ({len(pages)} pages)"
 
@@ -290,7 +290,7 @@ def check_docker_compose():
 
     dc = ROOT / "docker-compose.yml"
     if not dc.exists():
-        raise Exception("docker-compose.yml missing")
+        raise FileNotFoundError("docker-compose.yml missing")
     cfg = yaml.safe_load(dc.read_text())
     services = list(cfg.get("services", {}).keys())
     return f"docker-compose.yml valid ({len(services)} services: {', '.join(services)})"
@@ -299,10 +299,8 @@ def check_docker_compose():
 def check_env_example():
     f = ROOT / "env.example"
     if not f.exists():
-        raise Exception("env.example missing")
-    lines = [
-        ln for ln in f.read_text().splitlines() if ln.strip() and not ln.startswith("#")
-    ]
+        raise FileNotFoundError("env.example missing")
+    lines = [ln for ln in f.read_text().splitlines() if ln.strip() and not ln.startswith("#")]
     return f"env.example present ({len(lines)} vars)"
 
 
@@ -407,9 +405,7 @@ def run_checks(strict: bool = False) -> int:
     crit_reds = [(n, r) for n, r in reds if r[2] == CRITICAL]
     crit_yellows = [(n, r) for n, r in yellows if r[2] == CRITICAL]
 
-    print(
-        f"  TOTAL  ✅ {len(greens)} GREEN   ⚠️  {len(yellows)} YELLOW   ❌ {len(reds)} RED"
-    )
+    print(f"  TOTAL  ✅ {len(greens)} GREEN   ⚠️  {len(yellows)} YELLOW   ❌ {len(reds)} RED")
     print()
 
     if crit_reds:
@@ -438,8 +434,6 @@ def run_checks(strict: bool = False) -> int:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="HOPEFX connection validator")
-    parser.add_argument(
-        "--strict", action="store_true", help="Fail on critical warnings (YELLOW) too"
-    )
+    parser.add_argument("--strict", action="store_true", help="Fail on critical warnings (YELLOW) too")
     args = parser.parse_args()
     sys.exit(run_checks(strict=args.strict))

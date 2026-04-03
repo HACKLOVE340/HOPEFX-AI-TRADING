@@ -43,8 +43,7 @@ import argparse
 import json
 import logging
 import sys
-from datetime import timezone
-UTC = timezone.utc
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -55,16 +54,16 @@ import pandas as pd
 class _NumpyEncoder(json.JSONEncoder):
     """JSON encoder that handles numpy scalars and booleans."""
 
-    def default(self, obj):
-        if isinstance(obj, (np.integer,)):
-            return int(obj)
-        if isinstance(obj, (np.floating,)):
-            return float(obj)
-        if isinstance(obj, (np.bool_,)):
-            return bool(obj)
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        return super().default(obj)
+    def default(self, o):
+        if isinstance(o, np.integer):
+            return int(o)
+        if isinstance(o, np.floating):
+            return float(o)
+        if isinstance(o, np.bool_):
+            return bool(o)
+        if isinstance(o, np.ndarray):
+            return o.tolist()
+        return super().default(o)
 
 
 _ROOT = Path(__file__).resolve().parent.parent
@@ -103,8 +102,7 @@ def load_ohlcv() -> pd.DataFrame:
     """Load XAUUSD daily OHLCV from cache."""
     if not OHLCV_CACHE.exists():
         raise FileNotFoundError(
-            f"OHLCV cache not found: {OHLCV_CACHE}\n"
-            "Run: python ml/train_advanced.py --smoke  to populate the cache."
+            f"OHLCV cache not found: {OHLCV_CACHE}\nRun: python ml/train_advanced.py --smoke  to populate the cache."
         )
     df = pd.read_csv(OHLCV_CACHE, parse_dates=["Date"], index_col="Date")
     df.columns = [c.lower() for c in df.columns]
@@ -135,14 +133,10 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
             if macro_df is not None:
                 logger.info("Macro data loaded: %d rows, %d series", *macro_df.shape)
         except Exception as macro_exc:
-            logger.warning(
-                "Macro fetch failed (%s) — macro features will be zeroed", macro_exc
-            )
+            logger.warning("Macro fetch failed (%s) — macro features will be zeroed", macro_exc)
 
         # Returns (X, y) tuple; we only need X for inference
-        result = build_extended_features(
-            df, macro_df=macro_df, use_filtered_target=True
-        )
+        result = build_extended_features(df, macro_df=macro_df, use_filtered_target=True)
         feat_df = result[0] if isinstance(result, tuple) else result
         logger.info("Built %d features via features_extended.py", feat_df.shape[1])
         return feat_df
@@ -195,12 +189,11 @@ def load_model():
 
     if not pkl.exists():
         raise FileNotFoundError(
-            f"Model not found: {pkl}\n"
-            "Run: python scripts/retrain_model.py --advanced --years 50 --oos-years 5"
+            f"Model not found: {pkl}\nRun: python scripts/retrain_model.py --advanced --years 50 --oos-years 5"
         )
 
-    model = joblib.load(str(pkl))
-    scaler = joblib.load(str(scaler_path)) if scaler_path.exists() else None
+    model = joblib.load(str(pkl))  # nosec B301 - pkl is hardcoded to ml/saved_models
+    scaler = joblib.load(str(scaler_path)) if scaler_path.exists() else None  # nosec B301 - hardcoded path
     logger.info("Loaded model from %s", pkl)
     return model, scaler
 
@@ -396,11 +389,7 @@ def compute_metrics(
 
     # Sharpe (annualised, daily returns)
     daily_ret = equity.pct_change(fill_method=None).dropna()
-    sharpe = (
-        float(daily_ret.mean() / daily_ret.std() * np.sqrt(252))
-        if daily_ret.std() > 0
-        else 0.0
-    )
+    sharpe = float(daily_ret.mean() / daily_ret.std() * np.sqrt(252)) if daily_ret.std() > 0 else 0.0
 
     # Monte Carlo: resample trade P&Ls to get drawdown distribution
     mc_dds = []
@@ -439,9 +428,7 @@ def compute_metrics(
 
 
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(
-        description="Reconciled backtest using advanced_oos.pkl"
-    )
+    p = argparse.ArgumentParser(description="Reconciled backtest using advanced_oos.pkl")
     p.add_argument(
         "--oos-only",
         action="store_true",
@@ -514,9 +501,7 @@ def main() -> int:
     if effective_hold != HOLD_BARS:
         logger.info("Hold bars override: %d (default %d)", effective_hold, HOLD_BARS)
     if effective_cost != ROUND_TRIP_COST_USD:
-        logger.info(
-            "Cost override: $%.0f (default $%.0f)", effective_cost, ROUND_TRIP_COST_USD
-        )
+        logger.info("Cost override: $%.0f (default $%.0f)", effective_cost, ROUND_TRIP_COST_USD)
 
     logger.info("Generating signals …")
     signals = generate_signals(
@@ -562,9 +547,7 @@ def main() -> int:
     }
 
     # Save detailed trade log
-    RECONCILED_OUT.write_text(
-        json.dumps({"metadata": result, "trades": trades}, indent=2, cls=_NumpyEncoder)
-    )
+    RECONCILED_OUT.write_text(json.dumps({"metadata": result, "trades": trades}, indent=2, cls=_NumpyEncoder))
     logger.info("Detailed trade log → %s", RECONCILED_OUT)
 
     # Update monte_carlo_results.json with reconciled daily result

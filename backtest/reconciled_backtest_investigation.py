@@ -44,8 +44,7 @@ import json
 import logging
 import sys
 import warnings
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -88,7 +87,7 @@ def load_reconciled_trades() -> list[dict[str, Any]]:
 
 def _sharpe(pnls: list[float], cost: float = 0.0) -> float:
     """Annualised Sharpe ratio from a list of per-trade P&Ls (daily bars)."""
-    if len(pnls) < 2:  # noqa: PLR2004
+    if len(pnls) < 2:
         return 0.0
     net = [p - cost for p in pnls]
     arr = np.array(net, dtype=float)
@@ -106,9 +105,7 @@ def _win_rate(pnls: list[float], cost: float = 0.0) -> float:
     return sum(1 for p in net if p > 0) / len(net)
 
 
-def _total_return(
-    pnls: list[float], cost: float = 0.0, initial: float = 100_000.0
-) -> float:
+def _total_return(pnls: list[float], cost: float = 0.0, initial: float = 100_000.0) -> float:
     net = sum(p - cost for p in pnls)
     return net / initial * 100.0
 
@@ -132,7 +129,7 @@ def _accuracy_pnl_correlation(trades: list[dict]) -> dict[str, Any]:
             directions.append(int(d))
             pnl_signs.append(1 if p > 0 else -1)
 
-    if len(directions) < 10:  # noqa: PLR2004
+    if len(directions) < 10:
         return {"correlation": None, "n": len(directions), "note": "Insufficient data"}
 
     corr = float(np.corrcoef(directions, pnl_signs)[0, 1])
@@ -171,9 +168,7 @@ def sweep_confidence_thresholds(
     """
     results = []
     for thresh in thresholds:
-        filtered = [
-            t for t in trades if abs(t.get("signal_prob", 0.5) - 0.5) + 0.5 >= thresh
-        ]
+        filtered = [t for t in trades if abs(t.get("signal_prob", 0.5) - 0.5) + 0.5 >= thresh]
         pnls = [t["pnl_usd"] for t in filtered]
         if not pnls:
             results.append(
@@ -206,34 +201,54 @@ def sweep_confidence_thresholds(
 
 
 def _load_xauusd_daily() -> pd.DataFrame | None:
-    """Load XAUUSD daily OHLCV from CSV cache or yfinance."""
+    """Load XAUUSD daily OHLCV for hold-period re-simulation.
+
+    Source priority
+    ---------------
+    1. CSV cache at data/XAUUSD_D1.csv (fastest, no network)
+    2. yfinance GC=F (gold futures — highly correlated with XAU/USD spot,
+       suitable for hold-period exit price lookup)
+
+    Note: GC=F is gold futures, not XAU/USD spot.  The price difference is
+    typically <0.5% and does not materially affect hold-period sweep results.
+    For production-grade reconciliation, replace with OANDA v20 candles:
+      GET /v3/instruments/XAU_USD/candles?granularity=D&count=2500
+    and save to data/XAUUSD_D1.csv before running this script.
+    """
     csv_path = DATA_DIR / "XAUUSD_D1.csv"
     if csv_path.exists():
         try:
             df = pd.read_csv(csv_path, parse_dates=["timestamp"])
             df = df.set_index("timestamp").sort_index()
-            if len(df) > 100:  # noqa: PLR2004
+            if len(df) > 100:
                 logger.info("Loaded %d daily bars from %s", len(df), csv_path)
                 return df
         except Exception as exc:
             logger.debug("CSV load failed: %s", exc)
 
-    # Try yfinance
+    # Try yfinance (GC=F — gold futures, highly correlated with XAU/USD spot)
     try:
         import yfinance as yf
 
-        df = yf.download(
-            "GC=F", period="10y", interval="1d", progress=False, auto_adjust=True
-        )
-        if df is not None and len(df) > 100:  # noqa: PLR2004
-            df.columns = [c.lower() for c in df.columns]
+        df = yf.download("GC=F", period="10y", interval="1d", progress=False, auto_adjust=True)
+        if df is not None and len(df) > 100:
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = [col[0].lower() for col in df.columns]
+            else:
+                df.columns = [c.lower() for c in df.columns]
             df.index.name = "timestamp"
             df.to_csv(csv_path)
-            logger.info("Downloaded %d daily bars from yfinance", len(df))
+            logger.info("Downloaded %d daily bars from yfinance (GC=F gold futures)", len(df))
             return df
     except Exception as exc:
         logger.debug("yfinance download failed: %s", exc)
 
+    logger.warning(
+        "_load_xauusd_daily: no OHLCV data available. "
+        "Hold-period sweep will use approximate P&L scaling. "
+        "For accurate results, save OANDA XAU_USD daily candles to %s",
+        csv_path,
+    )
     return None
 
 
@@ -278,9 +293,7 @@ def sweep_hold_periods(
         for t in trades:
             entry_bar = t.get("entry_bar", 0)
             direction = t.get("direction", 1)
-            entry_price = t.get(
-                "entry_price", closes[entry_bar] if entry_bar < len(closes) else 0
-            )
+            entry_price = t.get("entry_price", closes[entry_bar] if entry_bar < len(closes) else 0)
             exit_bar = min(entry_bar + hold, len(closes) - 1)
             if exit_bar >= len(closes) or entry_bar >= len(closes):
                 continue
@@ -359,7 +372,7 @@ def _format_summary(results: dict[str, Any]) -> str:
     for r in results["confidence_sweep"]:
         lines.append(
             f"{r['threshold']:>10.2f} {r['n_trades']:>10} "
-            f"{r['win_rate']*100:>9.1f}% {r['sharpe']:>10.4f} "
+            f"{r['win_rate'] * 100:>9.1f}% {r['sharpe']:>10.4f} "
             f"{r['total_return_pct']:>9.2f}%"
         )
 
@@ -373,7 +386,7 @@ def _format_summary(results: dict[str, Any]) -> str:
     for r in results["hold_period_sweep"]:
         lines.append(
             f"{r['hold_bars']:>10} {r['n_trades']:>10} "
-            f"{r['win_rate']*100:>9.1f}% {r['sharpe']:>10.4f} "
+            f"{r['win_rate'] * 100:>9.1f}% {r['sharpe']:>10.4f} "
             f"{r['total_return_pct']:>9.2f}%"
         )
 
@@ -401,7 +414,7 @@ def _format_summary(results: dict[str, Any]) -> str:
     for r in results["cost_sweep"]:
         lines.append(
             f"{r['round_trip_cost_usd']:>10.0f} "
-            f"{r['win_rate']*100:>9.1f}% {r['sharpe']:>10.4f} "
+            f"{r['win_rate'] * 100:>9.1f}% {r['sharpe']:>10.4f} "
             f"{r['total_return_pct']:>9.2f}% "
             f"${r['total_cost_drag_usd']:>10,.0f}"
         )
@@ -424,7 +437,7 @@ def _diagnose(results: dict[str, Any]) -> list[str]:
     # Check if higher thresholds help
     conf_sweep = results["confidence_sweep"]
     best_conf = max(conf_sweep, key=lambda r: r["sharpe"]) if conf_sweep else None
-    if best_conf and best_conf["threshold"] > 0.55 and best_conf["sharpe"] > 0:  # noqa: PLR2004
+    if best_conf and best_conf["threshold"] > 0.55 and best_conf["sharpe"] > 0:
         diag.append(
             f"✅ THRESHOLD EDGE EXISTS: At threshold={best_conf['threshold']:.2f}, "
             f"Sharpe={best_conf['sharpe']:.4f} (positive). "
@@ -441,7 +454,7 @@ def _diagnose(results: dict[str, Any]) -> list[str]:
     # Check if shorter holds help
     hold_sweep = results["hold_period_sweep"]
     best_hold = max(hold_sweep, key=lambda r: r["sharpe"]) if hold_sweep else None
-    if best_hold and best_hold["hold_bars"] < 5 and best_hold["sharpe"] > 0:  # noqa: PLR2004
+    if best_hold and best_hold["hold_bars"] < 5 and best_hold["sharpe"] > 0:
         diag.append(
             f"✅ HOLD PERIOD EDGE EXISTS: At hold={best_hold['hold_bars']} bars, "
             f"Sharpe={best_hold['sharpe']:.4f} (positive). "
@@ -456,14 +469,13 @@ def _diagnose(results: dict[str, Any]) -> list[str]:
         )
     else:
         diag.append(
-            "❌ HOLD PERIOD SWEEP: No hold period produces a positive Sharpe. "
-            "The problem is not the hold period alone."
+            "❌ HOLD PERIOD SWEEP: No hold period produces a positive Sharpe. The problem is not the hold period alone."
         )
 
     # Check accuracy vs P&L correlation
     corr = results["accuracy_pnl_correlation"]
     match_rate = corr.get("direction_pnl_match_rate", 0.5)
-    if match_rate is not None and match_rate < 0.55:  # noqa: PLR2004
+    if match_rate is not None and match_rate < 0.55:
         diag.append(
             f"❌ ACCURACY/P&L DISCONNECT: Direction-P&L match rate = {match_rate:.1%}. "
             "The model's predicted direction and actual trade P&L are nearly uncorrelated. "
@@ -555,12 +567,8 @@ def run_investigation(smoke: bool = False) -> dict[str, Any]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Reconciled backtest root cause investigation"
-    )
-    parser.add_argument(
-        "--smoke", action="store_true", help="Fast CI run (fewer sweep points)"
-    )
+    parser = argparse.ArgumentParser(description="Reconciled backtest root cause investigation")
+    parser.add_argument("--smoke", action="store_true", help="Fast CI run (fewer sweep points)")
     args = parser.parse_args()
 
     results = run_investigation(smoke=args.smoke)

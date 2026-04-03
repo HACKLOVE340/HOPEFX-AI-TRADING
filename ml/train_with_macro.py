@@ -55,8 +55,7 @@ import json
 import logging
 import sys
 import warnings
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -102,9 +101,7 @@ def fetch_gold_ohlcv(symbol: str, years: int) -> pd.DataFrame:
     )
     if raw.empty:
         raise ValueError(f"No data returned for {symbol}")
-    raw.columns = [
-        c.lower() if isinstance(c, str) else c[0].lower() for c in raw.columns
-    ]
+    raw.columns = [c.lower() if isinstance(c, str) else c[0].lower() for c in raw.columns]
     raw.index = pd.to_datetime(raw.index).tz_localize(None)
     actual_years = (raw.index[-1] - raw.index[0]).days / 365.25
     logger.info(
@@ -161,7 +158,7 @@ def build_features(
         include_regime=True,
         macro_df=macro_df,
     )
-    X, y_class, y_reg, _ = fe.create_features(
+    X, y_class, _y_reg, _ = fe.create_features(
         ohlcv,
         target_col="close",
         prediction_horizon=prediction_horizon,
@@ -206,7 +203,7 @@ def _compute_fold_sharpe(
     signal = np.where(preds == 1, 1.0, -1.0)
     strategy_returns = signal * bar_returns
 
-    if len(strategy_returns) < 2:  # noqa: PLR2004
+    if len(strategy_returns) < 2:
         return 0.0
 
     mu = np.mean(strategy_returns)
@@ -254,8 +251,7 @@ def walk_forward_eval(
                 gamma=0.1,
                 reg_alpha=0.1,
                 reg_lambda=1.0,
-                scale_pos_weight=float((y_train == 0).sum())
-                / max((y_train == 1).sum(), 1),
+                scale_pos_weight=float((y_train == 0).sum()) / max((y_train == 1).sum(), 1),
                 eval_metric="logloss",
                 random_state=42,
                 n_jobs=-1,
@@ -273,11 +269,7 @@ def walk_forward_eval(
 
         model.fit(X_train, y_train)
         preds = model.predict(X_test)
-        (
-            model.predict_proba(X_test)[:, 1]
-            if hasattr(model, "predict_proba")
-            else preds
-        )
+        _proba = model.predict_proba(X_test)[:, 1] if hasattr(model, "predict_proba") else preds
 
         acc = accuracy_score(y_test, preds)
         f1 = f1_score(y_test, preds, zero_division=0)
@@ -327,7 +319,7 @@ def walk_forward_eval(
         "mean_sharpe": round(float(np.mean(sharpes)), 4),
         "t_stat": round(float(t_stat), 4),
         "p_value": round(float(p_value), 4),
-        "significant": bool(p_value < 0.05),  # noqa: PLR2004
+        "significant": bool(p_value < 0.05),
     }
 
 
@@ -477,7 +469,7 @@ def oos_eval(
     acc = accuracy_score(y_oos, preds)
     f1 = f1_score(y_oos, preds, zero_division=0)
     n = len(y_oos)
-    k = int(round(acc * n))
+    k = round(acc * n)
 
     # Accuracy SE: sqrt(p*(1-p)/n)
     acc_se = float(np.sqrt(acc * (1 - acc) / max(n, 1)))
@@ -494,16 +486,8 @@ def oos_eval(
     p_value = float(binom_result.pvalue)
 
     # OOS date range
-    oos_start = (
-        X_oos.index[0].date()
-        if hasattr(X_oos.index[0], "date")
-        else str(X_oos.index[0])
-    )
-    oos_end = (
-        X_oos.index[-1].date()
-        if hasattr(X_oos.index[-1], "date")
-        else str(X_oos.index[-1])
-    )
+    oos_start = X_oos.index[0].date() if hasattr(X_oos.index[0], "date") else str(X_oos.index[0])
+    oos_end = X_oos.index[-1].date() if hasattr(X_oos.index[-1], "date") else str(X_oos.index[-1])
 
     logger.info(
         "OOS %s  acc=%.3f±%.3f  f1=%.3f  auc=%.3f  n=%d  k=%d  p=%.4f  significant=%s",
@@ -515,7 +499,7 @@ def oos_eval(
         n,
         k,
         p_value,
-        p_value < 0.05,  # noqa: PLR2004
+        p_value < 0.05,
     )
     logger.info("\n%s", classification_report(y_oos, preds))
 
@@ -542,14 +526,11 @@ def oos_eval(
         "f1": round(f1, 4),
         "auc": round(auc, 4),
         "p_value_binomial": round(p_value, 4),
-        "significant": bool(p_value < 0.05),  # noqa: PLR2004
+        "significant": bool(p_value < 0.05),
         "oos_period": f"{oos_start} → {oos_end}",
         "test": "one-sided binomial (H0: accuracy <= 0.5)",
         "top_features": top10,
-        "sharpe_note": (
-            "N=45 trades: Sharpe SE ≈ ±0.54. "
-            "Use OOS accuracy as the credible performance number."
-        ),
+        "sharpe_note": ("N=45 trades: Sharpe SE ≈ ±0.54. Use OOS accuracy as the credible performance number."),
     }
 
 
@@ -629,9 +610,9 @@ def main():
     X_oos, y_oos = None, None
 
     if args.oos_years > 0:
-        oos_n = int(round(args.oos_years * 252))  # ~252 trading days/year
+        oos_n = round(args.oos_years * 252)  # ~252 trading days/year
         oos_n = min(oos_n, len(X) // 4)  # cap at 25% of data
-        if oos_n < 100:  # noqa: PLR2004
+        if oos_n < 100:
             # < 100 bars gives accuracy SE > ±0.05 — not meaningful for production.
             logger.warning(
                 "--oos-years %.1f produces only %d bars (need >= 100 for SE <= ±0.05). "
@@ -648,12 +629,8 @@ def main():
                 len(X_cv),
                 oos_n,
                 args.oos_years,
-                X_oos.index[0].date()
-                if hasattr(X_oos.index[0], "date")
-                else X_oos.index[0],
-                X_oos.index[-1].date()
-                if hasattr(X_oos.index[-1], "date")
-                else X_oos.index[-1],
+                X_oos.index[0].date() if hasattr(X_oos.index[0], "date") else X_oos.index[0],
+                X_oos.index[-1].date() if hasattr(X_oos.index[-1], "date") else X_oos.index[-1],
             )
 
     # ── Walk-forward evaluation (on CV portion only) ──────────────────────────
@@ -697,7 +674,7 @@ def main():
 
     # ── Save report ───────────────────────────────────────────────────────────
     report_path = MODEL_DIR / "training_report.json"
-    with open(report_path, "w") as f:
+    with Path(report_path).open("w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
     logger.info("Training report saved to %s", report_path)
 
@@ -715,8 +692,7 @@ def main():
         print(f"  Walk-forward F1       : {wf['mean_f1']:.3f}")
         mean_sharpe = wf.get("mean_sharpe", 0.0)
         print(
-            f"  Walk-forward Sharpe   : {mean_sharpe:.3f}"
-            f"  (annualised, 1-bar, no costs — N < 250: SE ≈ ±0.54)",
+            f"  Walk-forward Sharpe   : {mean_sharpe:.3f}  (annualised, 1-bar, no costs — N < 250: SE ≈ ±0.54)",
         )
         print(
             f"  p-value (vs random)   : {wf['p_value']:.4f}"
@@ -733,8 +709,7 @@ def main():
                 f"  OOS period            : {oos.get('oos_period', 'n/a')}",
             )
             print(
-                f"  OOS accuracy          : {oos['accuracy']:.3f} ± {acc_se:.3f}"
-                f"  (n={oos['oos_size']})",
+                f"  OOS accuracy          : {oos['accuracy']:.3f} ± {acc_se:.3f}  (n={oos['oos_size']})",
             )
             print(f"  OOS F1                : {oos['f1']:.3f}")
             print(f"  OOS AUC               : {oos.get('auc', 0.0):.3f}")

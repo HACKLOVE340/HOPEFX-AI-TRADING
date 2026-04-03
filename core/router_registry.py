@@ -36,33 +36,34 @@ def register_routers(
     """Register all API routers on *app*, respecting feature flags."""
 
     # ── Core routers (always on) ──────────────────────────────────────────────
-    from auth.router import router as auth_router
-    from api.trading import router as trading_router
-    from api.admin import router as admin_router
-    from api.monetization import router as monetization_router
-    from api.backtesting import router as backtesting_router
-    from api.online_learner import router as online_learner_router
-    from api.chat import router as chat_router
-    from api.prop_firm import router as prop_firm_router
-    from api.performance import router as performance_router
-    from api.explain import router as explain_router
-    from api.macro import router as macro_router
-    from api.broker import router as broker_router
-    from api.landing import router as landing_router
-    from api.payments import router as payments_router
-    from api.settings import router as settings_router
-    from api.status import router as status_router
-    from api.brain import router as brain_router
-    from api.calendar import router as calendar_router
-    from api.profiles import router as profiles_router
-    from api.social_feed import router as social_feed_router
-    from api.social_feed import leaderboard_router as social_leaderboard_router
-    from api.mobile import router as mobile_router
-    from api.whitelabel_admin import router as whitelabel_router
-    from api.platform import router as platform_router
-    from api.ml import router as ml_router
     from api.accounts import router as accounts_router
+    from api.admin import router as admin_router
+    from api.backtesting import router as backtesting_router
+    from api.brain import router as brain_router
+    from api.broker import router as broker_router
+    from api.calendar import router as calendar_router
+    from api.chat import router as chat_router
+    from api.explain import router as explain_router
+    from api.landing import router as landing_router
+    from api.macro import router as macro_router
+    from api.ml import router as ml_router
+    from api.mobile import router as mobile_router
+    from api.monetization import router as monetization_router
+    from api.online_learner import router as online_learner_router
+    from api.payments import router as payments_router
+    from api.performance import router as performance_router
+    from api.platform import router as platform_router
     from api.portfolio import router as portfolio_router
+    from api.profiles import router as profiles_router
+    from api.prop_firm import router as prop_firm_router
+    from api.settings import router as settings_router
+    from api.settings_extended import router as settings_extended_router
+    from api.social_feed import leaderboard_router as social_leaderboard_router
+    from api.social_feed import router as social_feed_router
+    from api.status import router as status_router
+    from api.trading import router as trading_router
+    from api.whitelabel_admin import router as whitelabel_router
+    from auth.router import router as auth_router
 
     for _router in [
         auth_router,
@@ -80,6 +81,7 @@ def register_routers(
         landing_router,
         payments_router,
         settings_router,
+        settings_extended_router,
         status_router,
         brain_router,
         calendar_router,
@@ -102,9 +104,7 @@ def register_routers(
         app.include_router(two_factor_router)
         logger.info("Two-factor auth router registered (/api/2fa)")
     else:
-        logger.debug(
-            "TWO_FACTOR_AUTH disabled — set FEATURE_TWO_FACTOR_AUTH=true to enable"
-        )
+        logger.debug("TWO_FACTOR_AUTH disabled — set FEATURE_TWO_FACTOR_AUTH=true to enable")
 
     if feature_flags.WATCHLIST:
         from api.watchlist import router as watchlist_router
@@ -120,9 +120,7 @@ def register_routers(
         app.include_router(journal_router)
         logger.info("Trade journal router registered (/api/journal)")
     else:
-        logger.debug(
-            "TRADE_JOURNAL disabled — set FEATURE_TRADE_JOURNAL=true to enable"
-        )
+        logger.debug("TRADE_JOURNAL disabled — set FEATURE_TRADE_JOURNAL=true to enable")
 
     if feature_flags.BILLING_SUBSCRIPTION:
         from api.billing import router as billing_router
@@ -130,9 +128,7 @@ def register_routers(
         app.include_router(billing_router)
         logger.info("Billing router registered (/api/billing)")
     else:
-        logger.debug(
-            "BILLING_SUBSCRIPTION disabled — set FEATURE_BILLING_SUBSCRIPTION=true to enable"
-        )
+        logger.debug("BILLING_SUBSCRIPTION disabled — set FEATURE_BILLING_SUBSCRIPTION=true to enable")
 
     if feature_flags.ADVANCED_TRADING:
         from api.advanced_trading import router as advanced_router
@@ -140,9 +136,7 @@ def register_routers(
         app.include_router(advanced_router)
         logger.info("Advanced trading router registered (/api/advanced)")
     else:
-        logger.debug(
-            "ADVANCED_TRADING disabled — set FEATURE_ADVANCED_TRADING=true to enable"
-        )
+        logger.debug("ADVANCED_TRADING disabled — set FEATURE_ADVANCED_TRADING=true to enable")
 
     if feature_flags.PRICE_ALERTS:
         from api.alerts import router as alerts_router

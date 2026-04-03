@@ -38,8 +38,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
+from typing import ClassVar
 
 import redis.asyncio as aioredis
 
@@ -48,9 +48,7 @@ logger = logging.getLogger(__name__)
 # ── config ────────────────────────────────────────────────────────────────────
 REDIS_KEY: str = "hopefx:news_events"
 REDIS_TTL_S: int = int(os.environ.get("NEWS_REDIS_TTL_S", "21600"))  # 6 h
-REFRESH_INTERVAL_S: float = float(
-    os.environ.get("NEWS_REFRESH_INTERVAL_S", "3600")
-)  # 1 h
+REFRESH_INTERVAL_S: float = float(os.environ.get("NEWS_REFRESH_INTERVAL_S", "3600"))  # 1 h
 # Currencies to watch — USD drives gold; XAU is gold itself
 WATCH_CURRENCIES: set = {"USD", "XAU", "ALL"}
 # Minimum impact level to store ("high" or "critical")
@@ -72,7 +70,7 @@ def _parse_forexfactory(data: list) -> list[datetime]:
     ForexFactory impact values: "Low", "Medium", "High", "Holiday"
     We keep "High" and above for USD/XAU events.
     """
-    events: list[datetime] = []
+    events: ClassVar[list[datetime]] = []
     impact_map = {"high": 3, "medium": 2, "low": 1, "holiday": 0}
     min_level = impact_map.get(MIN_IMPACT, 3)
 
@@ -118,9 +116,7 @@ def _static_fallback() -> list[datetime]:
     # NFP: first Friday of the month at 13:30 UTC
     first_day = now.replace(day=1)
     days_to_friday = (4 - first_day.weekday()) % 7
-    nfp = first_day.replace(hour=13, minute=30, second=0, microsecond=0) + timedelta(
-        days=days_to_friday
-    )
+    nfp = first_day.replace(hour=13, minute=30, second=0, microsecond=0) + timedelta(days=days_to_friday)
     if nfp > now:
         events.append(nfp)
 
@@ -130,8 +126,7 @@ def _static_fallback() -> list[datetime]:
         events.append(cpi)
 
     logger.warning(
-        "NewsCalendarFeed: using static fallback — %d events. "
-        "Configure a real feed for accurate blackouts.",
+        "NewsCalendarFeed: using static fallback — %d events. Configure a real feed for accurate blackouts.",
         len(events),
     )
     return events
@@ -162,9 +157,7 @@ class NewsCalendarFeed:
     async def run(self) -> None:
         """Refresh loop — runs until stop() is called."""
         self._running = True
-        logger.info(
-            "NewsCalendarFeed starting — refresh every %.0f s", REFRESH_INTERVAL_S
-        )
+        logger.info("NewsCalendarFeed starting — refresh every %.0f s", REFRESH_INTERVAL_S)
         while self._running:
             await self.refresh_once()
             await asyncio.sleep(REFRESH_INTERVAL_S)
@@ -184,9 +177,7 @@ class NewsCalendarFeed:
         events = await self._fetch_forexfactory()
 
         if not events:
-            logger.warning(
-                "NewsCalendarFeed: ForexFactory returned no events — using static fallback."
-            )
+            logger.warning("NewsCalendarFeed: ForexFactory returned no events — using static fallback.")
             events = _static_fallback()
 
         count = await self._write_redis(events)
@@ -204,15 +195,16 @@ class NewsCalendarFeed:
         try:
             import aiohttp
 
-            async with aiohttp.ClientSession() as session, session.get(
-                FF_URL,
-                timeout=aiohttp.ClientTimeout(total=15),
-                headers={"User-Agent": "HOPEFX-AI-TRADING/1.0"},
-            ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
-                    logger.warning(
-                        "NewsCalendarFeed: ForexFactory HTTP %d", resp.status
-                    )
+            async with (
+                aiohttp.ClientSession() as session,
+                session.get(
+                    FF_URL,
+                    timeout=aiohttp.ClientTimeout(total=15),
+                    headers={"User-Agent": "HOPEFX-AI-TRADING/1.0"},
+                ) as resp,
+            ):
+                if resp.status != 200:
+                    logger.warning("NewsCalendarFeed: ForexFactory HTTP %d", resp.status)
                     return []
                 data = await resp.json(content_type=None)
                 events = _parse_forexfactory(data)
@@ -240,9 +232,7 @@ class NewsCalendarFeed:
         iso_strings = [dt.isoformat() for dt in sorted(events)]
 
         try:
-            r = aioredis.from_url(
-                self._redis_url, decode_responses=True, socket_timeout=5
-            )
+            r = aioredis.from_url(self._redis_url, decode_responses=True, socket_timeout=5)
             async with r.pipeline(transaction=True) as pipe:
                 pipe.delete(REDIS_KEY)
                 pipe.rpush(REDIS_KEY, *iso_strings)
@@ -262,9 +252,7 @@ class NewsCalendarFeed:
     async def list_events(self) -> list[str]:
         """Return all stored event timestamps from Redis (for debugging)."""
         try:
-            r = aioredis.from_url(
-                self._redis_url, decode_responses=True, socket_timeout=5
-            )
+            r = aioredis.from_url(self._redis_url, decode_responses=True, socket_timeout=5)
             events = await r.lrange(REDIS_KEY, 0, -1)
             await r.aclose()
             return events

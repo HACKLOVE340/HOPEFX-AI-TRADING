@@ -11,11 +11,10 @@ Allows users to publish, list, purchase, and subscribe to trading strategies.
 
 import ast
 import uuid
-from typing import Any
-from decimal import Decimal
-from datetime import datetime, timezone
-UTC = timezone.utc
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from decimal import Decimal
+from typing import Any
 
 
 @dataclass

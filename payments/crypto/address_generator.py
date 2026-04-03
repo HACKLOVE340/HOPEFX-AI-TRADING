@@ -29,38 +29,61 @@ with a loud warning.
 import logging
 import os
 
-from hdwallet import HDWallet
 try:
-    from hdwallet.symbols import BTC, ETH, TRX
-except ImportError:
-    BTC = ETH = TRX = None  # type: ignore[assignment]
+    from hdwallet import HDWallet as _HDWallet
 
-try:
-    from hdwallet.utils import generate_mnemonic
+    try:
+        from hdwallet.symbols import BTC, ETH, TRX
+    except ImportError:
+        BTC = ETH = TRX = None  # type: ignore[assignment]
+
+    try:
+        from hdwallet.utils import generate_mnemonic as _gen_mnemonic
+
+        def generate_mnemonic(language: str = "english", strength: int = 128) -> str:  # type: ignore[misc]
+            return _gen_mnemonic(language=language, strength=strength)
+
+    except ImportError:
+        # hdwallet v3+: use BIP39Mnemonic.from_entropy
+        from hdwallet.mnemonics import BIP39Mnemonic as _BIP39Mnemonic
+
+        def generate_mnemonic(language: str = "english", strength: int = 128) -> str:  # type: ignore[misc]
+            entropy_bytes = os.urandom(strength // 8)
+            return _BIP39Mnemonic.from_entropy(entropy=entropy_bytes.hex(), language=language)
+
+    _HDWALLET_AVAILABLE = True
+
 except ImportError:
-    # hdwallet v3+: use BIP39Mnemonic.from_entropy
-    import os as _os
-    from hdwallet.mnemonics import BIP39Mnemonic as _BIP39Mnemonic
+    _HDWallet = None  # type: ignore[assignment,misc]
+    BTC = ETH = TRX = None  # type: ignore[assignment]
+    _HDWALLET_AVAILABLE = False
 
     def generate_mnemonic(language: str = "english", strength: int = 128) -> str:  # type: ignore[misc]
-        entropy_bytes = _os.urandom(strength // 8)
-        return _BIP39Mnemonic.from_entropy(entropy=entropy_bytes.hex(), language=language)
+        raise RuntimeError("Address generation requires the 'hdwallet' package. Install it with: pip install hdwallet")
+
+
+def HDWallet(*args, **kwargs):  # type: ignore[misc]
+    """Thin wrapper that raises a clear error when hdwallet is not installed."""
+    if not _HDWALLET_AVAILABLE:
+        raise RuntimeError("Address generation requires the 'hdwallet' package. Install it with: pip install hdwallet")
+    return _HDWallet(*args, **kwargs)  # type: ignore[misc]
+
 
 logger = logging.getLogger(__name__)
 
 # ── Derivation path constants ─────────────────────────────────────────────────
 
 _PATHS: dict[str, str] = {
-    "BTC":         "m/84'/0'/0'/0/{index}",    # BIP84 native SegWit
-    "ETH":         "m/44'/60'/0'/0/{index}",   # BIP44 Ethereum
-    "USDT_ERC20":  "m/44'/60'/0'/0/{index}",   # ERC-20 shares ETH path
-    "USDT_TRC20":  "m/44'/195'/0'/0/{index}",  # BIP44 Tron
+    "BTC": "m/84'/0'/0'/0/{index}",  # BIP84 native SegWit
+    "ETH": "m/44'/60'/0'/0/{index}",  # BIP44 Ethereum
+    "USDT_ERC20": "m/44'/60'/0'/0/{index}",  # ERC-20 shares ETH path
+    "USDT_TRC20": "m/44'/195'/0'/0/{index}",  # BIP44 Tron
 }
 
 # hdwallet symbol objects per currency group
 _SYMBOLS = {
-    "BTC":        BTC,
-    "ETH":        ETH,
+    "BTC": BTC,
+    "ETH": ETH,
     "USDT_ERC20": ETH,
     "USDT_TRC20": TRX,
 }
@@ -72,8 +95,8 @@ _SEMANTICS: dict[str, str] = {
 
 # Environment variable that holds each currency's mnemonic
 _MNEMONIC_ENV: dict[str, str] = {
-    "BTC":        "BITCOIN_MNEMONIC",
-    "ETH":        "ETHEREUM_MNEMONIC",
+    "BTC": "BITCOIN_MNEMONIC",
+    "ETH": "ETHEREUM_MNEMONIC",
     "USDT_ERC20": "ETHEREUM_MNEMONIC",
     "USDT_TRC20": "TRON_MNEMONIC",
 }
@@ -97,9 +120,9 @@ def _load_mnemonic(currency: str) -> str:
             )
         mnemonic = generate_mnemonic(language="english", strength=256)
         logger.warning(
-            "%s not set — using ephemeral mnemonic for %s. "
-            "Addresses will change on restart.",
-            env_var, currency,
+            "%s not set — using ephemeral mnemonic for %s. Addresses will change on restart.",
+            env_var,
+            currency,
         )
     return mnemonic
 
@@ -111,6 +134,9 @@ class AddressGenerator:
     Each (user_id, currency) pair gets a fresh address per call, advancing the
     derivation index.  The same mnemonic + index always produces the same
     address, so addresses are recoverable as long as the mnemonic is stable.
+
+    Requires the optional 'hdwallet' package.  Raises RuntimeError on first
+    use (not at import time) when the package is absent.
     """
 
     def __init__(self) -> None:
@@ -142,13 +168,15 @@ class AddressGenerator:
             Blockchain address string
 
         Raises:
+            RuntimeError: if hdwallet is not installed
             ValueError: if *currency* is not supported
         """
-        if currency not in _PATHS:
-            raise ValueError(
-                f"Unsupported currency: {currency!r}. "
-                f"Supported: {sorted(_PATHS)}"
+        if not _HDWALLET_AVAILABLE:
+            raise RuntimeError(
+                "Address generation requires the 'hdwallet' package. Install it with: pip install hdwallet"
             )
+        if currency not in _PATHS:
+            raise ValueError(f"Unsupported currency: {currency!r}. Supported: {sorted(_PATHS)}")
 
         mnemonic = self._get_mnemonic(currency)
         index = self._next_index(currency)
@@ -168,7 +196,10 @@ class AddressGenerator:
 
         logger.info(
             "Derived %s deposit address for user %s: %s (path=%s)",
-            currency, user_id, address, path,
+            currency,
+            user_id,
+            address,
+            path,
         )
         return address
 
@@ -188,5 +219,6 @@ class AddressGenerator:
         return address
 
 
-# Module-level singleton
+# Module-level singleton — instantiation is safe even without hdwallet;
+# RuntimeError is raised only when generate_address() is actually called.
 address_generator = AddressGenerator()

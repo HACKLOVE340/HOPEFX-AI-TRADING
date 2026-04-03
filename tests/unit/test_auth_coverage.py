@@ -14,17 +14,15 @@ No external services required — all DB calls are mocked.
 
 from __future__ import annotations
 
-import pytest
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
+
+import pytest
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _make_jwt(
-    sub: str = "user123", role: str = "trader", secret: str = "test-secret"
-) -> str:
+def _make_jwt(sub: str = "user123", role: str = "trader", secret: str = "test-secret") -> str:
     import jwt
 
     payload = {
@@ -130,9 +128,7 @@ class TestFreeTierAssignment:
             assert existing is None
             sub = mock_mgr.create_subscription("new_user", SubscriptionTier.FREE)
             assert sub.tier.value == "free"
-            mock_mgr.create_subscription.assert_called_once_with(
-                "new_user", SubscriptionTier.FREE
-            )
+            mock_mgr.create_subscription.assert_called_once_with("new_user", SubscriptionTier.FREE)
 
     def test_activate_free_tier_idempotent(self):
         """
@@ -161,12 +157,12 @@ class TestFreeTierAssignment:
             mock_aff.track_referral(
                 affiliate_code="REF123",
                 referred_user_id="new_user",
-                conversion_value=Decimal("0"),
+                conversion_value=Decimal(0),
             )
             mock_aff.track_referral.assert_called_once_with(
                 affiliate_code="REF123",
                 referred_user_id="new_user",
-                conversion_value=Decimal("0"),
+                conversion_value=Decimal(0),
             )
 
 
@@ -182,7 +178,9 @@ class TestAuthApiEndpoints:
         try:
             from fastapi import FastAPI
             from fastapi.testclient import TestClient
-            from auth.router import router as auth_router, set_auth_service
+
+            from auth.router import router as auth_router
+            from auth.router import set_auth_service
 
             # Mock auth service
             mock_svc = MagicMock()
@@ -221,11 +219,11 @@ class TestAuthApiEndpoints:
                 "password": "SecurePass123!",  # nosec B105 - test file
             },
         )
-        assert res.status_code == 201  # noqa: PLR2004
+        assert res.status_code == 201
 
     def test_register_missing_fields_returns_422(self, client):
         res = client.post("/api/auth/register", json={"email": "only@email.com"})
-        assert res.status_code == 422  # noqa: PLR2004
+        assert res.status_code == 422
 
     def test_login_success(self, client):
         res = client.post(
@@ -236,7 +234,7 @@ class TestAuthApiEndpoints:
             },
         )
         # 200 or 422 depending on mock wiring — just ensure no 500
-        assert res.status_code != 500  # noqa: PLR2004
+        assert res.status_code != 500
 
     def test_verify_email_endpoint(self, client):
         res = client.get("/api/auth/verify-email?token=verify-token-123")

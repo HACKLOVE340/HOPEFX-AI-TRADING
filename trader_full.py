@@ -40,11 +40,11 @@ Streaming API keys (at least one required for live ticks):
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import signal
 from typing import Any
-import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -66,9 +66,7 @@ class SecureConfig:
         self.redis_port: int = int(os.getenv("REDIS_PORT", "6379"))
         self.telegram_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
         self.telegram_chat_id: str = os.getenv("TELEGRAM_CHAT_ID", "")
-        self.symbols: list[str] = os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAU_USD").split(
-            ","
-        )
+        self.symbols: list[str] = os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAU_USD").split(",")
         self.initial_balance: float = float(os.getenv("INITIAL_BALANCE", "10000"))
 
     def validate_live(self) -> None:
@@ -143,8 +141,7 @@ class LiveDataPipeline:
             self._streamer.subscribe(_TickBridge())
             self._running = True
             logger.info(
-                "LiveDataPipeline: NuclearStreamer started | mode=%s | "
-                "finnhub=%s twelvedata=%s polygon=%s",
+                "LiveDataPipeline: NuclearStreamer started | mode=%s | finnhub=%s twelvedata=%s polygon=%s",
                 self._config.app_env,
                 bool(os.getenv("FINNHUB_API_KEY")),
                 bool(os.getenv("TWELVE_API_KEY")),
@@ -264,9 +261,9 @@ class MLPredictor:
 
     def load(self) -> bool:
         try:
-            from enhanced_ml_predictor import HopeFXPredictor
+            from enhanced_ml_predictor import EnhancedMLPredictor
 
-            self._predictor = HopeFXPredictor()
+            self._predictor = EnhancedMLPredictor()
             import pathlib
 
             if pathlib.Path(self._model_path).exists():
@@ -312,16 +309,15 @@ class RiskManager:
 
     def setup(self) -> None:
         try:
-            from risk.manager import RiskManager as _RM, RiskConfig
+            from risk.manager import RiskConfig
+            from risk.manager import RiskManager as _RM
 
             self._rm = _RM(config=RiskConfig(), initial_balance=self._balance)
             logger.info("RiskManager: initialised with balance=%.2f", self._balance)
         except Exception as exc:
             logger.warning("RiskManager.setup: %s", exc)
 
-    def approve_trade(
-        self, symbol: str, side: str, price: float, equity: float
-    ) -> dict:
+    def approve_trade(self, symbol: str, side: str, price: float, equity: float) -> dict:
         if self._rm is None:
             return {"approved": False, "reason": "risk manager not initialised"}
         try:
@@ -342,9 +338,9 @@ class RiskManager:
                 "size": result.recommended_size,
                 "reason": result.reason,
             }
-        except Exception as exc:
-            logger.error("RiskManager.approve_trade: %s", exc)
-            return {"approved": False, "reason": str(exc)}
+        except Exception:
+            logger.exception("RiskManager.approve_trade: %s")
+            return {"approved": False, "reason": "Risk check failed — check server logs"}
 
 
 # ---------------------------------------------------------------------------
@@ -377,9 +373,7 @@ class StateManager:
                 self._redis_port,
             )
         except Exception as exc:
-            logger.warning(
-                "StateManager: Redis unavailable (%s) — state will not persist", exc
-            )
+            logger.warning("StateManager: Redis unavailable (%s) — state will not persist", exc)
             self._redis = None
 
     def save(self, key: str, value: str, ttl: int = 86400) -> None:
@@ -429,7 +423,8 @@ class AlertManager:
             try:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
-                    asyncio.create_task(self._bot.send_message(self._chat_id, message))
+                    _t = asyncio.create_task(self._bot.send_message(self._chat_id, message))
+                    _t.add_done_callback(lambda _: None)
             except Exception as exc:
                 logger.warning("AlertManager.send telegram: %s", exc)
 
@@ -514,7 +509,7 @@ class ForwardTestHarness:
                 await asyncio.sleep(60)
                 self._state.save("hopefx:equity", str(self._equity))
         except asyncio.CancelledError:
-            pass
+            ...  # nosec B110
         finally:
             await self._pipeline.stop()
             if not pipeline_task.done():
@@ -540,7 +535,7 @@ class ForwardTestHarness:
                 return
 
             self._tick_buffer.append({"close": price, "bid": price, "ask": price})
-            if len(self._tick_buffer) > 200:  # noqa: PLR2004
+            if len(self._tick_buffer) > 200:
                 self._tick_buffer.pop(0)
 
             if not self._news.is_safe_to_trade():

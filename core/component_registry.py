@@ -39,9 +39,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
-from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ class Component:
     deps: list[str] = field(default_factory=list)
     # Populated after startup
     status: str = "pending"  # pending | ok | failed | skipped
-    instance: Any = None
+    instance: Any | None = None
     error: str | None = None
     elapsed_ms: float = 0.0
 
@@ -164,8 +164,7 @@ class ComponentRegistry:
                     raise RuntimeError(
                         f"Required component '{name}' failed: {exc}",
                     ) from exc
-                else:
-                    logger.warning("⚠ %-30s %.0f ms — %s", name, comp.elapsed_ms, exc)
+                logger.warning("⚠ %-30s %.0f ms — %s", name, comp.elapsed_ms, exc)
 
         return self._components
 

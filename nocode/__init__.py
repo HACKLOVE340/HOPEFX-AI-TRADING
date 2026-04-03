@@ -16,19 +16,19 @@ Submodules:
     router  — FastAPI router exposing the builder via REST API
 """
 
+from nocode.builder import NoCodeStrategyBuilder
 from nocode.models import (
-    ConditionOperator,
-    LogicOperator,
     ActionType,
-    IndicatorType,
-    Indicator,
     Condition,
     ConditionGroup,
-    TradingAction,
-    StrategyRule,
+    ConditionOperator,
+    Indicator,
+    IndicatorType,
+    LogicOperator,
     NoCodeStrategy,
+    StrategyRule,
+    TradingAction,
 )
-from nocode.builder import NoCodeStrategyBuilder
 from nocode.router import create_nocode_router
 
 __all__ = [

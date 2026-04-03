@@ -36,15 +36,15 @@ On any breach
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 
-from core.event_bus import bus, CH_SIGNAL, CH_BREACH
+from core.event_bus import CH_BREACH, CH_SIGNAL, bus
 
 logger = logging.getLogger(__name__)
 
@@ -97,18 +97,15 @@ class _NewsCalendar:
         """Register a high-impact event datetime (timezone-aware)."""
         self._events.append(dt)
 
-    def is_blackout(self, window_minutes: int = None) -> bool:
+    def is_blackout(self, window_minutes: int | None = None) -> bool:
         """Return True if any registered event is within *window_minutes* of now."""
-        window = (
-            window_minutes if window_minutes is not None else self._BLACKOUT_MINUTES
-        )
+        window = window_minutes if window_minutes is not None else self._BLACKOUT_MINUTES
         now = datetime.now(UTC)
         cutoff = timedelta(minutes=window)
         for ev in self._events:
             # Normalise naive datetimes to UTC
-            if ev.tzinfo is None:
-                ev = ev.replace(tzinfo=UTC)  # noqa: PLW2901
-            if abs(now - ev) <= cutoff:
+            ev_aware = ev.replace(tzinfo=UTC) if ev.tzinfo is None else ev
+            if abs(now - ev_aware) <= cutoff:
                 return True
         return False
 
@@ -189,7 +186,8 @@ class Gatekeeper:
             _MAX_DD_LIMIT * 100,
             _MIN_CONFIDENCE,
         )
-        asyncio.create_task(self._breach_listener(), name="gatekeeper_breach_listener")
+        _t = asyncio.create_task(self._breach_listener(), name="gatekeeper_breach_listener")
+        _t.add_done_callback(lambda _: None)
         await self._signal_consumer()
 
     async def stop(self) -> None:
@@ -370,9 +368,7 @@ class Gatekeeper:
         _paused = paused_until if paused_until is not None else 0.0
         if time.monotonic() < _paused:
             remaining = _paused - time.monotonic()
-            return [
-                {"reason": "post_breach_pause", "detail": f"{remaining:.0f}s remaining"}
-            ]
+            return [{"reason": "post_breach_pause", "detail": f"{remaining:.0f}s remaining"}]
 
         # 3. Daily drawdown
         if daily_dd >= _DAILY_DD_LIMIT:
@@ -476,22 +472,35 @@ class Gatekeeper:
             return 1.0
 
     def _get_blackout(self) -> bool:
-        """Return True when a news blackout is active.
+        """Return True when a news/macro blackout is active.
 
-        Priority:
+        Priority
+        --------
         1. Orchestrator MacroCalendarEngine (authoritative in production).
-        2. Local _NewsCalendar (used in tests / standalone mode).
+           Calls orchestrator.is_blackout_window() which delegates to
+           MacroCalendarEngine.is_blackout_window().  The window is
+           controlled by NEWS_BLACKOUT_BEFORE_MIN / NEWS_BLACKOUT_AFTER_MIN
+           env vars (default 5 min each side of a HIGH-impact event).
+
+           NOTE: We call is_blackout_window() directly — NOT is_safe_to_trade().
+           is_safe_to_trade() bundles feed-liveness and tick-quality checks
+           that are already handled by separate gates (check 5 above).
+           Mixing them here would cause a blackout block when a feed is
+           temporarily down, masking the real reason in logs.
+
+        2. Local _NewsCalendar (used in tests / standalone mode when no
+           orchestrator is wired).  Controlled by NEWS_BLACKOUT_MINUTES
+           env var (default 30 min).
         """
-        # Local calendar check first (fast, no I/O)
+        # Orchestrator is authoritative — check first when available.
+        if getattr(self, "_orch", None) is not None:
+            with contextlib.suppress(Exception):
+                return self._orch.is_blackout_window()
+            # fall through to local calendar
+
+        # Local calendar fallback (tests / standalone mode)
         cal = getattr(self, "_calendar", None)
-        if cal is not None and cal.is_blackout():
-            return True
-        if getattr(self, "_orch", None) is None:
-            return False
-        try:
-            return not self._orch.is_safe_to_trade()
-        except Exception:
-            return False
+        return bool(cal is not None and cal.is_blackout())
 
     def _get_impact_score(self, signal) -> float:
         score = self._get_impact_score_from_orch()
@@ -530,9 +539,7 @@ class Gatekeeper:
             self._daily_trades = 0
             self._trade_day = today
 
-    def _write_rejection_lineage(
-        self, signal, reason: str, failures: list[dict]
-    ) -> None:
+    def _write_rejection_lineage(self, signal, reason: str, failures: list[dict]) -> None:
         if self._lineage is None:
             return
         try:

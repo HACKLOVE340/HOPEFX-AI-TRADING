@@ -36,13 +36,16 @@ from typing import TYPE_CHECKING
 logger = logging.getLogger(__name__)
 
 try:
-    import prometheus_client as prom  # noqa: F401
     from prometheus_client import (
-        Counter as PromCounter,
-        Gauge as PromGauge,
+        CONTENT_TYPE_LATEST,
         REGISTRY,
         generate_latest,
-        CONTENT_TYPE_LATEST,
+    )
+    from prometheus_client import (
+        Counter as PromCounter,
+    )
+    from prometheus_client import (
+        Gauge as PromGauge,
     )
 
     _PROM_AVAILABLE = True
@@ -170,7 +173,7 @@ def _sync_counter_collector(name: str, collector) -> None:
 
 def _sync_all_collectors(registry) -> None:
     """Iterate registry collectors and push each into prometheus_client."""
-    from infrastructure.metrics import Gauge, Counter
+    from infrastructure.metrics import Counter, Gauge
 
     for name, collector in list(registry._collectors.items()):
         if isinstance(collector, Gauge):
@@ -259,10 +262,7 @@ def _sync_trading_gauges() -> None:
                 dd_gauge.set(getattr(rm, "current_drawdown", 0.0))
             if max_dd_gauge is not None:
                 max_dd_gauge.set(getattr(rm.config, "max_drawdown_pct", 0.10))
-            if (
-                daily_loss_gauge is not None
-                and getattr(rm, "daily_starting_equity", 0) > 0
-            ):
+            if daily_loss_gauge is not None and getattr(rm, "daily_starting_equity", 0) > 0:
                 daily_loss_pct = abs(rm.daily_pnl) / rm.daily_starting_equity
                 daily_loss_gauge.set(daily_loss_pct)
             if daily_limit_gauge is not None:
@@ -318,8 +318,7 @@ def setup_prometheus_monitoring(app: FastAPI) -> None:
                 return Response(content=body, media_type="text/plain; version=0.0.4")
 
             logger.info(
-                "Prometheus monitoring active — /metrics ready "
-                "(fallback exporter, prometheus_client not installed)"
+                "Prometheus monitoring active — /metrics ready (fallback exporter, prometheus_client not installed)"
             )
 
     app.state._prometheus_monitoring_active = True

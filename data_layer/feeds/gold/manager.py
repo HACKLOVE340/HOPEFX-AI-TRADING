@@ -26,23 +26,22 @@ Responsibilities
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
 import time
 import uuid
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 from data_layer.feeds.gold.base import CircuitState, GoldFeedBase
+from data_layer.feeds.gold.commodity_api import CommodityAPIFeed
 from data_layer.feeds.gold.goldapi import GoldAPIFeed
 from data_layer.feeds.gold.metalpriceapi import MetalpriceAPIFeed
 from data_layer.feeds.gold.metals_api import MetalsAPIFeed
 from data_layer.feeds.gold.metals_dev import MetalsDevFeed
-from data_layer.feeds.gold.commodity_api import CommodityAPIFeed
 from data_layer.quality.engine import dqe
 from data_layer.types import FeedSource, GoldTick, TickQuality
-import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +100,7 @@ class GoldFeedManager:
 
     def _init_prometheus(self) -> None:
         try:
-            from prometheus_client import Counter, Gauge, REGISTRY
+            from prometheus_client import REGISTRY, Counter, Gauge
 
             def _gauge(name: str, doc: str):
                 try:
@@ -135,9 +134,7 @@ class GoldFeedManager:
     async def start(self) -> None:
         """Start all configured feed polling loops."""
         self._running = True
-        configured = [
-            (src, feed) for src, feed in self._feeds.items() if feed.is_configured
-        ]
+        configured = [(src, feed) for src, feed in self._feeds.items() if feed.is_configured]
         if not configured:
             logger.error(
                 "GoldFeedManager: NO gold feed API keys configured. "
@@ -193,9 +190,7 @@ class GoldFeedManager:
             try:
                 # Skip if circuit is open
                 if feed.circuit_state == CircuitState.OPEN:
-                    logger.debug(
-                        "GoldFeedManager: %s circuit OPEN — skipping poll", src.value
-                    )
+                    logger.debug("GoldFeedManager: %s circuit OPEN — skipping poll", src.value)
                 else:
                     raw_tick = await feed.fetch_tick()
                     received_at = time.time()
@@ -205,13 +200,13 @@ class GoldFeedManager:
                     # REST APIs occasionally return cached/stale prices; this
                     # catches them before they corrupt the consensus.
                     tick_age_s = received_at - raw_tick.timestamp.timestamp()
-                    if tick_age_s > 300.0:  # noqa: PLR2004
+                    if tick_age_s > 300.0:
                         logger.warning(
                             "GoldFeedManager: %s tick too old (age=%.1fs) — discarded",
                             src.value,
                             tick_age_s,
                         )
-                    elif tick_age_s < -10.0:  # noqa: PLR2004
+                    elif tick_age_s < -10.0:
                         logger.warning(
                             "GoldFeedManager: %s tick from future (age=%.1fs) — discarded",
                             src.value,
@@ -238,8 +233,7 @@ class GoldFeedManager:
                             if prev_state == CircuitState.HALF_OPEN:
                                 dqe.reset_source(src)
                                 logger.info(
-                                    "GoldFeedManager: %s circuit recovered — "
-                                    "DQE source state reset",
+                                    "GoldFeedManager: %s circuit recovered — DQE source state reset",
                                     src.value,
                                 )
                         feed._prev_circuit_state = feed.circuit_state
@@ -247,9 +241,7 @@ class GoldFeedManager:
             except asyncio.CancelledError:
                 break
             except Exception as exc:
-                logger.warning(
-                    "GoldFeedManager poll error source=%s: %s", src.value, exc
-                )
+                logger.warning("GoldFeedManager poll error source=%s: %s", src.value, exc)
 
             elapsed = time.monotonic() - t0
             sleep_s = max(0.1, interval - elapsed)
@@ -277,13 +269,12 @@ class GoldFeedManager:
         live = {
             src: tick
             for src, tick in self._latest.items()
-            if tick.is_valid()
-            and (now_epoch - tick.timestamp.timestamp()) <= _max_age_s
+            if tick.is_valid() and (now_epoch - tick.timestamp.timestamp()) <= _max_age_s
         }
         if not live:
             return
 
-        consensus_mid, confidence, weights = dqe.cross_source_consensus(live)
+        consensus_mid, confidence, _ = dqe.cross_source_consensus(live)
         if consensus_mid <= 0:
             return
 
@@ -402,11 +393,7 @@ class GoldFeedManager:
         return self._latest.get(source)
 
     def active_sources(self) -> list[FeedSource]:
-        return [
-            src
-            for src, tick in self._latest.items()
-            if tick.quality != TickQuality.REJECTED and tick.is_valid()
-        ]
+        return [src for src, tick in self._latest.items() if tick.quality != TickQuality.REJECTED and tick.is_valid()]
 
     def health(self) -> dict:
         h = {
@@ -414,16 +401,12 @@ class GoldFeedManager:
             "tick_count": self._tick_count,
             "active_sources": [s.value for s in self.active_sources()],
             "consensus_mid": self._consensus_tick.mid if self._consensus_tick else None,
-            "consensus_conf": self._consensus_tick.confidence
-            if self._consensus_tick
-            else None,
+            "consensus_conf": self._consensus_tick.confidence if self._consensus_tick else None,
             "last_consensus_age_s": round(time.time() - self._last_consensus_at, 1)
             if self._last_consensus_at
             else None,
             "source_health": dqe.get_source_health(),
-            "feed_health": {
-                src.value: feed.health_summary() for src, feed in self._feeds.items()
-            },
+            "feed_health": {src.value: feed.health_summary() for src, feed in self._feeds.items()},
         }
         # Cache feed health to Redis (TTL 10s) for monitoring dashboards
         if self._redis:

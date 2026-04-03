@@ -34,13 +34,12 @@ GET  /api/portfolio/risk/factor-report     — combined factor risk report
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from auth.dependencies import get_current_user, require_role
-from auth.schemas import TokenPayload
+from api.auth import TokenPayload, get_current_user, require_role
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +48,11 @@ router = APIRouter(prefix="/api/portfolio", tags=["Portfolio"])
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
+
 def _get_app_state() -> Any:
     try:
         from core.app_state import app_state
+
         return app_state
     except Exception:
         return None
@@ -65,6 +66,7 @@ def _get_factor_engine() -> Any:
             return engine
     try:
         from portfolio.factor_model import get_live_factor_engine
+
         return get_live_factor_engine()
     except Exception:
         return None
@@ -78,6 +80,7 @@ def _get_rebalancer() -> Any:
             return rb
     try:
         from portfolio.rebalancer import get_rebalancer
+
         return get_rebalancer()
     except Exception:
         return None
@@ -91,6 +94,7 @@ def _get_tick_feed() -> Any:
             return tf
     try:
         from data.tick_feed import get_tick_feed
+
         return get_tick_feed()
     except Exception:
         return None
@@ -103,8 +107,9 @@ def _get_execution_engine() -> Any:
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
 
+
 class AttributeRequest(BaseModel):
-    positions: Dict[str, float] = Field(
+    positions: dict[str, float] = Field(
         ...,
         description="Symbol -> dollar value (positive=long, negative=short)",
         example={"XAU_USD": 50000.0, "BTC_USD": -10000.0},
@@ -116,7 +121,7 @@ class AttributeRequest(BaseModel):
 
 
 class FactorVarRequest(BaseModel):
-    positions: Dict[str, float] = Field(
+    positions: dict[str, float] = Field(
         ...,
         description="Symbol -> dollar value",
     )
@@ -131,7 +136,7 @@ class RebalanceRequest(BaseModel):
 
 class FeedReturnsRequest(BaseModel):
     strategy_id: str = Field(..., description="Strategy identifier")
-    returns: List[float] = Field(
+    returns: list[float] = Field(
         ...,
         description="Daily return series (most recent last)",
         min_length=5,
@@ -146,14 +151,15 @@ class FeedReturnsRequest(BaseModel):
 
 # ── Factor Model routes ───────────────────────────────────────────────────────
 
+
 @router.get(
     "/factor/status",
     summary="LiveFactorEngine status",
-    response_model=Dict[str, Any],
+    response_model=dict[str, Any],
 )
 async def factor_status(
     _user: TokenPayload = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Return LiveFactorEngine running status and last fit timestamp."""
     engine = _get_factor_engine()
     if engine is None:
@@ -164,11 +170,11 @@ async def factor_status(
 @router.get(
     "/factor/exposures",
     summary="Per-symbol factor beta loadings",
-    response_model=Dict[str, Any],
+    response_model=dict[str, Any],
 )
 async def factor_exposures(
     _user: TokenPayload = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Return Ridge regression beta loadings for each tracked symbol."""
     engine = _get_factor_engine()
     if engine is None:
@@ -181,19 +187,19 @@ async def factor_exposures(
         return {"exposures": {}, "note": "No symbols fitted yet — engine may still be warming up"}
     return {
         "exposures": {sym: exp.to_dict() for sym, exp in exposures.items()},
-        "factor_names": list(exposures.values())[0].betas.keys() if exposures else [],
+        "factor_names": next(iter(exposures.values())).betas.keys() if exposures else [],
     }
 
 
 @router.post(
     "/factor/attribute",
     summary="Attribute portfolio P&L to systematic factors",
-    response_model=Dict[str, Any],
+    response_model=dict[str, Any],
 )
 async def factor_attribute(
     body: AttributeRequest,
     _user: TokenPayload = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Decompose total_pnl into factor contributions (rates, vol, momentum,
     carry, macro, DXY) plus residual idiosyncratic alpha.
@@ -211,12 +217,12 @@ async def factor_attribute(
 @router.post(
     "/factor/var",
     summary="Factor-level VaR contributions",
-    response_model=Dict[str, Any],
+    response_model=dict[str, Any],
 )
 async def factor_var(
     body: FactorVarRequest,
     _user: TokenPayload = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Return annualised 95% VaR contribution of each systematic factor
     for the given portfolio positions.
@@ -236,14 +242,15 @@ async def factor_var(
 
 # ── Rebalancer routes ─────────────────────────────────────────────────────────
 
+
 @router.get(
     "/rebalancer/status",
     summary="DynamicRebalancer status",
-    response_model=Dict[str, Any],
+    response_model=dict[str, Any],
 )
 async def rebalancer_status(
     _user: TokenPayload = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Return rebalancer method, current weights, and last rebalance timestamp."""
     rb = _get_rebalancer()
     if rb is None:
@@ -254,11 +261,11 @@ async def rebalancer_status(
 @router.get(
     "/rebalancer/weights",
     summary="Current target weights",
-    response_model=Dict[str, Any],
+    response_model=dict[str, Any],
 )
 async def rebalancer_weights(
     _user: TokenPayload = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Return the current target allocation weights across all strategies."""
     rb = _get_rebalancer()
     if rb is None:
@@ -277,12 +284,12 @@ async def rebalancer_weights(
 @router.post(
     "/rebalancer/rebalance",
     summary="Trigger a portfolio rebalance",
-    response_model=Dict[str, Any],
+    response_model=dict[str, Any],
 )
 async def trigger_rebalance(
     body: RebalanceRequest,
     _user: TokenPayload = Depends(require_role("admin")),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Trigger a rebalance check.  Returns the RebalanceResult if a rebalance
     was executed, or a ``skipped`` response if the scheduler blocked it.
@@ -307,12 +314,12 @@ async def trigger_rebalance(
 @router.post(
     "/rebalancer/returns",
     summary="Feed a strategy return series into the rebalancer",
-    response_model=Dict[str, Any],
+    response_model=dict[str, Any],
 )
 async def feed_returns(
     body: FeedReturnsRequest,
     _user: TokenPayload = Depends(require_role("admin")),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Feed a daily return series for a strategy into the rebalancer's
     CorrelationTracker.  Also updates the strategy's current drawdown.
@@ -326,6 +333,7 @@ async def feed_returns(
             detail="Rebalancer not initialised",
         )
     import pandas as pd
+
     returns_series = pd.Series(body.returns)
     rb.update_strategy_returns(body.strategy_id, returns_series)
     rb.update_drawdown(body.strategy_id, body.drawdown)
@@ -339,14 +347,15 @@ async def feed_returns(
 
 # ── Tick Feed routes ──────────────────────────────────────────────────────────
 
+
 @router.get(
     "/tick-feed/status",
     summary="TickFeedManager status",
-    response_model=Dict[str, Any],
+    response_model=dict[str, Any],
 )
 async def tick_feed_status(
     _user: TokenPayload = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Return tick feed running status, source health, and tick counts."""
     tf = _get_tick_feed()
     if tf is None:
@@ -357,12 +366,12 @@ async def tick_feed_status(
 @router.get(
     "/tick-feed/last-tick",
     summary="Latest validated tick",
-    response_model=Dict[str, Any],
+    response_model=dict[str, Any],
 )
 async def tick_feed_last_tick(
     symbol: str = Query(default="XAU_USD", description="Symbol to query"),
     _user: TokenPayload = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Return the most recent validated tick for the given symbol."""
     tf = _get_tick_feed()
     if tf is None:
@@ -379,11 +388,11 @@ async def tick_feed_last_tick(
 @router.get(
     "/tick-feed/execution",
     summary="Execution engine tick cache status",
-    response_model=Dict[str, Any],
+    response_model=dict[str, Any],
 )
 async def tick_feed_execution_status(
     _user: TokenPayload = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Return the execution engine's last-tick cache (used for MARKET order pricing)."""
     ee = _get_execution_engine()
     if ee is None:
@@ -395,15 +404,25 @@ async def tick_feed_execution_status(
 
 # ── Combined factor risk report ───────────────────────────────────────────────
 
+
 @router.get(
     "/risk/factor-report",
     summary="Combined factor risk report",
-    response_model=Dict[str, Any],
+    response_model=dict[str, Any],
 )
 async def factor_risk_report(
     _user: TokenPayload = Depends(get_current_user),
-) -> Dict[str, Any]:
-    """Return a combined factor risk report for the current portfolio."""
+) -> dict[str, Any]:
+    """
+    Return a combined factor risk report for the current portfolio.
+
+    Includes:
+    - Factor attribution of today's P&L
+    - Factor-level VaR contributions
+    - Per-symbol beta loadings
+    - Rebalancer current weights
+    - Tick feed status
+    """
     s = _get_app_state()
     positions, total_pnl = await _fetch_portfolio_positions(s)
     factor_section = _build_factor_section(positions, total_pnl)
@@ -413,10 +432,8 @@ async def factor_risk_report(
     tick_section: Dict[str, Any] = {"available": True, **tf.status()} if tf is not None else {"available": False}
     return {"positions": positions, "total_pnl": total_pnl, "factor": factor_section, "rebalancer": rebalancer_section, "tick_feed": tick_section}
 
-
-async def _fetch_portfolio_positions(s: Any) -> tuple[Dict[str, float], float]:
-    """Return (positions, total_pnl) from portfolio manager or broker."""
-    positions: Dict[str, float] = {}
+    # Gather positions from portfolio manager or broker
+    positions: dict[str, float] = {}
     total_pnl = 0.0
     try:
         pms = getattr(s, "portfolio_manager", None) if s else None
@@ -436,15 +453,39 @@ async def _fetch_portfolio_positions(s: Any) -> tuple[Dict[str, float], float]:
         logger.debug("factor_risk_report: position fetch failed: %s", exc)
     return positions, total_pnl
 
-
-def _build_factor_section(positions: Dict[str, float], total_pnl: float) -> Dict[str, Any]:
-    """Return factor attribution section dict."""
+    # Factor attribution
+    factor_section: dict[str, Any] = {"available": False}
     engine = _get_factor_engine()
-    if engine is None:
-        return {"available": False}
-    try:
-        attribution = engine.attribute(positions, total_pnl)
-        factor_var = engine.factor_var(positions)
-        return {"available": True, "attribution": attribution.to_dict(), "factor_var": {k: round(v, 2) for k, v in factor_var.items()}, "engine_status": engine.status()}
-    except Exception as exc:
-        return {"available": False, "error": str(exc)}
+    if engine is not None:
+        try:
+            attribution = engine.attribute(positions, total_pnl)
+            factor_var = engine.factor_var(positions)
+            factor_section = {
+                "available": True,
+                "attribution": attribution.to_dict(),
+                "factor_var": {k: round(v, 2) for k, v in factor_var.items()},
+                "engine_status": engine.status(),
+            }
+        except Exception as exc:
+            logger.warning("factor analysis unavailable: %s", exc)
+            factor_section = {"available": False, "error": "Factor analysis unavailable — check server logs"}
+
+    # Rebalancer weights
+    rebalancer_section: dict[str, Any] = {"available": False}
+    rb = _get_rebalancer()
+    if rb is not None:
+        rebalancer_section = {"available": True, **rb.status()}
+
+    # Tick feed
+    tick_section: dict[str, Any] = {"available": False}
+    tf = _get_tick_feed()
+    if tf is not None:
+        tick_section = {"available": True, **tf.status()}
+
+    return {
+        "positions": positions,
+        "total_pnl": total_pnl,
+        "factor": factor_section,
+        "rebalancer": rebalancer_section,
+        "tick_feed": tick_section,
+    }

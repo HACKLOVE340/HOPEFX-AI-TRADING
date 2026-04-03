@@ -104,27 +104,27 @@ from .strategy_brain import StrategyBrain
 __all__ = [
     # ABC and data types
     "BaseStrategy",
-    "Signal",
-    "SignalType",
-    "StrategyStatus",
-    "StrategyConfig",
-    # Orchestration
-    "StrategyManager",
-    "StrategyBrain",
+    "BollingerBandsStrategy",
+    "BreakoutStrategy",
+    "EMAcrossoverStrategy",
+    "ITS8OSStrategy",
+    "MACDStrategy",
+    "MeanReversionStrategy",
     # Trend-following
     "MovingAverageCrossover",
-    "EMAcrossoverStrategy",
-    "MACDStrategy",
-    "BreakoutStrategy",
     "PullbackStrategy",
     # Mean-reversion
     "RSIStrategy",
-    "BollingerBandsStrategy",
-    "MeanReversionStrategy",
-    "StochasticStrategy",
     # Pattern / institutional
     "SMCICTStrategy",
-    "ITS8OSStrategy",
+    "Signal",
+    "SignalType",
+    "StochasticStrategy",
+    "StrategyBrain",
+    "StrategyConfig",
+    # Orchestration
+    "StrategyManager",
+    "StrategyStatus",
 ]
 
 __version__ = "1.0.0"

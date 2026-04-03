@@ -36,9 +36,8 @@ Credential resolution
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-UTC = timezone.utc
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, ClassVar
 
 import aiohttp
 
@@ -123,8 +122,8 @@ class OANDAStream:
         account_id: str,
         instruments: list[str],
         practice: bool = True,
-        event_bus: Any = None,
-        on_tick: Any = None,  # accepted but ignored — streaming is forbidden
+        event_bus: Any | None = None,
+        on_tick: Any | None = None,  # accepted but ignored — streaming is forbidden
     ) -> None:
         if not api_key or not account_id:
             raise ValueError("api_key and account_id are required")
@@ -168,9 +167,7 @@ class OANDAStream:
             self._session = aiohttp.ClientSession(headers=self._headers)
         try:
             url = f"{self._rest_base}/v3/accounts/{self.account_id}/summary"
-            async with self._session.get(
-                url, timeout=aiohttp.ClientTimeout(total=_DEFAULT_TIMEOUT)
-            ) as r:
+            async with self._session.get(url, timeout=aiohttp.ClientTimeout(total=_DEFAULT_TIMEOUT)) as r:
                 r.raise_for_status()
                 data = await r.json()
                 bal = data.get("account", {}).get("balance", "?")
@@ -198,7 +195,7 @@ class OANDAStream:
 
         Live price streaming is handled by data_feed.NuclearStreamer.
         """
-        raise StreamingForbiddenError()
+        raise StreamingForbiddenError
 
     # ── Account ───────────────────────────────────────────────────────────────
 
@@ -206,9 +203,7 @@ class OANDAStream:
         """Fetch live account summary."""
         try:
             url = f"{self._rest_base}/v3/accounts/{self.account_id}/summary"
-            async with self._session.get(
-                url, timeout=aiohttp.ClientTimeout(total=_DEFAULT_TIMEOUT)
-            ) as r:
+            async with self._session.get(url, timeout=aiohttp.ClientTimeout(total=_DEFAULT_TIMEOUT)) as r:
                 r.raise_for_status()
                 a = (await r.json()).get("account", {})
                 bal = float(a.get("balance", 0))
@@ -218,9 +213,7 @@ class OANDAStream:
                     equity=nav,
                     margin_used=float(a.get("marginUsed", 0)),
                     margin_available=float(a.get("marginAvailable", nav)),
-                    positions_count=int(
-                        a.get("openPositionCount", a.get("openTradeCount", 0))
-                    ),
+                    positions_count=int(a.get("openPositionCount", a.get("openTradeCount", 0))),
                     timestamp=datetime.now(UTC),
                 )
         except Exception as exc:
@@ -233,11 +226,9 @@ class OANDAStream:
         """Fetch all open positions."""
         try:
             url = f"{self._rest_base}/v3/accounts/{self.account_id}/openPositions"
-            async with self._session.get(
-                url, timeout=aiohttp.ClientTimeout(total=_DEFAULT_TIMEOUT)
-            ) as r:
+            async with self._session.get(url, timeout=aiohttp.ClientTimeout(total=_DEFAULT_TIMEOUT)) as r:
                 r.raise_for_status()
-                out: list[Position] = []
+                out: ClassVar[list[Position]] = []
                 for p in (await r.json()).get("positions", []):
                     lu = float(p.get("long", {}).get("units", 0))
                     su = float(p.get("short", {}).get("units", 0))
@@ -273,10 +264,7 @@ class OANDAStream:
     async def close_position(self, symbol: str) -> bool:
         """Close all units of a position."""
         try:
-            url = (
-                f"{self._rest_base}/v3/accounts/{self.account_id}"
-                f"/positions/{symbol}/close"
-            )
+            url = f"{self._rest_base}/v3/accounts/{self.account_id}/positions/{symbol}/close"
             async with self._session.put(
                 url,
                 json={"longUnits": "ALL", "shortUnits": "ALL"},
@@ -333,13 +321,8 @@ class OANDAStream:
     async def cancel_order(self, order_id: str) -> bool:
         """Cancel a pending order by ID."""
         try:
-            url = (
-                f"{self._rest_base}/v3/accounts/{self.account_id}"
-                f"/orders/{order_id}/cancel"
-            )
-            async with self._session.put(
-                url, timeout=aiohttp.ClientTimeout(total=_DEFAULT_TIMEOUT)
-            ) as r:
+            url = f"{self._rest_base}/v3/accounts/{self.account_id}/orders/{order_id}/cancel"
+            async with self._session.put(url, timeout=aiohttp.ClientTimeout(total=_DEFAULT_TIMEOUT)) as r:
                 r.raise_for_status()
                 return True
         except Exception as exc:
@@ -350,9 +333,7 @@ class OANDAStream:
         """Fetch all pending (open) orders."""
         try:
             url = f"{self._rest_base}/v3/accounts/{self.account_id}/pendingOrders"
-            async with self._session.get(
-                url, timeout=aiohttp.ClientTimeout(total=_DEFAULT_TIMEOUT)
-            ) as r:
+            async with self._session.get(url, timeout=aiohttp.ClientTimeout(total=_DEFAULT_TIMEOUT)) as r:
                 r.raise_for_status()
                 orders = []
                 for o in (await r.json()).get("orders", []):

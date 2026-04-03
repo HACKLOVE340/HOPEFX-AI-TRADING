@@ -9,12 +9,11 @@ Compliance Module
 AML (Anti-Money Laundering) monitoring and regulatory compliance.
 """
 
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
+import logging
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from enum import Enum
-from dataclasses import dataclass, field
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +172,8 @@ class ComplianceManager:
             self.flagged_users[user_id] = []
         self.flagged_users[user_id].append(check_id)
 
-        logger.warning(f"AML check flagged: {check_id} - {reason}")
+        logger.warning("AML check flagged: %s - %s", check_id, reason)
+
         return check
 
     def _check_structuring(self, user_id: str, amount: Decimal) -> bool:
@@ -187,17 +187,13 @@ class ComplianceManager:
         recent_checks = [
             self.aml_checks[cid]
             for cid in user_checks
-            if cid in self.aml_checks
-            and datetime.now(UTC) - self.aml_checks[cid].checked_at
-            < timedelta(days=1)
+            if cid in self.aml_checks and datetime.now(UTC) - self.aml_checks[cid].checked_at < timedelta(days=1)
         ]
 
         # Count transactions just below threshold
-        near_threshold = [
-            c for c in recent_checks if c.check_type == "large_transaction"
-        ]
+        near_threshold = [c for c in recent_checks if c.check_type == "large_transaction"]
 
-        return len(near_threshold) >= 3  # noqa: PLR2004
+        return len(near_threshold) >= 3
 
     def _check_high_frequency(self, user_id: str) -> bool:
         """Check for unusually high transaction frequency"""
@@ -205,9 +201,7 @@ class ComplianceManager:
         recent_checks = [
             cid
             for cid in user_checks
-            if cid in self.aml_checks
-            and datetime.now(UTC) - self.aml_checks[cid].checked_at
-            < timedelta(hours=1)
+            if cid in self.aml_checks and datetime.now(UTC) - self.aml_checks[cid].checked_at < timedelta(hours=1)
         ]
 
         return len(recent_checks) >= self.high_frequency_threshold
@@ -218,20 +212,14 @@ class ComplianceManager:
         # In production, would use ML models
         user_checks = self.flagged_users.get(user_id, [])
 
-        if len(user_checks) < 5:  # noqa: PLR2004
+        if len(user_checks) < 5:
             return False
 
         # Check for many identical amounts (possible automation)
-        recent_checks = [
-            self.aml_checks[cid] for cid in user_checks[-10:] if cid in self.aml_checks
-        ]
+        recent_checks = [self.aml_checks[cid] for cid in user_checks[-10:] if cid in self.aml_checks]
 
         # Count similar amounts (within 1%)
-        similar_count = sum(
-            1
-            for c in recent_checks
-            if c.check_type in ["large_transaction", "structuring"]
-        )
+        similar_count = sum(1 for c in recent_checks if c.check_type in ["large_transaction", "structuring"])
 
         return similar_count >= self.suspicious_pattern_threshold
 
@@ -274,11 +262,11 @@ class ComplianceManager:
         score = min(score, 100)
 
         # Determine overall risk level
-        if score >= 75:  # noqa: PLR2004
+        if score >= 75:
             risk_level = RiskLevel.CRITICAL
-        elif score >= 50:  # noqa: PLR2004
+        elif score >= 50:
             risk_level = RiskLevel.HIGH
-        elif score >= 25:  # noqa: PLR2004
+        elif score >= 25:
             risk_level = RiskLevel.MEDIUM
         else:
             risk_level = RiskLevel.LOW
@@ -291,13 +279,9 @@ class ComplianceManager:
             "unresolved_flags": len(unresolved),
             "breakdown": {
                 "low": len([c for c in unresolved if c.risk_level == RiskLevel.LOW]),
-                "medium": len(
-                    [c for c in unresolved if c.risk_level == RiskLevel.MEDIUM]
-                ),
+                "medium": len([c for c in unresolved if c.risk_level == RiskLevel.MEDIUM]),
                 "high": len([c for c in unresolved if c.risk_level == RiskLevel.HIGH]),
-                "critical": len(
-                    [c for c in unresolved if c.risk_level == RiskLevel.CRITICAL]
-                ),
+                "critical": len([c for c in unresolved if c.risk_level == RiskLevel.CRITICAL]),
             },
         }
 
@@ -314,32 +298,34 @@ class ComplianceManager:
         """
         check = self.aml_checks.get(check_id)
         if not check:
-            logger.error(f"AML check not found: {check_id}")
+            logger.error("AML check not found: %s", check_id)
+
             return False
 
         check.resolved = True
         check.resolution_notes = resolution_notes
 
-        logger.info(f"AML check resolved: {check_id}")
+        logger.info("AML check resolved: %s", check_id)
+
         return True
 
     def add_to_blacklist(self, user_id: str) -> None:
         """Add user to blacklist"""
         if user_id not in self.blacklist:
             self.blacklist.append(user_id)
-            logger.warning(f"User added to blacklist: {user_id}")
+            logger.warning("User added to blacklist: %s", user_id)
+
 
     def remove_from_blacklist(self, user_id: str) -> bool:
         """Remove user from blacklist"""
         if user_id in self.blacklist:
             self.blacklist.remove(user_id)
-            logger.info(f"User removed from blacklist: {user_id}")
+            logger.info("User removed from blacklist: %s", user_id)
+
             return True
         return False
 
-    def generate_compliance_report(
-        self, start_date: datetime, end_date: datetime
-    ) -> ComplianceReport:
+    def generate_compliance_report(self, start_date: datetime, end_date: datetime) -> ComplianceReport:
         """
         Generate compliance report for period
 
@@ -353,28 +339,18 @@ class ComplianceManager:
         report_id = f"RPT-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
 
         # Get checks in period
-        period_checks = [
-            check
-            for check in self.aml_checks.values()
-            if start_date <= check.checked_at <= end_date
-        ]
+        period_checks = [check for check in self.aml_checks.values() if start_date <= check.checked_at <= end_date]
 
         # Count by risk level
         risk_breakdown = {
             "low": len([c for c in period_checks if c.risk_level == RiskLevel.LOW]),
-            "medium": len(
-                [c for c in period_checks if c.risk_level == RiskLevel.MEDIUM]
-            ),
+            "medium": len([c for c in period_checks if c.risk_level == RiskLevel.MEDIUM]),
             "high": len([c for c in period_checks if c.risk_level == RiskLevel.HIGH]),
-            "critical": len(
-                [c for c in period_checks if c.risk_level == RiskLevel.CRITICAL]
-            ),
+            "critical": len([c for c in period_checks if c.risk_level == RiskLevel.CRITICAL]),
         }
 
         # Get unique transactions
-        transaction_ids = set(
-            c.transaction_id for c in period_checks if c.transaction_id
-        )
+        transaction_ids = {c.transaction_id for c in period_checks if c.transaction_id}
 
         report = ComplianceReport(
             report_id=report_id,
@@ -385,12 +361,11 @@ class ComplianceManager:
             risk_breakdown=risk_breakdown,
         )
 
-        logger.info(f"Compliance report generated: {report_id}")
+        logger.info("Compliance report generated: %s", report_id)
+
         return report
 
-    def get_flagged_users(
-        self, min_risk_level: RiskLevel = RiskLevel.MEDIUM
-    ) -> list[dict]:
+    def get_flagged_users(self, min_risk_level: RiskLevel = RiskLevel.MEDIUM) -> list[dict]:
         """
         Get list of flagged users
 
@@ -406,22 +381,14 @@ class ComplianceManager:
             risk_score = self.calculate_risk_score(user_id)
 
             # Filter by risk level
-            if (
-                risk_score["risk_level"] == RiskLevel.LOW.value
-                and min_risk_level != RiskLevel.LOW
-            ):
+            if risk_score["risk_level"] == RiskLevel.LOW.value and min_risk_level != RiskLevel.LOW:
                 continue
-            if risk_score[
-                "risk_level"
-            ] == RiskLevel.MEDIUM.value and min_risk_level in [
+            if risk_score["risk_level"] == RiskLevel.MEDIUM.value and min_risk_level in [
                 RiskLevel.HIGH,
                 RiskLevel.CRITICAL,
             ]:
                 continue
-            if (
-                risk_score["risk_level"] == RiskLevel.HIGH.value
-                and min_risk_level == RiskLevel.CRITICAL
-            ):
+            if risk_score["risk_level"] == RiskLevel.HIGH.value and min_risk_level == RiskLevel.CRITICAL:
                 continue
 
             flagged.append(risk_score)

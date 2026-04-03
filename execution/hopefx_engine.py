@@ -30,6 +30,7 @@ Latency budget
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import json
 import logging
@@ -37,18 +38,17 @@ import os
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
-from risk.intra_trade_monitor import IntraTradeMonitor, OpenPosition as IntraPosition
-from risk.post_trade_analyzer import PostTradeAnalyzer
-from risk.drawdown_tracker import DrawdownTracker
-from shadow.trading_engine import ShadowTradingEngine
-from shadow.data_validator import ShadowDataValidator
 from resilience.hot_standby import HotStandbyReplicator
-import contextlib
+from risk.drawdown_tracker import DrawdownTracker
+from risk.intra_trade_monitor import IntraTradeMonitor
+from risk.intra_trade_monitor import OpenPosition as IntraPosition
+from risk.post_trade_analyzer import PostTradeAnalyzer
+from shadow.data_validator import ShadowDataValidator
+from shadow.trading_engine import ShadowTradingEngine
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ _SIGNAL_COOLDOWN_S = float(os.getenv("ENGINE_SIGNAL_COOLDOWN_S", "30.0"))
 _STALE_TICK_THRESHOLD = float(os.getenv("ENGINE_STALE_TICK_S", "10.0"))
 
 
-class EngineState(str, Enum):
+class EngineState(StrEnum):
     IDLE = "idle"
     RUNNING = "running"
     PAUSED = "paused"
@@ -161,27 +161,17 @@ class HopeFXEngine:
 
         # ── Multi-layer risk components ────────────────────────────────────
         # Instantiate defaults if not injected — all three layers are mandatory
-        self._intra_monitor: IntraTradeMonitor = (
-            intra_trade_monitor or IntraTradeMonitor(equity=initial_equity)
-        )
-        self._post_analyzer: PostTradeAnalyzer = (
-            post_trade_analyzer or PostTradeAnalyzer(lineage_store=lineage_store)
-        )
-        self._dd_tracker: DrawdownTracker = drawdown_tracker or DrawdownTracker(
-            initial_balance=initial_equity
-        )
+        self._intra_monitor: IntraTradeMonitor = intra_trade_monitor or IntraTradeMonitor(equity=initial_equity)
+        self._post_analyzer: PostTradeAnalyzer = post_trade_analyzer or PostTradeAnalyzer(lineage_store=lineage_store)
+        self._dd_tracker: DrawdownTracker = drawdown_tracker or DrawdownTracker(initial_balance=initial_equity)
         self._current_equity: float = initial_equity
 
         # ── Shadow trading components ──────────────────────────────────────
         # ShadowTradingEngine: paper-executes every live signal in parallel.
         # ShadowDataValidator: compares production vs shadow feed on every tick.
         # Both are optional — if not injected, defaults are created.
-        self._shadow: ShadowTradingEngine = shadow_engine or ShadowTradingEngine(
-            initial_balance=initial_equity
-        )
-        self._shadow_validator: ShadowDataValidator = (
-            shadow_validator or ShadowDataValidator()
-        )
+        self._shadow: ShadowTradingEngine = shadow_engine or ShadowTradingEngine(initial_balance=initial_equity)
+        self._shadow_validator: ShadowDataValidator = shadow_validator or ShadowDataValidator()
 
         # ── Hot-standby replication ────────────────────────────────────────
         # Optional — only active when a Redis client is available.
@@ -218,9 +208,7 @@ class HopeFXEngine:
         if self._standby is not None:
             await self._standby.start()
 
-        self._loop_task = asyncio.create_task(
-            self._tick_loop(), name="hopefx_engine_tick_loop"
-        )
+        self._loop_task = asyncio.create_task(self._tick_loop(), name="hopefx_engine_tick_loop")
         logger.info(
             "HopeFXEngine started — min_conf=%.2f min_quality=%.2f max_spread=%.2f",
             _MIN_CONFIDENCE,
@@ -287,8 +275,8 @@ class HopeFXEngine:
                 await self._process_tick()
             except asyncio.CancelledError:
                 break
-            except Exception as exc:
-                logger.error("Tick loop error: %s", exc, exc_info=True)
+            except Exception:
+                logger.exception("Tick loop error: %s")
 
             elapsed = time.monotonic() - t0
             sleep_s = max(0.0, interval - elapsed)
@@ -308,9 +296,7 @@ class HopeFXEngine:
         now_epoch = time.time()
         age_s = now_epoch - tick_epoch
         if age_s > _STALE_TICK_THRESHOLD:
-            logger.warning(
-                "Stale tick rejected: age=%.1fs symbol=%s", age_s, tick.symbol
-            )
+            logger.warning("Stale tick rejected: age=%.1fs symbol=%s", age_s, tick.symbol)
             return
 
         # Deduplicate — skip if same tick as last iteration
@@ -351,9 +337,7 @@ class HopeFXEngine:
 
         # ── Step 2c: Drawdown gate ─────────────────────────────────────────
         # Compute floating equity from open positions and check drawdown limits.
-        floating_pnl = sum(
-            pos.get("mtm_pnl", 0.0) for pos in self._open_positions.values()
-        )
+        floating_pnl = sum(pos.get("mtm_pnl", 0.0) for pos in self._open_positions.values())
         floating_equity = self._current_equity + floating_pnl
         dd_result = self._dd_tracker.update(equity=floating_equity)
         if dd_result.total_breach or dd_result.daily_breach:
@@ -361,21 +345,14 @@ class HopeFXEngine:
             logger.critical(
                 "DRAWDOWN BREACH type=%s pct=%.2f%% — halting engine",
                 breach_type,
-                (
-                    dd_result.total_drawdown_pct
-                    if dd_result.total_breach
-                    else dd_result.daily_drawdown_pct
-                )
-                * 100,
+                (dd_result.total_drawdown_pct if dd_result.total_breach else dd_result.daily_drawdown_pct) * 100,
             )
             self.halt(f"drawdown_breach:{breach_type}")
             return
 
         # ── Step 3: Spread gate ────────────────────────────────────────────
         if tick.spread > _MAX_SPREAD_USD:
-            logger.debug(
-                "Spread too wide: %.4f > %.4f — skipping", tick.spread, _MAX_SPREAD_USD
-            )
+            logger.debug("Spread too wide: %.4f > %.4f — skipping", tick.spread, _MAX_SPREAD_USD)
             return
 
         # ── Step 4: Data quality gate (from orchestrator DQE) ─────────────
@@ -453,9 +430,7 @@ class HopeFXEngine:
         gate_result = await self._gate.evaluate(signal)
         if not gate_result.passed:
             self._reject_count += 1
-            logger.warning(
-                "GATE BLOCK signal_id=%s reason=%s", signal_id, gate_result.reason
-            )
+            logger.warning("GATE BLOCK signal_id=%s reason=%s", signal_id, gate_result.reason)
             self._record_rejection(signal, gate_result.reason)
             return
 
@@ -491,9 +466,9 @@ class HopeFXEngine:
         sent = features.get("news_sentiment_score", 0.0)
         score = 0.5 * ofi + 0.3 * press + 0.2 * sent
 
-        if score > 0.15:  # noqa: PLR2004
+        if score > 0.15:
             return "long", min(0.5 + abs(score), 0.95), 0.5 + abs(score) * 0.5
-        if score < -0.15:  # noqa: PLR2004
+        if score < -0.15:
             return "short", min(0.5 + abs(score), 0.95), 0.5 + abs(score) * 0.5
         return "neutral", 0.0, 0.5
 
@@ -515,15 +490,13 @@ class HopeFXEngine:
                 stop_loss=float(
                     signal.features.get(
                         "stop_loss",
-                        signal.tick_mid
-                        * (0.99 if signal.direction == "long" else 1.01),
+                        signal.tick_mid * (0.99 if signal.direction == "long" else 1.01),
                     )
                 ),
                 take_profit=float(
                     signal.features.get(
                         "take_profit",
-                        signal.tick_mid
-                        * (1.01 if signal.direction == "long" else 0.99),
+                        signal.tick_mid * (1.01 if signal.direction == "long" else 0.99),
                     )
                 ),
             )
@@ -557,9 +530,64 @@ class HopeFXEngine:
             return
 
         latency_ms = (time.monotonic() - t0) * 1000
+        status = fill.get("status", "rejected")
 
-        if fill.get("status") == "filled":
+        if status == "filled":
             await self._on_fill(signal, order_request, fill, latency_ms)
+
+        elif status == "partial":
+            # Partial fill: broker filled less than the requested quantity.
+            # Accept the partial fill — record it as a real fill with the
+            # actual filled quantity, then log the unfilled remainder.
+            # We do NOT re-submit the remainder automatically because:
+            #   1. OANDA FOK orders either fill fully or cancel — a "partial"
+            #      here means the broker adapter normalised a partial trade.
+            #   2. Re-submitting the remainder risks doubling position size
+            #      if the original order is still pending on the broker side.
+            filled_qty = float(fill.get("quantity", fill.get("filled_qty", 0)))
+            requested_qty = float(order_request.get("quantity", 0))
+            unfilled_qty = max(0.0, requested_qty - filled_qty)
+            logger.warning(
+                "PARTIAL FILL signal_id=%s filled=%.4f requested=%.4f unfilled=%.4f broker=%s",
+                signal.signal_id,
+                filled_qty,
+                requested_qty,
+                unfilled_qty,
+                fill.get("broker", "?"),
+            )
+            if filled_qty > 0:
+                # Treat the partial as a real fill with the actual quantity.
+                partial_fill = {**fill, "status": "filled", "quantity": filled_qty}
+                await self._on_fill(signal, order_request, partial_fill, latency_ms)
+            else:
+                # Zero-quantity partial — treat as rejection.
+                self._reject_count += 1
+                self._record_rejection(signal, "partial_fill_zero_qty")
+
+        elif status == "pending":
+            # Limit order accepted by broker but not yet filled.
+            # Track the pending order so we can monitor it for fill/cancel.
+            order_id = fill.get("order_id", order_request.get("order_id", ""))
+            logger.info(
+                "PENDING ORDER signal_id=%s order_id=%s broker=%s — awaiting fill",
+                signal.signal_id,
+                order_id,
+                fill.get("broker", "?"),
+            )
+            # Record in lineage so the audit trail shows the pending state.
+            try:
+                self._lineage.record_signal(
+                    direction=f"PENDING:{signal.direction}",
+                    confidence=signal.confidence,
+                    probability=signal.probability,
+                    features_hash=signal.features_hash,
+                    model_version=f"pending@{fill.get('broker', '?')}",
+                    lineage_id=signal.lineage_id,
+                    symbol=signal.symbol,
+                )
+            except Exception as _exc:
+                logger.debug("lineage record_signal (pending) error: %s", _exc)
+
         else:
             self._reject_count += 1
             self._record_rejection(signal, fill.get("reason", "broker_reject"))
@@ -573,14 +601,42 @@ class HopeFXEngine:
     ) -> None:
         """Handle confirmed fill: lineage, position tracking, orchestrator notify."""
         fill_price = float(fill.get("fill_price", signal.tick_mid))
-        quantity = float(fill.get("quantity", order["quantity"]))
         broker = fill.get("broker", "unknown")
 
-        # Slippage in bps
-        if signal.direction == "long":
-            slippage_bps = (fill_price - signal.tick_ask) / signal.tick_ask * 10000
+        # ── OANDA XAUUSD unit normalisation ───────────────────────────────
+        # OANDA returns quantity in units (troy oz for XAU_USD).
+        # 1 standard lot = 100 oz.  The engine tracks quantity in lots so
+        # that slippage bps and position sizing are consistent across brokers.
+        # If the broker returned units > 10 and the requested quantity was
+        # in lots (< 10), convert units → lots.
+        raw_qty = float(fill.get("quantity", order.get("quantity", 0)))
+        requested_qty = float(order.get("quantity", raw_qty))
+        symbol = signal.symbol.upper().replace("/", "_")
+        if broker == "oanda" and "XAU" in symbol:
+            # OANDA XAU_USD: 1 lot = 100 units (oz).
+            # If the fill quantity looks like units (>> requested lots),
+            # convert to lots.
+            if raw_qty > requested_qty * 10 and requested_qty < 100:
+                quantity = raw_qty / 100.0
+                logger.debug(
+                    "OANDA XAU_USD unit→lot conversion: %.0f units → %.4f lots",
+                    raw_qty,
+                    quantity,
+                )
+            else:
+                quantity = raw_qty
         else:
-            slippage_bps = (signal.tick_bid - fill_price) / signal.tick_bid * 10000
+            quantity = raw_qty
+
+        # ── Slippage in bps ────────────────────────────────────────────────
+        # Guard against zero bid/ask (e.g. first tick before feed is live).
+        # Use tick_mid as fallback reference price.
+        if signal.direction == "long":
+            ref_price = signal.tick_ask if signal.tick_ask > 0 else signal.tick_mid
+            slippage_bps = (fill_price - ref_price) / ref_price * 10_000 if ref_price > 0 else 0.0
+        else:
+            ref_price = signal.tick_bid if signal.tick_bid > 0 else signal.tick_mid
+            slippage_bps = (ref_price - fill_price) / ref_price * 10_000 if ref_price > 0 else 0.0
 
         fill_record = FillRecord(
             fill_id=str(uuid.uuid4()),
@@ -590,9 +646,7 @@ class HopeFXEngine:
             direction=signal.direction,
             quantity=quantity,
             fill_price=fill_price,
-            expected_price=signal.tick_ask
-            if signal.direction == "long"
-            else signal.tick_bid,
+            expected_price=signal.tick_ask if signal.direction == "long" else signal.tick_bid,
             slippage_bps=slippage_bps,
             broker=broker,
             latency_ms=latency_ms,
@@ -678,13 +732,9 @@ class HopeFXEngine:
                 # Compute live slippage for the closing leg so shadow engine
                 # can calibrate its slippage model via R² tracking.
                 if existing["direction"] == "long":
-                    live_slip = (
-                        (fill_price - prev_entry) / max(prev_entry, 1e-9) * 10_000
-                    )
+                    live_slip = (fill_price - prev_entry) / max(prev_entry, 1e-9) * 10_000
                 else:
-                    live_slip = (
-                        (prev_entry - fill_price) / max(prev_entry, 1e-9) * 10_000
-                    )
+                    live_slip = (prev_entry - fill_price) / max(prev_entry, 1e-9) * 10_000
                 self._shadow.on_live_close(
                     signal_id=existing.get("signal_id", ""),
                     live_pnl=prev_pnl,
@@ -724,8 +774,7 @@ class HopeFXEngine:
                 logger.error("orchestrator.notify_fill failed: %s", exc)
 
         logger.info(
-            "FILL symbol=%s dir=%s qty=%.4f price=%.4f slippage=%.2fbps "
-            "broker=%s latency=%.1fms",
+            "FILL symbol=%s dir=%s qty=%.4f price=%.4f slippage=%.2fbps broker=%s latency=%.1fms",
             signal.symbol,
             signal.direction,
             quantity,
@@ -872,9 +921,7 @@ class HopeFXEngine:
         avg_lat = sum(f.latency_ms for f in fills) / len(fills) if fills else 0.0
 
         # Drawdown snapshot
-        floating_pnl = sum(
-            pos.get("mtm_pnl", 0.0) for pos in self._open_positions.values()
-        )
+        floating_pnl = sum(pos.get("mtm_pnl", 0.0) for pos in self._open_positions.values())
         floating_equity = self._current_equity + floating_pnl
         dd_result = self._dd_tracker.update(equity=floating_equity)
 

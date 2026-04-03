@@ -16,13 +16,10 @@ tests/unit/test_kill_switch_integration.py
 """
 
 import json
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-
-from risk.manager import RiskManager, RiskConfig
-
+from risk.manager import RiskConfig, RiskManager
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -66,7 +63,7 @@ def test_halt_persists_to_disk(tmp_path):
     rm._halt_trading("test halt", duration_hours=1)
 
     assert halt_file.exists(), "Halt state file should be written to disk"
-    data = json.loads(halt_file.read_text())
+    data = json.loads(halt_file.read_text(encoding="utf-8"))
     assert data["halted"] is True
     assert data["reason"] == "test halt"
 
@@ -136,16 +133,10 @@ def test_wrong_token_rejected():
     wrong_secret = "wrong_secret_key"
     message = "deactivate"
 
-    correct_sig = hmac.new(
-        secret.encode(), message.encode(), hashlib.sha256
-    ).hexdigest()
-    wrong_sig = hmac.new(
-        wrong_secret.encode(), message.encode(), hashlib.sha256
-    ).hexdigest()
+    correct_sig = hmac.new(secret.encode(), message.encode(), hashlib.sha256).hexdigest()
+    wrong_sig = hmac.new(wrong_secret.encode(), message.encode(), hashlib.sha256).hexdigest()
 
-    assert not hmac.compare_digest(
-        correct_sig, wrong_sig
-    ), "Wrong token must not match the correct HMAC signature"
+    assert not hmac.compare_digest(correct_sig, wrong_sig), "Wrong token must not match the correct HMAC signature"
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +159,4 @@ def test_amber_warning_fires_before_halt(tmp_path, caplog):
 
     assert rm._amber_warned is True, "Amber flag should be set"
     assert rm._trading_halted is False, "Trading should NOT be halted at amber level"
-    assert any(
-        "AMBER" in r.message for r in caplog.records
-    ), "Expected AMBER warning in log"
+    assert any("AMBER" in r.message for r in caplog.records), "Expected AMBER warning in log"

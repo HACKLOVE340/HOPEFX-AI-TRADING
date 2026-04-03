@@ -39,7 +39,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 # ─── Data classes ─────────────────────────────────────────────────────────────
 
 
@@ -90,8 +89,7 @@ _ANALOGS: dict[int, tuple[str, str]] = {
     ),
     7: (
         "2022 Taiwan Strait tensions (Aug)",
-        "Gold +2.5%, vol spike, risk-off across EM. "
-        "Expected max drawdown if long: -8%. Recommended: hedge positions.",
+        "Gold +2.5%, vol spike, risk-off across EM. Expected max drawdown if long: -8%. Recommended: hedge positions.",
     ),
     6: (
         "2023 Middle East flare-up (Oct 7)",
@@ -123,10 +121,7 @@ _ACTION_ADVICE: dict[str, str] = {
         "Do not open new trades until severity drops below 5. "
         "Review matched keywords and monitor news feed."
     ),
-    "normal": (
-        "Normal trading conditions. No action required. "
-        "Continue monitoring the geopolitical gauge."
-    ),
+    "normal": ("Normal trading conditions. No action required. Continue monitoring the geopolitical gauge."),
 }
 
 
@@ -246,9 +241,7 @@ class NuclearExplainabilityEngine:
         total = max(base_score * vol_factor + sentiment_factor, 0.001)
 
         # Top matched keywords
-        top_terms = sorted(
-            matched_terms, key=lambda x: x.get("contribution", 0), reverse=True
-        )[:5]
+        top_terms = sorted(matched_terms, key=lambda x: x.get("contribution", 0), reverse=True)[:5]
         for t in top_terms:
             contrib = t.get("contribution", 0.0)
             scores.append(
@@ -260,7 +253,7 @@ class NuclearExplainabilityEngine:
                     description=(
                         f'WORDMAP keyword "{t["term"]}" in category '
                         f'"{t["category"]}" matched {t.get("count", 1)}× '
-                        f'(weight={t["weight"]:.1f}, contribution={contrib:.2f})'
+                        f"(weight={t['weight']:.1f}, contribution={contrib:.2f})"
                     ),
                 )
             )
@@ -276,7 +269,7 @@ class NuclearExplainabilityEngine:
                     direction="bearish",
                     description=(
                         f"Market volatility is {vol_factor:.2f}× normal. "
-                        f"Elevated vol amplifies WORDMAP severity by {(vol_factor-1)*100:.0f}%."
+                        f"Elevated vol amplifies WORDMAP severity by {(vol_factor - 1) * 100:.0f}%."
                     ),
                 )
             )
@@ -298,7 +291,7 @@ class NuclearExplainabilityEngine:
 
         # Risk exposure
         exposure = risk_data.get("current_exposure", 0.0)
-        if exposure > 0.3:  # noqa: PLR2004
+        if exposure > 0.3:
             scores.append(
                 FeatureScore(
                     name="portfolio_exposure",
@@ -306,7 +299,7 @@ class NuclearExplainabilityEngine:
                     importance=round(min(0.2, exposure * 0.3), 4),
                     direction="bearish",
                     description=(
-                        f"Current portfolio exposure is {exposure*100:.1f}%. "
+                        f"Current portfolio exposure is {exposure * 100:.1f}%. "
                         f"High exposure increases urgency of protective action."
                     ),
                 )
@@ -346,15 +339,15 @@ class NuclearExplainabilityEngine:
             top = max(matched_terms, key=lambda x: x.get("contribution", 0))
             trace.append(
                 f'[2] Highest-weight keyword: "{top["term"]}" '
-                f'(category={top["category"]}, weight={top["weight"]:.1f}, '
-                f'contribution={top.get("contribution", 0):.2f}).'
+                f"(category={top['category']}, weight={top['weight']:.1f}, "
+                f"contribution={top.get('contribution', 0):.2f})."
             )
 
         # Step 3: Amplifiers
         amp_parts = []
-        if vol_factor > 1.05:  # noqa: PLR2004
+        if vol_factor > 1.05:
             amp_parts.append(f"volatility ×{vol_factor:.2f}")
-        if sentiment_factor > 0.1:  # noqa: PLR2004
+        if sentiment_factor > 0.1:
             amp_parts.append(f"negative sentiment +{sentiment_factor:.2f}")
         if amp_parts:
             trace.append(f"[3] Score amplified by: {', '.join(amp_parts)}.")
@@ -362,25 +355,16 @@ class NuclearExplainabilityEngine:
             trace.append("[3] No amplifiers active (normal vol + neutral sentiment).")
 
         # Step 4: Severity determination
-        trace.append(
-            f"[4] Final severity score: {severity}/10 "
-            f"(confidence={confidence*100:.0f}%)."
-        )
+        trace.append(f"[4] Final severity score: {severity}/10 (confidence={confidence * 100:.0f}%).")
 
         # Step 5: RL decision
         agent_type = "PPO RL agent" if rl_loaded else "rule-based fallback"
-        trace.append(
-            f"[5] {agent_type} mapped severity={severity} → action={rl_label} "
-            f"(RL action index={rl_action})."
-        )
+        trace.append(f"[5] {agent_type} mapped severity={severity} → action={rl_label} (RL action index={rl_action}).")
 
         # Step 6: Risk gate
         exposure = risk_data.get("current_exposure", 0.0)
         max_risk = risk_data.get("max_risk_fraction", 1.0)
-        trace.append(
-            f"[6] Risk gate: exposure={exposure*100:.1f}%, "
-            f"max_risk={max_risk*100:.0f}%."
-        )
+        trace.append(f"[6] Risk gate: exposure={exposure * 100:.1f}%, max_risk={max_risk * 100:.0f}%.")
 
         # Step 7: Final action
         action_desc = {
@@ -406,7 +390,7 @@ class NuclearExplainabilityEngine:
         agent = "RL agent (PPO)" if rl_loaded else "rule-based system"
         action_str = action.replace("_", " ")
         return (
-            f"{agent} triggered {rl_label} with {confidence*100:.0f}% confidence "
+            f"{agent} triggered {rl_label} with {confidence * 100:.0f}% confidence "
             f"(severity {severity}/10) → {action_str}."
         )
 
@@ -423,30 +407,29 @@ class NuclearExplainabilityEngine:
         exposure = risk_data.get("current_exposure", 0.0)
         drawdown = risk_data.get("drawdown_pct", 0.0)
 
-        if severity >= 9:  # noqa: PLR2004
+        if severity >= 9:
             return (
                 f"CRITICAL geopolitical event detected. At current exposure "
-                f"({exposure*100:.1f}%), CVaR-95 is {cvar*100:.2f}%. "
+                f"({exposure * 100:.1f}%), CVaR-95 is {cvar * 100:.2f}%. "
                 f"Historical gold moves of +8–15% in 48h are typical for this severity. "
                 f"Full liquidation is the only risk-safe response."
             )
-        elif severity >= 7:  # noqa: PLR2004
+        if severity >= 7:
             return (
-                f"HIGH geopolitical risk. Exposure {exposure*100:.1f}%, "
-                f"CVaR-95 {cvar*100:.2f}%. Hedge mode reduces max loss by ~60%. "
+                f"HIGH geopolitical risk. Exposure {exposure * 100:.1f}%, "
+                f"CVaR-95 {cvar * 100:.2f}%. Hedge mode reduces max loss by ~60%. "
                 f"Gold typically moves +2–6% in the first 24h at this severity."
             )
-        elif severity >= 5:  # noqa: PLR2004
+        if severity >= 5:
             return (
-                f"ELEVATED geopolitical noise. Exposure {exposure*100:.1f}%. "
+                f"ELEVATED geopolitical noise. Exposure {exposure * 100:.1f}%. "
                 f"Pausing new entries limits additional risk accumulation. "
                 f"Current drawdown: {drawdown:.2f}%."
             )
-        else:
-            return (
-                f"Normal conditions. Exposure {exposure*100:.1f}%, "
-                f"drawdown {drawdown:.2f}%. No protective action required."
-            )
+        return (
+            f"Normal conditions. Exposure {exposure * 100:.1f}%, "
+            f"drawdown {drawdown:.2f}%. No protective action required."
+        )
 
     # ── Historical analog ─────────────────────────────────────────────────────
 

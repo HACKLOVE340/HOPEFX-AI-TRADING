@@ -33,10 +33,10 @@ import threading
 import time
 import traceback
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
-from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -210,9 +210,7 @@ class TickValidator:
             return False, f"inverted spread: bid={tick.bid} > ask={tick.ask}"
 
         if tick.spread_bps > self._max_spread_bps:
-            return False, (
-                f"spread {tick.spread_bps:.1f}bps exceeds limit {self._max_spread_bps:.0f}bps"
-            )
+            return False, (f"spread {tick.spread_bps:.1f}bps exceeds limit {self._max_spread_bps:.0f}bps")
 
         # Timestamp staleness
         age = time.time() - tick.timestamp
@@ -225,8 +223,7 @@ class TickValidator:
             jump = abs(tick.mid - last) / last
             if jump > self._max_jump_pct:
                 return False, (
-                    f"price jump {jump:.2%} exceeds limit {self._max_jump_pct:.2%}: "
-                    f"last={last:.4f} mid={tick.mid:.4f}"
+                    f"price jump {jump:.2%} exceeds limit {self._max_jump_pct:.2%}: last={last:.4f} mid={tick.mid:.4f}"
                 )
 
         # Update last known price
@@ -474,9 +471,7 @@ class IBKRMarketDataFeed:
         """Subscribe to IBKR ticks and start health monitor."""
         with self._lock:
             if self._running:
-                logger.warning(
-                    "IBKRMarketDataFeed.start() called while running — ignored."
-                )
+                logger.warning("IBKRMarketDataFeed.start() called while running — ignored.")
                 return
             self._running = True
             self._status = FeedStatus.CONNECTING
@@ -492,9 +487,7 @@ class IBKRMarketDataFeed:
             logger.info("IBKRMarketDataFeed: subscribed to %s ticks.", self._symbol)
         except Exception as exc:
             tb = traceback.format_exc()
-            logger.error(
-                "IBKRMarketDataFeed.start: subscribe_ticks failed: %s\n%s", exc, tb
-            )
+            logger.error("IBKRMarketDataFeed.start: subscribe_ticks failed: %s\n%s", exc, tb)
             self._capture_sentry(exc)
             with self._lock:
                 self._status = FeedStatus.ERROR
@@ -654,8 +647,7 @@ class IBKRMarketDataFeed:
                     if _SENTRY:
                         try:
                             sentry_sdk.capture_message(
-                                f"IBKRMarketDataFeed stale: {self._symbol} "
-                                f"no tick for {age:.1f}s",
+                                f"IBKRMarketDataFeed stale: {self._symbol} no tick for {age:.1f}s",
                                 level="warning",
                             )
                         except Exception as _exc:

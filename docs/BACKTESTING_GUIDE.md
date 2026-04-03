@@ -1,7 +1,7 @@
 # Backtesting Guide
 
 > How to run, interpret, and avoid pitfalls in HOPEFX backtests.
-> Last updated: 2026-07-14
+> Last updated: 2026-04-01
 
 ---
 

@@ -72,9 +72,7 @@ async def _fetch_coingecko() -> dict[str, float]:
     import aiohttp
 
     ids = ",".join(_COIN_IDS.values())
-    url = (
-        f"https://api.coingecko.com/api/v3/simple/price" f"?ids={ids}&vs_currencies=usd"
-    )
+    url = f"https://api.coingecko.com/api/v3/simple/price?ids={ids}&vs_currencies=usd"
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=8)) as session, session.get(url) as resp:
         resp.raise_for_status()
         data = await resp.json()
@@ -131,7 +129,7 @@ async def get_rates(force_refresh: bool = False) -> dict[str, float]:
         # Try CoinGecko
         try:
             rates = await _fetch_coingecko()
-            if len(rates) >= 2:  # at least BTC + ETH  # noqa: PLR2004
+            if len(rates) >= 2:  # at least BTC + ETH
                 _cached_rates = rates
                 _cache_ts = now
                 logger.debug("Crypto rates refreshed from CoinGecko: %s", rates)
@@ -148,15 +146,11 @@ async def get_rates(force_refresh: bool = False) -> dict[str, float]:
                 logger.warning("Crypto rates from Binance fallback: %s", rates)
                 return dict(rates)
         except Exception as exc:
-            logger.warning(
-                "Binance rate fetch failed: %s — using last known rates", exc
-            )
+            logger.warning("Binance rate fetch failed: %s — using last known rates", exc)
 
         # Use last known good cache (stale but real)
         if _cached_rates:
-            logger.warning(
-                "Using stale cached crypto rates (age=%.0fs)", now - _cache_ts
-            )
+            logger.warning("Using stale cached crypto rates (age=%.0fs)", now - _cache_ts)
             return dict(_cached_rates)
 
         # No live data and no cache — stablecoins are safe to return at peg,

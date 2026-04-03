@@ -26,9 +26,8 @@ import ast
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +48,7 @@ _FORBIDDEN_MODULES = frozenset(
 )
 
 
-class AuditStatus(str, Enum):
+class AuditStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     PASSED = "passed"
@@ -57,7 +56,7 @@ class AuditStatus(str, Enum):
     MANUAL_REVIEW = "manual_review"
 
 
-class SubmissionStatus(str, Enum):
+class SubmissionStatus(StrEnum):
     DRAFT = "draft"
     PENDING_REVIEW = "pending_review"
     UNDER_AUDIT = "under_audit"
@@ -103,9 +102,7 @@ class AuditReport:
                 for c in self.checks
             ],
             "started_at": self.started_at.isoformat(),
-            "completed_at": self.completed_at.isoformat()
-            if self.completed_at
-            else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "reviewer_id": self.reviewer_id,
             "reviewer_notes": self.reviewer_notes,
         }
@@ -176,9 +173,7 @@ class StrategyAuditor:
     def _check_syntax(self, code: str) -> AuditCheck:
         try:
             ast.parse(code)
-            return AuditCheck(
-                "syntax_check", True, "Strategy code is syntactically valid"
-            )
+            return AuditCheck("syntax_check", True, "Strategy code is syntactically valid")
         except SyntaxError as e:
             return AuditCheck("syntax_check", False, f"Syntax error: {e}", "error")
 
@@ -190,12 +185,8 @@ class StrategyAuditor:
 
         found = []
         for node in ast.walk(tree):
-            if isinstance(node, (ast.Import, ast.ImportFrom)):
-                names = (
-                    [a.name for a in node.names]
-                    if isinstance(node, ast.Import)
-                    else [node.module or ""]
-                )
+            if isinstance(node, ast.Import | ast.ImportFrom):
+                names = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module or ""]
                 for name in names:
                     root = name.split(".")[0]
                     if root in _FORBIDDEN_MODULES:
@@ -213,9 +204,7 @@ class StrategyAuditor:
     def _check_sharpe(self, bt: dict) -> AuditCheck:
         sharpe = float(bt.get("sharpe_ratio", 0))
         if sharpe >= self.MIN_SHARPE:
-            return AuditCheck(
-                "sharpe_gate", True, f"Sharpe {sharpe:.2f} >= {self.MIN_SHARPE}"
-            )
+            return AuditCheck("sharpe_gate", True, f"Sharpe {sharpe:.2f} >= {self.MIN_SHARPE}")
         return AuditCheck(
             "sharpe_gate",
             False,
@@ -241,9 +230,7 @@ class StrategyAuditor:
     def _check_trade_count(self, bt: dict) -> AuditCheck:
         trades = int(bt.get("total_trades", 0))
         if trades >= self.MIN_TRADES:
-            return AuditCheck(
-                "trade_count", True, f"{trades} trades >= minimum {self.MIN_TRADES}"
-            )
+            return AuditCheck("trade_count", True, f"{trades} trades >= minimum {self.MIN_TRADES}")
         return AuditCheck(
             "trade_count",
             False,
@@ -252,7 +239,7 @@ class StrategyAuditor:
         )
 
     def _check_description(self, desc: str) -> AuditCheck:
-        if len(desc.strip()) >= 100:  # noqa: PLR2004
+        if len(desc.strip()) >= 100:
             return AuditCheck("description", True, "Description meets minimum length")
         return AuditCheck(
             "description",
@@ -313,20 +300,12 @@ class SubmissionManager:
             logger.info("Strategy auto-approved: %s", sub.submission_id)
         else:
             sub.status = SubmissionStatus.REJECTED
-            sub.rejection_reason = "; ".join(
-                c.message
-                for c in report.checks
-                if not c.passed and c.severity == "error"
-            )
-            logger.warning(
-                "Strategy rejected: %s — %s", sub.submission_id, sub.rejection_reason
-            )
+            sub.rejection_reason = "; ".join(c.message for c in report.checks if not c.passed and c.severity == "error")
+            logger.warning("Strategy rejected: %s — %s", sub.submission_id, sub.rejection_reason)
 
         return sub
 
-    def manual_approve(
-        self, submission_id: str, reviewer_id: str, notes: str = ""
-    ) -> bool:
+    def manual_approve(self, submission_id: str, reviewer_id: str, notes: str = "") -> bool:
         sub = self._submissions.get(submission_id)
         if not sub:
             return False
@@ -358,11 +337,7 @@ class SubmissionManager:
         return [s for s in self._submissions.values() if s.creator_id == creator_id]
 
     def list_pending(self) -> list[StrategySubmission]:
-        return [
-            s
-            for s in self._submissions.values()
-            if s.status == SubmissionStatus.PENDING_REVIEW
-        ]
+        return [s for s in self._submissions.values() if s.status == SubmissionStatus.PENDING_REVIEW]
 
 
 # Module-level singleton

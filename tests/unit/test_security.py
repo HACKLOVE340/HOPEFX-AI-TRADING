@@ -14,19 +14,18 @@ Tests for all security modules including:
 """
 
 import os
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 from utils.security import (
+    AuditEventType,
+    CredentialRotationTracker,
     LogSanitizer,
     SecurityAuditor,
-    CredentialRotationTracker,
     SecurityConfigValidator,
-    AuditEventType,
+    check_security_setup,
     generate_secure_key,
     generate_secure_salt,
-    check_security_setup,
 )
 
 
@@ -175,9 +174,7 @@ class TestSecurityAuditor:
         )
 
         # Details should be sanitized
-        assert "supersecret" not in str(
-            event.details["password"]
-        ) or "[REDACTED]" in str(event.details["password"])
+        assert "supersecret" not in str(event.details["password"]) or "[REDACTED]" in str(event.details["password"])
 
     def test_get_events_filtered(self):
         """Test filtering audit events"""
@@ -196,9 +193,7 @@ class TestSecurityAuditor:
         """Test that disabled auditor returns None"""
         auditor = SecurityAuditor(enabled=False)
 
-        event = auditor.log_event(
-            event_type=AuditEventType.LOGIN_SUCCESS, resource="session", action="create"
-        )
+        event = auditor.log_event(event_type=AuditEventType.LOGIN_SUCCESS, resource="session", action="create")
 
         assert event is None
 
@@ -244,7 +239,7 @@ class TestCredentialRotationTracker:
 
         status = tracker.get_rotation_status()
 
-        assert len(status) == 2  # noqa: PLR2004
+        assert len(status) == 2
         assert status["key1"]["needs_rotation"] is False
         assert status["key2"]["needs_rotation"] is True
 
@@ -273,10 +268,7 @@ class TestSecurityConfigValidator:
 
             # Should fail without CONFIG_ENCRYPTION_KEY
             assert is_valid is False
-            assert any(
-                "CONFIG_ENCRYPTION_KEY" in issue["variable"]
-                for issue in validator.issues
-            )
+            assert any("CONFIG_ENCRYPTION_KEY" in issue["variable"] for issue in validator.issues)
 
     def test_validate_short_encryption_key(self):
         """Test validation fails with short encryption key"""
@@ -285,9 +277,7 @@ class TestSecurityConfigValidator:
             is_valid = validator.validate()
 
             assert is_valid is False
-            assert any(
-                "32 characters" in issue["message"] for issue in validator.issues
-            )
+            assert any("32 characters" in issue["message"] for issue in validator.issues)
 
     def test_validate_valid_config(self):
         """Test validation passes with valid config"""
@@ -343,20 +333,20 @@ class TestSecurityHelpers:
         """Test secure key generation"""
         key = generate_secure_key(32)
 
-        assert len(key) == 64  # 32 bytes = 64 hex characters  # noqa: PLR2004
+        assert len(key) == 64  # 32 bytes = 64 hex characters
         assert all(c in "0123456789abcdef" for c in key)
 
     def test_generate_secure_key_unique(self):
         """Test that generated keys are unique"""
         keys = [generate_secure_key(16) for _ in range(100)]
 
-        assert len(set(keys)) == 100  # All unique  # noqa: PLR2004
+        assert len(set(keys)) == 100  # All unique
 
     def test_generate_secure_salt(self):
         """Test secure salt generation"""
         salt = generate_secure_salt(16)
 
-        assert len(salt) == 32  # 16 bytes = 32 hex characters  # noqa: PLR2004
+        assert len(salt) == 32  # 16 bytes = 32 hex characters
 
     def test_check_security_setup(self):
         """Test comprehensive security check"""

@@ -45,8 +45,7 @@ import os
 import time
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import aiohttp
@@ -151,19 +150,13 @@ class OANDABroker:
         api_key: str | None = None,
         account_id: str | None = None,
         server: str | None = None,
-        **kwargs,
+        **_kwargs,
     ) -> None:
         # Accept both dict-style config and keyword-argument style.
         cfg = config or {}
-        self._account_id = _resolve_env(
-            account_id or cfg.get("login", os.getenv("OANDA_ACCOUNT_ID", ""))
-        )
-        self._token = _resolve_env(
-            api_key or cfg.get("password", os.getenv("OANDA_API_TOKEN", ""))
-        )
-        _server = _resolve_env(
-            server or cfg.get("server", os.getenv("OANDA_ENVIRONMENT", "practice"))
-        )
+        self._account_id = _resolve_env(account_id or cfg.get("login", os.getenv("OANDA_ACCOUNT_ID", "")))
+        self._token = _resolve_env(api_key or cfg.get("password", os.getenv("OANDA_API_TOKEN", "")))
+        _server = _resolve_env(server or cfg.get("server", os.getenv("OANDA_ENVIRONMENT", "practice")))
         self._base_url = _LIVE_BASE if _server == "live" else _PRACTICE_BASE
         self._timeout = float(cfg.get("timeout_seconds", _DEFAULT_TIMEOUT))
         self._session: aiohttp.ClientSession | None = None
@@ -183,12 +176,10 @@ class OANDABroker:
         # When a test injects self.api, skip the real HTTP handshake.
         if self.api is not None:
             self.connected = True
-            logger.debug(
-                "OANDABroker: using injected api object — skipping HTTP connect"
-            )
+            logger.debug("OANDABroker: using injected api object — skipping HTTP connect")
             return True
         if not self._account_id or not self._token:
-            logger.error("OANDABroker: missing OANDA_ACCOUNT_ID or OANDA_API_TOKEN")
+            logger.error("OANDABroker: missing OANDA_ACCOUNT_ID or OANDA_API_TOKEN")  # nosec B105 - logs absence, not value
             return False
         headers = {
             "Authorization": f"Bearer {self._token}",
@@ -198,18 +189,12 @@ class OANDABroker:
         timeout = aiohttp.ClientTimeout(total=self._timeout)
         self._session = aiohttp.ClientSession(headers=headers, timeout=timeout)
         try:
-            async with self._session.get(
-                f"{self._base_url}/v3/accounts/{self._account_id}"
-            ) as resp:
+            async with self._session.get(f"{self._base_url}/v3/accounts/{self._account_id}") as resp:
                 resp.raise_for_status()
             self.connected = True
-            logger.info(
-                "OANDABroker: connected to %s account=%s",
-                self._base_url,
-                self._account_id,
-            )
+            logger.info("OANDABroker: connected to %s", self._base_url)
             return True
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("OANDABroker: connect failed: %s", exc)
             await self._session.close()
             self._session = None
@@ -229,9 +214,7 @@ class OANDABroker:
         if not self.connected or not self._session:
             return None
         try:
-            async with self._session.get(
-                f"{self._base_url}/v3/accounts/{self._account_id}/summary"
-            ) as resp:
+            async with self._session.get(f"{self._base_url}/v3/accounts/{self._account_id}/summary") as resp:
                 resp.raise_for_status()
                 data = await resp.json()
             a = data.get("account", {})
@@ -244,12 +227,10 @@ class OANDABroker:
                 unrealized_pnl=float(a.get("unrealizedPL", 0)),
                 margin_used=float(a.get("marginUsed", 0)),
                 margin_available=float(a.get("marginAvailable", nav)),
-                positions_count=int(
-                    a.get("openPositionCount", a.get("openTradeCount", 0))
-                ),
+                positions_count=int(a.get("openPositionCount", a.get("openTradeCount", 0))),
                 timestamp=datetime.now(UTC),
             )
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("OANDABroker get_account_info: %s", exc)
             return None
 
@@ -277,7 +258,7 @@ class OANDABroker:
                     )
             except RuntimeError:
                 raise
-            except Exception as exc:
+            except Exception as exc:  # pylint: disable=broad-exception-caught
                 raise RuntimeError(f"Risk check error: {exc}") from exc
 
         if not self.connected or not self._session:
@@ -363,16 +344,13 @@ class OANDABroker:
 
             except TimeoutError:
                 last_error = "timeout"
-                logger.warning(
-                    "OANDABroker: order timeout (attempt %d/%d)", attempt, _MAX_RETRIES
-                )
-            except Exception as exc:
-                last_error = str(exc)
-                logger.error(
-                    "OANDABroker: order error (attempt %d/%d): %s",
+                logger.warning("OANDABroker: order timeout (attempt %d/%d)", attempt, _MAX_RETRIES)
+            except Exception:  # pylint: disable=broad-exception-caught
+                last_error = "order_error"
+                logger.exception(
+                    "OANDABroker: order error (attempt %d/%d)",
                     attempt,
                     _MAX_RETRIES,
-                    exc,
                 )
 
             if attempt < _MAX_RETRIES:
@@ -390,9 +368,7 @@ class OANDABroker:
         # Market order fill
         fill = data.get("orderFillTransaction", {})
         if fill:
-            price = float(
-                fill.get("price", fill.get("tradeOpened", {}).get("price", 0))
-            )
+            price = float(fill.get("price", fill.get("tradeOpened", {}).get("price", 0)))
             units = abs(int(fill.get("units", 0)))
             direction = "long" if int(fill.get("units", 0)) > 0 else "short"
             return {
@@ -432,7 +408,7 @@ class OANDABroker:
                 f"{self._base_url}/v3/accounts/{self._account_id}/orders/{order_id}/cancel"
             ) as resp:
                 return resp.status in (200, 201)
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("OANDABroker cancel_order %s: %s", order_id, exc)
             return False
 
@@ -443,9 +419,7 @@ class OANDABroker:
         if not self.connected or not self._session:
             return []
         try:
-            async with self._session.get(
-                f"{self._base_url}/v3/accounts/{self._account_id}/openPositions"
-            ) as resp:
+            async with self._session.get(f"{self._base_url}/v3/accounts/{self._account_id}/openPositions") as resp:
                 resp.raise_for_status()
                 data = await resp.json()
             positions = []
@@ -462,7 +436,7 @@ class OANDABroker:
                         }
                     )
             return positions
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("OANDABroker get_open_positions: %s", exc)
             return []
 
@@ -486,9 +460,9 @@ class OANDABroker:
                 if resp.status in (200, 201):
                     return {"status": "closed", "symbol": symbol, "raw": data}
                 return {"status": "rejected", "reason": str(data), "symbol": symbol}
-        except Exception as exc:
-            logger.error("OANDABroker close_position %s: %s", symbol, exc)
-            return {"status": "rejected", "reason": str(exc)}
+        except Exception:  # pylint: disable=broad-exception-caught
+            logger.exception("OANDABroker close_position %s: %s")
+            return {"status": "rejected", "reason": "Close failed — check server logs"}
 
     # ── Ping ──────────────────────────────────────────────────────────────────
 
@@ -498,12 +472,10 @@ class OANDABroker:
             return 9999.0
         t0 = time.monotonic()
         try:
-            async with self._session.get(
-                f"{self._base_url}/v3/accounts/{self._account_id}/summary"
-            ) as resp:
+            async with self._session.get(f"{self._base_url}/v3/accounts/{self._account_id}/summary") as resp:
                 await resp.read()
             return (time.monotonic() - t0) * 1000
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             return 9999.0
 
     # ── FORBIDDEN: market data methods ───────────────────────────────────────
@@ -552,12 +524,22 @@ OandaAPI = OANDABroker
 # Wraps the OANDA v20 REST API with requests.Session (no async).
 
 from brokers.base import (
-    OrderType as _OrderType,
-    OrderSide as _OrderSide,
-    OrderStatus as _OrderStatus,
-    Order as _Order,
-    Position as _Position,
     AccountInfo as _AccountInfo,
+)
+from brokers.base import (
+    Order as _Order,
+)
+from brokers.base import (
+    OrderSide as _OrderSide,
+)
+from brokers.base import (
+    OrderStatus as _OrderStatus,
+)
+from brokers.base import (
+    OrderType as _OrderType,
+)
+from brokers.base import (
+    Position as _Position,
 )
 
 
@@ -615,7 +597,7 @@ class OANDAConnector:
                 self._account_id,
             )
             return True
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("OANDAConnector.connect failed: %s", exc)
             self.connected = False
             return False
@@ -628,7 +610,7 @@ class OANDAConnector:
             self.connected = False
             self.session = None
             return True
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("OANDAConnector.disconnect failed: %s", exc)
             return False
 
@@ -641,15 +623,13 @@ class OANDAConnector:
         quantity: float,
         order_type: _OrderType = _OrderType.MARKET,
         price: float | None = None,
-        stop_price: float | None = None,
+        stop_price: float | None = None,  # pylint: disable=unused-argument
     ) -> _Order | None:
         """Place a market or limit order. Returns None when not connected."""
         if not self.connected or not self.session:
             return None
         units = str(int(quantity)) if side == _OrderSide.BUY else str(-int(quantity))
-        body: dict[str, Any] = {
-            "order": {"units": units, "instrument": symbol, "timeInForce": "FOK"}
-        }
+        body: dict[str, Any] = {"order": {"units": units, "instrument": symbol, "timeInForce": "FOK"}}
         if order_type == _OrderType.MARKET:
             body["order"]["type"] = "MARKET"
         else:
@@ -687,7 +667,7 @@ class OANDAConnector:
                     timestamp=datetime.now(UTC),
                 )
             return None
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("OANDAConnector.place_order failed: %s", exc)
             return None
 
@@ -700,7 +680,7 @@ class OANDAConnector:
             resp = self.session.put(url, timeout=self._timeout)
             resp.raise_for_status()
             return True
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("OANDAConnector.cancel_order failed: %s", exc)
             return False
 
@@ -746,7 +726,7 @@ class OANDAConnector:
                     )
                 )
             return positions
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("OANDAConnector.get_positions failed: %s", exc)
             return []
 
@@ -763,7 +743,7 @@ class OANDAConnector:
             )
             resp.raise_for_status()
             return True
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("OANDAConnector.close_position failed: %s", exc)
             return False
 
@@ -786,7 +766,7 @@ class OANDAConnector:
                 positions_count=int(acct.get("openPositionCount", 0)),
                 timestamp=datetime.now(UTC),
             )
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("OANDAConnector.get_account_info failed: %s", exc)
             return None
 
@@ -820,7 +800,7 @@ class OANDAConnector:
                     }
                 )
             return candles
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("OANDAConnector.get_market_data failed: %s", exc)
             return None
 

@@ -37,8 +37,7 @@ import os
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from enum import Enum, auto
 from pathlib import Path
 from typing import Any
@@ -116,12 +115,18 @@ class MT5FillResult:
 
 
 def _retry(max_attempts: int = 3, base_delay: float = 0.5):
-    """Retry with exponential back-off; re-raises last exception on exhaustion."""
+    """Retry with exponential back-off; re-raises last exception on exhaustion.
+
+    Uses threading.Event.wait() instead of time.sleep() so the GIL is
+    released during the back-off interval.  This matters when the decorated
+    sync method is called from an async run_in_executor context.
+    """
 
     def decorator(fn):
         def wrapper(*args, **kwargs):
             delay = base_delay
             last_exc: Exception | None = None
+            _wait = threading.Event()
             for attempt in range(1, max_attempts + 1):
                 try:
                     return fn(*args, **kwargs)
@@ -135,7 +140,7 @@ def _retry(max_attempts: int = 3, base_delay: float = 0.5):
                         exc,
                     )
                     if attempt < max_attempts:
-                        time.sleep(delay)
+                        _wait.wait(timeout=delay)
                         delay *= 2
             raise last_exc  # type: ignore[misc]
 
@@ -214,14 +219,19 @@ class EX5SignalExporter:
 
     @staticmethod
     def _read_json_locked(path: Path) -> dict:
-        """Read JSON from path safely (handles partial writes from EA)."""
+        """Read JSON from path safely (handles partial writes from EA).
+
+        Uses threading.Event-based sleep so this sync helper does not block
+        an event loop when called from a thread pool executor.
+        """
+        _wait = threading.Event()
         for attempt in range(3):
             try:
                 text = path.read_text(encoding="utf-8")
                 return json.loads(text)
             except json.JSONDecodeError:
-                if attempt < 2:  # noqa: PLR2004
-                    time.sleep(0.1)
+                if attempt < 2:
+                    _wait.wait(timeout=0.1)
         return {}
 
     def export(self, order: MT5Order) -> Path:
@@ -317,9 +327,7 @@ class EX5SignalExporter:
                     return MT5FillResult(
                         ticket=int(data.get("ticket", 0)),
                         status=FillStatus.FILLED,
-                        filled_volume=float(
-                            data.get("fill_volume", data.get("volume", 0))
-                        ),
+                        filled_volume=float(data.get("fill_volume", data.get("volume", 0))),
                         fill_price=float(data.get("fill_price", 0)),
                         commission=float(data.get("commission", 0)),
                         swap=float(data.get("swap", 0)),
@@ -329,17 +337,16 @@ class EX5SignalExporter:
                     )
                 if status == "REJECTED":
                     raise RuntimeError(
-                        f"MT5 EA rejected signal {signal_path.name}: "
-                        f"{data.get('reject_reason', 'unknown')}",
+                        f"MT5 EA rejected signal {signal_path.name}: {data.get('reject_reason', 'unknown')}",
                     )
             except RuntimeError:
                 raise
             except (OSError, ValueError, KeyError) as _exc:
                 logger.debug("Suppressed exception: %s", _exc)
-            time.sleep(0.5)
-        raise TimeoutError(
-            f"Signal {signal_path.name} not filled within {timeout_sec}s"
-        )
+            # Non-blocking wait: uses Event.wait() so a thread-pool executor
+            # does not starve the event loop during the poll interval.
+            threading.Event().wait(timeout=0.5)
+        raise TimeoutError(f"Signal {signal_path.name} not filled within {timeout_sec}s")
 
     def cleanup_old_signals(self, max_age_hours: int = 24) -> int:
         """Remove signal files older than max_age_hours. Returns count removed."""
@@ -479,8 +486,7 @@ class MT5Bridge:
 
         if not order.stop_loss:
             raise ValueError(
-                f"Order for {order.symbol!r} rejected: stop_loss must be set. "
-                "Never trade without a stop-loss.",
+                f"Order for {order.symbol!r} rejected: stop_loss must be set. Never trade without a stop-loss.",
             )
 
         self._enforce(order.symbol)
@@ -496,7 +502,7 @@ class MT5Bridge:
         if sym_info is None:
             raise ValueError(f"Symbol {order.symbol!r} not found in MT5")
         if not sym_info.visible and not mt5.symbol_select(order.symbol, True):
-                raise RuntimeError(f"Cannot select symbol {order.symbol!r}")
+            raise RuntimeError(f"Cannot select symbol {order.symbol!r}")
 
         tick = mt5.symbol_info_tick(order.symbol)
         if tick is None:
@@ -505,31 +511,19 @@ class MT5Bridge:
         if order.order_type == OrderType.MARKET:
             price = tick.ask if order.side == OrderSide.BUY else tick.bid
             action = mt5.TRADE_ACTION_DEAL
-            mt5_type = (
-                mt5.ORDER_TYPE_BUY
-                if order.side == OrderSide.BUY
-                else mt5.ORDER_TYPE_SELL
-            )
+            mt5_type = mt5.ORDER_TYPE_BUY if order.side == OrderSide.BUY else mt5.ORDER_TYPE_SELL
         elif order.order_type == OrderType.LIMIT:
             if order.price is None:
                 raise ValueError("LIMIT order requires a price")
             price = order.price
             action = mt5.TRADE_ACTION_PENDING
-            mt5_type = (
-                mt5.ORDER_TYPE_BUY_LIMIT
-                if order.side == OrderSide.BUY
-                else mt5.ORDER_TYPE_SELL_LIMIT
-            )
+            mt5_type = mt5.ORDER_TYPE_BUY_LIMIT if order.side == OrderSide.BUY else mt5.ORDER_TYPE_SELL_LIMIT
         else:
             if order.price is None:
                 raise ValueError("STOP order requires a price")
             price = order.price
             action = mt5.TRADE_ACTION_PENDING
-            mt5_type = (
-                mt5.ORDER_TYPE_BUY_STOP
-                if order.side == OrderSide.BUY
-                else mt5.ORDER_TYPE_SELL_STOP
-            )
+            mt5_type = mt5.ORDER_TYPE_BUY_STOP if order.side == OrderSide.BUY else mt5.ORDER_TYPE_SELL_STOP
 
         request: dict[str, Any] = {
             "action": action,
@@ -551,9 +545,7 @@ class MT5Bridge:
         if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
             retcode = result.retcode if result else -1
             comment = result.comment if result else "no result"
-            raise RuntimeError(
-                f"MT5 order rejected retcode={retcode} comment={comment!r}"
-            )
+            raise RuntimeError(f"MT5 order rejected retcode={retcode} comment={comment!r}")
 
         fill = MT5FillResult(
             ticket=result.order,
@@ -616,11 +608,11 @@ class MT5Bridge:
                             comment=deal.comment,
                             raw=deal,
                         )
-            time.sleep(poll_interval)
+            # Non-blocking wait: Event.wait() yields the GIL so the event loop
+            # is not starved when monitor_fill() runs in a thread pool executor.
+            threading.Event().wait(timeout=poll_interval)
 
-        raise TimeoutError(
-            f"monitor_fill: ticket {ticket} not filled within {timeout_sec}s"
-        )
+        raise TimeoutError(f"monitor_fill: ticket {ticket} not filled within {timeout_sec}s")
 
     # ── position management ───────────────────────────────────────────────────
 
@@ -655,11 +647,7 @@ class MT5Bridge:
 
         results: list[MT5FillResult] = []
         for pos in positions:
-            close_type = (
-                mt5.ORDER_TYPE_SELL
-                if pos.type == mt5.POSITION_TYPE_BUY
-                else mt5.ORDER_TYPE_BUY
-            )
+            close_type = mt5.ORDER_TYPE_SELL if pos.type == mt5.POSITION_TYPE_BUY else mt5.ORDER_TYPE_BUY
             tick = mt5.symbol_info_tick(symbol)
             if tick is None:
                 logger.error("mt5_bridge.close_position: no tick for %s", symbol)
@@ -804,9 +792,7 @@ class MT5Bridge:
         result = mt5.order_send(request)
         if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
             retcode = result.retcode if result else -1
-            raise RuntimeError(
-                f"mt5_bridge.modify_order failed ticket={ticket} retcode={retcode}"
-            )
+            raise RuntimeError(f"mt5_bridge.modify_order failed ticket={ticket} retcode={retcode}")
         logger.info(
             "mt5_bridge.modify_order: ticket=%d SL=%s TP=%s retcode=%d",
             ticket,
@@ -830,9 +816,7 @@ class MT5Bridge:
 
         if not _MT5_AVAILABLE:
             path = self._exporter.export_cancel(ticket=ticket, symbol=symbol)
-            logger.info(
-                "mt5_bridge.cancel_order (signal): ticket=%d path=%s", ticket, path
-            )
+            logger.info("mt5_bridge.cancel_order (signal): ticket=%d path=%s", ticket, path)
             return True
 
         request = {
@@ -842,12 +826,8 @@ class MT5Bridge:
         result = mt5.order_send(request)
         if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
             retcode = result.retcode if result else -1
-            raise RuntimeError(
-                f"mt5_bridge.cancel_order failed ticket={ticket} retcode={retcode}"
-            )
-        logger.info(
-            "mt5_bridge.cancel_order: ticket=%d retcode=%d", ticket, result.retcode
-        )
+            raise RuntimeError(f"mt5_bridge.cancel_order failed ticket={ticket} retcode={retcode}")
+        logger.info("mt5_bridge.cancel_order: ticket=%d retcode=%d", ticket, result.retcode)
         return True
 
     # ── async wrappers ────────────────────────────────────────────────────────
@@ -872,9 +852,7 @@ class MT5Bridge:
         take_profit: float | None = None,
     ) -> bool:
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
-            None, self.modify_order, ticket, symbol, stop_loss, take_profit
-        )
+        return await loop.run_in_executor(None, self.modify_order, ticket, symbol, stop_loss, take_profit)
 
     async def async_cancel_order(self, ticket: int, symbol: str = "") -> bool:
         loop = asyncio.get_event_loop()

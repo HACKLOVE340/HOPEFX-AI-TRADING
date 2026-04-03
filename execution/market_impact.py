@@ -51,7 +51,6 @@ import os
 from dataclasses import dataclass
 from typing import Literal
 
-
 logger = logging.getLogger(__name__)
 
 # ── Model parameters (env-overridable) ────────────────────────────────────────
@@ -92,12 +91,7 @@ class ImpactEstimate:
 
     @property
     def total_impact_bps(self) -> float:
-        return (
-            self.temporary_impact_bps
-            + self.permanent_impact_bps
-            + self.spread_cost_bps
-            + self.queue_cost_bps
-        )
+        return self.temporary_impact_bps + self.permanent_impact_bps + self.spread_cost_bps + self.queue_cost_bps
 
     @property
     def total_cost_usd(self) -> float:
@@ -193,9 +187,7 @@ class AlmgrenChrissModel:
 
             # Temporary impact: η × σ × sqrt(participation)
             # Converted to bps: × 10,000
-            temp_bps = (
-                self.eta * volatility_daily * math.sqrt(participation_rate) * 10_000
-            )
+            temp_bps = self.eta * volatility_daily * math.sqrt(participation_rate) * 10_000
 
             # Permanent impact: γ × σ × participation
             perm_bps = self.gamma * volatility_daily * participation_rate * 10_000

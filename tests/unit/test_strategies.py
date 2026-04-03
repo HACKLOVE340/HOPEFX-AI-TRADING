@@ -7,8 +7,8 @@
 Unit tests for trading strategies.
 """
 
-import pytest
 import pandas as pd
+import pytest
 
 from strategies.ma_crossover import MovingAverageCrossover
 
@@ -55,9 +55,9 @@ class TestBaseStrategy:
         strategy.update_performance(profit_loss=100, signal_type="BUY")
 
         assert strategy.performance["total_signals"] == 1
-        assert strategy.performance["total_pnl"] == 100  # noqa: PLR2004
+        assert strategy.performance["total_pnl"] == 100
         assert strategy.performance["winning_trades"] == 1
-        assert strategy.performance["win_rate"] == 100.0  # noqa: PLR2004
+        assert strategy.performance["win_rate"] == 100.0
 
     def test_performance_win_rate_calculation(self, test_config, mock_strategy):
         """Test win rate calculation."""
@@ -70,11 +70,11 @@ class TestBaseStrategy:
         strategy.update_performance(75, "BUY")
         strategy.update_performance(-20, "SELL")
 
-        assert strategy.performance["total_signals"] == 5  # noqa: PLR2004
-        assert strategy.performance["winning_trades"] == 3  # noqa: PLR2004
-        assert strategy.performance["losing_trades"] == 2  # noqa: PLR2004
-        assert strategy.performance["win_rate"] == 60.0  # noqa: PLR2004
-        assert strategy.performance["total_pnl"] == 175  # noqa: PLR2004
+        assert strategy.performance["total_signals"] == 5
+        assert strategy.performance["winning_trades"] == 3
+        assert strategy.performance["losing_trades"] == 2
+        assert strategy.performance["win_rate"] == 60.0
+        assert strategy.performance["total_pnl"] == 175
 
 
 @pytest.mark.unit
@@ -93,8 +93,8 @@ class TestMovingAverageCrossover:
         )
         strategy = MovingAverageCrossover(config=config)
 
-        assert strategy.fast_period == 10  # noqa: PLR2004
-        assert strategy.slow_period == 20  # noqa: PLR2004
+        assert strategy.fast_period == 10
+        assert strategy.slow_period == 20
         assert strategy.config.symbol == "EUR_USD"
 
     def test_ma_crossover_bullish_signal(self, test_config, sample_market_data):
@@ -237,9 +237,7 @@ class TestStrategyManager:
 
         assert strategy.status == StrategyStatus.STOPPED
 
-    def test_get_strategy_performance(
-        self, strategy_manager, test_config, mock_strategy
-    ):
+    def test_get_strategy_performance(self, strategy_manager, test_config, mock_strategy):
         """Test getting strategy performance."""
         strategy = mock_strategy()
         strategy.update_performance(100, "BUY")
@@ -248,7 +246,7 @@ class TestStrategyManager:
         perf = strategy_manager.get_strategy_performance(strategy.config.name)
 
         assert perf is not None
-        assert perf["total_pnl"] == 100  # noqa: PLR2004
+        assert perf["total_pnl"] == 100
 
     def test_start_all_strategies(self, strategy_manager, test_config, mock_strategy):
         """Test starting all strategies."""

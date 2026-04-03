@@ -45,13 +45,12 @@ async def call_llm(prompt: str) -> str:
     """
     if LLM_BACKEND == "anthropic" and ANTHROPIC_API_KEY:
         return await _call_anthropic(prompt)
-    elif LLM_BACKEND == "openai" and OPENAI_API_KEY:
+    if LLM_BACKEND == "openai" and OPENAI_API_KEY:
         return await _call_openai(prompt)
-    else:
-        raise RuntimeError(
-            f"LLM backend '{LLM_BACKEND}' is not configured. "
-            "Set ANTHROPIC_API_KEY or OPENAI_API_KEY in your environment."
-        )
+    raise RuntimeError(
+        f"LLM backend '{LLM_BACKEND}' is not configured. "
+        "Set ANTHROPIC_API_KEY or OPENAI_API_KEY in your environment."
+    )
 
 
 # ── Anthropic backend ─────────────────────────────────────────────────────────
@@ -99,10 +98,7 @@ async def _call_openai(prompt: str) -> str:
         "messages": [
             {
                 "role": "system",
-                "content": (
-                    "You are a cybersecurity analyst for a trading platform. "
-                    "Be concise and technical."
-                ),
+                "content": ("You are a cybersecurity analyst for a trading platform. Be concise and technical."),
             },
             {"role": "user", "content": prompt},
         ],

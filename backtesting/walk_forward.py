@@ -10,12 +10,13 @@ Prevents overfitting with rolling train/test splits
 """
 
 import logging
-import pandas as pd
-import numpy as np
-from typing import Any
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
+
+import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -70,10 +71,7 @@ class WalkForwardEngine:
         n_samples = len(data)
         window_start = 0
 
-        while (
-            window_start + self.train_size + self.purge_size + self.test_size
-            <= n_samples
-        ):
+        while window_start + self.train_size + self.purge_size + self.test_size <= n_samples:
             # Define windows with purge/embargo
             train_start = window_start
             train_end = train_start + self.train_size
@@ -82,9 +80,8 @@ class WalkForwardEngine:
             test_start = purge_end
             test_end = test_start + self.test_size
 
-            # Extract data
+            # Extract data (purge_start:purge_end is the embargo gap between train and test)
             train_data = data.iloc[train_start:train_end]
-            data.iloc[purge_start:purge_end]  # Not used (embargo)
             test_data = data.iloc[test_start:test_end]
 
             logger.info(
@@ -98,9 +95,7 @@ class WalkForwardEngine:
             )
 
             # Optimize on training data
-            best_params, train_perf = self._optimize_parameters(
-                train_data, strategy_factory, parameter_grid
-            )
+            best_params, train_perf = self._optimize_parameters(train_data, strategy_factory, parameter_grid)
 
             # Test on out-of-sample data
             test_strategy = strategy_factory(**best_params)
@@ -178,11 +173,7 @@ class WalkForwardEngine:
                     position -= 1
 
             # Mark to market
-            pnl = (
-                position
-                * (row["close"] - data.iloc[0]["close"])
-                / data.iloc[0]["close"]
-            )
+            pnl = position * (row["close"] - data.iloc[0]["close"]) / data.iloc[0]["close"]
             equity.append(1.0 + pnl)
 
         # Calculate metrics
@@ -190,14 +181,10 @@ class WalkForwardEngine:
 
         return {
             "total_return": equity[-1] - 1,
-            "sharpe_ratio": returns.mean() / returns.std() * np.sqrt(252)
-            if len(returns) > 1
-            else 0,
+            "sharpe_ratio": returns.mean() / returns.std() * np.sqrt(252) if len(returns) > 1 else 0,
             "max_drawdown": self._calculate_max_drawdown(equity),
             "num_trades": len(trades),
-            "win_rate": len([t for t in trades if t.get("pnl", 0) > 0]) / len(trades)
-            if trades
-            else 0,
+            "win_rate": len([t for t in trades if t.get("pnl", 0) > 0]) / len(trades) if trades else 0,
         }
 
     def _calculate_max_drawdown(self, equity: list[float]) -> float:
@@ -212,9 +199,7 @@ class WalkForwardEngine:
 
         return max_dd
 
-    def _detect_overfit(
-        self, train_perf: dict[str, Any], test_perf: dict[str, Any]
-    ) -> bool:
+    def _detect_overfit(self, train_perf: dict[str, Any], test_perf: dict[str, Any]) -> bool:
         """Detect if strategy is overfit."""
         # Sharpe ratio degradation
         train_sharpe = train_perf.get("sharpe_ratio", 0)
@@ -243,7 +228,7 @@ class WalkForwardEngine:
             "avg_test_return": np.mean(test_returns),
             "avg_test_sharpe": np.mean(test_sharpes),
             "consistency": 1 - np.std(test_returns) / (np.mean(test_returns) + 1e-10),
-            "is_robust": np.mean(test_sharpes) > 0.5  # noqa: PLR2004
+            "is_robust": np.mean(test_sharpes) > 0.5
             and sum(1 for r in self.results if r.is_overfit) < len(self.results) * 0.3,
         }
 

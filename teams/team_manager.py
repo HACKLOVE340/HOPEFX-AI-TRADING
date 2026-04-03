@@ -10,12 +10,11 @@ Multi-User Team Management
 - Shared strategies
 """
 
-from dataclasses import dataclass
-from enum import Enum
-from datetime import datetime, timezone
-UTC = timezone.utc
 import logging
 import uuid
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from enum import Enum
 
 logger = logging.getLogger(__name__)
 
@@ -51,20 +50,20 @@ class Team:
         self.created_at = datetime.now(UTC)
         self.strategies = []
 
-    def add_member(
-        self, user_id: str, username: str, email: str, role: UserRole = UserRole.TRADER
-    ) -> TeamMember:
+    def add_member(self, user_id: str, username: str, email: str, role: UserRole = UserRole.TRADER) -> TeamMember:
         """Add team member"""
         member = TeamMember(user_id, username, email, role, datetime.now(UTC))
         self.members[user_id] = member
-        logger.info(f"Member added: {username} ({role.value})")
+        logger.info("Member added: %s (%s)", username, role.value)
+
         return member
 
     def remove_member(self, user_id: str) -> bool:
         """Remove team member"""
         if user_id in self.members:
             del self.members[user_id]
-            logger.info(f"Member removed: {user_id}")
+            logger.info("Member removed: %s", user_id)
+
             return True
         return False
 
@@ -72,7 +71,8 @@ class Team:
         """Change member role"""
         if user_id in self.members:
             self.members[user_id].role = new_role
-            logger.info(f"Role changed for {user_id}: {new_role.value}")
+            logger.info("Role changed for %s: %s", user_id, new_role.value)
+
             return True
         return False
 
@@ -88,7 +88,8 @@ class Team:
         """Share strategy with team members"""
         for user_id in with_users:
             if user_id in self.members:
-                logger.info(f"Strategy {strategy_id} shared with {user_id}")
+                logger.info("Strategy %s shared with %s", strategy_id, user_id)
+
 
 
 class TeamManager:
@@ -102,7 +103,8 @@ class TeamManager:
         team_id = str(uuid.uuid4())
         team = Team(team_id, name, creator_id)
         self.teams[team_id] = team
-        logger.info(f"Team created: {name}")
+        logger.info("Team created: %s", name)
+
         return team
 
     def get_team(self, team_id: str) -> Team:

@@ -15,9 +15,9 @@ Author: HOPEFX Development Team
 """
 
 import logging
+import re
 from dataclasses import dataclass
 from enum import Enum
-import re
 
 logger = logging.getLogger(__name__)
 
@@ -91,9 +91,7 @@ class SentimentAnalyzer:
 
     def __init__(self):
         if not TEXTBLOB_AVAILABLE:
-            raise ImportError(
-                "TextBlob is required. Install with: pip install textblob"
-            )
+            raise ImportError("TextBlob is required. Install with: pip install textblob")
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def analyze(self, text: str) -> SentimentScore:
@@ -128,7 +126,8 @@ class SentimentAnalyzer:
             )
 
         except Exception as e:
-            self.logger.error(f"Error analyzing sentiment: {e}")
+            self.logger.error("Error analyzing sentiment: %s", e)
+
             # Return neutral sentiment on error
             return SentimentScore(
                 polarity=0.0,
@@ -139,16 +138,15 @@ class SentimentAnalyzer:
 
     def _get_label(self, polarity: float) -> SentimentLabel:
         """Convert polarity score to sentiment label"""
-        if polarity >= 0.5:  # noqa: PLR2004
+        if polarity >= 0.5:
             return SentimentLabel.VERY_POSITIVE
-        elif polarity >= 0.1:  # noqa: PLR2004
+        if polarity >= 0.1:
             return SentimentLabel.POSITIVE
-        elif polarity <= -0.5:  # noqa: PLR2004
+        if polarity <= -0.5:
             return SentimentLabel.VERY_NEGATIVE
-        elif polarity <= -0.1:  # noqa: PLR2004
+        if polarity <= -0.1:
             return SentimentLabel.NEGATIVE
-        else:
-            return SentimentLabel.NEUTRAL
+        return SentimentLabel.NEUTRAL
 
     def analyze_multiple(self, texts: list[str]) -> list[SentimentScore]:
         """Analyze multiple texts"""
@@ -260,12 +258,12 @@ class FinancialSentimentAnalyzer:
                     label=self._get_label(polarity),
                     compound_score=polarity,
                 )
-            else:
-                # Fallback to keyword-based analysis
-                return self._keyword_analysis(combined_text)
+            # Fallback to keyword-based analysis
+            return self._keyword_analysis(combined_text)
 
         except Exception as e:
-            self.logger.error(f"Error in financial sentiment analysis: {e}")
+            self.logger.error("Error in financial sentiment analysis: %s", e)
+
             return SentimentScore(
                 polarity=0.0,
                 subjectivity=0.5,
@@ -302,16 +300,15 @@ class FinancialSentimentAnalyzer:
 
     def _get_label(self, polarity: float) -> SentimentLabel:
         """Convert polarity score to sentiment label"""
-        if polarity >= 0.5:  # noqa: PLR2004
+        if polarity >= 0.5:
             return SentimentLabel.VERY_POSITIVE
-        elif polarity >= 0.05:  # noqa: PLR2004
+        if polarity >= 0.05:
             return SentimentLabel.POSITIVE
-        elif polarity <= -0.5:  # noqa: PLR2004
+        if polarity <= -0.5:
             return SentimentLabel.VERY_NEGATIVE
-        elif polarity <= -0.05:  # noqa: PLR2004
+        if polarity <= -0.05:
             return SentimentLabel.NEGATIVE
-        else:
-            return SentimentLabel.NEUTRAL
+        return SentimentLabel.NEUTRAL
 
     def extract_entities(self, text: str) -> dict[str, list[str]]:
         """
@@ -337,9 +334,7 @@ class FinancialSentimentAnalyzer:
 
         return entities
 
-    def analyze_with_entities(
-        self, text: str, title: str = ""
-    ) -> tuple[SentimentScore, dict]:
+    def analyze_with_entities(self, text: str, title: str = "") -> tuple[SentimentScore, dict]:
         """Analyze sentiment and extract entities"""
         sentiment = self.analyze(text, title)
         entities = self.extract_entities(f"{title} {text}")

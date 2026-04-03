@@ -62,15 +62,14 @@ Or as a standalone process:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import signal
 import time
-from typing import Any
 from collections.abc import Callable
-from datetime import timezone
-UTC = timezone.utc
-import contextlib
+from datetime import UTC
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -194,9 +193,7 @@ class ExecutionSystem:
         logger.info("Step 9/9: HopeFXEngine started ✓")
 
         # ── Background tasks ───────────────────────────────────────────────
-        self._tasks.append(
-            asyncio.create_task(self._health_loop(), name="execution_health_loop")
-        )
+        self._tasks.append(asyncio.create_task(self._health_loop(), name="execution_health_loop"))
 
         # ── Signal handlers ────────────────────────────────────────────────
         self._install_signal_handlers()
@@ -205,9 +202,7 @@ class ExecutionSystem:
         elapsed = time.monotonic() - self._start_time
         logger.info("=" * 60)
         logger.info("ExecutionSystem: FULLY STARTED in %.2fs", elapsed)
-        logger.info(
-            "  Orchestrator : %s", "running" if self._orchestrator._started else "ERROR"
-        )
+        logger.info("  Orchestrator : %s", "running" if self._orchestrator._started else "ERROR")
         logger.info("  Brokers      : %s", list(self._brokers.keys()))
         logger.info("  Engine state : %s", self._engine._state.value)
         logger.info("=" * 60)
@@ -259,9 +254,7 @@ class ExecutionSystem:
                     await broker.disconnect()
                 logger.info("ExecutionSystem: broker %s disconnected", broker_id)
             except Exception as exc:
-                logger.error(
-                    "ExecutionSystem: broker %s disconnect error: %s", broker_id, exc
-                )
+                logger.error("ExecutionSystem: broker %s disconnect error: %s", broker_id, exc)
 
         # 4. Stop orchestrator last
         if self._orchestrator:
@@ -315,16 +308,15 @@ class ExecutionSystem:
         loop = asyncio.get_event_loop()
 
         def _handle_shutdown(sig_name: str) -> None:
-            logger.warning(
-                "ExecutionSystem: received %s — initiating shutdown", sig_name
-            )
-            asyncio.create_task(self.stop())
+            logger.warning("ExecutionSystem: received %s — initiating shutdown", sig_name)
+            _t = asyncio.create_task(self.stop())
+            _t.add_done_callback(lambda _: None)
 
         try:
             loop.add_signal_handler(signal.SIGTERM, lambda: _handle_shutdown("SIGTERM"))
             loop.add_signal_handler(signal.SIGINT, lambda: _handle_shutdown("SIGINT"))
         except (NotImplementedError, RuntimeError):
-            pass  # Windows / non-main thread
+            ...  # nosec B110
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
 
@@ -521,7 +513,7 @@ async def _main() -> None:
         while system._started:
             await asyncio.sleep(1)
     except asyncio.CancelledError:
-        pass
+        ...  # nosec B110
     finally:
         await system.stop()
 

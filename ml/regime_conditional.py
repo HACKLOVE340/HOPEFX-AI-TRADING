@@ -40,7 +40,7 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import joblib
 import numpy as np
@@ -159,16 +159,16 @@ def detect_regime_labels(
     if has_hurst and has_adx:
         hurst = X[hurst_col]
         adx = X[adx_col]
-        labels[(hurst < 0.45) & (adx < 0.20)] = REGIME_MEAN_REVERTING  # noqa: PLR2004
-        labels[(hurst > 0.55) & (adx > 0.25)] = REGIME_TRENDING  # noqa: PLR2004
+        labels[(hurst < 0.45) & (adx < 0.20)] = REGIME_MEAN_REVERTING
+        labels[(hurst > 0.55) & (adx > 0.25)] = REGIME_TRENDING
     elif has_hurst:
         hurst = X[hurst_col]
-        labels[hurst < 0.45] = REGIME_MEAN_REVERTING  # noqa: PLR2004
-        labels[hurst > 0.55] = REGIME_TRENDING  # noqa: PLR2004
+        labels[hurst < 0.45] = REGIME_MEAN_REVERTING
+        labels[hurst > 0.55] = REGIME_TRENDING
     elif has_adx:
         adx = X[adx_col]
-        labels[adx < 0.20] = REGIME_MEAN_REVERTING  # noqa: PLR2004
-        labels[adx > 0.25] = REGIME_TRENDING  # noqa: PLR2004
+        labels[adx < 0.20] = REGIME_MEAN_REVERTING
+        labels[adx > 0.25] = REGIME_TRENDING
     else:
         logger.warning(
             "Neither '%s' nor '%s' found in feature matrix — "
@@ -216,9 +216,7 @@ def add_regime_features(
     X = X.copy()
 
     if "close" not in X.columns:
-        logger.warning(
-            "add_regime_features: 'close' column missing — regime features set to 0.5"
-        )
+        logger.warning("add_regime_features: 'close' column missing — regime features set to 0.5")
         X["regime_hurst"] = 0.5
         X["regime_trend_str"] = 0.25
         return X
@@ -229,7 +227,7 @@ def add_regime_features(
     def _hurst_rs(prices: np.ndarray) -> float:
         """Estimate Hurst exponent via R/S analysis on a price window."""
         n = len(prices)
-        if n < 10:  # noqa: PLR2004
+        if n < 10:
             return 0.5
         lags = range(2, min(n // 2, 12))
         rs_vals = []
@@ -241,7 +239,7 @@ def add_regime_features(
             s = np.std(sub, ddof=1)
             if s > 0:
                 rs_vals.append(np.log(r / s))
-        if len(rs_vals) < 2:  # noqa: PLR2004
+        if len(rs_vals) < 2:
             return 0.5
         log_lags = np.log(list(lags[: len(rs_vals)]))
         return float(np.clip(np.polyfit(log_lags, rs_vals, 1)[0], 0.0, 1.0))
@@ -272,14 +270,12 @@ def add_regime_features(
     else:
         # Fallback: use rolling slope of close as trend proxy
         def _slope(x: np.ndarray) -> float:
-            if len(x) < 3:  # noqa: PLR2004
+            if len(x) < 3:
                 return 0.0
             coef = np.polyfit(np.arange(len(x)), x, 1)[0]
             return float(np.clip(abs(coef) / (np.std(x) + 1e-9), 0.0, 1.0))
 
-        X["regime_trend_str"] = (
-            close.rolling(adx_window).apply(_slope, raw=True).shift(1)
-        )
+        X["regime_trend_str"] = close.rolling(adx_window).apply(_slope, raw=True).shift(1)
 
     # Fill NaN from rolling windows with neutral values
     X["regime_hurst"] = X["regime_hurst"].fillna(0.5)
@@ -452,7 +448,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
         """Predict class labels using regime-specific models."""
-        return (self.predict_proba(X)[:, 1] >= 0.5).astype(int)  # noqa: PLR2004
+        return (self.predict_proba(X)[:, 1] >= 0.5).astype(int)
 
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
         """
@@ -492,7 +488,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
         proba = self.predict_proba(X)[:, 1]
 
         def _metrics(mask: np.ndarray, tag: str) -> dict:
-            if mask.sum() < 2:  # noqa: PLR2004
+            if mask.sum() < 2:
                 return {"n": int(mask.sum()), "note": "too few samples"}
             p = preds[mask]
             t = y.values[mask]
@@ -553,7 +549,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
     @classmethod
     def load(cls, path: str) -> RegimeConditionalModel:
         """Load a previously saved RegimeConditionalModel."""
-        payload = joblib.load(path)
+        payload = joblib.load(path)  # nosec B301 - path set by class constructor from saved_models
         obj = cls(
             hurst_col=payload["hurst_col"],
             adx_col=payload["adx_col"],
@@ -620,10 +616,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
             # Minimal feature set from OHLCV
             X = (
                 ohlcv[["open", "high", "low", "close", "volume"]].copy()
-                if all(
-                    c in ohlcv.columns
-                    for c in ["open", "high", "low", "close", "volume"]
-                )
+                if all(c in ohlcv.columns for c in ["open", "high", "low", "close", "volume"])
                 else ohlcv.copy()
             )
 
@@ -699,9 +692,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
         regime_name = REGIME_NAMES.get(regime_id, "unknown")
 
         model = self._regime_models.get(regime_id, self._global_model)
-        model_used = (
-            "regime_specific" if regime_id in self._regime_models else "global_fallback"
-        )
+        model_used = "regime_specific" if regime_id in self._regime_models else "global_fallback"
 
         try:
             proba = model.predict_proba(last_row)
@@ -717,9 +708,9 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
         scaled_prob = float(np.clip(scaled_prob, 0.01, 0.99))
 
         # ── Step 7: Direction ─────────────────────────────────────────────────
-        if scaled_prob >= 0.58:  # noqa: PLR2004
+        if scaled_prob >= 0.58:
             direction = "long"
-        elif scaled_prob <= 0.42:  # noqa: PLR2004
+        elif scaled_prob <= 0.42:
             direction = "short"
         else:
             direction = "neutral"
@@ -784,9 +775,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
         for regime_id, regime_name in REGIME_NAMES.items():
             frac = float((labels == regime_id).sum()) / total
             _PROM.regime_distribution.labels(regime=regime_name).set(frac)
-            _PROM.predict_total.labels(symbol=symbol, regime=regime_name).inc(
-                amount=int((labels == regime_id).sum())
-            )
+            _PROM.predict_total.labels(symbol=symbol, regime=regime_name).inc(amount=int((labels == regime_id).sum()))
 
         return proba
 
@@ -855,7 +844,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
 
         # ── Base prediction ───────────────────────────────────────────────────
         proba = self.predict_proba(X)
-        preds = (proba[:, 1] >= 0.5).astype(int)  # noqa: PLR2004
+        preds = (proba[:, 1] >= 0.5).astype(int)
 
         # ── Sentiment scaling (soft — reduces confidence, never flips signal) ─
         # High absolute sentiment → model is less reliable (news-driven move).
@@ -902,13 +891,13 @@ def walk_forward_regime_eval(
     from sklearn.model_selection import TimeSeriesSplit
 
     tscv = TimeSeriesSplit(n_splits=n_splits, gap=1)
-    fold_results: list[dict] = []
+    fold_results: ClassVar[list[dict]] = []
 
     for fold, (train_idx, test_idx) in enumerate(tscv.split(X)):
         X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
         y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
 
-        if len(y_train.unique()) < 2:  # noqa: PLR2004
+        if len(y_train.unique()) < 2:
             logger.warning("Fold %d: only one class in training — skipping", fold + 1)
             continue
 
@@ -961,7 +950,7 @@ def walk_forward_regime_eval(
         "mean_auc": round(float(np.mean(aucs)), 4),
         "t_stat": round(float(t_stat), 4),
         "p_value": round(float(p_value), 4),
-        "significant": bool(p_value < 0.05 and float(np.mean(accs)) > 0.55),  # noqa: PLR2004
+        "significant": bool(p_value < 0.05 and float(np.mean(accs)) > 0.55),
     }
 
 

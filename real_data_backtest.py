@@ -36,7 +36,7 @@ from __future__ import annotations
 import math
 import os
 import time
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
@@ -105,13 +105,11 @@ def fetch_ohlcv_paginated(
     Returns a DataFrame with columns: [open, high, low, close, volume].
     Index is a UTC-aware DatetimeIndex.
     """
-    all_bars: list[list] = []
+    all_bars: ClassVar[list[list]] = []
     fetch_since = since_ms
 
     while len(all_bars) < max_bars:
-        batch = exchange.fetch_ohlcv(
-            symbol, timeframe, since=fetch_since, limit=batch_size
-        )
+        batch = exchange.fetch_ohlcv(symbol, timeframe, since=fetch_since, limit=batch_size)
         if not batch:
             break
 
@@ -134,9 +132,7 @@ def fetch_ohlcv_paginated(
     if not all_bars:
         raise RuntimeError(f"No OHLCV data returned for {symbol} {timeframe}")
 
-    df = pd.DataFrame(
-        all_bars, columns=["timestamp", "open", "high", "low", "close", "volume"]
-    )
+    df = pd.DataFrame(all_bars, columns=["timestamp", "open", "high", "low", "close", "volume"])
     df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
     df.set_index("timestamp", inplace=True)
     df = df[~df.index.duplicated(keep="first")].sort_index()
@@ -196,8 +192,8 @@ def generate_signals(df: pd.DataFrame) -> pd.DataFrame:
     sma_signal = np.sign(df["sma20"] - df["sma50"])
     # 2. RSI momentum: +1 when RSI > 55, -1 when RSI < 45, 0 otherwise
     rsi_signal = pd.Series(0.0, index=df.index)
-    rsi_signal[df["rsi14"] > 55] = 1.0  # noqa: PLR2004
-    rsi_signal[df["rsi14"] < 45] = -1.0  # noqa: PLR2004
+    rsi_signal[df["rsi14"] > 55] = 1.0
+    rsi_signal[df["rsi14"] < 45] = -1.0
     # 3. Price vs SMA20: +1 / -1
     price_signal = np.sign(df["close"] - df["sma20"])
 
@@ -219,7 +215,7 @@ def _pip_value_for_price(price: float) -> float:
     Gold (price > $100): 1 pip = $0.10
     Crypto/Forex (price ≤ $100): 1 pip = $0.01
     """
-    return GOLD_PIP_VALUE if price > 100 else CRYPTO_PIP_VALUE  # noqa: PLR2004
+    return GOLD_PIP_VALUE if price > 100 else CRYPTO_PIP_VALUE
 
 
 # ---------------------------------------------------------------------------
@@ -255,8 +251,8 @@ def run_backtest(
     bar_idx = 0
 
     records = []
-    trade_pnls: list[float] = []
-    hold_bars: list[int] = []
+    trade_pnls: ClassVar[list[float]] = []
+    hold_bars: ClassVar[list[int]] = []
 
     for _ts, row in df.iterrows():
         trade_pnl = 0.0
@@ -264,12 +260,8 @@ def run_backtest(
 
         # --- Manage open position ---
         if position != 0:
-            stop_hit = (position == 1 and row["low"] <= stop_price) or (
-                position == -1 and row["high"] >= stop_price
-            )
-            tp_hit = (position == 1 and row["high"] >= tp_price) or (
-                position == -1 and row["low"] <= tp_price
-            )
+            stop_hit = (position == 1 and row["low"] <= stop_price) or (position == -1 and row["high"] >= stop_price)
+            tp_hit = (position == 1 and row["high"] >= tp_price) or (position == -1 and row["low"] <= tp_price)
 
             if stop_hit or tp_hit:
                 exit_price = stop_price if stop_hit else tp_price
@@ -426,7 +418,7 @@ def trade_level_sharpe(
     """
     arr = np.array(trade_pnls, dtype=float)
     n = len(arr)
-    if n < 2 or np.std(arr, ddof=1) == 0:  # noqa: PLR2004
+    if n < 2 or np.std(arr, ddof=1) == 0:
         return 0.0, 0.0
     avg_hold_days = avg_hold_hours / 24.0
     ann_factor = math.sqrt(252.0 / max(avg_hold_days, 0.04))
@@ -481,10 +473,7 @@ def run_multi_symbol_backtest(
         symbols = SYMBOLS
 
     if not _CCXT_AVAILABLE:
-        raise RuntimeError(
-            "ccxt is required for live data fetching. "
-            "Install it with: pip install ccxt"
-        )
+        raise RuntimeError("ccxt is required for live data fetching. Install it with: pip install ccxt")
     exchange = _ccxt_module.binance(
         {
             "enableRateLimit": True,
@@ -493,8 +482,8 @@ def run_multi_symbol_backtest(
     )
     since_ms = exchange.parse8601(since_iso)
 
-    all_test_pnls: list[float] = []
-    all_train_pnls: list[float] = []
+    all_test_pnls: ClassVar[list[float]] = []
+    all_train_pnls: ClassVar[list[float]] = []
     symbol_results: dict[str, dict] = {}
 
     for sym in symbols:
@@ -506,6 +495,7 @@ def run_multi_symbol_backtest(
             # checks when fewer than MIN_SOURCES sources are available.
             try:
                 import asyncio as _asyncio
+
                 from backtest.data_validator import fetch_validated_ohlcv
 
                 df = _asyncio.run(
@@ -526,12 +516,8 @@ def run_multi_symbol_backtest(
                         print(f"  {sym}: rejections={report.rejection_reasons}")
             except Exception as _mv_exc:
                 # Multi-source validation unavailable — fall back to single source
-                print(
-                    f"  {sym}: multi-source validation failed ({_mv_exc}) — using Binance only"
-                )
-                df = fetch_ohlcv_paginated(
-                    exchange, sym, TIMEFRAME, since_ms=since_ms, max_bars=max_bars
-                )
+                print(f"  {sym}: multi-source validation failed ({_mv_exc}) — using Binance only")
+                df = fetch_ohlcv_paginated(exchange, sym, TIMEFRAME, since_ms=since_ms, max_bars=max_bars)
 
             if df is None or df.empty:
                 print(f"  {sym}: SKIP — no data returned")
@@ -561,24 +547,18 @@ def run_multi_symbol_backtest(
     se_target = 1.0 / math.sqrt(2.0 * (TARGET_TRADE_COUNT - 1))
     robust = total_test_trades >= TARGET_TRADE_COUNT
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"POOLED RESULTS ({len(symbol_results)} symbols)")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"  Train trades total : {total_train_trades}")
-    print(
-        f"  Test  trades total : {total_test_trades}  "
-        f"(target: {TARGET_TRADE_COUNT})"
-    )
+    print(f"  Test  trades total : {total_test_trades}  (target: {TARGET_TRADE_COUNT})")
     print(
         f"  Pooled test Sharpe : {pooled_sharpe:.3f}  "
         f"SE ±{pooled_se:.3f}  "
         f"({'✅ robust' if robust else f'⚠️  need {TARGET_TRADE_COUNT - total_test_trades} more'})"
     )
     print(f"  SE at N={TARGET_TRADE_COUNT}          : ±{se_target:.3f}")
-    print(
-        "\nNOTE: Sharpe is trade-level (corrected). "
-        "Bar-level Sharpe is NOT reported here."
-    )
+    print("\nNOTE: Sharpe is trade-level (corrected). Bar-level Sharpe is NOT reported here.")
 
     return {
         "symbol_results": symbol_results,

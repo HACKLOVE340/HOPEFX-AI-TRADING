@@ -48,7 +48,7 @@ class GARCHModel:
             negative_alpha = alpha < 0
             negative_beta = beta < 0
             non_stationary = alpha + beta >= 1
-            invalid_df = nu <= 2  # Student-t requires df > 2 for finite variance  # noqa: PLR2004
+            invalid_df = nu <= 2  # Student-t requires df > 2 for finite variance
             return non_positive_omega or negative_alpha or negative_beta or non_stationary or invalid_df
 
         def neg_log_likelihood(params):
@@ -60,15 +60,11 @@ class GARCHModel:
             variance[0] = np.var(returns)
 
             for t in range(1, len(returns)):
-                variance[t] = (
-                    omega + alpha * returns[t - 1] ** 2 + beta * variance[t - 1]
-                )
+                variance[t] = omega + alpha * returns[t - 1] ** 2 + beta * variance[t - 1]
 
             # Student-t log-likelihood
             log_likelihood = -np.sum(
-                np.log(
-                    stats.t.pdf(returns / np.sqrt(variance), nu) / np.sqrt(variance)
-                ),
+                np.log(stats.t.pdf(returns / np.sqrt(variance), nu) / np.sqrt(variance)),
             )
             return log_likelihood
 
@@ -102,11 +98,7 @@ class GARCHModel:
         variance = np.ones(n_sims) * self.omega / (1 - self.alpha - self.beta)
 
         for t in range(horizon):
-            variance = (
-                self.omega
-                + self.alpha * simulated[:, t - 1] ** 2
-                + self.beta * variance
-            )
+            variance = self.omega + self.alpha * simulated[:, t - 1] ** 2 + self.beta * variance
             simulated[:, t] = np.sqrt(variance) * stats.t.rvs(self.nu, size=n_sims)
 
         return simulated
@@ -185,9 +177,7 @@ class MonteCarloRiskEngine:
                 scaled_returns[col] = copula_sims[col] * vol[: len(copula_sims)]
 
         # Calculate portfolio returns
-        portfolio_returns = sum(
-            scaled_returns[col] * weights.get(col, 0) for col in scaled_returns.columns
-        )
+        portfolio_returns = sum(scaled_returns[col] * weights.get(col, 0) for col in scaled_returns.columns)
 
         # Risk metrics
         var_95 = np.percentile(portfolio_returns, 5)
@@ -214,15 +204,13 @@ class MonteCarloRiskEngine:
     def _stress_correlation(self, weights: dict[str, float]) -> float:
         """Calculate correlation under stress (tail dependence)"""
         # Simplified: use historical correlation in worst 5% of days
-        if len(self.historical_returns) < 100:  # noqa: PLR2004
+        if len(self.historical_returns) < 100:
             return 0.5
 
         worst_days = self.historical_returns.sum(axis=1).quantile(0.05)
-        stress_data = self.historical_returns[
-            self.historical_returns.sum(axis=1) <= worst_days
-        ]
+        stress_data = self.historical_returns[self.historical_returns.sum(axis=1) <= worst_days]
 
-        if len(stress_data) < 10:  # noqa: PLR2004
+        if len(stress_data) < 10:
             return 0.5
 
         return float(stress_data.corr().values.mean())
@@ -250,10 +238,7 @@ class RealTimeRiskMonitor:
         """Recalculate risk with current positions"""
         total_value = sum(positions[s] * prices[s] for s in positions)
 
-        weights = {
-            s: float(positions[s] * prices[s] / total_value) if total_value > 0 else 0
-            for s in positions
-        }
+        weights = {s: float(positions[s] * prices[s] / total_value) if total_value > 0 else 0 for s in positions}
 
         self.current_risk = self.risk_engine.calculate_portfolio_risk(weights)
         return self._check_limits()
@@ -293,8 +278,6 @@ class RealTimeRiskMonitor:
 
 import logging as _logging
 from pathlib import Path as _Path
-
-import numpy as _np
 
 _gpu_logger = _logging.getLogger(__name__)
 
@@ -340,12 +323,8 @@ class GPUInferenceEngine:
     """
 
     # Default search paths relative to the project root (parent of core/).
-    _DEFAULT_ONNX = (
-        _Path(__file__).parent.parent.parent / "ml" / "saved_models" / "hopefx.onnx"
-    )
-    _DEFAULT_PT = (
-        _Path(__file__).parent.parent.parent / "ml" / "saved_models" / "hopefx.pt"
-    )
+    _DEFAULT_ONNX = _Path(__file__).parent.parent.parent / "ml" / "saved_models" / "hopefx.onnx"
+    _DEFAULT_PT = _Path(__file__).parent.parent.parent / "ml" / "saved_models" / "hopefx.pt"
 
     def __init__(
         self,
@@ -394,8 +373,7 @@ class GPUInferenceEngine:
             self._load_torchscript(path)
         else:
             raise ValueError(
-                f"Unsupported model format '{suffix}'. "
-                "Provide an ONNX (.onnx) or TorchScript (.pt/.pth) file."
+                f"Unsupported model format '{suffix}'. Provide an ONNX (.onnx) or TorchScript (.pt/.pth) file."
             )
 
     def _load_onnx(self, path: _Path) -> None:
@@ -409,9 +387,7 @@ class GPUInferenceEngine:
             ) from exc
 
         providers = (
-            ["CUDAExecutionProvider", "CPUExecutionProvider"]
-            if self.device == "cuda"
-            else ["CPUExecutionProvider"]
+            ["CUDAExecutionProvider", "CPUExecutionProvider"] if self.device == "cuda" else ["CPUExecutionProvider"]
         )
         self._ort_session = _ort.InferenceSession(str(path), providers=providers)
         self._input_name = self._ort_session.get_inputs()[0].name
@@ -420,16 +396,11 @@ class GPUInferenceEngine:
     def _load_torchscript(self, path: _Path) -> None:
         """Load a TorchScript model via torch.jit.load."""
         if _torch is None:
-            raise ImportError(
-                "torch is required to load TorchScript models. "
-                "Install it with: pip install torch"
-            )
+            raise ImportError("torch is required to load TorchScript models. Install it with: pip install torch")
         map_location = _torch.device(self.device)
-        self._torch_model = _torch.jit.load(str(path), map_location=map_location)
+        self._torch_model = _torch.jit.load(str(path), map_location=map_location)  # nosec B614 — TorchScript load, path validated by caller
         self._torch_model.eval()
-        _gpu_logger.info(
-            "TorchScript model loaded from %s (device=%s)", path, self.device
-        )
+        _gpu_logger.info("TorchScript model loaded from %s (device=%s)", path, self.device)
 
     def load_model(self, model_path: str) -> None:
         """Load or replace the inference model at runtime."""
@@ -439,7 +410,7 @@ class GPUInferenceEngine:
 
     # ── inference ─────────────────────────────────────────────────────────────
 
-    def predict(self, features: _np.ndarray) -> _np.ndarray:
+    def predict(self, features: np.ndarray) -> np.ndarray:
         """
         Run inference on *features* and return predictions as a numpy array.
 
@@ -461,11 +432,11 @@ class GPUInferenceEngine:
             was found at init time and ``load_model()`` has not been called).
         """
         if features.ndim == 1:
-            features = features[_np.newaxis, :]
+            features = features[np.newaxis, :]
 
         # ── ONNX Runtime path ─────────────────────────────────────────────────
         if self._ort_session is not None:
-            inputs = {self._input_name: features.astype(_np.float32)}
+            inputs = {self._input_name: features.astype(np.float32)}
             outputs = self._ort_session.run(None, inputs)
             return outputs[0]
 
@@ -483,7 +454,7 @@ class GPUInferenceEngine:
             f"Default search paths checked: {self._DEFAULT_ONNX}, {self._DEFAULT_PT}"
         )
 
-    def batch_predict(self, feature_batches: list[_np.ndarray]) -> list[_np.ndarray]:
+    def batch_predict(self, feature_batches: list[np.ndarray]) -> list[np.ndarray]:
         """Run predict() on each batch and return a list of output arrays."""
         return [self.predict(b) for b in feature_batches]
 
@@ -498,19 +469,19 @@ class GPUFeatureEngine:
         self.device = "cuda" if _HAS_CUDA else "cpu"
         _gpu_logger.info("GPUFeatureEngine initialised on device=%s", self.device)
 
-    def compute_features(self, prices: _np.ndarray) -> _np.ndarray:
+    def compute_features(self, prices: np.ndarray) -> np.ndarray:
         """Compute technical features from a price array."""
-        if len(prices) < 2:  # noqa: PLR2004
+        if len(prices) < 2:
             return prices
-        returns = _np.diff(prices) / prices[:-1]
+        returns = np.diff(prices) / prices[:-1]
         # Simple feature set: returns, rolling mean, rolling std
         window = min(20, len(returns))
-        rolling_mean = _np.convolve(returns, _np.ones(window) / window, mode="valid")
-        rolling_std = _np.array(
+        rolling_mean = np.convolve(returns, np.ones(window) / window, mode="valid")
+        rolling_std = np.array(
             [returns[i : i + window].std() for i in range(len(returns) - window + 1)],
         )
         min_len = min(len(returns), len(rolling_mean), len(rolling_std))
-        return _np.column_stack(
+        return np.column_stack(
             [
                 returns[-min_len:],
                 rolling_mean[-min_len:],

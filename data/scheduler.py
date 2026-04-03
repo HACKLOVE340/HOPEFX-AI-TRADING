@@ -26,7 +26,8 @@ Usage (from app startup)::
 
     from data.scheduler import DataScheduler
     scheduler = DataScheduler()
-    asyncio.create_task(scheduler.start())
+    _t = asyncio.create_task(scheduler.start())
+    _t.add_done_callback(lambda _: None)
 
 Environment variables::
 
@@ -46,9 +47,9 @@ import asyncio
 import csv
 import logging
 import os
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -80,9 +81,7 @@ _OANDA_URLS: dict[str, dict[str, str]] = {
     },
 }
 
-_OANDA_BASE = _OANDA_URLS.get(_OANDA_REGION, _OANDA_URLS["us"]).get(
-    _OANDA_ENV, "https://api-fxpractice.oanda.com"
-)
+_OANDA_BASE = _OANDA_URLS.get(_OANDA_REGION, _OANDA_URLS["us"]).get(_OANDA_ENV, "https://api-fxpractice.oanda.com")
 
 # Granularity codes and their duration in seconds
 # Supported: M1, M5, M15, M30, H1, H4, D, W, M
@@ -200,21 +199,20 @@ async def _fetch_oanda(
 
     try:
         timeout = aiohttp.ClientTimeout(total=30)
-        async with aiohttp.ClientSession() as session, session.get(
-            url, headers=headers, params=params, timeout=timeout
-        ) as resp:
-            if resp.status == 401:  # noqa: PLR2004
+        async with (
+            aiohttp.ClientSession() as session,
+            session.get(url, headers=headers, params=params, timeout=timeout) as resp,
+        ):
+            if resp.status == 401:
                 logger.error("OANDA auth failed (401) — check OANDA_API_KEY")
                 return []
-            if resp.status == 400:  # noqa: PLR2004
+            if resp.status == 400:
                 text = await resp.text()
                 logger.error("OANDA bad request (400): %s", text[:300])
                 return []
-            if resp.status != 200:  # noqa: PLR2004
+            if resp.status != 200:
                 text = await resp.text()
-                logger.error(
-                    "OANDA fetch failed status=%d: %s", resp.status, text[:200]
-                )
+                logger.error("OANDA fetch failed status=%d: %s", resp.status, text[:200])
                 return []
             data = await resp.json()
     except TimeoutError:
@@ -224,7 +222,7 @@ async def _fetch_oanda(
         logger.error("OANDA fetch error: %s", exc)
         return []
 
-    bars: list[dict] = []
+    bars: ClassVar[list[dict]] = []
     for candle in data.get("candles", []):
         if not candle.get("complete", True):
             continue
@@ -297,9 +295,7 @@ async def _fetch_yfinance(
             )
         else:
             ticker = await loop.run_in_executor(None, lambda: yf.Ticker(yf_symbol))
-            hist = await loop.run_in_executor(
-                None, lambda: ticker.history(period=period, interval=interval)
-            )
+            hist = await loop.run_in_executor(None, lambda: ticker.history(period=period, interval=interval))
     except Exception as exc:
         logger.error("yfinance fetch error for %s/%s: %s", yf_symbol, interval, exc)
         return []
@@ -310,13 +306,11 @@ async def _fetch_yfinance(
 
     # Flatten MultiIndex columns if present (yfinance >= 0.2.x)
     if hasattr(hist.columns, "levels"):
-        hist.columns = [
-            c[0].lower() if isinstance(c, tuple) else c.lower() for c in hist.columns
-        ]
+        hist.columns = [c[0].lower() if isinstance(c, tuple) else c.lower() for c in hist.columns]
     else:
         hist.columns = [c.lower() for c in hist.columns]
 
-    bars: list[dict] = []
+    bars: ClassVar[list[dict]] = []
     for ts, row in hist.iterrows():
         try:
             # Normalise timestamp to ISO format without timezone
@@ -365,9 +359,9 @@ def _load_existing_timestamps(path: Path) -> set:
     """Return the set of timestamp strings already in the CSV."""
     if not path.exists():
         return set()
-    timestamps: set = set()
+    timestamps: ClassVar[set] = set()
     try:
-        with open(path, newline="") as f:
+        with Path(path).open(newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 ts = row.get("timestamp", "")
@@ -403,7 +397,7 @@ def _append_bars(path: Path, bars: list[dict]) -> int:
     write_header = not path.exists() or path.stat().st_size == 0
 
     fieldnames = ["timestamp", "open", "high", "low", "close", "volume"]
-    with open(path, "a", newline="") as f:
+    with Path(path).open("a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
         if write_header:
             writer.writeheader()
@@ -450,13 +444,9 @@ async def _update_timeframe(
 
     # Choose data source
     if _OANDA_KEY and _OANDA_ACCOUNT:
-        bars = await _fetch_oanda(
-            symbol, granularity, count=fetch_count, from_dt=from_dt
-        )
+        bars = await _fetch_oanda(symbol, granularity, count=fetch_count, from_dt=from_dt)
     else:
-        logger.info(
-            "OANDA credentials absent — using yfinance for %s/%s", symbol, granularity
-        )
+        logger.info("OANDA credentials absent — using yfinance for %s/%s", symbol, granularity)
         bars = await _fetch_yfinance(symbol, granularity, from_dt=from_dt)
 
     if not bars:
@@ -468,7 +458,7 @@ async def _update_timeframe(
         from data.validator import DataValidator
 
         validator = DataValidator(symbol=symbol.replace("_", ""))
-        valid_bars: list[dict] = []
+        valid_bars: ClassVar[list[dict]] = []
         for i, bar in enumerate(bars):
             result = validator.validate_bar(bar)
             if result.ok:
@@ -556,8 +546,8 @@ class DataScheduler:
             try:
                 results = await self.run_once()
                 logger.info("DataScheduler update: %s", results)
-            except Exception as exc:
-                logger.error("DataScheduler update failed: %s", exc, exc_info=True)
+            except Exception:
+                logger.exception("DataScheduler update failed: %s")
             await asyncio.sleep(self.interval_secs)
 
     def stop(self) -> None:
@@ -715,14 +705,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--timeframe",
         default=None,
-        help="Single timeframe to update (default: all). One of: "
-        + ", ".join(ALL_TIMEFRAMES),
+        help="Single timeframe to update (default: all). One of: " + ", ".join(ALL_TIMEFRAMES),
     )
     parser.add_argument(
         "--granularity",
         default="H1",
-        help="Granularity for backfill (default: H1). One of: "
-        + ", ".join(ALL_TIMEFRAMES),
+        help="Granularity for backfill (default: H1). One of: " + ", ".join(ALL_TIMEFRAMES),
     )
     parser.add_argument(
         "--from",
@@ -740,16 +728,8 @@ if __name__ == "__main__":
 
     async def _main() -> None:
         if args.backfill:
-            from_dt = (
-                datetime.fromisoformat(args.from_date).replace(tzinfo=UTC)
-                if args.from_date
-                else None
-            )
-            to_dt = (
-                datetime.fromisoformat(args.to_date).replace(tzinfo=UTC)
-                if args.to_date
-                else None
-            )
+            from_dt = datetime.fromisoformat(args.from_date).replace(tzinfo=UTC) if args.from_date else None
+            to_dt = datetime.fromisoformat(args.to_date).replace(tzinfo=UTC) if args.to_date else None
             count = await backfill(
                 symbol=args.symbol,
                 granularity=args.granularity,
@@ -760,16 +740,10 @@ if __name__ == "__main__":
             print(f"Data saved to: {_csv_path(args.symbol, args.granularity)}")
         elif args.timeframe:
             if args.timeframe not in TIMEFRAME_SECONDS:
-                print(
-                    f"Unknown timeframe '{args.timeframe}'. "
-                    f"Supported: {', '.join(ALL_TIMEFRAMES)}"
-                )
+                print(f"Unknown timeframe '{args.timeframe}'. Supported: {', '.join(ALL_TIMEFRAMES)}")
                 return
             count = await _update_timeframe(args.symbol, args.timeframe)
-            print(
-                f"Fetched and appended {count} new bars "
-                f"for {args.symbol}/{args.timeframe}."
-            )
+            print(f"Fetched and appended {count} new bars for {args.symbol}/{args.timeframe}.")
         else:
             scheduler = DataScheduler(symbol=args.symbol)
             results = await scheduler.run_once()

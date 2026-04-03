@@ -40,9 +40,7 @@ class TestRiskCalculations(unittest.TestCase):
         equity = 30  # Test with $30 equity
         risk_percent = 0.005  # 0.5% risk
         position_size = equity * risk_percent
-        self.assertEqual(
-            position_size, 0.15
-        )  # Should be $0.15 position size for this risk
+        self.assertEqual(position_size, 0.15)  # Should be $0.15 position size for this risk
 
     def test_edge_cases(self):
         # Tests with zero equity / infinite ATR.

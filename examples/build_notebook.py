@@ -278,9 +278,12 @@ Image(ROOT / "examples" / "results" / "equity_curve.png", width=900)""",
 cells.append(md("## 6 · Feature Importance"))
 fi_lines = ""
 try:
-    fi = sorted(zip(bundle["features"], clf.feature_importances_, strict=False), key=lambda x: -x[1])
+    import joblib as _joblib
+    _bundle = _joblib.load(ROOT / "ml" / "saved_models" / "rf_xauusd.pkl")
+    _clf = _bundle["model"]
+    fi = sorted(zip(_bundle["features"], _clf.feature_importances_, strict=False), key=lambda x: -x[1])
     fi_lines = "\n".join(f"  {name:<22} {imp:.4f}" for name, imp in fi[:10])
-except Exception:
+except Exception:  # pylint: disable=broad-exception-caught
     fi_lines = "  (load model to see importances)"
 
 cells.append(

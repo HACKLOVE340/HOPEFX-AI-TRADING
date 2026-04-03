@@ -44,7 +44,7 @@ class HealthCheckService:
     def check_api(self, url: str) -> bool:
         try:
             response = requests.get(url, timeout=5)
-            return response.status_code == 200  # noqa: PLR2004
+            return response.status_code == 200
         except Exception as exc:
             self.alerts.append(f"API check failed: {exc}")
             return False
@@ -71,9 +71,7 @@ class HealthCheckService:
             self.alerts.append(f"Cache check failed: {exc}")
             return False
 
-    def check_broker_connections(
-        self, broker: Any | None = None
-    ) -> bool | str:
+    def check_broker_connections(self, broker: Any | None = None) -> bool | str:
         b = broker or self.broker
         if b is None:
             return "unconfigured"

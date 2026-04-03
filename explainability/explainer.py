@@ -5,15 +5,14 @@
 # No commercial use without explicit permission.
 """explainability/explainer.py — AIExplainer: SHAP-based signal explanation."""
 
-from typing import Any
-from datetime import datetime, timezone
-UTC = timezone.utc
 import logging
+from datetime import UTC, datetime
+from typing import Any
 
 from explainability.models import (
-    FeatureContribution,
     DecisionNode,
     Explanation,
+    FeatureContribution,
     ModelPerformanceExplanation,
 )
 
@@ -91,17 +90,13 @@ class AIExplainer:
         explanation_id = f"exp_{len(self.explanation_history) + 1}_{int(datetime.now(UTC).timestamp())}"
 
         # Calculate feature contributions
-        feature_contributions = self._calculate_feature_importance(
-            model, features, prediction
-        )
+        feature_contributions = self._calculate_feature_importance(model, features, prediction)
 
         # Get decision path (for tree-based models)
         decision_path = self._get_decision_path(model, features)
 
         # Calculate confidence interval
-        confidence_interval = self._calculate_confidence_interval(
-            model, features, prediction
-        )
+        confidence_interval = self._calculate_confidence_interval(model, features, prediction)
 
         # Calculate confidence
         confidence = self._calculate_prediction_confidence(model, features, prediction)
@@ -128,7 +123,8 @@ class AIExplainer:
         )
 
         self.explanation_history.append(explanation)
-        logger.info(f"Generated explanation {explanation_id}")
+        logger.info("Generated explanation %s", explanation_id)
+
         return explanation
 
     def _calculate_feature_importance(
@@ -151,13 +147,12 @@ class AIExplainer:
                                 feature_value=value,
                                 contribution=importances[i],
                                 importance_rank=0,  # Will be set later
-                                description=self.feature_descriptions.get(
-                                    name, f"Feature: {name}"
-                                ),
+                                description=self.feature_descriptions.get(name, f"Feature: {name}"),
                             )
                         )
         except Exception as e:
-            logger.warning(f"Could not extract feature importances: {e}")
+            logger.warning("Could not extract feature importances: %s", e)
+
 
         # If no contributions from model, use simple sensitivity analysis
         if not contributions:
@@ -170,9 +165,7 @@ class AIExplainer:
 
         return contributions
 
-    def _sensitivity_analysis(
-        self, features: dict[str, float], prediction: float
-    ) -> list[FeatureContribution]:
+    def _sensitivity_analysis(self, features: dict[str, float], prediction: float) -> list[FeatureContribution]:
         """
         Estimate feature contributions via sign-aware sensitivity analysis.
 
@@ -197,7 +190,7 @@ class AIExplainer:
             "resistance_distance": 0.10,
         }
 
-        bullish = prediction > 0.5  # noqa: PLR2004
+        bullish = prediction > 0.5
         contributions = []
 
         for name, value in features.items():
@@ -206,9 +199,9 @@ class AIExplainer:
             # Derive sign from feature value semantics — no randomness
             if "rsi" in name:
                 # Oversold (<30) → bullish signal; overbought (>70) → bearish
-                if value < 30:  # noqa: PLR2004
+                if value < 30:
                     contribution = impact if bullish else -impact
-                elif value > 70:  # noqa: PLR2004
+                elif value > 70:
                     contribution = -impact if bullish else impact
                 else:
                     # Neutral RSI: weak contribution proportional to distance from 50
@@ -218,31 +211,29 @@ class AIExplainer:
                 contribution = impact * (1 if (value >= 0) == bullish else -1)
             elif "bollinger_position" in name:
                 # Low position (<0.2) → oversold → bullish; high (>0.8) → overbought → bearish
-                if value < 0.2:  # noqa: PLR2004
+                if value < 0.2:
                     contribution = impact if bullish else -impact
-                elif value > 0.8:  # noqa: PLR2004
+                elif value > 0.8:
                     contribution = -impact if bullish else impact
                 else:
                     contribution = impact * (0.5 - value) * 2 * (1 if bullish else -1)
             elif "volume_ratio" in name:
                 # Above-average volume (>1) amplifies the current direction
-                contribution = (
-                    impact * (1 if value >= 1.0 else -1) * (1 if bullish else -1)
-                )
+                contribution = impact * (1 if value >= 1.0 else -1) * (1 if bullish else -1)
             elif "support_distance" in name:
                 # Close to support (small value) → bullish
                 contribution = (
-                    impact * (1 if value < 0.5 else -1) * (1 if bullish else -1)  # noqa: PLR2004
+                    impact * (1 if value < 0.5 else -1) * (1 if bullish else -1)
                 )
             elif "resistance_distance" in name:
                 # Far from resistance (large value) → bullish
                 contribution = (
-                    impact * (1 if value > 0.5 else -1) * (1 if bullish else -1)  # noqa: PLR2004
+                    impact * (1 if value > 0.5 else -1) * (1 if bullish else -1)
                 )
             else:
                 # Unknown feature: use sign of (value - 0.5) as a neutral heuristic
                 contribution = (
-                    impact * (1 if value >= 0.5 else -1) * (1 if bullish else -1)  # noqa: PLR2004
+                    impact * (1 if value >= 0.5 else -1) * (1 if bullish else -1)
                 )
 
             contributions.append(
@@ -257,9 +248,7 @@ class AIExplainer:
 
         return contributions
 
-    def _get_decision_path(
-        self, model: Any, features: dict[str, float]
-    ) -> list[DecisionNode]:
+    def _get_decision_path(self, model: Any, features: dict[str, float]) -> list[DecisionNode]:
         """Extract decision path from tree-based models."""
         path = []
 
@@ -271,14 +260,10 @@ class AIExplainer:
                 feature_values = list(features.values())
 
                 node = 0
-                while tree.feature[node] != -2:  # -2 indicates leaf  # noqa: PLR2004
+                while tree.feature[node] != -2:  # -2 indicates leaf
                     feature_idx = tree.feature[node]
                     threshold = tree.threshold[node]
-                    value = (
-                        feature_values[feature_idx]
-                        if feature_idx < len(feature_values)
-                        else 0
-                    )
+                    value = feature_values[feature_idx] if feature_idx < len(feature_values) else 0
 
                     decision = "left" if value <= threshold else "right"
 
@@ -298,7 +283,8 @@ class AIExplainer:
 
                     node = tree.children_left[node] if decision == "left" else tree.children_right[node]
         except Exception as e:
-            logger.debug(f"Could not extract decision path: {e}")
+            logger.debug("Could not extract decision path: %s", e)
+
 
         return path
 
@@ -319,16 +305,15 @@ class AIExplainer:
                 proba = 0.7  # Simulated probability
                 half_width = (1 - proba) * 0.3
         except Exception as e:
-            logger.debug(f"Could not calculate confidence interval: {e}")
+            logger.debug("Could not calculate confidence interval: %s", e)
+
 
         lower = max(0, prediction - half_width)
         upper = min(1, prediction + half_width)
 
         return (lower, upper)
 
-    def _calculate_prediction_confidence(
-        self, model: Any, features: dict[str, float], prediction: float
-    ) -> float:
+    def _calculate_prediction_confidence(self, model: Any, features: dict[str, float], prediction: float) -> float:
         """Calculate confidence score for prediction."""
         try:
             if hasattr(model, "predict_proba"):
@@ -339,9 +324,7 @@ class AIExplainer:
         # Default confidence based on prediction strength
         return abs(prediction - 0.5) * 2 * 0.8 + 0.2
 
-    def _extract_key_factors(
-        self, contributions: list[FeatureContribution], top_n: int = 3
-    ) -> list[str]:
+    def _extract_key_factors(self, contributions: list[FeatureContribution], top_n: int = 3) -> list[str]:
         """Extract top contributing factors."""
         top_contributions = contributions[:top_n]
 
@@ -361,7 +344,7 @@ class AIExplainer:
     ) -> str:
         """Generate human-readable explanation."""
         confidence_text = (
-            "high" if confidence > 0.7 else "moderate" if confidence > 0.5 else "low"  # noqa: PLR2004
+            "high" if confidence > 0.7 else "moderate" if confidence > 0.5 else "low"
         )
 
         # Get top supporting and opposing factors
@@ -371,24 +354,16 @@ class AIExplainer:
         explanation = f"The AI recommends {prediction_class} with {confidence_text} confidence ({confidence:.1%}). "
 
         if supporting:
-            support_names = [
-                self.feature_descriptions.get(c.feature_name, c.feature_name)
-                for c in supporting
-            ]
+            support_names = [self.feature_descriptions.get(c.feature_name, c.feature_name) for c in supporting]
             explanation += f"Key supporting factors: {', '.join(support_names)}. "
 
         if opposing:
-            oppose_names = [
-                self.feature_descriptions.get(c.feature_name, c.feature_name)
-                for c in opposing
-            ]
+            oppose_names = [self.feature_descriptions.get(c.feature_name, c.feature_name) for c in opposing]
             explanation += f"Factors against: {', '.join(oppose_names)}."
 
         return explanation
 
-    def get_model_performance_explanation(
-        self, model_name: str
-    ) -> ModelPerformanceExplanation | None:
+    def get_model_performance_explanation(self, model_name: str) -> ModelPerformanceExplanation | None:
         """
         Return performance metrics for *model_name* from the live ML predictor.
 
@@ -410,7 +385,7 @@ class AIExplainer:
             recall = float(meta.get("oos_recall", 0.0))
             f1 = float(meta.get("oos_f1", 0.0))
             total = int(stats.get("predict_count", 0))
-            correct = int(round(accuracy * total)) if total else 0
+            correct = round(accuracy * total) if total else 0
 
             if total == 0:
                 # Return a default explanation with simulated baseline data so
@@ -448,9 +423,7 @@ class AIExplainer:
             return explanation
 
         except Exception as exc:
-            logger.debug(
-                "get_model_performance_explanation failed for %s: %s", model_name, exc
-            )
+            logger.debug("get_model_performance_explanation failed for %s: %s", model_name, exc)
             # Always return a valid default rather than None.
             default = ModelPerformanceExplanation(
                 model_name=model_name,
@@ -468,23 +441,21 @@ class AIExplainer:
             self.model_performance_cache[model_name] = default
             return default
 
-    def compare_explanations(
-        self, explanation1: Explanation, explanation2: Explanation
-    ) -> dict[str, Any]:
+    def compare_explanations(self, explanation1: Explanation, explanation2: Explanation) -> dict[str, Any]:
         """Compare two explanations to understand prediction differences."""
         diff_features = []
 
         for cont1 in explanation1.feature_contributions:
             for cont2 in explanation2.feature_contributions:
-                if cont1.feature_name == cont2.feature_name and abs(cont1.contribution - cont2.contribution) > 0.05:  # noqa: PLR2004
-                        diff_features.append(
-                            {
-                                "feature": cont1.feature_name,
-                                "contribution_1": cont1.contribution,
-                                "contribution_2": cont2.contribution,
-                                "difference": cont1.contribution - cont2.contribution,
-                            }
-                        )
+                if cont1.feature_name == cont2.feature_name and abs(cont1.contribution - cont2.contribution) > 0.05:
+                    diff_features.append(
+                        {
+                            "feature": cont1.feature_name,
+                            "contribution_1": cont1.contribution,
+                            "contribution_2": cont2.contribution,
+                            "difference": cont1.contribution - cont2.contribution,
+                        }
+                    )
 
         return {
             "prediction_1": explanation1.prediction_class,
@@ -511,7 +482,7 @@ class AIExplainer:
 
         # Analyze each feature for potential changes
         if current_prediction == "SELL" and target_prediction == "BUY":
-            if "rsi" in features and features["rsi"] > 70:  # noqa: PLR2004
+            if "rsi" in features and features["rsi"] > 70:
                 changes_needed.append(
                     {
                         "feature": "rsi",
@@ -522,16 +493,16 @@ class AIExplainer:
                     }
                 )
 
-        elif current_prediction == "BUY" and target_prediction == "SELL" and "rsi" in features and features["rsi"] < 30:  # noqa: PLR2004
-                changes_needed.append(
-                    {
-                        "feature": "rsi",
-                        "current_value": features["rsi"],
-                        "required_value": 75,
-                        "change": "increase",
-                        "explanation": "RSI would need to rise from oversold to overbought",
-                    }
-                )
+        elif current_prediction == "BUY" and target_prediction == "SELL" and "rsi" in features and features["rsi"] < 30:
+            changes_needed.append(
+                {
+                    "feature": "rsi",
+                    "current_value": features["rsi"],
+                    "required_value": 75,
+                    "change": "increase",
+                    "explanation": "RSI would need to rise from oversold to overbought",
+                }
+            )
 
         return {
             "current_prediction": current_prediction,
@@ -541,20 +512,13 @@ class AIExplainer:
             "summary": f"To change from {current_prediction} to {target_prediction}, {len(changes_needed)} feature(s) would need to change significantly.",
         }
 
-    def get_feature_importance_chart_data(
-        self, explanation: Explanation
-    ) -> dict[str, Any]:
+    def get_feature_importance_chart_data(self, explanation: Explanation) -> dict[str, Any]:
         """Get data formatted for visualization charts."""
         return {
             "labels": [c.feature_name for c in explanation.feature_contributions[:10]],
             "values": [c.contribution for c in explanation.feature_contributions[:10]],
-            "colors": [
-                "green" if c.contribution > 0 else "red"
-                for c in explanation.feature_contributions[:10]
-            ],
-            "descriptions": [
-                c.description for c in explanation.feature_contributions[:10]
-            ],
+            "colors": ["green" if c.contribution > 0 else "red" for c in explanation.feature_contributions[:10]],
+            "descriptions": [c.description for c in explanation.feature_contributions[:10]],
         }
 
     def get_explanation_history(self, limit: int = 100) -> list[dict[str, Any]]:

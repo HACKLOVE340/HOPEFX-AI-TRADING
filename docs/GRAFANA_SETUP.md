@@ -2,7 +2,7 @@
 
 > Monitoring dashboards for HOPEFX AI Trading.
 > Grafana is available on Professional, Enterprise, and Elite plans.
-> Last updated: 2026-07-14
+> Last updated: 2026-04-01
 
 ---
 
@@ -416,4 +416,4 @@ Commit the JSON to version control so it is provisioned automatically on next de
 
 ---
 
-*Last updated: 2026-07-14*
+*Last updated: 2026-04-01*

@@ -12,12 +12,11 @@ Tests for:
 - SupportResistanceDetector / PriceLevel  (analysis/patterns/support_resistance.py)
 """
 
-import pytest
+from datetime import UTC, datetime
+
 import numpy as np
 import pandas as pd
-from datetime import datetime, timezone
-UTC = timezone.utc
-
+import pytest
 
 # ================================================================
 # HELPERS
@@ -122,15 +121,15 @@ class TestChartPattern:
     def _make_pattern(self, **kwargs):
         from analysis.patterns.chart_patterns import ChartPattern
 
-        defaults = dict(
-            pattern_type="double_top",
-            direction="bearish",
-            confidence=0.75,
-            start_index=10,
-            end_index=30,
-            key_levels={"neckline": 1980.0, "target": 1960.0},
-            description="Test double top pattern",
-        )
+        defaults = {
+            "pattern_type": "double_top",
+            "direction": "bearish",
+            "confidence": 0.75,
+            "start_index": 10,
+            "end_index": 30,
+            "key_levels": {"neckline": 1980.0, "target": 1960.0},
+            "description": "Test double top pattern",
+        }
         defaults.update(kwargs)
         return ChartPattern(**defaults)
 
@@ -164,16 +163,16 @@ class TestChartPattern:
         d = pattern.to_dict()
 
         assert d["direction"] == "bullish"
-        assert abs(d["confidence"] - 0.82) < 1e-3  # noqa: PLR2004
-        assert d["start_index"] == 10  # noqa: PLR2004
-        assert d["end_index"] == 30  # noqa: PLR2004
+        assert abs(d["confidence"] - 0.82) < 1e-3
+        assert d["start_index"] == 10
+        assert d["end_index"] == 30
 
     def test_to_dict_key_levels_rounded(self):
         """key_levels prices are rounded to 5 decimal places."""
         pattern = self._make_pattern(key_levels={"neckline": 1980.123456789})
         d = pattern.to_dict()
 
-        assert abs(d["key_levels"]["neckline"] - round(1980.123456789, 5)) < 1e-9  # noqa: PLR2004
+        assert abs(d["key_levels"]["neckline"] - round(1980.123456789, 5)) < 1e-9
 
     def test_to_dict_timestamp_is_iso_string(self):
         """timestamp in to_dict() is an ISO-8601 string."""
@@ -209,20 +208,18 @@ class TestChartPatternDetector:
 
         det = ChartPatternDetector()
         assert det is not None
-        assert det.min_bars == 20  # noqa: PLR2004
-        assert det.sensitivity == 0.02  # noqa: PLR2004
-        assert det.swing_window == 3  # noqa: PLR2004
+        assert det.min_bars == 20
+        assert det.sensitivity == 0.02
+        assert det.swing_window == 3
 
     def test_custom_config(self):
         """Detector accepts and applies custom config."""
         from analysis.patterns.chart_patterns import ChartPatternDetector
 
-        det = ChartPatternDetector(
-            config={"min_bars": 50, "sensitivity": 0.01, "swing_window": 5}
-        )
-        assert det.min_bars == 50  # noqa: PLR2004
-        assert det.sensitivity == 0.01  # noqa: PLR2004
-        assert det.swing_window == 5  # noqa: PLR2004
+        det = ChartPatternDetector(config={"min_bars": 50, "sensitivity": 0.01, "swing_window": 5})
+        assert det.min_bars == 50
+        assert det.sensitivity == 0.01
+        assert det.swing_window == 5
 
     def test_detect_patterns_returns_list(self):
         """detect_patterns() returns a list on valid data."""
@@ -302,7 +299,7 @@ class TestChartPatternDetector:
         df = make_ohlcv(n=200)
         patterns = det.detect_patterns(df, min_confidence=0.0)
 
-        if len(patterns) >= 2:  # noqa: PLR2004
+        if len(patterns) >= 2:
             confidences = [p.confidence for p in patterns]
             assert confidences == sorted(confidences, reverse=True)
 
@@ -392,7 +389,7 @@ class TestChartPatternDetector:
                 result = det.detect_patterns(bad_input)  # type: ignore[arg-type]
                 assert isinstance(result, list)
             except (AttributeError, TypeError):
-                pass  # acceptable – module lacks isinstance guard
+                ...  # nosec B110
 
     def test_patterns_have_valid_index_range(self):
         """Pattern start_index and end_index are within DataFrame bounds."""
@@ -443,15 +440,15 @@ class TestCandlestickPattern:
     def _make_pattern(self, **kwargs):
         from analysis.patterns.candlestick import CandlestickPattern
 
-        defaults = dict(
-            pattern_name="Hammer",
-            pattern_type="reversal",
-            direction="bullish",
-            confidence=0.78,
-            index=5,
-            candles_count=1,
-            description="Hammer candlestick at index 5",
-        )
+        defaults = {
+            "pattern_name": "Hammer",
+            "pattern_type": "reversal",
+            "direction": "bullish",
+            "confidence": 0.78,
+            "index": 5,
+            "candles_count": 1,
+            "description": "Hammer candlestick at index 5",
+        }
         defaults.update(kwargs)
         return CandlestickPattern(**defaults)
 
@@ -488,8 +485,8 @@ class TestCandlestickPattern:
         d = pattern.to_dict()
 
         assert d["pattern_name"] == "Doji"
-        assert abs(d["confidence"] - 0.65) < 1e-3  # noqa: PLR2004
-        assert d["index"] == 10  # noqa: PLR2004
+        assert abs(d["confidence"] - 0.65) < 1e-3
+        assert d["index"] == 10
 
     def test_to_dict_timestamp_is_iso_string(self):
         """timestamp field is a valid ISO-8601 string."""
@@ -522,9 +519,9 @@ class TestCandlestickPatternDetector:
 
         det = CandlestickPatternDetector()
         assert det is not None
-        assert det.doji_threshold == 0.05  # noqa: PLR2004
-        assert det.wick_ratio == 2.0  # noqa: PLR2004
-        assert det.marubozu_threshold == 0.05  # noqa: PLR2004
+        assert det.doji_threshold == 0.05
+        assert det.wick_ratio == 2.0
+        assert det.marubozu_threshold == 0.05
 
     def test_custom_config(self):
         """Detector accepts and applies custom config."""
@@ -537,9 +534,9 @@ class TestCandlestickPatternDetector:
                 "max_patterns_per_type": 5,
             }
         )
-        assert det.doji_threshold == 0.03  # noqa: PLR2004
-        assert det.wick_ratio == 3.0  # noqa: PLR2004
-        assert det.max_patterns_per_type == 5  # noqa: PLR2004
+        assert det.doji_threshold == 0.03
+        assert det.wick_ratio == 3.0
+        assert det.max_patterns_per_type == 5
 
     def test_detect_patterns_returns_list_on_valid_data(self):
         """detect_patterns() returns a list on valid OHLCV data."""
@@ -592,9 +589,7 @@ class TestCandlestickPatternDetector:
         patterns = det.detect_patterns(df, min_confidence=0.0)
 
         for p in patterns:
-            assert (
-                0.0 <= p.confidence <= 1.0
-            ), f"Out-of-range confidence: {p.confidence}"
+            assert 0.0 <= p.confidence <= 1.0, f"Out-of-range confidence: {p.confidence}"
 
     def test_detect_patterns_valid_direction(self):
         """All returned patterns have a valid direction."""
@@ -741,9 +736,7 @@ class TestCandlestickPatternDetector:
         names = [p.pattern_name for p in patterns]
         # Hammer and Hanging Man share the same candle structure; the name
         # depends on the trend context (downtrend → Hammer, otherwise → Hanging Man).
-        assert any(
-            n in ("Hammer", "Hanging Man") for n in names
-        ), f"Expected Hammer or Hanging Man among {names}"
+        assert any(n in ("Hammer", "Hanging Man") for n in names), f"Expected Hammer or Hanging Man among {names}"
 
     def test_to_dict_on_detected_patterns(self):
         """Each detected pattern can be serialised via to_dict()."""
@@ -786,16 +779,16 @@ class TestPriceLevel:
     def _make_level(self, **kwargs):
         from analysis.patterns.support_resistance import PriceLevel
 
-        defaults = dict(
-            price=2000.0,
-            level_type="support",
-            strength=0.8,
-            touch_count=3,
-            last_touch=datetime(2024, 1, 15, tzinfo=UTC),
-            method="swing",
-            is_active=True,
-            description="Test support level",
-        )
+        defaults = {
+            "price": 2000.0,
+            "level_type": "support",
+            "strength": 0.8,
+            "touch_count": 3,
+            "last_touch": datetime(2024, 1, 15, tzinfo=UTC),
+            "method": "swing",
+            "is_active": True,
+            "description": "Test support level",
+        }
         defaults.update(kwargs)
         return PriceLevel(**defaults)
 
@@ -832,9 +825,9 @@ class TestPriceLevel:
         level = self._make_level(price=2050.0, level_type="resistance", touch_count=5)
         d = level.to_dict()
 
-        assert abs(d["price"] - 2050.0) < 1e-3  # noqa: PLR2004
+        assert abs(d["price"] - 2050.0) < 1e-3
         assert d["level_type"] == "resistance"
-        assert d["touch_count"] == 5  # noqa: PLR2004
+        assert d["touch_count"] == 5
 
     def test_to_dict_last_touch_none(self):
         """to_dict() serialises None last_touch as None."""
@@ -881,9 +874,9 @@ class TestSupportResistanceDetector:
 
         det = SupportResistanceDetector()
         assert det is not None
-        assert det.sensitivity == 0.003  # noqa: PLR2004
-        assert det.swing_window == 5  # noqa: PLR2004
-        assert det.min_bars == 30  # noqa: PLR2004
+        assert det.sensitivity == 0.003
+        assert det.swing_window == 5
+        assert det.min_bars == 30
 
     def test_custom_config(self):
         """Detector accepts and applies custom config."""
@@ -897,9 +890,9 @@ class TestSupportResistanceDetector:
                 "round_number_increment": 25.0,
             }
         )
-        assert det.sensitivity == 0.01  # noqa: PLR2004
-        assert det.swing_window == 3  # noqa: PLR2004
-        assert det.round_number_increment == 25.0  # noqa: PLR2004
+        assert det.sensitivity == 0.01
+        assert det.swing_window == 3
+        assert det.round_number_increment == 25.0
 
     def test_detect_levels_returns_dict_with_required_keys(self):
         """detect_levels() returns dict with support/resistance/pivot keys."""
@@ -961,8 +954,8 @@ class TestSupportResistanceDetector:
     def test_detect_levels_price_levels_are_price_level_instances(self):
         """Each item in detect_levels() lists is a PriceLevel."""
         from analysis.patterns.support_resistance import (
-            SupportResistanceDetector,
             PriceLevel,
+            SupportResistanceDetector,
         )
 
         det = SupportResistanceDetector()
@@ -971,9 +964,7 @@ class TestSupportResistanceDetector:
 
         for key in ("support", "resistance", "pivot"):
             for lvl in result[key]:
-                assert isinstance(
-                    lvl, PriceLevel
-                ), f"Expected PriceLevel, got {type(lvl)}"
+                assert isinstance(lvl, PriceLevel), f"Expected PriceLevel, got {type(lvl)}"
 
     def test_get_swing_levels_returns_list(self):
         """get_swing_levels() returns a list."""
@@ -1008,7 +999,7 @@ class TestSupportResistanceDetector:
         df = make_ohlcv(n=100)
         result = det.get_fibonacci_levels(df)
         # Standard ratios: 0, 23.6, 38.2, 50, 61.8, 78.6, 100 → 7 levels
-        assert 1 <= len(result) <= 7  # noqa: PLR2004
+        assert 1 <= len(result) <= 7
 
     def test_get_fibonacci_levels_method_label(self):
         """All Fibonacci levels carry method='fibonacci'."""
@@ -1031,9 +1022,9 @@ class TestSupportResistanceDetector:
         levels = det.get_fibonacci_levels(df)
 
         for lvl in levels:
-            assert (
-                price_min - 1e-6 <= lvl.price <= price_max + 1e-6
-            ), f"Fib level price {lvl.price} outside [{price_min}, {price_max}]"
+            assert price_min - 1e-6 <= lvl.price <= price_max + 1e-6, (
+                f"Fib level price {lvl.price} outside [{price_min}, {price_max}]"
+            )
 
     def test_get_fibonacci_levels_empty_df(self):
         """get_fibonacci_levels() returns empty list for empty DataFrame."""
@@ -1062,9 +1053,9 @@ class TestSupportResistanceDetector:
 
         for lvl in levels:
             remainder = lvl.price % increment
-            assert (
-                remainder < 1e-6 or abs(remainder - increment) < 1e-6  # noqa: PLR2004
-            ), f"Level {lvl.price} is not a multiple of {increment}"
+            assert remainder < 1e-6 or abs(remainder - increment) < 1e-6, (
+                f"Level {lvl.price} is not a multiple of {increment}"
+            )
 
     def test_get_round_number_levels_method_label(self):
         """All round-number levels carry method='round_number'."""
@@ -1111,8 +1102,8 @@ class TestSupportResistanceDetector:
     def test_classify_level_support(self):
         """classify_level() returns 'support' for level below current price."""
         from analysis.patterns.support_resistance import (
-            SupportResistanceDetector,
             PriceLevel,
+            SupportResistanceDetector,
         )
 
         det = SupportResistanceDetector(config={"sensitivity": 0.001})
@@ -1131,8 +1122,8 @@ class TestSupportResistanceDetector:
     def test_classify_level_resistance(self):
         """classify_level() returns 'resistance' for level above current price."""
         from analysis.patterns.support_resistance import (
-            SupportResistanceDetector,
             PriceLevel,
+            SupportResistanceDetector,
         )
 
         det = SupportResistanceDetector(config={"sensitivity": 0.001})
@@ -1151,8 +1142,8 @@ class TestSupportResistanceDetector:
     def test_classify_level_pivot(self):
         """classify_level() returns 'pivot' when level is within sensitivity band."""
         from analysis.patterns.support_resistance import (
-            SupportResistanceDetector,
             PriceLevel,
+            SupportResistanceDetector,
         )
 
         sensitivity = 0.005
@@ -1181,9 +1172,7 @@ class TestSupportResistanceDetector:
 
         for key in ("support", "resistance", "pivot"):
             for lvl in result[key]:
-                assert (
-                    0.0 <= lvl.strength <= 1.0
-                ), f"Level {lvl.price} has out-of-range strength: {lvl.strength}"
+                assert 0.0 <= lvl.strength <= 1.0, f"Level {lvl.price} has out-of-range strength: {lvl.strength}"
 
     def test_detect_levels_to_dict_on_results(self):
         """Each detected level can be serialised via to_dict()."""

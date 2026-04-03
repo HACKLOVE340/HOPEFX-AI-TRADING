@@ -1,7 +1,7 @@
 # ML Guide
 
 > How to use, evaluate, retrain, and extend the HOPEFX ML pipeline.
-> Last updated: 2026-07-14
+> Last updated: 2026-04-01
 
 ---
 

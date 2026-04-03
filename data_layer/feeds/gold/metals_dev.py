@@ -19,11 +19,11 @@ WebSocket: wss://stream.metals.dev/v1/stream?api_key=KEY
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 
 from data_layer.feeds.gold.base import GoldFeedBase
 from data_layer.types import FeedSource, GoldTick
-import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +86,7 @@ class MetalsDevFeed(GoldFeedBase):
         during the connection window.
         """
         try:
-            import websockets  # type: ignore[import]  # noqa: F401
+            import websockets  # pylint: disable=unused-import  # type: ignore[import]  # noqa: F401
         except ImportError:
             logger.debug("Metals.dev WebSocket: websockets package not installed")
             return
@@ -97,6 +97,7 @@ class MetalsDevFeed(GoldFeedBase):
     async def _ws_loop(self) -> None:
         import json
         import random
+
         import websockets  # type: ignore[import]
 
         url = f"{_WS_URL}?api_key={self._api_key}"
@@ -123,8 +124,7 @@ class MetalsDevFeed(GoldFeedBase):
                                 if not self._ws_enabled:
                                     self._ws_enabled = True
                                     logger.info(
-                                        "Metals.dev WebSocket: first tick received "
-                                        "(price=%.4f) — switching to WS mode",
+                                        "Metals.dev WebSocket: first tick received (price=%.4f) — switching to WS mode",
                                         price,
                                     )
                         except Exception as exc:

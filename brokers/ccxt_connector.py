@@ -26,8 +26,7 @@ Usage:
 """
 
 import logging
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 from brokers.base import (
@@ -164,7 +163,7 @@ class CCXTConnector(BrokerConnector):
         )
         return self._parse_order(raw)
 
-    def cancel_order(self, order_id: str, symbol: str = None) -> bool:
+    def cancel_order(self, order_id: str, symbol: str | None = None) -> bool:
         self._require_connected()
         try:
             self._exchange.cancel_order(order_id, symbol)
@@ -173,7 +172,7 @@ class CCXTConnector(BrokerConnector):
             logger.error("Cancel order %s failed: %s", order_id, exc)
             return False
 
-    def get_order(self, order_id: str, symbol: str = None) -> Order | None:
+    def get_order(self, order_id: str, symbol: str | None = None) -> Order | None:
         self._require_connected()
         try:
             raw = self._exchange.fetch_order(order_id, symbol)
@@ -189,11 +188,7 @@ class CCXTConnector(BrokerConnector):
         try:
             if self._exchange.has.get("fetchPositions"):
                 raws = self._exchange.fetch_positions()
-                return [
-                    self._parse_position(p)
-                    for p in raws
-                    if float(p.get("contracts") or p.get("size") or 0) != 0
-                ]
+                return [self._parse_position(p) for p in raws if float(p.get("contracts") or p.get("size") or 0) != 0]
             # Spot fallback: derive from balance
             balance = self._exchange.fetch_balance()
             positions = []
@@ -223,7 +218,7 @@ class CCXTConnector(BrokerConnector):
             for pos in positions:
                 if pos.symbol == symbol:
                     side = OrderSide.SELL if pos.side == "LONG" else OrderSide.BUY
-                    self.place_order(symbol, side, OrderType.MARKET, abs(pos.quantity))
+                    self.place_order(symbol, side, abs(pos.quantity), OrderType.MARKET)
                     return True
             return False
         except Exception as exc:
@@ -341,11 +336,7 @@ class CCXTConnector(BrokerConnector):
         )
 
     def _parse_position(self, raw: dict) -> Position:
-        side = (
-            "LONG"
-            if float(raw.get("contracts") or raw.get("size") or 0) > 0
-            else "SHORT"
-        )
+        side = "LONG" if float(raw.get("contracts") or raw.get("size") or 0) > 0 else "SHORT"
         return Position(
             symbol=raw.get("symbol", ""),
             side=side,

@@ -51,35 +51,25 @@ def add_price_action_features(df: pd.DataFrame) -> pd.DataFrame:
     candle_range = (h - l).replace(0, np.nan)
 
     d["pa_body_ratio"] = (body / candle_range).fillna(0.0)
-    d["pa_upper_wick"] = (
-        (h - pd.concat([o, c], axis=1).max(axis=1)) / candle_range
-    ).fillna(0.0)
-    d["pa_lower_wick"] = (
-        (pd.concat([o, c], axis=1).min(axis=1) - l) / candle_range
-    ).fillna(0.0)
+    d["pa_upper_wick"] = ((h - pd.concat([o, c], axis=1).max(axis=1)) / candle_range).fillna(0.0)
+    d["pa_lower_wick"] = ((pd.concat([o, c], axis=1).min(axis=1) - l) / candle_range).fillna(0.0)
     d["pa_bull_candle"] = (c > o).astype(int)
-    d["pa_doji"] = (d["pa_body_ratio"] < 0.1).astype(int)  # noqa: PLR2004
+    d["pa_doji"] = (d["pa_body_ratio"] < 0.1).astype(int)
     d["pa_pin_bar_bull"] = (
-        (d["pa_lower_wick"] > 0.6) & (d["pa_body_ratio"] < 0.3)  # noqa: PLR2004
+        (d["pa_lower_wick"] > 0.6) & (d["pa_body_ratio"] < 0.3)
     ).astype(int)
     d["pa_pin_bar_bear"] = (
-        (d["pa_upper_wick"] > 0.6) & (d["pa_body_ratio"] < 0.3)  # noqa: PLR2004
+        (d["pa_upper_wick"] > 0.6) & (d["pa_body_ratio"] < 0.3)
     ).astype(int)
 
     # Engulfing patterns
     prev_body = (d["close"].shift(1) - d["open"].shift(1)).abs()
-    d["pa_bull_engulf"] = (
-        (c > o)
-        & (o < d["close"].shift(1))
-        & (c > d["open"].shift(1))
-        & (body > prev_body)
-    ).astype(int)
-    d["pa_bear_engulf"] = (
-        (c < o)
-        & (o > d["close"].shift(1))
-        & (c < d["open"].shift(1))
-        & (body > prev_body)
-    ).astype(int)
+    d["pa_bull_engulf"] = ((c > o) & (o < d["close"].shift(1)) & (c > d["open"].shift(1)) & (body > prev_body)).astype(
+        int
+    )
+    d["pa_bear_engulf"] = ((c < o) & (o > d["close"].shift(1)) & (c < d["open"].shift(1)) & (body > prev_body)).astype(
+        int
+    )
 
     # 3-bar momentum
     d["pa_3bar_bull"] = ((c > c.shift(1)) & (c.shift(1) > c.shift(2))).astype(int)
@@ -112,8 +102,8 @@ def add_swing_features(df: pd.DataFrame, window: int = 5) -> pd.DataFrame:
 
     d["dist_to_swing_high"] = ((last_sh - c) / atr.replace(0, np.nan)).fillna(0.0)
     d["dist_to_swing_low"] = ((c - last_sl) / atr.replace(0, np.nan)).fillna(0.0)
-    d["near_swing_high"] = (d["dist_to_swing_high"].abs() < 0.5).astype(int)  # noqa: PLR2004
-    d["near_swing_low"] = (d["dist_to_swing_low"].abs() < 0.5).astype(int)  # noqa: PLR2004
+    d["near_swing_high"] = (d["dist_to_swing_high"].abs() < 0.5).astype(int)
+    d["near_swing_low"] = (d["dist_to_swing_low"].abs() < 0.5).astype(int)
 
     # Breakout flags
     d["breakout_high"] = (c > last_sh.shift(1)).astype(int)
@@ -175,9 +165,7 @@ def add_volatility_regime(df: pd.DataFrame) -> pd.DataFrame:
     # Vol regime: 0=low, 1=normal, 2=high (60-bar percentile)
     pct = d["rvol_20"].rolling(60).rank(pct=True).fillna(0.5)
     d["vol_regime"] = (
-        pd.cut(pct, bins=[0, 0.33, 0.67, 1.0], labels=[0, 1, 2], include_lowest=True)
-        .astype(float)
-        .fillna(1.0)
+        pd.cut(pct, bins=[0, 0.33, 0.67, 1.0], labels=[0, 1, 2], include_lowest=True).astype(float).fillna(1.0)
     )
 
     # Parkinson volatility estimator (uses high-low range, more efficient)
@@ -213,9 +201,7 @@ def add_microstructure_features(df: pd.DataFrame) -> pd.DataFrame:
     # Amihud illiquidity proxy
     if "volume" in d.columns and d["volume"].sum() > 0:
         ret_abs = c.pct_change(fill_method=None).abs()
-        d["amihud"] = (
-            (ret_abs / d["volume"].replace(0, np.nan)).rolling(20).mean()
-        ).fillna(0.0)
+        d["amihud"] = ((ret_abs / d["volume"].replace(0, np.nan)).rolling(20).mean()).fillna(0.0)
         # Volume z-score
         vol_mean = d["volume"].rolling(20).mean()
         vol_std = d["volume"].rolling(20).std().replace(0, np.nan)
@@ -257,7 +243,7 @@ def add_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
     d["cal_month"] = idx.month
     d["cal_quarter"] = idx.quarter
     d["cal_eom"] = idx.is_month_end.astype(int)
-    d["cal_eow"] = (idx.dayofweek == 4).astype(int)  # noqa: PLR2004
+    d["cal_eow"] = (idx.dayofweek == 4).astype(int)
     d["cal_monday"] = (idx.dayofweek == 0).astype(int)
 
     # Cyclical encoding avoids ordinal assumption
@@ -320,23 +306,17 @@ def add_trend_features(df: pd.DataFrame, smoke: bool = False) -> pd.DataFrame:
     for w in [14]:
         lo_w = l.rolling(w).min()
         hi_w = h.rolling(w).max()
-        d[f"stoch_k_{w}"] = (
-            100 * (c - lo_w) / (hi_w - lo_w).replace(0, np.nan)
-        ).fillna(50.0)
+        d[f"stoch_k_{w}"] = (100 * (c - lo_w) / (hi_w - lo_w).replace(0, np.nan)).fillna(50.0)
         d[f"stoch_d_{w}"] = d[f"stoch_k_{w}"].rolling(3).mean().fillna(50.0)
 
     # Williams %R
     d["williams_r"] = (
-        -100
-        * (h.rolling(14).max() - c)
-        / (h.rolling(14).max() - l.rolling(14).min()).replace(0, np.nan)
+        -100 * (h.rolling(14).max() - c) / (h.rolling(14).max() - l.rolling(14).min()).replace(0, np.nan)
     ).fillna(-50.0)
 
     # CCI (Commodity Channel Index)
     tp = (h + l + c) / 3
-    d["cci_20"] = (
-        (tp - tp.rolling(20).mean()) / (0.015 * tp.rolling(20).std().replace(0, np.nan))
-    ).fillna(0.0)
+    d["cci_20"] = ((tp - tp.rolling(20).mean()) / (0.015 * tp.rolling(20).std().replace(0, np.nan))).fillna(0.0)
 
     return d
 
@@ -423,7 +403,7 @@ def add_intermarket_features(
     # Forced liquidation: gold down + VIX up (risk-off but gold sold for margin)
     if "vix" in macro.columns:
         vix_ret = macro["vix"].pct_change(fill_method=None).fillna(0.0)
-        d["im_forced_liquidation"] = ((gold_ret < -0.005) & (vix_ret > 0.05)).astype(  # noqa: PLR2004
+        d["im_forced_liquidation"] = ((gold_ret < -0.005) & (vix_ret > 0.05)).astype(
             float,
         )
     else:
@@ -482,9 +462,7 @@ def add_cot_proxy_features(
         oi_mom_mean = d["cot_oi_momentum_5"].rolling(60).mean()
         oi_mom_std = d["cot_oi_momentum_5"].rolling(60).std().replace(0, np.nan)
         oi_z = ((d["cot_oi_momentum_5"] - oi_mom_mean) / oi_mom_std).fillna(0.0)
-        d["cot_demand_surge"] = (
-            (oi_z > 1.0) & (d["close"].pct_change(fill_method=None) > 0)
-        ).astype(
+        d["cot_demand_surge"] = ((oi_z > 1.0) & (d["close"].pct_change(fill_method=None) > 0)).astype(
             float,
         )
     else:
@@ -527,9 +505,7 @@ def add_cot_proxy_features(
         # physical/institutional buying rather than speculative positioning.
         if "gold_etf" in macro.columns and macro["gold_etf"].abs().sum() > 0:
             gld_ret = macro["gold_etf"].pct_change(fill_method=None).fillna(0.0)
-            d["cot_large_spec_proxy"] = (
-                (gold_ret - gld_ret).rolling(5).mean().fillna(0.0)
-            )
+            d["cot_large_spec_proxy"] = (gold_ret - gld_ret).rolling(5).mean().fillna(0.0)
         else:
             d["cot_large_spec_proxy"] = 0.0
 
@@ -543,12 +519,10 @@ def add_cot_proxy_features(
             yield_chg = macro["yield_10y"].diff().fillna(0.0)
             # All three rising simultaneously = central bank / geopolitical demand
             d["cot_cb_buying_proxy"] = (
-                (gold_ret > 0.002) & (dxy_ret > 0) & (yield_chg > 0)  # noqa: PLR2004
+                (gold_ret > 0.002) & (dxy_ret > 0) & (yield_chg > 0)
             ).astype(float)
             # Rolling 20-bar frequency of this pattern (persistence measure)
-            d["cot_cb_buying_freq20"] = (
-                d["cot_cb_buying_proxy"].rolling(20).mean().fillna(0.0)
-            )
+            d["cot_cb_buying_freq20"] = d["cot_cb_buying_proxy"].rolling(20).mean().fillna(0.0)
         else:
             d["cot_cb_buying_proxy"] = 0.0
             d["cot_cb_buying_freq20"] = 0.0
@@ -557,12 +531,10 @@ def add_cot_proxy_features(
         has_vix = "vix" in macro.columns and macro["vix"].abs().sum() > 0
         has_spx = "spx" in macro.columns and macro["spx"].abs().sum() > 0
         if has_vix and has_spx:
-            vix_spike = (macro["vix"] > 25).astype(float)  # noqa: PLR2004
+            vix_spike = (macro["vix"] > 25).astype(float)
             spx_ret = macro["spx"].pct_change(fill_method=None).fillna(0.0)
             gold_vs_spx = gold_ret - spx_ret
-            d["cot_geopolitical"] = (
-                vix_spike * (gold_vs_spx > 0).astype(float)
-            ).fillna(0.0)
+            d["cot_geopolitical"] = (vix_spike * (gold_vs_spx > 0).astype(float)).fillna(0.0)
             # 20-bar rolling geopolitical premium score
             d["cot_geo_score20"] = d["cot_geopolitical"].rolling(20).mean().fillna(0.0)
         else:
@@ -697,7 +669,7 @@ def build_advanced_features(
     exclude = {"open", "high", "low", "close", "volume", "_target"}
     feature_cols = [c for c in d.columns if c not in exclude]
 
-    d = d[feature_cols + ["_target"]]
+    d = d[[*feature_cols, "_target"]]
     d = d.replace([np.inf, -np.inf], np.nan).dropna()
 
     X = d[feature_cols]
@@ -744,7 +716,7 @@ def _rolling_hurst(series: pd.Series, window: int = 40) -> pd.Series:
     """
 
     def _hurst_scalar(x: np.ndarray) -> float:
-        if len(x) < 8:  # noqa: PLR2004
+        if len(x) < 8:
             return 0.5
         try:
             lags = range(2, min(len(x) // 2, 12))
@@ -753,7 +725,7 @@ def _rolling_hurst(series: pd.Series, window: int = 40) -> pd.Series:
                 chunks = [x[i : i + lag] for i in range(0, len(x) - lag, lag)]
                 rs_chunk = []
                 for chunk in chunks:
-                    if len(chunk) < 2:  # noqa: PLR2004
+                    if len(chunk) < 2:
                         continue
                     dev = np.cumsum(chunk - np.mean(chunk))
                     r = dev.max() - dev.min()
@@ -762,7 +734,7 @@ def _rolling_hurst(series: pd.Series, window: int = 40) -> pd.Series:
                         rs_chunk.append(r / s)
                 if rs_chunk:
                     rs_vals.append(np.mean(rs_chunk))
-            if len(rs_vals) < 2:  # noqa: PLR2004
+            if len(rs_vals) < 2:
                 return 0.5
             log_lags = np.log(list(lags)[: len(rs_vals)])
             log_rs = np.log(rs_vals)

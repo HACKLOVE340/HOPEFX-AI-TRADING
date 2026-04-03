@@ -34,8 +34,7 @@ import asyncio
 import logging
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 
 import pandas as pd
 
@@ -115,7 +114,7 @@ class RealRiskManager:
         """Reject ticks outside plausible XAUUSD range."""
         if tick.mid <= 0:
             return False
-        if not (500.0 < tick.mid < 5000.0):  # noqa: PLR2004
+        if not (500.0 < tick.mid < 5000.0):
             logger.warning("SUSPICIOUS PRICE: %.4f (out of XAU range)", tick.mid)
             return False
         return True
@@ -246,12 +245,8 @@ class PaperOrderGateway:
         if self._position is None:
             return None
         pos = self._position
-        hit_sl = (pos.side == "BUY" and close <= pos.stop_loss) or (
-            pos.side == "SELL" and close >= pos.stop_loss
-        )
-        hit_tp = (pos.side == "BUY" and close >= pos.take_profit) or (
-            pos.side == "SELL" and close <= pos.take_profit
-        )
+        hit_sl = (pos.side == "BUY" and close <= pos.stop_loss) or (pos.side == "SELL" and close >= pos.stop_loss)
+        hit_tp = (pos.side == "BUY" and close >= pos.take_profit) or (pos.side == "SELL" and close <= pos.take_profit)
         if not (hit_sl or hit_tp):
             return None
 
@@ -357,8 +352,7 @@ class ForwardTestHarness:
         df = await self._fetch_ohlcv()
         if df is None or df.empty:
             logger.error(
-                "No data returned from Dukascopy for %s → %s. "
-                "Check network connectivity and symbol name.",
+                "No data returned from Dukascopy for %s → %s. Check network connectivity and symbol name.",
                 self._start.strftime("%Y-%m-%d"),
                 self._end.strftime("%Y-%m-%d"),
             )
@@ -369,9 +363,7 @@ class ForwardTestHarness:
         # Replay bar by bar
         for _ts, bar in df.iterrows():
             close = float(bar.get("close", 0.0))
-            if close <= 0 or not self._risk.validate_tick(
-                type("_T", (), {"mid": close})()
-            ):
+            if close <= 0 or not self._risk.validate_tick(type("_T", (), {"mid": close})()):
                 self._metrics["invalid_bars"] += 1
                 continue
 
@@ -431,9 +423,7 @@ class ForwardTestHarness:
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="HOPEFX Forward Test — Real Dukascopy Replay"
-    )
+    parser = argparse.ArgumentParser(description="HOPEFX Forward Test — Real Dukascopy Replay")
     parser.add_argument(
         "--days",
         type=int,

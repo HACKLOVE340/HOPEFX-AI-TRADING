@@ -80,9 +80,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────────
-LSTM_MODEL_PATH: Path = Path(
-    os.getenv("LSTM_MODEL_PATH", "ml/saved_models/lstm_signal.pt")
-)
+LSTM_MODEL_PATH: Path = Path(os.getenv("LSTM_MODEL_PATH", "ml/saved_models/lstm_signal.pt"))
 LSTM_SEQ_LEN: int = int(os.getenv("LSTM_SEQ_LEN", "60"))
 LSTM_MIN_BARS: int = int(os.getenv("LSTM_MIN_BARS", "120"))
 LSTM_ABSTAIN_LOW: float = float(os.getenv("LSTM_ABSTAIN_LOW", "0.46"))
@@ -199,9 +197,7 @@ class LSTMSignalLayer:
             return X_window[np.newaxis, :, :]
 
         except Exception as exc:
-            logger.warning(
-                "LSTMSignalLayer feature build failed for %s: %s", symbol, exc
-            )
+            logger.warning("LSTMSignalLayer feature build failed for %s: %s", symbol, exc)
             return None
 
     # ── Neutral response ──────────────────────────────────────────────────────
@@ -262,8 +258,7 @@ class LSTMSignalLayer:
         if ohlcv is None or len(ohlcv) < self._min_bars:
             return self._neutral(
                 ohlcv,
-                reason=f"insufficient_bars_{len(ohlcv) if ohlcv is not None else 0}"
-                f"_need_{self._min_bars}",
+                reason=f"insufficient_bars_{len(ohlcv) if ohlcv is not None else 0}_need_{self._min_bars}",
                 t0=t0,
             )
 
@@ -273,7 +268,7 @@ class LSTMSignalLayer:
             return self._neutral(ohlcv, reason="sequence_build_failed", t0=t0)
 
         # ── Flat-market abstain ───────────────────────────────────────────────
-        if X_seq.std() < 1e-6:  # noqa: PLR2004
+        if X_seq.std() < 1e-6:
             return self._neutral(ohlcv, reason="flat_market_low_variance", t0=t0)
 
         # ── LSTM inference ────────────────────────────────────────────────────
@@ -332,11 +327,7 @@ class LSTMSignalLayer:
             "n_features": self._n_features,
             "predict_count": self._predict_count,
             "abstain_count": self._abstain_count,
-            "abstain_rate": (
-                round(self._abstain_count / self._predict_count, 3)
-                if self._predict_count > 0
-                else 0.0
-            ),
+            "abstain_rate": (round(self._abstain_count / self._predict_count, 3) if self._predict_count > 0 else 0.0),
             "signal_weight": LSTM_SIGNAL_WEIGHT,
         }
 

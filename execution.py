@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from validation import OrderValidator, Order
+from validation import Order, OrderValidator  # pylint: disable=no-name-in-module
 
 logger = logging.getLogger("execution")
 
@@ -84,9 +84,7 @@ class PaperExecutor:
     def equity(self) -> float:
         """Mark-to-market equity = cash + sum of all unrealised P&L."""
         total_upnl = sum(
-            self.get_unrealized_pnl(sym, self._last_prices[sym])
-            for sym in self.positions
-            if sym in self._last_prices
+            self.get_unrealized_pnl(sym, self._last_prices[sym]) for sym in self.positions if sym in self._last_prices
         )
         return self.cash + total_upnl
 
@@ -124,7 +122,7 @@ class PaperExecutor:
             # Fixed $0.05 slippage for XAUUSD
             return 0.05 if symbol == "XAUUSD" else base_price * 0.0001
 
-        elif self.slippage_model == "variable":
+        if self.slippage_model == "variable":
             # Variable slippage based on size and volatility
             base_slippage = 0.02  # $0.02 base for XAUUSD
 
@@ -180,7 +178,8 @@ class PaperExecutor:
             )
 
             if not validation.valid:
-                logger.error(f"Order {order_id} rejected: {validation.reason}")
+                logger.error("Order %s rejected: %s", order_id, validation.reason)
+
                 return ExecutionResult(
                     order_id=order_id,
                     status=OrderStatus.REJECTED,
@@ -196,16 +195,12 @@ class PaperExecutor:
 
         # Determine fill price
         if order.side == "buy":
-            base_price = ask if ask else current_price + 0.02
-            slippage = self._calculate_slippage(
-                order.symbol, order.side, order.qty, base_price, volatility
-            )
+            base_price = ask or current_price + 0.02
+            slippage = self._calculate_slippage(order.symbol, order.side, order.qty, base_price, volatility)
             fill_price = base_price + slippage
         else:
-            base_price = bid if bid else current_price - 0.02
-            slippage = self._calculate_slippage(
-                order.symbol, order.side, order.qty, base_price, volatility
-            )
+            base_price = bid or current_price - 0.02
+            slippage = self._calculate_slippage(order.symbol, order.side, order.qty, base_price, volatility)
             fill_price = base_price - slippage
 
         # Calculate costs
@@ -213,10 +208,8 @@ class PaperExecutor:
 
         # Execute based on order type
         if order.order_type == "market":
-            return self._execute_market_order(
-                order_id, order, fill_price, slippage, commission, timestamp
-            )
-        elif order.order_type == "limit":
+            return self._execute_market_order(order_id, order, fill_price, slippage, commission, timestamp)
+        if order.order_type == "limit":
             return self._execute_limit_order(
                 order_id,
                 order,
@@ -226,17 +219,16 @@ class PaperExecutor:
                 commission,
                 timestamp,
             )
-        else:
-            return ExecutionResult(
-                order_id=order_id,
-                status=OrderStatus.REJECTED,
-                filled_qty=0.0,
-                avg_price=0.0,
-                slippage=0.0,
-                commission=0.0,
-                message=f"Unsupported order type: {order.order_type}",
-                timestamp=timestamp,
-            )
+        return ExecutionResult(
+            order_id=order_id,
+            status=OrderStatus.REJECTED,
+            filled_qty=0.0,
+            avg_price=0.0,
+            slippage=0.0,
+            commission=0.0,
+            message=f"Unsupported order type: {order.order_type}",
+            timestamp=timestamp,
+        )
 
     def _execute_market_order(
         self,
@@ -270,10 +262,7 @@ class PaperExecutor:
                 )
 
             # Close existing short first (buy-to-cover)
-            if (
-                order.symbol in self.positions
-                and self.positions[order.symbol]["side"] == "short"
-            ):
+            if order.symbol in self.positions and self.positions[order.symbol]["side"] == "short":
                 old_pos = self.positions[order.symbol]
                 close_qty = min(order.qty, old_pos["qty"])
                 pnl = (old_pos["entry_price"] - fill_price) * close_qty - commission
@@ -283,18 +272,15 @@ class PaperExecutor:
                     del self.positions[order.symbol]
                 else:
                     old_pos["qty"] -= close_qty
-                logger.info(
-                    f"Closed short {order.symbol} qty={close_qty} P&L=${pnl:.2f}"
-                )
+                logger.info("Closed short %s qty=%s P&L=$%s", order.symbol, close_qty, pnl)
+
             else:
                 # Open or add to long — deduct cash
                 self.cash -= total_cost
                 if order.symbol in self.positions:
                     old = self.positions[order.symbol]
                     total_qty = old["qty"] + order.qty
-                    avg_entry = (
-                        old["entry_price"] * old["qty"] + fill_price * order.qty
-                    ) / total_qty
+                    avg_entry = (old["entry_price"] * old["qty"] + fill_price * order.qty) / total_qty
                     old["qty"] = total_qty
                     old["entry_price"] = avg_entry
                 else:
@@ -352,18 +338,10 @@ class PaperExecutor:
         actual_filled = order.qty
         if order.side in ("sell", "short") and order.symbol in self.positions:
             # Position was partially closed — remaining qty still open
-            remaining = (
-                self.positions[order.symbol]["qty"]
-                if order.symbol in self.positions
-                else 0
-            )
-            actual_filled = (
-                order.qty - remaining if remaining < order.qty else order.qty
-            )
+            remaining = self.positions[order.symbol]["qty"] if order.symbol in self.positions else 0
+            actual_filled = order.qty - remaining if remaining < order.qty else order.qty
 
-        fill_status = (
-            OrderStatus.PARTIAL if actual_filled < order.qty else OrderStatus.FILLED
-        )
+        fill_status = OrderStatus.PARTIAL if actual_filled < order.qty else OrderStatus.FILLED
 
         result = ExecutionResult(
             order_id=order_id,
@@ -385,10 +363,7 @@ class PaperExecutor:
             }
         )
 
-        logger.info(
-            f"Executed {order.side} {order.qty} {order.symbol} @ {fill_price:.2f} "
-            f"(slip: ${slippage:.2f}, comm: ${commission:.2f})"
-        )
+        logger.info("Executed %s %s %s @ %s (slip: $%s, comm: $%s)", order.side, order.qty, order.symbol, fill_price, slippage, commission)
 
         return result
 
@@ -443,9 +418,7 @@ class PaperExecutor:
 
         # Fill at limit price (or better)
         fill_price = order.price
-        return self._execute_market_order(
-            order_id, order, fill_price, 0.0, commission, timestamp
-        )
+        return self._execute_market_order(order_id, order, fill_price, 0.0, commission, timestamp)
 
     def get_position(self, symbol: str) -> dict | None:
         """Get current position for symbol."""
@@ -459,8 +432,7 @@ class PaperExecutor:
 
         if pos["side"] == "long":
             return (current_price - pos["entry_price"]) * pos["qty"]
-        else:
-            return (pos["entry_price"] - current_price) * pos["qty"]
+        return (pos["entry_price"] - current_price) * pos["qty"]
 
     def close_all_positions(self, current_prices: dict[str, float]) -> list:
         """Close all open positions."""
@@ -472,9 +444,7 @@ class PaperExecutor:
                 side="sell" if pos["side"] == "long" else "buy",
                 qty=pos["qty"],
             )
-            result = self.submit_order(
-                order, current_prices.get(symbol, pos["entry_price"])
-            )
+            result = self.submit_order(order, current_prices.get(symbol, pos["entry_price"]))
             results.append(result)
         return results
 
@@ -546,9 +516,8 @@ class SmartOrderRouter:
         self._excluded_until[name] = 0.0
         if is_default or self.default_broker is None:
             self.default_broker = name
-        logger.info(
-            f"SmartOrderRouter: registered broker '{name}' (fee={fee_bps}bps, spread={spread_bps}bps)"
-        )
+        logger.info("SmartOrderRouter: registered broker '%s' (fee=%sbps, spread=%sbps)", name, fee_bps, spread_bps)
+
 
     def _score_broker(self, name: str) -> float:
         """Compute routing score for a broker (higher = preferred)."""
@@ -567,17 +536,13 @@ class SmartOrderRouter:
     def _ranked_brokers(self) -> list:
         """Return broker names sorted by score, excluding temporarily excluded ones."""
         now = time.monotonic()
-        available = [
-            name for name in self.brokers if self._excluded_until.get(name, 0.0) <= now
-        ]
+        available = [name for name in self.brokers if self._excluded_until.get(name, 0.0) <= now]
         return sorted(available, key=self._score_broker, reverse=True)
 
     def _update_metrics(self, name: str, latency_ms: float, success: bool) -> None:
         """Update EMA latency and fill history after an attempt."""
         alpha = 0.2
-        self._latency_ema[name] = (
-            alpha * latency_ms + (1 - alpha) * self._latency_ema[name]
-        )
+        self._latency_ema[name] = alpha * latency_ms + (1 - alpha) * self._latency_ema[name]
         hist = self._fill_history[name]
         hist.append(1 if success else 0)
         if len(hist) > self._FILL_HISTORY_LEN:
@@ -589,10 +554,7 @@ class SmartOrderRouter:
             if self._error_count[name] >= self._ERROR_EXCLUSION:
                 exclusion_secs = 60.0 * self._error_count[name]
                 self._excluded_until[name] = time.monotonic() + exclusion_secs
-                logger.warning(
-                    f"SmartOrderRouter: broker '{name}' excluded for "
-                    f"{exclusion_secs:.0f}s after {self._error_count[name]} consecutive errors"
-                )
+                logger.warning("SmartOrderRouter: broker '%s' excluded for %ss after %s consecutive errors", name, exclusion_secs, self._error_count[name])
 
     def route_order(self, order: Any, **kwargs) -> ExecutionResult:
         """
@@ -610,9 +572,8 @@ class SmartOrderRouter:
         for name in ranked:
             broker = self.brokers[name]
             if not hasattr(broker, "submit_order"):
-                logger.warning(
-                    f"SmartOrderRouter: broker '{name}' has no submit_order — skipping"
-                )
+                logger.warning("SmartOrderRouter: broker '%s' has no submit_order — skipping", name)
+
                 continue
 
             t0 = time.monotonic()
@@ -621,22 +582,16 @@ class SmartOrderRouter:
                 latency_ms = (time.monotonic() - t0) * 1000
                 success = result.status == OrderStatus.FILLED
                 self._update_metrics(name, latency_ms, success)
-                logger.debug(
-                    f"SmartOrderRouter: routed to '{name}' "
-                    f"latency={latency_ms:.1f}ms status={result.status.value}"
-                )
+                logger.debug("SmartOrderRouter: routed to '%s' latency=%sms status=%s", name, latency_ms, result.status.value)
                 return result
             except Exception as exc:
                 latency_ms = (time.monotonic() - t0) * 1000
                 self._update_metrics(name, latency_ms, False)
-                logger.warning(
-                    f"SmartOrderRouter: broker '{name}' raised {exc!r} — trying next"
-                )
+                logger.warning("SmartOrderRouter: broker '%s' raised %s — trying next", name, exc)
+
                 last_error = exc
 
-        raise RuntimeError(
-            f"SmartOrderRouter: all brokers failed. Last error: {last_error}"
-        )
+        raise RuntimeError(f"SmartOrderRouter: all brokers failed. Last error: {last_error}")
 
     def get_routing_stats(self) -> dict[str, Any]:
         """Return per-broker routing statistics for monitoring."""

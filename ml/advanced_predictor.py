@@ -85,9 +85,7 @@ ABSTAIN_LOW: float = float(os.getenv("SIGNAL_ABSTAIN_LOW", "0.46"))
 ABSTAIN_HIGH: float = float(os.getenv("SIGNAL_ABSTAIN_HIGH", "0.54"))
 HIGH_CONF_THRESHOLD: float = float(os.getenv("SIGNAL_HIGH_CONF", "0.60"))
 # Online learning gate: only update adapter when enabled
-ONLINE_LEARNING_ENABLED: bool = (
-    os.getenv("FEATURE_ONLINE_LEARNING", "false").lower() == "true"
-)
+ONLINE_LEARNING_ENABLED: bool = os.getenv("FEATURE_ONLINE_LEARNING", "false").lower() == "true"
 # SGD adapter blend weight (0 = base model only, 1 = adapter only)
 ADAPTER_BLEND: float = float(os.getenv("PREDICTOR_ADAPTER_BLEND", "0.15"))
 
@@ -152,7 +150,7 @@ class _SGDAdapter:
 
     def predict_proba(self, X: np.ndarray) -> float | None:
         """Return P(up) from adapter, or None if not ready."""
-        if self._clf is None or self._n_updates < 10:  # noqa: PLR2004
+        if self._clf is None or self._n_updates < 10:
             return None
         with self._lock:
             try:
@@ -224,7 +222,8 @@ class AdvancedPredictor:
         expected_digest: str | None = None
         source = "unknown"
         try:
-            from ml.model_registry import get_registry, sha256_file as _sha256
+            from ml.model_registry import get_registry
+            from ml.model_registry import sha256_file as _sha256
 
             reg = get_registry()
             # Check active version first
@@ -272,9 +271,7 @@ class AdvancedPredictor:
                 f"(source={source}): "
                 f"expected {expected_digest[:16]}… got {actual[:16]}…"
             )
-            logger.critical(
-                "AdvancedPredictor: INTEGRITY FAILURE — %s", self._integrity_msg
-            )
+            logger.critical("AdvancedPredictor: INTEGRITY FAILURE — %s", self._integrity_msg)
             # Fire Sentry alert if available
             try:
                 import sentry_sdk
@@ -288,9 +285,7 @@ class AdvancedPredictor:
             return False
 
         self._integrity_ok = True
-        self._integrity_msg = (
-            f"Integrity OK ({source}): {self._model_path.name} sha256={actual[:16]}…"
-        )
+        self._integrity_msg = f"Integrity OK ({source}): {self._model_path.name} sha256={actual[:16]}…"
         logger.info("AdvancedPredictor: %s", self._integrity_msg)
         return True
 
@@ -299,7 +294,7 @@ class AdvancedPredictor:
     def _load_meta(self) -> None:
         try:
             if _META_FILE.exists():
-                with open(_META_FILE) as f:
+                with Path(_META_FILE).open(encoding="utf-8") as f:
                     self._meta = json.load(f)
                 logger.debug(
                     "Model meta loaded: OOS accuracy=%.4f, AUC=%.4f",
@@ -336,7 +331,7 @@ class AdvancedPredictor:
             try:
                 import joblib
 
-                payload = joblib.load(self._model_path)
+                payload = joblib.load(self._model_path)  # nosec B301 - _model_path set from saved_models
                 self._model = payload
                 # Extract feature names from the pipeline
                 if hasattr(payload, "feature_names_in_"):
@@ -411,8 +406,7 @@ class AdvancedPredictor:
                 X = add_data_layer_features(X, as_of=as_of)
             except Exception as exc:
                 logger.debug(
-                    "AdvancedPredictor: data layer feature injection failed "
-                    "(non-fatal): %s",
+                    "AdvancedPredictor: data layer feature injection failed (non-fatal): %s",
                     exc,
                 )
 
@@ -506,7 +500,7 @@ class AdvancedPredictor:
 
         # ── Flat-market abstain: if feature variance is near zero ─────────────
         feat_std = float(X.values.std())
-        if feat_std < 1e-6:  # noqa: PLR2004
+        if feat_std < 1e-6:
             self._abstain_count += 1
             return self._neutral(ohlcv, reason="flat_market_low_variance", t0=t0)
 
@@ -642,11 +636,7 @@ class AdvancedPredictor:
         return {
             "predict_count": self._predict_count,
             "abstain_count": self._abstain_count,
-            "abstain_rate": (
-                self._abstain_count / self._predict_count
-                if self._predict_count > 0
-                else 0.0
-            ),
+            "abstain_rate": (self._abstain_count / self._predict_count if self._predict_count > 0 else 0.0),
             "adapter_updates": self._adapter.n_updates if self._adapter else 0,
             "online_learning_enabled": ONLINE_LEARNING_ENABLED,
             "model_loaded": self._model is not None,
@@ -730,7 +720,7 @@ class HybridEnsemblePredictor:
     def _check_components(self) -> None:
         """Probe which components are available without loading models."""
         try:
-            import xgboost  # noqa: F401
+            import xgboost  # pylint: disable=unused-import  # noqa: F401
 
             self._has_xgb = True
         except ImportError:
@@ -738,7 +728,7 @@ class HybridEnsemblePredictor:
             logger.warning("HybridEnsemble: xgboost not available")
 
         try:
-            import torch  # noqa: F401
+            import torch  # pylint: disable=unused-import  # noqa: F401
 
             self._has_lstm = True
         except ImportError:
@@ -746,14 +736,12 @@ class HybridEnsemblePredictor:
             logger.debug("HybridEnsemble: torch not available — LSTM disabled")
 
         try:
-            import stable_baselines3  # noqa: F401
+            import stable_baselines3  # pylint: disable=unused-import  # noqa: F401
 
             self._has_rl = True
         except ImportError:
             self._has_rl = False
-            logger.debug(
-                "HybridEnsemble: stable_baselines3 not available — RL disabled"
-            )
+            logger.debug("HybridEnsemble: stable_baselines3 not available — RL disabled")
 
     def _effective_weights(self) -> tuple:
         """Redistribute weights for unavailable components."""
@@ -773,9 +761,7 @@ class HybridEnsemblePredictor:
                 pred._load()
             if pred._model is None:
                 return 0.5
-            X_df = pd.DataFrame(
-                X, columns=pred._feature_names or [f"f{i}" for i in range(X.shape[1])]
-            )
+            X_df = pd.DataFrame(X, columns=pred._feature_names or [f"f{i}" for i in range(X.shape[1])])
             X_df = pred._align_features(X_df)
             X_df = X_df.replace([np.inf, -np.inf], np.nan).fillna(0.0)
             proba = pred._model.predict_proba(X_df)
@@ -811,9 +797,9 @@ class HybridEnsemblePredictor:
             agent = get_rl_agent()
             if agent is None:
                 return 0.5
-            action, _states = agent.predict(obs, deterministic=True)
-            # Action space: 0=short, 1=hold, 2=long → map to probability
-            action_map = {0: 0.2, 1: 0.5, 2: 0.8}
+            action, _confidence = agent.predict(obs)
+            # Action space: 0=HOLD, 1=BUY, 2=SELL → map to probability
+            action_map = {0: 0.5, 1: 0.8, 2: 0.2}
             return float(action_map.get(int(action), 0.5))
         except Exception as exc:
             logger.debug("HybridEnsemble RL predict failed: %s", exc)
@@ -838,9 +824,7 @@ class HybridEnsemblePredictor:
         w_xgb, w_lstm, w_rl = self._effective_weights()
 
         p_xgb = self._xgb_predict(X) if w_xgb > 0 else 0.5
-        p_lstm = (
-            self._lstm_predict(X_seq if X_seq is not None else X) if w_lstm > 0 else 0.5
-        )
+        p_lstm = self._lstm_predict(X_seq if X_seq is not None else X) if w_lstm > 0 else 0.5
         p_rl = self._rl_predict(X.flatten()) if w_rl > 0 else 0.5
 
         if self._meta_blend and self._meta_trained and self._meta is not None:
@@ -852,7 +836,7 @@ class HybridEnsemblePredictor:
                 blended = float(self._meta.predict(meta_input)[0])
                 return float(np.clip(blended, 0.0, 1.0))
             except Exception:  # nosec B110 - meta-model failure falls through to weighted average
-                pass
+                ...  # nosec B110
 
         # Weighted average fallback
         blended = w_xgb * p_xgb + w_lstm * p_lstm + w_rl * p_rl

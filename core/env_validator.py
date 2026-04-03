@@ -228,7 +228,7 @@ def validate_environment(strict: bool = False) -> ValidationResult:
     is_production = app_env == "production"
 
     for var in REQUIRED_VARS:
-        val = os.getenv(var.name)
+        val = os.getenv(var.name)  # pylint: disable=invalid-envvar-value
         if not val:
             result.errors.append(
                 f"Missing required env var: {var.name} — {var.description}",
@@ -237,12 +237,11 @@ def validate_environment(strict: bool = False) -> ValidationResult:
             result.errors.append(
                 f"{var.name} is too short ({len(val)} chars, need ≥{var.min_length}) — {var.description}",
             )
-        elif is_production and var.name in _DEV_PLACEHOLDERS:
-            if val == _DEV_PLACEHOLDERS[var.name]:
-                result.errors.append(
-                    f"{var.name} is set to the dev placeholder value in production. "
-                    f"Generate a real secret before deploying."
-                )
+        elif is_production and var.name in _DEV_PLACEHOLDERS and val == _DEV_PLACEHOLDERS[var.name]:
+            result.errors.append(
+                f"{var.name} is set to the dev placeholder value in production. "
+                f"Generate a real secret before deploying."
+            )
 
     # Check all known placeholders even if not in REQUIRED_VARS
     if is_production:
@@ -252,12 +251,11 @@ def validate_environment(strict: bool = False) -> ValidationResult:
             val = os.getenv(name)
             if val and val == placeholder:
                 result.errors.append(
-                    f"{name} is set to the dev placeholder value in production. "
-                    f"Generate a real value before deploying."
+                    f"{name} is set to the dev placeholder value in production. Generate a real value before deploying."
                 )
 
     for var in RECOMMENDED_VARS:
-        val = os.getenv(var.name)
+        val = os.getenv(var.name)  # pylint: disable=invalid-envvar-value
         if not val:
             msg = f"Env var not set: {var.name} — {var.description}"
             if var.default:

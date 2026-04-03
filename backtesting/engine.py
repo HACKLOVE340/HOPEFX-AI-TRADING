@@ -8,16 +8,16 @@ HOPEFX Backtesting Engine - Event-Driven Architecture
 Production-grade backtesting with transaction cost modeling
 """
 
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
-from dataclasses import dataclass, field
-from typing import Any
-from collections.abc import Callable
-from enum import Enum
 import json
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from enum import Enum
 from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
 
 
 class OrderType(Enum):
@@ -72,9 +72,7 @@ class BarData:
     volume: float
 
     @classmethod
-    def from_ticks(
-        cls, ticks: list[TickData], symbol: str, timestamp: datetime
-    ) -> "BarData":
+    def from_ticks(cls, ticks: list[TickData], symbol: str, timestamp: datetime) -> "BarData":
         if not ticks:
             raise ValueError("Cannot create bar from empty ticks")
         prices = [t.mid for t in ticks]
@@ -110,9 +108,7 @@ class Order:
 
     def __post_init__(self):
         if self.order_id is None:
-            self.order_id = (
-                f"ORD_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S_%f')}"
-            )
+            self.order_id = f"ORD_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S_%f')}"
 
 
 @dataclass
@@ -229,7 +225,7 @@ class PerformanceMetrics:
 
     def save(self, filepath: str):
         """Save metrics to JSON"""
-        with open(filepath, "w") as f:
+        with Path(filepath).open("w", encoding="utf-8") as f:
             json.dump(self.to_dict(), f, indent=2)
 
 
@@ -252,9 +248,7 @@ class TransactionCostModel:
         self.slippage_pips = slippage_pips
         self.slippage_std = slippage_std
 
-    def calculate_costs(
-        self, order: Order, tick: TickData, quantity: float
-    ) -> tuple[float, float, float]:
+    def calculate_costs(self, order: Order, tick: TickData, quantity: float) -> tuple[float, float, float]:
         """Returns (fill_price, commission, slippage)"""
 
         # Base price with spread
@@ -264,9 +258,7 @@ class TransactionCostModel:
         if self.slippage_model == "fixed":
             slippage = self.slippage_pips * 0.0001  # Convert pips to price
         elif self.slippage_model == "gaussian":
-            slippage = np.random.normal(
-                self.slippage_pips * 0.0001, self.slippage_std * 0.0001
-            )
+            slippage = np.random.normal(self.slippage_pips * 0.0001, self.slippage_std * 0.0001)
         else:
             slippage = 0.0
 
@@ -274,9 +266,7 @@ class TransactionCostModel:
 
         # Commission
         if self.commission_per_lot > 0:
-            commission = self.commission_per_lot * (
-                quantity / 100000
-            )  # Standard lot size
+            commission = self.commission_per_lot * (quantity / 100000)  # Standard lot size
         elif self.commission_rate > 0:
             commission = fill_price * quantity * self.commission_rate
         else:
@@ -435,7 +425,9 @@ class BacktestEngine:
                 fill_price = tick.ask if order.side == OrderSide.BUY else tick.bid
 
             elif order.order_type == OrderType.LIMIT:
-                if (order.side == OrderSide.BUY and tick.ask <= order.price) or (order.side == OrderSide.SELL and tick.bid >= order.price):
+                if (order.side == OrderSide.BUY and tick.ask <= order.price) or (
+                    order.side == OrderSide.SELL and tick.bid >= order.price
+                ):
                     fill_price = order.price
 
             elif order.order_type == OrderType.STOP:
@@ -446,9 +438,7 @@ class BacktestEngine:
 
             if fill_price:
                 # Apply transaction costs
-                fill_price, commission, slippage = (
-                    self.transaction_costs.calculate_costs(order, tick, order.quantity)
-                )
+                fill_price, commission, slippage = self.transaction_costs.calculate_costs(order, tick, order.quantity)
 
                 order.filled_price = fill_price
                 order.filled_quantity = order.quantity
@@ -503,9 +493,7 @@ class BacktestEngine:
                 "capital": self.capital,
                 "unrealized_pnl": unrealized,
                 "total_equity": total_equity,
-                "drawdown": (self.peak_equity - total_equity) / self.peak_equity
-                if self.peak_equity > 0
-                else 0,
+                "drawdown": (self.peak_equity - total_equity) / self.peak_equity if self.peak_equity > 0 else 0,
                 "positions": len(self.positions),
             }
         )
@@ -527,9 +515,7 @@ class BacktestEngine:
                     order_id=None,
                     timestamp=self.current_time,
                     symbol=tick.symbol,
-                    side=OrderSide.SELL
-                    if current_pos.side == OrderSide.BUY
-                    else OrderSide.BUY,
+                    side=OrderSide.SELL if current_pos.side == OrderSide.BUY else OrderSide.BUY,
                     order_type=OrderType.MARKET,
                     quantity=current_pos.quantity,
                 )
@@ -560,18 +546,13 @@ class BacktestEngine:
                 # Adding to position
                 total_qty = position.quantity + order.filled_quantity
                 position.entry_price = (
-                    position.entry_price * position.quantity
-                    + order.filled_price * order.filled_quantity
+                    position.entry_price * position.quantity + order.filled_price * order.filled_quantity
                 ) / total_qty
                 position.quantity = total_qty
             # Reducing/closing position
             elif order.filled_quantity >= position.quantity:
                 # Close position
-                pnl = (
-                    position.realized_pnl
-                    + (order.filled_price - position.entry_price)
-                    * position.quantity
-                )
+                pnl = position.realized_pnl + (order.filled_price - position.entry_price) * position.quantity
                 if position.side == OrderSide.SELL:
                     pnl = -pnl
 
@@ -617,9 +598,7 @@ class BacktestEngine:
                 order_id=f"CLOSE_{symbol}",
                 timestamp=self.current_time,
                 symbol=symbol,
-                side=OrderSide.SELL
-                if position.side == OrderSide.BUY
-                else OrderSide.BUY,
+                side=OrderSide.SELL if position.side == OrderSide.BUY else OrderSide.BUY,
                 order_type=OrderType.MARKET,
                 quantity=position.quantity,
                 filled_quantity=position.quantity,
@@ -652,9 +631,7 @@ class BacktestEngine:
 
         self.positions = {}
 
-    def _calculate_metrics(
-        self, start_date: datetime, end_date: datetime
-    ) -> PerformanceMetrics:
+    def _calculate_metrics(self, start_date: datetime, end_date: datetime) -> PerformanceMetrics:
         """Calculate comprehensive performance metrics"""
 
         # Convert equity history to DataFrame
@@ -683,15 +660,11 @@ class BacktestEngine:
 
         # Sortino (downside deviation only)
         downside_returns = equity_df["daily_return"][equity_df["daily_return"] < 0]
-        downside_dev = (
-            downside_returns.std() * np.sqrt(252) if len(downside_returns) > 0 else 0
-        )
+        downside_dev = downside_returns.std() * np.sqrt(252) if len(downside_returns) > 0 else 0
         sortino_ratio = excess_return / downside_dev if downside_dev > 0 else 0
 
         # Calmar (return / max drawdown)
-        calmar_ratio = (
-            annualized_return / self.max_drawdown if self.max_drawdown > 0 else 0
-        )
+        calmar_ratio = annualized_return / self.max_drawdown if self.max_drawdown > 0 else 0
 
         # Trade statistics
         total_trades = len(self.closed_trades)
@@ -710,25 +683,19 @@ class BacktestEngine:
 
             gross_profit = sum(wins)
             gross_loss = abs(sum(losses))
-            profit_factor = (
-                gross_profit / gross_loss if gross_loss > 0 else float("inf")
-            )
+            profit_factor = gross_profit / gross_loss if gross_loss > 0 else float("inf")
 
             expectancy = (win_rate * avg_win) - ((1 - win_rate) * abs(avg_loss))
         else:
             winning_trades = losing_trades = 0
-            win_rate = avg_trade_return = avg_win = avg_loss = profit_factor = (
-                expectancy
-            ) = 0
+            win_rate = avg_trade_return = avg_win = avg_loss = profit_factor = expectancy = 0
 
         # Drawdown calculations
         equity_curve = equity_df["total_equity"]
         rolling_max = equity_curve.expanding().max()
         drawdown_series = (equity_curve - rolling_max) / rolling_max
         avg_drawdown = (
-            drawdown_series[drawdown_series < 0].mean()
-            if len(drawdown_series[drawdown_series < 0]) > 0
-            else 0
+            drawdown_series[drawdown_series < 0].mean() if len(drawdown_series[drawdown_series < 0]) > 0 else 0
         )
 
         return PerformanceMetrics(
@@ -798,7 +765,7 @@ class BacktestEngine:
             "data_frequency": self.data_frequency,
         }
 
-        with open(f"{filepath_prefix}_state.json", "w") as f:
+        with Path(f"{filepath_prefix}_state.json").open("w", encoding="utf-8") as f:
             json.dump(state, f, indent=2)
 
         print(f"Results saved to {filepath_prefix}*")
@@ -811,25 +778,21 @@ class CSVDataHandler:
     def __init__(self, filepath: str, date_format: str = "%Y-%m-%d %H:%M:%S"):
         self.filepath = filepath
         self.date_format = date_format
-        self.data: pd.DataFrame = None
+        self.data: pd.DataFrame | None = None
 
     def load(self):
         """Load CSV data"""
         self.data = pd.read_csv(self.filepath)
-        self.data["timestamp"] = pd.to_datetime(
-            self.data["timestamp"], format=self.date_format
-        )
+        self.data["timestamp"] = pd.to_datetime(self.data["timestamp"], format=self.date_format)
         self.data.sort_values("timestamp", inplace=True)
         print(f"Loaded {len(self.data)} rows from {self.filepath}")
 
-    def get_data(self, start_date: datetime, end_date: datetime, symbols: list[str]):
+    def get_data(self, start_date: datetime, end_date: datetime, _symbols: list[str]):
         """Generator yielding (timestamp, symbol, tick)"""
         if self.data is None:
             self.load()
 
-        mask = (self.data["timestamp"] >= start_date) & (
-            self.data["timestamp"] <= end_date
-        )
+        mask = (self.data["timestamp"] >= start_date) & (self.data["timestamp"] <= end_date)
         filtered = self.data[mask]
 
         for _, row in filtered.iterrows():
@@ -841,6 +804,38 @@ class CSVDataHandler:
                 volume=row.get("volume", 0.0),
             )
             yield row["timestamp"], row["symbol"], tick
+
+
+class DataFrameDataHandler:
+    """Adapts a pre-loaded OHLCV DataFrame for use with BacktestEngine.
+
+    The DataFrame must have a DatetimeIndex and columns:
+    open, high, low, close, volume.  Each bar is converted to a synthetic
+    TickData where bid = close and ask = close (mid-price approximation).
+    """
+
+    def __init__(self, df: "pd.DataFrame", symbol: str) -> None:
+        self._df = df
+        self._symbol = symbol
+
+    def get_data(
+        self,
+        start_date: "datetime",
+        end_date: "datetime",
+        _symbols: "list[str]",  # symbol is fixed at construction time
+    ):
+        """Yield (timestamp, symbol, TickData) for each bar in the date range."""
+        mask = (self._df.index >= start_date) & (self._df.index <= end_date)
+        for ts, row in self._df[mask].iterrows():
+            close = float(row["close"])
+            tick = TickData(
+                timestamp=ts,
+                symbol=self._symbol,
+                bid=close,
+                ask=close,
+                volume=float(row.get("volume", 0.0)),
+            )
+            yield ts, self._symbol, tick
 
 
 if __name__ == "__main__":

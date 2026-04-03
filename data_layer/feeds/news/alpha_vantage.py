@@ -19,8 +19,8 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
+from typing import ClassVar
 
 from data_layer.feeds.news.base import NewsFeedBase
 from data_layer.types import NewsArticle, NewsSource
@@ -41,7 +41,7 @@ class AlphaVantageNewsFeed(NewsFeedBase):
         if not self.is_configured:
             return []
 
-        articles: list[NewsArticle] = []
+        articles: ClassVar[list[NewsArticle]] = []
         try:
             data = await self._get(
                 _BASE,
@@ -66,9 +66,7 @@ class AlphaVantageNewsFeed(NewsFeedBase):
                 # Alpha Vantage time format: "20240115T143000"
                 time_str = item.get("time_published", "")
                 try:
-                    published = datetime.strptime(time_str, "%Y%m%dT%H%M%S").replace(
-                        tzinfo=UTC
-                    )
+                    published = datetime.strptime(time_str, "%Y%m%dT%H%M%S").replace(tzinfo=UTC)
                 except Exception:
                     published = datetime.now(UTC)
 
@@ -97,10 +95,7 @@ class AlphaVantageNewsFeed(NewsFeedBase):
                         sentiment_score=raw_score,
                         sentiment_label=label.lower(),
                         gold_relevance=gold_relevance,
-                        keywords=[
-                            t.get("ticker", "")
-                            for t in item.get("ticker_sentiment", [])
-                        ],
+                        keywords=[t.get("ticker", "") for t in item.get("ticker_sentiment", [])],
                         lineage_id=str(uuid.uuid4()),
                     )
                 )

@@ -13,11 +13,10 @@ Tests for:
 - Impact Predictor
 """
 
-import pytest
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from unittest.mock import Mock, patch
 
+import pytest
 
 # ============================================================
 # ECONOMIC CALENDAR TESTS
@@ -29,7 +28,7 @@ class TestEconomicEvent:
 
     def test_event_creation(self):
         """Test basic event creation."""
-        from news.economic_calendar import EconomicEvent, EventType, EventImportance
+        from news.economic_calendar import EconomicEvent, EventImportance, EventType
 
         event = EconomicEvent(
             title="Fed Interest Rate Decision",
@@ -47,12 +46,12 @@ class TestEconomicEvent:
         assert event.event_type == EventType.INTEREST_RATE
         assert event.importance == EventImportance.CRITICAL
         assert event.country == "US"
-        assert event.actual == 5.5  # noqa: PLR2004
-        assert event.forecast == 5.25  # noqa: PLR2004
+        assert event.actual == 5.5
+        assert event.forecast == 5.25
 
     def test_event_to_dict(self):
         """Test event serialization to dict."""
-        from news.economic_calendar import EconomicEvent, EventType, EventImportance
+        from news.economic_calendar import EconomicEvent, EventImportance, EventType
 
         now = datetime.now(UTC)
         event = EconomicEvent(
@@ -71,7 +70,7 @@ class TestEconomicEvent:
 
     def test_is_surprise_positive(self):
         """Test positive surprise detection."""
-        from news.economic_calendar import EconomicEvent, EventType, EventImportance
+        from news.economic_calendar import EconomicEvent, EventImportance, EventType
 
         event = EconomicEvent(
             title="Employment Report",
@@ -88,7 +87,7 @@ class TestEconomicEvent:
 
     def test_is_surprise_not_surprise(self):
         """Test no surprise when values are close."""
-        from news.economic_calendar import EconomicEvent, EventType, EventImportance
+        from news.economic_calendar import EconomicEvent, EventImportance, EventType
 
         event = EconomicEvent(
             title="PMI",
@@ -105,7 +104,7 @@ class TestEconomicEvent:
 
     def test_is_surprise_no_data(self):
         """Test surprise check when data is missing."""
-        from news.economic_calendar import EconomicEvent, EventType, EventImportance
+        from news.economic_calendar import EconomicEvent, EventImportance, EventType
 
         event = EconomicEvent(
             title="Pending Event",
@@ -158,8 +157,8 @@ class TestEconomicCalendar:
         from news.economic_calendar import (
             EconomicCalendar,
             EconomicEvent,
-            EventType,
             EventImportance,
+            EventType,
         )
 
         calendar = EconomicCalendar()
@@ -179,8 +178,8 @@ class TestEconomicCalendar:
         from news.economic_calendar import (
             EconomicCalendar,
             EconomicEvent,
-            EventType,
             EventImportance,
+            EventType,
         )
 
         calendar = EconomicCalendar()
@@ -203,8 +202,8 @@ class TestEconomicCalendar:
         from news.economic_calendar import (
             EconomicCalendar,
             EconomicEvent,
-            EventType,
             EventImportance,
+            EventType,
         )
 
         calendar = EconomicCalendar()
@@ -230,10 +229,7 @@ class TestEconomicCalendar:
         calendar.add_event(low_impact)
 
         high_impact_events = calendar.get_high_impact_events()
-        assert all(
-            e.importance in [EventImportance.HIGH, EventImportance.CRITICAL]
-            for e in high_impact_events
-        )
+        assert all(e.importance in [EventImportance.HIGH, EventImportance.CRITICAL] for e in high_impact_events)
 
 
 # ============================================================
@@ -246,7 +242,7 @@ class TestSentimentScore:
 
     def test_score_creation(self):
         """Test sentiment score creation."""
-        from news.sentiment import SentimentScore, SentimentLabel
+        from news.sentiment import SentimentLabel, SentimentScore
 
         score = SentimentScore(
             polarity=0.7,
@@ -256,14 +252,14 @@ class TestSentimentScore:
             compound_score=0.75,
         )
 
-        assert score.polarity == 0.7  # noqa: PLR2004
-        assert score.subjectivity == 0.5  # noqa: PLR2004
-        assert score.confidence == 0.85  # noqa: PLR2004
+        assert score.polarity == 0.7
+        assert score.subjectivity == 0.5
+        assert score.confidence == 0.85
         assert score.label == SentimentLabel.POSITIVE
 
     def test_score_to_dict(self):
         """Test sentiment score serialization."""
-        from news.sentiment import SentimentScore, SentimentLabel
+        from news.sentiment import SentimentLabel, SentimentScore
 
         score = SentimentScore(
             polarity=0.3,
@@ -273,12 +269,12 @@ class TestSentimentScore:
         )
 
         result = score.to_dict()
-        assert result["polarity"] == 0.3  # noqa: PLR2004
+        assert result["polarity"] == 0.3
         assert result["label"] == "positive"
 
     def test_is_bullish(self):
         """Test bullish detection."""
-        from news.sentiment import SentimentScore, SentimentLabel
+        from news.sentiment import SentimentLabel, SentimentScore
 
         bullish_score = SentimentScore(
             polarity=0.5,
@@ -292,7 +288,7 @@ class TestSentimentScore:
 
     def test_is_bearish(self):
         """Test bearish detection."""
-        from news.sentiment import SentimentScore, SentimentLabel
+        from news.sentiment import SentimentLabel, SentimentScore
 
         bearish_score = SentimentScore(
             polarity=-0.5,
@@ -306,7 +302,7 @@ class TestSentimentScore:
 
     def test_is_neutral(self):
         """Test neutral detection."""
-        from news.sentiment import SentimentScore, SentimentLabel
+        from news.sentiment import SentimentLabel, SentimentScore
 
         neutral_score = SentimentScore(
             polarity=0.05,
@@ -497,7 +493,7 @@ class TestNewsProvider:
         from news.providers import NewsProvider
 
         with pytest.raises(TypeError):
-            NewsProvider(api_key="test_key")  # type: ignore[abstract]
+            NewsProvider(api_key="test_key")  # type: ignore[abstract]  # pylint: disable=abstract-class-instantiated
 
     def test_incomplete_subclass_missing_both_raises_type_error(self):
         """A subclass missing both abstract methods raises TypeError."""
@@ -507,7 +503,7 @@ class TestNewsProvider:
             pass  # get_news and format_article not implemented
 
         with pytest.raises(TypeError):
-            IncompleteProvider()  # type: ignore[abstract]
+            IncompleteProvider()  # type: ignore[abstract]  # pylint: disable=abstract-class-instantiated
 
     def test_incomplete_subclass_missing_one_raises_type_error(self):
         """A subclass missing one abstract method still raises TypeError."""
@@ -520,25 +516,23 @@ class TestNewsProvider:
             # format_article not implemented
 
         with pytest.raises(TypeError):
-            PartialProvider()  # type: ignore[abstract]
+            PartialProvider()  # type: ignore[abstract]  # pylint: disable=abstract-class-instantiated
 
     def test_concrete_subclass_stores_api_key(self):
         """A fully implemented subclass stores api_key correctly."""
-        from news.providers import NewsProvider, NewsArticle
+        from news.providers import NewsArticle, NewsProvider
 
         class ConcreteProvider(NewsProvider):
             def get_news(self, **kwargs):
                 return []
 
-            def format_article(self, raw_article):
+            def format_article(self, raw_article, **kwargs):
                 return NewsArticle(
                     title="",
-                    content="",
+                    description="",
                     source="",
                     url="",
-                    published_at=None,
-                    sentiment_score=0.0,
-                    relevance_score=0.0,
+                    published_at=datetime.now(UTC),
                     symbols=[],
                 )
 
@@ -722,7 +716,7 @@ class TestNewsAggregator:
         ]
 
         unique = aggregator._deduplicate(articles)
-        assert len(unique) == 2  # noqa: PLR2004
+        assert len(unique) == 2
 
 
 # ============================================================
@@ -799,7 +793,7 @@ class TestNewsModuleSingleton:
 
     def test_singleton_is_geopolitical_risk_provider(self):
         """Singleton is an instance of GeopoliticalRiskProvider."""
-        from news import _get_risk_provider, GeopoliticalRiskProvider
+        from news import GeopoliticalRiskProvider, _get_risk_provider
 
         provider = _get_risk_provider()
         assert isinstance(provider, GeopoliticalRiskProvider)
@@ -856,7 +850,7 @@ class TestGeopoliticalRiskProvider:
 
     def test_get_risk_assessment_returns_assessment(self):
         """get_risk_assessment returns a GeopoliticalRiskAssessment."""
-        from news import GeopoliticalRiskProvider, GeopoliticalRiskAssessment
+        from news import GeopoliticalRiskAssessment, GeopoliticalRiskProvider
 
         provider = GeopoliticalRiskProvider()
         assessment = provider.get_risk_assessment()

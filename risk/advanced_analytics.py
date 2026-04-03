@@ -33,8 +33,7 @@ callers to use the correct multi-day methods.  Set to False only in tests.
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -399,10 +398,10 @@ class AdvancedRiskAnalytics:
 
         # Test normality (Jarque-Bera) and warn if rejected at 5% level.
         # This is informational — the calculation proceeds regardless.
-        if len(returns) >= 20:  # noqa: PLR2004
+        if len(returns) >= 20:
             try:
                 _, jb_pvalue = stats.jarque_bera(returns)
-                if jb_pvalue < 0.05:  # noqa: PLR2004
+                if jb_pvalue < 0.05:
                     import warnings as _w
 
                     _w.warn(
@@ -605,14 +604,11 @@ class AdvancedRiskAnalytics:
         if method == "non_overlapping":
             # Non-overlapping t-day blocks
             n_blocks = len(returns) // time_horizon
-            if n_blocks < 10:  # noqa: PLR2004
+            if n_blocks < 10:
                 # Fall back to overlapping if too few blocks
                 method = "overlapping"
             else:
-                blocks = [
-                    np.sum(returns[i * time_horizon : (i + 1) * time_horizon])
-                    for i in range(n_blocks)
-                ]
+                blocks = [np.sum(returns[i * time_horizon : (i + 1) * time_horizon]) for i in range(n_blocks)]
                 multiday_returns = np.array(blocks)
 
         if method == "overlapping":
@@ -630,11 +626,7 @@ class AdvancedRiskAnalytics:
                 )
                 var_1d = np.percentile(returns, (1 - confidence_level) * 100)
                 var_scaled = var_1d * np.sqrt(time_horizon)
-                val = (
-                    abs(var_scaled * portfolio_value)
-                    if portfolio_value
-                    else abs(var_scaled)
-                )
+                val = abs(var_scaled * portfolio_value) if portfolio_value else abs(var_scaled)
                 return VaRResult(
                     var_value=val,
                     confidence_level=confidence_level,
@@ -648,18 +640,11 @@ class AdvancedRiskAnalytics:
                     ),
                 )
             multiday_returns = np.array(
-                [
-                    np.sum(returns[i : i + time_horizon])
-                    for i in range(len(returns) - time_horizon + 1)
-                ],
+                [np.sum(returns[i : i + time_horizon]) for i in range(len(returns) - time_horizon + 1)],
             )
 
-        var_percentile = np.percentile(multiday_returns, (1 - confidence_level) * 100)
-        val = (
-            abs(var_percentile * portfolio_value)
-            if portfolio_value
-            else abs(var_percentile)
-        )
+        var_percentile = np.percentile(multiday_returns, (1 - confidence_level) * 100)  # pylint: disable=possibly-used-before-assignment
+        val = abs(var_percentile * portfolio_value) if portfolio_value else abs(var_percentile)
 
         return VaRResult(
             var_value=val,
@@ -703,7 +688,7 @@ class AdvancedRiskAnalytics:
         """
         confidence_level = confidence_level or self.var_confidence
 
-        if len(returns) < 10:  # noqa: PLR2004
+        if len(returns) < 10:
             # Delegate to 1-day historical (no multi-day scaling needed)
             return self.calculate_var_historical(
                 returns,
@@ -745,10 +730,7 @@ class AdvancedRiskAnalytics:
                 # Overlapping t-day windows on EWMA-scaled returns.
                 # No sqrt(t) assumption — captures autocorrelation and fat tails.
                 multi_day = np.array(
-                    [
-                        np.sum(scaled_returns[i : i + t])
-                        for i in range(len(scaled_returns) - t + 1)
-                    ],
+                    [np.sum(scaled_returns[i : i + t]) for i in range(len(scaled_returns) - t + 1)],
                 )
                 var_scaled = np.percentile(multi_day, (1 - confidence_level) * 100)
             else:
@@ -818,13 +800,12 @@ class AdvancedRiskAnalytics:
                 portfolio_value,
             )
             return result
-        else:
-            return self.calculate_var_ewma(
-                returns,
-                confidence_level,
-                time_horizon,
-                portfolio_value,
-            )
+        return self.calculate_var_ewma(
+            returns,
+            confidence_level,
+            time_horizon,
+            portfolio_value,
+        )
 
     def calculate_cvar(
         self,
@@ -849,7 +830,7 @@ class AdvancedRiskAnalytics:
         """
         cl: float = confidence or confidence_level or self.var_confidence
 
-        returns_arr   = np.asarray(returns, dtype=float)
+        returns_arr = np.asarray(returns, dtype=float)
         var_threshold = np.percentile(returns_arr, (1 - cl) * 100)
 
         # Calculate expected shortfall (average of returns below VaR)
@@ -913,9 +894,7 @@ class AdvancedRiskAnalytics:
         final_returns = (final_values - initial_value) / initial_value
 
         fr: NDArray[np.float64] = np.asarray(final_returns, dtype=np.float64)
-        paths: NDArray[np.float64] | None = (
-            np.asarray(cumulative_returns, dtype=np.float64) if return_paths else None
-        )
+        paths: NDArray[np.float64] | None = np.asarray(cumulative_returns, dtype=np.float64) if return_paths else None
         result = MonteCarloResult(
             expected_return=float(np.mean(fr)),
             expected_volatility=float(np.std(fr)),
@@ -988,9 +967,7 @@ class AdvancedRiskAnalytics:
         initial_portfolio_value = np.sum(values)
 
         # Calculate metrics
-        portfolio_returns = (
-            final_portfolio_values - initial_portfolio_value
-        ) / initial_portfolio_value
+        portfolio_returns = (final_portfolio_values - initial_portfolio_value) / initial_portfolio_value
 
         return {
             "initial_value": initial_portfolio_value,
@@ -1002,7 +979,7 @@ class AdvancedRiskAnalytics:
             "best_case": np.percentile(final_portfolio_values, 95),
             "worst_case": np.percentile(final_portfolio_values, 5),
             "probability_loss": np.mean(portfolio_returns < 0),
-            "probability_gain_10pct": np.mean(portfolio_returns > 0.10),  # noqa: PLR2004
+            "probability_gain_10pct": np.mean(portfolio_returns > 0.10),
         }
 
     # ============================================================
@@ -1050,13 +1027,13 @@ class AdvancedRiskAnalytics:
         pct_impact = total_impact / total_value if total_value > 0 else 0
 
         # Determine risk level
-        if abs(pct_impact) < 0.05:  # noqa: PLR2004
+        if abs(pct_impact) < 0.05:
             risk_level = "low"
             recommendation = "Portfolio is resilient to this scenario"
-        elif abs(pct_impact) < 0.15:  # noqa: PLR2004
+        elif abs(pct_impact) < 0.15:
             risk_level = "medium"
             recommendation = "Consider hedging or reducing exposure"
-        elif abs(pct_impact) < 0.30:  # noqa: PLR2004
+        elif abs(pct_impact) < 0.30:
             risk_level = "high"
             recommendation = "Significant risk - implement protective measures"
         else:
@@ -1252,9 +1229,7 @@ class AdvancedRiskAnalytics:
         annual_return = float(np.mean(returns) * 252)
 
         ec: NDArray[np.float64] = (
-            equity_curve
-            if equity_curve is not None
-            else np.asarray(np.cumprod(1 + returns), dtype=np.float64)
+            equity_curve if equity_curve is not None else np.asarray(np.cumprod(1 + returns), dtype=np.float64)
         )
 
         analysis = self.analyze_drawdowns(ec)
@@ -1335,7 +1310,7 @@ class AdvancedRiskAnalytics:
         confidence_level = confidence_level or self.var_confidence
         arr = np.asarray(returns, dtype=float)
 
-        if len(arr) < 100:  # noqa: PLR2004
+        if len(arr) < 100:
             raise ValueError(
                 f"calculate_var_garch requires >= 100 observations, got {len(arr)}. "
                 "Use calculate_var_ewma or calculate_var_multiday for shorter series."
@@ -1376,9 +1351,7 @@ class AdvancedRiskAnalytics:
         sigma2_t = self._garch_current_variance(arr, omega, alpha, beta)
 
         # ── h-step ahead variance forecast (sum of conditional variances) ────
-        sigma2_forecast = self._garch_hstep_variance(
-            sigma2_t, omega, alpha, beta, time_horizon
-        )
+        sigma2_forecast = self._garch_hstep_variance(sigma2_t, omega, alpha, beta, time_horizon)
 
         sigma_forecast = float(np.sqrt(sigma2_forecast))
         alpha_level = 1.0 - confidence_level
@@ -1449,14 +1422,10 @@ class AdvancedRiskAnalytics:
         # Multi-day VaR (10-day) — correct methods, no sqrt(t)
         var_multiday_10 = None
         var_garch_10 = None
-        if len(returns) >= 30:  # noqa: PLR2004
-            var_multiday_10 = self.calculate_var_multiday(
-                returns, time_horizon=10, portfolio_value=portfolio_value
-            )
-        if len(returns) >= 100:  # noqa: PLR2004
-            var_garch_10 = self.calculate_var_garch(
-                returns, time_horizon=10, portfolio_value=portfolio_value
-            )
+        if len(returns) >= 30:
+            var_multiday_10 = self.calculate_var_multiday(returns, time_horizon=10, portfolio_value=portfolio_value)
+        if len(returns) >= 100:
+            var_garch_10 = self.calculate_var_garch(returns, time_horizon=10, portfolio_value=portfolio_value)
 
         # Drawdown analysis
         drawdown = self.analyze_drawdowns(ec)
@@ -1513,6 +1482,7 @@ class AdvancedRiskAnalytics:
         result = self.calculate_sharpe_ratio(np.asarray(returns, dtype=float))
         self.risk_free_rate = old_rfr
         return float(result)
+
 
 # Alias expected by tests
 RiskAnalytics = AdvancedRiskAnalytics

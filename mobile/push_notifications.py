@@ -34,6 +34,7 @@ import base64
 import json
 import logging
 import os
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -70,14 +71,12 @@ def _load_firebase_admin() -> Any | None:
                 cred = credentials.Certificate(cred_dict)
                 logger.info("FCM: using base64-encoded service-account credentials")
             except Exception as exc:
-                logger.warning(
-                    "FCM: failed to decode FIREBASE_CREDENTIALS_BASE64: %s", exc
-                )
+                logger.warning("FCM: failed to decode FIREBASE_CREDENTIALS_BASE64: %s", exc)
 
         # Option 2: path to service-account JSON file
         if cred is None:
             json_path = os.getenv("FIREBASE_CREDENTIALS_JSON", "")
-            if json_path and os.path.isfile(json_path):
+            if json_path and Path(json_path).is_file():
                 cred = credentials.Certificate(json_path)
                 logger.info("FCM: using service-account JSON at %s", json_path)
 
@@ -259,9 +258,7 @@ class PushNotificationManager:
                     result = json.loads(resp.read())
                     results.append(result)
                     if result.get("failure"):
-                        logger.warning(
-                            "FCM legacy delivery failed for token: %s", token[:20]
-                        )
+                        logger.warning("FCM legacy delivery failed for token: %s", token[:20])
 
             return all(r.get("success", 0) > 0 for r in results)
         except Exception as exc:
@@ -270,9 +267,7 @@ class PushNotificationManager:
 
     # ── Typed helpers ─────────────────────────────────────────────────────────
 
-    def send_price_alert(
-        self, user_id: str, symbol: str, price: float, direction: str
-    ) -> bool:
+    def send_price_alert(self, user_id: str, symbol: str, price: float, direction: str) -> bool:
         return self.send_notification(
             user_id=user_id,
             title=f"Price Alert: {symbol}",
@@ -281,9 +276,7 @@ class PushNotificationManager:
             data={"symbol": symbol, "price": str(price)},
         )
 
-    def send_new_signal(
-        self, user_id: str, symbol: str, direction: str, confidence: float
-    ) -> bool:
+    def send_new_signal(self, user_id: str, symbol: str, direction: str, confidence: float) -> bool:
         return self.send_notification(
             user_id=user_id,
             title=f"New Signal: {symbol}",
@@ -296,9 +289,7 @@ class PushNotificationManager:
             },
         )
 
-    def send_drawdown_warning(
-        self, user_id: str, drawdown_pct: float, limit_pct: float
-    ) -> bool:
+    def send_drawdown_warning(self, user_id: str, drawdown_pct: float, limit_pct: float) -> bool:
         return self.send_notification(
             user_id=user_id,
             title="Drawdown Warning",
@@ -328,9 +319,7 @@ class PushNotificationManager:
             },
         )
 
-    def send_challenge_warning(
-        self, user_id: str, rule: str, current: float, limit: float
-    ) -> bool:
+    def send_challenge_warning(self, user_id: str, rule: str, current: float, limit: float) -> bool:
         return self.send_notification(
             user_id=user_id,
             title="Challenge Rule Near Breach",

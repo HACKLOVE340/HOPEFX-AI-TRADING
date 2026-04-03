@@ -26,25 +26,20 @@ class VaultError(HopeFXError):
     """Cryptographic vault error."""
 
 
-
 class AuthenticationError(HopeFXError):
     """Auth failure."""
-
 
 
 class EventBusError(HopeFXError):
     """Event bus failure."""
 
 
-
 class DataValidationError(HopeFXError):
     """Tick/data validation failed."""
 
 
-
 class CircuitBreakerError(HopeFXError):
     """Circuit breaker open."""
-
 
 
 class RiskLimitError(HopeFXError):
@@ -68,15 +63,12 @@ class ExecutionError(HopeFXError):
     """Order execution failed."""
 
 
-
 class ModelError(HopeFXError):
     """ML model error."""
 
 
-
 class DriftDetectedError(HopeFXError):
     """Model drift threshold exceeded."""
-
 
 
 # ── Aliases expected by tests ─────────────────────────────────────────────────
@@ -86,7 +78,7 @@ BrokerConnectionError = BrokerError
 TradingError = ExecutionError
 ConfigurationError = HopeFXError
 NetworkError = HopeFXError
-TimeoutError = HopeFXError
+HopeFXTimeoutError = HopeFXError  # use HopeFXTimeoutError to avoid shadowing builtin TimeoutError
 FeedError = HopeFXError
 DataError = DataValidationError
 DatabaseError = HopeFXError

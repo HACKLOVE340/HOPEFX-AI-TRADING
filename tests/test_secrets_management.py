@@ -19,7 +19,6 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-
 # Ensure project root is on path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -37,19 +36,18 @@ from scripts.manage_secrets import (
     cmd_validate,
 )
 
-
 # ── unit: helpers ─────────────────────────────────────────────────────────────
 
 
 def test_generate_token48_length():
     val = _generate("token48")
     # base64url: 48 bytes → 64 chars
-    assert len(val) >= 60  # noqa: PLR2004
+    assert len(val) >= 60
 
 
 def test_generate_token32_length():
     val = _generate("token32")
-    assert len(val) >= 40  # noqa: PLR2004
+    assert len(val) >= 40
 
 
 def test_is_placeholder_detects_change_me():
@@ -144,9 +142,7 @@ def test_validate_passes_when_all_set(tmp_path, monkeypatch):
 
 def test_validate_fails_when_placeholder(tmp_path, monkeypatch):
     env_file = tmp_path / ".env"
-    env_file.write_text(
-        "SECURITY_JWT_SECRET=CHANGE_ME_generate_a_random_48_char_secret\n"
-    )
+    env_file.write_text("SECURITY_JWT_SECRET=CHANGE_ME_generate_a_random_48_char_secret\n")
     monkeypatch.setattr("scripts.manage_secrets.ENV_FILE", env_file)
 
     rc = cmd_validate(_FakeArgs())

@@ -8,16 +8,15 @@ HOPEFX Event Store
 Event sourcing for complete audit trail and replay capability
 """
 
+import asyncio
 import logging
 import uuid
-from typing import Any
+from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum
-from collections import defaultdict
-import asyncio
+from typing import Any
 
 try:
     from database.connection import get_db_manager
@@ -157,9 +156,11 @@ class EventStore:
                 self._recent_events = self._recent_events[-self._max_memory_events :]
 
         # Notify subscribers asynchronously
-        asyncio.create_task(self._notify_subscribers(event))
+        _t = asyncio.create_task(self._notify_subscribers(event))
+        _t.add_done_callback(lambda _: None)
 
-        logger.debug(f"Event appended: {event.event_type.value} [{event.aggregate_id}]")
+        logger.debug("Event appended: %s [%s]", event.event_type.value, event.aggregate_id)
+
 
     async def _notify_subscribers(self, event: DomainEvent):
         """Notify all subscribers of event"""
@@ -172,12 +173,14 @@ class EventStore:
                 else:
                     callback(event)
             except Exception as e:
-                logger.error(f"Event subscriber error: {e}")
+                logger.error("Event subscriber error: %s", e)
+
 
     def subscribe(self, event_type: EventType, callback: Callable):
         """Subscribe to events"""
         self._subscribers[event_type].append(callback)
-        logger.info(f"Subscriber added for {event_type.value}")
+        logger.info("Subscriber added for %s", event_type.value)
+
 
     def unsubscribe(self, event_type: EventType, callback: Callable):
         """Unsubscribe from events"""
@@ -233,7 +236,8 @@ class EventStore:
             try:
                 handler(event)
             except Exception as e:
-                logger.error(f"Replay handler error: {e}")
+                logger.error("Replay handler error: %s", e)
+
                 raise
 
     async def _periodic_flush(self):
@@ -245,7 +249,8 @@ class EventStore:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Event flush error: {e}")
+                logger.error("Event flush error: %s", e)
+
 
     async def _flush_events(self):
         """Flush buffered events to database"""
@@ -262,23 +267,24 @@ class EventStore:
                 db = get_db_manager()
                 if db:
                     # Would insert to database here
-                    logger.debug(f"Flushed {len(events_to_flush)} events to database")
+                    logger.debug("Flushed %s events to database", len(events_to_flush))
+
             except Exception as e:
-                logger.error(f"Database flush error: {e}")
+                logger.error("Database flush error: %s", e)
+
                 # Re-buffer events
                 async with self._buffer_lock:
                     self._event_buffer = events_to_flush + self._event_buffer
         else:
-            logger.debug(f"Would flush {len(events_to_flush)} events (no database)")
+            logger.debug("Would flush %s events (no database)", len(events_to_flush))
+
 
     def get_statistics(self) -> dict[str, Any]:
         """Get event store statistics"""
         return {
             "buffered_events": len(self._event_buffer),
             "memory_events": len(self._recent_events),
-            "subscribers": {
-                et.value: len(subs) for et, subs in self._subscribers.items()
-            },
+            "subscribers": {et.value: len(subs) for et, subs in self._subscribers.items()},
         }
 
 
@@ -316,38 +322,46 @@ async def publish_event(
 # ── Typed event bus integration ───────────────────────────────────────────────
 # Re-export the typed event system so callers can import from one place.
 from events.typed_events import (
-    EventEnvelope,
-    PriceTickEvent,
-    SignalEvent,
-    OrderFilledEvent,
-    RiskHaltEvent,
-    PositionDriftEvent,
-    RegimeChangeEvent,
     CircuitBreakerEvent,
-    subscribe as subscribe_typed,
-    unsubscribe as unsubscribe_typed,
+    EventEnvelope,
+    OrderFilledEvent,
+    PositionDriftEvent,
+    PriceTickEvent,
+    RegimeChangeEvent,
+    RiskHaltEvent,
+    SignalEvent,
+)
+from events.typed_events import (
     publish as publish_typed,
+)
+from events.typed_events import (
     publish_sync as publish_typed_sync,
+)
+from events.typed_events import (
+    subscribe as subscribe_typed,
+)
+from events.typed_events import (
+    unsubscribe as unsubscribe_typed,
 )
 
 __all__ = [
-    # Legacy
-    "EventType",
+    "CircuitBreakerEvent",
     "DomainEvent",
-    "EventStore",
-    "get_event_store",
-    "publish_event",
     # Typed
     "EventEnvelope",
-    "PriceTickEvent",
-    "SignalEvent",
+    "EventStore",
+    # Legacy
+    "EventType",
     "OrderFilledEvent",
-    "RiskHaltEvent",
     "PositionDriftEvent",
+    "PriceTickEvent",
     "RegimeChangeEvent",
-    "CircuitBreakerEvent",
-    "subscribe_typed",
-    "unsubscribe_typed",
+    "RiskHaltEvent",
+    "SignalEvent",
+    "get_event_store",
+    "publish_event",
     "publish_typed",
     "publish_typed_sync",
+    "subscribe_typed",
+    "unsubscribe_typed",
 ]

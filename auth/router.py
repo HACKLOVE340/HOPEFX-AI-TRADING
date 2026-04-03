@@ -50,9 +50,7 @@ _AUTH_RATE_WINDOW = int(os.getenv("AUTH_RATE_LIMIT_WINDOW_SECONDS", "60"))  # pe
 # Trusted reverse-proxy IPs — only these may set X-Forwarded-For.
 # Comma-separated list; defaults to loopback only.
 _TRUSTED_PROXIES: frozenset[str] = frozenset(
-    ip.strip()
-    for ip in os.getenv("TRUSTED_PROXY_IPS", "127.0.0.1,::1").split(",")
-    if ip.strip()
+    ip.strip() for ip in os.getenv("TRUSTED_PROXY_IPS", "127.0.0.1,::1").split(",") if ip.strip()
 )
 
 # In-memory fallback: {ip: [timestamp, ...]}
@@ -102,9 +100,7 @@ def _check_ip_rate_limit(ip: str) -> None:
     except HTTPException:
         raise
     except Exception as _exc:
-        logger.debug(
-            "Suppressed exception: %s", _exc
-        )  # Redis unavailable — fall through to in-memory
+        logger.debug("Suppressed exception: %s", _exc)  # Redis unavailable — fall through to in-memory
 
     # In-memory fallback
     now = time.time()
@@ -343,9 +339,7 @@ async def logout(
 ):
     """Revoke the current session and blacklist the access token."""
     # Use the bearer token from the Authorization header if not explicitly provided
-    access_token = body.access_token or (
-        credentials.credentials if credentials else None
-    )
+    access_token = body.access_token or (credentials.credentials if credentials else None)
     _svc().logout(body.refresh_token, access_token=access_token)
     return {"message": "Logged out successfully"}
 
@@ -361,7 +355,7 @@ async def logout_all(user_id: str = Depends(_get_current_user_id)):
 async def forgot_password(body: ForgotPasswordRequest, request: Request):
     """Request a password reset link. Always returns 200 to avoid email enumeration."""
     _check_ip_rate_limit(_get_client_ip(request))
-    ok, msg, reset_token = _svc().request_password_reset(body.email)
+    _, msg, reset_token = _svc().request_password_reset(body.email)
     if reset_token:
         try:
             from core.email_service import send_password_reset_email

@@ -72,6 +72,8 @@ if TYPE_CHECKING:
     import pandas as pd
 
 # ── Component imports ─────────────────────────────────────────────────────────
+import contextlib
+
 from data_layer.cache.redis_store import DataLayerRedisStore, dl_redis_store
 from data_layer.calendar.engine import MacroCalendarEngine, macro_calendar_engine
 from data_layer.feeds.gold.manager import GoldFeedManager
@@ -85,8 +87,7 @@ from data_layer.normalization.pipeline import (
 from data_layer.quality.engine import DataQualityEngine, dqe
 from data_layer.replay.engine import MarketReplayEngine, market_replay_engine
 from data_layer.sentiment.engine import NewsSentimentEngine, news_sentiment_engine
-from data_layer.types import GoldTick, QualityReport, TickQuality
-import contextlib
+from data_layer.types import FeedSource, GoldTick, QualityReport, TickQuality
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +139,7 @@ class MarketDataOrchestrator:
 
     def _init_prometheus(self) -> None:
         try:
-            from prometheus_client import Counter, Gauge, REGISTRY
+            from prometheus_client import REGISTRY, Counter, Gauge
 
             def _gauge(name: str, doc: str):
                 try:
@@ -195,8 +196,7 @@ class MarketDataOrchestrator:
             logger.info("MarketDataOrchestrator: Redis connected (%s)", _REDIS_URL)
         except Exception as exc:
             logger.warning(
-                "MarketDataOrchestrator: Redis unavailable (%s) — "
-                "caching disabled, continuing without Redis",
+                "MarketDataOrchestrator: Redis unavailable (%s) — caching disabled, continuing without Redis",
                 exc,
             )
 
@@ -257,9 +257,7 @@ class MarketDataOrchestrator:
         self._start_ts = time.time()
 
         # Start uptime/health reporter — track task so stop() can cancel it
-        self._uptime_task = asyncio.create_task(
-            self._uptime_loop(), name="orchestrator_uptime"
-        )
+        self._uptime_task = asyncio.create_task(self._uptime_loop(), name="orchestrator_uptime")
 
         logger.info("MarketDataOrchestrator: all components started")
 
@@ -343,9 +341,7 @@ class MarketDataOrchestrator:
                         _r = self._redis_store._r
                         await asyncio.get_running_loop().run_in_executor(
                             None,
-                            lambda: _r.setex(
-                                "hopefx:dl:orchestrator_health", 30, payload
-                            ),
+                            lambda: _r.setex("hopefx:dl:orchestrator_health", 30, payload),
                         )
                     except Exception as _exc:
                         logger.debug("Orchestrator health push error: %s", _exc)
@@ -367,16 +363,12 @@ class MarketDataOrchestrator:
             cached = self._redis_store.get_tick(symbol)
             if cached:
                 try:
-                    from data_layer.types import FeedSource
-
                     # Require source to be present and a known FeedSource value.
                     # Missing or unrecognised source → fall through to live feed
                     # rather than labelling the tick with a fabricated origin.
                     raw_source = cached.get("source")
                     if not raw_source:
-                        raise ValueError(
-                            f"Cached tick for {symbol} has no 'source' field"
-                        )
+                        raise ValueError(f"Cached tick for {symbol} has no 'source' field")
                     return GoldTick(
                         symbol=cached["symbol"],
                         timestamp=datetime.fromisoformat(cached["timestamp"]),
@@ -528,17 +520,13 @@ class MarketDataOrchestrator:
             tick = self.get_latest_tick()
             if tick:
                 features["tick_confidence"] = tick.confidence
-                features["tick_spread_pct"] = (
-                    tick.spread / tick.mid * 100.0 if tick.mid > 0 else 0.0
-                )
+                features["tick_spread_pct"] = tick.spread / tick.mid * 100.0 if tick.mid > 0 else 0.0
             else:
                 features["tick_confidence"] = 0.0
                 features["tick_spread_pct"] = 0.0
 
             if self._gold_feed:
-                features["tick_source_count"] = float(
-                    len(self._gold_feed.active_sources())
-                )
+                features["tick_source_count"] = float(len(self._gold_feed.active_sources()))
             else:
                 features["tick_source_count"] = 0.0
         except Exception as exc:
@@ -582,18 +570,17 @@ class MarketDataOrchestrator:
 
         # Check tick quality
         tick = self.get_latest_tick()
-        if tick is not None and tick.confidence < 0.30:  # noqa: PLR2004
+        if tick is not None and tick.confidence < 0.30:
             return False
 
-        # Check at least one feed alive
-        if self._gold_feed and not self._gold_feed.active_sources():
-            # No active sources — but only block if we've been running > 30s
-            import time
-
-            if self._started and (time.time() - self._start_ts) > 30.0:  # noqa: PLR2004
-                return False
-
-        return True
+        # No active sources — but only block if we've been running > 30s
+        feed_stalled = (
+            self._gold_feed
+            and not self._gold_feed.active_sources()
+            and self._started
+            and (time.time() - self._start_ts) > 30.0
+        )
+        return not feed_stalled
 
     def get_ohlcv(
         self,
@@ -667,9 +654,7 @@ class MarketDataOrchestrator:
                 try:
                     self._redis_store.set_quality_report(symbol, report_dict)
                 except Exception as _exc:
-                    logger.debug(
-                        "Orchestrator: quality report Redis cache error: %s", _exc
-                    )
+                    logger.debug("Orchestrator: quality report Redis cache error: %s", _exc)
 
             # Write to lineage store
             try:
@@ -699,11 +684,9 @@ class MarketDataOrchestrator:
         """
         try:
             raw_ticks = self._redis_store.get_tick_history(symbol, limit=max_ticks)
-            if len(raw_ticks) < 2:  # noqa: PLR2004
+            if len(raw_ticks) < 2:
                 return None
 
-            from datetime import datetime
-            from data_layer.types import FeedSource, TickQuality
 
             ticks = []
             for r in raw_ticks:
@@ -728,7 +711,7 @@ class MarketDataOrchestrator:
                 except Exception:  # nosec B112 - skip malformed tick record during replay
                     continue
 
-            if len(ticks) < 2:  # noqa: PLR2004
+            if len(ticks) < 2:
                 return None
 
             return self._norm.tick_to_ohlcv(ticks, timeframe_minutes=timeframe_minutes)
@@ -756,9 +739,7 @@ class MarketDataOrchestrator:
         orchestrator.subscribe_ticks("my_handler", on_tick)
         """
         if not callable(callback):
-            raise TypeError(
-                f"subscribe_ticks: callback must be callable, got {type(callback)}"
-            )
+            raise TypeError(f"subscribe_ticks: callback must be callable, got {type(callback)}")
         self._tick_callbacks[name] = callback
         logger.debug("Orchestrator: tick subscriber registered: %s", name)
 
@@ -789,7 +770,7 @@ class MarketDataOrchestrator:
         """
         # Try OHLCVStore (broker feed) first
         df = self.get_ohlcv(symbol=symbol, bars=bars, timeframe=timeframe)
-        if df is not None and len(df) >= 10:  # noqa: PLR2004
+        if df is not None and len(df) >= 10:
             return df
 
         # Fall back to tick-based reconstruction

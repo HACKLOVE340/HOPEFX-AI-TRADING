@@ -5,6 +5,7 @@
 # No commercial use without explicit permission.
 
 # File 2: scripts/xauusd_bot.py - REAL working version (not aspirational)
+from pathlib import Path
 
 xauusd_bot_content = '''#!/usr/bin/env python3
 """
@@ -86,7 +87,7 @@ class PaperBroker:
         if side == 'buy':
             cost = fill_price * qty
             if cost > self.balance:
-                logger.warning(f"Insufficient balance: ${self.balance:.2f} < ${cost:.2f}")
+                logger.warning("Insufficient balance: $%s < $%s", self.balance, cost)
                 return None
             self.balance -= cost
             self.positions[symbol] = {'side': 'long', 'qty': qty, 'entry': fill_price}
@@ -103,7 +104,7 @@ class PaperBroker:
                 return None
 
         self.trades.append(trade)
-        logger.info(f"Order filled: {side} {qty} {symbol} @ {fill_price:.2f}")
+        logger.info("Order filled: %s %s %s @ %s", side, qty, symbol, fill_price)
         return trade
 
     def get_position(self, symbol):
@@ -185,8 +186,8 @@ class XAUUSDBot:
 
     def run(self):
         """Main trading loop."""
-        logger.info(f"Starting XAUUSD Bot - Mode: {self.mode}, Capital: ${self.capital:.2f}")
-        logger.info(f"Running for {self.duration} minutes...")
+        logger.info("Starting XAUUSD Bot - Mode: %s, Capital: $%s", self.mode, self.capital)
+        logger.info("Running for %s minutes...", self.duration)
 
         self.running = True
         start_time = time.time()
@@ -219,7 +220,7 @@ class XAUUSDBot:
             qty = 0.01  # Micro lot
             self.broker.place_order('XAUUSD', 'buy', qty)
             self.stats['trades'] += 1
-            logger.info(f"🔵 BUY signal (conf: {pred['confidence']:.2f}) @ {price_data['mid']:.2f}")
+            logger.info("🔵 BUY signal (conf: %s) @ %s", pred['confidence'], price_data['mid'])
 
         elif position and position['side'] == 'long' and pred['signal'] == 'sell':
             # Exit long
@@ -231,7 +232,7 @@ class XAUUSDBot:
                     self.stats['wins'] += 1
                 else:
                     self.stats['losses'] += 1
-            logger.info(f"🔴 SELL signal @ {price_data['mid']:.2f} (P&L: ${trade.get('pnl', 0):.2f})")
+            logger.info("🔴 SELL signal @ %s (P&L: $%s)", price_data['mid'], trade.get('pnl', 0))
 
         # Update equity tracking
         unrealized = self.broker.get_unrealized_pnl('XAUUSD')
@@ -276,12 +277,12 @@ class XAUUSDBot:
         # Print stats
         win_rate = (self.stats['wins'] / self.stats['trades'] * 100) if self.stats['trades'] > 0 else 0
 
-        logger.info(f"Total Trades: {self.stats['trades']}")
-        logger.info(f"Wins: {self.stats['wins']} | Losses: {self.stats['losses']}")
-        logger.info(f"Win Rate: {win_rate:.1f}%")
-        logger.info(f"Total P&L: ${self.stats['total_pnl']:.2f}")
-        logger.info(f"Max Drawdown: {self.stats['max_drawdown']*100:.2f}%")
-        logger.info(f"Final Equity: ${self.broker.equity:.2f}")
+        logger.info("Total Trades: %s", self.stats['trades'])
+        logger.info("Wins: %s | Losses: %s", self.stats['wins'], self.stats['losses'])
+        logger.info("Win Rate: %s%", win_rate)
+        logger.info("Total P&L: $%s", self.stats['total_pnl'])
+        logger.info("Max Drawdown: %s%", self.stats['max_drawdown']*100)
+        logger.info("Final Equity: $%s", self.broker.equity)
 
         # Save results
         results = {
@@ -295,9 +296,9 @@ class XAUUSDBot:
 
         results_file = Path('results/xauusd_paper_results.json')
         results_file.parent.mkdir(exist_ok=True)
-        with open(results_file, 'w') as f:
+        with Path(results_file).open('w') as f:
             json.dump(results, f, indent=2, default=str)
-        logger.info(f"Results saved to: {results_file}")
+        logger.info("Results saved to: %s", results_file)
 
 
 def main():
@@ -361,7 +362,7 @@ if __name__ == '__main__':
     sys.exit(main())
 '''
 
-with open("/mnt/kimi/output/hopefx_upgrade/scripts/xauusd_bot.py", "w") as f:
+with Path("/mnt/kimi/output/hopefx_upgrade/scripts/xauusd_bot.py").open("w", encoding="utf-8") as f:
     f.write(xauusd_bot_content)
 
 print("✅ scripts/xauusd_bot.py created - REAL working paper trading bot")

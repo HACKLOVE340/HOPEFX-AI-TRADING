@@ -40,14 +40,14 @@ os.environ.setdefault("SECURITY_JWT_SECRET", "dev_secret_for_admin_seed_script_3
 os.environ.setdefault("DATABASE_URL", "sqlite:///hopefx.db")
 
 # ── Imports ───────────────────────────────────────────────────────────────────
-from database.models import Base
-from database.user_models import User, UserRole, UserStatus
+from sqlalchemy import create_engine
 
 # Use the same hash_password as AuthService (auth.service uses pbkdf2_sha256 via passlib).
 # auth.jwt uses bcrypt — a different scheme. Using the wrong one causes
 # "hash could not be identified" at login time.
 from auth.service import hash_password
-from sqlalchemy import create_engine
+from database.models import Base
+from database.user_models import User, UserRole, UserStatus
 
 
 def _get_engine():
@@ -56,9 +56,7 @@ def _get_engine():
     return create_engine(db_url, connect_args=connect_args)
 
 
-def create_or_update_admin(
-    email: str, username: str, password: str, reset: bool
-) -> None:
+def create_or_update_admin(email: str, username: str, password: str, reset: bool) -> None:
     engine = _get_engine()
     Base.metadata.create_all(engine)
 
@@ -68,11 +66,7 @@ def create_or_update_admin(
     session = Session()
 
     try:
-        existing = (
-            session.query(User)
-            .filter((User.email == email.lower()) | (User.username == username))
-            .first()
-        )
+        existing = session.query(User).filter((User.email == email.lower()) | (User.username == username)).first()
 
         if existing and not reset:
             print(f"\n[INFO] User '{existing.username}' already exists.")
@@ -109,7 +103,9 @@ def create_or_update_admin(
         print("─" * 50)
         print(f"  Email    : {email}")
         print(f"  Username : {username}")
-        print(f"  Password : {password}")
+        # Do not echo the password here — it was either supplied by the caller
+        # (who already knows it) or printed once by main() before this call.
+        print("  Password : (set — use the value shown above or your supplied value)")
         print("  Role     : admin")
         print("  Status   : active (email pre-verified)")
         print("─" * 50)
@@ -126,12 +122,8 @@ def main():
     parser = argparse.ArgumentParser(description="Create or reset HOPEFX admin user")
     parser.add_argument("--email", default="admin@hopefx.io", help="Admin email")
     parser.add_argument("--username", default="admin", help="Admin username")
-    parser.add_argument(
-        "--password", default=None, help="Password (auto-generated if omitted)"
-    )
-    parser.add_argument(
-        "--reset", action="store_true", help="Reset password if user exists"
-    )
+    parser.add_argument("--password", default=None, help="Password (auto-generated if omitted)")
+    parser.add_argument("--reset", action="store_true", help="Reset password if user exists")
     args = parser.parse_args()
 
     if args.password is None:
@@ -140,7 +132,27 @@ def main():
 
         alphabet = string.ascii_letters + string.digits + "!@#$%"
         args.password = "".join(secrets.choice(alphabet) for _ in range(16))
-        print(f"[INFO] Auto-generated password: {args.password}")
+
+        # Write the generated password to a mode-0600 restricted local file so
+        # it survives terminal scroll. The user is instructed to delete it
+        # immediately after saving to a password manager.
+        # os.open with O_CREAT|O_WRONLY|O_TRUNC and mode=0o600 creates the file
+        # with restricted permissions atomically — no world-readable window.
+        import datetime as _dt
+
+        pw_file = ROOT / "admin_password.txt"
+        pw_content = (
+            f"Admin password (generated {_dt.datetime.now().isoformat()}):\n"
+            f"{args.password}\n"
+            "Delete this file after saving the password to a password manager.\n"
+        ).encode()
+        fd = os.open(str(pw_file), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            os.write(fd, pw_content)
+        finally:
+            os.close(fd)
+        print(f"[INFO] Auto-generated password written to: {pw_file}")
+        print("[INFO] Delete that file after saving the password to a password manager.")
 
     create_or_update_admin(args.email, args.username, args.password, args.reset)
 

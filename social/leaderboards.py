@@ -29,9 +29,7 @@ class LeaderboardManager:
         return {cat: self._sorted(cat) for cat in self._data}
 
     def _sorted(self, category: str) -> list[LeaderboardEntry]:
-        entries = sorted(
-            self._data[category].values(), key=lambda e: e.score, reverse=True
-        )
+        entries = sorted(self._data[category].values(), key=lambda e: e.score, reverse=True)
         for i, e in enumerate(entries, 1):
             e.rank = i
         return entries
@@ -43,13 +41,9 @@ class LeaderboardManager:
         if entry:
             entry.score = score
         else:
-            self._data[category][user_id] = LeaderboardEntry(
-                user_id=user_id, score=score
-            )
+            self._data[category][user_id] = LeaderboardEntry(user_id=user_id, score=score)
 
-    def get_leaderboard(
-        self, category: str, limit: int | None = None
-    ) -> list[LeaderboardEntry]:
+    def get_leaderboard(self, category: str, limit: int | None = None) -> list[LeaderboardEntry]:
         if category not in self._data:
             return []
         entries = self._sorted(category)

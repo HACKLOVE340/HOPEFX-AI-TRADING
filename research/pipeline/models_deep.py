@@ -51,8 +51,7 @@ logger = logging.getLogger(__name__)
 # ── PyTorch (preferred; lighter than TF for this use-case) ───────────────────
 try:
     import torch
-    from torch import nn
-    from torch import optim
+    from torch import nn, optim
     from torch.utils.data import DataLoader, TensorDataset
 
     TORCH_AVAILABLE = True
@@ -63,7 +62,6 @@ except ImportError:
 # ── TensorFlow / Keras fallback ───────────────────────────────────────────────
 try:
     import tensorflow as tf  # noqa: F401
-    from tensorflow.keras import layers, Model  # noqa: F401
 
     TF_AVAILABLE = True
 except ImportError:
@@ -119,18 +117,14 @@ if TORCH_AVAILABLE:
             super().__init__()
             self.n_heads = n_heads
             self.attn = nn.Linear(hidden, n_heads)
-            self.out_proj = (
-                nn.Linear(hidden * n_heads, hidden) if n_heads > 1 else nn.Identity()
-            )
+            self.out_proj = nn.Linear(hidden * n_heads, hidden) if n_heads > 1 else nn.Identity()
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             # x: (batch, seq, hidden)
             scores = self.attn(x)  # (batch, seq, n_heads)
             weights = torch.softmax(scores, dim=1)  # (batch, seq, n_heads)
             # Weighted sum for each head
-            heads = [
-                (weights[:, :, h : h + 1] * x).sum(dim=1) for h in range(self.n_heads)
-            ]
+            heads = [(weights[:, :, h : h + 1] * x).sum(dim=1) for h in range(self.n_heads)]
             ctx = torch.cat(heads, dim=-1)  # (batch, hidden * n_heads)
             return self.out_proj(ctx)  # (batch, hidden)
 
@@ -211,25 +205,17 @@ if TORCH_AVAILABLE:
         def __init__(self, channels: int, kernel: int, dilation: int, dropout: float):
             super().__init__()
             pad = (kernel - 1) * dilation
-            self.conv1 = nn.Conv1d(
-                channels, channels, kernel, padding=pad, dilation=dilation
-            )
-            self.conv2 = nn.Conv1d(
-                channels, channels, kernel, padding=pad, dilation=dilation
-            )
+            self.conv1 = nn.Conv1d(channels, channels, kernel, padding=pad, dilation=dilation)
+            self.conv2 = nn.Conv1d(channels, channels, kernel, padding=pad, dilation=dilation)
             self.drop = nn.Dropout(dropout)
             self.relu = nn.ReLU()
             self._pad = pad
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             # Causal: trim right padding
-            out = self.relu(
-                self.conv1(x)[..., : -self._pad] if self._pad else self.conv1(x)
-            )
+            out = self.relu(self.conv1(x)[..., : -self._pad] if self._pad else self.conv1(x))
             out = self.drop(out)
-            out = self.relu(
-                self.conv2(out)[..., : -self._pad] if self._pad else self.conv2(out)
-            )
+            out = self.relu(self.conv2(out)[..., : -self._pad] if self._pad else self.conv2(out))
             out = self.drop(out)
             return self.relu(out + x)
 
@@ -245,10 +231,7 @@ if TORCH_AVAILABLE:
             super().__init__()
             self.input_proj = nn.Conv1d(n_features, channels, 1)
             self.blocks = nn.Sequential(
-                *[
-                    _TCNBlock(channels, kernel, dilation=2**i, dropout=dropout)
-                    for i in range(n_levels)
-                ]
+                *[_TCNBlock(channels, kernel, dilation=2**i, dropout=dropout) for i in range(n_levels)]
             )
             self.head = nn.Sequential(
                 nn.AdaptiveAvgPool1d(1),
@@ -298,10 +281,7 @@ if TORCH_AVAILABLE:
             # TCN encoder
             self.input_proj = nn.Conv1d(n_features, tcn_channels, 1)
             self.tcn_blocks = nn.Sequential(
-                *[
-                    _TCNBlock(tcn_channels, kernel=3, dilation=2**i, dropout=dropout)
-                    for i in range(tcn_levels)
-                ]
+                *[_TCNBlock(tcn_channels, kernel=3, dilation=2**i, dropout=dropout) for i in range(tcn_levels)]
             )
             # LSTM refinement (operates on TCN output)
             self.lstm = nn.LSTM(
@@ -361,13 +341,10 @@ if TORCH_AVAILABLE:
             target_smooth = target * (1 - self.smoothing) + 0.5 * self.smoothing
             eps = 1e-7
             pred = pred.clamp(eps, 1 - eps)
-            loss = -(
-                target_smooth * torch.log(pred)
-                + (1 - target_smooth) * torch.log(1 - pred)
-            )
+            loss = -(target_smooth * torch.log(pred) + (1 - target_smooth) * torch.log(1 - pred))
             if self.pos_weight is not None:
                 weight = torch.where(
-                    target > 0.5,  # noqa: PLR2004
+                    target > 0.5,
                     torch.tensor(self.pos_weight, device=pred.device),
                     torch.ones_like(pred),
                 )
@@ -446,10 +423,7 @@ class DeepPredictor:
     ):
         # Validate architecture before any torch dependency
         if architecture not in self.ARCHITECTURES:
-            raise ValueError(
-                f"Unknown architecture '{architecture}'. "
-                f"Valid options: {list(self.ARCHITECTURES.keys())}"
-            )
+            raise ValueError(f"Unknown architecture '{architecture}'. Valid options: {list(self.ARCHITECTURES.keys())}")
 
         # Torch is required — raise immediately so callers get a clear error
         if not TORCH_AVAILABLE:
@@ -496,12 +470,8 @@ class DeepPredictor:
         self.use_amp = self._use_amp_requested and self.device.type == "cuda"
         self._scaler = torch.cuda.amp.GradScaler() if self.use_amp else None
 
-        self.model = self._build_model(
-            self.n_features, self.seq_len, **self._model_kwargs
-        ).to(self.device)
-        self.optimizer = optim.AdamW(
-            self.model.parameters(), lr=self.lr, weight_decay=1e-4
-        )
+        self.model = self._build_model(self.n_features, self.seq_len, **self._model_kwargs).to(self.device)
+        self.optimizer = optim.AdamW(self.model.parameters(), lr=self.lr, weight_decay=1e-4)
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer,
             mode="min",
@@ -510,27 +480,21 @@ class DeepPredictor:
             min_lr=1e-6,
         )
         if self.task == "binary":
-            self.criterion = _LabelSmoothBCE(
-                smoothing=self.label_smoothing, pos_weight=self.pos_weight
-            )
+            self.criterion = _LabelSmoothBCE(smoothing=self.label_smoothing, pos_weight=self.pos_weight)  # pylint: disable=possibly-used-before-assignment
         else:
             self.criterion = nn.MSELoss()
 
     def _build_model(self, n_features: int, seq_len: int, **kwargs) -> nn.Module:
         arch = self.architecture.lower()
         if arch == "lstm":
-            return _LSTMNet(n_features, **kwargs)
-        elif arch == "transformer":
-            return _TransformerNet(n_features, seq_len=seq_len, **kwargs)
-        elif arch == "tcn":
-            return _TCNNet(n_features, **kwargs)
-        elif arch == "hybrid":
-            return _HybridNet(n_features, **kwargs)
-        else:
-            raise ValueError(
-                f"Unknown architecture '{arch}'. "
-                f"Choose from: {list(self.ARCHITECTURES)}"
-            )
+            return _LSTMNet(n_features, **kwargs)  # pylint: disable=possibly-used-before-assignment
+        if arch == "transformer":
+            return _TransformerNet(n_features, seq_len=seq_len, **kwargs)  # pylint: disable=possibly-used-before-assignment
+        if arch == "tcn":
+            return _TCNNet(n_features, **kwargs)  # pylint: disable=possibly-used-before-assignment
+        if arch == "hybrid":
+            return _HybridNet(n_features, **kwargs)  # pylint: disable=possibly-used-before-assignment
+        raise ValueError(f"Unknown architecture '{arch}'. Choose from: {list(self.ARCHITECTURES)}")
 
     def _to_loader(self, X: np.ndarray, y: np.ndarray, shuffle: bool) -> DataLoader:
         X_t = torch.tensor(X, dtype=torch.float32)
@@ -578,9 +542,7 @@ class DeepPredictor:
                 )
 
         train_loader = self._to_loader(X_train, y_train, shuffle=True)
-        val_loader = (
-            self._to_loader(X_val, y_val, shuffle=False) if X_val is not None else None
-        )
+        val_loader = self._to_loader(X_val, y_val, shuffle=False) if X_val is not None else None
 
         best_val_loss = float("inf")
         patience_counter = 0
@@ -590,8 +552,8 @@ class DeepPredictor:
             # ── Train ─────────────────────────────────────────────────────────
             self.model.train()
             train_losses = []
-            for X_b, y_b in train_loader:
-                X_b, y_b = X_b.to(self.device), y_b.to(self.device)  # noqa: PLW2901
+            for X_b_raw, y_b_raw in train_loader:
+                X_b, y_b = X_b_raw.to(self.device), y_b_raw.to(self.device)
                 self.optimizer.zero_grad(set_to_none=True)
 
                 if self.use_amp and self._scaler is not None:
@@ -622,8 +584,8 @@ class DeepPredictor:
                 self.model.eval()
                 val_losses = []
                 with torch.no_grad():
-                    for X_b, y_b in val_loader:
-                        X_b, y_b = X_b.to(self.device), y_b.to(self.device)  # noqa: PLW2901
+                    for X_b_raw, y_b_raw in val_loader:
+                        X_b, y_b = X_b_raw.to(self.device), y_b_raw.to(self.device)
                         pred = self.model(X_b)
                         val_losses.append(self.criterion(pred, y_b).item())
                 avg_val = float(np.mean(val_losses))
@@ -634,9 +596,7 @@ class DeepPredictor:
 
                 if avg_val < best_val_loss:
                     best_val_loss = avg_val
-                    best_state = {
-                        k: v.cpu().clone() for k, v in self.model.state_dict().items()
-                    }
+                    best_state = {k: v.cpu().clone() for k, v in self.model.state_dict().items()}
                     patience_counter = 0
                 else:
                     patience_counter += 1
@@ -700,7 +660,7 @@ class DeepPredictor:
 
         Returns a dict with keys: accuracy, auc, f1, n_samples.
         """
-        from sklearn.metrics import accuracy_score, roc_auc_score, f1_score
+        from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
         proba = self.predict(X)
         preds = (proba >= threshold).astype(int)

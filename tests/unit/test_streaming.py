@@ -7,9 +7,9 @@
 Tests for Real-Time Streaming Service (data/streaming.py)
 """
 
+from datetime import UTC, datetime
+
 import pytest
-from datetime import datetime, timezone
-UTC = timezone.utc
 
 
 class TestTick:
@@ -28,8 +28,8 @@ class TestTick:
         )
 
         assert tick.symbol == "XAUUSD"
-        assert tick.bid == 1950.0  # noqa: PLR2004
-        assert tick.ask == 1950.1  # noqa: PLR2004
+        assert tick.bid == 1950.0
+        assert tick.ask == 1950.1
 
     def test_tick_mid(self):
         from data.streaming import Tick
@@ -96,7 +96,7 @@ class TestAggregatedBar:
         d = bar.to_dict()
         assert d["symbol"] == "XAUUSD"
         assert d["timeframe"] == "1m"
-        assert d["high"] == 1951.0  # noqa: PLR2004
+        assert d["high"] == 1951.0
 
 
 class TestTickAggregator:
@@ -132,8 +132,8 @@ class TestTickAggregator:
 
         assert bar is not None
         assert bar.symbol == "XAUUSD"
-        assert bar.close == 1950.0  # noqa: PLR2004
-        assert bar.volume == 100.0  # noqa: PLR2004
+        assert bar.close == 1950.0
+        assert bar.volume == 100.0
 
     def test_ohlc_tracking(self):
         from data.streaming import Tick, TickAggregator
@@ -148,9 +148,7 @@ class TestTickAggregator:
             (1951.0, 30.0),
         ]
         for price, vol in prices_vols:
-            agg.add_tick(
-                Tick("XAUUSD", ts_base, 1950.0, price + 0.1, price, volume=vol)
-            )
+            agg.add_tick(Tick("XAUUSD", ts_base, 1950.0, price + 0.1, price, volume=vol))
             ts_base = ts_base.replace(second=ts_base.second + 10)
 
         # Close the bar with a tick in next minute
@@ -158,9 +156,9 @@ class TestTickAggregator:
         bar = agg.add_tick(Tick("XAUUSD", ts_next, 1950.0, 1950.1, 1950.0))
 
         assert bar is not None
-        assert bar.high == 1952.0  # noqa: PLR2004
-        assert bar.low == 1948.0  # noqa: PLR2004
-        assert bar.open == 1950.0  # noqa: PLR2004
+        assert bar.high == 1952.0
+        assert bar.low == 1948.0
+        assert bar.open == 1950.0
 
     def test_get_open_bar(self):
         from data.streaming import Tick, TickAggregator
@@ -171,7 +169,7 @@ class TestTickAggregator:
 
         open_bar = agg.get_open_bar("XAUUSD")
         assert open_bar is not None
-        assert open_bar["open"] == 1950.05  # noqa: PLR2004
+        assert open_bar["open"] == 1950.05
 
 
 class TestStreamingService:
@@ -214,9 +212,7 @@ class TestStreamingService:
         events = []
         service.subscribe("XAUUSD", events.append)
 
-        tick = Tick(
-            "XAUUSD", datetime.now(UTC), 1950.0, 1950.1, 1950.05, volume=100.0
-        )
+        tick = Tick("XAUUSD", datetime.now(UTC), 1950.0, 1950.1, 1950.05, volume=100.0)
         service.publish_tick(tick)
 
         assert len(events) == 1
@@ -229,28 +225,22 @@ class TestStreamingService:
         all_events = []
         service.subscribe("*", all_events.append)
 
-        service.publish_tick(
-            Tick("XAUUSD", datetime.now(UTC), 1950.0, 1950.1, 1950.05)
-        )
-        service.publish_tick(
-            Tick("EURUSD", datetime.now(UTC), 1.08, 1.0801, 1.0800)
-        )
+        service.publish_tick(Tick("XAUUSD", datetime.now(UTC), 1950.0, 1950.1, 1950.05))
+        service.publish_tick(Tick("EURUSD", datetime.now(UTC), 1.08, 1.0801, 1.0800))
 
         # At least one tick event per symbol
         tick_events = [e for e in all_events if e.event_type == "tick"]
-        assert len(tick_events) == 2  # noqa: PLR2004
+        assert len(tick_events) == 2
 
     def test_get_recent_ticks(self):
         from data.streaming import StreamingService, Tick
 
         service = StreamingService()
         for i in range(20):
-            service.publish_tick(
-                Tick("XAUUSD", datetime.now(UTC), 1950.0, 1950.1, 1950.0 + i)
-            )
+            service.publish_tick(Tick("XAUUSD", datetime.now(UTC), 1950.0, 1950.1, 1950.0 + i))
 
         ticks = service.get_recent_ticks("XAUUSD", n=5)
-        assert len(ticks) == 5  # noqa: PLR2004
+        assert len(ticks) == 5
 
     def test_get_recent_ticks_empty(self):
         from data.streaming import StreamingService
@@ -262,16 +252,12 @@ class TestStreamingService:
         from data.streaming import StreamingService, Tick
 
         service = StreamingService()
-        service.publish_tick(
-            Tick("XAUUSD", datetime.now(UTC), 1950.0, 1950.1, 1950.0)
-        )
-        service.publish_tick(
-            Tick("XAUUSD", datetime.now(UTC), 1951.0, 1951.1, 1951.0)
-        )
+        service.publish_tick(Tick("XAUUSD", datetime.now(UTC), 1950.0, 1950.1, 1950.0))
+        service.publish_tick(Tick("XAUUSD", datetime.now(UTC), 1951.0, 1951.1, 1951.0))
 
         latest = service.get_latest_tick("XAUUSD")
         assert latest is not None
-        assert latest.last == 1951.0  # noqa: PLR2004
+        assert latest.last == 1951.0
 
     def test_get_latest_tick_empty(self):
         from data.streaming import StreamingService
@@ -299,7 +285,7 @@ class TestStreamingService:
 
         assert len(bars_received) == 1
         bar_data = bars_received[0].data
-        assert bar_data["volume"] == 100.0  # noqa: PLR2004
+        assert bar_data["volume"] == 100.0
 
     def test_get_bars(self):
         from data.streaming import StreamingService, Tick
@@ -321,9 +307,7 @@ class TestStreamingService:
         from data.streaming import StreamingService, Tick
 
         service = StreamingService()
-        service.publish_tick(
-            Tick("XAUUSD", datetime.now(UTC), 1950.0, 1950.1, 1950.05)
-        )
+        service.publish_tick(Tick("XAUUSD", datetime.now(UTC), 1950.0, 1950.1, 1950.05))
         service.clear_symbol("XAUUSD")
 
         assert service.get_recent_ticks("XAUUSD") == []
@@ -332,12 +316,8 @@ class TestStreamingService:
         from data.streaming import StreamingService, Tick
 
         service = StreamingService()
-        service.publish_tick(
-            Tick("XAUUSD", datetime.now(UTC), 1950.0, 1950.1, 1950.05)
-        )
-        service.publish_tick(
-            Tick("EURUSD", datetime.now(UTC), 1.08, 1.0801, 1.08)
-        )
+        service.publish_tick(Tick("XAUUSD", datetime.now(UTC), 1950.0, 1950.1, 1950.05))
+        service.publish_tick(Tick("EURUSD", datetime.now(UTC), 1.08, 1.0801, 1.08))
         service.clear_all()
 
         assert service.get_recent_ticks("XAUUSD") == []
@@ -361,7 +341,7 @@ class TestStreamingService:
 
         def mock_connect():
             call_count[0] += 1
-            return call_count[0] >= 2  # Succeed on second attempt  # noqa: PLR2004
+            return call_count[0] >= 2  # Succeed on second attempt
 
         result = service.reconnect_with_backoff(mock_connect, max_attempts=3)
         assert result is True

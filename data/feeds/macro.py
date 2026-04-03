@@ -35,8 +35,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
@@ -96,7 +95,7 @@ async def _fetch_fred_async(series_id: str, limit: int = 30) -> pd.DataFrame:
             resp.raise_for_status()
             return _parse_fred_response(resp.json())
     except ImportError:
-        pass
+        ...  # nosec B110
 
     # Fallback: run blocking requests in thread pool
     import requests
@@ -234,7 +233,7 @@ class MacroFeed:
 
         # YoY CPI change
         cpi_yoy = None
-        if not cpi_df.empty and len(cpi_df) >= 2:  # noqa: PLR2004
+        if not cpi_df.empty and len(cpi_df) >= 2:
             try:
                 cpi_now = float(cpi_df.iloc[-1].iloc[0])
                 cpi_prev = float(cpi_df.iloc[0].iloc[0])
@@ -270,7 +269,7 @@ class MacroFeed:
                 logger.warning("MacroFeed refresh failed: %s", exc)
                 if not self._cache:
                     return {
-                        "error": str(exc),
+                        "error": "Macro feed unavailable — check server logs",
                         "macro_regime_score": 50,
                         "macro_stance": "neutral",
                     }
@@ -282,9 +281,11 @@ class MacroFeed:
 
         Keys are prefixed with 'macro_' to avoid collisions with OHLCV features.
         Missing values are filled with 0.0 so the feature vector stays fixed-width.
+
+        Includes WGC gold demand series from MacroStore when available.
         """
         snap = self.latest_snapshot()
-        return {
+        features: dict[str, float] = {
             "macro_dxy": snap.get("dxy") or 0.0,
             "macro_yield_10y": snap.get("yield_10y") or 0.0,
             "macro_yield_2y": snap.get("yield_2y") or 0.0,
@@ -292,6 +293,34 @@ class MacroFeed:
             "macro_cpi_yoy": snap.get("cpi_yoy_pct") or 0.0,
             "macro_regime_score": snap.get("macro_regime_score") or 50.0,
         }
+
+        # Merge WGC series from MacroStore (latest values, forward-filled)
+        try:
+            from ml.macro_store import macro_store
+
+            store_snap = macro_store.snapshot()
+            wgc_keys = [
+                "wgc_total_demand",
+                "wgc_investment",
+                "wgc_central_bank",
+                "wgc_jewellery",
+                "wgc_etf_flow",
+            ]
+            for key in wgc_keys:
+                info = store_snap.get(key)
+                features[f"macro_{key}"] = float(info["value"]) if info else 0.0
+        except Exception:
+            # MacroStore unavailable — WGC features default to 0.0
+            for key in [
+                "wgc_total_demand",
+                "wgc_investment",
+                "wgc_central_bank",
+                "wgc_jewellery",
+                "wgc_etf_flow",
+            ]:
+                features.setdefault(f"macro_{key}", 0.0)
+
+        return features
 
     async def refresh_async(self) -> dict[str, Any]:
         """Async version of refresh() — preferred in FastAPI context."""
@@ -314,16 +343,14 @@ class MacroFeed:
         spread = (y10 - y2) if (y10 is not None and y2 is not None) else None
 
         cpi_yoy = None
-        if not cpi_df.empty and len(cpi_df) >= 2:  # noqa: PLR2004
+        if not cpi_df.empty and len(cpi_df) >= 2:
             try:
                 cpi_now = float(cpi_df.iloc[-1].iloc[0])
                 cpi_prev = float(cpi_df.iloc[0].iloc[0])
                 if cpi_prev > 0:
                     cpi_yoy = round((cpi_now - cpi_prev) / cpi_prev * 100, 2)
             except Exception as exc:
-                logger.warning(
-                    "MacroFeed.refresh_async: CPI YoY calculation failed: %s", exc
-                )
+                logger.warning("MacroFeed.refresh_async: CPI YoY calculation failed: %s", exc)
 
         score = _macro_regime_score(dxy, y10, spread, cpi_yoy)
         snapshot = {
@@ -401,13 +428,13 @@ def _macro_regime_score(
 
 def _regime_label(score: float) -> str:
     """Convert numeric score to human-readable stance label."""
-    if score >= 70:  # noqa: PLR2004
+    if score >= 70:
         return "Risk-off: gold bullish"
-    if score >= 55:  # noqa: PLR2004
+    if score >= 55:
         return "Mild tailwind for gold"
-    if score >= 45:  # noqa: PLR2004
+    if score >= 45:
         return "Neutral"
-    if score >= 30:  # noqa: PLR2004
+    if score >= 30:
         return "Dollar strength: gold headwind"
     return "Risk-on: gold bearish"
 

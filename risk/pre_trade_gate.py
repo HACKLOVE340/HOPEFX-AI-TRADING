@@ -34,8 +34,7 @@ import logging
 import os
 import traceback
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -114,9 +113,7 @@ class GateOrder:
 
     def __post_init__(self) -> None:
         if self.side not in ("BUY", "SELL"):
-            raise ValueError(
-                f"GateOrder.side must be 'BUY' or 'SELL', got {self.side!r}"
-            )
+            raise ValueError(f"GateOrder.side must be 'BUY' or 'SELL', got {self.side!r}")
         if self.quantity <= 0:
             raise ValueError(f"GateOrder.quantity must be > 0, got {self.quantity}")
 
@@ -253,8 +250,7 @@ class PreTradeGate:
         )
 
         logger.info(
-            "PRE-TRADE GATE PASSED | symbol=%s side=%s qty=%.4f strategy=%s "
-            "checks=%s cvar=%s dd=%.4f",
+            "PRE-TRADE GATE PASSED | symbol=%s side=%s qty=%.4f strategy=%s checks=%s cvar=%s dd=%.4f",
             order.symbol,
             order.side,
             order.quantity,
@@ -293,10 +289,7 @@ class PreTradeGate:
             raise
         except Exception as exc:
             tb = traceback.format_exc()
-            msg = (
-                f"Risk manager raised unexpected exception in check '{name}': "
-                f"{type(exc).__name__}: {exc}"
-            )
+            msg = f"Risk manager raised unexpected exception in check '{name}': {type(exc).__name__}: {exc}"
             logger.error("%s\n%s", msg, tb)
             if _SENTRY:
                 try:
@@ -321,10 +314,7 @@ class PreTradeGate:
             raise
         except Exception as exc:
             tb = traceback.format_exc()
-            msg = (
-                f"Risk manager raised unexpected exception in check '{name}': "
-                f"{type(exc).__name__}: {exc}"
-            )
+            msg = f"Risk manager raised unexpected exception in check '{name}': {type(exc).__name__}: {exc}"
             logger.error("%s\n%s", msg, tb)
             if _SENTRY:
                 try:
@@ -379,10 +369,7 @@ class PreTradeGate:
         limit = getattr(config, "daily_loss_limit_pct", 0.05)
 
         if daily_loss_pct >= limit:
-            detail = (
-                f"Daily loss {daily_loss_pct:.2%} >= limit {limit:.2%} "
-                f"(pnl={daily_pnl:.2f})"
-            )
+            detail = f"Daily loss {daily_loss_pct:.2%} >= limit {limit:.2%} (pnl={daily_pnl:.2f})"
             logger.warning("PRE-TRADE BLOCKED [DAILY_LOSS_LIMIT] %s", detail)
             raise TradeBlockedError(
                 reason_code="DAILY_LOSS_LIMIT",
@@ -427,8 +414,7 @@ class PreTradeGate:
 
         # Extract CVaR value for audit log
         if (
-            hasattr(rm, "_compute_cvar")
-            and len(getattr(rm, "_returns_history", [])) >= 10  # noqa: PLR2004
+            hasattr(rm, "_compute_cvar") and len(getattr(rm, "_returns_history", [])) >= 10
         ):
             try:
                 return rm._compute_cvar()
@@ -445,7 +431,7 @@ class PreTradeGate:
 
         def _rf(attr: str) -> float:
             val = getattr(rm, attr, None)
-            if isinstance(val, (int, float)):
+            if isinstance(val, int | float):
                 return float(val)
             return 0.0
 
@@ -523,15 +509,11 @@ class PreTradeGate:
             val = getattr(rm, attr, None)
             if val is None:
                 return 0.0
-            if isinstance(val, (int, float)):
+            if isinstance(val, int | float):
                 return float(val)
             return 0.0
 
-        balance = (
-            _real_float("current_equity")
-            or _real_float("current_balance")
-            or _real_float("initial_balance")
-        )
+        balance = _real_float("current_equity") or _real_float("current_balance") or _real_float("initial_balance")
 
         if not balance or balance <= 0:
             return  # cannot check — pass (balance unavailable)

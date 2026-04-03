@@ -19,63 +19,22 @@ import logging
 import threading
 import uuid
 from collections import deque
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any, Optional
-from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
-# ── Router request/response models (defined at module level) ──────────────────
-try:
-    from pydantic import BaseModel as _PydanticBase
-
-    class _GenerateSignalRequest(_PydanticBase):
-        symbol: str
-        price: float
-        direction: str = "buy"
-        confidence: float = 0.7
-        entry_price: float | None = None
-        stop_loss: float | None = None
-        take_profit: float | None = None
-        timeframe: str = "1h"
-        regime: str = "ranging"
-        session: str = "new_york"
-        strategies_agreeing: list[str] | None = None
-        total_strategies: int = 1
-        parameters: dict[str, Any] | None = None
-
-    class _CreateAlertRequest(_PydanticBase):
-        symbol: str
-        direction: str
-        min_confidence: float = 0.7
-        notify_webhook: str | None = None
-
-    class _OOSSignalItem(_PydanticBase):
-        direction: str
-        confidence: float
-        raw_score: float
-
-    class _LiveSignalItem(_PydanticBase):
-        direction: str
-        confidence: float
-        raw_score: float
-
-    class _SetOOSReferenceRequest(_PydanticBase):
-        signals: list[_OOSSignalItem]
-
-    class _ValidateSignalsRequest(_PydanticBase):
-        live_signals: list[_LiveSignalItem] | None = None
-
-except ImportError:
-    _GenerateSignalRequest = None  # type: ignore[assignment,misc]
-    _CreateAlertRequest = None  # type: ignore[assignment,misc]
-    _OOSSignalItem = None  # type: ignore[assignment,misc]
-    _LiveSignalItem = None  # type: ignore[assignment,misc]
-    _SetOOSReferenceRequest = None  # type: ignore[assignment,misc]
-    _ValidateSignalsRequest = None  # type: ignore[assignment,misc]
+# Signal confidence thresholds
+_CONF_VERY_STRONG = 0.8
+_CONF_STRONG = 0.6
+_CONF_MODERATE = 0.4
+_CONF_WEAK = 0.2
+_CONF_HIGH_PUSH = 0.70  # threshold for social-feed + FCM push
+# Minimum sample size for distribution validation
+_VALIDATION_MIN_SAMPLES = 30
 
 
 class SignalStrength(Enum):
@@ -218,9 +177,7 @@ class SignalAnalytics:
         # Update averages
         n = self.signals_generated
         self.avg_confidence = ((self.avg_confidence * (n - 1)) + signal.confidence) / n
-        self.avg_rr_ratio = (
-            (self.avg_rr_ratio * (n - 1)) + signal.risk_reward_ratio
-        ) / n
+        self.avg_rr_ratio = ((self.avg_rr_ratio * (n - 1)) + signal.risk_reward_ratio) / n
 
     def record_outcome(self, outcome: str):
         """Record signal outcome (tp, sl, expired)."""
@@ -235,12 +192,8 @@ class SignalAnalytics:
             "signals_by_strength": self.signals_by_strength,
             "signals_by_symbol": self.signals_by_symbol,
             "hit_rate": self.hit_rate,
-            "tp_rate": self.hit_rate["tp"] / total_outcomes
-            if total_outcomes > 0
-            else 0,
-            "sl_rate": self.hit_rate["sl"] / total_outcomes
-            if total_outcomes > 0
-            else 0,
+            "tp_rate": self.hit_rate["tp"] / total_outcomes if total_outcomes > 0 else 0,
+            "sl_rate": self.hit_rate["sl"] / total_outcomes if total_outcomes > 0 else 0,
             "avg_confidence": self.avg_confidence,
             "avg_rr_ratio": self.avg_rr_ratio,
             "hourly_distribution": self.hourly_distribution,
@@ -333,15 +286,11 @@ class RealTimeSignalService:
         """
         # Validate
         if confidence < self.min_confidence:
-            logger.debug(
-                f"Signal rejected: confidence {confidence} < {self.min_confidence}",
-            )
+            logger.debug("Signal rejected: confidence %s < %s", confidence, self.min_confidence)
             return None
 
         if len(strategies_agreeing) < self.min_strategies:
-            logger.debug(
-                f"Signal rejected: {len(strategies_agreeing)} strategies < {self.min_strategies}",
-            )
+            logger.debug("Signal rejected: %s strategies < %s", len(strategies_agreeing), self.min_strategies)
             return None
 
         # Calculate risk/reward
@@ -379,8 +328,7 @@ class RealTimeSignalService:
             total_strategies=total_strategies,
             regime=regime,
             session=session,
-            expiry=datetime.now(UTC)
-            + timedelta(minutes=self.signal_expiry_minutes),
+            expiry=datetime.now(UTC) + timedelta(minutes=self.signal_expiry_minutes),
             metadata=metadata or {},
         )
 
@@ -396,14 +344,11 @@ class RealTimeSignalService:
         self._check_alerts(signal)
 
         # ── High-confidence pipeline: social feed + FCM push ─────────────────
-        # Threshold: confidence >= 0.70 (70%)
-        if confidence >= 0.70:  # noqa: PLR2004
+        if confidence >= _CONF_HIGH_PUSH:
             self._publish_to_social_feed(signal)
             self._push_fcm_to_all_users(signal)
 
-        logger.info(
-            f"Signal generated: {signal.id} - {direction.value} {symbol} @ {confidence:.2%}",
-        )
+        logger.info("Signal generated: %s - %s %s @ %s", signal.id, direction.value, symbol, confidence)
         return signal
 
     def _publish_to_social_feed(self, signal: "TradingSignal") -> None:
@@ -467,22 +412,21 @@ class RealTimeSignalService:
         # Weighted score
         composite = (confidence * 0.5) + (strategy_agreement * 0.3) + (rr_score * 0.2)
 
-        if composite >= 0.8:  # noqa: PLR2004
+        if composite >= _CONF_VERY_STRONG:
             return SignalStrength.VERY_STRONG
-        elif composite >= 0.6:  # noqa: PLR2004
+        if composite >= _CONF_STRONG:
             return SignalStrength.STRONG
-        elif composite >= 0.4:  # noqa: PLR2004
+        if composite >= _CONF_MODERATE:
             return SignalStrength.MODERATE
-        elif composite >= 0.2:  # noqa: PLR2004
+        if composite >= _CONF_WEAK:
             return SignalStrength.WEAK
-        else:
-            return SignalStrength.VERY_WEAK
+        return SignalStrength.VERY_WEAK
 
     def get_active_signals(
         self,
-        symbol: str = None,
-        direction: SignalDirection = None,
-        min_strength: SignalStrength = None,
+        symbol: str | None = None,
+        direction: SignalDirection | None = None,
+        min_strength: SignalStrength | None = None,
     ) -> list[TradingSignal]:
         """
         Get active (non-expired) signals.
@@ -511,9 +455,7 @@ class RealTimeSignalService:
             if min_strength:
                 strength_order = list(SignalStrength)
                 min_idx = strength_order.index(min_strength)
-                signals = [
-                    s for s in signals if strength_order.index(s.strength) <= min_idx
-                ]
+                signals = [s for s in signals if strength_order.index(s.strength) <= min_idx]
 
             return sorted(signals, key=lambda s: -s.confidence)
 
@@ -565,7 +507,7 @@ class RealTimeSignalService:
         direction: SignalDirection | None = None,
         min_confidence: float = 0.5,
         min_strength: SignalStrength = SignalStrength.MODERATE,
-        notify_channels: list[str] = None,
+        notify_channels: list[str] | None = None,
     ) -> SignalAlert:
         """Create a signal alert."""
         alert = SignalAlert(
@@ -580,7 +522,8 @@ class RealTimeSignalService:
         with self._lock:
             self.alerts[alert.id] = alert
 
-        logger.info(f"Alert created: {alert.id} for {symbol}")
+        logger.info("Alert created: %s for %s", alert.id, symbol)
+
         return alert
 
     def _check_alerts(self, signal: TradingSignal):
@@ -614,7 +557,8 @@ class RealTimeSignalService:
                 {"alert": asdict(alert), "signal": signal.to_dict()},
             )
 
-            logger.info(f"Alert triggered: {alert.id} by signal {signal.id}")
+            logger.info("Alert triggered: %s by signal %s", alert.id, signal.id)
+
 
     def delete_alert(self, alert_id: str):
         """Delete an alert."""
@@ -622,7 +566,7 @@ class RealTimeSignalService:
             if alert_id in self.alerts:
                 del self.alerts[alert_id]
 
-    def get_alerts(self, symbol: str = None) -> list[SignalAlert]:
+    def get_alerts(self, symbol: str | None = None) -> list[SignalAlert]:
         """Get all alerts, optionally filtered by symbol."""
         alerts = list(self.alerts.values())
         if symbol:
@@ -640,7 +584,8 @@ class RealTimeSignalService:
         Callback receives (event_type: str, data: dict)
         """
         self.subscribers.append(callback)
-        logger.debug(f"New subscriber added. Total: {len(self.subscribers)}")
+        logger.debug("New subscriber added. Total: %s", len(self.subscribers))
+
 
     def unsubscribe(self, callback: Callable):
         """Unsubscribe from signal events."""
@@ -659,7 +604,8 @@ class RealTimeSignalService:
             try:
                 callback(event_type, event)
             except Exception as e:
-                logger.error(f"Error in subscriber callback: {e}")
+                logger.error("Error in subscriber callback: %s", e)
+
 
     # ============================================================
     # HISTORY & ANALYTICS
@@ -667,7 +613,7 @@ class RealTimeSignalService:
 
     def get_signal_history(
         self,
-        symbol: str = None,
+        symbol: str | None = None,
         hours: int = 24,
     ) -> list[TradingSignal]:
         """Get signal history."""
@@ -689,43 +635,25 @@ class RealTimeSignalService:
             return {
                 "active_signals": len(self.active_signals),
                 "signals_last_hour": len(
-                    [
-                        s
-                        for s in self.signal_history
-                        if s.timestamp > datetime.now(UTC) - timedelta(hours=1)
-                    ],
+                    [s for s in self.signal_history if s.timestamp > datetime.now(UTC) - timedelta(hours=1)],
                 ),
                 "signals_last_24h": len(
-                    [
-                        s
-                        for s in self.signal_history
-                        if s.timestamp
-                        > datetime.now(UTC) - timedelta(hours=24)
-                    ],
+                    [s for s in self.signal_history if s.timestamp > datetime.now(UTC) - timedelta(hours=24)],
                 ),
                 "active_alerts": len([a for a in self.alerts.values() if a.active]),
                 "symbols_with_signals": list(
-                    set(s.symbol for s in self.active_signals.values()),
+                    {s.symbol for s in self.active_signals.values()},
                 ),
                 "direction_distribution": {
                     "buy": len(
-                        [
-                            s
-                            for s in self.active_signals.values()
-                            if s.direction == SignalDirection.BUY
-                        ],
+                        [s for s in self.active_signals.values() if s.direction == SignalDirection.BUY],
                     ),
                     "sell": len(
-                        [
-                            s
-                            for s in self.active_signals.values()
-                            if s.direction == SignalDirection.SELL
-                        ],
+                        [s for s in self.active_signals.values() if s.direction == SignalDirection.SELL],
                     ),
                 },
                 "avg_active_confidence": (
-                    sum(s.confidence for s in self.active_signals.values())
-                    / len(self.active_signals)
+                    sum(s.confidence for s in self.active_signals.values()) / len(self.active_signals)
                     if self.active_signals
                     else 0
                 ),
@@ -747,15 +675,13 @@ class RealTimeSignalService:
 
     def get_websocket_channels(self) -> list[str]:
         """Get available WebSocket channels."""
-        symbols = set(s.symbol for s in self.active_signals.values())
+        symbols = {s.symbol for s in self.active_signals.values()}
         channels = [f"signals:{sym}" for sym in symbols]
         channels.append("signals:all")
         channels.append("alerts")
         return channels
 
-    def ingest_engine_signal(
-        self, payload: dict[str, Any]
-    ) -> Optional["TradingSignal"]:
+    def ingest_engine_signal(self, payload: dict[str, Any]) -> Optional["TradingSignal"]:
         """
         Ingest a signal dict produced by core/signal_engine.py and store it in
         the ring buffer so /api/signals/latest reflects engine-generated signals.
@@ -782,27 +708,19 @@ class RealTimeSignalService:
 
             # Derive SL/TP from entry if not provided (0.5% conservative default)
             if sl is None:
-                sl = (
-                    round(entry * 0.995, 5)
-                    if direction == SignalDirection.BUY
-                    else round(entry * 1.005, 5)
-                )
+                sl = round(entry * 0.995, 5) if direction == SignalDirection.BUY else round(entry * 1.005, 5)
             if tp is None:
-                tp = (
-                    round(entry * 1.015, 5)
-                    if direction == SignalDirection.BUY
-                    else round(entry * 0.985, 5)
-                )
+                tp = round(entry * 1.015, 5) if direction == SignalDirection.BUY else round(entry * 0.985, 5)
 
             rr = abs(float(tp) - entry) / max(abs(entry - float(sl)), 1e-9)
 
             strength = (
                 SignalStrength.VERY_STRONG
-                if confidence >= 0.8  # noqa: PLR2004
+                if confidence >= _CONF_VERY_STRONG
                 else SignalStrength.STRONG
-                if confidence >= 0.6  # noqa: PLR2004
+                if confidence >= _CONF_STRONG
                 else SignalStrength.MODERATE
-                if confidence >= 0.4  # noqa: PLR2004
+                if confidence >= _CONF_MODERATE
                 else SignalStrength.WEAK
             )
 
@@ -824,9 +742,7 @@ class RealTimeSignalService:
                 session="live",
                 expiry=datetime.now(UTC)
                 .replace(second=0, microsecond=0)
-                .__class__.fromtimestamp(
-                    datetime.now(UTC).timestamp() + 1800, tz=UTC
-                ),
+                .__class__.fromtimestamp(datetime.now(UTC).timestamp() + 1800, tz=UTC),
                 metadata={
                     "probability": payload.get("probability"),
                     "model_version": payload.get("model_version"),
@@ -921,6 +837,9 @@ def _register_signal_write_routes(router: Any) -> None:  # noqa: C901
             else:
                 sl = req.stop_loss if req.stop_loss is not None else round(entry * 1.005, 5)
                 tp = req.take_profit if req.take_profit is not None else round(entry * 0.985, 5)
+
+            # Ensure at least one strategy name is present so min_strategies
+            # check passes for direct API calls (e.g. from the frontend or tests).
             strategies = req.strategies_agreeing or ["api_signal"]
             signal = svc.generate_signal(symbol=req.symbol, direction=direction, confidence=req.confidence, price=req.price, entry_price=entry, stop_loss=sl, take_profit=tp, timeframe=req.timeframe, strategies_agreeing=strategies, total_strategies=max(req.total_strategies, len(strategies)), regime=req.regime, session=req.session, metadata=req.parameters or {})
             if signal is None:
@@ -928,17 +847,30 @@ def _register_signal_write_routes(router: Any) -> None:  # noqa: C901
             return {"signal": signal.to_dict()}
         except _HTTPException:
             raise
-        except Exception as e:
-            raise _HTTPException(status_code=500, detail=f"Signal generation failed: {e}") from e
+        except Exception:
+            logger.exception("Signal generation failed: %s")
+            raise HTTPException(
+                status_code=500,
+                detail="Signal generation failed",
+            ) from None
 
     @router.post("/alerts")
     async def create_alert(req: _CreateAlertRequest):
         try:
             svc = _get_signal_service()
-            alert = svc.create_alert(symbol=req.symbol, direction=req.direction, min_confidence=req.min_confidence, notify_webhook=req.notify_webhook)
+            notify_channels = ["web"]
+            if req.notify_webhook:
+                notify_channels.append(req.notify_webhook)
+            alert = svc.create_alert(
+                symbol=req.symbol,
+                direction=req.direction,
+                min_confidence=req.min_confidence,
+                notify_channels=notify_channels,
+            )
             return {"alert_id": alert.id, "status": "created"}
         except Exception as e:
-            raise _HTTPException(status_code=500, detail=f"Alert creation failed: {e}") from e
+            logger.error("Alert creation failed: %s", e)
+            raise HTTPException(status_code=500, detail="Alert creation failed — check server logs") from e
 
     @router.get("/alerts")
     async def list_alerts(symbol: str | None = None):
@@ -950,7 +882,42 @@ def _register_signal_write_routes(router: Any) -> None:  # noqa: C901
         _get_signal_service().delete_alert(alert_id)
         return {"status": "deleted", "alert_id": alert_id}
 
-    _register_distribution_routes(router, _OOSSignalItem, _LiveSignalItem, _SetOOSReferenceRequest, _ValidateSignalsRequest)
+    @signals_router.get("/channels")
+    async def get_websocket_channels():
+        """List available WebSocket channel names for signal subscriptions."""
+        return {"channels": _get_signal_service().get_websocket_channels()}
+
+    @signals_router.get("/engine")
+    async def get_engine_status():
+        """
+        Return the live signal engine health and Phase 1–4 store status.
+
+        Includes:
+        - ml_available, symbols, interval_seconds, auto_trade flag
+        - phase1_mtf: MTF fusion store status
+        - phase2_anomaly: anomaly detection store status
+        - phase3_online: Phase-3 OnlineLearnerStore status
+        - phase4_deep: deep ensemble store status
+        - recent_signals: last 10 engine-generated signals from the ring buffer
+        """
+        try:
+            from core.signal_engine import get_signal_engine_status
+
+            engine_status = get_signal_engine_status()
+        except Exception as exc:
+            logger.warning("get_signal_engine_status failed: %s", exc)
+            engine_status = {"error": "Signal engine unavailable — check server logs"}
+
+        # Pull the last 10 engine-generated signals from the ring buffer
+        svc = _get_signal_service()
+        recent = svc.get_signal_history(hours=1)
+        engine_signals = [s.to_dict() for s in recent if s.metadata.get("source") == "signal_engine"][:10]
+
+        return {
+            "engine": engine_status,
+            "recent_engine_signals": engine_signals,
+            "recent_engine_signal_count": len(engine_signals),
+        }
 
 
 def _register_distribution_routes(router: Any, OOSSignalItem: Any, LiveSignalItem: Any, SetOOSReferenceRequest: Any, ValidateSignalsRequest: Any) -> None:
@@ -981,9 +948,19 @@ def _register_distribution_routes(router: Any, OOSSignalItem: Any, LiveSignalIte
     async def signal_distribution_status():
         from ml.signal_validator import get_validator
         validator = get_validator()
-        report = validator.validate() if (len(validator._oos_signals) >= 30 and len(validator._live_signals) >= 30) else None  # noqa: PLR2004
-        return {"oos_sample_size": len(validator._oos_signals), "live_buffer_size": len(validator._live_signals), "validation": report.to_dict() if report else None}
-
+        report = (
+            validator.validate()
+            if (
+                len(validator._oos_signals) >= _VALIDATION_MIN_SAMPLES
+                and len(validator._live_signals) >= _VALIDATION_MIN_SAMPLES
+            )
+            else None
+        )
+        return {
+            "oos_sample_size": len(validator._oos_signals),
+            "live_buffer_size": len(validator._live_signals),
+            "validation": report.to_dict() if report else None,
+        }
 
 def create_signals_router():
     """Build and return a FastAPI APIRouter with all signal endpoints."""

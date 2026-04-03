@@ -10,7 +10,7 @@ The5ers is a prop trading firm offering funded forex accounts.
 """
 
 import logging
-from typing import Any
+from typing import Any, ClassVar
 
 from ..mt5 import MT5Connector
 
@@ -40,7 +40,7 @@ class The5ersConnector(MT5Connector):
         the5ers.connect()
     """
 
-    THE5ERS_SERVERS = [
+    THE5ERS_SERVERS: ClassVar[list] = [
         "The5ers-Demo",
         "The5ers-Live",
         "The5ers-Server",
@@ -50,13 +50,15 @@ class The5ersConnector(MT5Connector):
         """Initialize The5ers connector."""
         if "server" not in config:
             config["server"] = self.THE5ERS_SERVERS[0]
-            logger.info(f"Auto-selected The5ers server: {config['server']}")
+            logger.info("Auto-selected The5ers server: %s", config['server'])
+
 
         super().__init__(config)
 
         self.program = config.get("program", "high_stakes")
 
-        logger.info(f"The5ers Connector initialized for {self.program} program")
+        logger.info("The5ers Connector initialized for %s program", self.program)
+
 
     def get_the5ers_rules(self) -> dict[str, Any]:
         """Get The5ers rules and limits."""

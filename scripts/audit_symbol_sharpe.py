@@ -44,8 +44,7 @@ import json
 import logging
 import math
 import sys
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -165,26 +164,26 @@ def detect_lookahead_bias(returns: np.ndarray) -> dict[str, object]:
     """
     results: dict[str, object] = {}
 
-    if len(returns) < 10:  # noqa: PLR2004
+    if len(returns) < 10:
         results["insufficient_data"] = True
         return results
 
     # 1. Lag-1 autocorrelation
-    if len(returns) > 2:  # noqa: PLR2004
+    if len(returns) > 2:
         autocorr = float(np.corrcoef(returns[:-1], returns[1:])[0, 1])
         results["autocorr_lag1"] = round(autocorr, 4)
-        results["autocorr_suspicious"] = abs(autocorr) > 0.5  # noqa: PLR2004
+        results["autocorr_suspicious"] = abs(autocorr) > 0.5
     else:
         results["autocorr_lag1"] = None
         results["autocorr_suspicious"] = False
 
     # 2. Sign predictability (fraction of times sign(r[t]) == sign(r[t+1]))
-    if len(returns) > 2:  # noqa: PLR2004
+    if len(returns) > 2:
         signs = np.sign(returns)
         sign_match = float(np.mean(signs[:-1] == signs[1:]))
         results["sign_predictability"] = round(sign_match, 4)
         # > 0.75 is suspicious (random walk → ~0.5)
-        results["sign_pred_suspicious"] = sign_match > 0.75  # noqa: PLR2004
+        results["sign_pred_suspicious"] = sign_match > 0.75
     else:
         results["sign_predictability"] = None
         results["sign_pred_suspicious"] = False
@@ -196,14 +195,14 @@ def detect_lookahead_bias(returns: np.ndarray) -> dict[str, object]:
         chunk = returns[i - window : i]
         mu = float(np.mean(chunk))
         sigma = float(np.std(chunk, ddof=1))
-        if sigma > 1e-10:  # noqa: PLR2004
+        if sigma > 1e-10:
             rolling_sharpes.append(mu / sigma * math.sqrt(252))
 
     if rolling_sharpes:
         min_rolling = float(np.min(rolling_sharpes))
         results["rolling_sharpe_min"] = round(min_rolling, 3)
         results["rolling_sharpe_never_negative"] = min_rolling > 0
-        results["rolling_sharpe_always_high"] = min_rolling > 2.0  # noqa: PLR2004
+        results["rolling_sharpe_always_high"] = min_rolling > 2.0
     else:
         results["rolling_sharpe_min"] = None
         results["rolling_sharpe_never_negative"] = False
@@ -233,7 +232,7 @@ def sharpe_upper_bound(
         return float("inf")
     edge = 2 * win_rate - 1
     variance_term = math.sqrt(4 * win_rate * (1 - win_rate))
-    if variance_term < 1e-10:  # noqa: PLR2004
+    if variance_term < 1e-10:
         return float("inf")
     return round(math.sqrt(trades_per_year) * edge / variance_term, 3)
 
@@ -253,7 +252,7 @@ def _load_predictions_csv(csv_dir: Path, symbol: str) -> np.ndarray | None:
         try:
             import csv as _csv
 
-            with open(csv_path, newline="") as f:
+            with Path(csv_path).open(newline="", encoding="utf-8") as f:
                 reader = _csv.DictReader(f)
                 rows = list(reader)
             if not rows:
@@ -336,27 +335,21 @@ def audit_symbol(
     result["ref_std"] = round(float(np.std(reference_dist)), 4)
     result["cmp_mean"] = round(float(np.mean(comparison_dist)), 4)
     result["cmp_std"] = round(float(np.std(comparison_dist)), 4)
-    result["mean_drift_sigma"] = round(
-        abs(result["cmp_mean"] - result["ref_mean"]) / max(result["ref_std"], 1e-10), 3
-    )
+    result["mean_drift_sigma"] = round(abs(result["cmp_mean"] - result["ref_mean"]) / max(result["ref_std"], 1e-10), 3)
 
     # Look-ahead bias detection (on comparison returns)
     # Convert probabilities to signed returns: r = sign(p - 0.5) * 2 * |p - 0.5|
     # No noise added — the signal is in the probabilities themselves.
     signed_returns = (
-        (2 * (comparison_dist > 0.5).astype(float) - 1) * (comparison_dist - 0.5) * 2  # noqa: PLR2004
+        (2 * (comparison_dist > 0.5).astype(float) - 1) * (comparison_dist - 0.5) * 2
     )
     result["lookahead_checks"] = detect_lookahead_bias(signed_returns)
 
     # Sharpe plausibility
     sharpe_bound = sharpe_upper_bound(n_trades, win_rate)
     result["sharpe_upper_bound"] = sharpe_bound
-    result["sharpe_plausible"] = (
-        known_sharpe is None or known_sharpe <= SHARPE_PLAUSIBILITY_THRESHOLD
-    )
-    result["sharpe_exceeds_bound"] = (
-        known_sharpe is not None and known_sharpe > sharpe_bound
-    )
+    result["sharpe_plausible"] = known_sharpe is None or known_sharpe <= SHARPE_PLAUSIBILITY_THRESHOLD
+    result["sharpe_exceeds_bound"] = known_sharpe is not None and known_sharpe > sharpe_bound
 
     # Overall verdict
     flags = []
@@ -364,7 +357,7 @@ def audit_symbol(
         flags.append("PSI_MAJOR_SHIFT")
     if result["ks_verdict"] == "DIFFERENT":
         flags.append("KS_DISTRIBUTION_MISMATCH")
-    if result["mean_drift_sigma"] > 2.0:  # noqa: PLR2004
+    if result["mean_drift_sigma"] > 2.0:
         flags.append("MEAN_DRIFT_2SIGMA")
     if not result["sharpe_plausible"]:
         flags.append("SHARPE_IMPLAUSIBLE")
@@ -458,14 +451,9 @@ def main(argv: list[str] | None = None) -> int:
         cmp_dist = _load_predictions_csv(csv_dir, symbol)
         if cmp_dist is None:
             implied_wr = _implied_win_rate_from_sharpe(symbol)
-            wr_note = (
-                f" (implied win-rate from known Sharpe: {implied_wr:.1%})"
-                if implied_wr is not None
-                else ""
-            )
+            wr_note = f" (implied win-rate from known Sharpe: {implied_wr:.1%})" if implied_wr is not None else ""
             logger.warning(
-                "%s: no predictions CSV found in %s%s — skipping. "
-                "Run the ML pipeline to generate evaluation CSVs.",
+                "%s: no predictions CSV found in %s%s — skipping. Run the ML pipeline to generate evaluation CSVs.",
                 symbol,
                 csv_dir,
                 wr_note,
@@ -491,9 +479,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  Known Sharpe:          {known_sharpe}")
         print(f"  Sharpe upper bound:    {result['sharpe_upper_bound']}")
         print(f"  PSI:                   {result['psi']} ({result['psi_verdict']})")
-        print(
-            f"  KS p-value:            {result['ks_p_value']} ({result['ks_verdict']})"
-        )
+        print(f"  KS p-value:            {result['ks_p_value']} ({result['ks_verdict']})")
         print(f"  Mean drift (sigma):    {result['mean_drift_sigma']}")
         la = result.get("lookahead_checks", {})
         if isinstance(la, dict):
@@ -528,10 +514,8 @@ def main(argv: list[str] | None = None) -> int:
     report_path = output_dir / f"sharpe_audit_{date_str}.json"
     report_path.write_text(json.dumps(report, indent=2, default=str))
 
-    print(f"\n{'='*60}")
-    print(
-        f"Audit complete: {report['summary']['passed']}/{report['summary']['total']} passed"
-    )
+    print(f"\n{'=' * 60}")
+    print(f"Audit complete: {report['summary']['passed']}/{report['summary']['total']} passed")
     print(f"Report saved:   {report_path}")
 
     if any_failed:
@@ -539,9 +523,7 @@ def main(argv: list[str] | None = None) -> int:
         print("  1. Re-examined for look-ahead bias in feature construction")
         print("  2. Re-backtested with walk-forward validation")
         print("  3. Excluded from live trading until Sharpe is confirmed OOS")
-        print(
-            "\nRun signal_validator.py against live fills to confirm distribution match."
-        )
+        print("\nRun signal_validator.py against live fills to confirm distribution match.")
 
     return 1 if (args.strict and any_failed) else 0
 

@@ -3,8 +3,8 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
-from fastapi import FastAPI, HTTPException
 import plotly.graph_objs as go
+from fastapi import FastAPI, HTTPException
 
 
 # DashboardDataManager manages market data
@@ -56,9 +56,7 @@ class ChartGenerator:
 
     @staticmethod
     def generate_volume_chart(symbol: str, data: list[dict]):
-        fig = go.Figure(
-            data=[go.Bar(x=[d["date"] for d in data], y=[d["volume"] for d in data])]
-        )
+        fig = go.Figure(data=[go.Bar(x=[d["date"] for d in data], y=[d["volume"] for d in data])])
         fig.update_layout(title=f"Volume chart for {symbol}")
         return fig.to_html(full_html=False)
 

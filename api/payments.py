@@ -25,8 +25,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -89,7 +88,7 @@ def _get_db_session():
         from app import app_state
 
         if app_state and app_state.db_session_factory:
-            return app_state.db_session_factory()
+            return app_state.db_session_factory()  # pylint: disable=not-callable
     except Exception as _exc:
         logger.debug("Suppressed exception: %s", _exc)
     return None
@@ -99,9 +98,7 @@ def _save_payment(payment: dict) -> None:
     """Persist a new payment record to the database."""
     session = _get_db_session()
     if session is None:
-        logger.warning(
-            "DB unavailable — payment %s not persisted", payment["payment_id"]
-        )
+        logger.warning("DB unavailable — payment %s not persisted", payment["payment_id"])
         return
     try:
         from database.models import CryptoPayment
@@ -138,11 +135,7 @@ def _load_payment(payment_id: str) -> dict | None:
     try:
         from database.models import CryptoPayment
 
-        record = (
-            session.query(CryptoPayment)
-            .filter(CryptoPayment.payment_id == payment_id)
-            .first()
-        )
+        record = session.query(CryptoPayment).filter(CryptoPayment.payment_id == payment_id).first()
         if record is None:
             return None
         return record.to_dict()
@@ -161,11 +154,7 @@ def _update_payment(payment_id: str, **kwargs) -> None:
     try:
         from database.models import CryptoPayment
 
-        record = (
-            session.query(CryptoPayment)
-            .filter(CryptoPayment.payment_id == payment_id)
-            .first()
-        )
+        record = session.query(CryptoPayment).filter(CryptoPayment.payment_id == payment_id).first()
         if record is None:
             return
         for key, value in kwargs.items():
@@ -203,7 +192,7 @@ async def generate_deposit_address(req: AddressRequest):
             raise ValueError(f"No rate for {currency}")
     except Exception as exc:
         logger.error("Rate fetch failed: %s", exc)
-        raise HTTPException(status_code=503, detail="Exchange rate service unavailable") from exc
+        raise HTTPException(status_code=503, detail="Exchange rate service unavailable") from None
 
     amount_crypto = req.amount_usd / rate_usd
     network = (req.network or currency).upper()
@@ -216,8 +205,8 @@ async def generate_deposit_address(req: AddressRequest):
         logger.warning("Address generation failed: %s", exc)
         raise HTTPException(
             status_code=503,
-            detail=f"Address generation unavailable: {exc}",
-        ) from exc
+            detail="Address generation unavailable — check server logs",
+        ) from None
 
     payment_id = f"PAY_{req.user_id}_{currency}_{int(time.time())}"
     payment = {
@@ -288,7 +277,7 @@ async def get_rates_endpoint():
         rates = await get_rates()
     except Exception as exc:
         logger.error("Rate fetch failed: %s", exc)
-        raise HTTPException(status_code=503, detail="Exchange rate service unavailable") from exc
+        raise HTTPException(status_code=503, detail="Exchange rate service unavailable") from None
 
     return {
         "rates": {
@@ -316,9 +305,7 @@ def _verify_webhook_hmac(body: bytes, signature: str) -> bool:
     if not _WEBHOOK_SECRET:
         # In production, require the secret to be set
         if os.getenv("APP_ENV", "development") == "production":
-            logger.error(
-                "CRYPTO_WEBHOOK_SECRET not set in production — rejecting webhook"
-            )
+            logger.error("CRYPTO_WEBHOOK_SECRET not set in production — rejecting webhook")
             return False
         logger.warning("CRYPTO_WEBHOOK_SECRET not set — skipping HMAC check (dev only)")
         return True
@@ -356,9 +343,7 @@ async def payment_webhook(
     verify = os.getenv("CRYPTO_WEBHOOK_VERIFY", "true").lower() != "false"
     if verify:
         if not x_webhook_signature:
-            raise HTTPException(
-                status_code=403, detail="Missing X-Webhook-Signature header"
-            )
+            raise HTTPException(status_code=403, detail="Missing X-Webhook-Signature header")
         if not _verify_webhook_hmac(raw_body, x_webhook_signature):
             logger.critical(
                 "Crypto webhook SIGNATURE INVALID from %s",
@@ -429,11 +414,7 @@ def _generate_address(currency: str, user_id: str, network: str) -> str:
         from payments.crypto.usdt import USDTClient, USDTNetwork
 
         client = USDTClient()
-        net_enum = (
-            USDTNetwork[network]
-            if network in USDTNetwork.__members__
-            else USDTNetwork.TRC20
-        )
+        net_enum = USDTNetwork[network] if network in USDTNetwork.__members__ else USDTNetwork.TRC20
         result = client.generate_deposit_address(user_id, net_enum)
         return result["address"]
 

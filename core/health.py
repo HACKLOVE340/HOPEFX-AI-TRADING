@@ -63,42 +63,26 @@ def _probe_components(app_state: Any, kill_switch: Any) -> dict:
 
     if app_state.cache:
         try:
-            ok = (
-                app_state.cache.health_check()
-                if hasattr(app_state.cache, "health_check")
-                else True
-            )
+            ok = app_state.cache.health_check() if hasattr(app_state.cache, "health_check") else True
             components["cache"] = "healthy" if ok else "degraded"
         except Exception:
             components["cache"] = "degraded"
     else:
         components["cache"] = "unavailable"
 
-    components["auth"] = (
-        "healthy" if getattr(app_state, "auth_service", None) else "unavailable"
-    )
-    components["risk_manager"] = (
-        "healthy" if getattr(app_state, "risk_manager", None) else "unavailable"
-    )
-    components["compliance"] = (
-        "healthy" if getattr(app_state, "compliance_manager", None) else "unavailable"
-    )
+    components["auth"] = "healthy" if getattr(app_state, "auth_service", None) else "unavailable"
+    components["risk_manager"] = "healthy" if getattr(app_state, "risk_manager", None) else "unavailable"
+    components["compliance"] = "healthy" if getattr(app_state, "compliance_manager", None) else "unavailable"
 
     _pe = getattr(app_state, "prop_enforcer", None)
     if _pe is not None:
         _pe_status = _pe.status()
-        components["prop_enforcer"] = (
-            "halted" if _pe_status.get("halted") else "healthy"
-        )
+        components["prop_enforcer"] = "halted" if _pe_status.get("halted") else "healthy"
     else:
         components["prop_enforcer"] = "unavailable"
 
-    components["strategy_brain"] = (
-        "healthy" if getattr(app_state, "strategy_brain", None) else "unavailable"
-    )
-    components["websocket"] = (
-        "healthy" if getattr(app_state, "ws_manager", None) else "unavailable"
-    )
+    components["strategy_brain"] = "healthy" if getattr(app_state, "strategy_brain", None) else "unavailable"
+    components["websocket"] = "healthy" if getattr(app_state, "ws_manager", None) else "unavailable"
 
     _sg_key = os.getenv("SENDGRID_API_KEY", "")
     _smtp_host = os.getenv("SMTP_HOST", "")
@@ -114,9 +98,7 @@ def _probe_components(app_state: Any, kill_switch: Any) -> dict:
             if hasattr(_broker, "connected"):
                 components["broker"] = "healthy" if _broker.connected else "degraded"
             elif hasattr(_broker, "health_check"):
-                components["broker"] = (
-                    "healthy" if _broker.health_check() else "degraded"
-                )
+                components["broker"] = "healthy" if _broker.health_check() else "degraded"
             else:
                 components["broker"] = "healthy"
         except Exception as _be:
@@ -139,11 +121,7 @@ def register_health_routes(app: FastAPI, app_state: Any, kill_switch: Any) -> No
         components = _probe_components(app_state, kill_switch)
 
         critical = ["api", "config", "database"]
-        overall_status = (
-            "healthy"
-            if all(components.get(c) == "healthy" for c in critical)
-            else "degraded"
-        )
+        overall_status = "healthy" if all(components.get(c) == "healthy" for c in critical) else "degraded"
         if kill_switch.is_active():
             overall_status = "degraded"
 
@@ -160,11 +138,7 @@ def register_health_routes(app: FastAPI, app_state: Any, kill_switch: Any) -> No
         cache_connected = False
         if app_state.cache is not None:
             try:
-                cache_connected = (
-                    app_state.cache.health_check()
-                    if hasattr(app_state.cache, "health_check")
-                    else True
-                )
+                cache_connected = app_state.cache.health_check() if hasattr(app_state.cache, "health_check") else True
             except Exception as e:
                 logger.warning("Cache health check failed: %s", e)
 
@@ -237,6 +211,6 @@ def register_health_routes(app: FastAPI, app_state: Any, kill_switch: Any) -> No
                 )
         except Exception:  # nosec B110 - Redis unavailable must not block readiness probe
             # Redis unavailable is non-fatal for readiness — don't block traffic
-            pass
+            ...  # nosec B110
 
         return {"ready": True}

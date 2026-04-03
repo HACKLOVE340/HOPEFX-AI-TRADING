@@ -81,16 +81,12 @@ class _FeatureCache:
             import redis as _redis_lib
 
             url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-            client = _redis_lib.from_url(
-                url, socket_connect_timeout=1, socket_timeout=1
-            )
+            client = _redis_lib.from_url(url, socket_connect_timeout=1, socket_timeout=1)
             client.ping()
             self._redis = client
             logger.debug("Feature cache: Redis connected at %s", url)
         except Exception as exc:
-            logger.debug(
-                "Feature cache: Redis unavailable (%s) — using in-memory LRU", exc
-            )
+            logger.debug("Feature cache: Redis unavailable (%s) — using in-memory LRU", exc)
 
     @staticmethod
     def _make_key(symbol: str, last_ts: Any) -> str:
@@ -110,7 +106,7 @@ class _FeatureCache:
                 entry = self._mem.get(key)
                 if entry and entry[0] > time.monotonic():
                     return pd.DataFrame([json.loads(entry[1])])
-                elif entry:
+                if entry:
                     del self._mem[key]
         except Exception as exc:
             logger.debug("Feature cache get error: %s", exc)
@@ -279,13 +275,11 @@ class AdvancedModelPredictor:
 
                 dl_features = orchestrator.get_ml_features()
                 if dl_features:
-                    import pandas as _pd
-
-                    dl_row = _pd.DataFrame([dl_features], index=result.index)
+                    dl_row = pd.DataFrame([dl_features], index=result.index)
                     # Only add columns not already present
                     new_cols = [c for c in dl_row.columns if c not in result.columns]
                     if new_cols:
-                        result = _pd.concat([result, dl_row[new_cols]], axis=1)
+                        result = pd.concat([result, dl_row[new_cols]], axis=1)
                         logger.debug(
                             "Data layer injected %d features for %s",
                             len(new_cols),
@@ -295,9 +289,7 @@ class AdvancedModelPredictor:
                 logger.debug("Data layer feature injection skipped: %s", dl_exc)
 
             self._cache.set(symbol, last_ts, result)
-            logger.debug(
-                "Feature cache MISS for %s @ %s — computed and cached", symbol, last_ts
-            )
+            logger.debug("Feature cache MISS for %s @ %s — computed and cached", symbol, last_ts)
             return result
         except Exception as exc:
             logger.warning("Feature build failed: %s", exc)
@@ -367,9 +359,7 @@ class AdvancedModelPredictor:
             # are filled with 0 (neutral/unknown) so the model still runs.
             if hasattr(self._model, "feature_names_in_"):
                 expected = list(self._model.feature_names_in_)
-            elif hasattr(self._model, "steps") and hasattr(
-                self._model.steps[0][1], "feature_names_in_"
-            ):
+            elif hasattr(self._model, "steps") and hasattr(self._model.steps[0][1], "feature_names_in_"):
                 expected = list(self._model.steps[0][1].feature_names_in_)
             else:
                 expected = None
@@ -455,8 +445,7 @@ def get_advanced_predictor() -> AdvancedModelPredictor:
 import asyncio
 import threading
 from collections.abc import Callable
-from datetime import timezone
-UTC = timezone.utc
+from datetime import UTC
 
 
 class LiveInferenceLoop:
@@ -581,9 +570,7 @@ class LiveInferenceLoop:
         except Exception:
             return None
 
-    def _apply_signal_filter(
-        self, signal: dict[str, Any], ohlcv: pd.DataFrame
-    ) -> dict[str, Any]:
+    def _apply_signal_filter(self, signal: dict[str, Any], ohlcv: pd.DataFrame) -> dict[str, Any]:
         """
         Run SignalFilter gates and annotate the signal dict.
 

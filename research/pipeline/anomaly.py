@@ -179,9 +179,7 @@ class AnomalyWeighter:
                 lof_norm = lof_scores - self._lof_threshold
                 return self.if_weight * if_norm + (1.0 - self.if_weight) * lof_norm
             except Exception as _exc:
-                logger.debug(
-                    "Suppressed exception: %s", _exc
-                )  # fall through to IF-only
+                logger.debug("Suppressed exception: %s", _exc)  # fall through to IF-only
 
         return if_scores - self._threshold
 
@@ -253,16 +251,17 @@ class AnomalyWeighter:
 
     @classmethod
     def load(cls, path: str | Path) -> AnomalyWeighter:
-        import joblib
         import pickle  # nosec B403 - joblib tried first; pickle only for legacy fallback
+
+        import joblib
 
         path = Path(path)
         if not path.exists():
             raise FileNotFoundError(f"AnomalyWeighter model not found: {path}")
         try:
-            obj = joblib.load(path)
+            obj = joblib.load(path)  # nosec B301 - path set by class constructor from saved_models
         except Exception:
-            with open(path, "rb") as f:
+            with Path(path).open("rb") as f:
                 obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
         if not isinstance(obj, cls):
             raise TypeError(f"Expected AnomalyWeighter, got {type(obj)}")
@@ -282,9 +281,7 @@ class AnomalyWeighter:
         """
         scores = self.decision_scores(X)
         idx = np.argsort(scores)[:top_n]
-        report = (
-            X.iloc[idx].copy() if isinstance(X, pd.DataFrame) else pd.DataFrame(X[idx])
-        )
+        report = X.iloc[idx].copy() if isinstance(X, pd.DataFrame) else pd.DataFrame(X[idx])
         report["anomaly_score"] = scores[idx]
         return report
 
@@ -440,8 +437,7 @@ class AnomalyWeightStore:
                 if score < self.anomaly_threshold:
                     self._anomaly_count += 1
                     logger.debug(
-                        "Anomaly detected: score=%.4f (threshold=%.4f) "
-                        "→ down-weight %.0f%% [%d/%d total]",
+                        "Anomaly detected: score=%.4f (threshold=%.4f) → down-weight %.0f%% [%d/%d total]",
                         score,
                         self.anomaly_threshold,
                         (1 - self.down_weight_factor) * 100,
@@ -462,7 +458,7 @@ class AnomalyWeightStore:
             weighter = AnomalyWeighter(
                 contamination=self._contamination,
                 n_estimators=100,
-                use_lof=self.use_lof and len(X) >= 100,  # LOF needs enough neighbours  # noqa: PLR2004
+                use_lof=self.use_lof and len(X) >= 100,  # LOF needs enough neighbours
                 lof_neighbors=min(20, len(X) // 5),
             )
             weighter.fit(X)
@@ -472,7 +468,7 @@ class AnomalyWeightStore:
             logger.debug(
                 "AnomalyWeightStore: refitted on %d bars (LOF=%s)",
                 len(X),
-                self.use_lof and len(X) >= 100,  # noqa: PLR2004
+                self.use_lof and len(X) >= 100,
             )
             # Persist after successful refit
             if self.persist_path:

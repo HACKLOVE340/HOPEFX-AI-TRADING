@@ -22,8 +22,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -231,9 +230,7 @@ async def feed_status(user: TokenPayload = Depends(get_current_user)):
 
     # Count signals this user has published to the feed
     signal_count = sum(
-        1
-        for item in _feed_items.values()
-        if item.get("trader_id") == user.sub and item.get("is_public")
+        1 for item in _feed_items.values() if item.get("trader_id") == user.sub and item.get("is_public")
     )
 
     # Follower count from profile store
@@ -246,9 +243,7 @@ async def feed_status(user: TokenPayload = Depends(get_current_user)):
         if profile:
             follower_count = getattr(profile, "total_followers", 0)
     except Exception as exc:
-        logger.warning(
-            "feed_status: failed to fetch follower count for %s: %s", user.sub, exc
-        )
+        logger.warning("feed_status: failed to fetch follower count for %s: %s", user.sub, exc)
 
     return {
         "opted_in": opted_in,
@@ -287,9 +282,7 @@ async def get_leaderboard(
     """
     # ── 1. Persisted leaderboard snapshot ────────────────────────────────────
     try:
-        from api.db_store import db_get as _db_get
-
-        stored = _db_get("leaderboard", {})
+        stored = db_get("leaderboard") or {}
         entries = stored.get(period, [])
         if entries:
             return entries[:limit]

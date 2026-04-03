@@ -20,8 +20,7 @@ Features:
 """
 
 import logging
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import numpy as np
@@ -107,7 +106,8 @@ class StrategyBrain:
         # Calculate initial weight (equal weight, updated by performance)
         self._recalculate_weights()
 
-        logger.info(f"Strategy Brain: Registered {strategy_name}")
+        logger.info("Strategy Brain: Registered %s", strategy_name)
+
 
     def unregister_strategy(self, strategy_name: str):
         """
@@ -119,7 +119,8 @@ class StrategyBrain:
         if strategy_name in self.strategies:
             del self.strategies[strategy_name]
             self._recalculate_weights()
-            logger.info(f"Strategy Brain: Unregistered {strategy_name}")
+            logger.info("Strategy Brain: Unregistered %s", strategy_name)
+
 
     def analyze_joint(self, data: dict[str, Any]) -> dict[str, Any]:
         """
@@ -147,7 +148,8 @@ class StrategyBrain:
                     if signal:
                         strategy_signals[name] = signal
                 except Exception as e:
-                    logger.error(f"Error getting signal from {name}: {e}")
+                    logger.error("Error getting signal from %s: %s", name, e)
+
 
             # If not enough strategies provided signals, return neutral
             if len(strategy_signals) < self.min_strategies_required:
@@ -165,15 +167,12 @@ class StrategyBrain:
                 self.stats["consensus_reached"] += 1
                 if consensus_result["consensus_signal"].signal_type == SignalType.BUY:
                     self.stats["bullish_consensus"] += 1
-                elif (
-                    consensus_result["consensus_signal"].signal_type == SignalType.SELL
-                ):
+                elif consensus_result["consensus_signal"].signal_type == SignalType.SELL:
                     self.stats["bearish_consensus"] += 1
 
                 # Update average confidence
                 self.stats["average_confidence"] = (
-                    self.stats["average_confidence"]
-                    * (self.stats["total_analyses"] - 1)
+                    self.stats["average_confidence"] * (self.stats["total_analyses"] - 1)
                     + consensus_result["consensus_signal"].confidence
                 ) / self.stats["total_analyses"]
 
@@ -188,16 +187,15 @@ class StrategyBrain:
                     "timestamp": datetime.now(UTC),
                     "strategy_signals": strategy_signals,
                     "consensus": consensus_result,
-                    "data_snapshot": data.get("prices", [])[-1]
-                    if data.get("prices")
-                    else {},
+                    "data_snapshot": data.get("prices", [])[-1] if data.get("prices") else {},
                 },
             )
 
             return consensus_result
 
         except Exception as e:
-            logger.error(f"Error in joint analysis: {e}")
+            logger.error("Error in joint analysis: %s", e)
+
             return {
                 "consensus_reached": False,
                 "reason": "Analysis error",
@@ -233,8 +231,7 @@ class StrategyBrain:
                 # Weight the signal by strategy performance and confidence
                 weighted_confidence = (
                     signal.confidence * self.confidence_weight
-                    + self.strategy_performance[strategy_name]["win_rate"]
-                    * self.performance_weight
+                    + self.strategy_performance[strategy_name]["win_rate"] * self.performance_weight
                 ) * weight
 
                 if signal.signal_type == SignalType.BUY:
@@ -284,13 +281,11 @@ class StrategyBrain:
 
                 # Create consensus signal
                 avg_price = np.mean([s["signal"].price for s in buy_signals])
-                consensus_confidence = (
-                    total_buy_confidence / len(buy_signals) if buy_signals else 0
-                )
+                consensus_confidence = total_buy_confidence / len(buy_signals) if buy_signals else 0
 
                 consensus_signal = Signal(
                     signal_type=SignalType.BUY,
-                    symbol=list(strategy_signals.values())[0].symbol,
+                    symbol=next(iter(strategy_signals.values())).symbol,
                     price=avg_price,
                     timestamp=datetime.now(UTC),
                     confidence=min(consensus_confidence, 1.0),
@@ -318,13 +313,11 @@ class StrategyBrain:
 
                 # Create consensus signal
                 avg_price = np.mean([s["signal"].price for s in sell_signals])
-                consensus_confidence = (
-                    total_sell_confidence / len(sell_signals) if sell_signals else 0
-                )
+                consensus_confidence = total_sell_confidence / len(sell_signals) if sell_signals else 0
 
                 consensus_signal = Signal(
                     signal_type=SignalType.SELL,
-                    symbol=list(strategy_signals.values())[0].symbol,
+                    symbol=next(iter(strategy_signals.values())).symbol,
                     price=avg_price,
                     timestamp=datetime.now(UTC),
                     confidence=min(consensus_confidence, 1.0),
@@ -367,7 +360,8 @@ class StrategyBrain:
             }
 
         except Exception as e:
-            logger.error(f"Error calculating consensus: {e}")
+            logger.error("Error calculating consensus: %s", e)
+
             return {
                 "consensus_reached": False,
                 "reason": "Consensus calculation error",
@@ -405,10 +399,7 @@ class StrategyBrain:
         # Recalculate strategy weights
         self._recalculate_weights()
 
-        logger.info(
-            f"Updated performance for {strategy_name}: "
-            f"Win rate: {perf['win_rate']:.2%}, PnL: ${perf['total_pnl']:.2f}",
-        )
+        logger.info("Updated performance for %s: Win rate: %s, PnL: $%s", strategy_name, perf['win_rate'], perf['total_pnl'])
 
     def _recalculate_weights(self):
         """Recalculate strategy weights based on performance"""
@@ -423,9 +414,7 @@ class StrategyBrain:
             if name in self.strategy_performance:
                 perf = self.strategy_performance[name]
                 # Combine win rate and normalized PnL for score
-                score = (
-                    perf["win_rate"] * 0.7 + min(perf["total_pnl"] / 1000, 1.0) * 0.3
-                )
+                score = perf["win_rate"] * 0.7 + min(perf["total_pnl"] / 1000, 1.0) * 0.3
             else:
                 score = 0.5  # Default score for new strategies
 
@@ -434,10 +423,7 @@ class StrategyBrain:
 
         # Normalize weights
         if total_performance > 0:
-            self.strategy_weights = {
-                name: score / total_performance
-                for name, score in strategy_scores.items()
-            }
+            self.strategy_weights = {name: score / total_performance for name, score in strategy_scores.items()}
         else:
             # Equal weights if no performance data
             equal_weight = 1.0 / len(self.strategies)
@@ -451,9 +437,7 @@ class StrategyBrain:
             Statistics dictionary
         """
         consensus_rate = (
-            self.stats["consensus_reached"] / self.stats["total_analyses"]
-            if self.stats["total_analyses"] > 0
-            else 0
+            self.stats["consensus_reached"] / self.stats["total_analyses"] if self.stats["total_analyses"] > 0 else 0
         )
 
         return {
@@ -494,15 +478,10 @@ class StrategyBrain:
                         signals = history_entry["strategy_signals"]
                         if strategy1 in signals and strategy2 in signals:
                             total_comparisons += 1
-                            if (
-                                signals[strategy1].signal_type
-                                == signals[strategy2].signal_type
-                            ):
+                            if signals[strategy1].signal_type == signals[strategy2].signal_type:
                                 agreements += 1
 
-                    correlation = (
-                        agreements / total_comparisons if total_comparisons > 0 else 0.5
-                    )
+                    correlation = agreements / total_comparisons if total_comparisons > 0 else 0.5
                     correlations[strategy1][strategy2] = correlation
 
         return correlations
