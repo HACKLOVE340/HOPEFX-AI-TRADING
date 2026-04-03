@@ -237,6 +237,15 @@ try:
 except Exception as _chaos_router_err:
     logger.warning("Chaos router failed to register: %s", _chaos_router_err)
 
+# SuperAdmin master control endpoints (superadmin role required for all)
+try:
+    from api.superadmin import router as _superadmin_router
+
+    app.include_router(_superadmin_router)
+    logger.info("SuperAdmin router registered at /api/superadmin")
+except Exception as _superadmin_router_err:
+    logger.warning("SuperAdmin router failed to register: %s", _superadmin_router_err)
+
 # Prometheus /metrics endpoint + background sync to MetricsRegistry
 try:
     from prometheus_monitoring import setup_prometheus_monitoring

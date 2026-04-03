@@ -187,3 +187,94 @@ export const calendarApi = {
   setAutoPause: (cfg: object) => api.post('/calendar/auto-pause', cfg),
   fomc:       ()             => api.get('/calendar/fomc'),
 };
+
+// ── SuperAdmin ────────────────────────────────────────────────────────────────
+
+export const superadminApi = {
+  // Platform overview
+  overview:          ()                        => api.get('/superadmin/overview'),
+
+  // User management
+  users:             (params?: Record<string, string>) => api.get('/superadmin/users', { params }),
+  getUser:           (id: string)              => api.get(`/superadmin/users/${id}`),
+  updateUser:        (id: string, p: object)   => api.patch(`/superadmin/users/${id}`, p),
+  deleteUser:        (id: string)              => api.delete(`/superadmin/users/${id}`),
+  impersonateUser:   (id: string)              => api.post(`/superadmin/users/${id}/impersonate`),
+  resetUserPassword: (id: string)              => api.post(`/superadmin/users/${id}/reset-password`),
+  setUserRole:       (id: string, role: string) => api.patch(`/superadmin/users/${id}/role`, { role }),
+  setUserPlan:       (id: string, plan: string) => api.patch(`/superadmin/users/${id}/plan`, { plan }),
+  banUser:           (id: string, reason: string) => api.post(`/superadmin/users/${id}/ban`, { reason }),
+  unbanUser:         (id: string)              => api.post(`/superadmin/users/${id}/unban`),
+  userActivity:      (id: string)              => api.get(`/superadmin/users/${id}/activity`),
+
+  // Platform settings
+  platformConfig:    ()                        => api.get('/superadmin/platform/config'),
+  updatePlatformConfig: (p: object)            => api.patch('/superadmin/platform/config', p),
+  maintenanceMode:   (enabled: boolean, msg?: string) =>
+    api.post('/superadmin/platform/maintenance', { enabled, message: msg }),
+  broadcastMessage:  (p: object)               => api.post('/superadmin/platform/broadcast', p),
+
+  // ML / AI engine
+  mlStatus:          ()                        => api.get('/superadmin/ml/status'),
+  mlModels:          ()                        => api.get('/superadmin/ml/models'),
+  retrainModel:      (model: string, p?: object) => api.post(`/superadmin/ml/retrain/${model}`, p ?? {}),
+  deployModel:       (model: string, version: string) =>
+    api.post(`/superadmin/ml/deploy`, { model, version }),
+  rollbackModel:     (model: string)           => api.post(`/superadmin/ml/rollback/${model}`),
+  mlMetrics:         ()                        => api.get('/superadmin/ml/metrics'),
+  rlAgentStatus:     ()                        => api.get('/superadmin/ml/rl/status'),
+  rlAgentControl:    (action: string)          => api.post('/superadmin/ml/rl/control', { action }),
+
+  // Trading engine
+  engineStatus:      ()                        => api.get('/superadmin/engine/status'),
+  engineConfig:      ()                        => api.get('/superadmin/engine/config'),
+  updateEngineConfig: (p: object)              => api.patch('/superadmin/engine/config', p),
+  killSwitch:        (enabled: boolean)        => api.post('/superadmin/engine/kill-switch', { enabled }),
+  pauseTrading:      (reason: string)          => api.post('/superadmin/engine/pause', { reason }),
+  resumeTrading:     ()                        => api.post('/superadmin/engine/resume'),
+  engineMetrics:     ()                        => api.get('/superadmin/engine/metrics'),
+
+  // Financial / billing
+  revenueStats:      (period?: string)         => api.get('/superadmin/financial/revenue', { params: period ? { period } : {} }),
+  subscriptionStats: ()                        => api.get('/superadmin/financial/subscriptions'),
+  paymentHistory:    (params?: Record<string, string>) => api.get('/superadmin/financial/payments', { params }),
+  refundPayment:     (id: string, reason: string) => api.post(`/superadmin/financial/payments/${id}/refund`, { reason }),
+  affiliateStats:    ()                        => api.get('/superadmin/financial/affiliates'),
+
+  // Security
+  securityEvents:    (params?: Record<string, string>) => api.get('/superadmin/security/events', { params }),
+  blockedIPs:        ()                        => api.get('/superadmin/security/blocked-ips'),
+  blockIP:           (ip: string, reason: string) => api.post('/superadmin/security/block-ip', { ip, reason }),
+  unblockIP:         (ip: string)              => api.delete(`/superadmin/security/blocked-ips/${ip}`),
+  activeSessions:    ()                        => api.get('/superadmin/security/sessions'),
+  revokeSession:     (sessionId: string)       => api.delete(`/superadmin/security/sessions/${sessionId}`),
+  revokeAllSessions: (userId: string)          => api.delete(`/superadmin/security/sessions/user/${userId}`),
+  threatIntel:       ()                        => api.get('/superadmin/security/threat-intel'),
+
+  // System logs
+  logs:              (params?: Record<string, string>) => api.get('/superadmin/logs', { params }),
+  logLevels:         ()                        => api.get('/superadmin/logs/levels'),
+  setLogLevel:       (logger: string, level: string) =>
+    api.patch('/superadmin/logs/levels', { logger, level }),
+  exportLogs:        (params?: Record<string, string>) =>
+    api.get('/superadmin/logs/export', { params, responseType: 'blob' }),
+
+  // Feature flags
+  featureFlags:      ()                        => api.get('/superadmin/feature-flags'),
+  setFeatureFlag:    (name: string, enabled: boolean, userIds?: string[]) =>
+    api.patch(`/superadmin/feature-flags/${name}`, { enabled, user_ids: userIds }),
+  userFlagOverrides: (userId: string)          => api.get(`/superadmin/feature-flags/overrides/${userId}`),
+  setUserFlagOverride: (userId: string, flag: string, enabled: boolean) =>
+    api.patch(`/superadmin/feature-flags/overrides/${userId}/${flag}`, { enabled }),
+
+  // Audit
+  auditLog:          (params?: Record<string, string>) => api.get('/superadmin/audit', { params }),
+  exportAudit:       ()                        => api.get('/superadmin/audit/export', { responseType: 'blob' }),
+
+  // Infrastructure
+  infraHealth:       ()                        => api.get('/superadmin/infra/health'),
+  cacheStats:        ()                        => api.get('/superadmin/infra/cache'),
+  flushCache:        (pattern?: string)        => api.post('/superadmin/infra/cache/flush', { pattern }),
+  dbStats:           ()                        => api.get('/superadmin/infra/db'),
+  queueStats:        ()                        => api.get('/superadmin/infra/queues'),
+};

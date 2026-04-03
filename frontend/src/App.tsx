@@ -23,6 +23,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import AuthGuard from './components/AuthGuard';
 import AdminGuard from './components/AdminGuard';
+import SuperAdminGuard from './components/SuperAdminGuard';
 import SubscriptionGate from './components/SubscriptionGate';
 import Sidebar from './components/sidebar/Sidebar';
 import { ThemeToggle } from './components/ThemeToggle';
@@ -81,6 +82,9 @@ const AuditLog          = React.lazy(() => import('./pages/AuditLog'));
 const SecurityDashboard = React.lazy(() => import('./pages/SecurityDashboard'));
 const AutoHealDashboard = React.lazy(() => import('./pages/AutoHealDashboard'));
 const WhitelabelAdmin   = React.lazy(() => import('./pages/WhitelabelAdmin'));
+
+// ── Superadmin-only ───────────────────────────────────────────────────────────
+const SuperAdminDashboard = React.lazy(() => import('./pages/SuperAdminDashboard'));
 
 // ── React Query ───────────────────────────────────────────────────────────────
 const queryClient = new QueryClient({
@@ -207,6 +211,14 @@ const adminOnly = (el: React.ReactNode) => (
   </AuthGuard>
 );
 
+const superAdminOnly = (el: React.ReactNode) => (
+  <AuthGuard>
+    <SuperAdminGuard>
+      {el}
+    </SuperAdminGuard>
+  </AuthGuard>
+);
+
 // ── App shell ─────────────────────────────────────────────────────────────────
 const AppShell: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
@@ -275,6 +287,9 @@ const AppShell: React.FC = () => {
             <Route path="/security"     element={wrap(adminOnly(<SecurityDashboard />))} />
             <Route path="/auto-heal"    element={wrap(adminOnly(<AutoHealDashboard />))} />
             <Route path="/whitelabel"   element={wrap(adminOnly(<WhitelabelAdmin />))} />
+
+            {/* Superadmin-only */}
+            <Route path="/superadmin"   element={wrap(superAdminOnly(<SuperAdminDashboard />))} />
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -5,8 +5,14 @@
  * Role hierarchy (lowest → highest):
  *   user < trader < admin < superadmin
  *
- * Superadmin bypasses EVERY gate — plan, role, feature flag, everything.
- * Admin bypasses plan gates but not superadmin-only gates.
+ * Access rules:
+ *   - superadmin  → bypasses EVERY gate: plan, role, feature flag, everything.
+ *                   Has exclusive access to /superadmin and all superadmin-only
+ *                   settings sections. Cannot be impersonated or demoted by admins.
+ *   - admin       → bypasses plan gates but NOT superadmin-only gates.
+ *                   Can access /admin, /audit, /security, /auto-heal, /whitelabel.
+ *   - trader      → plan-gated features at starter/pro/elite tiers.
+ *   - user        → free tier only.
  */
 
 import type { UserRole } from '../store';
@@ -14,10 +20,10 @@ import type { UserRole } from '../store';
 export type Plan = 'free' | 'starter' | 'pro' | 'elite';
 
 export const PLAN_RANK: Record<Plan, number> = {
-  free: 0,
+  free:    0,
   starter: 1,
-  pro: 2,
-  elite: 3,
+  pro:     2,
+  elite:   3,
 };
 
 export const ROLE_RANK: Record<UserRole, number> = {
@@ -79,25 +85,31 @@ export const SUPERADMIN_ONLY_ROUTES = new Set([
   '/superadmin',
 ]);
 
-/** True for superadmin role */
+// ── Role predicates ───────────────────────────────────────────────────────────
+
+/** True only for superadmin — the highest privilege level. */
 export function isSuperAdmin(role: UserRole): boolean {
   return role === 'superadmin';
 }
 
-/** True for admin or superadmin */
+/** True for admin or superadmin. */
 export function isAdmin(role: UserRole): boolean {
   return role === 'admin' || role === 'superadmin';
 }
 
-/** True if role meets minimum required role */
+/** True if role meets or exceeds the required role in the hierarchy. */
 export function hasRole(role: UserRole, required: UserRole): boolean {
   return ROLE_RANK[role] >= ROLE_RANK[required];
 }
 
+// ── Feature access ────────────────────────────────────────────────────────────
+
 /**
  * Check feature access.
- * Superadmin always passes. Admin bypasses plan gates.
- * Traders/users need the correct plan tier.
+ *
+ * - superadmin: always passes (bypasses plan AND role gates).
+ * - admin:      bypasses plan gates (can access all plan-gated features).
+ * - trader/user: must meet the required plan tier.
  */
 export function hasFeatureAccess(
   role: UserRole,
@@ -110,10 +122,20 @@ export function hasFeatureAccess(
   return PLAN_RANK[userPlan] >= PLAN_RANK[required];
 }
 
-/** Return the minimum plan required for a feature */
+/**
+ * Check superadmin-only feature access.
+ * Only superadmin passes — admins do NOT bypass this gate.
+ */
+export function hasSuperAdminAccess(role: UserRole): boolean {
+  return isSuperAdmin(role);
+}
+
+/** Return the minimum plan required for a feature. */
 export function requiredPlan(featureKey: string): Plan {
   return PLAN_FEATURES[featureKey] ?? 'free';
 }
+
+// ── Display metadata ──────────────────────────────────────────────────────────
 
 export const PLAN_LABELS: Record<Plan, string> = {
   free:    'Free',
@@ -140,5 +162,12 @@ export const ROLE_COLORS: Record<UserRole, string> = {
   user:       '#475569',
   trader:     '#3b82f6',
   admin:      '#8b5cf6',
-  superadmin: '#f59e0b',
+  superadmin: '#ef4444',
+};
+
+export const ROLE_BADGE_STYLES: Record<UserRole, { bg: string; color: string; border: string }> = {
+  user:       { bg: '#1e293b', color: '#94a3b8', border: '#334155' },
+  trader:     { bg: '#1e3a5f', color: '#60a5fa', border: '#1d4ed8' },
+  admin:      { bg: '#2e1065', color: '#c084fc', border: '#7c3aed' },
+  superadmin: { bg: '#450a0a', color: '#fca5a5', border: '#dc2626' },
 };

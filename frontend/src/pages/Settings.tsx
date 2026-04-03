@@ -11,7 +11,7 @@
 
 import React, { useState, Suspense, lazy } from 'react';
 import { useStore, selectUser } from '../store';
-import { isAdmin } from '../lib/subscription';
+import { isAdmin, isSuperAdmin } from '../lib/subscription';
 import type { SettingsTab } from './settings/types';
 
 // Lazy-load every section for code splitting
@@ -30,6 +30,16 @@ const AccessibilitySection = lazy(() => import('./settings/AccessibilitySection'
 const AdminSettingsSection = lazy(() => import('./settings/AdminSettingsSection'));
 const DangerSection        = lazy(() => import('./settings/DangerSection'));
 
+// Superadmin-only settings sections (lazy-loaded from superadmin module)
+const SAUsersSection         = lazy(() => import('./superadmin/UsersSection'));
+const SAPlatformSection      = lazy(() => import('./superadmin/PlatformSection'));
+const SAMLAISection          = lazy(() => import('./superadmin/MLAISection'));
+const SATradingEngineSection = lazy(() => import('./superadmin/TradingEngineSection'));
+const SAFinancialSection     = lazy(() => import('./superadmin/FinancialSection'));
+const SASecuritySection      = lazy(() => import('./superadmin/SecuritySection'));
+const SALogsSection          = lazy(() => import('./superadmin/LogsSection'));
+const SAFeatureFlagsSection  = lazy(() => import('./superadmin/FeatureFlagsSection'));
+
 // ── Tab definitions ───────────────────────────────────────────────────────────
 
 interface TabGroup {
@@ -42,6 +52,7 @@ interface TabDef {
   label: string;
   icon: string;
   adminOnly?: boolean;
+  superAdminOnly?: boolean;
   danger?: boolean;
 }
 
@@ -50,39 +61,52 @@ const TAB_GROUPS: TabGroup[] = [
     label: 'Account',
     tabs: [
       { id: 'profile',       label: 'Profile',        icon: '👤' },
-      { id: 'security',      label: 'Security',        icon: '🔒' },
-      { id: 'billing',       label: 'Billing',         icon: '💳' },
-      { id: 'api-keys',      label: 'API Keys',        icon: '🔑' },
+      { id: 'security',      label: 'Security',       icon: '🔒' },
+      { id: 'billing',       label: 'Billing',        icon: '💳' },
+      { id: 'api-keys',      label: 'API Keys',       icon: '🔑' },
     ],
   },
   {
     label: 'Trading',
     tabs: [
-      { id: 'broker',        label: 'Broker',          icon: '🏦' },
-      { id: 'trading',       label: 'Trading',         icon: '📈' },
-      { id: 'integrations',  label: 'Integrations',    icon: '🔌' },
+      { id: 'broker',        label: 'Broker',         icon: '🏦' },
+      { id: 'trading',       label: 'Trading',        icon: '📈' },
+      { id: 'integrations',  label: 'Integrations',   icon: '🔌' },
     ],
   },
   {
     label: 'Preferences',
     tabs: [
-      { id: 'appearance',    label: 'Appearance',      icon: '🎨' },
-      { id: 'notifications', label: 'Notifications',   icon: '🔔' },
-      { id: 'accessibility', label: 'Accessibility',   icon: '♿' },
-      { id: 'privacy',       label: 'Privacy & Data',  icon: '🔏' },
+      { id: 'appearance',    label: 'Appearance',     icon: '🎨' },
+      { id: 'notifications', label: 'Notifications',  icon: '🔔' },
+      { id: 'accessibility', label: 'Accessibility',  icon: '♿' },
+      { id: 'privacy',       label: 'Privacy & Data', icon: '🔏' },
     ],
   },
   {
     label: 'Administration',
     tabs: [
-      { id: 'system',        label: 'System',          icon: '⚙️',  adminOnly: true },
-      { id: 'admin',         label: 'Admin Settings',  icon: '🔧',  adminOnly: true },
+      { id: 'system',        label: 'System',         icon: '⚙️', adminOnly: true },
+      { id: 'admin',         label: 'Admin Settings', icon: '🔧', adminOnly: true },
+    ],
+  },
+  {
+    label: 'Super Admin',
+    tabs: [
+      { id: 'sa-users',          label: 'Users',          icon: '👥', superAdminOnly: true },
+      { id: 'sa-platform',       label: 'Platform',       icon: '🌐', superAdminOnly: true },
+      { id: 'sa-ml-ai',          label: 'ML / AI',        icon: '🧠', superAdminOnly: true },
+      { id: 'sa-trading-engine', label: 'Trading Engine', icon: '📈', superAdminOnly: true },
+      { id: 'sa-financial',      label: 'Financial',      icon: '💰', superAdminOnly: true },
+      { id: 'sa-security',       label: 'Security',       icon: '🛡️', superAdminOnly: true },
+      { id: 'sa-logs',           label: 'Logs',           icon: '📋', superAdminOnly: true },
+      { id: 'sa-feature-flags',  label: 'Feature Flags',  icon: '🚩', superAdminOnly: true },
     ],
   },
   {
     label: 'Danger Zone',
     tabs: [
-      { id: 'danger',        label: 'Danger Zone',     icon: '⚠️',  danger: true },
+      { id: 'danger',        label: 'Danger Zone',    icon: '⚠️', danger: true },
     ],
   },
 ];
@@ -103,27 +127,37 @@ const SectionFallback: React.FC = () => (
 // ── Settings page ─────────────────────────────────────────────────────────────
 
 const Settings: React.FC = () => {
-  const user = useStore(selectUser);
-  const admin = user ? isAdmin(user.role) : false;
+  const user       = useStore(selectUser);
+  const admin      = user ? isAdmin(user.role) : false;
+  const superAdmin = user ? isSuperAdmin(user.role) : false;
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
 
   const renderSection = () => {
     switch (activeTab) {
-      case 'profile':       return <ProfileSection />;
-      case 'security':      return <SecuritySection />;
-      case 'broker':        return <BrokerSection />;
-      case 'trading':       return <TradingSection />;
-      case 'appearance':    return <AppearanceSection />;
-      case 'notifications': return <NotificationsSection />;
-      case 'api-keys':      return <ApiKeysSection />;
-      case 'billing':       return <BillingSection />;
-      case 'integrations':  return <IntegrationsSection />;
-      case 'system':        return admin ? <SystemSection /> : null;
-      case 'privacy':       return <PrivacySection />;
-      case 'accessibility': return <AccessibilitySection />;
-      case 'admin':         return admin ? <AdminSettingsSection /> : null;
-      case 'danger':        return <DangerSection />;
-      default:              return null;
+      case 'profile':            return <ProfileSection />;
+      case 'security':           return <SecuritySection />;
+      case 'broker':             return <BrokerSection />;
+      case 'trading':            return <TradingSection />;
+      case 'appearance':         return <AppearanceSection />;
+      case 'notifications':      return <NotificationsSection />;
+      case 'api-keys':           return <ApiKeysSection />;
+      case 'billing':            return <BillingSection />;
+      case 'integrations':       return <IntegrationsSection />;
+      case 'system':             return admin      ? <SystemSection />           : null;
+      case 'privacy':            return <PrivacySection />;
+      case 'accessibility':      return <AccessibilitySection />;
+      case 'admin':              return admin      ? <AdminSettingsSection />    : null;
+      case 'danger':             return <DangerSection />;
+      // Superadmin-only
+      case 'sa-users':           return superAdmin ? <SAUsersSection />          : null;
+      case 'sa-platform':        return superAdmin ? <SAPlatformSection />       : null;
+      case 'sa-ml-ai':           return superAdmin ? <SAMLAISection />           : null;
+      case 'sa-trading-engine':  return superAdmin ? <SATradingEngineSection />  : null;
+      case 'sa-financial':       return superAdmin ? <SAFinancialSection />      : null;
+      case 'sa-security':        return superAdmin ? <SASecuritySection />       : null;
+      case 'sa-logs':            return superAdmin ? <SALogsSection />           : null;
+      case 'sa-feature-flags':   return superAdmin ? <SAFeatureFlagsSection />   : null;
+      default:                   return null;
     }
   };
 
@@ -146,7 +180,11 @@ const Settings: React.FC = () => {
           {/* Sidebar nav */}
           <nav style={styles.sidebar}>
             {TAB_GROUPS.map((group) => {
-              const visibleTabs = group.tabs.filter((t) => !t.adminOnly || admin);
+              const visibleTabs = group.tabs.filter((t) => {
+                if (t.superAdminOnly) return superAdmin;
+                if (t.adminOnly)      return admin;
+                return true;
+              });
               if (visibleTabs.length === 0) return null;
 
               return (
@@ -160,19 +198,22 @@ const Settings: React.FC = () => {
                         onClick={() => setActiveTab(tab.id)}
                         style={{
                           ...styles.tabBtn,
-                          background:  active ? '#1e293b' : 'transparent',
-                          color:       active
-                            ? (tab.danger ? '#fca5a5' : '#60a5fa')
-                            : (tab.danger ? '#f87171' : '#94a3b8'),
-                          borderLeft:  active
-                            ? `3px solid ${tab.danger ? '#ef4444' : '#3b82f6'}`
+                          background: active ? '#1e293b' : 'transparent',
+                          color: active
+                            ? (tab.danger ? '#fca5a5' : tab.superAdminOnly ? '#fca5a5' : '#60a5fa')
+                            : (tab.danger ? '#f87171' : tab.superAdminOnly ? '#f87171' : '#94a3b8'),
+                          borderLeft: active
+                            ? `3px solid ${tab.danger || tab.superAdminOnly ? '#ef4444' : '#3b82f6'}`
                             : '3px solid transparent',
-                          fontWeight:  active ? 600 : 400,
+                          fontWeight: active ? 600 : 400,
                         }}
                       >
                         <span style={styles.tabIcon}>{tab.icon}</span>
                         <span>{tab.label}</span>
-                        {tab.adminOnly && (
+                        {tab.superAdminOnly && (
+                          <span style={styles.superAdminBadge}>SA</span>
+                        )}
+                        {tab.adminOnly && !tab.superAdminOnly && (
                           <span style={styles.adminBadge}>ADMIN</span>
                         )}
                       </button>
@@ -280,6 +321,17 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#1e3a5f',
     color: '#60a5fa',
     border: '1px solid #1e3a5f',
+    letterSpacing: '0.05em',
+  },
+  superAdminBadge: {
+    marginLeft: 'auto',
+    fontSize: 9,
+    fontWeight: 700,
+    padding: '2px 5px',
+    borderRadius: 4,
+    background: '#450a0a',
+    color: '#fca5a5',
+    border: '1px solid #dc2626',
     letterSpacing: '0.05em',
   },
   content: {
