@@ -177,7 +177,7 @@ def get_tracer(name: str = "hopefx") -> Any:
 
 def _hex_trace_id() -> str:
     """Return a fresh 128-bit hex trace ID."""
-    return uuid.uuid4().hex + uuid.uuid4().hex[:0]  # 32 hex chars
+    return uuid.uuid4().hex
 
 
 def _hex_span_id() -> str:
