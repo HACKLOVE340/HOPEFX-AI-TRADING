@@ -42,21 +42,34 @@ interface InfraLogEntry {
   timestamp: string;
 }
 
+interface ThreatIndicator {
+  type: string;
+  value: string;
+  severity: string;
+  description: string;
+  source: string;
+  first_seen: string;
+  last_seen: string;
+  blocked: boolean;
+}
+
 const STATUS_COLOR = (s: string) =>
   s === 'running' || s === 'healthy' ? '#4ade80' :
   s === 'unknown' ? '#fbbf24' : '#f87171';
 
 const SecurityInfraSection: React.FC = () => {
-  const [healer, setHealer]   = useState<SelfHealerStatus | null>(null);
-  const [av, setAv]           = useState<AVStatus | null>(null);
-  const [hsm, setHsm]         = useState<HSMStatus | null>(null);
+  const [healer, setHealer]     = useState<SelfHealerStatus | null>(null);
+  const [av, setAv]             = useState<AVStatus | null>(null);
+  const [hsm, setHsm]           = useState<HSMStatus | null>(null);
   const [infraLog, setInfraLog] = useState<InfraLogEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState('');
-  const [busy, setBusy]       = useState<string | null>(null);
-  const [msg, setMsg]         = useState('');
+  const [threatIntel, setThreatIntel]   = useState<ThreatIndicator[]>([]);
+  const [threatLoading, setThreatLoading] = useState(false);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState('');
+  const [busy, setBusy]         = useState<string | null>(null);
+  const [msg, setMsg]           = useState('');
   const [rotateConfirm, setRotateConfirm] = useState<string | null>(null);
-  const [tab, setTab]         = useState<'healer' | 'av' | 'hsm' | 'log'>('healer');
+  const [tab, setTab]           = useState<'healer' | 'av' | 'hsm' | 'log' | 'threat'>('healer');
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -77,6 +90,16 @@ const SecurityInfraSection: React.FC = () => {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Lazy-load threat intel when tab selected
+  useEffect(() => {
+    if (tab !== 'threat') return;
+    setThreatLoading(true);
+    superadminApi.threatIntel()
+      .then(r => setThreatIntel(r.data.indicators ?? r.data ?? []))
+      .catch(() => setThreatIntel([]))
+      .finally(() => setThreatLoading(false));
+  }, [tab]);
 
   const triggerScan = async (type: 'integrity' | 'av') => {
     setBusy(type); setMsg('');
@@ -141,15 +164,15 @@ const SecurityInfraSection: React.FC = () => {
         <KpiTile label="HSM Keys" value={hsm?.key_count ?? 0} icon="🔑" accent="#a78bfa" />
       </div>
 
-      <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
-        {(['healer', 'av', 'hsm', 'log'] as const).map(t => (
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap' }}>
+        {(['healer', 'av', 'hsm', 'log', 'threat'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
             background: tab === t ? '#1e293b' : 'transparent',
             border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`,
             borderRadius: 8, color: tab === t ? '#f8fafc' : '#64748b',
             padding: '7px 14px', fontSize: 13, cursor: 'pointer',
           }}>
-            {{ healer: 'Self-Healer', av: 'Antivirus', hsm: 'HSM Vault', log: 'Infra Log' }[t]}
+            {{ healer: 'Self-Healer', av: 'Antivirus', hsm: 'HSM Vault', log: 'Infra Log', threat: 'Threat Intel' }[t]}
           </button>
         ))}
       </div>
@@ -276,6 +299,59 @@ const SecurityInfraSection: React.FC = () => {
                 <div style={{ fontSize: 11, color: '#475569', flexShrink: 0 }}>{fmtDate(entry.timestamp)}</div>
               </div>
             ))
+          )}
+        </SectionCard>
+      )}
+
+      {/* ── TAB: Threat Intelligence ── */}
+      {tab === 'threat' && (
+        <SectionCard title="Threat Intelligence" icon="🛡️" accent="#ef4444"
+          subtitle="Live IOC feed — blocked IPs, malicious domains, hash signatures"
+          actions={<ActionBtn label="Refresh" onClick={() => {
+            setThreatLoading(true);
+            superadminApi.threatIntel()
+              .then(r => setThreatIntel(r.data.indicators ?? r.data ?? []))
+              .catch(() => setThreatIntel([]))
+              .finally(() => setThreatLoading(false));
+          }} loading={threatLoading} icon="🔄" size="sm" />}>
+          {threatLoading ? (
+            <LoadingRows rows={4} />
+          ) : threatIntel.length === 0 ? (
+            <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 24 }}>No threat indicators loaded.</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                    {['Type', 'Indicator', 'Severity', 'Source', 'First Seen', 'Last Seen', 'Blocked'].map(h => (
+                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {threatIntel.map((ti, i) => {
+                    const sevColor = ti.severity === 'critical' ? '#f87171' : ti.severity === 'high' ? '#f97316' : ti.severity === 'medium' ? '#fbbf24' : '#94a3b8';
+                    return (
+                      <tr key={i} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
+                        <td style={{ padding: '8px 12px' }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 3, background: '#1e293b', color: '#60a5fa', textTransform: 'uppercase' }}>{ti.type}</span>
+                        </td>
+                        <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 12, color: '#f1f5f9', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={ti.value}>{ti.value}</td>
+                        <td style={{ padding: '8px 12px' }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: sevColor }}>{ti.severity.toUpperCase()}</span>
+                        </td>
+                        <td style={{ padding: '8px 12px', fontSize: 11, color: '#64748b' }}>{ti.source}</td>
+                        <td style={{ padding: '8px 12px', fontSize: 11, color: '#475569', whiteSpace: 'nowrap' }}>{fmtDate(ti.first_seen)}</td>
+                        <td style={{ padding: '8px 12px', fontSize: 11, color: '#475569', whiteSpace: 'nowrap' }}>{fmtDate(ti.last_seen)}</td>
+                        <td style={{ padding: '8px 12px' }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: ti.blocked ? '#4ade80' : '#f87171' }}>{ti.blocked ? '✅ Yes' : '❌ No'}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </SectionCard>
       )}
