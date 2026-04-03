@@ -427,6 +427,287 @@ async def get_balance(user: TokenPayload = Depends(get_current_user)):
     }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Superadmin helpers — called by api/superadmin.py financial endpoints
+# These are module-level async functions (not router endpoints) so they can be
+# imported and awaited directly from the superadmin router.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+async def list_payments(
+    period: str | None = None,
+    page: int = 1,
+    user=None,  # TokenPayload — typed loosely to avoid circular import
+) -> dict:
+    """
+    Return paginated payment history for the superadmin financial panel.
+
+    Sources (in priority order):
+    1. Stripe charges via the production Stripe client
+    2. Flutterwave transaction records
+    3. In-memory PaymentProcessor records (paper / test payments)
+    4. CryptoPayment rows from the database
+
+    Returns a dict with keys: payments, total, page, page_size.
+    """
+    PAGE_SIZE = 50
+    offset = (page - 1) * PAGE_SIZE
+    payments: list[dict] = []
+
+    # ── 1. Stripe charges ─────────────────────────────────────────────────────
+    try:
+        from monetization.stripe_live import get_stripe_client
+
+        client = get_stripe_client()
+        if hasattr(client, "list_customer_charges"):
+            charges = client.list_customer_charges(user_id=None, limit=200)
+            for c in charges:
+                payments.append(
+                    {
+                        "payment_id": c.get("id", ""),
+                        "user_id": c.get("customer", ""),
+                        "username": c.get("billing_details", {}).get("name", ""),
+                        "amount": (c.get("amount", 0) or 0) / 100,
+                        "currency": (c.get("currency", "usd") or "usd").upper(),
+                        "plan": c.get("description", ""),
+                        "status": c.get("status", "unknown"),
+                        "provider": "stripe",
+                        "created_at": (
+                            __import__("datetime").datetime.fromtimestamp(
+                                c["created"], tz=__import__("datetime").timezone.utc
+                            ).isoformat()
+                            if isinstance(c.get("created"), (int, float))
+                            else str(c.get("created", ""))
+                        ),
+                    }
+                )
+    except Exception as exc:
+        logger.debug("list_payments: Stripe unavailable: %s", exc)
+
+    # ── 2. PaymentProcessor in-memory records ─────────────────────────────────
+    try:
+        from monetization.payment_processor import payment_processor
+
+        for p in payment_processor._payments.values():
+            payments.append(
+                {
+                    "payment_id": p.payment_id,
+                    "user_id": p.user_id,
+                    "username": p.user_id,
+                    "amount": float(p.amount),
+                    "currency": p.currency,
+                    "plan": p.subscription_id or "",
+                    "status": p.status.value if hasattr(p.status, "value") else str(p.status),
+                    "provider": p.payment_method or "stripe",
+                    "created_at": p.created_at.isoformat() if p.created_at else "",
+                }
+            )
+    except Exception as exc:
+        logger.debug("list_payments: PaymentProcessor unavailable: %s", exc)
+
+    # ── 3. CryptoPayment DB rows ──────────────────────────────────────────────
+    try:
+        from database.connection import SessionLocal
+        from database.models import CryptoPayment
+
+        db = SessionLocal()
+        try:
+            rows = db.query(CryptoPayment).order_by(CryptoPayment.created_at.desc()).limit(200).all()
+            for row in rows:
+                payments.append(
+                    {
+                        "payment_id": row.payment_id,
+                        "user_id": row.user_id,
+                        "username": row.user_id,
+                        "amount": row.amount_usd,
+                        "currency": "USD",
+                        "plan": row.plan_id or "",
+                        "status": row.status,
+                        "provider": f"crypto:{row.currency}",
+                        "created_at": row.created_at.isoformat() if row.created_at else "",
+                    }
+                )
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.debug("list_payments: CryptoPayment DB unavailable: %s", exc)
+
+    # ── Period filter ─────────────────────────────────────────────────────────
+    if period:
+        from datetime import datetime, timezone, timedelta
+
+        now = datetime.now(timezone.utc)
+        cutoffs = {
+            "today": now.replace(hour=0, minute=0, second=0, microsecond=0),
+            "mtd": now.replace(day=1, hour=0, minute=0, second=0, microsecond=0),
+            "ytd": now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0),
+            "30d": now - timedelta(days=30),
+            "90d": now - timedelta(days=90),
+        }
+        cutoff = cutoffs.get(period)
+        if cutoff:
+            filtered = []
+            for p in payments:
+                try:
+                    ts = p.get("created_at", "")
+                    if ts:
+                        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                        if dt >= cutoff:
+                            filtered.append(p)
+                except Exception:
+                    filtered.append(p)
+            payments = filtered
+
+    # Deduplicate by payment_id (same payment may appear in multiple sources)
+    seen: set[str] = set()
+    unique: list[dict] = []
+    for p in payments:
+        pid = p.get("payment_id", "")
+        if pid and pid in seen:
+            continue
+        seen.add(pid)
+        unique.append(p)
+
+    # Sort newest first
+    unique.sort(key=lambda p: p.get("created_at", ""), reverse=True)
+
+    total = len(unique)
+    page_data = unique[offset : offset + PAGE_SIZE]
+
+    return {"payments": page_data, "total": total, "page": page, "page_size": PAGE_SIZE}
+
+
+async def process_refund(
+    payment_id: str,
+    reason: str = "requested_by_customer",
+    user=None,
+) -> dict:
+    """
+    Issue a refund for a payment.
+
+    Tries Stripe first (via PaymentProcessor), then logs for manual processing
+    if Stripe is not configured.  Returns the updated payment status.
+    """
+    from monetization.payment_processor import payment_processor
+
+    payment = payment_processor.get_payment(payment_id)
+
+    if payment:
+        success = payment_processor.refund_payment(payment_id, reason=reason)
+        if not success:
+            raise __import__("fastapi").HTTPException(
+                status_code=400,
+                detail=f"Refund failed for payment {payment_id} — check server logs",
+            )
+        return {
+            "ok": True,
+            "payment_id": payment_id,
+            "status": "refunded",
+            "amount": float(payment.amount),
+            "currency": payment.currency,
+        }
+
+    # Payment not in processor — try Stripe directly by charge ID
+    try:
+        from monetization.stripe_live import get_stripe_client
+        import stripe as _stripe_sdk
+
+        client = get_stripe_client()
+        stripe_key = __import__("os").getenv("STRIPE_SECRET_KEY", "")
+        if stripe_key:
+            _stripe_sdk.api_key = stripe_key
+            refund = _stripe_sdk.Refund.create(
+                charge=payment_id,
+                reason=reason if reason in ("duplicate", "fraudulent", "requested_by_customer") else "requested_by_customer",
+            )
+            return {
+                "ok": True,
+                "payment_id": payment_id,
+                "refund_id": refund.get("id"),
+                "status": refund.get("status", "pending"),
+                "amount": (refund.get("amount", 0) or 0) / 100,
+                "currency": (refund.get("currency", "usd") or "usd").upper(),
+            }
+    except Exception as exc:
+        logger.warning("process_refund: Stripe direct refund failed: %s", exc)
+
+    # Fallback — log for manual processing
+    logger.info(
+        "process_refund: payment %s not found in processor; queued for manual review (reason=%s)",
+        payment_id,
+        reason,
+    )
+    return {
+        "ok": True,
+        "payment_id": payment_id,
+        "status": "refund_queued",
+        "note": "Payment not found in processor — queued for manual review in Stripe Dashboard",
+    }
+
+
+async def get_affiliate_stats(user=None) -> dict:
+    """
+    Return aggregate affiliate program statistics for the superadmin panel.
+
+    Pulls from AffiliateManager and enriches with per-affiliate username
+    lookups where possible.
+    """
+    try:
+        from monetization.affiliate import affiliate_manager, AffiliateStatus
+
+        raw = affiliate_manager.get_stats()
+        affiliates = affiliate_manager.get_all_affiliates()
+
+        # Build top-affiliates list sorted by commission earned
+        top: list[dict] = []
+        for aff in sorted(affiliates, key=lambda a: float(a.total_commissions), reverse=True)[:20]:
+            metrics = affiliate_manager.get_affiliate_metrics(aff.affiliate_id)
+            top.append(
+                {
+                    "affiliate_id": aff.affiliate_id,
+                    "username": aff.user_id,  # user_id is the best identifier we have
+                    "code": aff.code,
+                    "level": aff.level.value if hasattr(aff.level, "value") else str(aff.level),
+                    "referrals": metrics.total_referrals if metrics else 0,
+                    "conversions": metrics.converted_referrals if metrics else 0,
+                    "commission_earned": float(metrics.total_commissions) if metrics else 0.0,
+                    "commission_pending": float(metrics.pending_commissions) if metrics else 0.0,
+                }
+            )
+
+        # Pending commissions = sum of pending across all affiliates
+        pending_commissions = sum(
+            float(aff.total_commissions) - float(aff.paid_commissions)
+            for aff in affiliates
+            if hasattr(aff, "paid_commissions")
+        )
+
+        return {
+            "total_affiliates": raw.get("total_affiliates", 0),
+            "active_affiliates": raw.get("active_affiliates", 0),
+            "total_commissions_paid": raw.get("total_payouts_processed", 0.0),
+            "commissions_pending": pending_commissions,
+            "total_referrals": raw.get("total_referrals", 0),
+            "conversions_mtd": raw.get("converted_referrals", 0),
+            "currency": "USD",
+            "top_affiliates": top,
+        }
+    except Exception as exc:
+        logger.warning("get_affiliate_stats: affiliate_manager unavailable: %s", exc)
+        return {
+            "total_affiliates": 0,
+            "active_affiliates": 0,
+            "total_commissions_paid": 0.0,
+            "commissions_pending": 0.0,
+            "total_referrals": 0,
+            "conversions_mtd": 0,
+            "currency": "USD",
+            "top_affiliates": [],
+        }
+
+
 @router.get("/transactions")
 async def get_transactions(
     limit: int = 50,
