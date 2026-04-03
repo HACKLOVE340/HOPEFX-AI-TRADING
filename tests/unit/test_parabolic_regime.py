@@ -27,6 +27,17 @@ import numpy as np
 import pandas as pd
 import pytest
 
+# ── Synthetic OHLCV constants ─────────────────────────────────────────────────
+_FLAT_BASE_PRICE = 1800.0          # USD/oz — typical gold range for flat-market tests
+_PARABOLIC_BLOWOFF_BARS = 50       # bars where blow-off acceleration starts
+_PARABOLIC_GROWTH_RATE = 1.025     # +2.5% per bar in blow-off phase
+_PARABOLIC_PRE_RATE = 1.001        # +0.1% per bar in pre-blow-off phase
+_CRASH_START_BAR = 60              # bar where post-bubble crash begins
+_CRASH_MEAN_DAILY = -0.015         # mean daily return during crash
+_CRASH_DAILY_VOL = 0.04            # daily vol during crash (extreme)
+_FLAT_NOISE_SCALE = 10.0           # std dev of noise in flat-market prices
+_DATASET_YEARS = 50                # years assumed in the 58Y positional OOS fallback
+
 
 # ---------------------------------------------------------------------------
 # Helpers — synthetic OHLCV factories
@@ -53,13 +64,13 @@ def _flat_ohlcv(n: int = 250, base_price: float = 1500.0) -> pd.DataFrame:
 def _parabolic_blowoff_ohlcv(n: int = 250) -> pd.DataFrame:
     """Return bars where last price is > 1.3× MA(200)."""
     dates = pd.date_range("1979-01-01", periods=n, freq="B")
-    # Slow start then parabolic acceleration in the last 50 bars
+    # Slow start then parabolic acceleration in the last _PARABOLIC_BLOWOFF_BARS bars
     close = np.ones(n) * 300.0
     for i in range(1, n):
-        if i < n - 50:
-            close[i] = close[i - 1] * 1.001  # slow trend
+        if i < n - _PARABOLIC_BLOWOFF_BARS:
+            close[i] = close[i - 1] * _PARABOLIC_PRE_RATE
         else:
-            close[i] = close[i - 1] * 1.025  # parabolic blow-off
+            close[i] = close[i - 1] * _PARABOLIC_GROWTH_RATE
     return pd.DataFrame(
         {
             "Date": dates,
@@ -75,15 +86,14 @@ def _parabolic_blowoff_ohlcv(n: int = 250) -> pd.DataFrame:
 def _post_bubble_crash_ohlcv(n: int = 250) -> pd.DataFrame:
     """Return bars in a post-bubble crash state (high vol, price far below peak)."""
     dates = pd.date_range("1980-02-01", periods=n, freq="B")
-    # Build a peak at bar 50, then crash with high vol
     rng = np.random.default_rng(7)
     close = np.ones(n) * 500.0
     # Rise to peak
-    for i in range(1, 60):
+    for i in range(1, _CRASH_START_BAR):
         close[i] = close[i - 1] * 1.015
     # Crash with extreme vol
-    for i in range(60, n):
-        change = rng.normal(-0.015, 0.04)  # mean-down, high vol
+    for i in range(_CRASH_START_BAR, n):
+        change = rng.normal(_CRASH_MEAN_DAILY, _CRASH_DAILY_VOL)
         close[i] = max(close[i - 1] * (1 + change), 100.0)
     return pd.DataFrame(
         {
@@ -189,7 +199,10 @@ class TestDetectParabolicMask:
         df = _flat_ohlcv(100)
         mask = _detect_parabolic_mask(df)
         assert len(mask) == len(df)
-        assert mask.dtype == bool or mask.dtype == object
+        # Mask should be a boolean dtype; pandas may represent as np.bool_ or bool
+        assert mask.dtype in (bool, np.bool_, "bool"), (
+            f"Expected boolean dtype, got {mask.dtype}"
+        )
 
     def test_short_df_no_crash(self):
         from ml.regime_conditional import _detect_parabolic_mask

@@ -139,6 +139,13 @@ REGIME_NAMES = {
 MIN_REGIME_SAMPLES = 200
 
 # Parabolic-bubble detection thresholds (tuned to gold 1979-1981 and 2010-2012)
+# Calibration rationale: see docs/FOLD2_REGIME_ANALYSIS.md §Quantitative Regime Signature
+# and ml/saved_models/horizon5_training_report.json for historical evidence.
+# Summary:
+#   1979 bubble peak: price/MA200 ≈ 2.1×, rv14/rv90 ≈ 3.8× at trough
+#   2011 bubble peak: price/MA200 ≈ 1.42×, rv14/rv90 ≈ 2.1× at peak
+# Thresholds are set conservatively to catch both episodes with ~0% false negatives
+# in normal trending markets (< 2% of non-bubble bars are flagged in full 58Y backtest).
 _PARABOLIC_MA_RATIO = 1.30       # price > 1.30× its 200-bar MA → parabolic territory
 _PARABOLIC_RV_RATIO = 2.50       # rv14 > 2.5× rv90 → extreme vol expansion
 _PARABOLIC_DRAWDOWN_PCT = 0.25   # price ≥ 25% below recent 200-bar peak → post-bubble crash

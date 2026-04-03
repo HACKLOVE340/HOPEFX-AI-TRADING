@@ -96,7 +96,17 @@ _CB_MIN_OUTCOMES = int(os.getenv("CB_MIN_OUTCOMES", "30"))
 
 # Lazy import — avoids circular dependency; called only inside _gate_regime
 def _is_parabolic(ohlcv: Any) -> bool:
-    """Return True when OHLCV data is in a parabolic-bubble or post-bubble regime."""
+    """
+    Return True when OHLCV data is in a parabolic-bubble or post-bubble regime.
+
+    Delegates to ``ml.regime_conditional.is_parabolic_bubble_regime()``.
+    Returns False gracefully on any import error or computation failure so that
+    the regime gate always has a deterministic fallback.
+
+    Parameters
+    ----------
+    ohlcv : pandas DataFrame with at least a ``close`` column, or any object.
+    """
     try:
         import pandas as pd
         from ml.regime_conditional import is_parabolic_bubble_regime
