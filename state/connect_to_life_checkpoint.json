@@ -1,0 +1,24 @@
+{
+  "timestamp": "2026-04-03T19:34:35.728212+00:00",
+  "trading_mode": "paper",
+  "equity": 100000.0,
+  "balance": 100000.0,
+  "daily_pnl": 0.0,
+  "drawdown_pct": 0.0,
+  "fill_count": 0,
+  "exit_code": 0,
+  "nuclear": {
+    "nuclear_level": 0,
+    "trading_paused": false,
+    "monitoring_only": false,
+    "monitoring_loop_running": false,
+    "kill_switch_active": false,
+    "kill_switch_reason": "",
+    "rl_agent_loaded": false,
+    "vecnorm_loaded": false,
+    "model_path": "ml/rl_models/nuclear_decision_ppo.zip",
+    "cooldown_remaining": 0.0,
+    "pause_elapsed": 0.0,
+    "event_history_count": 0
+  }
+}
