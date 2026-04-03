@@ -271,11 +271,11 @@ def build_mtf_features(df: pd.DataFrame) -> pd.DataFrame:
         11: 0.2,
         12: 0.5,
     }
-    d["mtf_gold_seasonal"] = dates.month.map(GOLD_SEASONAL_SCORE).fillna(0).values
+    d["mtf_gold_seasonal"] = dates.month.map(GOLD_SEASONAL_SCORE).fillna(0)
 
     # Year-end effect (last 10 trading days of year)
-    d["mtf_year_end"] = ((dates.month == 12) & (dates.day >= 20)).astype(int).values
-    d["mtf_jan_effect"] = (dates.month == 1).astype(int).values
+    d["mtf_year_end"] = ((dates.month == 12) & (dates.day >= 20)).astype(int)
+    d["mtf_jan_effect"] = (dates.month == 1).astype(int)
 
     # ── MTF-9: Macro regime features ─────────────────────────────────────────
     # Rate cycle proxy: 12M change in monthly close (rising = tightening)

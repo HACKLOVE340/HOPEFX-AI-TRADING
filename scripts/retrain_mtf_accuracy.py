@@ -173,6 +173,11 @@ def build_full_feature_matrix(df: pd.DataFrame) -> pd.DataFrame:
         df_out = X_base.copy()
         if y_base is not None and "target" not in df_out.columns:
             df_out["target"] = y_base.values
+        # Restore the date column so OOS split can use calendar dates
+        if "date" not in df_out.columns and "Date" not in df_out.columns:
+            # X_base has a reset integer index; map back to raw_ohlcv dates by position
+            n = len(df_out)
+            df_out["date"] = raw_ohlcv["Date"].iloc[:n].values if n <= len(raw_ohlcv) else None
     else:
         df_out = raw_ohlcv.copy()
 
@@ -287,7 +292,9 @@ def train_xgboost(X_train, y_train, X_test, y_test):
         eval_set=[(X_test, y_test)],
         verbose=False,
     )
-    cal = CalibratedClassifierCV(model, method="isotonic", cv="prefit")
+    # sklearn >= 1.5 removed cv='prefit'; train calibrator with cross-validation on
+    # the calibration set so no data leakage beyond what the base model already saw.
+    cal = CalibratedClassifierCV(model, method="isotonic", cv=3)
     cal.fit(X_test, y_test)
     return cal
 
@@ -337,7 +344,7 @@ def train_lightgbm(X_train, y_train, X_test, y_test):
             eval_set=[(X_test, y_test)],
             callbacks=[lgb.early_stopping(50, verbose=False), lgb.log_evaluation(-1)],
         )
-        cal = CalibratedClassifierCV(model, method="isotonic", cv="prefit")
+        cal = CalibratedClassifierCV(model, method="isotonic", cv=3)
         cal.fit(X_test, y_test)
         return cal
     except ImportError:
@@ -467,24 +474,36 @@ def main() -> int:
         return 1
 
     # 4. OOS split (last OOS_YEARS years)
-    dates = pd.to_datetime(df.loc[X.index, "Date"] if "Date" in df.columns else df.index)
+    _date_col = "Date" if "Date" in df.columns else ("date" if "date" in df.columns else None)
+    if _date_col:
+        dates = pd.to_datetime(df.loc[X.index, _date_col])
+    else:
+        # No date column preserved — use positional integer index as a fallback
+        # (means the OOS cutoff will be positional, not calendar-based)
+        logger.warning("No Date column found in feature matrix — falling back to positional OOS split")
+        n = len(X)
+        oos_n = max(1, int(n * OOS_YEARS / 50))  # approximate OOS fraction
+        fake_dates = pd.date_range("1968-01-01", periods=n, freq="B")
+        dates = pd.Series(fake_dates, index=X.index)
+
     cutoff = dates.max() - pd.DateOffset(years=OOS_YEARS)
-    train_mask = dates < cutoff
-    oos_mask = dates >= cutoff
+    train_mask = np.asarray(dates < cutoff)
+    oos_mask = np.asarray(dates >= cutoff)
 
-    X_train = X[train_mask.values]
-    y_train = y[train_mask.values]
-    X_oos = X[oos_mask.values]
-    y_oos = y[oos_mask.values]
+    X_train = X.iloc[train_mask]
+    y_train = y.iloc[train_mask]
+    X_oos = X.iloc[oos_mask]
+    y_oos = y.iloc[oos_mask]
 
+    dates_arr = pd.Series(dates.values if hasattr(dates, "values") else dates, index=range(len(dates)))
     logger.info(
         "Train: %d bars (%s → %s)  OOS: %d bars (%s → %s)",
         len(X_train),
-        dates[train_mask.values].min().strftime("%Y-%m-%d"),
-        dates[train_mask.values].max().strftime("%Y-%m-%d"),
+        dates_arr[train_mask].min().strftime("%Y-%m-%d"),
+        dates_arr[train_mask].max().strftime("%Y-%m-%d"),
         len(X_oos),
-        dates[oos_mask.values].min().strftime("%Y-%m-%d"),
-        dates[oos_mask.values].max().strftime("%Y-%m-%d"),
+        dates_arr[oos_mask].min().strftime("%Y-%m-%d"),
+        dates_arr[oos_mask].max().strftime("%Y-%m-%d"),
     )
 
     # 5. Scale features
@@ -518,6 +537,12 @@ def main() -> int:
         from sklearn.metrics import accuracy_score, roc_auc_score
         from xgboost import XGBClassifier
 
+        # Reserve last 20% of training fold for calibration — avoids data leakage
+        # (previously cv=3 on Xte caused model to re-train on the test set itself)
+        cal_split = max(1, int(len(Xtr) * 0.80))
+        Xtr_fit, ytr_fit = Xtr.iloc[:cal_split], ytr.iloc[:cal_split]
+        Xtr_cal, ytr_cal = Xtr.iloc[cal_split:], ytr.iloc[cal_split:]
+
         fold_xgb = XGBClassifier(
             n_estimators=300,
             max_depth=5,
@@ -528,9 +553,10 @@ def main() -> int:
             n_jobs=-1,
             eval_metric="logloss",
         )
-        fold_xgb.fit(Xtr, ytr, verbose=False)
-        fold_cal = CalibratedClassifierCV(fold_xgb, method="isotonic", cv="prefit")
-        fold_cal.fit(Xte, yte)
+        fold_xgb.fit(Xtr_fit, ytr_fit, verbose=False)
+        # Calibrate on the held-out 20% of training data (no leakage from test fold)
+        fold_cal = CalibratedClassifierCV(fold_xgb, method="isotonic", cv=3)
+        fold_cal.fit(Xtr_cal, ytr_cal)
 
         proba = fold_cal.predict_proba(Xte)[:, 1]
         pred = (proba > 0.5).astype(int)
@@ -539,12 +565,14 @@ def main() -> int:
         cv_accs.append(acc)
         cv_aucs.append(auc)
         logger.info(
-            "Fold %d/%d  acc=%.3f  auc=%.3f  train=%d  test=%d",
+            "Fold %d/%d  acc=%.3f  auc=%.3f  train=%d (fit=%d cal=%d)  test=%d",
             i + 1,
             len(splits),
             acc,
             auc,
             len(tr_idx),
+            cal_split,
+            len(Xtr) - cal_split,
             len(te_idx),
         )
 
