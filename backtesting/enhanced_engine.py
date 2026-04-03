@@ -1452,6 +1452,194 @@ class InstitutionalRiskManager:
 
 
 # =============================================================================
+# =============================================================================
+# PERFORMANCE REPORT HELPERS
+# Module-level functions extracted from get_performance_report() so each
+# metric section is independently testable without instantiating the engine.
+# =============================================================================
+
+# Annualisation factor: minute bars assumed (252 trading days × 390 min/day).
+_ANNUAL_BARS = 252 * 390
+
+
+def _compute_drawdown_series(
+    equity_curve: list[tuple],
+    initial_capital: float,
+) -> tuple[float, list[dict]]:
+    """
+    Compute maximum drawdown and completed drawdown periods from an equity curve.
+
+    Returns (max_drawdown_fraction, drawdown_periods_list).
+    max_drawdown_fraction is in [0, 1]; multiply by 100 for percentage.
+    """
+    peak = initial_capital
+    max_dd = 0.0
+    dd_start = None
+    dd_periods: list[dict] = []
+
+    for ts, eq in equity_curve:
+        if eq > peak:
+            if dd_start is not None:
+                ts_dt = ts.to_datetime() if hasattr(ts, "to_datetime") else datetime.now(UTC)
+                if (ts_dt - dd_start).total_seconds() > 0:
+                    dd_periods.append({
+                        "start": dd_start.isoformat(),
+                        "end": ts_dt.isoformat(),
+                        "max_dd": max_dd,
+                    })
+            peak = eq
+            max_dd = 0.0
+            dd_start = None
+        else:
+            dd = (peak - eq) / peak if peak > 0 else 0.0
+            if dd > max_dd:
+                max_dd = dd
+                if dd_start is None:
+                    dd_start = ts.to_datetime() if hasattr(ts, "to_datetime") else datetime.now(UTC)
+
+    return max_dd, dd_periods
+
+
+def _calculate_sortino(returns: "np.ndarray", target: float = 0.0) -> float:
+    """Sortino ratio: excess return over target divided by downside deviation."""
+    downside = returns[returns < target]
+    if len(downside) == 0:
+        return 0.0
+    downside_std = float(np.std(downside))
+    return float((np.mean(returns) - target) / downside_std) if downside_std > 0 else 0.0
+
+
+def _calculate_calmar(returns: "np.ndarray", max_dd: float) -> float:
+    """Calmar ratio: annualised return divided by maximum drawdown."""
+    if max_dd <= 0 or len(returns) == 0:
+        return 0.0
+    annual_return = float(np.mean(returns)) * _ANNUAL_BARS
+    return annual_return / max_dd
+
+
+def _build_report_metadata(engine: "EnhancedBacktestEngine") -> dict[str, Any]:
+    """Build the metadata section of the performance report."""
+    return {
+        "generated_at": datetime.now(UTC).isoformat(),
+        "initial_capital": engine.initial_capital,
+        "final_capital": engine.capital,
+        "total_return_pct": (engine.capital - engine.initial_capital) / engine.initial_capital * 100,
+        "backtest_periods": len(engine.equity_curve),
+        "execution_quality": engine.execution_quality.name,
+    }
+
+
+def _build_trade_statistics(trades: list, pnls: list[float]) -> dict[str, Any]:
+    """Compute win/loss counts, profit factor, payoff ratio, and P&L distribution."""
+    wins = [p for p in pnls if p > 0]
+    losses = [p for p in pnls if p < 0]
+    return {
+        "total_trades": len(trades),
+        "winning_trades": len(wins),
+        "losing_trades": len(losses),
+        "win_rate": len(wins) / len(trades) if trades else 0,
+        "profit_factor": abs(sum(wins) / sum(losses)) if losses else float("inf"),
+        "payoff_ratio": abs(float(np.mean(wins)) / float(np.mean(losses))) if wins and losses else 0,
+        "total_pnl": sum(pnls),
+        "avg_trade_pnl": float(np.mean(pnls)),
+        "avg_win": float(np.mean(wins)) if wins else 0,
+        "avg_loss": float(np.mean(losses)) if losses else 0,
+        "largest_win": max(wins) if wins else 0,
+        "largest_loss": min(losses) if losses else 0,
+        "std_dev_pnl": float(np.std(pnls)),
+    }
+
+
+def _build_time_analysis(trades: list) -> dict[str, Any]:
+    """Compute trade duration statistics in seconds and minutes."""
+    durations = [t.duration_seconds for t in trades]
+    return {
+        "avg_duration_sec": float(np.mean(durations)) if durations else 0,
+        "avg_duration_min": float(np.mean(durations)) / 60 if durations else 0,
+        "max_duration_sec": max(durations) if durations else 0,
+        "min_duration_sec": min(durations) if durations else 0,
+    }
+
+
+def _build_risk_metrics(
+    returns: list[float],
+    equity_returns: "np.ndarray",
+    max_dd: float,
+    dd_periods: list[dict],
+    current_capital: float,
+    risk_manager: "InstitutionalRiskManager",
+) -> dict[str, Any]:
+    """
+    Compute Sharpe, Sortino, Calmar, VaR, CVaR, skewness, and kurtosis.
+
+    All ratio metrics use the annualisation factor _ANNUAL_BARS (minute bars).
+    """
+    eq_std = float(np.std(equity_returns)) if len(equity_returns) > 1 else 0.0
+    eq_mean = float(np.mean(equity_returns)) if len(equity_returns) > 1 else 0.0
+    sharpe = (eq_mean / eq_std * np.sqrt(_ANNUAL_BARS)) if eq_std > 0 else 0.0
+    annual_vol = eq_std * np.sqrt(_ANNUAL_BARS) if len(equity_returns) > 1 else 0.0
+
+    ret_arr = np.array(returns)
+    var_95 = float(np.percentile(ret_arr, 5)) if len(returns) > 10 else 0.0
+    cvar_95 = float(np.mean(ret_arr[ret_arr <= var_95])) if len(returns) > 10 else 0.0
+
+    skewness = float(stats.skew(returns)) if SCIPY_AVAILABLE and len(returns) > 2 else 0.0
+    kurtosis = float(stats.kurtosis(returns)) if SCIPY_AVAILABLE and len(returns) > 2 else 0.0
+
+    current_dd_pct = (
+        (risk_manager.peak_capital - current_capital) / risk_manager.peak_capital * 100
+        if risk_manager.peak_capital > 0
+        else 0.0
+    )
+
+    return {
+        "max_drawdown_pct": max_dd * 100,
+        "max_drawdown_periods": dd_periods,
+        "current_drawdown_pct": current_dd_pct,
+        "volatility_annual": annual_vol,
+        "sharpe_ratio": float(sharpe),
+        "sortino_ratio": _calculate_sortino(equity_returns),
+        "calmar_ratio": _calculate_calmar(equity_returns, max_dd),
+        "var_95": var_95,
+        "cvar_95": cvar_95,
+        "skewness": skewness,
+        "kurtosis": kurtosis,
+    }
+
+
+def _build_execution_quality(
+    execution_log: list[dict],
+    positions: dict,
+    initial_capital: float,
+    cost_model: "TransactionCostModel",
+) -> dict[str, Any]:
+    """Aggregate slippage, latency, commission, and overnight financing costs."""
+    total_financing = sum(p.total_financing_paid for p in positions.values())
+    total_cost = sum(e["costs"].get("total_cost", 0) for e in execution_log if "costs" in e)
+    return {
+        "avg_slippage_bps": float(np.mean([e.get("slippage_bps", 0) for e in execution_log])) if execution_log else 0,
+        "avg_latency_ms": float(np.mean([e.get("latency_ms", 0) for e in execution_log])) if execution_log else 0,
+        "total_commission": sum(e["costs"].get("commission", 0) for e in execution_log if "costs" in e),
+        "total_slippage_cost": sum(e["costs"].get("market_impact", 0) for e in execution_log if "costs" in e),
+        "cost_drag_pct": (total_cost / initial_capital * 100) if initial_capital > 0 else 0,
+        "total_financing_paid": total_financing,
+        "financing_drag_pct": (total_financing / initial_capital * 100) if initial_capital > 0 else 0,
+        "overnight_rate_annual_pct": getattr(cost_model, "overnight_rate_annual", 0.004) * 100,
+    }
+
+
+def _build_mfe_mae_analysis(trades: list) -> dict[str, Any]:
+    """Compute MFE/MAE efficiency metrics across all closed trades."""
+    total_mae = sum(t.mae for t in trades)
+    return {
+        "avg_mfe_pct": float(np.mean([t.mfe_pct for t in trades])),
+        "avg_mae_pct": float(np.mean([t.mae_pct for t in trades])),
+        "avg_efficiency": float(np.mean([t.net_pnl / t.mfe if t.mfe > 0 else 0 for t in trades])),
+        "profit_factor_mfe": sum(t.mfe for t in trades) / total_mae if total_mae > 0 else 0,
+    }
+
+
+# =============================================================================
 # MAIN BACKTEST ENGINE
 # =============================================================================
 
@@ -1944,168 +2132,44 @@ class EnhancedBacktestEngine:
         return trade
 
     def get_performance_report(self) -> dict[str, Any]:
-        """Generate comprehensive institutional-grade performance report"""
+        """Generate comprehensive institutional-grade performance report."""
         if not self.closed_trades:
             return {"error": "No completed trades"}
 
         trades = self.closed_trades
         pnls = [t.net_pnl for t in trades]
         returns = [t.return_pct for t in trades]
-
-        # Basic statistics
-        wins = [p for p in pnls if p > 0]
-        losses = [p for p in pnls if p < 0]
-
-        # Time analysis
-        durations = [t.duration_seconds for t in trades]
-
-        # Equity curve analysis
         equity_values = [e[1] for e in self.equity_curve]
-        _equity_timestamps = [e[0] for e in self.equity_curve]  # available for time-series analysis
+        equity_returns = (
+            np.diff(equity_values) / equity_values[:-1] if len(equity_values) > 1 else np.array([])
+        )
+        max_dd, dd_periods = _compute_drawdown_series(self.equity_curve, self.initial_capital)
 
-        # Calculate returns
-        equity_returns = np.diff(equity_values) / equity_values[:-1] if len(equity_values) > 1 else np.array([])
-
-        # Drawdown calculation
-        peak = self.initial_capital
-        max_dd = 0.0
-        dd_start = None
-        dd_periods = []
-
-        for ts, eq in self.equity_curve:
-            if eq > peak:
-                if dd_start and (ts.to_datetime() - dd_start).total_seconds() > 0:
-                    dd_periods.append(
-                        {
-                            "start": dd_start.isoformat() if isinstance(dd_start, datetime) else str(dd_start),
-                            "end": ts.to_datetime().isoformat() if hasattr(ts, "to_datetime") else str(ts),
-                            "max_dd": max_dd,
-                        }
-                    )
-                peak = eq
-                max_dd = 0.0
-                dd_start = None
-            else:
-                dd = (peak - eq) / peak
-                if dd > max_dd:
-                    max_dd = dd
-                    if dd_start is None:
-                        dd_start = ts.to_datetime() if hasattr(ts, "to_datetime") else datetime.now(UTC)
-
-        # Advanced metrics
-        def calculate_sortino(returns, target=0):
-            downside = [r for r in returns if r < target]
-            if not downside:
-                return 0.0
-            return (np.mean(returns) - target) / np.std(downside) if np.std(downside) > 0 else 0.0
-
-        def calculate_calmar(returns, max_dd):
-            if max_dd <= 0:
-                return 0.0
-            annual_return = np.mean(returns) * 252 * 390  # Assuming minute bars
-            return annual_return / max_dd
-
-        report = {
-            "metadata": {
-                "generated_at": datetime.now(UTC).isoformat(),
-                "initial_capital": self.initial_capital,
-                "final_capital": self.capital,
-                "total_return_pct": (self.capital - self.initial_capital) / self.initial_capital * 100,
-                "backtest_periods": len(self.equity_curve),
-                "execution_quality": self.execution_quality.name,
-            },
-            "trade_statistics": {
-                "total_trades": len(trades),
-                "winning_trades": len(wins),
-                "losing_trades": len(losses),
-                "win_rate": len(wins) / len(trades) if trades else 0,
-                "profit_factor": abs(sum(wins) / sum(losses)) if losses else float("inf"),
-                "payoff_ratio": abs(np.mean(wins) / np.mean(losses)) if wins and losses else 0,
-                "total_pnl": sum(pnls),
-                "avg_trade_pnl": np.mean(pnls),
-                "avg_win": np.mean(wins) if wins else 0,
-                "avg_loss": np.mean(losses) if losses else 0,
-                "largest_win": max(wins) if wins else 0,
-                "largest_loss": min(losses) if losses else 0,
-                "std_dev_pnl": np.std(pnls),
-            },
-            "time_analysis": {
-                "avg_duration_sec": np.mean(durations),
-                "avg_duration_min": np.mean(durations) / 60,
-                "max_duration_sec": max(durations) if durations else 0,
-                "min_duration_sec": min(durations) if durations else 0,
-            },
-            "risk_metrics": {
-                "max_drawdown_pct": max_dd * 100,
-                "max_drawdown_periods": dd_periods,
-                "current_drawdown_pct": (self.risk_manager.peak_capital - self.capital)
-                / self.risk_manager.peak_capital
-                * 100
-                if self.risk_manager.peak_capital > 0
-                else 0,
-                "volatility_annual": np.std(equity_returns) * np.sqrt(252 * 390) if len(equity_returns) > 1 else 0,
-                "sharpe_ratio": np.mean(equity_returns) / np.std(equity_returns) * np.sqrt(252 * 390)
-                if len(equity_returns) > 1 and np.std(equity_returns) > 0
-                else 0,
-                "sortino_ratio": calculate_sortino(equity_returns),
-                "calmar_ratio": calculate_calmar(equity_returns, max_dd),
-                "var_95": np.percentile(returns, 5) if len(returns) > 10 else 0,
-                "cvar_95": np.mean([r for r in returns if r <= np.percentile(returns, 5)])
-                if len(returns) > 10
-                else 0,
-                "skewness": stats.skew(returns)
-                if SCIPY_AVAILABLE and len(returns) > 2
-                else 0,
-                "kurtosis": stats.kurtosis(returns)
-                if SCIPY_AVAILABLE and len(returns) > 2
-                else 0,
-            },
-            "execution_quality": {
-                "avg_slippage_bps": np.mean([e.get("slippage_bps", 0) for e in self.execution_log]),
-                "avg_latency_ms": np.mean([e.get("latency_ms", 0) for e in self.execution_log]),
-                "total_commission": sum(e["costs"].get("commission", 0) for e in self.execution_log if "costs" in e),
-                "total_slippage_cost": sum(
-                    e["costs"].get("market_impact", 0) for e in self.execution_log if "costs" in e
-                ),
-                "cost_drag_pct": (
-                    sum(e["costs"].get("total_cost", 0) for e in self.execution_log if "costs" in e)
-                    / self.initial_capital
-                )
-                * 100
-                if self.initial_capital > 0
-                else 0,
-                # Overnight financing totals across all positions (open + closed)
-                "total_financing_paid": sum(p.total_financing_paid for p in self.positions.values()),
-                "financing_drag_pct": (
-                    sum(p.total_financing_paid for p in self.positions.values()) / self.initial_capital * 100
-                )
-                if self.initial_capital > 0
-                else 0,
-                "overnight_rate_annual_pct": getattr(self.cost_model, "overnight_rate_annual", 0.004) * 100,
-            },
+        return {
+            "metadata": _build_report_metadata(self),
+            "trade_statistics": _build_trade_statistics(trades, pnls),
+            "time_analysis": _build_time_analysis(trades),
+            "risk_metrics": _build_risk_metrics(
+                returns, equity_returns, max_dd, dd_periods, self.capital, self.risk_manager
+            ),
+            "execution_quality": _build_execution_quality(
+                self.execution_log, self.positions, self.initial_capital, self.cost_model
+            ),
             "regime_performance": self._analyze_regime_performance(),
-            "mfe_mae_analysis": {
-                "avg_mfe_pct": np.mean([t.mfe_pct for t in trades]),
-                "avg_mae_pct": np.mean([t.mae_pct for t in trades]),
-                "avg_efficiency": np.mean([t.net_pnl / t.mfe if t.mfe > 0 else 0 for t in trades]),
-                "profit_factor_mfe": sum(t.mfe for t in trades) / sum(t.mae for t in trades)
-                if sum(t.mae for t in trades) > 0
-                else 0,
-            },
+            "mfe_mae_analysis": _build_mfe_mae_analysis(trades),
             "risk_manager_report": self.risk_manager.get_risk_report(),
             "monthly_returns": self._calculate_monthly_returns(),
             "equity_curve_sample": [
                 {"timestamp": float(ts), "equity": eq}
-                for ts, eq in self.equity_curve[-100:]  # Last 100 points
+                for ts, eq in self.equity_curve[-100:]
             ],
         }
 
-        return report
-
     def _analyze_regime_performance(self) -> dict[str, dict]:
-        """Analyze performance by market regime"""
-        regime_stats = defaultdict(lambda: {"trades": 0, "pnl": 0.0, "wins": 0, "losses": 0})
-
+        """Aggregate trade P&L and win-rate by entry market regime."""
+        regime_stats: dict[str, dict] = defaultdict(
+            lambda: {"trades": 0, "pnl": 0.0, "wins": 0, "losses": 0}
+        )
         for trade in self.closed_trades:
             regime = trade.entry_regime.name
             regime_stats[regime]["trades"] += 1
@@ -2117,33 +2181,30 @@ class EnhancedBacktestEngine:
 
         return {
             regime: {
-                "total_trades": stats["trades"],
-                "total_pnl": stats["pnl"],
-                "win_rate": stats["wins"] / stats["trades"] if stats["trades"] > 0 else 0,
-                "avg_pnl": stats["pnl"] / stats["trades"] if stats["trades"] > 0 else 0,
+                "total_trades": s["trades"],
+                "total_pnl": s["pnl"],
+                "win_rate": s["wins"] / s["trades"] if s["trades"] > 0 else 0,
+                "avg_pnl": s["pnl"] / s["trades"] if s["trades"] > 0 else 0,
             }
-            for regime, stats in regime_stats.items()
+            for regime, s in regime_stats.items()
         }
 
     def _calculate_monthly_returns(self) -> dict[str, float]:
-        """Calculate monthly returns from equity curve"""
+        """Compute month-over-month equity returns from the equity curve."""
         if not self.equity_curve:
             return {}
-
-        monthly_equity = {}
+        monthly_equity: dict[str, float] = {}
         for ts, eq in self.equity_curve:
             dt = ts.to_datetime() if hasattr(ts, "to_datetime") else datetime.fromtimestamp(float(ts))
-            month_key = dt.strftime("%Y-%m")
-            monthly_equity[month_key] = eq  # Last equity of month
+            monthly_equity[dt.strftime("%Y-%m")] = eq  # last equity value wins per month
 
-        months = sorted(monthly_equity.keys())
-        returns = {}
-        for i, month in enumerate(months[1:], 1):
-            prev_eq = monthly_equity[months[i - 1]]
-            curr_eq = monthly_equity[month]
-            returns[month] = (curr_eq - prev_eq) / prev_eq if prev_eq > 0 else 0
-
-        return returns
+        months = sorted(monthly_equity)
+        return {
+            month: (monthly_equity[month] - monthly_equity[months[i - 1]]) / monthly_equity[months[i - 1]]
+            if monthly_equity[months[i - 1]] > 0
+            else 0.0
+            for i, month in enumerate(months[1:], 1)
+        }
 
     def save_state(self, filepath: str, compress: bool = True):
         """Save complete engine state to disk"""
