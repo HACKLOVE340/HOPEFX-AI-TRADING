@@ -10,12 +10,13 @@ Prevents overfitting with rolling train/test splits
 """
 
 import logging
-import pandas as pd
-import numpy as np
-from typing import Any
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
+
+import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -79,9 +80,8 @@ class WalkForwardEngine:
             test_start = purge_end
             test_end = test_start + self.test_size
 
-            # Extract data
+            # Extract data (purge_start:purge_end is the embargo gap between train and test)
             train_data = data.iloc[train_start:train_end]
-            data.iloc[purge_start:purge_end]  # Not used (embargo)
             test_data = data.iloc[test_start:test_end]
 
             logger.info(
@@ -228,7 +228,7 @@ class WalkForwardEngine:
             "avg_test_return": np.mean(test_returns),
             "avg_test_sharpe": np.mean(test_sharpes),
             "consistency": 1 - np.std(test_returns) / (np.mean(test_returns) + 1e-10),
-            "is_robust": np.mean(test_sharpes) > 0.5  # noqa: PLR2004
+            "is_robust": np.mean(test_sharpes) > 0.5
             and sum(1 for r in self.results if r.is_overfit) < len(self.results) * 0.3,
         }
 

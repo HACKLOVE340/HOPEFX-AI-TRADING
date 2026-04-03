@@ -33,10 +33,10 @@ import threading
 import time
 import traceback
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
-from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ except ImportError:
 
 # Optional Redis
 try:
-    import redis  # type: ignore[import]  # noqa: F401
+    import redis  # type: ignore[import]
 
     _REDIS_AVAILABLE = True
 except ImportError:

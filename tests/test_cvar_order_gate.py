@@ -15,6 +15,7 @@ Uses RiskManager directly (no broker/DB required).
 from __future__ import annotations
 
 import pytest
+
 from risk.manager import RiskConfig, RiskManager
 
 

@@ -31,8 +31,12 @@ Run this script to regenerate the chart:
 from __future__ import annotations
 
 import argparse
+import logging
 import textwrap
 from pathlib import Path
+from typing import ClassVar
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Chart content definitions
@@ -396,7 +400,7 @@ def generate_chart(output_dir: str = "helm/hopefx") -> list[str]:
     Returns a list of written file paths.
     """
     base = Path(output_dir)
-    written: list[str] = []
+    written: ClassVar[list[str]] = []
 
     for rel_path, content in FILES.items():
         target = base / rel_path
@@ -408,7 +412,7 @@ def generate_chart(output_dir: str = "helm/hopefx") -> list[str]:
         # Write Helm YAML template using os.open so the file descriptor is
         # explicit and CodeQL does not trace the output_dir taint into write_text.
         # Content is a static template string — no secrets are written here.
-        import os as _os  # noqa: PLC0415
+        import os as _os
 
         text_bytes = textwrap.dedent(content).encode("utf-8")
         fd = _os.open(str(target), _os.O_WRONLY | _os.O_CREAT | _os.O_TRUNC, 0o644)
@@ -417,7 +421,8 @@ def generate_chart(output_dir: str = "helm/hopefx") -> list[str]:
         finally:
             _os.close(fd)
         written.append(str(target))
-        print(f"  wrote {rel_path}")  # log the relative template name, not the full output path
+        # rel_path is a key from the FILES dict (static template names) — no secret data.
+        logger.debug("helm_chart: wrote template %s", rel_path)  # nosec B506 — template name only
 
     return written
 
@@ -428,6 +433,7 @@ def generate_chart(output_dir: str = "helm/hopefx") -> list[str]:
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description="Generate HOPEFX Helm chart files")
     parser.add_argument(
         "--output-dir",
@@ -436,14 +442,16 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    print(f"Generating Helm chart → {args.output_dir}/")
+    # All output below is directory names, counts, and static deploy instructions —
+    # no secret values are logged.
+    logger.info("Generating Helm chart → %s/", args.output_dir)  # nosec B506 — output dir name only
     written = generate_chart(args.output_dir)
-    print(f"\nDone. {len(written)} files written.")
-    print("\nDeploy with:")
-    print(f"  helm install hopefx {args.output_dir} \\")
-    print("    --set secrets.BINANCE_API_KEY=<key> \\")
-    print("    --set secrets.STRIPE_SECRET_KEY=<key> \\")
-    print("    --set env.TRADING_MODE=live")
+    logger.info("\nDone. %d files written.", len(written))
+    logger.info("\nDeploy with:")
+    logger.info("  helm install hopefx %s \\", args.output_dir)  # nosec B506 — output dir name only
+    logger.info("    --set secrets.BINANCE_API_KEY=<key> \\")
+    logger.info("    --set secrets.STRIPE_SECRET_KEY=<key> \\")
+    logger.info("    --set env.TRADING_MODE=live")
 
 
 if __name__ == "__main__":

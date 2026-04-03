@@ -84,14 +84,14 @@ def validate(practice: bool = True) -> bool:
             headers=headers,
             timeout=10,
         )
-        if r.status_code == 401:  # noqa: PLR2004
+        if r.status_code == 401:
             _check(
                 "API token valid",
                 False,
                 "401 Unauthorized — regenerate token in OANDA portal",
             )
             return False
-        if r.status_code == 404:  # noqa: PLR2004
+        if r.status_code == 404:
             _check("Account ID valid", False, f"404 — account {account_id!r} not found")
             return False
         r.raise_for_status()
@@ -199,8 +199,8 @@ def validate_gate() -> None:
         gate = PaperTradingGate()
         gate.print_status()
 
-        p2_ok, p2_reason = gate.phase2_ready()
-        p3_ok, p3_reason = gate.phase3_ready()
+        p2_ok, _ = gate.phase2_ready()
+        p3_ok, _ = gate.phase3_ready()
 
         if not p2_ok:
             print("\nTo start the 30-day clock:")

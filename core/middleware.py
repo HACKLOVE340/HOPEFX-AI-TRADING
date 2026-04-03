@@ -111,6 +111,7 @@ def setup_metrics_middleware(app: FastAPI) -> None:
     """Add Prometheus HTTP metrics middleware."""
     try:
         from starlette.middleware.base import BaseHTTPMiddleware
+
         from core.metrics import make_metrics_middleware
 
         app.add_middleware(BaseHTTPMiddleware, dispatch=make_metrics_middleware())

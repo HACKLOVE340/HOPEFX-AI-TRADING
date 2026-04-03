@@ -99,7 +99,7 @@ class BaseStrategy(ABC):
         self.status = StrategyStatus.IDLE
         self.positions = []
         self.signals_history = []
-        self.logger = logging.getLogger(f"{__name__}.{config.name}")
+        self.logger = logging.getLogger(f"{__name__}.{self.config.name}")
         self.performance_metrics = {
             "total_signals": 0,
             "winning_signals": 0,
@@ -110,7 +110,7 @@ class BaseStrategy(ABC):
             "win_rate": 0.0,
         }
 
-        logger.info(f"Initialized strategy: {config.name} for {config.symbol}")
+        logger.info("Initialized strategy: %s for %s", self.config.name, self.config.symbol)
 
     @property
     def name(self) -> str:
@@ -203,29 +203,34 @@ class BaseStrategy(ABC):
             return signal
 
         except Exception as e:
-            logger.error(f"Error processing bar in {self.config.name}: {e}")
+            logger.error("Error processing bar in %s: %s", self.config.name, e)
+
             self.status = StrategyStatus.ERROR
             return None
 
     def start(self):
         """Start strategy execution"""
         self.status = StrategyStatus.RUNNING
-        logger.info(f"Started strategy: {self.config.name}")
+        logger.info("Started strategy: %s", self.config.name)
+
 
     def stop(self):
         """Stop strategy execution"""
         self.status = StrategyStatus.STOPPED
-        logger.info(f"Stopped strategy: {self.config.name}")
+        logger.info("Stopped strategy: %s", self.config.name)
+
 
     def pause(self):
         """Pause strategy execution"""
         self.status = StrategyStatus.PAUSED
-        logger.info(f"Paused strategy: {self.config.name}")
+        logger.info("Paused strategy: %s", self.config.name)
+
 
     def resume(self):
         """Resume strategy execution"""
         self.status = StrategyStatus.RUNNING
-        logger.info(f"Resumed strategy: {self.config.name}")
+        logger.info("Resumed strategy: %s", self.config.name)
+
 
     def _record_signal(self, signal: Signal):
         """Record signal in history"""

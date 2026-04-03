@@ -8,6 +8,7 @@ Configuration Management System
 """
 
 import base64
+import contextlib
 import fcntl
 import hashlib
 import json
@@ -17,7 +18,6 @@ import secrets
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-import contextlib
 
 try:
     from cryptography.fernet import Fernet
@@ -83,7 +83,7 @@ class EncryptionManager:
             return self._fernet.decrypt(token.encode()).decode()
         return base64.b64decode(token.encode()).decode()
 
-    def hash_password(self, password: str, salt: bytes = None) -> str:
+    def hash_password(self, password: str, salt: bytes | None = None) -> str:
         if salt is None:
             salt = secrets.token_bytes(16)
         dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 100_000)
@@ -162,7 +162,7 @@ class TradingConfig:
     def validate(self) -> bool:
         if self.max_position_size <= 0:
             return False
-        if self.max_leverage <= 0 or self.max_leverage > 100:  # noqa: PLR2004
+        if self.max_leverage <= 0 or self.max_leverage > 100:
             return False
         return self.risk_per_trade > 0
 
@@ -309,7 +309,7 @@ class ConfigManager:
 
     def _write_config(self, cfg: AppConfig, path: Path) -> None:
         d = cfg.to_dict()
-        for _name, api_d in d.get("api_configs", {}).items():
+        for api_d in d.get("api_configs", {}).values():
             api_d["api_key"] = self._encrypt_value(api_d.get("api_key", ""))
             api_d["api_secret"] = self._encrypt_value(api_d.get("api_secret", ""))
         with open(path, "w", encoding="utf-8") as f:
@@ -326,7 +326,7 @@ class ConfigManager:
                 d = json.load(f)
             finally:
                 fcntl.flock(f, fcntl.LOCK_UN)
-        for _name, api_d in d.get("api_configs", {}).items():
+        for api_d in d.get("api_configs", {}).values():
             api_d["api_key"] = self._decrypt_value(api_d.get("api_key", ""))
             api_d["api_secret"] = self._decrypt_value(api_d.get("api_secret", ""))
         return AppConfig.from_dict(d)

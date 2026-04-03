@@ -25,47 +25,40 @@ Version: 1.2.0
 """
 
 import logging
-from typing import Optional  # noqa: F401
-
-from .providers import (
-    NewsProvider,
-    NewsAPIProvider,
-    AlphaVantageNewsProvider,
-    RSSFeedProvider,
-    MultiSourceAggregator,
-)
-
-from .sentiment import SentimentAnalyzer, FinancialSentimentAnalyzer, SentimentScore
-
-from .impact_predictor import ImpactPredictor, ImpactLevel, MarketImpact
+from datetime import UTC
 
 from .economic_calendar import EconomicCalendar, EconomicEvent, EventImportance
-
 from .geopolitical_risk import (
+    CountryRisk,
+    CustomDataLayerConfig,
+    GeopoliticalEvent,
+    GeopoliticalEventType,
+    GeopoliticalRiskAssessment,
     # Core Classes
     GeopoliticalRiskProvider,
-    GeopoliticalEvent,
-    GeopoliticalRiskAssessment,
-    GeopoliticalEventType,
-    RiskSeverity,
     GoldImpact,
-    CountryRisk,
+    RiskSeverity,
+    WorldMonitorAPIClient,
     # World Monitor Integration
     WorldMonitorIntegration,
-    WorldMonitorAPIClient,
     WorldMonitorSelfHostConfig,
-    CustomDataLayerConfig,
+    create_self_hosted_setup,
+    get_api_client,
+    get_custom_layer_config,
     # Convenience Functions
     get_geopolitical_provider,
     get_gold_geopolitical_signal,
-    get_api_client,
     get_gold_signal_from_api,
-    create_self_hosted_setup,
-    get_custom_layer_config,
 )
-from datetime import timezone
-
-UTC = timezone.utc
+from .impact_predictor import ImpactLevel, ImpactPredictor, MarketImpact
+from .providers import (
+    AlphaVantageNewsProvider,
+    MultiSourceAggregator,
+    NewsAPIProvider,
+    NewsProvider,
+    RSSFeedProvider,
+)
+from .sentiment import FinancialSentimentAnalyzer, SentimentAnalyzer, SentimentScore
 
 logger = logging.getLogger(__name__)
 
@@ -136,8 +129,8 @@ def create_news_router():
                 signal["direction"] = signal["direction"].upper()
             return signal
         except Exception as exc:
-            logger.error(f"Geopolitical signal error: {exc}")
-            raise HTTPException(status_code=500, detail=f"Geopolitical signal unavailable: {exc}") from exc
+            logger.error("Geopolitical signal error: %s", exc)
+            raise HTTPException(status_code=500, detail="Geopolitical signal unavailable — check server logs") from None
 
     @news_router.get("/geopolitical/events")
     async def get_geopolitical_events(force_refresh: bool = Query(False)):
@@ -159,8 +152,8 @@ def create_news_router():
                 "count": len(events),
             }
         except Exception as exc:
-            logger.error(f"Geopolitical events error: {exc}")
-            raise HTTPException(status_code=500, detail=f"Events unavailable: {exc}") from exc
+            logger.error("Geopolitical events error: %s", exc)
+            raise HTTPException(status_code=500, detail="Events unavailable — check server logs") from None
 
     @news_router.get("/geopolitical/assessment")
     async def get_risk_assessment():
@@ -173,8 +166,8 @@ def create_news_router():
             assessment = provider.get_risk_assessment()
             return assessment.to_dict()
         except Exception as exc:
-            logger.error(f"Risk assessment error: {exc}")
-            raise HTTPException(status_code=500, detail=f"Assessment unavailable: {exc}") from exc
+            logger.error("Risk assessment error: %s", exc)
+            raise HTTPException(status_code=500, detail="Assessment unavailable — check server logs") from None
 
     @news_router.get("/geopolitical/world-monitor")
     async def get_world_monitor_urls():
@@ -190,8 +183,8 @@ def create_news_router():
                 "base_url": "https://worldmonitor.app",
             }
         except Exception as exc:
-            logger.error(f"World Monitor URLs error: {exc}")
-            raise HTTPException(status_code=500, detail=f"World Monitor integration error: {exc}") from exc
+            logger.error("World Monitor URLs error: %s", exc)
+            raise HTTPException(status_code=500, detail="World Monitor integration unavailable — check server logs") from None
 
     # ── Economic calendar endpoint ─────────────────────────────────────────
 
@@ -203,7 +196,7 @@ def create_news_router():
         Defaults to 24 hours. Only CRITICAL and HIGH importance events are returned.
         """
         try:
-            from datetime import datetime, timezone, timedelta  # noqa: F401
+            from datetime import datetime, timedelta
 
             calendar = EconomicCalendar()
             now = datetime.now(UTC)
@@ -236,8 +229,8 @@ def create_news_router():
                 "hours_ahead": hours_ahead,
             }
         except Exception as exc:
-            logger.error(f"Economic calendar error: {exc}")
-            raise HTTPException(status_code=500, detail=f"Economic calendar unavailable: {exc}") from exc
+            logger.error("Economic calendar error: %s", exc)
+            raise HTTPException(status_code=500, detail="Economic calendar unavailable — check server logs") from None
 
     # ── Sentiment endpoint ──────────────────────────────────────────────────
 
@@ -269,51 +262,51 @@ def create_news_router():
                 else ("bullish" if score > 0 else "bearish" if score < 0 else "neutral"),
             }
         except Exception as exc:
-            logger.error(f"Sentiment analysis error for {symbol}: {exc}")
-            raise HTTPException(status_code=500, detail=f"Sentiment unavailable: {exc}") from exc
+            logger.error("Sentiment analysis error for %s: %s", symbol, exc)
+            raise HTTPException(status_code=500, detail="Sentiment unavailable — check server logs") from None
 
     return news_router
 
 
 __all__ = [
-    # Providers
-    "NewsProvider",
-    "NewsAPIProvider",
     "AlphaVantageNewsProvider",
-    "RSSFeedProvider",
-    "MultiSourceAggregator",
-    # Sentiment
-    "SentimentAnalyzer",
-    "FinancialSentimentAnalyzer",
-    "SentimentScore",
-    # Impact Prediction
-    "ImpactPredictor",
-    "ImpactLevel",
-    "MarketImpact",
+    "CountryRisk",
+    "CustomDataLayerConfig",
     # Economic Calendar
     "EconomicCalendar",
     "EconomicEvent",
     "EventImportance",
+    "FinancialSentimentAnalyzer",
+    "GeopoliticalEvent",
+    "GeopoliticalEventType",
+    "GeopoliticalRiskAssessment",
     # Geopolitical Risk (World Monitor Integration)
     "GeopoliticalRiskProvider",
-    "GeopoliticalEvent",
-    "GeopoliticalRiskAssessment",
-    "GeopoliticalEventType",
-    "RiskSeverity",
     "GoldImpact",
-    "CountryRisk",
-    "WorldMonitorIntegration",
+    "ImpactLevel",
+    # Impact Prediction
+    "ImpactPredictor",
+    "MarketImpact",
+    "MultiSourceAggregator",
+    "NewsAPIProvider",
+    # Providers
+    "NewsProvider",
+    "RSSFeedProvider",
+    "RiskSeverity",
+    # Sentiment
+    "SentimentAnalyzer",
+    "SentimentScore",
     "WorldMonitorAPIClient",
+    "WorldMonitorIntegration",
     "WorldMonitorSelfHostConfig",
-    "CustomDataLayerConfig",
-    "get_geopolitical_provider",
-    "get_gold_geopolitical_signal",
-    "get_api_client",
-    "get_gold_signal_from_api",
-    "create_self_hosted_setup",
-    "get_custom_layer_config",
     # Router factory
     "create_news_router",
+    "create_self_hosted_setup",
+    "get_api_client",
+    "get_custom_layer_config",
+    "get_geopolitical_provider",
+    "get_gold_geopolitical_signal",
+    "get_gold_signal_from_api",
 ]
 
 # Module metadata

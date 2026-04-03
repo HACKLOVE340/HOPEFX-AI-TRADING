@@ -49,13 +49,11 @@ import functools
 import json
 import logging
 import os
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -255,7 +253,7 @@ class LiveTradingGate:
                     gate_passed = bool(mse.get("sharpe_gate_passed", False))
                     n = int(mse.get("pooled_n_trades", 0))
                     se = float(mse.get("pooled_sharpe_se", 999.0))
-                    if gate_passed and se <= 0.10:  # noqa: PLR2004
+                    if gate_passed and se <= 0.10:
                         return True, (f"Sharpe gate passed (extended backtest): N={n}, SE={se:.3f}")
                     return False, (f"Sharpe gate BLOCKED (extended backtest): N={n}, SE={se:.3f}. Need SE<=0.10.")
 

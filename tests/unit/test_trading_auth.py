@@ -16,13 +16,12 @@ Covers:
 - Order side / type validation
 """
 
-import os
-import time
-from unittest.mock import AsyncMock, MagicMock
-
 import importlib.util
+import os
 import pathlib
 import sys
+import time
+from unittest.mock import AsyncMock, MagicMock
 
 import jwt
 import pytest
@@ -80,7 +79,7 @@ auth_module = _load_module("api.auth", _API_DIR / "auth.py")
 sys.modules["api"].auth = auth_module  # type: ignore[attr-defined]
 trading_module = _load_module("api.trading", _API_DIR / "trading.py")
 
-from api.auth import _ROLE_RANK, validate_order_symbol, validate_order_quantity
+from api.auth import _ROLE_RANK, validate_order_quantity, validate_order_symbol
 
 router = trading_module.router
 

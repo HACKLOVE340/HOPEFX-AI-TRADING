@@ -28,10 +28,9 @@ import logging
 import lzma
 import os
 import struct
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import ClassVar
 
 import aiohttp
 import pandas as pd
@@ -185,7 +184,7 @@ class DukascopyFetcher:
 
         try:
             async with session.get(url) as resp:
-                if resp.status == 404:  # noqa: PLR2004
+                if resp.status == 404:
                     # No data for this hour (weekend, holiday) — cache empty marker
                     self._save_cache(symbol, hour, b"")
                     return None
@@ -193,7 +192,7 @@ class DukascopyFetcher:
                 data = await resp.read()
                 if data:
                     self._save_cache(symbol, hour, data)
-                return data if data else None
+                return data or None
         except TimeoutError:
             logger.warning("Dukascopy timeout: %s", url)
             return None
@@ -243,7 +242,7 @@ class DukascopyFetcher:
         df = pd.DataFrame(records, columns=["ts_ms", "bid", "ask", "bid_vol", "ask_vol"])
         df["timestamp"] = pd.to_datetime(df["ts_ms"], unit="ms", utc=True)
         df = df.drop(columns=["ts_ms"])
-        df["mid"] = (df["bid"] + df["ask"]) / 2.0
+        df["mid"] = (df["bid"] + df["ask"]) / 2.0  # pylint: disable=unsubscriptable-object,unsupported-assignment-operation
         return df.set_index("timestamp").sort_index()
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -262,7 +261,7 @@ class DukascopyFetcher:
         and UTC DatetimeIndex.
         """
         # Enumerate all hours in range
-        hours: list[datetime] = []
+        hours: ClassVar[list[datetime]] = []
         cur = start.replace(minute=0, second=0, microsecond=0, tzinfo=UTC)
         end_utc = end.replace(tzinfo=UTC) if end.tzinfo is None else end
 

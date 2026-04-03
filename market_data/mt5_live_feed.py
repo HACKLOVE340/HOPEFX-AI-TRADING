@@ -26,8 +26,8 @@ import logging
 import threading
 import time
 import traceback
-from dataclasses import dataclass
 from collections.abc import Callable
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
@@ -318,7 +318,7 @@ class MT5LiveFeed:
             latency = time.time() - float(timestamp)
             with self._lock:
                 self._latency.append(latency)
-                if len(self._latency) > 100:  # noqa: PLR2004
+                if len(self._latency) > 100:
                     self._latency.pop(0)
         except (TypeError, ValueError) as exc:
             logger.warning("MT5LiveFeed: bad timestamp in tick: %s", exc)
@@ -326,7 +326,7 @@ class MT5LiveFeed:
     def _smooth_ticks(self, tick_data: dict) -> None:
         with self._lock:
             self._tick_buffer.append(tick_data)
-            if len(self._tick_buffer) > 10:  # noqa: PLR2004
+            if len(self._tick_buffer) > 10:
                 self._tick_buffer.pop(0)
 
     def get_smoothed_price(self) -> float | None:

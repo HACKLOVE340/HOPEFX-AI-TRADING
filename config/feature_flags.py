@@ -36,11 +36,9 @@ from __future__ import annotations
 
 import logging
 import os
-from enum import Enum
+from datetime import UTC
+from enum import StrEnum
 from typing import Any
-from datetime import timezone
-
-UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +47,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class FeatureStatus(str, Enum):
+class FeatureStatus(StrEnum):
     """Maturity level of a feature."""
 
     STABLE = "stable"
@@ -721,7 +719,7 @@ def check_phase2_gate() -> tuple[bool, str]:
     if not start_str:
         return False, ("OANDA_PAPER_RUN_START_UTC not set. Set to ISO-8601 UTC timestamp when the paper run started.")
     try:
-        start = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
+        start = datetime.fromisoformat(start_str)
         if start.tzinfo is None:
             start = start.replace(tzinfo=UTC)
         elapsed = datetime.now(UTC) - start
@@ -755,7 +753,7 @@ def check_phase3_gate() -> tuple[bool, str]:
     except ValueError:
         return False, f"OANDA_PAPER_FILL_COUNT is not an integer: {fill_count_str!r}"
 
-    if fill_count < 500:  # noqa: PLR2004
+    if fill_count < 500:
         return False, (
             f"Phase 3 gate: {fill_count} fills recorded, need >= 500. "
             "Set OANDA_PAPER_FILL_COUNT after the paper run completes."
@@ -766,7 +764,7 @@ def check_phase3_gate() -> tuple[bool, str]:
     if not start_str:
         return False, ("OANDA_PAPER_RUN_START_UTC not set. Set to ISO-8601 UTC timestamp when the paper run started.")
     try:
-        start = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
+        start = datetime.fromisoformat(start_str)
         if start.tzinfo is None:
             start = start.replace(tzinfo=UTC)
         elapsed = datetime.now(UTC) - start

@@ -7,9 +7,9 @@
 Unit tests for Phases 17-26 modules.
 """
 
-import pytest
 from datetime import datetime
 
+import pytest
 
 # ==================== Phase 17: Dashboard Tests ====================
 
@@ -21,7 +21,7 @@ class TestDashboardService:
     @pytest.fixture
     def dashboard_service(self):
         """Create dashboard service."""
-        from dashboard import DashboardService
+        from dashboard import DashboardService  # pylint: disable=no-name-in-module
 
         return DashboardService()
 
@@ -39,7 +39,7 @@ class TestDashboardService:
 
     def test_get_portfolio_summary(self, dashboard_service):
         """Test getting portfolio summary data."""
-        from dashboard import DashboardWidgetType
+        from dashboard import DashboardWidgetType  # pylint: disable=no-name-in-module
 
         data = dashboard_service.get_widget_data(DashboardWidgetType.PORTFOLIO_SUMMARY)
         assert "total_balance" in data
@@ -48,7 +48,7 @@ class TestDashboardService:
 
     def test_create_custom_layout(self, dashboard_service):
         """Test creating custom layout."""
-        from dashboard import DashboardWidget, DashboardWidgetType
+        from dashboard import DashboardWidget, DashboardWidgetType  # pylint: disable=no-name-in-module
 
         widgets = [
             DashboardWidget(

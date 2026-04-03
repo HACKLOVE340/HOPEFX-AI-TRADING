@@ -10,14 +10,12 @@ Strategy listings, pricing engine, subscription management, license validation
 
 import json
 import secrets
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from typing import Any
-from pathlib import Path
-from dataclasses import dataclass, field
-from enum import Enum
 import sqlite3
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from enum import Enum
+from pathlib import Path
+from typing import Any
 
 try:
     import stripe
@@ -390,14 +388,13 @@ class PricingEngine:
 
     def get_recommended_tier(self, trading_volume: float, account_balance: float) -> SubscriptionTier:
         """Recommend subscription tier based on user profile"""
-        if account_balance < 1000:  # noqa: PLR2004
+        if account_balance < 1000:
             return SubscriptionTier.FREE
-        elif trading_volume < 100000:  # noqa: PLR2004
+        if trading_volume < 100000:
             return SubscriptionTier.BASIC
-        elif trading_volume < 1000000:  # noqa: PLR2004
+        if trading_volume < 1000000:
             return SubscriptionTier.PRO
-        else:
-            return SubscriptionTier.ENTERPRISE
+        return SubscriptionTier.ENTERPRISE
 
 
 class LicenseManager:
@@ -716,9 +713,7 @@ class MarketplaceAPI:
         performance_metrics: dict[str, float],
     ) -> StrategyListing:
         """List new strategy on marketplace"""
-        import uuid
-
-        strategy_id = str(uuid.uuid4())
+        strategy_id = str(_uuid.uuid4())
 
         strategy = StrategyListing(
             strategy_id=strategy_id,
@@ -836,11 +831,6 @@ class PurchaseStatus(_enum.Enum):
     EXPIRED = "expired"
     CANCELLED = "cancelled"
     REFUNDED = "refunded"
-
-
-# Dataclass-style aliases
-from dataclasses import dataclass
-from datetime import datetime
 
 
 @dataclass
@@ -984,8 +974,8 @@ class StrategyMarketplace:
 
     def purchase_strategy(
         self,
-        buyer_id: str = None,
-        strategy_id: str = None,
+        buyer_id: str | None = None,
+        strategy_id: str | None = None,
         payment_method: str = "wallet",
     ) -> _Purchase | None:
         # Handle reversed positional call: purchase_strategy(strategy_id, buyer_id)
@@ -1093,7 +1083,7 @@ class StrategyMarketplace:
         category=None,
         price=0,
         tags=None,
-        creator_id: str = None,
+        creator_id: str | None = None,
     ) -> dict:
         """Accept either a StrategyListing object or keyword args."""
         # Resolve creator_id from positional arg or keyword
@@ -1114,8 +1104,7 @@ class StrategyMarketplace:
                 s.status = StrategyStatus.APPROVED
                 self._strategies[sid] = s
                 return {"status": "active", "id": sid}
-            else:
-                creator_id = listing_or_creator_id
+            creator_id = listing_or_creator_id
 
         # Keyword / positional creator_id form
         cid = creator_id or ""

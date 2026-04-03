@@ -35,9 +35,7 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Ensure project root is on the path regardless of where the script is called from
@@ -153,7 +151,7 @@ def retrain(
     """Load data, train models, save weights, return results dict."""
     df = _load_csv(symbol, csv_path, years)
 
-    if len(df) < 100:  # noqa: PLR2004
+    if len(df) < 100:
         raise ValueError(f"Only {len(df)} bars available for {symbol} — need at least 100. Run the backfill first.")
 
     # Resolve ml/training.py directly (avoids ml/training/ package shadowing)
@@ -207,14 +205,13 @@ def retrain(
         )
 
     manifest_path = out_dir / "manifest.json"
-    with open(manifest_path, "w") as f:
+    with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
     logger.info("Manifest written: %s", manifest_path)
 
     # Also update the regime router manifest with new accuracy data
     try:
-        from strategies.regime_router import update_regime_performance
-        from strategies.regime_router import detect_regime
+        from strategies.regime_router import detect_regime, update_regime_performance
 
         regime, _ = detect_regime(df)
         for name, info in results.items():
@@ -365,7 +362,7 @@ Examples:
                 print(f"  {name:<20} accuracy={acc}  f1={f1}")
                 print(f"  {'':20} saved → {path}")
         except Exception as exc:
-            logger.error("Failed for %s: %s", sym, exc, exc_info=True)
+            logger.exception("Failed for %s: %s", sym)
             all_ok = False
 
     if not all_ok:

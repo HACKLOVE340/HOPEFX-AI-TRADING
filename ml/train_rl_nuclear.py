@@ -161,10 +161,10 @@ if _GYM_AVAILABLE:
             reward = self._compute_reward(action, severity, vol, exposure)
 
             # Update internal state based on action
-            if action == 3:  # NUCLEAR  # noqa: PLR2004
+            if action == 3:  # NUCLEAR
                 self._nuclear_level = 3
                 self._trading_paused = True
-            elif action == 2:  # HEDGE  # noqa: PLR2004
+            elif action == 2:  # HEDGE
                 self._nuclear_level = min(self._nuclear_level, 2)
                 self._trading_paused = False
             elif action == 1:  # PAUSE
@@ -195,7 +195,7 @@ if _GYM_AVAILABLE:
 
             if self.reward_mode == "sharpe_minus_drawdown":
                 # Base: small positive reward for staying in market when safe
-                if not self._trading_paused and severity < 5:  # noqa: PLR2004
+                if not self._trading_paused and severity < 5:
                     pnl_sim = self.np_random.normal(0.0002, 0.001)
                     reward += pnl_sim / (vol + 1e-6)
 
@@ -204,29 +204,29 @@ if _GYM_AVAILABLE:
                 reward -= dd * 2.0
 
                 # Correct nuclear action on critical event
-                if action == 3 and severity >= 9:  # noqa: PLR2004
+                if action == 3 and severity >= 9:
                     reward += 5.0
-                elif action == 3 and severity < 5:  # noqa: PLR2004
+                elif action == 3 and severity < 5:
                     reward -= 3.0  # false nuclear — unnecessary halt
 
                 # Correct hedge on elevated event
-                if action == 2 and 7 <= severity < 9:  # noqa: PLR2004
+                if action == 2 and 7 <= severity < 9:
                     reward += 2.0
-                elif action == 2 and severity < 5:  # noqa: PLR2004
+                elif action == 2 and severity < 5:
                     reward -= 1.0
 
                 # Correct pause on moderate event
-                if action == 1 and 5 <= severity < 7:  # noqa: PLR2004
+                if action == 1 and 5 <= severity < 7:
                     reward += 1.0
 
                 # Missed nuclear — stayed normal during critical event
-                if action == 0 and severity >= 9:  # noqa: PLR2004
+                if action == 0 and severity >= 9:
                     reward -= 5.0
-                elif action == 0 and severity >= 7:  # noqa: PLR2004
+                elif action == 0 and severity >= 7:
                     reward -= 2.0
 
                 # Exposure penalty: high exposure + high severity = bad
-                if severity >= 7 and exposure > 0.5 and action == 0:  # noqa: PLR2004
+                if severity >= 7 and exposure > 0.5 and action == 0:
                     reward -= exposure * severity * 0.1
 
             return float(reward)
@@ -244,9 +244,9 @@ if _GYM_AVAILABLE:
              85 % of steps → normal market   [0,  4]
             """
             roll = self.np_random.random()
-            if roll < 0.05:  # noqa: PLR2004
+            if roll < 0.05:
                 severity = self.np_random.uniform(8.0, 10.0)
-            elif roll < 0.15:  # noqa: PLR2004
+            elif roll < 0.15:
                 severity = self.np_random.uniform(5.0, 8.0)
             else:
                 severity = self.np_random.uniform(0.0, 4.0)
@@ -302,7 +302,7 @@ def train(
 
     # Build vectorised + normalised training env
     def make_env():
-        env = NuclearDecisionEnv(episode_length=200, reward_mode=reward_mode)
+        env = NuclearDecisionEnv(episode_length=200, reward_mode=reward_mode)  # pylint: disable=possibly-used-before-assignment
         env = Monitor(env)
         return env
 
@@ -354,8 +354,8 @@ def train(
 
     # progress_bar requires tqdm+rich; degrade gracefully if absent
     try:
-        import tqdm  # noqa: F401
-        import rich  # noqa: F401
+        import rich  # pylint: disable=unused-import
+        import tqdm  # pylint: disable=unused-import
 
         _progress_bar = True
     except ImportError:

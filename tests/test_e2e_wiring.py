@@ -38,9 +38,10 @@ import os
 import sys
 
 import pytest
+from pathlib import Path
 
 # ── Ensure project root is on path ───────────────────────────────────────────
-_ROOT = os.path.dirname(os.path.dirname(__file__))
+_ROOT = os.path.dirname(Path(__file__).parent)
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
@@ -81,8 +82,8 @@ class TestStartupValidator:
         monkeypatch.delenv("REDIS_URL", raising=False)
 
         from config.startup_validator import (
-            validate_environment,
             StartupValidationError,
+            validate_environment,
         )
 
         with pytest.raises(StartupValidationError) as exc_info:
@@ -97,8 +98,8 @@ class TestStartupValidator:
         monkeypatch.setenv("SECURITY_JWT_SECRET", "CHANGE_ME_generate_a_random_48_char_secret")
 
         from config.startup_validator import (
-            validate_environment,
             StartupValidationError,
+            validate_environment,
         )
 
         with pytest.raises(StartupValidationError) as exc_info:
@@ -177,6 +178,7 @@ class TestMacroStoreWiring:
     def test_align_to_hourly_forward_fills(self):
         """align_to_hourly() forward-fills daily values to hourly bars."""
         import pandas as pd
+
         from ml.macro_store import MacroStore
 
         store = MacroStore()
@@ -195,6 +197,7 @@ class TestMacroStoreWiring:
     def test_missing_series_fills_zero(self):
         """Missing series in align_to_hourly() fills with 0.0."""
         import pandas as pd
+
         from ml.macro_store import MacroStore
 
         store = MacroStore()
@@ -207,11 +210,12 @@ class TestMacroStoreWiring:
     def test_macro_store_api_endpoint(self, monkeypatch):
         """GET /api/macro/store returns store state via TestClient."""
         _set_jwt(monkeypatch)
-        import ml.macro_store as _ms
-        from ml.macro_store import MacroStore
-        from fastapi.testclient import TestClient
-        from api.macro import router as macro_router
         from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        import ml.macro_store as _ms
+        from api.macro import router as macro_router
+        from ml.macro_store import MacroStore
 
         app = FastAPI()
         app.include_router(macro_router)
@@ -234,11 +238,12 @@ class TestMacroStoreWiring:
     def test_macro_store_update_endpoint(self, monkeypatch):
         """POST /api/macro/store/update upserts a value."""
         _set_jwt(monkeypatch)
-        import ml.macro_store as _ms
-        from ml.macro_store import MacroStore
-        from fastapi.testclient import TestClient
-        from api.macro import router as macro_router
         from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        import ml.macro_store as _ms
+        from api.macro import router as macro_router
+        from ml.macro_store import MacroStore
 
         app = FastAPI()
         app.include_router(macro_router)
@@ -267,11 +272,12 @@ class TestMacroStoreWiring:
     def test_macro_features_prefers_store(self, monkeypatch):
         """GET /api/macro/features returns store values when populated."""
         _set_jwt(monkeypatch)
-        import ml.macro_store as _ms
-        from ml.macro_store import MacroStore
-        from fastapi.testclient import TestClient
-        from api.macro import router as macro_router
         from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        import ml.macro_store as _ms
+        from api.macro import router as macro_router
+        from ml.macro_store import MacroStore
 
         app = FastAPI()
         app.include_router(macro_router)
@@ -301,10 +307,11 @@ class TestMLEndpoints:
     @pytest.fixture
     def ml_client(self, monkeypatch):
         _set_jwt(monkeypatch)
-        from fastapi.testclient import TestClient
-        from api.ml import router
-        from api.auth import get_current_user, require_role, TokenPayload
         from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.auth import TokenPayload, get_current_user, require_role
+        from api.ml import router
 
         # Stub auth so tests don't need a real JWT
         _stub_user = TokenPayload(sub="test-user", role="admin", exp=9999999999)
@@ -376,8 +383,6 @@ class TestCORSSafety:
         from fastapi.middleware.cors import CORSMiddleware
 
         # Simulate what app.py does
-        import os
-
         raw = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
         allowed = [o.strip() for o in raw.split(",") if o.strip()]
         assert "*" not in allowed, "Wildcard origin must not be used with allow_credentials=True"
@@ -409,10 +414,10 @@ class TestPreTradeGate:
         """
         _set_jwt(monkeypatch)
         from risk.pre_trade_gate import (
-            PreTradeGate,
             GateOrder,
-            TradeBlockedError,
+            PreTradeGate,
             RiskManagerError,
+            TradeBlockedError,
         )
 
         class _ExplodingConfig:
@@ -478,7 +483,7 @@ class TestKillSwitch:
 
         # Wrong token must raise PermissionError or return falsy — never silently deactivate
         try:
-            _result = ks.deactivate("wrong-token")
+            _result = ks.deactivate("wrong-token")  # pylint: disable=assignment-from-none
             # If it returns without raising, the switch must still be active
             assert ks.is_active(), "Deactivation with wrong token must not clear the kill switch"
         except PermissionError:
@@ -496,9 +501,10 @@ class TestSocialLeaderboard:
     @pytest.fixture
     def leaderboard_client(self, monkeypatch):
         _set_jwt(monkeypatch)
-        from fastapi.testclient import TestClient
-        from api.social_feed import leaderboard_router
         from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.social_feed import leaderboard_router
 
         app = FastAPI()
         app.include_router(leaderboard_router)

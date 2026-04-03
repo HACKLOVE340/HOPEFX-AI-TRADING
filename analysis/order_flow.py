@@ -19,12 +19,10 @@ Inspired by: Bookmap, Sierra Chart, OrderFlow.pro
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from dataclasses import dataclass
-from collections import defaultdict
 import math
+from collections import defaultdict
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -534,9 +532,9 @@ class OrderFlowAnalyzer:
             dominant_side = "neutral"
 
         abs_imbalance = abs(imbalance_ratio)
-        if abs_imbalance > 0.5:  # noqa: PLR2004
+        if abs_imbalance > 0.5:
             imbalance_strength = "strong"
-        elif abs_imbalance > 0.25:  # noqa: PLR2004
+        elif abs_imbalance > 0.25:
             imbalance_strength = "moderate"
         else:
             imbalance_strength = "weak"
@@ -575,9 +573,9 @@ class OrderFlowAnalyzer:
         selling_pressure = (sell_volume / total_volume * 100) if total_volume > 0 else 50
 
         # Signal
-        if imbalance_ratio > 0.3:  # noqa: PLR2004
+        if imbalance_ratio > 0.3:
             signal = "bullish"
-        elif imbalance_ratio < -0.3:  # noqa: PLR2004
+        elif imbalance_ratio < -0.3:
             signal = "bearish"
         else:
             signal = "neutral"
@@ -608,7 +606,7 @@ class OrderFlowAnalyzer:
         Absorption occurs when large volume trades happen
         but price doesn't move significantly.
         """
-        if len(trades) < 10:  # noqa: PLR2004
+        if len(trades) < 10:
             return []
 
         # Group trades by time windows
@@ -623,7 +621,7 @@ class OrderFlowAnalyzer:
                 window_trades.append(trade)
             else:
                 # Analyze window
-                if len(window_trades) >= 5:  # noqa: PLR2004
+                if len(window_trades) >= 5:
                     absorption = self._analyze_window_for_absorption(window_trades)
                     if absorption:
                         absorptions.append(absorption)
@@ -633,7 +631,7 @@ class OrderFlowAnalyzer:
                 window_trades = [trade]
 
         # Analyze last window
-        if len(window_trades) >= 5:  # noqa: PLR2004
+        if len(window_trades) >= 5:
             absorption = self._analyze_window_for_absorption(window_trades)
             if absorption:
                 absorptions.append(absorption)
@@ -654,7 +652,7 @@ class OrderFlowAnalyzer:
 
         # High volume but low price movement = absorption
         # This is a simplified heuristic
-        if total_volume > 0 and price_range / avg_price < 0.001:  # < 0.1% move  # noqa: PLR2004
+        if total_volume > 0 and price_range / avg_price < 0.001:  # < 0.1% move
             buy_vol = sum(t.size for t in trades if t.is_buy)
             sell_vol = sum(t.size for t in trades if t.is_sell)
 

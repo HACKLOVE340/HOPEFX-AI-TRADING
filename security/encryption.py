@@ -8,11 +8,11 @@ HOPEFX Security Module
 Encryption, key management, and secure credential storage
 """
 
-import os
 import base64
 import hashlib
-import secrets
 import logging
+import os
+import secrets
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,12 +20,12 @@ try:
     from cryptography.fernet import Fernet
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-    from cryptography.hazmat.primitives.ciphers.aead import AESGCM  # noqa: F401
+
 
     CRYPTO_AVAILABLE = True
 except ImportError:
     CRYPTO_AVAILABLE = False
-    logging.warning("cryptography not available, using base64 obfuscation only")
+    logger.warning("cryptography not available, using base64 obfuscation only")
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,8 @@ class SecureVault:
                 self._salt = secrets.token_bytes(16)
         else:
             self._salt = secrets.token_bytes(16)
-            logger.warning(f"Generated new salt: {self._salt.hex()[:16]}... (set HOPEFX_SALT for persistence)")
+            logger.warning("Generated new salt: %s... (set HOPEFX_SALT for persistence)", self._salt.hex()[:16])
+
 
         # Derive key using PBKDF2
         kdf = PBKDF2HMAC(
@@ -106,7 +107,8 @@ class SecureVault:
                     version=1,
                 )
             except Exception as e:
-                logger.error(f"Encryption failed: {e}")
+                logger.error("Encryption failed: %s", e)
+
 
         # Fallback to base64
         return EncryptedCredential(ciphertext=base64.b64encode(plaintext.encode()).decode(), salt="", version=0)
@@ -130,7 +132,8 @@ class SecureVault:
         try:
             return self._cipher.decrypt(credential.ciphertext.encode()).decode()
         except Exception as e:
-            logger.error(f"Decryption failed: {e}")
+            logger.error("Decryption failed: %s", e)
+
             return ""
 
     def rotate_key(self, new_master_key: str) -> bool:
@@ -148,7 +151,8 @@ class SecureVault:
             return True
 
         except Exception as e:
-            logger.error(f"Key rotation failed: {e}")
+            logger.error("Key rotation failed: %s", e)
+
             return False
 
 
@@ -181,11 +185,13 @@ class APICredentialManager:
             # Update cache
             self._cache[f"{service}:{key_name}"] = value
 
-            logger.info(f"Credential stored: {service}/{key_name}")
+            logger.info("Credential stored: %s/%s", service, key_name)
+
             return True
 
         except Exception as e:
-            logger.error(f"Failed to store credential: {e}")
+            logger.error("Failed to store credential: %s", e)
+
             return False
 
     def get_credential(self, service: str, key_name: str) -> str | None:
@@ -225,7 +231,8 @@ class APICredentialManager:
                 return True
             return False
         except Exception as e:
-            logger.error(f"Failed to delete credential: {e}")
+            logger.error("Failed to delete credential: %s", e)
+
             return False
 
     def _save_to_disk(self):
@@ -254,7 +261,8 @@ class APICredentialManager:
             self._credential_file.chmod(0o600)  # Owner read/write only
 
         except Exception as e:
-            logger.error(f"Failed to save credentials: {e}")
+            logger.error("Failed to save credentials: %s", e)
+
 
     def _load_from_disk(self):
         """Load credentials from disk"""
@@ -276,10 +284,12 @@ class APICredentialManager:
                         version=cred_data.get("version", 1),
                     )
 
-            logger.info(f"Loaded credentials for {len(self._credentials)} services")
+            logger.info("Loaded credentials for %s services", len(self._credentials))
+
 
         except Exception as e:
-            logger.error(f"Failed to load credentials: {e}")
+            logger.error("Failed to load credentials: %s", e)
+
 
     def get_all_services(self) -> list[str]:
         """List all services with stored credentials"""

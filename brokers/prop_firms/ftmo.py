@@ -16,9 +16,7 @@ import hmac
 import json
 import logging
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -154,7 +152,7 @@ class FTMOBroker:
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=30),
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     error_data = await resp.json()
                     raise RuntimeError(f"FTMO API Error: {error_data}")
 
@@ -189,7 +187,8 @@ class FTMOBroker:
             logger.error("FTMO API timeout")
             raise RuntimeError("FTMO API request timed out") from None
         except Exception as e:
-            logger.error(f"Failed to fetch FTMO metrics: {e}")
+            logger.error("Failed to fetch FTMO metrics: %s", e)
+
             raise
 
     async def place_order(
@@ -264,7 +263,8 @@ class FTMOBroker:
                 return await resp.json()
 
         except Exception as e:
-            logger.error(f"Failed to place FTMO order: {e}")
+            logger.error("Failed to place FTMO order: %s", e)
+
             raise
 
     async def get_trade_history(
@@ -286,7 +286,7 @@ class FTMOBroker:
                 headers=headers,
                 params=params,
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     raise RuntimeError(await resp.json())
 
                 data = await resp.json()
@@ -295,7 +295,8 @@ class FTMOBroker:
                 return df
 
         except Exception as e:
-            logger.error(f"Failed to fetch trade history: {e}")
+            logger.error("Failed to fetch trade history: %s", e)
+
             raise
 
     async def check_violation(self) -> tuple[bool, str | None]:
@@ -313,7 +314,7 @@ class FTMOBroker:
         if metrics.remaining_monthly_loss <= 0:
             return True, "Monthly loss limit exceeded"
 
-        if metrics.drawdown >= 0.05:  # 5% max drawdown  # noqa: PLR2004
+        if metrics.drawdown >= 0.05:  # 5% max drawdown
             return True, "Maximum drawdown exceeded"
 
         return False, None
@@ -337,7 +338,8 @@ class FTMOBroker:
                     raise RuntimeError(await resp.json())
                 return await resp.json()
         except Exception as e:
-            logger.error(f"Payout request failed: {e}")
+            logger.error("Payout request failed: %s", e)
+
             raise
 
 
@@ -345,7 +347,6 @@ class FTMOBroker:
 # MT5-based FTMOConnector (used by tests and BrokerFactory)
 # ---------------------------------------------------------------------------
 
-from typing import Any as _Any
 
 try:
     from brokers.mt5 import MT5Connector as _MT5Connector
@@ -358,7 +359,7 @@ try:
             "live": ["FTMO-Live", "FTMO-Live2"],
         }
 
-        def __init__(self, config: dict[str, _Any]):
+        def __init__(self, config: dict[str, Any]):
             cfg = dict(config)
             self.challenge_type = cfg.get("challenge_type", "demo")
             if "server" not in cfg:
@@ -372,7 +373,7 @@ try:
                 f"FTMOConnector initialized: {self.challenge_type} / {self.server}",
             )
 
-        def get_ftmo_rules(self) -> dict[str, _Any]:
+        def get_ftmo_rules(self) -> dict[str, Any]:
             return {
                 "max_daily_loss": "5%",
                 "max_total_drawdown": "10%",
@@ -382,12 +383,12 @@ try:
                 "scaling": "up to $2M",
             }
 
-        def check_ftmo_compliance(self) -> dict[str, _Any]:
+        def check_ftmo_compliance(self) -> dict[str, Any]:
             info = self.get_account_info()
             if info is None:
                 return {"compliant": False, "reason": "not connected"}
             daily_loss_pct = (info.balance - info.equity) / info.balance * 100 if info.balance else 0
-            compliant = daily_loss_pct < 5.0  # noqa: PLR2004
+            compliant = daily_loss_pct < 5.0
             return {
                 "compliant": compliant,
                 "equity": info.equity,

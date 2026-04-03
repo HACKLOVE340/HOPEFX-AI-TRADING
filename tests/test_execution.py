@@ -4,17 +4,19 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
+# pylint: disable=not-callable
 """
 Tests for execution module.
 """
 
-import pytest
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from execution import PaperExecutor, SmartOrderRouter, Order, OrderStatus
+from execution import Order, OrderStatus, PaperExecutor, SmartOrderRouter  # pylint: disable=no-name-in-module
 
 
 class TestPaperExecutor:

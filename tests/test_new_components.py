@@ -18,17 +18,16 @@ import json
 import tempfile
 from pathlib import Path
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 import pytest
-
 
 # ── PropEnforcer ──────────────────────────────────────────────────────────────
 
 
 class TestPropEnforcer:
     def _make(self, **kwargs):
-        from risk.compliance.prop_enforcer import PropEnforcer, PropConfig
+        from risk.compliance.prop_enforcer import PropConfig, PropEnforcer
 
         cfg = PropConfig(**kwargs)
         e = PropEnforcer.__new__(PropEnforcer)
@@ -155,9 +154,9 @@ class TestEX5SignalExporter:
     def test_poll_fill_returns_result_on_filled(self):
         from brokers.mt5_bridge import (
             EX5SignalExporter,
+            FillStatus,
             MT5Order,
             OrderSide,
-            FillStatus,
         )
 
         with tempfile.TemporaryDirectory() as d:
@@ -205,6 +204,7 @@ class TestEX5SignalExporter:
 
     def test_cleanup_removes_old_files(self):
         import time
+
         from brokers.mt5_bridge import EX5SignalExporter, MT5Order, OrderSide
 
         with tempfile.TemporaryDirectory() as d:
@@ -234,7 +234,7 @@ class TestEX5SignalExporter:
 
 class TestPaperTradingHelpers:
     def test_trade_logger_creates_csv(self):
-        from scripts.paper_trading_starter import TradeLogger, CSV_HEADERS
+        from scripts.paper_trading_starter import CSV_HEADERS, TradeLogger
 
         with tempfile.TemporaryDirectory() as d:
             path = Path(d) / "trades.csv"
@@ -244,14 +244,14 @@ class TestPaperTradingHelpers:
             logger.log(record)
             import csv
 
-            with open(path) as _fh:
+            with open(path, encoding="utf-8") as _fh:
                 rows = list(csv.DictReader(_fh))
             assert len(rows) == 1
             assert rows[0]["instrument"] == "test"
 
     def test_write_status_creates_json(self):
-        from scripts.paper_trading_starter import write_status
         import scripts.paper_trading_starter as pts
+        from scripts.paper_trading_starter import write_status
 
         with tempfile.TemporaryDirectory() as d:
             orig = pts.STATUS_JSON

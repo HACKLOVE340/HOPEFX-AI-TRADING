@@ -53,7 +53,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-_ROOT = os.path.dirname(os.path.dirname(__file__))
+_ROOT = os.path.dirname(Path(__file__).parent)
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
@@ -88,7 +88,7 @@ class TestFeaturesExtended:
         from ml.features_extended import build_extended_features
 
         df = _make_ohlcv(600)
-        X, y = build_extended_features(df, use_filtered_target=False, min_move_atr=0.0)
+        X, _ = build_extended_features(df, use_filtered_target=False, min_move_atr=0.0)
         assert X.shape[1] >= 150, f"Expected >=150 features, got {X.shape[1]}"
         assert len(X) > 0
 
@@ -96,7 +96,7 @@ class TestFeaturesExtended:
         from ml.features_extended import build_extended_features
 
         df = _make_ohlcv(600)
-        X, y = build_extended_features(df, use_filtered_target=False, min_move_atr=0.0)
+        X, _ = build_extended_features(df, use_filtered_target=False, min_move_atr=0.0)
         assert not X.isnull().any().any(), "NaN values in feature matrix"
         assert not np.isinf(X.values).any(), "Inf values in feature matrix"
 
@@ -439,9 +439,10 @@ class TestStatusEndpoints:
     def client(self):
         os.environ.setdefault("SECURITY_JWT_SECRET", "test-secret-key-32chars-minimum!!")
         os.environ.setdefault("APP_ENV", "development")
-        from fastapi.testclient import TestClient
-        from api.status import router
         from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.status import router
 
         app = FastAPI()
         app.include_router(router)

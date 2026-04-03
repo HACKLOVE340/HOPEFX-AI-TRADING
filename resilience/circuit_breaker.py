@@ -12,9 +12,7 @@ Prevents cascade failures and ensures system stability
 import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum, auto
 
 
@@ -37,7 +35,7 @@ class CircuitBreaker:
     Circuit breaker pattern for external service calls.
     """
 
-    def __init__(self, name: str, config: CircuitBreakerConfig = None):
+    def __init__(self, name: str, config: CircuitBreakerConfig | None = None):
         self.name = name
         self.config = config or CircuitBreakerConfig()
         self.state = CircuitState.CLOSED

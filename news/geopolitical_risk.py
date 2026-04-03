@@ -38,15 +38,14 @@ This module is particularly valuable for XAU/USD (Gold) trading since:
 Author: HOPEFX Development Team
 """
 
-import logging
-from typing import Any
-from dataclasses import dataclass, field
-from enum import Enum
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-import requests
 import json
+import logging
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from enum import Enum
+from typing import Any
+
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -352,7 +351,8 @@ class GeopoliticalRiskProvider:
         # Historical events for trend analysis
         self.event_history = []
 
-        logger.info(f"GeopoliticalRiskProvider initialized with layers: {self.data_layers}")
+        logger.info("GeopoliticalRiskProvider initialized with layers: %s", self.data_layers)
+
 
     def get_current_events(self, force_refresh: bool = False) -> list[GeopoliticalEvent]:
         """
@@ -401,7 +401,8 @@ class GeopoliticalRiskProvider:
             self.event_history = [e for e in self.event_history if e.timestamp > cutoff]
 
         except Exception as e:
-            logger.error(f"Error fetching geopolitical events: {e}")
+            logger.error("Error fetching geopolitical events: %s", e)
+
             # Return cached data if available
             events = self._cache.get("events", [])
 
@@ -611,16 +612,14 @@ class GeopoliticalRiskProvider:
                     ts = datetime.now(UTC)
 
                 event = GeopoliticalEvent(
-                    event_id=f"gdelt_{hash(url_str) & 0xFFFFFFFF:08x}",
                     event_type=GeopoliticalEventType.POLITICAL_UNREST,
                     title=title,
-                    description=f"Source: {domain}",
+                    description=f"Source: {domain} | {url_str}",
                     severity=RiskSeverity.MEDIUM,
                     region="Global",
                     countries=[],
                     timestamp=ts,
                     source="GDELT",
-                    url=url_str,
                 )
                 events.append(event)
             logger.debug("GDELT returned %d articles", len(events))
@@ -669,7 +668,7 @@ class GeopoliticalRiskProvider:
                 # Parse timestamp
                 raw_ts = props.get("date") or props.get("timestamp") or props.get("updated")
                 try:
-                    ts = datetime.fromisoformat(str(raw_ts).replace("Z", "+00:00"))
+                    ts = datetime.fromisoformat(str(raw_ts))
                     if ts.tzinfo is None:
                         ts = ts.replace(tzinfo=UTC)
                 except (TypeError, ValueError):
@@ -679,7 +678,7 @@ class GeopoliticalRiskProvider:
                 coordinates: tuple[float, float] | None = None
                 if geom.get("type") == "Point":
                     coords = geom.get("coordinates", [])
-                    if len(coords) >= 2:  # noqa: PLR2004
+                    if len(coords) >= 2:
                         coordinates = (float(coords[1]), float(coords[0]))
 
                 # Confidence from API quality score (0–1), default 0.8
@@ -743,29 +742,28 @@ class GeopoliticalRiskProvider:
         impact_score += severity_impact.get(event.severity, 0)
 
         # Region impact (gold-sensitive regions)
-        for _region_key, countries in self.GOLD_SENSITIVE_REGIONS.items():
+        for countries in self.GOLD_SENSITIVE_REGIONS.values():
             if any(country in countries for country in event.countries):
                 impact_score += 1
                 break
 
         # Check for high-impact keywords
         text = f"{event.title} {event.description}".lower()
-        for _category, keywords in self.HIGH_IMPACT_KEYWORDS.items():
+        for keywords in self.HIGH_IMPACT_KEYWORDS.values():
             if any(keyword in text for keyword in keywords):
                 impact_score += 1
                 break
 
         # Map score to gold impact
-        if impact_score >= 6:  # noqa: PLR2004
+        if impact_score >= 6:
             return GoldImpact.STRONGLY_BULLISH
-        elif impact_score >= 4:  # noqa: PLR2004
+        if impact_score >= 4:
             return GoldImpact.BULLISH
-        elif impact_score >= 2:  # noqa: PLR2004
+        if impact_score >= 2:
             return GoldImpact.NEUTRAL
-        elif impact_score >= 1:
+        if impact_score >= 1:
             return GoldImpact.BEARISH
-        else:
-            return GoldImpact.NEUTRAL
+        return GoldImpact.NEUTRAL
 
     def _calculate_risk_score(self, event: GeopoliticalEvent) -> float:
         """Calculate risk score for an event (0-100)"""
@@ -789,7 +787,7 @@ class GeopoliticalRiskProvider:
             score += 15
 
         # Adjust by region significance
-        for _region_key, countries in self.GOLD_SENSITIVE_REGIONS.items():
+        for countries in self.GOLD_SENSITIVE_REGIONS.values():
             if any(country in countries for country in event.countries):
                 score += 10
                 break
@@ -849,20 +847,19 @@ class GeopoliticalRiskProvider:
         bearish_count = sum(1 for e in events if e.gold_impact in [GoldImpact.BEARISH, GoldImpact.STRONGLY_BEARISH])
 
         # Consider global risk level
-        if global_risk >= 70:  # noqa: PLR2004
+        if global_risk >= 70:
             return GoldImpact.STRONGLY_BULLISH
-        elif global_risk >= 50 and bullish_count > bearish_count:  # noqa: PLR2004
+        if global_risk >= 50 and bullish_count > bearish_count:
             return GoldImpact.BULLISH
 
         # Default based on event balance
         if bullish_count > bearish_count * 2:
             return GoldImpact.STRONGLY_BULLISH
-        elif bullish_count > bearish_count:
+        if bullish_count > bearish_count:
             return GoldImpact.BULLISH
-        elif bearish_count > bullish_count:
+        if bearish_count > bullish_count:
             return GoldImpact.BEARISH
-        else:
-            return GoldImpact.NEUTRAL
+        return GoldImpact.NEUTRAL
 
     def _identify_high_risk_regions(self, events: list[GeopoliticalEvent]) -> list[str]:
         """Identify regions with highest risk"""
@@ -877,7 +874,7 @@ class GeopoliticalRiskProvider:
         sorted_regions = sorted(region_scores.items(), key=lambda x: -x[1])
 
         # Return top 5 high-risk regions
-        return [region for region, score in sorted_regions[:5] if score >= 30]  # noqa: PLR2004
+        return [region for region, score in sorted_regions[:5] if score >= 30]
 
     def _get_country_risks(self, events: list[GeopoliticalEvent]) -> dict[str, CountryRisk]:
         """Calculate risk for individual countries"""
@@ -919,10 +916,10 @@ class GeopoliticalRiskProvider:
         recommendations = []
 
         # Risk-based recommendations
-        if global_risk >= 70:  # noqa: PLR2004
+        if global_risk >= 70:
             recommendations.append("HIGH ALERT: Elevated geopolitical risk - Consider increasing gold allocation")
             recommendations.append("Reduce exposure to risk assets during heightened uncertainty")
-        elif global_risk >= 50:  # noqa: PLR2004
+        elif global_risk >= 50:
             recommendations.append("MODERATE RISK: Monitor developing situations - Gold as portfolio hedge")
         else:
             recommendations.append("LOW RISK: Geopolitical environment relatively stable")
@@ -938,7 +935,7 @@ class GeopoliticalRiskProvider:
         # Region-specific recommendations
         conflict_events = [e for e in events if e.event_type == GeopoliticalEventType.CONFLICT]
         if conflict_events:
-            regions = set(e.region for e in conflict_events)
+            regions = {e.region for e in conflict_events}
             recommendations.append(f"Active conflicts in {', '.join(regions)} - Monitor for escalation")
 
         # Sanctions recommendations
@@ -957,9 +954,9 @@ class GeopoliticalRiskProvider:
 
         # More events = more data = higher confidence
         event_count = len(assessment.key_events)
-        if event_count >= 5:  # noqa: PLR2004
+        if event_count >= 5:
             confidence += 0.2
-        elif event_count >= 3:  # noqa: PLR2004
+        elif event_count >= 3:
             confidence += 0.1
 
         # Clear direction = higher confidence
@@ -972,7 +969,7 @@ class GeopoliticalRiskProvider:
             confidence += 0.1
 
         # High risk = higher confidence in bullish gold
-        if assessment.global_risk_score >= 60:  # noqa: PLR2004
+        if assessment.global_risk_score >= 60:
             confidence += 0.1
 
         return min(confidence, 1.0)
@@ -993,7 +990,8 @@ class WorldMonitorIntegration:
     World Monitor URL structure (from user's link):
     https://worldmonitor.app/?lat=46.4000&lon=-163.8957&zoom=2.50&view=mena&timeRange=7d&layers=conflicts,hotspots,sanctions,weather,outages,natural
 
-    Parameters:
+    Parameters
+    ----------
     - lat/lon: Map center coordinates
     - zoom: Map zoom level
     - view: Regional view preset (global, americas, europe, mena, asia, etc.)
@@ -1219,7 +1217,8 @@ class WorldMonitorAPIClient:
         self._cache_timestamps: dict[str, datetime] = {}
         self.cache_ttl = self.config.get("cache_ttl", 300)  # 5 minutes
 
-        logger.info(f"WorldMonitorAPIClient initialized with base_url: {self.base_url}")
+        logger.info("WorldMonitorAPIClient initialized with base_url: %s", self.base_url)
+
 
     def _make_request(self, endpoint: str, params: dict | None = None) -> dict | None:
         """
@@ -1245,10 +1244,12 @@ class WorldMonitorAPIClient:
             return response.json()
 
         except requests.exceptions.RequestException as e:
-            logger.warning(f"World Monitor API request failed: {endpoint} - {e}")
+            logger.warning("World Monitor API request failed: %s - %s", endpoint, e)
+
             return None
         except json.JSONDecodeError as e:
-            logger.warning(f"World Monitor API response not JSON: {endpoint} - {e}")
+            logger.warning("World Monitor API response not JSON: %s - %s", endpoint, e)
+
             return None
 
     def _get_cached_or_fetch(self, layer: str, params: dict | None = None) -> dict | None:
@@ -1266,7 +1267,8 @@ class WorldMonitorAPIClient:
         # Fetch from API
         endpoint = self.API_ENDPOINTS.get(layer)
         if not endpoint:
-            logger.warning(f"Unknown layer: {layer}")
+            logger.warning("Unknown layer: %s", layer)
+
             return None
 
         data = self._make_request(endpoint, params)
@@ -1464,11 +1466,11 @@ class WorldMonitorAPIClient:
         final_score = total_score / total_weight if total_weight > 0 else 0
 
         # Determine gold outlook
-        if final_score >= 70:  # noqa: PLR2004
+        if final_score >= 70:
             outlook = GoldImpact.STRONGLY_BULLISH
-        elif final_score >= 50:  # noqa: PLR2004
+        elif final_score >= 50:
             outlook = GoldImpact.BULLISH
-        elif final_score >= 30:  # noqa: PLR2004
+        elif final_score >= 30:
             outlook = GoldImpact.NEUTRAL
         else:
             outlook = GoldImpact.BEARISH

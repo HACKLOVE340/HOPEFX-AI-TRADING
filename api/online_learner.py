@@ -32,15 +32,13 @@ Endpoints
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from api.auth import get_current_user, require_role, TokenPayload
+from api.auth import TokenPayload, get_current_user, require_role
 
 logger = logging.getLogger(__name__)
 
@@ -57,10 +55,11 @@ def _get_registry() -> dict[str, Any]:
 
         return _learner_registry
     except ImportError as exc:
+        logger.error("ml.online_learner unavailable: %s", exc)
         raise HTTPException(
             status_code=503,
-            detail=f"ml.online_learner unavailable: {exc}",
-        ) from exc
+            detail="ml.online_learner unavailable — check server logs",
+        ) from None
 
 
 def _get_learner(symbol: str):
@@ -70,10 +69,11 @@ def _get_learner(symbol: str):
 
         return get_online_learner(symbol=symbol)
     except ImportError as exc:
+        logger.error("ml.online_learner unavailable: %s", exc)
         raise HTTPException(
             status_code=503,
-            detail=f"ml.online_learner unavailable: {exc}",
-        ) from exc
+            detail="ml.online_learner unavailable — check server logs",
+        ) from None
 
 
 def _fetch_bars(symbol: str, lookback: int = 200):
@@ -105,10 +105,11 @@ def _fetch_bars(symbol: str, lookback: int = 200):
         df.columns = [c.lower() if isinstance(c, str) else c[0].lower() for c in df.columns]
         return df.tail(lookback)
     except Exception as exc:
+        logger.warning("Could not fetch OHLCV for %s: %s", symbol, exc)
         raise HTTPException(
             status_code=502,
-            detail=f"Could not fetch OHLCV for {symbol}: {exc}",
-        ) from exc
+            detail=f"Could not fetch OHLCV for {symbol} — check server logs",
+        ) from None
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -293,12 +294,12 @@ async def partial_fit(
             None,
             functools.partial(learner.partial_fit, bars),
         )
-    except Exception as exc:
-        logger.exception("partial_fit failed for %s: %s", req.symbol, exc)
+    except Exception:
+        logger.exception("partial_fit failed for %s: %s", req.symbol)
         raise HTTPException(
             status_code=500,
-            detail=f"partial_fit raised: {exc}",
-        ) from exc
+            detail="Online learning update failed — check server logs",
+        ) from None
 
     updated_at = datetime.now(UTC).isoformat()
     # Stamp last_fit_at on the learner for status reporting
@@ -404,10 +405,11 @@ async def reset_online_learner(
 
         removed = _reset(symbol=req.symbol)
     except Exception as exc:
+        logger.error("reset_online_learner failed for %s: %s", req.symbol, exc)
         raise HTTPException(
             status_code=500,
-            detail=f"reset_online_learner failed: {exc}",
-        ) from exc
+            detail="Online learner reset failed — check server logs",
+        ) from None
 
     msg = (
         f"OnlineLearnerStore for {req.symbol.upper()} removed from registry — "

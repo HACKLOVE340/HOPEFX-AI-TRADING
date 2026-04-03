@@ -16,13 +16,13 @@ Covers:
 """
 
 import logging
-import pytest
-import pandas as pd
+from unittest.mock import MagicMock, patch
+
 import numpy as np
-from unittest.mock import patch, MagicMock
+import pandas as pd
+import pytest
 
 from strategies.base import BaseStrategy, StrategyConfig, StrategyStatus
-
 
 # ---------------------------------------------------------------------------
 # Helper: create a concrete old-style strategy instance
@@ -55,8 +55,8 @@ def make_concrete(cls, **params):
         self.logger = logging.getLogger(cls.__name__)
 
     with patch.object(BaseStrategy, "__init__", _base_init):
-        s = Concrete.__new__(Concrete)
-        Concrete.__init__(s, "TestStrategy", "XAUUSD", MagicMock(), **params)
+        s = Concrete.__new__(Concrete)  # pylint: disable=no-value-for-parameter
+        s.__init__("TestStrategy", "XAUUSD", MagicMock(), **params)
 
     return s
 
@@ -420,19 +420,10 @@ class TestBollingerBandsSignalPaths:
         """Cover lines 106-107: prev_price < prev_lower, current_price > current_lower."""
         n = 25
         prices = [1900.0] * n
-        df = _df(prices)
+        _df(prices)
 
         # Construct bands such that prev was below lower, now crosses above
-        sma_val = 1900.0
-        std_val = 5.0
-        sma_val + 2 * std_val  # 1910
-        sma_val - 2 * std_val  # 1890
-
-        # Override the calculation
-        import pandas as pd
-
-        idx = df.index
-        pd.Series(prices, index=idx)
+        # upper_band = sma + 2*std = 1910, lower_band = sma - 2*std = 1890
 
         # Hack: patch rolling calc by changing close values
         # prev price below lower band, current price above lower band
@@ -505,7 +496,7 @@ class TestBollingerBandsSignalPaths:
         # but price stays in the middle (0.1 < percent_b < 0.9)
         base_prices = [1900.0 + np.random.uniform(-2, 2) for _ in range(24)]
         # Final price at exactly the mean (percent_b ≈ 0.5)
-        prices = base_prices + [sum(base_prices[-20:]) / 20]
+        prices = [*base_prices, sum(base_prices[-20:]) / 20]
         df = _df(prices)
         result = strat.generate_signal(df)
         assert result["type"] == "HOLD"

@@ -59,7 +59,7 @@ from sklearn.preprocessing import StandardScaler
 logger = logging.getLogger(__name__)
 
 try:
-    from research.pipeline.models_ensemble import EnsemblePredictor  # noqa: F401
+    from research.pipeline.models_ensemble import EnsemblePredictor
 
     ENSEMBLE_AVAILABLE = True
 except ImportError:
@@ -224,7 +224,7 @@ class _RegimeSpecialist:
         self._fitted = False
 
     def fit(self, X: pd.DataFrame, y: np.ndarray) -> _RegimeSpecialist:
-        if len(np.unique(y)) < 2:  # noqa: PLR2004
+        if len(np.unique(y)) < 2:
             logger.warning("Regime %d: only one class — skipping", self.regime_id)
             return self
         if len(y) < self._MIN_SAMPLES:

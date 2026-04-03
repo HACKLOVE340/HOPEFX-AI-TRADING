@@ -23,7 +23,6 @@ sys.path.insert(0, str(_ROOT))
 
 import scripts.fill_tracker as ft
 
-
 # ── fixtures ──────────────────────────────────────────────────────────────────
 
 
@@ -34,7 +33,7 @@ def tmp_data_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(ft, "FILL_LEDGER", tmp_path / "fill_tracker.json")
     monkeypatch.setattr(ft, "GATE_FILE", tmp_path / "paper_trading_gate.json")
     monkeypatch.setattr(ft, "FILL_GATE_TARGET", 500)
-    yield tmp_path
+    return tmp_path
 
 
 def _make_fill(txn_id: int, instrument: str = "XAU_USD", pl: str = "10.00") -> dict:

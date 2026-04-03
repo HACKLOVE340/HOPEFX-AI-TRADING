@@ -30,9 +30,7 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -206,10 +204,10 @@ class BasePropFirmBroker(ABC):
         if metrics.remaining_monthly_loss <= 0:
             return True, "Monthly loss limit exceeded"
 
-        if metrics.daily_drawdown_percentage >= 5.0:  # noqa: PLR2004
+        if metrics.daily_drawdown_percentage >= 5.0:
             return True, "Maximum daily drawdown exceeded"
 
-        if metrics.monthly_drawdown_percentage >= 10.0:  # noqa: PLR2004
+        if metrics.monthly_drawdown_percentage >= 10.0:
             return True, "Maximum monthly drawdown exceeded"
 
         return False, None
@@ -277,7 +275,7 @@ class FTMOBroker(BasePropFirmBroker):
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=30),
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     error = await resp.json()
                     raise RuntimeError(f"FTMO API error: {error}")
 
@@ -327,7 +325,8 @@ class FTMOBroker(BasePropFirmBroker):
             logger.error("FTMO API timeout")
             raise RuntimeError("FTMO API request timed out") from None
         except Exception as e:
-            logger.error(f"Failed to fetch FTMO metrics: {e}")
+            logger.error("Failed to fetch FTMO metrics: %s", e)
+
             raise
 
     async def place_order(
@@ -386,7 +385,8 @@ class FTMOBroker(BasePropFirmBroker):
                 return await resp.json()
 
         except Exception as e:
-            logger.error(f"Failed to place FTMO order: {e}")
+            logger.error("Failed to place FTMO order: %s", e)
+
             raise
 
     async def get_open_trades(self) -> list[PropFirmTrade]:
@@ -402,7 +402,7 @@ class FTMOBroker(BasePropFirmBroker):
                 f"{self.base_url}{endpoint}",
                 headers=headers,
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     raise RuntimeError(await resp.json())
 
                 data = await resp.json()
@@ -423,7 +423,8 @@ class FTMOBroker(BasePropFirmBroker):
                 return trades
 
         except Exception as e:
-            logger.error(f"Failed to fetch FTMO open trades: {e}")
+            logger.error("Failed to fetch FTMO open trades: %s", e)
+
             raise
 
     async def close_trade(self, trade_id: str) -> dict[str, Any]:
@@ -445,7 +446,8 @@ class FTMOBroker(BasePropFirmBroker):
                 return await resp.json()
 
         except Exception as e:
-            logger.error(f"Failed to close FTMO trade: {e}")
+            logger.error("Failed to close FTMO trade: %s", e)
+
             raise
 
     async def get_trade_history(self, limit: int = 100) -> list[PropFirmTrade]:
@@ -462,7 +464,7 @@ class FTMOBroker(BasePropFirmBroker):
                 headers=headers,
                 params={"limit": limit},
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     raise RuntimeError(await resp.json())
 
                 data = await resp.json()
@@ -487,7 +489,8 @@ class FTMOBroker(BasePropFirmBroker):
                 return trades
 
         except Exception as e:
-            logger.error(f"Failed to fetch FTMO trade history: {e}")
+            logger.error("Failed to fetch FTMO trade history: %s", e)
+
             raise
 
 
@@ -527,7 +530,7 @@ class The5ersBroker(BasePropFirmBroker):
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=30),
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     raise RuntimeError(f"The5ers API error: {await resp.text()}")
 
                 data = await resp.json()
@@ -561,7 +564,8 @@ class The5ersBroker(BasePropFirmBroker):
                 )
 
         except Exception as e:
-            logger.error(f"Failed to fetch The5ers metrics: {e}")
+            logger.error("Failed to fetch The5ers metrics: %s", e)
+
             raise
 
     async def place_order(
@@ -611,7 +615,8 @@ class The5ersBroker(BasePropFirmBroker):
                 return await resp.json()
 
         except Exception as e:
-            logger.error(f"Failed to place The5ers order: {e}")
+            logger.error("Failed to place The5ers order: %s", e)
+
             raise
 
     async def get_open_trades(self) -> list[PropFirmTrade]:
@@ -630,7 +635,7 @@ class The5ersBroker(BasePropFirmBroker):
                 f"{self.base_url}{endpoint}",
                 headers=headers,
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     raise RuntimeError(await resp.json())
 
                 data = await resp.json()
@@ -651,7 +656,8 @@ class The5ersBroker(BasePropFirmBroker):
                 return trades
 
         except Exception as e:
-            logger.error(f"Failed to fetch The5ers positions: {e}")
+            logger.error("Failed to fetch The5ers positions: %s", e)
+
             raise
 
     async def close_trade(self, trade_id: str) -> dict[str, Any]:
@@ -676,7 +682,8 @@ class The5ersBroker(BasePropFirmBroker):
                 return await resp.json()
 
         except Exception as e:
-            logger.error(f"Failed to close The5ers position: {e}")
+            logger.error("Failed to close The5ers position: %s", e)
+
             raise
 
     async def get_trade_history(self, limit: int = 100) -> list[PropFirmTrade]:
@@ -696,7 +703,7 @@ class The5ersBroker(BasePropFirmBroker):
                 headers=headers,
                 params={"limit": limit},
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     raise RuntimeError(await resp.json())
 
                 data = await resp.json()
@@ -720,7 +727,8 @@ class The5ersBroker(BasePropFirmBroker):
                 return trades
 
         except Exception as e:
-            logger.error(f"Failed to fetch The5ers history: {e}")
+            logger.error("Failed to fetch The5ers history: %s", e)
+
             raise
 
 
@@ -766,7 +774,7 @@ class MyForexFundsBroker(BasePropFirmBroker):
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=30),
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     raise RuntimeError(f"MyForexFunds API error: {await resp.text()}")
 
                 data = await resp.json()
@@ -802,7 +810,8 @@ class MyForexFundsBroker(BasePropFirmBroker):
                 )
 
         except Exception as e:
-            logger.error(f"Failed to fetch MyForexFunds metrics: {e}")
+            logger.error("Failed to fetch MyForexFunds metrics: %s", e)
+
             raise
 
     async def place_order(
@@ -849,7 +858,8 @@ class MyForexFundsBroker(BasePropFirmBroker):
                 return await resp.json()
 
         except Exception as e:
-            logger.error(f"Failed to place MyForexFunds order: {e}")
+            logger.error("Failed to place MyForexFunds order: %s", e)
+
             raise
 
     async def get_open_trades(self) -> list[PropFirmTrade]:
@@ -865,7 +875,7 @@ class MyForexFundsBroker(BasePropFirmBroker):
                 f"{self.base_url}{endpoint}",
                 headers=headers,
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     raise RuntimeError(await resp.json())
 
                 data = await resp.json()
@@ -886,7 +896,8 @@ class MyForexFundsBroker(BasePropFirmBroker):
                 return trades
 
         except Exception as e:
-            logger.error(f"Failed to fetch MyForexFunds trades: {e}")
+            logger.error("Failed to fetch MyForexFunds trades: %s", e)
+
             raise
 
     async def close_trade(self, trade_id: str) -> dict[str, Any]:
@@ -908,7 +919,8 @@ class MyForexFundsBroker(BasePropFirmBroker):
                 return await resp.json()
 
         except Exception as e:
-            logger.error(f"Failed to close MyForexFunds trade: {e}")
+            logger.error("Failed to close MyForexFunds trade: %s", e)
+
             raise
 
     async def get_trade_history(self, limit: int = 100) -> list[PropFirmTrade]:
@@ -925,7 +937,7 @@ class MyForexFundsBroker(BasePropFirmBroker):
                 headers=headers,
                 params={"limit": limit},
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     raise RuntimeError(await resp.json())
 
                 data = await resp.json()
@@ -950,7 +962,8 @@ class MyForexFundsBroker(BasePropFirmBroker):
                 return trades
 
         except Exception as e:
-            logger.error(f"Failed to fetch MyForexFunds history: {e}")
+            logger.error("Failed to fetch MyForexFunds history: %s", e)
+
             raise
 
 
@@ -997,7 +1010,7 @@ class TopStepBroker(BasePropFirmBroker):
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=30),
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     raise RuntimeError(f"TopStep API error: {await resp.text()}")
 
                 data = await resp.json()
@@ -1035,7 +1048,8 @@ class TopStepBroker(BasePropFirmBroker):
                 )
 
         except Exception as e:
-            logger.error(f"Failed to fetch TopStep metrics: {e}")
+            logger.error("Failed to fetch TopStep metrics: %s", e)
+
             raise
 
     async def place_order(
@@ -1082,7 +1096,8 @@ class TopStepBroker(BasePropFirmBroker):
                 return await resp.json()
 
         except Exception as e:
-            logger.error(f"Failed to place TopStep order: {e}")
+            logger.error("Failed to place TopStep order: %s", e)
+
             raise
 
     async def get_open_trades(self) -> list[PropFirmTrade]:
@@ -1098,7 +1113,7 @@ class TopStepBroker(BasePropFirmBroker):
                 f"{self.base_url}{endpoint}",
                 headers=headers,
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     raise RuntimeError(await resp.json())
 
                 data = await resp.json()
@@ -1119,7 +1134,8 @@ class TopStepBroker(BasePropFirmBroker):
                 return trades
 
         except Exception as e:
-            logger.error(f"Failed to fetch TopStep positions: {e}")
+            logger.error("Failed to fetch TopStep positions: %s", e)
+
             raise
 
     async def close_trade(self, trade_id: str) -> dict[str, Any]:
@@ -1141,7 +1157,8 @@ class TopStepBroker(BasePropFirmBroker):
                 return await resp.json()
 
         except Exception as e:
-            logger.error(f"Failed to close TopStep position: {e}")
+            logger.error("Failed to close TopStep position: %s", e)
+
             raise
 
     async def get_trade_history(self, limit: int = 100) -> list[PropFirmTrade]:
@@ -1158,7 +1175,7 @@ class TopStepBroker(BasePropFirmBroker):
                 headers=headers,
                 params={"limit": limit, "status": "closed"},
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     raise RuntimeError(await resp.json())
 
                 data = await resp.json()
@@ -1183,7 +1200,8 @@ class TopStepBroker(BasePropFirmBroker):
                 return trades
 
         except Exception as e:
-            logger.error(f"Failed to fetch TopStep history: {e}")
+            logger.error("Failed to fetch TopStep history: %s", e)
+
             raise
 
 
@@ -1251,7 +1269,7 @@ async def example_usage():
         logger.info("Balance: %s | Daily P&L: %s", metrics.account_balance, metrics.profit_loss)
 
         # Check risk
-        is_violated, reason = await broker.check_risk_violations()
+        is_violated, _ = await broker.check_risk_violations()
         if not is_violated:
             # Place order
             result = await broker.place_order(

@@ -11,19 +11,16 @@ Commissions are charged based on subscription tier (0.1% - 0.5% per trade).
 """
 
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 
 from .pricing import SubscriptionTier, pricing_manager
-
 
 logger = logging.getLogger(__name__)
 
 
-class CommissionStatus(str, Enum):
+class CommissionStatus(StrEnum):
     """Commission status enumeration"""
 
     PENDING = "pending"
@@ -65,17 +62,20 @@ class Commission:
         """Mark commission as collected"""
         self.status = CommissionStatus.COLLECTED
         self.collected_at = datetime.now(UTC)
-        logger.info(f"Commission {self.commission_id} marked as collected")
+        logger.info("Commission %s marked as collected", self.commission_id)
+
 
     def mark_failed(self) -> None:
         """Mark commission as failed"""
         self.status = CommissionStatus.FAILED
-        logger.warning(f"Commission {self.commission_id} marked as failed")
+        logger.warning("Commission %s marked as failed", self.commission_id)
+
 
     def refund(self) -> None:
         """Refund commission"""
         self.status = CommissionStatus.REFUNDED
-        logger.info(f"Commission {self.commission_id} refunded")
+        logger.info("Commission %s refunded", self.commission_id)
+
 
     def to_dict(self) -> dict:
         """Convert to dictionary"""
@@ -149,11 +149,13 @@ class CommissionTracker:
         """Collect a commission"""
         commission = self._commissions.get(commission_id)
         if not commission:
-            logger.error(f"Commission {commission_id} not found")
+            logger.error("Commission %s not found", commission_id)
+
             return False
 
         if commission.status != CommissionStatus.PENDING:
-            logger.warning(f"Commission {commission_id} already processed")
+            logger.warning("Commission %s already processed", commission_id)
+
             return False
 
         commission.mark_collected()

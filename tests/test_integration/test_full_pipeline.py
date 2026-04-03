@@ -18,8 +18,8 @@ class TestFullTradePipeline:
 
     def setup_method(self):
         from brokers.paper_trading import PaperTradingBroker
-        from risk.manager import RiskManager, RiskConfig
         from infrastructure.metrics import get_metrics_registry
+        from risk.manager import RiskConfig, RiskManager
 
         self.broker = PaperTradingBroker(initial_balance=100_000.0)
         self.risk = RiskManager(

@@ -44,9 +44,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum, auto
 
 from core.event_bus import bus
@@ -149,7 +147,8 @@ class _ProtectContext:
                     self._module,
                     exc_val,
                 )
-                asyncio.create_task(self._guard._publish_breach(self._module, "probe_failed", str(exc_val)))
+                _t = asyncio.create_task(self._guard._publish_breach(self._module, "probe_failed", str(exc_val)))
+                _t.add_done_callback(lambda _: None)
 
             elif ms.failures >= FAILURE_THRESHOLD and ms.state == _State.CLOSED:
                 ms.state = _State.OPEN

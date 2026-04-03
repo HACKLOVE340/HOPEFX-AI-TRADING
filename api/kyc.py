@@ -81,13 +81,13 @@ def _require_auth(request: Request) -> dict[str, Any]:
         token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         if not token:
             raise HTTPException(status_code=401, detail="Missing token")
-        from fastapi import HTTPException as _HTTPException
-        _creds_exc = _HTTPException(status_code=401, detail="Invalid token")
+        _creds_exc = HTTPException(status_code=401, detail="Invalid token")
         return decode_token(token, _creds_exc)
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
+        logger.warning("KYC auth token decode failed: %s", exc)
+        raise HTTPException(status_code=401, detail="Invalid or expired token") from None
 
 
 def _require_admin(request: Request) -> dict[str, Any]:
@@ -132,10 +132,11 @@ async def create_applicant(
             },
         )
     except PermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+        logger.warning("KYC create_applicant permission denied: %s", exc)
+        raise HTTPException(status_code=403, detail="Permission denied") from None
     except Exception as exc:
         logger.error("KYC create_applicant error: %s", exc)
-        raise HTTPException(status_code=502, detail="KYC provider error") from exc
+        raise HTTPException(status_code=502, detail="KYC provider error") from None
 
     return ApplicantResponse(
         applicant_id=applicant.applicant_id,
@@ -157,7 +158,7 @@ async def get_applicant_status(
         status_val = await gateway.check_status(applicant_id)
     except Exception as exc:
         logger.error("KYC check_status error: %s", exc)
-        raise HTTPException(status_code=502, detail="KYC provider error") from exc
+        raise HTTPException(status_code=502, detail="KYC provider error") from None
     return {"applicant_id": applicant_id, "status": status_val.value}
 
 
@@ -182,7 +183,7 @@ async def get_my_kyc_status(request: Request) -> dict[str, str]:
         return {"user_id": user_id, "kyc_status": kyc_status.value}
     except Exception as exc:
         logger.error("KYC status lookup error: %s", exc)
-        raise HTTPException(status_code=500, detail="Status lookup failed") from exc
+        raise HTTPException(status_code=500, detail="Status lookup failed") from None
 
 
 @router.post("/webhooks/sumsub", status_code=200)
@@ -259,7 +260,7 @@ async def screen_sanctions(
         )
     except Exception as exc:
         logger.error("Sanctions screen error: %s", exc)
-        raise HTTPException(status_code=502, detail="Sanctions screening error") from exc
+        raise HTTPException(status_code=502, detail="Sanctions screening error") from None
 
     return SanctionsScreenResponse(
         screened=result.screened,

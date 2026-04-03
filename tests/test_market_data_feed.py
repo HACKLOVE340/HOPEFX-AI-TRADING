@@ -10,8 +10,9 @@ Unit tests for market_data/ibkr_feed.py and market_data/redis_cache.py.
 """
 
 import time
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 from market_data.ibkr_feed import (
     FeedStatus,
@@ -21,7 +22,6 @@ from market_data.ibkr_feed import (
     TickValidator,
 )
 from market_data.redis_cache import MarketDataCache
-
 
 # ---------------------------------------------------------------------------
 # TickValidator
@@ -37,13 +37,13 @@ class TestTickValidator:
         )
 
     def _make_tick(self, **overrides):
-        defaults = dict(
-            symbol="XAUUSD",
-            bid=1949.0,
-            ask=1951.0,
-            last=1950.0,
-            timestamp=time.time(),
-        )
+        defaults = {
+            "symbol": "XAUUSD",
+            "bid": 1949.0,
+            "ask": 1951.0,
+            "last": 1950.0,
+            "timestamp": time.time(),
+        }
         defaults.update(overrides)
         return Tick(**defaults)
 

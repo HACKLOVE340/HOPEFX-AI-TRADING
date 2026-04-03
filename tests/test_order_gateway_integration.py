@@ -27,7 +27,6 @@ import pytest
 from execution.order_gateway import Order, OrderGateway
 from execution.trade_executor import ExecutionResult, OrderStatus, TradeExecutor
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers / fixtures
 # ─────────────────────────────────────────────────────────────────────────────

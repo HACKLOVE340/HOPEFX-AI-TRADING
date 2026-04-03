@@ -10,7 +10,7 @@ Tests for the charting module.
 import pytest
 
 from charting.chart_engine import Chart, ChartEngine, ChartType
-from charting.indicators import Indicator, SMA, EMA, RSI, IndicatorLibrary
+from charting.indicators import EMA, RSI, SMA, Indicator, IndicatorLibrary
 
 
 class TestChartType:
@@ -136,7 +136,7 @@ class TestIndicator:
     def test_base_indicator_is_abstract(self):
         """Indicator is an ABC — instantiating it directly raises TypeError."""
         with pytest.raises(TypeError):
-            Indicator("test", 10)  # type: ignore[abstract]
+            Indicator("test", 10)  # type: ignore[abstract]  # pylint: disable=abstract-class-instantiated
 
     def test_incomplete_subclass_raises_type_error(self):
         """A subclass that omits calculate() raises TypeError at construction."""
@@ -145,7 +145,7 @@ class TestIndicator:
             pass  # calculate not implemented
 
         with pytest.raises(TypeError):
-            IncompleteIndicator("test", 10)  # type: ignore[abstract]
+            IncompleteIndicator("test", 10)  # type: ignore[abstract]  # pylint: disable=abstract-class-instantiated  # pylint: disable=abstract-class-instantiated
 
 
 class TestSMA:

@@ -31,9 +31,7 @@ import logging
 import os
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -147,8 +145,10 @@ class SecurityService:
             )
         except _jwt.ExpiredSignatureError:
             raise ValueError("Token has expired") from None
-        except _jwt.InvalidTokenError as exc:
-            raise ValueError(f"Invalid token: {exc}") from exc
+        except _jwt.InvalidTokenError:
+            # Log the specific JWT error server-side; surface only a generic
+            # message to callers to avoid leaking token structure details.
+            raise ValueError("Invalid token") from None
 
         if payload.get("type") != expected_type:
             raise ValueError(f"Token type mismatch: expected '{expected_type}', got '{payload.get('type')}'")

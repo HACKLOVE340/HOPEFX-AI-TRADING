@@ -27,13 +27,13 @@ from sklearn.linear_model import LogisticRegression
 from ml.features.technical import TechnicalFeatureEngineer
 from ml.models.base import BaseMLModel
 from ml.models.ensemble import (
-    EnsemblePredictor,
     EnsemblePrediction,
+    EnsemblePredictor,
     ModelPrediction,
 )
 from ml.models.lstm import LSTMPricePredictor
 from ml.models.random_forest import RandomForestTradingClassifier
-
+from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Helpers / Fixtures shared across test classes
@@ -199,13 +199,13 @@ class TestBaseMLModel:
         model.training_history = [{"epoch": 1}]
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            path = os.path.join(tmpdir, "model.pkl")
+            path = Path(tmpdir) / "model.pkl"
             model.save(path)
 
             # Verify metadata JSON was written
-            meta_path = os.path.join(tmpdir, "model_metadata.json")
+            meta_path = Path(tmpdir) / "model_metadata.json"
             assert os.path.exists(meta_path)
-            with open(meta_path) as f:
+            with open(meta_path, encoding="utf-8") as f:
                 meta = json.load(f)
             assert meta["name"] == "save_test"
 
@@ -329,8 +329,6 @@ class TestLSTMPricePredictor:
         lstm = LSTMPricePredictor(config={"sequence_length": 10, "lstm_units": [32]})
         # If TensorFlow is not installed, build() should raise ImportError
         try:
-            import tensorflow  # noqa: F401
-
             # TF available: build should set self.model
             lstm.build()
             assert lstm.model is not None
@@ -451,7 +449,7 @@ class TestRandomForestTradingClassifier:
 
     def test_train_and_predict_real_model(self):
         """Train/predict pipeline using a real sklearn RandomForest."""
-        rf, X, y = self._make_trained_rf(n_features=5, feature_names=["f1", "f2", "f3", "f4", "f5"])
+        rf, _, _ = self._make_trained_rf(n_features=5, feature_names=["f1", "f2", "f3", "f4", "f5"])
 
         assert rf.is_trained is True
         assert "train_accuracy" in rf.training_history[-1]["metrics"]
@@ -459,7 +457,7 @@ class TestRandomForestTradingClassifier:
 
     def test_train_stores_feature_names(self):
         """train() stores the provided feature names."""
-        rf, X, y = self._make_trained_rf(n_features=3, feature_names=["rsi", "macd", "atr"])
+        rf, _, _ = self._make_trained_rf(n_features=3, feature_names=["rsi", "macd", "atr"])
         assert rf.feature_names == ["rsi", "macd", "atr"]
 
     def test_train_infers_feature_names_when_not_provided(self):
@@ -474,7 +472,7 @@ class TestRandomForestTradingClassifier:
 
     def test_predict_returns_correct_shape(self):
         """predict() returns an array with one label per sample."""
-        rf, X, y = self._make_trained_rf(n_samples=40, n_features=5)
+        rf, X, _ = self._make_trained_rf(n_samples=40, n_features=5)
         preds = rf.predict(X[:3])
         assert preds.shape == (3,)
         # All predictions must be valid class labels
@@ -482,7 +480,7 @@ class TestRandomForestTradingClassifier:
 
     def test_predict_proba_returns_correct_shape(self):
         """predict_proba() returns (n_samples, n_classes) probabilities."""
-        rf, X, y = self._make_trained_rf(n_samples=40, n_features=5, n_classes=3)
+        rf, X, _ = self._make_trained_rf(n_samples=40, n_features=5, n_classes=3)
         proba = rf.predict_proba(X[:2])
         assert proba.shape[0] == 2
         # Each row must sum to ~1.0
@@ -490,7 +488,7 @@ class TestRandomForestTradingClassifier:
 
     def test_predict_with_confidence_shape(self):
         """predict_with_confidence() returns (preds, confidences) arrays."""
-        rf, X, y = self._make_trained_rf(n_samples=40, n_features=5, n_classes=3)
+        rf, X, _ = self._make_trained_rf(n_samples=40, n_features=5, n_classes=3)
         preds, confidences = rf.predict_with_confidence(X[:4])
         assert len(preds) == 4
         assert len(confidences) == 4
@@ -499,7 +497,7 @@ class TestRandomForestTradingClassifier:
 
     def test_get_feature_importance_dict_with_names(self):
         """get_feature_importance_dict() maps feature names to real importances."""
-        rf, X, y = self._make_trained_rf(n_features=3, feature_names=["a", "b", "c"])
+        rf, _, _ = self._make_trained_rf(n_features=3, feature_names=["a", "b", "c"])
         fi = rf.get_feature_importance_dict()
         assert set(fi.keys()) == {"a", "b", "c"}
         # Importances are non-negative and sum to ~1
@@ -508,14 +506,14 @@ class TestRandomForestTradingClassifier:
 
     def test_get_feature_importance_dict_without_names(self):
         """get_feature_importance_dict() uses integer keys when no names set."""
-        rf, X, y = self._make_trained_rf(n_features=2)
+        rf, _, _ = self._make_trained_rf(n_features=2)
         rf.feature_names = []  # clear names to test fallback
         fi = rf.get_feature_importance_dict()
         assert len(fi) == 2
 
     def test_get_top_features(self):
         """get_top_features(n) returns the n highest-importance features in order."""
-        rf, X, y = self._make_trained_rf(n_features=4, feature_names=["a", "b", "c", "d"])
+        rf, _, _ = self._make_trained_rf(n_features=4, feature_names=["a", "b", "c", "d"])
         top2 = rf.get_top_features(n=2)
         assert len(top2) == 2
         # First entry must have higher importance than second
@@ -523,7 +521,7 @@ class TestRandomForestTradingClassifier:
 
     def test_validate_training_history_updated(self):
         """train() appends one entry to training_history with a metrics key."""
-        rf, X, y = self._make_trained_rf(n_features=3)
+        rf, _, _ = self._make_trained_rf(n_features=3)
         assert len(rf.training_history) == 1
         assert "metrics" in rf.training_history[0]
 

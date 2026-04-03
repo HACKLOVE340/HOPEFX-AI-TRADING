@@ -28,13 +28,11 @@ import logging
 import time
 import traceback
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
-from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -556,7 +554,7 @@ class ExecutionEngine:
                 request_id=request.request_id,
                 status=ExecutionStatus.ERROR,
                 latency_ms=latency_ms,
-                message=f"[BROKER_ERROR] {exc}",
+                message="[BROKER_ERROR] Order submission failed — check server logs",
             )
 
         # ── 6. Post-fill processing ───────────────────────────────────────────
@@ -852,7 +850,7 @@ class ExecutionEngine:
 
     def _record_latency(self, latency_ms: float) -> None:
         self._latencies_ms.append(latency_ms)
-        if len(self._latencies_ms) > 100:  # noqa: PLR2004
+        if len(self._latencies_ms) > 100:
             self._latencies_ms.pop(0)
 
     def get_metrics(self) -> dict[str, Any]:
@@ -860,7 +858,7 @@ class ExecutionEngine:
         avg_latency = sum(self._latencies_ms) / len(self._latencies_ms) if self._latencies_ms else 0.0
         p99_latency = (
             sorted(self._latencies_ms)[int(len(self._latencies_ms) * 0.99)]
-            if len(self._latencies_ms) >= 100  # noqa: PLR2004
+            if len(self._latencies_ms) >= 100
             else 0.0
         )
         return {

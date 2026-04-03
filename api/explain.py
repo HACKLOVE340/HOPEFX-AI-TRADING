@@ -26,14 +26,12 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import UTC
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from api.auth import TokenPayload, get_current_user
-from datetime import timezone
-
-UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +46,6 @@ _EXPLAIN_LATEST_LIMIT = os.getenv("EXPLAIN_LATEST_RATE_LIMIT", "60/minute")
 def _get_limiter():
     """Return the slowapi Limiter from app state, or None if not configured."""
     try:
-        from fastapi import Request as _Req  # noqa: F401
         from slowapi import Limiter
         from slowapi.util import get_remote_address
 
@@ -308,10 +305,11 @@ async def explain_signal(
     try:
         return _build_explanation(signal_id)
     except (RuntimeError, ValueError, KeyError, AttributeError) as exc:
+        logger.warning("Explanation unavailable for signal %s: %s", signal_id, exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Explanation unavailable: {exc}",
-        ) from exc
+            detail="Explanation unavailable — check server logs",
+        ) from None
 
 
 @router.get(

@@ -14,23 +14,22 @@ This module provides security-related utilities for the HOPEFX AI Trading platfo
 - Environment security checks
 """
 
+import logging
 import os
 import re
-import logging
 import secrets
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from typing import Any
-from re import Pattern
 from dataclasses import dataclass
-from enum import Enum
+from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 from functools import wraps
+from pathlib import Path
+from re import Pattern
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class SecurityLevel(str, Enum):
+class SecurityLevel(StrEnum):
     """Security levels for audit logging"""
 
     INFO = "info"
@@ -39,7 +38,7 @@ class SecurityLevel(str, Enum):
     ALERT = "alert"
 
 
-class AuditEventType(str, Enum):
+class AuditEventType(StrEnum):
     """Types of security audit events"""
 
     LOGIN_SUCCESS = "login_success"
@@ -150,7 +149,7 @@ class LogSanitizer:
             return message
 
         sanitized = message
-        for _pattern_name, pattern in self.patterns.items():
+        for pattern in self.patterns.values():
             # For patterns with groups, replace the captured group
             if pattern.groups:
                 sanitized = pattern.sub(
@@ -192,21 +191,21 @@ class LogSanitizer:
             "bearer",
         ]
 
-        sensitive = set(key.lower() for key in (sensitive_keys or default_sensitive))
+        sensitive = {key.lower() for key in (sensitive_keys or default_sensitive)}
 
         def redact_value(key: str, value: Any) -> Any:
             key_lower = key.lower()
             for s in sensitive:
                 if s in key_lower:
-                    if isinstance(value, str) and len(value) > 4:  # noqa: PLR2004
+                    if isinstance(value, str) and len(value) > 4:
                         return f"{value[:2]}...{self.redaction_text}"
                     return self.redaction_text
 
             if isinstance(value, str):
                 return self.sanitize(value)
-            elif isinstance(value, dict):
+            if isinstance(value, dict):
                 return self.sanitize_dict(value, sensitive_keys)
-            elif isinstance(value, list):
+            if isinstance(value, list):
                 return [redact_value(key, v) for v in value]
             return value
 
@@ -243,7 +242,7 @@ class SecurityAuditor:
 
     def _setup_audit_logger(self, log_path: str) -> None:
         """Setup dedicated audit logger"""
-        os.makedirs(os.path.dirname(log_path) or ".", exist_ok=True)
+        Path(Path(log_path).parent.mkdir(parents=True, exist_ok=True) or ".", exist_ok=True)
 
         self.audit_logger = logging.getLogger("security_audit")
         self.audit_logger.setLevel(logging.INFO)
@@ -355,7 +354,8 @@ class CredentialRotationTracker:
     def register_credential(self, credential_name: str, created_at: datetime | None = None) -> None:
         """Register a credential for rotation tracking"""
         self._credentials[credential_name] = created_at or datetime.now(UTC)
-        logger.info(f"Registered credential for rotation tracking: {credential_name}")
+        logger.info("Registered credential for rotation tracking: %s", credential_name)
+
 
     def get_credential_age(self, credential_name: str) -> timedelta | None:
         """Get the age of a credential"""
@@ -385,7 +385,7 @@ class CredentialRotationTracker:
                 "status": "expired"
                 if days_until_rotation == 0
                 else "warning"
-                if days_until_rotation <= 14  # noqa: PLR2004
+                if days_until_rotation <= 14
                 else "ok",
             }
 
@@ -442,7 +442,7 @@ class SecurityConfigValidator:
                     }
                 )
                 is_valid = False
-            elif var == "CONFIG_ENCRYPTION_KEY" and len(value) < 32:  # noqa: PLR2004
+            elif var == "CONFIG_ENCRYPTION_KEY" and len(value) < 32:
                 self.issues.append(
                     {
                         "level": "error",

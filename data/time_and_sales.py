@@ -19,10 +19,8 @@ Real-time trade tape (time & sales) with:
 import logging
 import threading
 from collections import deque
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 logger = logging.getLogger(__name__)
 

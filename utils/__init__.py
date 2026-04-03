@@ -12,17 +12,15 @@ import asyncio
 import functools
 import hashlib
 import inspect
-import json  # noqa: F401
+import json
 import logging
 import secrets
 import time
 from collections import deque
-from datetime import datetime, timedelta, timezone  # noqa: F401
-
-UTC = timezone.utc
-from decimal import ROUND_HALF_UP, Decimal
-from typing import Any, Dict, Generic, List, Optional, TypeVar  # noqa: F401
 from collections.abc import Callable
+from datetime import UTC, datetime
+from decimal import ROUND_HALF_UP, Decimal
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +79,8 @@ class RetryWithExponentialBackoff:
                         raise
 
                     delay = self.base_delay * (2**attempt)
-                    logger.warning(f"{func.__name__} failed (attempt {attempt + 1}), retrying in {delay}s: {e}")
+                    logger.warning("%s failed (attempt %s), retrying in %ss: %s", func.__name__, attempt + 1, delay, e)
+
 
                     if self.on_retry:
                         self.on_retry(attempt, e)
@@ -100,7 +99,8 @@ class RetryWithExponentialBackoff:
                         raise
 
                     delay = self.base_delay * (2**attempt)
-                    logger.warning(f"{func.__name__} failed (attempt {attempt + 1}), retrying in {delay}s: {e}")
+                    logger.warning("%s failed (attempt %s), retrying in %ss: %s", func.__name__, attempt + 1, delay, e)
+
 
                     if self.on_retry:
                         self.on_retry(attempt, e)
@@ -138,7 +138,8 @@ class CircuitBreaker:
 
         if self.failure_count >= self.failure_threshold:
             self.is_open = True
-            logger.critical(f"Circuit breaker OPENED after {self.failure_count} failures")
+            logger.critical("Circuit breaker OPENED after %s failures", self.failure_count)
+
             return True
         return False
 
@@ -204,7 +205,8 @@ def timeit(func: Callable) -> Callable:
             return await func(*args, **kwargs)
         finally:
             elapsed = time.perf_counter() - start
-            logger.debug(f"{func.__name__} took {elapsed * 1000:.2f}ms")
+            logger.debug("%s took %sms", func.__name__, elapsed * 1000)
+
 
     @functools.wraps(func)
     def sync_wrapper(*args, **kwargs):
@@ -213,7 +215,8 @@ def timeit(func: Callable) -> Callable:
             return func(*args, **kwargs)
         finally:
             elapsed = time.perf_counter() - start
-            logger.debug(f"{func.__name__} took {elapsed * 1000:.2f}ms")
+            logger.debug("%s took %sms", func.__name__, elapsed * 1000)
+
 
     return async_wrapper if inspect.iscoroutinefunction(func) else sync_wrapper
 
@@ -229,11 +232,11 @@ def parse_timestamp(timestamp: Any) -> datetime:
         return timestamp
     if isinstance(timestamp, int | float):
         # Assume milliseconds if large number
-        if timestamp > 1e10:  # noqa: PLR2004
+        if timestamp > 1e10:
             timestamp = timestamp / 1000
         return datetime.fromtimestamp(timestamp, tz=UTC)
     if isinstance(timestamp, str):
-        return datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+        return datetime.fromisoformat(timestamp)
     raise ValueError(f"Cannot parse timestamp: {timestamp}")
 
 
@@ -258,17 +261,17 @@ def truncate_string(s: str, max_length: int, suffix: str = "...") -> str:
 def validate_symbol(symbol: str) -> bool:
     """Validate trading symbol format"""
     # Basic validation: 6 chars for forex (EURUSD), or contains /
-    if len(symbol) == 6 and symbol.isalpha():  # noqa: PLR2004
+    if len(symbol) == 6 and symbol.isalpha():
         return True
-    if "/" in symbol and len(symbol) <= 10:  # noqa: PLR2004
+    if "/" in symbol and len(symbol) <= 10:
         return True
     # XAUUSD, etc.
-    return len(symbol) <= 10 and symbol.replace("/", "").isalnum()  # noqa: PLR2004
+    return len(symbol) <= 10 and symbol.replace("/", "").isalnum()
 
 
 def calculate_correlation(x: list[float], y: list[float]) -> float:
     """Calculate Pearson correlation"""
-    if len(x) != len(y) or len(x) < 2:  # noqa: PLR2004
+    if len(x) != len(y) or len(x) < 2:
         return 0.0
 
     n = len(x)

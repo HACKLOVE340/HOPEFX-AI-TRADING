@@ -27,17 +27,15 @@ Usage
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import uuid
 from collections import defaultdict
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from typing import Any, Generic, TypeVar
 from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, Field
-import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +113,7 @@ class PriceTickEvent(BaseModel):
     volume: float | None = None
     spread_pips: float | None = None
 
-    def model_post_init(self, __context: Any) -> None:
+    def model_post_init(self, context: Any) -> None:
         if self.mid is None:
             object.__setattr__(self, "mid", (self.bid + self.ask) / 2)
 
@@ -263,6 +261,7 @@ def publish_sync(envelope: EventEnvelope) -> None:
     """
     try:
         loop = asyncio.get_running_loop()
-        loop.create_task(publish(envelope))
+        _t = loop.create_task(publish(envelope))
+        _t.add_done_callback(lambda _: None)
     except RuntimeError:
         asyncio.run(publish(envelope))

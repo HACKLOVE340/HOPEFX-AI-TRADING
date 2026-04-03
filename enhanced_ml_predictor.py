@@ -23,51 +23,44 @@ License: Proprietary - Institutional Use Only
 =============================================================================
 """
 
+import json
+import logging
+import warnings
+from collections import defaultdict, deque
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from enum import Enum
+from typing import Any
+
 import numpy as np
 import pandas as pd
-from typing import Any
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from enum import Enum
-from collections import deque, defaultdict
-import logging
-import json
-import warnings
 
 # ML/DL Libraries
 try:
     import tensorflow as tf
-    from tensorflow import keras  # noqa: F401
-    from tensorflow.keras.models import Model, Sequential, load_model  # noqa: F401
-    from tensorflow.keras.layers import (
-        LSTM,
-        GRU,
-        Dense,
-        Dropout,
-        BatchNormalization,
-        Input,
-        Concatenate,  # noqa: F401
-        Multiply,  # noqa: F401
-        Add,
-        Attention,  # noqa: F401
-        Conv1D,
-        MaxPooling1D,
-        GlobalAveragePooling1D,
-        LayerNormalization,
-        MultiHeadAttention,
-    )
     from tensorflow.keras.callbacks import (
         EarlyStopping,
-        ReduceLROnPlateau,
         ModelCheckpoint,
-        TensorBoard,  # noqa: F401
+        ReduceLROnPlateau,
         TerminateOnNaN,
     )
-    from tensorflow.keras.optimizers import Adam, AdamW  # noqa: F401
+    from tensorflow.keras.layers import (
+        GRU,
+        LSTM,
+        Add,
+        BatchNormalization,
+        Conv1D,
+        Dense,
+        Dropout,
+        GlobalAveragePooling1D,
+        Input,
+        LayerNormalization,
+        MaxPooling1D,
+        MultiHeadAttention,
+    )
+    from tensorflow.keras.models import Model, load_model
+    from tensorflow.keras.optimizers import AdamW
     from tensorflow.keras.regularizers import l1_l2
-    from tensorflow.keras.losses import Huber  # noqa: F401
 
     TENSORFLOW_AVAILABLE = True
 except ImportError:
@@ -75,37 +68,19 @@ except ImportError:
     warnings.warn("TensorFlow not available - deep learning disabled", stacklevel=2)
 
 try:
-    import torch  # noqa: F401
-    from torch import nn  # noqa: F401
-    from torch.utils.data import DataLoader, Dataset, TensorDataset  # noqa: F401
-    from torch.optim import AdamW as TorchAdamW  # noqa: F401
-    from torch.optim.lr_scheduler import ReduceLROnPlateau as TorchReduceLROnPlateau  # noqa: F401
-
+    import torch
     PYTORCH_AVAILABLE = True
 except ImportError:
     PYTORCH_AVAILABLE = False
 
 try:
+    from sklearn.calibration import CalibratedClassifierCV
     from sklearn.ensemble import (
         RandomForestClassifier,
-        GradientBoostingClassifier,  # noqa: F401
-        ExtraTreesClassifier,  # noqa: F401
-        VotingClassifier,  # noqa: F401
-        StackingClassifier,  # noqa: F401
     )
-    from sklearn.preprocessing import RobustScaler, StandardScaler, QuantileTransformer  # noqa: F401
-    from sklearn.model_selection import TimeSeriesSplit, cross_val_score  # noqa: F401
-    from sklearn.metrics import (
-        accuracy_score,  # noqa: F401
-        precision_recall_fscore_support,  # noqa: F401
-        log_loss,  # noqa: F401
-        brier_score_loss,  # noqa: F401
-        roc_auc_score,  # noqa: F401
-        mean_squared_error,  # noqa: F401
-        mean_absolute_error,  # noqa: F401
-    )
-    from sklearn.calibration import CalibratedClassifierCV
     from sklearn.feature_selection import SelectFromModel, mutual_info_classif
+    from sklearn.model_selection import TimeSeriesSplit
+    from sklearn.preprocessing import RobustScaler
 
     SKLEARN_AVAILABLE = True
 except ImportError:
@@ -126,15 +101,13 @@ except ImportError:
     LIGHTGBM_AVAILABLE = False
 
 try:
-    import optuna  # noqa: F401
-
+    import optuna
     OPTUNA_AVAILABLE = True
 except ImportError:
     OPTUNA_AVAILABLE = False
 
 try:
-    import shap  # noqa: F401
-
+    import shap
     SHAP_AVAILABLE = True
 except ImportError:
     SHAP_AVAILABLE = False
@@ -259,7 +232,7 @@ class Prediction:
                        on that constant before relying on it in production).
         """
         unc_thresh = threshold if threshold is not None else self.DEFAULT_UNCERTAINTY_THRESHOLD
-        return self.confidence >= 0.6 and self.total_uncertainty < unc_thresh  # noqa: PLR2004
+        return self.confidence >= 0.6 and self.total_uncertainty < unc_thresh
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization"""
@@ -424,7 +397,7 @@ class AdvancedFeatureEngineer:
         features["high_low_range"] = (df["high"] - df["low"]) / df["close"]
 
         # Candlestick patterns (simplified)
-        features["doji"] = (abs(df["close"] - df["open"]) / (df["high"] - df["low"] + 1e-10)) < 0.1  # noqa: PLR2004
+        features["doji"] = (abs(df["close"] - df["open"]) / (df["high"] - df["low"] + 1e-10)) < 0.1
         features["hammer"] = (
             (features["lower_shadow"] > 2 * abs(features["body"])) & (features["upper_shadow"] < abs(features["body"]))
         ).astype(int)
@@ -458,12 +431,12 @@ class AdvancedFeatureEngineer:
 
             # Session indicators
             features["is_market_open"] = (
-                (df.index.hour >= 9) & (df.index.hour < 16)  # noqa: PLR2004
+                (df.index.hour >= 9) & (df.index.hour < 16)
             ).astype(int)
             features["is_london"] = (
-                (df.index.hour >= 8) & (df.index.hour < 17)  # noqa: PLR2004
+                (df.index.hour >= 8) & (df.index.hour < 17)
             ).astype(int)
-            features["is_ny"] = ((df.index.hour >= 13) & (df.index.hour < 22)).astype(  # noqa: PLR2004
+            features["is_ny"] = ((df.index.hour >= 13) & (df.index.hour < 22)).astype(
                 int
             )
 
@@ -563,7 +536,7 @@ class AdvancedFeatureEngineer:
             if TENSORFLOW_AVAILABLE and isinstance(model, Model):
                 preds = model.predict(X.values, verbose=0)
                 # preds may be a dict (multi-output) or an array
-                direction_probs = preds.get("direction", list(preds.values())[0]) if isinstance(preds, dict) else preds
+                direction_probs = preds.get("direction", next(iter(preds.values()))) if isinstance(preds, dict) else preds
                 if len(direction_probs.shape) > 1:
                     return float(np.mean(np.max(direction_probs, axis=1)))
                 return float(np.mean(np.abs(direction_probs - 0.5) + 0.5))
@@ -606,7 +579,7 @@ class AdvancedFeatureEngineer:
             feature_scores.sort(key=lambda x: x[1], reverse=True)
             return [f for f, _ in feature_scores[:n_features]]
 
-        elif method == "model_based":
+        if method == "model_based":
             selector = SelectFromModel(
                 RandomForestClassifier(n_estimators=100, random_state=42),
                 max_features=n_features,
@@ -726,9 +699,11 @@ class DeepLearningModel:
             },
         )
 
-        logger.info(f"Built {cfg.architecture.value} model")
+        logger.info("Built %s model", cfg.architecture.value)
+
         if self.model:
-            logger.info(f"Total parameters: {self.model.count_params():,}")
+            logger.info("Total parameters: %s", self.model.count_params())
+
 
     def _build_lstm_stack(self, x, cfg: ModelConfig):
         """Standard LSTM architecture"""
@@ -859,7 +834,7 @@ class DeepLearningModel:
         cfg = self.config
 
         # Update feature count
-        if len(X_train.shape) == 2:  # noqa: PLR2004
+        if len(X_train.shape) == 2:
             self.n_features = X_train.shape[1]
             # Rebuild model with correct input shape
             self._build_model()
@@ -896,10 +871,13 @@ class DeepLearningModel:
         ]
 
         # Train
-        logger.info(f"Training {cfg.architecture.value} model...")
-        logger.info(f"Training samples: {len(X_train)}")
+        logger.info("Training %s model...", cfg.architecture.value)
+
+        logger.info("Training samples: %s", len(X_train))
+
         if X_val is not None:
-            logger.info(f"Validation samples: {len(X_val)}")
+            logger.info("Validation samples: %s", len(X_val))
+
 
         self.history = self.model.fit(
             X_train,
@@ -959,7 +937,7 @@ class DeepLearningModel:
         start_time = datetime.now(UTC)
 
         # Ensure correct shape
-        if len(X.shape) == 2:  # noqa: PLR2004
+        if len(X.shape) == 2:
             X = X.reshape(1, *X.shape)
 
         if X.shape[1] != self.config.sequence_length:
@@ -1054,7 +1032,8 @@ class DeepLearningModel:
         # Restore learning rate
         self.model.optimizer.learning_rate.assign(current_lr)
 
-        logger.info(f"Online update completed with lr={new_lr:.2e}")
+        logger.info("Online update completed with lr=%s", new_lr)
+
 
     def save(self, filepath: str):
         """Save model and configuration"""
@@ -1069,23 +1048,25 @@ class DeepLearningModel:
                 "dropout_rate": self.config.dropout_rate,
             }
 
-            with open(f"{filepath}/config.json", "w") as f:
+            with open(f"{filepath}/config.json", "w", encoding="utf-8") as f:
                 json.dump(config_dict, f, indent=2)
 
-            logger.info(f"Model saved to {filepath}")
+            logger.info("Model saved to %s", filepath)
+
 
     def load(self, filepath: str):
         """Load model and configuration"""
         if TENSORFLOW_AVAILABLE:
             self.model = load_model(f"{filepath}/model.h5")
 
-            with open(f"{filepath}/config.json") as f:
+            with open(f"{filepath}/config.json", encoding="utf-8") as f:
                 config_dict = json.load(f)
                 self.config.architecture = ModelArchitecture(config_dict["architecture"])
                 self.n_features = config_dict["n_features"]
 
             self.is_trained = True
-            logger.info(f"Model loaded from {filepath}")
+            logger.info("Model loaded from %s", filepath)
+
 
 
 # =============================================================================
@@ -1125,7 +1106,8 @@ class EnsemblePredictor:
         self.models[name] = model
         self.weights[name] = weight
         self.performance_history[name] = deque(maxlen=100)
-        logger.info(f"Added model '{name}' to ensemble (weight={weight})")
+        logger.info("Added model '%s' to ensemble (weight=%s)", name, weight)
+
 
     def fit(
         self,
@@ -1156,27 +1138,31 @@ class EnsemblePredictor:
         X_val = self.feature_engineer.create_features(X_raw_val, fit=False)
         y_val = y_raw_val.loc[X_val.index]
 
-        logger.info(f"Train: {len(X_train)} bars | Val: {len(X_val)} bars | Features: {X_train.shape[1]}")
+        logger.info("Train: %s bars | Val: %s bars | Features: %s", len(X_train), len(X_val), X_train.shape[1])
+
 
         # Train each model — track val accuracy explicitly per model
-        logger.info(f"Training {len(self.models)} models...")
+        logger.info("Training %s models...", len(self.models))
+
         val_scores: dict[str, float] = {}
 
         for name, model in self.models.items():
-            logger.info(f"Training {name}...")
+            logger.info("Training %s...", name)
+
             score: float = 0.5  # safe default before any evaluation
 
             if isinstance(model, DeepLearningModel):
                 result = model.fit(X_train.values, y_train.values, X_val.values, y_val.values)
                 score = result.get("best_val_accuracy", result.get("final_direction_accuracy", 0.5))
-                logger.info(f"  {name}: {result['epochs_trained']} epochs, val_accuracy={score:.3f}")
+                logger.info("  %s: %s epochs, val_accuracy=%s", name, result['epochs_trained'], score)
+
 
             elif SKLEARN_AVAILABLE and hasattr(model, "fit"):
                 model.fit(X_train, y_train)
 
                 # Calibrate probabilities using a held-out portion of the
                 # validation set — never shuffle time-series data.
-                if hasattr(model, "predict_proba") and len(X_val) >= 20:  # noqa: PLR2004
+                if hasattr(model, "predict_proba") and len(X_val) >= 20:
                     cal_split = max(10, len(X_val) // 2)
                     X_cal = X_val.iloc[cal_split:]
                     y_cal = y_val.iloc[cal_split:]
@@ -1185,10 +1171,12 @@ class EnsemblePredictor:
                         calibrated.fit(X_cal, y_cal)
                         self.calibrators[name] = calibrated
                     except Exception as cal_exc:
-                        logger.warning(f"  {name}: calibration failed ({cal_exc}), using raw probabilities")
+                        logger.warning("  %s: calibration failed (%s), using raw probabilities", name, cal_exc)
+
 
                 score = float(model.score(X_val, y_val))
-                logger.info(f"  {name}: val_accuracy={score:.3f}")
+                logger.info("  %s: val_accuracy=%s", name, score)
+
 
             val_scores[name] = score
             self.performance_history[name].append(score)
@@ -1247,13 +1235,14 @@ class EnsemblePredictor:
         softmax_weights = exp_vals / exp_vals.sum()
 
         self.weights = {name: float(w) for name, w in zip(names, softmax_weights, strict=False)}
-        logger.info(f"Optimized weights (softmax over val accuracy): {self.weights}")
+        logger.info("Optimized weights (softmax over val accuracy): %s", self.weights)
+
 
     def _train_meta_learner(self, X_val: pd.DataFrame, y_val: pd.Series):
         """Train meta-learner for stacking"""
         # Generate base model predictions as features
         meta_features = []
-        for _name, model in self.models.items():
+        for model in self.models.values():
             if isinstance(model, DeepLearningModel):
                 probs = []
                 for i in range(len(X_val)):
@@ -1337,7 +1326,8 @@ class EnsemblePredictor:
                         model_probabilities.append({"down": 0.33, "neutral": 0.33, "up": 0.34})
 
             except Exception as e:
-                logger.error(f"Prediction error for {name}: {e}")
+                logger.error("Prediction error for %s: %s", name, e)
+
                 model_confidences.append(0)
 
         if not model_predictions:
@@ -1400,10 +1390,11 @@ class EnsemblePredictor:
                 try:
                     model.partial_fit(X_features, y_aligned)
                 except Exception as e:
-                    logger.error(f"Online update failed for {name}: {e}")
+                    logger.error("Online update failed for %s: %s", name, e)
+
 
         # Periodically re-optimize weights using the most recent validation window
-        first_key = list(self.models.keys())[0]
+        first_key = next(iter(self.models.keys()))
         if len(self.performance_history[first_key]) % 50 == 0:
             # Build per-model accuracy scores from the last 20 entries in history
             recent_scores: dict[str, float] = {
@@ -1519,10 +1510,14 @@ class EnhancedMLPredictor:
         self.best_config: ModelConfig | None = None
 
         logger.info("EnhancedMLPredictor initialized")
-        logger.info(f"  Sequence length: {sequence_length}")
-        logger.info(f"  Prediction horizon: {prediction_horizon}")
-        logger.info(f"  GPU enabled: {self.use_gpu}")
-        logger.info(f"  Auto-optimize: {self.auto_optimize}")
+        logger.info("  Sequence length: %s", sequence_length)
+
+        logger.info("  Prediction horizon: %s", prediction_horizon)
+
+        logger.info("  GPU enabled: %s", self.use_gpu)
+
+        logger.info("  Auto-optimize: %s", self.auto_optimize)
+
 
     def build_ensemble(self, model_types: list[str] | None = None, use_stacking: bool = False):
         """Build ensemble with specified model types"""
@@ -1597,7 +1592,8 @@ class EnhancedMLPredictor:
 
             self.ensemble.meta_learner = LogisticRegression(multi_class="multinomial", max_iter=1000)
 
-        logger.info(f"Built ensemble with {len(self.ensemble.models)} models")
+        logger.info("Built ensemble with %s models", len(self.ensemble.models))
+
 
     def optimize_hyperparameters(self, X: pd.DataFrame, y: pd.Series, n_trials: int = 50) -> ModelConfig:
         """Use Optuna for hyperparameter optimization"""
@@ -1643,7 +1639,8 @@ class EnhancedMLPredictor:
         )
 
         self.best_config = best_config
-        logger.info(f"Best config found: {best_config}")
+        logger.info("Best config found: %s", best_config)
+
 
         return best_config
 
@@ -1739,7 +1736,7 @@ class EnhancedMLPredictor:
             y_train = y.iloc[train_idx]
             y_test = y.iloc[test_idx]
 
-            if len(X_train_raw) < 50 or len(X_test_raw) < 10:  # noqa: PLR2004
+            if len(X_train_raw) < 50 or len(X_test_raw) < 10:
                 logger.warning("Fold %d: insufficient data, skipping", fold + 1)
                 continue
 
@@ -1813,12 +1810,14 @@ class EnhancedMLPredictor:
             # Check confidence threshold
             if prediction.confidence < self.confidence_threshold:
                 prediction.prediction = "uncertain"
-                logger.warning(f"Low confidence prediction: {prediction.confidence:.2%}")
+                logger.warning("Low confidence prediction: %s", prediction.confidence)
+
 
             return prediction
 
         except Exception as e:
-            logger.error(f"Prediction error: {e}")
+            logger.error("Prediction error: %s", e)
+
             return None
 
     def update_performance(self, actual_return: float):
@@ -1833,9 +1832,9 @@ class EnhancedMLPredictor:
         # Determine if prediction was correct
         actual_direction = (
             "up"
-            if actual_return > 0.001  # noqa: PLR2004
+            if actual_return > 0.001
             else "down"
-            if actual_return < -0.001  # noqa: PLR2004
+            if actual_return < -0.001
             else "neutral"
         )
         correct = last_pred.prediction == actual_direction
@@ -1907,7 +1906,8 @@ class EnhancedMLPredictor:
                         self._retrain_requested = True
                     else:
                         hours_remaining = cooldown_hours - (now - last_retrain).total_seconds() / 3600
-                        logger.info(f"Retrain suppressed by cooldown ({hours_remaining:.1f}h remaining)")
+                        logger.info("Retrain suppressed by cooldown (%sh remaining)", hours_remaining)
+
             else:
                 # Reset consecutive counter when performance recovers
                 self._consecutive_degraded_windows = 0
@@ -1951,7 +1951,6 @@ def generate_synthetic_data(n_samples: int = 5000, trend: float = 0.0001, volati
     Raises RuntimeError if called in APP_ENV=production.
     """
     import os as _os
-    import warnings
 
     if _os.getenv("APP_ENV", "production").lower() == "production":
         raise RuntimeError(
@@ -2021,12 +2020,12 @@ def run_ml_test():
     print("\n[5] Generating predictions...")
     predictions = []
     for i in range(50):
-        pred_df = df.iloc[max(0, i - 100) : i + 100] if i > 100 else df.iloc[:200]  # noqa: PLR2004
+        pred_df = df.iloc[max(0, i - 100) : i + 100] if i > 100 else df.iloc[:200]
         pred = predictor.predict(pred_df)
 
         if pred:
             predictions.append(pred)
-            if i < 5:  # noqa: PLR2004
+            if i < 5:
                 print(
                     f"    Prediction {i + 1}: {pred.prediction} "
                     f"(conf: {pred.confidence:.1%}, "

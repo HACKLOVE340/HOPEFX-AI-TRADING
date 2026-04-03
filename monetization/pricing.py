@@ -16,12 +16,12 @@ This module defines the pricing tiers for the HOPEFX AI Trading platform:
 Annual subscriptions get 2 months free (16.67% discount).
 """
 
-from enum import Enum
 from dataclasses import dataclass
 from decimal import Decimal
+from enum import StrEnum
 
 
-class SubscriptionTier(str, Enum):
+class SubscriptionTier(StrEnum):
     """Subscription tier enumeration"""
 
     FREE = "free"
@@ -31,7 +31,7 @@ class SubscriptionTier(str, Enum):
     ELITE = "elite"
 
 
-class BillingCycle(str, Enum):
+class BillingCycle(StrEnum):
     """Billing cycle enumeration"""
 
     MONTHLY = "monthly"

@@ -31,10 +31,10 @@ Quick start:
 """
 
 from .chart_engine import ChartEngine
+from .drawing_tools import Drawing, DrawingToolkit, DrawingType
 from .indicators import TechnicalIndicators as IndicatorLibrary
-from .drawing_tools import DrawingToolkit, Drawing, DrawingType
-from .timeframes import TimeframeManager
 from .templates import TemplateManager
+from .timeframes import TimeframeManager
 
 # ── Nuclear AI chart engine ───────────────────────────────────────────────────
 # Imported lazily so the module loads even when optional deps (FastAPI, SB3)
@@ -76,20 +76,20 @@ template_manager = TemplateManager()
 __all__ = [
     # Standard charting
     "ChartEngine",
-    "IndicatorLibrary",
-    "DrawingToolkit",
     "Drawing",
+    "DrawingToolkit",
     "DrawingType",
-    "TimeframeManager",
+    "IndicatorLibrary",
     "TemplateManager",
+    "TimeframeManager",
     "chart_engine",
-    "indicator_library",
     "drawing_toolkit",
-    "timeframe_manager",
-    "template_manager",
     # Nuclear AI dashboard
     "get_chart_engine",
+    "indicator_library",
     "mount_nuclear_routes",
+    "template_manager",
+    "timeframe_manager",
 ]
 
 __version__ = "2.0.0"

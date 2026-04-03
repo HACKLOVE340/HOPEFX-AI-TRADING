@@ -22,20 +22,17 @@ import asyncio
 import logging
 import os
 import sys
-from typing import TYPE_CHECKING, Any
-from datetime import timezone
-
-UTC = timezone.utc
-
-if TYPE_CHECKING:
-    pass  # AppState is duck-typed; no circular import needed
+from datetime import UTC
+from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)
 
 
 # ── Known dev-only placeholder values — rejected in production ────────────────
-_DEV_JWT_SECRET = "dev-jwt-secret-minimum-32-characters-long!!"
-_DEV_ENCRYPTION_KEY = "dev-key-minimum-32-characters-long-for-testing"
+# nosec B105 — these are intentional dev-only placeholders, not real secrets.
+# Production startup aborts if either value is still set (see init_env below).
+_DEV_JWT_SECRET = "dev-jwt-secret-minimum-32-characters-long!!"  # nosec B105
+_DEV_ENCRYPTION_KEY = "dev-key-minimum-32-characters-long-for-testing"  # nosec B105
 
 # ── Environment / config ──────────────────────────────────────────────────────
 
@@ -170,8 +167,6 @@ async def init_model_registry(s: Any) -> bool:
 
 
 async def init_config(s: Any) -> Any:
-    import os as _os
-
     from config import initialize_config
 
     _raw = initialize_config()
@@ -182,14 +177,14 @@ async def init_config(s: Any) -> Any:
             max_overflow = 10
 
             def get_connection_string(self):
-                return _os.getenv("DATABASE_URL", "sqlite:///hopefx.db")
+                return os.getenv("DATABASE_URL", "sqlite:///hopefx.db")
 
         class _NS:
             def __init__(self, d):
                 for k, v in d.items():
                     setattr(self, k, v)
                 if not hasattr(self, "environment"):
-                    self.environment = _os.getenv("APP_ENV", "development")
+                    self.environment = os.getenv("APP_ENV", "development")
                 self.database = _DB()
                 if not hasattr(self, "api_configs"):
                     self.api_configs = {}
@@ -212,7 +207,7 @@ async def init_database(s: Any) -> Any:
     # SQLite does not support pool_size / max_overflow — only pass them for
     # PostgreSQL/MySQL connections.
     is_sqlite = conn_str.startswith("sqlite")
-    engine_kwargs: dict = {}
+    engine_kwargs: ClassVar[dict] = {}
     if not is_sqlite:
         engine_kwargs["pool_size"] = int(os.getenv("DB_POOL_SIZE", str(s.config.database.connection_pool_size)))
         engine_kwargs["max_overflow"] = int(os.getenv("DB_POOL_MAX_OVERFLOW", str(s.config.database.max_overflow)))
@@ -479,11 +474,10 @@ async def init_broker(s: Any) -> Any:
                     logger.warning("OandaPaperClock.maybe_start failed (non-fatal): %s", _clk_exc)
                     _stamp_oanda_paper_start(oanda_account, oanda_practice)
                 return b
-            else:
-                logger.warning(
-                    "OANDA connection failed — falling back to paper broker. "
-                    "Check BROKER_OANDA_TOKEN and BROKER_OANDA_ACCOUNT.",
-                )
+            logger.warning(
+                "OANDA connection failed — falling back to paper broker. "
+                "Check BROKER_OANDA_TOKEN and BROKER_OANDA_ACCOUNT.",
+            )
         except Exception as exc:
             logger.warning(
                 "OANDA broker init failed (%s) — falling back to paper broker.",
@@ -537,14 +531,14 @@ def _stamp_oanda_paper_start(account_id: str, practice: bool) -> None:
     """
     import json
     import pathlib
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta  # local use
 
     stamp_path = pathlib.Path("data/oanda_paper_start.json")
     stamp_path.parent.mkdir(parents=True, exist_ok=True)
 
     if stamp_path.exists():
         try:
-            existing = json.loads(stamp_path.read_text())
+            existing = json.loads(stamp_path.read_text(encoding="utf-8"))
         except Exception:
             existing = {}
 
@@ -567,9 +561,7 @@ def _stamp_oanda_paper_start(account_id: str, practice: bool) -> None:
     now = datetime.now(UTC)
     if started_utc_str:
         try:
-            from datetime import datetime as _dt
-
-            started_utc = _dt.fromisoformat(started_utc_str)
+            started_utc = datetime.fromisoformat(started_utc_str)
         except Exception:
             started_utc = now
     else:
@@ -591,7 +583,7 @@ def _stamp_oanda_paper_start(account_id: str, practice: bool) -> None:
             "Do not delete this file — it tracks the run start time."
         ),
     }
-    stamp_path.write_text(json.dumps(payload, indent=2))
+    stamp_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     logger.info(
         "OANDA paper trading clock stamped — account=%s… target: 30 days from %s, gate opens %s",
         account_id[:8],
@@ -653,7 +645,8 @@ async def init_price_engine(s: Any) -> Any:
             # Store on app_state so nuclear_price_bridge and health checks can
             # inspect it; run() is launched as a background task.
             s.nuclear_streamer = streamer
-            asyncio.create_task(streamer.run(), name="nuclear_streamer")
+            _t = asyncio.create_task(streamer.run(), name="nuclear_streamer")
+            _t.add_done_callback(lambda _: None)
             logger.info(
                 "init_price_engine: NuclearStreamer started — symbol=%s finnhub=%s twelvedata=%s polygon=%s",
                 primary_symbol,
@@ -946,7 +939,7 @@ async def init_macro_store(s: Any) -> Any:
 
     # ── Fallback: CSV bootstrap (original yfinance path) ────────────────────
     # Runs if FRED loaded fewer than 3 series (partial failure) or errored.
-    if fred_loaded < 3:  # noqa: PLR2004
+    if fred_loaded < 3:
         try:
             from ml.macro_bootstrap import bootstrap, load_into_store
 
@@ -966,7 +959,7 @@ async def init_macro_store(s: Any) -> Any:
     n_in_store = len(getattr(macro_store, "_series", {}))
     log_activity(
         f"MacroStore initialised — {n_in_store} series loaded "
-        f"({'FRED' if fred_loaded >= 3 else 'CSV fallback'}), "  # noqa: PLR2004
+        f"({'FRED' if fred_loaded >= 3 else 'CSV fallback'}), "
         "daily refresh scheduled at 18:00 UTC",
     )
     return macro_store
@@ -1214,7 +1207,7 @@ async def init_deep_ensemble_store(s: Any) -> Any:
             p_value_gate=float(os.getenv("DEEP_ENSEMBLE_PVAL_GATE", "0.001")),
             deep_weight=float(os.getenv("DEEP_ENSEMBLE_WEIGHT", "0.20")),
             seq_len=int(os.getenv("DEEP_ENSEMBLE_SEQ_LEN", "60")),
-            scaler_path=scaler_path if os.path.exists(scaler_path) else None,
+            scaler_path=scaler_path if Path(scaler_path).exists() else None,
         )
 
         activated = store.load()
@@ -1469,7 +1462,7 @@ async def init_daily_online_learner(s: Any) -> Any:
         OnlineLearner.adapt_to_regime() to adjust EWC lambda and learning
         rate.  Best-effort — failures are logged but never propagate.
         """
-        from datetime import datetime as _dt
+        from datetime import datetime as _dt  # local use
 
         while True:
             try:
@@ -1519,8 +1512,9 @@ async def init_daily_online_learner(s: Any) -> Any:
         ATR to price range over the last 20 bars.  Returns None on error.
         """
         try:
-            import pandas as pd
             from pathlib import Path as _Path
+
+            import pandas as pd
 
             csv_path = _Path(f"data/{symbol}_H1.csv")
             if not csv_path.exists():
@@ -1528,7 +1522,7 @@ async def init_daily_online_learner(s: Any) -> Any:
             df = pd.read_csv(csv_path, parse_dates=["timestamp"])
             df.columns = [c.lower() for c in df.columns]
             df = df.tail(20)
-            if len(df) < 10 or "close" not in df.columns:  # noqa: PLR2004
+            if len(df) < 10 or "close" not in df.columns:
                 return None
 
             returns = df["close"].pct_change().dropna()
@@ -1537,12 +1531,11 @@ async def init_daily_online_learner(s: Any) -> Any:
             mid = float(df["close"].mean())
             range_pct = price_range / mid if mid > 0 else 0
 
-            if vol > 0.005:  # noqa: PLR2004
+            if vol > 0.005:
                 return "volatile"
-            elif range_pct < 0.005:  # noqa: PLR2004
+            if range_pct < 0.005:
                 return "ranging"
-            else:
-                return "trending"
+            return "trending"
         except Exception:
             return None
 
@@ -1571,8 +1564,9 @@ def build_component_registry(app, feature_flags):
     lifespan handler.
     """
     from functools import partial
-    from core.component_registry import ComponentRegistry
+
     import core.startup_factories as F
+    from core.component_registry import ComponentRegistry
 
     registry = ComponentRegistry()
 
@@ -1774,8 +1768,8 @@ async def init_chaos_controller(s: Any) -> Any | None:
         )
         return controller
 
-    except Exception as exc:
-        logger.error("init_chaos_controller failed: %s", exc, exc_info=True)
+    except Exception:
+        logger.exception("init_chaos_controller failed: %s")
         return None
 
 
@@ -1836,8 +1830,8 @@ async def init_hot_standby(s: Any) -> Any | None:
         )
         return replicator
 
-    except Exception as exc:
-        logger.error("init_hot_standby failed: %s", exc, exc_info=True)
+    except Exception:
+        logger.exception("init_hot_standby failed: %s")
         return None
 
 

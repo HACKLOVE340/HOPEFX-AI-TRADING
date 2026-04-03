@@ -44,9 +44,7 @@ import json
 import logging
 import sys
 import warnings
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -89,7 +87,7 @@ def load_reconciled_trades() -> list[dict[str, Any]]:
 
 def _sharpe(pnls: list[float], cost: float = 0.0) -> float:
     """Annualised Sharpe ratio from a list of per-trade P&Ls (daily bars)."""
-    if len(pnls) < 2:  # noqa: PLR2004
+    if len(pnls) < 2:
         return 0.0
     net = [p - cost for p in pnls]
     arr = np.array(net, dtype=float)
@@ -131,7 +129,7 @@ def _accuracy_pnl_correlation(trades: list[dict]) -> dict[str, Any]:
             directions.append(int(d))
             pnl_signs.append(1 if p > 0 else -1)
 
-    if len(directions) < 10:  # noqa: PLR2004
+    if len(directions) < 10:
         return {"correlation": None, "n": len(directions), "note": "Insufficient data"}
 
     corr = float(np.corrcoef(directions, pnl_signs)[0, 1])
@@ -222,7 +220,7 @@ def _load_xauusd_daily() -> pd.DataFrame | None:
         try:
             df = pd.read_csv(csv_path, parse_dates=["timestamp"])
             df = df.set_index("timestamp").sort_index()
-            if len(df) > 100:  # noqa: PLR2004
+            if len(df) > 100:
                 logger.info("Loaded %d daily bars from %s", len(df), csv_path)
                 return df
         except Exception as exc:
@@ -233,7 +231,7 @@ def _load_xauusd_daily() -> pd.DataFrame | None:
         import yfinance as yf
 
         df = yf.download("GC=F", period="10y", interval="1d", progress=False, auto_adjust=True)
-        if df is not None and len(df) > 100:  # noqa: PLR2004
+        if df is not None and len(df) > 100:
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = [col[0].lower() for col in df.columns]
             else:
@@ -439,7 +437,7 @@ def _diagnose(results: dict[str, Any]) -> list[str]:
     # Check if higher thresholds help
     conf_sweep = results["confidence_sweep"]
     best_conf = max(conf_sweep, key=lambda r: r["sharpe"]) if conf_sweep else None
-    if best_conf and best_conf["threshold"] > 0.55 and best_conf["sharpe"] > 0:  # noqa: PLR2004
+    if best_conf and best_conf["threshold"] > 0.55 and best_conf["sharpe"] > 0:
         diag.append(
             f"✅ THRESHOLD EDGE EXISTS: At threshold={best_conf['threshold']:.2f}, "
             f"Sharpe={best_conf['sharpe']:.4f} (positive). "
@@ -456,7 +454,7 @@ def _diagnose(results: dict[str, Any]) -> list[str]:
     # Check if shorter holds help
     hold_sweep = results["hold_period_sweep"]
     best_hold = max(hold_sweep, key=lambda r: r["sharpe"]) if hold_sweep else None
-    if best_hold and best_hold["hold_bars"] < 5 and best_hold["sharpe"] > 0:  # noqa: PLR2004
+    if best_hold and best_hold["hold_bars"] < 5 and best_hold["sharpe"] > 0:
         diag.append(
             f"✅ HOLD PERIOD EDGE EXISTS: At hold={best_hold['hold_bars']} bars, "
             f"Sharpe={best_hold['sharpe']:.4f} (positive). "
@@ -477,7 +475,7 @@ def _diagnose(results: dict[str, Any]) -> list[str]:
     # Check accuracy vs P&L correlation
     corr = results["accuracy_pnl_correlation"]
     match_rate = corr.get("direction_pnl_match_rate", 0.5)
-    if match_rate is not None and match_rate < 0.55:  # noqa: PLR2004
+    if match_rate is not None and match_rate < 0.55:
         diag.append(
             f"❌ ACCURACY/P&L DISCONNECT: Direction-P&L match rate = {match_rate:.1%}. "
             "The model's predicted direction and actual trade P&L are nearly uncorrelated. "

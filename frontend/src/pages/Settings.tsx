@@ -1,480 +1,193 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { api } from '../hooks/useApi';
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface NotificationSettings {
-  discord_enabled: boolean;
-  discord_webhook_url: string;
-  slack_enabled: boolean;
-  slack_webhook_url: string;
-  telegram_enabled: boolean;
-  telegram_bot_token: string;
-  telegram_chat_id: string;
-  email_enabled: boolean;
-  email_address: string;
-  notify_on_trade: boolean;
-  notify_on_signal: boolean;
-  notify_on_error: boolean;
-  notify_on_daily_summary: boolean;
-}
-
-const DEFAULT_SETTINGS: NotificationSettings = {
-  discord_enabled: false,
-  discord_webhook_url: '',
-  slack_enabled: false,
-  slack_webhook_url: '',
-  telegram_enabled: false,
-  telegram_bot_token: '',
-  telegram_chat_id: '',
-  email_enabled: false,
-  email_address: '',
-  notify_on_trade: true,
-  notify_on_signal: true,
-  notify_on_error: true,
-  notify_on_daily_summary: true,
-};
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-const STORAGE_KEY = 'hopefx_notification_prefs';
-
 /**
- * Non-sensitive boolean preferences that are safe to cache locally.
- * Webhook URLs and bot tokens are NEVER written to localStorage — they are
- * loaded from and saved to the backend API only.
+ * Settings.tsx
+ * Full-featured settings hub covering every aspect of the application.
+ *
+ * Sections:
+ *   Profile       — identity, avatar, bio, timezone, language
+ *   Security      — password change, 2FA, active sessions
+ *   Broker        — broker connection, API keys, live/paper toggle
+ *   Trading       — defaults, risk limits, automation, kill switch
+ *   Appearance    — theme, accent color, chart style, display prefs
+ *   Notifications — Discord, Slack, Telegram, Email, alert triggers
+ *   API Keys      — generate, list, revoke programmatic access keys
+ *   Billing       — subscription plan, wallet, transaction history
+ *   Danger Zone   — export data, emergency stop, delete account
  */
-type SafePrefs = Pick<
-  NotificationSettings,
-  | 'discord_enabled'
-  | 'slack_enabled'
-  | 'telegram_enabled'
-  | 'email_enabled'
-  | 'notify_on_trade'
-  | 'notify_on_signal'
-  | 'notify_on_error'
-  | 'notify_on_daily_summary'
->;
 
-function loadLocalPrefs(): Partial<SafePrefs> {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as Partial<SafePrefs>;
-  } catch {
-    // Corrupted localStorage entry — discard and return empty (safe default)
-    localStorage.removeItem(STORAGE_KEY);
-  }
-  return {};
-}
+import React, { useState, Suspense, lazy } from 'react';
+import type { SettingsTab } from './settings/types';
 
-function cacheLocalPrefs(s: NotificationSettings): void {
-  const prefs: SafePrefs = {
-    discord_enabled:        s.discord_enabled,
-    slack_enabled:          s.slack_enabled,
-    telegram_enabled:       s.telegram_enabled,
-    email_enabled:          s.email_enabled,
-    notify_on_trade:        s.notify_on_trade,
-    notify_on_signal:       s.notify_on_signal,
-    notify_on_error:        s.notify_on_error,
-    notify_on_daily_summary: s.notify_on_daily_summary,
-  };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
-}
+const ProfileSection       = lazy(() => import('./settings/ProfileSection'));
+const SecuritySection      = lazy(() => import('./settings/SecuritySection'));
+const BrokerSection        = lazy(() => import('./settings/BrokerSection'));
+const TradingSection       = lazy(() => import('./settings/TradingSection'));
+const AppearanceSection    = lazy(() => import('./settings/AppearanceSection'));
+const NotificationsSection = lazy(() => import('./settings/NotificationsSection'));
+const ApiKeysSection       = lazy(() => import('./settings/ApiKeysSection'));
+const BillingSection       = lazy(() => import('./settings/BillingSection'));
+const DangerSection        = lazy(() => import('./settings/DangerSection'));
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-interface ToggleProps {
-  id: string;
+interface TabDef {
+  id: SettingsTab;
   label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
+  icon: string;
+  danger?: boolean;
 }
 
-const Toggle: React.FC<ToggleProps> = ({ id, label, checked, onChange }) => (
-  <label htmlFor={id} style={styles.toggleRow}>
-    <span style={styles.toggleLabel}>{label}</span>
-    <div
-      id={id}
-      role="switch"
-      aria-checked={checked}
-      tabIndex={0}
-      onClick={() => onChange(!checked)}
-      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onChange(!checked)}
-      style={{
-        ...styles.toggleTrack,
-        background: checked ? '#22c55e' : '#374151',
-      }}
-    >
-      <div
-        style={{
-          ...styles.toggleThumb,
-          transform: checked ? 'translateX(20px)' : 'translateX(2px)',
-        }}
-      />
-    </div>
-  </label>
-);
+const TABS: TabDef[] = [
+  { id: 'profile',       label: 'Profile',       icon: '👤' },
+  { id: 'security',      label: 'Security',       icon: '🔒' },
+  { id: 'broker',        label: 'Broker',         icon: '🏦' },
+  { id: 'trading',       label: 'Trading',        icon: '📈' },
+  { id: 'appearance',    label: 'Appearance',     icon: '🎨' },
+  { id: 'notifications', label: 'Notifications',  icon: '🔔' },
+  { id: 'api-keys',      label: 'API Keys',       icon: '🔑' },
+  { id: 'billing',       label: 'Billing',        icon: '💳' },
+  { id: 'danger',        label: 'Danger Zone',    icon: '⚠️', danger: true },
+];
 
-interface WebhookFieldProps {
-  label: string;
-  placeholder: string;
-  value: string;
-  enabled: boolean;
-  onToggle: (v: boolean) => void;
-  onChange: (v: string) => void;
-  onTest: () => void;
-  testStatus: 'idle' | 'sending' | 'ok' | 'fail';
-  helpText?: string;
-}
-
-const WebhookField: React.FC<WebhookFieldProps> = ({
-  label, placeholder, value, enabled, onToggle, onChange, onTest, testStatus, helpText,
-}) => (
-  <div style={styles.card}>
-    <div style={styles.cardHeader}>
-      <span style={styles.cardTitle}>{label}</span>
-      <Toggle id={`toggle-${label}`} label="" checked={enabled} onChange={onToggle} />
-    </div>
-    {enabled && (
-      <>
-        <input
-          type="url"
-          placeholder={placeholder}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          style={styles.input}
-          spellCheck={false}
-        />
-        {helpText && <p style={styles.helpText}>{helpText}</p>}
-        <div style={styles.testRow}>
-          <button
-            onClick={onTest}
-            disabled={!value || testStatus === 'sending'}
-            style={{
-              ...styles.testBtn,
-              opacity: !value || testStatus === 'sending' ? 0.5 : 1,
-            }}
-          >
-            {testStatus === 'sending' ? 'Sending…' : 'Send test message'}
-          </button>
-          {testStatus === 'ok' && <span style={styles.statusOk}>✅ Delivered</span>}
-          {testStatus === 'fail' && <span style={styles.statusFail}>❌ Failed — check URL</span>}
-        </div>
-      </>
-    )}
+const SectionFallback: React.FC = () => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#64748b', padding: '32px 0' }}>
+    <div style={{
+      width: 20, height: 20, border: '2px solid #334155',
+      borderTopColor: '#3b82f6', borderRadius: '50%',
+      animation: 'spin 0.7s linear infinite',
+    }} />
+    Loading…
   </div>
 );
 
-// ── Main component ────────────────────────────────────────────────────────────
-
 const Settings: React.FC = () => {
-  // Seed initial state from cached non-sensitive prefs only; credentials start blank
-  const [settings, setSettings] = useState<NotificationSettings>(() => ({
-    ...DEFAULT_SETTINGS,
-    ...loadLocalPrefs(),
-  }));
-  const [saved,    setSaved]    = useState(false);
-  const [loading,  setLoading]  = useState(true);
-  const [saveErr,  setSaveErr]  = useState('');
-  const [testStatus, setTestStatus] = useState<Record<string, 'idle' | 'sending' | 'ok' | 'fail'>>({
-    discord: 'idle',
-    slack:   'idle',
-    telegram:'idle',
-  });
+  const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
 
-  // Load full settings (including credentials) from API on mount.
-  // Credentials are never read from localStorage — only from the server.
-  useEffect(() => {
-    api.get<NotificationSettings>('/settings/notifications')
-      .then((res) => {
-        const merged = { ...DEFAULT_SETTINGS, ...res.data };
-        setSettings(merged);
-        // Cache only non-sensitive prefs for faster initial render next time
-        cacheLocalPrefs(merged);
-      })
-      .catch((err: unknown) => {
-        // API unavailable — keep non-sensitive prefs already in state;
-        // credential fields remain blank (safe default)
-        console.warn('[Settings] Failed to load notification settings from API:', err);
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
-  const update = useCallback((patch: Partial<NotificationSettings>) =>
-    setSettings((prev) => ({ ...prev, ...patch })), []);
-
-  const handleSave = async () => {
-    setSaveErr('');
-    try {
-      await api.post('/settings/notifications', settings);
-      // Only cache non-sensitive prefs after a successful server save
-      cacheLocalPrefs(settings);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
-    } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })
-        ?.response?.data?.detail;
-      setSaveErr(detail ?? 'Failed to save settings. Please try again.');
+  const renderSection = () => {
+    switch (activeTab) {
+      case 'profile':       return <ProfileSection />;
+      case 'security':      return <SecuritySection />;
+      case 'broker':        return <BrokerSection />;
+      case 'trading':       return <TradingSection />;
+      case 'appearance':    return <AppearanceSection />;
+      case 'notifications': return <NotificationsSection />;
+      case 'api-keys':      return <ApiKeysSection />;
+      case 'billing':       return <BillingSection />;
+      case 'danger':        return <DangerSection />;
     }
-  };
-
-  const sendTest = async (channel: string) => {
-    setTestStatus((prev) => ({ ...prev, [channel]: 'sending' }));
-    try {
-      await api.post('/notifications/test', { channel, settings });
-      setTestStatus((prev) => ({ ...prev, [channel]: 'ok' }));
-    } catch (err: unknown) {
-      console.warn('[Settings] Test notification failed for channel "%s":', channel, err);
-      setTestStatus((prev) => ({ ...prev, [channel]: 'fail' }));
-    }
-    setTimeout(() => setTestStatus((prev) => ({ ...prev, [channel]: 'idle' })), 4000);
   };
 
   return (
-    <div style={styles.page}>
-      <h1 style={styles.heading}>Settings</h1>
+    <>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+      `}</style>
 
-      {/* ── Notification Channels ─────────────────────────────────────────── */}
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>Notification Channels</h2>
-        <p style={styles.sectionDesc}>
-          Configure where HOPEFX sends trade alerts, signals, and system events.
-        </p>
+      <div style={styles.page}>
+        <div style={styles.header}>
+          <h1 style={styles.heading}>Settings</h1>
+          <p style={styles.subheading}>Manage your account, trading preferences, and integrations.</p>
+        </div>
 
-        {/* Discord */}
-        <WebhookField
-          label="Discord"
-          placeholder="https://discord.com/api/webhooks/…"
-          value={settings.discord_webhook_url}
-          enabled={settings.discord_enabled}
-          onToggle={(v) => update({ discord_enabled: v })}
-          onChange={(v) => update({ discord_webhook_url: v })}
-          onTest={() => sendTest('discord')}
-          testStatus={testStatus.discord}
-          helpText="Create a webhook in Discord: Server Settings → Integrations → Webhooks → New Webhook."
-        />
-
-        {/* Slack */}
-        <WebhookField
-          label="Slack"
-          placeholder="https://hooks.slack.com/services/…"
-          value={settings.slack_webhook_url}
-          enabled={settings.slack_enabled}
-          onToggle={(v) => update({ slack_enabled: v })}
-          onChange={(v) => update({ slack_webhook_url: v })}
-          onTest={() => sendTest('slack')}
-          testStatus={testStatus.slack}
-          helpText="Create an Incoming Webhook at api.slack.com/apps → Your App → Incoming Webhooks."
-        />
-
-        {/* Telegram */}
-        <div style={styles.card}>
-          <div style={styles.cardHeader}>
-            <span style={styles.cardTitle}>Telegram</span>
-            <Toggle
-              id="toggle-telegram"
-              label=""
-              checked={settings.telegram_enabled}
-              onChange={(v) => update({ telegram_enabled: v })}
-            />
-          </div>
-          {settings.telegram_enabled && (
-            <>
-              <input
-                type="text"
-                placeholder="Bot token (from @BotFather)"
-                value={settings.telegram_bot_token}
-                onChange={(e) => update({ telegram_bot_token: e.target.value })}
-                style={{ ...styles.input, marginBottom: 8 }}
-              />
-              <input
-                type="text"
-                placeholder="Chat ID (e.g. -1001234567890)"
-                value={settings.telegram_chat_id}
-                onChange={(e) => update({ telegram_chat_id: e.target.value })}
-                style={styles.input}
-              />
-              <div style={styles.testRow}>
+        <div style={styles.layout}>
+          <nav style={styles.sidebar}>
+            {TABS.map((tab) => {
+              const active = activeTab === tab.id;
+              return (
                 <button
-                  onClick={() => sendTest('telegram')}
-                  disabled={!settings.telegram_bot_token || !settings.telegram_chat_id || testStatus.telegram === 'sending'}
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
                   style={{
-                    ...styles.testBtn,
-                    opacity: (!settings.telegram_bot_token || !settings.telegram_chat_id) ? 0.5 : 1,
+                    ...styles.tabBtn,
+                    background:  active ? '#1e293b' : 'transparent',
+                    color:       active ? (tab.danger ? '#fca5a5' : '#60a5fa') : (tab.danger ? '#f87171' : '#94a3b8'),
+                    borderLeft:  active ? `3px solid ${tab.danger ? '#ef4444' : '#3b82f6'}` : '3px solid transparent',
+                    fontWeight:  active ? 600 : 400,
                   }}
                 >
-                  {testStatus.telegram === 'sending' ? 'Sending…' : 'Send test message'}
+                  <span style={styles.tabIcon}>{tab.icon}</span>
+                  <span>{tab.label}</span>
                 </button>
-                {testStatus.telegram === 'ok' && <span style={styles.statusOk}>✅ Delivered</span>}
-                {testStatus.telegram === 'fail' && <span style={styles.statusFail}>❌ Failed — check token/chat ID</span>}
+              );
+            })}
+          </nav>
+
+          <main style={styles.content}>
+            <Suspense fallback={<SectionFallback />}>
+              <div key={activeTab} style={{ animation: 'fadeIn 0.2s ease' }}>
+                {renderSection()}
               </div>
-            </>
-          )}
+            </Suspense>
+          </main>
         </div>
-
-        {/* Email */}
-        <div style={styles.card}>
-          <div style={styles.cardHeader}>
-            <span style={styles.cardTitle}>Email</span>
-            <Toggle
-              id="toggle-email"
-              label=""
-              checked={settings.email_enabled}
-              onChange={(v) => update({ email_enabled: v })}
-            />
-          </div>
-          {settings.email_enabled && (
-            <input
-              type="email"
-              placeholder="alerts@example.com"
-              value={settings.email_address}
-              onChange={(e) => update({ email_address: e.target.value })}
-              style={styles.input}
-            />
-          )}
-        </div>
-      </section>
-
-      {/* ── Alert Triggers ────────────────────────────────────────────────── */}
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>Alert Triggers</h2>
-        <div style={styles.card}>
-          <Toggle
-            id="notify-trade"
-            label="Trade executed"
-            checked={settings.notify_on_trade}
-            onChange={(v) => update({ notify_on_trade: v })}
-          />
-          <Toggle
-            id="notify-signal"
-            label="New signal generated"
-            checked={settings.notify_on_signal}
-            onChange={(v) => update({ notify_on_signal: v })}
-          />
-          <Toggle
-            id="notify-error"
-            label="System errors"
-            checked={settings.notify_on_error}
-            onChange={(v) => update({ notify_on_error: v })}
-          />
-          <Toggle
-            id="notify-daily"
-            label="Daily P&L summary"
-            checked={settings.notify_on_daily_summary}
-            onChange={(v) => update({ notify_on_daily_summary: v })}
-          />
-        </div>
-      </section>
-
-      {/* ── Save ─────────────────────────────────────────────────────────── */}
-      <div style={styles.saveRow}>
-        <button onClick={handleSave} style={{ ...styles.saveBtn, opacity: loading ? 0.6 : 1 }} disabled={loading}>
-          {loading ? 'Loading…' : saved ? '✅ Saved' : 'Save settings'}
-        </button>
-        {saveErr && (
-          <span style={{ fontSize: 12, color: '#fbbf24', marginLeft: 12 }}>
-            ⚠️ {saveErr}
-          </span>
-        )}
       </div>
-    </div>
+    </>
   );
 };
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-
 const styles: Record<string, React.CSSProperties> = {
   page: {
-    maxWidth: 680,
-    margin: '0 auto',
-    padding: '32px 16px',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-    color: '#f1f5f9',
-    background: '#0f172a',
     minHeight: '100vh',
+    background: '#0f172a',
+    color: '#f1f5f9',
+    fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
+    padding: '32px 24px',
+    boxSizing: 'border-box',
   },
-  heading: { fontSize: 28, fontWeight: 700, marginBottom: 32, color: '#f8fafc' },
-  section: { marginBottom: 40 },
-  sectionTitle: { fontSize: 18, fontWeight: 600, marginBottom: 6, color: '#e2e8f0' },
-  sectionDesc: { fontSize: 14, color: '#94a3b8', marginBottom: 16 },
-  card: {
-    background: '#1e293b',
-    border: '1px solid #334155',
-    borderRadius: 10,
-    padding: '16px 20px',
-    marginBottom: 12,
+  header: {
+    maxWidth: 1100,
+    margin: '0 auto 28px',
   },
-  cardHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  heading: {
+    fontSize: 28,
+    fontWeight: 800,
+    color: '#f8fafc',
+    margin: 0,
+    letterSpacing: '-0.02em',
+  },
+  subheading: {
+    fontSize: 14,
+    color: '#64748b',
+    marginTop: 6,
     marginBottom: 0,
   },
-  cardTitle: { fontSize: 15, fontWeight: 600, color: '#e2e8f0' },
-  input: {
-    width: '100%',
-    marginTop: 12,
-    padding: '10px 12px',
-    background: '#0f172a',
-    border: '1px solid #475569',
-    borderRadius: 6,
-    color: '#f1f5f9',
-    fontSize: 14,
-    boxSizing: 'border-box',
-    outline: 'none',
-  },
-  helpText: { fontSize: 12, color: '#64748b', marginTop: 6, marginBottom: 0 },
-  testRow: { display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 },
-  testBtn: {
-    padding: '8px 16px',
-    background: '#3b82f6',
-    color: '#fff',
-    border: 'none',
-    borderRadius: 6,
-    fontSize: 13,
-    cursor: 'pointer',
-    fontWeight: 500,
-  },
-  statusOk: { fontSize: 13, color: '#22c55e' },
-  statusFail: { fontSize: 13, color: '#ef4444' },
-  toggleRow: {
+  layout: {
+    maxWidth: 1100,
+    margin: '0 auto',
     display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '8px 0',
-    cursor: 'pointer',
-    userSelect: 'none',
+    gap: 28,
+    alignItems: 'flex-start',
   },
-  toggleLabel: { fontSize: 14, color: '#cbd5e1' },
-  toggleTrack: {
-    width: 44,
-    height: 24,
+  sidebar: {
+    width: 200,
+    flexShrink: 0,
+    background: '#0f172a',
     borderRadius: 12,
-    position: 'relative',
+    border: '1px solid #1e293b',
+    padding: '8px 0',
+    position: 'sticky',
+    top: 24,
+  },
+  tabBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    width: '100%',
+    padding: '10px 16px',
+    border: 'none',
+    borderLeft: '3px solid transparent',
+    background: 'transparent',
     cursor: 'pointer',
-    transition: 'background 0.2s',
+    fontSize: 14,
+    textAlign: 'left',
+    transition: 'background 0.15s, color 0.15s',
+    borderRadius: 0,
+  },
+  tabIcon: {
+    fontSize: 16,
     flexShrink: 0,
   },
-  toggleThumb: {
-    position: 'absolute',
-    top: 2,
-    width: 20,
-    height: 20,
-    borderRadius: '50%',
-    background: '#fff',
-    transition: 'transform 0.2s',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
-  },
-  saveRow: { display: 'flex', justifyContent: 'flex-end', marginTop: 8 },
-  saveBtn: {
-    padding: '12px 28px',
-    background: '#22c55e',
-    color: '#fff',
-    border: 'none',
-    borderRadius: 8,
-    fontSize: 15,
-    fontWeight: 600,
-    cursor: 'pointer',
+  content: {
+    flex: 1,
+    minWidth: 0,
   },
 };
 

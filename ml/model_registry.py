@@ -83,17 +83,15 @@ Usage
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import logging
 import os
 import tempfile
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +172,7 @@ class ModelRegistry:
             Path(tmp_path).replace(self._path)
         except Exception:
             with contextlib.suppress(OSError):
-                os.unlink(tmp_path)
+                Path(tmp_path).unlink()
             raise
 
     # ── Registration ──────────────────────────────────────────────────────────

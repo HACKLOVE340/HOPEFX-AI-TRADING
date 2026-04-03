@@ -16,14 +16,13 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
-
 
 # ── Enumerations ──────────────────────────────────────────────────────────────
 
 
-class FeedSource(str, Enum):
+class FeedSource(StrEnum):
     GOLDAPI = "goldapi"
     METALPRICEAPI = "metalpriceapi"
     METALS_API = "metals_api"
@@ -34,14 +33,14 @@ class FeedSource(str, Enum):
     REPLAY = "replay"  # historical replay engine
 
 
-class TickQuality(str, Enum):
+class TickQuality(StrEnum):
     GOOD = "good"
     STALE = "stale"
     SUSPECT = "suspect"
     REJECTED = "rejected"
 
 
-class NewsSource(str, Enum):
+class NewsSource(StrEnum):
     FINNHUB = "finnhub"
     FMP = "fmp"
     NEWSDATA = "newsdata"
@@ -50,14 +49,14 @@ class NewsSource(str, Enum):
     NEWSAPI_AI = "newsapi_ai"
 
 
-class MacroImpact(str, Enum):
+class MacroImpact(StrEnum):
     HIGH = "high"
     MEDIUM = "medium"
     LOW = "low"
     NONE = "none"
 
 
-class Direction(str, Enum):
+class Direction(StrEnum):
     LONG = "long"
     SHORT = "short"
     NEUTRAL = "neutral"

@@ -58,9 +58,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -124,8 +122,7 @@ def _send(
             # Fire-and-forget from async context
             asyncio.ensure_future(channel.send_email_async([to], subject, plain_body=subject, html_body=html))
             return True
-        else:
-            return loop.run_until_complete(channel.send_email_async([to], subject, plain_body=subject, html_body=html))
+        return loop.run_until_complete(channel.send_email_async([to], subject, plain_body=subject, html_body=html))
     except Exception as exc:
         logger.error("email_triggers: send failed for %s: %s", template, exc)
         return False

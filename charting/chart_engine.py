@@ -13,7 +13,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-class ChartType(str, _enum.Enum):
+class ChartType(_enum.StrEnum):
     """Chart type enum. Inherits from str so values compare equal to strings."""
 
     CANDLESTICK = "candlestick"
@@ -77,7 +77,7 @@ class Chart:
         }
 
     def export_to_json(self, filepath: str) -> None:
-        with open(filepath, "w") as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             json.dump(self.render(), f, indent=2, default=str)
 
     def clear(self) -> None:

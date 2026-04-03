@@ -9,15 +9,13 @@ Multi-channel alerts: Discord, Telegram, Email, SMS, Webhooks
 """
 
 import asyncio
+import json
 import logging
-import aiohttp
-from typing import Dict, List, Optional  # noqa: F401
-from enum import Enum
 from dataclasses import dataclass
-import json  # noqa: F401
-from datetime import timezone
+from datetime import UTC, datetime
+from enum import Enum
 
-UTC = timezone.utc
+import aiohttp
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +32,7 @@ class Notification:
     level: NotificationLevel
     message: str
     data: dict | None = None
-    timestamp: float = None
+    timestamp: float | None = None
 
     def __post_init__(self):
         if self.timestamp is None:
@@ -48,7 +46,7 @@ class NotificationManager:
     Unified notification system
     """
 
-    def __init__(self, config: dict = None):
+    def __init__(self, config: dict | None = None):
         self.config = config or {}
         self.channels: dict[str, bool] = {
             "discord": bool(self.config.get("discord_webhook")),
@@ -62,7 +60,8 @@ class NotificationManager:
     async def start(self):
         """Start notification processor"""
         self._running = True
-        asyncio.create_task(self._process_queue())
+        _t = asyncio.create_task(self._process_queue())
+        _t.add_done_callback(lambda _: None)
         logger.info("NotificationManager started")
 
     async def stop(self):
@@ -74,7 +73,7 @@ class NotificationManager:
         """Queue a notification"""
         await self.queue.put(notification)
 
-    async def send_alert(self, level: str, message: str, data: dict = None):
+    async def send_alert(self, level: str, message: str, data: dict | None = None):
         """Quick send method"""
         notification = Notification(level=NotificationLevel(level.lower()), message=message, data=data)
         await self.send(notification)
@@ -88,7 +87,8 @@ class NotificationManager:
             except TimeoutError:
                 continue
             except Exception as e:
-                logger.error(f"Notification processing error: {e}")
+                logger.error("Notification processing error: %s", e)
+
 
     async def _dispatch(self, notification: Notification):
         """Send to all configured channels"""
@@ -155,8 +155,9 @@ class NotificationManager:
         payload = {"embeds": [embed]}
 
         async with aiohttp.ClientSession() as session, session.post(webhook_url, json=payload) as resp:
-            if resp.status != 204:  # noqa: PLR2004
-                logger.error(f"Discord notification failed: {resp.status}")
+            if resp.status != 204:
+                logger.error("Discord notification failed: %s", resp.status)
+
 
     @staticmethod
     def _escape_mdv2(text: str) -> str:
@@ -210,7 +211,7 @@ class NotificationManager:
         payload = {"chat_id": chat_id, "text": text, "parse_mode": "MarkdownV2"}
 
         async with aiohttp.ClientSession() as session, session.post(url, json=payload) as resp:
-            if resp.status != 200:  # noqa: PLR2004
+            if resp.status != 200:
                 body = await resp.text()
                 logger.error(
                     "Telegram notification failed: status=%s body=%s",
@@ -236,13 +237,12 @@ class NotificationManager:
         }
 
         async with aiohttp.ClientSession() as session, session.post(webhook_url, json=payload) as resp:
-            if resp.status >= 400:  # noqa: PLR2004
-                logger.error(f"Webhook notification failed: {resp.status}")
+            if resp.status >= 400:
+                logger.error("Webhook notification failed: %s", resp.status)
+
 
     def _format_timestamp(self, timestamp: float) -> str:
         """Format timestamp for Discord"""
-        from datetime import datetime, timezone  # noqa: F401
-
         dt = datetime.fromtimestamp(timestamp, tz=UTC)
         return dt.isoformat()
 
@@ -295,7 +295,7 @@ class _NotificationsSingleton:
             await self._manager.start()
             self._started = True
 
-    async def send_critical_alert(self, message: str, data: dict = None) -> None:
+    async def send_critical_alert(self, message: str, data: dict | None = None) -> None:
         """Send a CRITICAL-level alert to all configured channels."""
         await self._ensure_started()
         notification = Notification(
@@ -306,7 +306,7 @@ class _NotificationsSingleton:
         await self._manager.send(notification)
         logger.critical("CRITICAL ALERT: %s", message)
 
-    async def send_warning(self, message: str, data: dict = None) -> None:
+    async def send_warning(self, message: str, data: dict | None = None) -> None:
         """Send a WARNING-level alert to all configured channels."""
         await self._ensure_started()
         notification = Notification(
@@ -317,7 +317,7 @@ class _NotificationsSingleton:
         await self._manager.send(notification)
         logger.warning("WARNING ALERT: %s", message)
 
-    async def send_info(self, message: str, data: dict = None) -> None:
+    async def send_info(self, message: str, data: dict | None = None) -> None:
         """Send an INFO-level alert to all configured channels."""
         await self._ensure_started()
         notification = Notification(
@@ -342,3 +342,8 @@ class _NotificationsSingleton:
 
 # Singleton instance — imported by nuclear_supervisor and kill_switch
 notifications = _NotificationsSingleton()
+
+try:
+    from notifications.manager import NotificationChannel
+except Exception as _exc:
+    logging.getLogger(__name__).debug("NotificationChannel unavailable: %s", _exc)

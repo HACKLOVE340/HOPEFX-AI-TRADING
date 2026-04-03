@@ -32,11 +32,11 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import sys
 import tempfile
 from pathlib import Path
-import contextlib
 
 # ---------------------------------------------------------------------------
 # Load .env if present
@@ -49,7 +49,7 @@ except ImportError:
     pass
 
 PROJECT_ROOT = Path(__file__).parent.parent
-_PASS = "  ✓"
+_PASS = "  ✓"  # nosec B105 — status symbol, not a password
 _FAIL = "  ✗"
 
 
@@ -63,11 +63,12 @@ def run(verbose: bool = False) -> int:
 
     # ── Check alembic is installed ────────────────────────────────────────────
     try:
-        from alembic import command as alembic_command
         from alembic.config import Config as AlembicConfig
+        from alembic.runtime.migration import MigrationContext
         from alembic.script import ScriptDirectory
-        from alembic.runtime.migration import MigrationContext  # noqa: F401
         from sqlalchemy import create_engine, inspect, text
+
+        from alembic import command as alembic_command
 
         print(f"{_PASS}  alembic + sqlalchemy importable")
     except ImportError as exc:

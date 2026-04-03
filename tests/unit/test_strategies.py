@@ -7,8 +7,8 @@
 Unit tests for trading strategies.
 """
 
-import pytest
 import pandas as pd
+import pytest
 
 from strategies.ma_crossover import MovingAverageCrossover
 

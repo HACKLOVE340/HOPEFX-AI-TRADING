@@ -14,14 +14,12 @@ Tests for:
 - OrderFlowDashboard (order_flow_dashboard.py)
 """
 
-import pytest
-import numpy as np
-import pandas as pd
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
+import numpy as np
+import pandas as pd
+import pytest
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -116,7 +114,7 @@ class TestMarketRegimeDetector:
         assert isinstance(result, RegimeAnalysis)
 
     def test_detect_regime_insufficient_data_returns_default(self):
-        from analysis.market_analysis import MarketRegimeDetector, MarketRegime
+        from analysis.market_analysis import MarketRegime, MarketRegimeDetector
 
         detector = MarketRegimeDetector(config={"lookback_period": 100})
         df = _make_ohlcv(n=50)  # less than lookback
@@ -141,7 +139,7 @@ class TestMarketRegimeDetector:
         assert "timestamp" in d
 
     def test_detect_regime_trending_up(self):
-        from analysis.market_analysis import MarketRegimeDetector, MarketRegime
+        from analysis.market_analysis import MarketRegime, MarketRegimeDetector
 
         detector = MarketRegimeDetector()
         df = _make_trending_up(n=200)
@@ -152,7 +150,7 @@ class TestMarketRegimeDetector:
         assert result.trend_direction in ("up", "down", "neutral")
 
     def test_detect_regime_trending_down(self):
-        from analysis.market_analysis import MarketRegimeDetector, MarketRegime
+        from analysis.market_analysis import MarketRegime, MarketRegimeDetector
 
         detector = MarketRegimeDetector()
         df = _make_trending_down(n=200)
@@ -161,7 +159,7 @@ class TestMarketRegimeDetector:
         assert result.trend_direction in ("up", "down", "neutral")
 
     def test_detect_regime_ranging(self):
-        from analysis.market_analysis import MarketRegimeDetector, MarketRegime
+        from analysis.market_analysis import MarketRegime, MarketRegimeDetector
 
         detector = MarketRegimeDetector()
         df = _make_ranging(n=200)
@@ -169,7 +167,7 @@ class TestMarketRegimeDetector:
         assert result.current_regime in list(MarketRegime)
 
     def test_detect_regime_volatile(self):
-        from analysis.market_analysis import MarketRegimeDetector, MarketRegime
+        from analysis.market_analysis import MarketRegime, MarketRegimeDetector
 
         detector = MarketRegimeDetector()
         df = _make_volatile(n=200)
@@ -263,7 +261,7 @@ class TestMarketRegimeDetector:
 
     def test_detect_regime_with_exact_100_rows(self):
         """Boundary: exactly lookback_period rows should NOT use default."""
-        from analysis.market_analysis import MarketRegimeDetector, MarketRegime
+        from analysis.market_analysis import MarketRegime, MarketRegimeDetector
 
         detector = MarketRegimeDetector(config={"lookback_period": 100})
         df = _make_ohlcv(n=100)
@@ -308,7 +306,7 @@ class TestMultiTimeframeAnalyzer:
         assert analyzer.timeframes == ["H1", "H4"]
 
     def test_analyze_confluence_returns_confluence_analysis(self):
-        from analysis.market_analysis import MultiTimeframeAnalyzer, ConfluenceAnalysis
+        from analysis.market_analysis import ConfluenceAnalysis, MultiTimeframeAnalyzer
 
         analyzer = MultiTimeframeAnalyzer()
         data = {"H1": _make_ohlcv(n=200), "H4": _make_ohlcv(n=200)}
@@ -502,9 +500,9 @@ class TestSessionAnalyzer:
 
     def test_analyze_session_asian(self):
         from analysis.market_analysis import (
+            SessionAnalysis,
             SessionAnalyzer,
             TradingSession,
-            SessionAnalysis,
         )
 
         analyzer = SessionAnalyzer()
@@ -592,9 +590,9 @@ class TestSessionAnalyzer:
 
     def test_analyze_session_without_explicit_time(self):
         from analysis.market_analysis import (
+            SessionAnalysis,
             SessionAnalyzer,
             TradingSession,
-            SessionAnalysis,
         )
 
         analyzer = SessionAnalyzer()
@@ -1035,7 +1033,7 @@ class TestOrderFlowDashboard:
         assert dashboard._inst is not None
 
     def test_create_dashboard_with_configs(self):
-        from analysis.order_flow_dashboard import create_dashboard, OrderFlowDashboard
+        from analysis.order_flow_dashboard import OrderFlowDashboard, create_dashboard
 
         dashboard = create_dashboard(
             order_flow_config={"lookback": 100},

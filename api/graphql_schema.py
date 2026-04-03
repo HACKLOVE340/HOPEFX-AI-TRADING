@@ -28,9 +28,7 @@ import asyncio
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 
 def _utcnow() -> datetime:
@@ -39,6 +37,7 @@ def _utcnow() -> datetime:
 
 
 from collections.abc import AsyncGenerator
+from typing import ClassVar
 
 import strawberry
 from strawberry.fastapi import GraphQLRouter
@@ -188,6 +187,7 @@ class AccountInfo:
     realized_pnl_today: float
     open_positions: int
     currency: str
+    broker_connected: bool = False
 
 
 @strawberry.type
@@ -323,27 +323,30 @@ def _live_account() -> AccountInfo:
         try:
             info = state.broker.get_account_info()
             return AccountInfo(
-                balance=float(info.get("balance", 10000)),
-                equity=float(info.get("equity", 10000)),
-                margin=float(info.get("margin", 0)),
-                free_margin=float(info.get("free_margin", 10000)),
-                margin_level=float(info.get("margin_level", 0)),
-                unrealized_pnl=float(info.get("unrealized_pnl", 0)),
-                realized_pnl_today=float(info.get("realized_pnl_today", 0)),
+                balance=float(info.get("balance", 0.0)),
+                equity=float(info.get("equity", 0.0)),
+                margin=float(info.get("margin", 0.0)),
+                free_margin=float(info.get("free_margin", 0.0)),
+                margin_level=float(info.get("margin_level", 0.0)),
+                unrealized_pnl=float(info.get("unrealized_pnl", 0.0)),
+                realized_pnl_today=float(info.get("realized_pnl_today", 0.0)),
                 open_positions=int(info.get("open_positions", 0)),
                 currency=str(info.get("currency", "USD")),
+                broker_connected=True,
             )
         except (RuntimeError, ValueError, OSError, AttributeError) as exc:
             logger.debug("Live account fetch failed: %s", exc)
+    # Broker unavailable — return zeroed struct so the frontend shows
+    # "disconnected" state rather than misleading fake values.
     return AccountInfo(
-        balance=10000,
-        equity=10420,
-        margin=200,
-        free_margin=9820,
-        margin_level=5210,
-        unrealized_pnl=420,
-        realized_pnl_today=120,
-        open_positions=1,
+        balance=0.0,
+        equity=0.0,
+        margin=0.0,
+        free_margin=0.0,
+        margin_level=0.0,
+        unrealized_pnl=0.0,
+        realized_pnl_today=0.0,
+        open_positions=0,
         currency="USD",
     )
 
@@ -449,7 +452,7 @@ class Query:
 
             pred = get_predictor()
             history = getattr(pred, "signal_history", None) or []
-            results: list[Signal] = []
+            results: ClassVar[list[Signal]] = []
             for sig in history[: min(limit, len(history))]:
                 results.append(
                     Signal(
@@ -555,7 +558,7 @@ class Query:
                         peak = max(peak, cum)
                         max_dd = max(max_dd, peak - cum)
                     # Best symbol by total PnL
-                    sym_pnl: dict = {}
+                    sym_pnl: ClassVar[dict] = {}
                     for t in trades:
                         s = t.get("symbol", "XAU/USD")
                         sym_pnl[s] = sym_pnl.get(s, 0.0) + float(t.get("pnl", 0))
@@ -605,7 +608,7 @@ class Query:
 
             prop_cfg = {}
             try:
-                with open(Path(__file__).parent.parent / "prop_firm_mode.json") as f:
+                with open(Path(__file__).parent.parent / "prop_firm_mode.json", encoding="utf-8") as f:
                     prop_cfg = _json.load(f)
             except (ImportError, AttributeError, RuntimeError) as _exc:
                 logger.debug("Suppressed exception: %s", _exc)
@@ -656,7 +659,7 @@ class Mutation:
         user = _require_auth(info)
         if side.upper() not in ("BUY", "SELL", "LONG", "SHORT"):
             raise ValueError(f"Invalid side: {side}")
-        if lots <= 0 or lots > 100:  # noqa: PLR2004
+        if lots <= 0 or lots > 100:
             raise ValueError(f"Invalid lot size: {lots}")
 
         order_id = str(uuid.uuid4())[:8]

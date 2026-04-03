@@ -67,7 +67,8 @@ Usage
 
     # Start background refresh at startup:
     from core.secrets_manager import secrets
-    asyncio.create_task(secrets.refresh_loop())
+    _t = asyncio.create_task(secrets.refresh_loop())
+    _t.add_done_callback(lambda _: None)
 """
 
 from __future__ import annotations
@@ -75,10 +76,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -189,7 +188,7 @@ class SecretsManager:
             except asyncio.CancelledError:
                 logger.info("SecretsManager: refresh loop stopped")
                 return
-            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            except Exception as exc:  # pylint: disable=broad-exception-caught
                 self._error_count += 1
                 logger.warning("SecretsManager: refresh error: %s", exc)
 
@@ -235,7 +234,7 @@ class SecretsManager:
 
     # ── Rotation callbacks ────────────────────────────────────────────────────
 
-    _rotation_callbacks: list = []
+    _rotation_callbacks: ClassVar[list] = []
 
     def on_rotation(self, callback) -> None:
         """
@@ -261,7 +260,7 @@ class SecretsManager:
                 result = cb(changed_keys)
                 if asyncio.iscoroutine(result):
                     await result
-            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            except Exception as exc:  # pylint: disable=broad-exception-caught
                 logger.warning("SecretsManager: rotation callback error: %s", exc)
 
     # ── Backend implementations ───────────────────────────────────────────────
@@ -319,15 +318,16 @@ class SecretsManager:
             logger.debug("SecretsManager: fetched %d keys from Vault", len(secrets_data))
             return {k.lower(): str(v) for k, v in secrets_data.items()}
 
-        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("SecretsManager: Vault fetch failed: %s — using cached/env values", exc)
             return self._fetch_env()
 
     async def _fetch_aws(self) -> dict[str, str]:
         """Fetch secrets from AWS Secrets Manager."""
         try:
-            import boto3
             import json as _json
+
+            import boto3
         except ImportError:
             logger.warning("SecretsManager: boto3 not installed — falling back to env vars. pip install boto3")
             return self._fetch_env()
@@ -351,7 +351,7 @@ class SecretsManager:
             )
             return {k.lower(): str(v) for k, v in secrets_data.items()}
 
-        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error(
                 "SecretsManager: AWS Secrets Manager fetch failed: %s — using cached/env values",
                 exc,

@@ -17,10 +17,11 @@ tests/unit/test_signal_pipeline_e2e.py
   8. Signal with ML probability uses correct Kelly fraction
 """
 
-import pytest
 from pathlib import Path
-from risk.manager import RiskManager, RiskConfig
 
+import pytest
+
+from risk.manager import RiskConfig, RiskManager
 
 # ---------------------------------------------------------------------------
 # Helpers

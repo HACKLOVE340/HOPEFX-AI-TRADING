@@ -29,6 +29,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from typing import ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +73,7 @@ def _validate_jwt(errors: list[str]) -> None:
             "MISSING  SECURITY_JWT_SECRET: JWT signing key — "
             'generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"',
         )
-    elif len(jwt_val) < 32:  # noqa: PLR2004
+    elif len(jwt_val) < 32:
         errors.append(
             f"TOO_SHORT SECURITY_JWT_SECRET (got {len(jwt_val)} chars, need >=32)",
         )
@@ -96,7 +97,7 @@ def _validate_database(errors: list[str]) -> None:
         errors.append(
             "MISSING  DB_PASSWORD: required when DB_HOST is set without DATABASE_URL",
         )
-    if db_pass and len(db_pass) < 12:  # noqa: PLR2004
+    if db_pass and len(db_pass) < 12:
         errors.append(
             f"TOO_SHORT DB_PASSWORD (got {len(db_pass)} chars, need >=12)",
         )
@@ -130,7 +131,7 @@ def _validate_encryption_key(errors: list[str]) -> None:
             "MISSING  CONFIG_ENCRYPTION_KEY: required for encrypting stored credentials. "
             'Generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"',
         )
-    elif len(enc_key) < 32:  # noqa: PLR2004
+    elif len(enc_key) < 32:
         errors.append(
             f"TOO_SHORT CONFIG_ENCRYPTION_KEY (got {len(enc_key)} chars, need >=32)",
         )
@@ -181,7 +182,7 @@ def _validate_kill_switch_token(errors: list[str]) -> None:
             "MISSING  HOPEFX_KILL_SWITCH_TOKEN: required to deactivate trading halts "
             'via API. Generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"',
         )
-    elif len(ks_token) < 32:  # noqa: PLR2004
+    elif len(ks_token) < 32:
         errors.append(
             f"TOO_SHORT HOPEFX_KILL_SWITCH_TOKEN (got {len(ks_token)} chars, need >=32)",
         )
@@ -300,7 +301,7 @@ def validate_environment(*, strict: bool = True) -> None:
     Raises:
         StartupValidationError: when strict=False and validation fails.
     """
-    errors: list[str] = []
+    errors: ClassVar[list[str]] = []
     dev_mode = _is_dev()
 
     _validate_jwt(errors)

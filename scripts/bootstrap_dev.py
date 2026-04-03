@@ -42,7 +42,7 @@ DEFAULT_ADMIN_EMAIL = "admin@hopefx.io"
 DEFAULT_ADMIN_USERNAME = "admin"
 # Password is generated once at bootstrap time and written to .env.
 # Never hardcoded — read back from .env after generation.
-_ADMIN_PASSWORD_KEY = "BOOTSTRAP_ADMIN_PASSWORD"
+_ADMIN_PASSWORD_KEY = "BOOTSTRAP_ADMIN_PASSWORD"  # nosec B105 — env var key name, not a password
 
 
 def _generate_env() -> bool:
@@ -122,12 +122,14 @@ def _seed_admin() -> str:
     if not admin_password:
         raise RuntimeError(f"{_ADMIN_PASSWORD_KEY} not found in environment. Run bootstrap_dev.py to regenerate .env.")
 
-    from database.models import Base
-    from database.user_models import User, UserRole, UserStatus
-    from auth.service import hash_password
+    import uuid
+
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    import uuid
+
+    from auth.service import hash_password
+    from database.models import Base
+    from database.user_models import User, UserRole, UserStatus
 
     db_url = os.environ["DATABASE_URL"]
     connect_args = {"check_same_thread": False} if db_url.startswith("sqlite") else {}
@@ -178,7 +180,7 @@ def bootstrap(verbose: bool = True) -> None:
             print("  Start the server:  python app.py")
             print("  Login at:          http://localhost:8000/login")
             print("─" * 58 + "\n")
-    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+    except Exception as exc:  # pylint: disable=broad-exception-caught
         if verbose:
             print(f"  ⚠️  Admin seed skipped: {exc}")
 

@@ -9,28 +9,27 @@ Market Data Cache Module - PRODUCTION VERSION
 Fixed: Thread safety, proper Redis connection management, circuit breaker
 """
 
+import asyncio
 import json
 import logging
-import time
 import threading
-import asyncio
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from typing import Any
-from dataclasses import dataclass, asdict
+import time
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime, timedelta
 from enum import Enum
+from typing import Any
 
 try:
+    from redis.exceptions import TimeoutError as RedisTimeoutError  # re-exported
+
     import redis
     from redis import Redis
-    from redis.exceptions import TimeoutError as RedisTimeoutError  # pylint: disable=unused-import  # re-exported
 
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
     Redis = None  # type: ignore[assignment,misc]
-    logging.warning("Redis not available, using in-memory fallback")
+    logger.warning("Redis not available, using in-memory fallback")
 
 logger = logging.getLogger(__name__)
 
@@ -268,7 +267,8 @@ class MarketDataCache:
         # Attempt connection at init time (tests patch this method)
         self._redis_client = self._connect_with_retry()
 
-        logger.info(f"MarketDataCache initialized (Redis: {host}:{port})")
+        logger.info("MarketDataCache initialized (Redis: %s:%s)", host, port)
+
 
     def _connect_with_retry(self) -> Redis | None:
         """Attempt Redis connection with retries; return client or None on failure."""
@@ -289,10 +289,12 @@ class MarketDataCache:
                 self._connection_failed = False
                 self._using_fallback = False
                 if attempt > 0:
-                    logger.info(f"Redis connected after {attempt} retries")
+                    logger.info("Redis connected after %s retries", attempt)
+
                 return client
             except Exception as e:
-                logger.warning(f"Redis connection attempt {attempt + 1} failed: {e}")
+                logger.warning("Redis connection attempt %s failed: %s", attempt + 1, e)
+
                 if attempt < self.max_retries - 1:
                     time.sleep(self.retry_delay * (2**attempt))
         self._connection_failed = True
@@ -336,12 +338,14 @@ class MarketDataCache:
                 self._using_fallback = False
 
                 if attempt > 0:
-                    logger.info(f"Redis reconnected after {attempt} attempts")
+                    logger.info("Redis reconnected after %s attempts", attempt)
+
 
                 return client
 
             except Exception as e:
-                logger.warning(f"Redis connection attempt {attempt + 1} failed: {e}")
+                logger.warning("Redis connection attempt %s failed: %s", attempt + 1, e)
+
                 if attempt < self.max_retries - 1:
                     time.sleep(self.retry_delay * (2**attempt))
 
@@ -352,8 +356,7 @@ class MarketDataCache:
         if self.enable_fallback:
             logger.warning("Using in-memory fallback for cache")
             return None
-        else:
-            raise ConnectionError(f"Could not connect to Redis at {self.host}:{self.port}")
+        raise ConnectionError(f"Could not connect to Redis at {self.host}:{self.port}")
 
     def _resolve_timeframe(self, timeframe) -> str:
         """Resolve timeframe to its string value, accepting Timeframe enum or raw string."""
@@ -424,11 +427,13 @@ class MarketDataCache:
                     self._local_cache[key] = cached_data
                     self._local_ttl[key] = time.time() + ttl
 
-            logger.debug(f"Cached OHLCV for {symbol} ({tf_key}): {len(ohlcv_data)} candles")
+            logger.debug("Cached OHLCV for %s (%s): %s candles", symbol, tf_key, len(ohlcv_data))
+
             return True
 
         except Exception as e:
-            logger.error(f"Error caching OHLCV: {e}")
+            logger.error("Error caching OHLCV: %s", e)
+
             return False
 
     def get_ohlcv(self, symbol: str, timeframe, limit: int | None = None) -> list | None:
@@ -486,7 +491,8 @@ class MarketDataCache:
             return None
 
         except Exception as e:
-            logger.error(f"Error retrieving OHLCV: {e}")
+            logger.error("Error retrieving OHLCV: %s", e)
+
             with self._stats_lock:
                 self._stats.total_misses += 1
             return None
@@ -518,11 +524,13 @@ class MarketDataCache:
                     self._local_cache[key] = cached_data
                     self._local_ttl[key] = time.time() + ttl
 
-            logger.debug(f"Cached tick for {symbol}")
+            logger.debug("Cached tick for %s", symbol)
+
             return True
 
         except Exception as e:
-            logger.error(f"Error caching tick: {e}")
+            logger.error("Error caching tick: %s", e)
+
             return False
 
     def get_tick(self, symbol: str):
@@ -557,7 +565,8 @@ class MarketDataCache:
             return None
 
         except Exception as e:
-            logger.error(f"Error retrieving tick: {e}")
+            logger.error("Error retrieving tick: %s", e)
+
             return None
 
     # Alias used by tests and external callers
@@ -605,11 +614,13 @@ class MarketDataCache:
             with self._stats_lock:
                 self._stats.total_evictions += 1
 
-            logger.debug(f"Invalidated cache for {symbol}")
+            logger.debug("Invalidated cache for %s", symbol)
+
             return True
 
         except Exception as e:
-            logger.error(f"Error invalidating symbol: {e}")
+            logger.error("Error invalidating symbol: %s", e)
+
             return False
 
     def clear_all(self) -> bool:
@@ -647,7 +658,8 @@ class MarketDataCache:
             return True
 
         except Exception as e:
-            logger.error(f"Error clearing cache: {e}")
+            logger.error("Error clearing cache: %s", e)
+
             return False
 
     # Statistics
@@ -699,7 +711,8 @@ class MarketDataCache:
                 self._local_ttl[key] = time.time() + ttl
             return True
         except Exception as e:
-            logger.error(f"cache_ticks error: {e}")
+            logger.error("cache_ticks error: %s", e)
+
             return False
 
     def get_ticks(self, symbol: str) -> list | None:
@@ -722,7 +735,8 @@ class MarketDataCache:
             items = envelope.get("data", envelope) if isinstance(envelope, dict) else envelope
             return [TickData.from_dict(d) if isinstance(d, dict) else d for d in items]
         except Exception as e:
-            logger.error(f"get_ticks error: {e}")
+            logger.error("get_ticks error: %s", e)
+
             return None
 
     def append_ohlcv(
@@ -730,7 +744,7 @@ class MarketDataCache:
         symbol: str,
         timeframe: Timeframe,
         candle: OHLCVData,
-        ttl: int = None,
+        ttl: int | None = None,
         max_size: int = 1000,
     ) -> bool:
         """Append a single candle to an existing OHLCV list in cache."""
@@ -764,7 +778,8 @@ class MarketDataCache:
                 self._local_ttl[key] = time.time() + ttl
             return True
         except Exception as e:
-            logger.error(f"append_ohlcv error: {e}")
+            logger.error("append_ohlcv error: %s", e)
+
             return False
 
     def cache_multi_timeframe(self, symbol: str, data: dict, ttl=None) -> bool:
@@ -800,7 +815,8 @@ class MarketDataCache:
                     self._stats.total_evictions += 1
             return deleted
         except Exception as e:
-            logger.error(f"invalidate_ohlcv error: {e}")
+            logger.error("invalidate_ohlcv error: %s", e)
+
             return False
 
     def invalidate_tick(self, symbol: str) -> bool:
@@ -820,7 +836,8 @@ class MarketDataCache:
                     self._stats.total_evictions += 1
             return deleted
         except Exception as e:
-            logger.error(f"invalidate_tick error: {e}")
+            logger.error("invalidate_tick error: %s", e)
+
             return False
 
     def get_statistics(self) -> CacheStatistics:
@@ -859,7 +876,8 @@ class MarketDataCache:
 
                         stats.total_keys = key_count
                     except Exception as e:
-                        logger.error(f"Error getting Redis stats: {e}")
+                        logger.error("Error getting Redis stats: %s", e)
+
                 else:
                     with self._local_cache_lock:
                         stats.total_keys = len(self._local_cache)
@@ -869,7 +887,8 @@ class MarketDataCache:
                 return stats
 
         except Exception as e:
-            logger.error(f"Error getting statistics: {e}")
+            logger.error("Error getting statistics: %s", e)
+
             return CacheStatistics()
 
     def print_statistics(self) -> None:
@@ -877,7 +896,8 @@ class MarketDataCache:
         stats = self.get_statistics()
         logger.info("Cache Statistics:")
         for key, value in stats.to_dict().items():
-            logger.info(f"  {key}: {value}")
+            logger.info("  %s: %s", key, value)
+
 
     def reset_statistics(self) -> None:
         """Reset cache statistics"""
@@ -899,7 +919,8 @@ class MarketDataCache:
             # No Redis — healthy only if fallback is enabled and active
             return self.enable_fallback and self._using_fallback
         except Exception as e:
-            logger.error(f"Health check failed: {e}")
+            logger.error("Health check failed: %s", e)
+
             return self.enable_fallback and self._using_fallback
 
     async def health_check_async(self) -> bool:
@@ -915,7 +936,8 @@ class MarketDataCache:
                 self._redis_client.close()
                 logger.info("Redis connection closed")
         except Exception as e:
-            logger.error(f"Error closing Redis: {e}")
+            logger.error("Error closing Redis: %s", e)
+
 
     def __enter__(self):
         return self

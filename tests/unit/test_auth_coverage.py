@@ -14,11 +14,10 @@ No external services required — all DB calls are mocked.
 
 from __future__ import annotations
 
-import pytest
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
-from datetime import datetime, timedelta, timezone
 
-UTC = timezone.utc
+import pytest
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -158,12 +157,12 @@ class TestFreeTierAssignment:
             mock_aff.track_referral(
                 affiliate_code="REF123",
                 referred_user_id="new_user",
-                conversion_value=Decimal("0"),
+                conversion_value=Decimal(0),
             )
             mock_aff.track_referral.assert_called_once_with(
                 affiliate_code="REF123",
                 referred_user_id="new_user",
-                conversion_value=Decimal("0"),
+                conversion_value=Decimal(0),
             )
 
 
@@ -179,7 +178,9 @@ class TestAuthApiEndpoints:
         try:
             from fastapi import FastAPI
             from fastapi.testclient import TestClient
-            from auth.router import router as auth_router, set_auth_service
+
+            from auth.router import router as auth_router
+            from auth.router import set_auth_service
 
             # Mock auth service
             mock_svc = MagicMock()

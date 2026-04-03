@@ -53,9 +53,7 @@ import logging
 import os
 import threading
 import time
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -436,14 +434,14 @@ class TradeLogger:
             target_n = self._sharpe_target_n
 
         n = len(pnls)
-        se = 1.0 / math.sqrt(2.0 * max(n - 1, 1)) if n >= 2 else float("inf")  # noqa: PLR2004
+        se = 1.0 / math.sqrt(2.0 * max(n - 1, 1)) if n >= 2 else float("inf")
         target_se = 1.0 / math.sqrt(2.0 * (target_n - 1))
         n_needed = max(0, target_n - n)
         pct_complete = min(100.0, n / target_n * 100.0)
 
         # Trade-level Sharpe: mean(pnl) / std(pnl) * sqrt(252)
         sharpe = 0.0
-        if n >= 2:  # noqa: PLR2004
+        if n >= 2:
             import statistics
 
             mean_pnl = statistics.mean(pnls)

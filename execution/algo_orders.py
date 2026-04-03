@@ -36,7 +36,8 @@ Usage
     from execution.algo_orders import AlgoOrderManager, get_algo_manager
 
     manager = get_algo_manager()
-    asyncio.create_task(manager.run())
+    _t = asyncio.create_task(manager.run())
+    _t.add_done_callback(lambda _: None)
 
     # Submit a TWAP order (100 lots over 10 minutes, 10 slices)
     algo_id = await manager.submit_twap(
@@ -83,13 +84,11 @@ import os
 import time
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
-from collections.abc import Callable
 
 import numpy as np
 
@@ -219,7 +218,7 @@ class AlgoOrder(ABC):
     @abstractmethod
     async def run(self) -> AlgoFillReport:
         """Execute the algorithm. Returns when complete or cancelled."""
-        ...
+        ...  # pylint: disable=unnecessary-ellipsis
 
     async def _submit_child(self, quantity: float) -> ChildOrder | None:
         """Submit a single child order to the broker."""
@@ -475,13 +474,12 @@ class VWAPOrder(AlgoOrder):
         )
 
         try:
-            for i, qty in enumerate(slice_quantities):
+            for i, slice_qty in enumerate(slice_quantities):
                 if self.status == AlgoStatus.CANCELLED:
                     break
 
                 # Last slice: fill remainder
-                if i == len(slice_quantities) - 1:
-                    qty = self.remaining_quantity  # noqa: PLW2901
+                qty = self.remaining_quantity if i == len(slice_quantities) - 1 else slice_qty
 
                 if qty >= ALGO_MIN_CHILD_SIZE:
                     await self._submit_child(qty)
@@ -708,7 +706,7 @@ class AlgoOrderManager:
                 peak_size=self.DEFAULT_ICEBERG_PEAK,
                 strategy_id=strategy_id,
             )
-        elif total_quantity >= self.LARGE_ORDER_THRESHOLD:
+        if total_quantity >= self.LARGE_ORDER_THRESHOLD:
             logger.info(
                 "AlgoOrderManager: auto-selecting TWAP for %.2f lots (%s %s)",
                 total_quantity,

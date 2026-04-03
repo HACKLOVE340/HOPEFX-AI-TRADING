@@ -21,21 +21,19 @@ Covers:
 """
 
 import logging
-import pytest
-import pandas as pd
-import numpy as np
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-UTC = timezone.utc
+import numpy as np
+import pandas as pd
+import pytest
 
 from strategies.base import (
     BaseStrategy,
-    StrategyConfig,
     Signal,
     SignalType,
+    StrategyConfig,
     StrategyStatus,
 )
-
 
 # ---------------------------------------------------------------------------
 # OHLCV data helpers
@@ -740,8 +738,6 @@ class TestRSIStrategy:
     def test_hold_for_neutral_rsi(self):
         """Flat prices should produce neutral RSI (≈50) → HOLD."""
         s = self._make()
-        rng = np.random.default_rng(99)
-        1900.0 + rng.uniform(-0.5, 0.5, 60)
         df = make_ohlcv_data(periods=60, noise=0.01, seed=55)
         result = s.generate_signal(df)
         assert result["type"] in ("BUY", "SELL", "HOLD")

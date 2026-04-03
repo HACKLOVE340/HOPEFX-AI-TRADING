@@ -21,9 +21,7 @@ All write endpoints require admin role.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
@@ -251,8 +249,6 @@ async def run_mutation_tests(
     Returns immediately with run_id. Poll /api/chaos/mutation/results
     for completion.
     """
-    global _mutation_running  # noqa: PLW0602
-
     if _mutation_running:
         raise HTTPException(
             status_code=409,

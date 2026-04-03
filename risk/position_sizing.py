@@ -28,7 +28,7 @@ class PositionSizer:
 
     # Default parameters
     RISK_PCT = Decimal("0.01")  # 1 % of equity per trade
-    MAX_LOTS = Decimal("100")  # hard cap
+    MAX_LOTS = Decimal(100)  # hard cap
 
     def __init__(
         self,
@@ -66,11 +66,11 @@ class PositionSizer:
         equity = getattr(account, "equity", None) or getattr(
             account,
             "balance",
-            Decimal("0"),
+            Decimal(0),
         )
 
         if self.method == "atr":
-            size = self._atr_size(equity, entry_price, atr or Decimal("1"))
+            size = self._atr_size(equity, entry_price, atr or Decimal(1))
         elif self.method == "kelly":
             size = self._kelly_size(
                 equity,
@@ -82,7 +82,7 @@ class PositionSizer:
             dist = stop_distance or (entry_price * Decimal("0.01"))
             size = self._percent_size(equity, dist)
         else:  # fixed
-            size = Decimal("1")
+            size = Decimal(1)
 
         return min(size, self.max_lots)
 
@@ -91,11 +91,11 @@ class PositionSizer:
     def _atr_size(self, equity: Decimal, entry_price: Decimal, atr: Decimal) -> Decimal:
         """Risk risk_pct of equity per 1-ATR adverse move."""
         if atr <= 0 or entry_price <= 0:
-            return Decimal("0")
+            return Decimal(0)
         risk_amount = equity * self.risk_pct
         # 1 lot = 1 unit; stop = 1 ATR
         size = risk_amount / atr
-        return max(Decimal("0"), size)
+        return max(Decimal(0), size)
 
     def _kelly_size(
         self,
@@ -106,16 +106,16 @@ class PositionSizer:
     ) -> Decimal:
         """Half-Kelly criterion."""
         if payoff_ratio <= 0:
-            return Decimal("0")
+            return Decimal(0)
         kelly = win_rate - (1 - win_rate) / payoff_ratio
         half_kelly = max(0.0, kelly * 0.5)
         risk_amount = equity * Decimal(str(half_kelly))
         if entry_price <= 0:
-            return Decimal("0")
+            return Decimal(0)
         return risk_amount / entry_price
 
     def _percent_size(self, equity: Decimal, stop_distance: Decimal) -> Decimal:
         """Risk risk_pct of equity over stop_distance."""
         if stop_distance <= 0:
-            return Decimal("0")
+            return Decimal(0)
         return (equity * self.risk_pct) / stop_distance

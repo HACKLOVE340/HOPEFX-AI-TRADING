@@ -9,13 +9,11 @@ Compliance Module
 AML (Anti-Money Laundering) monitoring and regulatory compliance.
 """
 
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+import logging
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from enum import Enum
-from dataclasses import dataclass, field
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +172,8 @@ class ComplianceManager:
             self.flagged_users[user_id] = []
         self.flagged_users[user_id].append(check_id)
 
-        logger.warning(f"AML check flagged: {check_id} - {reason}")
+        logger.warning("AML check flagged: %s - %s", check_id, reason)
+
         return check
 
     def _check_structuring(self, user_id: str, amount: Decimal) -> bool:
@@ -194,7 +193,7 @@ class ComplianceManager:
         # Count transactions just below threshold
         near_threshold = [c for c in recent_checks if c.check_type == "large_transaction"]
 
-        return len(near_threshold) >= 3  # noqa: PLR2004
+        return len(near_threshold) >= 3
 
     def _check_high_frequency(self, user_id: str) -> bool:
         """Check for unusually high transaction frequency"""
@@ -213,7 +212,7 @@ class ComplianceManager:
         # In production, would use ML models
         user_checks = self.flagged_users.get(user_id, [])
 
-        if len(user_checks) < 5:  # noqa: PLR2004
+        if len(user_checks) < 5:
             return False
 
         # Check for many identical amounts (possible automation)
@@ -263,11 +262,11 @@ class ComplianceManager:
         score = min(score, 100)
 
         # Determine overall risk level
-        if score >= 75:  # noqa: PLR2004
+        if score >= 75:
             risk_level = RiskLevel.CRITICAL
-        elif score >= 50:  # noqa: PLR2004
+        elif score >= 50:
             risk_level = RiskLevel.HIGH
-        elif score >= 25:  # noqa: PLR2004
+        elif score >= 25:
             risk_level = RiskLevel.MEDIUM
         else:
             risk_level = RiskLevel.LOW
@@ -299,26 +298,30 @@ class ComplianceManager:
         """
         check = self.aml_checks.get(check_id)
         if not check:
-            logger.error(f"AML check not found: {check_id}")
+            logger.error("AML check not found: %s", check_id)
+
             return False
 
         check.resolved = True
         check.resolution_notes = resolution_notes
 
-        logger.info(f"AML check resolved: {check_id}")
+        logger.info("AML check resolved: %s", check_id)
+
         return True
 
     def add_to_blacklist(self, user_id: str) -> None:
         """Add user to blacklist"""
         if user_id not in self.blacklist:
             self.blacklist.append(user_id)
-            logger.warning(f"User added to blacklist: {user_id}")
+            logger.warning("User added to blacklist: %s", user_id)
+
 
     def remove_from_blacklist(self, user_id: str) -> bool:
         """Remove user from blacklist"""
         if user_id in self.blacklist:
             self.blacklist.remove(user_id)
-            logger.info(f"User removed from blacklist: {user_id}")
+            logger.info("User removed from blacklist: %s", user_id)
+
             return True
         return False
 
@@ -347,7 +350,7 @@ class ComplianceManager:
         }
 
         # Get unique transactions
-        transaction_ids = set(c.transaction_id for c in period_checks if c.transaction_id)
+        transaction_ids = {c.transaction_id for c in period_checks if c.transaction_id}
 
         report = ComplianceReport(
             report_id=report_id,
@@ -358,7 +361,8 @@ class ComplianceManager:
             risk_breakdown=risk_breakdown,
         )
 
-        logger.info(f"Compliance report generated: {report_id}")
+        logger.info("Compliance report generated: %s", report_id)
+
         return report
 
     def get_flagged_users(self, min_risk_level: RiskLevel = RiskLevel.MEDIUM) -> list[dict]:

@@ -14,7 +14,7 @@ received from the SendGrid Event Webhook (POST /api/email/webhook).
 EmailChannel.send() checks this table before every dispatch.
 """
 
-from typing import Sequence, Union
+from typing import Sequence
 
 import sqlalchemy as sa
 from alembic import op
@@ -40,7 +40,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(),
             nullable=False,
-            server_default=sa.func.now(),
+            server_default=sa.func.now(),  # pylint: disable=not-callable
         ),
     )
     op.create_index(

@@ -57,7 +57,7 @@ TIMEOUT = float(os.environ.get("IBKR_CONNECT_TIMEOUT", "10"))
 PAPER_PORTS = {7497, 4002}
 LIVE_PORTS = {7496, 4001}
 
-_PASS = "  ✓"
+_PASS = "  ✓"  # nosec B105 — status symbol, not a password
 _FAIL = "  ✗"
 _WARN = "  ⚠"
 
@@ -82,7 +82,7 @@ def run_checks(interactive: bool = True) -> int:
 
     # ── Check 1: ib_insync importable ────────────────────────────────────────
     try:
-        from ib_insync import IB, Stock, Future, ContFuture  # noqa: F401
+        from ib_insync import IB, ContFuture
 
         _check("ib_insync importable", True, "ib_insync available")
     except ImportError as exc:

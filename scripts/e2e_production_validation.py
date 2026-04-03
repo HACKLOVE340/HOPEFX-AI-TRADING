@@ -41,15 +41,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import os
 import sys
 import time
 import traceback
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
-import contextlib
 
 # Ensure project root is on sys.path regardless of where the script is invoked.
 # This script lives in scripts/ — add the parent directory (project root).
@@ -61,7 +59,7 @@ os.chdir(_PROJECT_ROOT)
 
 # ── Result tracking ───────────────────────────────────────────────────────────
 
-PASS = "\033[92m✓\033[0m"
+PASS = "\033[92m✓\033[0m"  # nosec B105 — ANSI colour code, not a password
 FAIL = "\033[91m✗\033[0m"
 WARN = "\033[93m⚠\033[0m"
 BOLD = "\033[1m"
@@ -126,7 +124,7 @@ def check_architecture() -> str:
     violations = []
     for path in EXTERNAL_FILES:
         try:
-            with open(path) as _fh:
+            with open(path, encoding="utf-8") as _fh:
                 src = _fh.read()
             for b in FORBIDDEN:
                 if b in src:
@@ -179,7 +177,7 @@ def check_orchestrator() -> str:
     f2 = orchestrator.get_ml_features(symbol="XAU_USD")
     f3 = orchestrator.get_ml_features(as_of=datetime.now(UTC), symbol="XAU_USD")
     assert isinstance(f1, dict), "get_ml_features() must return dict"
-    assert len(f1) >= 20, f"Expected >=20 features, got {len(f1)}"  # noqa: PLR2004
+    assert len(f1) >= 20, f"Expected >=20 features, got {len(f1)}"
     assert len(f1) == len(f2) == len(f3), "All call signatures must return same count"
     h = orchestrator.health()
     required_keys = {
@@ -233,7 +231,6 @@ def check_single_entry_point() -> str:
 @check("Redis: ping, set, get, TTL, pub/sub")
 def check_redis() -> str:
     import redis as redis_lib
-    import os
 
     url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     r = redis_lib.from_url(url, decode_responses=True)
@@ -318,8 +315,9 @@ def check_dqe() -> str:
 
 @check("NormalizationPipeline: OHLCV cleaning, tick normalisation")
 def check_normalization() -> str:
-    import pandas as pd
     import numpy as np
+    import pandas as pd
+
     from data_layer.orchestrator import orchestrator
 
     norm = orchestrator._norm
@@ -340,7 +338,7 @@ def check_normalization() -> str:
     assert not cleaned.empty, "normalize_ohlcv returned empty DataFrame"
     assert "log_return" in cleaned.columns
     assert "ohlcv_valid" in cleaned.columns
-    assert cleaned["ohlcv_valid"].sum() >= 40, "Too many invalid bars"  # noqa: PLR2004
+    assert cleaned["ohlcv_valid"].sum() >= 40, "Too many invalid bars"
     return f"{len(cleaned)} bars cleaned, {int(cleaned['ohlcv_valid'].sum())} valid"
 
 
@@ -369,7 +367,7 @@ def check_microstructure() -> str:
         micro.on_tick(tick)
 
     features = micro.get_ml_features()
-    assert len(features) >= 16, f"Expected >=16 features, got {len(features)}"  # noqa: PLR2004
+    assert len(features) >= 16, f"Expected >=16 features, got {len(features)}"
     assert "micro_spread" in features
     assert "micro_ofi" in features
     assert "micro_kyles_lambda" in features
@@ -398,7 +396,7 @@ def check_sentiment_scorer() -> str:
     )
     scored = scorer.score(article)
     assert (
-        scored.gold_relevance > 0.3  # noqa: PLR2004
+        scored.gold_relevance > 0.3
     ), f"Gold relevance too low: {scored.gold_relevance}"
     assert -1.0 <= scored.sentiment_score <= 1.0
     return (
@@ -476,7 +474,7 @@ def check_inference() -> str:
     assert hasattr(engine, "get_data_layer_features"), "get_data_layer_features missing"
     assert hasattr(engine, "_get_data_layer_nudge"), "_get_data_layer_nudge missing"
     # Verify no direct sub-module imports remain
-    with open("ml/inference_engine.py") as _fh:
+    with open("ml/inference_engine.py", encoding="utf-8") as _fh:
         src = _fh.read()
     assert "from data_layer.feeds.macro.store_bridge" not in src
     assert "from data_layer.lineage.store" not in src
@@ -489,8 +487,8 @@ def check_inference() -> str:
 @check("Risk: RiskManager + Gatekeeper wired to orchestrator")
 def check_risk() -> str:
     from data_layer.orchestrator import orchestrator
-    from risk.manager import RiskManager
     from risk.gatekeeper import gatekeeper
+    from risk.manager import RiskManager
 
     rm = RiskManager(orchestrator=orchestrator, lineage_store=orchestrator._lineage)
     # RiskManager stores orchestrator as _orch (see risk/manager.py)
@@ -503,7 +501,7 @@ def check_risk() -> str:
     assert hasattr(gatekeeper, "_orch"), "Gatekeeper missing _orch (orchestrator reference)"
 
     # Verify no direct sub-module imports in gatekeeper
-    with open("risk/gatekeeper.py") as _fh:
+    with open("risk/gatekeeper.py", encoding="utf-8") as _fh:
         src = _fh.read()
     assert "from data_layer.lineage.store" not in src
     return "RiskManager + Gatekeeper wired, no forbidden imports"
@@ -514,7 +512,7 @@ def check_risk() -> str:
 
 @check("Execution: ExecutionEngine imports cleanly, no forbidden imports")
 def check_execution() -> str:
-    with open("execution/execution.py") as _fh:
+    with open("execution/execution.py", encoding="utf-8") as _fh:
         src = _fh.read()
     assert "from data_layer.lineage.store" not in src
     return "execution.execution OK, no forbidden imports"
@@ -525,7 +523,7 @@ def check_execution() -> str:
 
 @check("API: data_layer router importable, no forbidden imports")
 def check_api() -> str:
-    with open("api/data_layer.py") as _fh:
+    with open("api/data_layer.py", encoding="utf-8") as _fh:
         src = _fh.read()
     forbidden = [
         "from data_layer.sentiment.engine",
@@ -599,7 +597,7 @@ def check_prometheus() -> str:
 @check("forward_test.py: no MockPriceFeed / MockRiskManager / MockTick")
 def check_forward_test_no_mocks() -> str:
     # Strip comments before checking — "No GBM" in a docstring is fine
-    with open("forward_test.py") as _fh:
+    with open("forward_test.py", encoding="utf-8") as _fh:
         lines = _fh.readlines()
     code_lines = [ln for ln in lines if not ln.lstrip().startswith("#")]
     src = "".join(code_lines)
@@ -622,7 +620,7 @@ def check_forward_test_no_mocks() -> str:
 
 @check("examples/order_flow_example.py: no MockDataSource")
 def check_order_flow_no_mocks() -> str:
-    with open("examples/order_flow_example.py") as _fh:
+    with open("examples/order_flow_example.py", encoding="utf-8") as _fh:
         src = _fh.read()
     assert "MockDataSource" not in src, "MockDataSource still present"
     assert "orchestrator" in src or "MarketReplayEngine" in src, "Must use real orchestrator or replay engine"
@@ -648,7 +646,7 @@ async def check_orchestrator_start_stop() -> None:
         features = orch.get_ml_features()
         record(
             "Orchestrator: get_ml_features() after start()",
-            len(features) >= 20,  # noqa: PLR2004
+            len(features) >= 20,
             f"{len(features)} features",
         )
     except Exception as exc:
@@ -724,7 +722,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="HOPEFX End-to-End Production Validation")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
-    passed, failed = asyncio.run(run_all(verbose=args.verbose))
+    _, failed = asyncio.run(run_all(verbose=args.verbose))
     sys.exit(0 if failed == 0 else 1)
 
 

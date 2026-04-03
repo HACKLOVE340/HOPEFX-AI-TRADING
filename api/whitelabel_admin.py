@@ -22,6 +22,7 @@ Endpoints:
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import logging
 import secrets
@@ -29,8 +30,6 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-
-import contextlib
 
 from api.auth import TokenPayload, get_current_user
 from whitelabel import (

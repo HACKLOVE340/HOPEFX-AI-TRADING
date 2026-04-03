@@ -24,9 +24,7 @@ import logging
 import os
 import warnings
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -56,7 +54,7 @@ except ImportError:
     logger.error("xgboost not installed. Install: pip install xgboost>=2.0.0")
 
 try:
-    from sklearn.metrics import accuracy_score, classification_report, roc_auc_score  # noqa: F401
+    from sklearn.metrics import accuracy_score, roc_auc_score
     from sklearn.preprocessing import StandardScaler
 
     _SKLEARN = True
@@ -288,7 +286,7 @@ class StationarityTester:
             )
 
         series = series.dropna()
-        if len(series) < 30:  # noqa: PLR2004
+        if len(series) < 30:
             return StationarityResult(
                 feature=name,
                 adf_statistic=0.0,
@@ -677,9 +675,9 @@ class MLPipeline:
 
             fold = WalkForwardFold(
                 fold_idx=i,
-                train_start=list(train_idx)[0],
+                train_start=next(iter(train_idx)),
                 train_end=list(train_idx)[-1],
-                test_start=list(test_idx)[0],
+                test_start=next(iter(test_idx)),
                 test_end=list(test_idx)[-1],
                 accuracy=acc,
                 auc=auc,
@@ -737,7 +735,7 @@ class MLPipeline:
     def _save_report(self, report: ValidationReport) -> None:
         self._model_dir.mkdir(parents=True, exist_ok=True)
         path = self._model_dir / "validation_report.json"
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(report.to_dict(), f, indent=2)
         logger.info("MLPipeline: validation report saved to %s", path)
 

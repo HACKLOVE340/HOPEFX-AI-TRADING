@@ -30,22 +30,21 @@ Usage
     engine = ProductionDataEngine()
     engine.subscribe(brain)
     engine.subscribe(risk_manager)
-    asyncio.create_task(engine.start())
+    _t = asyncio.create_task(engine.start())
+    _t.add_done_callback(lambda _: None)
 """
 
 import asyncio
+import contextlib
 import logging
 import os
 from collections import deque
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import aiohttp
 import yaml
-import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -320,7 +319,7 @@ class ProductionDataEngine:
             await asyncio.sleep(15)
             if self.last_update is not None:
                 age = (datetime.now(tz=UTC) - self.last_update).total_seconds()
-                if age > 30:  # noqa: PLR2004
+                if age > 30:
                     logger.warning("Data feed stale (%.0f s) — forcing provider rotation", age)
                     self.active_provider = self._get_next_provider(self.active_provider)
 
@@ -331,7 +330,7 @@ class ProductionDataEngine:
         config_path = Path(path)
         if not config_path.exists():
             raise FileNotFoundError(f"Data feed config not found: {config_path.resolve()}")
-        with config_path.open("r") as fh:
+        with config_path.open("r", encoding="utf-8") as fh:
             return yaml.safe_load(fh)
 
     # ── Diagnostics ───────────────────────────────────────────────────────────

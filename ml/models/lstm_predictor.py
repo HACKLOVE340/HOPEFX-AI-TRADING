@@ -12,8 +12,11 @@ Advanced LSTM Neural Network for Price Prediction
 - Walk-forward validation
 """
 
+from __future__ import annotations
+
 import warnings
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
@@ -25,12 +28,8 @@ try:
     from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
     from tensorflow.keras.layers import (
         LSTM,
-        Attention,  # noqa: F401
-        Bidirectional,  # noqa: F401
-        Concatenate,  # noqa: F401
         Dense,
         Dropout,
-        Input,  # noqa: F401
     )
     from tensorflow.keras.models import Model, Sequential
     from tensorflow.keras.optimizers import Adam
@@ -38,6 +37,12 @@ try:
     TENSORFLOW_AVAILABLE = True
 except ImportError:
     TENSORFLOW_AVAILABLE = False
+    # Provide stub so type annotations resolve at class-body parse time
+    # when TensorFlow is absent.  The __init__ guard raises ImportError
+    # before any method that uses these is called.
+    Model = Any  # type: ignore[assignment,misc]
+    Sequential = Any  # type: ignore[assignment,misc]
+    MinMaxScaler = Any  # type: ignore[assignment,misc]
 
 
 @dataclass

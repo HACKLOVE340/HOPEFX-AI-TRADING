@@ -9,10 +9,8 @@ Event System for Backtesting
 Defines events used in event-driven backtesting architecture.
 """
 
+from datetime import UTC, datetime
 from enum import Enum
-from datetime import datetime, timezone
-
-UTC = timezone.utc
 
 
 class EventType(Enum):
@@ -47,7 +45,7 @@ class SignalEvent(Event):
         symbol: str,
         signal_type: str,
         strength: float = 1.0,
-        metadata: dict = None,
+        metadata: dict | None = None,
     ):
         """
         Initialize signal event.

@@ -45,11 +45,9 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
-from enum import Enum
+from enum import StrEnum
 
 logger = logging.getLogger(__name__)
 
@@ -68,14 +66,14 @@ CREATOR_SHARE_PCT = Decimal("0.80")  # 80% to creator
 MIN_PAYOUT_USD = Decimal("10.00")  # minimum payout threshold
 
 
-class PayoutStatus(str, Enum):
+class PayoutStatus(StrEnum):
     PENDING = "pending"
     PROCESSING = "processing"
     PAID = "paid"
     FAILED = "failed"
 
 
-class TransactionType(str, Enum):
+class TransactionType(StrEnum):
     PURCHASE = "purchase"
     SUBSCRIPTION = "subscription"
     REFUND = "refund"
@@ -380,10 +378,10 @@ class RevenueSplitEngine:
                 transfer.id,
                 float(payout.amount_usd),
             )
-        except Exception as exc:
+        except Exception:
             payout.status = PayoutStatus.FAILED
-            payout.failure_reason = str(exc)
-            logger.error("Stripe transfer failed: creator=%s error=%s", payout.creator_id, exc)
+            payout.failure_reason = "Transfer failed — check server logs"
+            logger.exception("Stripe transfer failed: creator=%s error=%s", payout.creator_id)
 
         return payout
 

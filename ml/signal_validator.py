@@ -49,10 +49,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 
 import numpy as np
 from scipy import stats as _stats
@@ -67,7 +65,7 @@ MEAN_DRIFT_SIGMA = 2.0  # mean drift beyond this many sigma → warning
 MIN_SAMPLES = 30  # minimum samples for meaningful comparison
 
 
-class ValidationStatus(str, Enum):
+class ValidationStatus(StrEnum):
     PASSED = "passed"
     WARNING = "warning"
     FAILED = "failed"
@@ -312,7 +310,7 @@ class SignalDistributionValidator:
         bias_drift = abs(live_buy_rate - oos_buy_rate)
         report.directional_bias_drift = float(bias_drift)
         bias_status = (
-            ValidationStatus.PASSED if bias_drift <= 0.15 else ValidationStatus.WARNING  # noqa: PLR2004
+            ValidationStatus.PASSED if bias_drift <= 0.15 else ValidationStatus.WARNING
         )
         checks.append(
             CheckResult(
@@ -330,7 +328,7 @@ class SignalDistributionValidator:
         conf_drift = abs(live_conf_mean - oos_conf_mean)
         report.confidence_drift = float(conf_drift)
         conf_status = (
-            ValidationStatus.PASSED if conf_drift <= 0.10 else ValidationStatus.WARNING  # noqa: PLR2004
+            ValidationStatus.PASSED if conf_drift <= 0.10 else ValidationStatus.WARNING
         )
         checks.append(
             CheckResult(
@@ -390,7 +388,7 @@ def _compute_psi(
     min_val = min(float(np.min(reference)), float(np.min(current)))
     max_val = max(float(np.max(reference)), float(np.max(current)))
 
-    if max_val - min_val < 1e-10:  # noqa: PLR2004
+    if max_val - min_val < 1e-10:
         return 0.0
 
     bins = np.linspace(min_val, max_val, n_bins + 1)

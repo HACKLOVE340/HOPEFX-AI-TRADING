@@ -26,13 +26,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Any
-from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -507,13 +509,18 @@ class FIXAdapter:
         self._pending_lock = threading.Lock()
 
         # quickfix objects (set in start())
-        self._initiator: Any = None
-        self._session_id: Any = None
+        self._initiator: Any | None = None
+        self._session_id: Any | None = None
         self._app: _QuickfixApp | None = None
 
         # Heartbeat thread
         self._hb_thread: threading.Thread | None = None
+        self._hb_stop_event: threading.Event | None = None
         self._running = False
+
+        # pyfixmsg socket state (set in _connect_pyfixmsg)
+        self._pyfixmsg_sock: Any | None = None
+        self._pyfixmsg_seq: int = 1
 
     # ------------------------------------------------------------------
     # Credential validation
@@ -548,7 +555,6 @@ class FIXAdapter:
             router.validate_credentials(raise_on_error=True)
             router.start()
         """
-        import os
 
         sender = os.environ.get("FIX_SENDER_COMP_ID", self.sender_comp_id)
         target = os.environ.get("FIX_TARGET_COMP_ID", self.target_comp_id)
@@ -602,7 +608,6 @@ class FIXAdapter:
         other environments a WARNING is logged and startup continues so that
         paper-trading and CI work without real broker credentials.
         """
-        import os
 
         _is_production = os.environ.get("APP_ENV", "production") == "production"
         self.validate_credentials(raise_on_error=_is_production)
@@ -650,9 +655,7 @@ class FIXAdapter:
             password=self._password,
         )
 
-        import os
-
-        if os.path.exists(self.config_file):
+        if Path(self.config_file).exists():
             settings = fix.SessionSettings(self.config_file)
         else:
             # Build minimal in-memory settings
@@ -673,14 +676,13 @@ class FIXAdapter:
                 f"SocketConnectHost={self.host}\n"
                 f"SocketConnectPort={self.port}\n"
             )
-            import os
             import tempfile
 
             with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as tmp:
                 tmp.write(settings_str)
                 tmp_name = tmp.name
             settings = fix.SessionSettings(tmp_name)
-            os.unlink(tmp_name)
+            Path(tmp_name).unlink()
 
         store_factory = fix.FileStoreFactory(settings)
         log_factory = fix.FileLogFactory(settings)
@@ -714,7 +716,7 @@ class FIXAdapter:
         """
         import socket as _socket
 
-        if pyfixmsg is None or FixMessage is None:
+        if pyfixmsg is None or FixMessage is None:  # pylint: disable=possibly-used-before-assignment
             raise RuntimeError("pyfixmsg is not installed. Run: pip install pyfixmsg")
 
         sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
@@ -750,11 +752,9 @@ class FIXAdapter:
 
     def _build_pyfixmsg_logon(self) -> bytes:
         """Build a minimal FIX 4.4 Logon message as raw bytes."""
-        import time as _time
-
         seq = self._pyfixmsg_seq
         self._pyfixmsg_seq += 1
-        sending_time = _time.strftime("%Y%m%d-%H:%M:%S", _time.gmtime())
+        sending_time = time.strftime("%Y%m%d-%H:%M:%S", time.gmtime())
 
         fields = [
             ("8", "FIX.4.4"),
@@ -970,11 +970,9 @@ class FIXAdapter:
                 "fix_adapter._send_pyfixmsg: socket not connected — call start() first",
             )
 
-        import time as _time
-
         seq = self._pyfixmsg_seq
         self._pyfixmsg_seq += 1
-        sending_time = _time.strftime("%Y%m%d-%H:%M:%S", _time.gmtime())
+        sending_time = time.strftime("%Y%m%d-%H:%M:%S", time.gmtime())
 
         fields = [
             ("8", "FIX.4.4"),

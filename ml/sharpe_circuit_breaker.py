@@ -51,7 +51,8 @@ Usage
     from ml.sharpe_circuit_breaker import get_sharpe_cb
 
     cb = get_sharpe_cb()
-    asyncio.create_task(cb.run())
+    _t = asyncio.create_task(cb.run())
+    _t.add_done_callback(lambda _: None)
 
     # In trade executor, after every fill:
     cb.record_trade(pnl=42.5, model_version="advanced_oos_v4")
@@ -59,7 +60,8 @@ Usage
     # In signal router, before placing an order:
     if cb.is_open("advanced_oos_v4"):
         logger.warning("Model gated by Sharpe circuit breaker — skipping signal")
-        return
+
+Return
 """
 
 from __future__ import annotations
@@ -71,9 +73,7 @@ import math
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 import numpy as np
 
@@ -130,7 +130,7 @@ class CircuitState:
             # All trades identical — sign of mean determines direction
             if mean > 0:
                 return float(ANNUALISE_FACTOR * 1e6)  # perfect wins
-            elif mean < 0:
+            if mean < 0:
                 return float(-ANNUALISE_FACTOR * 1e6)  # perfect losses
             return 0.0
         return float(mean / std * ANNUALISE_FACTOR)

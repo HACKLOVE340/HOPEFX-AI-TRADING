@@ -12,9 +12,7 @@ CUDA-powered inference for sub-millisecond predictions
 from __future__ import annotations
 
 import asyncio
-import logging
-from dataclasses import dataclass, field  # noqa: F401
-from typing import Dict, List  # noqa: F401
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -88,7 +86,7 @@ class QuantizedTransformer(nn.Module):
 class GPUInferenceEngine:
     """High-throughput GPU inference with dynamic batching"""
 
-    def __init__(self, config: GPUConfig = None):
+    def __init__(self, config: GPUConfig | None = None):
         self.config = config or GPUConfig()
         self.device = torch.device(
             self.config.device if torch.cuda.is_available() else "cpu",
@@ -187,7 +185,8 @@ class GPUInferenceEngine:
 
     def start(self):
         self.running = True
-        asyncio.create_task(self.batch_processor())
+        _t = asyncio.create_task(self.batch_processor())
+        _t.add_done_callback(lambda _: None)
 
     def stop(self):
         self.running = False

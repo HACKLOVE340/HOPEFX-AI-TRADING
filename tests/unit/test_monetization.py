@@ -15,34 +15,31 @@ Tests for all monetization modules including:
 - Enterprise features
 """
 
+from datetime import UTC, datetime
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
 
-from monetization.pricing import SubscriptionTier, BillingCycle, PricingManager
 from monetization.affiliate import (
-    AffiliateManager,
+    AFFILIATE_COMMISSION_RATES,
     AffiliateLevel,
+    AffiliateManager,
     AffiliateStatus,
     ReferralStatus,
-    AFFILIATE_COMMISSION_RATES,
-)
-from monetization.marketplace import (
-    StrategyMarketplace,
-    StrategyCategory,
-    StrategyStatus,
 )
 from monetization.analytics import RevenueAnalytics, RevenueSource, TimePeriod
 from monetization.enterprise import (
     EnterpriseManager,
-    PartnerType,
     PartnerStatus,
+    PartnerType,
     WhiteLabelConfig,
     WhiteLabelStatus,
 )
-from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-
+from monetization.marketplace import (
+    StrategyCategory,
+    StrategyMarketplace,
+    StrategyStatus,
+)
+from monetization.pricing import BillingCycle, PricingManager, SubscriptionTier
 from monetization.stripe_integration import StripeIntegration, StripeWebhookEvent
 
 
@@ -390,7 +387,7 @@ class TestRevenueAnalytics:
 
         metrics = ra.get_growth_metrics()
 
-        assert metrics.mrr >= Decimal("0")
+        assert metrics.mrr >= Decimal(0)
         assert metrics.arr == metrics.mrr * 12
 
     def test_generate_report(self):
@@ -578,12 +575,11 @@ class TestStripeIntegration:
         exported by monetization/__init__.py) and patches _stripe +
         _STRIPE_AVAILABLE so _require_stripe() passes without network calls.
         """
-        import sys
-
         # Force the real module object — monetization.__init__ re-exports the
         # stripe_integration *instance* under the same name, so we must go
         # through sys.modules to get the module itself.
         import importlib
+        import sys
 
         _mod = sys.modules.get("monetization.stripe_integration") or importlib.import_module(
             "monetization.stripe_integration"

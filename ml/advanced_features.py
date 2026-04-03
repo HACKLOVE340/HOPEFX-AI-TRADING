@@ -54,12 +54,12 @@ def add_price_action_features(df: pd.DataFrame) -> pd.DataFrame:
     d["pa_upper_wick"] = ((h - pd.concat([o, c], axis=1).max(axis=1)) / candle_range).fillna(0.0)
     d["pa_lower_wick"] = ((pd.concat([o, c], axis=1).min(axis=1) - l) / candle_range).fillna(0.0)
     d["pa_bull_candle"] = (c > o).astype(int)
-    d["pa_doji"] = (d["pa_body_ratio"] < 0.1).astype(int)  # noqa: PLR2004
+    d["pa_doji"] = (d["pa_body_ratio"] < 0.1).astype(int)
     d["pa_pin_bar_bull"] = (
-        (d["pa_lower_wick"] > 0.6) & (d["pa_body_ratio"] < 0.3)  # noqa: PLR2004
+        (d["pa_lower_wick"] > 0.6) & (d["pa_body_ratio"] < 0.3)
     ).astype(int)
     d["pa_pin_bar_bear"] = (
-        (d["pa_upper_wick"] > 0.6) & (d["pa_body_ratio"] < 0.3)  # noqa: PLR2004
+        (d["pa_upper_wick"] > 0.6) & (d["pa_body_ratio"] < 0.3)
     ).astype(int)
 
     # Engulfing patterns
@@ -102,8 +102,8 @@ def add_swing_features(df: pd.DataFrame, window: int = 5) -> pd.DataFrame:
 
     d["dist_to_swing_high"] = ((last_sh - c) / atr.replace(0, np.nan)).fillna(0.0)
     d["dist_to_swing_low"] = ((c - last_sl) / atr.replace(0, np.nan)).fillna(0.0)
-    d["near_swing_high"] = (d["dist_to_swing_high"].abs() < 0.5).astype(int)  # noqa: PLR2004
-    d["near_swing_low"] = (d["dist_to_swing_low"].abs() < 0.5).astype(int)  # noqa: PLR2004
+    d["near_swing_high"] = (d["dist_to_swing_high"].abs() < 0.5).astype(int)
+    d["near_swing_low"] = (d["dist_to_swing_low"].abs() < 0.5).astype(int)
 
     # Breakout flags
     d["breakout_high"] = (c > last_sh.shift(1)).astype(int)
@@ -243,7 +243,7 @@ def add_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
     d["cal_month"] = idx.month
     d["cal_quarter"] = idx.quarter
     d["cal_eom"] = idx.is_month_end.astype(int)
-    d["cal_eow"] = (idx.dayofweek == 4).astype(int)  # noqa: PLR2004
+    d["cal_eow"] = (idx.dayofweek == 4).astype(int)
     d["cal_monday"] = (idx.dayofweek == 0).astype(int)
 
     # Cyclical encoding avoids ordinal assumption
@@ -403,7 +403,7 @@ def add_intermarket_features(
     # Forced liquidation: gold down + VIX up (risk-off but gold sold for margin)
     if "vix" in macro.columns:
         vix_ret = macro["vix"].pct_change(fill_method=None).fillna(0.0)
-        d["im_forced_liquidation"] = ((gold_ret < -0.005) & (vix_ret > 0.05)).astype(  # noqa: PLR2004
+        d["im_forced_liquidation"] = ((gold_ret < -0.005) & (vix_ret > 0.05)).astype(
             float,
         )
     else:
@@ -519,7 +519,7 @@ def add_cot_proxy_features(
             yield_chg = macro["yield_10y"].diff().fillna(0.0)
             # All three rising simultaneously = central bank / geopolitical demand
             d["cot_cb_buying_proxy"] = (
-                (gold_ret > 0.002) & (dxy_ret > 0) & (yield_chg > 0)  # noqa: PLR2004
+                (gold_ret > 0.002) & (dxy_ret > 0) & (yield_chg > 0)
             ).astype(float)
             # Rolling 20-bar frequency of this pattern (persistence measure)
             d["cot_cb_buying_freq20"] = d["cot_cb_buying_proxy"].rolling(20).mean().fillna(0.0)
@@ -531,7 +531,7 @@ def add_cot_proxy_features(
         has_vix = "vix" in macro.columns and macro["vix"].abs().sum() > 0
         has_spx = "spx" in macro.columns and macro["spx"].abs().sum() > 0
         if has_vix and has_spx:
-            vix_spike = (macro["vix"] > 25).astype(float)  # noqa: PLR2004
+            vix_spike = (macro["vix"] > 25).astype(float)
             spx_ret = macro["spx"].pct_change(fill_method=None).fillna(0.0)
             gold_vs_spx = gold_ret - spx_ret
             d["cot_geopolitical"] = (vix_spike * (gold_vs_spx > 0).astype(float)).fillna(0.0)
@@ -669,7 +669,7 @@ def build_advanced_features(
     exclude = {"open", "high", "low", "close", "volume", "_target"}
     feature_cols = [c for c in d.columns if c not in exclude]
 
-    d = d[feature_cols + ["_target"]]
+    d = d[[*feature_cols, "_target"]]
     d = d.replace([np.inf, -np.inf], np.nan).dropna()
 
     X = d[feature_cols]
@@ -716,7 +716,7 @@ def _rolling_hurst(series: pd.Series, window: int = 40) -> pd.Series:
     """
 
     def _hurst_scalar(x: np.ndarray) -> float:
-        if len(x) < 8:  # noqa: PLR2004
+        if len(x) < 8:
             return 0.5
         try:
             lags = range(2, min(len(x) // 2, 12))
@@ -725,7 +725,7 @@ def _rolling_hurst(series: pd.Series, window: int = 40) -> pd.Series:
                 chunks = [x[i : i + lag] for i in range(0, len(x) - lag, lag)]
                 rs_chunk = []
                 for chunk in chunks:
-                    if len(chunk) < 2:  # noqa: PLR2004
+                    if len(chunk) < 2:
                         continue
                     dev = np.cumsum(chunk - np.mean(chunk))
                     r = dev.max() - dev.min()
@@ -734,7 +734,7 @@ def _rolling_hurst(series: pd.Series, window: int = 40) -> pd.Series:
                         rs_chunk.append(r / s)
                 if rs_chunk:
                     rs_vals.append(np.mean(rs_chunk))
-            if len(rs_vals) < 2:  # noqa: PLR2004
+            if len(rs_vals) < 2:
                 return 0.5
             log_lags = np.log(list(lags)[: len(rs_vals)])
             log_rs = np.log(rs_vals)

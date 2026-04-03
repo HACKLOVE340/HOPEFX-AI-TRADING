@@ -129,7 +129,7 @@ async def get_rates(force_refresh: bool = False) -> dict[str, float]:
         # Try CoinGecko
         try:
             rates = await _fetch_coingecko()
-            if len(rates) >= 2:  # at least BTC + ETH  # noqa: PLR2004
+            if len(rates) >= 2:  # at least BTC + ETH
                 _cached_rates = rates
                 _cache_ts = now
                 logger.debug("Crypto rates refreshed from CoinGecko: %s", rates)

@@ -38,9 +38,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
+from typing import ClassVar
 
 import redis.asyncio as aioredis
 
@@ -71,7 +70,7 @@ def _parse_forexfactory(data: list) -> list[datetime]:
     ForexFactory impact values: "Low", "Medium", "High", "Holiday"
     We keep "High" and above for USD/XAU events.
     """
-    events: list[datetime] = []
+    events: ClassVar[list[datetime]] = []
     impact_map = {"high": 3, "medium": 2, "low": 1, "holiday": 0}
     min_level = impact_map.get(MIN_IMPACT, 3)
 
@@ -204,7 +203,7 @@ class NewsCalendarFeed:
                     headers={"User-Agent": "HOPEFX-AI-TRADING/1.0"},
                 ) as resp,
             ):
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     logger.warning("NewsCalendarFeed: ForexFactory HTTP %d", resp.status)
                     return []
                 data = await resp.json(content_type=None)

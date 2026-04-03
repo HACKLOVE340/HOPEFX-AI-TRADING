@@ -13,11 +13,9 @@ Note: This wallet ONLY handles subscription fees and commission payments.
 Trading capital is managed directly by brokers/prop firms.
 """
 
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from decimal import Decimal
 import logging
+from datetime import UTC, datetime
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +177,8 @@ class WalletManager:
         self._wallets[wallet_id] = wallet
         self._transaction_history[user_id] = []
 
-        logger.info(f"Created wallet {wallet_id} for user {user_id} (balance={starting_balance})")
+        logger.info("Created wallet %s for user %s (balance=%s)", wallet_id, user_id, starting_balance)
+
         return wallet
 
     def get_wallet(self, user_id: str) -> Wallet | None:
@@ -222,19 +221,18 @@ class WalletManager:
                 "wallet_type": "subscription",
                 "currency": wallet.currency,
             }
-        elif wallet_type == WalletType.COMMISSION:
+        if wallet_type == WalletType.COMMISSION:
             return {
                 "balance": float(wallet.commission_balance),
                 "wallet_type": "commission",
                 "currency": wallet.currency,
             }
-        else:
-            return {
-                "subscription_balance": float(wallet.subscription_balance),
-                "commission_balance": float(wallet.commission_balance),
-                "total_balance": float(wallet.subscription_balance + wallet.commission_balance),
-                "currency": wallet.currency,
-            }
+        return {
+            "subscription_balance": float(wallet.subscription_balance),
+            "commission_balance": float(wallet.commission_balance),
+            "total_balance": float(wallet.subscription_balance + wallet.commission_balance),
+            "currency": wallet.currency,
+        }
 
     def credit_wallet(
         self,
@@ -299,7 +297,8 @@ class WalletManager:
         self._transaction_history[user_id].append(transaction)
         self._persist_transaction(user_id, transaction)
 
-        logger.info(f"Credited {amount} to {wallet_type} wallet for user {user_id}")
+        logger.info("Credited %s to %s wallet for user %s", amount, wallet_type, user_id)
+
         return True, "Wallet credited successfully", transaction
 
     def debit_wallet(
@@ -387,7 +386,8 @@ class WalletManager:
         self._transaction_history[user_id].append(transaction)
         self._persist_transaction(user_id, transaction)
 
-        logger.info(f"Debited {amount} from {wallet_type} wallet for user {user_id}")
+        logger.info("Debited %s from %s wallet for user %s", amount, wallet_type, user_id)
+
         return True, "Wallet debited successfully", transaction
 
     def transfer_between_wallets(
@@ -439,7 +439,8 @@ class WalletManager:
             )
             return False, f"Transfer failed: {message}"
 
-        logger.info(f"Transferred {amount} from {from_wallet} to {to_wallet} for user {user_id}")
+        logger.info("Transferred %s from %s to %s for user %s", amount, from_wallet, to_wallet, user_id)
+
         return True, "Transfer successful"
 
     def freeze_wallet(self, user_id: str) -> tuple[bool, str]:
@@ -459,7 +460,8 @@ class WalletManager:
         wallet.status = WalletStatus.FROZEN
         wallet.updated_at = datetime.now(UTC)
 
-        logger.warning(f"Wallet frozen for user {user_id}")
+        logger.warning("Wallet frozen for user %s", user_id)
+
         return True, "Wallet frozen successfully"
 
     def unfreeze_wallet(self, user_id: str) -> tuple[bool, str]:
@@ -479,7 +481,8 @@ class WalletManager:
         wallet.status = WalletStatus.ACTIVE
         wallet.updated_at = datetime.now(UTC)
 
-        logger.info(f"Wallet unfrozen for user {user_id}")
+        logger.info("Wallet unfrozen for user %s", user_id)
+
         return True, "Wallet activated successfully"
 
     def get_transaction_history(self, user_id: str, limit: int = 50) -> list[dict]:

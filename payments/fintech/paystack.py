@@ -9,13 +9,11 @@ Paystack Payment Integration
 Handles payments via Paystack (Nigeria) - Bank transfer, Cards, USSD.
 """
 
-import os
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from decimal import Decimal
-import logging
 import hashlib
+import logging
+import os
+from datetime import UTC, datetime
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +30,7 @@ class PaystackClient:
         self.secret_key = secret_key
         self.payments = {}
 
-    def initialize_payment(self, user_id: str, amount: Decimal, currency: str = "USD", email: str = None) -> dict:
+    def initialize_payment(self, user_id: str, amount: Decimal, currency: str = "USD", email: str | None = None) -> dict:
         """Initialize Paystack payment"""
         try:
             reference = f"PSK-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
@@ -55,11 +53,13 @@ class PaystackClient:
             }
 
             self.payments[reference] = payment
-            logger.info(f"Paystack payment initialized: {reference}")
+            logger.info("Paystack payment initialized: %s", reference)
+
 
             return payment
         except Exception as e:
-            logger.error(f"Error initializing Paystack payment: {e}")
+            logger.error("Error initializing Paystack payment: %s", e)
+
             raise
 
     def verify_transaction(self, reference: str) -> dict:
@@ -67,7 +67,8 @@ class PaystackClient:
         payment = self.payments.get(reference)
         if payment:
             payment["status"] = "verified"
-            logger.info(f"Paystack payment verified: {reference}")
+            logger.info("Paystack payment verified: %s", reference)
+
         return payment or {"status": "not_found"}
 
     def initiate_transfer(self, user_id: str, amount: Decimal, bank_code: str, account_number: str) -> dict:
@@ -84,7 +85,8 @@ class PaystackClient:
                 "created_at": datetime.now(UTC).isoformat(),
             }
         except Exception as e:
-            logger.error(f"Error initiating Paystack transfer: {e}")
+            logger.error("Error initiating Paystack transfer: %s", e)
+
             raise
 
 

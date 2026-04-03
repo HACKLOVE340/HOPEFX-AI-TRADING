@@ -51,8 +51,9 @@ from __future__ import annotations
 import os
 import random
 
-from locust import HttpUser, between, events, task
-from locust.exception import StopUser
+from locust.exception import StopUser  # pylint: disable=no-name-in-module
+
+from locust import HttpUser, between, events, task  # pylint: disable=no-name-in-module
 
 _AUTH_TOKEN = os.getenv("AUTH_TOKEN", "")
 _THINK_TIME = float(os.getenv("THINK_TIME", "1.0"))
@@ -216,7 +217,7 @@ class AuthenticatedTrader(HttpUser):
 
     def on_start(self):
         if not _AUTH_TOKEN:
-            raise StopUser()
+            raise StopUser
 
     @task(5)
     def get_positions(self):
@@ -258,9 +259,9 @@ class AuthenticatedTrader(HttpUser):
         ) as r:
             if r.status_code in (201, 400, 403, 422, 429, 503):
                 r.success()
-            elif r.status_code == 401:  # noqa: PLR2004
+            elif r.status_code == 401:
                 r.failure("Auth token rejected")
-            elif r.status_code == 500:  # noqa: PLR2004
+            elif r.status_code == 500:
                 r.failure(f"Server error placing order: {r.text[:200]}")
             else:
                 r.success()

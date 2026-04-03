@@ -3,9 +3,10 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
-import pytest
-import pandas as pd
 import numpy as np
+import pandas as pd
+import pytest
+
 from portfolio.manager import PortfolioManager
 
 

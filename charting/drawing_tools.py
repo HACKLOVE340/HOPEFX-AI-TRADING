@@ -11,9 +11,7 @@ horizontal lines, rectangles, Fibonacci retracements, text labels,
 channels, arc/circle annotations, pitchforks, and Elliott Wave labels.
 """
 
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 # Default Fibonacci retracement and extension levels
@@ -498,7 +496,7 @@ class DrawingToolkit:
         Raises:
             ValueError: If fewer than 2 points are provided.
         """
-        if len(points) < 2:  # noqa: PLR2004
+        if len(points) < 2:
             raise ValueError("At least 2 points are required for an Elliott Wave.")
         drawing = Drawing(DrawingType.ELLIOTT_WAVE)
         drawing.properties = {

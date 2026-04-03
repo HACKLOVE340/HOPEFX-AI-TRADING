@@ -15,12 +15,10 @@ Run with:
 from __future__ import annotations
 
 import os
+from datetime import UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from datetime import timezone
-
-UTC = timezone.utc
 
 # ---------------------------------------------------------------------------
 # Ensure test env vars are set before any app module is imported
@@ -250,7 +248,7 @@ class TestDocsGating:
         """app.py FastAPI construction must gate docs on APP_ENV."""
         monkeypatch.setenv("APP_ENV", "production")
         # Read the source and verify the conditional is present
-        with open("app.py") as f:
+        with open("app.py", encoding="utf-8") as f:
             source = f.read()
         assert 'None if os.getenv("APP_ENV") == "production"' in source
 
@@ -322,7 +320,7 @@ class TestNoPIILogging:
     """Email addresses must not appear in log output on login/register."""
 
     def test_mobile_api_register_no_email_in_log(self):
-        with open("mobile/api.py") as f:
+        with open("mobile/api.py", encoding="utf-8") as f:
             source = f.read()
         # The old pattern logged user.email directly
         assert "user.email" not in source.split("logger.info")[1].split("\n")[0] if "logger.info" in source else True
@@ -330,18 +328,18 @@ class TestNoPIILogging:
         assert "user_id" in source
 
     def test_mobile_api_login_no_email_in_log(self):
-        with open("mobile/api.py") as f:
+        with open("mobile/api.py", encoding="utf-8") as f:
             source = f.read()
         # Confirm the old "logged in: %s", email pattern is gone
         assert '"Mobile user logged in: %s", email' not in source
 
     def test_mobile_api_v2_register_no_email_in_log(self):
-        with open("mobile/api_v2.py") as f:
+        with open("mobile/api_v2.py", encoding="utf-8") as f:
             source = f.read()
         assert 'f"User registered: {user.email}"' not in source
 
     def test_mobile_api_v2_login_no_email_in_log(self):
-        with open("mobile/api_v2.py") as f:
+        with open("mobile/api_v2.py", encoding="utf-8") as f:
             source = f.read()
         assert 'f"User logged in: {email}"' not in source
 
@@ -353,7 +351,7 @@ class TestEnvTemplate:
     """OANDA and MT5 variables must not appear in the env template."""
 
     def _read_template(self) -> str:
-        with open("SECURE ENVIRONMENT FILE TEMPLATE") as f:
+        with open("SECURE ENVIRONMENT FILE TEMPLATE", encoding="utf-8") as f:
             return f.read()
 
     def test_no_oanda_vars(self):
@@ -381,7 +379,7 @@ class TestQuickfixPinned:
     """quickfix must be pinned to an exact version in requirements.txt."""
 
     def test_quickfix_exact_pin(self):
-        with open("requirements.txt") as f:
+        with open("requirements.txt", encoding="utf-8") as f:
             content = f.read()
         # Must use == not >=
         assert "quickfix>=1.15.1" not in content

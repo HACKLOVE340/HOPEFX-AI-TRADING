@@ -18,9 +18,7 @@ import hashlib
 import hmac
 import os
 import time
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -283,6 +281,7 @@ class TestPaymentDBHelpers:
     def test_save_payment_logs_warning_when_db_unavailable(self, caplog):
         """_save_payment() logs a warning when DB session is None."""
         import logging
+
         from api.payments import _save_payment
 
         with (
@@ -359,8 +358,9 @@ class TestPaymentStatusAutoExpiry:
     @pytest.mark.asyncio
     async def test_expired_payment_status_updated(self):
         """get_payment_status() marks expired payments as 'expired'."""
-        from fastapi.testclient import TestClient
         from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
         from api.payments import router
 
         app = FastAPI()
@@ -404,8 +404,9 @@ class TestPaymentRatesEndpoint:
     @pytest.mark.asyncio
     async def test_rates_endpoint_returns_live_rates(self):
         """GET /crypto/rates returns live rates with correct structure."""
-        from fastapi.testclient import TestClient
         from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
         from api.payments import router
 
         app = FastAPI()
@@ -432,8 +433,9 @@ class TestPaymentRatesEndpoint:
     @pytest.mark.asyncio
     async def test_rates_endpoint_returns_503_on_feed_failure(self):
         """GET /crypto/rates returns 503 when rate feed fails."""
-        from fastapi.testclient import TestClient
         from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
         from api.payments import router
 
         app = FastAPI()

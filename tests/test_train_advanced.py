@@ -191,8 +191,8 @@ class TestOosEvalAdvanced:
         assert 0.0 <= result["p_value_binomial"] <= 1.0
 
     def test_saves_advanced_oos_pkl(self, cv_oos_split, tmp_path):
-        from ml.train_advanced import oos_eval_advanced
         import ml.train_advanced as ta
+        from ml.train_advanced import oos_eval_advanced
 
         original = ta.MODEL_DIR
         ta.MODEL_DIR = tmp_path
@@ -219,9 +219,9 @@ def _make_cv_oos_split():
 class TestTrainFinalModel:
     @pytest.fixture(scope="class")
     def trained(self, tmp_path_factory):
+        import ml.train_advanced as ta
         from ml.advanced_features import build_advanced_features
         from ml.train_advanced import train_final_model
-        import ml.train_advanced as ta
 
         tmp = tmp_path_factory.mktemp("models_final")
         original = ta.MODEL_DIR
@@ -256,9 +256,9 @@ class TestTrainFinalModel:
 
 class TestExtractFeatureImportance:
     def test_returns_nonempty_dict(self, tmp_path):
-        from ml.advanced_features import build_advanced_features
-        from ml.train_advanced import train_final_model, extract_feature_importance
         import ml.train_advanced as ta
+        from ml.advanced_features import build_advanced_features
+        from ml.train_advanced import extract_feature_importance, train_final_model
 
         original = ta.MODEL_DIR
         ta.MODEL_DIR = tmp_path
@@ -273,9 +273,9 @@ class TestExtractFeatureImportance:
             ta.MODEL_DIR = original
 
     def test_importance_values_are_floats(self, tmp_path):
-        from ml.advanced_features import build_advanced_features
-        from ml.train_advanced import train_final_model, extract_feature_importance
         import ml.train_advanced as ta
+        from ml.advanced_features import build_advanced_features
+        from ml.train_advanced import extract_feature_importance, train_final_model
 
         original = ta.MODEL_DIR
         ta.MODEL_DIR = tmp_path
@@ -339,7 +339,7 @@ class TestOosCap:
 
     def _compute_oos_n(self, total_samples: int, oos_years: float) -> int:
         """Replicate the OOS-n calculation from main()."""
-        oos_n = int(round(oos_years * 252))
+        oos_n = round(oos_years * 252)
         oos_n = min(oos_n, int(total_samples * 0.40))
         if oos_n < 100:
             return 0

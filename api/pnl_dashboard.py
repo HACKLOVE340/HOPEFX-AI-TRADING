@@ -22,9 +22,10 @@ GET /api/pnl/open-positions   — current open positions with unrealised P&L
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import math
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
@@ -32,7 +33,6 @@ from pydantic import BaseModel
 
 from api.auth import TokenPayload, get_current_user
 
-UTC = timezone.utc
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/pnl", tags=["P&L Dashboard"])
@@ -177,7 +177,7 @@ def _compute_sharpe(equity_series: list[tuple[float, float]]) -> float | None:
         return None
     values = [v for _, v in equity_series]
     returns = [(values[i] - values[i - 1]) / values[i - 1] for i in range(1, len(values)) if values[i - 1] > 0]
-    if len(returns) < 2:  # noqa: PLR2004
+    if len(returns) < 2:
         return None
     n = len(returns)
     mean_r = sum(returns) / n
@@ -263,13 +263,11 @@ async def pnl_summary(
     post = getattr(engine, "_post_analyzer", None)
     win_rate: float | None = None
     if post is not None and hasattr(post, "rolling_stats"):
-        try:
+        with contextlib.suppress(Exception):
             stats = post.rolling_stats()
             wr = stats.get("win_rate")
             if wr is not None and len(fills) >= _MIN_FILLS_FOR_SHARPE:
                 win_rate = round(float(wr) * 100, 2)
-        except Exception:
-            pass
 
     avg_slip = sum(f.slippage_bps for f in fills) / len(fills) if fills else 0.0
     avg_lat = sum(f.latency_ms for f in fills) / len(fills) if fills else 0.0

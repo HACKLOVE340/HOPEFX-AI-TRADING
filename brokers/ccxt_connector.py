@@ -26,9 +26,7 @@ Usage:
 """
 
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 from brokers.base import (
@@ -165,7 +163,7 @@ class CCXTConnector(BrokerConnector):
         )
         return self._parse_order(raw)
 
-    def cancel_order(self, order_id: str, symbol: str = None) -> bool:
+    def cancel_order(self, order_id: str, symbol: str | None = None) -> bool:
         self._require_connected()
         try:
             self._exchange.cancel_order(order_id, symbol)
@@ -174,7 +172,7 @@ class CCXTConnector(BrokerConnector):
             logger.error("Cancel order %s failed: %s", order_id, exc)
             return False
 
-    def get_order(self, order_id: str, symbol: str = None) -> Order | None:
+    def get_order(self, order_id: str, symbol: str | None = None) -> Order | None:
         self._require_connected()
         try:
             raw = self._exchange.fetch_order(order_id, symbol)
@@ -220,7 +218,7 @@ class CCXTConnector(BrokerConnector):
             for pos in positions:
                 if pos.symbol == symbol:
                     side = OrderSide.SELL if pos.side == "LONG" else OrderSide.BUY
-                    self.place_order(symbol, side, OrderType.MARKET, abs(pos.quantity))
+                    self.place_order(symbol, side, abs(pos.quantity), OrderType.MARKET)
                     return True
             return False
         except Exception as exc:

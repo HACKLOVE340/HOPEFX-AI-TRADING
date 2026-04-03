@@ -136,7 +136,7 @@ class MacroStore:
     def update(
         self,
         series_name: str,
-        date: str | date | datetime,
+        as_of: str | date | datetime,
         value: float,
     ) -> None:
         """
@@ -145,7 +145,7 @@ class MacroStore:
         Called by data ingestion jobs when new data arrives (e.g. weekly COT,
         monthly CPI, daily DXY close).
         """
-        ts = pd.Timestamp(date, tz="UTC")
+        ts = pd.Timestamp(as_of, tz="UTC")
         if series_name not in self._series:
             self._series[series_name] = pd.Series(dtype=float, name=series_name)
         self._series[series_name][ts] = float(value)

@@ -27,10 +27,8 @@ GET  /api/data-layer/ml-features     — complete ML feature set
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, ClassVar
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -46,7 +44,8 @@ def _get_orchestrator():
 
         return orchestrator
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"Data layer unavailable: {exc}") from exc
+        logger.error("Data layer unavailable: %s", exc)
+        raise HTTPException(status_code=503, detail="Data layer unavailable — check server logs") from None
 
 
 @router.get("/health")
@@ -87,7 +86,7 @@ async def get_sentiment() -> dict[str, Any]:
         health = orch.health()
         sentiment_health = health.get("sentiment", {})
 
-        recent_articles: list = []
+        recent_articles: ClassVar[list] = []
         try:
             articles = orch._sentiment.get_recent_articles(hours=1.0, min_relevance=0.1)
             recent_articles = [
@@ -111,7 +110,8 @@ async def get_sentiment() -> dict[str, Any]:
             "recent_articles": recent_articles,
         }
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        logger.error("Data layer endpoint error: %s", exc)
+        raise HTTPException(status_code=503, detail="Data unavailable — check server logs") from None
 
 
 @router.get("/macro")
@@ -124,7 +124,7 @@ async def get_macro() -> dict[str, Any]:
         macro_impact = orch.get_macro_impact_score()
         is_blackout = orch.is_blackout_window()
 
-        upcoming: list = []
+        upcoming: ClassVar[list] = []
         try:
             events = orch._calendar.get_upcoming_events(hours_ahead=24)
             upcoming = [
@@ -143,7 +143,7 @@ async def get_macro() -> dict[str, Any]:
         except Exception as exc:
             logger.debug("data_layer API: upcoming events error: %s", exc)
 
-        macro_snapshot: dict = {}
+        macro_snapshot: ClassVar[dict] = {}
         try:
             macro_snapshot = orch._macro_bridge.snapshot()
         except Exception as exc:
@@ -157,7 +157,8 @@ async def get_macro() -> dict[str, Any]:
             "fred_snapshot": macro_snapshot,
         }
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        logger.error("Data layer endpoint error: %s", exc)
+        raise HTTPException(status_code=503, detail="Data unavailable — check server logs") from None
 
 
 @router.get("/microstructure")
@@ -193,7 +194,8 @@ async def get_microstructure(symbol: str = Query("XAU_USD")) -> dict[str, Any]:
             "features": micro_features,
         }
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        logger.error("Data layer endpoint error: %s", exc)
+        raise HTTPException(status_code=503, detail="Data unavailable — check server logs") from None
 
 
 @router.get("/quality")
@@ -223,7 +225,8 @@ async def get_quality_report(symbol: str = Query("XAU_USD")) -> dict[str, Any]:
             "source_health": orch._dqe.get_source_health(),
         }
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        logger.error("Data layer endpoint error: %s", exc)
+        raise HTTPException(status_code=503, detail="Data unavailable — check server logs") from None
 
 
 @router.get("/lineage")
@@ -243,7 +246,8 @@ async def get_lineage(
         stats = orch._lineage.stats()
         return {"records": records, "stats": stats}
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        logger.error("Data layer endpoint error: %s", exc)
+        raise HTTPException(status_code=503, detail="Data unavailable — check server logs") from None
 
 
 @router.get("/feeds")
@@ -261,7 +265,8 @@ async def get_feed_health() -> dict[str, Any]:
             "dqe_health": health.get("dqe", {}),
         }
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        logger.error("Data layer endpoint error: %s", exc)
+        raise HTTPException(status_code=503, detail="Data unavailable — check server logs") from None
 
 
 @router.get("/ml-features")
@@ -277,4 +282,5 @@ async def get_ml_features(symbol: str = Query("XAU_USD")) -> dict[str, Any]:
             "timestamp": datetime.now(UTC).isoformat(),
         }
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        logger.error("Data layer endpoint error: %s", exc)
+        raise HTTPException(status_code=503, detail="Data unavailable — check server logs") from None

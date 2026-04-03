@@ -12,11 +12,8 @@ live in the same database and share the same Base / session factory.
 
 from __future__ import annotations
 
-import enum
 import uuid
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 
 def _utcnow() -> datetime:
@@ -24,28 +21,28 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
-from database.models import Base
-
 from sqlalchemy import (
-    Column,
-    String,
     Boolean,
+    Column,
     DateTime,
-    Integer,
     ForeignKey,
     Index,
+    Integer,
+    String,
 )
 from sqlalchemy.orm import relationship
 
+from database.models import Base
 
-class UserRole(str, enum.Enum):
+
+class UserRole(StrEnum):
     USER = "user"
     TRADER = "trader"
     ADMIN = "admin"
     SUPERADMIN = "superadmin"
 
 
-class UserStatus(str, enum.Enum):
+class UserStatus(StrEnum):
     ACTIVE = "active"
     SUSPENDED = "suspended"
     PENDING_VERIFICATION = "pending_verification"

@@ -16,25 +16,22 @@ In production this secret must be stored in a secrets manager (Vault, AWS
 Secrets Manager, etc.) and injected at runtime — never committed to source.
 """
 
+import hashlib
 import logging
 import os
 import time
-import hashlib
 from dataclasses import dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from decimal import Decimal
 
 try:
     # hdwallet v3+ — BIP39Mnemonic.from_entropy() is the generator
     from hdwallet import HDWallet
     from hdwallet.mnemonics import BIP39Mnemonic as _BIP39Mnemonic
-    import os as _os
 
     def generate_mnemonic(language: str = "english", strength: int = 128) -> str:  # type: ignore[misc]
         # strength is in bits (128 = 12 words, 256 = 24 words)
-        entropy_bytes = _os.urandom(strength // 8)
+        entropy_bytes = os.urandom(strength // 8)
         return _BIP39Mnemonic.from_entropy(entropy=entropy_bytes.hex(), language=language)
 
     BTC = "BTC"
@@ -308,9 +305,9 @@ class BitcoinClient:
     def _validate_address(self, address: str) -> bool:
         """Validate Bitcoin address format (bech32, P2PKH, P2SH)."""
         if address.startswith("bc1"):  # native SegWit bech32
-            return 42 <= len(address) <= 62  # noqa: PLR2004
+            return 42 <= len(address) <= 62
         if address.startswith(("1", "3")):  # legacy P2PKH / P2SH
-            return 26 <= len(address) <= 35  # noqa: PLR2004
+            return 26 <= len(address) <= 35
         return False
 
     def get_transaction_status(self, tx_hash: str) -> dict | None:

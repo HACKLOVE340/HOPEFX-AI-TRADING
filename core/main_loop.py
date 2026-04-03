@@ -40,13 +40,11 @@ import os
 import pathlib
 import signal
 import sys
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 from dotenv import load_dotenv
 
-from core.event_bus import bus, CH_BREACH
+from core.event_bus import CH_BREACH, bus
 from data.market_ingest import MarketIngest
 from data.news_calendar_feed import NewsCalendarFeed
 from execution.fix_router import FIXRouter
@@ -196,7 +194,7 @@ class MainLoop:
         }
         try:
             pathlib.Path(CHECKPOINT_FILE).parent.mkdir(parents=True, exist_ok=True)
-            with open(CHECKPOINT_FILE, "w") as fh:
+            with open(CHECKPOINT_FILE, "w", encoding="utf-8") as fh:
                 json.dump(state, fh, indent=2)
             logger.info("MainLoop: checkpoint saved → %s", CHECKPOINT_FILE)
         except OSError as exc:

@@ -34,7 +34,7 @@ def _get_session():
             return None
         ctx = mgr.session()
         return ctx.__enter__()  # caller closes/rolls back in finally block
-    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+    except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.debug("db_store: could not obtain DB session: %s", exc)  # nosec B105 - logs exception type, no secrets
         return None
 
@@ -53,7 +53,7 @@ def db_get(key: str) -> Any | None:
         record = session.query(Configuration).filter_by(config_key=key).first()
         if record and record.config_value:
             return json.loads(record.config_value)
-    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+    except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.debug("db_get failed: %s", type(exc).__name__)
     return None
 
@@ -86,7 +86,7 @@ def db_set(key: str, value: Any, changed_by: str = "system") -> bool:
             session.add(record)
         session.commit()
         return True
-    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+    except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.debug("db_set failed: %s", type(exc).__name__)
         return False
 
@@ -102,7 +102,7 @@ def db_delete(key: str) -> bool:
         session.query(Configuration).filter_by(config_key=key).delete()
         session.commit()
         return True
-    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+    except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.debug("db_delete failed: %s", type(exc).__name__)
         return False
 
@@ -117,6 +117,6 @@ def db_keys_prefix(prefix: str) -> list[str]:
             return []
         records = session.query(Configuration.config_key).filter(Configuration.config_key.like(f"{prefix}%")).all()
         return [r[0] for r in records]
-    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+    except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.debug("db_keys_prefix(%s) failed: %s", prefix, exc)
         return []

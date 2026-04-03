@@ -67,9 +67,7 @@ from __future__ import annotations
 
 import logging
 from collections import deque
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 import numpy as np
 import pandas as pd
@@ -82,7 +80,7 @@ try:
     from pathlib import Path
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from data.order_book import OrderBook, OrderBookLevel  # noqa: F401
+    from data.order_book import OrderBook
 
     OB_AVAILABLE = True
 except ImportError:
@@ -418,7 +416,7 @@ def attach_microstructure(
     # Infer resample frequency from price_df if not given
     if resample is None:
         freq = pd.infer_freq(price_df.index)
-        resample = freq if freq else "5min"
+        resample = freq or "5min"
 
     ms_cols = [c for c in ms_df.columns if c.startswith("ms_")]
 

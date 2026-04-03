@@ -7,12 +7,13 @@
 Tests for Notification Manager
 """
 
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
 from urllib.parse import urlparse
+
 from notifications.manager import (
-    NotificationManager,
-    NotificationLevel,
     NotificationChannel,
+    NotificationLevel,
+    NotificationManager,
 )
 
 

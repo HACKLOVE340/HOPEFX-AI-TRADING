@@ -11,12 +11,11 @@ Database Connection Management
 - Migration support
 """
 
+import logging
 import re
 import sqlite3
 from contextlib import contextmanager
 from typing import Any
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -91,12 +90,12 @@ class Database:
 
                 if query.strip().upper().startswith("SELECT"):
                     return [dict(row) for row in cursor.fetchall()]
-                else:
-                    conn.commit()
-                    return None
+                conn.commit()
+                return None
 
         except Exception as e:
-            logger.error(f"Database error: {e}")
+            logger.error("Database error: %s", e)
+
             return None
 
     def insert(self, table: str, data: dict[str, Any]) -> bool:
@@ -115,7 +114,8 @@ class Database:
                 conn.commit()
                 return True
         except Exception as e:
-            logger.error(f"Insert error: {e}")
+            logger.error("Insert error: %s", e)
+
             return False
 
     def update(self, table: str, data: dict[str, Any], where: str) -> bool:
@@ -137,7 +137,8 @@ class Database:
                 conn.commit()
                 return True
         except Exception as e:
-            logger.error(f"Update error: {e}")
+            logger.error("Update error: %s", e)
+
             return False
 
     def delete(self, table: str, where: str) -> bool:
@@ -156,7 +157,8 @@ class Database:
                 conn.commit()
                 return True
         except Exception as e:
-            logger.error(f"Delete error: {e}")
+            logger.error("Delete error: %s", e)
+
             return False
 
     def create_table(self, table: str, schema: str) -> bool:
@@ -170,7 +172,8 @@ class Database:
                 conn.commit()
                 return True
         except Exception as e:
-            logger.error(f"Create table error: {e}")
+            logger.error("Create table error: %s", e)
+
             return False
 
     def close(self):

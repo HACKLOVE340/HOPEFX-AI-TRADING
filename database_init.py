@@ -21,8 +21,11 @@ This module provides:
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
+from pathlib import Path
+from typing import ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -57,11 +60,12 @@ def initialize_database(db_url: str | None = None) -> None:
         logger.warning("Could not create user tables: %s", exc)
 
     # Run Alembic migrations if alembic.ini is present.
-    alembic_ini = os.path.join(os.path.dirname(__file__), "alembic.ini")
-    if os.path.exists(alembic_ini):
+    alembic_ini = os.path.join(Path(__file__).parent, "alembic.ini")
+    if Path(alembic_ini).exists():
         try:
-            from alembic import command
-            from alembic.config import Config
+            from alembic.config import Config  # pylint: disable=no-name-in-module
+
+            from alembic import command  # pylint: disable=no-name-in-module
 
             alembic_cfg = Config(alembic_ini)
             with engine.begin() as connection:
@@ -88,7 +92,7 @@ def validate_schema(engine) -> dict[str, list[str]]:
     inspector = sa_inspect(engine)
     existing = set(inspector.get_table_names())
 
-    required: set[str] = set()
+    required: ClassVar[set[str]] = set()
     for base_path in ("database.models", "database.user_models"):
         try:
             import importlib
@@ -142,10 +146,9 @@ def recover_database(file_path: str) -> bool:
             src = sqlite3.connect(str(path))
             dst = sqlite3.connect(str(recovered))
             for line in src.iterdump():
-                try:
+                with contextlib.suppress(sqlite3.Error):
+                    # skip rows that fail (e.g. constraint violations in corrupt data)
                     dst.execute(line)
-                except sqlite3.Error:
-                    pass  # skip rows that fail (e.g. constraint violations in corrupt data)
             dst.commit()
             src.close()
             dst.close()

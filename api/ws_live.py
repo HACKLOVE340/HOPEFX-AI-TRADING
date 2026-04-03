@@ -52,9 +52,8 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
+from typing import ClassVar
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -75,8 +74,7 @@ WS_AUTH_REQUIRED: bool = os.getenv("WS_AUTH_REQUIRED", "true").lower() == "true"
 
 def _validate_ws_token(token: str) -> dict | None:
     """Validate a Bearer token from a WS auth message. Returns payload or None."""
-    if token.startswith("Bearer "):
-        token = token[7:]
+    token = token.removeprefix("Bearer ")
     try:
         from auth.jwt import decode_access_token
 
@@ -172,7 +170,7 @@ class LiveConnectionManager:
         Send to all connections subscribed to channel.
         Empty subscription set = subscribed to all channels.
         """
-        dead: list[str] = []
+        dead: ClassVar[list[str]] = []
         for cid, subs in list(self._subscriptions.items()):
             if channel in subs or not subs:
                 ws = self._connections.get(cid)
@@ -190,7 +188,7 @@ class LiveConnectionManager:
         Send a message only to connections belonging to a specific user.
         Used for per-user channels: account updates, position fills, alerts.
         """
-        dead: list[str] = []
+        dead: ClassVar[list[str]] = []
         for cid, uid in list(self._user_ids.items()):
             if uid != user_id:
                 continue
@@ -348,7 +346,7 @@ async def _eventbus_tick_broadcaster() -> None:
     (Redis unavailable) so the dashboard always shows something.
     """
     try:
-        from core.event_bus import bus, CH_TICK
+        from core.event_bus import CH_TICK, bus
 
         await bus.connect()
         logger.info("WS live: connected to EventBus — streaming real ticks.")
@@ -415,7 +413,7 @@ def _compute_atr_sl_tp(
 
         broker_sym = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
         buf = _data_buffers.get(broker_sym) or _data_buffers.get(symbol)
-        if buf is not None and len(buf) >= 15:  # noqa: PLR2004
+        if buf is not None and len(buf) >= 15:
             import numpy as _np
 
             highs = _np.array([b["high"] for b in list(buf)[-15:]], dtype=float)
@@ -428,7 +426,7 @@ def _compute_atr_sl_tp(
                     _np.abs(lows[1:] - closes[:-1]),
                 ),
             )
-            if len(tr) >= 14:  # noqa: PLR2004
+            if len(tr) >= 14:
                 atr = float(_np.mean(tr[-14:]))
     except Exception as exc:
         logger.debug(
@@ -440,6 +438,7 @@ def _compute_atr_sl_tp(
     if atr is None:
         try:
             import pathlib
+
             import pandas as _pd
 
             broker_sym = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
@@ -448,7 +447,7 @@ def _compute_atr_sl_tp(
                 csv_path = pathlib.Path(f"data/{symbol.replace('/', '')}_H1.csv")
             if csv_path.exists():
                 df = _pd.read_csv(csv_path, usecols=["high", "low", "close"]).tail(20)
-                if len(df) >= 15:  # noqa: PLR2004
+                if len(df) >= 15:
                     highs = df["high"].to_numpy(dtype=float)
                     lows = df["low"].to_numpy(dtype=float)
                     closes = df["close"].to_numpy(dtype=float)
@@ -490,7 +489,7 @@ async def _eventbus_signal_broadcaster() -> None:
     subscribed to the 'signals' channel.
     """
     try:
-        from core.event_bus import bus, CH_SIGNAL
+        from core.event_bus import CH_SIGNAL, bus
 
         await bus.connect()
         async for msg in bus.subscribe(CH_SIGNAL):
@@ -565,7 +564,7 @@ async def _price_broadcaster_live_only() -> None:
     a broker is connected (e.g. paper broker with market_prices populated).
     Sends no_live_feed when no live price is available for a symbol.
     """
-    _no_feed_warned: set[str] = set()
+    _no_feed_warned: ClassVar[set[str]] = set()
     while True:
         await asyncio.sleep(1)
         if _manager.connection_count == 0:
@@ -624,7 +623,7 @@ async def _heartbeat_broadcaster() -> None:
         await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
         if _manager.connection_count == 0:
             continue
-        dead: list[str] = []
+        dead: ClassVar[list[str]] = []
         for cid in list(_manager._connections.keys()):
             misses = _manager.record_hb_miss(cid)
             if misses > HEARTBEAT_MISS_LIMIT:
@@ -648,11 +647,13 @@ async def _heartbeat_broadcaster() -> None:
 
 def start_broadcasters() -> None:
     """Start background tasks (call once from app lifespan)."""
-    global _broadcast_task  # noqa: PLW0602
     loop = asyncio.get_event_loop()
-    loop.create_task(_price_broadcaster())
-    loop.create_task(_heartbeat_broadcaster())
-    loop.create_task(_eventbus_signal_broadcaster())
+    _t = loop.create_task(_price_broadcaster())
+    _t.add_done_callback(lambda _: None)
+    _t = loop.create_task(_heartbeat_broadcaster())
+    _t.add_done_callback(lambda _: None)
+    _t = loop.create_task(_eventbus_signal_broadcaster())
+    _t.add_done_callback(lambda _: None)
     logger.info("WS live broadcasters started (EventBus → broker poll → no_live_feed)")
 
 
@@ -681,7 +682,7 @@ async def ws_live(websocket: WebSocket) -> None:
       Max WS_MAX_CONNECTIONS_PER_MINUTE new connections per IP per minute (default 20).
       Excess connections are rejected with close code 1008 before accept().
     """
-    from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+    from rate_limiting.websocket_limiter import get_client_ip, get_ws_limiter
 
     limiter = get_ws_limiter()
     client_ip = get_client_ip(websocket)
@@ -848,8 +849,6 @@ async def ws_live(websocket: WebSocket) -> None:
         logger.error("WS live error [%s]: %s", cid, exc)
         _manager.disconnect(cid)
     finally:
-        from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
-
         await get_ws_limiter().release(get_client_ip(websocket))
 
 

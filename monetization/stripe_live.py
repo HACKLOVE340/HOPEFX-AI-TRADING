@@ -45,10 +45,8 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from decimal import Decimal, ROUND_HALF_UP
+from datetime import UTC, datetime
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 import requests
@@ -236,8 +234,8 @@ def usd_to_currency(usd_amount: Decimal, currency: str) -> int:
     converted = usd_amount * Decimal(str(rate))
 
     if currency in ZERO_DECIMAL_CURRENCIES:
-        return int(converted.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-    return int((converted * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        return int(converted.quantize(Decimal(1), rounding=ROUND_HALF_UP))
+    return int((converted * 100).quantize(Decimal(1), rounding=ROUND_HALF_UP))
 
 
 # ── Stripe mode detection ─────────────────────────────────────────────────────
@@ -477,7 +475,7 @@ class StripeProductionClient:
 
         except Exception as exc:
             error_code = getattr(getattr(exc, "error", None), "code", "stripe_error")
-            logger.error("Stripe PaymentIntent failed: %s", exc)
+            logger.exception("Stripe PaymentIntent failed: %s")
             return PaymentResult(
                 success=False,
                 payment_intent_id=None,
@@ -486,7 +484,7 @@ class StripeProductionClient:
                 amount_cents=amount_cents,
                 currency=currency.lower(),
                 error_code=str(error_code),
-                error_message=str(exc),
+                error_message="Payment failed — check server logs",
             )
 
     def verify_webhook(self, payload: bytes, sig_header: str) -> dict[str, Any] | None:

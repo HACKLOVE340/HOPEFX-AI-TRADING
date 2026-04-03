@@ -10,12 +10,21 @@ User-facing settings endpoints with DB persistence.
 
 Routes
 ------
-POST /api/settings/notifications   — save notification channel config
-GET  /api/settings/notifications   — retrieve current config
-POST /api/notifications/test       — send a test message to a channel
+POST /api/settings/notifications    — save notification channel config
+GET  /api/settings/notifications    — retrieve current config
+POST /api/notifications/test        — send a test message to a channel
+GET  /api/settings/preferences      — get timezone/language preferences
+POST /api/settings/preferences      — save timezone/language preferences
+GET  /api/settings/appearance       — get appearance/theme settings
+POST /api/settings/appearance       — save appearance/theme settings
+GET  /api/settings/trading          — get trading preferences
+POST /api/settings/trading          — save trading preferences
+POST /api/settings/broker           — save broker connection settings
+POST /api/auth/change-password      — change authenticated user's password
+DELETE /api/auth/account            — delete authenticated user's account
 
 Settings are stored in the `configurations` table keyed by
-`notification_settings:{user_id}`. Falls back to an in-memory dict when
+`{section}_settings:{user_id}`. Falls back to an in-memory dict when
 the DB is unavailable (dev mode without a running database).
 
 Security
@@ -78,7 +87,7 @@ def _safe_webhook_url(url: str, label: str) -> str:
     Raises HTTPException(400) if the URL is empty, not HTTPS, or targets a
     host not in ``_WEBHOOK_ALLOWED_HOSTS``.
     """
-    from urllib.parse import quote, urlencode, parse_qsl  # noqa: PLC0415
+    from urllib.parse import parse_qsl, quote, urlencode
 
     if not url:
         raise HTTPException(
@@ -166,7 +175,7 @@ def _get_user_id(request: Request) -> str:
         auth = request.headers.get("Authorization", "")
         if auth.startswith("Bearer "):
             token = auth[7:]
-            import jwt as pyjwt  # noqa: PLC0415
+            import jwt as pyjwt
 
             secret = os.getenv("SECURITY_JWT_SECRET", "")
             if not secret:
@@ -174,7 +183,7 @@ def _get_user_id(request: Request) -> str:
                 return "anonymous"
             payload = pyjwt.decode(token, secret, algorithms=["HS256"])
             return str(payload.get("sub", "anonymous"))
-    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+    except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.debug("Settings JWT extraction failed, defaulting to anonymous: %s", exc)
     return "anonymous"
 
@@ -185,8 +194,8 @@ def _get_user_id(request: Request) -> str:
 def _db_save(user_id: str, data: dict) -> bool:
     """Persist settings to the configurations table. Returns True on success."""
     try:
-        from database.connection import get_db_manager  # noqa: PLC0415
-        from database.models import Configuration  # noqa: PLC0415
+        from database.connection import get_db_manager
+        from database.models import Configuration
 
         mgr = get_db_manager()
         if not mgr:
@@ -213,7 +222,7 @@ def _db_save(user_id: str, data: dict) -> bool:
             session.add(record)
         session.commit()
         return True
-    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+    except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.debug("DB save failed for settings: %s", exc)
         return False
 
@@ -221,8 +230,8 @@ def _db_save(user_id: str, data: dict) -> bool:
 def _db_load(user_id: str) -> dict | None:
     """Load settings from the configurations table. Returns None on miss/error."""
     try:
-        from database.connection import get_db_manager  # noqa: PLC0415
-        from database.models import Configuration  # noqa: PLC0415
+        from database.connection import get_db_manager
+        from database.models import Configuration
 
         mgr = get_db_manager()
         if not mgr:
@@ -236,7 +245,7 @@ def _db_load(user_id: str) -> dict | None:
         record = session.query(Configuration).filter_by(config_key=key).first()
         if record and record.config_value:
             return json.loads(record.config_value)
-    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+    except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.debug("DB load failed for settings: %s", exc)
     return None
 
@@ -297,12 +306,12 @@ async def test_notification(body: TestNotificationRequest):
             )
     except HTTPException:
         raise
-    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+    except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.warning("Test notification failed for %s: %s", channel, exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Channel delivery failed: {exc}",
-        ) from exc
+            detail="Channel delivery failed — check server logs",
+        ) from None
 
     return {"status": "delivered", "channel": channel}
 
@@ -319,7 +328,7 @@ def _build_safe_url(validated_url: str) -> str:
     CodeQL's taint engine sees a value derived from ``urlsplit`` output rather
     than from the original request field.
     """
-    from urllib.parse import urlsplit, urlunsplit  # noqa: PLC0415
+    from urllib.parse import urlsplit, urlunsplit
 
     parts = urlsplit(validated_url)
     # Reconstruct from parsed components — scheme and netloc are now literals
@@ -332,7 +341,7 @@ async def _send_discord(webhook_url: str) -> None:
 
     ``webhook_url`` must have been produced by ``_safe_webhook_url``.
     """
-    import aiohttp  # noqa: PLC0415
+    import aiohttp
 
     endpoint = _build_safe_url(webhook_url)
     payload = {
@@ -355,12 +364,12 @@ async def _send_slack(webhook_url: str) -> None:
 
     ``webhook_url`` must have been produced by ``_safe_webhook_url``.
     """
-    import aiohttp  # noqa: PLC0415
+    import aiohttp
 
     endpoint = _build_safe_url(webhook_url)
     payload = {"text": "*HOPEFX* — Slack notifications are working correctly."}
     async with aiohttp.ClientSession() as session, session.post(endpoint, json=payload) as resp:
-        if resp.status != 200:  # noqa: PLR2004
+        if resp.status != 200:
             text = await resp.text()
             raise ValueError(f"Slack returned {resp.status}: {text[:200]}")
 
@@ -373,7 +382,7 @@ async def _send_telegram(bot_token: str, chat_id: str) -> None:
     """
     if not bot_token or not chat_id:
         raise ValueError("Telegram bot token or chat ID is empty")
-    import aiohttp  # noqa: PLC0415
+    import aiohttp
 
     # URL is constructed from the server-side bot token, not from user input.
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
@@ -388,3 +397,4 @@ async def _send_telegram(bot_token: str, chat_id: str) -> None:
             raise ValueError(
                 f"Telegram error: {data.get('description', 'unknown')}",
             )
+

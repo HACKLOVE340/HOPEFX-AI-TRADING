@@ -33,14 +33,15 @@ All credentials are read from environment variables (see .env.example).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import signal
 import sys
 from collections import deque
+from typing import ClassVar
 
 import pandas as pd
-import contextlib
 
 # ── logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -80,8 +81,8 @@ def validate_startup_environment() -> list[str]:
     - Python version >= 3.10
     """
 
-    warnings: list[str] = []
-    errors: list[str] = []
+    warnings: ClassVar[list[str]] = []
+    errors: ClassVar[list[str]] = []
     is_production = os.environ.get("APP_ENV", "production") == "production"
     is_test = os.environ.get("APP_ENV", "") == "test"
 
@@ -94,7 +95,7 @@ def validate_startup_environment() -> list[str]:
             errors.append("SECURITY_JWT_SECRET is not set (required in production)")
         else:
             warnings.append("SECURITY_JWT_SECRET is not set — using insecure default")
-    elif len(jwt_secret) < 32:  # noqa: PLR2004
+    elif len(jwt_secret) < 32:
         errors.append(f"SECURITY_JWT_SECRET is too short ({len(jwt_secret)} chars); minimum 32 characters required")
 
     # Broker-specific credentials
@@ -152,12 +153,11 @@ def validate_startup_environment() -> list[str]:
             logger.critical("❌  Startup validation FAILED: %s", e)
         if is_production and not is_test:
             raise RuntimeError(f"Engine startup aborted — {len(errors)} validation error(s). See logs above.")
-        else:
-            # Non-production: log errors but continue (allows CI/dev to run)
-            logger.warning(
-                "Startup validation errors present but APP_ENV=%s — continuing anyway",
-                os.environ.get("APP_ENV", "production"),
-            )
+        # Non-production: log errors but continue (allows CI/dev to run)
+        logger.warning(
+            "Startup validation errors present but APP_ENV=%s — continuing anyway",
+            os.environ.get("APP_ENV", "production"),
+        )
 
     return warnings + [f"ERROR: {e}" for e in errors]
 
@@ -401,7 +401,7 @@ class HopeFXEngine:
                     account.balance,
                     account.equity,
                 )
-                self._risk_manager.update_equity(account.equity, account.balance)
+                self._risk_manager.update_equity(account.equity)
                 self._trade_logger.log_equity(
                     equity=account.equity,
                     balance=account.balance,
@@ -426,7 +426,7 @@ class HopeFXEngine:
                     acct.get("equity", 0),
                     acct.get("server", "?"),
                 )
-                self._risk_manager.update_equity(acct.get("equity", 0), acct.get("balance", 0))
+                self._risk_manager.update_equity(acct.get("equity", 0))
             else:
                 logger.warning("MT5 connect failed — running in signal-export mode")
             logger.info("MT5Bridge ready")
@@ -570,7 +570,7 @@ class HopeFXEngine:
         if self._dl_orchestrator:
             try:
                 dl_tick = self._dl_orchestrator.get_latest_tick()
-                if dl_tick and dl_tick.is_valid() and abs(dl_tick.mid - mid) / max(mid, 1.0) < 0.005:  # noqa: PLR2004
+                if dl_tick and dl_tick.is_valid() and abs(dl_tick.mid - mid) / max(mid, 1.0) < 0.005:
                     # Use orchestrator mid if NuclearStreamer price is within 0.5%
                     # (sanity check — reject if sources diverge significantly)
                     _real_bid = dl_tick.bid
@@ -719,7 +719,7 @@ class HopeFXEngine:
 
             # Volatility: std of last 20 closes normalised to 1.0 = normal
             vol = 1.0
-            if len(ohlcv_df) >= 20:  # noqa: PLR2004
+            if len(ohlcv_df) >= 20:
                 closes = ohlcv_df["close"].tail(20).values
                 std = float(closes.std())
                 mean = float(abs(closes.mean()))
@@ -736,7 +736,7 @@ class HopeFXEngine:
                 logger.debug("Suppressed exception: %s", _exc)
 
             # Only dispatch if there's an elevated signal worth checking
-            if abs(sentiment) < 0.1 and vol < 1.5:  # noqa: PLR2004
+            if abs(sentiment) < 0.1 and vol < 1.5:
                 return
 
             # Build a synthetic news text from the decision reason
@@ -814,9 +814,8 @@ class HopeFXEngine:
                 # Online learner feedback — notify Phase-3 store of the fill.
                 try:
                     from core.signal_engine import notify_fill as _notify_fill
-                    import pandas as _pd
 
-                    _features = _pd.DataFrame(
+                    _features = pd.DataFrame(
                         [
                             {
                                 "symbol": symbol,
@@ -852,7 +851,7 @@ class HopeFXEngine:
                 equity = float(info.get("equity", 0))
                 balance = float(info.get("balance", equity))
             if equity > 0:
-                self._risk_manager.update_equity(equity, balance)
+                self._risk_manager.update_equity(equity)
                 self._trade_logger.log_equity(
                     equity=equity,
                     balance=balance,

@@ -29,9 +29,7 @@ import abc
 import logging
 import math
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -200,7 +198,7 @@ class BaseStrategy(abc.ABC):
         m["profit_factor"] = round(gross_profit / gross_loss, 4) if gross_loss else float("inf")
 
         # Sharpe ratio (annualised, assuming hourly bars)
-        if len(self._pnl_history) >= 2:  # noqa: PLR2004
+        if len(self._pnl_history) >= 2:
             arr = np.array(self._pnl_history)
             mean_r = float(np.mean(arr))
             std_r = float(np.std(arr, ddof=1))
@@ -268,7 +266,7 @@ class TrendFollowingStrategy(BaseStrategy):
                 self.performance_metrics["signals_generated"] += 1
                 self.performance_metrics["last_signal_at"] = datetime.now(UTC).isoformat()
                 return [sig]
-            elif fast_ma < slow_ma and market_regime == "trending_down":
+            if fast_ma < slow_ma and market_regime == "trending_down":
                 sig = Signal(
                     symbol=symbol,
                     action="sell",
@@ -418,7 +416,7 @@ class BreakoutStrategy(BaseStrategy):
                 self.performance_metrics["signals_generated"] += 1
                 self.performance_metrics["last_signal_at"] = datetime.now(UTC).isoformat()
                 return [sig]
-            elif current < support * (1 - self.breakout_threshold):
+            if current < support * (1 - self.breakout_threshold):
                 sig = Signal(
                     symbol=symbol,
                     action="sell",
@@ -570,7 +568,7 @@ class StrategyManager:
 
             try:
                 ohlcv = price_engine.get_ohlcv(symbol, "1h", limit=100)
-                if not ohlcv or len(ohlcv) < 50:  # noqa: PLR2004
+                if not ohlcv or len(ohlcv) < 50:
                     logger.debug("strategy.skip_no_data symbol=%s", symbol)
                     continue
             except Exception as exc:

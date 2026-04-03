@@ -52,9 +52,8 @@ import os
 import sys
 import time
 import traceback
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
+from typing import ClassVar
 
 # ── Colour helpers ────────────────────────────────────────────────────────────
 _GREEN = "\033[92m"
@@ -106,8 +105,9 @@ def check_imports() -> ValidationResult:
 
 def check_types() -> ValidationResult:
     try:
-        from data_layer.types import GoldTick, FeedSource, MicrostructureSnapshot
         import uuid
+
+        from data_layer.types import FeedSource, GoldTick, MicrostructureSnapshot
 
         tick = GoldTick(
             symbol="XAU_USD",
@@ -120,7 +120,7 @@ def check_types() -> ValidationResult:
         )
         assert tick.is_valid(), "GoldTick.is_valid() returned False"  # nosec B101
         # spread auto-computed via __post_init__
-        assert abs(tick.spread - 0.5) < 1e-6, f"Expected spread=0.5, got {tick.spread}"  # nosec B101  # noqa: PLR2004
+        assert abs(tick.spread - 0.5) < 1e-6, f"Expected spread=0.5, got {tick.spread}"  # nosec B101
         # MicrostructureSnapshot.mid property
         snap = MicrostructureSnapshot(
             symbol="XAU_USD",
@@ -136,7 +136,7 @@ def check_types() -> ValidationResult:
             order_flow_imbalance=0.0,
             trade_pressure=0.0,
         )
-        assert abs(snap.mid - 1980.5) < 1e-6, f"Expected mid=1980.5, got {snap.mid}"  # nosec B101  # noqa: PLR2004
+        assert abs(snap.mid - 1980.5) < 1e-6, f"Expected mid=1980.5, got {snap.mid}"  # nosec B101
         return ValidationResult("Types module", True, "GoldTick/MicrostructureSnapshot/MacroEvent")
     except Exception as exc:
         return ValidationResult("Types module", False, str(exc))
@@ -144,9 +144,10 @@ def check_types() -> ValidationResult:
 
 def check_dqe() -> ValidationResult:
     try:
-        from data_layer.quality.engine import DataQualityEngine
-        from data_layer.types import GoldTick, FeedSource, TickQuality
         import uuid
+
+        from data_layer.quality.engine import DataQualityEngine
+        from data_layer.types import FeedSource, GoldTick, TickQuality
 
         dqe = DataQualityEngine()
         now = datetime.now(UTC)
@@ -184,8 +185,9 @@ def check_dqe() -> ValidationResult:
 
 def check_normalization() -> ValidationResult:
     try:
-        import pandas as pd
         import numpy as np
+        import pandas as pd
+
         from data_layer.normalization.pipeline import NormalizationPipeline
 
         pipe = NormalizationPipeline()
@@ -212,9 +214,10 @@ def check_normalization() -> ValidationResult:
 
 def check_microstructure() -> ValidationResult:
     try:
-        from data_layer.microstructure.engine import MicrostructureEngine
-        from data_layer.types import GoldTick, FeedSource
         import uuid
+
+        from data_layer.microstructure.engine import MicrostructureEngine
+        from data_layer.types import FeedSource, GoldTick
 
         engine = MicrostructureEngine()
         for i in range(20):
@@ -231,7 +234,7 @@ def check_microstructure() -> ValidationResult:
 
         features = engine.get_ml_features()
         # 17 features: 16 original + micro_tick_count added for dl_tick_count wiring
-        assert len(features) >= 17, f"Expected >= 17 features, got {len(features)}"  # nosec B101  # noqa: PLR2004
+        assert len(features) >= 17, f"Expected >= 17 features, got {len(features)}"  # nosec B101
         assert "micro_ofi" in features  # nosec B101
         assert "micro_cumulative_delta" in features  # nosec B101
         assert (  # nosec B101
@@ -249,9 +252,10 @@ def check_microstructure() -> ValidationResult:
 
 def check_sentiment_scorer() -> ValidationResult:
     try:
+        import uuid
+
         from data_layer.sentiment.scorer import GoldSentimentScorer
         from data_layer.types import NewsArticle, NewsSource
-        import uuid
 
         scorer = GoldSentimentScorer()
         article = NewsArticle(
@@ -378,8 +382,8 @@ async def check_fred_reachable() -> ValidationResult:
 
 def check_redis() -> ValidationResult:
     try:
-        from data_layer.cache.redis_store import DataLayerRedisStore
         import redis as redis_lib
+        from data_layer.cache.redis_store import DataLayerRedisStore
 
         url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
         client = redis_lib.from_url(url, socket_connect_timeout=2, socket_timeout=2)
@@ -404,8 +408,9 @@ def check_lineage_store() -> ValidationResult:
         import tempfile
         import uuid
         from pathlib import Path
+
         from data_layer.lineage.store import DataLineageStore
-        from data_layer.types import GoldTick, FeedSource
+        from data_layer.types import FeedSource, GoldTick
 
         with tempfile.TemporaryDirectory() as tmpdir:
             store = DataLineageStore()
@@ -474,7 +479,7 @@ def check_macro_calendar() -> ValidationResult:
         assert "macro_impact_score_now" in features  # nosec B101
         assert "macro_hours_to_next_high" in features  # nosec B101
         assert "macro_is_blackout" in features  # nosec B101
-        assert len(features) == 6  # nosec B101  # noqa: PLR2004
+        assert len(features) == 6  # nosec B101
         return ValidationResult("MacroCalendarEngine", True, f"{len(features)} ML features")
     except Exception as exc:
         return ValidationResult("MacroCalendarEngine", False, str(exc))
@@ -504,7 +509,7 @@ def check_api_router() -> ValidationResult:
         from api.data_layer import router
 
         routes = [r.path for r in router.routes]
-        assert len(routes) >= 8  # nosec B101  # noqa: PLR2004
+        assert len(routes) >= 8  # nosec B101
         return ValidationResult("API router", True, f"{len(routes)} endpoints registered")
     except Exception as exc:
         return ValidationResult("API router", False, str(exc))
@@ -600,8 +605,9 @@ def check_lineage_flush() -> ValidationResult:
     try:
         import tempfile
         from pathlib import Path
+
         from data_layer.lineage.store import DataLineageStore
-        from data_layer.types import GoldTick, FeedSource
+        from data_layer.types import FeedSource, GoldTick
 
         with tempfile.TemporaryDirectory() as tmpdir:
             store = DataLineageStore(db_path=Path(tmpdir) / "test.db")
@@ -648,7 +654,7 @@ def check_redis_auto_connect() -> ValidationResult:
         # Round-trip test
         store.set_tick("XAU_USD_TEST", {"mid": 2000.0, "epoch": time.time()})
         result = store.get_tick("XAU_USD_TEST")
-        assert result is not None and result["mid"] == 2000.0  # nosec B101  # noqa: PLR2004
+        assert result is not None and result["mid"] == 2000.0  # nosec B101
 
         return ValidationResult("Redis auto-connect", True, "singleton auto-connects on init")
     except Exception as exc:
@@ -659,8 +665,9 @@ def check_dqe_mahalanobis() -> ValidationResult:
     """Verify DQE Mahalanobis anomaly detection fires on a clear outlier."""
     try:
         import uuid
+
         from data_layer.quality.engine import DataQualityEngine
-        from data_layer.types import GoldTick, FeedSource
+        from data_layer.types import FeedSource, GoldTick
 
         dqe = DataQualityEngine()
         now = datetime.now(UTC)
@@ -706,12 +713,12 @@ def check_prometheus_no_duplicate_registration() -> ValidationResult:
     """All Prometheus metrics must survive two instantiations without ValueError."""
     try:
         from data_layer.cache.redis_store import DataLayerRedisStore
-        from data_layer.quality.engine import DataQualityEngine
-        from data_layer.feeds.gold.manager import GoldFeedManager
-        from data_layer.sentiment.engine import NewsSentimentEngine
         from data_layer.calendar.engine import MacroCalendarEngine
+        from data_layer.feeds.gold.manager import GoldFeedManager
         from data_layer.feeds.macro.store_bridge import MacroStoreBridge
         from data_layer.orchestrator import MarketDataOrchestrator
+        from data_layer.quality.engine import DataQualityEngine
+        from data_layer.sentiment.engine import NewsSentimentEngine
 
         # Second instantiation must not raise
         DataLayerRedisStore()
@@ -738,8 +745,9 @@ def check_normalization_batch() -> ValidationResult:
     """NormalizationPipeline.normalize_ticks_batch() and tick_to_ohlcv() work correctly."""
     try:
         import uuid
+
         from data_layer.normalization.pipeline import normalization_pipeline
-        from data_layer.types import GoldTick, FeedSource
+        from data_layer.types import FeedSource, GoldTick
 
         ticks = [
             GoldTick(
@@ -754,7 +762,7 @@ def check_normalization_batch() -> ValidationResult:
             for i in range(10)
         ]
         batch = normalization_pipeline.normalize_ticks_batch(ticks)
-        assert len(batch) == 10, f"Expected 10 ticks, got {len(batch)}"  # nosec B101  # noqa: PLR2004
+        assert len(batch) == 10, f"Expected 10 ticks, got {len(batch)}"  # nosec B101
 
         df = normalization_pipeline.tick_to_ohlcv(ticks, timeframe_minutes=60)
         assert not df.empty, "tick_to_ohlcv returned empty DataFrame"  # nosec B101
@@ -826,6 +834,7 @@ def check_replay_engine_timeframe_param() -> ValidationResult:
     """MarketReplayEngine.build_ohlcv_dataframe accepts both timeframe and timeframe_minutes."""
     try:
         import inspect
+
         from data_layer.replay.engine import MarketReplayEngine
 
         sig = inspect.signature(MarketReplayEngine.build_ohlcv_dataframe)
@@ -880,6 +889,7 @@ def check_sentiment_redis_cold_start() -> ValidationResult:
     """NewsSentimentEngine.get_ml_features() must attempt Redis read on cold start."""
     try:
         import inspect
+
         from data_layer.sentiment.engine import NewsSentimentEngine
 
         src = inspect.getsource(NewsSentimentEngine.get_ml_features)
@@ -969,6 +979,7 @@ def check_data_layer_features_injection() -> ValidationResult:
     try:
         import numpy as np
         import pandas as pd
+
         from ml.features_extended import add_data_layer_features
 
         idx = pd.date_range("2025-01-01", periods=5, freq="1h", tz="UTC")
@@ -985,7 +996,7 @@ def check_data_layer_features_injection() -> ValidationResult:
 
         result = add_data_layer_features(df)
         dl_cols = [c for c in result.columns if c.startswith("dl_")]
-        assert len(dl_cols) >= 26, f"Expected >= 26 dl_* columns, got {len(dl_cols)}"  # nosec B101  # noqa: PLR2004
+        assert len(dl_cols) >= 26, f"Expected >= 26 dl_* columns, got {len(dl_cols)}"  # nosec B101
 
         nan_count = result[dl_cols].isna().sum().sum()
         assert nan_count == 0, f"{nan_count} NaN values in dl_* columns"  # nosec B101
@@ -1013,12 +1024,13 @@ def check_data_layer_features_injection() -> ValidationResult:
 def check_macro_store_bridge_retry_config() -> ValidationResult:
     """MacroStoreBridge must have startup retry config and _load_csv_fallback."""
     try:
+        import inspect
+
         from data_layer.feeds.macro.store_bridge import (
-            MacroStoreBridge,
             _STARTUP_MAX_RETRIES,
             _STARTUP_RETRY_DELAY,
+            MacroStoreBridge,
         )
-        import inspect
 
         assert _STARTUP_MAX_RETRIES >= 1, "STARTUP_MAX_RETRIES must be >= 1"  # nosec B101
         assert _STARTUP_RETRY_DELAY > 0, "STARTUP_RETRY_DELAY must be > 0"  # nosec B101
@@ -1162,10 +1174,10 @@ def check_lineage_pg_stats() -> ValidationResult:
 def check_risk_gatekeeper_full_wiring() -> ValidationResult:
     """RiskManager and Gatekeeper must be wired to the orchestrator singleton."""
     try:
-        from risk.manager import RiskManager
-        from risk.gatekeeper import gatekeeper
-        from data_layer.orchestrator import orchestrator
         from data_layer.lineage.store import lineage_store
+        from data_layer.orchestrator import orchestrator
+        from risk.gatekeeper import gatekeeper
+        from risk.manager import RiskManager
 
         rm = RiskManager(orchestrator=orchestrator, lineage_store=lineage_store)
         assert rm._orch is orchestrator, "RiskManager._orch not wired"  # nosec B101
@@ -1192,8 +1204,8 @@ def check_risk_gatekeeper_full_wiring() -> ValidationResult:
 def check_macro_csv_startup_population() -> ValidationResult:
     """MacroStore must be populated from CSV at orchestrator startup."""
     try:
-        from ml.macro_store import macro_store
         from data_layer.feeds.macro.store_bridge import macro_store_bridge
+        from ml.macro_store import macro_store
 
         # Trigger CSV load (simulates orchestrator startup step 7)
         macro_store_bridge._load_csv_fallback()
@@ -1218,7 +1230,7 @@ async def run_all(verbose: bool = False) -> tuple[int, int]:
     print(f"  Python:    {sys.version.split()[0]}")
     print()
 
-    results: list[ValidationResult] = []
+    results: ClassVar[list[ValidationResult]] = []
 
     # Synchronous checks
     sync_checks = [
@@ -1319,7 +1331,7 @@ def main():
     )
     args = parser.parse_args()
 
-    passed, failed = asyncio.run(run_all(verbose=args.verbose))
+    _, failed = asyncio.run(run_all(verbose=args.verbose))
 
     # Exit 1 only on critical failures (warnings are acceptable in dev/CI)
     sys.exit(0 if failed == 0 else 1)

@@ -15,11 +15,8 @@ import random
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone  # noqa: F401
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional  # noqa: F401
 
 try:
     import aiohttp
@@ -27,10 +24,10 @@ try:
     AIOHTTP_AVAILABLE = True
 except ImportError:
     AIOHTTP_AVAILABLE = False
-    logging.warning("aiohttp not available, OANDA broker disabled")
+    logger.warning("aiohttp not available, OANDA broker disabled")
 
 try:
-    import numpy as np  # noqa: F401
+    import numpy as np
 
     NUMPY_AVAILABLE = True
 except ImportError:
@@ -651,9 +648,6 @@ class PaperTradingBroker(BaseBroker):
         if not self._session_factory:
             return
         try:
-            import uuid as _uuid
-            from datetime import datetime, timezone  # noqa: F401
-
             from database.models import OrderSide as DBOrderSide
             from database.models import Trade, TradeStatus
 
@@ -672,7 +666,7 @@ class PaperTradingBroker(BaseBroker):
             realized_pnl = float(record.get("realized_pnl", 0))
 
             trade = Trade(
-                trade_id=str(_uuid.uuid4()),
+                trade_id=str(uuid.uuid4()),
                 symbol=record.get("symbol", ""),
                 side=side_enum,
                 entry_price=float(record.get("entry_price", 0)),
@@ -732,12 +726,11 @@ class PaperTradingBroker(BaseBroker):
         side,
         quantity: float,
         order_type=None,
-        price: float = None,
-        stop_loss: float = None,
-        take_profit: float = None,
+        price: float | None = None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
     ) -> "Order":
         """Synchronous order placement for unit tests."""
-        import asyncio as _asyncio  # noqa: F401
 
         from brokers.base import OrderSide as _OS
         from brokers.base import OrderStatus as _OSt
@@ -762,20 +755,19 @@ class PaperTradingBroker(BaseBroker):
                 f"Insufficient balance: need {cost:.2f}, have {self.balance:.2f}",
             )
 
+        order_id = f"PAPER-{len(self._orders) + 1:06d}"
         order = Order(
-            order_id=f"PAPER-{len(self._orders) + 1:06d}",
+            id=order_id,
             symbol=symbol,
             side=side,
-            order_type=order_type,
+            type=order_type,
             quantity=quantity,
             price=price,
-            stop_loss=stop_loss,
-            take_profit=take_profit,
             status=_OSt.FILLED if order_type == _OT.MARKET else _OSt.PENDING,
             filled_quantity=quantity if order_type == _OT.MARKET else 0.0,
-            average_fill_price=fill_price if order_type == _OT.MARKET else None,
+            average_fill_price=fill_price if order_type == _OT.MARKET else 0.0,
         )
-        self._orders[order.order_id] = order
+        self._orders[order.id] = order
 
         if order_type == _OT.MARKET:
             # Update balance and positions
@@ -786,9 +778,9 @@ class PaperTradingBroker(BaseBroker):
                     self._positions[pos_key].quantity += quantity
                 else:
                     self._positions[pos_key] = Position(
-                        position_id=pos_key,
+                        id=pos_key,
                         symbol=symbol,
-                        side="LONG",
+                        side=_OS.BUY,
                         quantity=quantity,
                         entry_price=fill_price,
                         current_price=fill_price,
@@ -944,34 +936,35 @@ class OANDABroker(BaseBroker):
                         f"{self.base_url}/v3/accounts/{self.account_id}",
                     ) as resp,
                 ):
-                    if resp.status == 200:  # noqa: PLR2004
+                    if resp.status == 200:
                         data = await resp.json()
                         account = data.get("account", {})
 
                         logger.info(
-                            f"OANDA Connected | "
-                            f"Balance: ${float(account.get('balance', 0)):,.2f} | "
-                            f"Currency: {account.get('currency', 'USD')} | "
-                            f"Practice: {self.practice}",
+                            "OANDA Connected | Balance: $%s | Currency: %s | Practice: %s",
+                            f"{float(account.get('balance', 0)):,.2f}",
+                            account.get("currency", "USD"),
+                            self.practice,
                         )
 
                         self.connected = True
                         return True
-                    else:
-                        error_data = await resp.text()
-                        raise ConnectionError(
-                            f"OANDA error {resp.status}: {error_data}",
-                        )
+                    error_data = await resp.text()
+                    raise ConnectionError(
+                        f"OANDA error {resp.status}: {error_data}",
+                    )
 
             except Exception as e:
-                logger.error(f"Connection attempt {attempt + 1} failed: {e}")
+                logger.error("Connection attempt %s failed: %s", attempt + 1, e)
+
                 if self._session:
                     await self._session.close()
                     self._session = None
 
                 if attempt < self.max_retries - 1:
                     wait_time = 2**attempt  # Exponential backoff
-                    logger.info(f"Retrying in {wait_time}s...")
+                    logger.info("Retrying in %ss...", wait_time)
+
                     await asyncio.sleep(wait_time)
                 else:
                     raise ConnectionError(
@@ -1003,27 +996,29 @@ class OANDABroker(BaseBroker):
                         self._request_count += 1
                         self._last_request_time = time.time()
 
-                        if resp.status == 200 or resp.status == 201:  # noqa: PLR2004
+                        if resp.status == 200 or resp.status == 201:
                             return await resp.json()
-                        elif resp.status == 429:  # Rate limited  # noqa: PLR2004
+                        if resp.status == 429:  # Rate limited
                             retry_after = int(resp.headers.get("Retry-After", 1))
-                            logger.warning(f"Rate limited, waiting {retry_after}s")
+                            logger.warning("Rate limited, waiting %ss", retry_after)
+
                             await asyncio.sleep(retry_after)
                             continue
-                        else:
-                            error_text = await resp.text()
-                            raise ValueError(
-                                f"OANDA API error {resp.status}: {error_text}",
-                            )
+                        error_text = await resp.text()
+                        raise ValueError(
+                            f"OANDA API error {resp.status}: {error_text}",
+                        )
 
                 except TimeoutError:
-                    logger.error(f"Request timeout (attempt {attempt + 1})")
+                    logger.error("Request timeout (attempt %s)", attempt + 1)
+
                     if attempt < self.max_retries - 1:
                         await asyncio.sleep(1)
                     else:
                         raise
                 except Exception as e:
-                    logger.error(f"Request error: {e}")
+                    logger.error("Request error: %s", e)
+
                     if attempt < self.max_retries - 1:
                         await asyncio.sleep(1)
                     else:
@@ -1137,8 +1132,9 @@ class OANDABroker(BaseBroker):
         """Close position"""
         # Parse position ID
         parts = position_id.rsplit("_", 1)
-        if len(parts) != 2:  # noqa: PLR2004
-            logger.error(f"Invalid position ID format: {position_id}")
+        if len(parts) != 2:
+            logger.error("Invalid position ID format: %s", position_id)
+
             return False
 
         instrument, side = parts
@@ -1159,11 +1155,13 @@ class OANDABroker(BaseBroker):
             # Invalidate cache
             self._last_cache_update = 0
 
-            logger.info(f"Position closed: {position_id}")
+            logger.info("Position closed: %s", position_id)
+
             return True
 
         except Exception as e:
-            logger.error(f"Failed to close position {position_id}: {e}")
+            logger.error("Failed to close position %s: %s", position_id, e)
+
             return False
 
     async def cancel_order(self, order_id: str) -> bool:
@@ -1173,10 +1171,12 @@ class OANDABroker(BaseBroker):
                 "PUT",
                 f"/accounts/{self.account_id}/orders/{order_id}/cancel",
             )
-            logger.info(f"Order cancelled: {order_id}")
+            logger.info("Order cancelled: %s", order_id)
+
             return True
         except Exception as e:
-            logger.error(f"Failed to cancel order {order_id}: {e}")
+            logger.error("Failed to cancel order %s: %s", order_id, e)
+
             return False
 
     async def get_pending_orders(self) -> list[Order]:
@@ -1186,19 +1186,18 @@ class OANDABroker(BaseBroker):
             f"/accounts/{self.account_id}/pendingOrders",
         )
 
-        orders = []
-        for order_data in data.get("orders", []):
-            orders.append(
-                Order(
-                    id=order_data.get("id", ""),
-                    symbol=order_data.get("instrument", "").replace("_", "/"),
-                    side=OrderSide((order_data.get("units", 0) > 0 and "buy") or "sell"),
-                    type=OrderType(order_data.get("type", "MARKET").lower()),
-                    quantity=abs(float(order_data.get("units", 0))),
-                    price=float(order_data.get("price", 0)) if order_data.get("price") else None,
-                    status=OrderStatus.PENDING,
-                ),
+        orders = [
+            Order(
+                id=order_data.get("id", ""),
+                symbol=order_data.get("instrument", "").replace("_", "/"),
+                side=OrderSide((order_data.get("units", 0) > 0 and "buy") or "sell"),
+                type=OrderType(order_data.get("type", "MARKET").lower()),
+                quantity=abs(float(order_data.get("units", 0))),
+                price=float(order_data.get("price", 0)) if order_data.get("price") else None,
+                status=OrderStatus.PENDING,
             )
+            for order_data in data.get("orders", [])
+        ]
 
         return orders
 
@@ -1213,7 +1212,7 @@ def create_broker(broker_type: str, config: dict) -> BaseBroker:
             commission_per_lot=config.get("commission_per_lot", 3.5),
             slippage_model=config.get("slippage_model", "gaussian"),
         )
-    elif broker_type == "oanda":
+    if broker_type == "oanda":
         if not AIOHTTP_AVAILABLE:
             raise ImportError(
                 "aiohttp required for OANDA broker. Install: pip install aiohttp",
@@ -1225,26 +1224,28 @@ def create_broker(broker_type: str, config: dict) -> BaseBroker:
             timeout=config.get("timeout", 10.0),
             max_retries=config.get("max_retries", 3),
         )
-    elif broker_type == "ccxt":
+    if broker_type == "ccxt":
         from brokers.ccxt_connector import CCXTConnector
 
         return CCXTConnector(config)
-    else:
-        raise ValueError(
-            f"Unknown broker type: {broker_type}. Supported: paper, oanda, ccxt",
-        )
+    raise ValueError(
+        f"Unknown broker type: {broker_type}. Supported: paper, oanda, ccxt",
+    )
 
 
 # Override with the dict-config-based PaperTradingBroker that tests expect
 try:
     from brokers.paper_trading import PaperTradingBroker
 except Exception as _exc:
-    import logging as _logging
-
-    _logging.getLogger(__name__).warning("PaperTradingBroker import failed: %s", _exc)
+    logger.warning("PaperTradingBroker import failed: %s", _exc)
 
 
 from brokers.factory import BrokerFactory  # noqa: F401
+
+try:
+    from brokers.base import AccountInfo, BrokerConnector  # noqa: F401
+except Exception as _exc:
+    logger.debug("BrokerConnector base unavailable: %s", _exc)
 
 # ── YAML-config-based broker implementations ──────────────────────────────────
 # These complement the existing connector classes and are used by the new
@@ -1252,22 +1253,16 @@ from brokers.factory import BrokerFactory  # noqa: F401
 try:
     from brokers.mt5_broker import MT5Broker  # noqa: F401
 except Exception as _exc:
-    import logging as _logging
-
-    _logging.getLogger(__name__).debug("MT5Broker unavailable: %s", _exc)
+    logger.debug("MT5Broker unavailable: %s", _exc)
 
 try:
     from brokers.oanda_broker import OandaBroker as OandaBrokerYaml  # noqa: F401
 except Exception as _exc:
-    import logging as _logging
-
-    _logging.getLogger(__name__).debug("OandaBroker (yaml) unavailable: %s", _exc)
+    logger.debug("OandaBroker (yaml) unavailable: %s", _exc)
 
 try:
     from brokers.ibkr_broker import IBKRBroker  # noqa: F401
 except Exception as _exc:
-    import logging as _logging
-
-    _logging.getLogger(__name__).debug("IBKRBroker unavailable: %s", _exc)
+    logger.debug("IBKRBroker unavailable: %s", _exc)
 
 __version__ = "1.0.0"

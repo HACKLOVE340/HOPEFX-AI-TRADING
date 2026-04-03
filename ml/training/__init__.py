@@ -8,10 +8,10 @@
 import importlib.util as _ilu
 import os as _os
 
-_parent = _os.path.dirname(_os.path.dirname(__file__))
+_parent = _os.path.dirname(_Path(__file__).parent)
 _spec = _ilu.spec_from_file_location(
     "_ml_training_module",
-    _os.path.join(_parent, "training.py"),
+    _Path(_parent) / "training.py",
 )
 if _spec and _spec.loader:
     _mod = _ilu.module_from_spec(_spec)

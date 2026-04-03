@@ -24,7 +24,6 @@ import math
 import numpy as np
 import pandas as pd
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -72,7 +71,7 @@ class TestTradeLevelSharpe:
 
         rng = np.random.default_rng(0)
         pnls = rng.normal(loc=50.0, scale=20.0, size=100).tolist()
-        sharpe, se = trade_level_sharpe(pnls)
+        sharpe, _ = trade_level_sharpe(pnls)
         assert sharpe > 0
 
     def test_negative_sharpe_for_negative_mean_pnl(self):
@@ -80,7 +79,7 @@ class TestTradeLevelSharpe:
 
         rng = np.random.default_rng(1)
         pnls = rng.normal(loc=-50.0, scale=20.0, size=100).tolist()
-        sharpe, se = trade_level_sharpe(pnls)
+        sharpe, _ = trade_level_sharpe(pnls)
         assert sharpe < 0
 
     def test_se_formula_exact(self):
@@ -122,7 +121,7 @@ class TestTradeLevelSharpe:
         """All-identical PnLs → std=0 → Sharpe=0."""
         from real_data_backtest import trade_level_sharpe
 
-        sharpe, se = trade_level_sharpe([100.0] * 50)
+        sharpe, _ = trade_level_sharpe([100.0] * 50)
         assert sharpe == 0.0
 
     def test_avg_hold_hours_affects_annualisation(self):
@@ -171,7 +170,7 @@ class TestRunBacktestSignature:
             assert isinstance(pnl, float)
 
     def test_equity_starts_near_initial_capital(self):
-        from real_data_backtest import run_backtest, INITIAL_CAPITAL
+        from real_data_backtest import INITIAL_CAPITAL, run_backtest
 
         df = _make_ohlcv(300)
         equity_df, _ = run_backtest(df, INITIAL_CAPITAL)
@@ -193,7 +192,7 @@ class TestRunBacktestSignature:
             },
             index=pd.date_range("2021-01-01", periods=n, freq="h", name="timestamp"),
         )
-        equity_df, trade_pnls = run_backtest(df)
+        _, trade_pnls = run_backtest(df)
         # Constant price → all rolling windows produce NaN → dropna() removes all bars
         # Result: zero trades
         assert len(trade_pnls) == 0
@@ -302,18 +301,18 @@ class TestWalkForwardBacktest:
 
 class TestPipValue:
     def test_gold_pip_value(self):
-        from real_data_backtest import _pip_value_for_price, GOLD_PIP_VALUE
+        from real_data_backtest import GOLD_PIP_VALUE, _pip_value_for_price
 
         assert _pip_value_for_price(2000.0) == GOLD_PIP_VALUE
 
     def test_crypto_pip_value(self):
-        from real_data_backtest import _pip_value_for_price, CRYPTO_PIP_VALUE
+        from real_data_backtest import CRYPTO_PIP_VALUE, _pip_value_for_price
 
         assert _pip_value_for_price(1.2) == CRYPTO_PIP_VALUE
 
     def test_gold_slippage_dollar_value(self):
         """3 pips × $0.10/pip = $0.30 slippage at gold price."""
-        from real_data_backtest import _pip_value_for_price, SLIPPAGE_PIPS
+        from real_data_backtest import SLIPPAGE_PIPS, _pip_value_for_price
 
         pip_val = _pip_value_for_price(2000.0)
         dollar_slip = SLIPPAGE_PIPS * pip_val

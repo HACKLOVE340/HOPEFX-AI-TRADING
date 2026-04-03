@@ -213,7 +213,7 @@ class PositionSizer:
     def _atr_distance(entry: float, ohlcv: Any | None) -> float:
         """Compute ATR(14) distance for SL fallback."""
         try:
-            if ohlcv is not None and len(ohlcv) >= 15:  # noqa: PLR2004
+            if ohlcv is not None and len(ohlcv) >= 15:
                 h = ohlcv["high"].values[-15:].astype(float)
                 l = ohlcv["low"].values[-15:].astype(float)
                 c = ohlcv["close"].values[-15:].astype(float)
@@ -221,7 +221,7 @@ class PositionSizer:
                     h[1:] - l[1:],
                     np.maximum(abs(h[1:] - c[:-1]), abs(l[1:] - c[:-1])),
                 )
-                if len(tr) >= 14:  # noqa: PLR2004
+                if len(tr) >= 14:
                     return float(np.mean(tr[-14:])) * _ATR_MULT
         except Exception as _exc:
             logger.debug("Suppressed exception: %s", _exc)

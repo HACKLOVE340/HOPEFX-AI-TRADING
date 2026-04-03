@@ -58,12 +58,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from typing import Any
 from collections.abc import Callable, Iterator
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -321,7 +319,7 @@ class RegimeResult:
         if self.metrics is None:
             return False
         max_dd = getattr(self.metrics, "max_drawdown", 1.0)
-        return max_dd < 0.20  # < 20% drawdown = survived  # noqa: PLR2004
+        return max_dd < 0.20  # < 20% drawdown = survived
 
 
 @dataclass
@@ -452,7 +450,7 @@ class RegimeShiftStressTester:
                 regime=regime,
                 metrics=None,
                 tick_count=0,
-                error=str(exc),
+                error="Regime simulation failed — check server logs",
             )
 
     def summary(self, report: StressReport) -> str:

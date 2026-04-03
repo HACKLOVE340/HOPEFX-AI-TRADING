@@ -83,7 +83,8 @@ class RandomForestTradingClassifier(BaseMLModel):
             )
 
         except Exception as e:
-            self.logger.error(f"Error building Random Forest: {e}")
+            self.logger.error("Error building Random Forest: %s", e)
+
             raise
 
     def train(
@@ -172,7 +173,8 @@ class RandomForestTradingClassifier(BaseMLModel):
             return metrics
 
         except Exception as e:
-            self.logger.error(f"Error training Random Forest: {e}")
+            self.logger.error("Error training Random Forest: %s", e)
+
             raise
 
     def predict(self, X: np.ndarray) -> np.ndarray:
@@ -198,7 +200,8 @@ class RandomForestTradingClassifier(BaseMLModel):
             return predictions
 
         except Exception as e:
-            self.logger.error(f"Error making predictions: {e}")
+            self.logger.error("Error making predictions: %s", e)
+
             raise
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
@@ -219,7 +222,8 @@ class RandomForestTradingClassifier(BaseMLModel):
             return probabilities
 
         except Exception as e:
-            self.logger.error(f"Error predicting probabilities: {e}")
+            self.logger.error("Error predicting probabilities: %s", e)
+
             raise
 
     def predict_with_confidence(self, X: np.ndarray) -> tuple:
@@ -254,8 +258,7 @@ class RandomForestTradingClassifier(BaseMLModel):
 
         if self.feature_names:
             return dict(zip(self.feature_names, importances, strict=False))
-        else:
-            return dict(enumerate(importances))
+        return dict(enumerate(importances))
 
     def get_top_features(self, n: int = 10) -> list[tuple]:
         """
@@ -308,7 +311,7 @@ class RandomForestTradingClassifier(BaseMLModel):
 
         # Calculate metrics
         accuracy = accuracy_score(y_test_encoded, predictions)
-        precision, recall, f1, support = precision_recall_fscore_support(
+        precision, recall, f1, _ = precision_recall_fscore_support(
             y_test_encoded,
             predictions,
             average="weighted",

@@ -22,12 +22,11 @@ from unittest.mock import patch
 
 import pytest
 
-from brokers.paper_trading import PaperTradingBroker
 from brokers.base import OrderSide, OrderType
+from brokers.paper_trading import PaperTradingBroker
 from infrastructure.metrics import get_metrics_registry
 from kill_switch import KillSwitch
-from risk.manager import RiskManager, RiskConfig
-
+from risk.manager import RiskConfig, RiskManager
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -378,12 +377,10 @@ class TestBrokerRiskIntegration:
     """PaperTradingBroker and RiskManager work together end-to-end."""
 
     def _make_broker(self, balance: float = 10_000.0):
-        from brokers.paper_trading import PaperTradingBroker
 
         return PaperTradingBroker(initial_balance=balance)
 
     def _make_risk(self, balance: float = 10_000.0):
-        from risk.manager import RiskManager, RiskConfig
 
         cfg = RiskConfig(
             max_position_size_pct=0.02,
@@ -407,7 +404,6 @@ class TestBrokerRiskIntegration:
         broker = self._make_broker(10_000.0)
         await broker.connect()
         broker.update_market_price("XAUUSD", 2000.0)
-        from brokers.base import OrderSide, OrderType
 
         order = broker.place_order(
             symbol="XAUUSD",
@@ -452,7 +448,6 @@ class TestBrokerRiskIntegration:
         broker = self._make_broker(10_000.0)
         await broker.connect()
         broker.update_market_price("EURUSD", 1.0850)
-        from brokers.base import OrderSide, OrderType
 
         broker.place_order(
             symbol="EURUSD",
@@ -471,7 +466,6 @@ class TestMetricsRegistryIntegration:
     """MetricsRegistry records and exports values correctly."""
 
     def setup_method(self):
-        from infrastructure.metrics import get_metrics_registry
 
         self.registry = get_metrics_registry()
 
@@ -537,7 +531,6 @@ class TestKillSwitchIntegration:
     def _make_ks(self, tmp_path=None):
         import tempfile
         from pathlib import Path
-        from kill_switch import KillSwitch
 
         if tmp_path is None:
             tmp_path = Path(tempfile.mkdtemp())
@@ -601,6 +594,7 @@ class TestPrometheusMonitoringIntegration:
     )
     def test_setup_on_fastapi_app(self):
         from fastapi import FastAPI
+
         import prometheus_monitoring
 
         app = FastAPI()
@@ -614,6 +608,7 @@ class TestPrometheusMonitoringIntegration:
     )
     def test_idempotent_setup(self):
         from fastapi import FastAPI
+
         import prometheus_monitoring
 
         app = FastAPI()

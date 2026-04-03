@@ -162,12 +162,12 @@ def main() -> None:
                 report = _run_single(args, ticker)
                 all_reports[ticker] = report
                 _print_report(report, ticker)
-            except Exception as exc:
-                logger.error("Failed %s: %s", ticker, exc)
-                all_reports[ticker] = {"error": str(exc)}
+            except Exception:
+                logger.exception("Failed %s: %s", ticker)
+                all_reports[ticker] = {"error": "Pipeline failed — check server logs"}
 
         if args.output:
-            with open(args.output, "w") as f:
+            with open(args.output, "w", encoding="utf-8") as f:
                 json.dump(all_reports, f, indent=2, default=str)
             logger.info("Batch report → %s", args.output)
 
@@ -176,7 +176,7 @@ def main() -> None:
         _print_report(report, args.ticker)
 
         if args.output:
-            with open(args.output, "w") as f:
+            with open(args.output, "w", encoding="utf-8") as f:
                 json.dump(report, f, indent=2, default=str)
             logger.info("Report → %s", args.output)
 

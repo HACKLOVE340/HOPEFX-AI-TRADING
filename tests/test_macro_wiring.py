@@ -21,7 +21,6 @@ import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
-
 # ── unit: MacroStore ──────────────────────────────────────────────────────────
 
 
@@ -72,11 +71,10 @@ def test_macro_store_missing_series_fills_zero():
 
 
 def test_push_snapshot_to_store():
-    from api.macro import _push_snapshot_to_store
-    from ml.macro_store import MacroStore
-
     # Patch the module-level singleton with a fresh store
     import ml.macro_store as _ms
+    from api.macro import _push_snapshot_to_store
+    from ml.macro_store import MacroStore
 
     original = _ms.macro_store
     _ms.macro_store = MacroStore()
@@ -104,6 +102,7 @@ def test_push_snapshot_to_store():
 @pytest.fixture(scope="module")
 def client():
     from fastapi import FastAPI
+
     from api.macro import router
 
     app = FastAPI()

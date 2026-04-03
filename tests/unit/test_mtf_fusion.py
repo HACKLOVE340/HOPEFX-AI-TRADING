@@ -28,7 +28,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 
@@ -152,7 +151,8 @@ class TestAlignToIntraday:
 
     def test_shift_prevents_look_ahead(self):
         """After shift_periods=1, the first intraday bar within a day must see
-        the *previous* day's regime, not the current day's."""
+        the *previous* day's regime, not the current day's.
+        """
         daily = _make_daily(50)
         from research.pipeline.mtf_fusion import _compute_daily_regime
 

@@ -18,13 +18,10 @@ from __future__ import annotations
 import json
 import pathlib
 import sys
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -268,7 +265,7 @@ class TestInitBrokerSelection:
         MockPaperClass = MagicMock(return_value=mock_paper_instance)
 
         _INJECTED = ("api.admin", "brokers.paper_trading", "core.startup_factories")
-        with MagicMock() as mock_admin:
+        with MagicMock() as mock_admin:  # pylint: disable=not-context-manager
             mock_admin.log_activity = MagicMock()
             # Snapshot only the keys we will mutate — never clear sys.modules
             # globally as that drops all cached modules and breaks subsequent tests.
@@ -277,6 +274,7 @@ class TestInitBrokerSelection:
             sys.modules["brokers.paper_trading"] = MagicMock(PaperTradingBroker=MockPaperClass)
             try:
                 import importlib
+
                 import core.startup_factories as sf
 
                 importlib.reload(sf)
@@ -306,13 +304,14 @@ class TestInitBrokerSelection:
         MockPaperClass = MagicMock(return_value=mock_paper_instance)
 
         _INJECTED = ("api.admin", "brokers.paper_trading", "core.startup_factories")
-        with MagicMock() as mock_admin:
+        with MagicMock() as mock_admin:  # pylint: disable=not-context-manager
             mock_admin.log_activity = MagicMock()
             _saved = {k: sys.modules.get(k) for k in _INJECTED}
             sys.modules["api.admin"] = mock_admin
             sys.modules["brokers.paper_trading"] = MagicMock(PaperTradingBroker=MockPaperClass)
             try:
                 import importlib
+
                 import core.startup_factories as sf
 
                 importlib.reload(sf)

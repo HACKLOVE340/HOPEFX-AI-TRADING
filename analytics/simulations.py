@@ -15,7 +15,6 @@ and adds the SimulationEngine wrapper used by the dashboard.
 
 from __future__ import annotations
 
-
 import numpy as np
 
 from analytics.monte_carlo import BootstrapResult, run_bootstrap

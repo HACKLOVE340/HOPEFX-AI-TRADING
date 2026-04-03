@@ -4,8 +4,9 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 import asyncio
-import websockets
 import json
+
+import websockets
 
 
 class WebSocketManager:

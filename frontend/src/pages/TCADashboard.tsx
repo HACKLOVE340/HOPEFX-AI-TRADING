@@ -17,7 +17,7 @@
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
-import axios from 'axios';
+import { api as sharedApi } from '../hooks/useApi';
 import {
   useQuery,
   useMutation,
@@ -101,37 +101,27 @@ interface TCAStats {
 }
 
 // ── API ───────────────────────────────────────────────────────────────────────
-
-const API_BASE = import.meta.env.VITE_API_URL ?? '';
-
-function authHeader(): Record<string, string> {
-  const token = localStorage.getItem('token') ?? sessionStorage.getItem('token') ?? '';
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
+// Uses the shared axios instance — JWT injected automatically via interceptor.
 
 const api = {
   reports: (lastN = 500) =>
-    axios.get<TCAReport[]>(`${API_BASE}/api/tca/report`, {
-      headers: authHeader(), params: { last_n: lastN },
-    }).then(r => r.data ?? []),
+    sharedApi.get<TCAReport[]>('/tca/report', { params: { last_n: lastN } })
+      .then(r => r.data ?? []),
 
   records: (n = 100) =>
-    axios.get<TCARecord[]>(`${API_BASE}/api/tca/records`, {
-      headers: authHeader(), params: { n },
-    }).then(r => r.data ?? []),
+    sharedApi.get<TCARecord[]>('/tca/records', { params: { n } })
+      .then(r => r.data ?? []),
 
   alerts: () =>
-    axios.get<TCAAlert[]>(`${API_BASE}/api/tca/alerts`, {
-      headers: authHeader(),
-    }).then(r => r.data ?? []),
+    sharedApi.get<TCAAlert[]>('/tca/alerts')
+      .then(r => r.data ?? []),
 
   stats: (n = 500) =>
-    axios.get<TCAStats>(`${API_BASE}/api/tca/stats`, {
-      headers: authHeader(), params: { n },
-    }).then(r => r.data),
+    sharedApi.get<TCAStats>('/tca/stats', { params: { n } })
+      .then(r => r.data),
 
   flush: () =>
-    axios.delete(`${API_BASE}/api/tca/records`, { headers: authHeader() })
+    sharedApi.delete('/tca/records')
       .then(r => r.data),
 };
 
@@ -232,7 +222,7 @@ const SlippageTrendChart: React.FC<{ points: TrendPoint[] }> = ({ points }) => (
       <Tooltip
         contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6, fontSize: 11 }}
         labelStyle={{ color: '#94a3b8' }}
-        formatter={(v: number) => [`${v} bps`, 'Slippage']}
+        formatter={(v) => [`${v} bps`, 'Slippage']}
       />
       <ReferenceLine y={5} stroke="#ef4444" strokeDasharray="4 2" label={{ value: '5 bps', fill: '#ef4444', fontSize: 10 }} />
       <Area type="monotone" dataKey="slippage" stroke="#f97316" fill="url(#slipGrad)" strokeWidth={1.5} dot={false} />
@@ -249,7 +239,7 @@ const LatencyTrendChart: React.FC<{ points: TrendPoint[] }> = ({ points }) => (
       <Tooltip
         contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6, fontSize: 11 }}
         labelStyle={{ color: '#94a3b8' }}
-        formatter={(v: number) => [`${v} ms`, 'Latency']}
+        formatter={(v) => [`${v} ms`, 'Latency']}
       />
       <ReferenceLine y={100} stroke="#facc15" strokeDasharray="4 2" label={{ value: '100ms', fill: '#facc15', fontSize: 10 }} />
       <Line type="monotone" dataKey="latency" stroke="#3b82f6" strokeWidth={1.5} dot={false} />

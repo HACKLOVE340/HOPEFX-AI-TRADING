@@ -13,13 +13,11 @@ Comprehensive tests for Phases 17-26 modules:
 - Phase 25: TeamManager (teams) - uncovered paths
 """
 
-import pytest
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
-import numpy as np
 
+import numpy as np
+import pytest
 
 # ===========================================================================
 # Phase 18: Chart Replay Engine - extended tests
@@ -644,7 +642,6 @@ class TestResearchNotebooksExtended:
         if create_features is None:
             pytest.skip("create_features not exported")
         import pandas as pd
-        import numpy as np
 
         dates = pd.date_range("2024-01-01", periods=50, freq="h")
         df = pd.DataFrame(
@@ -762,7 +759,6 @@ class TestExecutionTransparencyExtended:
 
     def test_slippage_distribution_by_symbol(self, engine, sample_executions):
         # No symbol filter in API; use period instead
-        from datetime import datetime, timedelta
 
         dist = engine.get_slippage_distribution(
             period_start=datetime.now(UTC) - timedelta(hours=1),
@@ -781,7 +777,6 @@ class TestExecutionTransparencyExtended:
         assert trend is not None
 
     def test_latency_trend_with_limit(self, engine, sample_executions):
-        from datetime import datetime, timedelta
 
         trend = engine.get_latency_trend(
             period_start=datetime.now(UTC) - timedelta(hours=1),
@@ -957,7 +952,7 @@ class TestTeamsExtended:
         assert result is False
 
     def test_viewer_cannot_execute_trades(self, manager, team_with_owner):
-        from teams import UserRole, Permission
+        from teams import Permission, UserRole
 
         inv = manager.invite_member(team_with_owner.team_id, "view@x.com", UserRole.VIEWER, "owner1")
         manager.accept_invitation(inv.token, "viewer2", "View 2")

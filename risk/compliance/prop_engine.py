@@ -33,13 +33,11 @@ from __future__ import annotations
 import json
 import logging
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, time, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, time
 from enum import Enum, auto
 from pathlib import Path
-from collections.abc import Callable
 
 import requests
 
@@ -67,7 +65,7 @@ class PropFirmConfig:
         if not p.exists():
             logger.warning("prop_firm_mode.json not found — using defaults")
             return cls()
-        with p.open() as fh:
+        with p.open(encoding="utf-8") as fh:
             data = json.load(fh)
         return cls(
             daily_dd=data.get("daily_dd", 0.05),
@@ -290,11 +288,11 @@ class PropComplianceEngine:
         weekday = now.weekday()  # 0=Mon … 6=Sun
         t = now.time()
 
-        if weekday == 4 and t >= time(21, 0):  # Friday after 21:00  # noqa: PLR2004
+        if weekday == 4 and t >= time(21, 0):  # Friday after 21:00
             return True
-        if weekday == 5:  # Saturday  # noqa: PLR2004
+        if weekday == 5:  # Saturday
             return True
-        return weekday == 6 and t < time(23, 0)  # Sunday before 23:00  # noqa: PLR2004
+        return weekday == 6 and t < time(23, 0)  # Sunday before 23:00
 
     def _breach(self, breach_type: BreachType, detail: str) -> None:
         """Handle a compliance breach: pause/kill + alert."""

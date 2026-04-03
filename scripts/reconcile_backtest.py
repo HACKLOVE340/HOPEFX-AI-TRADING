@@ -43,9 +43,7 @@ import argparse
 import json
 import logging
 import sys
-from datetime import timezone
-
-UTC = timezone.utc
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -56,16 +54,16 @@ import pandas as pd
 class _NumpyEncoder(json.JSONEncoder):
     """JSON encoder that handles numpy scalars and booleans."""
 
-    def default(self, obj):
-        if isinstance(obj, np.integer):
-            return int(obj)
-        if isinstance(obj, np.floating):
-            return float(obj)
-        if isinstance(obj, np.bool_):
-            return bool(obj)
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        return super().default(obj)
+    def default(self, o):
+        if isinstance(o, np.integer):
+            return int(o)
+        if isinstance(o, np.floating):
+            return float(o)
+        if isinstance(o, np.bool_):
+            return bool(o)
+        if isinstance(o, np.ndarray):
+            return o.tolist()
+        return super().default(o)
 
 
 _ROOT = Path(__file__).resolve().parent.parent

@@ -102,7 +102,7 @@ class DataLayerRedisStore:
 
     def _init_prometheus(self) -> None:
         try:
-            from prometheus_client import Counter, Gauge, REGISTRY
+            from prometheus_client import REGISTRY, Counter, Gauge
 
             def _counter(name: str, doc: str) -> Counter:
                 try:
@@ -138,7 +138,6 @@ class DataLayerRedisStore:
           REDIS_SENTINEL_MASTER=mymaster
           REDIS_PASSWORD=secret
         """
-        import os
 
         sentinel_hosts_raw = os.getenv("REDIS_SENTINEL_HOSTS", "")
         sentinel_master = os.getenv("REDIS_SENTINEL_MASTER", "mymaster")
@@ -147,8 +146,9 @@ class DataLayerRedisStore:
         # ── Sentinel path ────────────────────────────────────────────────────
         if sentinel_hosts_raw:
             try:
-                import redis as _redis_lib
                 from redis.sentinel import Sentinel  # type: ignore[import]
+
+                import redis as _redis_lib
 
                 sentinels = []
                 for _part in sentinel_hosts_raw.split(","):
@@ -274,7 +274,7 @@ class DataLayerRedisStore:
             keys = self._r.keys(pattern)
             for key in keys:
                 count = self._r.zcard(key)
-                if count > 100:  # noqa: PLR2004
+                if count > 100:
                     evict_count = max(1, count // 5)
                     self._r.zremrangebyrank(key, 0, evict_count - 1)
                     logger.debug(
@@ -459,11 +459,10 @@ class DataLayerRedisStore:
 
         Extends stats() with ping latency, key count, and memory info.
         """
-        import time as _time
 
-        t0 = _time.monotonic()
+        t0 = time.monotonic()
         alive = self.ping()
-        ping_ms = round((_time.monotonic() - t0) * 1000, 2)
+        ping_ms = round((time.monotonic() - t0) * 1000, 2)
         h = self.stats()
         h.update(
             {
@@ -500,8 +499,6 @@ class DataLayerRedisStore:
         if not self._r or not items:
             return 0
         try:
-            import json
-
             pipe = self._r.pipeline(transaction=False)
             for suffix, value in items.items():
                 full_key = self._key(suffix)
@@ -531,8 +528,6 @@ class DataLayerRedisStore:
         if not self._r or not keys:
             return {}
         try:
-            import json
-
             full_keys = [self._key(k) for k in keys]
             pipe = self._r.pipeline(transaction=False)
             for fk in full_keys:

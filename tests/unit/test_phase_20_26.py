@@ -8,11 +8,9 @@ Tests for Phase 20: Enhanced Drawing Tools (charting/drawing_tools.py)
 and Phase 26: White-Label Module (whitelabel/).
 """
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-
 
 # ===========================================================================
 # Phase 20: Enhanced Drawing Tools
@@ -889,7 +887,7 @@ class TestWhiteLabelManagerFeatures:
 
     @pytest.fixture
     def manager_with_tenant(self):
-        from whitelabel import WhiteLabelManager, FeatureFlag
+        from whitelabel import FeatureFlag, WhiteLabelManager
 
         mgr = WhiteLabelManager()
         t = mgr.create_tenant("FeatureTenant", "ft@ft.com", features=[FeatureFlag.TRADING])
@@ -1195,6 +1193,6 @@ class TestWhiteLabelConstants:
         assert len(flags) >= 13  # All defined flags
 
     def test_module_singleton_accessible(self):
-        from whitelabel import white_label_manager, WhiteLabelManager
+        from whitelabel import WhiteLabelManager, white_label_manager
 
         assert isinstance(white_label_manager, WhiteLabelManager)

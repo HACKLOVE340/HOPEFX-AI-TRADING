@@ -25,9 +25,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -194,7 +192,7 @@ async def generate_deposit_address(req: AddressRequest):
             raise ValueError(f"No rate for {currency}")
     except Exception as exc:
         logger.error("Rate fetch failed: %s", exc)
-        raise HTTPException(status_code=503, detail="Exchange rate service unavailable") from exc
+        raise HTTPException(status_code=503, detail="Exchange rate service unavailable") from None
 
     amount_crypto = req.amount_usd / rate_usd
     network = (req.network or currency).upper()
@@ -207,8 +205,8 @@ async def generate_deposit_address(req: AddressRequest):
         logger.warning("Address generation failed: %s", exc)
         raise HTTPException(
             status_code=503,
-            detail=f"Address generation unavailable: {exc}",
-        ) from exc
+            detail="Address generation unavailable — check server logs",
+        ) from None
 
     payment_id = f"PAY_{req.user_id}_{currency}_{int(time.time())}"
     payment = {
@@ -279,7 +277,7 @@ async def get_rates_endpoint():
         rates = await get_rates()
     except Exception as exc:
         logger.error("Rate fetch failed: %s", exc)
-        raise HTTPException(status_code=503, detail="Exchange rate service unavailable") from exc
+        raise HTTPException(status_code=503, detail="Exchange rate service unavailable") from None
 
     return {
         "rates": {

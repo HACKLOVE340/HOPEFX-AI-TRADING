@@ -26,13 +26,13 @@ Coverage
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import time
 from unittest.mock import AsyncMock, patch
 
 import pytest
-import contextlib
 
 os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
@@ -491,6 +491,7 @@ class TestOANDAStreamArchitecturalBoundary:
 
     def test_on_tick_callback_ignored_with_warning(self, caplog):
         import logging
+
         from brokers.oanda_stream import OANDAStream
 
         with caplog.at_level(logging.WARNING, logger="brokers.oanda_stream"):
@@ -554,6 +555,7 @@ class TestOANDAStreamAdapterTombstone:
 
     def test_instantiation_logs_error(self, caplog):
         import logging
+
         from brokers.oanda_ws import OANDAStreamAdapter
 
         with caplog.at_level(logging.ERROR, logger="brokers.oanda_ws"):

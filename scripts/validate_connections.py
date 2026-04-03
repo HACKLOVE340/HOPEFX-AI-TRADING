@@ -70,13 +70,14 @@ def check_env_vars():
         if not os.getenv(var, "").strip():
             missing.append(var)
     if missing:
-        raise Exception(f"Missing required env vars: {missing}")
+        raise OSError(f"Missing required env vars: {missing}")
     return "All required env vars present"
 
 
 def check_database():
-    from database.connection import engine
     from sqlalchemy import text
+
+    from database.connection import engine
 
     with engine.connect() as conn:
         conn.execute(text("SELECT 1"))
@@ -106,8 +107,9 @@ def check_auth_service():
 
 
 def check_jwt():
-    from auth.jwt import create_access_token, verify_token
     from fastapi import HTTPException
+
+    from auth.jwt import create_access_token, verify_token
 
     token = create_access_token({"sub": "test@hopefx.io", "type": "access"})
     assert token, "Token is empty"
@@ -268,7 +270,7 @@ def check_dashboard_built():
 def check_frontend_src():
     src = ROOT / "frontend" / "src"
     if not src.exists():
-        raise Exception("frontend/src/ missing")
+        raise FileNotFoundError("frontend/src/ missing")
     pages = list((src / "pages").glob("*.tsx")) if (src / "pages").exists() else []
     return f"frontend/src present ({len(pages)} pages)"
 
@@ -288,7 +290,7 @@ def check_docker_compose():
 
     dc = ROOT / "docker-compose.yml"
     if not dc.exists():
-        raise Exception("docker-compose.yml missing")
+        raise FileNotFoundError("docker-compose.yml missing")
     cfg = yaml.safe_load(dc.read_text())
     services = list(cfg.get("services", {}).keys())
     return f"docker-compose.yml valid ({len(services)} services: {', '.join(services)})"
@@ -297,14 +299,14 @@ def check_docker_compose():
 def check_env_example():
     f = ROOT / "env.example"
     if not f.exists():
-        raise Exception("env.example missing")
+        raise FileNotFoundError("env.example missing")
     lines = [ln for ln in f.read_text().splitlines() if ln.strip() and not ln.startswith("#")]
     return f"env.example present ({len(lines)} vars)"
 
 
 def check_graphql():
     try:
-        from api.graphql_schema import graphql_router  # noqa: F401
+        from api.graphql_schema import graphql_router
 
         return "GraphQL router importable"
     except ImportError as e:

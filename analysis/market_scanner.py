@@ -17,15 +17,13 @@ Inspired by: TradeStation RadarScreen, TradingView Screener, TC2000
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from typing import Any
-from collections.abc import Callable
-from dataclasses import dataclass, field
-from enum import Enum
 import threading
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from enum import Enum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -279,7 +277,8 @@ class MarketScanner:
             for symbol in symbols:
                 if symbol not in self._symbols:
                     self._symbols.append(symbol)
-        logger.info(f"Added {len(symbols)} symbols to scanner")
+        logger.info("Added %s symbols to scanner", len(symbols))
+
 
     def remove_symbol(self, symbol: str):
         """Remove a symbol from scanning."""
@@ -446,7 +445,8 @@ class MarketScanner:
                         results.append(result)
                 except Exception as e:
                     symbol = futures[future]
-                    logger.error(f"Error scanning {symbol}: {e}")
+                    logger.error("Error scanning %s: %s", symbol, e)
+
 
         return results
 
@@ -547,7 +547,7 @@ class MarketScanner:
                 }
             return False, {}
 
-        elif ctype == ScanCriteriaType.PRICE_ABOVE_MA:
+        if ctype == ScanCriteriaType.PRICE_ABOVE_MA:
             ma_period = params.get("period", 20)
             ma_key = f"ma_{ma_period}"
             ma_value = data.get(ma_key, data.get(f"sma_{ma_period}", ma_20))
@@ -560,7 +560,7 @@ class MarketScanner:
                 }
             return False, {}
 
-        elif ctype == ScanCriteriaType.PRICE_BELOW_MA:
+        if ctype == ScanCriteriaType.PRICE_BELOW_MA:
             ma_period = params.get("period", 20)
             ma_key = f"ma_{ma_period}"
             ma_value = data.get(ma_key, data.get(f"sma_{ma_period}", ma_20))
@@ -573,7 +573,7 @@ class MarketScanner:
                 }
             return False, {}
 
-        elif ctype == ScanCriteriaType.RSI_OVERBOUGHT:
+        if ctype == ScanCriteriaType.RSI_OVERBOUGHT:
             threshold = params.get("threshold", 70)
             if rsi > threshold:
                 return True, {
@@ -583,7 +583,7 @@ class MarketScanner:
                 }
             return False, {}
 
-        elif ctype == ScanCriteriaType.RSI_OVERSOLD:
+        if ctype == ScanCriteriaType.RSI_OVERSOLD:
             threshold = params.get("threshold", 30)
             if rsi < threshold:
                 return True, {
@@ -593,7 +593,7 @@ class MarketScanner:
                 }
             return False, {}
 
-        elif ctype == ScanCriteriaType.MOMENTUM:
+        if ctype == ScanCriteriaType.MOMENTUM:
             # Price change and RSI combination
             change_pct = params.get("min_change_pct", 1.0)
             price_change = ((price - open_price) / open_price) * 100 if open_price > 0 else 0
@@ -607,7 +607,7 @@ class MarketScanner:
                 }
             return False, {}
 
-        elif ctype == ScanCriteriaType.VOLUME_SPIKE:
+        if ctype == ScanCriteriaType.VOLUME_SPIKE:
             multiplier = params.get("multiplier", 2.0)
             if avg_volume > 0 and volume > avg_volume * multiplier:
                 return True, {
@@ -618,7 +618,7 @@ class MarketScanner:
                 }
             return False, {}
 
-        elif ctype == ScanCriteriaType.MACD_BULLISH_CROSS:
+        if ctype == ScanCriteriaType.MACD_BULLISH_CROSS:
             prev_macd = data.get("prev_macd", macd)
             prev_signal = data.get("prev_macd_signal", macd_signal)
 
@@ -630,7 +630,7 @@ class MarketScanner:
                 }
             return False, {}
 
-        elif ctype == ScanCriteriaType.MACD_BEARISH_CROSS:
+        if ctype == ScanCriteriaType.MACD_BEARISH_CROSS:
             prev_macd = data.get("prev_macd", macd)
             prev_signal = data.get("prev_macd_signal", macd_signal)
 
@@ -642,18 +642,18 @@ class MarketScanner:
                 }
             return False, {}
 
-        elif ctype == ScanCriteriaType.UPTREND:
+        if ctype == ScanCriteriaType.UPTREND:
             # Price above MA20 > MA50 > MA200
             if price > ma_20 > ma_50:
                 return True, {"direction": "bullish", "ma_20": ma_20, "ma_50": ma_50}
             return False, {}
 
-        elif ctype == ScanCriteriaType.DOWNTREND:
+        if ctype == ScanCriteriaType.DOWNTREND:
             if price < ma_20 < ma_50:
                 return True, {"direction": "bearish", "ma_20": ma_20, "ma_50": ma_50}
             return False, {}
 
-        elif ctype == ScanCriteriaType.MA_CROSSOVER:
+        if ctype == ScanCriteriaType.MA_CROSSOVER:
             fast = params.get("fast_period", 20)
             slow = params.get("slow_period", 50)
             fast_ma = data.get(f"ma_{fast}", ma_20)
@@ -668,7 +668,7 @@ class MarketScanner:
                     "slow_ma": slow_ma,
                     "cross_type": "golden_cross",
                 }
-            elif prev_fast_ma >= prev_slow_ma and fast_ma < slow_ma:
+            if prev_fast_ma >= prev_slow_ma and fast_ma < slow_ma:
                 return True, {
                     "direction": "bearish",
                     "fast_ma": fast_ma,
@@ -677,7 +677,7 @@ class MarketScanner:
                 }
             return False, {}
 
-        elif ctype == ScanCriteriaType.VOLATILITY_EXPANSION:
+        if ctype == ScanCriteriaType.VOLATILITY_EXPANSION:
             atr_multiplier = params.get("multiplier", 1.5)
             avg_atr = data.get("avg_atr", atr)
 
@@ -690,7 +690,7 @@ class MarketScanner:
                 }
             return False, {}
 
-        elif ctype == ScanCriteriaType.NEW_HIGH:
+        if ctype == ScanCriteriaType.NEW_HIGH:
             period = params.get("period", 20)
             high_key = f"high_{period}"
             period_high = data.get(high_key, high_20)
@@ -703,7 +703,7 @@ class MarketScanner:
                 }
             return False, {}
 
-        elif ctype == ScanCriteriaType.NEW_LOW:
+        if ctype == ScanCriteriaType.NEW_LOW:
             period = params.get("period", 20)
             low_key = f"low_{period}"
             period_low = data.get(low_key, low_20)
@@ -716,7 +716,7 @@ class MarketScanner:
                 }
             return False, {}
 
-        elif ctype == ScanCriteriaType.GAP_UP:
+        if ctype == ScanCriteriaType.GAP_UP:
             gap_pct = params.get("min_gap_pct", 1.0)
             prev_close = data.get("prev_close", open_price)
 
@@ -726,7 +726,7 @@ class MarketScanner:
                     return True, {"direction": "bullish", "gap_pct": round(gap, 2)}
             return False, {}
 
-        elif ctype == ScanCriteriaType.GAP_DOWN:
+        if ctype == ScanCriteriaType.GAP_DOWN:
             gap_pct = params.get("min_gap_pct", 1.0)
             prev_close = data.get("prev_close", open_price)
 
@@ -746,7 +746,7 @@ class MarketScanner:
     def _generate_opportunities(self, results: list[ScanResult]):
         """Generate trading opportunities from scan results."""
         for result in results:
-            if result.signal_strength >= 70:  # Strong signals only  # noqa: PLR2004
+            if result.signal_strength >= 70:  # Strong signals only
                 opportunity = self._create_opportunity(result)
                 if opportunity:
                     self._add_opportunity(opportunity)
@@ -814,7 +814,8 @@ class MarketScanner:
                 try:
                     callback(opportunity)
                 except Exception as e:
-                    logger.error(f"Opportunity callback error: {e}")
+                    logger.error("Opportunity callback error: %s", e)
+
 
     def get_opportunities(
         self,
@@ -904,7 +905,8 @@ def create_scanner_router(scanner: MarketScanner):
             try:
                 criteria = [ScanCriteriaType(c) for c in request.criteria]
             except ValueError as e:
-                raise HTTPException(status_code=400, detail=str(e)) from e
+                logger.warning("run_scan invalid criteria: %s", e)
+                raise HTTPException(status_code=400, detail="Invalid scan criteria type") from None
 
         results = scanner.scan(request.market_data, criteria=criteria, min_strength=request.min_strength)
         return [r.to_dict() for r in results]

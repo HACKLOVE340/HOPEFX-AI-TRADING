@@ -25,12 +25,12 @@ Covers:
 from __future__ import annotations
 
 import json
-import numpy as np
-import pandas as pd
-import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import numpy as np
+import pandas as pd
+import pytest
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -263,7 +263,7 @@ class TestDeepEnsembleSignalEngine:
 # ── DeepPredictor architecture validation ─────────────────────────────────────
 
 try:
-    import torch as _torch  # noqa: F401
+    import torch as _torch
 
     _TORCH_AVAILABLE = True
 except ImportError:

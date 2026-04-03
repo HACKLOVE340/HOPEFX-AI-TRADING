@@ -39,23 +39,21 @@ _ATR_FALLBACK_VOL = 0.001  # fallback volatility when realized variance is zero
 # ── Risk check severity constants ─────────────────────────────────────────────
 _CIRCUIT_BREAKER_HALT_LEVEL = 2  # circuit_breaker_level at which trading halts
 
-from dataclasses import dataclass, field
-from typing import Any
-from collections.abc import Callable
-from enum import Enum, IntEnum, auto
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from collections import deque, defaultdict
-import logging
-import json
 import gzip
+import json
+import logging
 import warnings
+from collections import defaultdict, deque
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from enum import Enum, IntEnum, auto
+from typing import Any
 
-# Performance libraries
+# Performance libraries — imported for availability checks; used conditionally
 try:
-    import numba  # noqa: F401
-    from numba import jit, prange, njit, cuda  # noqa: F401
+    import numba  # pylint: disable=unused-import
+    from numba import cuda, jit, njit, prange  # pylint: disable=unused-import
 
     NUMBA_AVAILABLE = True
 except ImportError:
@@ -63,16 +61,16 @@ except ImportError:
     warnings.warn("Numba unavailable - performance degraded", stacklevel=2)
 
 try:
-    import cupy as cp  # noqa: F401
-    from cupy.cuda import Device  # noqa: F401
+    import cupy as cp  # pylint: disable=unused-import
+    from cupy.cuda import Device  # pylint: disable=unused-import
 
     CUDA_AVAILABLE = True
 except ImportError:
     CUDA_AVAILABLE = False
 
 try:
-    from scipy import stats, optimize, interpolate  # noqa: F401
-    from scipy.optimize import minimize, differential_evolution  # noqa: F401
+    from scipy import interpolate, optimize, stats  # pylint: disable=unused-import
+    from scipy.optimize import differential_evolution, minimize  # pylint: disable=unused-import
 
     SCIPY_AVAILABLE = True
 except ImportError:
@@ -391,7 +389,7 @@ class TransactionCostModel:
         perm_impact = self.permanent_impact_coefficient * daily_volatility * participation_rate
 
         # Adjust for order flow toxicity (VPIN-like)
-        if self.use_order_flow_toxicity and order_flow_toxicity > 0.5:  # noqa: PLR2004
+        if self.use_order_flow_toxicity and order_flow_toxicity > 0.5:
             # Toxic flow = higher impact
             toxicity_multiplier = 1 + (order_flow_toxicity - 0.5) * 2
             temp_impact *= toxicity_multiplier
@@ -401,7 +399,7 @@ class TransactionCostModel:
             "permanent_bps": perm_impact * 10000,
             "total_bps": (temp_impact + perm_impact) * 10000,
             "temporary_decay_time": self._estimate_decay_time(participation_rate),
-            "is_toxic": order_flow_toxicity > 0.7,  # noqa: PLR2004
+            "is_toxic": order_flow_toxicity > 0.7,
         }
 
     def _estimate_decay_time(self, participation_rate: float) -> timedelta:
@@ -461,10 +459,8 @@ class TransactionCostModel:
         If fewer than min_samples are provided, returns the current parameters
         unchanged with a warning.
         """
-        import warnings as _w
-
         if len(executions) < min_samples:
-            _w.warn(
+            warnings.warn(
                 f"calibrate_from_executions: only {len(executions)} samples "
                 f"(need >= {min_samples}). Parameters unchanged.",
                 RuntimeWarning,
@@ -481,12 +477,11 @@ class TransactionCostModel:
             }
 
         try:
-            import numpy as _np
             from scipy.optimize import curve_fit as _curve_fit
 
-            x_arr = _np.array([e["participation_rate"] for e in executions])
-            s_arr = _np.array([e["daily_volatility"] for e in executions])
-            y_arr = _np.array([e["observed_impact_bps"] for e in executions]) / 10000  # → fraction
+            x_arr = np.array([e["participation_rate"] for e in executions])
+            s_arr = np.array([e["daily_volatility"] for e in executions])
+            y_arr = np.array([e["observed_impact_bps"] for e in executions]) / 10000  # → fraction
 
             def _model(X, eta, gamma, beta):
                 x, s = X
@@ -505,12 +500,12 @@ class TransactionCostModel:
                 maxfev=5000,
             )
             eta_fit, gamma_fit, beta_fit = popt
-            perr = _np.sqrt(_np.diag(pcov))
+            perr = np.sqrt(np.diag(pcov))
 
             # Goodness of fit
             y_pred = _model((x_arr, s_arr), *popt)
-            ss_res = _np.sum((y_arr - y_pred) ** 2)
-            ss_tot = _np.sum((y_arr - _np.mean(y_arr)) ** 2)
+            ss_res = np.sum((y_arr - y_pred) ** 2)
+            ss_tot = np.sum((y_arr - np.mean(y_arr)) ** 2)
             r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
 
             self.temporary_impact_coefficient = float(eta_fit)
@@ -539,7 +534,7 @@ class TransactionCostModel:
 
         except (ValueError, RuntimeError, TypeError) as exc:
             logger.warning("calibrate_from_executions failed: %s", exc)
-            return {"calibrated": False, "error": str(exc)}
+            return {"calibrated": False, "error": "Calibration failed — check server logs"}
 
     def total_cost(self, order_size: float, price: float, is_maker: bool = False, **kwargs) -> dict[str, float]:
         """Calculate all-in transaction cost"""
@@ -869,7 +864,7 @@ class MarketMicrostructureAnalyzer:
 
     def _update_microstructure_metrics(self):
         """Update spread and impact metrics"""
-        if len(self.ticks) < 20:  # noqa: PLR2004
+        if len(self.ticks) < 20:
             return
 
         recent_ticks = list(self.ticks)[-20:]
@@ -886,7 +881,7 @@ class MarketMicrostructureAnalyzer:
 
     def _update_toxicity_metrics(self):
         """Calculate VPIN-like order flow toxicity"""
-        if len(self.trade_flow) < 50:  # noqa: PLR2004
+        if len(self.trade_flow) < 50:
             return
 
         recent_flow = list(self.trade_flow)[-50:]
@@ -903,7 +898,7 @@ class MarketMicrostructureAnalyzer:
 
     def _detect_regime(self):
         """Detect current market regime using multiple classifiers"""
-        if len(self.ticks) < 50:  # noqa: PLR2004
+        if len(self.ticks) < 50:
             self.current_regime = MarketRegime.UNKNOWN
             return
 
@@ -917,23 +912,23 @@ class MarketMicrostructureAnalyzer:
         self._calculate_hurst()
 
         # Classify
-        if volatility > 0.05:  # >5% realized vol  # noqa: PLR2004
+        if volatility > 0.05:  # >5% realized vol
             if self.realized_skewness < -1:
                 self.current_regime = MarketRegime.HIGH_VOLATILITY_BREAKOUT
             else:
                 self.current_regime = MarketRegime.HIGH_VOLATILITY_MEAN_REVERSION
-        elif self.hurst_exponent > 0.6:  # noqa: PLR2004
+        elif self.hurst_exponent > 0.6:
             if self.returns and np.mean(list(self.returns)[-10:]) > 0:
                 self.current_regime = MarketRegime.TRENDING_STRONG_BULL
             else:
                 self.current_regime = MarketRegime.TRENDING_STRONG_BEAR
-        elif self.hurst_exponent > 0.5:  # noqa: PLR2004
+        elif self.hurst_exponent > 0.5:
             self.current_regime = (
                 MarketRegime.TRENDING_WEAK_BULL
                 if (self.returns and np.mean(list(self.returns)[-10:]) > 0)
                 else MarketRegime.TRENDING_WEAK_BEAR
             )
-        elif volatility < 0.01:  # noqa: PLR2004
+        elif volatility < 0.01:
             self.current_regime = MarketRegime.RANGING_NARROW
         else:
             self.current_regime = MarketRegime.RANGING_WIDE
@@ -1126,7 +1121,8 @@ class InstitutionalRiskManager:
         # Callbacks for emergency actions
         self.emergency_callbacks: list[Callable] = []
 
-        logger.info(f"RiskManager initialized: ${initial_capital:,.2f} capital")
+        logger.info("RiskManager initialized: $%s capital", initial_capital)
+
 
     def register_emergency_callback(self, callback: Callable):
         """Register callback for kill switch activation"""
@@ -1251,7 +1247,7 @@ class InstitutionalRiskManager:
             )
 
         # Check for unusual trading patterns
-        if self.daily_trades > 1000:  # >1000 trades/day is unusual  # noqa: PLR2004
+        if self.daily_trades > 1000:  # >1000 trades/day is unusual
             self._log_risk_event("High trade frequency detected", RiskEventSeverity.WARNING)
 
         return True, "OK"
@@ -1278,7 +1274,7 @@ class InstitutionalRiskManager:
         """
         Calculate Value at Risk using specified method.
         """
-        if len(self.returns_history) < 30:  # noqa: PLR2004
+        if len(self.returns_history) < 30:
             # Not enough data - use parametric fallback
             return self.current_capital * 0.02  # Conservative 2%
 
@@ -1286,11 +1282,11 @@ class InstitutionalRiskManager:
 
         if method == "historical":
             return np.percentile(returns, (1 - confidence) * 100) * self.current_capital
-        elif method == "parametric" and SCIPY_AVAILABLE:
+        if method == "parametric" and SCIPY_AVAILABLE:
             mu, sigma = np.mean(returns), np.std(returns)
             z_score = stats.norm.ppf(1 - confidence)
             return (mu + z_score * sigma) * self.current_capital
-        elif method == "cornish_fisher" and SCIPY_AVAILABLE:
+        if method == "cornish_fisher" and SCIPY_AVAILABLE:
             # Adjust for skewness and kurtosis
             z = stats.norm.ppf(1 - confidence)
             s = stats.skew(returns)
@@ -1312,7 +1308,7 @@ class InstitutionalRiskManager:
         Calculate optimal Kelly fraction based on trade history.
         f* = (bp - q) / b
         """
-        if len(self.trade_history) < 20:  # noqa: PLR2004
+        if len(self.trade_history) < 20:
             return self.kelly_fraction  # Default
 
         wins = [t.net_pnl for t in self.trade_history if t.net_pnl > 0]
@@ -1368,10 +1364,14 @@ class InstitutionalRiskManager:
 
         logger.critical("=" * 70)
         logger.critical("KILL SWITCH ACTIVATED")
-        logger.critical(f"Reason: {reason}")
-        logger.critical(f"Daily P&L: ${self.daily_pnl:,.2f}")
-        logger.critical(f"Current Capital: ${self.current_capital:,.2f}")
-        logger.critical(f"Drawdown: {(self.peak_capital - self.current_capital) / self.peak_capital:.2%}")
+        logger.critical("Reason: %s", reason)
+
+        logger.critical("Daily P&L: $%s", self.daily_pnl)
+
+        logger.critical("Current Capital: $%s", self.current_capital)
+
+        logger.critical("Drawdown: %s", (self.peak_capital - self.current_capital) / self.peak_capital)
+
         logger.critical("=" * 70)
 
         # Execute emergency callbacks
@@ -1379,7 +1379,8 @@ class InstitutionalRiskManager:
             try:
                 callback(reason, self.daily_pnl, self.current_capital)
             except (RuntimeError, ValueError, AttributeError) as e:
-                logger.error(f"Emergency callback failed: {e}")
+                logger.error("Emergency callback failed: %s", e)
+
 
         self._log_risk_event(f"Kill switch: {reason}", RiskEventSeverity.KILL_SWITCH)
 
@@ -1503,8 +1504,10 @@ class EnhancedBacktestEngine:
         # Slippage model parameters based on execution quality
         self.latency_model = self._get_latency_model()
 
-        logger.info(f"BacktestEngine initialized: ${initial_capital:,.2f}")
-        logger.info(f"Execution quality: {execution_quality.name}")
+        logger.info("BacktestEngine initialized: $%s", initial_capital)
+
+        logger.info("Execution quality: %s", execution_quality.name)
+
         if self.enable_gpu:
             logger.info("GPU acceleration enabled")
 
@@ -1651,7 +1654,7 @@ class EnhancedBacktestEngine:
         current_price = history[-1]
 
         # Pre-trade risk check
-        allowed, reason, risk_meta = self.risk_manager.check_pre_trade_risk(symbol, side, size, current_price, {})
+        allowed, reason, _ = self.risk_manager.check_pre_trade_risk(symbol, side, size, current_price, {})
 
         if not allowed:
             return False, reason, None
@@ -1816,7 +1819,8 @@ class EnhancedBacktestEngine:
             else:
                 return False, {"error": "Invalid order type"}
         except ValueError as exc:
-            return False, {"error": str(exc), "status": "pending"}
+            logger.warning("Order fill resolution failed: %s", exc)
+            return False, {"error": "Invalid order parameters", "status": "pending"}
 
         # ── Calculate transaction costs ────────────────────────────────────
         costs = self.cost_model.total_cost(
@@ -1935,7 +1939,7 @@ class EnhancedBacktestEngine:
         position.realized_pnl += net_pnl
         position.size = position.size + (closing_size if position.size > 0 else -closing_size)
 
-        if is_full_close or abs(position.size) < 0.0001:  # noqa: PLR2004
+        if is_full_close or abs(position.size) < 0.0001:
             # Archive position
             position.closing_trades.append({"trade_id": trade.trade_id, "exit_price": exit_price, "pnl": net_pnl})
 
@@ -1959,7 +1963,7 @@ class EnhancedBacktestEngine:
 
         # Equity curve analysis
         equity_values = [e[1] for e in self.equity_curve]
-        [e[0] for e in self.equity_curve]
+        _equity_timestamps = [e[0] for e in self.equity_curve]  # available for time-series analysis
 
         # Calculate returns
         equity_returns = np.diff(equity_values) / equity_values[:-1] if len(equity_values) > 1 else np.array([])
@@ -2047,15 +2051,15 @@ class EnhancedBacktestEngine:
                 else 0,
                 "sortino_ratio": calculate_sortino(equity_returns),
                 "calmar_ratio": calculate_calmar(equity_returns, max_dd),
-                "var_95": np.percentile(returns, 5) if len(returns) > 10 else 0,  # noqa: PLR2004
+                "var_95": np.percentile(returns, 5) if len(returns) > 10 else 0,
                 "cvar_95": np.mean([r for r in returns if r <= np.percentile(returns, 5)])
-                if len(returns) > 10  # noqa: PLR2004
+                if len(returns) > 10
                 else 0,
                 "skewness": stats.skew(returns)
-                if SCIPY_AVAILABLE and len(returns) > 2  # noqa: PLR2004
+                if SCIPY_AVAILABLE and len(returns) > 2
                 else 0,
                 "kurtosis": stats.kurtosis(returns)
-                if SCIPY_AVAILABLE and len(returns) > 2  # noqa: PLR2004
+                if SCIPY_AVAILABLE and len(returns) > 2
                 else 0,
             },
             "execution_quality": {
@@ -2174,10 +2178,11 @@ class EnhancedBacktestEngine:
             with gzip.open(filepath, "wt") as f:
                 json.dump(state, f, default=str, indent=2)
         else:
-            with open(filepath, "w") as f:
+            with open(filepath, "w", encoding="utf-8") as f:
                 json.dump(state, f, default=str, indent=2)
 
-        logger.info(f"State saved to {filepath} ({'compressed' if compress else 'raw'})")
+        logger.info("State saved to %s (%s)", filepath, 'compressed' if compress else 'raw')
+
 
     def load_state(self, filepath: str):
         """Load engine state from disk"""
@@ -2203,7 +2208,8 @@ class EnhancedBacktestEngine:
             )
             self.positions[symbol] = pos
 
-        logger.info(f"State loaded from {filepath}")
+        logger.info("State loaded from %s", filepath)
+
         return state
 
 
@@ -2301,7 +2307,7 @@ def _load_real_ticks(symbol: str = "XAUUSD", max_bars: int = 5000) -> list["Tick
         exchange = _ccxt.binance({"enableRateLimit": True, "options": {"defaultType": "spot"}})
         since_ms = exchange.parse8601("2022-01-01T00:00:00Z")
         df = rdb.fetch_ohlcv_paginated(exchange, "XAU/USDT", "1h", since_ms=since_ms, max_bars=max_bars)
-        if df is None or len(df) < 100:  # noqa: PLR2004
+        if df is None or len(df) < 100:
             return None
 
         ticks: list[TickData] = []
@@ -2442,7 +2448,7 @@ def run_comprehensive_backtest(use_real_data: bool = True):
 
             if fast_ma > slow_ma * (1 + threshold):
                 return (OrderSide.BUY, 0.8)  # 80% confidence
-            elif fast_ma < slow_ma * (1 - threshold):
+            if fast_ma < slow_ma * (1 - threshold):
                 return (OrderSide.SELL, 0.8)
 
             return None
@@ -2465,7 +2471,7 @@ def run_comprehensive_backtest(use_real_data: bool = True):
             side, confidence = signal
 
             # Risk-based position sizing
-            if confidence > 0.7:  # noqa: PLR2004
+            if confidence > 0.7:
                 size = position_size * confidence
 
                 # Check if we need to reverse

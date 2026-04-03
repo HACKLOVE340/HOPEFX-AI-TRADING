@@ -51,9 +51,7 @@ import os
 import smtplib
 import uuid
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
@@ -139,30 +137,30 @@ class WeeklyReport:
 
 
 def _sharpe(returns: np.ndarray, periods_per_year: int = 252) -> float | None:
-    if len(returns) < 5:  # noqa: PLR2004
+    if len(returns) < 5:
         return None
     mu = float(np.mean(returns))
     sigma = float(np.std(returns, ddof=1))
-    if sigma < 1e-10:  # noqa: PLR2004
+    if sigma < 1e-10:
         return None
     return round(mu / sigma * math.sqrt(periods_per_year), 3)
 
 
 def _sortino(returns: np.ndarray, periods_per_year: int = 252) -> float | None:
-    if len(returns) < 5:  # noqa: PLR2004
+    if len(returns) < 5:
         return None
     mu = float(np.mean(returns))
     downside = returns[returns < 0]
     if len(downside) == 0:
         return None
     downside_std = float(np.std(downside, ddof=1))
-    if downside_std < 1e-10:  # noqa: PLR2004
+    if downside_std < 1e-10:
         return None
     return round(mu / downside_std * math.sqrt(periods_per_year), 3)
 
 
 def _max_drawdown(equity_curve: list[float]) -> float:
-    if len(equity_curve) < 2:  # noqa: PLR2004
+    if len(equity_curve) < 2:
         return 0.0
     arr = np.array(equity_curve, dtype=float)
     peak = np.maximum.accumulate(arr)
@@ -171,7 +169,7 @@ def _max_drawdown(equity_curve: list[float]) -> float:
 
 
 def _calmar(annual_return: float, max_dd: float) -> float | None:
-    if abs(max_dd) < 1e-10:  # noqa: PLR2004
+    if abs(max_dd) < 1e-10:
         return None
     return round(annual_return / abs(max_dd), 3)
 
@@ -179,7 +177,7 @@ def _calmar(annual_return: float, max_dd: float) -> float | None:
 def _profit_factor(wins: list[float], losses: list[float]) -> float | None:
     gross_win = sum(w for w in wins if w > 0)
     gross_loss = abs(sum(loss for loss in losses if loss < 0))
-    if gross_loss < 1e-10:  # noqa: PLR2004
+    if gross_loss < 1e-10:
         return None
     return round(gross_win / gross_loss, 3)
 
@@ -225,7 +223,7 @@ class WeeklyReportGenerator:
         # Daily returns from equity curve
         eq_values = [v for _, v in equity_curve if week_start <= _ <= week_end]
         daily_returns = np.array([])
-        if len(eq_values) >= 2:  # noqa: PLR2004
+        if len(eq_values) >= 2:
             arr = np.array(eq_values, dtype=float)
             daily_returns = np.diff(arr) / np.where(arr[:-1] > 0, arr[:-1], 1.0)
 
@@ -245,7 +243,7 @@ class WeeklyReportGenerator:
             total_trades=total,
             winning_trades=len(wins),
             losing_trades=len(losses),
-            win_rate=round(len(wins) / total, 4) if total >= 10 else None,  # noqa: PLR2004
+            win_rate=round(len(wins) / total, 4) if total >= 10 else None,
             avg_win=round(sum(wins) / len(wins), 4) if wins else 0.0,
             avg_loss=round(sum(losses) / len(losses), 4) if losses else 0.0,
             profit_factor=_profit_factor(wins, losses),
@@ -263,7 +261,7 @@ class WeeklyReportGenerator:
             data_source=resolved_source,
             note=(
                 "Insufficient trades for statistical significance (< 10)."
-                if total < 10  # noqa: PLR2004
+                if total < 10
                 else ""
             ),
         )
@@ -327,7 +325,7 @@ class WeeklyReportGenerator:
         try:
             with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
                 server.ehlo()
-                if smtp_port == 587:  # noqa: PLR2004
+                if smtp_port == 587:
                     server.starttls()
                 if smtp_user and smtp_pass:
                     server.login(smtp_user, smtp_pass)
@@ -353,12 +351,9 @@ def _detect_data_source() -> str:
       4. Fallback → paper_simulation
     """
     try:
-        import json as _json
-        from pathlib import Path as _Path
-
-        oanda_stamp = _Path("data/oanda_paper_start.json")
+        oanda_stamp = Path("data/oanda_paper_start.json")
         if oanda_stamp.exists():
-            info = _json.loads(oanda_stamp.read_text())
+            info = json.loads(oanda_stamp.read_text())
             account_id = info.get("account_id", "PENDING")
             if account_id and account_id != "PENDING" and not account_id.startswith("PENDING"):
                 return DATA_SOURCE_PAPER_OANDA
@@ -366,8 +361,9 @@ def _detect_data_source() -> str:
         logger.debug("Suppressed exception: %s", _exc)
 
     try:
-        from core.live_trading_gate import live_gate  # type: ignore[import]
+        from core.live_trading_gate import get_gate
 
+        live_gate = get_gate()
         if getattr(live_gate, "is_live", False):
             return DATA_SOURCE_LIVE
     except Exception as _exc:
@@ -566,8 +562,8 @@ async def _run_weekly_report_job() -> None:
             report.sharpe_ratio,
             report.data_source,
         )
-    except Exception as exc:
-        logger.error("Weekly report job failed: %s", exc, exc_info=True)
+    except Exception:
+        logger.exception("Weekly report job failed: %s")
 
 
 async def _load_trade_data() -> tuple:

@@ -34,9 +34,7 @@ import logging
 import os
 import traceback
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -416,7 +414,7 @@ class PreTradeGate:
 
         # Extract CVaR value for audit log
         if (
-            hasattr(rm, "_compute_cvar") and len(getattr(rm, "_returns_history", [])) >= 10  # noqa: PLR2004
+            hasattr(rm, "_compute_cvar") and len(getattr(rm, "_returns_history", [])) >= 10
         ):
             try:
                 return rm._compute_cvar()

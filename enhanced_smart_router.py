@@ -14,9 +14,7 @@ import logging
 from abc import ABC, abstractmethod
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum, auto
 from typing import Any
 
@@ -125,7 +123,7 @@ class Order:
 
     @property
     def is_filled(self) -> bool:
-        return abs(self.filled_size - self.size) < 0.0001  # noqa: PLR2004
+        return abs(self.filled_size - self.size) < 0.0001
 
     @property
     def notional(self) -> float:
@@ -268,7 +266,8 @@ class TWAPStrategy(ExecutionStrategy):
 
     async def execute(self) -> list[Fill]:
         """Execute TWAP slices"""
-        logger.info(f"Starting TWAP: {self.order.size} in {self.num_slices} slices")
+        logger.info("Starting TWAP: %s in %s slices", self.order.size, self.num_slices)
+
 
         for i in range(self.num_slices):
             if self.is_complete:
@@ -291,7 +290,8 @@ class TWAPStrategy(ExecutionStrategy):
             fill = await self._simulate_fill(slice_order, venue)
             if fill:
                 self.update_order(fill)
-                logger.info(f"Slice {i + 1}/{self.num_slices} filled: {fill.size} @ {fill.price}")
+                logger.info("Slice %s/%s filled: %s @ %s", i + 1, self.num_slices, fill.size, fill.price)
+
 
             # Wait for next interval
             if i < self.num_slices - 1:
@@ -375,7 +375,7 @@ class VWAPStrategy(ExecutionStrategy):
         slice_sizes = [(vol / self.total_volume) * self.order.size for vol in self.volume_profile]
 
         for i, size in enumerate(slice_sizes):
-            if size < 0.001 or self.is_complete:  # noqa: PLR2004
+            if size < 0.001 or self.is_complete:
                 continue
 
             venue = self._select_venue()
@@ -482,7 +482,8 @@ class ImplementationShortfallStrategy(ExecutionStrategy):
                 if self.order.side == OrderSide.SELL:
                     shortfall = -shortfall
 
-                logger.info(f"Slice {i + 1}: IS = {shortfall:.4%}")
+                logger.info("Slice %s: IS = %s", i + 1, shortfall)
+
 
             await asyncio.sleep(6)  # 10 slices over 1 minute
 
@@ -527,7 +528,8 @@ class SmartOrderRouter:
             "fill_rate": 0.2,
         }
 
-        logger.info(f"SmartOrderRouter initialized with {len(self.venues)} venues")
+        logger.info("SmartOrderRouter initialized with %s venues", len(self.venues))
+
 
     def _default_venues(self) -> list[Venue]:
         """Create default venue configuration"""
@@ -620,7 +622,8 @@ class SmartOrderRouter:
         """
         Execute order with full lifecycle management.
         """
-        logger.info(f"Routing order {order.id}: {order.side.name} {order.size} {order.symbol}")
+        logger.info("Routing order %s: %s %s %s", order.id, order.side.name, order.size, order.symbol)
+
 
         # Route to strategy
         strategy = self.route_order(order)

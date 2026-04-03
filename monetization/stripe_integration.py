@@ -27,11 +27,9 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from .pricing import BillingCycle, SubscriptionTier
@@ -52,7 +50,7 @@ except ImportError:
 # ── Webhook event types ───────────────────────────────────────────────────────
 
 
-class StripeWebhookEvent(str, Enum):
+class StripeWebhookEvent(StrEnum):
     PAYMENT_INTENT_SUCCEEDED = "payment_intent.succeeded"
     PAYMENT_INTENT_FAILED = "payment_intent.payment_failed"
     CHECKOUT_SESSION_COMPLETED = "checkout.session.completed"
@@ -263,7 +261,7 @@ class StripeIntegration:
             )
             logger.info("Created Stripe customer: %s", result.customer_id)
             return result
-        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("Error creating Stripe customer: %s", exc)
             raise
 
@@ -279,7 +277,7 @@ class StripeIntegration:
                 name=c.name,
                 metadata=dict(c.metadata),
             )
-        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("Error retrieving Stripe customer %s: %s", customer_id, exc)
             return None
 
@@ -323,7 +321,7 @@ class StripeIntegration:
             pi.client_secret = intent.client_secret
             logger.info("Created payment intent: %s", pi.intent_id)
             return pi
-        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("Error creating payment intent: %s", exc)
             raise
 
@@ -342,7 +340,7 @@ class StripeIntegration:
             )
             pi.client_secret = intent.client_secret
             return pi
-        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("Error retrieving payment intent %s: %s", intent_id, exc)
             return None
 
@@ -381,7 +379,7 @@ class StripeIntegration:
                 "tier": tier.value,
                 "billing_cycle": billing_cycle.value,
             }
-        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("Error creating checkout session: %s", exc)
             raise
 
@@ -415,7 +413,7 @@ class StripeIntegration:
             )
             logger.info("Created subscription: %s", result.subscription_id)
             return result
-        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("Error creating subscription: %s", exc)
             raise
 
@@ -434,7 +432,7 @@ class StripeIntegration:
                 current_period_end=datetime.fromtimestamp(sub.current_period_end, tz=UTC),
                 cancel_at_period_end=sub.cancel_at_period_end,
             )
-        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("Error retrieving subscription %s: %s", subscription_id, exc)
             return None
 
@@ -458,7 +456,7 @@ class StripeIntegration:
                     )
                 )
             return results
-        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("Error listing subscriptions for %s: %s", customer_id, exc)
             return []
 
@@ -476,7 +474,7 @@ class StripeIntegration:
                 at_period_end,
             )
             return True
-        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("Error cancelling subscription %s: %s", subscription_id, exc)
             return False
 
@@ -500,7 +498,7 @@ class StripeIntegration:
                 "status": refund.status,
                 "amount": refund.amount / 100,
             }
-        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("Error processing refund for %s: %s", payment_intent_id, exc)
             raise
 
@@ -517,7 +515,7 @@ class StripeIntegration:
         try:
             _stripe.Webhook.construct_event(payload, signature, self.webhook_secret)
             return True
-        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("Webhook signature verification failed: %s", exc)
             return False
 

@@ -24,9 +24,7 @@ Phase chain (Phases 1–4 are optional and gated by feature flags):
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any, Optional
 
 import pandas as pd
@@ -114,7 +112,7 @@ def _get_deep_ensemble_store() -> Any | None:
             logger.debug("DeepEnsembleStore init failed: %s", exc)
             _deep_ensemble_store = False  # type: ignore[assignment]
     # Return None for the sentinel (False) so callers get a clean None
-    return _deep_ensemble_store if _deep_ensemble_store else None
+    return _deep_ensemble_store or None
 
 
 def _get_online_learner_store() -> Any | None:
@@ -180,7 +178,7 @@ _AUTO_TRADE = os.getenv("SIGNAL_ENGINE_AUTO_TRADE", "false").lower() == "true"
 
 async def _fetch_market_data(
     symbol: str,
-    app_state: Any = None,
+    app_state: Any | None = None,
 ) -> dict[str, Any] | None:
     """
     Fetch latest OHLCV data for a symbol from the broker's market data feed.
@@ -285,7 +283,7 @@ def _build_ohlcv_df(data: dict[str, Any]) -> "pd.DataFrame":
     The broker feed provides up to 100 bars. The advanced predictor needs
     >= 100 bars for reliable rolling-window feature computation.
     """
-    import pandas as pd
+
 
     prices = data.get("prices", [data["close"]])
     highs = data.get("highs", [data["high"]])
@@ -330,7 +328,7 @@ def _fetch_macro_df(
     Returns a DataFrame of macro features or None if both stages fail.
     None is safe — the predictor falls back to OHLCV-only features.
     """
-    import pandas as pd
+
 
     _store = _get_macro_store()
     if _store is None or len(_store) == 0:
@@ -405,7 +403,7 @@ def _fetch_macro_df(
 
 def _fetch_mtf_df(
     ohlcv_df: "pd.DataFrame",
-    app_state: Any = None,
+    app_state: Any | None = None,
 ) -> Any | None:
     """
     Fetch MTF regime features from MTFFusionStore if available and enabled.
@@ -513,8 +511,6 @@ def _predict_advanced(
     calibration thresholds remain valid.  Anomaly weighting, online blend,
     and deep ensemble blend all receive the same daily-resampled DataFrame.
     """
-    import pandas as _pd
-
     ohlcv_df = _build_ohlcv_df(data)
 
     # ── Timeframe alignment: resample H1 → daily before model inference ───────
@@ -524,11 +520,9 @@ def _predict_advanced(
 
         if needs_resampling(ohlcv_df):
             # Assign a proper DatetimeIndex so the resampler can work
-            if not isinstance(ohlcv_df.index, _pd.DatetimeIndex):
-                from datetime import datetime, timezone as _tz
-
-                idx = _pd.date_range(
-                    end=datetime.now(_tz.utc),
+            if not isinstance(ohlcv_df.index, pd.DatetimeIndex):
+                idx = pd.date_range(
+                    end=datetime.now(UTC),
                     periods=len(ohlcv_df),
                     freq="1h",
                     tz="UTC",
@@ -592,7 +586,7 @@ def _predict_basic(
 
     Returns (prob, model_ver).
     """
-    import pandas as pd
+
 
     prices = data.get("prices", [data["close"]])
     closes = pd.Series(prices)
@@ -603,10 +597,10 @@ def _predict_basic(
         "low": data["low"],
         "volume": data.get("volume", 0),
         "ret_1": closes.pct_change(1).iloc[-1] if len(closes) > 1 else 0,
-        "ret_5": closes.pct_change(5).iloc[-1] if len(closes) > 5 else 0,  # noqa: PLR2004
-        "ret_20": closes.pct_change(20).iloc[-1] if len(closes) > 20 else 0,  # noqa: PLR2004
+        "ret_5": closes.pct_change(5).iloc[-1] if len(closes) > 5 else 0,
+        "ret_20": closes.pct_change(20).iloc[-1] if len(closes) > 20 else 0,
         "vol_20": (
-            closes.pct_change().rolling(20).std().iloc[-1] if len(closes) > 20 else 0  # noqa: PLR2004
+            closes.pct_change().rolling(20).std().iloc[-1] if len(closes) > 20 else 0
         ),
     }
     X = pd.DataFrame([feat])
@@ -627,7 +621,7 @@ def _compute_ml_probability(
     data: dict[str, Any],
     symbol: str,
     base_confidence: float,
-    app_state: Any = None,
+    app_state: Any | None = None,
 ) -> tuple:
     """
     Compute ML probability using the best available model.
@@ -712,7 +706,7 @@ def _enrich_signal_with_factors(
     signal_payload: dict[str, Any],
     positions: dict[str, float],
     total_pnl: float,
-    app_state: Any = None,
+    app_state: Any | None = None,
 ) -> dict[str, Any]:
     """
     Append live factor attribution to a signal payload.
@@ -968,13 +962,13 @@ async def _execute_if_approved(
                 # Build a minimal OHLCV-like object from data dict for regime gate
                 _ohlcv_proxy = None
                 try:
-                    import pandas as _pd
+
 
                     _prices = data.get("prices", [])
                     _highs = data.get("highs", [])
                     _lows = data.get("lows", [])
                     if _prices and _highs and _lows:
-                        _ohlcv_proxy = _pd.DataFrame(
+                        _ohlcv_proxy = pd.DataFrame(
                             {
                                 "close": _prices,
                                 "high": _highs,
@@ -1030,7 +1024,7 @@ async def _execute_if_approved(
                     highs = _data.get("highs", [])
                     lows = _data.get("lows", [])
                     closes_list = _data.get("prices", [entry])
-                    if len(highs) >= 14 and len(lows) >= 14:  # noqa: PLR2004
+                    if len(highs) >= 14 and len(lows) >= 14:
                         import numpy as _np
 
                         h = _np.array(highs[-15:], dtype=float)
@@ -1075,14 +1069,14 @@ async def _execute_if_approved(
 
             try:
                 from ml.position_sizer import get_position_sizer
-                import pandas as _pd_sz
+
 
                 _ohlcv_sz = None
                 _prices_sz = (data or {}).get("prices", [])
                 _highs_sz = (data or {}).get("highs", [])
                 _lows_sz = (data or {}).get("lows", [])
                 if _prices_sz and _highs_sz and _lows_sz:
-                    _ohlcv_sz = _pd_sz.DataFrame(
+                    _ohlcv_sz = pd.DataFrame(
                         {
                             "close": _prices_sz,
                             "high": _highs_sz,
@@ -1116,7 +1110,7 @@ async def _execute_if_approved(
                 import numpy as _np2
 
                 _prices = (data or {}).get("prices", [entry])
-                if len(_prices) >= 20:  # noqa: PLR2004
+                if len(_prices) >= 20:
                     _rets = _np2.diff(_np2.log(_np2.array(_prices[-21:], dtype=float)))
                     _vol = float(_np2.std(_rets)) * (252**0.5)
                 else:
@@ -1195,12 +1189,25 @@ async def _handle_post_fill_actions(
     # Broadcast fill
     if ws is not None:
         try:
-            await ws.broadcast_trade(
-                symbol=symbol,
-                price=order.average_fill_price or signal_payload["entry_price"],
-                quantity=quantity,
-                side=direction.lower(),
-                trade_id=order.id,
+
+
+            _fill_price = order.average_fill_price or signal_payload["entry_price"]
+            _features = pd.DataFrame(
+                [
+                    {
+                        "symbol": symbol,
+                        "direction": direction,
+                        "confidence": signal_payload.get("confidence", 0.0),
+                        "fill_price": _fill_price,
+                        "ml_prob": signal_payload.get("probability", 0.5),
+                        "source": "signal_engine_auto",
+                    }
+                ]
+            )
+            notify_fill(
+                _features,
+                label=1,
+                primary_prob=signal_payload.get("probability"),
             )
         except Exception as _exc:
             logger.debug("Suppressed exception: %s", _exc)

@@ -129,6 +129,8 @@ aiofiles>=23.0.0
 
 # ── Technical analysis ────────────────────────────────────────────────────────
 ta>=0.11.0
+# pandas_ta requires Python >=3.12; ml_model_trainer.py falls back to `ta` on 3.10.
+pandas_ta>=0.3.14b0; python_version >= "3.12"
 
 # ── Circuit breaker ───────────────────────────────────────────────────────────
 circuitbreaker>=2.0.0
@@ -148,6 +150,15 @@ simplefix>=1.0.1
 
 # ── System / process monitoring ───────────────────────────────────────────────
 psutil>=5.9.0
+
+# ── Antivirus / malware detection (security/antivirus.py) ─────────────────────
+# yara-python: YARA rule engine for pattern-based malware detection.
+#   Requires libyara: apt-get install libyara-dev (Ubuntu) / brew install yara (macOS)
+# clamd: Python bindings for ClamAV daemon.
+#   Requires ClamAV: apt-get install clamav clamav-daemon
+# Both degrade gracefully when absent — entropy + regex layers always run.
+yara-python>=4.3.0
+clamd>=1.0.2
 
 # ── JWT / auth ────────────────────────────────────────────────────────────────
 # python-jose removed: replaced by PyJWT (CVE-2024-33663 and algorithm confusion vulns)

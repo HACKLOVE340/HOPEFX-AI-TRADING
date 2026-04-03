@@ -10,9 +10,10 @@ try:
 except ImportError as e:
     raise SystemExit(f"MetaTrader5 not available (Windows-only): {e}") from e
 
-import time
 import logging
 import os
+import time
+
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -43,9 +44,8 @@ def connect_to_account():
         if mt5.login(login, password, server):
             logging.info("Connected to account successfully")
             return True
-        else:
-            logging.warning(f"Connection attempt {attempt + 1} failed: {mt5.last_error()}")
-            time.sleep(2**attempt)  # Exponential backoff
+        logging.warning(f"Connection attempt {attempt + 1} failed: {mt5.last_error()}")
+        time.sleep(2**attempt)  # Exponential backoff
     logging.error("All connection attempts failed")
     return False
 

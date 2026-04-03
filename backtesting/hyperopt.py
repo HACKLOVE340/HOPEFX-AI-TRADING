@@ -36,9 +36,9 @@ Usage:
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal
-from collections.abc import Callable
 
 import numpy as np
 import pandas as pd
@@ -51,10 +51,10 @@ logger = logging.getLogger(__name__)
 @dataclass
 class _Param:
     kind: str  # "int" | "float" | "categorical" | "bool"
-    low: Any = None
-    high: Any = None
-    choices: Any = None
-    step: Any = None
+    low: Any | None = None
+    high: Any | None = None
+    choices: Any | None = None
+    step: Any | None = None
     log: bool = False  # log-scale for float/int
 
 
@@ -66,7 +66,7 @@ class ParamSpace:
         return _Param("int", low=low, high=high, step=step)
 
     @staticmethod
-    def float(low: float, high: float, step: float = None, log: bool = False) -> _Param:
+    def float(low: float, high: float, step: float | None = None, log: bool = False) -> _Param:
         return _Param("float", low=low, high=high, step=step, log=log)
 
     @staticmethod
@@ -74,7 +74,8 @@ class ParamSpace:
         return _Param("categorical", choices=choices)
 
     @staticmethod
-    def bool() -> _Param:
+    def boolean() -> _Param:
+        """Return a boolean parameter space (True/False categorical)."""
         return _Param("categorical", choices=[True, False])
 
 
@@ -352,7 +353,7 @@ class HyperoptEngine:
             return float(total_return)
 
         period_returns = np.diff(equity) / equity[:-1]
-        if len(period_returns) < 2:  # noqa: PLR2004
+        if len(period_returns) < 2:
             return 0.0
 
         if self.metric == "sharpe_ratio":
@@ -524,8 +525,9 @@ def create_hyperopt_router():
                         "duration_seconds": result.duration_seconds,
                     },
                 }
-            except Exception as exc:
-                _jobs[job_id] = {"status": "error", "result": {"error": str(exc)}}
+            except Exception:
+                logger.exception("Hyperopt job %s failed: %s", job_id)
+                _jobs[job_id] = {"status": "error", "result": {"error": "Optimisation failed — check server logs"}}
 
         background_tasks.add_task(_run)
         return HyperoptStatus(job_id=job_id, status="running")

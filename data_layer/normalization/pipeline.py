@@ -33,13 +33,10 @@ Single-tick operations are pure Python for minimal latency.
 from __future__ import annotations
 
 import logging
-from datetime import timezone
-
-UTC = timezone.utc
+import os
+from datetime import UTC
 
 import numpy as np
-import os
-
 import pandas as pd
 
 from data_layer.types import GoldTick
@@ -301,7 +298,7 @@ class NormalizationPipeline:
         out["log_return"] = lr
 
         # gap_flag: absolute log return > 0.5%
-        out["gap_flag"] = 1 if abs(lr) > 0.005 else 0  # noqa: PLR2004
+        out["gap_flag"] = 1 if abs(lr) > 0.005 else 0
 
         return out
 

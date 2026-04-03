@@ -31,9 +31,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -161,7 +159,7 @@ async def create_sub_account(
 ) -> dict[str, Any]:
     """Create a new sub-account under the current user."""
     existing = _load_sub_accounts(user.sub)
-    if len(existing) >= 10:  # noqa: PLR2004
+    if len(existing) >= 10:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Maximum 10 sub-accounts per user",

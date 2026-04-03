@@ -37,9 +37,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -61,13 +59,13 @@ def _require_auth(request: Request) -> dict[str, Any]:
         token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         if not token:
             raise HTTPException(status_code=401, detail="Missing token")
-        from fastapi import HTTPException as _HTTPException
-        _creds_exc = _HTTPException(status_code=401, detail="Invalid token")
+        _creds_exc = HTTPException(status_code=401, detail="Invalid token")
         return decode_token(token, _creds_exc)
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
+        logger.warning("Security auth token decode failed: %s", exc)
+        raise HTTPException(status_code=401, detail="Invalid or expired token") from None
 
 
 def _require_admin(request: Request) -> dict[str, Any]:

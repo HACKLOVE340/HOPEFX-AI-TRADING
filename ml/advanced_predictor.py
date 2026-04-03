@@ -150,7 +150,7 @@ class _SGDAdapter:
 
     def predict_proba(self, X: np.ndarray) -> float | None:
         """Return P(up) from adapter, or None if not ready."""
-        if self._clf is None or self._n_updates < 10:  # noqa: PLR2004
+        if self._clf is None or self._n_updates < 10:
             return None
         with self._lock:
             try:
@@ -222,7 +222,8 @@ class AdvancedPredictor:
         expected_digest: str | None = None
         source = "unknown"
         try:
-            from ml.model_registry import get_registry, sha256_file as _sha256
+            from ml.model_registry import get_registry
+            from ml.model_registry import sha256_file as _sha256
 
             reg = get_registry()
             # Check active version first
@@ -293,7 +294,7 @@ class AdvancedPredictor:
     def _load_meta(self) -> None:
         try:
             if _META_FILE.exists():
-                with open(_META_FILE) as f:
+                with open(_META_FILE, encoding="utf-8") as f:
                     self._meta = json.load(f)
                 logger.debug(
                     "Model meta loaded: OOS accuracy=%.4f, AUC=%.4f",
@@ -499,7 +500,7 @@ class AdvancedPredictor:
 
         # ── Flat-market abstain: if feature variance is near zero ─────────────
         feat_std = float(X.values.std())
-        if feat_std < 1e-6:  # noqa: PLR2004
+        if feat_std < 1e-6:
             self._abstain_count += 1
             return self._neutral(ohlcv, reason="flat_market_low_variance", t0=t0)
 
@@ -719,7 +720,7 @@ class HybridEnsemblePredictor:
     def _check_components(self) -> None:
         """Probe which components are available without loading models."""
         try:
-            import xgboost  # noqa: F401
+            import xgboost  # pylint: disable=unused-import
 
             self._has_xgb = True
         except ImportError:
@@ -727,7 +728,7 @@ class HybridEnsemblePredictor:
             logger.warning("HybridEnsemble: xgboost not available")
 
         try:
-            import torch  # noqa: F401
+            import torch  # pylint: disable=unused-import
 
             self._has_lstm = True
         except ImportError:
@@ -735,7 +736,7 @@ class HybridEnsemblePredictor:
             logger.debug("HybridEnsemble: torch not available — LSTM disabled")
 
         try:
-            import stable_baselines3  # noqa: F401
+            import stable_baselines3  # pylint: disable=unused-import
 
             self._has_rl = True
         except ImportError:
@@ -796,9 +797,9 @@ class HybridEnsemblePredictor:
             agent = get_rl_agent()
             if agent is None:
                 return 0.5
-            action, _states = agent.predict(obs, deterministic=True)
-            # Action space: 0=short, 1=hold, 2=long → map to probability
-            action_map = {0: 0.2, 1: 0.5, 2: 0.8}
+            action, _confidence = agent.predict(obs)
+            # Action space: 0=HOLD, 1=BUY, 2=SELL → map to probability
+            action_map = {0: 0.5, 1: 0.8, 2: 0.2}
             return float(action_map.get(int(action), 0.5))
         except Exception as exc:
             logger.debug("HybridEnsemble RL predict failed: %s", exc)

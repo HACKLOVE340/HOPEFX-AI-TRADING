@@ -16,58 +16,56 @@ This module provides data management and market data functionality:
 from .depth_of_market import (
     DepthOfMarketService,
     OrderBook,
-    OrderBookLevel,
     OrderBookAnalysis,
+    OrderBookLevel,
     OrderBookSide,
-    get_dom_service,
     create_dom_router,
+    get_dom_service,
 )
-
-from .time_and_sales import (
-    TimeAndSalesService,
-    ExecutedTrade,
-    TradeVelocity,
-    AggressorStats,
-    get_time_and_sales_service,
-    create_time_and_sales_router,
-)
-
 from .streaming import (
-    StreamingService,
-    Tick,
     AggregatedBar,
     StreamEvent,
+    StreamingService,
     StreamStatus,
+    Tick,
     TickAggregator,
-    get_streaming_service,
     create_streaming_router,
+    get_streaming_service,
+)
+from .time_and_sales import (
+    AggressorStats,
+    ExecutedTrade,
+    TimeAndSalesService,
+    TradeVelocity,
+    create_time_and_sales_router,
+    get_time_and_sales_service,
 )
 
 __all__ = [
+    "AggregatedBar",
+    "AggressorStats",
     # Depth of Market
     "DepthOfMarketService",
-    "OrderBook",
-    "OrderBookLevel",
-    "OrderBookAnalysis",
-    "OrderBookSide",
-    "get_dom_service",
-    "create_dom_router",
-    # Time & Sales
-    "TimeAndSalesService",
     "ExecutedTrade",
-    "TradeVelocity",
-    "AggressorStats",
-    "get_time_and_sales_service",
-    "create_time_and_sales_router",
+    "OrderBook",
+    "OrderBookAnalysis",
+    "OrderBookLevel",
+    "OrderBookSide",
+    "StreamEvent",
+    "StreamStatus",
     # Streaming
     "StreamingService",
     "Tick",
-    "AggregatedBar",
-    "StreamEvent",
-    "StreamStatus",
     "TickAggregator",
-    "get_streaming_service",
+    # Time & Sales
+    "TimeAndSalesService",
+    "TradeVelocity",
+    "create_dom_router",
     "create_streaming_router",
+    "create_time_and_sales_router",
+    "get_dom_service",
+    "get_streaming_service",
+    "get_time_and_sales_service",
 ]
 
 # Module metadata

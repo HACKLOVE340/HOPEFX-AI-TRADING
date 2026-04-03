@@ -14,9 +14,9 @@ No external services required.
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock, patch
 
+import pytest
 
 # ── RiskManager assess_risk ───────────────────────────────────────────────────
 
@@ -123,7 +123,7 @@ class TestPropFirmRules:
         }
         # The guard may raise or return a failure — either is acceptable
         try:
-            result = check_prop_firm_rules(account_info)
+            result = check_prop_firm_rules(account_info)  # pylint: disable=assignment-from-none
             # If it returns, it should indicate failure
             if result is not None:
                 assert result is not True
@@ -229,8 +229,9 @@ class TestMlRouter:
         try:
             from fastapi import FastAPI
             from fastapi.testclient import TestClient
+
+            from api.auth import TokenPayload, get_current_user, require_role
             from api.ml import router
-            from api.auth import get_current_user, require_role, TokenPayload
 
             # Stub user so all auth-gated endpoints pass without a real JWT.
             _stub_user = TokenPayload(sub="test-user", role="admin")

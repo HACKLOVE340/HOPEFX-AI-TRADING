@@ -50,13 +50,13 @@ import logging
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
 try:
     import torch
-    from torch import nn
-    from torch import optim
+    from torch import nn, optim
 
     TORCH_AVAILABLE = True
 except ImportError:
@@ -109,8 +109,6 @@ def label_regimes(
 # ─────────────────────────────────────────────────────────────────────────────
 
 if TORCH_AVAILABLE:
-    import pandas as pd  # only needed when torch is present
-
     class _Embedder(nn.Module):
         """Maps real sequences to a fixed-size latent space."""
 
@@ -242,10 +240,10 @@ class RegimeSynthesizer:
         else:
             self.device = torch.device(device)
 
-        self.E = _Embedder(n_features, hidden, latent, seq_len).to(self.device)
-        self.R = _Recovery(latent, hidden, n_features).to(self.device)
-        self.G = _Generator(noise_dim, n_regimes, hidden, latent).to(self.device)
-        self.D = _Discriminator(latent, n_regimes, hidden).to(self.device)
+        self.E = _Embedder(n_features, hidden, latent, seq_len).to(self.device)  # pylint: disable=possibly-used-before-assignment
+        self.R = _Recovery(latent, hidden, n_features).to(self.device)  # pylint: disable=possibly-used-before-assignment
+        self.G = _Generator(noise_dim, n_regimes, hidden, latent).to(self.device)  # pylint: disable=possibly-used-before-assignment
+        self.D = _Discriminator(latent, n_regimes, hidden).to(self.device)  # pylint: disable=possibly-used-before-assignment
 
         self._feature_mean: np.ndarray | None = None
         self._feature_std: np.ndarray | None = None
@@ -474,7 +472,7 @@ class RegimeSynthesizer:
 
     @classmethod
     def load(cls, path: str | Path, device: str = "auto") -> RegimeSynthesizer:
-        ckpt = torch.load(path, map_location="cpu")
+        ckpt = torch.load(path, map_location="cpu", weights_only=False)  # nosec B614 — path confined to ml/saved_models
         obj = cls(
             seq_len=ckpt["seq_len"],
             n_features=ckpt["n_features"],

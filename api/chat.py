@@ -23,14 +23,12 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import UTC
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
-from datetime import timezone
-
-UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 
@@ -64,10 +62,11 @@ def _get_agent(session_id: str | None = None):
     try:
         from brain.llm_agent import LLMAgent
     except ImportError as exc:
+        logger.error("LLM agent module unavailable: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"LLM agent module unavailable: {exc}",
-        ) from exc
+            detail="LLM agent module unavailable — check server logs",
+        ) from None
 
     key = session_id or "__default__"
     if key not in _agents:
@@ -110,12 +109,12 @@ async def ai_chat(
 
     try:
         response_text = await agent.chat(body.message)
-    except Exception as exc:
-        logger.error("LLM chat error: %s", exc, exc_info=True)
+    except Exception:
+        logger.exception("LLM chat error: %s")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"AI response failed: {exc}",
-        ) from exc
+            detail="AI response failed — check server logs",
+        ) from None
 
     return ChatResponse(response=response_text, session_id=key)
 
@@ -162,7 +161,7 @@ async def chat_status(user: TokenPayload = Depends(get_current_user)):
     llm_available = False
     llm_error: str | None = None
     try:
-        from brain.llm_agent import LLMAgent  # noqa: F401
+        import brain.llm_agent  # availability check only  # pylint: disable=unused-import
 
         llm_available = True
     except ImportError as exc:

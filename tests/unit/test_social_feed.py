@@ -14,8 +14,8 @@ module-level attributes, which breaks when the module is already imported.
 
 from __future__ import annotations
 
-import uuid
 import time
+import uuid
 
 import pytest
 from fastapi import FastAPI
@@ -46,8 +46,8 @@ def stub_user() -> TokenPayload:
 
 @pytest.fixture
 def app(stub_user: TokenPayload) -> FastAPI:
-    import sys
     import importlib
+    import sys
 
     # Always use the canonical module instances — survive any sys.modules reloads
     # performed by other tests (e.g. test_oanda_paper_clock clears sys.modules).

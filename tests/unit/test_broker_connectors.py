@@ -13,9 +13,10 @@ and all Prop Firm connectors (FTMO, MyForexFunds, The5ers, TopstepTrader).
 
 import sys
 import types
-import pytest
 from datetime import datetime
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 # ---------------------------------------------------------------------------
 # Inject stub modules for optional heavy dependencies BEFORE any broker import
@@ -75,17 +76,16 @@ _ib_stub.StopOrder = MagicMock
 sys.modules.setdefault("ib_insync", _ib_stub)
 
 # Now import brokers (stubs are already in sys.modules)
-from brokers.alpaca import AlpacaConnector
-from brokers.binance import BinanceConnector
-from brokers.oanda import OANDAConnector
-from brokers.mt5 import MT5Connector
-from brokers.interactive_brokers import InteractiveBrokersConnector
-
 # ---------------------------------------------------------------------------
 # Override module-level availability flags so connectors are constructable
 # even though the real packages aren't installed in this environment.
 # ---------------------------------------------------------------------------
 import brokers.mt5 as _mt5_module
+from brokers.alpaca import AlpacaConnector
+from brokers.binance import BinanceConnector
+from brokers.interactive_brokers import InteractiveBrokersConnector
+from brokers.mt5 import MT5Connector
+from brokers.oanda import OANDAConnector
 
 _mt5_module.MT5_AVAILABLE = True
 _mt5_module.mt5 = _mt5_stub
@@ -103,17 +103,22 @@ _ib_module.LimitOrder = MagicMock
 _ib_module.StopOrder = MagicMock
 from brokers.advanced_orders import (
     AdvancedOrderManager,
+)
+from brokers.advanced_orders import (
     OrderSide as AdvOrderSide,
-    OrderType as AdvOrderType,
+)
+from brokers.advanced_orders import (
     OrderStatus as AdvOrderStatus,
 )
+from brokers.advanced_orders import (
+    OrderType as AdvOrderType,
+)
+from brokers.base import OrderSide, OrderStatus, OrderType
 from brokers.factory import BrokerFactory
 from brokers.prop_firms.ftmo import FTMOConnector
 from brokers.prop_firms.myforexfunds import MyForexFundsConnector
 from brokers.prop_firms.the5ers import The5ersConnector
 from brokers.prop_firms.topstep import TopstepTraderConnector
-from brokers.base import OrderType, OrderSide, OrderStatus
-
 
 # ---------------------------------------------------------------------------
 # Shared helpers

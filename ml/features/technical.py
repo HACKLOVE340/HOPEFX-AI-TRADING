@@ -73,7 +73,8 @@ class TechnicalFeatureEngineer:
         # Store feature names (excluding OHLCV)
         self.feature_names = [col for col in df.columns if col not in required]
 
-        self.logger.info(f"Created {len(self.feature_names)} features")
+        self.logger.info("Created %s features", len(self.feature_names))
+
 
         return df
 
@@ -242,7 +243,7 @@ class TechnicalFeatureEngineer:
         # Candle patterns (simplified)
         df["is_bullish"] = (close > open_price).astype(int)
         df["is_bearish"] = (close < open_price).astype(int)
-        df["is_doji"] = (np.abs(close - open_price) / (high - low) < 0.1).astype(int)  # noqa: PLR2004
+        df["is_doji"] = (np.abs(close - open_price) / (high - low) < 0.1).astype(int)
 
         # Price gaps
         df["gap"] = open_price - close.shift()

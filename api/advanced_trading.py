@@ -38,9 +38,7 @@ import logging
 import math
 import random
 import uuid
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -117,7 +115,8 @@ def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, init
             "BacktestEngine is not available. Ensure the backtest module is installed and configured."
         ) from None
     except Exception as exc:
-        raise ValueError(f"Backtest failed for strategy '{strategy_name}': {exc}") from exc
+        logger.error("Backtest failed for strategy '%s': %s", strategy_name, exc)
+        raise ValueError(f"Backtest failed for strategy '{strategy_name}' — check server logs") from None
 
 
 @router.post("/api/ab-test/start", status_code=201)
@@ -136,7 +135,8 @@ async def start_ab_test(
         result_a = _run_real_backtest(req.strategy_a, req.symbol, req.duration_days, req.initial_capital)
         result_b = _run_real_backtest(req.strategy_b, req.symbol, req.duration_days, req.initial_capital)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        logger.warning("ab_test start failed: %s", exc)
+        raise HTTPException(status_code=422, detail="A/B test failed — check strategy names and data availability") from None
 
     # Winner by Sharpe ratio (risk-adjusted)
     winner = req.strategy_a if result_a["sharpe_ratio"] >= result_b["sharpe_ratio"] else req.strategy_b
@@ -246,10 +246,11 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
     Raises ValueError when no real data is available.
     """
     import pathlib
+
     import pandas as pd
 
     sym_key = symbol.upper().replace("/", "_").replace("-", "_")
-    if "_" not in sym_key and len(sym_key) == 6:  # noqa: PLR2004
+    if "_" not in sym_key and len(sym_key) == 6:
         sym_key = sym_key[:3] + "_" + sym_key[3:]
 
     data_dir = pathlib.Path(__file__).parent.parent / "data"
@@ -261,7 +262,7 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
         if csv_path.exists():
             try:
                 df = pd.read_csv(csv_path).tail(periods + 50)
-                if len(df) >= 20:  # noqa: PLR2004
+                if len(df) >= 20:
                     return {
                         "close": df["close"].tolist(),
                         "open": df["open"].tolist(),
@@ -279,9 +280,7 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
         broker = getattr(app_state, "broker", None)
         if broker and hasattr(broker, "get_market_data"):
             raw = broker.get_market_data(sym_key.replace("_", ""), "1h", periods + 50)
-            if raw and len(raw) >= 20:  # noqa: PLR2004
-                import pandas as pd
-
+            if raw and len(raw) >= 20:
                 df = pd.DataFrame(raw)
                 return {
                     "close": df["close"].tolist(),
@@ -411,7 +410,9 @@ def _parse_formula(formula: str) -> _ast.Expression:
     try:
         tree = _ast.parse(stripped, mode="eval")
     except SyntaxError as exc:
-        raise ValueError(f"Formula syntax error: {exc}") from exc
+        # Surface a sanitized message — SyntaxError.msg is safe (describes the
+        # syntax problem, not internal state), but lineno/offset are omitted.
+        raise ValueError(f"Formula syntax error: {exc.msg}") from None
     _validate_formula_ast(tree)
     return tree
 
@@ -515,7 +516,8 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
     try:
         result = _interp_node(tree.body, name_map)
     except Exception as exc:
-        raise ValueError(f"Formula evaluation error: {exc}") from exc
+        logger.warning("Formula evaluation error: %s", exc)
+        raise ValueError("Formula evaluation error — check formula syntax and variable names") from None
 
     closes = ohlcv["close"]
     if isinstance(result, (int, float)):
@@ -546,7 +548,8 @@ async def preview_indicator(
             "points": len(data),
         }
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.warning("evaluate_indicator validation error: %s", exc)
+        raise HTTPException(status_code=400, detail="Invalid formula or symbol") from None
 
 
 @router.get("/api/indicators")
@@ -620,7 +623,7 @@ async def get_correlation(
                 ohlcv = pe.get_ohlcv(sym, "1d", window + 5)
                 if asyncio.iscoroutine(ohlcv):
                     ohlcv = await ohlcv
-                if ohlcv and len(ohlcv) >= 5:  # noqa: PLR2004
+                if ohlcv and len(ohlcv) >= 5:
                     closes = [
                         float(
                             bar.get(
@@ -659,14 +662,14 @@ async def get_correlation(
                     returns = [
                         (closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes)) if closes[i - 1] > 0
                     ]
-                    if len(returns) >= 5:  # noqa: PLR2004
+                    if len(returns) >= 5:
                         series[sym] = returns
                         break
                 except Exception as exc:
                     logger.debug("correlation CSV miss for %s: %s", sym, exc)
 
     # Require at least 2 symbols with real data
-    if len(series) < 2:  # noqa: PLR2004
+    if len(series) < 2:
         raise HTTPException(
             status_code=503,
             detail={
@@ -709,7 +712,7 @@ async def get_correlation(
             if s1 >= s2:
                 continue
             c = matrix[s1][s2]
-            if abs(c) >= 0.6:  # noqa: PLR2004
+            if abs(c) >= 0.6:
                 direction = "positively" if c > 0 else "negatively"
                 insights.append(f"{s1} and {s2} are {direction} correlated ({c:+.2f})")
 
@@ -756,7 +759,7 @@ async def get_cot_gold():
                     "short_positions": int(rec.get("noncomm_positions_short_all", 0)),
                     "sentiment": "BULLISH" if net_long > 0 else "BEARISH",
                     "sentiment_strength": "STRONG"
-                    if abs(net_long) > 100000  # noqa: PLR2004
+                    if abs(net_long) > 100000
                     else "MODERATE",
                     "source": "CFTC",
                     "note": "Non-commercial (speculator) net positions in COMEX gold futures.",
@@ -871,7 +874,7 @@ async def run_monte_carlo(
     n_trades = int(result.get("total_trades", 0))
     capital = req.initial_capital or float(result.get("initial_capital", 10000))
 
-    if n_trades < 10:  # noqa: PLR2004
+    if n_trades < 10:
         raise HTTPException(
             status_code=422,
             detail=(

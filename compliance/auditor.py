@@ -14,9 +14,7 @@ import hashlib
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum
 
 logger = logging.getLogger(__name__)
@@ -115,13 +113,13 @@ class ImmutableAuditLog:
 
     def _persist_record(self, record: AuditRecord):
         """Write to append-only log (async when a loop is running, sync otherwise)."""
-        import os as _os
 
-        _os.makedirs(self.log_path, exist_ok=True)
+        _Path(self.log_path).mkdir(parents=True, exist_ok=True)
         filename = f"{self.log_path}audit_{datetime.now(UTC).strftime('%Y-%m')}.jsonl"
         try:
             loop = asyncio.get_running_loop()
-            loop.create_task(self._async_write(filename, record))
+            _t = loop.create_task(self._async_write(filename, record))
+            _t.add_done_callback(lambda _: None)
         except RuntimeError:
             # No running event loop (e.g. called from sync context / tests)
             self._sync_write(filename, record)
@@ -144,7 +142,7 @@ class ImmutableAuditLog:
             + "\n"
         )
         try:
-            with open(filename, "a") as fh:
+            with open(filename, "a", encoding="utf-8") as fh:
                 fh.write(line)
         except Exception as exc:
             logger.error("Audit sync write failed: %s", exc)
@@ -262,7 +260,8 @@ class TradeReporting:
 
         # Check reporting thresholds
         if self._requires_immediate_reporting(trade):
-            asyncio.create_task(self._submit_to_regulator(trade))
+            _t = asyncio.create_task(self._submit_to_regulator(trade))
+            _t.add_done_callback(lambda _: None)
 
     def _requires_immediate_reporting(self, trade: dict) -> bool:
         """Check if trade requires immediate regulatory reporting"""

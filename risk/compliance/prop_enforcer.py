@@ -47,13 +47,12 @@ import json
 import logging
 import os
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, time as dtime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
+from datetime import time as dtime
 from enum import Enum, auto
 from pathlib import Path
-from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -334,11 +333,11 @@ class PropEnforcer:
         """True between Friday 21:00 UTC and Monday 00:00 UTC."""
         weekday = now.weekday()  # 0=Mon … 6=Sun
         t = now.time()
-        if weekday == 4 and t >= dtime(21, 0):  # Friday after 21:00  # noqa: PLR2004
+        if weekday == 4 and t >= dtime(21, 0):  # Friday after 21:00
             return True
-        if weekday == 5:  # Saturday  # noqa: PLR2004
+        if weekday == 5:  # Saturday
             return True
-        return weekday == 6 and t < dtime(0, 1)  # Sunday before 00:01  # noqa: PLR2004
+        return weekday == 6 and t < dtime(0, 1)  # Sunday before 00:01
 
     def _is_news_blackout(self, now_ts: float) -> bool:
         """True if now is within news_blackout seconds of any registered event."""
@@ -383,8 +382,8 @@ class PropEnforcer:
         if not token or not chat_id:
             return
         try:
-            import urllib.request
             import urllib.parse
+            import urllib.request
 
             emoji = {
                 "DAILY_DD": "🔴",

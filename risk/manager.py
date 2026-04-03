@@ -42,9 +42,7 @@ import sys
 import uuid
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -823,8 +821,8 @@ class RiskManager:
                 "engine_status": engine.status(),
             }
         except Exception as exc:
-            logger.warning("get_factor_risk_report failed: %s", exc)
-            return {"available": False, "reason": str(exc)}
+            logger.warning("get_factor_risk_report failed: %s", exc, exc_info=True)
+            return {"available": False, "reason": "Risk report unavailable — check server logs"}
 
     # ── Convenience public API (used by tests and downstream callers) ─────────
 
@@ -1180,7 +1178,8 @@ class RiskManager:
                         "persisted_at": datetime.now(UTC).isoformat(),
                     },
                     indent=2,
-                )
+                ),
+                encoding="utf-8",
             )
         except OSError as exc:
             logger.warning("RiskManager: could not persist halt state: %s", exc)
@@ -1190,7 +1189,7 @@ class RiskManager:
         if self._halt_state_file is None or not self._halt_state_file.exists():
             return
         try:
-            data = json.loads(self._halt_state_file.read_text())
+            data = json.loads(self._halt_state_file.read_text(encoding="utf-8"))
             # Accept both "halt" and "halted" keys for forward/backward compat.
             is_halted = data.get("halt") or data.get("halted")
             if is_halted:
@@ -1408,7 +1407,7 @@ class RiskManager:
     # ── VaR ───────────────────────────────────────────────────────────────────
 
     def value_at_risk(self) -> float:
-        if len(self._pnl_history) < 10:  # noqa: PLR2004
+        if len(self._pnl_history) < 10:
             return 0.0
         arr = np.array(list(self._pnl_history))
         return float(np.percentile(arr, (1 - _VAR_CONFIDENCE) * 100))
@@ -1670,10 +1669,10 @@ class RiskManager:
             return RiskLevel.MEDIUM
         return RiskLevel.LOW
 
-    def check_drawdown(  # noqa: F811  # pylint: disable=function-redefined
+    def check_drawdown(  # pylint: disable=function-redefined
         self,
-        equity_curve: Any = None,
-        max_dd: float = None,
+        equity_curve: Any | None = None,
+        max_dd: float | None = None,
     ) -> RiskCheckResult:
         """
         Validate that the current (or supplied) drawdown does not exceed max_dd.
@@ -1688,7 +1687,7 @@ class RiskManager:
 
         current_dd = (
             self._drawdown_from_curve(equity_curve)
-            if equity_curve is not None and len(equity_curve) >= 2  # noqa: PLR2004
+            if equity_curve is not None and len(equity_curve) >= 2
             else self._state.current_drawdown
         )
 
@@ -1821,7 +1820,7 @@ class RiskManager:
         Returns the mean of the worst (1-confidence) fraction of returns as a
         positive number (i.e. the expected loss magnitude).
         """
-        if len(self._returns_history) < 2:  # noqa: PLR2004
+        if len(self._returns_history) < 2:
             return 0.0
         arr = np.array(list(self._returns_history), dtype=float)
         cutoff = np.percentile(arr, (1.0 - confidence) * 100)
@@ -1848,7 +1847,7 @@ class RiskManager:
         if self._cvar_daily_limit <= 0.0:
             return (True, "CVaR gate disabled")
 
-        if len(self._returns_history) < 10:  # noqa: PLR2004
+        if len(self._returns_history) < 10:
             return (
                 True,
                 f"Insufficient history ({len(self._returns_history)} obs) for CVaR",
@@ -1975,7 +1974,7 @@ class RiskManager:
 
     # ── Extended validate_trade ───────────────────────────────────────────────
 
-    def validate_trade(  # type: ignore[override]  # noqa: F811  # pylint: disable=function-redefined
+    def validate_trade(  # type: ignore[override]  # pylint: disable=function-redefined
         self,
         symbol: str,
         quantity: float = 0.0,
@@ -2016,7 +2015,7 @@ class RiskManager:
 
     # ── Extended check_risk_limits (returns violations list) ─────────────────
 
-    def check_risk_limits(self) -> tuple[bool, list[str]]:  # type: ignore[override]  # noqa: F811  # pylint: disable=function-redefined
+    def check_risk_limits(self) -> tuple[bool, list[str]]:  # type: ignore[override]  # pylint: disable=function-redefined
         """Return (within_limits: bool, violations: List[str]).
 
         Evaluates drawdown, daily loss, open-position count, and halt state.
@@ -2049,7 +2048,7 @@ class RiskManager:
 
     # ── can_open_position (extended — human-readable reasons) ─────────────────
 
-    def can_open_position(self, size: float) -> tuple[bool, str]:  # type: ignore[override]  # noqa: F811  # pylint: disable=function-redefined
+    def can_open_position(self, size: float) -> tuple[bool, str]:  # type: ignore[override]  # pylint: disable=function-redefined
         """Return (True, 'approved') or (False, human-readable reason)."""
         if self._halt or self._trading_halted:
             return False, f"halted:{self._halt_reason}"

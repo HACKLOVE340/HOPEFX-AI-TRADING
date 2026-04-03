@@ -10,9 +10,7 @@ A simple trend-following strategy based on moving average crossovers.
 """
 
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 from .base import BaseStrategy, Signal, SignalType, StrategyConfig
@@ -28,7 +26,8 @@ class MovingAverageCrossover(BaseStrategy):
     - BUY: Fast MA crosses above slow MA
     - SELL: Fast MA crosses below slow MA
 
-    Parameters:
+    Parameters
+    ----------
     - fast_period: Fast MA period (default: 10)
     - slow_period: Slow MA period (default: 30)
     - min_confidence: Minimum confidence threshold (default: 0.6)

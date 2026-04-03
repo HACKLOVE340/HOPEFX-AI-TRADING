@@ -38,11 +38,11 @@ from pathlib import Path
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+import uvicorn
 from fastapi import FastAPI, HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-import uvicorn
 
 # Add project root to path
 project_root = Path(__file__).parent
@@ -75,10 +75,10 @@ from config.startup_validator import validate_environment
 validate_environment(strict=True)  # calls sys.exit(1) on failure
 
 from api.admin import (
-    log_activity,
     apply_persisted_risk_settings,
+    log_activity,
 )
-from api.platform import setup_rate_limiting, init_sentry
+from api.platform import init_sentry, setup_rate_limiting
 from api.signals import create_signals_router as _create_signals_router
 from config.feature_flags import flags as feature_flags
 from kill_switch import KillSwitch, create_kill_switch_router
@@ -195,9 +195,7 @@ try:
 
     app.include_router(_nuclear_router, prefix="/nuclear", tags=["nuclear"])
 except Exception as _nuclear_err:
-    import logging as _logging
-
-    _logging.getLogger(__name__).warning("Nuclear router failed to register: %s", _nuclear_err)
+    logger.warning("Nuclear router failed to register: %s", _nuclear_err)
 
 # Data layer REST endpoints
 try:
@@ -205,9 +203,7 @@ try:
 
     app.include_router(_dl_router)
 except Exception as _dl_router_err:
-    import logging as _logging
-
-    _logging.getLogger(__name__).warning("Data layer router failed to register: %s", _dl_router_err)
+    logger.warning("Data layer router failed to register: %s", _dl_router_err)
 
 # KYC/AML endpoints (Sumsub/Onfido + sanctions screening)
 try:
@@ -215,9 +211,7 @@ try:
 
     app.include_router(_kyc_router, prefix="/api")
 except Exception as _kyc_router_err:
-    import logging as _logging
-
-    _logging.getLogger(__name__).warning("KYC router failed to register: %s", _kyc_router_err)
+    logger.warning("KYC router failed to register: %s", _kyc_router_err)
 
 # TCA endpoints (slippage stats, fill quality, alerts)
 try:
@@ -225,9 +219,7 @@ try:
 
     app.include_router(_tca_router, prefix="/api")
 except Exception as _tca_router_err:
-    import logging as _logging
-
-    _logging.getLogger(__name__).warning("TCA router failed to register: %s", _tca_router_err)
+    logger.warning("TCA router failed to register: %s", _tca_router_err)
 
 # Live P&L dashboard — auditable trade log, equity curve, Sharpe, drawdown
 try:
@@ -235,9 +227,7 @@ try:
 
     app.include_router(_pnl_router)
 except Exception as _pnl_router_err:
-    import logging as _logging
-
-    _logging.getLogger(__name__).warning("P&L dashboard router failed to register: %s", _pnl_router_err)
+    logger.warning("P&L dashboard router failed to register: %s", _pnl_router_err)
 
 # Chaos engineering + mutation testing endpoints
 try:
@@ -245,9 +235,7 @@ try:
 
     app.include_router(_chaos_router)
 except Exception as _chaos_router_err:
-    import logging as _logging
-
-    _logging.getLogger(__name__).warning("Chaos router failed to register: %s", _chaos_router_err)
+    logger.warning("Chaos router failed to register: %s", _chaos_router_err)
 
 # Prometheus /metrics endpoint + background sync to MetricsRegistry
 try:
@@ -255,9 +243,7 @@ try:
 
     setup_prometheus_monitoring(app)
 except Exception as _prom_err:
-    import logging as _logging
-
-    _logging.getLogger(__name__).warning("Prometheus monitoring setup failed: %s", _prom_err)
+    logger.warning("Prometheus monitoring setup failed: %s", _prom_err)
 
 # OpenTelemetry distributed tracing — instruments FastAPI, SQLAlchemy, Redis,
 # aiohttp and enables W3C trace context propagation through Redis messages.
@@ -290,7 +276,7 @@ def get_db() -> Session:
             detail="Database not initialized",
         )
 
-    db = app_state.db_session_factory()
+    db = app_state.db_session_factory()  # pylint: disable=not-callable
     try:
         yield db
     finally:
@@ -317,10 +303,9 @@ async def lifespan(_app: FastAPI):
     # Start Prometheus sync loop (replaces deprecated @app.on_event("startup"))
     try:
         from prometheus_monitoring import _sync_loop as _prom_sync_loop
-        import os as _os
-
-        _prom_interval = float(_os.getenv("PROMETHEUS_SCRAPE_INTERVAL_SECONDS", "15"))
-        asyncio.create_task(_prom_sync_loop(_prom_interval))
+        _prom_interval = float(os.getenv("PROMETHEUS_SCRAPE_INTERVAL_SECONDS", "15"))
+        _t = asyncio.create_task(_prom_sync_loop(_prom_interval))
+        _t.add_done_callback(lambda _: None)
         logger.info("Prometheus sync loop started (interval=%.0fs)", _prom_interval)
     except Exception as _prom_err:
         logger.warning("Prometheus sync loop not started: %s", _prom_err)
@@ -335,14 +320,15 @@ async def lifespan(_app: FastAPI):
 
     # Mount nuclear dashboard WebSocket + REST routes (/ws/nuclear, /api/nuclear/*)
     try:
-        from charting.websocket_server import mount_nuclear_routes
         from charting.nuclear_ai_chart_engine import (
             get_chart_engine as _get_chart_engine,
         )
+        from charting.websocket_server import mount_nuclear_routes
 
         _nuclear_engine = _get_chart_engine()
         mount_nuclear_routes(app, _nuclear_engine)
-        asyncio.create_task(_nuclear_engine.start(), name="nuclear-chart-engine")
+        _t = asyncio.create_task(_nuclear_engine.start(), name="nuclear-chart-engine")
+        _t.add_done_callback(lambda _: None)
         logger.info("✓ Nuclear dashboard routes mounted (/ws/nuclear, /api/nuclear/*)")
     except Exception as _nuclear_err:
         logger.warning("Nuclear dashboard routes not mounted: %s", _nuclear_err)
@@ -395,8 +381,8 @@ async def startup_event():
         logger.info("=" * 70)
         logger.info("API SERVER READY")
         logger.info("=" * 70)
-    except Exception as exc:
-        logger.error("Startup failed: %s", exc, exc_info=True)
+    except Exception:
+        logger.exception("Startup failed: %s")
         raise
 
 
@@ -428,7 +414,8 @@ def _start_data_layer_orchestrator(state) -> None:
     try:
         from data_layer.orchestrator import orchestrator
 
-        asyncio.create_task(orchestrator.start(), name="data_layer_orchestrator")
+        _t = asyncio.create_task(orchestrator.start(), name="data_layer_orchestrator")
+        _t.add_done_callback(lambda _: None)
         logger.info("Data layer orchestrator starting in background")
     except Exception as _exc:
         logger.warning("Data layer orchestrator failed to start (non-fatal): %s", _exc)
@@ -437,7 +424,7 @@ def _start_data_layer_orchestrator(state) -> None:
 def _init_kyc_gateway(state) -> None:
     """Wire KYCGateway with ComplianceManager (non-fatal)."""
     try:
-        from compliance.kyc_provider import init_kyc_gateway, get_kyc_gateway
+        from compliance.kyc_provider import get_kyc_gateway, init_kyc_gateway
 
         _cm = getattr(state, "compliance_manager", None)
         if _cm is not None:
@@ -623,18 +610,18 @@ async def root():
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     """Global exception handler."""
-    logger.error("Unhandled exception: %s", exc, exc_info=True)
+    logger.exception("Unhandled exception: %s")
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"error": "Internal server error", "detail": str(exc)},
+        content={"error": "Internal server error"},
     )
 
 
 # ── Middleware, page routes, and email webhook ────────────────────────────────
 # Extracted to core/ modules to keep app.py under 300 lines.
 
-from core.middleware import register_all as _register_middleware
 from core.email_webhook import register_email_webhook
+from core.middleware import register_all as _register_middleware
 from core.page_routes import register_page_routes
 
 _register_middleware(app)
@@ -651,8 +638,10 @@ def run_server():
     workers = int(os.getenv("API_WORKERS", "4"))
     reload = os.getenv("ENVIRONMENT", "development") == "development"
 
-    logger.info(f"Starting API server on {host}:{port}")
-    logger.info(f"Workers: {workers}, Reload: {reload}")
+    logger.info("Starting API server on %s:%s", host, port)
+
+    logger.info("Workers: %s, Reload: %s", workers, reload)
+
 
     uvicorn.run(
         "app:app",

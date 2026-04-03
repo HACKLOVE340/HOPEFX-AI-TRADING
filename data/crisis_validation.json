@@ -1,0 +1,142 @@
+{
+  "generated_at": "2026-04-02T15:08:05.302355+00:00",
+  "dataset": "data/XAUUSD_50Y.csv",
+  "full_stats": {
+    "n_bars": 15197,
+    "date_range": "1968-01-01 \u2192 2026-04-01",
+    "years_covered": 58.2,
+    "sharpe_full": 2.8797,
+    "max_drawdown_full": -0.9363,
+    "annualised_return": 35.0511,
+    "annualised_vol": 12.1716,
+    "start_price": 39.31,
+    "end_price": 4783.2
+  },
+  "crisis_periods": {
+    "1980_gold_bubble": {
+      "start": "1979-10-01",
+      "end": "1980-09-30",
+      "n_bars": 262,
+      "sharpe": 1.1132,
+      "max_drawdown": -0.3276,
+      "total_return": 0.7199,
+      "annualised_vol": 2.0911,
+      "start_price": 391.66,
+      "end_price": 673.63
+    },
+    "1987_black_monday": {
+      "start": "1987-08-01",
+      "end": "1988-01-31",
+      "n_bars": 130,
+      "sharpe": 5.5134,
+      "max_drawdown": -0.8169,
+      "total_return": -0.807,
+      "annualised_vol": 22.4422,
+      "start_price": 461.15,
+      "end_price": 89.01
+    },
+    "2001_dotcom": {
+      "start": "2001-01-01",
+      "end": "2002-12-31",
+      "n_bars": 522,
+      "sharpe": 0.6674,
+      "max_drawdown": -0.0776,
+      "total_return": 0.2502,
+      "annualised_vol": 0.1883,
+      "start_price": 265.49,
+      "end_price": 331.92
+    },
+    "2008_gfc": {
+      "start": "2007-10-01",
+      "end": "2009-03-31",
+      "n_bars": 392,
+      "sharpe": 0.5267,
+      "max_drawdown": -0.2854,
+      "total_return": 0.2347,
+      "annualised_vol": 0.4528,
+      "start_price": 747.2,
+      "end_price": 922.6
+    },
+    "2011_peak_crash": {
+      "start": "2011-08-01",
+      "end": "2012-06-30",
+      "n_bars": 240,
+      "sharpe": -0.1094,
+      "max_drawdown": -0.1866,
+      "total_return": -0.0884,
+      "annualised_vol": 0.347,
+      "start_price": 1759.01,
+      "end_price": 1603.5
+    },
+    "2013_gold_crash": {
+      "start": "2013-04-01",
+      "end": "2013-12-31",
+      "n_bars": 197,
+      "sharpe": -0.5184,
+      "max_drawdown": -0.2466,
+      "total_return": -0.1922,
+      "annualised_vol": 0.3858,
+      "start_price": 1487.86,
+      "end_price": 1201.9
+    },
+    "2020_covid": {
+      "start": "2020-02-01",
+      "end": "2020-04-30",
+      "n_bars": 64,
+      "sharpe": 0.8108,
+      "max_drawdown": -0.1158,
+      "total_return": 0.0678,
+      "annualised_vol": 0.4431,
+      "start_price": 1577.2,
+      "end_price": 1684.2
+    },
+    "2022_rates_shock": {
+      "start": "2022-01-01",
+      "end": "2022-12-31",
+      "n_bars": 260,
+      "sharpe": 0.1534,
+      "max_drawdown": -0.2043,
+      "total_return": 0.0113,
+      "annualised_vol": 0.1967,
+      "start_price": 1799.4,
+      "end_price": 1819.7
+    }
+  },
+  "source_coverage": {
+    "annual_london_fix_1968_1979": {
+      "rows": 3131,
+      "from": "1968-01-01",
+      "to": "1979-12-31"
+    },
+    "datahub_monthly_1950+": {
+      "rows": 50374,
+      "from": "1833-01-01",
+      "to": "2026-01-30"
+    },
+    "quandl_lbma_1968+": {
+      "rows": 0,
+      "from": null,
+      "to": null
+    },
+    "fred_london_am_fix_1968+": {
+      "rows": 0,
+      "from": null,
+      "to": null
+    },
+    "yfinance_xau_index_1983+": {
+      "rows": 4305,
+      "from": "1983-12-19",
+      "to": "2000-12-29"
+    },
+    "yfinance_gcf_futures_1999+": {
+      "rows": 6420,
+      "from": "2000-08-30",
+      "to": "2026-04-01"
+    },
+    "existing_40y_csv_2000+": {
+      "rows": 6415,
+      "from": "2000-08-30",
+      "to": "2026-03-25"
+    }
+  }
+}

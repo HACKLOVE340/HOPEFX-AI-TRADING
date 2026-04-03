@@ -22,25 +22,24 @@ import numpy as np
 
 from backtest.engine import BacktestConfig, BacktestEngine, SimulatedBroker
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
 def _make_config(**kwargs) -> BacktestConfig:
-    defaults = dict(
-        start_date=datetime(2024, 1, 1),
-        end_date=datetime(2024, 6, 1),
-        symbols=["XAUUSD"],
-        initial_capital=100_000.0,
-        commission_per_trade=7.0,
-        slippage_pips=3.0,
-        slippage_model="fixed",
-        kelly_fraction=0.25,
-        risk_per_trade=0.01,
-        min_rr_ratio=1.5,
-    )
+    defaults = {
+        "start_date": datetime(2024, 1, 1),
+        "end_date": datetime(2024, 6, 1),
+        "symbols": ["XAUUSD"],
+        "initial_capital": 100_000.0,
+        "commission_per_trade": 7.0,
+        "slippage_pips": 3.0,
+        "slippage_model": "fixed",
+        "kelly_fraction": 0.25,
+        "risk_per_trade": 0.01,
+        "min_rr_ratio": 1.5,
+    }
     defaults.update(kwargs)
     return BacktestConfig(**defaults)
 

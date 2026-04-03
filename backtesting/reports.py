@@ -70,7 +70,8 @@ class ReportGenerator:
         """Save report to file."""
         report = self.generate_text_report()
 
-        with open(filename, "w") as f:
+        with open(filename, "w", encoding="utf-8") as f:
             f.write(report)
 
-        logger.info(f"Report saved to {filename}")
+        logger.info("Report saved to %s", filename)
+

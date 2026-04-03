@@ -46,14 +46,13 @@ FastAPI integration
 
 from __future__ import annotations
 
-import hashlib
 import hmac
 import logging
 import os
 import time
 from collections import defaultdict
-from dataclasses import dataclass
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from fastapi import Depends, Header, HTTPException, status
 
@@ -97,7 +96,7 @@ try:
     _redis_client.ping()
     _REDIS_AVAILABLE = True
     logger.info("whitelabel rate limiter: Redis backend at %s", _REDIS_URL)
-except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+except Exception:  # pylint: disable=broad-exception-caught
     _redis_client = None
     _REDIS_AVAILABLE = False
     logger.warning(
@@ -125,7 +124,7 @@ _KEY_HASH_SECRET: bytes = _load_key_hash_secret()
 
 def _reload_key_hash_secret() -> None:
     """Re-read the hashing secret from the environment (call after rotation)."""
-    global _KEY_HASH_SECRET  # noqa: PLW0603  # pylint: disable=global-statement
+    global _KEY_HASH_SECRET  # pylint: disable=global-statement
     _KEY_HASH_SECRET = _load_key_hash_secret()
 
 
@@ -160,8 +159,14 @@ def _hash_key(raw_key: str) -> str:
     Using a server-side secret means a leaked key-store cannot be used to
     brute-force API keys offline.  HMAC-SHA256 is a cryptographically strong
     MAC; the digest is used only for key-store lookups, never as a password hash.
+
+    nosec B324 — this is HMAC-SHA256 (a keyed MAC), not a bare hash or password
+    hash.  The _KEY_HASH_SECRET provides the cryptographic binding; SHA-256 is
+    the underlying PRF.  This construction is intentional and correct for
+    server-side API key fingerprinting.
     """
-    raw = hmac.digest(_KEY_HASH_SECRET, raw_key.encode(), "sha256")
+    # nosec B324 — HMAC-SHA256 keyed MAC for key-store lookup, not password hashing
+    raw = hmac.digest(_KEY_HASH_SECRET, raw_key.encode(), "sha256")  # nosec B324
     return raw.hex()
 
 
@@ -203,7 +208,8 @@ def _check_rate_limit(key_hash: str, tier_config: TierConfig) -> None:
 
 def _check_rate_limit_redis(key_hash: str, tier_config: TierConfig) -> None:
     """Redis sliding-window rate limiter."""
-    assert _redis_client is not None
+    if _redis_client is None:
+        raise RuntimeError("Redis client is not initialised")
     pipe = _redis_client.pipeline()
 
     min_key = f"rl:min:{key_hash}"
@@ -249,12 +255,12 @@ def _check_rate_limit_memory(key_hash: str, tier_config: TierConfig) -> None:
     c = _mem_counters[key_hash]
 
     # Reset minute window
-    if now - c["min_reset"] >= 60.0:  # noqa: PLR2004
+    if now - c["min_reset"] >= 60.0:
         c["min_count"] = 0
         c["min_reset"] = now
 
     # Reset day window
-    if now - c["day_reset"] >= 86400.0:  # noqa: PLR2004
+    if now - c["day_reset"] >= 86400.0:
         c["day_count"] = 0
         c["day_reset"] = now
 
@@ -359,7 +365,7 @@ def require_feature(feature: str) -> Callable:
 
 def _suggest_upgrade(feature: str) -> str:
     """Return the minimum tier that includes the given feature."""
-    from whitelabel.config import TIER_CONFIGS  # noqa: PLC0415
+    from whitelabel.config import TIER_CONFIGS
 
     for tier in (TierName.STARTER, TierName.GROWTH, TierName.ENTERPRISE):
         if feature in TIER_CONFIGS[tier].allowed_features:

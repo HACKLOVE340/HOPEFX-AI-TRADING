@@ -20,9 +20,7 @@ import json as _json
 import logging
 import os
 import time
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path as _Path
 from typing import Any
 
@@ -172,7 +170,6 @@ _order_rl_cache: dict = {}  # in-memory fallback: {user_id: [timestamps]}
 
 def _reset_order_rl_cache() -> None:
     """Clear the in-memory rate-limit cache. Used by tests to prevent bleed."""
-    global _order_rl_cache  # noqa: PLW0602
     _order_rl_cache.clear()
 
 
@@ -397,7 +394,7 @@ async def _run_standard_risk_check(order: "OrderRequest", user_id: str) -> None:
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error("Risk check error (blocking order for safety): user=%s %s", user_id, exc, exc_info=True)
+        logger.exception("Risk check error (blocking order for safety): user=%s %s", user_id, exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Risk check unavailable — order rejected for safety",
@@ -420,7 +417,7 @@ async def _run_cvar_gate(user_id: str) -> None:
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error("CVaR pre-trade check error (blocking order for safety): user=%s %s", user_id, exc, exc_info=True)
+        logger.exception("CVaR pre-trade check error (blocking order for safety): user=%s %s", user_id, exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="CVaR risk check unavailable — order rejected for safety",
@@ -477,15 +474,15 @@ async def _route_to_broker(order: "OrderRequest") -> Any:
         return result
     except HTTPException:
         raise
-    except Exception as exc:
-        logger.error("Broker order submission failed: %s", exc, exc_info=True)
+    except Exception:
+        logger.exception("Broker order submission failed: %s")
         try:
             from core.metrics import ORDERS_TOTAL
 
             ORDERS_TOTAL.labels(symbol=order.symbol, side=order.side, status="error").inc()
         except Exception as _exc:
             logger.debug("Suppressed exception: %s", _exc)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Order submission failed — check server logs") from None
 
 
 async def _broadcast_fill_ws(order: "OrderRequest", result: Any) -> None:
@@ -580,6 +577,7 @@ def _notify_paper_gate_and_online_learner(order: "OrderRequest", result: Any) ->
 
     try:
         import pandas as _pd
+
         from core.signal_engine import notify_fill as _notify_fill
 
         _features = _pd.DataFrame(
@@ -651,7 +649,7 @@ def _check_subscription_gate(user_id: str) -> None:
         return
 
     try:
-        from monetization.subscription import subscription_manager, plan_gate
+        from monetization.subscription import plan_gate, subscription_manager
 
         sub = subscription_manager.get_user_subscription(user_id)
         user_plan = sub.tier.value if (sub and sub.is_active() and hasattr(sub.tier, "value")) else "free"
@@ -1096,7 +1094,7 @@ class StrategyResponse(BaseModel):
     enabled: bool
     parameters: dict | None = None
 
-    def model_post_init(self, __context):
+    def model_post_init(self, __context: Any) -> None:  # pylint: disable=arguments-differ
         if not self.type:
             object.__setattr__(self, "type", self.strategy_type)
 
@@ -1139,8 +1137,6 @@ _strategy_store: dict[str, dict] = {}
 
 def _make_strategy_router():
     """Return a sub-router with the strategy CRUD + position-size endpoints."""
-    from fastapi import APIRouter
-
     _r = APIRouter()  # no prefix — parent router already has /api/trading
 
     @_r.get("/strategies")
@@ -1162,8 +1158,6 @@ def _make_strategy_router():
             "strategy_brain",
         }
         if req.strategy_type not in _KNOWN:
-            from fastapi import HTTPException
-
             raise HTTPException(400, f"Unknown strategy type: {req.strategy_type}")
         sid = str(_uuid.uuid4())[:8]
         record = {
@@ -1191,8 +1185,6 @@ def _make_strategy_router():
 
     @_r.get("/strategies/{strategy_id}")
     def get_strategy(strategy_id: str):
-        from fastapi import HTTPException
-
         key = _resolve(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
@@ -1200,8 +1192,6 @@ def _make_strategy_router():
 
     @_r.delete("/strategies/{strategy_id}")
     def delete_strategy(strategy_id: str):
-        from fastapi import HTTPException
-
         key = _resolve(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
@@ -1317,7 +1307,7 @@ def _make_strategy_router():
             # Sharpe from point-to-point returns
             returns = [(values[i] - values[i - 1]) / values[i - 1] for i in range(1, len(values)) if values[i - 1] > 0]
             sharpe = 0.0
-            if len(returns) >= 2:  # noqa: PLR2004
+            if len(returns) >= 2:
                 mean_r = sum(returns) / len(returns)
                 var = sum((r - mean_r) ** 2 for r in returns) / len(returns)
                 std_r = _math.sqrt(var) if var > 0 else 0.0
@@ -1330,7 +1320,7 @@ def _make_strategy_router():
             ts_list = [t for t, _ in equity_history]
             period_days = (
                 max(1, round((ts_list[-1] - ts_list[0]) / 86400))
-                if len(ts_list) >= 2  # noqa: PLR2004
+                if len(ts_list) >= 2
                 else 1
             )
 
@@ -1357,8 +1347,6 @@ def _make_strategy_router():
 
     @_r.get("/performance/{strategy_id}")
     def get_strategy_performance(strategy_id: str):
-        from fastapi import HTTPException
-
         key = _resolve(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
@@ -1373,8 +1361,6 @@ def _make_strategy_router():
 
     @_r.post("/strategies/{strategy_id}/start")
     def start_strategy(strategy_id: str):
-        from fastapi import HTTPException
-
         key = _resolve(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
@@ -1383,8 +1369,6 @@ def _make_strategy_router():
 
     @_r.post("/strategies/{strategy_id}/stop")
     def stop_strategy(strategy_id: str):
-        from fastapi import HTTPException
-
         key = _resolve(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
@@ -1397,8 +1381,8 @@ def _make_strategy_router():
 # Register the sub-router on the module-level router
 try:
     router.include_router(_make_strategy_router())
-except Exception as exc:
-    logger.error("Failed to register strategy sub-router: %s", exc, exc_info=True)
+except Exception:
+    logger.exception("Failed to register strategy sub-router: %s")
 
 
 # ── Regime status endpoint ────────────────────────────────────────────────────
@@ -1430,6 +1414,7 @@ async def get_regime_status():
         # Try to detect regime from live price data
         if broker is not None and hasattr(broker, "get_ohlcv"):
             import asyncio
+
             import pandas as pd
 
             _get = broker.get_ohlcv("XAUUSD", limit=100)
@@ -1444,9 +1429,7 @@ async def get_regime_status():
         return regime_router.status()
 
     except Exception as exc:
-        import logging as _log
-
-        _log.getLogger(__name__).warning("regime status error: %s", exc)
+        logger.warning("regime status error: %s", exc)
         return {
             "current_regime": "unknown",
             "confidence": 0.0,
@@ -1500,9 +1483,7 @@ async def run_stress_test(
     max_loss_pct   : Gate threshold — any scenario exceeding this fraction
                      of equity marks gate_passed=False.
     """
-    import logging as _log
-
-    _logger = _log.getLogger(__name__)
+    _logger = logger
     try:
         from risk.stress_test import run_all_scenarios
 
@@ -1512,8 +1493,6 @@ async def run_stress_test(
             leverage=leverage,
             max_loss_pct=max_loss_pct,
         )
-    except Exception as exc:
-        _logger.error("Stress test failed: %s", exc, exc_info=True)
-        from fastapi import HTTPException
-
-        raise HTTPException(status_code=500, detail=f"Stress test error: {exc}") from None
+    except Exception:
+        _logger.exception("Stress test failed: %s")
+        raise HTTPException(status_code=500, detail="Stress test failed — check server logs") from None

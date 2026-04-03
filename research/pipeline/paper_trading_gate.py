@@ -52,9 +52,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -101,7 +99,7 @@ class PaperTradingGate:
         }
         if self._state_path.exists():
             try:
-                with open(self._state_path) as f:
+                with open(self._state_path, encoding="utf-8") as f:
                     loaded = json.load(f)
                 # Merge: file values override defaults
                 default.update(loaded)
@@ -114,7 +112,7 @@ class PaperTradingGate:
         """Persist current state to disk."""
         try:
             self._state_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self._state_path, "w") as f:
+            with open(self._state_path, "w", encoding="utf-8") as f:
                 json.dump(self._state, f, indent=2, default=str)
         except Exception as exc:
             logger.warning("PaperTradingGate: state save failed: %s", exc)
@@ -144,7 +142,7 @@ class PaperTradingGate:
         if not s:
             return None
         try:
-            dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+            dt = datetime.fromisoformat(s)
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=UTC)
             return dt
@@ -181,7 +179,7 @@ class PaperTradingGate:
             }
         )
         # Keep only last 1000 fills in memory to bound file size
-        if len(self._state["fills"]) > 1000:  # noqa: PLR2004
+        if len(self._state["fills"]) > 1000:
             self._state["fills"] = self._state["fills"][-1000:]
         self._save_state()
         return self._state["fill_count"]

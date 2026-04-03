@@ -33,6 +33,7 @@ Usage
 import asyncio
 import logging
 import os
+from typing import ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -40,12 +41,8 @@ try:
     from ib_insync import (  # type: ignore
         IB,
         Contract,
-        Forex,  # noqa: F401
-        Future,  # noqa: F401
         LimitOrder,
         MarketOrder,
-        Order,  # noqa: F401
-        Stock,  # noqa: F401
         StopOrder,
     )
 
@@ -170,7 +167,7 @@ class IBKRBroker:
         if not self._assert_connected("get_account_info"):
             return None
         summary = self._ib.accountSummary(account=self._account or "")
-        result: dict = {}
+        result: ClassVar[dict] = {}
         for item in summary:
             result[item.tag] = item.value
         # Normalise the most common fields.
@@ -308,9 +305,9 @@ class IBKRBroker:
                 "status": trade.orderStatus.status,
                 "comment": "OK",
             }
-        except Exception as exc:
-            logger.error("IBKRBroker.place_order failed: %s", exc)
-            return {"success": False, "order_id": 0, "comment": str(exc)}
+        except Exception:
+            logger.exception("IBKRBroker.place_order failed: %s")
+            return {"success": False, "order_id": 0, "comment": "Order failed — check server logs"}
 
     async def cancel_order(self, order_id: int) -> dict:
         """Cancel a pending order by order ID."""
@@ -328,8 +325,9 @@ class IBKRBroker:
             await asyncio.sleep(0.1)
             logger.info("IBKR order cancelled | order_id=%s", order_id)
             return {"success": True, "comment": "OK"}
-        except Exception as exc:
-            return {"success": False, "comment": str(exc)}
+        except Exception:
+            logger.exception("IBKRBroker.cancel_order failed: %s")
+            return {"success": False, "comment": "Cancel failed — check server logs"}
 
     async def close_position(
         self,
