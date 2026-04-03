@@ -35,9 +35,19 @@ interface EngineMetrics {
   uptime_hours: number;
 }
 
+interface EngineStatus {
+  running: boolean;
+  uptime_seconds: number;
+  last_signal_at: string | null;
+  positions_open: number;
+  heartbeat_ok: boolean;
+  mode: string;
+}
+
 const TradingEngineSection: React.FC = () => {
   const [cfg, setCfg]         = useState<EngineConfig | null>(null);
   const [metrics, setMetrics] = useState<EngineMetrics | null>(null);
+  const [status, setStatus]   = useState<EngineStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
   const [error, setError]     = useState('');
@@ -47,12 +57,14 @@ const TradingEngineSection: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const [cfgRes, metRes] = await Promise.all([
+      const [cfgRes, metRes, stRes] = await Promise.all([
         superadminApi.engineConfig(),
         superadminApi.engineMetrics(),
+        superadminApi.engineStatus(),
       ]);
       setCfg(cfgRes.data);
       setMetrics(metRes.data);
+      setStatus(stRes.data);
     } catch (e: unknown) {
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load engine data');
     } finally { setLoading(false); }
@@ -104,6 +116,35 @@ const TradingEngineSection: React.FC = () => {
   return (
     <div style={{ animation: 'sa-fadein 0.2s ease' }}>
       <SAStyles />
+
+      {/* ── Live engine status banner ── */}
+      {status && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
+          padding: '12px 18px', borderRadius: 10, marginBottom: 16,
+          background: status.running ? '#052e16' : '#450a0a',
+          border: `1px solid ${status.running ? '#16a34a44' : '#dc262644'}`,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 9, height: 9, borderRadius: '50%', background: status.running ? '#4ade80' : '#f87171', display: 'inline-block', boxShadow: status.running ? '0 0 6px #4ade80' : 'none' }} />
+            <span style={{ fontSize: 13, fontWeight: 700, color: status.running ? '#4ade80' : '#f87171' }}>
+              Engine {status.running ? 'RUNNING' : 'STOPPED'}
+            </span>
+            <span style={{ fontSize: 12, color: '#475569', marginLeft: 4 }}>{status.mode}</span>
+          </div>
+          {[
+            { label: 'Uptime',        value: `${Math.floor(status.uptime_seconds / 3600)}h ${Math.floor((status.uptime_seconds % 3600) / 60)}m` },
+            { label: 'Open Positions', value: status.positions_open },
+            { label: 'Last Signal',   value: status.last_signal_at ? new Date(status.last_signal_at).toLocaleTimeString() : 'N/A' },
+            { label: 'Heartbeat',     value: status.heartbeat_ok ? '✅ OK' : '❌ Miss' },
+          ].map(s => (
+            <div key={s.label} style={{ fontSize: 12, color: '#94a3b8' }}>
+              <span style={{ color: '#475569' }}>{s.label}: </span>
+              <span style={{ fontWeight: 600, color: '#f1f5f9' }}>{s.value}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {confirm === 'kill' && (
         <ConfirmDialog
