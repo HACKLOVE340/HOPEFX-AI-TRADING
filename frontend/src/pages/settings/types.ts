@@ -9,6 +9,11 @@ export type SettingsTab =
   | 'notifications'
   | 'api-keys'
   | 'billing'
+  | 'integrations'
+  | 'system'
+  | 'privacy'
+  | 'accessibility'
+  | 'admin'
   | 'danger';
 
 export interface ProfileSettings {
@@ -103,7 +108,83 @@ export interface BillingInfo {
   currency: string;
 }
 
-// Shared UI helpers
+export interface IntegrationSettings {
+  tradingview_enabled: boolean;
+  tradingview_webhook_secret: string;
+  zapier_enabled: boolean;
+  zapier_webhook_url: string;
+  google_sheets_enabled: boolean;
+  google_sheets_id: string;
+  mt4_enabled: boolean;
+  mt4_server: string;
+  mt4_login: string;
+  mt4_password: string;
+  mt5_enabled: boolean;
+  mt5_server: string;
+  mt5_login: string;
+  mt5_password: string;
+  ctrader_enabled: boolean;
+  ctrader_client_id: string;
+  ctrader_client_secret: string;
+  webhook_enabled: boolean;
+  webhook_url: string;
+  webhook_secret: string;
+}
+
+export interface SystemSettings {
+  data_refresh_interval: number;
+  max_open_positions: number;
+  session_timeout_minutes: number;
+  log_level: 'debug' | 'info' | 'warning' | 'error';
+  enable_paper_trading: boolean;
+  enable_live_trading: boolean;
+  maintenance_mode: boolean;
+  rate_limit_per_minute: number;
+  cache_ttl_seconds: number;
+  backup_enabled: boolean;
+  backup_frequency: 'hourly' | 'daily' | 'weekly';
+}
+
+export interface PrivacySettings {
+  share_performance: boolean;
+  share_trades: boolean;
+  share_signals: boolean;
+  allow_copy_trading: boolean;
+  show_in_leaderboard: boolean;
+  analytics_opt_in: boolean;
+  marketing_emails: boolean;
+  data_retention_days: number;
+}
+
+export interface AccessibilitySettings {
+  reduce_motion: boolean;
+  high_contrast: boolean;
+  large_text: boolean;
+  keyboard_shortcuts: boolean;
+  screen_reader_hints: boolean;
+  color_blind_mode: 'none' | 'deuteranopia' | 'protanopia' | 'tritanopia';
+  font_size: 'small' | 'medium' | 'large' | 'xlarge';
+}
+
+export interface AdminSettings {
+  allow_new_registrations: boolean;
+  require_email_verification: boolean;
+  default_new_user_plan: string;
+  max_users: number;
+  force_2fa_for_admins: boolean;
+  ip_whitelist_enabled: boolean;
+  ip_whitelist: string[];
+  global_kill_switch: boolean;
+  announcement_banner: string;
+  announcement_enabled: boolean;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_user: string;
+  smtp_password: string;
+  smtp_from: string;
+  smtp_tls: boolean;
+}
+
 export const TIMEZONES = [
   'UTC', 'America/New_York', 'America/Chicago', 'America/Los_Angeles',
   'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Asia/Tokyo',
