@@ -277,4 +277,119 @@ export const superadminApi = {
   flushCache:        (pattern?: string)        => api.post('/superadmin/infra/cache/flush', { pattern }),
   dbStats:           ()                        => api.get('/superadmin/infra/db'),
   queueStats:        ()                        => api.get('/superadmin/infra/queues'),
+
+  // ── Compliance / KYC / AML ────────────────────────────────────────────────
+  kycQueue:          (params?: Record<string, string>) => api.get('/superadmin/compliance/kyc', { params }),
+  approveKyc:        (userId: string)          => api.post(`/superadmin/compliance/kyc/${userId}/approve`),
+  rejectKyc:         (userId: string, reason: string) =>
+    api.post(`/superadmin/compliance/kyc/${userId}/reject`, { reason }),
+  amlAlerts:         (params?: Record<string, string>) => api.get('/superadmin/compliance/aml/alerts', { params }),
+  updateAmlAlert:    (alertId: string, status: string, notes?: string) =>
+    api.patch(`/superadmin/compliance/aml/alerts/${alertId}`, { status, notes }),
+  sanctionsHits:     (params?: Record<string, string>) => api.get('/superadmin/compliance/sanctions', { params }),
+  clearSanctionsHit: (hitId: string)           => api.post(`/superadmin/compliance/sanctions/${hitId}/clear`),
+  regulatoryReports: ()                        => api.get('/superadmin/compliance/regulatory/reports'),
+  triggerRegReport:  (reportType: string, period: string) =>
+    api.post('/superadmin/compliance/regulatory/trigger', { report_type: reportType, period }),
+  immutableAuditLog: (params?: Record<string, string>) => api.get('/superadmin/compliance/audit-trail', { params }),
+  exportAuditTrail:  ()                        => api.get('/superadmin/compliance/audit-trail/export', { responseType: 'blob' }),
+
+  // ── Risk Management ───────────────────────────────────────────────────────
+  circuitBreakers:   ()                        => api.get('/superadmin/risk/circuit-breakers'),
+  resetCircuitBreaker: (name: string)          => api.post(`/superadmin/risk/circuit-breakers/${name}/reset`),
+  forceOpenBreaker:  (name: string)            => api.post(`/superadmin/risk/circuit-breakers/${name}/open`),
+  varMetrics:        ()                        => api.get('/superadmin/risk/var'),
+  stressTestResults: ()                        => api.get('/superadmin/risk/stress-tests'),
+  runStressTest:     (scenario: string)        => api.post('/superadmin/risk/stress-tests/run', { scenario }),
+  propBreaches:      (params?: Record<string, string>) => api.get('/superadmin/risk/prop-breaches', { params }),
+  drawdownStats:     ()                        => api.get('/superadmin/risk/drawdown'),
+
+  // ── Broker Management / TCA ───────────────────────────────────────────────
+  brokerHealth:      ()                        => api.get('/superadmin/brokers/health'),
+  reconnectBroker:   (brokerId: string)        => api.post(`/superadmin/brokers/${brokerId}/reconnect`),
+  disconnectBroker:  (brokerId: string)        => api.post(`/superadmin/brokers/${brokerId}/disconnect`),
+  tcaMetrics:        (params?: Record<string, string>) => api.get('/superadmin/brokers/tca', { params }),
+  brokerRouting:     ()                        => api.get('/superadmin/brokers/routing'),
+  updateBrokerRouting: (p: object)             => api.patch('/superadmin/brokers/routing', p),
+
+  // ── White-Label Tenants ───────────────────────────────────────────────────
+  tenants:           (params?: Record<string, string>) => api.get('/superadmin/whitelabel/tenants', { params }),
+  getTenant:         (id: string)              => api.get(`/superadmin/whitelabel/tenants/${id}`),
+  createTenant:      (p: object)               => api.post('/superadmin/whitelabel/tenants', p),
+  updateTenant:      (id: string, p: object)   => api.patch(`/superadmin/whitelabel/tenants/${id}`, p),
+  suspendTenant:     (id: string)              => api.post(`/superadmin/whitelabel/tenants/${id}/suspend`),
+  activateTenant:    (id: string)              => api.post(`/superadmin/whitelabel/tenants/${id}/activate`),
+  deleteTenant:      (id: string)              => api.delete(`/superadmin/whitelabel/tenants/${id}`),
+  tenantApiKeys:     (id: string)              => api.get(`/superadmin/whitelabel/tenants/${id}/api-keys`),
+  rotateTenantKey:   (id: string)              => api.post(`/superadmin/whitelabel/tenants/${id}/api-keys/rotate`),
+  tenantUsage:       (id: string)              => api.get(`/superadmin/whitelabel/tenants/${id}/usage`),
+
+  // ── GDPR / Data Privacy ───────────────────────────────────────────────────
+  gdprRequests:      (params?: Record<string, string>) => api.get('/superadmin/gdpr/requests', { params }),
+  processGdprRequest: (reqId: string, action: 'approve' | 'reject', notes?: string) =>
+    api.post(`/superadmin/gdpr/requests/${reqId}/process`, { action, notes }),
+  gdprExportUser:    (userId: string)          => api.post(`/superadmin/gdpr/users/${userId}/export`),
+  gdprEraseUser:     (userId: string, reason: string) =>
+    api.post(`/superadmin/gdpr/users/${userId}/erase`, { reason }),
+  consentLog:        (userId?: string)         => api.get('/superadmin/gdpr/consent-log', { params: userId ? { user_id: userId } : {} }),
+  retentionPolicies: ()                        => api.get('/superadmin/gdpr/retention-policies'),
+  updateRetentionPolicy: (p: object)           => api.patch('/superadmin/gdpr/retention-policies', p),
+
+  // ── Nuclear Emergency Controls ────────────────────────────────────────────
+  nuclearStatus:     ()                        => api.get('/superadmin/nuclear/status'),
+  nuclearHalt:       (reason: string)          => api.post('/superadmin/nuclear/halt', { reason }),
+  nuclearResume:     ()                        => api.post('/superadmin/nuclear/resume'),
+  activateHedge:     (params: object)          => api.post('/superadmin/nuclear/hedge/activate', params),
+  deactivateHedge:   ()                        => api.post('/superadmin/nuclear/hedge/deactivate'),
+  maxRiskOverride:   (params: object)          => api.post('/superadmin/nuclear/risk-override', params),
+  nuclearLog:        ()                        => api.get('/superadmin/nuclear/log'),
+
+  // ── Rate Limiting ─────────────────────────────────────────────────────────
+  rateLimitRules:    ()                        => api.get('/superadmin/rate-limits/rules'),
+  updateRateLimitRule: (ruleId: string, p: object) =>
+    api.patch(`/superadmin/rate-limits/rules/${ruleId}`, p),
+  createRateLimitRule: (p: object)             => api.post('/superadmin/rate-limits/rules', p),
+  deleteRateLimitRule: (ruleId: string)        => api.delete(`/superadmin/rate-limits/rules/${ruleId}`),
+  rateLimitStats:    ()                        => api.get('/superadmin/rate-limits/stats'),
+  rateLimitViolations: (params?: Record<string, string>) =>
+    api.get('/superadmin/rate-limits/violations', { params }),
+
+  // ── Alerting / Monitoring ─────────────────────────────────────────────────
+  alertRules:        ()                        => api.get('/superadmin/alerting/rules'),
+  createAlertRule:   (p: object)               => api.post('/superadmin/alerting/rules', p),
+  updateAlertRule:   (ruleId: string, p: object) =>
+    api.patch(`/superadmin/alerting/rules/${ruleId}`, p),
+  deleteAlertRule:   (ruleId: string)          => api.delete(`/superadmin/alerting/rules/${ruleId}`),
+  silenceAlert:      (ruleId: string, durationMin: number) =>
+    api.post(`/superadmin/alerting/rules/${ruleId}/silence`, { duration_minutes: durationMin }),
+  firedAlerts:       (params?: Record<string, string>) => api.get('/superadmin/alerting/fired', { params }),
+  prometheusStatus:  ()                        => api.get('/superadmin/alerting/prometheus'),
+
+  // ── Reporting ─────────────────────────────────────────────────────────────
+  reportList:        ()                        => api.get('/superadmin/reports'),
+  triggerReport:     (type: string, period: string) =>
+    api.post('/superadmin/reports/generate', { type, period }),
+  downloadReport:    (reportId: string)        => api.get(`/superadmin/reports/${reportId}/download`, { responseType: 'blob' }),
+  deleteReport:      (reportId: string)        => api.delete(`/superadmin/reports/${reportId}`),
+
+  // ── Security Infrastructure ───────────────────────────────────────────────
+  selfHealerStatus:  ()                        => api.get('/superadmin/security-infra/self-healer'),
+  triggerIntegrityScan: ()                     => api.post('/superadmin/security-infra/self-healer/scan'),
+  antivirusStatus:   ()                        => api.get('/superadmin/security-infra/antivirus'),
+  triggerAvScan:     (path?: string)           => api.post('/superadmin/security-infra/antivirus/scan', { path }),
+  hsmStatus:         ()                        => api.get('/superadmin/security-infra/hsm'),
+  hsmRotateKey:      (keyId: string)           => api.post(`/superadmin/security-infra/hsm/keys/${keyId}/rotate`),
+  securityInfraLog:  ()                        => api.get('/superadmin/security-infra/log'),
+
+  // ── System Health (services, backups, scheduled jobs) ────────────────────
+  serviceStatuses:   ()                        => api.get('/superadmin/system/services'),
+  backupList:        ()                        => api.get('/superadmin/system/backups'),
+  triggerBackup:     (type: 'full' | 'incremental' | 'snapshot') =>
+    api.post('/superadmin/system/backups/trigger', { type }),
+  scheduledJobs:     ()                        => api.get('/superadmin/system/jobs'),
+  triggerJob:        (jobId: string)           => api.post(`/superadmin/system/jobs/${jobId}/trigger`),
+  pauseJob:          (jobId: string)           => api.post(`/superadmin/system/jobs/${jobId}/pause`),
+  resumeJob:         (jobId: string)           => api.post(`/superadmin/system/jobs/${jobId}/resume`),
+  apiKeyAudit:       (params?: Record<string, string>) => api.get('/superadmin/system/api-keys', { params }),
+  revokeApiKey:      (keyId: string)           => api.delete(`/superadmin/system/api-keys/${keyId}`),
 };
