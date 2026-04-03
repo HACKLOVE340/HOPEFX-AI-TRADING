@@ -190,3 +190,5 @@ data/macro/*.csv
 -e 
 # Admin bootstrap credential file (create_admin.py)
 admin_password.txt
+.python-version
+mutants/
