@@ -34,6 +34,7 @@ __all__ = [
     "BaseMLModel",
     "LSTMPricePredictor",
     "RandomForestTradingClassifier",
+    "StackingEnsemblePredictor",
     "TechnicalFeatureEngineer",
     "create_ml_router",
     "get_active_model",
@@ -173,41 +174,198 @@ def _try_load(path: _Path) -> _Any | None:
             return None
 
 
+
+def _load_from_registry() -> "tuple[_Any | None, str]":
+    """
+    Try to load the active model from registry.json.
+
+    Supports two pkl formats:
+    - ``sklearn_estimator``: standard sklearn/XGBoost model → loaded directly.
+    - ``stacking_dict``: MTF ensemble dict with keys
+      ``base_learners``, ``meta_model``, ``feature_cols``, ``scaler``,
+      ``horizon``, ``abstain_threshold`` → wrapped in ``StackingEnsemblePredictor``.
+
+    Returns (model, version_name) or (None, "") on failure.
+    """
+    registry_path = _SAVED / "registry.json"
+    if not registry_path.exists():
+        _ml_logger.debug("_load_from_registry: registry.json not found — skipping")
+        return None, ""
+
+    try:
+        registry = _json.loads(registry_path.read_text())
+        active = registry.get("active_version", "")
+        if not active:
+            return None, ""
+        entry = registry.get("versions", {}).get(active)
+        if not entry:
+            return None, ""
+
+        pkl_file = _Path(entry.get("file", ""))
+        if not pkl_file.is_absolute():
+            # Resolve relative to repo root (two parents up from ml/saved_models)
+            pkl_file = _Path(__file__).parent.parent / pkl_file
+
+        if not pkl_file.exists():
+            _ml_logger.warning("_load_from_registry: active model file not found: %s", pkl_file)
+            return None, ""
+
+        model = _try_load(pkl_file)
+        if model is None:
+            return None, ""
+
+        # ── Unwrap stacking_dict format (MTF ensemble) ────────────────────────
+        pkl_format = entry.get("pkl_format", "sklearn_estimator")
+        if isinstance(model, dict) and pkl_format == "stacking_dict":
+            model = StackingEnsemblePredictor(model)
+            _ml_logger.info(
+                "_load_from_registry: loaded stacking_dict '%s' from %s",
+                active,
+                pkl_file.name,
+            )
+        else:
+            _ml_logger.info(
+                "_load_from_registry: loaded sklearn_estimator '%s' from %s",
+                active,
+                pkl_file.name,
+            )
+
+        return model, active
+
+    except Exception as exc:
+        _ml_logger.warning("_load_from_registry: error loading active version: %s", exc)
+        return None, ""
+
+
+class StackingEnsemblePredictor:
+    """
+    Wraps the MTF stacking-ensemble pkl dict so it exposes a standard
+    sklearn ``predict_proba(X)`` interface compatible with the execution engine.
+
+    The dict produced by ``scripts/retrain_mtf_accuracy.py`` contains:
+      base_learners     : list of fitted sklearn estimators
+      meta_model        : fitted CalibratedClassifierCV meta-learner
+      feature_cols      : list of feature column names (for alignment)
+      scaler            : StandardScaler fitted on training data
+      horizon           : int — prediction horizon in bars
+      abstain_threshold : float — confidence floor for abstain
+
+    Calling ``predict_proba(X)`` returns an (N, 2) array where column 1 is
+    P(up) — consistent with the sklearn API consumed by the signal engine.
+
+    Missing feature columns are filled with 0.0 (safe default for scaled features).
+    """
+
+    def __init__(self, payload: dict) -> None:
+        self._base_learners = payload["base_learners"]
+        self._meta = payload["meta_model"]
+        self._feature_cols: list[str] = payload.get("feature_cols", [])
+        self._scaler = payload.get("scaler")
+        self._horizon: int = payload.get("horizon", 5)
+        self._abstain_threshold: float = payload.get("abstain_threshold", 0.55)
+
+    # ── sklearn-compatible API ────────────────────────────────────────────────
+
+    def predict_proba(self, X) -> "_Any":
+        """Return (N, 2) probability array consistent with sklearn convention."""
+        import numpy as np
+        import pandas as pd
+
+        X_in = X
+        if isinstance(X, pd.DataFrame):
+            # Align columns to training schema
+            if self._feature_cols:
+                for col in self._feature_cols:
+                    if col not in X.columns:
+                        X[col] = 0.0
+                X_in = X[self._feature_cols]
+            X_in = X_in.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+
+        if self._scaler is not None:
+            try:
+                X_in = self._scaler.transform(X_in)
+            except Exception as exc:
+                _ml_logger.debug("StackingEnsemblePredictor: scaler.transform failed: %s", exc)
+
+        meta_X = np.column_stack([m.predict_proba(X_in)[:, 1] for m in self._base_learners])
+        return self._meta.predict_proba(meta_X)
+
+    def predict(self, X) -> "_Any":
+        import numpy as np
+
+        proba = self.predict_proba(X)
+        return (proba[:, 1] >= 0.5).astype(int)
+
+    @property
+    def horizon(self) -> int:
+        return self._horizon
+
+    @property
+    def abstain_threshold(self) -> float:
+        return self._abstain_threshold
+
+    def __repr__(self) -> str:
+        return (
+            f"StackingEnsemblePredictor("
+            f"n_base={len(self._base_learners)}, "
+            f"features={len(self._feature_cols)}, "
+            f"horizon={self._horizon})"
+        )
+
+
 def _load_models() -> None:
     """Lazy-load all saved models on first access.
 
     Priority (highest to lowest):
-      1. advanced_oos.pkl  — 122-feature calibrated XGBoost, 68% OOS accuracy (p=0.0000)
-      2. xgb_macro.pkl     — basic macro XGBoost, 65 stationary features, ~50% OOS
-      3. xgb_xauusd.pkl    — baseline XGBoost (no macro)
-      4. rf_macro.pkl      — basic macro RF
-      5. rf_xauusd.pkl     — baseline RF
+      1. Registry-active model  — resolved from registry.json ``active_version``
+         (currently xgb_horizon5_v1 → advanced_oos.pkl, horizon=5, OOS=59.9%)
+      2. advanced_oos.pkl       — hardcoded fallback (same file, backward-compat)
+      3. xgb_macro.pkl          — basic macro XGBoost, ~50% OOS
+      4. xgb_xauusd.pkl         — baseline XGBoost (no macro)
 
     FALLBACK WARNING
     ----------------
-    If advanced_oos.pkl fails to load (version mismatch, missing file, import
-    error), the engine falls back to xgb_macro.pkl which has ~50% OOS accuracy
-    — no demonstrated edge above chance.  A CRITICAL log is emitted so
-    operators can detect silent degradation in log aggregators (Sentry, Datadog,
-    CloudWatch).  The fallback model has had all close_lag_N non-stationary
-    features removed as of this version.
+    If the registry-active model fails to load (version mismatch, missing file,
+    import error), the engine falls back to xgb_macro.pkl which has ~50% OOS
+    accuracy — no demonstrated edge above chance.  A CRITICAL log is emitted so
+    operators can detect silent degradation in log aggregators.
 
     OOS metadata sidecar
     --------------------
     When advanced_oos.pkl loads successfully, the companion
     advanced_oos_meta.json is read to log the validated OOS accuracy, SE,
     p-value, and period.  This lets operators confirm the loaded model matches
-    the expected 68% OOS accuracy without unpickling the full pipeline.
+    the expected OOS accuracy without unpickling the full pipeline.
     """
     global _macro_xgb, _macro_rf, _baseline_xgb, _baseline_rf, _model_version
 
-    # ── Priority 1: advanced OOS model (122 stationary features, p=0.0000) ──
+    # ── Priority 1: registry-active model ────────────────────────────────────
+    _reg_model, _reg_version = _load_from_registry()
+    if _reg_model is not None:
+        _macro_xgb = _reg_model
+        _model_version = _reg_version
+        # Log registry metadata
+        try:
+            registry = _json.loads((_SAVED / "registry.json").read_text())
+            entry = registry["versions"].get(_reg_version, {})
+            _ml_logger.info(
+                "Active ML model (registry): %s  oos_acc=%.3f  oos_n=%d  horizon=%d  features=%d",
+                _reg_version,
+                float(entry.get("oos_accuracy", 0)),
+                int(entry.get("oos_n", entry.get("n_trades", 0))),
+                int(entry.get("horizon", 1)),
+                int(entry.get("feature_count", 0)),
+            )
+        except Exception as _meta_exc:
+            _ml_logger.debug("Registry metadata log failed: %s", _meta_exc)
+        return
+
+    # ── Priority 2: advanced OOS model (hardcoded fallback path) ─────────────
     _advanced_oos = _try_load(_SAVED / "advanced_oos.pkl")
     if _advanced_oos is not None:
         _macro_xgb = _advanced_oos
-        _model_version = "advanced_oos_v1"
+        _model_version = "advanced_oos_v2"
 
-        # Read OOS metadata sidecar to log validated accuracy without unpickling
         _meta_path = _SAVED / "advanced_oos_meta.json"
         if _meta_path.exists():
             try:
@@ -228,7 +386,6 @@ def _load_models() -> None:
                     _n_features,
                     _trained_at,
                 )
-                # Warn if loaded model accuracy is below the validated 68% threshold
                 if isinstance(_oos_acc, float) and _oos_acc < 0.60:
                     _ml_logger.warning(
                         "advanced_oos.pkl OOS accuracy %.3f is below 60%% — "
@@ -239,45 +396,37 @@ def _load_models() -> None:
             except Exception as _exc:
                 _ml_logger.info(
                     "Active ML model: advanced_oos.pkl — "
-                    "68.0%% OOS accuracy, p=0.0000, 122 stationary features "
-                    "(metadata sidecar unreadable: %s)",
+                    "OOS accuracy (metadata sidecar unreadable: %s)",
                     _exc,
                 )
         else:
             _ml_logger.info(
                 "Active ML model: advanced_oos.pkl — "
-                "68.0%% OOS accuracy, p=0.0000, 122 stationary features "
-                "(no metadata sidecar — retrain to generate advanced_oos_meta.json)",
+                "59.9%% OOS accuracy (horizon-5, no metadata sidecar)",
             )
         return
 
     # ── CRITICAL: advanced model unavailable — falling back ──────────────────
-    # This means advanced_oos.pkl is missing, corrupt, or incompatible with
-    # the installed scikit-learn/xgboost version.  The fallback model has
-    # ~50% OOS accuracy (no demonstrated edge).  Operator action required.
     _ml_logger.critical(
-        "FALLBACK ACTIVATED: advanced_oos.pkl could not be loaded from %s. "
-        "The live signal engine is now running on the basic fallback model "
+        "FALLBACK ACTIVATED: registry-active model and advanced_oos.pkl could not be "
+        "loaded from %s. The live signal engine is now running on the basic fallback model "
         "(xgb_macro.pkl, ~50%% OOS accuracy, no demonstrated edge above chance). "
-        "This is a SILENT DEGRADATION from 68%% to ~50%% accuracy. "
-        "Fix: ensure advanced_oos.pkl exists and scikit-learn/xgboost versions "
-        "match the training environment. Re-run: python ml/train_advanced.py "
-        "--years 50 --oos-years 8",
+        "Fix: ensure ml/saved_models/registry.json points to a valid model file and "
+        "scikit-learn/xgboost versions match the training environment. "
+        "Re-run: python ml/train_advanced.py --years 50 --oos-years 8",
         _SAVED,
     )
-    # Fire a Sentry fatal-level issue so operators get paged immediately
     try:
         from monitoring.sentry_config import capture_ml_fallback_event
 
         capture_ml_fallback_event(
-            reason=f"advanced_oos.pkl not loadable from {_SAVED}",
+            reason=f"registry model not loadable from {_SAVED}",
             fallback_model="xgb_macro.pkl",
             fallback_accuracy=0.503,
         )
     except Exception as _sentry_exc:
         _ml_logger.debug("Sentry capture failed (non-fatal): %s", _sentry_exc)
 
-    # Post Discord alert so community operators are notified immediately
     try:
         import asyncio as _asyncio
 
@@ -290,7 +439,6 @@ def _load_models() -> None:
                 fallback_accuracy=0.503,
             )
 
-        # Fire-and-forget: post without blocking model loading
         try:
             loop = _asyncio.get_event_loop()
             if loop.is_running():
@@ -303,11 +451,11 @@ def _load_models() -> None:
     except Exception as _discord_exc:
         _ml_logger.debug("Discord alert failed (non-fatal): %s", _discord_exc)
 
-    # ── Priority 2: basic macro XGBoost (65 stationary features, ~50% OOS) ──
+    # ── Priority 3: basic macro XGBoost ──────────────────────────────────────
     _macro_xgb = _try_load(_SAVED / "xgb_macro.pkl")
     _macro_rf = _try_load(_SAVED / "rf_macro.pkl")
 
-    # ── Priority 3: baseline models (no macro) ───────────────────────────────
+    # ── Priority 4: baseline models (no macro) ───────────────────────────────
     _baseline_xgb = _try_load(_SAVED / "xgb_xauusd.pkl")
     _baseline_rf = _try_load(_SAVED / "rf_xauusd.pkl")
 
@@ -337,7 +485,8 @@ def get_active_model() -> _Any | None:
     """
     Return the best available trained model.
 
-    Priority: macro XGBoost → baseline XGBoost → macro RF → baseline RF → None.
+    Uses the registry-active model (xgb_horizon5_v1 / mtf_ensemble_v1) when
+    available.  Falls back through macro XGBoost → baseline XGBoost → RF.
     Models are loaded lazily on first call and cached for the process lifetime.
     """
     if _macro_xgb is None and _model_version == "none":
