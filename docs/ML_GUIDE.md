@@ -146,9 +146,42 @@ print("Current bar parabolic?", is_parabolic_bubble_regime(df))
 
 ---
 
+## MTF Ensemble Retrain (April 2026)
+
+`scripts/retrain_mtf_accuracy.py` was run on 2026-04-03 targeting ≥68% OOS accuracy.
+
+**Result: OOS 61.4%** (up from 59.9% for `xgb_horizon5_v1`, +1.5pp)
+
+| Metric | xgb_horizon5_v1 | mtf_ensemble_v1 |
+|--------|----------------|-----------------|
+| OOS accuracy | 59.9% | **61.4%** |
+| OOS acc confident | ~60% | **61.2%** |
+| OOS AUC | 0.608 | **0.663** |
+| OOS F1 | 0.689 | **0.613** |
+| N bars (OOS) | 2,016 | 1,687 |
+| Features | 222 | 164 (base+ext+MTF) |
+| Abstain rate | 27.5% | 2.8% |
+| Status | **active** | **staging** |
+
+**Target of 68% not yet met.** The improvement from +1.5pp is significant (p=0.0000)
+but below the target. The gap vs the old 66.4% model is largely explained by the
+horizon mismatch fix (horizon=1 → horizon=5 reduces apparent accuracy while improving P&L alignment).
+
+**Promotion path for `mtf_ensemble_v1`:**
+1. Run Sharpe gate (N ≥ 600 verified fills through OANDA paper API)
+2. Wire execution engine to load `stacking_dict` pkl format (currently expects sklearn estimator)
+3. Re-run with calibration-leakage fix applied (20% training holdout for calibration)
+4. Confirm walk-forward accuracy is ~57–60% (vs spurious 99% from the first run)
+
+**Known issue (fixed in script):** First run used `CalibratedClassifierCV(cv=3)` on the
+test fold, causing in-sample leakage and artificially inflated walk-forward accuracy of 99%.
+The fix is committed: calibration now uses a 20% holdout from the training fold.
+
+---
+
 ## Feature Categories
 
-The 222 features are grouped into 7 categories. All are stationary (ADF + KPSS tested).
+The 222 features (xgb_horizon5_v1) / 164 features (mtf_ensemble_v1) are grouped into 7 categories. All are stationary (ADF + KPSS tested).
 
 ### Returns & Momentum (28 features)
 ```

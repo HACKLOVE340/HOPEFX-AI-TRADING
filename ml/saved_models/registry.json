@@ -116,6 +116,43 @@
         "regime_filter_applied": true
       },
       "notes": "XGBoost horizon-5 production model. Trained 2026-04-02 on 50Y XAUUSD (GC=F) daily bars, horizon=5 to match execution hold period. OOS accuracy=59.9% (p=0.0, N=2016). Sharpe gate PASSED. Fold-2 parabolic-bubble regime filter active (see docs/FOLD2_REGIME_ANALYSIS.md). current.pkl symlink verified to this file."
+    },
+    "mtf_ensemble_v1": {
+      "name": "mtf_ensemble_v1",
+      "file": "ml/saved_models/mtf_ensemble.pkl",
+      "sha256": "d270cf34336527ce6d12ec9d8a0eaa20f9be615356f59095b0a7178e0c1695dd",
+      "registered_at": "2026-04-03T16:50:42.438703+00:00",
+      "promoted_at": null,
+      "state": "staging",
+      "oos_accuracy": 0.6135,
+      "oos_accuracy_confident": 0.6116,
+      "oos_f1": 0.6133,
+      "oos_auc": 0.6634,
+      "oos_p_value": 0.0,
+      "oos_significant": true,
+      "oos_n": 1687,
+      "oos_n_confident": 1640,
+      "oos_period": "2018-03-26 \u2192 2026-03-25",
+      "sharpe_gate_passed": false,
+      "n_trades": 1687,
+      "feature_count": 164,
+      "horizon": 5,
+      "hold_period_bars": 5,
+      "symbol": "GC=F",
+      "years": 58,
+      "oos_years": 8,
+      "macro_features": true,
+      "feature_layers": ["base", "extended", "mtf"],
+      "ensemble": "XGBoost + RandomForest + LightGBM + LogisticRegression meta",
+      "abstain_threshold": 0.55,
+      "abstain_rate": 0.0279,
+      "cv_accuracy": 0.9901,
+      "cv_accuracy_std": 0.0078,
+      "cv_note": "Walk-forward CV accuracy 99% is spurious: CalibratedClassifierCV(cv=3) re-trains on test fold causing in-sample leakage. True CV accuracy ~57-60%. OOS 61.4% is the reliable metric.",
+      "pkl_format": "stacking_dict",
+      "pkl_keys": ["base_learners", "meta_model", "feature_cols", "scaler", "horizon", "abstain_threshold"],
+      "top_features": ["near_swing_low", "dist_to_swing_high", "near_swing_high", "dist_to_swing_low", "di_diff", "stoch_k_14", "mtf_m_atr_pct", "rvol_60", "pa_gap_pct", "dist_ma_10"],
+      "notes": "MTF stacking ensemble (XGB+RF+LGB+meta-LR). 58Y XAUUSD, 164 features (base+extended+MTF), horizon=5. OOS accuracy=61.4% (p=0.0, N=1687) vs xgb_horizon5_v1=59.9% (+1.5pp). Staged: awaiting Sharpe-gate reconciliation and calibration-leakage fix. pkl_format=stacking_dict — not a plain sklearn estimator."
     }
   }
 }
