@@ -454,6 +454,25 @@ class WebSocketManager:
     # MESSAGE HANDLING
     # ================================================================
 
+    async def _handle_subscribe(self, connection_id: str, data: dict) -> dict | None:
+        channel = data.get("channel")
+        if channel:
+            await self.subscribe(connection_id, channel)
+            return {"status": "subscribed", "channel": channel}
+        return None
+
+    async def _handle_unsubscribe(self, connection_id: str, data: dict) -> dict | None:
+        channel = data.get("channel")
+        if channel:
+            await self.unsubscribe(connection_id, channel)
+            return {"status": "unsubscribed", "channel": channel}
+        return None
+
+    async def _handle_ping(self, connection_id: str, data: dict) -> dict:
+        if connection_id in self._connection_info:
+            self._connection_info[connection_id].last_heartbeat = datetime.now(UTC)
+        return {"action": "pong", "timestamp": datetime.now(UTC).isoformat()}
+
     async def handle_message(self, connection_id: str, message: str) -> dict | None:
         """
         Handle an incoming WebSocket message.
@@ -475,43 +494,23 @@ class WebSocketManager:
 
             return {"error": "Invalid JSON"}
 
-        # Update stats
         self._stats["total_messages_received"] += 1
         if connection_id in self._connection_info:
             self._connection_info[connection_id].messages_received += 1
 
-        # Handle different message types
         action = data.get("action")
+        dispatch = {
+            "subscribe": self._handle_subscribe,
+            "unsubscribe": self._handle_unsubscribe,
+            "ping": self._handle_ping,
+        }
 
-        if action == "subscribe":
-            channel = data.get("channel")
-            if channel:
-                await self.subscribe(connection_id, channel)
-                return {"status": "subscribed", "channel": channel}
+        if action in dispatch:
+            return await dispatch[action](connection_id, data)
 
-        elif action == "unsubscribe":
-            channel = data.get("channel")
-            if channel:
-                await self.unsubscribe(connection_id, channel)
-                return {"status": "unsubscribed", "channel": channel}
+        if action == "auth":
+            return await self._handle_auth(connection_id, data.get("token"))
 
-        elif action == "ping":
-            # Heartbeat response
-            if connection_id in self._connection_info:
-                self._connection_info[connection_id].last_heartbeat = datetime.now(
-                    UTC,
-                )
-            return {
-                "action": "pong",
-                "timestamp": datetime.now(UTC).isoformat(),
-            }
-
-        elif action == "auth":
-            # Handle authentication
-            token = data.get("token")
-            return await self._handle_auth(connection_id, token)
-
-        # Notify callbacks
         for callback in self._on_message_callbacks:
             try:
                 callback(connection_id, data)

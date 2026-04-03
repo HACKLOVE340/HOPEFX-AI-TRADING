@@ -646,7 +646,7 @@ class Query:
 @strawberry.type
 class Mutation:
     @strawberry.mutation(description="Place a market or limit order")
-    def place_order(
+    def place_order(  # noqa: PLR0913
         self,
         info: Info,
         symbol: str,

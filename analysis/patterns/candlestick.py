@@ -25,6 +25,19 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class OHLCBars:
+    """Bundled OHLC price lists for pattern detection."""
+
+    opens: list[float]
+    highs: list[float]
+    lows: list[float]
+    closes: list[float]
+
+    def __len__(self) -> int:
+        return len(self.closes)
+
+
+@dataclass
 class CandlestickPattern:
     """Detected candlestick pattern."""
 
@@ -106,11 +119,9 @@ def _is_doji(open_: float, close: float, high: float, low: float, threshold: flo
 
 
 def _detect_hammer(
-    opens: list[float],
-    highs: list[float],
-    lows: list[float],
-    closes: list[float],
+    bars: OHLCBars,
     i: int,
+    *,
     doji_threshold: float = 0.05,
     wick_ratio: float = 2.0,
 ) -> CandlestickPattern | None:
@@ -121,6 +132,7 @@ def _detect_hammer(
                         (candles at or below this ratio are excluded as dojis).
         wick_ratio: Minimum ratio of lower shadow to body for a valid hammer.
     """
+    opens, highs, lows, closes = bars.opens, bars.highs, bars.lows, bars.closes
     body = _candle_body(opens[i], closes[i])
     total = _candle_range(highs[i], lows[i])
     if total == 0:
@@ -152,11 +164,9 @@ def _detect_hammer(
 
 
 def _detect_shooting_star(
-    opens: list[float],
-    highs: list[float],
-    lows: list[float],
-    closes: list[float],
+    bars: OHLCBars,
     i: int,
+    *,
     doji_threshold: float = 0.05,
     wick_ratio: float = 2.0,
 ) -> CandlestickPattern | None:
@@ -167,6 +177,7 @@ def _detect_shooting_star(
                         (candles at or below this ratio are excluded as dojis).
         wick_ratio: Minimum ratio of upper shadow to body for a valid shooting star.
     """
+    opens, highs, lows, closes = bars.opens, bars.highs, bars.lows, bars.closes
     body = _candle_body(opens[i], closes[i])
     total = _candle_range(highs[i], lows[i])
     if total == 0:
@@ -197,11 +208,9 @@ def _detect_shooting_star(
 
 
 def _detect_marubozu(
-    opens: list[float],
-    highs: list[float],
-    lows: list[float],
-    closes: list[float],
+    bars: OHLCBars,
     i: int,
+    *,
     marubozu_threshold: float = 0.05,
 ) -> CandlestickPattern | None:
     """Marubozu (almost no shadows) detection at index *i*.
@@ -211,6 +220,7 @@ def _detect_marubozu(
                             occupy at least (1 - marubozu_threshold) of the
                             total candle range.
     """
+    opens, highs, lows, closes = bars.opens, bars.highs, bars.lows, bars.closes
     body = _candle_body(opens[i], closes[i])
     total = _candle_range(highs[i], lows[i])
     if total == 0:
@@ -242,11 +252,9 @@ def _detect_marubozu(
 
 
 def _detect_doji_pattern(
-    opens: list[float],
-    highs: list[float],
-    lows: list[float],
-    closes: list[float],
+    bars: OHLCBars,
     i: int,
+    *,
     doji_threshold: float = 0.05,
 ) -> CandlestickPattern | None:
     """Doji detection at index *i*.
@@ -256,6 +264,7 @@ def _detect_doji_pattern(
                         as a doji (body must be smaller than this fraction of
                         the total high-to-low range).
     """
+    opens, highs, lows, closes = bars.opens, bars.highs, bars.lows, bars.closes
     if not _is_doji(opens[i], closes[i], highs[i], lows[i], doji_threshold):
         return None
 
@@ -796,6 +805,37 @@ class CandlestickPatternDetector:
     # Legacy helpers kept for backward compatibility
     # ------------------------------------------------------------------
 
+    def _detect_single_candle(self, bars: OHLCBars, i: int) -> CandlestickPattern | None:
+        """Try all single-candle detectors at index *i*, return first match."""
+        p = _detect_doji_pattern(bars, i, doji_threshold=self.doji_threshold)
+        if p:
+            return p
+        p = _detect_hammer(bars, i, doji_threshold=self.doji_threshold, wick_ratio=self.wick_ratio)
+        if p:
+            return p
+        p = _detect_shooting_star(bars, i, doji_threshold=self.doji_threshold, wick_ratio=self.wick_ratio)
+        if p:
+            return p
+        return _detect_marubozu(bars, i, marubozu_threshold=self.marubozu_threshold)
+
+    @staticmethod
+    def _detect_two_candle(opens: list[float], closes: list[float], i: int) -> CandlestickPattern | None:
+        """Try all two-candle detectors at index *i*, return first match."""
+        for detector in (_detect_engulfing, _detect_harami, _detect_piercing_dark_cloud):
+            p = detector(opens, closes, i)
+            if p:
+                return p
+        return None
+
+    @staticmethod
+    def _detect_three_candle(opens: list[float], closes: list[float], i: int) -> CandlestickPattern | None:
+        """Try all three-candle detectors at index *i*, return first match."""
+        for detector in (_detect_three_soldiers_crows, _detect_morning_evening_star):
+            p = detector(opens, closes, i)
+            if p:
+                return p
+        return None
+
     def detect(
         self,
         opens: list[float],
@@ -819,61 +859,23 @@ class CandlestickPatternDetector:
         if n == 0:
             return []
 
+        bars = OHLCBars(opens=opens, highs=highs, lows=lows, closes=closes)
         patterns: list[CandlestickPattern] = []
 
         for i in range(n):
-            p = _detect_doji_pattern(opens, highs, lows, closes, i, self.doji_threshold)
-            if p:
-                patterns.append(p)
-                continue
-            p = _detect_hammer(
-                opens,
-                highs,
-                lows,
-                closes,
-                i,
-                self.doji_threshold,
-                self.wick_ratio,
-            )
-            if p:
-                patterns.append(p)
-                continue
-            p = _detect_shooting_star(
-                opens,
-                highs,
-                lows,
-                closes,
-                i,
-                self.doji_threshold,
-                self.wick_ratio,
-            )
-            if p:
-                patterns.append(p)
-                continue
-            p = _detect_marubozu(opens, highs, lows, closes, i, self.marubozu_threshold)
+            p = self._detect_single_candle(bars, i)
             if p:
                 patterns.append(p)
 
         for i in range(1, n):
-            for detector in (
-                _detect_engulfing,
-                _detect_harami,
-                _detect_piercing_dark_cloud,
-            ):
-                p = detector(opens, closes, i)
-                if p:
-                    patterns.append(p)
-                    break
+            p = self._detect_two_candle(opens, closes, i)
+            if p:
+                patterns.append(p)
 
         for i in range(2, n):
-            for detector in (
-                _detect_three_soldiers_crows,
-                _detect_morning_evening_star,
-            ):
-                p = detector(opens, closes, i)
-                if p:
-                    patterns.append(p)
-                    break
+            p = self._detect_three_candle(opens, closes, i)
+            if p:
+                patterns.append(p)
 
         return patterns
 

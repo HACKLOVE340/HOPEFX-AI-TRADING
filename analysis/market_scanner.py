@@ -478,15 +478,21 @@ class MarketScanner:
             details=details,
         )
 
-    def _check_criterion(self, criterion: ScanCriteria, data: dict[str, Any]) -> tuple:
-        """
-        Check if a criterion is met.
+    # ----------------------------------------------------------------
+    # Per-criterion check helpers
+    # ----------------------------------------------------------------
 
-        Returns:
-            (met: bool, details: dict)
-        """
-        ctype = criterion.type
-        params = criterion.parameters
+    def _check_breakout(self, params: dict, data: dict, ctx: dict) -> tuple:
+        period = params.get("period", 20)
+        high_period = data.get(f"high_{period}", ctx["high_20"])
+        price = ctx["price"]
+        if price > high_period:
+            return True, {
+                "direction": "bullish",
+                "level": high_period,
+                "breakout_pct": round((price - high_period) / high_period * 100, 2),
+            }
+        return False, {}
 
         price = data.get("price", data.get("close", 0))
         open_price = data.get("open", price)
@@ -601,13 +607,17 @@ class MarketScanner:
             prev_macd = data.get("prev_macd", macd)
             prev_signal = data.get("prev_macd_signal", macd_signal)
 
-            if prev_macd <= prev_signal and macd > macd_signal:
-                return True, {
-                    "direction": "bullish",
-                    "macd": macd,
-                    "signal": macd_signal,
-                }
-            return False, {}
+    def _check_volume_spike(self, params: dict, ctx: dict) -> tuple:
+        multiplier = params.get("multiplier", 2.0)
+        volume, avg_volume = ctx["volume"], ctx["avg_volume"]
+        if avg_volume > 0 and volume > avg_volume * multiplier:
+            return True, {
+                "direction": "neutral",
+                "volume": volume,
+                "avg_volume": avg_volume,
+                "multiplier": round(volume / avg_volume, 2),
+            }
+        return False, {}
 
         if ctype == ScanCriteriaType.MACD_BEARISH_CROSS:
             prev_macd = data.get("prev_macd", macd)
@@ -699,23 +709,80 @@ class MarketScanner:
             gap_pct = params.get("min_gap_pct", 1.0)
             prev_close = data.get("prev_close", open_price)
 
-            if prev_close > 0:
-                gap = ((open_price - prev_close) / prev_close) * 100
-                if gap >= gap_pct:
-                    return True, {"direction": "bullish", "gap_pct": round(gap, 2)}
-            return False, {}
+    def _check_volatility_expansion(self, params: dict, ctx: dict) -> tuple:
+        atr_multiplier = params.get("multiplier", 1.5)
+        atr = ctx["atr"]
+        avg_atr = ctx.get("avg_atr", atr)
+        if avg_atr > 0 and atr > avg_atr * atr_multiplier:
+            return True, {"direction": "neutral", "atr": atr, "avg_atr": avg_atr, "expansion": round(atr / avg_atr, 2)}
+        return False, {}
 
         if ctype == ScanCriteriaType.GAP_DOWN:
             gap_pct = params.get("min_gap_pct", 1.0)
             prev_close = data.get("prev_close", open_price)
 
-            if prev_close > 0:
-                gap = ((prev_close - open_price) / prev_close) * 100
+    def _check_gap(self, params: dict, data: dict, ctx: dict, gap_up: bool) -> tuple:
+        gap_pct = params.get("min_gap_pct", 1.0)
+        open_price = ctx["open_price"]
+        prev_close = data.get("prev_close", open_price)
+        if prev_close > 0:
+            if gap_up:
+                gap = (open_price - prev_close) / prev_close * 100
+                if gap >= gap_pct:
+                    return True, {"direction": "bullish", "gap_pct": round(gap, 2)}
+            else:
+                gap = (prev_close - open_price) / prev_close * 100
                 if gap >= gap_pct:
                     return True, {"direction": "bearish", "gap_pct": round(gap, 2)}
-            return False, {}
+        return False, {}
 
-        # Default: not met
+    def _check_criterion(self, criterion: ScanCriteria, data: dict[str, Any]) -> tuple:
+        """Check if a criterion is met. Returns (met: bool, details: dict)."""
+        ctype = criterion.type
+        params = criterion.parameters
+
+        price = data.get("price", data.get("close", 0))
+        ctx = {
+            "price": price,
+            "open_price": data.get("open", price),
+            "high": data.get("high", price),
+            "low": data.get("low", price),
+            "volume": data.get("volume", 0),
+            "ma_20": data.get("ma_20", data.get("sma_20", price)),
+            "ma_50": data.get("ma_50", data.get("sma_50", price)),
+            "rsi": data.get("rsi", data.get("rsi_14", 50)),
+            "macd": data.get("macd", 0),
+            "macd_signal": data.get("macd_signal", 0),
+            "atr": data.get("atr", 0),
+            "avg_atr": data.get("avg_atr", data.get("atr", 0)),
+            "high_20": data.get("high_20", data.get("high", price)),
+            "low_20": data.get("low_20", data.get("low", price)),
+            "avg_volume": data.get("avg_volume", data.get("volume", 0)),
+        }
+
+        dispatch = {
+            ScanCriteriaType.BREAKOUT: lambda: self._check_breakout(params, data, ctx),
+            ScanCriteriaType.PRICE_ABOVE_MA: lambda: self._check_price_vs_ma(params, data, ctx, above=True),
+            ScanCriteriaType.PRICE_BELOW_MA: lambda: self._check_price_vs_ma(params, data, ctx, above=False),
+            ScanCriteriaType.RSI_OVERBOUGHT: lambda: self._check_rsi(params, ctx, overbought=True),
+            ScanCriteriaType.RSI_OVERSOLD: lambda: self._check_rsi(params, ctx, overbought=False),
+            ScanCriteriaType.MOMENTUM: lambda: self._check_momentum(params, ctx),
+            ScanCriteriaType.VOLUME_SPIKE: lambda: self._check_volume_spike(params, ctx),
+            ScanCriteriaType.MACD_BULLISH_CROSS: lambda: self._check_macd_cross(params, data, ctx, bullish=True),
+            ScanCriteriaType.MACD_BEARISH_CROSS: lambda: self._check_macd_cross(params, data, ctx, bullish=False),
+            ScanCriteriaType.UPTREND: lambda: self._check_trend(ctx, uptrend=True),
+            ScanCriteriaType.DOWNTREND: lambda: self._check_trend(ctx, uptrend=False),
+            ScanCriteriaType.MA_CROSSOVER: lambda: self._check_ma_crossover(params, data, ctx),
+            ScanCriteriaType.VOLATILITY_EXPANSION: lambda: self._check_volatility_expansion(params, ctx),
+            ScanCriteriaType.NEW_HIGH: lambda: self._check_new_extreme(params, data, ctx, new_high=True),
+            ScanCriteriaType.NEW_LOW: lambda: self._check_new_extreme(params, data, ctx, new_high=False),
+            ScanCriteriaType.GAP_UP: lambda: self._check_gap(params, data, ctx, gap_up=True),
+            ScanCriteriaType.GAP_DOWN: lambda: self._check_gap(params, data, ctx, gap_up=False),
+        }
+
+        handler = dispatch.get(ctype)
+        if handler:
+            return handler()
         return False, {}
 
     # ================================================================
@@ -849,20 +916,9 @@ class MarketScanner:
 # ================================================================
 
 
-def create_scanner_router(scanner: MarketScanner):
-    """
-    Create FastAPI router with scanner endpoints.
-
-    Args:
-        scanner: MarketScanner instance
-
-    Returns:
-        FastAPI APIRouter
-    """
-    from fastapi import APIRouter, HTTPException
+def _build_scanner_models():
+    """Return Pydantic request models for the scanner router."""
     from pydantic import BaseModel
-
-    router = APIRouter(prefix="/api/scanner", tags=["Market Scanner"])
 
     class ScanRequest(BaseModel):
         market_data: dict[str, dict[str, Any]]
@@ -896,35 +952,61 @@ def create_scanner_router(scanner: MarketScanner):
         min_strength: float = 0,
         limit: int = 20,
     ):
-        """Get trading opportunities."""
         dir_enum = SignalDirection(direction) if direction else None
-        opportunities = scanner.get_opportunities(symbol, dir_enum, min_strength)
-        return [o.to_dict() for o in opportunities[:limit]]
+        return [o.to_dict() for o in scanner.get_opportunities(symbol, dir_enum, min_strength)[:limit]]
 
     @router.get("/opportunities/top")
     async def get_top_opportunities(limit: int = 10):
-        """Get top opportunities."""
         return [o.to_dict() for o in scanner.get_top_opportunities(limit)]
 
     @router.get("/symbols")
     async def get_symbols():
-        """Get scanned symbols."""
         return {"symbols": scanner.get_symbols()}
-
-    @router.post("/symbols")
-    async def add_symbols(symbols: list[str]):
-        """Add symbols to scan."""
-        scanner.add_symbols(symbols)
-        return {"status": "added", "symbols": symbols}
 
     @router.get("/criteria")
     async def get_criteria():
-        """Get scan criteria."""
         return [c.to_dict() for c in scanner.get_criteria()]
+
+    @router.get("/results")
+    async def get_results():
+        return {sym: r.to_dict() for sym, r in scanner.get_all_results().items()}
+
+    @router.get("/results/{symbol}")
+    async def get_symbol_result(symbol: str):
+        result = scanner.get_last_result(symbol)
+        if not result:
+            raise HTTPException(status_code=404, detail=f"No result for {symbol}")
+        return result.to_dict()
+
+    @router.get("/stats")
+    async def get_stats():
+        return scanner.get_stats()
+
+
+def _register_scanner_write_routes(router: Any, scanner: MarketScanner) -> None:
+    """Register mutating POST/DELETE routes on *router*."""
+    from fastapi import HTTPException
+
+    ScanRequest, AddCriteriaRequest = _build_scanner_models()
+
+    @router.post("/scan")
+    async def run_scan(request: ScanRequest):
+        criteria = None
+        if request.criteria:
+            try:
+                criteria = [ScanCriteriaType(c) for c in request.criteria]
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e)) from e
+        results = scanner.scan(request.market_data, criteria=criteria, min_strength=request.min_strength)
+        return [r.to_dict() for r in results]
+
+    @router.post("/symbols")
+    async def add_symbols(symbols: list[str]):
+        scanner.add_symbols(symbols)
+        return {"status": "added", "symbols": symbols}
 
     @router.post("/criteria")
     async def add_criteria(request: AddCriteriaRequest):
-        """Add scan criterion."""
         try:
             criteria_type = ScanCriteriaType(request.criteria_type)
         except ValueError:
@@ -938,7 +1020,6 @@ def create_scanner_router(scanner: MarketScanner):
 
     @router.delete("/criteria")
     async def clear_criteria():
-        """Clear all scan criteria."""
         scanner.clear_criteria()
         return {"status": "cleared"}
 
@@ -955,11 +1036,13 @@ def create_scanner_router(scanner: MarketScanner):
             raise HTTPException(status_code=404, detail=f"No result for {symbol}")
         return result.to_dict()
 
-    @router.get("/stats")
-    async def get_stats():
-        """Get scanner statistics."""
-        return scanner.get_stats()
+def create_scanner_router(scanner: MarketScanner):
+    """Create FastAPI router with scanner endpoints."""
+    from fastapi import APIRouter
 
+    router = APIRouter(prefix="/api/scanner", tags=["Market Scanner"])
+    _register_scanner_read_routes(router, scanner)
+    _register_scanner_write_routes(router, scanner)
     return router
 
 

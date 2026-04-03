@@ -161,18 +161,9 @@ def apply_persisted_risk_settings() -> None:
             exc,
         )
 
-    persisted = _get_risk_settings()
-    if not persisted:
-        logger.debug("apply_persisted_risk_settings: no persisted settings found")
-        return
 
-    _risk_settings.update(persisted)
-    logger.info(
-        "apply_persisted_risk_settings: restored %d keys from shared config store",
-        len(persisted),
-    )
-
-    # Push into the live RiskManager if it is already initialised.
+def _push_risk_settings_to_manager(persisted: dict) -> None:
+    """Apply persisted settings to the live RiskManager if initialised."""
     try:
         if app_state is not None:
             rm = getattr(app_state, "risk_manager", None)
@@ -181,9 +172,7 @@ def apply_persisted_risk_settings() -> None:
                     if hasattr(rm, key):
                         setattr(rm, key, value)
                         logger.debug(
-                            "apply_persisted_risk_settings: set risk_manager.%s = %s",
-                            key,
-                            value,
+                            "apply_persisted_risk_settings: set risk_manager.%s = %s", key, value
                         )
     except Exception as exc:
         logger.warning("apply_persisted_risk_settings: RiskManager update failed: %s", exc)
@@ -572,35 +561,23 @@ def get_activity(user: TokenPayload = Depends(require_role("admin"))):
     return {"events": list(activity_log)}
 
 
-@router.get("/dashboard-data")
-def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
-    """Full system state. Requires: role >= 'admin'."""
-    trading_stats: dict[str, Any] = {
-        "total_trades": 0,
-        "open_positions": 0,
-        "daily_pnl": 0.0,
-    }
-    risk_status: dict[str, Any] = {"within_limits": True}
-    module_status: dict[str, Any] = {
-        "strategies": False,
-        "brokers": False,
-        "signal_engine": False,
-    }
-
-    # Live broker stats
+def _dashboard_broker_stats(trading_stats: dict, module_status: dict) -> None:
+    """Populate broker-related fields in-place."""
     try:
         if app_state is not None:
             broker = getattr(app_state, "broker", None)
             if broker is not None:
                 module_status["brokers"] = True
-                # Positions count (sync-safe: use cached value if available)
                 pos = getattr(broker, "_cached_positions", None)
                 if pos is not None:
                     trading_stats["open_positions"] = len(pos)
     except Exception as exc:
         logger.debug("dashboard-data broker stats failed: %s", exc)
 
-    # Risk manager stats
+
+def _dashboard_risk_stats(trading_stats: dict) -> dict:
+    """Return risk_status dict and update trading_stats daily_pnl."""
+    risk_status: dict[str, Any] = {"within_limits": True}
     try:
         if app_state is not None:
             rm = getattr(app_state, "risk_manager", None)
@@ -617,8 +594,11 @@ def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
                 trading_stats["daily_pnl"] = rm_status.get("daily_pnl", 0.0)
     except Exception as exc:
         logger.debug("dashboard-data risk stats failed: %s", exc)
+    return risk_status
 
-    # Trade logger stats
+
+def _dashboard_trade_stats(trading_stats: dict) -> None:
+    """Populate total_trades and paper_fill_count in-place."""
     try:
         from monitoring.trade_logger import get_trade_logger
 
@@ -628,24 +608,34 @@ def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
     except Exception as exc:
         logger.debug("dashboard-data trade logger stats failed: %s", exc)
 
-    # Signal engine
+    try:
+        from research.pipeline.paper_trading_gate import get_gate
+        trading_stats["paper_fill_count"] = get_gate().fill_count
+    except Exception as exc:
+        logger.debug("dashboard-data paper trading gate stats failed: %s", exc)
+
+
+def _dashboard_signal_status(module_status: dict) -> None:
+    """Populate signal_engine and strategies flags in-place."""
     try:
         from core.signal_engine import get_signal_engine_status
-
         se = get_signal_engine_status()
         module_status["signal_engine"] = se.get("ml_available", False)
         module_status["strategies"] = True
     except Exception as exc:
         logger.debug("dashboard-data signal engine status failed: %s", exc)
 
-    # Paper trading gate fill count
-    try:
-        from research.pipeline.paper_trading_gate import get_gate
 
-        gate = get_gate()
-        trading_stats["paper_fill_count"] = gate.fill_count
-    except Exception as exc:
-        logger.debug("dashboard-data paper trading gate stats failed: %s", exc)
+@router.get("/dashboard-data")
+def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
+    """Full system state. Requires: role >= 'admin'."""
+    trading_stats: dict[str, Any] = {"total_trades": 0, "open_positions": 0, "daily_pnl": 0.0}
+    module_status: dict[str, Any] = {"strategies": False, "brokers": False, "signal_engine": False}
+
+    _dashboard_broker_stats(trading_stats, module_status)
+    risk_status = _dashboard_risk_stats(trading_stats)
+    _dashboard_trade_stats(trading_stats)
+    _dashboard_signal_status(module_status)
 
     return {
         "system_health": {"status": "ok", "uptime": time.time() - _start_time},

@@ -34,6 +34,7 @@ from pydantic import BaseModel, Field
 from api.auth import TokenPayload, get_current_user, require_role
 
 logger = logging.getLogger(__name__)
+ML_MODELS_DIR = (Path(os.getenv("ML_MODELS_DIR", "models"))).resolve()
 # Prefix must match the frontend useApi.ts mlApi calls (/api/ml/*)
 router = APIRouter(prefix="/api/ml", tags=["ML Models"])
 
@@ -509,6 +510,53 @@ async def list_models(user: TokenPayload = Depends(get_current_user)):
 
 
 @router.post("/predict/{symbol}", response_model=PredictResponse)
+def _check_subscription_gate(user: Any) -> None:
+    """Raise HTTP 403 if user's plan does not include ML predictions."""
+    if getattr(user, "role", "") == "admin":
+        return
+    try:
+        from monetization.subscription import subscription_manager, plan_gate
+        sub = subscription_manager.get_user_subscription(user.sub)
+        user_plan = sub.tier.value if (sub and sub.is_active() and hasattr(sub.tier, "value")) else "free"
+        if not plan_gate("professional", user_plan):
+            from fastapi import HTTPException as _HTTPException, status as _status
+            raise _HTTPException(status_code=_status.HTTP_403_FORBIDDEN, detail={"error": "PLAN_LIMIT_EXCEEDED", "required_plan": "professional", "current_plan": user_plan, "message": "ML predictions require a Professional subscription or above."})
+    except ImportError:
+        pass
+
+
+def _predict_with_inference_engine(predictor: Any, ohlcv: Any, symbol_upper: str, now_iso: str) -> Any:
+    """Run prediction via InferenceEngine path."""
+    result = predictor.predict(ohlcv, symbol=symbol_upper)
+    direction_map = {"long": "BUY", "short": "SELL", "neutral": "HOLD"}
+    direction = direction_map.get(result.get("direction", "neutral"), "HOLD")
+    confidence = round(float(result.get("confidence", 0.0)) * 100, 1)
+    entry_price = result.get("last_close")
+    sl, tp = (None, None)
+    if entry_price and direction != "HOLD":
+        sl, tp = _compute_atr_sl_tp(ohlcv, entry_price, direction)
+    return PredictResponse(symbol=symbol_upper, direction=direction, confidence=confidence, entry_price=entry_price, stop_loss=sl, take_profit=tp, features_used=result.get("bars_used", 0), model_id=result.get("model_version", "inference_engine"), generated_at=now_iso)
+
+
+def _predict_with_advanced_predictor(predictor: Any, ohlcv: Any, symbol_upper: str, lookback: int, now_iso: str) -> Any:
+    """Run prediction via AdvancedModelPredictor path."""
+    macro_df = _get_macro_df_for_symbol(symbol_upper, lookback=lookback)
+    result = predictor.predict_signal(ohlcv, macro_df=macro_df, symbol=symbol_upper)
+    direction_map = {"long": "BUY", "short": "SELL", "neutral": "HOLD"}
+    direction = direction_map.get(result.get("direction", "neutral"), "HOLD")
+    confidence = round(float(result.get("confidence", 0.0)) * 100, 1)
+    entry_price = result.get("last_close")
+    sl, tp = (None, None)
+    if entry_price and direction != "HOLD":
+        sl, tp = _compute_atr_sl_tp(ohlcv, entry_price, direction)
+    return PredictResponse(symbol=symbol_upper, direction=direction, confidence=confidence, entry_price=entry_price, stop_loss=sl, take_profit=tp, features_used=result.get("bars_used", 0), model_id=result.get("model_version", "advanced_oos"), generated_at=now_iso)
+
+
+def _hold_response(symbol_upper: str, now_iso: str, model_id: str = "fallback") -> Any:
+    """Return a safe HOLD PredictResponse."""
+    return PredictResponse(symbol=symbol_upper, direction="HOLD", confidence=0.0, entry_price=None, stop_loss=None, take_profit=None, features_used=0, model_id=model_id, generated_at=now_iso)
+
+
 async def predict(
     symbol: str,
     body: PredictRequest,
@@ -544,15 +592,11 @@ async def predict(
             ...  # nosec B110
     symbol_upper = symbol.upper().replace("-", "/")
     now_iso = datetime.now(UTC).isoformat()
-
     predictor = _get_predictor()
 
     if predictor is not None:
         try:
-            # Load real OHLCV data (CSV → paper broker → empty if unavailable)
             ohlcv = _load_ohlcv_for_symbol(symbol_upper, body.lookback)
-
-            # InferenceEngine path (full pipeline)
             if hasattr(predictor, "predict") and hasattr(predictor, "health"):
                 result = predictor.predict(ohlcv, symbol=symbol_upper)
                 direction_map = {"long": "BUY", "short": "SELL", "neutral": "HOLD"}
@@ -613,19 +657,7 @@ async def predict(
                 )
         except Exception as exc:
             logger.warning("Predictor failed for %s: %s", symbol, exc)
-            # Return a safe HOLD fallback rather than 503 so callers can
-            # always rely on a valid PredictResponse shape.
-            return PredictResponse(
-                symbol=symbol_upper,
-                direction="HOLD",
-                confidence=0.0,
-                entry_price=None,
-                stop_loss=None,
-                take_profit=None,
-                features_used=0,
-                model_id="fallback",
-                generated_at=now_iso,
-            )
+            return _hold_response(symbol_upper, now_iso, "fallback")
 
     # No predictor loaded — return a safe HOLD fallback
     logger.warning("No ML predictor loaded for %s — returning HOLD fallback", symbol_upper)
@@ -787,146 +819,112 @@ async def signal_filter_stats(
         503: {"description": "Model unavailable — inference disabled"},
     },
 )
+def _ml_health_meta(saved_dir: Any) -> tuple:
+    """Read model metadata from disk. Returns (oos_accuracy, feature_count, model_file, last_trained_at)."""
+    import json as _json
+    import pathlib
+    # Constrain saved_dir to the configured ML_MODELS_DIR to avoid path traversal.
+    oos_accuracy: float | None = None
+    feature_count: int = 0
+    model_file: str = "advanced_oos.pkl"
+    last_trained_at: str | None = None
+    try:
+        raw_dir = pathlib.Path(str(saved_dir))
+        # Disallow absolute paths; interpret saved_dir as a subdirectory name.
+        if raw_dir.is_absolute():
+            raise ValueError("Absolute paths are not allowed for saved_dir")
+        candidate_dir = (ML_MODELS_DIR / raw_dir).resolve()
+        # Ensure the resolved path is within the ML_MODELS_DIR tree.
+        if ML_MODELS_DIR not in (candidate_dir, *candidate_dir.parents):
+            raise ValueError("saved_dir escapes ML_MODELS_DIR")
+        meta_path = candidate_dir / "advanced_oos_meta.json"
+    except Exception as exc:
+        logger.warning("ml_health: invalid saved_dir %r: %s", saved_dir, exc)
+        return oos_accuracy, feature_count, model_file, last_trained_at
+    if meta_path.exists():
+        try:
+            meta = _json.loads(meta_path.read_text())
+            oos_accuracy = float(meta.get("oos_accuracy", 0.0)) or None
+            feature_count = int(meta.get("feature_count", 0))
+            model_file = meta.get("model_file", "advanced_oos.pkl")
+            last_trained_at = meta.get("validated_at") or meta.get("trained_at")
+        except Exception as exc:
+            logger.debug("ml_health: meta parse failed: %s", exc)
+    return oos_accuracy, feature_count, model_file, last_trained_at
+
+
+def _ml_health_feature_count_from_predictor() -> int:
+    """Derive feature count from the live predictor when meta file is missing."""
+    try:
+        from ml.live_inference import get_advanced_predictor
+        pred = get_advanced_predictor()
+        if pred.is_available and hasattr(pred, "_model"):
+            n = getattr(pred._model, "n_features_in_", 0)
+            return int(n) if n else 0
+    except Exception as _exc:
+        logger.debug("Suppressed exception: %s", _exc)
+    return 0
+
+
 async def ml_health(user: TokenPayload = Depends(get_current_user)):
     """
     Return the current health status of the production ML model.
 
-    Delegates to InferenceEngine.health() for live engine metrics:
-    predict count, fallback count, last latency, calibrator state,
-    feature flags, and signal thresholds.
-
-    HTTP status codes:
-    - 200: model loaded and ready for inference
-    - 503: engine unavailable or no model loaded
-
-    Any authenticated user may call this endpoint.
-    Infrastructure liveness probes should use GET /api/health instead.
+    HTTP 200: model loaded and ready. HTTP 503: unavailable.
     """
-    import json as _json
     import pathlib
-
     checked_at = datetime.now(UTC).isoformat()
+    saved_dir = pathlib.Path(__file__).parent.parent / "ml" / "saved_models"
 
-    # ── Primary: InferenceEngine live health ──────────────────────────────────
     try:
         from ml.inference_engine import get_inference_engine
-
         engine = get_inference_engine()
         engine_health = engine.health()
 
-        # Enrich with saved-model registry metadata
-        saved_dir = pathlib.Path(__file__).parent.parent / "ml" / "saved_models"
-        meta_path = saved_dir / "advanced_oos_meta.json"
-        oos_accuracy: float | None = None
-        feature_count: int = 0
-        model_file: str = "advanced_oos.pkl"
-        last_trained_at: str | None = None
-
-        if meta_path.exists():
-            try:
-                meta = _json.loads(meta_path.read_text())
-                oos_accuracy = float(meta.get("oos_accuracy", 0.0)) or None
-                feature_count = int(meta.get("feature_count", 0))
-                model_file = meta.get("model_file", "advanced_oos.pkl")
-                last_trained_at = meta.get("validated_at") or meta.get("trained_at")
-            except Exception as exc:
-                logger.debug("ml_health: meta parse failed: %s", exc)
-
-        # Derive feature_count from predictor when meta didn't have it
+        oos_accuracy, feature_count, model_file, last_trained_at = _ml_health_meta(saved_dir)
         if feature_count == 0:
-            try:
-                from ml.live_inference import get_advanced_predictor
+            feature_count = _ml_health_feature_count_from_predictor()
 
-                pred = get_advanced_predictor()
-                if pred.is_available and hasattr(pred, "_model"):
-                    n = getattr(pred._model, "n_features_in_", 0)
-                    feature_count = int(n) if n else 0
-            except Exception as _exc:
-                logger.debug("Suppressed exception: %s", _exc)
-
+        # Prefer live engine values over meta file
+        feature_count = engine_health.get("feature_count", 0) or feature_count
+        oos_accuracy = engine_health.get("oos_accuracy") if engine_health.get("oos_accuracy") is not None else oos_accuracy
+        last_trained_at = engine_health.get("last_trained_at") or last_trained_at
         model_available = engine_health.get("model_available", False)
-
-        # engine.health() now provides feature_count, oos_accuracy,
-        # last_trained_at directly — prefer those over the meta file parse
-        # (meta file is the fallback when engine hasn't run a predict yet)
-        if engine_health.get("feature_count", 0) > 0:
-            feature_count = engine_health["feature_count"]
-        if engine_health.get("oos_accuracy") is not None:
-            oos_accuracy = engine_health["oos_accuracy"]
-        if engine_health.get("last_trained_at"):
-            last_trained_at = engine_health["last_trained_at"]
 
         payload = MLHealthResponse(
             status=engine_health.get("status", "ok" if model_available else "degraded"),
-            model_loaded=model_available,
-            model_id=engine_health.get("model_version", model_file),
-            feature_count=feature_count,
-            oos_accuracy=oos_accuracy,
-            last_trained_at=last_trained_at,
-            predict_count=engine_health.get("predict_count", 0),
-            fallback_count=engine_health.get("fallback_count", 0),
-            fallback_rate=engine_health.get("fallback_rate", 0.0),
-            non_neutral_rate=engine_health.get("non_neutral_rate", 0.0),
-            signal_window_size=engine_health.get("signal_window_size", 0),
-            last_latency_ms=engine_health.get("last_latency_ms", 0.0),
-            uptime_seconds=engine_health.get("uptime_seconds"),
-            calibrator_available=engine_health.get("calibrator_available", False),
-            online_learning_enabled=engine_health.get("online_learning_enabled", False),
-            mtf_fusion_enabled=engine_health.get("mtf_fusion_enabled", True),
-            threshold_long=engine_health.get("threshold_long", 0.58),
-            threshold_short=engine_health.get("threshold_short", 0.42),
-            signal_filter=engine_health.get("signal_filter", {}),
-            pipeline=engine_health.get("pipeline", {}),
+            model_loaded=model_available, model_id=engine_health.get("model_version", model_file),
+            feature_count=feature_count, oos_accuracy=oos_accuracy, last_trained_at=last_trained_at,
+            predict_count=engine_health.get("predict_count", 0), fallback_count=engine_health.get("fallback_count", 0),
+            fallback_rate=engine_health.get("fallback_rate", 0.0), non_neutral_rate=engine_health.get("non_neutral_rate", 0.0),
+            signal_window_size=engine_health.get("signal_window_size", 0), last_latency_ms=engine_health.get("last_latency_ms", 0.0),
+            uptime_seconds=engine_health.get("uptime_seconds"), calibrator_available=engine_health.get("calibrator_available", False),
+            online_learning_enabled=engine_health.get("online_learning_enabled", False), mtf_fusion_enabled=engine_health.get("mtf_fusion_enabled", True),
+            threshold_long=engine_health.get("threshold_long", 0.58), threshold_short=engine_health.get("threshold_short", 0.42),
+            signal_filter=engine_health.get("signal_filter", {}), pipeline=engine_health.get("pipeline", {}),
             checked_at=engine_health.get("checked_at", checked_at),
         )
-
         if not model_available:
             from fastapi.responses import JSONResponse
-
-            return JSONResponse(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                content=payload.model_dump(),
-            )
+            return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=payload.model_dump())
         return payload
 
     except Exception as exc:
         logger.warning("ml_health: InferenceEngine unavailable: %s", exc)
 
-    # ── Fallback: file-based registry ─────────────────────────────────────────
     predictor = _get_predictor()
     model_loaded = predictor is not None
-
     payload = MLHealthResponse(
-        status="ok" if model_loaded else "unavailable",
-        model_loaded=model_loaded,
-        model_id=None,
-        feature_count=0,
-        oos_accuracy=None,
-        last_trained_at=None,
-        predict_count=0,
-        fallback_count=0,
-        fallback_rate=0.0,
-        non_neutral_rate=0.0,
-        signal_window_size=0,
-        last_latency_ms=0.0,
-        uptime_seconds=None,
-        calibrator_available=False,
-        online_learning_enabled=False,
-        mtf_fusion_enabled=False,
-        threshold_long=0.58,
-        threshold_short=0.42,
-        signal_filter={},
-        pipeline={},
-        checked_at=checked_at,
+        status="ok" if model_loaded else "unavailable", model_loaded=model_loaded, model_id=None,
+        feature_count=0, oos_accuracy=None, last_trained_at=None, predict_count=0, fallback_count=0,
+        fallback_rate=0.0, non_neutral_rate=0.0, signal_window_size=0, last_latency_ms=0.0,
+        uptime_seconds=None, calibrator_available=False, online_learning_enabled=False,
+        mtf_fusion_enabled=False, threshold_long=0.58, threshold_short=0.42,
+        signal_filter={}, pipeline={}, checked_at=checked_at,
     )
-
     if not model_loaded:
         from fastapi.responses import JSONResponse
-
-        return JSONResponse(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content=payload.model_dump(),
-        )
+        return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=payload.model_dump())
     return payload
 
 
@@ -939,89 +937,70 @@ async def ml_health(user: TokenPayload = Depends(get_current_user)):
         503: {"description": "Engine unavailable or model not loaded"},
     },
 )
+def _engine_macro_status() -> dict:
+    """Return MacroStore availability dict."""
+    try:
+        from ml.macro_store import macro_store
+        return {"available": len(macro_store) > 0, "series_count": len(macro_store)}
+    except Exception as _exc:
+        logger.debug("Suppressed exception: %s", _exc)
+    return {"available": False, "series_count": 0}
+
+
+def _engine_mtf_status() -> dict:
+    """Return MTF store availability dict."""
+    try:
+        from research.pipeline.mtf_fusion import _MTF_STORE_SINGLETON
+        if _MTF_STORE_SINGLETON is not None:
+            return {"available": True, "ready": getattr(_MTF_STORE_SINGLETON, "is_ready", False)}
+    except Exception as _exc:
+        logger.debug("Suppressed exception: %s", _exc)
+    return {"available": False, "ready": False}
+
+
+def _engine_model_files(saved_dir: Any) -> dict:
+    """Return {filename: size_kb} for all pkl/json files in saved_dir."""
+    import pathlib
+    model_files: dict[str, float] = {}
+    p = pathlib.Path(saved_dir)
+    if p.exists():
+        for ext in ("*.pkl", "*.json"):
+            for f in p.glob(ext):
+                try:
+                    model_files[f.name] = round(f.stat().st_size / 1024, 1)
+                except Exception as _exc:
+                    logger.debug("Suppressed exception: %s", _exc)
+    return model_files
+
+
 async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
     """
-    Return detailed InferenceEngine diagnostics.
+    Return detailed InferenceEngine diagnostics (admin only).
 
-    Includes pipeline step availability (MacroStore, MTF, online learner,
-    calibrator), live predict/fallback counters, last inference latency,
-    and saved model file inventory.
-
-    Admin only — exposes internal model configuration details.
-
-    HTTP status codes:
-    - 200: engine healthy, model loaded
-    - 503: engine unavailable or model not loaded
+    HTTP 200: engine healthy. HTTP 503: unavailable or model not loaded.
     """
     import pathlib
-
     checked_at = datetime.now(UTC).isoformat()
+    saved_dir = pathlib.Path(__file__).parent.parent / "ml" / "saved_models"
 
     try:
         from ml.inference_engine import get_inference_engine
-
         engine = get_inference_engine()
         health = engine.health()
 
-        # MacroStore status
-        macro_status: dict[str, Any] = {"available": False, "series_count": 0}
-        try:
-            from ml.macro_store import macro_store
-
-            macro_status = {
-                "available": len(macro_store) > 0,
-                "series_count": len(macro_store),
-            }
-        except Exception as _exc:
-            logger.debug("Suppressed exception: %s", _exc)
-
-        # MTF store status
-        mtf_status: dict[str, Any] = {"available": False, "ready": False}
-        try:
-            from research.pipeline.mtf_fusion import _MTF_STORE_SINGLETON
-
-            if _MTF_STORE_SINGLETON is not None:
-                mtf_status = {
-                    "available": True,
-                    "ready": getattr(_MTF_STORE_SINGLETON, "is_ready", False),
-                }
-        except Exception as _exc:
-            logger.debug("Suppressed exception: %s", _exc)
-
-        # Saved model files inventory (pkl + json metadata)
-        saved_dir = pathlib.Path(__file__).parent.parent / "ml" / "saved_models"
-        model_files: dict[str, float] = {}
-        if saved_dir.exists():
-            for ext in ("*.pkl", "*.json"):
-                for f in saved_dir.glob(ext):
-                    try:
-                        model_files[f.name] = round(f.stat().st_size / 1024, 1)
-                    except Exception as _exc:
-                        logger.debug("Suppressed exception: %s", _exc)
+        macro_status = _engine_macro_status()
+        mtf_status = _engine_mtf_status()
+        model_files = _engine_model_files(saved_dir)
 
         model_available = health.get("model_available", False)
         engine_status = health.get("status", "ok" if model_available else "degraded")
-
-        # Enrich macro_status with series count from engine health
         if "macro_series_count" in health.get("pipeline", {}):
             macro_status["series_count"] = health["pipeline"]["macro_series_count"]
 
-        payload = MLEngineHealthResponse(
-            status=engine_status,
-            engine=health,
-            macro_store=macro_status,
-            mtf_store=mtf_status,
-            saved_model_files_kb=model_files,
-            checked_at=health.get("checked_at", checked_at),
-        )
-
+        payload = MLEngineHealthResponse(status=engine_status, engine=health, macro_store=macro_status, mtf_store=mtf_status, saved_model_files_kb=model_files, checked_at=health.get("checked_at", checked_at))
         if not model_available:
             from fastapi.responses import JSONResponse
-
-            return JSONResponse(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                content=payload.model_dump(),
-            )
+            return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=payload.model_dump())
         return payload
 
     except Exception as exc:

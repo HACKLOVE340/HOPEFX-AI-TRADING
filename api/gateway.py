@@ -165,10 +165,8 @@ class APIGateway:
             response.headers["X-RateLimit-Remaining"] = str(remaining)
             return response
 
-    def _setup_routes(self):
-        """Setup API routes"""
-
-        # Health check
+    def _setup_info_routes(self) -> None:
+        """Register health, status, and portfolio read routes."""
         @self.app.get("/health")
         async def health():
             return {
@@ -184,10 +182,9 @@ class APIGateway:
 
         # System status
         @self.app.get("/api/v1/status")
-        async def status(
-            credentials: HTTPAuthorizationCredentials = Depends(self.security),
-        ):
+        async def status(credentials: HTTPAuthorizationCredentials = Depends(self.security)):
             self._verify_token(credentials.credentials)
+            return {"system": self.mcc.get_status() if hasattr(self.mcc, "get_status") else {}, "orchestra": self.orchestra.get_heatmap_data(), "portfolio": self.pms.get_portfolio_summary(), "timestamp": datetime.now(UTC).isoformat()}
 
             return {
                 "system": self.mcc.get_status() if hasattr(self.mcc, "get_status") else {},
@@ -196,120 +193,49 @@ class APIGateway:
                 "timestamp": datetime.now(UTC).isoformat(),
             }
 
-        # Strategy control
+    def _setup_strategy_routes(self) -> None:
+        """Register strategy control routes."""
         @self.app.post("/api/v1/strategies/{strategy_id}/activate")
-        async def activate_strategy(
-            strategy_id: str,
-            credentials: HTTPAuthorizationCredentials = Depends(self.security),
-        ):
+        async def activate_strategy(strategy_id: str, credentials: HTTPAuthorizationCredentials = Depends(self.security)):
             self._verify_token(credentials.credentials, required_role="admin")
-
             self.orchestra.activate_strategy(strategy_id)
             return {"success": True, "strategy_id": strategy_id, "action": "activated"}
 
         @self.app.post("/api/v1/strategies/{strategy_id}/deactivate")
-        async def deactivate_strategy(
-            strategy_id: str,
-            reason: str = "api_request",
-            credentials: HTTPAuthorizationCredentials = Depends(self.security),
-        ):
+        async def deactivate_strategy(strategy_id: str, reason: str = "api_request", credentials: HTTPAuthorizationCredentials = Depends(self.security)):
             self._verify_token(credentials.credentials, required_role="admin")
-
             self.orchestra.deactivate_strategy(strategy_id, reason)
-            return {
-                "success": True,
-                "strategy_id": strategy_id,
-                "action": "deactivated",
-            }
+            return {"success": True, "strategy_id": strategy_id, "action": "deactivated"}
 
-        # Emergency controls
         @self.app.post("/api/v1/emergency/kill-switch")
-        async def trigger_kill_switch(
-            reason: str,
-            credentials: HTTPAuthorizationCredentials = Depends(self.security),
-        ):
+        async def trigger_kill_switch(reason: str, credentials: HTTPAuthorizationCredentials = Depends(self.security)):
             self._verify_token(credentials.credentials, required_role="superadmin")
-
             if hasattr(self.mcc, "_trigger_kill_switch"):
                 self.mcc._trigger_kill_switch(f"API: {reason}")
+            return {"success": True, "action": "kill_switch_triggered", "reason": reason}
 
-            return {
-                "success": True,
-                "action": "kill_switch_triggered",
-                "reason": reason,
-            }
-
-        # Portfolio info
-        @self.app.get("/api/v1/portfolio")
-        async def get_portfolio(
-            credentials: HTTPAuthorizationCredentials = Depends(self.security),
-        ):
-            self._verify_token(credentials.credentials)
-            return self.pms.get_portfolio_summary()
-
-        # Order management
+    def _setup_order_routes(self) -> None:
+        """Register order management routes."""
         @self.app.post("/api/v1/orders")
-        async def create_order(
-            order: dict,
-            credentials: HTTPAuthorizationCredentials = Depends(self.security),
-        ):
+        async def create_order(order: dict, credentials: HTTPAuthorizationCredentials = Depends(self.security)):
             self._verify_token(credentials.credentials, required_role="trader")
-
-            # Validate required fields
             symbol = order.get("symbol", "").strip().upper()
             action = order.get("action", order.get("side", "")).strip().lower()
             quantity = float(order.get("quantity", order.get("size", 0)))
-
             if not symbol:
                 raise HTTPException(status_code=400, detail="symbol is required")
             if action not in ("buy", "sell", "close"):
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"action must be buy | sell | close, got {action!r}",
-                )
+                raise HTTPException(status_code=400, detail=f"action must be buy | sell | close, got {action!r}")
             if quantity <= 0:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"quantity must be > 0, got {quantity}",
-                )
-
-            # Route through the main app's TradeExecutor so all pre-trade risk
-            # checks (PreTradeGate, drawdown limits, position sizing) apply.
+                raise HTTPException(status_code=400, detail=f"quantity must be > 0, got {quantity}")
             try:
                 from app import app_state
-
                 trade_executor = getattr(app_state, "trade_executor", None)
                 if trade_executor is None:
-                    raise HTTPException(
-                        status_code=503,
-                        detail="TradeExecutor not initialised — server is still starting up",
-                    )
-
-                signal = {
-                    "symbol": symbol,
-                    "action": action,
-                    "size": quantity,
-                    "price": order.get("price"),
-                    "stop_loss": order.get("stop_loss"),
-                    "take_profit": order.get("take_profit"),
-                    "strategy_id": order.get("strategy_id", "gateway_api"),
-                    "position_id": order.get("position_id"),
-                }
-
+                    raise HTTPException(status_code=503, detail="TradeExecutor not initialised — server is still starting up")
+                signal = {"symbol": symbol, "action": action, "size": quantity, "price": order.get("price"), "stop_loss": order.get("stop_loss"), "take_profit": order.get("take_profit"), "strategy_id": order.get("strategy_id", "gateway_api"), "position_id": order.get("position_id")}
                 result = await trade_executor.execute_signal(signal)
-
-                return {
-                    "success": result.success,
-                    "order_id": result.order_id,
-                    "status": result.status.value,
-                    "filled_quantity": result.filled_quantity,
-                    "average_price": result.average_price,
-                    "commission": result.commission,
-                    "latency_ms": result.latency_ms,
-                    "message": result.message,
-                    "timestamp": datetime.now(UTC).isoformat(),
-                }
-
+                return {"success": result.success, "order_id": result.order_id, "status": result.status.value, "filled_quantity": result.filled_quantity, "average_price": result.average_price, "commission": result.commission, "latency_ms": result.latency_ms, "message": result.message, "timestamp": datetime.now(UTC).isoformat()}
             except HTTPException:
                 raise
             except Exception:
@@ -319,7 +245,8 @@ class APIGateway:
                     detail="Order execution failed — check server logs",
                 ) from None
 
-        # WebSocket for real-time data
+    def _setup_ws_routes(self) -> None:
+        """Register WebSocket streaming route."""
         @self.app.websocket("/ws/v1/stream")
         async def websocket_stream(websocket: WebSocket):
             from rate_limiting.websocket_limiter import get_client_ip, get_ws_limiter
@@ -330,31 +257,28 @@ class APIGateway:
             if not allowed:
                 await websocket.close(code=1008, reason=reason)
                 return
-
-            # Authenticate before accepting
             token = websocket.query_params.get("token")
             if not token or not self._verify_token(token, raise_exception=False):
                 await websocket.close(code=4001, reason="Unauthorized")
                 await limiter.release(client_ip)
                 return
-
             await websocket.accept()
-
             try:
                 while True:
-                    # Send portfolio updates
-                    data = {
-                        "timestamp": datetime.now(UTC).isoformat(),
-                        "portfolio": self.pms.get_portfolio_summary(),
-                        "heatmap": self.orchestra.get_heatmap_data(),
-                    }
+                    data = {"timestamp": datetime.now(UTC).isoformat(), "portfolio": self.pms.get_portfolio_summary(), "heatmap": self.orchestra.get_heatmap_data()}
                     await websocket.send_json(data)
                     await asyncio.sleep(1)
-
             except Exception as e:
-                print(f"WebSocket error: {e}")
+                logger.debug("WebSocket stream error: %s", e)
             finally:
                 await limiter.release(client_ip)
+
+    def _setup_routes(self):
+        """Setup API routes."""
+        self._setup_info_routes()
+        self._setup_strategy_routes()
+        self._setup_order_routes()
+        self._setup_ws_routes()
 
     def _verify_token(
         self,

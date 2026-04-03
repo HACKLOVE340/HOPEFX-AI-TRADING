@@ -424,6 +424,13 @@ async def factor_risk_report(
     - Tick feed status
     """
     s = _get_app_state()
+    positions, total_pnl = await _fetch_portfolio_positions(s)
+    factor_section = _build_factor_section(positions, total_pnl)
+    rb = _get_rebalancer()
+    rebalancer_section: Dict[str, Any] = {"available": True, **rb.status()} if rb is not None else {"available": False}
+    tf = _get_tick_feed()
+    tick_section: Dict[str, Any] = {"available": True, **tf.status()} if tf is not None else {"available": False}
+    return {"positions": positions, "total_pnl": total_pnl, "factor": factor_section, "rebalancer": rebalancer_section, "tick_feed": tick_section}
 
     # Gather positions from portfolio manager or broker
     positions: dict[str, float] = {}
@@ -438,14 +445,13 @@ async def factor_risk_report(
         elif s is not None:
             broker = getattr(s, "broker", None)
             if broker is not None and hasattr(broker, "get_positions"):
-                raw_positions = await broker.get_positions()
-                for p in raw_positions:
+                for p in await broker.get_positions():
                     sym = getattr(p, "symbol", "")
-                    mv = getattr(p, "market_value", 0.0)
                     if sym:
-                        positions[sym] = float(mv)
+                        positions[sym] = float(getattr(p, "market_value", 0.0))
     except Exception as exc:
         logger.debug("factor_risk_report: position fetch failed: %s", exc)
+    return positions, total_pnl
 
     # Factor attribution
     factor_section: dict[str, Any] = {"available": False}

@@ -556,16 +556,13 @@ async def list_strategy(request: StrategyListRequest):
 
 
 @router.get("/marketplace/strategies")
-async def search_strategies(
+async def search_strategies(  # noqa: PLR0913
     query: str | None = None,
     category: str | None = None,
     min_price: float | None = None,
     max_price: float | None = None,
     min_rating: float | None = None,
-    sort_by: str = Query(
-        "popular",
-        pattern="^(popular|rating|newest|price_low|price_high)$",
-    ),
+    sort_by: str = Query("popular", pattern="^(popular|rating|newest|price_low|price_high)$"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
