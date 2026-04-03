@@ -43,28 +43,40 @@ interface RLStatus {
   model_version: string;
 }
 
+interface MLStatus {
+  status: string;
+  active_model: string;
+  inference_latency_ms: number;
+  predictions_today: number;
+  accuracy_7d: number;
+  drift_score: number;
+}
+
 const MLAISection: React.FC = () => {
-  const [models, setModels]     = useState<MLModel[]>([]);
-  const [metrics, setMetrics]   = useState<Record<string, number>>({});
-  const [rlStatus, setRlStatus] = useState<RLStatus | null>(null);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState('');
+  const [models, setModels]       = useState<MLModel[]>([]);
+  const [metrics, setMetrics]     = useState<Record<string, number>>({});
+  const [rlStatus, setRlStatus]   = useState<RLStatus | null>(null);
+  const [mlStatus, setMlStatus]   = useState<MLStatus | null>(null);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState('');
   const [actionMsg, setActionMsg] = useState('');
-  const [busy, setBusy]         = useState<string | null>(null);
-  const [confirm, setConfirm]   = useState<{ model: string; action: string } | null>(null);
+  const [busy, setBusy]           = useState<string | null>(null);
+  const [confirm, setConfirm]     = useState<{ model: string; action: string } | null>(null);
   const [deployTarget, setDeployTarget] = useState<{ model: string; version: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const [mRes, meRes, rlRes] = await Promise.all([
+      const [mRes, meRes, rlRes, stRes] = await Promise.all([
         superadminApi.mlModels(),
         superadminApi.mlMetrics(),
         superadminApi.rlAgentStatus(),
+        superadminApi.mlStatus(),
       ]);
       setModels(mRes.data.models ?? mRes.data);
       setMetrics(meRes.data);
       setRlStatus(rlRes.data);
+      setMlStatus(stRes.data);
     } catch (e: unknown) {
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load ML data');
     } finally { setLoading(false); }
@@ -114,6 +126,25 @@ const MLAISection: React.FC = () => {
           onConfirm={() => doAction(confirm.model, confirm.action)}
           onCancel={() => setConfirm(null)}
         />
+      )}
+
+      {/* ── ML System Status banner ── */}
+      {mlStatus && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 20, padding: '14px 18px', background: mlStatus.status === 'healthy' ? '#052e16' : '#450a0a', borderRadius: 12, border: `1px solid ${mlStatus.status === 'healthy' ? '#16a34a44' : '#dc262644'}` }}>
+          {[
+            { label: 'ML System',        value: mlStatus.status.toUpperCase(),                   color: mlStatus.status === 'healthy' ? '#4ade80' : '#f87171', icon: '🧠' },
+            { label: 'Active Model',     value: mlStatus.active_model,                           color: '#a78bfa', icon: '📦' },
+            { label: 'Latency',          value: `${mlStatus.inference_latency_ms.toFixed(0)}ms`, color: mlStatus.inference_latency_ms < 50 ? '#4ade80' : '#fbbf24', icon: '⚡' },
+            { label: 'Predictions Today', value: mlStatus.predictions_today.toLocaleString(),    color: '#60a5fa', icon: '📊' },
+            { label: '7-Day Accuracy',   value: `${mlStatus.accuracy_7d.toFixed(1)}%`,           color: mlStatus.accuracy_7d >= 65 ? '#4ade80' : '#f87171', icon: '🎯' },
+            { label: 'Drift Score',      value: mlStatus.drift_score.toFixed(3),                 color: mlStatus.drift_score < 0.1 ? '#4ade80' : mlStatus.drift_score < 0.3 ? '#fbbf24' : '#f87171', icon: '📈' },
+          ].map(m => (
+            <div key={m.label}>
+              <div style={{ fontSize: 11, color: '#475569', marginBottom: 3 }}>{m.icon} {m.label}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: m.color }}>{m.value}</div>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Metrics KPIs */}
