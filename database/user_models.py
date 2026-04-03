@@ -15,7 +15,8 @@ from __future__ import annotations
 import enum
 import sys
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 if sys.version_info >= (3, 11):
     from enum import StrEnum
