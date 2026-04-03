@@ -864,6 +864,358 @@ async def _publish_and_broadcast(
         logger.debug("Discord signal post failed: %s", discord_exc)
 
 
+def _check_live_trading_gate() -> bool:
+    """
+    Verify the LiveTradingGate allows trading.
+
+    Returns True when trading is permitted. Returns False and logs a warning
+    when blocked. Returns False and logs an error when the gate itself raises —
+    fail-safe behaviour blocks the trade on gate unavailability.
+    """
+    try:
+        from core.live_trading_gate import get_gate
+
+        result = get_gate().check()
+        if not result.allowed:
+            logger.warning("Auto-trade blocked by LiveTradingGate: %s", result.reason)
+            return False
+        return True
+    except Exception as exc:
+        logger.error("LiveTradingGate raised — blocking trade: %s", exc)
+        return False
+
+
+def _build_ohlcv_proxy(data: dict[str, Any] | None) -> "pd.DataFrame | None":
+    """
+    Build a minimal close/high/low DataFrame from a tick data dict.
+
+    Returns None when the data dict lacks price lists — callers must handle
+    None gracefully (signal filter falls back to OHLCV-less mode).
+    """
+    if not data:
+        return None
+    prices = data.get("prices", [])
+    highs = data.get("highs", [])
+    lows = data.get("lows", [])
+    if not (prices and highs and lows):
+        return None
+    return pd.DataFrame({"close": prices, "high": highs, "low": lows})
+
+
+def _run_signal_filter(
+    signal_payload: dict[str, Any],
+    ohlcv_proxy: "pd.DataFrame | None",
+    symbol: str,
+) -> bool:
+    """
+    Run the production signal quality filter (confidence, EV, regime, MTF).
+
+    Returns True when the signal passes all gates.
+    Falls back to a legacy ML-probability threshold when the filter module
+    is unavailable — filter failure must never silently pass bad signals.
+    """
+    try:
+        from ml.signal_filter import get_signal_filter
+
+        result = get_signal_filter().check(signal_payload, ohlcv=ohlcv_proxy, symbol=symbol)
+        if not result.passed:
+            logger.info(
+                "Signal filter blocked [%s]: %s (symbol=%s confidence=%.3f)",
+                result.gate,
+                result.reason,
+                symbol,
+                result.confidence,
+            )
+            return False
+        return True
+    except Exception as exc:
+        logger.debug("Signal filter error (falling back to ML prob gate): %s", exc)
+
+    # Legacy fallback: raw ML probability threshold
+    ml_prob: float = signal_payload.get("probability", 0.5)
+    min_prob = float(os.getenv("ML_MIN_TRADE_PROB", "0.58"))
+    if ml_prob < min_prob:
+        logger.info(
+            "Auto-trade skipped (fallback gate): ML prob %.3f < %.3f (%s)",
+            ml_prob,
+            min_prob,
+            symbol,
+        )
+        return False
+    return True
+
+
+def _resolve_execution_sl_tp(
+    signal_payload: dict[str, Any],
+    data: dict[str, Any] | None,
+    direction: str,
+) -> tuple[float, float]:
+    """
+    Return (stop_loss, take_profit) for order submission.
+
+    Uses signal-provided values when present. Falls back to ATR-based levels
+    computed via _compute_atr() / _resolve_sl_tp() which already handle the
+    fixed-percentage fallback internally.
+    """
+    sl_price = signal_payload.get("stop_loss")
+    tp_price = signal_payload.get("take_profit")
+    if sl_price is not None and tp_price is not None:
+        return sl_price, tp_price
+
+    entry: float = signal_payload["entry_price"]
+    return _resolve_sl_tp(
+        signal=None,
+        data=data or {},
+        direction=direction,
+        entry_price=entry,
+    )
+
+
+def _compute_signal_strength(
+    signal_payload: dict[str, Any],
+    symbol: str,
+    direction: str,
+    entry: float,
+    sl_price: float,
+    equity: float,
+    data: dict[str, Any] | None,
+) -> float:
+    """
+    Compute normalised signal strength for risk manager position sizing.
+
+    Tries PositionSizer first (volatility-scaled Kelly). Falls back to the
+    raw ML probability capped at 0.80 to prevent over-sizing.
+    """
+    ml_prob: float = signal_payload.get("probability", 0.5)
+    fallback_strength = min(ml_prob, 0.80)
+
+    try:
+        from ml.position_sizer import get_position_sizer
+
+        ohlcv = _build_ohlcv_proxy(data)
+        lots = get_position_sizer().compute(
+            symbol=symbol,
+            direction=direction,
+            entry_price=entry,
+            stop_loss=sl_price,
+            account_equity=equity,
+            confidence=ml_prob,
+            ohlcv=ohlcv,
+        )
+        max_lots = float(os.getenv("MAX_LOTS", "10.0"))
+        strength = min(lots / max(max_lots, 1.0), 0.80)
+        logger.debug("PositionSizer: %s lots=%.4f signal_strength=%.4f", symbol, lots, strength)
+        return strength
+    except Exception as exc:
+        logger.debug("PositionSizer error (fallback to ML prob): %s", exc)
+        return fallback_strength
+
+
+def _estimate_annualised_volatility(data: dict[str, Any] | None, entry: float) -> float:
+    """
+    Estimate annualised volatility from recent log-returns.
+
+    Returns 0.15 (gold baseline) when fewer than 20 price observations are
+    available or when the computation fails.
+    """
+    _GOLD_VOL_BASELINE = 0.15
+    _MIN_PRICES_FOR_VOL = 20
+    try:
+        import numpy as np
+
+        prices = (data or {}).get("prices", [entry])
+        if len(prices) < _MIN_PRICES_FOR_VOL:
+            return _GOLD_VOL_BASELINE
+        log_returns = np.diff(np.log(np.array(prices[-21:], dtype=float)))
+        return float(np.std(log_returns)) * (252**0.5)
+    except Exception:
+        return _GOLD_VOL_BASELINE
+
+
+async def _assess_risk_and_size(
+    broker: Any,
+    risk_manager: Any,
+    symbol: str,
+    direction: str,
+    signal_payload: dict[str, Any],
+    data: dict[str, Any] | None,
+) -> float | None:
+    """
+    Run risk assessment and compute approved position size.
+
+    Returns the approved quantity, or None when the trade is blocked.
+    Raises on unexpected broker/risk errors — caller logs and returns.
+    """
+    account_info: dict[str, Any] = await broker.get_account_info()
+    raw_positions: list[Any] = await broker.get_positions()
+    positions_dicts: list[dict[str, Any]] = [
+        {
+            "symbol": p.symbol,
+            "quantity": p.quantity,
+            "current_price": getattr(p, "current_price", 0),
+        }
+        for p in raw_positions
+    ]
+
+    assessment = risk_manager.assess_risk(account_info, positions_dicts)
+    if not assessment.can_trade:
+        logger.info("Auto-trade blocked by risk manager: %s", assessment.messages)
+        return None
+
+    equity: float = account_info.get("equity", 100_000)
+    entry: float = signal_payload["entry_price"]
+    sl_price, tp_price = _resolve_execution_sl_tp(signal_payload, data, direction)
+
+    ohlcv_proxy = _build_ohlcv_proxy(data)
+    if not _run_signal_filter(signal_payload, ohlcv_proxy, symbol):
+        return None
+
+    signal_strength = _compute_signal_strength(
+        signal_payload, symbol, direction, entry, sl_price, equity, data
+    )
+    volatility = _estimate_annualised_volatility(data, entry)
+
+    sizing = risk_manager.calculate_position_size(
+        symbol=symbol,
+        signal_strength=signal_strength,
+        entry_price=entry,
+        stop_loss_price=sl_price,
+        take_profit_price=tp_price,
+        account_equity=equity,
+        volatility=volatility,
+        existing_positions=positions_dicts,
+    )
+    if not sizing.approved:
+        logger.info("Auto-trade sizing rejected: %s", sizing.reason)
+        return None
+
+    return sizing.recommended_size
+
+
+async def _place_order_and_notify(
+    broker: Any,
+    app_state: Any,
+    symbol: str,
+    direction: str,
+    quantity: float,
+    signal_payload: dict[str, Any],
+) -> None:
+    """
+    Place a market order and fire all post-fill side-effects.
+
+    Side-effects (all best-effort, never raise):
+      - Compliance audit log
+      - WebSocket fill broadcast
+      - Paper trading gate fill counter
+      - Online learner Phase-3 feedback
+    """
+    order = await broker.place_market_order(
+        symbol=symbol,
+        side=direction.lower(),
+        quantity=quantity,
+    )
+    logger.info(
+        "Auto-trade executed: %s %s confidence=%.2f qty=%s order_id=%s",
+        direction,
+        symbol,
+        signal_payload["confidence"],
+        quantity,
+        order.id,
+    )
+
+    _log_compliance(app_state, symbol, direction, quantity, signal_payload)
+    await _broadcast_fill(app_state, symbol, direction, quantity, order, signal_payload)
+    _record_paper_gate_fill()
+    _notify_online_learner(symbol, direction, quantity, order, signal_payload)
+
+
+def _log_compliance(
+    app_state: Any,
+    symbol: str,
+    direction: str,
+    quantity: float,
+    signal_payload: dict[str, Any],
+) -> None:
+    """Write a compliance audit record for the auto-trade fill."""
+    compliance = getattr(app_state, "compliance_manager", None)
+    if compliance is None:
+        return
+    try:
+        compliance.log_trade(
+            user_id="signal_engine",
+            trade_data={
+                "symbol": symbol,
+                "side": direction.lower(),
+                "quantity": quantity,
+                "source": "strategy_brain_auto",
+                "confidence": signal_payload["confidence"],
+            },
+        )
+    except Exception as exc:
+        logger.warning("Compliance log_trade failed: %s", exc)
+
+
+async def _broadcast_fill(
+    app_state: Any,
+    symbol: str,
+    direction: str,
+    quantity: float,
+    order: Any,
+    signal_payload: dict[str, Any],
+) -> None:
+    """Broadcast the fill over WebSocket — best-effort."""
+    ws = getattr(app_state, "ws_manager", None)
+    if ws is None:
+        return
+    try:
+        await ws.broadcast_trade(
+            symbol=symbol,
+            price=order.average_fill_price or signal_payload["entry_price"],
+            quantity=quantity,
+            side=direction.lower(),
+            trade_id=order.id,
+        )
+    except Exception as exc:
+        logger.debug("WebSocket fill broadcast failed: %s", exc)
+
+
+def _record_paper_gate_fill() -> None:
+    """Increment the paper trading gate fill counter — best-effort."""
+    try:
+        from research.pipeline.paper_trading_gate import get_gate as _get_gate
+
+        _get_gate().record_fill(pnl=0.0)
+    except Exception as exc:
+        logger.debug("gate.record_fill skipped: %s", exc)
+
+
+def _notify_online_learner(
+    symbol: str,
+    direction: str,
+    quantity: float,
+    order: Any,
+    signal_payload: dict[str, Any],
+) -> None:
+    """Notify Phase-3 online learner of a confirmed fill — best-effort."""
+    try:
+        fill_price = order.average_fill_price or signal_payload["entry_price"]
+        features = pd.DataFrame(
+            [
+                {
+                    "symbol": symbol,
+                    "direction": direction,
+                    "confidence": signal_payload.get("confidence", 0.0),
+                    "fill_price": fill_price,
+                    "ml_prob": signal_payload.get("probability", 0.5),
+                    "source": "signal_engine_auto",
+                }
+            ]
+        )
+        notify_fill(features, label=1, primary_prob=signal_payload.get("probability"))
+    except Exception as exc:
+        logger.debug("notify_fill skipped after auto-trade: %s", exc)
+
+
 async def _execute_if_approved(
     app_state: Any,
     symbol: str,
@@ -873,36 +1225,22 @@ async def _execute_if_approved(
     """
     Apply risk filter and execute an auto-trade if approved.
 
-    Only runs when SIGNAL_ENGINE_AUTO_TRADE=true. Skips silently if the
-    risk manager blocks the trade or sizing is rejected.
+    Only runs when SIGNAL_ENGINE_AUTO_TRADE=true. Delegates each concern to
+    a focused helper so each gate is independently testable:
+
+      _check_live_trading_gate()   — 5-check pre-order safety gate
+      _assess_risk_and_size()      — risk assessment + position sizing
+      _place_order_and_notify()    — order placement + post-fill side-effects
     """
     if not _AUTO_TRADE:
         return
 
-    # Live trading gate — all 5 checks must pass before any order is placed.
-    # This is the authoritative pre-order safety check; it runs even when the
-    # execution engine's PreTradeGate is also active.
-    try:
-        from core.live_trading_gate import get_gate
-
-        gate_result = get_gate().check()
-        if not gate_result.allowed:
-            logger.warning(
-                "Auto-trade blocked by LiveTradingGate: %s",
-                gate_result.reason,
-            )
-            return
-    except Exception as _gate_exc:
-        # Gate unavailable → fail safe: block the trade.
-        logger.error(
-            "LiveTradingGate check raised an exception — blocking trade: %s",
-            _gate_exc,
-        )
+    if not _check_live_trading_gate():
         return
 
     broker: Any = getattr(app_state, "broker", None)
     risk_manager: Any = getattr(app_state, "risk_manager", None)
-    ws: Any = getattr(app_state, "ws_manager", None)
+
     if broker is None:
         return
 
@@ -910,311 +1248,28 @@ async def _execute_if_approved(
     if direction not in ("BUY", "SELL"):
         return
 
-    # Risk gate + position sizing
-    # No fallback lot — if the risk manager is absent we cannot size the
-    # trade safely, so we block it entirely.
     if risk_manager is None:
         logger.error(
-            "Auto-trade blocked for %s: risk_manager is not initialised. Cannot size position without risk controls.",
+            "Auto-trade blocked for %s: risk_manager not initialised — cannot size without risk controls.",
             symbol,
         )
         return
 
-    quantity: float = 0.0
-    if risk_manager is not None:
-        try:
-            account_info: dict[str, Any] = await broker.get_account_info()
-            positions: list[Any] = await broker.get_positions()
-            positions_dicts: list[dict[str, Any]] = [
-                {
-                    "symbol": p.symbol,
-                    "quantity": p.quantity,
-                    "current_price": getattr(p, "current_price", 0),
-                }
-                for p in positions
-            ]
-            assessment: Any = risk_manager.assess_risk(account_info, positions_dicts)
-            if not assessment.can_trade:
-                logger.info(
-                    "Auto-trade blocked by risk manager: %s",
-                    assessment.messages,
-                )
-                return
-
-            equity: float = account_info.get("equity", 100_000)
-
-            # ── ML probability gate ───────────────────────────────────────────
-            # ── Production-grade signal quality filter ────────────────────────
-            # Runs four independent gates before any order is sent:
-            # 1. Confidence gate (threshold per direction)
-            # 2. Expected value gate (EV > 0 based on rolling trade outcomes)
-            # 3. Regime filter (block HIGH_VOL / MEAN_REVERTING when enabled)
-            # 4. MTF confluence (H4+D1 alignment when enabled)
-            #
-            # Root cause: 66% OOS accuracy ≠ tradeable edge when the accuracy
-            # metric measures 1-bar direction but the hold period is 5 bars.
-            # The EV gate catches this — it blocks signals when the rolling
-            # win rate × avg_win < (1-win_rate) × avg_loss.
-            try:
-                from ml.signal_filter import get_signal_filter
-
-                _filt = get_signal_filter()
-                # Build a minimal OHLCV-like object from data dict for regime gate
-                _ohlcv_proxy = None
-                try:
-
-
-                    _prices = data.get("prices", [])
-                    _highs = data.get("highs", [])
-                    _lows = data.get("lows", [])
-                    if _prices and _highs and _lows:
-                        _ohlcv_proxy = pd.DataFrame(
-                            {
-                                "close": _prices,
-                                "high": _highs,
-                                "low": _lows,
-                            }
-                        )
-                except Exception as _exc:
-                    logger.debug("Suppressed exception: %s", _exc)
-
-                _filter_result = _filt.check(
-                    signal_payload,
-                    ohlcv=_ohlcv_proxy,
-                    symbol=symbol,
-                )
-                if not _filter_result.passed:
-                    logger.info(
-                        "Signal filter blocked [%s]: %s (symbol=%s confidence=%.3f)",
-                        _filter_result.gate,
-                        _filter_result.reason,
-                        symbol,
-                        _filter_result.confidence,
-                    )
-                    return
-            except Exception as _filt_exc:
-                # Filter failure must never block execution — log and continue
-                logger.debug("Signal filter error (pass-through): %s", _filt_exc)
-                # Fall back to legacy confidence check
-                ml_prob: float = signal_payload.get("probability", 0.5)
-                _ML_MIN_PROB = float(os.getenv("ML_MIN_TRADE_PROB", "0.58"))
-                if ml_prob < _ML_MIN_PROB:
-                    logger.info(
-                        "Auto-trade skipped (fallback): ML prob %.3f < %.3f (%s)",
-                        ml_prob,
-                        _ML_MIN_PROB,
-                        symbol,
-                    )
-                    return
-
-            # ── ATR-based SL/TP ───────────────────────────────────────────────
-            # Use ATR(14) from the data buffer for volatility-adaptive levels.
-            # Gold at $3,000: ATR ≈ $25–$40/day.
-            # SL = 1.5× ATR below entry (tight enough to cut losers quickly).
-            # TP = 3.0× ATR above entry (2:1 R:R minimum).
-            # Falls back to percentage-based levels if ATR unavailable.
-            entry: float = signal_payload["entry_price"]
-            sl_price = signal_payload["stop_loss"]
-            tp_price = signal_payload["take_profit"]
-
-            if sl_price is None or tp_price is None:
-                # Compute ATR from recent highs/lows if available in data
-                try:
-                    _data = data or {}
-                    highs = _data.get("highs", [])
-                    lows = _data.get("lows", [])
-                    closes_list = _data.get("prices", [entry])
-                    if len(highs) >= 14 and len(lows) >= 14:
-                        import numpy as _np
-
-                        h = _np.array(highs[-15:], dtype=float)
-                        l = _np.array(lows[-15:], dtype=float)
-                        c = _np.array(closes_list[-15:], dtype=float)
-                        tr = _np.maximum(
-                            h[1:] - l[1:],
-                            _np.maximum(abs(h[1:] - c[:-1]), abs(l[1:] - c[:-1])),
-                        )
-                        atr = float(_np.mean(tr[-14:]))
-                    else:
-                        # Fallback: 0.8% of price (typical gold daily range)
-                        atr = entry * 0.008
-                    sl_atr_mult = float(os.getenv("SL_ATR_MULT", "1.5"))
-                    tp_atr_mult = float(os.getenv("TP_ATR_MULT", "3.0"))
-                    if direction.upper() == "BUY":
-                        sl_price = entry - atr * sl_atr_mult
-                        tp_price = entry + atr * tp_atr_mult
-                    else:
-                        sl_price = entry + atr * sl_atr_mult
-                        tp_price = entry - atr * tp_atr_mult
-                    logger.debug(
-                        "ATR-based SL/TP: entry=%.2f atr=%.2f sl=%.2f tp=%.2f",
-                        entry,
-                        atr,
-                        sl_price,
-                        tp_price,
-                    )
-                except Exception as _atr_exc:
-                    logger.debug("ATR SL/TP calc failed, using pct fallback: %s", _atr_exc)
-                    sl_price = sl_price or (entry * 0.985 if direction.upper() == "BUY" else entry * 1.015)
-                    tp_price = tp_price or (entry * 1.03 if direction.upper() == "BUY" else entry * 0.97)
-
-            # ── Dynamic position sizing (volatility-scaled Kelly) ─────────────
-            # PositionSizer computes a volatility-adaptive lot size using:
-            # - Volatility method: risk_pct / ATR-based SL distance
-            # - Kelly method: quarter-Kelly from rolling win rate / avg P&L
-            # The result is passed as signal_strength to the risk manager which
-            # applies its own caps and correlation checks.
-            ml_prob: float = signal_payload.get("probability", 0.5)
-            signal_strength = min(ml_prob, 0.80)  # cap at 80% to avoid over-sizing
-
-            try:
-                from ml.position_sizer import get_position_sizer
-
-
-                _ohlcv_sz = None
-                _prices_sz = (data or {}).get("prices", [])
-                _highs_sz = (data or {}).get("highs", [])
-                _lows_sz = (data or {}).get("lows", [])
-                if _prices_sz and _highs_sz and _lows_sz:
-                    _ohlcv_sz = pd.DataFrame(
-                        {
-                            "close": _prices_sz,
-                            "high": _highs_sz,
-                            "low": _lows_sz,
-                        }
-                    )
-                _sizer_lots = get_position_sizer().compute(
-                    symbol=symbol,
-                    direction=direction,
-                    entry_price=entry,
-                    stop_loss=sl_price,
-                    account_equity=equity,
-                    confidence=ml_prob,
-                    ohlcv=_ohlcv_sz,
-                )
-                # Use sizer output as signal_strength proxy (normalised to [0,1])
-                # so the risk manager's Kelly layer scales consistently
-                _max_lots = float(os.getenv("MAX_LOTS", "10.0"))
-                signal_strength = min(_sizer_lots / max(_max_lots, 1.0), 0.80)
-                logger.debug(
-                    "PositionSizer: %s lots=%.4f signal_strength=%.4f",
-                    symbol,
-                    _sizer_lots,
-                    signal_strength,
-                )
-            except Exception as _sz_exc:
-                logger.debug("PositionSizer error (fallback to ML prob): %s", _sz_exc)
-
-            # ── Volatility estimate from recent returns ────────────────────────
-            try:
-                import numpy as _np2
-
-                _prices = (data or {}).get("prices", [entry])
-                if len(_prices) >= 20:
-                    _rets = _np2.diff(_np2.log(_np2.array(_prices[-21:], dtype=float)))
-                    _vol = float(_np2.std(_rets)) * (252**0.5)
-                else:
-                    _vol = 0.15  # gold annualised vol baseline
-            except Exception:
-                _vol = 0.15
-
-            sizing: Any = risk_manager.calculate_position_size(
-                symbol=symbol,
-                signal_strength=signal_strength,
-                entry_price=entry,
-                stop_loss_price=sl_price,
-                take_profit_price=tp_price,
-                account_equity=equity,
-                volatility=_vol,
-                existing_positions=positions_dicts,
-            )
-            if not sizing.approved:
-                logger.info("Auto-trade sizing rejected: %s", sizing.reason)
-                return
-            quantity = sizing.recommended_size
-        except Exception as risk_exc:
-            logger.error("Risk check failed in signal engine: %s", risk_exc)
-            return
-
-    # Place order
     try:
-        order = await broker.place_market_order(
-            symbol=symbol,
-            side=direction.lower(),
-            quantity=quantity,
+        quantity = await _assess_risk_and_size(
+            broker, risk_manager, symbol, direction, signal_payload, data
         )
-        logger.info(
-            "Auto-trade executed: %s %s confidence=%.2f qty=%s order_id=%s",
-            direction,
-            symbol,
-            signal_payload["confidence"],
-            quantity,
-            order.id,
-        )
+    except Exception as exc:
+        logger.error("Risk assessment failed in signal engine for %s: %s", symbol, exc)
+        return
 
-        # Compliance log
-        compliance = getattr(app_state, "compliance_manager", None)
-        if compliance is not None:
-            compliance.log_trade(
-                user_id="signal_engine",
-                trade_data={
-                    "symbol": symbol,
-                    "side": direction.lower(),
-                    "quantity": quantity,
-                    "source": "strategy_brain_auto",
-                    "confidence": signal_payload["confidence"],
-                },
-            )
+    if quantity is None:
+        return
 
-        # Broadcast fill
-        if ws is not None:
-            try:
-                await ws.broadcast_trade(
-                    symbol=symbol,
-                    price=order.average_fill_price or signal_payload["entry_price"],
-                    quantity=quantity,
-                    side=direction.lower(),
-                    trade_id=order.id,
-                )
-            except Exception as _exc:
-                logger.debug("Suppressed exception: %s", _exc)
-
-        # Paper trading gate fill counter.
-        try:
-            from research.pipeline.paper_trading_gate import get_gate as _get_gate
-
-            _get_gate().record_fill(pnl=0.0)
-        except Exception as _gate_exc:
-            logger.debug("gate.record_fill skipped in signal_engine: %s", _gate_exc)
-
-        # Online learner feedback — notify Phase-3 store of the confirmed fill.
-        # label=1 (trade was approved by risk + ML gates, so it's a positive sample).
-        try:
-
-
-            _fill_price = order.average_fill_price or signal_payload["entry_price"]
-            _features = pd.DataFrame(
-                [
-                    {
-                        "symbol": symbol,
-                        "direction": direction,
-                        "confidence": signal_payload.get("confidence", 0.0),
-                        "fill_price": _fill_price,
-                        "ml_prob": signal_payload.get("probability", 0.5),
-                        "source": "signal_engine_auto",
-                    }
-                ]
-            )
-            notify_fill(
-                _features,
-                label=1,
-                primary_prob=signal_payload.get("probability"),
-            )
-        except Exception as _ol_exc:
-            logger.debug("notify_fill skipped after auto-trade: %s", _ol_exc)
-
-    except Exception as order_exc:
-        logger.error("Auto-trade order failed for %s: %s", symbol, order_exc)
+    try:
+        await _place_order_and_notify(broker, app_state, symbol, direction, quantity, signal_payload)
+    except Exception as exc:
+        logger.error("Auto-trade order failed for %s: %s", symbol, exc)
 
 
 _SL_ATR_MULT_DEFAULT = 1.5
