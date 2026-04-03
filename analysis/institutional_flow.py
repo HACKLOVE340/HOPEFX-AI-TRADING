@@ -17,9 +17,8 @@ Identifies institutional vs retail trading activity through:
 
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -223,11 +222,7 @@ class InstitutionalFlowDetector:
             List of FlowSignal objects for detected icebergs
         """
         cutoff = datetime.now(UTC) - timedelta(minutes=lookback_minutes)
-        trades = [
-            (ts, price, size, side)
-            for ts, price, size, side in self._trades.get(symbol, [])
-            if ts >= cutoff
-        ]
+        trades = [(ts, price, size, side) for ts, price, size, side in self._trades.get(symbol, []) if ts >= cutoff]
 
         if not trades:
             return []
@@ -253,9 +248,7 @@ class InstitutionalFlowDetector:
             buy_vol = sum(t[2] for t in group if t[3] == "buy")
             sell_vol = total_vol - buy_vol
             direction = "bullish" if buy_vol >= sell_vol else "bearish"
-            strength = (
-                "strong" if len(group) >= self._iceberg_min_fills * 2 else "moderate"
-            )
+            strength = "strong" if len(group) >= self._iceberg_min_fills * 2 else "moderate"
 
             signals.append(
                 FlowSignal(
@@ -300,19 +293,13 @@ class InstitutionalFlowDetector:
         """
         now = datetime.now(UTC)
         cutoff = now - timedelta(minutes=lookback_minutes)
-        trades = [
-            (ts, price, size, side)
-            for ts, price, size, side in self._trades.get(symbol, [])
-            if ts >= cutoff
-        ]
+        trades = [(ts, price, size, side) for ts, price, size, side in self._trades.get(symbol, []) if ts >= cutoff]
 
-        if len(trades) < 5:  # noqa: PLR2004
+        if len(trades) < 5:
             return []
 
         # Build volume windows
-        windows: dict[int, dict] = defaultdict(
-            lambda: {"volume": 0.0, "buy": 0.0, "sell": 0.0, "prices": []}
-        )
+        windows: dict[int, dict] = defaultdict(lambda: {"volume": 0.0, "buy": 0.0, "sell": 0.0, "prices": []})
         for ts, price, size, side in trades:
             epoch = int(ts.timestamp() // window_seconds)
             windows[epoch]["volume"] += size
@@ -322,7 +309,7 @@ class InstitutionalFlowDetector:
             else:
                 windows[epoch]["sell"] += size
 
-        if len(windows) < 2:  # noqa: PLR2004
+        if len(windows) < 2:
             return []
 
         volumes = [w["volume"] for w in windows.values()]
@@ -336,12 +323,8 @@ class InstitutionalFlowDetector:
                 ts = datetime.utcfromtimestamp(epoch * window_seconds)
                 direction = "bullish" if data["buy"] >= data["sell"] else "bearish"
                 ratio = data["volume"] / avg_vol
-                strength = (
-                    "strong" if ratio >= self._spike_multiplier * 2 else "moderate"
-                )
-                avg_price = (
-                    sum(data["prices"]) / len(data["prices"]) if data["prices"] else 0.0
-                )
+                strength = "strong" if ratio >= self._spike_multiplier * 2 else "moderate"
+                avg_price = sum(data["prices"]) / len(data["prices"]) if data["prices"] else 0.0
                 signals.append(
                     FlowSignal(
                         symbol=symbol,
@@ -380,13 +363,9 @@ class InstitutionalFlowDetector:
             List of FlowSignal objects for absorption levels
         """
         cutoff = datetime.now(UTC) - timedelta(minutes=lookback_minutes)
-        trades = [
-            (ts, price, size, side)
-            for ts, price, size, side in self._trades.get(symbol, [])
-            if ts >= cutoff
-        ]
+        trades = [(ts, price, size, side) for ts, price, size, side in self._trades.get(symbol, []) if ts >= cutoff]
 
-        if len(trades) < 10:  # noqa: PLR2004
+        if len(trades) < 10:
             return []
 
         # Group trades into time windows
@@ -401,7 +380,7 @@ class InstitutionalFlowDetector:
 
         signals = []
         for epoch, group in windows.items():
-            if len(group) < 3:  # noqa: PLR2004
+            if len(group) < 3:
                 continue
 
             prices = [t[1] for t in group]
@@ -436,9 +415,7 @@ class InstitutionalFlowDetector:
                             "price_range_pct": round(price_range_pct, 4),
                             "buy_volume": buy_vol,
                             "sell_volume": sell_vol,
-                            "volume_ratio": round(total_vol / avg_vol, 2)
-                            if avg_vol > 0
-                            else 0,
+                            "volume_ratio": round(total_vol / avg_vol, 2) if avg_vol > 0 else 0,
                         },
                     )
                 )
@@ -480,8 +457,8 @@ class InstitutionalFlowDetector:
         confidence = min(1.0, confidence)
         classification = (
             "institutional"
-            if confidence >= 0.4  # noqa: PLR2004
-            else ("retail" if confidence < 0.2 else "unknown")  # noqa: PLR2004
+            if confidence >= 0.4
+            else ("retail" if confidence < 0.2 else "unknown")
         )
 
         return InstitutionalTrade(
@@ -546,9 +523,9 @@ class InstitutionalFlowDetector:
         total_vol = buy_vol + sell_vol
         net = (buy_vol - sell_vol) / total_vol if total_vol > 0 else 0.0
 
-        if net > 0.1 or bullish_signals > bearish_signals:  # noqa: PLR2004
+        if net > 0.1 or bullish_signals > bearish_signals:
             direction = "bullish"
-        elif net < -0.1 or bearish_signals > bullish_signals:  # noqa: PLR2004
+        elif net < -0.1 or bearish_signals > bullish_signals:
             direction = "bearish"
         else:
             direction = "neutral"

@@ -10,8 +10,9 @@ Pre-trade gate unit tests — verifies every block condition and the
 no-fallback invariant.
 """
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 from risk.pre_trade_gate import (
     GateOrder,
@@ -19,7 +20,6 @@ from risk.pre_trade_gate import (
     RiskManagerError,
     TradeBlockedError,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -85,7 +85,7 @@ class TestPreTradeGatePass:
         # Gate runs: kill_switch, trading_halted, daily_loss_limit, max_drawdown,
         # cvar_pre_trade, position_size, max_open_positions, validate_trade,
         # risk_per_trade_cap, loss_streak  (10 total)
-        assert len(result.checks_passed) >= 8  # noqa: PLR2004
+        assert len(result.checks_passed) >= 8
 
     def test_returns_gate_result_with_order(self):
         rm = _make_risk_manager()
@@ -282,9 +282,7 @@ class TestRiskManagerError:
         """Verify there is no code path that allows a trade when risk manager errors."""
         from pathlib import Path
 
-        source = (
-            Path(__file__).parent.parent / "risk" / "pre_trade_gate.py"
-        ).read_text()
+        source = (Path(__file__).parent.parent / "risk" / "pre_trade_gate.py").read_text()
         # Check the raw file — not lowercased inspect output
         assert "allow_anyway" not in source
         # The docstring mentions "allow anyway" as a concept to reject — that's fine.

@@ -16,8 +16,8 @@ import logging
 import os
 import secrets
 from dataclasses import dataclass
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +52,9 @@ class HSMVault:
         self._key_cache: dict[str, bytes] = {}
         self._initialized = False
 
-        os.makedirs(key_store_path, exist_ok=True)
+        Path(key_store_path).mkdir(parents=True, exist_ok=True)
 
-    def initialize(
-        self, password: str | None = None, hardware_token: str | None = None
-    ) -> None:
+    def initialize(self, password: str | None = None, hardware_token: str | None = None) -> None:
         """
         Derive or generate the master key and mark the vault ready.
 
@@ -84,22 +82,15 @@ class HSMVault:
             self._master_key = self._derive_key_cloud(hardware_token)
 
         else:
-            raise ValueError(
-                f"Unknown hsm_type {self.hsm_type!r}. "
-                "Valid values: 'software', 'yubikey', 'cloudhsm'."
-            )
+            raise ValueError(f"Unknown hsm_type {self.hsm_type!r}. Valid values: 'software', 'yubikey', 'cloudhsm'.")
 
         if not self._master_key:
-            raise RuntimeError(
-                f"Master key derivation returned empty bytes for hsm_type={self.hsm_type!r}"
-            )
+            raise RuntimeError(f"Master key derivation returned empty bytes for hsm_type={self.hsm_type!r}")
 
         self._initialized = True
         logger.info("HSMVault initialised: %s", self.hsm_type)
 
-    def _derive_key_software(
-        self, password: str, hardware_token: str | None
-    ) -> bytes:
+    def _derive_key_software(self, password: str, hardware_token: str | None) -> bytes:
         """PBKDF2 key derivation with hardware binding"""
         # Combine password with hardware fingerprint
         salt = secrets.token_bytes(32)
@@ -120,7 +111,7 @@ class HSMVault:
         key = kdf.derive(password.encode())
 
         # Store salt for future derivation
-        with open(f"{self.key_store_path}salt.bin", "wb") as f:
+        with Path(f"{self.key_store_path}salt.bin").open("wb") as f:
             f.write(salt)
 
         return key
@@ -176,14 +167,13 @@ class HSMVault:
 
         if provider == "aws":
             return self._derive_key_aws_kms()
-        elif provider == "azure":
+        if provider == "azure":
             return self._derive_key_azure_keyvault()
-        else:
-            raise RuntimeError(
-                "CLOUD_HSM_PROVIDER is not set or unrecognised. "
-                "Set it to 'aws' or 'azure' and configure the required env vars "
-                "before using hsm_type='cloudhsm'."
-            )
+        raise RuntimeError(
+            "CLOUD_HSM_PROVIDER is not set or unrecognised. "
+            "Set it to 'aws' or 'azure' and configure the required env vars "
+            "before using hsm_type='cloudhsm'."
+        )
 
     def _derive_key_aws_kms(self) -> bytes:
         """Generate a 256-bit data key via AWS KMS GenerateDataKey.
@@ -196,8 +186,7 @@ class HSMVault:
             import boto3  # type: ignore[import]
         except ImportError:
             raise RuntimeError(
-                "boto3 is required for AWS KMS integration. "
-                "Install it with: pip install boto3"
+                "boto3 is required for AWS KMS integration. Install it with: pip install boto3"
             ) from None
 
         key_id = os.getenv("AWS_KMS_KEY_ID")
@@ -222,18 +211,16 @@ class HSMVault:
         encrypted_key: bytes = response["CiphertextBlob"]
 
         # Persist the encrypted copy for disaster recovery (KMS Decrypt to recover)
-        enc_path = os.path.join(self.key_store_path, "master.key.kms")
+        enc_path = Path(self.key_store_path) / "master.key.kms"
         try:
-            with open(enc_path, "wb") as f:
+            with Path(enc_path).open("wb") as f:
                 f.write(encrypted_key)
-            os.chmod(enc_path, 0o600)
+            Path(enc_path).chmod(0o600)
             logger.info("AWS KMS encrypted key blob saved to %s", enc_path)
         except OSError as exc:
             logger.warning("Could not persist KMS encrypted key blob: %s", exc)
 
-        logger.info(
-            "Master key derived via AWS KMS (key_id=%s, region=%s)", key_id, region
-        )
+        logger.info("Master key derived via AWS KMS (key_id=%s, region=%s)", key_id, region)
         return plaintext_key
 
     def _derive_key_azure_keyvault(self) -> bytes:
@@ -244,12 +231,12 @@ class HSMVault:
         plaintext key as the vault master key.
         """
         try:
+            from azure.identity import ClientSecretCredential  # type: ignore[import]
+            from azure.keyvault.keys import KeyClient  # type: ignore[import]
             from azure.keyvault.keys.crypto import (  # type: ignore[import]
                 CryptographyClient,
                 KeyWrapAlgorithm,
             )
-            from azure.keyvault.keys import KeyClient  # type: ignore[import]
-            from azure.identity import ClientSecretCredential  # type: ignore[import]
         except ImportError:
             raise RuntimeError(
                 "azure-keyvault-keys and azure-identity are required for Azure Key Vault "
@@ -292,19 +279,17 @@ class HSMVault:
 
             # Generate a random 256-bit master key and wrap it with the Key Vault key
             plaintext_key = secrets.token_bytes(32)
-            wrap_result = crypto_client.wrap_key(
-                KeyWrapAlgorithm.rsa_oaep, plaintext_key
-            )
+            wrap_result = crypto_client.wrap_key(KeyWrapAlgorithm.rsa_oaep, plaintext_key)
             wrapped_key: bytes = wrap_result.encrypted_key
         except Exception as exc:
             raise RuntimeError(f"Azure Key Vault wrap_key failed: {exc}") from exc
 
         # Persist the wrapped copy for disaster recovery (unwrap via Key Vault)
-        wrapped_path = os.path.join(self.key_store_path, "master.key.azure")
+        wrapped_path = Path(self.key_store_path) / "master.key.azure"
         try:
-            with open(wrapped_path, "wb") as f:
+            with Path(wrapped_path).open("wb") as f:
                 f.write(wrapped_key)
-            os.chmod(wrapped_path, 0o600)
+            Path(wrapped_path).chmod(0o600)
             logger.info("Azure Key Vault wrapped key saved to %s", wrapped_path)
         except OSError as exc:
             logger.warning("Could not persist Azure wrapped key: %s", exc)
@@ -326,11 +311,11 @@ class HSMVault:
         """
         if not self._master_key:
             raise RuntimeError("Cannot save master key: vault not initialised")
-        key_path = os.path.join(self.key_store_path, "master.key")
+        key_path = Path(self.key_store_path) / "master.key"
         try:
-            with open(key_path, "w") as f:
+            with Path(key_path).open("w", encoding="utf-8") as f:
                 f.write(self._master_key.hex())
-            os.chmod(key_path, 0o600)
+            Path(key_path).chmod(0o600)
             logger.info("Master key saved to %s (mode 0600)", key_path)
         except OSError as exc:
             logger.error("Failed to save master key: %s", exc)
@@ -429,9 +414,7 @@ class HSMVault:
         # Overwrite memory
         if self._master_key:
             for i in range(len(self._master_key)):
-                self._master_key = (
-                    self._master_key[:i] + b"\x00" + self._master_key[i + 1 :]
-                )
+                self._master_key = self._master_key[:i] + b"\x00" + self._master_key[i + 1 :]
             self._master_key = None
 
         self._key_cache.clear()
@@ -448,9 +431,7 @@ class APICredentialManager:
         self.credentials: dict[str, EncryptedSecret] = {}
         self.rotation_schedule: dict[str, datetime] = {}
 
-    def add_credential(
-        self, name: str, api_key: str, api_secret: str, rotation_days: int = 90
-    ):
+    def add_credential(self, name: str, api_key: str, api_secret: str, rotation_days: int = 90):
         """Store API credentials encrypted"""
         credential_data = json.dumps(
             {
@@ -466,9 +447,7 @@ class APICredentialManager:
         # Schedule rotation
         from datetime import timedelta
 
-        self.rotation_schedule[name] = datetime.now(UTC) + timedelta(
-            days=rotation_days
-        )
+        self.rotation_schedule[name] = datetime.now(UTC) + timedelta(days=rotation_days)
 
         logger.info("Credential '%s' encrypted and stored", name)
 
@@ -478,18 +457,14 @@ class APICredentialManager:
             raise KeyError(f"Credential '{name}' not found")
 
         # Check rotation
-        if datetime.now(UTC) > self.rotation_schedule.get(
-            name, datetime.now(UTC)
-        ):
+        if datetime.now(UTC) > self.rotation_schedule.get(name, datetime.now(UTC)):
             logger.warning("Credential '%s' needs rotation", name)
 
         encrypted = self.credentials[name]
         plaintext = self.vault.decrypt(encrypted)
         return json.loads(plaintext)
 
-    def rotate_credential(
-        self, name: str, new_api_key: str, new_api_secret: str
-    ) -> None:
+    def rotate_credential(self, name: str, new_api_key: str, new_api_secret: str) -> None:
         """Rotate credentials atomically with rollback on failure.
 
         Validates inputs before touching the stored credential so the old
@@ -497,8 +472,7 @@ class APICredentialManager:
         """
         if not new_api_key or not new_api_secret:
             raise ValueError(
-                f"Cannot rotate credential '{name}': new_api_key and new_api_secret "
-                "must both be non-empty strings."
+                f"Cannot rotate credential '{name}': new_api_key and new_api_secret must both be non-empty strings."
             )
 
         old_secret = self.credentials.get(name)

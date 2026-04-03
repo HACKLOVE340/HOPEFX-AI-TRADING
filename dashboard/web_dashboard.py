@@ -11,24 +11,21 @@ Professional trading dashboard with WebSocket updates
 import asyncio
 import json
 import logging
-from typing import Any
-from datetime import datetime, timezone
-UTC = timezone.utc
 from collections import deque
+from datetime import UTC, datetime
+from typing import Any
 
 try:
-    from aiohttp import web, WSMsgType
     import aiohttp_jinja2
     import jinja2
+    from aiohttp import WSMsgType, web
 
     AIOHTTP_AVAILABLE = True
 except ImportError:
     AIOHTTP_AVAILABLE = False
 
 try:
-    import plotly  # noqa: F401
-    import plotly.graph_objs as go  # noqa: F401
-
+    import plotly  # type: ignore[import]  # noqa: F401
     PLOTLY_AVAILABLE = True
 except ImportError:
     PLOTLY_AVAILABLE = False
@@ -51,13 +48,15 @@ class DashboardWebSocketManager:
         """Register new client"""
         async with self._lock:
             self.clients.add(ws)
-            logger.info(f"Dashboard client connected. Total: {len(self.clients)}")
+            logger.info("Dashboard client connected. Total: %s", len(self.clients))
+
 
     async def unregister(self, ws: web.WebSocketResponse):
         """Unregister client"""
         async with self._lock:
             self.clients.discard(ws)
-            logger.info(f"Dashboard client disconnected. Total: {len(self.clients)}")
+            logger.info("Dashboard client disconnected. Total: %s", len(self.clients))
+
 
     async def broadcast(self, message: dict):
         """Broadcast message to all clients"""
@@ -99,7 +98,8 @@ class DashboardWebSocketManager:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Broadcast error: {e}")
+                logger.error("Broadcast error: %s", e)
+
                 await asyncio.sleep(5)
 
     def stop(self):
@@ -115,8 +115,7 @@ class DashboardDataSource:
     def __init__(self, trading_app):
         self.app = trading_app
         self._price_history: dict[str, deque] = {
-            symbol: deque(maxlen=100)
-            for symbol in getattr(trading_app, "symbols", ["EURUSD", "XAUUSD"])
+            symbol: deque(maxlen=100) for symbol in getattr(trading_app, "symbols", ["EURUSD", "XAUUSD"])
         }
         self._trade_history: deque = deque(maxlen=50)
         self._performance_metrics: dict[str, Any] = {}
@@ -130,7 +129,8 @@ class DashboardDataSource:
                 try:
                     account = await self.app.broker.get_account_info()
                 except Exception as e:
-                    logger.error(f"Error getting account: {e}")
+                    logger.error("Error getting account: %s", e)
+
 
             # Positions
             positions = []
@@ -152,7 +152,8 @@ class DashboardDataSource:
                         for p in positions
                     ]
                 except Exception as e:
-                    logger.error(f"Error getting positions: {e}")
+                    logger.error("Error getting positions: %s", e)
+
 
             # Brain state
             brain_state = {}
@@ -167,12 +168,12 @@ class DashboardDataSource:
                         "open_trades": state.open_trades_count,
                         "daily_pnl": state.daily_pnl,
                         "market_regime": {
-                            k: v.value if hasattr(v, "value") else str(v)
-                            for k, v in state.market_regime.items()
+                            k: v.value if hasattr(v, "value") else str(v) for k, v in state.market_regime.items()
                         },
                     }
                 except Exception as e:
-                    logger.error(f"Error getting brain state: {e}")
+                    logger.error("Error getting brain state: %s", e)
+
 
             # Price data
             price_data = {}
@@ -202,14 +203,13 @@ class DashboardDataSource:
             }
 
         except Exception as e:
-            logger.error(f"Error compiling dashboard data: {e}")
+            logger.error("Error compiling dashboard data: %s", e)
+
             return {"error": str(e)}
 
     def record_trade(self, trade: dict):
         """Record trade for history"""
-        self._trade_history.append(
-            {**trade, "timestamp": datetime.now(UTC).isoformat()}
-        )
+        self._trade_history.append({**trade, "timestamp": datetime.now(UTC).isoformat()})
 
 
 def create_dashboard_app(trading_app, host: str = "0.0.0.0", port: int = 8081):  # nosec B104 - host configurable via parameter
@@ -242,9 +242,7 @@ def create_dashboard_app(trading_app, host: str = "0.0.0.0", port: int = 8081): 
 
     # Start background broadcasting
     async def on_startup(app):
-        app["broadcast_task"] = asyncio.create_task(
-            ws_manager.start_broadcasting(data_source, interval=1.0)
-        )
+        app["broadcast_task"] = asyncio.create_task(ws_manager.start_broadcasting(data_source, interval=1.0))
 
     async def on_cleanup(app):
         ws_manager.stop()
@@ -822,7 +820,8 @@ async def websocket_handler(request):
                 if data.get("action") == "ping":
                     await ws.send_str(json.dumps({"type": "pong"}))
             elif msg.type == WSMsgType.ERROR:
-                logger.error(f"WebSocket error: {ws.exception()}")
+                logger.error("WebSocket error: %s", ws.exception())
+
     finally:
         await ws_manager.unregister(ws)
 
@@ -857,5 +856,6 @@ async def start_dashboard(trading_app, host: str = "0.0.0.0", port: int = 8081):
     site = web.TCPSite(runner, host, port)
     await site.start()
 
-    logger.info(f"🎛️ Dashboard started at http://{host}:{port}")
+    logger.info("🎛️ Dashboard started at http://%s:%s", host, port)
+
     return runner

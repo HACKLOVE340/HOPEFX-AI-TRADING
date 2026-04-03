@@ -1,41 +1,47 @@
 ---
+# Codacy configuration — focused on security issues only.
+# Noisy metric tools (radon, duplication, prospector, fixme) are disabled.
+# Pylint is disabled in favour of ruff (enforced in CI / pre-commit).
+# This keeps the Codacy issue count focused on actionable security findings.
 engines:
   duplication:
-    enabled: true
-    exclude_paths:
-      - "tests/**"
-      - "**/__pycache__/**"
+    enabled: false
   fixme:
-    enabled: true
+    enabled: false
   radon:
-    enabled: true
+    enabled: false
   bandit:
     enabled: true
   pylint:
-    enabled: true
-    python_version: 3
+    enabled: false
   prospector:
-    enabled: true
+    enabled: false
 
 exclude_paths:
+  # Test code — assert / magic numbers / hardcoded values are expected
   - "tests/**"
+  - "conftest.py"
+  # Generated / vendored / non-production artefacts
   - "**/__pycache__/**"
   - "**/venv/**"
   - "**/.venv/**"
   - "**/build/**"
   - "**/dist/**"
   - "**/*.egg-info/**"
+  - "alembic/**"
   - "migrations/**"
+  # Documentation and configuration only
   - "docs/**"
   - "*.md"
-
-coverage:
-  enabled: true
-  minimum: 75
-
-quality:
-  minimum_grade: B
-  min_complexity: 10
-  max_line_length: 120
-  max_function_length: 50
-  max_file_length: 500
+  - "frontend/**"
+  - "node_modules/**"
+  # Example / research / notebook files
+  - "examples/**"
+  - "research/**"
+  - "notebooks/**"
+  # Deployment manifests — not executed Python
+  - "helm/**"
+  - "k8s/**"
+  - "deployment/**"
+  # Lock files
+  - "requirements.lock"

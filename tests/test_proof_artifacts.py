@@ -42,17 +42,13 @@ MODELS = ROOT / "ml" / "saved_models"
 def perf():
     path = RESULTS / "performance.json"
     if not path.exists():
-        pytest.skip(
-            "performance.json not generated yet — run examples/generate_proof_artifacts.py"
-        )
-    with open(path) as f:
+        pytest.skip("performance.json not generated yet — run examples/generate_proof_artifacts.py")
+    with Path(path).open(encoding="utf-8") as f:
         return json.load(f)
 
 
 def test_performance_json_exists():
-    assert (
-        RESULTS / "performance.json"
-    ).exists(), "Run: python examples/generate_proof_artifacts.py"
+    assert (RESULTS / "performance.json").exists(), "Run: python examples/generate_proof_artifacts.py"
 
 
 def test_performance_has_required_keys(perf):
@@ -72,15 +68,12 @@ def test_performance_has_required_keys(perf):
 
 def test_trade_count_sufficient(perf):
     n = int(perf["n_trades"])
-    assert n >= 250, (  # noqa: PLR2004
-        f"Only {n} trades — need >= 250 for Sharpe SE <= 0.3. "
-        "Re-run with a longer backtest period."
-    )
+    assert n >= 250, f"Only {n} trades — need >= 250 for Sharpe SE <= 0.3. Re-run with a longer backtest period."
 
 
 def test_win_rate_plausible(perf):
     wr = float(perf["win_rate_pct"])
-    assert 35.0 <= wr <= 75.0, f"Win rate {wr}% outside plausible range [35, 75]"  # noqa: PLR2004
+    assert 35.0 <= wr <= 75.0, f"Win rate {wr}% outside plausible range [35, 75]"
 
 
 def test_sharpe_finite_and_nonnegative(perf):
@@ -96,25 +89,20 @@ def test_profit_factor_above_one(perf):
 
 def test_real_data_used(perf):
     assert perf.get("real_data") is True, (
-        "Backtest used synthetic data — yfinance may be unavailable. "
-        "Install: pip install yfinance"
+        "Backtest used synthetic data — yfinance may be unavailable. Install: pip install yfinance"
     )
 
 
 def test_data_source_is_yahoo(perf):
     src = perf.get("data_source", "")
-    assert (
-        "Yahoo" in src or "GC=F" in src or "yfinance" in src.lower()
-    ), f"Unexpected data source: {src}"
+    assert "Yahoo" in src or "GC=F" in src or "yfinance" in src.lower(), f"Unexpected data source: {src}"
 
 
 # ── trades.csv ────────────────────────────────────────────────────────────────
 
 
 def test_trades_csv_exists():
-    assert (
-        RESULTS / "trades.csv"
-    ).exists(), "Run: python examples/generate_proof_artifacts.py"
+    assert (RESULTS / "trades.csv").exists(), "Run: python examples/generate_proof_artifacts.py"
 
 
 def test_trades_csv_has_correct_columns():
@@ -126,9 +114,7 @@ def test_trades_csv_has_correct_columns():
     missing = required_cols - set(df.columns)
     assert not missing, f"trades.csv missing columns: {missing}"
     # At least one of side/result must be present
-    assert (
-        "side" in df.columns or "result" in df.columns
-    ), "trades.csv must have either 'side' or 'result' column"
+    assert "side" in df.columns or "result" in df.columns, "trades.csv must have either 'side' or 'result' column"
 
 
 def test_trades_csv_row_count(perf):
@@ -136,32 +122,26 @@ def test_trades_csv_row_count(perf):
 
     df = pd.read_csv(RESULTS / "trades.csv")
     expected = int(perf["n_trades"])
-    assert (
-        len(df) == expected
-    ), f"trades.csv has {len(df)} rows but performance.json says {expected} trades"
+    assert len(df) == expected, f"trades.csv has {len(df)} rows but performance.json says {expected} trades"
 
 
 # ── equity_curve.png ──────────────────────────────────────────────────────────
 
 
 def test_equity_curve_exists():
-    assert (
-        RESULTS / "equity_curve.png"
-    ).exists(), "Run: python examples/generate_proof_artifacts.py"
+    assert (RESULTS / "equity_curve.png").exists(), "Run: python examples/generate_proof_artifacts.py"
 
 
 def test_equity_curve_nonempty():
     size = (RESULTS / "equity_curve.png").stat().st_size
-    assert size > 10_000, f"equity_curve.png is suspiciously small ({size} bytes)"  # noqa: PLR2004
+    assert size > 10_000, f"equity_curve.png is suspiciously small ({size} bytes)"
 
 
 # ── rf_xauusd.pkl ─────────────────────────────────────────────────────────────
 
 
 def test_model_pkl_exists():
-    assert (
-        MODELS / "rf_xauusd.pkl"
-    ).exists(), "Run: python examples/generate_proof_artifacts.py"
+    assert (MODELS / "rf_xauusd.pkl").exists(), "Run: python examples/generate_proof_artifacts.py"
 
 
 def test_model_pkl_loads():

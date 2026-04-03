@@ -50,10 +50,9 @@ import queue
 import sqlite3
 import threading
 import time
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from data_layer.types import GoldTick, MacroEvent, NewsArticle
 
@@ -168,14 +167,12 @@ class DataLineageStore:
                 )
             except ImportError:
                 logger.warning(
-                    "DataLineageStore: LINEAGE_DB_URL set but psycopg2 not installed. "
-                    "Run: pip install psycopg2-binary"
+                    "DataLineageStore: LINEAGE_DB_URL set but psycopg2 not installed. Run: pip install psycopg2-binary"
                 )
                 self._pg_url = ""
             except Exception as exc:
                 logger.warning(
-                    "DataLineageStore: PostgreSQL connection failed (%s) — "
-                    "dual-write disabled, SQLite only",
+                    "DataLineageStore: PostgreSQL connection failed (%s) — dual-write disabled, SQLite only",
                     exc,
                 )
                 self._pg_url = ""
@@ -193,13 +190,9 @@ class DataLineageStore:
                 try:
                     n = self.export_to_postgres(self._pg_url)
                     self._pg_export_count += n
-                    logger.info(
-                        "DataLineageStore: exported %d records to PostgreSQL on stop", n
-                    )
+                    logger.info("DataLineageStore: exported %d records to PostgreSQL on stop", n)
                 except Exception as exc:
-                    logger.warning(
-                        "DataLineageStore: PostgreSQL export on stop failed: %s", exc
-                    )
+                    logger.warning("DataLineageStore: PostgreSQL export on stop failed: %s", exc)
             self._conn.close()
 
     # ── Public record API ─────────────────────────────────────────────────────
@@ -321,8 +314,8 @@ class DataLineageStore:
         if not self._conn:
             return []
 
-        clauses: list[str] = []
-        params: list[Any] = []
+        clauses: ClassVar[list[str]] = []
+        params: ClassVar[list[Any]] = []
 
         if record_type:
             clauses.append("record_type = ?")
@@ -341,9 +334,7 @@ class DataLineageStore:
         sql = (
             "SELECT id, record_type, schema_version, lineage_id, source, "  # nosec B608 - where has only ? placeholders
             "symbol, timestamp, payload, created_at "
-            "FROM lineage_records "
-            + where
-            + " ORDER BY timestamp DESC LIMIT ?"
+            "FROM lineage_records " + where + " ORDER BY timestamp DESC LIMIT ?"
         )
         params.append(limit)
 
@@ -465,9 +456,7 @@ class DataLineageStore:
         sql = (
             "SELECT id, record_type, schema_version, lineage_id, source, "  # nosec B608 - where has only ? placeholders
             "symbol, timestamp, payload, created_at "
-            "FROM lineage_records "
-            + where
-            + " ORDER BY timestamp ASC LIMIT ?"
+            "FROM lineage_records " + where + " ORDER BY timestamp ASC LIMIT ?"
         )
         params.append(limit)
 
@@ -527,8 +516,7 @@ class DataLineageStore:
             import psycopg2.extras  # type: ignore
         except ImportError:
             logger.warning(
-                "DataLineageStore.export_to_postgres: psycopg2 not installed. "
-                "Run: pip install psycopg2-binary"
+                "DataLineageStore.export_to_postgres: psycopg2 not installed. Run: pip install psycopg2-binary"
             )
             return 0
 
@@ -585,9 +573,7 @@ class DataLineageStore:
             inserted = cur.rowcount
             cur.close()
             conn.close()
-            logger.info(
-                "DataLineageStore.export_to_postgres: inserted %d rows", inserted
-            )
+            logger.info("DataLineageStore.export_to_postgres: inserted %d rows", inserted)
             return inserted
         except Exception as exc:
             logger.error("DataLineageStore.export_to_postgres error: %s", exc)
@@ -603,9 +589,7 @@ class DataLineageStore:
                     (record_type,),
                 ).fetchone()
             else:
-                row = self._conn.execute(
-                    "SELECT COUNT(*) FROM lineage_records"
-                ).fetchone()
+                row = self._conn.execute("SELECT COUNT(*) FROM lineage_records").fetchone()
             return row[0] if row else 0
         except Exception:
             return 0
@@ -620,9 +604,7 @@ class DataLineageStore:
             "queue_size": self._queue.qsize(),
             "db_path": str(self._db_path),
             "total_records": self.count(),
-            "by_type": {
-                t: self.count(t) for t in ("TICK", "NEWS", "MACRO", "SIGNAL", "QUALITY")
-            },
+            "by_type": {t: self.count(t) for t in ("TICK", "NEWS", "MACRO", "SIGNAL", "QUALITY")},
         }
 
     # ── Internal ──────────────────────────────────────────────────────────────
@@ -674,12 +656,12 @@ class DataLineageStore:
         if not self._conn:
             return
 
-        batch: list[dict] = []
+        batch: ClassVar[list[dict]] = []
         try:
             while len(batch) < _BATCH_SIZE:
                 batch.append(self._queue.get_nowait())
         except queue.Empty:
-            pass
+            ...  # nosec B110
 
         if not batch:
             return

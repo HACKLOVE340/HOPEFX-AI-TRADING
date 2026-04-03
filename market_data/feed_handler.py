@@ -12,10 +12,9 @@ Ultra-low latency tick processing with normalization
 import asyncio
 import json
 from collections import deque
-from dataclasses import dataclass
-from datetime import datetime, timezone
-UTC = timezone.utc
 from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
 
 try:
     import aiohttp
@@ -40,11 +39,7 @@ class Tick:
 
     @property
     def mid(self) -> float:
-        return (
-            (self.bid + self.ask) / 2
-            if self.bid > 0 and self.ask > 0
-            else self.last_price
-        )
+        return (self.bid + self.ask) / 2 if self.bid > 0 and self.ask > 0 else self.last_price
 
     @property
     def spread(self) -> float:
@@ -121,8 +116,7 @@ class FeedHandler:
             bid_size=float(raw.get("bids", [{}])[0].get("liquidity", 0)),
             ask_size=float(raw.get("asks", [{}])[0].get("liquidity", 0)),
             last_price=(
-                float(raw.get("bids", [{}])[0].get("price", 0))
-                + float(raw.get("asks", [{}])[0].get("price", 0))
+                float(raw.get("bids", [{}])[0].get("price", 0)) + float(raw.get("asks", [{}])[0].get("price", 0))
             )
             / 2,
             last_size=0,
@@ -147,9 +141,7 @@ class FeedHandler:
         # Coinbase Pro format
         return Tick(
             symbol=raw.get("product_id", "").replace("-", ""),
-            timestamp=datetime.fromisoformat(
-                raw.get("time", "").replace("Z", "+00:00")
-            ),
+            timestamp=datetime.fromisoformat(raw.get("time", "")),
             bid=float(raw.get("best_bid", 0)),
             ask=float(raw.get("best_ask", 0)),
             bid_size=float(raw.get("bid_size", 0)),
@@ -186,9 +178,7 @@ class FeedHandler:
 
     def get_recent_trades(self, symbol: str, n: int = 100) -> list[Tick]:
         """Get recent trades for symbol"""
-        return [
-            tick for tick in self.tick_buffer if tick.symbol == symbol and tick.is_trade
-        ][-n:]
+        return [tick for tick in self.tick_buffer if tick.symbol == symbol and tick.is_trade][-n:]
 
 
 class ExchangeFeed:
@@ -219,7 +209,8 @@ class ExchangeFeed:
         await self._send_subscription()
 
         # Start receive loop
-        asyncio.create_task(self._receive_loop())
+        _t = asyncio.create_task(self._receive_loop())
+        _t.add_done_callback(lambda _: None)
 
     async def _send_subscription(self):
         """Send subscription message"""

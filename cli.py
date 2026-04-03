@@ -10,7 +10,7 @@ try:
 
     _load_dotenv(override=False)
 except ImportError:
-    pass
+    ...  # nosec B110
 # No commercial use without explicit permission.
 """
 HOPEFX AI Trading Framework - Command Line Interface
@@ -35,9 +35,7 @@ from config import initialize_config
 from database.models import Base
 
 # Setup logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -48,13 +46,15 @@ def cmd_init(args):
     try:
         # Initialize config (auto-generates CONFIG_ENCRYPTION_KEY if missing)
         config = initialize_config(environment=args.environment)
-        logger.info(f"✓ Configuration initialized: {config.environment}")
+        logger.info("✓ Configuration initialized: %s", config.environment)
+
 
         # Create database
         connection_string = config.database.get_connection_string()
         engine = create_engine(connection_string)
         Base.metadata.create_all(engine)
-        logger.info(f"✓ Database tables created: {config.database.db_type}")
+        logger.info("✓ Database tables created: %s", config.database.db_type)
+
 
         # Create required directories
         Path("logs").mkdir(exist_ok=True)
@@ -67,7 +67,8 @@ def cmd_init(args):
         return 0
 
     except Exception as e:
-        logger.error(f"Initialization failed: {e}")
+        logger.error("Initialization failed: %s", e)
+
         return 1
 
 
@@ -78,15 +79,19 @@ def cmd_status(args):
     try:
         # Check config
         config = initialize_config()
-        logger.info(f"✓ Configuration: {config.app_name} v{config.version}")
-        logger.info(f"  Environment: {config.environment}")
-        logger.info(f"  Debug: {config.debug}")
+        logger.info("✓ Configuration: %s v%s", config.app_name, config.version)
+
+        logger.info("  Environment: %s", config.environment)
+
+        logger.info("  Debug: %s", config.debug)
+
 
         # Check database
         connection_string = config.database.get_connection_string()
         engine = create_engine(connection_string)
         engine.connect()
-        logger.info(f"✓ Database: Connected ({config.database.db_type})")
+        logger.info("✓ Database: Connected (%s)", config.database.db_type)
+
 
         # Check cache
         try:
@@ -98,14 +103,16 @@ def cmd_status(args):
             )
             if cache.health_check():
                 stats = cache.get_statistics()
-                logger.info(f"✓ Cache: Connected (hit rate: {stats.hit_rate:.2f}%)")
+                logger.info("✓ Cache: Connected (hit rate: %s%)", stats.hit_rate)
+
             else:
                 logger.warning("⚠ Cache: Connection failed")
         except Exception:
             logger.warning("⚠ Cache: Not available")
 
         # Check API configs
-        logger.info(f"✓ API Configurations: {len(config.api_configs)} configured")
+        logger.info("✓ API Configurations: %s configured", len(config.api_configs))
+
 
         # Check directories
         dirs = {
@@ -115,15 +122,18 @@ def cmd_status(args):
         }
         for name, path in dirs.items():
             if path.exists():
-                logger.info(f"✓ Directory '{name}': Exists")
+                logger.info("✓ Directory '%s': Exists", name)
+
             else:
-                logger.warning(f"⚠ Directory '{name}': Not found")
+                logger.warning("⚠ Directory '%s': Not found", name)
+
 
         logger.info("\n✓ System status check complete")
         return 0
 
     except Exception as e:
-        logger.error(f"Status check failed: {e}")
+        logger.error("Status check failed: %s", e)
+
         return 1
 
 
@@ -133,15 +143,22 @@ def cmd_config(args):
         try:
             config = initialize_config()
             logger.info("Current Configuration:")
-            logger.info(f"  App: {config.app_name} v{config.version}")
-            logger.info(f"  Environment: {config.environment}")
-            logger.info(f"  Debug: {config.debug}")
-            logger.info(f"  Database: {config.database.db_type}")
-            logger.info(f"  Trading enabled: {config.trading.trading_enabled}")
-            logger.info(f"  Paper trading: {config.trading.paper_trading_mode}")
+            logger.info("  App: %s v%s", config.app_name, config.version)
+
+            logger.info("  Environment: %s", config.environment)
+
+            logger.info("  Debug: %s", config.debug)
+
+            logger.info("  Database: %s", config.database.db_type)
+
+            logger.info("  Trading enabled: %s", config.trading.trading_enabled)
+
+            logger.info("  Paper trading: %s", config.trading.paper_trading_mode)
+
             return 0
         except Exception as e:
-            logger.error(f"Failed to show config: {e}")
+            logger.error("Failed to show config: %s", e)
+
             return 1
 
     elif args.action == "validate":
@@ -150,11 +167,11 @@ def cmd_config(args):
             if config.validate():
                 logger.info("✓ Configuration is valid")
                 return 0
-            else:
-                logger.error("✗ Configuration validation failed")
-                return 1
+            logger.error("✗ Configuration validation failed")
+            return 1
         except Exception as e:
-            logger.error(f"Validation failed: {e}")
+            logger.error("Validation failed: %s", e)
+
             return 1
 
     return 0
@@ -168,13 +185,16 @@ def cmd_cache(args):
         if args.action == "stats":
             stats = cache.get_statistics()
             logger.info("Cache Statistics:")
-            logger.info(f"  Total keys: {stats.total_keys}")
-            logger.info(f"  Total hits: {stats.total_hits}")
-            logger.info(f"  Total misses: {stats.total_misses}")
-            logger.info(f"  Hit rate: {stats.hit_rate:.2f}%")
-            logger.info(
-                f"  Memory usage: {stats.memory_usage_bytes / 1024 / 1024:.2f} MB"
-            )
+            logger.info("  Total keys: %s", stats.total_keys)
+
+            logger.info("  Total hits: %s", stats.total_hits)
+
+            logger.info("  Total misses: %s", stats.total_misses)
+
+            logger.info("  Hit rate: %s%", stats.hit_rate)
+
+            logger.info("  Memory usage: %s MB", stats.memory_usage_bytes / 1024 / 1024)
+
 
         elif args.action == "clear":
             if cache.clear_all():
@@ -193,7 +213,8 @@ def cmd_cache(args):
         return 0
 
     except Exception as e:
-        logger.error(f"Cache operation failed: {e}")
+        logger.error("Cache operation failed: %s", e)
+
         return 1
 
 
@@ -218,7 +239,8 @@ def cmd_db(args):
         return 0
 
     except Exception as e:
-        logger.error(f"Database operation failed: {e}")
+        logger.error("Database operation failed: %s", e)
+
         return 1
 
 
@@ -236,12 +258,8 @@ def cmd_start(args):
                 'Generate one with: python -c "import secrets; print(secrets.token_hex(32))"'
             )
             return 1
-        logger.warning(
-            "CONFIG_ENCRYPTION_KEY not set. Using default for development only."
-        )
-        os.environ["CONFIG_ENCRYPTION_KEY"] = (
-            "dev-key-minimum-32-characters-long-for-testing"
-        )
+        logger.warning("CONFIG_ENCRYPTION_KEY not set. Using default for development only.")
+        os.environ["CONFIG_ENCRYPTION_KEY"] = "dev-key-minimum-32-characters-long-for-testing"
 
     host = args.host
     port = args.port
@@ -252,10 +270,14 @@ def cmd_start(args):
     logger.info("=" * 60)
     logger.info("  HOPEFX AI TRADING - STARTING")
     logger.info("=" * 60)
-    logger.info(f"  API:          {base_url}/")
-    logger.info(f"  Docs:         {base_url}/docs")
-    logger.info(f"  Paper Trade:  {base_url}/paper-trading")
-    logger.info(f"  Pricing:      {base_url}/pricing")
+    logger.info("  API:          %s/", base_url)
+
+    logger.info("  Docs:         %s/docs", base_url)
+
+    logger.info("  Paper Trade:  %s/paper-trading", base_url)
+
+    logger.info("  Pricing:      %s/pricing", base_url)
+
     logger.info("=" * 60)
 
     # uvicorn's --reload flag is incompatible with multiple workers;
@@ -281,9 +303,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
-    parser.add_argument(
-        "--version", action="version", version="HOPEFX AI Trading Framework v1.0.0"
-    )
+    parser.add_argument("--version", action="version", version="HOPEFX AI Trading Framework v1.0.0")
 
     parser.add_argument(
         "--env",
@@ -305,16 +325,12 @@ def main():
 
     # config command
     parser_config = subparsers.add_parser("config", help="Manage configuration")
-    parser_config.add_argument(
-        "action", choices=["show", "validate"], help="Config action"
-    )
+    parser_config.add_argument("action", choices=["show", "validate"], help="Config action")
     parser_config.set_defaults(func=cmd_config)
 
     # cache command
     parser_cache = subparsers.add_parser("cache", help="Manage cache")
-    parser_cache.add_argument(
-        "action", choices=["stats", "clear", "health"], help="Cache action"
-    )
+    parser_cache.add_argument("action", choices=["stats", "clear", "health"], help="Cache action")
     parser_cache.set_defaults(func=cmd_cache)
 
     # db command
@@ -360,7 +376,8 @@ def main():
     try:
         return args.func(args)
     except Exception as e:
-        logger.error(f"Command failed: {e}")
+        logger.error("Command failed: %s", e)
+
         return 1
 
 

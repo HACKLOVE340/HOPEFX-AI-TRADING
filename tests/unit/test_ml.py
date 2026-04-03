@@ -7,9 +7,9 @@
 Tests for the ML module.
 """
 
-import pytest
 import numpy as np
 import pandas as pd
+import pytest
 
 from ml.features.technical import TechnicalFeatureEngineer
 
@@ -73,7 +73,7 @@ class TestTechnicalFeatureEngineer:
         result = fe.create_features(sample_ohlcv_data)
 
         # Check that features were created
-        assert len(result.columns) > 5  # More than just OHLCV  # noqa: PLR2004
+        assert len(result.columns) > 5  # More than just OHLCV
         assert len(fe.feature_names) > 0
 
     def test_create_features_no_nan_in_result(self, sample_ohlcv_data):
@@ -124,9 +124,7 @@ class TestTechnicalFeatureEngineer:
 
         # Check for volatility features (e.g., Bollinger Bands)
         # Bollinger Bands or ATR should be present
-        volatility_features = [
-            col for col in result.columns if "bb_" in col or "atr" in col
-        ]
+        volatility_features = [col for col in result.columns if "bb_" in col or "atr" in col]
         assert len(volatility_features) >= 1
 
     def test_volume_features_created(self, sample_ohlcv_data):
@@ -136,9 +134,7 @@ class TestTechnicalFeatureEngineer:
         result = fe.create_features(sample_ohlcv_data)
 
         # Check for volume-related features
-        volume_features = [
-            col for col in result.columns if "volume" in col.lower() or "vol_" in col
-        ]
+        volume_features = [col for col in result.columns if "volume" in col.lower() or "vol_" in col]
         assert len(volume_features) >= 1
 
     def test_feature_names_populated(self, sample_ohlcv_data):

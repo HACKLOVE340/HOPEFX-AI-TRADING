@@ -47,12 +47,12 @@ import json
 import logging
 import os
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, time as dtime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
+from datetime import time as dtime
 from enum import Enum, auto
 from pathlib import Path
-from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -121,18 +121,12 @@ class PropConfig:
             )
             news_blackout = int(
                 raw.get("news_blackout")
-                or firm_cfg.get("news_trading", {}).get(
-                    "blackout_minutes_before_news", 5
-                )
-                * 60
+                or firm_cfg.get("news_trading", {}).get("blackout_minutes_before_news", 5) * 60
                 or 300,
             )
             weekend_close = bool(
                 raw.get("weekend_close", True)
-                or firm_cfg.get("overnight_holding", {}).get(
-                    "weekend_holding_allowed", False
-                )
-                is False,
+                or firm_cfg.get("overnight_holding", {}).get("weekend_holding_allowed", False) is False,
             )
             return cls(
                 daily_dd=float(daily_dd),
@@ -140,17 +134,11 @@ class PropConfig:
                 news_blackout=news_blackout,
                 weekend_close=weekend_close,
                 breach_action=raw.get("breach_action", "pause"),
-                telegram_token=raw.get(
-                    "telegram_token", os.environ.get("TELEGRAM_BOT_TOKEN", "")
-                ),
-                telegram_chat_id=raw.get(
-                    "telegram_chat_id", os.environ.get("TELEGRAM_CHAT_ID", "")
-                ),
+                telegram_token=raw.get("telegram_token", os.environ.get("TELEGRAM_BOT_TOKEN", "")),
+                telegram_chat_id=raw.get("telegram_chat_id", os.environ.get("TELEGRAM_CHAT_ID", "")),
             )
         except Exception as exc:
-            logger.error(
-                "Failed to parse prop_firm_mode.json: %s — using defaults", exc
-            )
+            logger.error("Failed to parse prop_firm_mode.json: %s — using defaults", exc)
             return cls()
 
 
@@ -216,9 +204,7 @@ class PropEnforcer:
 
     # ── public API ────────────────────────────────────────────────────────────
 
-    def update_balance(
-        self, current_equity: float, start_of_day_equity: float | None = None
-    ) -> None:
+    def update_balance(self, current_equity: float, start_of_day_equity: float | None = None) -> None:
         """
         Update equity state. Call on every account snapshot.
 
@@ -307,9 +293,7 @@ class PropEnforcer:
 
             # 5. Total drawdown check (from high-water mark)
             if self._high_water_mark > 0:
-                total_dd = (
-                    self._high_water_mark - self._current_equity
-                ) / self._high_water_mark
+                total_dd = (self._high_water_mark - self._current_equity) / self._high_water_mark
                 if total_dd >= self.cfg.max_dd:
                     reason = (
                         f"TOTAL_DD breach: {total_dd * 100:.2f}% >= {self.cfg.max_dd * 100:.1f}% limit "
@@ -323,11 +307,7 @@ class PropEnforcer:
     def status(self) -> dict:
         """Return current enforcer state as a dict (for API/health endpoints)."""
         with self._lock:
-            daily_dd = (
-                (self._sod_equity - self._current_equity) / self._sod_equity
-                if self._sod_equity > 0
-                else 0.0
-            )
+            daily_dd = (self._sod_equity - self._current_equity) / self._sod_equity if self._sod_equity > 0 else 0.0
             total_dd = (
                 (self._high_water_mark - self._current_equity) / self._high_water_mark
                 if self._high_water_mark > 0
@@ -344,9 +324,7 @@ class PropEnforcer:
                 "daily_dd_limit": self.cfg.daily_dd * 100,
                 "total_dd_limit": self.cfg.max_dd * 100,
                 "breach_count": len(self._breach_log),
-                "last_breach": self._breach_log[-1].__dict__
-                if self._breach_log
-                else None,
+                "last_breach": self._breach_log[-1].__dict__ if self._breach_log else None,
             }
 
     # ── internal helpers ──────────────────────────────────────────────────────
@@ -355,11 +333,11 @@ class PropEnforcer:
         """True between Friday 21:00 UTC and Monday 00:00 UTC."""
         weekday = now.weekday()  # 0=Mon … 6=Sun
         t = now.time()
-        if weekday == 4 and t >= dtime(21, 0):  # Friday after 21:00  # noqa: PLR2004
+        if weekday == 4 and t >= dtime(21, 0):  # Friday after 21:00
             return True
-        if weekday == 5:  # Saturday  # noqa: PLR2004
+        if weekday == 5:  # Saturday
             return True
-        return weekday == 6 and t < dtime(0, 1)  # Sunday before 00:01  # noqa: PLR2004
+        return weekday == 6 and t < dtime(0, 1)  # Sunday before 00:01
 
     def _is_news_blackout(self, now_ts: float) -> bool:
         """True if now is within news_blackout seconds of any registered event."""
@@ -404,8 +382,8 @@ class PropEnforcer:
         if not token or not chat_id:
             return
         try:
-            import urllib.request
             import urllib.parse
+            import urllib.request
 
             emoji = {
                 "DAILY_DD": "🔴",

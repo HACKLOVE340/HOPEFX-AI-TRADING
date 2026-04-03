@@ -97,9 +97,7 @@ async def prop_firm_status(user: TokenPayload = Depends(get_current_user)):
 
         # AI message
         if ks_active:
-            ai_msg = (
-                "🔴 CHALLENGE PROTECTED — all positions closed (drawdown limit reached)"
-            )
+            ai_msg = "🔴 CHALLENGE PROTECTED — all positions closed (drawdown limit reached)"
         elif paused:
             ai_msg = "🛑 TRADING PAUSED — approaching drawdown limit"
         elif total_dd >= max_limit * 0.95:
@@ -126,9 +124,9 @@ async def prop_firm_status(user: TokenPayload = Depends(get_current_user)):
             starting_equity=starting,
         )
 
-    except Exception as exc:
-        logger.error("prop_firm_status error: %s", exc, exc_info=True)
+    except Exception:
+        logger.exception("prop_firm_status error: %s")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Prop firm status unavailable: {exc}",
-        ) from exc
+            detail="Prop firm status unavailable — check server logs",
+        ) from None

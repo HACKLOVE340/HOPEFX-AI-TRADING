@@ -20,8 +20,7 @@ import json as _json
 import logging
 import os
 import time
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path as _Path
 from typing import Any
 
@@ -97,9 +96,7 @@ def _check_kill_switch() -> None:
 # Both gates are bypassed when BROKER_TYPE=paper (paper trading is always
 # allowed) or APP_ENV=test so the test suite is not affected.
 # ---------------------------------------------------------------------------
-_OOS_META_PATH = (
-    _Path(__file__).parent.parent / "ml" / "saved_models" / "advanced_oos_meta.json"
-)
+_OOS_META_PATH = _Path(__file__).parent.parent / "ml" / "saved_models" / "advanced_oos_meta.json"
 _deployment_gate_cache: dict = {}  # {path_mtime: result} — avoids re-reading on every order
 
 
@@ -173,7 +170,6 @@ _order_rl_cache: dict = {}  # in-memory fallback: {user_id: [timestamps]}
 
 def _reset_order_rl_cache() -> None:
     """Clear the in-memory rate-limit cache. Used by tests to prevent bleed."""
-    global _order_rl_cache  # noqa: PLW0602
     _order_rl_cache.clear()
 
 
@@ -380,25 +376,25 @@ async def _run_standard_risk_check(order: "OrderRequest", user_id: str) -> None:
     """
     try:
         account_info = await _broker_call("get_account_info")
-        positions    = await _broker_call("get_positions")
+        positions = await _broker_call("get_positions")
         positions_dicts = [
             {
-                "symbol":        p.symbol,
-                "quantity":      p.quantity,
+                "symbol": p.symbol,
+                "quantity": p.quantity,
                 "current_price": getattr(p, "current_price", 0),
             }
             for p in positions
         ]
         assessment = app_state.risk_manager.assess_risk(account_info, positions_dicts)
         if not assessment.can_trade:
-            reason     = getattr(assessment, "reason", None) or getattr(assessment, "messages", ["risk_check_failed"])
+            reason = getattr(assessment, "reason", None) or getattr(assessment, "messages", ["risk_check_failed"])
             reason_str = "; ".join(reason) if isinstance(reason, list) else str(reason)
             logger.warning("Order blocked by risk manager: user=%s reason=%s", user_id, reason_str)
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Risk check failed: {reason_str}")
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error("Risk check error (blocking order for safety): user=%s %s", user_id, exc, exc_info=True)
+        logger.exception("Risk check error (blocking order for safety): user=%s %s", user_id, exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Risk check unavailable — order rejected for safety",
@@ -421,7 +417,7 @@ async def _run_cvar_gate(user_id: str) -> None:
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error("CVaR pre-trade check error (blocking order for safety): user=%s %s", user_id, exc, exc_info=True)
+        logger.exception("CVaR pre-trade check error (blocking order for safety): user=%s %s", user_id, exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="CVaR risk check unavailable — order rejected for safety",
@@ -446,10 +442,7 @@ async def _apply_risk_checks(order: "OrderRequest", user_id: str) -> None:
 
 def _log_compliance(order: "OrderRequest", user_id: str) -> None:
     """Write the pre-execution compliance audit record. Non-blocking on error."""
-    if not (
-        hasattr(app_state, "compliance_manager")
-        and app_state.compliance_manager is not None
-    ):
+    if not (hasattr(app_state, "compliance_manager") and app_state.compliance_manager is not None):
         return
     try:
         app_state.compliance_manager.log_trade(
@@ -481,17 +474,15 @@ async def _route_to_broker(order: "OrderRequest") -> Any:
         return result
     except HTTPException:
         raise
-    except Exception as exc:
-        logger.error("Broker order submission failed: %s", exc, exc_info=True)
+    except Exception:
+        logger.exception("Broker order submission failed: %s")
         try:
             from core.metrics import ORDERS_TOTAL
 
-            ORDERS_TOTAL.labels(
-                symbol=order.symbol, side=order.side, status="error"
-            ).inc()
+            ORDERS_TOTAL.labels(symbol=order.symbol, side=order.side, status="error").inc()
         except Exception as _exc:
             logger.debug("Suppressed exception: %s", _exc)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Order submission failed — check server logs") from None
 
 
 async def _broadcast_fill_ws(order: "OrderRequest", result: Any) -> None:
@@ -514,6 +505,7 @@ def _send_fill_push(order: "OrderRequest", result: Any, user_id: str) -> None:
     """Send FCM push notification for the fill. Best-effort."""
     try:
         from mobile.push_notifications import push_manager
+
         push_manager.send_trade_filled(
             user_id=user_id,
             symbol=order.symbol,
@@ -529,7 +521,12 @@ def _resolve_user_email(user_id: str) -> str:
     """Look up the authenticated user's email address from the DB."""
     try:
         from auth.service import AuthService
-        db_user = AuthService().get_user_by_id(user_id)
+        from core.app_state import app_state
+
+        session_factory = app_state.db_session_factory
+        if session_factory is None:
+            return ""
+        db_user = AuthService(session_factory=session_factory).get_user_by_id(user_id)
         return getattr(db_user, "email", "") or ""
     except Exception as exc:
         logger.debug("Could not resolve user email for fill notification: %s", exc)
@@ -540,6 +537,7 @@ def _send_fill_email(order: "OrderRequest", result: Any, user_id: str) -> None:
     """Send trade-fill email notification. Best-effort."""
     try:
         from notifications.email_triggers import send_trade_fill_email
+
         send_trade_fill_email(
             symbol=order.symbol,
             direction=order.side,
@@ -558,6 +556,7 @@ def _increment_fill_metrics(order: "OrderRequest") -> None:
     """Increment Prometheus fill counter. Best-effort."""
     try:
         from core.metrics import ORDERS_TOTAL
+
         ORDERS_TOTAL.labels(symbol=order.symbol, side=order.side, status="filled").inc()
     except Exception as exc:
         logger.debug("Suppressed exception: %s", exc)
@@ -571,20 +570,27 @@ def _notify_paper_gate_and_online_learner(order: "OrderRequest", result: Any) ->
     """
     try:
         from research.pipeline.paper_trading_gate import get_gate as _get_gate
+
         _get_gate().record_fill(pnl=float(getattr(result, "pnl", 0.0) or 0.0))
     except Exception as exc:
         logger.debug("gate.record_fill skipped: %s", exc)
 
     try:
         import pandas as _pd
+
         from core.signal_engine import notify_fill as _notify_fill
-        _features = _pd.DataFrame([{
-            "symbol":     order.symbol,
-            "side":       order.side,
-            "quantity":   order.quantity,
-            "fill_price": result.average_fill_price or 0.0,
-            "source":     "rest_api",
-        }])
+
+        _features = _pd.DataFrame(
+            [
+                {
+                    "symbol": order.symbol,
+                    "side": order.side,
+                    "quantity": order.quantity,
+                    "fill_price": result.average_fill_price or 0.0,
+                    "source": "rest_api",
+                }
+            ]
+        )
         _notify_fill(_features, label=1, primary_prob=None)
     except Exception as exc:
         logger.debug("notify_fill skipped: %s", exc)
@@ -608,7 +614,11 @@ async def _record_fill(
     """
     logger.info(
         "Order placed: user=%s symbol=%s side=%s qty=%s order_id=%s",
-        user_id, order.symbol, order.side, order.quantity, result.id,
+        user_id,
+        order.symbol,
+        order.side,
+        order.quantity,
+        result.id,
     )
     await _broadcast_fill_ws(order, result)
     _send_fill_push(order, result, user_id)
@@ -617,10 +627,10 @@ async def _record_fill(
     _notify_paper_gate_and_online_learner(order, result)
 
     return {
-        "status":           "success",
-        "order_id":         result.id,
-        "filled_price":     result.average_fill_price,
-        "filled_quantity":  result.filled_quantity,
+        "status": "success",
+        "order_id": result.id,
+        "filled_price": result.average_fill_price,
+        "filled_quantity": result.filled_quantity,
     }
 
 
@@ -632,36 +642,29 @@ def _check_subscription_gate(user_id: str) -> None:
     monetization module is unavailable.  Raises HTTP 403 when the user's
     active plan is below 'starter'.
     """
-    app_env    = os.getenv("APP_ENV", "test").lower()
+    app_env = os.getenv("APP_ENV", "test").lower()
     broker_type = os.getenv("BROKER_TYPE", "paper").lower()
 
-    if (
-        app_state is None
-        or app_env  in ("test", "ci", "testing", "")
-        or broker_type in ("paper", "")
-    ):
+    if app_state is None or app_env in ("test", "ci", "testing", "") or broker_type in ("paper", ""):
         return
 
     try:
-        from monetization.subscription import subscription_manager, plan_gate
-        sub       = subscription_manager.get_user_subscription(user_id)
-        user_plan = (
-            sub.tier.value
-            if (sub and sub.is_active() and hasattr(sub.tier, "value"))
-            else "free"
-        )
+        from monetization.subscription import plan_gate, subscription_manager
+
+        sub = subscription_manager.get_user_subscription(user_id)
+        user_plan = sub.tier.value if (sub and sub.is_active() and hasattr(sub.tier, "value")) else "free"
         if not plan_gate("starter", user_plan):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={
-                    "error":         "PLAN_LIMIT_EXCEEDED",
+                    "error": "PLAN_LIMIT_EXCEEDED",
                     "required_plan": "starter",
-                    "current_plan":  user_plan,
-                    "message":       "Live trading requires a Starter subscription or above.",
+                    "current_plan": user_plan,
+                    "message": "Live trading requires a Starter subscription or above.",
                 },
             )
     except ImportError:
-        pass  # monetization module not installed — allow through
+        ...  # nosec B110
 
 
 @router.post(
@@ -720,11 +723,7 @@ async def get_positions(
         pnl = float(getattr(p, "unrealized_pnl", 0) or 0)
         pnl_pct = ((current - entry) / entry * 100) if entry > 0 else 0.0
         opened_at = getattr(p, "opened_at", None) or getattr(p, "created_at", None)
-        opened_at_str = (
-            opened_at.isoformat()
-            if hasattr(opened_at, "isoformat")
-            else str(opened_at or "")
-        )
+        opened_at_str = opened_at.isoformat() if hasattr(opened_at, "isoformat") else str(opened_at or "")
         result.append(
             PositionResponse(
                 id=p.id,
@@ -830,7 +829,7 @@ async def get_account(
                 try:
                     return float(v)
                 except (TypeError, ValueError):
-                    pass
+                    ...  # nosec B110
         return default
 
     def _s(obj, *keys, default=""):
@@ -843,9 +842,7 @@ async def get_account(
     balance = _f(raw, "balance", "nav", "net_liquidation")
     equity = _f(raw, "equity", "balance", "nav") or balance
     margin_used = _f(raw, "margin_used", "margin", "used_margin")
-    margin_avail = _f(raw, "margin_available", "free_margin", "available_margin") or (
-        equity - margin_used
-    )
+    margin_avail = _f(raw, "margin_available", "free_margin", "available_margin") or (equity - margin_used)
     unrealized = _f(raw, "unrealized_pnl", "open_pnl", "unrealised_pnl")
     daily_pnl = _f(raw, "daily_pnl", "day_pnl", "realized_pnl")
     daily_pnl_pct = (daily_pnl / balance * 100) if balance > 0 else 0.0
@@ -987,7 +984,7 @@ def _query_trades(user_id: str, symbol: str | None, limit: int, offset: int) -> 
 
         if not _state or not _state.db_session_factory:
             return []
-        with _state.db_session_factory() as session:
+        with _state.db_session_factory() as session:  # pylint: disable=not-callable
             q = session.query(Trade).filter(Trade.user_id == user_id)
             if symbol:
                 q = q.filter(Trade.symbol == symbol.upper())
@@ -1097,7 +1094,7 @@ class StrategyResponse(BaseModel):
     enabled: bool
     parameters: dict | None = None
 
-    def model_post_init(self, __context):
+    def model_post_init(self, __context: Any) -> None:  # pylint: disable=arguments-differ
         if not self.type:
             object.__setattr__(self, "type", self.strategy_type)
 
@@ -1138,30 +1135,9 @@ import uuid as _uuid
 _strategy_store: dict[str, dict] = {}
 
 
-_KNOWN_STRATEGY_TYPES = frozenset({
-    "ma_crossover", "rsi", "macd", "bollinger_bands", "ema_crossover",
-    "breakout", "stochastic", "mean_reversion", "smc_ict", "strategy_brain",
-})
-
-
-def _resolve_strategy_key(strategy_id: str) -> str | None:
-    """Return store key by id or name."""
-    if strategy_id in _strategy_store:
-        return strategy_id
-    for k, v in _strategy_store.items():
-        if v.get("name") == strategy_id:
-            return k
-    return None
-
-
-def _compute_max_drawdown(values: list[float]) -> float:
-    """Return max drawdown fraction from an equity curve."""
-    peak, max_dd = values[0], 0.0
-    for v in values:
-        peak = max(peak, v)
-        dd = (peak - v) / peak if peak > 0 else 0.0
-        max_dd = max(max_dd, dd)
-    return max_dd
+def _make_strategy_router():
+    """Return a sub-router with the strategy CRUD + position-size endpoints."""
+    _r = APIRouter()  # no prefix — parent router already has /api/trading
 
 
 def _register_strategy_crud(r: Any) -> None:  # noqa: C901
@@ -1174,7 +1150,19 @@ def _register_strategy_crud(r: Any) -> None:  # noqa: C901
 
     @r.post("/strategies", status_code=201)
     def create_strategy(req: StrategyCreateRequest):
-        if req.strategy_type not in _KNOWN_STRATEGY_TYPES:
+        _KNOWN = {
+            "ma_crossover",
+            "rsi",
+            "macd",
+            "bollinger_bands",
+            "ema_crossover",
+            "breakout",
+            "stochastic",
+            "mean_reversion",
+            "smc_ict",
+            "strategy_brain",
+        }
+        if req.strategy_type not in _KNOWN:
             raise HTTPException(400, f"Unknown strategy type: {req.strategy_type}")
         sid = str(_uuid.uuid4())[:8]
         record = {"id": sid, "name": req.name, "symbol": req.symbol, "timeframe": req.timeframe, "strategy_type": req.strategy_type, "type": req.strategy_type, "enabled": req.enabled, "parameters": req.parameters, "risk_per_trade": req.risk_per_trade}
@@ -1183,14 +1171,14 @@ def _register_strategy_crud(r: Any) -> None:  # noqa: C901
 
     @r.get("/strategies/{strategy_id}")
     def get_strategy(strategy_id: str):
-        key = _resolve_strategy_key(strategy_id)
+        key = _resolve(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
         return _strategy_store[key]
 
     @r.delete("/strategies/{strategy_id}")
     def delete_strategy(strategy_id: str):
-        key = _resolve_strategy_key(strategy_id)
+        key = _resolve(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
         del _strategy_store[key]
@@ -1229,6 +1217,7 @@ def _register_risk_performance_routes(r: Any) -> None:  # noqa: C901,PLR0915
                 fomc_multiplier = _fomc_regime_override.get("position_size_multiplier", 1.0)
         except Exception as exc:
             logger.debug("FOMC regime multiplier unavailable, using 1.0: %s", exc)
+
         size = (risk_amount / risk_per_unit if risk_per_unit > 0 else 0.0) * fomc_multiplier
         tp = req.entry_price + risk_per_unit * 2 if req.stop_loss_price else None
         return PositionSizeResponse(size=round(size, 4), risk_amount=round(risk_amount * fomc_multiplier, 2), stop_loss_price=req.stop_loss_price, take_profit_price=tp)
@@ -1241,6 +1230,8 @@ def _register_risk_performance_routes(r: Any) -> None:  # noqa: C901,PLR0915
                 raise AttributeError("no broker")
             account = broker.get_account_info()
             positions = broker.get_positions() if hasattr(broker, "get_positions") else []
+
+            # Daily PnL: sum unrealised PnL across open positions
             daily_pnl = sum(getattr(p, "unrealized_pnl", 0.0) or 0.0 for p in positions)
             margin_used = float(getattr(account, "margin_used", 0.0) or 0.0)
             max_dd = 0.0
@@ -1263,31 +1254,78 @@ def _register_risk_performance_routes(r: Any) -> None:  # noqa: C901,PLR0915
             if not equity_history:
                 raise ValueError("no history")
             values = [v for _, v in equity_history]
-            total_return = ((values[-1] - values[0]) / values[0] * 100) if values[0] > 0 else 0.0
-            max_dd = _compute_max_drawdown(values)
+            initial = values[0]
+            final = values[-1]
+            total_return = ((final - initial) / initial * 100) if initial > 0 else 0.0
+
+            # Max drawdown
+            peak, max_dd = initial, 0.0
+            for v in values:
+                peak = max(peak, v)
+                dd = (peak - v) / peak if peak > 0 else 0.0
+                max_dd = max(max_dd, dd)
+
+            # Sharpe from point-to-point returns
             returns = [(values[i] - values[i - 1]) / values[i - 1] for i in range(1, len(values)) if values[i - 1] > 0]
             sharpe = 0.0
-            if len(returns) >= 2:  # noqa: PLR2004
+            if len(returns) >= 2:
                 mean_r = sum(returns) / len(returns)
                 var = sum((r - mean_r) ** 2 for r in returns) / len(returns)
                 std_r = _math.sqrt(var) if var > 0 else 0.0
                 if std_r > 0:
                     sharpe = round((mean_r / std_r) * _math.sqrt(252), 3)
+
             win_rate = sum(1 for r in returns if r > 0) / len(returns) if returns else 0.0
+
+            # Period in days
             ts_list = [t for t, _ in equity_history]
-            period_days = max(1, round((ts_list[-1] - ts_list[0]) / 86400)) if len(ts_list) >= 2 else 1  # noqa: PLR2004
-            return {"total_return": round(total_return, 4), "sharpe_ratio": sharpe, "max_drawdown": round(max_dd * 100, 3), "win_rate": round(win_rate * 100, 2), "total_trades": len(returns), "period_days": period_days, "total_strategies": len(_strategy_store)}
+            period_days = (
+                max(1, round((ts_list[-1] - ts_list[0]) / 86400))
+                if len(ts_list) >= 2
+                else 1
+            )
+
+            return {
+                "total_return": round(total_return, 4),
+                "sharpe_ratio": sharpe,
+                "max_drawdown": round(max_dd * 100, 3),
+                "win_rate": round(win_rate * 100, 2),
+                "total_trades": len(returns),
+                "period_days": period_days,
+                "total_strategies": len(_strategy_store),
+            }
         except Exception as exc:
             logger.debug("performance/summary fallback: %s", exc)
             return {"total_return": 0.0, "sharpe_ratio": 0.0, "max_drawdown": 0.0, "win_rate": 0.0, "total_trades": 0, "period_days": 30, "total_strategies": len(_strategy_store)}
 
     @r.get("/performance/{strategy_id}")
     def get_strategy_performance(strategy_id: str):
-        key = _resolve_strategy_key(strategy_id)
+        key = _resolve(strategy_id)
+        if key is None:
+            raise HTTPException(404, "Strategy not found")
+        return {
+            "strategy_id": strategy_id,
+            "total_return": 0.0,
+            "sharpe_ratio": 0.0,
+            "max_drawdown": 0.0,
+            "win_rate": 0.0,
+            "total_trades": 0,
+        }
+
+    @_r.post("/strategies/{strategy_id}/start")
+    def start_strategy(strategy_id: str):
+        key = _resolve(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
         return {"strategy_id": strategy_id, "total_return": 0.0, "sharpe_ratio": 0.0, "max_drawdown": 0.0, "win_rate": 0.0, "total_trades": 0}
 
+    @_r.post("/strategies/{strategy_id}/stop")
+    def stop_strategy(strategy_id: str):
+        key = _resolve(strategy_id)
+        if key is None:
+            raise HTTPException(404, "Strategy not found")
+        _strategy_store[key]["enabled"] = False
+        return {"status": "stopped", "strategy_id": strategy_id}
 
 def _make_strategy_router():
     """Return a sub-router with strategy CRUD, position-size, and performance endpoints."""
@@ -1301,16 +1339,14 @@ def _make_strategy_router():
 # Register the sub-router on the module-level router
 try:
     router.include_router(_make_strategy_router())
-except Exception as exc:
-    logger.error("Failed to register strategy sub-router: %s", exc, exc_info=True)
+except Exception:
+    logger.exception("Failed to register strategy sub-router: %s")
 
 
 # ── Regime status endpoint ────────────────────────────────────────────────────
 
 
-@router.get(
-    "/regime", response_model=None, summary="Current market regime and active strategy"
-)
+@router.get("/regime", response_model=None, summary="Current market regime and active strategy")
 async def get_regime_status():
     """
     Return the current detected market regime, confidence score, and the
@@ -1336,6 +1372,7 @@ async def get_regime_status():
         # Try to detect regime from live price data
         if broker is not None and hasattr(broker, "get_ohlcv"):
             import asyncio
+
             import pandas as pd
 
             _get = broker.get_ohlcv("XAUUSD", limit=100)
@@ -1350,21 +1387,17 @@ async def get_regime_status():
         return regime_router.status()
 
     except Exception as exc:
-        import logging as _log
-
-        _log.getLogger(__name__).warning("regime status error: %s", exc)
+        logger.warning("regime status error: %s", exc)
         return {
             "current_regime": "unknown",
             "confidence": 0.0,
             "selected_strategy": "TrendFollowing",
             "manifest_entries": {},
-            "error": str(exc),
+            "error": "Regime router unavailable — check server logs",
         }
 
 
-@router.get(
-    "/regime/history", response_model=None, summary="Recent regime transition history"
-)
+@router.get("/regime/history", response_model=None, summary="Recent regime transition history")
 async def get_regime_history(limit: int = 20):
     """Return the last N regime transitions with timestamps."""
     try:
@@ -1375,7 +1408,8 @@ async def get_regime_history(limit: int = 20):
             return {"history": []}
         return {"history": regime_router.regime_history(limit=limit)}
     except Exception as exc:
-        return {"history": [], "error": str(exc)}
+        logger.warning("get_regime_history failed: %s", exc)
+        return {"history": [], "error": "Regime history unavailable — check server logs"}
 
 
 # ── Stress test endpoint ──────────────────────────────────────────────────────
@@ -1407,9 +1441,7 @@ async def run_stress_test(
     max_loss_pct   : Gate threshold — any scenario exceeding this fraction
                      of equity marks gate_passed=False.
     """
-    import logging as _log
-
-    _logger = _log.getLogger(__name__)
+    _logger = logger
     try:
         from risk.stress_test import run_all_scenarios
 
@@ -1419,8 +1451,6 @@ async def run_stress_test(
             leverage=leverage,
             max_loss_pct=max_loss_pct,
         )
-    except Exception as exc:
-        _logger.error("Stress test failed: %s", exc, exc_info=True)
-        from fastapi import HTTPException
-
-        raise HTTPException(status_code=500, detail=f"Stress test error: {exc}") from None
+    except Exception:
+        _logger.exception("Stress test failed: %s")
+        raise HTTPException(status_code=500, detail="Stress test failed — check server logs") from None

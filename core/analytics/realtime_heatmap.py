@@ -10,8 +10,7 @@ Live correlation, regime detection, and risk visualization
 """
 
 from collections import deque
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 import numpy as np
 
@@ -56,13 +55,11 @@ class RealtimeHeatmapEngine:
 
     def _detect_regime(self, symbol: str):
         """Detect current market regime"""
-        if len(self.price_history[symbol]) < 50:  # noqa: PLR2004
+        if len(self.price_history[symbol]) < 50:
             return
 
         prices = [p for _, p in self.price_history[symbol]]
-        returns = [
-            (prices[i] - prices[i - 1]) / prices[i - 1] for i in range(1, len(prices))
-        ]
+        returns = [(prices[i] - prices[i - 1]) / prices[i - 1] for i in range(1, len(prices))]
 
         # Calculate metrics
         volatility = np.std(returns[-50:])
@@ -70,8 +67,8 @@ class RealtimeHeatmapEngine:
         adx = self._calculate_adx(prices[-50:])
 
         # Classify regime
-        if volatility > 0.001:  # noqa: PLR2004
-            if abs(trend) > 0.0005 and adx > 25:  # noqa: PLR2004
+        if volatility > 0.001:
+            if abs(trend) > 0.0005 and adx > 25:
                 regime = "trending_up" if trend > 0 else "trending_down"
             else:
                 regime = "volatile"
@@ -92,16 +89,11 @@ class RealtimeHeatmapEngine:
         closes = prices[1:]
 
         plus_dm = [
-            highs[i] - highs[i - 1]
-            if highs[i] - highs[i - 1] > lows[i - 1] - lows[i]
-            else 0
+            highs[i] - highs[i - 1] if highs[i] - highs[i - 1] > lows[i - 1] - lows[i] else 0
             for i in range(1, len(highs))
         ]
         minus_dm = [
-            lows[i - 1] - lows[i]
-            if lows[i - 1] - lows[i] > highs[i] - highs[i - 1]
-            else 0
-            for i in range(1, len(lows))
+            lows[i - 1] - lows[i] if lows[i - 1] - lows[i] > highs[i] - highs[i - 1] else 0 for i in range(1, len(lows))
         ]
 
         tr = [
@@ -117,25 +109,21 @@ class RealtimeHeatmapEngine:
         plus_di = 100 * np.mean(plus_dm[-period:]) / atr if atr > 0 else 0
         minus_di = 100 * np.mean(minus_dm[-period:]) / atr if atr > 0 else 0
 
-        dx = (
-            100 * abs(plus_di - minus_di) / (plus_di + minus_di)
-            if (plus_di + minus_di) > 0
-            else 0
-        )
+        dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di) if (plus_di + minus_di) > 0 else 0
         return dx
 
     def get_correlation_matrix(self, symbols: list[str]) -> np.ndarray:
         """Calculate real-time correlation matrix"""
-        if len(symbols) < 2:  # noqa: PLR2004
+        if len(symbols) < 2:
             return np.eye(1)
 
         # Build returns matrix
         returns_list = []
         for sym in symbols:
-            if sym in self.returns_history and len(self.returns_history[sym]) > 10:  # noqa: PLR2004
+            if sym in self.returns_history and len(self.returns_history[sym]) > 10:
                 returns_list.append(list(self.returns_history[sym])[-100:])
 
-        if len(returns_list) < 2:  # noqa: PLR2004
+        if len(returns_list) < 2:
             return np.eye(len(symbols))
 
         # Pad to same length
@@ -165,9 +153,7 @@ class RealtimeHeatmapEngine:
             }
 
         # Regime timeline
-        regime_timeline = [
-            {"time": ts.isoformat(), "regime": reg} for ts, reg in self.regime_history
-        ]
+        regime_timeline = [{"time": ts.isoformat(), "regime": reg} for ts, reg in self.regime_history]
 
         return {
             "strategies": strategy_data,

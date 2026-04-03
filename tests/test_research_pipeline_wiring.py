@@ -24,7 +24,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -74,6 +73,7 @@ class TestMTFFusionStore:
         monkeypatch.setenv("FEATURE_MTF_FUSION", "false")
         # Reload flags to pick up env change
         import importlib
+
         import config.feature_flags as ff
 
         importlib.reload(ff)
@@ -92,6 +92,7 @@ class TestMTFFusionStore:
         """When FEATURE_MTF_FUSION=true, _fetch_mtf_df() tries the store."""
         monkeypatch.setenv("FEATURE_MTF_FUSION", "true")
         import importlib
+
         import config.feature_flags as ff
 
         importlib.reload(ff)
@@ -136,6 +137,7 @@ class TestAnomalyWeightStore:
         """When FEATURE_ANOMALY_WEIGHTING=false, _get_anomaly_store() returns None."""
         monkeypatch.setenv("FEATURE_ANOMALY_WEIGHTING", "false")
         import importlib
+
         import config.feature_flags as ff
 
         importlib.reload(ff)
@@ -155,8 +157,8 @@ class TestAnomalyWeightStore:
         anomaly_weight = 0.5
         blended = 0.5 + (prob - 0.5) * anomaly_weight
         assert blended < prob  # moved toward neutral
-        assert blended > 0.5  # still bullish  # noqa: PLR2004
-        assert abs(blended - 0.65) < 1e-9  # noqa: PLR2004
+        assert blended > 0.5  # still bullish
+        assert abs(blended - 0.65) < 1e-9
 
 
 # ---------------------------------------------------------------------------
@@ -178,12 +180,13 @@ class TestOnlineLearnerStore:
         store = OnlineLearnerStore(min_fills=20)
         ohlcv = _make_ohlcv(50)
         result = store.blend(0.72, ohlcv)
-        assert result == 0.72  # noqa: PLR2004
+        assert result == 0.72
 
     def test_feature_flag_off_returns_none_from_signal_engine(self, monkeypatch):
         """When FEATURE_ONLINE_LEARNING=false, _get_online_learner_store() returns None."""
         monkeypatch.setenv("FEATURE_ONLINE_LEARNING", "false")
         import importlib
+
         import config.feature_flags as ff
 
         importlib.reload(ff)
@@ -201,12 +204,13 @@ class TestOnlineLearnerStore:
         from research.pipeline.online_learning import OnlineLearnerStore
 
         store = OnlineLearnerStore()
-        assert abs(store.primary_weight + store.online_weight - 1.0) < 1e-9  # noqa: PLR2004
+        assert abs(store.primary_weight + store.online_weight - 1.0) < 1e-9
 
     def test_notify_fill_no_op_when_flag_off(self, monkeypatch):
         """notify_fill() must be a no-op when FEATURE_ONLINE_LEARNING=false."""
         monkeypatch.setenv("FEATURE_ONLINE_LEARNING", "false")
         import importlib
+
         import config.feature_flags as ff
 
         importlib.reload(ff)
@@ -246,12 +250,13 @@ class TestDeepEnsembleStore:
         store = DeepEnsembleStore()
         ohlcv = _make_ohlcv(100)
         result = store.blend(0.65, ohlcv)
-        assert result == 0.65  # noqa: PLR2004
+        assert result == 0.65
 
     def test_feature_flag_off_returns_none_from_signal_engine(self, monkeypatch):
         """When FEATURE_DEEP_ENSEMBLE=false, _get_deep_ensemble_store() returns None."""
         monkeypatch.setenv("FEATURE_DEEP_ENSEMBLE", "false")
         import importlib
+
         import config.feature_flags as ff
 
         importlib.reload(ff)
@@ -267,6 +272,7 @@ class TestDeepEnsembleStore:
     def test_oos_gate_blocks_low_accuracy_model(self, tmp_path):
         """Model with OOS accuracy below gate must not activate."""
         import json
+
         from research.pipeline.models_ensemble import DeepEnsembleStore
 
         # Write a fake model file and metadata with low accuracy
@@ -294,6 +300,7 @@ class TestDeepEnsembleStore:
     def test_oos_gate_blocks_high_pvalue_model(self, tmp_path):
         """Model with p-value above gate must not activate."""
         import json
+
         from research.pipeline.models_ensemble import DeepEnsembleStore
 
         model_file = tmp_path / "deep.pt"
@@ -325,7 +332,7 @@ class TestDeepEnsembleStore:
         feat = DeepEnsembleStore._extract_features(ohlcv)
         assert feat is not None
         assert feat.dtype == np.float32
-        assert feat.shape[1] == 6  # log_ret, hl_range, vol_z, atr14, sma20_d, rsi  # noqa: PLR2004
+        assert feat.shape[1] == 6  # log_ret, hl_range, vol_z, atr14, sma20_d, rsi
         assert not np.any(np.isnan(feat))
         assert not np.any(np.isinf(feat))
 
@@ -366,6 +373,7 @@ class TestSignalEngineFullChain:
         """Phase 2: anomaly weight < 1.0 must move probability toward 0.5."""
         monkeypatch.setenv("FEATURE_ANOMALY_WEIGHTING", "true")
         import importlib
+
         import config.feature_flags as ff
 
         importlib.reload(ff)
@@ -384,7 +392,7 @@ class TestSignalEngineFullChain:
             prob = 0.80
             weight = mock_anomaly.update_and_score(None)
             blended = 0.5 + (prob - 0.5) * weight
-            assert abs(blended - 0.65) < 1e-9  # noqa: PLR2004
+            assert abs(blended - 0.65) < 1e-9
         finally:
             se._anomaly_store = original
             monkeypatch.delenv("FEATURE_ANOMALY_WEIGHTING", raising=False)
@@ -395,18 +403,18 @@ class TestSignalEngineFullChain:
         from research.pipeline.online_learning import OnlineLearnerStore
 
         store = OnlineLearnerStore(primary_weight=0.7, online_weight=0.3)
-        assert store.primary_weight == 0.7  # noqa: PLR2004
-        assert store.online_weight == 0.3  # noqa: PLR2004
+        assert store.primary_weight == 0.7
+        assert store.online_weight == 0.3
 
     def test_phase4_deep_blend_weight(self):
         """Phase 4: deep_weight controls the blend fraction."""
         from research.pipeline.models_ensemble import DeepEnsembleStore
 
         store = DeepEnsembleStore(deep_weight=0.20)
-        assert store.deep_weight == 0.20  # noqa: PLR2004
+        assert store.deep_weight == 0.20
         # When not active, blend returns advanced_prob unchanged
         result = store.blend(0.72, _make_ohlcv(100))
-        assert result == 0.72  # noqa: PLR2004
+        assert result == 0.72
 
     def test_all_phases_disabled_returns_base_confidence(self, monkeypatch):
         """With all research phases off, signal engine uses base confidence."""
@@ -419,6 +427,7 @@ class TestSignalEngineFullChain:
             monkeypatch.setenv(flag, "false")
 
         import importlib
+
         import config.feature_flags as ff
 
         importlib.reload(ff)
@@ -452,6 +461,7 @@ class TestDeepPredictorInterface:
     def test_raises_runtime_error_when_torch_available_false(self):
         """DeepPredictor must raise RuntimeError when TORCH_AVAILABLE=False."""
         import importlib
+
         import research.pipeline.models_deep as md
 
         importlib.reload(md)

@@ -4,17 +4,19 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
+# pylint: disable=not-callable
 """
 Tests for execution module.
 """
 
-import pytest
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from execution import PaperExecutor, SmartOrderRouter, Order, OrderStatus
+from execution import Order, OrderStatus, PaperExecutor, SmartOrderRouter  # pylint: disable=no-name-in-module
 
 
 class TestPaperExecutor:
@@ -25,29 +27,25 @@ class TestPaperExecutor:
 
     def test_initial_state(self):
         """Test initial executor state."""
-        assert self.executor.balance == 10000.0  # noqa: PLR2004
-        assert self.executor.equity == 10000.0  # noqa: PLR2004
+        assert self.executor.balance == 10000.0
+        assert self.executor.equity == 10000.0
         assert len(self.executor.positions) == 0
 
     def test_buy_order(self):
         """Test basic buy order execution."""
         order = Order(symbol="XAUUSD", side="buy", qty=0.01)
-        result = self.executor.submit_order(
-            order, current_price=2000.0, skip_validation=True
-        )
+        result = self.executor.submit_order(order, current_price=2000.0, skip_validation=True)
 
         assert result.status == OrderStatus.FILLED
-        assert result.filled_qty == 0.01  # noqa: PLR2004
+        assert result.filled_qty == 0.01
         assert result.avg_price > 0
         assert result.commission > 0
-        assert self.executor.balance < 10000.0  # Balance reduced  # noqa: PLR2004
+        assert self.executor.balance < 10000.0  # Balance reduced
 
     def test_sell_without_position(self):
         """Test sell order without position should fail."""
         order = Order(symbol="XAUUSD", side="sell", qty=0.01)
-        result = self.executor.submit_order(
-            order, current_price=2000.0, skip_validation=True
-        )
+        result = self.executor.submit_order(order, current_price=2000.0, skip_validation=True)
 
         assert result.status == OrderStatus.REJECTED
         assert "position" in result.message.lower()
@@ -56,16 +54,12 @@ class TestPaperExecutor:
         """Test complete buy then sell cycle."""
         # Buy
         buy_order = Order(symbol="XAUUSD", side="buy", qty=0.01)
-        buy_result = self.executor.submit_order(
-            buy_order, current_price=2000.0, skip_validation=True
-        )
+        buy_result = self.executor.submit_order(buy_order, current_price=2000.0, skip_validation=True)
         assert buy_result.status == OrderStatus.FILLED
 
         # Sell at higher price
         sell_order = Order(symbol="XAUUSD", side="sell", qty=0.01)
-        sell_result = self.executor.submit_order(
-            sell_order, current_price=2010.0, skip_validation=True
-        )
+        sell_result = self.executor.submit_order(sell_order, current_price=2010.0, skip_validation=True)
         assert sell_result.status == OrderStatus.FILLED
 
         # Position should be closed
@@ -75,15 +69,11 @@ class TestPaperExecutor:
         """Test slippage is applied correctly."""
         slippage = self.executor._calculate_slippage("XAUUSD", "buy", 0.01, 2000.0, 0.0)
         assert slippage >= 0
-        assert slippage <= 0.5  # Max slippage cap  # noqa: PLR2004
+        assert slippage <= 0.5  # Max slippage cap
 
         # Larger orders should have more slippage
-        small_slip = self.executor._calculate_slippage(
-            "XAUUSD", "buy", 0.01, 2000.0, 0.0
-        )
-        large_slip = self.executor._calculate_slippage(
-            "XAUUSD", "buy", 1.0, 2000.0, 0.0
-        )
+        small_slip = self.executor._calculate_slippage("XAUUSD", "buy", 0.01, 2000.0, 0.0)
+        large_slip = self.executor._calculate_slippage("XAUUSD", "buy", 1.0, 2000.0, 0.0)
         assert large_slip >= small_slip
 
     def test_commission_calculation(self):
@@ -95,9 +85,7 @@ class TestPaperExecutor:
     def test_insufficient_balance(self):
         """Test rejection of orders exceeding balance."""
         order = Order(symbol="XAUUSD", side="buy", qty=10.0)  # Way too big
-        result = self.executor.submit_order(
-            order, current_price=2000.0, skip_validation=True
-        )
+        result = self.executor.submit_order(order, current_price=2000.0, skip_validation=True)
 
         assert result.status == OrderStatus.REJECTED
         assert "balance" in result.message.lower()
@@ -110,7 +98,7 @@ class TestPaperExecutor:
         pos = self.executor.get_position("XAUUSD")
         assert pos is not None
         assert pos["side"] == "long"
-        assert pos["qty"] == 0.01  # noqa: PLR2004
+        assert pos["qty"] == 0.01
         assert pos["entry_price"] > 0
 
     def test_unrealized_pnl(self):
@@ -149,12 +137,8 @@ class TestPaperExecutor:
 
     def test_limit_order_pending(self):
         """Test limit order that doesn't fill immediately."""
-        order = Order(
-            symbol="XAUUSD", side="buy", qty=0.01, order_type="limit", price=1900.0
-        )
-        result = self.executor.submit_order(
-            order, current_price=2000.0, skip_validation=True
-        )
+        order = Order(symbol="XAUUSD", side="buy", qty=0.01, order_type="limit", price=1900.0)
+        result = self.executor.submit_order(order, current_price=2000.0, skip_validation=True)
 
         # Price is above limit, should be pending
         assert result.status == OrderStatus.PENDING

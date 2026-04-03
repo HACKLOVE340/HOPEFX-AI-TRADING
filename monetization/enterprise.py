@@ -15,19 +15,18 @@ This module provides:
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
-from decimal import Decimal
-from typing import Any
-from enum import Enum
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from enum import StrEnum
+from typing import Any
 
 from .pricing import SubscriptionTier
 
 logger = logging.getLogger(__name__)
 
 
-class PartnerType(str, Enum):
+class PartnerType(StrEnum):
     """Partner program types"""
 
     RESELLER = "reseller"
@@ -37,7 +36,7 @@ class PartnerType(str, Enum):
     TECHNOLOGY = "technology"
 
 
-class PartnerStatus(str, Enum):
+class PartnerStatus(StrEnum):
     """Partner status"""
 
     PENDING = "pending"
@@ -46,7 +45,7 @@ class PartnerStatus(str, Enum):
     TERMINATED = "terminated"
 
 
-class WhiteLabelStatus(str, Enum):
+class WhiteLabelStatus(StrEnum):
     """White-label deployment status"""
 
     PENDING = "pending"
@@ -132,9 +131,7 @@ class Partner:
         self.approved_at: datetime | None = None
 
         # Commission settings
-        self.commission_rate = PARTNER_COMMISSION_RATES.get(
-            partner_type, Decimal("0.10")
-        )
+        self.commission_rate = PARTNER_COMMISSION_RATES.get(partner_type, Decimal("0.10"))
         self.custom_commission_rate: Decimal | None = None
 
         # Revenue tracking
@@ -164,18 +161,21 @@ class Partner:
         self.status = PartnerStatus.ACTIVE
         self.approved_at = datetime.now(UTC)
         self.contract_start = datetime.now(UTC)
-        logger.info(f"Partner {self.partner_id} approved")
+        logger.info("Partner %s approved", self.partner_id)
+
 
     def suspend(self) -> None:
         """Suspend partner"""
         self.status = PartnerStatus.SUSPENDED
-        logger.info(f"Partner {self.partner_id} suspended")
+        logger.info("Partner %s suspended", self.partner_id)
+
 
     def terminate(self) -> None:
         """Terminate partnership"""
         self.status = PartnerStatus.TERMINATED
         self.contract_end = datetime.now(UTC)
-        logger.info(f"Partner {self.partner_id} terminated")
+        logger.info("Partner %s terminated", self.partner_id)
+
 
     def record_sale(self, amount: Decimal) -> Decimal:
         """Record a sale and calculate commission"""
@@ -202,12 +202,8 @@ class Partner:
             "client_count": self.client_count,
             "created_at": self.created_at.isoformat(),
             "approved_at": self.approved_at.isoformat() if self.approved_at else None,
-            "contract_start": self.contract_start.isoformat()
-            if self.contract_start
-            else None,
-            "contract_end": self.contract_end.isoformat()
-            if self.contract_end
-            else None,
+            "contract_start": self.contract_start.isoformat() if self.contract_start else None,
+            "contract_end": self.contract_end.isoformat() if self.contract_end else None,
         }
 
 
@@ -247,27 +243,32 @@ class WhiteLabelInstance:
         """Mark instance as deployed"""
         self.status = WhiteLabelStatus.DEPLOYED
         self.deployed_at = datetime.now(UTC)
-        logger.info(f"White-label instance {self.instance_id} deployed")
+        logger.info("White-label instance %s deployed", self.instance_id)
+
 
     def enter_maintenance(self) -> None:
         """Enter maintenance mode"""
         self.status = WhiteLabelStatus.MAINTENANCE
-        logger.info(f"White-label instance {self.instance_id} in maintenance")
+        logger.info("White-label instance %s in maintenance", self.instance_id)
+
 
     def suspend(self) -> None:
         """Suspend instance"""
         self.status = WhiteLabelStatus.SUSPENDED
-        logger.info(f"White-label instance {self.instance_id} suspended")
+        logger.info("White-label instance %s suspended", self.instance_id)
+
 
     def update_config(self, new_config: WhiteLabelConfig) -> None:
         """Update branding configuration"""
         self.config = new_config
-        logger.info(f"White-label instance {self.instance_id} config updated")
+        logger.info("White-label instance %s config updated", self.instance_id)
+
 
     def update_enterprise_features(self, features: EnterpriseFeatures) -> None:
         """Update enterprise features"""
         self.enterprise_features = features
-        logger.info(f"White-label instance {self.instance_id} features updated")
+        logger.info("White-label instance %s features updated", self.instance_id)
+
 
     def is_active(self) -> bool:
         """Check if instance is active"""
@@ -343,22 +344,26 @@ class EnterpriseCustomer:
         self.features.sso_enabled = True
         self.features.sso_provider = provider
         self.features.sso_config = config
-        logger.info(f"SSO configured for {self.customer_id}: {provider}")
+        logger.info("SSO configured for %s: %s", self.customer_id, provider)
+
 
     def set_api_rate_limit(self, limit: int) -> None:
         """Set custom API rate limit"""
         self.features.api_rate_limit_override = limit
-        logger.info(f"API rate limit set for {self.customer_id}: {limit}")
+        logger.info("API rate limit set for %s: %s", self.customer_id, limit)
+
 
     def set_ip_whitelist(self, ips: list[str]) -> None:
         """Set IP whitelist"""
         self.features.ip_whitelist = ips
-        logger.info(f"IP whitelist set for {self.customer_id}")
+        logger.info("IP whitelist set for %s", self.customer_id)
+
 
     def enable_mfa(self) -> None:
         """Enable mandatory MFA"""
         self.features.mfa_required = True
-        logger.info(f"MFA enabled for {self.customer_id}")
+        logger.info("MFA enabled for %s", self.customer_id)
+
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary"""
@@ -380,9 +385,7 @@ class EnterpriseCustomer:
             },
             "contract": {
                 "value": float(self.contract_value),
-                "start": self.contract_start.isoformat()
-                if self.contract_start
-                else None,
+                "start": self.contract_start.isoformat() if self.contract_start else None,
                 "end": self.contract_end.isoformat() if self.contract_end else None,
                 "billing_cycle": self.billing_cycle,
                 "auto_renew": self.auto_renew,
@@ -431,7 +434,8 @@ class EnterpriseManager:
             partner.custom_commission_rate = custom_commission_rate
 
         self._partners[partner_id] = partner
-        logger.info(f"Registered partner {partner_id}: {company_name}")
+        logger.info("Registered partner %s: %s", partner_id, company_name)
+
         return partner
 
     def get_partner(self, partner_id: str) -> Partner | None:
@@ -460,18 +464,18 @@ class EnterpriseManager:
 
         partner = self.get_partner(partner_id)
         if not partner or not partner.is_active():
-            logger.warning(f"Invalid or inactive partner: {partner_id}")
+            logger.warning("Invalid or inactive partner: %s", partner_id)
+
             return None
 
         if partner.partner_type != PartnerType.WHITE_LABEL:
-            logger.warning(f"Partner {partner_id} is not white-label type")
+            logger.warning("Partner %s is not white-label type", partner_id)
+
             return None
 
         instance_id = f"WL-{uuid.uuid4().hex[:12].upper()}"
 
-        instance = WhiteLabelInstance(
-            instance_id=instance_id, partner_id=partner_id, name=name, config=config
-        )
+        instance = WhiteLabelInstance(instance_id=instance_id, partner_id=partner_id, name=name, config=config)
 
         # Generate subdomain
         subdomain_base = name.lower().replace(" ", "-")
@@ -479,15 +483,12 @@ class EnterpriseManager:
         instance.api_endpoint = f"https://api.{subdomain_base}.hopefx.ai"
 
         self._white_label_instances[instance_id] = instance
-        logger.info(
-            f"Created white-label instance {instance_id} for partner {partner_id}"
-        )
+        logger.info("Created white-label instance %s for partner %s", instance_id, partner_id)
+
 
         return instance
 
-    def get_white_label_instance(
-        self, instance_id: str
-    ) -> WhiteLabelInstance | None:
+    def get_white_label_instance(self, instance_id: str) -> WhiteLabelInstance | None:
         """Get white-label instance by ID"""
         return self._white_label_instances.get(instance_id)
 
@@ -524,12 +525,11 @@ class EnterpriseManager:
         if contract_value:
             customer.contract_value = contract_value
             customer.contract_start = datetime.now(UTC)
-            customer.contract_end = datetime.now(UTC) + timedelta(
-                days=30 * contract_months
-            )
+            customer.contract_end = datetime.now(UTC) + timedelta(days=30 * contract_months)
 
         self._enterprise_customers[customer_id] = customer
-        logger.info(f"Registered enterprise customer {customer_id}: {company_name}")
+        logger.info("Registered enterprise customer %s: %s", customer_id, company_name)
+
 
         return customer
 
@@ -537,9 +537,7 @@ class EnterpriseManager:
         """Get enterprise customer by ID"""
         return self._enterprise_customers.get(customer_id)
 
-    def configure_enterprise_sso(
-        self, customer_id: str, provider: str, config: dict[str, Any]
-    ) -> bool:
+    def configure_enterprise_sso(self, customer_id: str, provider: str, config: dict[str, Any]) -> bool:
         """Configure SSO for enterprise customer"""
         customer = self.get_enterprise_customer(customer_id)
         if not customer:
@@ -549,11 +547,7 @@ class EnterpriseManager:
 
     def get_partner_clients(self, partner_id: str) -> list[WhiteLabelInstance]:
         """Get all white-label instances for a partner"""
-        return [
-            inst
-            for inst in self._white_label_instances.values()
-            if inst.partner_id == partner_id
-        ]
+        return [inst for inst in self._white_label_instances.values() if inst.partner_id == partner_id]
 
     def get_all_partners(
         self,
@@ -570,9 +564,7 @@ class EnterpriseManager:
 
         return partners
 
-    def get_all_white_label_instances(
-        self, status: WhiteLabelStatus | None = None
-    ) -> list[WhiteLabelInstance]:
+    def get_all_white_label_instances(self, status: WhiteLabelStatus | None = None) -> list[WhiteLabelInstance]:
         """Get all white-label instances"""
         instances = list(self._white_label_instances.values())
 
@@ -581,9 +573,7 @@ class EnterpriseManager:
 
         return instances
 
-    def get_all_enterprise_customers(
-        self, tier: SubscriptionTier | None = None
-    ) -> list[EnterpriseCustomer]:
+    def get_all_enterprise_customers(self, tier: SubscriptionTier | None = None) -> list[EnterpriseCustomer]:
         """Get all enterprise customers"""
         customers = list(self._enterprise_customers.values())
 
@@ -592,9 +582,7 @@ class EnterpriseManager:
 
         return customers
 
-    def process_partner_payout(
-        self, partner_id: str, amount: Decimal | None = None
-    ) -> dict[str, Any] | None:
+    def process_partner_payout(self, partner_id: str, amount: Decimal | None = None) -> dict[str, Any] | None:
         """Process payout for partner"""
         import uuid
 
@@ -633,22 +621,15 @@ class EnterpriseManager:
             "partners": {
                 "total": len(partners),
                 "active": len([p for p in partners if p.is_active()]),
-                "pending": len(
-                    [p for p in partners if p.status == PartnerStatus.PENDING]
-                ),
-                "by_type": {
-                    pt.value: len([p for p in partners if p.partner_type == pt])
-                    for pt in PartnerType
-                },
+                "pending": len([p for p in partners if p.status == PartnerStatus.PENDING]),
+                "by_type": {pt.value: len([p for p in partners if p.partner_type == pt]) for pt in PartnerType},
                 "total_revenue": float(total_partner_revenue),
                 "total_commissions": float(total_partner_commissions),
             },
             "white_label": {
                 "total_instances": len(instances),
                 "deployed": len([i for i in instances if i.is_active()]),
-                "pending": len(
-                    [i for i in instances if i.status == WhiteLabelStatus.PENDING]
-                ),
+                "pending": len([i for i in instances if i.status == WhiteLabelStatus.PENDING]),
                 "total_users": sum(i.total_users for i in instances),
                 "total_revenue": float(sum(i.total_revenue for i in instances)),
             },

@@ -19,6 +19,7 @@ tick → signal → risk → execute pipeline through MT5Bridge.
 import logging
 import os
 from pathlib import Path
+from typing import ClassVar
 
 import yaml
 
@@ -31,7 +32,7 @@ _DEFAULT_BROKER = os.getenv("BROKER", "paper").lower()
 class BrokerFactory:
     """Factory for creating broker instances."""
 
-    _brokers: dict[str, type] = {}
+    _brokers: ClassVar[dict[str, type]] = {}
 
     @classmethod
     def _ensure_registered(cls) -> None:
@@ -85,9 +86,7 @@ class BrokerFactory:
                 cls._brokers["ib"] = InteractiveBrokersConnector
                 cls._brokers["interactive_brokers"] = InteractiveBrokersConnector
             except Exception as exc2:
-                logger.debug(
-                    "interactive_brokers legacy connector unavailable: %s", exc2
-                )
+                logger.debug("interactive_brokers legacy connector unavailable: %s", exc2)
         try:
             from brokers.prop_firms.ftmo import FTMOConnector
 
@@ -121,10 +120,7 @@ class BrokerFactory:
         try:
             from brokers.base import BrokerConnector
 
-            if not (
-                isinstance(broker_class, type)
-                and issubclass(broker_class, BrokerConnector)
-            ):
+            if not (isinstance(broker_class, type) and issubclass(broker_class, BrokerConnector)):
                 raise ValueError(f"{broker_class} is not a BrokerConnector subclass")
         except ImportError as exc:
             logger.debug(
@@ -132,10 +128,11 @@ class BrokerFactory:
                 exc,
             )
         cls._brokers[name.lower()] = broker_class
-        logger.info(f"Broker registered: {name}")
+        logger.info("Broker registered: %s", name)
+
 
     @classmethod
-    def create_broker(cls, name: str = None, config: dict = None):
+    def create_broker(cls, name: str | None = None, config: dict | None = None):
         """
         Create a broker instance by name (case-insensitive).
 
@@ -207,9 +204,7 @@ class BrokerFactory:
             return None
 
         brokers_section: dict = cfg.get("brokers", {})
-        resolved_name = (
-            name or os.getenv("BROKER") or brokers_section.get("default", "prop_mt5")
-        )
+        resolved_name = name or os.getenv("BROKER") or brokers_section.get("default", "prop_mt5")
 
         broker_cfg = brokers_section.get(resolved_name)
         if broker_cfg is None:
@@ -243,8 +238,7 @@ class BrokerFactory:
                 return IBKRBroker(broker_cfg)
 
             logger.error(
-                "Unsupported broker type '%s' for profile '%s'. "
-                "Supported: mt5, oanda, ibkr",
+                "Unsupported broker type '%s' for profile '%s'. Supported: mt5, oanda, ibkr",
                 broker_type,
                 resolved_name,
             )
@@ -252,8 +246,7 @@ class BrokerFactory:
 
         except ImportError as exc:
             logger.error(
-                "Cannot import broker class for type '%s': %s. "
-                "Ensure the required SDK is installed.",
+                "Cannot import broker class for type '%s': %s. Ensure the required SDK is installed.",
                 broker_type,
                 exc,
             )
@@ -266,5 +259,5 @@ class BrokerFactory:
         if not config_path.exists():
             logger.error("Broker config not found: %s", config_path.resolve())
             return None
-        with config_path.open("r") as fh:
+        with config_path.open("r", encoding="utf-8") as fh:
             return yaml.safe_load(fh)

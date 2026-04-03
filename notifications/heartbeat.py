@@ -49,10 +49,9 @@ import logging
 import os
 import threading
 import time
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
-from typing import Any
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -77,15 +76,14 @@ async def _send_telegram(token: str, chat_id: str, text: str) -> bool:
             "parse_mode": "HTML",
             "disable_web_page_preview": True,
         }
-        async with aiohttp.ClientSession() as session, session.post(
-            url, json=payload, timeout=aiohttp.ClientTimeout(total=10)
-        ) as resp:
-            if resp.status == 200:  # noqa: PLR2004
+        async with (
+            aiohttp.ClientSession() as session,
+            session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=10)) as resp,
+        ):
+            if resp.status == 200:
                 return True
             body = await resp.text()
-            logger.warning(
-                "Telegram heartbeat send failed: %d %s", resp.status, body[:200]
-            )
+            logger.warning("Telegram heartbeat send failed: %d %s", resp.status, body[:200])
             return False
     except Exception as exc:
         logger.warning("Telegram heartbeat send error: %s", exc)
@@ -121,7 +119,7 @@ def _build_message(status: dict[str, Any], uptime_seconds: float) -> str:
     mode = status.get("mode", "paper")
 
     pnl_emoji = "🟢" if daily_pnl >= 0 else "🔴"
-    dd_emoji = "⚠️" if drawdown > 5 else ("🟡" if drawdown > 2 else "🟢")  # noqa: PLR2004
+    dd_emoji = "⚠️" if drawdown > 5 else ("🟡" if drawdown > 2 else "🟢")
 
     sig_text = ""
     if last_sig:
@@ -131,9 +129,7 @@ def _build_message(status: dict[str, Any], uptime_seconds: float) -> str:
 
     alerts_text = ""
     if risk_alerts:
-        alerts_text = "\n⚠️ Risk alerts:\n" + "\n".join(
-            f"  • {a}" for a in risk_alerts[:3]
-        )
+        alerts_text = "\n⚠️ Risk alerts:\n" + "\n".join(f"  • {a}" for a in risk_alerts[:3])
 
     now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
@@ -168,7 +164,7 @@ class HeartbeatService:
         chat_id: str = _TELEGRAM_CHAT_ID,
         interval_hours: float = _HEARTBEAT_INTERVAL_HOURS,
         get_status_fn: Callable[[], dict[str, Any]] | None = None,
-        app_state: Any = None,
+        app_state: Any | None = None,
     ) -> None:
         self._token = token
         self._chat_ids = [c.strip() for c in chat_id.split(",") if c.strip()]
@@ -180,6 +176,8 @@ class HeartbeatService:
         self._running = False
         self._ping_count = 0
         self._last_ping: float | None = None
+        # Event used to interrupt the wait in _loop() when stop() is called.
+        self._stop_event = threading.Event()
 
     def _get_status(self) -> dict[str, Any]:
         """Collect current system status."""
@@ -207,12 +205,8 @@ class HeartbeatService:
                 rm = getattr(self._app_state, "risk_manager", None)
                 if rm:
                     status["daily_pnl"] = float(getattr(rm, "daily_pnl", 0))
-                    status["drawdown_pct"] = (
-                        float(getattr(rm, "current_drawdown", 0)) * 100
-                    )
-                    status["risk_alerts"] = (
-                        (getattr(rm, "_halt_reason", None) and [rm._halt_reason]) or []
-                    )
+                    status["drawdown_pct"] = float(getattr(rm, "current_drawdown", 0)) * 100
+                    status["risk_alerts"] = (getattr(rm, "_halt_reason", None) and [rm._halt_reason]) or []
             except Exception as _exc:
                 logger.debug("Suppressed exception: %s", _exc)
 
@@ -258,7 +252,11 @@ class HeartbeatService:
         )
 
     def _loop(self) -> None:
-        """Main heartbeat loop — runs in daemon thread."""
+        """Main heartbeat loop — runs in daemon thread.
+
+        Uses threading.Event.wait() instead of time.sleep() so stop() can
+        interrupt the interval immediately without waiting up to 30 s.
+        """
         logger.info(
             "HeartbeatService started — interval=%.1fh chats=%d",
             self._interval / 3600,
@@ -268,11 +266,8 @@ class HeartbeatService:
         self._send_ping()
 
         while self._running:
-            # Sleep in small increments so stop() is responsive
-            elapsed = 0.0
-            while elapsed < self._interval and self._running:
-                time.sleep(min(30, self._interval - elapsed))
-                elapsed += 30
+            # Block until the interval elapses or stop() sets the event.
+            self._stop_event.wait(timeout=self._interval)
             if self._running:
                 self._send_ping()
 
@@ -284,26 +279,23 @@ class HeartbeatService:
             logger.info("HeartbeatService disabled (HEARTBEAT_ENABLED=false)")
             return self
         if not self._token:
-            logger.warning(
-                "HeartbeatService: TELEGRAM_BOT_TOKEN not set — heartbeat disabled"
-            )
+            logger.warning("HeartbeatService: TELEGRAM_BOT_TOKEN not set — heartbeat disabled")
             return self
         if not self._chat_ids:
-            logger.warning(
-                "HeartbeatService: TELEGRAM_CHAT_ID not set — heartbeat disabled"
-            )
+            logger.warning("HeartbeatService: TELEGRAM_CHAT_ID not set — heartbeat disabled")
             return self
 
         self._running = True
-        self._thread = threading.Thread(
-            target=self._loop, daemon=True, name="telegram-heartbeat"
-        )
+        self._thread = threading.Thread(target=self._loop, daemon=True, name="telegram-heartbeat")
         self._thread.start()
         return self
 
     def stop(self) -> None:
         """Stop the heartbeat thread gracefully."""
         self._running = False
+        # Wake the sleeping _loop() immediately instead of waiting up to
+        # _interval seconds for the Event.wait() timeout to expire.
+        self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=5)
 
@@ -317,11 +309,7 @@ class HeartbeatService:
             "running": self._running,
             "ping_count": self._ping_count,
             "interval_hours": self._interval / 3600,
-            "last_ping_ago_s": (
-                round(time.monotonic() - self._last_ping, 1)
-                if self._last_ping
-                else None
-            ),
+            "last_ping_ago_s": (round(time.monotonic() - self._last_ping, 1) if self._last_ping else None),
             "chat_ids": len(self._chat_ids),
             "token_set": bool(self._token),
         }
@@ -333,7 +321,7 @@ _heartbeat: HeartbeatService | None = None
 
 def start_heartbeat(
     get_status_fn: Callable[[], dict[str, Any]] | None = None,
-    app_state: Any = None,
+    app_state: Any | None = None,
     token: str = _TELEGRAM_TOKEN,
     chat_id: str = _TELEGRAM_CHAT_ID,
     interval_hours: float = _HEARTBEAT_INTERVAL_HOURS,

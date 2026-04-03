@@ -23,14 +23,16 @@ Or start a throw-away Redis in Docker::
 from __future__ import annotations
 
 import time
+
 import pytest
 
 # ---------------------------------------------------------------------------
 # Optional dependency guards
 # ---------------------------------------------------------------------------
 try:
-    import redis as redis_lib
     from redis.exceptions import ConnectionError as RedisConnectionError
+
+    import redis as redis_lib
 
     REDIS_AVAILABLE = True
 except ImportError:
@@ -87,15 +89,22 @@ class TestRedisPackage:
 
     def test_redis_exceptions_importable(self) -> None:
         """Verify common exception types are accessible."""
-        from redis.exceptions import ConnectionError, TimeoutError, AuthenticationError
+        from redis.exceptions import (
+            AuthenticationError,
+        )
+        from redis.exceptions import (
+            ConnectionError as RedisConnError,
+        )
+        from redis.exceptions import (
+            TimeoutError as RedisTimeoutError,
+        )
 
-        assert ConnectionError
-        assert TimeoutError
+        assert RedisConnError
+        assert RedisTimeoutError
         assert AuthenticationError
 
     def test_connection_refused_raises(self) -> None:
         """Connecting to a closed port raises a Redis ConnectionError."""
-        from redis.exceptions import ConnectionError as RedisConnectionError
         r = redis_lib.Redis(host="localhost", port=19999, socket_connect_timeout=0.2)
         with pytest.raises((RedisConnectionError, ConnectionError, OSError)):
             r.ping()
@@ -147,13 +156,11 @@ class TestRedisLive:
         self.r.incr("hopefx_test:counter", 5)
         self.r.incr("hopefx_test:counter", 3)
         self.r.decr("hopefx_test:counter", 2)
-        assert int(self.r.get("hopefx_test:counter")) == 6  # noqa: PLR2004
+        assert int(self.r.get("hopefx_test:counter")) == 6
 
     def test_hash_operations(self) -> None:
         key = "hopefx_test:tick"
-        self.r.hset(
-            key, mapping={"bid": "2345.50", "ask": "2345.70", "symbol": "XAUUSD"}
-        )
+        self.r.hset(key, mapping={"bid": "2345.50", "ask": "2345.70", "symbol": "XAUUSD"})
         self.r.expire(key, 30)
         assert self.r.hget(key, "symbol") == "XAUUSD"
         assert float(self.r.hget(key, "bid")) == pytest.approx(2345.50)
@@ -166,10 +173,10 @@ class TestRedisLive:
         for i in range(5):
             self.r.rpush(key, f"item_{i}")
         self.r.expire(key, 30)
-        assert int(self.r.llen(key)) == 5  # noqa: PLR2004
+        assert int(self.r.llen(key)) == 5
         first = self.r.lpop(key)
         assert first == "item_0"
-        assert int(self.r.llen(key)) == 4  # noqa: PLR2004
+        assert int(self.r.llen(key)) == 4
 
     def test_publish_subscribe(self) -> None:
         """Verify pub/sub round-trip."""
@@ -234,7 +241,7 @@ class TestMarketDataCacheLive:
                 r.delete(key)
             r.close()
         except Exception:
-            pass
+            ...  # nosec B110
 
     def test_cache_initialises(self) -> None:
         assert self.cache is not None

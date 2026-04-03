@@ -144,9 +144,7 @@ class RegimeClassifier:
                 self._hmm.fit(feats_sc)
                 logger.info("RegimeClassifier: HMM fitted (%d regimes)", self.n_regimes)
             except Exception as exc:
-                logger.warning(
-                    "HMM fit failed (%s) — falling back to vol quantiles", exc
-                )
+                logger.warning("HMM fit failed (%s) — falling back to vol quantiles", exc)
                 self._hmm = None
                 self.use_hmm = False
 
@@ -156,9 +154,7 @@ class RegimeClassifier:
                 feats_sc[:, 0],
                 np.linspace(0, 1, self.n_regimes + 1)[1:-1],
             )
-            logger.info(
-                "RegimeClassifier: vol-quantile bucketing (%d regimes)", self.n_regimes
-            )
+            logger.info("RegimeClassifier: vol-quantile bucketing (%d regimes)", self.n_regimes)
 
         self._fitted = True
         return self
@@ -228,7 +224,7 @@ class _RegimeSpecialist:
         self._fitted = False
 
     def fit(self, X: pd.DataFrame, y: np.ndarray) -> _RegimeSpecialist:
-        if len(np.unique(y)) < 2:  # noqa: PLR2004
+        if len(np.unique(y)) < 2:
             logger.warning("Regime %d: only one class — skipping", self.regime_id)
             return self
         if len(y) < self._MIN_SAMPLES:
@@ -392,9 +388,9 @@ class RegimeRouter:
     @classmethod
     def load(cls, path: str | Path) -> RegimeRouter:
         try:
-            obj = joblib.load(path)
+            obj = joblib.load(path)  # nosec B301 - path set by class constructor from saved_models
         except Exception:
-            with open(path, "rb") as f:
+            with Path(path).open("rb") as f:
                 obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
         logger.info("RegimeRouter loaded ← %s", path)
         return obj

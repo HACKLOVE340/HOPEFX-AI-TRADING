@@ -12,6 +12,7 @@ Continuously adapts to market regime changes without catastrophic forgetting
 from __future__ import annotations
 
 import logging
+import pathlib
 
 try:
     import torch
@@ -92,9 +93,7 @@ class EWCRegularizer:
         loss = 0
         for name, param in model.named_parameters():
             if name in self.fisher_dict:
-                loss += (
-                    self.fisher_dict[name] * (param - self.optimal_params[name]) ** 2
-                ).sum()
+                loss += (self.fisher_dict[name] * (param - self.optimal_params[name]) ** 2).sum()
 
         return self.lambda_ewc * loss
 
@@ -105,7 +104,7 @@ class OnlineLearner:
     Adapts to new data while preserving knowledge of past regimes.
     """
 
-    def __init__(self, model: nn.Module = None, learning_rate: float = 1e-4):
+    def __init__(self, model: nn.Module | None = None, learning_rate: float = 1e-4):
         self.model = model
         if model is not None:
             self.optimizer = torch.optim.AdamW(
@@ -205,7 +204,7 @@ class OnlineLearner:
 
         return total_loss.item()
 
-    def adapt_to_regime(self, regime: str, regime_data: dict[str, np.ndarray]):
+    def adapt_to_regime(self, regime: str, _regime_data: dict[str, np.ndarray]):
         """
         Fast adaptation to detected market regime.
         Uses regime-specific learning rate and EWC weight.
@@ -228,7 +227,7 @@ class OnlineLearner:
                 self.train_losses,
                 1,
             )[0]
-            if len(self.train_losses) > 10  # noqa: PLR2004
+            if len(self.train_losses) > 10
             else 0,
             "buffer_size": len(self.replay_buffer),
             "ewc_lambda": self.ewc.lambda_ewc,
@@ -245,9 +244,7 @@ class EnsemblePredictor:
     def __init__(self, models: list[nn.Module], weights: list[float] | None = None):
         self.models = models
         self.weights = weights or [1.0 / len(models)] * len(models)
-        self.performance_history: dict[int, list[float]] = {
-            i: [] for i in range(len(models))
-        }
+        self.performance_history: dict[int, list[float]] = {i: [] for i in range(len(models))}
 
     def predict(self, X: np.ndarray) -> tuple[float, float]:
         """
@@ -410,15 +407,14 @@ class SklearnOnlineLearner:
         All values are padded/truncated to ``n_features``.
         """
         try:
-            cols = [
-                c
-                for c in ["open", "high", "low", "close", "volume"]
-                if c in bars.columns
-            ]
+            cols = [c for c in ["open", "high", "low", "close", "volume"] if c in bars.columns]
             if not cols:
                 return None
 
-            ohlcv_vals = bars[cols].ffill().bfill().values.astype(float)
+            # ffill propagates the last known value forward (causal).
+            # fillna(0.0) handles any leading NaNs at the start of the window
+            # without back-filling from future bars (no look-ahead bias).
+            ohlcv_vals = bars[cols].ffill().fillna(0.0).values.astype(float)
             flat = ohlcv_vals.flatten()
 
             # Log returns (last 20 bars)
@@ -438,10 +434,8 @@ class SklearnOnlineLearner:
                 dl_extra[1] = float(feats.get("micro_ofi", 0.0))
                 dl_extra[2] = float(feats.get("macro_impact_score_now", 0.0))
                 dl_extra[3] = float(feats.get("macro_is_blackout", 0.0))
-            except Exception as _exc:
-                logger.debug(
-                    "SklearnOnlineLearner: data layer injection skipped: %s", _exc
-                )
+            except Exception as _exc:  # pylint: disable=broad-exception-caught
+                logger.debug("SklearnOnlineLearner: data layer injection skipped: %s", _exc)
 
             flat = np.concatenate([flat, dl_extra])
 
@@ -454,7 +448,7 @@ class SklearnOnlineLearner:
             # Replace inf/nan
             flat = np.where(np.isfinite(flat), flat, 0.0)
             return flat.reshape(1, -1)
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.debug("SklearnOnlineLearner._extract_features: %s", exc)
             return None
 
@@ -463,7 +457,7 @@ class SklearnOnlineLearner:
         try:
             closes = bars["close"].values
             return np.array([1 if closes[-1] > closes[0] else 0])
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             return None
 
     def _update_ewc_anchor(self) -> None:
@@ -483,7 +477,7 @@ class SklearnOnlineLearner:
                 self.symbol,
                 self._update_count,
             )
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.debug("EWC anchor update failed: %s", exc)
 
     def _apply_ewc_penalty(self) -> None:
@@ -506,11 +500,9 @@ class SklearnOnlineLearner:
         try:
             drift = float(np.mean(np.abs(self._model.coef_ - self._anchor_coef)))
             new_alpha = self._base_alpha * (1.0 + self.ewc_lambda * drift * 100.0)
-            new_alpha = float(
-                np.clip(new_alpha, self._base_alpha, self._base_alpha * 100)
-            )
+            new_alpha = float(np.clip(new_alpha, self._base_alpha, self._base_alpha * 100))
             self._model.alpha = new_alpha
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.debug("EWC penalty application failed: %s", exc)
 
     def _check_drift(self, prob: float) -> bool:
@@ -538,13 +530,12 @@ class SklearnOnlineLearner:
             _, p_value = ks_2samp(self._ref_probs, window_arr)
             if p_value < self._DRIFT_P_THRESH:
                 logger.info(
-                    "SklearnOnlineLearner[%s]: drift detected (p=%.4f) — "
-                    "resetting model to adapt to new regime",
+                    "SklearnOnlineLearner[%s]: drift detected (p=%.4f) — resetting model to adapt to new regime",
                     self.symbol,
                     p_value,
                 )
                 return True
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.debug("Drift check failed: %s", exc)
 
         return False
@@ -608,10 +599,10 @@ class SklearnOnlineLearner:
                 pred = int(self._model.predict(X_scaled)[0])
                 correct = int(pred == int(y[0]))
                 self._correct_window.append(correct)
-                if len(self._correct_window) >= 10:  # noqa: PLR2004
+                if len(self._correct_window) >= 10:
                     self._rolling_accuracy = float(np.mean(self._correct_window))
-            except Exception:  # nosec B110 - accuracy update failure must not interrupt learning loop
-                pass
+            except Exception:  # pylint: disable=broad-exception-caught  # nosec B110
+                ...  # nosec B110
 
             # EWC anchor snapshot
             if self._update_count % self._EWC_ANCHOR_EVERY == 0:
@@ -625,8 +616,8 @@ class SklearnOnlineLearner:
                 prob = float(self._model.predict_proba(X_scaled)[0, 1])
                 if self._check_drift(prob):
                     self._reset_for_new_regime()
-            except Exception:  # nosec B110 - drift detection failure must not interrupt learning loop
-                pass
+            except Exception:  # pylint: disable=broad-exception-caught  # nosec B110
+                ...  # nosec B110
 
             if self.persist_path:
                 self._save()
@@ -639,10 +630,8 @@ class SklearnOnlineLearner:
                 self._reset_count,
             )
             return True
-        except Exception as exc:
-            logger.warning(
-                "SklearnOnlineLearner[%s] partial_fit failed: %s", self.symbol, exc
-            )
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            logger.warning("SklearnOnlineLearner[%s] partial_fit failed: %s", self.symbol, exc)
             return False
 
     def predict_proba(self, bars: pd.DataFrame) -> float | None:
@@ -661,7 +650,7 @@ class SklearnOnlineLearner:
             X_scaled = self._scaler.transform(X)
             proba = self._model.predict_proba(X_scaled)
             return float(proba[0, 1])
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.debug("SklearnOnlineLearner.predict_proba failed: %s", exc)
             return None
 
@@ -690,56 +679,107 @@ class SklearnOnlineLearner:
         }
 
     def _save(self) -> None:
-        import joblib as _jl
         import pathlib as _pl
 
+        import joblib as _jl
+
         path = _pl.Path(self.persist_path)
+        _assert_safe_model_path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         _jl.dump(self, path, compress=3)
 
     @classmethod
     def load(cls, path: str) -> SklearnOnlineLearner:
+        """Load a persisted learner from *path*.
+
+        The path must resolve inside the project's ``ml/saved_models`` directory
+        to prevent loading arbitrary pickles from attacker-controlled locations.
+        """
+        import pathlib as _pl
+
         import joblib as _jl
 
-        return _jl.load(path)
+        p = _pl.Path(path)
+        _assert_safe_model_path(p)
+        return _jl.load(p)  # nosec B301 - path is confined to ml/saved_models
+
+
+# ── Path-confinement helper ───────────────────────────────────────────────────
+
+# Canonical root for all persisted model files.  Any load/save outside this
+# directory is rejected to prevent path-traversal / arbitrary-pickle attacks.
+_MODEL_ROOT = pathlib.Path(__file__).resolve().parent / "saved_models"
+
+
+def _assert_safe_model_path(path: pathlib.Path) -> None:
+    """Raise ValueError if *path* escapes the allowed model directory."""
+    import pathlib as _pl
+
+    resolved = _pl.Path(path).resolve()
+    try:
+        resolved.relative_to(_MODEL_ROOT)
+    except ValueError as exc:
+        raise ValueError(
+            f"Model path '{resolved}' is outside the permitted directory "
+            f"'{_MODEL_ROOT}'. Refusing to load/save."
+        ) from exc
 
 
 # ── Module-level singleton registry ──────────────────────────────────────────
 
 _learner_registry: dict[str, SklearnOnlineLearner] = {}
 
+# Characters allowed in a symbol name used to build a model filename.
+# Restricts to alphanumeric, underscore, and hyphen — no path separators.
+import re as _re
+
+_SYMBOL_RE = _re.compile(r"^[A-Za-z0-9_\-]{1,32}$")
+
+
+def _validate_symbol(symbol: str) -> str:
+    """Return *symbol* if it is safe to embed in a filename, else raise."""
+    if not _SYMBOL_RE.match(symbol):
+        raise ValueError(
+            f"Symbol '{symbol}' contains characters not permitted in a model "
+            "filename. Use only letters, digits, underscores, and hyphens."
+        )
+    return symbol
+
 
 def get_online_learner(
     symbol: str = "XAU_USD",
     persist_path: str | None = None,
 ) -> SklearnOnlineLearner:
-    """
-    Return the SklearnOnlineLearner singleton for ``symbol``.
+    """Return the SklearnOnlineLearner singleton for ``symbol``.
 
     Creates and registers a new instance on first call.  If ``persist_path``
     is provided and the file exists, the persisted learner is loaded instead
     of creating a fresh one.
 
+    The symbol is validated against a strict allowlist of characters before
+    being used to construct a filesystem path.  An explicit ``persist_path``
+    is resolved and confined to ``ml/saved_models`` before any I/O.
+
     Called by HourlyTrainer._online_update() on every hourly cycle.
     """
-    global _learner_registry  # noqa: PLW0602
 
     if symbol not in _learner_registry:
-        if persist_path is None:
-            persist_path = f"ml/saved_models/online_learner_{symbol}.pkl"
+        _validate_symbol(symbol)
 
         import pathlib as _pl
 
-        p = _pl.Path(persist_path)
+        if persist_path is None:
+            # Build path from validated symbol — no user-controlled segments.
+            p = _MODEL_ROOT / f"online_learner_{symbol}.pkl"
+        else:
+            p = _pl.Path(persist_path)
+            _assert_safe_model_path(p)
+
         if p.exists():
             try:
                 learner = SklearnOnlineLearner.load(str(p))
-                import logging as _log
-
-                _log.getLogger(__name__).info(
-                    "Loaded persisted OnlineLearner for %s from %s", symbol, p
-                )
-            except Exception:
+                logger.info("Loaded persisted OnlineLearner for %s from %s", symbol, p)
+            except Exception:  # pylint: disable=broad-exception-caught
                 learner = SklearnOnlineLearner(symbol=symbol, persist_path=str(p))
         else:
             learner = SklearnOnlineLearner(symbol=symbol, persist_path=str(p))
@@ -788,12 +828,10 @@ class XGBoostOnlineModel:
         random_state: int = 42,
     ) -> None:
         try:
-            import xgboost as xgb  # noqa: F401
+            import xgboost as xgb
+            self._xgb = xgb  # retain reference; used in fit/predict
         except ImportError as exc:
-            raise ImportError(
-                "xgboost is required for XGBoostOnlineModel. "
-                "Install with: pip install xgboost"
-            ) from exc
+            raise ImportError("xgboost is required for XGBoostOnlineModel. Install with: pip install xgboost") from exc
 
         self._n_estimators = n_estimators
         self._max_depth = max_depth
@@ -803,7 +841,7 @@ class XGBoostOnlineModel:
         self._eval_fraction = eval_fraction
         self._random_state = random_state
 
-        self._model: Any = None
+        self._model: Any | None = None
         self._is_trained: bool = False
         self.metadata: ModelMetadata | None = None
 
@@ -825,9 +863,9 @@ class XGBoostOnlineModel:
         return meta
 
     def _fit_sync(self, X: np.ndarray, y: np.ndarray) -> ModelMetadata:
-        from xgboost import XGBClassifier
-        from sklearn.model_selection import train_test_split
         from sklearn.metrics import roc_auc_score
+        from sklearn.model_selection import train_test_split
+        from xgboost import XGBClassifier
 
         n_samples, n_features = X.shape
         X_train, X_val, y_train, y_val = train_test_split(
@@ -890,7 +928,7 @@ class XGBoostOnlineModel:
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """Return binary predictions (threshold 0.5)."""
-        return (self.predict_proba(X) >= 0.5).astype(int)  # noqa: PLR2004
+        return (self.predict_proba(X) >= 0.5).astype(int)
 
     def partial_fit(self, X: np.ndarray, y: np.ndarray) -> None:
         """
@@ -921,6 +959,4 @@ class XGBoostOnlineModel:
         )
         updated.fit(X, y, xgb_model=prev.get_booster(), verbose=False)
         self._model = updated
-        logger.debug(
-            "XGBoostOnlineModel partial_fit: added %d trees", self._n_estimators
-        )
+        logger.debug("XGBoostOnlineModel partial_fit: added %d trees", self._n_estimators)

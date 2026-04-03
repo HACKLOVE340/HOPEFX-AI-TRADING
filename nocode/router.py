@@ -77,17 +77,13 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
         """Export a no-code strategy as Python code."""
         code = builder.export_to_python(strategy_id)
         if code is None:
-            raise HTTPException(
-                status_code=404, detail=f"Strategy {strategy_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Strategy {strategy_id} not found")
         return {"strategy_id": strategy_id, "python_code": code}
 
     @router.post("/strategies/parse")
     async def parse_plain_english(req: PlainEnglishRequest):
         """Parse a plain-English strategy description into a structured strategy."""
-        strategy = builder.parse_plain_english(
-            req.description, req.symbol, req.timeframe
-        )
+        strategy = builder.parse_plain_english(req.description, req.symbol, req.timeframe)
         if strategy is None:
             raise HTTPException(
                 status_code=422,
@@ -114,13 +110,9 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
     @router.post("/strategies/from-template/{template_id}")
     async def create_from_template(template_id: str, req: FromTemplateRequest):
         """Create a strategy from a built-in template."""
-        strategy = builder.create_from_template(
-            template_id, req.name, req.symbol, req.timeframe
-        )
+        strategy = builder.create_from_template(template_id, req.name, req.symbol, req.timeframe)
         if strategy is None:
-            raise HTTPException(
-                status_code=404, detail=f"Template {template_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Template {template_id} not found")
         return {
             "strategy_id": strategy.strategy_id,
             "name": strategy.name,

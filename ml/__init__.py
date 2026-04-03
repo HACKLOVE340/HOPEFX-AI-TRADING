@@ -50,24 +50,23 @@ import json as _json
 import logging as _logging
 from pathlib import Path as _Path
 from typing import Any as _Any
-from typing import Optional as _Optional  # noqa: F401
 
 _ml_logger = _logging.getLogger(__name__)
 _SAVED = _Path(__file__).parent / "saved_models"
 _CHECKSUM_FILE = _SAVED / "model_checksums.json"
 
 # Loaded model instances (None until first call to get_active_model())
-_macro_xgb: _Any = None
-_macro_rf: _Any = None
-_baseline_xgb: _Any = None
-_baseline_rf: _Any = None
+_macro_xgb: _Any | None = None
+_macro_rf: _Any | None = None
+_baseline_xgb: _Any | None = None
+_baseline_rf: _Any | None = None
 _model_version: str = "none"
 
 
 def _sha256(path: _Path) -> str:
     """Return the SHA-256 hex digest of a file."""
     h = _hashlib.sha256()
-    with open(path, "rb") as f:
+    with _Path(path).open("rb") as f:
         for chunk in iter(lambda: f.read(65536), b""):
             h.update(chunk)
     return h.hexdigest()
@@ -93,9 +92,7 @@ def _verify_checksum(path: _Path) -> bool:
     try:
         stored = _json.loads(_CHECKSUM_FILE.read_text())
     except Exception as exc:
-        _ml_logger.warning(
-            "Could not read model checksums: %s — skipping verification", exc
-        )
+        _ml_logger.warning("Could not read model checksums: %s — skipping verification", exc)
         return True
 
     name = path.name
@@ -148,15 +145,13 @@ def _try_load(path: _Path) -> _Any | None:
     try:
         import joblib as _joblib
 
-        return _joblib.load(path)
+        return _joblib.load(path)  # nosec B301 - path is always from ml/saved_models (internal)
     except Exception as _jl_exc:
-        _ml_logger.debug(
-            "joblib.load failed for %s (%s) — trying pickle", path.name, _jl_exc
-        )
+        _ml_logger.debug("joblib.load failed for %s (%s) — trying pickle", path.name, _jl_exc)
         try:
             import pickle as _pickle  # nosec B403
 
-            with open(path, "rb") as f:
+            with _Path(path).open("rb") as f:
                 return _pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback for protocol mismatch
         except Exception as exc:
             import sys as _sys
@@ -216,9 +211,7 @@ def _load_models() -> None:
         _meta_path = _SAVED / "advanced_oos_meta.json"
         if _meta_path.exists():
             try:
-                import json as _json
-
-                with open(_meta_path) as _f:
+                with _Path(_meta_path).open(encoding="utf-8") as _f:
                     _meta = _json.load(_f)
                 _oos_acc = _meta.get("oos_accuracy", "?")
                 _oos_se = _meta.get("oos_accuracy_se", "?")
@@ -227,8 +220,7 @@ def _load_models() -> None:
                 _n_features = _meta.get("feature_count", "?")
                 _trained_at = _meta.get("trained_at", "?")
                 _ml_logger.info(
-                    "Active ML model: advanced_oos.pkl — "
-                    "OOS acc=%.3f±%.3f  p=%.4f  period=%s  features=%s  trained=%s",
+                    "Active ML model: advanced_oos.pkl — OOS acc=%.3f±%.3f  p=%.4f  period=%s  features=%s  trained=%s",
                     _oos_acc,
                     _oos_se,
                     _oos_p,
@@ -237,7 +229,7 @@ def _load_models() -> None:
                     _trained_at,
                 )
                 # Warn if loaded model accuracy is below the validated 68% threshold
-                if isinstance(_oos_acc, float) and _oos_acc < 0.60:  # noqa: PLR2004
+                if isinstance(_oos_acc, float) and _oos_acc < 0.60:
                     _ml_logger.warning(
                         "advanced_oos.pkl OOS accuracy %.3f is below 60%% — "
                         "model may need retraining. Run: "
@@ -288,6 +280,7 @@ def _load_models() -> None:
     # Post Discord alert so community operators are notified immediately
     try:
         import asyncio as _asyncio
+
         from notifications.discord_bot import discord_signal_bot
 
         async def _post_discord_fallback():
@@ -301,7 +294,8 @@ def _load_models() -> None:
         try:
             loop = _asyncio.get_event_loop()
             if loop.is_running():
-                loop.create_task(_post_discord_fallback())
+                _t = loop.create_task(_post_discord_fallback())
+                _t.add_done_callback(lambda _: None)
             else:
                 loop.run_until_complete(_post_discord_fallback())
         except RuntimeError:
@@ -346,7 +340,6 @@ def get_active_model() -> _Any | None:
     Priority: macro XGBoost → baseline XGBoost → macro RF → baseline RF → None.
     Models are loaded lazily on first call and cached for the process lifetime.
     """
-    global _macro_xgb  # noqa: PLW0602
     if _macro_xgb is None and _model_version == "none":
         _load_models()
     return _macro_xgb or _baseline_xgb or _macro_rf or _baseline_rf
@@ -373,9 +366,7 @@ except Exception as _live_inf_exc:
 
 
 __author__ = "HOPEFX Development Team"
-__description__ = (
-    "Machine learning models for price prediction and signal classification"
-)
+__description__ = "Machine learning models for price prediction and signal classification"
 
 
 def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
@@ -391,8 +382,6 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
     Returns:
         FastAPI APIRouter
     """
-    from typing import Any, Dict, List, Optional  # noqa: F401
-
     from fastapi import APIRouter, HTTPException
     from pydantic import BaseModel
 
@@ -420,10 +409,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
                 "random_forest": "requires training",
                 "ensemble": "requires training",
             },
-            "note": (
-                "Set FEATURE_ML_PREDICTIONS=true and provide labelled data "
-                "to enable live predictions."
-            ),
+            "note": ("Set FEATURE_ML_PREDICTIONS=true and provide labelled data to enable live predictions."),
         }
 
     @router.get("/features/groups")
@@ -440,7 +426,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
         """
         import pandas as pd
 
-        if len(req.bars) < 10:  # noqa: PLR2004
+        if len(req.bars) < 10:
             raise HTTPException(
                 status_code=422,
                 detail="At least 10 bars are required to compute features.",
@@ -449,7 +435,8 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
         try:
             features_df = feature_engineer.create_features(df)
         except Exception as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+            _ml_logger.error("Feature engineering failed: %s", exc)
+            raise HTTPException(status_code=422, detail="Feature engineering failed — check server logs") from None
         return {
             "rows": len(features_df),
             "feature_count": len(feature_engineer.feature_names),
@@ -464,15 +451,10 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
         Reads from the saved training report if available; returns demo
         metrics otherwise so the frontend always has data to display.
         """
-        import json as _json
-        from pathlib import Path as _Path
-
-        report_path = (
-            _Path(__file__).parent / "saved_models" / "advanced_training_report.json"
-        )
+        report_path = _Path(__file__).parent / "saved_models" / "advanced_training_report.json"
         if report_path.exists():
             try:
-                with open(report_path) as f:
+                with _Path(report_path).open(encoding="utf-8") as f:
                     report = _json.load(f)
                 final = report.get("final", {})
                 wf = report.get("walkforward", {})
@@ -498,9 +480,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
                     "p_value": wf.get("p_value"),
                 }
             except Exception as _report_exc:
-                import logging as _log
-
-                _log.getLogger(__name__).warning(
+                _logging.getLogger(__name__).warning(
                     "Failed to read training report: %s",
                     _report_exc,
                 )
@@ -523,16 +503,11 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
         Return the latest ML signal for a symbol.
         Uses the saved stacking ensemble if available.
         """
-        import json as _json
-        from pathlib import Path as _Path
-
         # Try to load a cached prediction from the report
-        report_path = (
-            _Path(__file__).parent / "saved_models" / "advanced_training_report.json"
-        )
+        report_path = _Path(__file__).parent / "saved_models" / "advanced_training_report.json"
         if report_path.exists():
             try:
-                with open(report_path) as f:
+                with _Path(report_path).open(encoding="utf-8") as f:
                     report = _json.load(f)
                 acc = report.get("final", {}).get("accuracy", 0.5)
                 return {
@@ -543,9 +518,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
                     "note": "Based on last training run — retrain for live signals",
                 }
             except Exception as _pred_exc:
-                import logging as _log
-
-                _log.getLogger(__name__).warning(
+                _ml_logger.warning(
                     "Failed to read training report for predict: %s",
                     _pred_exc,
                 )
@@ -561,8 +534,6 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
     @router.get("/models")
     async def list_models():
         """List available trained model files."""
-        from pathlib import Path as _Path
-
         model_dir = _Path(__file__).parent / "saved_models"
         if not model_dir.exists():
             return {"models": []}

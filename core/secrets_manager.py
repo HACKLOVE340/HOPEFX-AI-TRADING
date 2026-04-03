@@ -67,7 +67,8 @@ Usage
 
     # Start background refresh at startup:
     from core.secrets_manager import secrets
-    asyncio.create_task(secrets.refresh_loop())
+    _t = asyncio.create_task(secrets.refresh_loop())
+    _t.add_done_callback(lambda _: None)
 """
 
 from __future__ import annotations
@@ -75,9 +76,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
-UTC = timezone.utc
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -156,9 +156,7 @@ class SecretsManager:
             "backend": _BACKEND,
             "refresh_enabled": _REFRESH_ENABLED,
             "refresh_interval_seconds": _REFRESH_INTERVAL,
-            "last_refresh": self._last_refresh.isoformat()
-            if self._last_refresh
-            else None,
+            "last_refresh": self._last_refresh.isoformat() if self._last_refresh else None,
             "refresh_count": self._refresh_count,
             "error_count": self._error_count,
             "cached_keys": sorted(self._cache.keys()),
@@ -174,9 +172,7 @@ class SecretsManager:
         the last successfully fetched values remain in cache.
         """
         if not _REFRESH_ENABLED:
-            logger.info(
-                "SecretsManager: background refresh disabled (SECRETS_REFRESH_ENABLED=false)"
-            )
+            logger.info("SecretsManager: background refresh disabled (SECRETS_REFRESH_ENABLED=false)")
             return
 
         self._running = True
@@ -192,7 +188,7 @@ class SecretsManager:
             except asyncio.CancelledError:
                 logger.info("SecretsManager: refresh loop stopped")
                 return
-            except Exception as exc:
+            except Exception as exc:  # pylint: disable=broad-exception-caught
                 self._error_count += 1
                 logger.warning("SecretsManager: refresh error: %s", exc)
 
@@ -214,11 +210,16 @@ class SecretsManager:
             self._refresh_count += 1
 
             if changed:
+                # INFO: log only counts — no variable names or values reach the log sink.
                 logger.info(
-                    "SecretsManager: refreshed %d secrets (%d changed): %s",
+                    "SecretsManager: refreshed %d secrets (%d changed)",
                     len(new_secrets),
                     len(changed),
-                    sorted(changed),
+                )
+                # Log only the count of changed keys — no names or values.
+                logger.debug(
+                    "SecretsManager: %d key(s) changed in this refresh cycle",
+                    len(changed),
                 )
                 # Notify registered rotation callbacks
                 await self._notify_rotation(changed)
@@ -233,7 +234,7 @@ class SecretsManager:
 
     # ── Rotation callbacks ────────────────────────────────────────────────────
 
-    _rotation_callbacks: list = []
+    _rotation_callbacks: ClassVar[list] = []
 
     def on_rotation(self, callback) -> None:
         """
@@ -259,7 +260,7 @@ class SecretsManager:
                 result = cb(changed_keys)
                 if asyncio.iscoroutine(result):
                     await result
-            except Exception as exc:
+            except Exception as exc:  # pylint: disable=broad-exception-caught
                 logger.warning("SecretsManager: rotation callback error: %s", exc)
 
     # ── Backend implementations ───────────────────────────────────────────────
@@ -285,10 +286,7 @@ class SecretsManager:
         try:
             import hvac
         except ImportError:
-            logger.warning(
-                "SecretsManager: hvac not installed — falling back to env vars. "
-                "pip install hvac"
-            )
+            logger.warning("SecretsManager: hvac not installed — falling back to env vars. pip install hvac")
             return self._fetch_env()
 
         vault_addr = os.getenv("VAULT_ADDR", "http://localhost:8200")
@@ -314,32 +312,24 @@ class SecretsManager:
             loop = asyncio.get_event_loop()
             data = await loop.run_in_executor(
                 None,
-                lambda: client.secrets.kv.v2.read_secret_version(
-                    path=secret_path, mount_point=mount_point
-                ),
+                lambda: client.secrets.kv.v2.read_secret_version(path=secret_path, mount_point=mount_point),
             )
             secrets_data = data["data"]["data"]
-            logger.debug(
-                "SecretsManager: fetched %d keys from Vault", len(secrets_data)
-            )
+            logger.debug("SecretsManager: fetched %d keys from Vault", len(secrets_data))
             return {k.lower(): str(v) for k, v in secrets_data.items()}
 
-        except Exception as exc:
-            logger.error(
-                "SecretsManager: Vault fetch failed: %s — using cached/env values", exc
-            )
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            logger.error("SecretsManager: Vault fetch failed: %s — using cached/env values", exc)
             return self._fetch_env()
 
     async def _fetch_aws(self) -> dict[str, str]:
         """Fetch secrets from AWS Secrets Manager."""
         try:
-            import boto3
             import json as _json
+
+            import boto3
         except ImportError:
-            logger.warning(
-                "SecretsManager: boto3 not installed — falling back to env vars. "
-                "pip install boto3"
-            )
+            logger.warning("SecretsManager: boto3 not installed — falling back to env vars. pip install boto3")
             return self._fetch_env()
 
         region = os.getenv("AWS_REGION", "us-east-1")
@@ -361,7 +351,7 @@ class SecretsManager:
             )
             return {k.lower(): str(v) for k, v in secrets_data.items()}
 
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error(
                 "SecretsManager: AWS Secrets Manager fetch failed: %s — using cached/env values",
                 exc,

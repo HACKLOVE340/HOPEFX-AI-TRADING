@@ -14,13 +14,13 @@ ib_insync is not installed in CI; tests patch the module-level IB_AVAILABLE
 flag and inject a mock IB class directly into the module namespace.
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+import brokers.ibkr_connector as _ibkr_mod
 from brokers.base import AccountInfo, Order, OrderSide, OrderType
 from brokers.ibkr_connector import IBKRConfig, IBKRConnector
-import brokers.ibkr_connector as _ibkr_mod
-
 
 # ---------------------------------------------------------------------------
 # IBKRConfig
@@ -76,9 +76,8 @@ def _make_mock_ib():
     return ib
 
 
-from contextlib import contextmanager
 import contextlib
-
+from contextlib import contextmanager
 
 _MISSING = object()  # sentinel
 
@@ -301,7 +300,7 @@ class TestBrokerManager:
             )
 
     def test_auto_failover_to_paper_after_failures(self):
-        from brokers.manager import BrokerManager, _MAX_CONSECUTIVE_FAILURES
+        from brokers.manager import _MAX_CONSECUTIVE_FAILURES, BrokerManager
 
         mgr = BrokerManager(primary_broker_name="ibkr")
 

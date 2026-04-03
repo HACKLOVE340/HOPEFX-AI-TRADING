@@ -10,8 +10,7 @@ Implements real stock trading with Alpaca REST API (commission-free US stocks).
 """
 
 import logging
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import requests
@@ -98,11 +97,13 @@ class AlpacaConnector(BrokerConnector):
 
             self.connected = True
             env = "paper" if self.paper else "live"
-            logger.info(f"Connected to Alpaca ({env})")
+            logger.info("Connected to Alpaca (%s)", env)
+
             return True
 
         except Exception as e:
-            logger.error(f"Failed to connect to Alpaca: {e}")
+            logger.error("Failed to connect to Alpaca: %s", e)
+
             self.connected = False
             return False
 
@@ -120,14 +121,15 @@ class AlpacaConnector(BrokerConnector):
             logger.info("Disconnected from Alpaca")
             return True
         except Exception as e:
-            logger.error(f"Error disconnecting from Alpaca: {e}")
+            logger.error("Error disconnecting from Alpaca: %s", e)
+
             return False
 
-    def place_order(
+    def place_order(  # pylint: disable=arguments-differ
         self,
         symbol: str,
         side: OrderSide,
-        quantity: float,
+        quantity: float = 0.0,
         order_type: OrderType = OrderType.MARKET,
         price: float | None = None,
         stop_price: float | None = None,
@@ -191,28 +193,24 @@ class AlpacaConnector(BrokerConnector):
                 side=OrderSide.BUY if result["side"] == "buy" else OrderSide.SELL,
                 type=self._parse_order_type(result["type"]),
                 quantity=float(result["qty"]),
-                price=float(result.get("limit_price", 0))
-                if result.get("limit_price")
-                else None,
-                stop_price=float(result.get("stop_price", 0))
-                if result.get("stop_price")
-                else None,
+                price=float(result.get("limit_price", 0)) if result.get("limit_price") else None,
+                stop_price=float(result.get("stop_price", 0)) if result.get("stop_price") else None,
                 status=self._parse_order_status(result["status"]),
                 filled_quantity=float(result.get("filled_qty", 0)),
-                average_price=float(result.get("filled_avg_price", 0))
-                if result.get("filled_avg_price")
-                else None,
+                average_price=float(result.get("filled_avg_price", 0)) if result.get("filled_avg_price") else None,
                 timestamp=datetime.fromisoformat(
-                    result["created_at"].replace("Z", "+00:00"),
+                    result["created_at"],
                 ),
                 metadata=result,
             )
 
-            logger.info(f"Order placed: {order.id} - {side.value} {quantity} {symbol}")
+            logger.info("Order placed: %s - %s %s %s", order.id, side.value, quantity, symbol)
+
             return order
 
         except Exception as e:
-            logger.error(f"Failed to place order: {e}")
+            logger.error("Failed to place order: %s", e)
+
             return None
 
     def cancel_order(self, order_id: str) -> bool:
@@ -233,11 +231,13 @@ class AlpacaConnector(BrokerConnector):
             response = self.session.delete(f"{self.base_url}/v2/orders/{order_id}")
             response.raise_for_status()
 
-            logger.info(f"Order cancelled: {order_id}")
+            logger.info("Order cancelled: %s", order_id)
+
             return True
 
         except Exception as e:
-            logger.error(f"Failed to cancel order {order_id}: {e}")
+            logger.error("Failed to cancel order %s: %s", order_id, e)
+
             return False
 
     def get_order(self, order_id: str) -> Order | None:
@@ -267,19 +267,13 @@ class AlpacaConnector(BrokerConnector):
                 side=OrderSide.BUY if result["side"] == "buy" else OrderSide.SELL,
                 type=self._parse_order_type(result["type"]),
                 quantity=float(result["qty"]),
-                price=float(result.get("limit_price", 0))
-                if result.get("limit_price")
-                else None,
-                stop_price=float(result.get("stop_price", 0))
-                if result.get("stop_price")
-                else None,
+                price=float(result.get("limit_price", 0)) if result.get("limit_price") else None,
+                stop_price=float(result.get("stop_price", 0)) if result.get("stop_price") else None,
                 status=self._parse_order_status(result["status"]),
                 filled_quantity=float(result.get("filled_qty", 0)),
-                average_price=float(result.get("filled_avg_price", 0))
-                if result.get("filled_avg_price")
-                else None,
+                average_price=float(result.get("filled_avg_price", 0)) if result.get("filled_avg_price") else None,
                 timestamp=datetime.fromisoformat(
-                    result["created_at"].replace("Z", "+00:00"),
+                    result["created_at"],
                 ),
                 metadata=result,
             )
@@ -287,7 +281,8 @@ class AlpacaConnector(BrokerConnector):
             return order
 
         except Exception as e:
-            logger.error(f"Failed to get order {order_id}: {e}")
+            logger.error("Failed to get order %s: %s", order_id, e)
+
             return None
 
     def get_positions(self) -> list[Position]:
@@ -324,7 +319,8 @@ class AlpacaConnector(BrokerConnector):
             return positions
 
         except Exception as e:
-            logger.error(f"Failed to get positions: {e}")
+            logger.error("Failed to get positions: %s", e)
+
             return []
 
     def close_position(self, symbol: str, quantity: float | None = None) -> bool:
@@ -348,9 +344,7 @@ class AlpacaConnector(BrokerConnector):
                 positions = self.get_positions()
                 for pos in positions:
                     if pos.symbol == symbol.upper():
-                        opposite_side = (
-                            OrderSide.SELL if pos.side == "LONG" else OrderSide.BUY
-                        )
+                        opposite_side = OrderSide.SELL if pos.side == "LONG" else OrderSide.BUY
                         order = self.place_order(
                             symbol=symbol,
                             side=opposite_side,
@@ -359,20 +353,22 @@ class AlpacaConnector(BrokerConnector):
                         )
                         return order is not None
 
-                logger.warning(f"No position found for {symbol}")
-                return False
-            else:
-                # Close entire position
-                response = self.session.delete(
-                    f"{self.base_url}/v2/positions/{symbol.upper()}",
-                )
-                response.raise_for_status()
+                logger.warning("No position found for %s", symbol)
 
-                logger.info(f"Position closed: {symbol}")
-                return True
+                return False
+            # Close entire position
+            response = self.session.delete(
+                f"{self.base_url}/v2/positions/{symbol.upper()}",
+            )
+            response.raise_for_status()
+
+            logger.info("Position closed: %s", symbol)
+
+            return True
 
         except Exception as e:
-            logger.error(f"Failed to close position {symbol}: {e}")
+            logger.error("Failed to close position %s: %s", symbol, e)
+
             return False
 
     def get_account_info(self) -> AccountInfo | None:
@@ -404,7 +400,8 @@ class AlpacaConnector(BrokerConnector):
             return info
 
         except Exception as e:
-            logger.error(f"Failed to get account info: {e}")
+            logger.error("Failed to get account info: %s", e)
+
             return None
 
     def get_market_data(
@@ -444,7 +441,7 @@ class AlpacaConnector(BrokerConnector):
                     candles.append(
                         {
                             "timestamp": datetime.fromisoformat(
-                                bar["t"].replace("Z", "+00:00"),
+                                bar["t"],
                             ),
                             "open": float(bar["o"]),
                             "high": float(bar["h"]),
@@ -457,7 +454,8 @@ class AlpacaConnector(BrokerConnector):
             return candles
 
         except Exception as e:
-            logger.error(f"Failed to get market data for {symbol}: {e}")
+            logger.error("Failed to get market data for %s: %s", symbol, e)
+
             return None
 
     def get_quote(self, symbol: str) -> dict[str, Any] | None:
@@ -490,14 +488,15 @@ class AlpacaConnector(BrokerConnector):
                     "bid_size": int(quote.get("bs", 0)),
                     "ask_size": int(quote.get("as", 0)),
                     "timestamp": datetime.fromisoformat(
-                        quote["t"].replace("Z", "+00:00"),
+                        quote["t"],
                     ),
                 }
 
             return None
 
         except Exception as e:
-            logger.error(f"Failed to get quote for {symbol}: {e}")
+            logger.error("Failed to get quote for %s: %s", symbol, e)
+
             return None
 
     def _convert_order_type(self, order_type: OrderType) -> str:

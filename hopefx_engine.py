@@ -33,14 +33,15 @@ All credentials are read from environment variables (see .env.example).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import signal
 import sys
 from collections import deque
+from typing import ClassVar
 
 import pandas as pd
-import contextlib
 
 # ── logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -80,8 +81,8 @@ def validate_startup_environment() -> list[str]:
     - Python version >= 3.10
     """
 
-    warnings: list[str] = []
-    errors: list[str] = []
+    warnings: ClassVar[list[str]] = []
+    errors: ClassVar[list[str]] = []
     is_production = os.environ.get("APP_ENV", "production") == "production"
     is_test = os.environ.get("APP_ENV", "") == "test"
 
@@ -94,11 +95,8 @@ def validate_startup_environment() -> list[str]:
             errors.append("SECURITY_JWT_SECRET is not set (required in production)")
         else:
             warnings.append("SECURITY_JWT_SECRET is not set — using insecure default")
-    elif len(jwt_secret) < 32:  # noqa: PLR2004
-        errors.append(
-            f"SECURITY_JWT_SECRET is too short ({len(jwt_secret)} chars); "
-            "minimum 32 characters required"
-        )
+    elif len(jwt_secret) < 32:
+        errors.append(f"SECURITY_JWT_SECRET is too short ({len(jwt_secret)} chars); minimum 32 characters required")
 
     # Broker-specific credentials
     broker = os.environ.get("BROKER", "").lower()
@@ -118,9 +116,7 @@ def validate_startup_environment() -> list[str]:
     # Live trading safety check
     trading_mode = os.environ.get("TRADING_MODE", "paper").lower()
     if trading_mode == "live" and broker == "paper":
-        errors.append(
-            "TRADING_MODE=live but BROKER=paper — live mode requires a real broker"
-        )
+        errors.append("TRADING_MODE=live but BROKER=paper — live mode requires a real broker")
 
     # INITIAL_BALANCE sanity
     initial_balance_str = os.environ.get("INITIAL_BALANCE", "")
@@ -130,9 +126,7 @@ def validate_startup_environment() -> list[str]:
             if bal <= 0:
                 errors.append(f"INITIAL_BALANCE={bal} must be positive")
         except ValueError:
-            errors.append(
-                f"INITIAL_BALANCE={initial_balance_str!r} is not a valid number"
-            )
+            errors.append(f"INITIAL_BALANCE={initial_balance_str!r} is not a valid number")
 
     # Kill switch pre-check
     try:
@@ -158,16 +152,12 @@ def validate_startup_environment() -> list[str]:
         for e in errors:
             logger.critical("❌  Startup validation FAILED: %s", e)
         if is_production and not is_test:
-            raise RuntimeError(
-                f"Engine startup aborted — {len(errors)} validation error(s). "
-                "See logs above."
-            )
-        else:
-            # Non-production: log errors but continue (allows CI/dev to run)
-            logger.warning(
-                "Startup validation errors present but APP_ENV=%s — continuing anyway",
-                os.environ.get("APP_ENV", "production"),
-            )
+            raise RuntimeError(f"Engine startup aborted — {len(errors)} validation error(s). See logs above.")
+        # Non-production: log errors but continue (allows CI/dev to run)
+        logger.warning(
+            "Startup validation errors present but APP_ENV=%s — continuing anyway",
+            os.environ.get("APP_ENV", "production"),
+        )
 
     return warnings + [f"ERROR: {e}" for e in errors]
 
@@ -294,8 +284,7 @@ class HopeFXEngine:
             )
         except Exception as _dl_exc:
             logger.error(
-                "Data layer orchestrator failed to start: %s — "
-                "ML features will be zero until resolved",
+                "Data layer orchestrator failed to start: %s — ML features will be zero until resolved",
                 _dl_exc,
             )
             self._dl_orchestrator = None
@@ -307,9 +296,7 @@ class HopeFXEngine:
         self._risk_manager = RiskManager(
             initial_balance=initial_balance,
             orchestrator=self._dl_orchestrator,
-            lineage_store=getattr(self._dl_orchestrator, "_lineage", None)
-            if self._dl_orchestrator
-            else None,
+            lineage_store=getattr(self._dl_orchestrator, "_lineage", None) if self._dl_orchestrator else None,
         )
         logger.info("RiskManager initialised (balance=%.2f)", initial_balance)
 
@@ -414,7 +401,7 @@ class HopeFXEngine:
                     account.balance,
                     account.equity,
                 )
-                self._risk_manager.update_equity(account.equity, account.balance)
+                self._risk_manager.update_equity(account.equity)
                 self._trade_logger.log_equity(
                     equity=account.equity,
                     balance=account.balance,
@@ -439,9 +426,7 @@ class HopeFXEngine:
                     acct.get("equity", 0),
                     acct.get("server", "?"),
                 )
-                self._risk_manager.update_equity(
-                    acct.get("equity", 0), acct.get("balance", 0)
-                )
+                self._risk_manager.update_equity(acct.get("equity", 0))
             else:
                 logger.warning("MT5 connect failed — running in signal-export mode")
             logger.info("MT5Bridge ready")
@@ -527,7 +512,7 @@ class HopeFXEngine:
             self._streamer_task = asyncio.current_task()
             await self._streamer.run()
         except asyncio.CancelledError:
-            pass
+            ...  # nosec B110
         except Exception as exc:
             logger.error("NuclearStreamer error: %s", exc)
 
@@ -554,9 +539,7 @@ class HopeFXEngine:
             bid = float(price_data.get("bid", price_data.get("price", 0)))
             ask = float(price_data.get("ask", bid))
             mid = (bid + ask) / 2
-            await self._on_tick(
-                symbol=symbol.replace("_", "/"), bid=bid, ask=ask, mid=mid
-            )
+            await self._on_tick(symbol=symbol.replace("_", "/"), bid=bid, ask=ask, mid=mid)
         except Exception as exc:
             logger.debug("Poll symbol %s error: %s", symbol, exc)
 
@@ -587,15 +570,15 @@ class HopeFXEngine:
         if self._dl_orchestrator:
             try:
                 dl_tick = self._dl_orchestrator.get_latest_tick()
-                if dl_tick and dl_tick.is_valid() and abs(dl_tick.mid - mid) / max(mid, 1.0) < 0.005:  # noqa: PLR2004
+                if dl_tick and dl_tick.is_valid() and abs(dl_tick.mid - mid) / max(mid, 1.0) < 0.005:
                     # Use orchestrator mid if NuclearStreamer price is within 0.5%
                     # (sanity check — reject if sources diverge significantly)
-                        _real_bid = dl_tick.bid
-                        _real_ask = dl_tick.ask
-                        spread = dl_tick.spread
-                        mid = dl_tick.mid
+                    _real_bid = dl_tick.bid
+                    _real_ask = dl_tick.ask
+                    spread = dl_tick.spread
+                    mid = dl_tick.mid
             except Exception:  # nosec B110 - intentional fallback to NuclearStreamer price
-                pass  # fall back to NuclearStreamer price
+                ...  # nosec B110
 
         # Build OHLCV bar: use spread to give high/low realistic range.
         # Without spread, every bar is a doji — the ML model gets zero ATR signal.
@@ -635,8 +618,7 @@ class HopeFXEngine:
             return
 
         logger.info(
-            "Brain[%s]: action=%s conf=%.3f regime=%s strategy=%s "
-            "ml_prob=%.3f ml_conf=%.3f abstain=%s reason=%s",
+            "Brain[%s]: action=%s conf=%.3f regime=%s strategy=%s ml_prob=%.3f ml_conf=%.3f abstain=%s reason=%s",
             sym_key,
             decision.action,
             decision.confidence,
@@ -685,8 +667,7 @@ class HopeFXEngine:
 
                 if not _ro.is_trading_allowed():
                     logger.warning(
-                        "RiskOrchestrator: trading halted (max_risk=%.2f) — "
-                        "order blocked for %s",
+                        "RiskOrchestrator: trading halted (max_risk=%.2f) — order blocked for %s",
                         _ro.get_max_risk(),
                         sym_key,
                     )
@@ -707,20 +688,12 @@ class HopeFXEngine:
                 trading_blocked = True
 
         min_conf = float(_optional("MIN_SIGNAL_CONFIDENCE", "0.35"))
-        if (
-            not trading_blocked
-            and decision.action in ("long", "short")
-            and decision.confidence >= min_conf
-        ):
+        if not trading_blocked and decision.action in ("long", "short") and decision.confidence >= min_conf:
             await self._execute_decision(decision, mid, sym_key)
 
         # ── Dispatch news/sentiment event to nuclear supervisor ───────────────
         # Extract sentiment from brain decision metadata if available
-        if (
-            self._news_callbacks
-            or not self._news_queue.empty()
-            or self._bar_count % 60 == 0
-        ):
+        if self._news_callbacks or not self._news_queue.empty() or self._bar_count % 60 == 0:
             await self._maybe_dispatch_news_event(ohlcv_df, decision, mid)
 
         # ── Equity snapshot ───────────────────────────────────────────────────
@@ -746,7 +719,7 @@ class HopeFXEngine:
 
             # Volatility: std of last 20 closes normalised to 1.0 = normal
             vol = 1.0
-            if len(ohlcv_df) >= 20:  # noqa: PLR2004
+            if len(ohlcv_df) >= 20:
                 closes = ohlcv_df["close"].tail(20).values
                 std = float(closes.std())
                 mean = float(abs(closes.mean()))
@@ -763,7 +736,7 @@ class HopeFXEngine:
                 logger.debug("Suppressed exception: %s", _exc)
 
             # Only dispatch if there's an elevated signal worth checking
-            if abs(sentiment) < 0.1 and vol < 1.5:  # noqa: PLR2004
+            if abs(sentiment) < 0.1 and vol < 1.5:
                 return
 
             # Build a synthetic news text from the decision reason
@@ -819,11 +792,7 @@ class HopeFXEngine:
                 # Brokers may be sync or async — handle both
                 import inspect as _inspect
 
-                result = (
-                    await _order_coro
-                    if _inspect.isawaitable(_order_coro)
-                    else _order_coro
-                )
+                result = await _order_coro if _inspect.isawaitable(_order_coro) else _order_coro
                 fill_price = float(result.get("fill_price", price)) if result else price
                 self._trade_logger.log_fill(
                     symbol=symbol,
@@ -845,9 +814,8 @@ class HopeFXEngine:
                 # Online learner feedback — notify Phase-3 store of the fill.
                 try:
                     from core.signal_engine import notify_fill as _notify_fill
-                    import pandas as _pd
 
-                    _features = _pd.DataFrame(
+                    _features = pd.DataFrame(
                         [
                             {
                                 "symbol": symbol,
@@ -883,7 +851,7 @@ class HopeFXEngine:
                 equity = float(info.get("equity", 0))
                 balance = float(info.get("balance", equity))
             if equity > 0:
-                self._risk_manager.update_equity(equity, balance)
+                self._risk_manager.update_equity(equity)
                 self._trade_logger.log_equity(
                     equity=equity,
                     balance=balance,
@@ -897,9 +865,7 @@ class HopeFXEngine:
     def _get_status(self) -> dict:
         tl_stats = self._trade_logger.stats if self._trade_logger else {}
         brain_stats = self._brain.stats if self._brain else {}
-        last_decision = (
-            (self._brain.recent_decisions(1) or [{}])[0] if self._brain else {}
-        )
+        last_decision = (self._brain.recent_decisions(1) or [{}])[0] if self._brain else {}
         return {
             "equity": tl_stats.get("equity", 0),
             "balance": tl_stats.get("balance", 0),

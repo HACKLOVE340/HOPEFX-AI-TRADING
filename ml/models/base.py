@@ -12,13 +12,12 @@ Abstract base class for all ML models in the trading framework.
 import json
 import logging
 import os
-import joblib
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import joblib
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -123,7 +122,7 @@ class BaseMLModel(ABC):
             metrics["r2"] = r2_score(y_test, predictions)
 
         # For classification tasks (if applicable)
-        if len(np.unique(y_test)) <= 10:  # Likely classification  # noqa: PLR2004
+        if len(np.unique(y_test)) <= 10:  # Likely classification
             try:
                 metrics["accuracy"] = accuracy_score(y_test, np.round(predictions))
                 metrics["precision"] = precision_score(
@@ -158,7 +157,7 @@ class BaseMLModel(ABC):
 
         # Save metadata
         metadata_path = filepath.parent / f"{filepath.stem}_metadata.json"
-        with open(metadata_path, "w") as f:
+        with Path(metadata_path).open("w", encoding="utf-8") as f:
             json.dump(self.metadata, f, indent=2)
 
         # Save model using joblib (safer than raw pickle for sklearn objects)
@@ -173,7 +172,8 @@ class BaseMLModel(ABC):
             compress=3,
         )
 
-        self.logger.info(f"Model saved to {filepath}")
+        self.logger.info("Model saved to %s", filepath)
+
 
     # Allowed base directory for model files — prevents path traversal
     _MODEL_BASE_DIR: Path = Path(os.environ.get("MODEL_BASE_DIR", "models")).resolve()
@@ -209,10 +209,11 @@ class BaseMLModel(ABC):
         # Load metadata if exists
         metadata_path = Path(filepath).parent / f"{Path(filepath).stem}_metadata.json"
         if metadata_path.exists():
-            with open(metadata_path) as f:
+            with Path(metadata_path).open(encoding="utf-8") as f:
                 self.metadata = json.load(f)
 
-        self.logger.info(f"Model loaded from {filepath}")
+        self.logger.info("Model loaded from %s", filepath)
+
 
     def get_feature_importance(self) -> dict[str, float] | None:
         """
@@ -223,7 +224,7 @@ class BaseMLModel(ABC):
         """
         if hasattr(self.model, "feature_importances_"):
             return dict(enumerate(self.model.feature_importances_))
-        elif hasattr(self.model, "coef_"):
+        if hasattr(self.model, "coef_"):
             return dict(enumerate(self.model.coef_))
         return None
 

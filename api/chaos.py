@@ -21,9 +21,8 @@ All write endpoints require admin role.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-UTC = timezone.utc
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -195,15 +194,12 @@ async def run_single_scenario(
     if method_name is None:
         raise HTTPException(
             status_code=404,
-            detail=f"Unknown scenario '{scenario_name}'. "
-            f"Valid: {list(scenario_map.keys())}",
+            detail=f"Unknown scenario '{scenario_name}'. Valid: {list(scenario_map.keys())}",
         )
 
     method = getattr(controller, method_name, None)
     if method is None:
-        raise HTTPException(
-            status_code=500, detail=f"Scenario method not found: {method_name}"
-        )
+        raise HTTPException(status_code=500, detail=f"Scenario method not found: {method_name}")
 
     logger.warning("CHAOS SCENARIO %s triggered via API", scenario_name)
     result = await method()
@@ -253,8 +249,6 @@ async def run_mutation_tests(
     Returns immediately with run_id. Poll /api/chaos/mutation/results
     for completion.
     """
-    global _mutation_running  # noqa: PLW0602
-
     if _mutation_running:
         raise HTTPException(
             status_code=409,
@@ -300,12 +294,11 @@ async def run_mutation_tests(
     return MutationRunResponse(
         status="started",
         run_id=run_id,
-        message=f"Mutation testing started (run_id={run_id}). "
-        f"Poll /api/chaos/mutation/results for completion.",
+        message=f"Mutation testing started (run_id={run_id}). Poll /api/chaos/mutation/results for completion.",
     )
 
 
-@router.get("/mutation/results", response_model=Optional[MutationResultOut])
+@router.get("/mutation/results", response_model=MutationResultOut | None)
 async def get_mutation_results() -> MutationResultOut | None:
     """Return the last mutation test report, or null if none has run."""
     if _last_mutation_report is None:

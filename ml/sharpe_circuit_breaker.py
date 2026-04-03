@@ -51,7 +51,8 @@ Usage
     from ml.sharpe_circuit_breaker import get_sharpe_cb
 
     cb = get_sharpe_cb()
-    asyncio.create_task(cb.run())
+    _t = asyncio.create_task(cb.run())
+    _t.add_done_callback(lambda _: None)
 
     # In trade executor, after every fill:
     cb.record_trade(pnl=42.5, model_version="advanced_oos_v4")
@@ -59,7 +60,8 @@ Usage
     # In signal router, before placing an order:
     if cb.is_open("advanced_oos_v4"):
         logger.warning("Model gated by Sharpe circuit breaker — skipping signal")
-        return
+
+Return
 """
 
 from __future__ import annotations
@@ -71,8 +73,7 @@ import math
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 import numpy as np
 
@@ -86,9 +87,7 @@ EVAL_INTERVAL_S: float = float(os.getenv("SHARPE_CB_EVAL_INTERVAL_S", "60"))
 MIN_TRADES: int = int(os.getenv("SHARPE_CB_MIN_TRADES", "20"))
 RESET_AFTER_S: float = float(os.getenv("SHARPE_CB_RESET_AFTER_S", "3600"))
 # Annualisation: sqrt(252) for daily, sqrt(252*24) for hourly, etc.
-ANNUALISE_FACTOR: float = float(
-    os.getenv("SHARPE_CB_ANNUALISE_FACTOR", str(math.sqrt(252)))
-)
+ANNUALISE_FACTOR: float = float(os.getenv("SHARPE_CB_ANNUALISE_FACTOR", str(math.sqrt(252))))
 
 
 @dataclass
@@ -96,9 +95,7 @@ class CircuitState:
     """Per-model circuit breaker state."""
 
     model_version: str
-    pnl_window: collections.deque[float] = field(
-        default_factory=lambda: collections.deque(maxlen=WINDOW_TRADES)
-    )
+    pnl_window: collections.deque[float] = field(default_factory=lambda: collections.deque(maxlen=WINDOW_TRADES))
     total_trades: int = 0
     consecutive_bad_windows: int = 0
     is_open: bool = False
@@ -133,7 +130,7 @@ class CircuitState:
             # All trades identical — sign of mean determines direction
             if mean > 0:
                 return float(ANNUALISE_FACTOR * 1e6)  # perfect wins
-            elif mean < 0:
+            if mean < 0:
                 return float(-ANNUALISE_FACTOR * 1e6)  # perfect losses
             return 0.0
         return float(mean / std * ANNUALISE_FACTOR)
@@ -213,14 +210,8 @@ class SharpeCircuitBreaker:
                 "total_trades": s.total_trades,
                 "window_trades": len(s.pnl_window),
                 "trip_reason": s.trip_reason,
-                "opened_at": datetime.fromtimestamp(
-                    s.opened_at, tz=UTC
-                ).isoformat()
-                if s.opened_at
-                else None,
-                "last_evaluated_at": s.last_evaluated_at.isoformat()
-                if s.last_evaluated_at
-                else None,
+                "opened_at": datetime.fromtimestamp(s.opened_at, tz=UTC).isoformat() if s.opened_at else None,
+                "last_evaluated_at": s.last_evaluated_at.isoformat() if s.last_evaluated_at else None,
                 "sharpe_history": [
                     {"ts": ts.isoformat(), "sharpe": sh}
                     for ts, sh in s.sharpe_history[-20:]  # last 20 evaluations
@@ -235,8 +226,7 @@ class SharpeCircuitBreaker:
         """Run the evaluation loop until cancelled."""
         self._running = True
         logger.info(
-            "SharpeCircuitBreaker started "
-            "(window=%d trades, min_sharpe=%.2f, consecutive=%d, interval=%.0fs)",
+            "SharpeCircuitBreaker started (window=%d trades, min_sharpe=%.2f, consecutive=%d, interval=%.0fs)",
             WINDOW_TRADES,
             MIN_SHARPE,
             CONSECUTIVE_WINDOWS,
@@ -286,8 +276,7 @@ class SharpeCircuitBreaker:
         state.sharpe_history.append((now, sharpe))
 
         logger.info(
-            "SharpeCircuitBreaker: '%s' rolling Sharpe=%.3f "
-            "(threshold=%.2f, consecutive_bad=%d/%d, circuit=%s)",
+            "SharpeCircuitBreaker: '%s' rolling Sharpe=%.3f (threshold=%.2f, consecutive_bad=%d/%d, circuit=%s)",
             state.model_version,
             sharpe,
             MIN_SHARPE,
@@ -298,17 +287,13 @@ class SharpeCircuitBreaker:
 
         if sharpe < MIN_SHARPE:
             state.consecutive_bad_windows += 1
-            if (
-                not state.is_open
-                and state.consecutive_bad_windows >= CONSECUTIVE_WINDOWS
-            ):
+            if not state.is_open and state.consecutive_bad_windows >= CONSECUTIVE_WINDOWS:
                 await self._trip(state, sharpe)
         else:
             # Good window — reset consecutive counter (but don't close if already open)
             if state.consecutive_bad_windows > 0:
                 logger.info(
-                    "SharpeCircuitBreaker: '%s' Sharpe recovered to %.3f — "
-                    "resetting consecutive counter",
+                    "SharpeCircuitBreaker: '%s' Sharpe recovered to %.3f — resetting consecutive counter",
                     state.model_version,
                     sharpe,
                 )
@@ -365,10 +350,7 @@ class SharpeCircuitBreaker:
             if ae and hasattr(ae, "send_alert"):
                 ae.send_alert(
                     title="Sharpe Circuit Breaker Tripped",
-                    message=(
-                        f"Model '{state.model_version}' gated out of production.\n"
-                        f"Reason: {state.trip_reason}"
-                    ),
+                    message=(f"Model '{state.model_version}' gated out of production.\nReason: {state.trip_reason}"),
                     severity="critical",
                 )
         except Exception as exc:

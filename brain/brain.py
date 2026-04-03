@@ -14,16 +14,17 @@ PRODUCTION VERSION with all critical fixes:
 """
 
 import asyncio
+import contextlib
+import copy
 import logging
 import time
-from typing import Any
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
-from enum import Enum
 from collections import deque
-import copy
-import contextlib
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from enum import Enum
+from typing import Any
+
+logger = logging.getLogger(__name__)
 
 try:
     import numpy as np
@@ -31,9 +32,7 @@ try:
     NUMPY_AVAILABLE = True
 except ImportError:
     NUMPY_AVAILABLE = False
-    logging.warning("NumPy not available, using fallback calculations")
-
-logger = logging.getLogger(__name__)
+    logger.warning("NumPy not available, using fallback calculations")
 
 
 class MarketRegime(Enum):
@@ -117,9 +116,8 @@ class CircuitBreaker:
         async with self._lock:
             if self.failure_count > 0:
                 self.failure_count -= 1
-                logger.debug(
-                    f"Circuit breaker: failure count decreased to {self.failure_count}"
-                )
+                logger.debug("Circuit breaker: failure count decreased to %s", self.failure_count)
+
 
             if self.failure_count == 0 and self.is_open:
                 self.is_open = False
@@ -133,10 +131,7 @@ class CircuitBreaker:
 
             if self.failure_count >= self.failure_threshold and not self.is_open:
                 self.is_open = True
-                logger.critical(
-                    f"Circuit breaker OPENED after {self.failure_count} consecutive failures. "
-                    f"Recovery timeout: {self.recovery_timeout}s"
-                )
+                logger.critical("Circuit breaker OPENED after %s consecutive failures. Recovery timeout: %ss", self.failure_count, self.recovery_timeout)
 
     async def check_recovery(self) -> bool:
         """Check if circuit can be closed automatically"""
@@ -144,9 +139,7 @@ class CircuitBreaker:
             if not self.is_open:
                 return True
 
-            if self.last_failure_time and (
-                time.time() - self.last_failure_time > self.recovery_timeout
-            ):
+            if self.last_failure_time and (time.time() - self.last_failure_time > self.recovery_timeout):
                 self.is_open = False
                 self.failure_count = max(0, self.failure_threshold - 1)
                 logger.info("Circuit breaker auto-recovery triggered")
@@ -182,9 +175,7 @@ class HOPEFXBrain:
         self.config = config or {}
 
         # State initialization
-        self.state = BrainState(
-            timestamp=time.time(), system_state=SystemState.INITIALIZING
-        )
+        self.state = BrainState(timestamp=time.time(), system_state=SystemState.INITIALIZING)
 
         # Component references (injected later)
         self.price_engine = None
@@ -244,7 +235,8 @@ class HOPEFXBrain:
             missing.append("price_engine")
 
         if missing:
-            logger.error(f"CRITICAL: Missing components: {', '.join(missing)}")
+            logger.error("CRITICAL: Missing components: %s", ', '.join(missing))
+
         else:
             logger.info("All critical components injected into Brain")
 
@@ -297,7 +289,7 @@ class HOPEFXBrain:
         except asyncio.CancelledError:
             logger.info("Brain dominate loop cancelled")
         except Exception as e:
-            logger.critical(f"Brain critical error: {e}", exc_info=True)
+            logger.critical("Brain critical error: %s", e, exc_info=True)
             await self._execute_emergency_stop()
         finally:
             await self._cleanup()
@@ -346,13 +338,14 @@ class HOPEFXBrain:
         }
         self.error_history.append(error_info)
 
-        logger.exception(f"Error in brain cycle {self._cycle_count}: {error}")
+        logger.exception("Error in brain cycle %s: %s", self._cycle_count)
+
 
         # Record failure
         await self._circuit_breaker.record_failure()
 
         # Notify if critical
-        if len(self.error_history) > 10:  # noqa: PLR2004
+        if len(self.error_history) > 10:
             await self._safe_notify(
                 "error",
                 f"Multiple errors in brain: {str(error)[:100]}",
@@ -383,9 +376,7 @@ class HOPEFXBrain:
                 # Get account info from broker (with timeout)
                 if self.broker:
                     try:
-                        account = await asyncio.wait_for(
-                            self.broker.get_account_info(), timeout=5.0
-                        )
+                        account = await asyncio.wait_for(self.broker.get_account_info(), timeout=5.0)
                         self.state.account_balance = account.get("balance", 0)
                         self.state.equity = account.get("equity", 0)
                         self.state.margin_used = account.get("margin_used", 0)
@@ -394,15 +385,14 @@ class HOPEFXBrain:
                         logger.error("Broker timeout getting account info")
                         raise
                     except Exception as e:
-                        logger.error(f"Error getting account info: {e}")
+                        logger.error("Error getting account info: %s", e)
+
                         raise
 
                 # Get positions (with timeout)
                 if self.broker:
                     try:
-                        positions = await asyncio.wait_for(
-                            self.broker.get_positions(), timeout=5.0
-                        )
+                        positions = await asyncio.wait_for(self.broker.get_positions(), timeout=5.0)
                         self.state.active_positions = {
                             p.id: {
                                 "id": p.id,
@@ -421,15 +411,14 @@ class HOPEFXBrain:
                         self.state.active_positions = {}
                         self.state.open_trades_count = 0
                     except Exception as e:
-                        logger.error(f"Error getting positions: {e}")
+                        logger.error("Error getting positions: %s", e)
+
                         self.state.active_positions = {}
 
                 # Get pending orders (with timeout)
                 if self.broker:
                     try:
-                        orders = await asyncio.wait_for(
-                            self.broker.get_pending_orders(), timeout=5.0
-                        )
+                        orders = await asyncio.wait_for(self.broker.get_pending_orders(), timeout=5.0)
                         self.state.pending_orders = [
                             {
                                 "id": o.id,
@@ -445,11 +434,13 @@ class HOPEFXBrain:
                         logger.error("Broker timeout getting orders")
                         self.state.pending_orders = []
                     except Exception as e:
-                        logger.error(f"Error getting orders: {e}")
+                        logger.error("Error getting orders: %s", e)
+
                         self.state.pending_orders = []
 
             except Exception as e:
-                logger.error(f"State update error: {e}")
+                logger.error("State update error: %s", e)
+
                 raise  # Re-raise to trigger circuit breaker
 
     async def _analyze_market_regimes(self):
@@ -474,9 +465,7 @@ class HOPEFXBrain:
 
                     # Log regime changes
                     if old_regime != regime:
-                        logger.info(
-                            f"Regime change for {symbol}: {old_regime.value if old_regime else 'None'} -> {regime.value}"
-                        )
+                        logger.info("Regime change for %s: %s -> %s", symbol, old_regime.value if old_regime else 'None', regime.value)
                         self.regime_history.append(
                             {
                                 "timestamp": time.time(),
@@ -487,7 +476,8 @@ class HOPEFXBrain:
                         )
 
             except Exception as e:
-                logger.error(f"Regime detection error for {symbol}: {e}")
+                logger.error("Regime detection error for %s: %s", symbol, e)
+
 
     async def _detect_regime(self, symbol: str) -> MarketRegime:
         """Detect market regime using price action - ROBUST VERSION"""
@@ -497,10 +487,11 @@ class HOPEFXBrain:
         try:
             ohlcv = self.price_engine.get_ohlcv(symbol, "1h", limit=24)
         except Exception as e:
-            logger.warning(f"Failed to get OHLCV for {symbol}: {e}")
+            logger.warning("Failed to get OHLCV for %s: %s", symbol, e)
+
             return MarketRegime.UNKNOWN
 
-        if len(ohlcv) < 20:  # noqa: PLR2004
+        if len(ohlcv) < 20:
             return MarketRegime.UNKNOWN
 
         try:
@@ -511,11 +502,11 @@ class HOPEFXBrain:
 
             if NUMPY_AVAILABLE:
                 return self._detect_regime_numpy(closes, highs, lows)
-            else:
-                return self._detect_regime_python(closes, highs, lows)
+            return self._detect_regime_python(closes, highs, lows)
 
         except Exception as e:
-            logger.error(f"Error in regime calculation for {symbol}: {e}")
+            logger.error("Error in regime calculation for %s: %s", symbol, e)
+
             return MarketRegime.UNKNOWN
 
     def _detect_regime_numpy(self, closes, highs, lows) -> MarketRegime:
@@ -528,12 +519,12 @@ class HOPEFXBrain:
         returns = np.diff(closes_arr) / closes_arr[:-1]
 
         # Volatility (annualized)
-        np.std(returns) * np.sqrt(252 * 24)
+        _annualized_vol = np.std(returns) * np.sqrt(252 * 24)
 
         # Trend using linear regression
         x = np.arange(len(closes_arr[-20:]))
         y = closes_arr[-20:]
-        slope, intercept = np.polyfit(x, y, 1)
+        slope, _intercept = np.polyfit(x, y, 1)
         normalized_slope = slope / closes_arr[-1] if closes_arr[-1] > 0 else 0
 
         # ATR calculation
@@ -542,7 +533,7 @@ class HOPEFXBrain:
         tr3 = np.abs(lows_arr[1:] - closes_arr[:-1])
         true_range = np.maximum(np.maximum(tr1, tr2), tr3)
         atr = (
-            np.mean(true_range[-14:]) if len(true_range) >= 14 else np.mean(true_range)  # noqa: PLR2004
+            np.mean(true_range[-14:]) if len(true_range) >= 14 else np.mean(true_range)
         )
 
         # Classification
@@ -550,14 +541,13 @@ class HOPEFXBrain:
         price_range = np.max(highs_arr[-20:]) - np.min(lows_arr[-20:])
         volatility_pct = (atr / current_price) * 100 if current_price > 0 else 0
 
-        if volatility_pct > 2.0:  # noqa: PLR2004
+        if volatility_pct > 2.0:
             return MarketRegime.VOLATILE
 
-        if abs(normalized_slope) > 0.001 and price_range > atr * 3:  # noqa: PLR2004
+        if abs(normalized_slope) > 0.001 and price_range > atr * 3:
             if normalized_slope > 0:
                 return MarketRegime.TRENDING_UP
-            else:
-                return MarketRegime.TRENDING_DOWN
+            return MarketRegime.TRENDING_DOWN
 
         return MarketRegime.RANGING
 
@@ -575,7 +565,7 @@ class HOPEFXBrain:
         trend = (second_half - first_half) / first_half if first_half > 0 else 0
 
         # Volatility
-        (std_close / mean_close) * 100 if mean_close > 0 else 0
+        _volatility_pct = (std_close / mean_close) * 100 if mean_close > 0 else 0
 
         # ATR approximation
         atr = sum(h - l for h, l in zip(highs[-14:], lows[-14:], strict=False)) / 14
@@ -584,14 +574,13 @@ class HOPEFXBrain:
         current_price = closes[-1]
         volatility_pct = (atr / current_price) * 100 if current_price > 0 else 0
 
-        if volatility_pct > 2.0:  # noqa: PLR2004
+        if volatility_pct > 2.0:
             return MarketRegime.VOLATILE
 
-        if abs(trend) > 0.001:  # noqa: PLR2004
+        if abs(trend) > 0.001:
             if trend > 0:
                 return MarketRegime.TRENDING_UP
-            else:
-                return MarketRegime.TRENDING_DOWN
+            return MarketRegime.TRENDING_DOWN
 
         return MarketRegime.RANGING
 
@@ -611,22 +600,25 @@ class HOPEFXBrain:
             # Check margin usage
             margin_ratio = margin_used / equity if equity > 0 else 0
 
-            if margin_ratio > 0.8:  # noqa: PLR2004
-                logger.warning(f"HIGH MARGIN USAGE: {margin_ratio:.2%}")
+            if margin_ratio > 0.8:
+                logger.warning("HIGH MARGIN USAGE: %s", margin_ratio)
+
                 await self._reduce_exposure()
                 await self._safe_notify(
                     "warning",
                     f"High margin usage: {margin_ratio:.1%}",
                     {"margin_ratio": margin_ratio, "equity": equity},
                 )
-            elif margin_ratio > 0.5:  # noqa: PLR2004
-                logger.info(f"Moderate margin usage: {margin_ratio:.2%}")
+            elif margin_ratio > 0.5:
+                logger.info("Moderate margin usage: %s", margin_ratio)
+
 
             # Check daily loss limit
             if balance > 0:
                 daily_loss_pct = abs(daily_pnl) / balance
-                if daily_loss_pct > 0.05:  # 5% daily loss  # noqa: PLR2004
-                    logger.critical(f"DAILY LOSS LIMIT REACHED: {daily_loss_pct:.2%}")
+                if daily_loss_pct > 0.05:  # 5% daily loss
+                    logger.critical("DAILY LOSS LIMIT REACHED: %s", daily_loss_pct)
+
                     await self._safe_notify(
                         "critical",
                         f"Daily loss limit reached: {daily_loss_pct:.2%}",
@@ -637,12 +629,14 @@ class HOPEFXBrain:
             # Check drawdown
             if hasattr(self.risk_manager, "current_drawdown"):
                 dd = self.risk_manager.current_drawdown
-                if dd > 0.10:  # 10% drawdown  # noqa: PLR2004
-                    logger.critical(f"MAX DRAWDOWN REACHED: {dd:.2%}")
+                if dd > 0.10:  # 10% drawdown
+                    logger.critical("MAX DRAWDOWN REACHED: %s", dd)
+
                     await self._execute_emergency_stop()
 
         except Exception as e:
-            logger.error(f"Risk assessment error: {e}")
+            logger.error("Risk assessment error: %s", e)
+
 
     async def _check_emergency_conditions(self) -> bool:
         """Check if emergency stop is needed - ROBUST"""
@@ -656,9 +650,8 @@ class HOPEFXBrain:
 
             # Check catastrophic loss (50% of initial balance)
             if balance > 0 and equity < balance * 0.5:
-                logger.critical(
-                    f"CATASTROPHIC LOSS: Equity ${equity:,.2f} < 50% of Balance ${balance:,.2f}"
-                )
+                logger.critical("CATASTROPHIC LOSS: Equity $%s < 50% of Balance $%s", equity, balance)
+
                 return True
 
             # Check for data feed staleness
@@ -670,19 +663,20 @@ class HOPEFXBrain:
                         if last_tick:
                             stale_time = time.time() - last_tick.timestamp
                             if stale_time > stale_threshold:
-                                logger.warning(
-                                    f"Stale data for {symbol}: {stale_time:.0f}s old"
-                                )
+                                logger.warning("Stale data for %s: %ss old", symbol, stale_time)
+
                     except Exception as e:
-                        logger.error(f"Error checking data staleness for {symbol}: {e}")
+                        logger.error("Error checking data staleness for %s: %s", symbol, e)
+
 
             # Check for too many consecutive errors
-            if self._circuit_breaker.failure_count > 10:  # noqa: PLR2004
+            if self._circuit_breaker.failure_count > 10:
                 logger.critical("Too many consecutive failures, emergency stopping")
                 return True
 
         except Exception as e:
-            logger.error(f"Emergency check error: {e}")
+            logger.error("Emergency check error: %s", e)
+
 
         return False
 
@@ -698,26 +692,24 @@ class HOPEFXBrain:
         if self.broker:
             for attempt in range(3):
                 try:
-                    closed_positions = await asyncio.wait_for(
-                        self.broker.close_all_positions(), timeout=10.0
-                    )
-                    logger.info(f"Closed {len(closed_positions)} positions")
+                    closed_positions = await asyncio.wait_for(self.broker.close_all_positions(), timeout=10.0)
+                    logger.info("Closed %s positions", len(closed_positions))
+
                     break
                 except Exception as e:
-                    logger.error(
-                        f"Attempt {attempt + 1} failed to close positions: {e}"
-                    )
+                    logger.error("Attempt %s failed to close positions: %s", attempt + 1, e)
+
                     await asyncio.sleep(1)
 
         # Cancel all orders
         if self.broker:
             try:
-                cancelled_orders = await asyncio.wait_for(
-                    self.broker.cancel_all_orders(), timeout=5.0
-                )
-                logger.info(f"Cancelled {len(cancelled_orders)} orders")
+                cancelled_orders = await asyncio.wait_for(self.broker.cancel_all_orders(), timeout=5.0)
+                logger.info("Cancelled %s orders", len(cancelled_orders))
+
             except Exception as e:
-                logger.error(f"Error cancelling orders: {e}")
+                logger.error("Error cancelling orders: %s", e)
+
 
         # Notify
         await self._safe_notify(
@@ -753,16 +745,17 @@ class HOPEFXBrain:
 
             for pos in to_close:
                 try:
-                    success = await asyncio.wait_for(
-                        self.broker.close_position(pos["id"]), timeout=5.0
-                    )
+                    success = await asyncio.wait_for(self.broker.close_position(pos["id"]), timeout=5.0)
                     if success:
-                        logger.info(f"Reduced exposure: closed position {pos['id']}")
+                        logger.info("Reduced exposure: closed position %s", pos['id'])
+
                 except Exception as e:
-                    logger.error(f"Error reducing position {pos['id']}: {e}")
+                    logger.error("Error reducing position %s: %s", pos['id'], e)
+
 
         except Exception as e:
-            logger.error(f"Error in reduce_exposure: {e}")
+            logger.error("Error in reduce_exposure: %s", e)
+
 
     async def _make_strategy_decisions(self):
         """Execute strategy logic - WITH TIMEOUTS AND CONCURRENCY CONTROL"""
@@ -772,17 +765,13 @@ class HOPEFXBrain:
         try:
             # Get signals with timeout
             signals = await asyncio.wait_for(
-                self.strategy_manager.generate_signals(
-                    self.state.market_regime, self.price_engine
-                ),
+                self.strategy_manager.generate_signals(self.state.market_regime, self.price_engine),
                 timeout=10.0,
             )
 
             # Filter signals through risk manager
             if self.risk_manager:
-                signals = await asyncio.wait_for(
-                    self.risk_manager.filter_signals(signals, self.state), timeout=5.0
-                )
+                signals = await asyncio.wait_for(self.risk_manager.filter_signals(signals, self.state), timeout=5.0)
 
             # Publish signals to RealTimeSignalService so /api/signals/active
             # reflects live brain activity.
@@ -797,14 +786,13 @@ class HOPEFXBrain:
                     await self._execute_signal(signal)
 
             # Limit to max 5 signals per cycle
-            await asyncio.gather(
-                *[execute_with_limit(s) for s in signals[:5]], return_exceptions=True
-            )
+            await asyncio.gather(*[execute_with_limit(s) for s in signals[:5]], return_exceptions=True)
 
         except TimeoutError:
             logger.warning("Strategy decision timeout")
         except Exception as e:
-            logger.error(f"Strategy decision error: {e}")
+            logger.error("Strategy decision error: %s", e)
+
 
     def _publish_to_signal_service(self, signal: dict) -> None:
         """
@@ -831,12 +819,8 @@ class HOPEFXBrain:
 
             # Derive SL/TP from signal dict or use conservative defaults
             entry = float(signal.get("entry_price", price) or price)
-            sl = float(
-                signal.get("stop_loss", entry * (0.995 if action == "buy" else 1.005))
-            )
-            tp = float(
-                signal.get("take_profit", entry * (1.015 if action == "buy" else 0.985))
-            )
+            sl = float(signal.get("stop_loss", entry * (0.995 if action == "buy" else 1.005)))
+            tp = float(signal.get("take_profit", entry * (1.015 if action == "buy" else 0.985)))
 
             svc = _get_signal_service()
             svc.generate_signal(
@@ -867,23 +851,24 @@ class HOPEFXBrain:
 
                 # Validate signal
                 if not all([action, symbol, size]):
-                    logger.warning(f"Invalid signal (missing fields): {signal}")
+                    logger.warning("Invalid signal (missing fields): %s", signal)
+
                     return
 
                 if action not in ("buy", "sell", "close"):
-                    logger.warning(f"Unknown action: {action}")
+                    logger.warning("Unknown action: %s", action)
+
                     return
 
                 if size <= 0:
-                    logger.warning(f"Invalid size: {size}")
+                    logger.warning("Invalid size: %s", size)
+
                     return
 
                 # Execute
                 if action in ("buy", "sell"):
                     order = await asyncio.wait_for(
-                        self.broker.place_market_order(
-                            symbol=symbol, side=action, quantity=size
-                        ),
+                        self.broker.place_market_order(symbol=symbol, side=action, quantity=size),
                         timeout=10.0,
                     )
 
@@ -899,36 +884,33 @@ class HOPEFXBrain:
                         }
                     )
 
-                    logger.info(
-                        f"Executed {action.upper()} {size} {symbol} @ "
-                        f"{order.average_fill_price:.5f} (ID: {order.id})"
-                    )
+                    logger.info("Executed %s %s %s @ %s (ID: %s)", action.upper(), size, symbol, order.average_fill_price, order.id)
 
                 elif action == "close":
                     position_id = signal.get("position_id")
                     if position_id:
-                        success = await asyncio.wait_for(
-                            self.broker.close_position(position_id), timeout=10.0
-                        )
+                        success = await asyncio.wait_for(self.broker.close_position(position_id), timeout=10.0)
                         if success:
-                            logger.info(f"Closed position {position_id}")
+                            logger.info("Closed position %s", position_id)
+
 
             except TimeoutError:
-                logger.error(f"Signal execution timeout: {signal.get('symbol')}")
-            except Exception as e:
-                logger.error(f"Signal execution error: {e}")
+                logger.error("Signal execution timeout: %s", signal.get('symbol'))
 
-    async def _safe_notify(self, level: str, message: str, data: dict = None):
+            except Exception as e:
+                logger.error("Signal execution error: %s", e)
+
+
+    async def _safe_notify(self, level: str, message: str, data: dict | None = None):
         """Safe notification with error handling"""
         if not self.notification_manager:
             return
 
         try:
-            await asyncio.wait_for(
-                self.notification_manager.send_alert(level, message, data), timeout=3.0
-            )
+            await asyncio.wait_for(self.notification_manager.send_alert(level, message, data), timeout=3.0)
         except Exception as e:
-            logger.error(f"Notification failed: {e}")
+            logger.error("Notification failed: %s", e)
+
 
     async def _log_periodic_state(self):
         """Log periodic state summary"""
@@ -937,22 +919,12 @@ class HOPEFXBrain:
                 state_dict = self.state.to_dict()
 
             # Calculate average cycle time
-            avg_cycle_time = (
-                sum(self._cycle_times) / len(self._cycle_times)
-                if self._cycle_times
-                else 0
-            )
+            avg_cycle_time = sum(self._cycle_times) / len(self._cycle_times) if self._cycle_times else 0
 
-            logger.info(
-                f"State Summary [Cycle {self._cycle_count}] | "
-                f"Equity: ${state_dict['equity']:,.2f} | "
-                f"Positions: {state_dict['open_trades_count']} | "
-                f"Regimes: {len(state_dict['market_regime'])} | "
-                f"Avg Cycle: {avg_cycle_time*1000:.1f}ms | "
-                f"Circuit: {'OPEN' if self._circuit_breaker.is_open else 'CLOSED'}"
-            )
+            logger.info("State Summary [Cycle %s] | Equity: $%s | Positions: %s | Regimes: %s | Avg Cycle: %sms | Circuit: %s", self._cycle_count, state_dict['equity'], state_dict['open_trades_count'], len(state_dict['market_regime']), avg_cycle_time * 1000, 'OPEN' if self._circuit_breaker.is_open else 'CLOSED')
         except Exception as e:
-            logger.error(f"Error logging state: {e}")
+            logger.error("Error logging state: %s", e)
+
 
     async def _pause_trading(self):
         """Pause trading but keep monitoring"""
@@ -985,14 +957,16 @@ class HOPEFXBrain:
             logger.info("Trading resumed")
             await self._safe_notify("info", "Trading resumed", {})
 
-        asyncio.create_task(_resume())
+        _t = asyncio.create_task(_resume())
+        _t.add_done_callback(lambda _: None)
 
     def emergency_stop(self):
         """Manual emergency stop — sets flag synchronously, schedules cleanup async."""
         logger.info("Manual emergency stop triggered")
         self._emergency_stop = True
         with contextlib.suppress(RuntimeError):
-            asyncio.create_task(self._execute_emergency_stop())
+            _t = asyncio.create_task(self._execute_emergency_stop())
+            _t.add_done_callback(lambda _: None)
 
     async def shutdown(self):
         """Graceful shutdown"""
@@ -1026,11 +1000,7 @@ class HOPEFXBrain:
             "cycle_count": self._cycle_count,
             "decision_history_size": len(self.decision_history),
             "error_history_size": len(self.error_history),
-            "avg_cycle_time_ms": (
-                sum(self._cycle_times) / len(self._cycle_times) * 1000
-            )
-            if self._cycle_times
-            else 0,
+            "avg_cycle_time_ms": (sum(self._cycle_times) / len(self._cycle_times) * 1000) if self._cycle_times else 0,
             "components": {
                 "price_engine": self.price_engine is not None,
                 "broker": self.broker is not None,

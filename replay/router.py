@@ -5,8 +5,12 @@
 # No commercial use without explicit permission.
 """replay/router.py — FastAPI router for chart replay endpoints."""
 
+import logging
+
 from replay.engine import ChartReplayEngine
 from replay.models import ReplaySpeed
+
+logger = logging.getLogger(__name__)
 
 
 def create_replay_router(engine: "ChartReplayEngine"):
@@ -50,7 +54,8 @@ def create_replay_router(engine: "ChartReplayEngine"):
             start = datetime.fromisoformat(req.start_date)
             end = datetime.fromisoformat(req.end_date)
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail=f"Invalid date format: {exc}") from exc
+            logger.warning("Invalid date format in replay request: %s", exc)
+            raise HTTPException(status_code=400, detail="Invalid date format — use ISO 8601 (e.g. 2024-01-15T00:00:00)") from None
         session = engine.create_session(
             symbol=req.symbol,
             timeframe=req.timeframe,
@@ -72,9 +77,7 @@ def create_replay_router(engine: "ChartReplayEngine"):
         """Start or resume a replay session."""
         success = engine.play(session_id)
         if not success:
-            raise HTTPException(
-                status_code=404, detail=f"Session {session_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
         return {"session_id": session_id, "status": "playing"}
 
     @router.post("/sessions/{session_id}/pause")
@@ -82,9 +85,7 @@ def create_replay_router(engine: "ChartReplayEngine"):
         """Pause a replay session."""
         success = engine.pause(session_id)
         if not success:
-            raise HTTPException(
-                status_code=404, detail=f"Session {session_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
         return {"session_id": session_id, "status": "paused"}
 
     @router.post("/sessions/{session_id}/stop")
@@ -92,9 +93,7 @@ def create_replay_router(engine: "ChartReplayEngine"):
         """Stop and reset a replay session."""
         success = engine.stop(session_id)
         if not success:
-            raise HTTPException(
-                status_code=404, detail=f"Session {session_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
         return {"session_id": session_id, "status": "idle"}
 
     @router.put("/sessions/{session_id}/speed")
@@ -108,9 +107,7 @@ def create_replay_router(engine: "ChartReplayEngine"):
             )
         success = engine.set_speed(valid_speeds[req.speed], session_id)
         if not success:
-            raise HTTPException(
-                status_code=404, detail=f"Session {session_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
         return {"session_id": session_id, "speed": req.speed}
 
     @router.get("/sessions/{session_id}/summary")
@@ -118,9 +115,7 @@ def create_replay_router(engine: "ChartReplayEngine"):
         """Get current session summary (P&L, state, positions)."""
         summary = engine.get_session_summary(session_id)
         if not summary:
-            raise HTTPException(
-                status_code=404, detail=f"Session {session_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
         return summary
 
     @router.post("/sessions/{session_id}/orders")

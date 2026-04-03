@@ -96,7 +96,8 @@ class LSTMPricePredictor(BaseMLModel):
             )
 
             self.model = model
-            self.logger.info(f"LSTM model built with architecture: {self.lstm_units}")
+            self.logger.info("LSTM model built with architecture: %s", self.lstm_units)
+
 
         except ImportError:
             self.logger.error(
@@ -104,7 +105,8 @@ class LSTMPricePredictor(BaseMLModel):
             )
             raise
         except Exception as e:
-            self.logger.error(f"Error building LSTM model: {e}")
+            self.logger.error("Error building LSTM model: %s", e)
+
             raise
 
     def _prepare_sequences(self, data: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -196,7 +198,7 @@ class LSTMPricePredictor(BaseMLModel):
             )
 
             # Reshape for LSTM [samples, time steps, features]
-            X_seq = X_seq.reshape(X_seq.shape[0], X_seq.shape[1], 1)
+            X_seq = X_seq.reshape(X_seq.shape[0], X_seq.shape[1], 1)  # pylint: disable=too-many-function-args
 
             # Prepare validation data if provided
             validation_data = None
@@ -205,7 +207,7 @@ class LSTMPricePredictor(BaseMLModel):
                 X_val_seq, y_val_seq = self._prepare_sequences(
                     np.concatenate([X_val_scaled, y_val_scaled.reshape(-1, 1)], axis=1),
                 )
-                X_val_seq = X_val_seq.reshape(X_val_seq.shape[0], X_val_seq.shape[1], 1)
+                X_val_seq = X_val_seq.reshape(X_val_seq.shape[0], X_val_seq.shape[1], 1)  # pylint: disable=too-many-function-args
                 validation_data = (X_val_seq, y_val_seq)
 
             # Train model
@@ -233,15 +235,11 @@ class LSTMPricePredictor(BaseMLModel):
                     "timestamp": pd.Timestamp.now().isoformat(),
                     "epochs": len(history.history["loss"]),
                     "final_loss": float(history.history["loss"][-1]),
-                    "final_val_loss": float(history.history["val_loss"][-1])
-                    if validation_data
-                    else None,
+                    "final_val_loss": float(history.history["val_loss"][-1]) if validation_data else None,
                 },
             )
 
-            self.logger.info(
-                f"LSTM training complete. Final loss: {history.history['loss'][-1]:.6f}",
-            )
+            self.logger.info("LSTM training complete. Final loss: %s", history.history['loss'][-1])
 
             return {
                 "loss": history.history["loss"],
@@ -251,7 +249,8 @@ class LSTMPricePredictor(BaseMLModel):
             }
 
         except Exception as e:
-            self.logger.error(f"Error training LSTM: {e}")
+            self.logger.error("Error training LSTM: %s", e)
+
             raise
 
     def predict(self, X: np.ndarray) -> np.ndarray:
@@ -277,7 +276,7 @@ class LSTMPricePredictor(BaseMLModel):
                 X_seq.append(X_scaled[i - self.sequence_length : i, 0])
 
             X_seq = np.array(X_seq)
-            X_seq = X_seq.reshape(X_seq.shape[0], X_seq.shape[1], 1)
+            X_seq = X_seq.reshape(X_seq.shape[0], X_seq.shape[1], 1)  # pylint: disable=too-many-function-args
 
             # Predict
             predictions_scaled = self.model.predict(X_seq, verbose=0)
@@ -288,7 +287,8 @@ class LSTMPricePredictor(BaseMLModel):
             return predictions.flatten()
 
         except Exception as e:
-            self.logger.error(f"Error making LSTM predictions: {e}")
+            self.logger.error("Error making LSTM predictions: %s", e)
+
             raise
 
     def predict_next(self, recent_data: np.ndarray, steps: int = 1) -> np.ndarray:

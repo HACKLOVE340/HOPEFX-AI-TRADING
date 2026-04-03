@@ -35,10 +35,9 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -77,8 +76,7 @@ class OandaPaperClock:
             )
         except Exception as exc:
             logger.warning(
-                "OandaPaperClock: SharpeProgressTracker unavailable (%s); "
-                "fill recording disabled",
+                "OandaPaperClock: SharpeProgressTracker unavailable (%s); fill recording disabled",
                 exc,
             )
             return None
@@ -105,7 +103,7 @@ class OandaPaperClock:
         """
         if self._stamp_path.exists():
             try:
-                existing = json.loads(self._stamp_path.read_text())
+                existing = json.loads(self._stamp_path.read_text(encoding="utf-8"))
             except Exception:
                 existing = {}
 
@@ -131,7 +129,7 @@ class OandaPaperClock:
 
         # Parse to compute live_gate_opens
         try:
-            started_dt = datetime.fromisoformat(started_utc_str.replace("Z", "+00:00"))
+            started_dt = datetime.fromisoformat(started_utc_str)
             if started_dt.tzinfo is None:
                 started_dt = started_dt.replace(tzinfo=UTC)
         except Exception:
@@ -142,7 +140,7 @@ class OandaPaperClock:
         live_gate_opens = (started_dt + timedelta(days=_TARGET_DAYS)).isoformat()
 
         # Mask account_id: first 8 chars + ellipsis
-        masked = (account_id[:8] + "…") if len(account_id) > 8 else account_id  # noqa: PLR2004
+        masked = (account_id[:8] + "…") if len(account_id) > 8 else account_id
 
         stamp = {
             "started_utc": started_utc_str,
@@ -157,7 +155,7 @@ class OandaPaperClock:
             ),
         }
         try:
-            self._stamp_path.write_text(json.dumps(stamp, indent=2))
+            self._stamp_path.write_text(json.dumps(stamp, indent=2), encoding="utf-8")
             logger.info(
                 "OandaPaperClock: clock stamped — started=%s account=%s env=%s gate=%s",
                 started_utc_str,
@@ -204,7 +202,7 @@ class OandaPaperClock:
 
         # ── Prometheus ────────────────────────────────────────────────────────
         try:
-            from core.metrics import SHARPE_N_TRADES, SHARPE_RATIO, SHARPE_GATE_PASSED
+            from core.metrics import SHARPE_GATE_PASSED, SHARPE_N_TRADES, SHARPE_RATIO
 
             SHARPE_N_TRADES.set(status["n_trades"])
             SHARPE_RATIO.set(status["sharpe"])
@@ -214,8 +212,7 @@ class OandaPaperClock:
 
         # ── Structured log ────────────────────────────────────────────────────
         logger.info(
-            "OandaPaperClock fill: symbol=%s return=%.4f n=%d sharpe=%.3f "
-            "se=%.3f gate=%s pct=%.1f%%",
+            "OandaPaperClock fill: symbol=%s return=%.4f n=%d sharpe=%.3f se=%.3f gate=%s pct=%.1f%%",
             symbol,
             trade_return,
             status["n_trades"],
@@ -265,9 +262,7 @@ class OandaPaperClock:
         Compatible with the /api/status/paper-trading response schema.
         """
         if not self._stamp_path.exists():
-            oanda_key = os.getenv("OANDA_API_KEY", "") or os.getenv(
-                "BROKER_OANDA_TOKEN", ""
-            )
+            oanda_key = os.getenv("OANDA_API_KEY", "") or os.getenv("BROKER_OANDA_TOKEN", "")
             if oanda_key:
                 note = (
                     "OANDA credentials detected but broker has not connected yet. "
@@ -275,8 +270,7 @@ class OandaPaperClock:
                 )
             else:
                 note = (
-                    "Clock not started. Set OANDA_API_KEY (or BROKER_OANDA_TOKEN) "
-                    "and restart with BROKER_TYPE=oanda."
+                    "Clock not started. Set OANDA_API_KEY (or BROKER_OANDA_TOKEN) and restart with BROKER_TYPE=oanda."
                 )
             return {
                 "started": False,
@@ -292,12 +286,12 @@ class OandaPaperClock:
             }
 
         try:
-            data = json.loads(self._stamp_path.read_text())
+            data = json.loads(self._stamp_path.read_text(encoding="utf-8"))
 
             # PENDING placeholder — clock is pre-seeded but no real connection yet
             if data.get("requires_real_account", False):
                 started_str = data.get("started_utc", "")
-                started_dt = datetime.fromisoformat(started_str.replace("Z", "+00:00"))
+                started_dt = datetime.fromisoformat(started_str)
                 if started_dt.tzinfo is None:
                     started_dt = started_dt.replace(tzinfo=UTC)
                 now = datetime.now(UTC)
@@ -325,7 +319,7 @@ class OandaPaperClock:
                 }
 
             started_str = data.get("started_utc", "")
-            started_dt = datetime.fromisoformat(started_str.replace("Z", "+00:00"))
+            started_dt = datetime.fromisoformat(started_str)
             if started_dt.tzinfo is None:
                 started_dt = started_dt.replace(tzinfo=UTC)
             now = datetime.now(UTC)
@@ -421,17 +415,13 @@ def validate_oanda_account_at_startup() -> dict[str, Any]:
     """
     clock = get_clock()
     status = clock.status()
-    warnings: list = []
+    warnings: ClassVar[list] = []
 
     account_id = status.get("account_id") or "PENDING"
     pending = status.get("pending_real_account", False) or account_id == "PENDING"
     broker_type = os.getenv("BROKER_TYPE", "paper").lower()
-    has_token = bool(
-        os.getenv("BROKER_OANDA_TOKEN", "") or os.getenv("OANDA_API_KEY", "")
-    )
-    has_account = bool(
-        os.getenv("BROKER_OANDA_ACCOUNT", "") or os.getenv("OANDA_ACCOUNT_ID", "")
-    )
+    has_token = bool(os.getenv("BROKER_OANDA_TOKEN", "") or os.getenv("OANDA_API_KEY", ""))
+    has_account = bool(os.getenv("BROKER_OANDA_ACCOUNT", "") or os.getenv("OANDA_ACCOUNT_ID", ""))
 
     if pending:
         elapsed = status.get("elapsed_days", 0.0)
@@ -443,21 +433,16 @@ def validate_oanda_account_at_startup() -> dict[str, Any]:
             f"then restart to connect a real practice account."
         )
         logger.warning(
-            "⚠ OANDA account PENDING — %s days elapsed, %s days remain. "
-            "No real fills until credentials are set.",
+            "⚠ OANDA account PENDING — %s days elapsed, %s days remain. No real fills until credentials are set.",
             round(elapsed, 1),
             round(remaining, 1),
         )
 
     if broker_type == "oanda" and not has_token:
         warnings.append(
-            "BROKER_TYPE=oanda but BROKER_OANDA_TOKEN is not set. "
-            "The broker will fall back to paper simulation."
+            "BROKER_TYPE=oanda but BROKER_OANDA_TOKEN is not set. The broker will fall back to paper simulation."
         )
-        logger.warning(
-            "⚠ BROKER_TYPE=oanda but BROKER_OANDA_TOKEN not set — "
-            "falling back to paper simulation."
-        )
+        logger.warning("⚠ BROKER_TYPE=oanda but BROKER_OANDA_TOKEN not set — falling back to paper simulation.")
 
     if broker_type == "oanda" and has_token and not has_account:
         warnings.append(
@@ -468,8 +453,7 @@ def validate_oanda_account_at_startup() -> dict[str, Any]:
 
     if not status.get("started", False):
         warnings.append(
-            "OANDA paper trading clock has not started. "
-            "Connect OANDA credentials to begin the 30-day paper run."
+            "OANDA paper trading clock has not started. Connect OANDA credentials to begin the 30-day paper run."
         )
 
     result = {

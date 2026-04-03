@@ -14,22 +14,22 @@ This module provides security-related utilities for the HOPEFX AI Trading platfo
 - Environment security checks
 """
 
+import logging
 import os
 import re
-import logging
 import secrets
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
-from typing import Any
-from re import Pattern
 from dataclasses import dataclass
-from enum import Enum
+from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 from functools import wraps
+from pathlib import Path
+from re import Pattern
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class SecurityLevel(str, Enum):
+class SecurityLevel(StrEnum):
     """Security levels for audit logging"""
 
     INFO = "info"
@@ -38,7 +38,7 @@ class SecurityLevel(str, Enum):
     ALERT = "alert"
 
 
-class AuditEventType(str, Enum):
+class AuditEventType(StrEnum):
     """Types of security audit events"""
 
     LOGIN_SUCCESS = "login_success"
@@ -95,15 +95,9 @@ class LogSanitizer:
 
     # Default patterns to redact
     DEFAULT_PATTERNS: dict[str, Pattern] = {
-        "api_key": re.compile(
-            r'(?i)(api[_-]?key|apikey)["\s:=]+["\']?([a-zA-Z0-9_\-]{20,})["\']?'
-        ),
-        "password": re.compile(
-            r'(?i)(password|passwd|pwd|secret)["\s:=]+["\']?([^\s"\',}]+)["\']?'
-        ),
-        "bearer_token": re.compile(
-            r"(?i)(bearer\s+|authorization:\s*bearer\s+)([a-zA-Z0-9_\-\.]+)"
-        ),
+        "api_key": re.compile(r'(?i)(api[_-]?key|apikey)["\s:=]+["\']?([a-zA-Z0-9_\-]{20,})["\']?'),
+        "password": re.compile(r'(?i)(password|passwd|pwd|secret)["\s:=]+["\']?([^\s"\',}]+)["\']?'),
+        "bearer_token": re.compile(r"(?i)(bearer\s+|authorization:\s*bearer\s+)([a-zA-Z0-9_\-\.]+)"),
         "authorization_header": re.compile(r"(?i)(authorization:\s*)([^\s,]+)"),
         "credit_card": re.compile(r"\b(?:\d{4}[-\s]?){3}\d{4}\b"),
         "aws_key": re.compile(
@@ -136,9 +130,7 @@ class LogSanitizer:
         self.patterns = dict(self.DEFAULT_PATTERNS)
 
         if redact_emails:
-            self.patterns["email"] = re.compile(
-                r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"
-            )
+            self.patterns["email"] = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b")
 
         if custom_patterns:
             self.patterns.update(custom_patterns)
@@ -157,13 +149,11 @@ class LogSanitizer:
             return message
 
         sanitized = message
-        for _pattern_name, pattern in self.patterns.items():
+        for pattern in self.patterns.values():
             # For patterns with groups, replace the captured group
             if pattern.groups:
                 sanitized = pattern.sub(
-                    lambda m: m.group(0).replace(
-                        m.group(m.lastindex), self.redaction_text
-                    ),
+                    lambda m: m.group(0).replace(m.group(m.lastindex), self.redaction_text),
                     sanitized,
                 )
             else:
@@ -171,9 +161,7 @@ class LogSanitizer:
 
         return sanitized
 
-    def sanitize_dict(
-        self, data: dict[str, Any], sensitive_keys: list[str] | None = None
-    ) -> dict[str, Any]:
+    def sanitize_dict(self, data: dict[str, Any], sensitive_keys: list[str] | None = None) -> dict[str, Any]:
         """
         Sanitize a dictionary by redacting sensitive keys.
 
@@ -203,21 +191,21 @@ class LogSanitizer:
             "bearer",
         ]
 
-        sensitive = set(key.lower() for key in (sensitive_keys or default_sensitive))
+        sensitive = {key.lower() for key in (sensitive_keys or default_sensitive)}
 
         def redact_value(key: str, value: Any) -> Any:
             key_lower = key.lower()
             for s in sensitive:
                 if s in key_lower:
-                    if isinstance(value, str) and len(value) > 4:  # noqa: PLR2004
+                    if isinstance(value, str) and len(value) > 4:
                         return f"{value[:2]}...{self.redaction_text}"
                     return self.redaction_text
 
             if isinstance(value, str):
                 return self.sanitize(value)
-            elif isinstance(value, dict):
+            if isinstance(value, dict):
                 return self.sanitize_dict(value, sensitive_keys)
-            elif isinstance(value, list):
+            if isinstance(value, list):
                 return [redact_value(key, v) for v in value]
             return value
 
@@ -254,15 +242,13 @@ class SecurityAuditor:
 
     def _setup_audit_logger(self, log_path: str) -> None:
         """Setup dedicated audit logger"""
-        os.makedirs(os.path.dirname(log_path) or ".", exist_ok=True)
+        Path(Path(log_path).parent.mkdir(parents=True, exist_ok=True) or ".", exist_ok=True)
 
         self.audit_logger = logging.getLogger("security_audit")
         self.audit_logger.setLevel(logging.INFO)
 
         handler = logging.FileHandler(log_path)
-        handler.setFormatter(
-            logging.Formatter("%(asctime)s - AUDIT - %(levelname)s - %(message)s")
-        )
+        handler.setFormatter(logging.Formatter("%(asctime)s - AUDIT - %(levelname)s - %(message)s"))
         self.audit_logger.addHandler(handler)
 
     def log_event(
@@ -323,8 +309,8 @@ class SecurityAuditor:
 
             self.audit_logger.log(
                 log_level,
-                f"[{event_type.value}] {action} on {resource} - "
-                f"Success: {success} - User: {user_id or 'N/A'}",
+                "[%s] %s on %s - Success: %s - User: %s",
+                event_type.value, action, resource, success, user_id or "N/A",
             )
 
         return event
@@ -366,12 +352,11 @@ class CredentialRotationTracker:
         self.rotation_days = rotation_days
         self._credentials: dict[str, datetime] = {}
 
-    def register_credential(
-        self, credential_name: str, created_at: datetime | None = None
-    ) -> None:
+    def register_credential(self, credential_name: str, created_at: datetime | None = None) -> None:
         """Register a credential for rotation tracking"""
         self._credentials[credential_name] = created_at or datetime.now(UTC)
-        logger.info(f"Registered credential for rotation tracking: {credential_name}")
+        logger.info("Registered credential for rotation tracking: %s", credential_name)
+
 
     def get_credential_age(self, credential_name: str) -> timedelta | None:
         """Get the age of a credential"""
@@ -401,7 +386,7 @@ class CredentialRotationTracker:
                 "status": "expired"
                 if days_until_rotation == 0
                 else "warning"
-                if days_until_rotation <= 14  # noqa: PLR2004
+                if days_until_rotation <= 14
                 else "ok",
             }
 
@@ -458,7 +443,7 @@ class SecurityConfigValidator:
                     }
                 )
                 is_valid = False
-            elif var == "CONFIG_ENCRYPTION_KEY" and len(value) < 32:  # noqa: PLR2004
+            elif var == "CONFIG_ENCRYPTION_KEY" and len(value) < 32:
                 self.issues.append(
                     {
                         "level": "error",
@@ -520,18 +505,12 @@ class SecurityConfigValidator:
                 "CONFIG_ENCRYPTION_KEY": bool(os.getenv("CONFIG_ENCRYPTION_KEY")),
                 "CONFIG_SALT": bool(os.getenv("CONFIG_SALT")),
                 "APP_ENV": bool(os.getenv("APP_ENV")),
-                "DB_SSL_ENABLED": os.getenv("DB_SSL_ENABLED", "").lower()
-                in ["true", "1", "yes"],
-                "DEBUG_DISABLED": os.getenv("DEBUG", "").lower()
-                not in ["true", "1", "yes"],
-                "API_KEY_ENCRYPTION": os.getenv("API_KEY_ENCRYPTION", "").lower()
-                in ["true", "1", "yes"],
-                "LOG_SANITIZATION": os.getenv("LOG_SANITIZATION_ENABLED", "").lower()
-                in ["true", "1", "yes"],
+                "DB_SSL_ENABLED": os.getenv("DB_SSL_ENABLED", "").lower() in ["true", "1", "yes"],
+                "DEBUG_DISABLED": os.getenv("DEBUG", "").lower() not in ["true", "1", "yes"],
+                "API_KEY_ENCRYPTION": os.getenv("API_KEY_ENCRYPTION", "").lower() in ["true", "1", "yes"],
+                "LOG_SANITIZATION": os.getenv("LOG_SANITIZATION_ENABLED", "").lower() in ["true", "1", "yes"],
             },
-            "recommendations": [
-                issue for issue in self.issues if issue["level"] == "warning"
-            ],
+            "recommendations": [issue for issue in self.issues if issue["level"] == "warning"],
         }
 
 
@@ -548,10 +527,7 @@ def audit_function(event_type: AuditEventType, resource: str, action: str):
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            auditor = SecurityAuditor(
-                enabled=os.getenv("ENABLE_SECURITY_MONITORING", "true").lower()
-                == "true"
-            )
+            auditor = SecurityAuditor(enabled=os.getenv("ENABLE_SECURITY_MONITORING", "true").lower() == "true")
 
             try:
                 result = func(*args, **kwargs)
@@ -608,14 +584,8 @@ def check_security_setup() -> dict[str, Any]:
 
 
 # Global instances
-log_sanitizer = LogSanitizer(
-    enabled=os.getenv("LOG_SANITIZATION_ENABLED", "true").lower() == "true"
-)
+log_sanitizer = LogSanitizer(enabled=os.getenv("LOG_SANITIZATION_ENABLED", "true").lower() == "true")
 
-security_auditor = SecurityAuditor(
-    enabled=os.getenv("ENABLE_SECURITY_MONITORING", "true").lower() == "true"
-)
+security_auditor = SecurityAuditor(enabled=os.getenv("ENABLE_SECURITY_MONITORING", "true").lower() == "true")
 
-credential_tracker = CredentialRotationTracker(
-    rotation_days=int(os.getenv("CREDENTIAL_ROTATION_DAYS", "90"))
-)
+credential_tracker = CredentialRotationTracker(rotation_days=int(os.getenv("CREDENTIAL_ROTATION_DAYS", "90")))

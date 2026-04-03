@@ -31,8 +31,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -160,7 +159,7 @@ async def create_sub_account(
 ) -> dict[str, Any]:
     """Create a new sub-account under the current user."""
     existing = _load_sub_accounts(user.sub)
-    if len(existing) >= 10:  # noqa: PLR2004
+    if len(existing) >= 10:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Maximum 10 sub-accounts per user",
@@ -319,9 +318,7 @@ async def update_member_role(
     return member
 
 
-@router.delete(
-    "/teams/{team_id}/members/{member_id}", status_code=status.HTTP_204_NO_CONTENT
-)
+@router.delete("/teams/{team_id}/members/{member_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_member(
     team_id: str,
     member_id: str,
@@ -337,9 +334,7 @@ async def remove_member(
         raise HTTPException(status_code=403, detail="Not a team member")
 
     if caller["role"] != "admin" and user.sub != member_id:
-        raise HTTPException(
-            status_code=403, detail="Admin role required to remove others"
-        )
+        raise HTTPException(status_code=403, detail="Admin role required to remove others")
 
     team["members"] = [m for m in team["members"] if m["user_id"] != member_id]
     _save_team(team)

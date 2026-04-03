@@ -11,11 +11,10 @@ Simulates order execution with realistic fills, slippage, and commissions.
 
 import hashlib
 import logging
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 
-from backtesting.events import OrderEvent, FillEvent
 from backtesting.engine import Order
+from backtesting.events import FillEvent, OrderEvent
 
 
 class OrderResult:
@@ -47,9 +46,7 @@ class SimulatedExecutionHandler:
     Models market orders, limit orders, slippage, and commissions.
     """
 
-    def __init__(
-        self, data_handler, commission_pct: float = 0.001, slippage_pct: float = 0.0005
-    ):
+    def __init__(self, data_handler, commission_pct: float = 0.001, slippage_pct: float = 0.0005):
         """
         Initialize execution handler.
 
@@ -62,9 +59,7 @@ class SimulatedExecutionHandler:
         self.commission_pct = commission_pct
         self.slippage_pct = slippage_pct
 
-        logger.info(
-            f"Initialized execution handler (commission: {commission_pct*100}%, slippage: {slippage_pct*100}%)"
-        )
+        logger.info("Initialized execution handler (commission: %s%, slippage: %s%)", commission_pct * 100, slippage_pct * 100)
 
     def execute_order(self, order: OrderEvent) -> FillEvent | None:
         """
@@ -80,9 +75,8 @@ class SimulatedExecutionHandler:
         bar = self.data_handler.get_latest_bar(order.symbol)
 
         if bar is None:
-            logger.warning(
-                f"No data available for {order.symbol}, cannot execute order"
-            )
+            logger.warning("No data available for %s, cannot execute order", order.symbol)
+
             return None
 
         # Determine fill price based on order type
@@ -119,7 +113,8 @@ class SimulatedExecutionHandler:
                 # Stop not triggered
                 return None
         else:
-            logger.error(f"Unknown order type: {order.order_type}")
+            logger.error("Unknown order type: %s", order.order_type)
+
             return None
 
         # Calculate commission
@@ -134,8 +129,7 @@ class SimulatedExecutionHandler:
             commission=commission,
         )
 
-        logger.debug(
-            f"Filled {order.direction} {order.quantity} {order.symbol} @ {fill_price:.4f}"
-        )
+        logger.debug("Filled %s %s %s @ %s", order.direction, order.quantity, order.symbol, fill_price)
+
 
         return fill

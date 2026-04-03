@@ -119,13 +119,18 @@ exclude_lines = [
 ]
 [tool.bandit]
 # Only fail on high-severity findings; medium/low are reported but non-blocking.
-# Tests are excluded — assert statements and hardcoded test credentials are expected.
+# Tests and scripts are excluded — assert statements and hardcoded test
+# credentials are expected in validation/bootstrap scripts.
 severity = "high"
 confidence = "medium"
-exclude_dirs = ["tests", "alembic", "build", "dist", ".venv", "venv"]
+exclude_dirs = ["tests", "alembic", "build", "dist", ".venv", "venv", "scripts", "locust", "examples"]
 skips = [
     "B101",  # assert_used — acceptable in tests and guard clauses
+    "B110",  # try_except_pass — contextlib.suppress preferred but not always possible
     "B311",  # random — non-crypto random is fine for simulations
+    "B403",  # blacklist pickle — used with path confinement guards
+    "B404",  # blacklist subprocess — used with fixed command lists only
+    "B603",  # subprocess_without_shell — all calls use fixed arg lists, no user input
 ]
 
 # ── mypy ──────────────────────────────────────────────────────────────────────

@@ -21,8 +21,7 @@ Features:
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import numpy as np
@@ -172,10 +171,12 @@ class EnsemblePredictor(BaseMLModel):
             if self.use_xgb:
                 self._build_xgboost()
 
-            self.logger.info(f"Ensemble built with models: {list(self.models.keys())}")
+            self.logger.info("Ensemble built with models: %s", list(self.models.keys()))
+
 
         except Exception as e:
-            self.logger.error(f"Error building ensemble: {e}")
+            self.logger.error("Error building ensemble: %s", e)
+
             raise
 
     def _build_lstm(self):
@@ -298,13 +299,12 @@ class EnsemblePredictor(BaseMLModel):
                 np.std(window),  # Volatility
                 np.mean(window[-10:]),  # Short-term MA
                 np.mean(window[-20:])
-                if len(window) >= 20  # noqa: PLR2004
+                if len(window) >= 20
                 else np.mean(window),  # Medium MA
-                window[-1] - window[-2] if len(window) >= 2 else 0,  # Momentum 1  # noqa: PLR2004
-                window[-1] - window[-5] if len(window) >= 5 else 0,  # Momentum 5  # noqa: PLR2004
+                window[-1] - window[-2] if len(window) >= 2 else 0,  # Momentum 1
+                window[-1] - window[-5] if len(window) >= 5 else 0,  # Momentum 5
                 np.max(window) - np.min(window),  # Range
-                (window[-1] - np.min(window))
-                / (np.max(window) - np.min(window) + 1e-8),  # %K
+                (window[-1] - np.min(window)) / (np.max(window) - np.min(window) + 1e-8),  # %K
                 np.mean(np.diff(window)),  # Trend
             ]
 
@@ -322,7 +322,7 @@ class EnsemblePredictor(BaseMLModel):
         for i in range(self.sequence_length, len(data)):
             X.append(data[i - self.sequence_length : i])
             y.append(data[i])
-        return np.array(X).reshape(-1, self.sequence_length, 1), np.array(y)
+        return np.array(X).reshape(-1, self.sequence_length, 1), np.array(y)  # pylint: disable=too-many-function-args
 
     def train(
         self,
@@ -384,7 +384,8 @@ class EnsemblePredictor(BaseMLModel):
                     "loss": float(history.history["loss"][-1]),
                     "val_loss": float(history.history.get("val_loss", [0])[-1]),
                 }
-                self.logger.info(f"LSTM trained: loss={results['lstm']['loss']:.6f}")
+                self.logger.info("LSTM trained: loss=%s", results['lstm']['loss'])
+
 
             # Train Random Forest
             if "random_forest" in self.models:
@@ -419,7 +420,8 @@ class EnsemblePredictor(BaseMLModel):
             return results
 
         except Exception as e:
-            self.logger.error(f"Error training ensemble: {e}")
+            self.logger.error("Error training ensemble: %s", e)
+
             raise
 
     def predict(self, X: np.ndarray) -> np.ndarray:
@@ -516,9 +518,7 @@ class EnsemblePredictor(BaseMLModel):
                 # Get XGBoost prediction
                 if "xgboost" in self.models:
                     xgb_pred_scaled = self.models["xgboost"].predict([X_features[i]])[0]
-                    xgb_pred = self.scaler_y.inverse_transform([[xgb_pred_scaled]])[0][
-                        0
-                    ]
+                    xgb_pred = self.scaler_y.inverse_transform([[xgb_pred_scaled]])[0][0]
                     model_predictions["xgboost"] = ModelPrediction(
                         model_name="xgboost",
                         prediction=xgb_pred,
@@ -533,7 +533,8 @@ class EnsemblePredictor(BaseMLModel):
             return predictions
 
         except Exception as e:
-            self.logger.error(f"Error making ensemble predictions: {e}")
+            self.logger.error("Error making ensemble predictions: %s", e)
+
             raise
 
     def _combine_predictions(
@@ -557,7 +558,7 @@ class EnsemblePredictor(BaseMLModel):
         weight_total = 0.0
         all_predictions = []
 
-        for _name, mp in model_predictions.items():
+        for mp in model_predictions.values():
             combined_weight = mp.weight * mp.confidence
             weighted_sum += mp.prediction * combined_weight
             weight_total += combined_weight
@@ -572,11 +573,11 @@ class EnsemblePredictor(BaseMLModel):
             mean_pred = np.mean(all_predictions)
             cv = std_dev / abs(mean_pred) if mean_pred != 0 else 1.0
 
-            if cv < 0.05:  # noqa: PLR2004
+            if cv < 0.05:
                 consensus = "strong"
-            elif cv < 0.15:  # noqa: PLR2004
+            elif cv < 0.15:
                 consensus = "moderate"
-            elif cv < 0.30:  # noqa: PLR2004
+            elif cv < 0.30:
                 consensus = "weak"
             else:
                 consensus = "divergent"
@@ -599,11 +600,7 @@ class EnsemblePredictor(BaseMLModel):
         # This would be compared to current price in practice
 
         # Volatility factor
-        volatility_factor = (
-            np.std(all_predictions) / abs(np.mean(all_predictions))
-            if all_predictions
-            else 0.0
-        )
+        volatility_factor = np.std(all_predictions) / abs(np.mean(all_predictions)) if all_predictions else 0.0
 
         return EnsemblePrediction(
             prediction=final_prediction,
@@ -670,9 +667,7 @@ class EnsemblePredictor(BaseMLModel):
 
         if total_confidence > 0:
             for model_name in self.models:
-                self.model_weights[model_name] = (
-                    confidences[model_name] / total_confidence
-                )
+                self.model_weights[model_name] = confidences[model_name] / total_confidence
 
     def get_model_summary(self) -> dict[str, Any]:
         """Get summary of all models in ensemble."""
@@ -681,13 +676,9 @@ class EnsemblePredictor(BaseMLModel):
             "weights": self.model_weights.copy(),
             "performance": {
                 name: {
-                    "accuracy": perf["correct"] / perf["total"]
-                    if perf["total"] > 0
-                    else 0,
+                    "accuracy": perf["correct"] / perf["total"] if perf["total"] > 0 else 0,
                     "total_predictions": perf["total"],
-                    "recent_mse": np.mean([e**2 for e in perf["recent_errors"][-20:]])
-                    if perf["recent_errors"]
-                    else 0,
+                    "recent_mse": np.mean([e**2 for e in perf["recent_errors"][-20:]]) if perf["recent_errors"] else 0,
                 }
                 for name, perf in self.model_performance.items()
                 if name in self.models

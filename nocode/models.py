@@ -5,12 +5,12 @@
 # No commercial use without explicit permission.
 """nocode/models.py — Data models for the no-code strategy builder."""
 
-from typing import Any
+import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-import logging
-import json
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +95,7 @@ class Condition:
         """Evaluate the condition against current data."""
         left_value = self._get_value(self.left_indicator, data)
 
-        if isinstance(self.right_indicator, (int, float)):
+        if isinstance(self.right_indicator, int | float):
             right_value = self.right_indicator
         else:
             right_value = self._get_value(self.right_indicator, data)
@@ -117,9 +117,7 @@ class Condition:
             return op_func(left_value, right_value)
         return False
 
-    def _get_value(
-        self, indicator: Indicator, data: dict[str, float]
-    ) -> float | None:
+    def _get_value(self, indicator: Indicator, data: dict[str, float]) -> float | None:
         """Get indicator value from data."""
         key = indicator.get_id()
         return data.get(key)
@@ -141,8 +139,8 @@ class ConditionGroup:
 
         if self.logic == LogicOperator.AND:
             return all(results)
-        else:  # OR
-            return any(results)
+        # OR
+        return any(results)
 
 
 @dataclass
@@ -220,7 +218,7 @@ class NoCodeStrategy:
                             },
                             "operator": c.operator.value,
                             "right": c.right_indicator
-                            if isinstance(c.right_indicator, (int, float))
+                            if isinstance(c.right_indicator, int | float)
                             else {
                                 "type": c.right_indicator.indicator_type.value,
                                 "period": c.right_indicator.period,

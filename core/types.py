@@ -7,17 +7,16 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-UTC = timezone.utc
-from decimal import Decimal
 import sys
+import uuid
+from datetime import UTC, datetime
+from decimal import Decimal
 
 if sys.version_info >= (3, 11):
     from enum import StrEnum
 else:
-    from enum import Enum
 
-    class StrEnum(str, Enum):  # type: ignore[no-redef]
+    class StrEnum(StrEnum):
         """Backport of StrEnum for Python < 3.11."""
 
 
@@ -85,7 +84,7 @@ class Tick(BaseModel):
     bid: Decimal = Field(..., decimal_places=5)
     ask: Decimal = Field(..., decimal_places=5)
     mid: Decimal = Field(..., decimal_places=5)
-    volume: Decimal = Field(default=Decimal("0"), decimal_places=2)
+    volume: Decimal = Field(default=Decimal(0), decimal_places=2)
     venue: Venue
 
     @field_validator("mid", mode="before")
@@ -94,7 +93,7 @@ class Tick(BaseModel):
         if v is not None:
             return v
         data = info.data
-        return (data.get("bid", Decimal("0")) + data.get("ask", Decimal("0"))) / 2
+        return (data.get("bid", Decimal(0)) + data.get("ask", Decimal(0))) / 2
 
 
 class OHLCV(BaseModel):
@@ -118,8 +117,8 @@ class Position(BaseModel):
     side: Side
     entry_price: Decimal
     quantity: Decimal
-    unrealized_pnl: Decimal = Decimal("0")
-    realized_pnl: Decimal = Decimal("0")
+    unrealized_pnl: Decimal = Decimal(0)
+    realized_pnl: Decimal = Decimal(0)
     open_time: datetime
     margin_used: Decimal
     stop_loss: Decimal | None = None
@@ -131,7 +130,7 @@ class Order(BaseModel):
 
     model_config = {"use_enum_values": False}
 
-    id: OrderId = Field(default_factory=lambda: str(__import__("uuid").uuid4()))
+    id: OrderId = Field(default_factory=lambda: str(uuid.uuid4()))
     symbol: Symbol
     side: Side
     order_type: OrderType
@@ -154,7 +153,7 @@ class Order(BaseModel):
     price: Decimal | None = None
     stop_price: Decimal | None = None
     status: OrderStatus = OrderStatus.PENDING
-    filled_qty: Decimal = Decimal("0")
+    filled_qty: Decimal = Decimal(0)
     avg_fill_price: Decimal | None = None
     time_in_force: TimeInForce = TimeInForce.GTC
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -173,5 +172,5 @@ class Fill(BaseModel):
     price: Decimal
     timestamp: datetime
     venue: Venue
-    commission: Decimal = Decimal("0")
-    slippage: Decimal = Decimal("0")  # vs requested price
+    commission: Decimal = Decimal(0)
+    slippage: Decimal = Decimal(0)  # vs requested price

@@ -16,7 +16,7 @@ class TestComponentStatusIndividualChecks:
     """Test each _check_* function directly."""
 
     def test_check_config_available(self):
-        from utils.component_status import _check_config, ComponentHealth
+        from utils.component_status import ComponentHealth, _check_config
 
         status = _check_config()
         assert status.name == "config"
@@ -24,7 +24,7 @@ class TestComponentStatusIndividualChecks:
         assert status.health == ComponentHealth.HEALTHY
 
     def test_check_cache_available(self):
-        from utils.component_status import _check_cache, ComponentHealth
+        from utils.component_status import ComponentHealth, _check_cache
 
         status = _check_cache()
         assert status.name == "cache"
@@ -67,7 +67,7 @@ class TestComponentStatusIndividualChecks:
         assert status.available is True
 
     def test_check_ml_unavailable(self):
-        from utils.component_status import _check_ml, ComponentHealth
+        from utils.component_status import ComponentHealth, _check_ml
 
         status = _check_ml()
         assert status.name == "ml"
@@ -75,14 +75,14 @@ class TestComponentStatusIndividualChecks:
         assert status.health in (ComponentHealth.HEALTHY, ComponentHealth.DEGRADED)
 
     def test_check_backtesting_unavailable(self):
-        from utils.component_status import _check_backtesting, ComponentHealth
+        from utils.component_status import ComponentHealth, _check_backtesting
 
         status = _check_backtesting()
         assert status.name == "backtesting"
         assert status.health in (ComponentHealth.HEALTHY, ComponentHealth.DEGRADED)
 
     def test_check_news_unavailable(self):
-        from utils.component_status import _check_news, ComponentHealth
+        from utils.component_status import ComponentHealth, _check_news
 
         status = _check_news()
         assert status.name == "news"
@@ -93,42 +93,42 @@ class TestComponentStatusIndividualChecks:
         )
 
     def test_check_analytics_unavailable(self):
-        from utils.component_status import _check_analytics, ComponentHealth
+        from utils.component_status import ComponentHealth, _check_analytics
 
         status = _check_analytics()
         assert status.name == "analytics"
         assert status.health in (ComponentHealth.HEALTHY, ComponentHealth.DEGRADED)
 
     def test_check_monetization_unavailable(self):
-        from utils.component_status import _check_monetization, ComponentHealth
+        from utils.component_status import ComponentHealth, _check_monetization
 
         status = _check_monetization()
         assert status.name == "monetization"
         assert status.health in (ComponentHealth.HEALTHY, ComponentHealth.DEGRADED)
 
     def test_check_payments_unavailable(self):
-        from utils.component_status import _check_payments, ComponentHealth
+        from utils.component_status import ComponentHealth, _check_payments
 
         status = _check_payments()
         assert status.name == "payments"
         assert status.health in (ComponentHealth.HEALTHY, ComponentHealth.DEGRADED)
 
     def test_check_social_unavailable(self):
-        from utils.component_status import _check_social, ComponentHealth
+        from utils.component_status import ComponentHealth, _check_social
 
         status = _check_social()
         assert status.name == "social"
         assert status.health in (ComponentHealth.HEALTHY, ComponentHealth.DEGRADED)
 
     def test_check_mobile_unavailable(self):
-        from utils.component_status import _check_mobile, ComponentHealth
+        from utils.component_status import ComponentHealth, _check_mobile
 
         status = _check_mobile()
         assert status.name == "mobile"
         assert status.health in (ComponentHealth.HEALTHY, ComponentHealth.DEGRADED)
 
     def test_check_charting_unavailable(self):
-        from utils.component_status import _check_charting, ComponentHealth
+        from utils.component_status import ComponentHealth, _check_charting
 
         status = _check_charting()
         assert status.name == "charting"
@@ -206,7 +206,7 @@ class TestComponentStatusErrors:
 
     def test_unavailable_component_has_error(self):
         """Test that unavailable components have error messages."""
-        from utils.component_status import ComponentStatus, ComponentHealth
+        from utils.component_status import ComponentHealth, ComponentStatus
 
         status = ComponentStatus(
             name="test",
@@ -222,7 +222,7 @@ class TestComponentStatusErrors:
 
     def test_degraded_component(self):
         """Test degraded component state."""
-        from utils.component_status import ComponentStatus, ComponentHealth
+        from utils.component_status import ComponentHealth, ComponentStatus
 
         status = ComponentStatus(
             name="ml",
@@ -234,11 +234,11 @@ class TestComponentStatusErrors:
         )
         d = status.to_dict()
         assert d["health"] == "degraded"
-        assert len(d["dependencies"]) == 2  # noqa: PLR2004
+        assert len(d["dependencies"]) == 2
 
     def test_unknown_component_check(self):
         """Test getting status for unknown component."""
-        from utils.component_status import get_component_status, ComponentHealth
+        from utils.component_status import ComponentHealth, get_component_status
 
         status = get_component_status("nonexistent_xyz")
         assert not status.available
@@ -273,7 +273,7 @@ class TestComponentStatusErrors:
 
     def test_component_status_with_features(self):
         """Test ComponentStatus with features list."""
-        from utils.component_status import ComponentStatus, ComponentHealth
+        from utils.component_status import ComponentHealth, ComponentStatus
 
         status = ComponentStatus(
             name="test",
@@ -283,5 +283,5 @@ class TestComponentStatusErrors:
             features=["feature_a", "feature_b", "feature_c"],
         )
         d = status.to_dict()
-        assert len(d["features"]) == 3  # noqa: PLR2004
+        assert len(d["features"]) == 3
         assert "feature_a" in d["features"]

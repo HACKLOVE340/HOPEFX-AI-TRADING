@@ -19,8 +19,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter
@@ -50,6 +49,7 @@ def _get_redis():
     """Return a Redis client or None if unavailable."""
     try:
         import os as _os
+
         import redis as _redis
 
         url = _os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -125,7 +125,7 @@ class _UptimeHistoryProxy:
 
     def get(self, key: str, default: float = 100.0) -> float:
         val = _uptime_get(key)
-        return val if val != 100.0 or key in _uptime_cache else default  # noqa: PLR2004
+        return val if val != 100.0 or key in _uptime_cache else default
 
     def __setitem__(self, key: str, value: float) -> None:
         _uptime_set(key, value)
@@ -134,7 +134,7 @@ class _UptimeHistoryProxy:
         return _uptime_get(key)
 
     def __contains__(self, key: object) -> bool:
-        return _uptime_get(str(key)) != 100.0 or str(key) in _uptime_cache  # noqa: PLR2004
+        return _uptime_get(str(key)) != 100.0 or str(key) in _uptime_cache
 
 
 _uptime_history = _UptimeHistoryProxy()
@@ -222,8 +222,8 @@ async def status_incidents(limit: int = 20):
     for i in range(89, -1, -1):
         day = (today - timedelta(days=i)).isoformat()
         pct = _uptime_history.get(day, 100.0)
-        if pct < 100.0:  # noqa: PLR2004
-            severity = "major" if pct < 90 else "minor"  # noqa: PLR2004
+        if pct < 100.0:
+            severity = "major" if pct < 90 else "minor"
             incidents.append(
                 {
                     "date": day,
@@ -263,13 +263,16 @@ async def status_page():
             "degraded": "#fbbf24",
             "unhealthy": "#f87171",
         }.get(status, "#94a3b8")
-        message = info.get("message", "")
+        import html as _html_mod
+        message = _html_mod.escape(str(info.get("message", "")))
+        safe_name = _html_mod.escape(name.replace("_", " ").title())
+        safe_status = _html_mod.escape(str(status))
         rows_html += f"""
         <div class="component-row">
-          <div class="component-name">{name.replace("_", " ").title()}</div>
+          <div class="component-name">{safe_name}</div>
           <div class="component-status">
             <span class="dot" style="background:{dot_color}"></span>
-            <span style="color:{label_color};font-weight:600;text-transform:capitalize">{status}</span>
+            <span style="color:{label_color};font-weight:600;text-transform:capitalize">{safe_status}</span>
           </div>
           <div class="component-msg">{message}</div>
         </div>"""
@@ -451,18 +454,17 @@ async def _run_checks() -> dict[str, Any]:
             result[check.name] = {
                 "status": check.status.value,
                 "message": check.message or "",
-                "response_time_ms": round(check.response_time * 1000, 1)
-                if check.response_time
-                else None,
+                "response_time_ms": round(check.response_time * 1000, 1) if check.response_time else None,
             }
         return result
     except Exception as exc:
+        # Log the full exception server-side; return a generic message to callers
+        # to avoid leaking internal error details through the status endpoint.
         logger.warning("Health checker unavailable: %s", exc)
-        # Return degraded status reflecting the actual failure — no synthetic data.
         return {
             "api": {
                 "status": "degraded",
-                "message": f"Health checker error: {exc}",
+                "message": "Health checker unavailable — check server logs",
             },
         }
 
@@ -518,11 +520,9 @@ async def paper_trading_status():
     _starter_path = _Path("data/paper_trading_status.json")
     if _starter_path.exists():
         try:
-            starter_status = _json.loads(_starter_path.read_text())
+            starter_status = _json.loads(_starter_path.read_text(encoding="utf-8"))
         except Exception as _e:
-            logger.warning(
-                "paper_trading_status: could not read starter status: %s", _e
-            )
+            logger.warning("paper_trading_status: could not read starter status: %s", _e)
 
     # Source 2: oanda_paper_clock (legacy clock)
     clock_status: dict = {}
@@ -531,28 +531,28 @@ async def paper_trading_status():
 
         clock_status = get_clock().status()
     except Exception as exc:
-        logger.warning("paper_trading_status: clock unavailable: %s", exc)
+        logger.warning("paper_trading_status: clock unavailable: %s", type(exc).__name__)
+
+    # Mask the account ID before returning — expose only the last 4 characters
+    # so the full OANDA account identifier never reaches API consumers.
+    _raw_account_id: str = str(clock_status.get("account_id") or "")
+    _account_id_hint: str | None = (
+        ("..." + _raw_account_id[-4:]) if len(_raw_account_id) > 4 else ("****" if _raw_account_id else None)
+    )
 
     # Merge — starter_status takes precedence for overlapping keys
     merged = {
         "started": clock_status.get("started", bool(starter_status)),
         "started_utc": clock_status.get("started_utc"),
-        "elapsed_days": starter_status.get(
-            "elapsed_days", clock_status.get("elapsed_days", 0.0)
-        ),
+        "elapsed_days": starter_status.get("elapsed_days", clock_status.get("elapsed_days", 0.0)),
         "remaining_days": max(
             0.0,
-            30.0
-            - float(
-                starter_status.get(
-                    "elapsed_days", clock_status.get("elapsed_days", 30.0)
-                )
-            ),
+            30.0 - float(starter_status.get("elapsed_days", clock_status.get("elapsed_days", 30.0))),
         ),
         "target_days": 30,
         "complete": starter_status.get("complete", clock_status.get("complete", False)),
         "environment": clock_status.get("environment"),
-        "account_id": clock_status.get("account_id"),
+        "account_id": _account_id_hint,  # masked — last 4 chars only
         "current_balance": starter_status.get("current_balance"),
         "start_balance": starter_status.get("start_balance"),
         "drawdown_pct": starter_status.get("drawdown_pct"),
@@ -592,7 +592,7 @@ async def paper_trading_gate_status():
     except Exception as exc:
         logger.warning("paper_trading_gate_status failed: %s", exc)
         return {
-            "error": str(exc),
+            "error": "Gate unavailable — check server logs for details",
             "phase2_ready": False,
             "phase3_ready": False,
             "note": "Gate unavailable — check research/pipeline/paper_trading_gate.py",
@@ -625,7 +625,7 @@ async def live_trading_gate_status():
         logger.warning("live_trading_gate_status failed: %s", exc)
         return {
             "allowed": False,
-            "reason": f"Gate unavailable: {exc}",
+            "reason": "Gate unavailable — check server logs for details",
             "checks": {},
             "checked_at": datetime.now(UTC).isoformat(),
         }
@@ -676,7 +676,7 @@ async def sharpe_progress():
             "target_se": 0.045,
             "pct_complete": 0.0,
             "sharpe": 0.0,
-            "error": str(exc),
+            "error": "Unavailable — check server logs for details",
         }
 
 
@@ -706,4 +706,4 @@ async def paper_trading_gate_record_fill(pnl: float = 0.0):
         logger.warning("paper_trading_gate_record_fill failed: %s", exc)
         from fastapi import HTTPException
 
-        raise HTTPException(status_code=503, detail=str(exc)) from None
+        raise HTTPException(status_code=503, detail="Gate unavailable — check server logs") from None

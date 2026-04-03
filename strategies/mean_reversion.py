@@ -10,8 +10,7 @@ This strategy trades when price deviates significantly from its mean,
 expecting it to revert back to the average.
 """
 
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
@@ -48,11 +47,11 @@ class MeanReversionStrategy(BaseStrategy):
         super().__init__(name, symbol, config)
         self.period = period
         self.std_dev = std_dev
-        self.logger.info(
-            f"Mean Reversion Strategy initialized: period={period}, std_dev={std_dev}",
-        )
+        self.position: str | None = None  # tracks current position side: "LONG", "SHORT", or None
+        self.logger.info("Mean Reversion Strategy initialized: period=%s, std_dev=%s", period, std_dev)
 
-    def generate_signal(self, market_data: pd.DataFrame) -> dict[str, Any]:
+    def generate_signal(self, analysis: pd.DataFrame) -> dict[str, Any]:  # type: ignore[override]
+        market_data = analysis
         """
         Generate trading signal based on mean reversion.
 
@@ -112,28 +111,16 @@ class MeanReversionStrategy(BaseStrategy):
                 reason = f"Price above upper band (overbought): {current_price:.5f} > {current_upper:.5f}"
 
             # SELL if we're long and price returns to mean
-            elif (
-                hasattr(self, "position")
-                and self.position == "LONG"
-                and current_price >= current_sma
-            ):
+            elif hasattr(self, "position") and self.position == "LONG" and current_price >= current_sma:
                 signal_type = "SELL"
                 confidence = 0.6
-                reason = (
-                    f"Price reverted to mean: {current_price:.5f} >= {current_sma:.5f}"
-                )
+                reason = f"Price reverted to mean: {current_price:.5f} >= {current_sma:.5f}"
 
             # BUY to close if we're short and price returns to mean
-            elif (
-                hasattr(self, "position")
-                and self.position == "SHORT"
-                and current_price <= current_sma
-            ):
+            elif hasattr(self, "position") and self.position == "SHORT" and current_price <= current_sma:
                 signal_type = "BUY"
                 confidence = 0.6
-                reason = (
-                    f"Price reverted to mean: {current_price:.5f} <= {current_sma:.5f}"
-                )
+                reason = f"Price reverted to mean: {current_price:.5f} <= {current_sma:.5f}"
 
             else:
                 reason = f"Price within bands: {current_lower:.5f} < {current_price:.5f} < {current_upper:.5f}"
@@ -153,7 +140,8 @@ class MeanReversionStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            self.logger.error(f"Error generating signal: {e}")
+            self.logger.error("Error generating signal: %s", e)
+
             return {
                 "type": "HOLD",
                 "confidence": 0.0,

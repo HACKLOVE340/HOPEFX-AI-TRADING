@@ -10,9 +10,10 @@ Configuration Management
 - Profile support
 """
 
+import json
 import os
 from dataclasses import dataclass
-import json
+from pathlib import Path
 
 
 @dataclass
@@ -100,7 +101,7 @@ class Config:
 
     def save(self, filepath: str):
         """Save config to file"""
-        with open(filepath, "w") as f:
+        with Path(filepath).open("w", encoding="utf-8") as f:
             json.dump(self.to_dict(), f, indent=2)
 
 

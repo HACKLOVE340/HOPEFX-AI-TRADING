@@ -10,12 +10,12 @@ Structured Logging System
 - JSON formatting
 """
 
+import json
 import logging
 import logging.handlers
-import json
-from datetime import datetime, timezone
-UTC = timezone.utc
-import os
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import ClassVar
 
 
 class JSONFormatter(logging.Formatter):
@@ -41,13 +41,11 @@ class JSONFormatter(logging.Formatter):
 class Logger:
     """Structured logger factory"""
 
-    _loggers = {}
+    _loggers: ClassVar[dict] = {}
     _configured = False
 
     @classmethod
-    def configure(
-        cls, log_dir: str = "logs", log_level: str = "INFO", json_output: bool = True
-    ):
+    def configure(cls, log_dir: str = "logs", log_level: str = "INFO", json_output: bool = True):
         """
         Configure logging system
 
@@ -56,8 +54,8 @@ class Logger:
             log_level: Logging level
             json_output: Use JSON formatting
         """
-        if not os.path.exists(log_dir):
-            os.makedirs(log_dir)
+        if not Path(log_dir).exists():
+            Path(log_dir).mkdir(parents=True, exist_ok=True)
 
         cls._json_output = json_output
         cls._log_level = getattr(logging, log_level)
@@ -94,15 +92,13 @@ class Logger:
         if cls._json_output:
             formatter = JSONFormatter()
         else:
-            formatter = logging.Formatter(
-                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-            )
+            formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
 
         # File handler with rotation
-        log_file = os.path.join(cls._log_dir, f"{name}.log")
+        log_file = Path(cls._log_dir) / f"{name}.log"
         file_handler = logging.handlers.RotatingFileHandler(
             log_file,
             maxBytes=10485760,  # 10MB
@@ -122,8 +118,6 @@ def get_logger(name: str) -> logging.Logger:
     return Logger.get_logger(name)
 
 
-def configure_logging(
-    log_dir: str = "logs", log_level: str = "INFO", json_output: bool = True
-):
+def configure_logging(log_dir: str = "logs", log_level: str = "INFO", json_output: bool = True):
     """Configure logging system"""
     Logger.configure(log_dir, log_level, json_output)

@@ -33,8 +33,8 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -81,11 +81,7 @@ def _compute_features(df) -> np.ndarray | None:
         bb = ta.volatility.BollingerBands(c, window=20)
         bb_pct = bb.bollinger_pband().iloc[-1]
         bb_width = bb.bollinger_wband().iloc[-1]
-        atr = (
-            ta.volatility.AverageTrueRange(h, l, c, window=14)
-            .average_true_range()
-            .iloc[-1]
-        )
+        atr = ta.volatility.AverageTrueRange(h, l, c, window=14).average_true_range().iloc[-1]
 
         # ── volume ────────────────────────────────────────────────────────────
         vol_mean = v.rolling(20).mean().iloc[-1]
@@ -105,16 +101,14 @@ def _compute_features(df) -> np.ndarray | None:
         price_pos = (last - lo20) / rng
 
         # ── regime flags ──────────────────────────────────────────────────────
-        trending = 1.0 if adx > 25 else 0.0  # noqa: PLR2004
+        trending = 1.0 if adx > 25 else 0.0
         bull = 1.0 if ema20 > ema50 else 0.0
-        overbought = 1.0 if rsi > 70 else 0.0  # noqa: PLR2004
-        oversold = 1.0 if rsi < 30 else 0.0  # noqa: PLR2004
+        overbought = 1.0 if rsi > 70 else 0.0
+        oversold = 1.0 if rsi < 30 else 0.0
 
         # ── higher-timeframe momentum (5-bar, 10-bar slopes) ──────────────────
         slope5 = float(np.polyfit(range(5), c.iloc[-5:].values, 1)[0]) / (last + 1e-9)
-        slope10 = float(np.polyfit(range(10), c.iloc[-10:].values, 1)[0]) / (
-            last + 1e-9
-        )
+        slope10 = float(np.polyfit(range(10), c.iloc[-10:].values, 1)[0]) / (last + 1e-9)
 
         vec = np.array(
             [
@@ -177,13 +171,13 @@ def _regime_label(df) -> str:
         ema20 = ta.trend.EMAIndicator(c, window=20).ema_indicator().iloc[-1]
         ema50 = ta.trend.EMAIndicator(c, window=50).ema_indicator().iloc[-1]
 
-        if adx > 30 and ema20 > ema50:  # noqa: PLR2004
+        if adx > 30 and ema20 > ema50:
             return "trending_up"
-        if adx > 30 and ema20 < ema50:  # noqa: PLR2004
+        if adx > 30 and ema20 < ema50:
             return "trending_down"
-        if rsi > 70:  # noqa: PLR2004
+        if rsi > 70:
             return "overbought"
-        if rsi < 30:  # noqa: PLR2004
+        if rsi < 30:
             return "oversold"
         return "ranging"
     except Exception:
@@ -227,7 +221,7 @@ class MarketVectorStore:
         self.collection_name = collection
         self._client = None
         self._collection = None
-        os.makedirs(persist_dir, exist_ok=True)
+        Path(persist_dir).mkdir(parents=True, exist_ok=True)
 
     def _ensure_connected(self) -> None:
         if self._collection is not None:
@@ -286,17 +280,12 @@ class MarketVectorStore:
             if vec is None:
                 continue
 
-            next_ret = float(
-                (next_bar["close"] - window.iloc[-1]["close"])
-                / (window.iloc[-1]["close"] + 1e-9)
-            )
+            next_ret = float((next_bar["close"] - window.iloc[-1]["close"]) / (window.iloc[-1]["close"] + 1e-9))
             regime = _regime_label(window)
             ts = str(window.iloc[-1]["timestamp"])
 
             # deterministic ID based on content
-            uid = hashlib.md5(
-                f"{symbol}:{timeframe}:{ts}".encode(), usedforsecurity=False
-            ).hexdigest()
+            uid = hashlib.md5(f"{symbol}:{timeframe}:{ts}".encode(), usedforsecurity=False).hexdigest()
 
             ids.append(uid)
             embeddings.append(vec.tolist())
@@ -429,10 +418,7 @@ class MarketVectorStore:
 
         avg = float(np.mean(returns))
         sign = "+" if avg >= 0 else ""
-        lines.append(
-            f"\nAverage next-bar return across {len(windows)} similar regimes: "
-            f"{sign}{avg * 100:.2f}%"
-        )
+        lines.append(f"\nAverage next-bar return across {len(windows)} similar regimes: {sign}{avg * 100:.2f}%")
         return "\n".join(lines)
 
     # ── stats ─────────────────────────────────────────────────────────────────

@@ -31,8 +31,7 @@ order requests through the main app's TradeExecutor so pre-trade risk checks
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, WebSocket
@@ -170,17 +169,29 @@ class APIGateway:
         """Register health, status, and portfolio read routes."""
         @self.app.get("/health")
         async def health():
-            return {"status": "healthy", "timestamp": datetime.now(UTC).isoformat(), "version": "3.0", "components": {"mcc": self.mcc.health if hasattr(self.mcc, "health") else "unknown", "orchestra": len(self.orchestra.active_strategies), "portfolio": self.pms.get_portfolio_summary()}}
+            return {
+                "status": "healthy",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "version": "3.0",
+                "components": {
+                    "mcc": self.mcc.health if hasattr(self.mcc, "health") else "unknown",
+                    "orchestra": len(self.orchestra.active_strategies),
+                    "portfolio": self.pms.get_portfolio_summary(),
+                },
+            }
 
+        # System status
         @self.app.get("/api/v1/status")
         async def status(credentials: HTTPAuthorizationCredentials = Depends(self.security)):
             self._verify_token(credentials.credentials)
             return {"system": self.mcc.get_status() if hasattr(self.mcc, "get_status") else {}, "orchestra": self.orchestra.get_heatmap_data(), "portfolio": self.pms.get_portfolio_summary(), "timestamp": datetime.now(UTC).isoformat()}
 
-        @self.app.get("/api/v1/portfolio")
-        async def get_portfolio(credentials: HTTPAuthorizationCredentials = Depends(self.security)):
-            self._verify_token(credentials.credentials)
-            return self.pms.get_portfolio_summary()
+            return {
+                "system": self.mcc.get_status() if hasattr(self.mcc, "get_status") else {},
+                "orchestra": self.orchestra.get_heatmap_data(),
+                "portfolio": self.pms.get_portfolio_summary(),
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
 
     def _setup_strategy_routes(self) -> None:
         """Register strategy control routes."""
@@ -227,15 +238,19 @@ class APIGateway:
                 return {"success": result.success, "order_id": result.order_id, "status": result.status.value, "filled_quantity": result.filled_quantity, "average_price": result.average_price, "commission": result.commission, "latency_ms": result.latency_ms, "message": result.message, "timestamp": datetime.now(UTC).isoformat()}
             except HTTPException:
                 raise
-            except Exception as exc:
-                logger.exception("Gateway order execution error: %s", exc)
-                raise HTTPException(status_code=500, detail=f"Order execution failed: {exc}") from exc
+            except Exception:
+                logger.exception("Gateway order execution error: %s")
+                raise HTTPException(
+                    status_code=500,
+                    detail="Order execution failed — check server logs",
+                ) from None
 
     def _setup_ws_routes(self) -> None:
         """Register WebSocket streaming route."""
         @self.app.websocket("/ws/v1/stream")
         async def websocket_stream(websocket: WebSocket):
-            from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+            from rate_limiting.websocket_limiter import get_client_ip, get_ws_limiter
+
             limiter = get_ws_limiter()
             client_ip = get_client_ip(websocket)
             allowed, reason = await limiter.check_and_register(websocket, client_ip)
@@ -351,7 +366,7 @@ def build_gateway_app():
         pms = getattr(app_state, "portfolio_manager", None)
         auth_secret = os.getenv("SECURITY_JWT_SECRET") or os.getenv("JWT_SECRET_KEY", "")
 
-        if not auth_secret or len(auth_secret) < 32:  # noqa: PLR2004
+        if not auth_secret or len(auth_secret) < 32:
             logger.warning(
                 "build_gateway_app: SECURITY_JWT_SECRET not set or too short — "
                 "gateway not mounted. Set SECURITY_JWT_SECRET (>=32 chars)."

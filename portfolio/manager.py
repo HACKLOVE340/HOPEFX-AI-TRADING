@@ -11,10 +11,11 @@ Portfolio construction, correlation analysis, optimization, and risk contributio
 
 from __future__ import annotations
 
-import numpy as np
-import pandas as pd
 from dataclasses import dataclass
 from typing import Any
+
+import numpy as np
+import pandas as pd
 
 
 @dataclass
@@ -85,13 +86,7 @@ class PortfolioManager:
             mu = returns.mean()
             returns.std()
             port_ret = sum(w[a] * mu[a] for a in assets)
-            port_vol = float(
-                np.sqrt(
-                    np.dot(
-                        list(w.values()), np.dot(returns.cov().values, list(w.values()))
-                    )
-                )
-            )
+            port_vol = float(np.sqrt(np.dot(list(w.values()), np.dot(returns.cov().values, list(w.values())))))
             sharpe = port_ret / port_vol if port_vol > 0 else 0.0
             return {"weights": w, "expected_sharpe": sharpe}
 

@@ -58,8 +58,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -85,9 +84,7 @@ class DrawdownResult:
 
     # Metadata
     drawdown_mode: str  # "equity" or "balance"
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 class DrawdownTracker:
@@ -177,10 +174,7 @@ class DrawdownTracker:
             total_dd = max(0.0, (self._total_hwm - equity) / self._total_hwm)
 
         total_breach = total_dd >= self.max_total_dd_pct
-        total_alert = (
-            not total_breach
-            and total_dd >= self.max_total_dd_pct * self.alert_pct_of_limit
-        )
+        total_alert = not total_breach and total_dd >= self.max_total_dd_pct * self.alert_pct_of_limit
 
         # ── Daily drawdown ────────────────────────────────────────────────────
         # FTMO: measure on floating equity
@@ -193,10 +187,7 @@ class DrawdownTracker:
             daily_dd = max(0.0, (anchor - measure) / anchor)
 
         daily_breach = daily_dd >= self.max_daily_dd_pct
-        daily_alert = (
-            not daily_breach
-            and daily_dd >= self.max_daily_dd_pct * self.alert_pct_of_limit
-        )
+        daily_alert = not daily_breach and daily_dd >= self.max_daily_dd_pct * self.alert_pct_of_limit
 
         # ── Logging ───────────────────────────────────────────────────────────
         if total_breach:
@@ -350,9 +341,7 @@ class DrawdownTracker:
     def current_daily_dd(self) -> float:
         """Current daily drawdown fraction from day-open anchor."""
         anchor = self._daily_open
-        measure = (
-            self._last_balance if self.drawdown_mode == "balance" else self._last_equity
-        )
+        measure = self._last_balance if self.drawdown_mode == "balance" else self._last_equity
         if anchor <= 0:
             return 0.0
         return max(0.0, (anchor - measure) / anchor)

@@ -17,11 +17,13 @@ Main components:
 """
 
 from .market_data_cache import (
-    MarketDataCache,
-    Timeframe,
-    OHLCVData,
-    TickData as CachedTickData,
     CacheStatistics,
+    MarketDataCache,
+    OHLCVData,
+    Timeframe,
+)
+from .market_data_cache import (
+    TickData as CachedTickData,
 )
 
 __all__ = [

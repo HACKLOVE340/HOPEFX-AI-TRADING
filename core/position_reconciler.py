@@ -22,8 +22,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
+from typing import ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,8 @@ class PositionReconciler:
     async def start(self) -> None:
         self._running = True
         logger.info("Position reconciler started (interval=%ds)", self._interval)
-        asyncio.create_task(self._loop())
+        _t = asyncio.create_task(self._loop())
+        _t.add_done_callback(lambda _: None)
 
     async def stop(self) -> None:
         self._running = False
@@ -102,7 +103,7 @@ class PositionReconciler:
             return
 
         # Fetch broker positions if available
-        broker_positions: dict = {}
+        broker_positions: ClassVar[dict] = {}
         if self._broker and hasattr(self._broker, "get_positions"):
             try:
                 raw = self._broker.get_positions()
@@ -132,9 +133,7 @@ class PositionReconciler:
             if broker_positions:
                 if pos.symbol not in broker_positions:
                     self._mismatches += 1
-                    self._consecutive_mismatches[pos.symbol] = (
-                        self._consecutive_mismatches.get(pos.symbol, 0) + 1
-                    )
+                    self._consecutive_mismatches[pos.symbol] = self._consecutive_mismatches.get(pos.symbol, 0) + 1
                     count = self._consecutive_mismatches[pos.symbol]
                     if count >= _MISMATCH_ALERT_THRESHOLD:
                         logger.error(
@@ -301,8 +300,7 @@ class PositionReconciler:
         entry = pos.entry_price or 0.0
         if pos.side == "buy":
             return (current_price - entry) * qty
-        else:
-            return (entry - current_price) * qty
+        return (entry - current_price) * qty
 
     @property
     def stats(self) -> dict:
@@ -320,7 +318,6 @@ def start_reconciler(
     interval_seconds: int = 10,
 ) -> PositionReconciler:
     """Create and start the reconciler. Returns the instance for status queries."""
-    global _reconciler_task  # noqa: PLW0602
     rec = PositionReconciler(
         session_factory=session_factory,
         broker=broker,

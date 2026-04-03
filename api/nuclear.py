@@ -73,10 +73,11 @@ def _get_supervisor():
 
         return get_nuclear_supervisor()
     except Exception as exc:
+        logger.error("Nuclear supervisor unavailable: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Nuclear supervisor unavailable: {exc}",
-        ) from exc
+            detail="Nuclear supervisor unavailable — check server logs",
+        ) from None
 
 
 def _get_orchestrator():
@@ -85,10 +86,11 @@ def _get_orchestrator():
 
         return risk_orchestrator
     except Exception as exc:
+        logger.error("Risk orchestrator unavailable: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Risk orchestrator unavailable: {exc}",
-        ) from exc
+            detail="Risk orchestrator unavailable — check server logs",
+        ) from None
 
 
 def _get_kill_switch():
@@ -97,10 +99,11 @@ def _get_kill_switch():
 
         return kill_switch
     except Exception as exc:
+        logger.error("Kill switch unavailable: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Kill switch unavailable: {exc}",
-        ) from exc
+            detail="Kill switch unavailable — check server logs",
+        ) from None
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -151,16 +154,17 @@ async def manual_resume(
     try:
         await supervisor.manual_resume(deactivation_token=req.deactivation_token)
     except PermissionError as exc:
+        logger.warning("manual_resume permission denied: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(exc),
-        ) from exc
+            detail="Permission denied",
+        ) from None
     except Exception as exc:
         logger.error("manual_resume failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Resume failed: {exc}",
-        ) from exc
+            detail="Resume failed — check server logs",
+        ) from None
 
     return {
         "status": "resumed",
@@ -276,8 +280,9 @@ async def deactivate_kill_switch(
     try:
         ks.deactivate(token=token)
     except PermissionError as exc:
+        logger.warning("kill switch deactivation permission denied: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(exc),
-        ) from exc
+            detail="Permission denied",
+        ) from None
     return {"status": "deactivated", "kill_switch": ks.status()}

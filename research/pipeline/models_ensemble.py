@@ -114,13 +114,9 @@ class SHAPFeatureSelector:
                 if isinstance(shap_values, list):
                     shap_values = shap_values[1]  # binary: class 1
                 importance = np.abs(shap_values).mean(axis=0)
-                self.importances_ = pd.Series(importance, index=X.columns).sort_values(
-                    ascending=False
-                )
+                self.importances_ = pd.Series(importance, index=X.columns).sort_values(ascending=False)
             except Exception as exc:
-                logger.warning(
-                    "SHAP failed, falling back to feature_importances_: %s", exc
-                )
+                logger.warning("SHAP failed, falling back to feature_importances_: %s", exc)
                 self._fallback_importance(model, X)
         else:
             self._fallback_importance(model, X)
@@ -136,9 +132,7 @@ class SHAPFeatureSelector:
     def _fallback_importance(self, model, X: pd.DataFrame) -> None:
         imp = getattr(model, "feature_importances_", None)
         if imp is not None:
-            self.importances_ = pd.Series(imp, index=X.columns).sort_values(
-                ascending=False
-            )
+            self.importances_ = pd.Series(imp, index=X.columns).sort_values(ascending=False)
         else:
             self.importances_ = pd.Series(np.ones(len(X.columns)), index=X.columns)
 
@@ -387,7 +381,7 @@ class EnsemblePredictor:
 
         if self.calibrate:
             # Isotonic regression calibration; fall back to sigmoid if too few samples
-            method = "isotonic" if len(y) >= 1000 else "sigmoid"  # noqa: PLR2004
+            method = "isotonic" if len(y) >= 1000 else "sigmoid"
             self.stack_ = CalibratedClassifierCV(
                 self.stack_,
                 method=method,
@@ -414,7 +408,7 @@ class EnsemblePredictor:
 
     def evaluate(self, X: pd.DataFrame, y: np.ndarray) -> dict[str, float]:
         prob = self.predict_proba(X)
-        preds = (prob >= 0.5).astype(int)  # noqa: PLR2004
+        preds = (prob >= 0.5).astype(int)
         result: dict[str, float] = {
             "auc": float(roc_auc_score(y, prob)),
             "logloss": float(log_loss(y, prob)),
@@ -431,13 +425,22 @@ class EnsemblePredictor:
 
     @classmethod
     def load(cls, path: str | Path) -> EnsemblePredictor:
-        path = Path(path)
+        path = Path(path).resolve()
+        # Confine loads to the project's saved_models directory.
+        _ALLOWED_ROOT = (Path(__file__).resolve().parent.parent.parent / "ml" / "saved_models")
+        try:
+            path.relative_to(_ALLOWED_ROOT)
+        except ValueError as exc:
+            raise ValueError(
+                f"EnsemblePredictor.load: path '{path}' is outside the permitted "
+                f"directory '{_ALLOWED_ROOT}'"
+            ) from exc
         if not path.exists():
             raise FileNotFoundError(f"EnsemblePredictor not found: {path}")
         try:
-            obj = joblib.load(path)
+            obj = joblib.load(path)  # nosec B301 - path confined to ml/saved_models above
         except Exception:
-            with open(path, "rb") as f:
+            with Path(path).open("rb") as f:
                 obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
         if not isinstance(obj, cls):
             raise TypeError(f"Expected EnsemblePredictor, got {type(obj)}")
@@ -552,16 +555,12 @@ class DeepEnsembleStore:
                     self._predictor = DeepPredictor.load(str(self.model_path))
                     break
                 except FileNotFoundError:
-                    self._gate_failure_reason = (
-                        f"model file disappeared: {self.model_path}"
-                    )
+                    self._gate_failure_reason = f"model file disappeared: {self.model_path}"
                     logger.warning("DeepEnsembleStore: %s", self._gate_failure_reason)
                     return False
                 except Exception as exc:
                     if attempt == 0:
-                        logger.debug(
-                            "DeepEnsembleStore: load attempt 1 failed: %s", exc
-                        )
+                        logger.debug("DeepEnsembleStore: load attempt 1 failed: %s", exc)
                         continue
                     self._gate_failure_reason = f"load failed: {exc}"
                     logger.warning("DeepEnsembleStore: %s", self._gate_failure_reason)
@@ -573,15 +572,11 @@ class DeepEnsembleStore:
                     try:
                         self._scaler = joblib.load(self.scaler_path)
                     except Exception:
-                        with open(self.scaler_path, "rb") as f:
+                        with Path(self.scaler_path).open("rb") as f:
                             self._scaler = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
-                    logger.debug(
-                        "DeepEnsembleStore: scaler loaded ← %s", self.scaler_path
-                    )
+                    logger.debug("DeepEnsembleStore: scaler loaded ← %s", self.scaler_path)
                 except Exception as exc:
-                    logger.debug(
-                        "DeepEnsembleStore: scaler load failed (non-fatal): %s", exc
-                    )
+                    logger.debug("DeepEnsembleStore: scaler load failed (non-fatal): %s", exc)
 
             self._active = True
             logger.info(
@@ -603,7 +598,7 @@ class DeepEnsembleStore:
             logger.debug("DeepEnsembleStore: %s", self._gate_failure_reason)
             return False
         try:
-            with open(self.meta_path) as f:
+            with Path(self.meta_path).open(encoding="utf-8") as f:
                 meta = json.load(f)
 
             self._oos_accuracy = float(meta.get("oos_accuracy", 0.0))
@@ -615,18 +610,12 @@ class DeepEnsembleStore:
 
             if not acc_ok:
                 self._gate_failure_reason = f"OOS accuracy {self._oos_accuracy:.1%} < gate {self.oos_accuracy_gate:.1%}"
-                logger.info(
-                    "DeepEnsembleStore: %s — inactive", self._gate_failure_reason
-                )
+                logger.info("DeepEnsembleStore: %s — inactive", self._gate_failure_reason)
                 return False
 
             if not pval_ok:
-                self._gate_failure_reason = (
-                    f"p-value {self._p_value:.4f} >= gate {self.p_value_gate:.4f}"
-                )
-                logger.info(
-                    "DeepEnsembleStore: %s — inactive", self._gate_failure_reason
-                )
+                self._gate_failure_reason = f"p-value {self._p_value:.4f} >= gate {self.p_value_gate:.4f}"
+                logger.info("DeepEnsembleStore: %s — inactive", self._gate_failure_reason)
                 return False
 
             return True
@@ -675,9 +664,7 @@ class DeepEnsembleStore:
                 try:
                     feat = self._scaler.transform(feat)
                 except Exception as _exc:
-                    logger.debug(
-                        "Suppressed exception: %s", _exc
-                    )  # proceed without scaling
+                    logger.debug("Suppressed exception: %s", _exc)  # proceed without scaling
 
             # Build sequence: (1, seq_len, n_features)
             X_seq = feat[-self.seq_len :][np.newaxis, :, :]
@@ -714,24 +701,14 @@ class DeepEnsembleStore:
 
             log_ret = np.log(c / c.shift(1)).fillna(0).values
             hl_range = ((h - lo) / c.replace(0, np.nan)).fillna(0).values
-            vol_z = (
-                ((v - v.rolling(20).mean()) / v.rolling(20).std().replace(0, np.nan))
-                .fillna(0)
-                .values
-            )
-            atr14 = (
-                ((h - lo).rolling(14).mean() / c.replace(0, np.nan)).fillna(0).values
-            )
-            sma20_d = (
-                ((c - c.rolling(20).mean()) / c.replace(0, np.nan)).fillna(0).values
-            )
+            vol_z = ((v - v.rolling(20).mean()) / v.rolling(20).std().replace(0, np.nan)).fillna(0).values
+            atr14 = ((h - lo).rolling(14).mean() / c.replace(0, np.nan)).fillna(0).values
+            sma20_d = ((c - c.rolling(20).mean()) / c.replace(0, np.nan)).fillna(0).values
 
             rsi_raw = c.diff()
             gain = rsi_raw.clip(lower=0).ewm(com=13, adjust=False).mean()
             loss = (-rsi_raw).clip(lower=0).ewm(com=13, adjust=False).mean()
-            rsi = (100 - 100 / (1 + gain / loss.replace(0, np.nan))).fillna(
-                50
-            ).values / 100.0
+            rsi = (100 - 100 / (1 + gain / loss.replace(0, np.nan))).fillna(50).values / 100.0
 
             feat = np.column_stack([log_ret, hl_range, vol_z, atr14, sma20_d, rsi])
             feat = np.nan_to_num(feat, nan=0.0, posinf=0.0, neginf=0.0)

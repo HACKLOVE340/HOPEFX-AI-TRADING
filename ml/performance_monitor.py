@@ -34,7 +34,8 @@ Usage
     from ml.performance_monitor import get_monitor
 
     monitor = get_monitor()
-    asyncio.create_task(monitor.run())
+    _t = asyncio.create_task(monitor.run())
+    _t.add_done_callback(lambda _: None)
 
     # In trade executor, after every fill:
     monitor.record_trade(pnl=42.5, model_version="advanced_oos_v4")
@@ -46,8 +47,7 @@ import asyncio
 import collections
 import logging
 import os
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -99,9 +99,7 @@ class ModelPerformanceMonitor:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def on_model_promoted(
-        self, new_version: str, previous_version: str | None
-    ) -> None:
+    def on_model_promoted(self, new_version: str, previous_version: str | None) -> None:
         """
         Notify the monitor that a new model version was promoted.
 
@@ -153,8 +151,7 @@ class ModelPerformanceMonitor:
         """Run the evaluation loop until cancelled."""
         self._running = True
         logger.info(
-            "ModelPerformanceMonitor started "
-            "(window=%d trades, interval=%.0fs, threshold=%.0f%%)",
+            "ModelPerformanceMonitor started (window=%d trades, interval=%.0fs, threshold=%.0f%%)",
             WINDOW_TRADES,
             CHECK_INTERVAL,
             ROLLBACK_THRESHOLD * 100,
@@ -185,8 +182,7 @@ class ModelPerformanceMonitor:
 
         if cur_win is None or cur_win.trade_count < MIN_TRADES:
             logger.debug(
-                "ModelPerformanceMonitor: skipping evaluation — "
-                "current version '%s' has only %d/%d trades",
+                "ModelPerformanceMonitor: skipping evaluation — current version '%s' has only %d/%d trades",
                 current,
                 cur_win.trade_count if cur_win else 0,
                 MIN_TRADES,
@@ -200,8 +196,7 @@ class ModelPerformanceMonitor:
             return
 
         logger.info(
-            "ModelPerformanceMonitor: current='%s' mean_pnl=%.4f  "
-            "previous='%s' mean_pnl=%s  trades=%d",
+            "ModelPerformanceMonitor: current='%s' mean_pnl=%.4f  previous='%s' mean_pnl=%s  trades=%d",
             current,
             cur_mean,
             previous,
@@ -213,9 +208,7 @@ class ModelPerformanceMonitor:
         if should_rollback:
             await self._rollback(current, previous, reason)
 
-    def _should_rollback(
-        self, cur_mean: float, prev_mean: float | None
-    ) -> tuple[bool, str]:
+    def _should_rollback(self, cur_mean: float, prev_mean: float | None) -> tuple[bool, str]:
         """
         Determine whether to roll back the current model.
 
@@ -231,21 +224,12 @@ class ModelPerformanceMonitor:
                     f"current mean_pnl={cur_mean:.4f} is {ROLLBACK_THRESHOLD * 100:.0f}%+ "
                     f"below previous mean_pnl={prev_mean:.4f}"
                 )
-            if (
-                prev_mean <= 0
-                and cur_mean < prev_mean - abs(prev_mean) * ROLLBACK_THRESHOLD
-            ):
-                return True, (
-                    f"current mean_pnl={cur_mean:.4f} degraded vs "
-                    f"previous mean_pnl={prev_mean:.4f}"
-                )
+            if prev_mean <= 0 and cur_mean < prev_mean - abs(prev_mean) * ROLLBACK_THRESHOLD:
+                return True, (f"current mean_pnl={cur_mean:.4f} degraded vs previous mean_pnl={prev_mean:.4f}")
 
         # Condition 2: absolute loss guard (no previous baseline)
         if prev_mean is None and cur_mean < -ROLLBACK_THRESHOLD:
-            return True, (
-                f"current mean_pnl={cur_mean:.4f} is below absolute loss "
-                f"threshold -{ROLLBACK_THRESHOLD:.2f}"
-            )
+            return True, (f"current mean_pnl={cur_mean:.4f} is below absolute loss threshold -{ROLLBACK_THRESHOLD:.2f}")
 
         return False, ""
 
@@ -253,8 +237,7 @@ class ModelPerformanceMonitor:
         """Revert to the previous model version."""
         self._rollback_count += 1
         logger.critical(
-            "ModelPerformanceMonitor: AUTO-ROLLBACK #%d — reverting '%s' → '%s'. "
-            "Reason: %s",
+            "ModelPerformanceMonitor: AUTO-ROLLBACK #%d — reverting '%s' → '%s'. Reason: %s",
             self._rollback_count,
             current,
             previous,
@@ -319,10 +302,7 @@ class ModelPerformanceMonitor:
             if ae and hasattr(ae, "send_alert"):
                 ae.send_alert(
                     title="ML Model Auto-Rollback",
-                    message=(
-                        f"Model '{current}' was automatically reverted to '{previous}'.\n"
-                        f"Reason: {reason}"
-                    ),
+                    message=(f"Model '{current}' was automatically reverted to '{previous}'.\nReason: {reason}"),
                     severity="critical",
                 )
         except Exception as exc:

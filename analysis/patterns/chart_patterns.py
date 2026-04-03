@@ -21,8 +21,7 @@ Identifies classic chart patterns in price series:
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 try:
     import pandas as pd  # type: ignore[import]
@@ -88,7 +87,7 @@ def _find_troughs(prices: list[float], window: int = 3) -> list[int]:
 def _linear_slope(xs: list[float], ys: list[float]) -> tuple[float, float]:
     """Return (slope, intercept) via least-squares."""
     n = len(xs)
-    if n < 2:  # noqa: PLR2004
+    if n < 2:
         return 0.0, ys[0] if ys else 0.0
     sx = sum(xs)
     sy = sum(ys)
@@ -126,7 +125,7 @@ def _detect_head_and_shoulders(
         symmetry_tolerance: Maximum fractional difference allowed between
                             the two shoulder heights to be considered similar.
     """
-    if len(peaks) < 3 or len(troughs) < 2:  # noqa: PLR2004
+    if len(peaks) < 3 or len(troughs) < 2:
         return None
 
     # Take the three most prominent peaks
@@ -139,9 +138,7 @@ def _detect_head_and_shoulders(
         head_h = prices[head_idx]
         right_h = prices[right_idx]
 
-        shoulders_similar = _price_symmetry(
-            left_h, right_h, tolerance=symmetry_tolerance
-        )
+        shoulders_similar = _price_symmetry(left_h, right_h, tolerance=symmetry_tolerance)
         head_higher = head_h > left_h and head_h > right_h
 
         if not (shoulders_similar and head_higher):
@@ -149,7 +146,7 @@ def _detect_head_and_shoulders(
 
         # Neckline from the troughs between peaks
         between = [t for t in troughs if left_idx < t < right_idx]
-        if len(between) < 2:  # noqa: PLR2004
+        if len(between) < 2:
             continue
 
         neck1_idx = between[0]
@@ -189,7 +186,7 @@ def _detect_inverse_head_and_shoulders(
         symmetry_tolerance: Maximum fractional difference allowed between
                             the two shoulder lows to be considered similar.
     """
-    if len(troughs) < 3 or len(peaks) < 2:  # noqa: PLR2004
+    if len(troughs) < 3 or len(peaks) < 2:
         return None
 
     for k in range(len(troughs) - 2):
@@ -201,16 +198,14 @@ def _detect_inverse_head_and_shoulders(
         head_l = prices[head_idx]
         right_l = prices[right_idx]
 
-        shoulders_similar = _price_symmetry(
-            left_l, right_l, tolerance=symmetry_tolerance
-        )
+        shoulders_similar = _price_symmetry(left_l, right_l, tolerance=symmetry_tolerance)
         head_lower = head_l < left_l and head_l < right_l
 
         if not (shoulders_similar and head_lower):
             continue
 
         between = [p for p in peaks if left_idx < p < right_idx]
-        if len(between) < 2:  # noqa: PLR2004
+        if len(between) < 2:
             continue
 
         neck1_idx = between[0]
@@ -254,16 +249,14 @@ def _detect_double_top(
         symmetry_tolerance: Maximum fractional difference allowed between
                             the two peak prices to be considered a valid double top.
     """
-    if len(peaks) < 2:  # noqa: PLR2004
+    if len(peaks) < 2:
         return None
 
     for k in range(len(peaks) - 1):
         idx1 = peaks[k]
         idx2 = peaks[k + 1]
 
-        if not _price_symmetry(
-            prices[idx1], prices[idx2], tolerance=symmetry_tolerance
-        ):
+        if not _price_symmetry(prices[idx1], prices[idx2], tolerance=symmetry_tolerance):
             continue
 
         trough_prices = prices[idx1 : idx2 + 1]
@@ -300,16 +293,14 @@ def _detect_double_bottom(
         symmetry_tolerance: Maximum fractional difference allowed between
                             the two trough prices to be considered a valid double bottom.
     """
-    if len(troughs) < 2:  # noqa: PLR2004
+    if len(troughs) < 2:
         return None
 
     for k in range(len(troughs) - 1):
         idx1 = troughs[k]
         idx2 = troughs[k + 1]
 
-        if not _price_symmetry(
-            prices[idx1], prices[idx2], tolerance=symmetry_tolerance
-        ):
+        if not _price_symmetry(prices[idx1], prices[idx2], tolerance=symmetry_tolerance):
             continue
 
         peak_prices = prices[idx1 : idx2 + 1]
@@ -396,7 +387,7 @@ def _detect_triangle(
     troughs: list[int],
 ) -> ChartPattern | None:
     """Detect triangle patterns using peak and trough trendlines."""
-    if len(peaks) < 2 or len(troughs) < 2:  # noqa: PLR2004
+    if len(peaks) < 2 or len(troughs) < 2:
         return None
 
     peak_xs = [float(p) for p in peaks[-3:]]
@@ -424,7 +415,7 @@ def _detect_wedge(
     troughs: list[int],
 ) -> ChartPattern | None:
     """Detect Rising (bearish) or Falling (bullish) Wedge."""
-    if len(peaks) < 2 or len(troughs) < 2:  # noqa: PLR2004
+    if len(peaks) < 2 or len(troughs) < 2:
         return None
 
     peak_xs = [float(p) for p in peaks[-3:]]
@@ -496,7 +487,7 @@ def _detect_channel(
     troughs: list[int],
 ) -> ChartPattern | None:
     """Detect Rising or Falling Channel (parallel trendlines)."""
-    if len(peaks) < 2 or len(troughs) < 2:  # noqa: PLR2004
+    if len(peaks) < 2 or len(troughs) < 2:
         return None
 
     high_slope, _, low_slope, _ = _compute_channel_params(prices, peaks, troughs)
@@ -568,9 +559,7 @@ class ChartPatternDetector:
     def _get_closes(self, df: "pd.DataFrame") -> list[float] | None:
         """Extract close prices from DataFrame; return None on failure."""
         if not HAS_PANDAS:
-            logger.warning(
-                "pandas is not available; DataFrame input cannot be processed."
-            )
+            logger.warning("pandas is not available; DataFrame input cannot be processed.")
             return None
         if not isinstance(df, pd.DataFrame) or df.empty:
             return None
@@ -581,9 +570,7 @@ class ChartPatternDetector:
         return df[cols["close"]].tolist()
 
     def _peaks_and_troughs(self, closes: list[float]) -> tuple[list[int], list[int]]:
-        return _find_peaks(closes, self.swing_window), _find_troughs(
-            closes, self.swing_window
-        )
+        return _find_peaks(closes, self.swing_window), _find_troughs(closes, self.swing_window)
 
     # ------------------------------------------------------------------
     # Public API
@@ -605,10 +592,7 @@ class ChartPatternDetector:
             List of ChartPattern objects sorted by confidence descending.
         """
         if not HAS_PANDAS:
-            logger.warning(
-                "pandas is not available; detect_patterns cannot process "
-                "DataFrame input."
-            )
+            logger.warning("pandas is not available; detect_patterns cannot process DataFrame input.")
             return []
         if not isinstance(df, pd.DataFrame) or df.empty:
             return []
@@ -644,14 +628,10 @@ class ChartPatternDetector:
             return []
         peaks, troughs = self._peaks_and_troughs(closes)
         results = []
-        p = _detect_head_and_shoulders(
-            closes, peaks, troughs, symmetry_tolerance=self.sensitivity
-        )
+        p = _detect_head_and_shoulders(closes, peaks, troughs, symmetry_tolerance=self.sensitivity)
         if p:
             results.append(p)
-        p = _detect_inverse_head_and_shoulders(
-            closes, peaks, troughs, symmetry_tolerance=self.sensitivity
-        )
+        p = _detect_inverse_head_and_shoulders(closes, peaks, troughs, symmetry_tolerance=self.sensitivity)
         if p:
             results.append(p)
         return results

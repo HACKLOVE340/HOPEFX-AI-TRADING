@@ -42,8 +42,8 @@ const CorrelationDashboard: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     const [corrRes, cotRes] = await Promise.allSettled([
-      api.get(`/correlation?window=${window}`),
-      api.get('/cot/gold'),
+      api.get('/advanced/correlation', { params: { window } }),
+      api.get('/advanced/cot-sentiment'),
     ]);
     setCorr(corrRes.status === 'fulfilled' ? corrRes.value.data : null);
     setCot(cotRes.status === 'fulfilled' ? cotRes.value.data : null);

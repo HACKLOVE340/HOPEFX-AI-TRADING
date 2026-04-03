@@ -15,9 +15,9 @@ Verifies that each module:
 """
 
 import os
-import pytest
 from unittest.mock import patch
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -49,7 +49,7 @@ class TestResearchModule:
         paths = _route_paths(router)
         assert any("notebooks" in p for p in paths)
         assert any("templates" in p for p in paths)
-        assert len(paths) >= 5  # noqa: PLR2004
+        assert len(paths) >= 5
 
     def test_engine_create_notebook(self):
         from research import ResearchNotebookEngine
@@ -96,7 +96,7 @@ class TestExplainabilityModule:
         paths = _route_paths(router)
         assert any("explain" in p for p in paths)
         assert any("history" in p for p in paths)
-        assert len(paths) >= 4  # noqa: PLR2004
+        assert len(paths) >= 4
 
     def test_engine_explain_prediction(self):
         from explainability import AIExplainer
@@ -147,10 +147,10 @@ class TestTransparencyModule:
         paths = _route_paths(router)
         assert any("executions" in p for p in paths)
         assert any("report" in p for p in paths)
-        assert len(paths) >= 4  # noqa: PLR2004
+        assert len(paths) >= 4
 
     def test_engine_record_execution(self):
-        from transparency import ExecutionTransparencyEngine, FOREX_PIP_MULTIPLIER
+        from transparency import FOREX_PIP_MULTIPLIER, ExecutionTransparencyEngine
 
         engine = ExecutionTransparencyEngine()
         requested = 1950.0
@@ -212,7 +212,7 @@ class TestTeamsModule:
         paths = _route_paths(router)
         assert any("invite" in p for p in paths)
         assert any("permissions" in p or "members" in p for p in paths)
-        assert len(paths) >= 6  # noqa: PLR2004
+        assert len(paths) >= 6
 
     def test_engine_create_team(self):
         from teams import TeamManager
@@ -241,7 +241,7 @@ class TestTeamsModule:
         assert summary["member_count"] >= 1  # Owner is a member
 
     def test_engine_has_permission(self):
-        from teams import TeamManager, Permission
+        from teams import Permission, TeamManager
 
         manager = TeamManager()
         team = manager.create_team(
@@ -251,9 +251,7 @@ class TestTeamsModule:
             owner_id="user_003",
         )
         # Owner should have trade execute permission
-        assert manager.has_permission(
-            team.team_id, "user_003", Permission.TRADE_EXECUTE
-        )
+        assert manager.has_permission(team.team_id, "user_003", Permission.TRADE_EXECUTE)
 
 
 # ---------------------------------------------------------------------------
@@ -277,7 +275,7 @@ class TestNoCodeModule:
         paths = _route_paths(router)
         assert any("strategies" in p for p in paths)
         assert any("indicators" in p for p in paths)
-        assert len(paths) >= 5  # noqa: PLR2004
+        assert len(paths) >= 5
 
     def test_engine_create_strategy(self):
         from nocode import NoCodeStrategyBuilder
@@ -299,7 +297,7 @@ class TestNoCodeModule:
         builder = NoCodeStrategyBuilder()
         indicators = builder.get_available_indicators()
         assert isinstance(indicators, list)
-        assert len(indicators) > 5  # noqa: PLR2004
+        assert len(indicators) > 5
 
     def test_engine_get_templates(self):
         from nocode import NoCodeStrategyBuilder
@@ -345,10 +343,11 @@ class TestReplayModule:
         assert any("sessions" in p for p in paths)
         assert any("play" in p for p in paths)
         assert any("pause" in p for p in paths)
-        assert len(paths) >= 5  # noqa: PLR2004
+        assert len(paths) >= 5
 
     def test_engine_create_session(self):
         from datetime import datetime
+
         from replay import ChartReplayEngine
 
         engine = ChartReplayEngine()
@@ -361,10 +360,11 @@ class TestReplayModule:
         )
         assert session.session_id
         assert session.symbol == "XAUUSD"
-        assert session.initial_balance == 50000.0  # noqa: PLR2004
+        assert session.initial_balance == 50000.0
 
     def test_engine_play_pause_stop(self):
         from datetime import datetime
+
         from replay import ChartReplayEngine
 
         engine = ChartReplayEngine()
@@ -380,6 +380,7 @@ class TestReplayModule:
 
     def test_engine_get_session_summary(self):
         from datetime import datetime
+
         from replay import ChartReplayEngine
 
         engine = ChartReplayEngine()
@@ -415,11 +416,12 @@ class TestMLModule:
         paths = _route_paths(router)
         assert any("status" in p for p in paths)
         assert any("features" in p for p in paths)
-        assert len(paths) >= 2  # noqa: PLR2004
+        assert len(paths) >= 2
 
     def test_feature_engineer_create_features(self):
-        import pandas as pd
         import numpy as np
+        import pandas as pd
+
         from ml import TechnicalFeatureEngineer
 
         engineer = TechnicalFeatureEngineer()
@@ -437,7 +439,7 @@ class TestMLModule:
         )
         features_df = engineer.create_features(df)
         assert len(features_df) > 0
-        assert len(engineer.feature_names) > 10  # noqa: PLR2004
+        assert len(engineer.feature_names) > 10
 
     def test_feature_engineer_get_feature_groups(self):
         from ml import TechnicalFeatureEngineer
@@ -499,9 +501,7 @@ class TestFeatureFlagIntegration:
             "REPLAY_ENGINE",
         )
         for name in experimental_off:
-            assert (
-                getattr(ff, name) is False
-            ), f"Experimental flag {name} should be off by default"
+            assert getattr(ff, name) is False, f"Experimental flag {name} should be off by default"
         # ML_PREDICTIONS is now STABLE and on by default
         assert ff.ML_PREDICTIONS is True, "ML_PREDICTIONS should be on (STABLE)"
 
@@ -522,16 +522,12 @@ class TestFeatureFlagIntegration:
     def test_app_state_has_experimental_attributes(self):
         """app.AppState must declare slots for all experimental engines."""
         import sys
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import MagicMock
 
         # Stub heavy optional deps so app.py can be imported in a test environment
-        stubs = {
-            mod: MagicMock()
-            for mod in ("uvicorn", "sqlalchemy", "sqlalchemy.orm")
-            if mod not in sys.modules
-        }
+        stubs = {mod: MagicMock() for mod in ("uvicorn", "sqlalchemy", "sqlalchemy.orm") if mod not in sys.modules}
         with patch.dict(sys.modules, stubs):
-            from app import AppState
+            from core.app_state import AppState
 
             state = AppState()
             for attr in (

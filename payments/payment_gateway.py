@@ -10,13 +10,12 @@ Multi-Gateway Payment Processor
 - Bank transfers
 """
 
+import logging
 import os
-from datetime import datetime, timezone
-UTC = timezone.utc
+import uuid
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
-import logging
-import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +43,7 @@ class PaymentStatus(Enum):
 class Payment:
     """Payment transaction"""
 
-    def __init__(
-        self, amount: float, method: PaymentMethod, user_id: str, description: str = ""
-    ):
+    def __init__(self, amount: float, method: PaymentMethod, user_id: str, description: str = ""):
         self.id = str(uuid.uuid4())
         self.amount = amount
         self.method = method
@@ -64,13 +61,12 @@ class PaymentGateway:
     def __init__(self):
         self.payments: dict[str, Payment] = {}
 
-    def create_payment(
-        self, amount: float, method: PaymentMethod, user_id: str, description: str = ""
-    ) -> Payment:
+    def create_payment(self, amount: float, method: PaymentMethod, user_id: str, description: str = "") -> Payment:
         """Create new payment"""
         payment = Payment(amount, method, user_id, description)
         self.payments[payment.id] = payment
-        logger.info(f"Payment created: {payment.id}")
+        logger.info("Payment created: %s", payment.id)
+
         return payment
 
     def process_payment(self, payment_id: str) -> bool:
@@ -91,12 +87,14 @@ class PaymentGateway:
 
             payment.status = PaymentStatus.SUCCESS
             payment.completed_at = datetime.now(UTC)
-            logger.info(f"Payment successful: {payment_id}")
+            logger.info("Payment successful: %s", payment_id)
+
             return True
 
         except Exception as e:
             payment.status = PaymentStatus.FAILED
-            logger.error(f"Payment failed: {e}")
+            logger.error("Payment failed: %s", e)
+
             return False
 
     def _process_stripe(self, payment: Payment) -> None:
@@ -105,16 +103,12 @@ class PaymentGateway:
             import stripe as _stripe  # type: ignore[import]
         except ImportError as exc:
             raise RuntimeError(
-                "stripe package is required for Stripe payments. "
-                "Install it with: pip install stripe"
+                "stripe package is required for Stripe payments. Install it with: pip install stripe"
             ) from exc
 
         secret_key = os.getenv("STRIPE_SECRET_KEY", "")
         if not secret_key:
-            raise RuntimeError(
-                "STRIPE_SECRET_KEY is not set. "
-                "Configure it in .env before accepting Stripe payments."
-            )
+            raise RuntimeError("STRIPE_SECRET_KEY is not set. Configure it in .env before accepting Stripe payments.")
 
         _stripe.api_key = secret_key
         intent = _stripe.PaymentIntent.create(
@@ -162,10 +156,9 @@ class PaymentGateway:
         # bank_code and account_number are passed via payment.description
         # as "bank_code:account_number" when this method is called.
         parts = (payment.description or "").split(":")
-        if len(parts) < 2:  # noqa: PLR2004
+        if len(parts) < 2:
             raise ValueError(
-                "Bank transfer requires description in format 'bank_code:account_number'. "
-                f"Got: '{payment.description}'"
+                f"Bank transfer requires description in format 'bank_code:account_number'. Got: '{payment.description}'"
             )
         bank_code, account_number = parts[0].strip(), parts[1].strip()
 
@@ -190,7 +183,8 @@ class PaymentGateway:
         payment = self.payments[payment_id]
         if payment.status == PaymentStatus.SUCCESS:
             payment.status = PaymentStatus.REFUNDED
-            logger.info(f"Payment refunded: {payment_id}")
+            logger.info("Payment refunded: %s", payment_id)
+
             return True
 
         return False

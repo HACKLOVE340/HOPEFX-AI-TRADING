@@ -19,9 +19,8 @@ Enhances the base OrderFlowAnalyzer with:
 
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -213,7 +212,7 @@ class AdvancedOrderFlowAnalyzer:
         self._cumulative_delta[symbol] += delta
 
         if len(self._trades[symbol]) > self._max_trades:
-            removed_ts, _, removed_size, removed_side = self._trades[symbol].pop(0)
+            _, _, removed_size, removed_side = self._trades[symbol].pop(0)
             adj = removed_size if removed_side == "buy" else -removed_size
             self._cumulative_delta[symbol] -= adj
 
@@ -261,7 +260,7 @@ class AdvancedOrderFlowAnalyzer:
         dominant = "buyers" if score > 0 else ("sellers" if score < 0 else "neutral")
         abs_score = abs(score)
         strength = (
-            "strong" if abs_score > 60 else ("moderate" if abs_score > 30 else "weak")  # noqa: PLR2004
+            "strong" if abs_score > 60 else ("moderate" if abs_score > 30 else "weak")
         )
 
         return AggressionMetrics(
@@ -326,11 +325,7 @@ class AdvancedOrderFlowAnalyzer:
         for idx in sorted(levels):
             d = levels[idx]
             total = d["buy_volume"] + d["sell_volume"]
-            imbalance = (
-                round((d["buy_volume"] - d["sell_volume"]) / total, 4)
-                if total > 0
-                else 0.0
-            )
+            imbalance = round((d["buy_volume"] - d["sell_volume"]) / total, 4) if total > 0 else 0.0
             result.append(
                 {
                     "price": d["price"],
@@ -381,8 +376,8 @@ class AdvancedOrderFlowAnalyzer:
             avg_imb = sum(abs(s["imbalance"]) for s in stack) / len(stack)
             strength = (
                 "strong"
-                if avg_imb > 0.5  # noqa: PLR2004
-                else ("moderate" if avg_imb > 0.25 else "weak")  # noqa: PLR2004
+                if avg_imb > 0.5
+                else ("moderate" if avg_imb > 0.25 else "weak")
             )
             results.append(
                 StackedImbalance(
@@ -446,7 +441,7 @@ class AdvancedOrderFlowAnalyzer:
         cutoff = datetime.now(UTC) - timedelta(minutes=lookback_minutes)
         trades = [t for t in self._trades.get(symbol, []) if t[0] >= cutoff]
 
-        if len(trades) < 10:  # noqa: PLR2004
+        if len(trades) < 10:
             return None
 
         # Split into two halves and compare
@@ -473,9 +468,7 @@ class AdvancedOrderFlowAnalyzer:
 
         # Bullish divergence: price down but delta up
         # Bearish divergence: price up but delta down
-        divergence_type = (
-            "bullish" if price_dir == "down" and delta_dir == "up" else "bearish"
-        )
+        divergence_type = "bullish" if price_dir == "down" and delta_dir == "up" else "bearish"
 
         price_move = abs(p2 - p1) / p1 if p1 > 0 else 0.0
         delta_move = abs(d2 - d1) / (abs(d1) + 1)
@@ -563,11 +556,7 @@ class AdvancedOrderFlowAnalyzer:
         clusters = []
         for b in significant:
             strength = round(b["total"] / max_vol, 4) if max_vol > 0 else 0.0
-            cluster_type = (
-                "support"
-                if b["price"] < cur
-                else ("resistance" if b["price"] > cur else "neutral")
-            )
+            cluster_type = "support" if b["price"] < cur else ("resistance" if b["price"] > cur else "neutral")
             clusters.append(
                 VolumeCluster(
                     price_level=b["price"],
@@ -618,15 +607,15 @@ class AdvancedOrderFlowAnalyzer:
             return None
 
         value = round((buy_vol - sell_vol) / total_vol * 100, 2)
-        signal = "bullish" if value > 20 else ("bearish" if value < -20 else "neutral")  # noqa: PLR2004
+        signal = "bullish" if value > 20 else ("bearish" if value < -20 else "neutral")
 
         return OrderFlowOscillator(
             symbol=symbol,
             timestamp=datetime.now(UTC),
             value=value,
             signal=signal,
-            overbought=value > 70,  # noqa: PLR2004
-            oversold=value < -70,  # noqa: PLR2004
+            overbought=value > 70,
+            oversold=value < -70,
         )
 
     # ================================================================

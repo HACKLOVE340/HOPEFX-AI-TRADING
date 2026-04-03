@@ -73,7 +73,8 @@ class TechnicalFeatureEngineer:
         # Store feature names (excluding OHLCV)
         self.feature_names = [col for col in df.columns if col not in required]
 
-        self.logger.info(f"Created {len(self.feature_names)} features")
+        self.logger.info("Created %s features", len(self.feature_names))
+
 
         return df
 
@@ -100,9 +101,7 @@ class TechnicalFeatureEngineer:
 
         # Price relative to MAs
         for period in [20, 50, 200]:
-            df[f"close_to_sma_{period}"] = (close - df[f"sma_{period}"]) / df[
-                f"sma_{period}"
-            ]
+            df[f"close_to_sma_{period}"] = (close - df[f"sma_{period}"]) / df[f"sma_{period}"]
 
         # MA crossovers (1 if short > long, -1 if short < long)
         df["sma_10_20_cross"] = np.where(df["sma_10"] > df["sma_20"], 1, -1)
@@ -140,9 +139,7 @@ class TechnicalFeatureEngineer:
 
         # Rate of Change (ROC)
         for period in [5, 10, 20]:
-            df[f"roc_{period}"] = (
-                (close - close.shift(period)) / close.shift(period)
-            ) * 100
+            df[f"roc_{period}"] = ((close - close.shift(period)) / close.shift(period)) * 100
 
         # Momentum
         for period in [5, 10, 20]:
@@ -152,9 +149,7 @@ class TechnicalFeatureEngineer:
         for period in [14, 21]:
             high_max = high.rolling(window=period).max()
             low_min = low.rolling(window=period).min()
-            df[f"williams_r_{period}"] = (
-                -100 * (high_max - close) / (high_max - low_min)
-            )
+            df[f"williams_r_{period}"] = -100 * (high_max - close) / (high_max - low_min)
 
         return df
 
@@ -170,9 +165,7 @@ class TechnicalFeatureEngineer:
             std = close.rolling(window=period).std()
             df[f"bb_upper_{period}"] = sma + (std * 2)
             df[f"bb_lower_{period}"] = sma - (std * 2)
-            df[f"bb_width_{period}"] = (
-                df[f"bb_upper_{period}"] - df[f"bb_lower_{period}"]
-            ) / sma
+            df[f"bb_width_{period}"] = (df[f"bb_upper_{period}"] - df[f"bb_lower_{period}"]) / sma
             bb_range = df[f"bb_upper_{period}"] - df[f"bb_lower_{period}"]
             df[f"bb_position_{period}"] = np.where(
                 bb_range == 0,
@@ -213,25 +206,15 @@ class TechnicalFeatureEngineer:
         df["obv"] = (np.sign(close.diff()) * volume).fillna(0).cumsum()
 
         # Volume Price Trend (VPT)
-        df["vpt"] = (
-            (volume * ((close - close.shift()) / close.shift())).fillna(0).cumsum()
-        )
+        df["vpt"] = (volume * ((close - close.shift()) / close.shift())).fillna(0).cumsum()
 
         # Money Flow Index (MFI)
         typical_price = (df["high"] + df["low"] + close) / 3
         money_flow = typical_price * volume
 
         for period in [14, 21]:
-            positive_flow = (
-                money_flow.where(typical_price > typical_price.shift(), 0)
-                .rolling(window=period)
-                .sum()
-            )
-            negative_flow = (
-                money_flow.where(typical_price < typical_price.shift(), 0)
-                .rolling(window=period)
-                .sum()
-            )
+            positive_flow = money_flow.where(typical_price > typical_price.shift(), 0).rolling(window=period).sum()
+            negative_flow = money_flow.where(typical_price < typical_price.shift(), 0).rolling(window=period).sum()
             mfi_ratio = positive_flow / negative_flow.replace(0, np.nan)
             mfi = 100 - (100 / (1 + mfi_ratio))
             # negative=0 & positive=0 → neutral; negative=0 & positive>0 → max buying pressure
@@ -260,7 +243,7 @@ class TechnicalFeatureEngineer:
         # Candle patterns (simplified)
         df["is_bullish"] = (close > open_price).astype(int)
         df["is_bearish"] = (close < open_price).astype(int)
-        df["is_doji"] = (np.abs(close - open_price) / (high - low) < 0.1).astype(int)  # noqa: PLR2004
+        df["is_doji"] = (np.abs(close - open_price) / (high - low) < 0.1).astype(int)
 
         # Price gaps
         df["gap"] = open_price - close.shift()
@@ -382,26 +365,12 @@ class TechnicalFeatureEngineer:
             Dict mapping group names to feature lists
         """
         groups = {
-            "trend": [
-                f
-                for f in self.feature_names
-                if any(x in f for x in ["sma", "ema", "macd"])
-            ],
+            "trend": [f for f in self.feature_names if any(x in f for x in ["sma", "ema", "macd"])],
             "momentum": [
-                f
-                for f in self.feature_names
-                if any(x in f for x in ["rsi", "stoch", "roc", "momentum", "williams"])
+                f for f in self.feature_names if any(x in f for x in ["rsi", "stoch", "roc", "momentum", "williams"])
             ],
-            "volatility": [
-                f
-                for f in self.feature_names
-                if any(x in f for x in ["bb", "atr", "volatility"])
-            ],
-            "volume": [
-                f
-                for f in self.feature_names
-                if any(x in f for x in ["volume", "obv", "vpt", "mfi"])
-            ],
+            "volatility": [f for f in self.feature_names if any(x in f for x in ["bb", "atr", "volatility"])],
+            "volume": [f for f in self.feature_names if any(x in f for x in ["volume", "obv", "vpt", "mfi"])],
             "pattern": [
                 f
                 for f in self.feature_names

@@ -27,8 +27,7 @@ MacroFeed (FRED) → MacroStore (in-memory, forward-fill) → live_inference
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException, status
@@ -152,9 +151,7 @@ async def macro_snapshot():
     # 3. No-data response — all values null so callers know data is absent.
     # Do NOT substitute hardcoded numbers here; stale guesses would silently
     # corrupt ML features and regime scoring.  Consumers must handle null.
-    logger.info(
-        "Returning null macro fallback. Set FRED_API_KEY in .env for live data."
-    )
+    logger.info("Returning null macro fallback. Set FRED_API_KEY in .env for live data.")
     return {
         "dxy": None,
         "yield_10y": None,
@@ -174,9 +171,7 @@ async def macro_snapshot():
     }
 
 
-@router.get(
-    "/refresh", summary="Force-refresh macro data from FRED and update MacroStore"
-)
+@router.get("/refresh", summary="Force-refresh macro data from FRED and update MacroStore")
 async def macro_refresh():
     """
     Force a fresh pull from FRED, bypassing the 1-hour cache, and push
@@ -194,7 +189,7 @@ async def macro_refresh():
         logger.warning("macro refresh failed (FRED unavailable): %s", exc)
         return {
             "status": "unavailable",
-            "error": str(exc),
+            "error": "FRED fetch failed — check server logs for details",
             "note": "FRED fetch failed. Set FRED_API_KEY in .env for live data.",
         }
 
@@ -225,16 +220,17 @@ async def macro_features():
         feed = get_macro_feed()
         return feed.as_ml_features()
     except Exception as exc:
+        # Log the full exception server-side. Suppress the chain (from None) so
+        # the original exception object is not attached to the HTTPException and
+        # cannot be serialised into the response by any middleware.
         logger.warning("macro features failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Macro features unavailable: {exc}",
-        ) from exc
+            detail="Macro features unavailable — check server logs",
+        ) from None
 
 
-@router.get(
-    "/store", summary="MacroStore snapshot — all loaded series with latest values"
-)
+@router.get("/store", summary="MacroStore snapshot — all loaded series with latest values")
 async def macro_store_snapshot():
     """
     Return the current state of the in-memory MacroStore: which series are
@@ -256,9 +252,7 @@ async def macro_store_snapshot():
 
 
 class MacroUpdateRequest(BaseModel):
-    series_name: str = Field(
-        ..., description="MacroStore series name, e.g. 'dxy', 'us10y'"
-    )
+    series_name: str = Field(..., description="MacroStore series name, e.g. 'dxy', 'us10y'")
     date: str = Field(..., description="ISO date string, e.g. '2026-03-26'")
     value: float = Field(..., description="Observed value")
 
@@ -291,8 +285,133 @@ async def macro_store_update(req: MacroUpdateRequest = Body(...)):
             "total_observations": snap["n_observations"] if snap else 1,
         }
     except Exception as exc:
+        # Log the full exception server-side; return a generic detail to avoid
+        # leaking internal error messages to API callers.
         logger.warning("MacroStore.update failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Update failed: {exc}",
-        ) from exc
+            detail="MacroStore update failed — check server logs",
+        ) from None
+
+
+# ── WGC endpoints ─────────────────────────────────────────────────────────────
+
+
+def _get_wgc_feed():
+    """Return the WGCFeed singleton (never raises)."""
+    try:
+        from data_layer.feeds.macro.wgc import wgc_feed
+
+        return wgc_feed
+    except Exception as exc:
+        logger.debug("WGCFeed unavailable: %s", exc)
+        return None
+
+
+@router.get(
+    "/wgc",
+    summary="WGC gold demand snapshot — latest values from MacroStore",
+)
+async def wgc_snapshot():
+    """
+    Return the latest World Gold Council gold demand values from MacroStore.
+
+    Series returned:
+      wgc_total_demand   — total gold demand (tonnes, quarterly)
+      wgc_investment     — bar/coin + ETF investment demand (tonnes, quarterly)
+      wgc_central_bank   — central bank net purchases (tonnes, quarterly)
+      wgc_jewellery      — jewellery demand (tonnes, quarterly)
+      wgc_etf_flow       — ETF net flow (tonnes, monthly)
+
+    Data is sourced from the WGC public download portal (no API key required)
+    and cached locally. Values are forward-filled from the last quarterly/
+    monthly observation.
+
+    Returns null values when WGC data has not yet been loaded. Call
+    /api/macro/wgc/refresh to trigger an immediate fetch.
+    """
+    store = _get_macro_store()
+    wgc_series = [
+        "wgc_total_demand",
+        "wgc_investment",
+        "wgc_central_bank",
+        "wgc_jewellery",
+        "wgc_etf_flow",
+    ]
+
+    result: dict[str, Any] = {
+        "refreshed_at": datetime.now(UTC).isoformat(),
+        "source": "macro_store",
+    }
+
+    if store is not None:
+        snap = store.snapshot()
+        for key in wgc_series:
+            info = snap.get(key)
+            result[key] = {
+                "value": info["value"] if info else None,
+                "date": info["date"] if info else None,
+                "observations": info["n_observations"] if info else 0,
+            }
+    else:
+        for key in wgc_series:
+            result[key] = {"value": None, "date": None, "observations": 0}
+
+    # Include feed health
+    feed = _get_wgc_feed()
+    result["feed_health"] = feed.health() if feed else {"loaded": False}
+
+    return result
+
+
+@router.post(
+    "/wgc/refresh",
+    summary="Force-refresh WGC gold demand data and inject into MacroStore",
+)
+async def wgc_refresh():
+    """
+    Trigger an immediate WGC data fetch, bypassing the local cache TTL.
+
+    Fetches quarterly demand and monthly ETF flow data from WGC's public
+    download endpoints and injects all series into MacroStore.
+
+    Use this after manually placing downloaded WGC CSV files in WGC_CACHE_DIR,
+    or to force a refresh outside the daily 18:00 UTC schedule.
+    """
+    feed = _get_wgc_feed()
+    if feed is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="WGCFeed not available",
+        )
+    try:
+        status_dict = await feed.fetch_and_inject()
+        return {"status": "refreshed", **status_dict}
+    except Exception as exc:
+        logger.warning("WGC refresh failed: %s", exc)
+        return {
+            "status": "error",
+            "error": "WGC fetch failed — check server logs for details",
+            "note": (
+                "WGC fetch failed. Check WGC_CACHE_DIR or place CSV files manually. "
+                "See data_layer/feeds/macro/wgc.py for download instructions."
+            ),
+        }
+
+
+@router.get(
+    "/wgc/health",
+    summary="WGC feed health — cache status and loaded series",
+)
+async def wgc_health():
+    """
+    Return WGC feed health: cache directory, last fetch time, and per-series
+    observation counts and latest values.
+
+    Used by the admin dashboard to verify WGC data is flowing into the
+    signal engine.
+    """
+    feed = _get_wgc_feed()
+    if feed is None:
+        return {"status": "unavailable", "loaded": False}
+    return {"status": "ok", **feed.health()}

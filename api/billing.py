@@ -19,14 +19,13 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import UTC
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
-from datetime import timezone
-UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 
@@ -191,7 +190,6 @@ async def create_payment_intent(
     Supported currencies: USD, EUR, GBP, AED, NGN, JPY, CHF, CAD, AUD, SGD.
     Returns client_secret for frontend Stripe.js confirmation.
     """
-    from decimal import Decimal
     from monetization.stripe_live import get_stripe_client
 
     client = get_stripe_client()
@@ -247,9 +245,7 @@ async def generate_referral_link(user: TokenPayload = Depends(get_current_user))
         "url": ref_url,
         "code": affiliate.code,
         "affiliate_id": affiliate.affiliate_id,
-        "status": affiliate.status.value
-        if hasattr(affiliate.status, "value")
-        else str(affiliate.status),
+        "status": affiliate.status.value if hasattr(affiliate.status, "value") else str(affiliate.status),
     }
 
 
@@ -279,9 +275,7 @@ async def activate_free_tier(body: FreeTierBody):
     existing = mgr.get_user_subscription(body.user_id)
     if existing:
         return {
-            "tier": existing.tier.value
-            if hasattr(existing.tier, "value")
-            else str(existing.tier),
+            "tier": existing.tier.value if hasattr(existing.tier, "value") else str(existing.tier),
             "message": "Subscription already active.",
             "features": ["paper_trading"],
         }
@@ -291,10 +285,9 @@ async def activate_free_tier(body: FreeTierBody):
     if body.ref_code:
         try:
             aff_mgr = _get_affiliate_manager()
-            aff_mgr.track_referral(
+            aff_mgr.create_referral(
                 affiliate_code=body.ref_code,
                 referred_user_id=body.user_id,
-                conversion_value=Decimal("0"),
             )
         except Exception as exc:
             logger.debug("Referral tracking skipped: %s", exc)
@@ -350,7 +343,7 @@ async def flutterwave_init(
         }
     except Exception as exc:
         logger.error("Flutterwave init error: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Payment init failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail="Payment init failed — check server logs") from None
 
 
 @router.post("/payments/flutterwave/verify")
@@ -371,7 +364,7 @@ async def flutterwave_verify(
         }
     except Exception as exc:
         logger.error("Flutterwave verify error: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Verification failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail="Verification failed — check server logs") from None
 
 
 @router.get("/payments/flutterwave/status")
@@ -411,12 +404,8 @@ async def get_balance(user: TokenPayload = Depends(get_current_user)):
 
             account = await asyncio.wait_for(broker.get_account(), timeout=3.0)
             if account:
-                balance = float(
-                    getattr(account, "balance", 0) or account.get("balance", 0)
-                )
-                margin_used = float(
-                    getattr(account, "margin_used", 0) or account.get("margin_used", 0)
-                )
+                balance = float(getattr(account, "balance", 0) or account.get("balance", 0))
+                margin_used = float(getattr(account, "margin_used", 0) or account.get("margin_used", 0))
                 frozen = margin_used
     except Exception as exc:
         logger.debug("Broker balance unavailable: %s", exc)
@@ -468,14 +457,11 @@ async def get_transactions(
                     {
                         "id": charge.get("id"),
                         "type": "deposit" if charge.get("amount", 0) > 0 else "refund",
-                        "amount": charge.get("amount", 0)
-                        / 100,  # Stripe amounts are in cents
+                        "amount": charge.get("amount", 0) / 100,  # Stripe amounts are in cents
                         "currency": charge.get("currency", "usd").upper(),
                         "status": charge.get("status", "unknown"),
                         "date": charge.get("created_at") or charge.get("created"),
-                        "method": charge.get("payment_method_details", {}).get(
-                            "type", "card"
-                        ),
+                        "method": charge.get("payment_method_details", {}).get("type", "card"),
                         "description": charge.get("description", ""),
                     }
                 )
@@ -508,7 +494,7 @@ async def get_transactions(
         d = tx.get("date")
         if d is None:
             return ""
-        if isinstance(d, (int, float)):
+        if isinstance(d, int | float):
             from datetime import datetime
 
             return datetime.fromtimestamp(d, tz=UTC).isoformat()

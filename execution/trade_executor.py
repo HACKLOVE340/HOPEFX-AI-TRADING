@@ -38,11 +38,10 @@ import asyncio
 import logging
 import os
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
-from enum import Enum
 from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from enum import Enum
 
 from infrastructure.metrics import get_metrics_registry
 
@@ -157,9 +156,7 @@ class TradeExecutor:
             self.metrics.record_order_latency(latency_ms)
 
             if result.success:
-                self.metrics.get_collector("orders_filled_total").inc(
-                    1, {"symbol": symbol, "type": "market"}
-                )
+                self.metrics.get_collector("orders_filled_total").inc(1, {"symbol": symbol, "type": "market"})
             else:
                 self.metrics.get_collector("orders_rejected_total").inc(
                     1, {"symbol": symbol, "reason": result.status.value}
@@ -170,7 +167,7 @@ class TradeExecutor:
 
         except Exception as exc:
             latency_ms = (asyncio.get_event_loop().time() - start_time) * 1000
-            logger.exception("Execution error for %s: %s", symbol, exc)
+            logger.exception("Execution error for %s: %s", symbol)
             self.metrics.record_error("trade_executor", type(exc).__name__)
             return ExecutionResult(
                 success=False,
@@ -273,8 +270,7 @@ class TradeExecutor:
             gate.check(gate_order)
         except TradeBlockedError as exc:
             logger.warning(
-                "ORDER BLOCKED by pre-trade gate | symbol=%s side=%s qty=%.4f "
-                "reason_code=%s detail=%s",
+                "ORDER BLOCKED by pre-trade gate | symbol=%s side=%s qty=%.4f reason_code=%s detail=%s",
                 symbol,
                 side,
                 size,
@@ -293,8 +289,7 @@ class TradeExecutor:
             )
         except RiskManagerError as exc:
             logger.critical(
-                "RISK MANAGER ERROR — order blocked as safety measure | "
-                "symbol=%s side=%s qty=%.4f error=%s",
+                "RISK MANAGER ERROR — order blocked as safety measure | symbol=%s side=%s qty=%.4f error=%s",
                 symbol,
                 side,
                 size,
@@ -313,7 +308,7 @@ class TradeExecutor:
                 average_price=0,
                 commission=0,
                 status=OrderStatus.REJECTED,
-                message=f"[RISK_MANAGER_ERROR] {exc}",
+                message="[RISK_MANAGER_ERROR] Order blocked — check server logs",
                 latency_ms=0,
             )
 
@@ -399,9 +394,7 @@ class TradeExecutor:
                 realized_pnl = closed_position.realized_pnl
 
                 # Update risk manager equity
-                self.risk_manager.update_equity(
-                    self.risk_manager.daily_starting_equity + realized_pnl
-                )
+                self.risk_manager.update_equity(self.risk_manager.daily_starting_equity + realized_pnl)
 
                 # ── Streak tracking (executor + risk manager) ────────────────
                 self._update_streak(realized_pnl)
@@ -426,10 +419,7 @@ class TradeExecutor:
                 try:
                     from ml.signal_filter import get_signal_filter
 
-                    _entry_px = (
-                        getattr(closed_position, "entry_price", None)
-                        or position.current_price
-                    )
+                    _entry_px = getattr(closed_position, "entry_price", None) or position.current_price
                     _pnl_pct = realized_pnl / _entry_px if _entry_px > 0 else 0.0
                     _side = getattr(closed_position, "side", "buy")
                     _direction = 1 if str(_side).lower() in ("buy", "long") else -1
@@ -443,17 +433,14 @@ class TradeExecutor:
                         confidence=_conf,
                     )
                     logger.debug(
-                        "SignalFilter close outcome: symbol=%s pnl_pct=%.5f "
-                        "dir=%d conf=%.3f",
+                        "SignalFilter close outcome: symbol=%s pnl_pct=%.5f dir=%d conf=%.3f",
                         _sym,
                         _pnl_pct,
                         _direction,
                         _conf,
                     )
                 except Exception as _sf_exc:
-                    logger.debug(
-                        "SignalFilter close record failed (non-fatal): %s", _sf_exc
-                    )
+                    logger.debug("SignalFilter close record failed (non-fatal): %s", _sf_exc)
 
         return ExecutionResult(
             success=success,
@@ -480,10 +467,7 @@ class TradeExecutor:
 
         current_dd = getattr(self.risk_manager, "current_drawdown", 0.0)
         if current_dd >= DRAWDOWN_HALT_PCT:
-            msg = (
-                f"Drawdown {current_dd:.2%} >= circuit breaker threshold "
-                f"{DRAWDOWN_HALT_PCT:.2%}. Trading halted."
-            )
+            msg = f"Drawdown {current_dd:.2%} >= circuit breaker threshold {DRAWDOWN_HALT_PCT:.2%}. Trading halted."
             self._trigger_drawdown_halt_if_needed()
             return True, msg
 
@@ -496,19 +480,16 @@ class TradeExecutor:
         """
         current_dd = getattr(self.risk_manager, "current_drawdown", 0.0)
         if current_dd >= DRAWDOWN_HALT_PCT and not getattr(self.risk_manager, "_trading_halted", False):
-                reason = (
-                    f"Drawdown circuit breaker: {current_dd:.2%} >= "
-                    f"{DRAWDOWN_HALT_PCT:.2%}"
-                )
-                logger.warning(
-                    "DRAWDOWN CIRCUIT BREAKER TRIGGERED: %s — halting trading",
-                    reason,
-                )
-                try:
-                    self.risk_manager._trading_halted = True
-                    self.risk_manager._halt_reason = reason
-                except Exception as _exc:
-                    logger.debug("Suppressed exception: %s", _exc)
+            reason = f"Drawdown circuit breaker: {current_dd:.2%} >= {DRAWDOWN_HALT_PCT:.2%}"
+            logger.warning(
+                "DRAWDOWN CIRCUIT BREAKER TRIGGERED: %s — halting trading",
+                reason,
+            )
+            try:
+                self.risk_manager._trading_halted = True
+                self.risk_manager._halt_reason = reason
+            except Exception as _exc:
+                logger.debug("Suppressed exception: %s", _exc)
 
     def _check_streak_circuit_breaker(self) -> tuple:
         """
@@ -562,8 +543,7 @@ class TradeExecutor:
                 cooldown_secs = STREAK_COOLDOWN_MINUTES * 60
                 self._streak_halted_until = time.monotonic() + cooldown_secs
                 logger.warning(
-                    "STREAK CIRCUIT BREAKER: %d consecutive losses — "
-                    "halting new entries for %.0f min",
+                    "STREAK CIRCUIT BREAKER: %d consecutive losses — halting new entries for %.0f min",
                     self._consecutive_losses,
                     STREAK_COOLDOWN_MINUTES,
                 )
@@ -599,8 +579,7 @@ class TradeExecutor:
                     max_size = max_loss / (entry_price * sl_pct)
                     if max_size < size:
                         logger.info(
-                            "Risk cap applied: size %.4f → %.4f "
-                            "(equity=%.2f, sl_pct=%.3f%%, max_risk=%.1f%%)",
+                            "Risk cap applied: size %.4f → %.4f (equity=%.2f, sl_pct=%.3f%%, max_risk=%.1f%%)",
                             size,
                             max_size,
                             equity,
@@ -647,9 +626,7 @@ class TradeExecutor:
         ):
             await self._notify_inference_engine_fill(result, signal)
 
-    async def _notify_inference_engine_fill(
-        self, result: ExecutionResult, signal: dict
-    ) -> None:
+    async def _notify_inference_engine_fill(self, result: ExecutionResult, signal: dict) -> None:
         """
         Notify InferenceEngine of a confirmed fill for online learning.
 
@@ -713,17 +690,14 @@ class TradeExecutor:
                     confidence=_confidence,
                 )
                 logger.debug(
-                    "SignalFilter outcome (fill): symbol=%s pnl_pct=%.5f "
-                    "dir=%d conf=%.3f",
+                    "SignalFilter outcome (fill): symbol=%s pnl_pct=%.5f dir=%d conf=%.3f",
                     _sym,
                     _pnl_pct,
                     _direction,
                     _confidence,
                 )
             except Exception as _sf_exc:
-                logger.debug(
-                    "SignalFilter record_outcome failed (non-fatal): %s", _sf_exc
-                )
+                logger.debug("SignalFilter record_outcome failed (non-fatal): %s", _sf_exc)
 
         except Exception as exc:
             logger.debug("InferenceEngine fill notify failed (non-fatal): %s", exc)
@@ -758,10 +732,7 @@ class TradeExecutor:
         return {
             "consecutive_losses": self._consecutive_losses,
             "streak_halt_threshold": STREAK_HALT_LOSSES,
-            "streak_halted": (
-                self._streak_halted_until is not None
-                and time.monotonic() < self._streak_halted_until
-            ),
+            "streak_halted": (self._streak_halted_until is not None and time.monotonic() < self._streak_halted_until),
             "streak_cooldown_remaining_min": streak_cooldown_remaining,
             "drawdown_halt_pct": DRAWDOWN_HALT_PCT,
             "max_risk_pct_per_trade": MAX_RISK_PCT_PER_TRADE,

@@ -14,8 +14,7 @@ import logging
 from abc import ABC, abstractmethod
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum, auto
 from typing import Any
 
@@ -124,7 +123,7 @@ class Order:
 
     @property
     def is_filled(self) -> bool:
-        return abs(self.filled_size - self.size) < 0.0001  # noqa: PLR2004
+        return abs(self.filled_size - self.size) < 0.0001
 
     @property
     def notional(self) -> float:
@@ -197,9 +196,7 @@ class MarketImpactModel:
         participation = X / V
         return self.gamma * self.sigma * (participation**self.beta)
 
-    def total_cost(
-        self, X: float, T: float, V: float, price: float
-    ) -> dict[str, float]:
+    def total_cost(self, X: float, T: float, V: float, price: float) -> dict[str, float]:
         """Calculate total market impact cost"""
         temp = self.temporary_impact(X, T, V)
         perm = self.permanent_impact(X, V)
@@ -225,9 +222,7 @@ class ExecutionStrategy(ABC):
         # Per-strategy seeded RNG for deterministic simulation in tests.
         # Seed is derived from the order id so different orders get different
         # but reproducible sequences.
-        self._rng = np.random.default_rng(
-            seed=abs(hash(order.id)) % (2**31) if order.id else 42
-        )
+        self._rng = np.random.default_rng(seed=abs(hash(order.id)) % (2**31) if order.id else 42)
 
     @abstractmethod
     async def execute(self) -> list[Fill]:
@@ -241,9 +236,7 @@ class ExecutionStrategy(ABC):
         # Update average fill price
         total_value = self.order.avg_fill_price * (self.order.filled_size - fill.size)
         total_value += fill.price * fill.size
-        self.order.avg_fill_price = (
-            total_value / self.order.filled_size if self.order.filled_size > 0 else 0
-        )
+        self.order.avg_fill_price = total_value / self.order.filled_size if self.order.filled_size > 0 else 0
 
         self.fills.append(fill)
 
@@ -273,7 +266,8 @@ class TWAPStrategy(ExecutionStrategy):
 
     async def execute(self) -> list[Fill]:
         """Execute TWAP slices"""
-        logger.info(f"Starting TWAP: {self.order.size} in {self.num_slices} slices")
+        logger.info("Starting TWAP: %s in %s slices", self.order.size, self.num_slices)
+
 
         for i in range(self.num_slices):
             if self.is_complete:
@@ -296,9 +290,8 @@ class TWAPStrategy(ExecutionStrategy):
             fill = await self._simulate_fill(slice_order, venue)
             if fill:
                 self.update_order(fill)
-                logger.info(
-                    f"Slice {i+1}/{self.num_slices} filled: {fill.size} @ {fill.price}"
-                )
+                logger.info("Slice %s/%s filled: %s @ %s", i + 1, self.num_slices, fill.size, fill.price)
+
 
             # Wait for next interval
             if i < self.num_slices - 1:
@@ -311,9 +304,7 @@ class TWAPStrategy(ExecutionStrategy):
         # Simple selection: lowest total cost
         costs = []
         for venue in self.venues:
-            cost = venue.total_cost(
-                self.slice_size * self.order.price if self.order.price else 100000
-            )
+            cost = venue.total_cost(self.slice_size * self.order.price if self.order.price else 100000)
             latency_penalty = venue.latency_ms * 0.001  # Convert to cost
             costs.append((cost + latency_penalty, venue))
 
@@ -342,7 +333,7 @@ class TWAPStrategy(ExecutionStrategy):
         slippage = self._rng.normal(0, 0.0001)  # 1 bps std
         fill_price = base_price * (1 + slippage)
         if order.side == OrderSide.SELL:
-            fill_price *= (1 - venue.taker_fee)  # Bid side net of fee
+            fill_price *= 1 - venue.taker_fee  # Bid side net of fee
 
         fee = venue.total_cost(order.size * fill_price, is_maker=False)
 
@@ -381,12 +372,10 @@ class VWAPStrategy(ExecutionStrategy):
     async def execute(self) -> list[Fill]:
         """Execute based on volume profile"""
         # Calculate slice sizes based on volume profile
-        slice_sizes = [
-            (vol / self.total_volume) * self.order.size for vol in self.volume_profile
-        ]
+        slice_sizes = [(vol / self.total_volume) * self.order.size for vol in self.volume_profile]
 
         for i, size in enumerate(slice_sizes):
-            if size < 0.001 or self.is_complete:  # noqa: PLR2004
+            if size < 0.001 or self.is_complete:
                 continue
 
             venue = self._select_venue()
@@ -412,11 +401,7 @@ class VWAPStrategy(ExecutionStrategy):
     def _select_venue(self) -> Venue:
         """Select venue with capacity for volume"""
         # Prefer venues with lower fees for large slices
-        suitable = [
-            v
-            for v in self.venues
-            if v.max_order_size > self.order.size / len(self.volume_profile)
-        ]
+        suitable = [v for v in self.venues if v.max_order_size > self.order.size / len(self.volume_profile)]
         return min(suitable, key=lambda v: v.taker_fee) if suitable else self.venues[0]
 
 
@@ -497,7 +482,8 @@ class ImplementationShortfallStrategy(ExecutionStrategy):
                 if self.order.side == OrderSide.SELL:
                     shortfall = -shortfall
 
-                logger.info(f"Slice {i+1}: IS = {shortfall:.4%}")
+                logger.info("Slice %s: IS = %s", i + 1, shortfall)
+
 
             await asyncio.sleep(6)  # 10 slices over 1 minute
 
@@ -529,9 +515,7 @@ class SmartOrderRouter:
         self.fill_history: deque = deque(maxlen=10000)
 
         # Performance tracking
-        self.venue_performance: dict[str, deque] = {
-            v.name: deque(maxlen=100) for v in self.venues
-        }
+        self.venue_performance: dict[str, deque] = {v.name: deque(maxlen=100) for v in self.venues}
 
         # Market impact model
         self.impact_model = MarketImpactModel()
@@ -544,7 +528,8 @@ class SmartOrderRouter:
             "fill_rate": 0.2,
         }
 
-        logger.info(f"SmartOrderRouter initialized with {len(self.venues)} venues")
+        logger.info("SmartOrderRouter initialized with %s venues", len(self.venues))
+
 
     def _default_venues(self) -> list[Venue]:
         """Create default venue configuration"""
@@ -570,9 +555,7 @@ class SmartOrderRouter:
                 taker_fee=0.0003,
                 latency_ms=25,
             ),
-            Venue(
-                "Internal", VenueType.MAKER, maker_fee=0.0, taker_fee=0.0, latency_ms=1
-            ),
+            Venue("Internal", VenueType.MAKER, maker_fee=0.0, taker_fee=0.0, latency_ms=1),
         ]
 
     def route_order(self, order: Order) -> ExecutionStrategy:
@@ -580,10 +563,7 @@ class SmartOrderRouter:
         Determine optimal execution strategy and venues.
         """
         # Select execution algorithm
-        if (
-            order.order_type == OrderType.TWAP
-            or self.default_strategy == OrderType.TWAP
-        ):
+        if order.order_type == OrderType.TWAP or self.default_strategy == OrderType.TWAP:
             strategy = TWAPStrategy(order, self.venues)
         elif order.order_type == OrderType.VWAP:
             strategy = VWAPStrategy(order, self.venues, [0.1] * 10)  # Flat profile
@@ -642,9 +622,8 @@ class SmartOrderRouter:
         """
         Execute order with full lifecycle management.
         """
-        logger.info(
-            f"Routing order {order.id}: {order.side.name} {order.size} {order.symbol}"
-        )
+        logger.info("Routing order %s: %s %s %s", order.id, order.side.name, order.size, order.symbol)
+
 
         # Route to strategy
         strategy = self.route_order(order)
@@ -672,18 +651,11 @@ class SmartOrderRouter:
             "filled_size": order.filled_size,
             "avg_price": order.avg_fill_price,
             "vwap": vwap,
-            "implementation_shortfall": (order.avg_fill_price - arrival_price)
-            / arrival_price
-            if arrival_price
-            else 0,
+            "implementation_shortfall": (order.avg_fill_price - arrival_price) / arrival_price if arrival_price else 0,
             "total_fees": sum(f.fee for f in fills),
             "total_slippage_bps": np.mean([f.slippage_bps for f in fills]),
             "fills": len(fills),
-            "duration_seconds": (
-                datetime.now(UTC) - order.created_at
-            ).total_seconds()
-            if fills
-            else 0,
+            "duration_seconds": (datetime.now(UTC) - order.created_at).total_seconds() if fills else 0,
         }
 
     def _calculate_vwap(self, fills: list[Fill]) -> float:
@@ -710,9 +682,7 @@ class SmartOrderRouter:
             "venue_performance": {
                 name: {
                     "fill_rate": np.mean(list(history)) if history else 0,
-                    "avg_slippage": np.mean(
-                        [f.slippage_bps for f in self.fill_history if f.venue == name]
-                    )
+                    "avg_slippage": np.mean([f.slippage_bps for f in self.fill_history if f.venue == name])
                     if self.fill_history
                     else 0,
                 }

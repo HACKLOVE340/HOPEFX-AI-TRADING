@@ -37,7 +37,7 @@ try:
 
     load_dotenv(_ROOT / ".env")
 except ImportError:
-    pass
+    ...  # nosec B110
 
 
 def _check(label: str, ok: bool, detail: str = "") -> bool:
@@ -51,9 +51,7 @@ def _check(label: str, ok: bool, detail: str = "") -> bool:
 
 def validate(practice: bool = True) -> bool:
     api_key = os.getenv("OANDA_API_KEY") or os.getenv("BROKER_OANDA_TOKEN") or ""
-    account_id = (
-        os.getenv("OANDA_ACCOUNT_ID") or os.getenv("BROKER_OANDA_ACCOUNT") or ""
-    )
+    account_id = os.getenv("OANDA_ACCOUNT_ID") or os.getenv("BROKER_OANDA_ACCOUNT") or ""
 
     env_label = "practice" if practice else "LIVE"
     print(f"\nOANDA {env_label} API validation")
@@ -76,11 +74,7 @@ def validate(practice: bool = True) -> bool:
         print("✗ requests library not installed — run: pip install requests")
         return False
 
-    base = (
-        "https://api-fxpractice.oanda.com"
-        if practice
-        else "https://api-fxtrade.oanda.com"
-    )
+    base = "https://api-fxpractice.oanda.com" if practice else "https://api-fxtrade.oanda.com"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
     # Account summary
@@ -90,14 +84,14 @@ def validate(practice: bool = True) -> bool:
             headers=headers,
             timeout=10,
         )
-        if r.status_code == 401:  # noqa: PLR2004
+        if r.status_code == 401:
             _check(
                 "API token valid",
                 False,
                 "401 Unauthorized — regenerate token in OANDA portal",
             )
             return False
-        if r.status_code == 404:  # noqa: PLR2004
+        if r.status_code == 404:
             _check("Account ID valid", False, f"404 — account {account_id!r} not found")
             return False
         r.raise_for_status()
@@ -205,16 +199,14 @@ def validate_gate() -> None:
         gate = PaperTradingGate()
         gate.print_status()
 
-        p2_ok, p2_reason = gate.phase2_ready()
-        p3_ok, p3_reason = gate.phase3_ready()
+        p2_ok, _ = gate.phase2_ready()
+        p3_ok, _ = gate.phase3_ready()
 
         if not p2_ok:
             print("\nTo start the 30-day clock:")
             print("  python -m research.pipeline.paper_trading_gate --set-start")
             print("\nTo record fills (called automatically by broker callback):")
-            print(
-                "  python -m research.pipeline.paper_trading_gate --record-fill <pnl>"
-            )
+            print("  python -m research.pipeline.paper_trading_gate --record-fill <pnl>")
         elif not p3_ok:
             print("\nPhase 2 gate passed. Enable anomaly weighting:")
             print("  FEATURE_ANOMALY_WEIGHTING=true  (in .env)")

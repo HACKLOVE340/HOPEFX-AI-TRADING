@@ -51,8 +51,7 @@ import os
 import smtplib
 import uuid
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
@@ -138,30 +137,30 @@ class WeeklyReport:
 
 
 def _sharpe(returns: np.ndarray, periods_per_year: int = 252) -> float | None:
-    if len(returns) < 5:  # noqa: PLR2004
+    if len(returns) < 5:
         return None
     mu = float(np.mean(returns))
     sigma = float(np.std(returns, ddof=1))
-    if sigma < 1e-10:  # noqa: PLR2004
+    if sigma < 1e-10:
         return None
     return round(mu / sigma * math.sqrt(periods_per_year), 3)
 
 
 def _sortino(returns: np.ndarray, periods_per_year: int = 252) -> float | None:
-    if len(returns) < 5:  # noqa: PLR2004
+    if len(returns) < 5:
         return None
     mu = float(np.mean(returns))
     downside = returns[returns < 0]
     if len(downside) == 0:
         return None
     downside_std = float(np.std(downside, ddof=1))
-    if downside_std < 1e-10:  # noqa: PLR2004
+    if downside_std < 1e-10:
         return None
     return round(mu / downside_std * math.sqrt(periods_per_year), 3)
 
 
 def _max_drawdown(equity_curve: list[float]) -> float:
-    if len(equity_curve) < 2:  # noqa: PLR2004
+    if len(equity_curve) < 2:
         return 0.0
     arr = np.array(equity_curve, dtype=float)
     peak = np.maximum.accumulate(arr)
@@ -170,7 +169,7 @@ def _max_drawdown(equity_curve: list[float]) -> float:
 
 
 def _calmar(annual_return: float, max_dd: float) -> float | None:
-    if abs(max_dd) < 1e-10:  # noqa: PLR2004
+    if abs(max_dd) < 1e-10:
         return None
     return round(annual_return / abs(max_dd), 3)
 
@@ -178,7 +177,7 @@ def _calmar(annual_return: float, max_dd: float) -> float | None:
 def _profit_factor(wins: list[float], losses: list[float]) -> float | None:
     gross_win = sum(w for w in wins if w > 0)
     gross_loss = abs(sum(loss for loss in losses if loss < 0))
-    if gross_loss < 1e-10:  # noqa: PLR2004
+    if gross_loss < 1e-10:
         return None
     return round(gross_win / gross_loss, 3)
 
@@ -224,14 +223,12 @@ class WeeklyReportGenerator:
         # Daily returns from equity curve
         eq_values = [v for _, v in equity_curve if week_start <= _ <= week_end]
         daily_returns = np.array([])
-        if len(eq_values) >= 2:  # noqa: PLR2004
+        if len(eq_values) >= 2:
             arr = np.array(eq_values, dtype=float)
             daily_returns = np.diff(arr) / np.where(arr[:-1] > 0, arr[:-1], 1.0)
 
         dd = _max_drawdown(eq_values) if eq_values else 0.0
-        annual_return = (
-            (gross_pnl / starting_equity) * 52 if starting_equity > 0 else 0.0
-        )
+        annual_return = (gross_pnl / starting_equity) * 52 if starting_equity > 0 else 0.0
 
         symbols = list({t.symbol for t in week_trades})
 
@@ -246,16 +243,14 @@ class WeeklyReportGenerator:
             total_trades=total,
             winning_trades=len(wins),
             losing_trades=len(losses),
-            win_rate=round(len(wins) / total, 4) if total >= 10 else None,  # noqa: PLR2004
+            win_rate=round(len(wins) / total, 4) if total >= 10 else None,
             avg_win=round(sum(wins) / len(wins), 4) if wins else 0.0,
             avg_loss=round(sum(losses) / len(losses), 4) if losses else 0.0,
             profit_factor=_profit_factor(wins, losses),
             expectancy=round(gross_pnl / total, 4) if total > 0 else 0.0,
             gross_pnl=round(gross_pnl, 4),
             net_pnl=round(gross_pnl, 4),
-            total_return_pct=round(gross_pnl / starting_equity * 100, 4)
-            if starting_equity > 0
-            else 0.0,
+            total_return_pct=round(gross_pnl / starting_equity * 100, 4) if starting_equity > 0 else 0.0,
             sharpe_ratio=_sharpe(daily_returns),
             sortino_ratio=_sortino(daily_returns),
             max_drawdown_pct=round(dd * 100, 4),
@@ -266,7 +261,7 @@ class WeeklyReportGenerator:
             data_source=resolved_source,
             note=(
                 "Insufficient trades for statistical significance (< 10)."
-                if total < 10  # noqa: PLR2004
+                if total < 10
                 else ""
             ),
         )
@@ -312,7 +307,7 @@ class WeeklyReportGenerator:
         subject = (
             f"HopeFX Weekly Report — "
             f"w/e {report.week_end.strftime('%d %b %Y')} | "
-            f"P&L: {'+'if report.net_pnl >= 0 else ''}"
+            f"P&L: {'+' if report.net_pnl >= 0 else ''}"
             f"${report.net_pnl:.2f} | "
             f"Trades: {report.total_trades}"
         )
@@ -330,7 +325,7 @@ class WeeklyReportGenerator:
         try:
             with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
                 server.ehlo()
-                if smtp_port == 587:  # noqa: PLR2004
+                if smtp_port == 587:
                     server.starttls()
                 if smtp_user and smtp_pass:
                     server.login(smtp_user, smtp_pass)
@@ -356,25 +351,19 @@ def _detect_data_source() -> str:
       4. Fallback → paper_simulation
     """
     try:
-        import json as _json
-        from pathlib import Path as _Path
-
-        oanda_stamp = _Path("data/oanda_paper_start.json")
+        oanda_stamp = Path("data/oanda_paper_start.json")
         if oanda_stamp.exists():
-            info = _json.loads(oanda_stamp.read_text())
+            info = json.loads(oanda_stamp.read_text())
             account_id = info.get("account_id", "PENDING")
-            if (
-                account_id
-                and account_id != "PENDING"
-                and not account_id.startswith("PENDING")
-            ):
+            if account_id and account_id != "PENDING" and not account_id.startswith("PENDING"):
                 return DATA_SOURCE_PAPER_OANDA
     except Exception as _exc:
         logger.debug("Suppressed exception: %s", _exc)
 
     try:
-        from core.live_trading_gate import live_gate  # type: ignore[import]
+        from core.live_trading_gate import get_gate
 
+        live_gate = get_gate()
         if getattr(live_gate, "is_live", False):
             return DATA_SOURCE_LIVE
     except Exception as _exc:
@@ -406,14 +395,14 @@ def _source_label(source: str) -> str:
 
 def _render_text(r: WeeklyReport) -> str:
     return f"""HopeFX Weekly Performance Report
-Week ending: {r.week_end.strftime('%d %b %Y')}
-Generated:   {r.generated_at.strftime('%Y-%m-%d %H:%M UTC')}
+Week ending: {r.week_end.strftime("%d %b %Y")}
+Generated:   {r.generated_at.strftime("%Y-%m-%d %H:%M UTC")}
 Data source: {_source_label(r.data_source)}
 
 TRADE SUMMARY
   Total trades:    {r.total_trades}
   Wins / Losses:   {r.winning_trades} / {r.losing_trades}
-  Win rate:        {_fmt(r.win_rate * 100 if r.win_rate else None, '%')}
+  Win rate:        {_fmt(r.win_rate * 100 if r.win_rate else None, "%")}
   Avg win:         ${_fmt(r.avg_win)}
   Avg loss:        ${_fmt(r.avg_loss)}
   Profit factor:   {_fmt(r.profit_factor)}
@@ -422,17 +411,17 @@ TRADE SUMMARY
 P&L
   Gross P&L:       ${r.gross_pnl:+.2f}
   Net P&L:         ${r.net_pnl:+.2f}
-  Return:          {_fmt(r.total_return_pct, '%')}
+  Return:          {_fmt(r.total_return_pct, "%")}
   Starting equity: ${r.starting_equity:,.2f}
   Ending equity:   ${r.ending_equity:,.2f}
 
 RISK METRICS
   Sharpe ratio:    {_fmt(r.sharpe_ratio)}
   Sortino ratio:   {_fmt(r.sortino_ratio)}
-  Max drawdown:    {_fmt(r.max_drawdown_pct, '%')}
+  Max drawdown:    {_fmt(r.max_drawdown_pct, "%")}
   Calmar ratio:    {_fmt(r.calmar_ratio)}
 
-Symbols traded: {', '.join(r.symbols_traded) or '—'}
+Symbols traded: {", ".join(r.symbols_traded) or "—"}
 {r.note}
 """
 
@@ -483,13 +472,13 @@ def _render_html(r: WeeklyReport) -> str:
 <body>
 <div class="card">
   <h1>HopeFX Weekly Report</h1>
-  <div class="sub">Week ending {r.week_end.strftime('%d %b %Y')} &nbsp;·&nbsp;
-    Generated {r.generated_at.strftime('%Y-%m-%d %H:%M UTC')}</div>
+  <div class="sub">Week ending {r.week_end.strftime("%d %b %Y")} &nbsp;·&nbsp;
+    Generated {r.generated_at.strftime("%Y-%m-%d %H:%M UTC")}</div>
   <div class="source-badge">Data source: {source_label}</div>
 
   <div class="pnl">{pnl_sign}${r.net_pnl:,.2f}</div>
   <div style="color:#94a3b8;font-size:13px;margin-bottom:20px;">
-    Net P&amp;L &nbsp;·&nbsp; {_fmt(r.total_return_pct, '%')} return
+    Net P&amp;L &nbsp;·&nbsp; {_fmt(r.total_return_pct, "%")} return
   </div>
 
   <div class="section">Trade Summary</div>
@@ -497,7 +486,7 @@ def _render_html(r: WeeklyReport) -> str:
     <tr><th>Metric</th><th>Value</th></tr>
     <tr><td>Total trades</td><td>{r.total_trades}</td></tr>
     <tr><td>Wins / Losses</td><td>{r.winning_trades} / {r.losing_trades}</td></tr>
-    <tr><td>Win rate</td><td>{_fmt(r.win_rate * 100 if r.win_rate else None, '%')}</td></tr>
+    <tr><td>Win rate</td><td>{_fmt(r.win_rate * 100 if r.win_rate else None, "%")}</td></tr>
     <tr><td>Avg win</td><td>${_fmt(r.avg_win)}</td></tr>
     <tr><td>Avg loss</td><td>${_fmt(r.avg_loss)}</td></tr>
     <tr><td>Profit factor</td><td>{_fmt(r.profit_factor)}</td></tr>
@@ -509,16 +498,16 @@ def _render_html(r: WeeklyReport) -> str:
     <tr><th>Metric</th><th>Value</th></tr>
     <tr><td>Sharpe ratio (ann.)</td><td>{_fmt(r.sharpe_ratio)}</td></tr>
     <tr><td>Sortino ratio</td><td>{_fmt(r.sortino_ratio)}</td></tr>
-    <tr><td>Max drawdown</td><td>{_fmt(r.max_drawdown_pct, '%')}</td></tr>
+    <tr><td>Max drawdown</td><td>{_fmt(r.max_drawdown_pct, "%")}</td></tr>
     <tr><td>Calmar ratio</td><td>{_fmt(r.calmar_ratio)}</td></tr>
     <tr><td>Starting equity</td><td>${r.starting_equity:,.2f}</td></tr>
     <tr><td>Ending equity</td><td>${r.ending_equity:,.2f}</td></tr>
   </table>
 
   <div style="color:#94a3b8;font-size:12px;">
-    Symbols: {', '.join(r.symbols_traded) or '—'}
+    Symbols: {", ".join(r.symbols_traded) or "—"}
   </div>
-  {f'<div class="note">⚠ {r.note}</div>' if r.note else ''}
+  {f'<div class="note">⚠ {r.note}</div>' if r.note else ""}
   <div class="footer">HopeFX AI Trading · Automated weekly report</div>
 </div>
 </body>
@@ -562,9 +551,7 @@ async def _run_weekly_report_job() -> None:
     try:
         trades, equity_curve, starting_equity, data_source = await _load_trade_data()
         gen = WeeklyReportGenerator()
-        report = gen.generate(
-            trades, equity_curve, starting_equity, data_source=data_source
-        )
+        report = gen.generate(trades, equity_curve, starting_equity, data_source=data_source)
         gen.save_json(report)
         gen.save_html(report)
         gen.send_email(report)
@@ -575,8 +562,8 @@ async def _run_weekly_report_job() -> None:
             report.sharpe_ratio,
             report.data_source,
         )
-    except Exception as exc:
-        logger.error("Weekly report job failed: %s", exc, exc_info=True)
+    except Exception:
+        logger.exception("Weekly report job failed: %s")
 
 
 async def _load_trade_data() -> tuple:
@@ -615,12 +602,8 @@ async def _load_trade_data() -> tuple:
                         trade_id=str(t.get("id", uuid.uuid4())),
                         symbol=t.get("symbol", ""),
                         side=t.get("side", "BUY"),
-                        open_time=datetime.fromisoformat(t["open_time"])
-                        if "open_time" in t
-                        else datetime.now(UTC),
-                        close_time=datetime.fromisoformat(t["close_time"])
-                        if "close_time" in t
-                        else datetime.now(UTC),
+                        open_time=datetime.fromisoformat(t["open_time"]) if "open_time" in t else datetime.now(UTC),
+                        close_time=datetime.fromisoformat(t["close_time"]) if "close_time" in t else datetime.now(UTC),
                         open_price=float(t.get("open_price", 0)),
                         close_price=float(t.get("close_price", 0)),
                         lots=float(t.get("lots", 0)),
@@ -632,10 +615,7 @@ async def _load_trade_data() -> tuple:
         # Load equity curve
         if hasattr(broker, "get_equity_history"):
             history = broker.get_equity_history()
-            equity_curve = [
-                (datetime.fromtimestamp(float(ts), tz=UTC), float(val))
-                for ts, val in history
-            ]
+            equity_curve = [(datetime.fromtimestamp(float(ts), tz=UTC), float(val)) for ts, val in history]
             if equity_curve:
                 starting_equity = equity_curve[0][1]
 
@@ -655,9 +635,7 @@ if __name__ == "__main__":
     async def _main() -> None:
         trades, equity_curve, starting_equity, data_source = await _load_trade_data()
         gen = WeeklyReportGenerator()
-        report = gen.generate(
-            trades, equity_curve, starting_equity, data_source=data_source
-        )
+        report = gen.generate(trades, equity_curve, starting_equity, data_source=data_source)
         json_path = gen.save_json(report)
         html_path = gen.save_html(report)
         print(_render_text(report))

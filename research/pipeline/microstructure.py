@@ -67,8 +67,7 @@ from __future__ import annotations
 
 import logging
 from collections import deque
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 import numpy as np
 import pandas as pd
@@ -81,7 +80,7 @@ try:
     from pathlib import Path
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from data.order_book import OrderBook, OrderBookLevel  # noqa: F401
+    from data.order_book import OrderBook  # noqa: F401
 
     OB_AVAILABLE = True
 except ImportError:
@@ -242,11 +241,7 @@ def _compute_from_records(records: list[dict], n_levels: int = 10) -> pd.DataFra
 
         best_bid = bid_p[0] if len(bid_p) > 0 else np.nan
         best_ask = ask_p[0] if len(ask_p) > 0 else np.nan
-        mid = (
-            (best_bid + best_ask) / 2
-            if (not np.isnan(best_bid) and not np.isnan(best_ask))
-            else np.nan
-        )
+        mid = (best_bid + best_ask) / 2 if (not np.isnan(best_bid) and not np.isnan(best_ask)) else np.nan
         spread = (best_ask - best_bid) if not np.isnan(mid) else np.nan
         spread_pct = spread / mid if (mid and mid != 0) else np.nan
 
@@ -289,9 +284,7 @@ def _compute_from_records(records: list[dict], n_levels: int = 10) -> pd.DataFra
                 "ms_price_impact": impact,
                 "ms_last_price": last_price,
                 "ms_trade_vol": trade_vol,
-                "ms_is_buy": 1.0
-                if is_buy is True
-                else (-1.0 if is_buy is False else 0.0),
+                "ms_is_buy": 1.0 if is_buy is True else (-1.0 if is_buy is False else 0.0),
             }
         )
 
@@ -300,9 +293,9 @@ def _compute_from_records(records: list[dict], n_levels: int = 10) -> pd.DataFra
 
     # ── Derived rolling features ───────────────────────────────────────────
     # Spread z-score (20 snapshots)
-    df["ms_spread_z20"] = (df["ms_spread"] - df["ms_spread"].rolling(20).mean()) / df[
-        "ms_spread"
-    ].rolling(20).std().replace(0, np.nan)
+    df["ms_spread_z20"] = (df["ms_spread"] - df["ms_spread"].rolling(20).mean()) / df["ms_spread"].rolling(
+        20
+    ).std().replace(0, np.nan)
 
     # OBI EMA(5)
     df["ms_obi_ema5"] = df["ms_obi_5"].ewm(span=5, adjust=False).mean()
@@ -322,18 +315,14 @@ def _compute_from_records(records: list[dict], n_levels: int = 10) -> pd.DataFra
 
     # Quote stuffing proxy: spread narrows rapidly without a trade
     spread_chg = df["ms_spread"].diff().abs()
-    df["ms_quote_stuff"] = (
-        (spread_chg > spread_chg.rolling(20).mean() * 3) & (df["ms_trade_vol"] == 0)
-    ).astype(float)
+    df["ms_quote_stuff"] = ((spread_chg > spread_chg.rolling(20).mean() * 3) & (df["ms_trade_vol"] == 0)).astype(float)
 
     # VWAP deviation (session-level, reset daily)
     dates = df.index.normalize() if df.index.tz is not None else pd.to_datetime(df.index.date)
     cum_pv = (df["ms_last_price"] * df["ms_trade_vol"]).groupby(dates).cumsum()
     cum_v = df["ms_trade_vol"].groupby(dates).cumsum().replace(0, np.nan)
     session_vwap = cum_pv / cum_v
-    df["ms_vwap_dev"] = (df["ms_last_price"] - session_vwap) / session_vwap.replace(
-        0, np.nan
-    )
+    df["ms_vwap_dev"] = (df["ms_last_price"] - session_vwap) / session_vwap.replace(0, np.nan)
 
     return df.drop(columns=["ms_last_price", "ms_trade_vol", "ms_is_buy"])
 
@@ -343,9 +332,7 @@ def _compute_from_records(records: list[dict], n_levels: int = 10) -> pd.DataFra
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def compute_microstructure_features(
-    snapshot_df: pd.DataFrame, n_levels: int = 10
-) -> pd.DataFrame:
+def compute_microstructure_features(snapshot_df: pd.DataFrame, n_levels: int = 10) -> pd.DataFrame:
     """
     Compute microstructure features from a historical snapshot DataFrame.
 
@@ -429,7 +416,7 @@ def attach_microstructure(
     # Infer resample frequency from price_df if not given
     if resample is None:
         freq = pd.infer_freq(price_df.index)
-        resample = freq if freq else "5min"
+        resample = freq or "5min"
 
     ms_cols = [c for c in ms_df.columns if c.startswith("ms_")]
 

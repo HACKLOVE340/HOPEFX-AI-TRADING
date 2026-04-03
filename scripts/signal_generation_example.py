@@ -30,15 +30,13 @@ def generate_signals(data):
     data["EMA9"] = talib.EMA(data["Close"], timeperiod=9)
     data["EMA21"] = talib.EMA(data["Close"], timeperiod=21)
     data["RSI14"] = talib.RSI(data["Close"], timeperiod=14)
-    data["upper_band"], data["middle_band"], data["lower_band"] = talib.BBANDS(
-        data["Close"]
-    )
+    data["upper_band"], data["middle_band"], data["lower_band"] = talib.BBANDS(data["Close"])
 
     # Generate signals based on conditions
     data["Signal"] = 0
-    data.loc[(data["EMA9"] > data["EMA21"]) & (data["RSI14"] < 70), "Signal"] = 1  # Buy  # noqa: PLR2004
+    data.loc[(data["EMA9"] > data["EMA21"]) & (data["RSI14"] < 70), "Signal"] = 1  # Buy
     data.loc[
-        (data["EMA9"] < data["EMA21"]) & (data["RSI14"] > 30), "Signal"  # noqa: PLR2004
+        (data["EMA9"] < data["EMA21"]) & (data["RSI14"] > 30), "Signal"
     ] = -1  # Sell
     return data
 

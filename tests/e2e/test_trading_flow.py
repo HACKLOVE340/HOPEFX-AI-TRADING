@@ -23,12 +23,11 @@ from unittest.mock import patch
 
 import pytest
 
-from brokers.paper_trading import PaperTradingBroker
 from brokers.base import OrderSide, OrderType
+from brokers.paper_trading import PaperTradingBroker
 from infrastructure.metrics import get_metrics_registry
 from kill_switch import KillSwitch
-from risk.manager import RiskManager, RiskConfig
-
+from risk.manager import RiskConfig, RiskManager
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -73,15 +72,13 @@ async def test_buy_signal_to_fill(broker, risk, metrics):
     broker.update_market_price("XAUUSD", 2050.0)
 
     risk.update_equity(100_000.0)
-    allowed, reason = risk.validate_trade("XAUUSD", 0.1, "buy")
+    allowed, _ = risk.validate_trade("XAUUSD", 0.1, "buy")
     assert isinstance(allowed, bool)
 
     order = broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 0.1)
     assert order is not None
 
-    metrics.get_collector("hopefx_orders_total").inc(
-        1, {"symbol": "XAUUSD", "side": "buy"}
-    )
+    metrics.get_collector("hopefx_orders_total").inc(1, {"symbol": "XAUUSD", "side": "buy"})
     metrics.get_collector("hopefx_signals_total").inc(1, {"direction": "buy"})
 
     positions = broker.get_positions()
@@ -245,12 +242,11 @@ def test_sentry_init_no_dsn_returns_false():
 def test_journal_create_entry_requires_auth():
     """POST /api/journal/trades endpoint has get_current_user dependency."""
     import inspect
+
     from api.journal import create_entry
 
     sig = inspect.signature(create_entry)
-    assert (
-        "user" in sig.parameters
-    ), "create_entry must have a 'user' parameter with get_current_user dependency"
+    assert "user" in sig.parameters, "create_entry must have a 'user' parameter with get_current_user dependency"
 
 
 # ── Scenario 11: Prop firm status requires auth ───────────────────────────────
@@ -259,12 +255,11 @@ def test_journal_create_entry_requires_auth():
 def test_prop_firm_status_requires_auth():
     """GET /api/risk/prop-firm-status endpoint has get_current_user dependency."""
     import inspect
+
     from api.prop_firm import prop_firm_status
 
     sig = inspect.signature(prop_firm_status)
-    assert (
-        "user" in sig.parameters
-    ), "prop_firm_status must have a 'user' parameter with get_current_user dependency"
+    assert "user" in sig.parameters, "prop_firm_status must have a 'user' parameter with get_current_user dependency"
 
 
 # ── Scenario 12: explain.py rate limit enforced ───────────────────────────────
@@ -273,7 +268,9 @@ def test_prop_firm_status_requires_auth():
 def test_explain_rate_limit_enforced():
     """_enforce_rate_limit raises HTTP 429 after exceeding the limit."""
     from unittest.mock import MagicMock
+
     from fastapi import HTTPException
+
     from api.explain import _enforce_rate_limit, _ip_windows
 
     # Clear any existing state for this test IP
@@ -291,4 +288,4 @@ def test_explain_rate_limit_enforced():
         with pytest.raises(HTTPException) as exc_info:
             _enforce_rate_limit(request, "3/minute")
 
-    assert exc_info.value.status_code == 429  # noqa: PLR2004
+    assert exc_info.value.status_code == 429

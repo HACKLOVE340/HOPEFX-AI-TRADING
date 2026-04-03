@@ -9,11 +9,10 @@ Flutterwave Payment Integration
 Handles payments via Flutterwave (Nigeria) - Cards, Bank, Mobile Money.
 """
 
-import os
-from datetime import datetime, timezone
-UTC = timezone.utc
-from decimal import Decimal
 import logging
+import os
+from datetime import UTC, datetime
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -23,18 +22,15 @@ class FlutterwaveClient:
 
     FEE_PERCENT = Decimal("0.014")  # 1.4%
 
-    def __init__(self, secret_key: str = None):
+    def __init__(self, secret_key: str | None = None):
         if not secret_key:
             raise ValueError(
-                "FlutterwaveClient requires a secret key. "
-                "Set the FLUTTERWAVE_SECRET_KEY environment variable."
+                "FlutterwaveClient requires a secret key. Set the FLUTTERWAVE_SECRET_KEY environment variable."
             )
         self.secret_key = secret_key
         self.payments = {}
 
-    def initialize_payment(
-        self, user_id: str, amount: Decimal, currency: str = "USD"
-    ) -> dict:
+    def initialize_payment(self, user_id: str, amount: Decimal, currency: str = "USD") -> dict:
         """Initialize Flutterwave payment"""
         try:
             tx_ref = f"FLW-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
@@ -51,11 +47,13 @@ class FlutterwaveClient:
             }
 
             self.payments[tx_ref] = payment
-            logger.info(f"Flutterwave payment initialized: {tx_ref}")
+            logger.info("Flutterwave payment initialized: %s", tx_ref)
+
 
             return payment
         except Exception as e:
-            logger.error(f"Error initializing Flutterwave payment: {e}")
+            logger.error("Error initializing Flutterwave payment: %s", e)
+
             raise
 
     def verify_transaction(self, tx_ref: str) -> dict:
@@ -63,17 +61,14 @@ class FlutterwaveClient:
         payment = self.payments.get(tx_ref)
         if payment:
             payment["status"] = "verified"
-            logger.info(f"Flutterwave payment verified: {tx_ref}")
+            logger.info("Flutterwave payment verified: %s", tx_ref)
+
         return payment or {"status": "not_found"}
 
-    def initiate_payout(
-        self, user_id: str, amount: Decimal, bank_code: str, account_number: str
-    ) -> dict:
+    def initiate_payout(self, user_id: str, amount: Decimal, bank_code: str, account_number: str) -> dict:
         """Initiate bank payout"""
         try:
-            transfer_ref = (
-                f"PAYOUT-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
-            )
+            transfer_ref = f"PAYOUT-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
 
             return {
                 "transfer_ref": transfer_ref,
@@ -83,7 +78,8 @@ class FlutterwaveClient:
                 "status": "pending",
             }
         except Exception as e:
-            logger.error(f"Error initiating Flutterwave payout: {e}")
+            logger.error("Error initiating Flutterwave payout: %s", e)
+
             raise
 
 
@@ -91,6 +87,4 @@ class FlutterwaveClient:
 # importing this module in environments without payment credentials does not
 # raise at import time. Callers must check for None before using.
 _flw_secret = os.getenv("FLUTTERWAVE_SECRET_KEY")
-flutterwave_client: FlutterwaveClient | None = (
-    FlutterwaveClient(_flw_secret) if _flw_secret else None
-)
+flutterwave_client: FlutterwaveClient | None = FlutterwaveClient(_flw_secret) if _flw_secret else None

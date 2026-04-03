@@ -11,10 +11,9 @@ Production-grade observability with Prometheus/Grafana integration
 
 import asyncio
 from collections import defaultdict
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
 from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 import numpy as np
 
@@ -44,7 +43,7 @@ class MetricsCollector:
         self,
         name: str,
         value: float,
-        labels: dict[str, str] = None,
+        labels: dict[str, str] | None = None,
         metric_type: str = "gauge",
     ):
         """Record a metric"""
@@ -57,14 +56,14 @@ class MetricsCollector:
             )
             self.metrics.append(metric)
 
-            if len(self.metrics) > 10000:  # noqa: PLR2004
+            if len(self.metrics) > 10000:
                 self.metrics = self.metrics[-5000:]  # Keep last 5000
 
             if metric_type == "counter":
                 self.counters[name] += value
             elif metric_type == "histogram":
                 self.histograms[name].append(value)
-                if len(self.histograms[name]) > 1000:  # noqa: PLR2004
+                if len(self.histograms[name]) > 1000:
                     self.histograms[name] = self.histograms[name][-500:]
 
     def get_prometheus_format(self) -> str:
@@ -83,9 +82,7 @@ class MetricsCollector:
                 lines.append(f"{name}_count {len(values)}")
                 lines.append(f"{name}_sum {sum(values)}")
                 for p in [50, 90, 99]:
-                    lines.append(
-                        f'{name}_bucket{{le="{p}"}} {np.percentile(values, p)}'
-                    )
+                    lines.append(f'{name}_bucket{{le="{p}"}} {np.percentile(values, p)}')
 
         for metric in self.metrics[-100:]:  # Last 100 gauges
             labels = ",".join([f'{k}="{v}"' for k, v in metric.labels.items()])
@@ -113,7 +110,7 @@ class HealthChecker:
         self.status: dict[str, str] = {}
         self.last_check: dict[str, datetime] = {}
 
-    def register(self, name: str, check_func: Callable, depends_on: list[str] = None):
+    def register(self, name: str, check_func: Callable, depends_on: list[str] | None = None):
         """Register a health check"""
         self.checks[name] = check_func
         self.dependencies[name] = depends_on or []
@@ -191,9 +188,7 @@ class AlertManager:
         """Add notification channel (email, slack, sms, etc.)"""
         self.channels[name] = handler
 
-    def add_rule(
-        self, condition: Callable, message: str, severity: int, channels: list[str]
-    ):
+    def add_rule(self, condition: Callable, message: str, severity: int, channels: list[str]):
         """Add alert rule"""
         self.rules.append(
             {

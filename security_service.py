@@ -31,8 +31,7 @@ import logging
 import os
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -53,9 +52,7 @@ try:
 except ImportError:
     _CryptContext = None
     _PASSLIB_AVAILABLE = False
-    logger.warning(
-        "passlib not installed — password hashing falls back to PBKDF2-HMAC-SHA256"
-    )
+    logger.warning("passlib not installed — password hashing falls back to PBKDF2-HMAC-SHA256")
 
 _SECRET_KEY: str = os.getenv("SECRET_KEY", "")
 _ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
@@ -93,17 +90,11 @@ class SecurityService:
         self._algorithm = algorithm
         self._access_expire = timedelta(minutes=access_token_expire_minutes)
         self._refresh_expire = timedelta(days=refresh_token_expire_days)
-        self._pwd_context = (
-            _CryptContext(schemes=["bcrypt"], deprecated="auto")
-            if _PASSLIB_AVAILABLE
-            else None
-        )
+        self._pwd_context = _CryptContext(schemes=["bcrypt"], deprecated="auto") if _PASSLIB_AVAILABLE else None
 
     # ── Token creation ────────────────────────────────────────────────────────
 
-    def create_access_token(
-        self, data: dict[str, Any], expires_delta: timedelta | None = None
-    ) -> str:
+    def create_access_token(self, data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
         """Create a signed JWT access token. Payload must include 'sub'."""
         if not _JWT_AVAILABLE:
             raise ImportError("PyJWT is required: pip install pyjwt")
@@ -119,9 +110,7 @@ class SecurityService:
         )
         return _jwt.encode(payload, self._secret, algorithm=self._algorithm)
 
-    def create_refresh_token(
-        self, data: dict[str, Any], expires_delta: timedelta | None = None
-    ) -> str:
+    def create_refresh_token(self, data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
         """Create a signed JWT refresh token (longer-lived)."""
         if not _JWT_AVAILABLE:
             raise ImportError("PyJWT is required: pip install pyjwt")
@@ -156,13 +145,13 @@ class SecurityService:
             )
         except _jwt.ExpiredSignatureError:
             raise ValueError("Token has expired") from None
-        except _jwt.InvalidTokenError as exc:
-            raise ValueError(f"Invalid token: {exc}") from exc
+        except _jwt.InvalidTokenError:
+            # Log the specific JWT error server-side; surface only a generic
+            # message to callers to avoid leaking token structure details.
+            raise ValueError("Invalid token") from None
 
         if payload.get("type") != expected_type:
-            raise ValueError(
-                f"Token type mismatch: expected '{expected_type}', got '{payload.get('type')}'"
-            )
+            raise ValueError(f"Token type mismatch: expected '{expected_type}', got '{payload.get('type')}'")
         return payload
 
     def get_token_jti(self, token: str) -> str | None:
@@ -170,9 +159,7 @@ class SecurityService:
         if not _JWT_AVAILABLE:
             return None
         try:
-            return _jwt.decode(
-                token, options={"verify_signature": False}, algorithms=[self._algorithm]
-            ).get("jti")
+            return _jwt.decode(token, options={"verify_signature": False}, algorithms=[self._algorithm]).get("jti")
         except Exception:
             return None
 
@@ -186,9 +173,7 @@ class SecurityService:
         if self._pwd_context is not None:
             return self._pwd_context.hash(plain_password)
         salt = secrets.token_hex(32)
-        dk = hashlib.pbkdf2_hmac(
-            _PBKDF2_HASH, plain_password.encode(), salt.encode(), _PBKDF2_ITERATIONS
-        )
+        dk = hashlib.pbkdf2_hmac(_PBKDF2_HASH, plain_password.encode(), salt.encode(), _PBKDF2_ITERATIONS)
         return f"pbkdf2:{_PBKDF2_HASH}:{_PBKDF2_ITERATIONS}${salt}${dk.hex()}"
 
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
@@ -204,9 +189,7 @@ class SecurityService:
         try:
             _, hash_algo, rest = hashed_password.split(":", 2)
             iterations_str, salt, stored_hex = rest.split("$", 2)
-            dk = hashlib.pbkdf2_hmac(
-                hash_algo, plain_password.encode(), salt.encode(), int(iterations_str)
-            )
+            dk = hashlib.pbkdf2_hmac(hash_algo, plain_password.encode(), salt.encode(), int(iterations_str))
             return hmac.compare_digest(dk.hex(), stored_hex)
         except Exception:
             return False
@@ -244,15 +227,11 @@ def _get_default_service() -> SecurityService:
     return _default_service
 
 
-def create_access_token(
-    data: dict[str, Any], expires_delta: timedelta | None = None
-) -> str:
+def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
     return _get_default_service().create_access_token(data, expires_delta)
 
 
-def create_refresh_token(
-    data: dict[str, Any], expires_delta: timedelta | None = None
-) -> str:
+def create_refresh_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
     return _get_default_service().create_refresh_token(data, expires_delta)
 
 

@@ -10,31 +10,31 @@ Complete SQLAlchemy models for all entities
 
 import enum
 import logging
-from datetime import datetime, timezone
-UTC = timezone.utc
+import uuid
+from datetime import UTC, datetime
 
 
 def _utcnow() -> datetime:
     """Return current UTC time as timezone-aware datetime."""
     return datetime.now(UTC)
 
+
 logger = logging.getLogger(__name__)
 
 try:
     from sqlalchemy import (
-        Column,
-        Integer,
         BigInteger,
-        String,
-        Float,
         Boolean,
+        Column,
         DateTime,
-        ForeignKey,
         Enum,
-        Text,
+        Float,
+        ForeignKey,
         Index,
+        Integer,
+        String,
+        Text,
         UniqueConstraint,
-        create_engine,
     )
     from sqlalchemy.sql import func
 
@@ -42,7 +42,7 @@ try:
         from sqlalchemy.orm import declarative_base
     except ImportError:
         from sqlalchemy.ext.declarative import declarative_base  # SQLAlchemy < 2.0
-    from sqlalchemy.orm import relationship, sessionmaker
+    from sqlalchemy.orm import relationship, sessionmaker  # pylint: disable=unused-import
 
     SQLALCHEMY_AVAILABLE = True
 except ImportError:
@@ -60,9 +60,7 @@ except ImportError:
             return self
 
     Column = BigInteger = Integer = String = Float = Boolean = _Stub()
-    DateTime = ForeignKey = Enum = Text = Index = UniqueConstraint = create_engine = (
-        _Stub()
-    )
+    DateTime = ForeignKey = Enum = Text = Index = UniqueConstraint = _Stub()
     relationship = sessionmaker = _Stub()
     func = _Stub()
 
@@ -295,9 +293,7 @@ class Signal(Base):
             "strategy": self.strategy,
             "strength": self.strength,
             "executed": self.executed,
-            "generated_at": self.generated_at.isoformat()
-            if self.generated_at
-            else None,
+            "generated_at": self.generated_at.isoformat() if self.generated_at else None,
         }
 
 
@@ -360,9 +356,7 @@ class MarketData(Base):
     tick_count = Column(Integer, nullable=True)
 
     # Create composite index
-    __table_args__ = (
-        Index("idx_symbol_timeframe_timestamp", "symbol", "timeframe", "timestamp"),
-    )
+    __table_args__ = (Index("idx_symbol_timeframe_timestamp", "symbol", "timeframe", "timestamp"),)
 
 
 class SystemEvent(Base):
@@ -393,9 +387,7 @@ class PerformanceMetric(Base):
 
     id = Column(BigInteger, primary_key=True)
     timestamp = Column(DateTime, default=_utcnow, index=True)
-    metric_type = Column(
-        String(50), nullable=False, index=True
-    )  # strategy, system, risk
+    metric_type = Column(String(50), nullable=False, index=True)  # strategy, system, risk
 
     # Metric details
     name = Column(String(100), nullable=False)
@@ -469,9 +461,7 @@ class Position(Base):
 
     __tablename__ = "positions"
 
-    id = Column(
-        String(50), primary_key=True, default=lambda: str(__import__("uuid").uuid4())
-    )
+    id = Column(String(50), primary_key=True, default=lambda: str(uuid.uuid4()))
     account_id = Column(Integer, nullable=True, index=True)
     symbol = Column(String(20), nullable=False, index=True)
     side = Column(String(10), nullable=True)
@@ -608,9 +598,7 @@ class WalletTransaction(Base):
     id = Column(BigInteger, primary_key=True)
     transaction_id = Column(String(50), unique=True, nullable=False, index=True)
     user_id = Column(String(50), nullable=False, index=True)
-    transaction_type = Column(
-        String(30), nullable=False
-    )  # deposit, withdrawal, fee, commission
+    transaction_type = Column(String(30), nullable=False)  # deposit, withdrawal, fee, commission
     amount = Column(Float, nullable=False)
     balance_after = Column(Float, nullable=False)
     currency = Column(String(10), default="USD")
@@ -643,9 +631,7 @@ class KYCRecord(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(String(50), unique=True, nullable=False, index=True)
-    status = Column(
-        String(20), nullable=False, default="unverified"
-    )  # unverified, pending, approved, rejected
+    status = Column(String(20), nullable=False, default="unverified")  # unverified, pending, approved, rejected
     document_type = Column(String(50), nullable=True)
     verification_method = Column(String(50), nullable=True)
     submitted_at = Column(DateTime, nullable=True)
@@ -662,9 +648,7 @@ Index("idx_trades_entry_time", Trade.entry_time)
 Index("idx_orders_symbol_created", Order.symbol, Order.created_at)
 Index("idx_signals_generated_executed", Signal.generated_at, Signal.executed)
 Index("idx_account_snapshots_timestamp", AccountSnapshot.timestamp)
-Index(
-    "idx_wallet_user_created", WalletTransaction.user_id, WalletTransaction.created_at
-)
+Index("idx_wallet_user_created", WalletTransaction.user_id, WalletTransaction.created_at)
 Index("idx_audit_timestamp", AuditLogEntry.timestamp)
 Index("idx_kyc_user", KYCRecord.user_id)
 
@@ -708,13 +692,6 @@ class OrderStatus(enum.Enum):
     REJECTED = "rejected"
 
 
-class OrderType(enum.Enum):
-    MARKET = "market"
-    LIMIT = "limit"
-    STOP = "stop"
-    STOP_LIMIT = "stop_limit"
-
-
 class PositionStatus(enum.Enum):
     OPEN = "open"
     CLOSING = "closing"
@@ -747,7 +724,7 @@ class MarketDataType(enum.Enum):
 # `from database.models import User` keeps working, and so SQLAlchemy resolves
 # the "User" string reference in Account.user without a second class definition.
 try:
-    from database.user_models import User
+    from database.user_models import User  # pylint: disable=unused-import
 except Exception:
     # Fallback stub so imports never fail when user_models has a dep issue
     class User:  # type: ignore[no-redef]
@@ -782,9 +759,7 @@ if SQLALCHEMY_AVAILABLE:
         __tablename__ = "email_suppressions"
         id = Column(Integer, primary_key=True)
         email = Column(String(320), unique=True, nullable=False, index=True)
-        reason = Column(
-            String(64), nullable=False
-        )  # bounce | spam_report | unsubscribe
+        reason = Column(String(64), nullable=False)  # bounce | spam_report | unsubscribe
         created_at = Column(DateTime, default=_utcnow)
 else:
 
@@ -806,14 +781,10 @@ if SQLALCHEMY_AVAILABLE:
         id = Column(BigInteger, primary_key=True, autoincrement=True)
         user_id = Column(String(128), nullable=False, index=True)
         symbol = Column(String(20), nullable=False)
-        added_at = Column(
-            DateTime(timezone=True), server_default=func.now(), nullable=False
-        )
+        added_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
         sort_order = Column(Integer, nullable=False, server_default="0")
 
-        __table_args__ = (
-            UniqueConstraint("user_id", "symbol", name="uq_watchlist_user_symbol"),
-        )
+        __table_args__ = (UniqueConstraint("user_id", "symbol", name="uq_watchlist_user_symbol"),)
 
         def __repr__(self) -> str:
             return f"<WatchlistEntry user={self.user_id!r} symbol={self.symbol!r}>"
@@ -854,14 +825,10 @@ if SQLALCHEMY_AVAILABLE:
         # Webhook / on-chain data
         tx_hash = Column(String(200), nullable=True)
         webhook_payload = Column(Text, nullable=True)  # raw JSON from processor
-        created_at = Column(
-            DateTime(timezone=True), default=_utcnow, index=True
-        )
+        created_at = Column(DateTime(timezone=True), default=_utcnow, index=True)
         expires_at = Column(DateTime(timezone=True), nullable=False)
         confirmed_at = Column(DateTime(timezone=True), nullable=True)
-        updated_at = Column(
-            DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
-        )
+        updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
 
         def to_dict(self) -> dict:
             return {
@@ -880,9 +847,7 @@ if SQLALCHEMY_AVAILABLE:
                 "tx_hash": self.tx_hash,
                 "created_at": self.created_at.isoformat() if self.created_at else None,
                 "expires_at": self.expires_at.isoformat() if self.expires_at else None,
-                "confirmed_at": self.confirmed_at.isoformat()
-                if self.confirmed_at
-                else None,
+                "confirmed_at": self.confirmed_at.isoformat() if self.confirmed_at else None,
             }
 
 else:
@@ -909,16 +874,12 @@ if SQLALCHEMY_AVAILABLE:
         event_type = Column(String(100), nullable=False, index=True)
         channel = Column(String(100), nullable=False)  # Redis pub/sub channel
         payload = Column(Text, nullable=False)  # JSON
-        created_at = Column(
-            DateTime(timezone=True), default=_utcnow, index=True
-        )
+        created_at = Column(DateTime(timezone=True), default=_utcnow, index=True)
         published_at = Column(DateTime(timezone=True), nullable=True)
         attempts = Column(Integer, default=0)
         last_error = Column(Text, nullable=True)
 
-        __table_args__ = (
-            Index("idx_outbox_unpublished", "published_at", "created_at"),
-        )
+        __table_args__ = (Index("idx_outbox_unpublished", "published_at", "created_at"),)
 
 else:
 
@@ -942,9 +903,7 @@ if SQLALCHEMY_AVAILABLE:
         key = Column(String(200), unique=True, nullable=False, index=True)
         value_json = Column(Text, nullable=False)
         changed_by = Column(String(128), nullable=True)
-        updated_at = Column(
-            DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
-        )
+        updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
 
 else:
 

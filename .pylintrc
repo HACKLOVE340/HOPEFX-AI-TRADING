@@ -1,0 +1,64 @@
+[MAIN]
+# Add the project root to sys.path so deferred imports resolve correctly.
+init-hook='import sys; sys.path.insert(0, ".")'
+
+# Use multiple processes for speed.
+jobs=0
+
+[MESSAGES CONTROL]
+# Disable categories/checks that are either false positives in this codebase
+# or intentionally suppressed project-wide.
+disable=
+    # Import errors for internal modules resolved at runtime (not at lint time).
+    import-error,
+    # Dynamic attribute access on SQLAlchemy / ORM objects.
+    no-member,
+    # Codacy/Pylint style checks not enforced here.
+    missing-module-docstring,
+    missing-class-docstring,
+    missing-function-docstring,
+    too-few-public-methods,
+    too-many-arguments,
+    too-many-instance-attributes,
+    too-many-locals,
+    too-many-branches,
+    too-many-statements,
+    too-many-return-statements,
+    too-many-public-methods,
+    fixme,
+    line-too-long,
+    invalid-name,
+    duplicate-code,
+    # W0718: broad-exception-caught — catching Exception is acceptable in top-level
+    # handlers and async tasks where we log and re-raise or degrade gracefully.
+    broad-exception-caught,
+    # W1203: logging-fstring-interpolation — f-strings in logging are intentional
+    # for readability; lazy % formatting is not enforced project-wide.
+    logging-fstring-interpolation,
+    # W0212: protected-access — internal helpers and tests legitimately access
+    # private attributes of sibling classes.
+    protected-access,
+    # W0621: redefined-outer-name — pytest fixtures shadow outer names by design.
+    redefined-outer-name,
+    # W0613: unused-argument — many callback/interface methods accept arguments
+    # they do not use (e.g. event handlers, abstract overrides).
+    unused-argument,
+    # W0603: global-statement — module-level singletons use global intentionally.
+    global-statement,
+    # W0201: attribute-defined-outside-init — SQLAlchemy mapped classes and
+    # dataclass-like patterns define attributes outside __init__.
+    attribute-defined-outside-init,
+    # W0602: global-variable-not-assigned — read-only global references are valid.
+    global-variable-not-assigned,
+    # W0108: unnecessary-lambda — some lambdas are kept for explicit readability.
+    unnecessary-lambda,
+    # W0105: pointless-string-statement — module-level string literals used as
+    # section separators or informal documentation.
+    pointless-string-statement
+
+[FORMAT]
+max-line-length=120
+
+[DESIGN]
+max-args=10
+max-attributes=15

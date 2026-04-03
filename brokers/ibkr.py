@@ -46,11 +46,10 @@ import logging
 import os
 import time
 import uuid
-from dataclasses import dataclass
-from datetime import datetime, timezone
-UTC = timezone.utc
-from typing import Any
 from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -58,25 +57,19 @@ logger = logging.getLogger(__name__)
 try:
     from ib_insync import (  # type: ignore[import]
         IB,
-        CFD,  # noqa: F401
         Commodity,
-        Contract,  # noqa: F401
         Future,
         LimitOrder,
         MarketOrder,
-        StopOrder,
         StopLimitOrder,
-        Trade,  # noqa: F401
-        util,  # noqa: F401
+        StopOrder,
     )
 
     _IB_AVAILABLE = True
 except ImportError:
     _IB_AVAILABLE = False
     IB = None
-    logger.warning(
-        "ib_insync not installed — IBKRBroker unavailable. pip install ib_insync==0.9.86"
-    )
+    logger.warning("ib_insync not installed — IBKRBroker unavailable. pip install ib_insync==0.9.86")
 
 # ── env config ────────────────────────────────────────────────────────────────
 _HOST = os.getenv("IBKR_HOST", "127.0.0.1")
@@ -230,9 +223,7 @@ class IBKRBroker:
             vals = {v.tag: v.value for v in self._ib.accountValues()}
             currency = vals.get("Currency", "USD")
             return AccountInfo(
-                account_id=self._ib.managedAccounts()[0]
-                if self._ib.managedAccounts()
-                else "",
+                account_id=self._ib.managedAccounts()[0] if self._ib.managedAccounts() else "",
                 currency=currency,
                 balance=float(vals.get("CashBalance", 0)),
                 nav=float(vals.get("NetLiquidation", 0)),
@@ -288,9 +279,9 @@ class IBKRBroker:
 
             return fill_result
 
-        except Exception as exc:
-            logger.error("IBKRBroker place_order: %s", exc)
-            return {"status": "rejected", "reason": str(exc), "broker": "ibkr"}
+        except Exception:
+            logger.exception("IBKRBroker place_order: %s")
+            return {"status": "rejected", "reason": "Order failed — check server logs", "broker": "ibkr"}
 
     def _build_gold_contract(self, symbol: str, use_futures: bool = False) -> Any:
         """Build IBKR XAUUSD contract. Never fetches price data."""
@@ -300,26 +291,23 @@ class IBKRBroker:
         c = Future(symbol="GC", exchange="NYMEX", currency="USD") if use_futures else Commodity(clean, "SMART", "USD")
         return c
 
-    def _build_ib_order(
-        self, action: str, quantity: float, order_type: str, req: dict
-    ) -> Any:
+    def _build_ib_order(self, action: str, quantity: float, order_type: str, req: dict) -> Any:
         if not _IB_AVAILABLE:
             raise RuntimeError("ib_insync not available")
         qty = float(quantity)
         if order_type == "MARKET":
             return MarketOrder(action, qty)
-        elif order_type == "LIMIT":
+        if order_type == "LIMIT":
             price = float(req.get("mid_price", 0))
             return LimitOrder(action, qty, price)
-        elif order_type == "STOP":
+        if order_type == "STOP":
             stop_price = float(req.get("stop_price", req.get("mid_price", 0)))
             return StopOrder(action, qty, stop_price)
-        elif order_type == "STOP_LIMIT":
+        if order_type == "STOP_LIMIT":
             lmt = float(req.get("mid_price", 0))
             stop = float(req.get("stop_price", lmt))
             return StopLimitOrder(action, qty, lmt, stop)
-        else:
-            return MarketOrder(action, qty)
+        return MarketOrder(action, qty)
 
     async def _wait_for_fill(self, trade: Any, client_ref: str) -> dict:
         """Poll trade status until filled, cancelled, or timeout."""
@@ -428,9 +416,7 @@ class IBKRBroker:
             except Exception as exc:
                 logger.error("IBKRBroker fill callback error: %s", exc)
 
-    def _on_error(
-        self, req_id: int, error_code: int, error_string: str, contract: Any
-    ) -> None:
+    def _on_error(self, req_id: int, error_code: int, error_string: str, contract: Any) -> None:
         if error_code in (2104, 2106, 2158):
             return  # informational only
         logger.error(

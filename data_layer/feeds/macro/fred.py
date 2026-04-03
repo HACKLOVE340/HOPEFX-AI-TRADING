@@ -26,8 +26,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 
 import aiohttp
 import pandas as pd
@@ -87,18 +86,14 @@ class FREDFeed:
         Returns empty Series on error.
         """
         if not observation_start:
-            start = (datetime.now(UTC) - timedelta(days=365 * 5)).strftime(
-                "%Y-%m-%d"
-            )
+            start = (datetime.now(UTC) - timedelta(days=365 * 5)).strftime("%Y-%m-%d")
         else:
             start = observation_start
 
         # FRED requires an API key for all requests since 2024.
         # Without a key every request returns HTTP 400.
         if not _FRED_KEY:
-            logger.debug(
-                "FRED fetch_series %s skipped — FRED_API_KEY not set", series_id
-            )
+            logger.debug("FRED fetch_series %s skipped — FRED_API_KEY not set", series_id)
             return pd.Series(dtype=float)
 
         params = {
@@ -142,9 +137,7 @@ class FREDFeed:
             logger.warning("FRED fetch_series %s error: %s", series_id, exc)
             return pd.Series(dtype=float)
 
-    async def fetch_all(
-        self, observation_start: str | None = None
-    ) -> dict[str, pd.Series]:
+    async def fetch_all(self, observation_start: str | None = None) -> dict[str, pd.Series]:
         """
         Fetch all configured FRED series concurrently.
 
@@ -172,14 +165,9 @@ class FREDFeed:
         Used for real-time macro snapshot injection.
         """
         all_series = await self.fetch_all(
-            observation_start=(
-                datetime.now(UTC) - timedelta(days=30)
-            ).strftime("%Y-%m-%d")
+            observation_start=(datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%d")
         )
-        return {
-            name: float(series.iloc[-1]) if not series.empty else None
-            for name, series in all_series.items()
-        }
+        return {name: float(series.iloc[-1]) if not series.empty else None for name, series in all_series.items()}
 
 
 # Module-level singleton

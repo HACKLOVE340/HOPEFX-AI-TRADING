@@ -11,119 +11,118 @@ Supports crypto (Bitcoin, USDT, Ethereum) and Nigerian fintech (Paystack, Flutte
 """
 
 # Wallet Management
-from .wallet import WalletManager, WalletType, WalletStatus, Wallet, wallet_manager
-
-# Transaction Management
-from .transaction_manager import (
-    TransactionManager,
-    Transaction,
-    TransactionType,
-    TransactionStatus,
-    transaction_manager,
-)
-
-# Payment Gateway
-from .payment_gateway import (
-    PaymentGateway,
-    PaymentMethod,
-    PaymentStatus,
-    PaymentInfo,
-    payment_gateway,
-)
-
-# Security
-from .security import (
-    SecurityManager,
-    KYCLevel,
-    KYCInfo,
-    TransactionLimit,
-    security_manager,
-)
-
 # Compliance
 from .compliance import (
-    ComplianceManager,
-    RiskLevel,
     AMLCheck,
+    ComplianceManager,
     ComplianceReport,
+    RiskLevel,
     compliance_manager,
 )
 
 # Crypto Payment Methods
 from .crypto import (
+    AddressGenerator,
     BitcoinClient,
-    bitcoin_client,
+    CryptoWalletManager,
+    EthereumClient,
     USDTClient,
     USDTNetwork,
-    usdt_client,
-    EthereumClient,
-    ethereum_client,
-    CryptoWalletManager,
-    crypto_wallet_manager,
-    AddressGenerator,
     address_generator,
+    bitcoin_client,
+    crypto_wallet_manager,
+    ethereum_client,
+    usdt_client,
 )
 
 # Fintech Payment Methods
 from .fintech import (
-    PaystackClient,
-    paystack_client,
-    FlutterwaveClient,
-    flutterwave_client,
     BankTransferClient,
+    FlutterwaveClient,
+    PaystackClient,
     bank_transfer_client,
+    flutterwave_client,
+    paystack_client,
 )
 
+# Payment Gateway
+from .payment_gateway import (
+    PaymentGateway,
+    PaymentInfo,
+    PaymentMethod,
+    PaymentStatus,
+    payment_gateway,
+)
+
+# Security
+from .security import (
+    KYCInfo,
+    KYCLevel,
+    SecurityManager,
+    TransactionLimit,
+    security_manager,
+)
+
+# Transaction Management
+from .transaction_manager import (
+    Transaction,
+    TransactionManager,
+    TransactionStatus,
+    TransactionType,
+    transaction_manager,
+)
+from .wallet import Wallet, WalletManager, WalletStatus, WalletType, wallet_manager
+
 __all__ = [
-    # Wallet
-    "WalletManager",
-    "WalletType",
-    "WalletStatus",
-    "Wallet",
-    "wallet_manager",
-    # Transactions
-    "TransactionManager",
-    "Transaction",
-    "TransactionType",
-    "TransactionStatus",
-    "transaction_manager",
-    # Payment Gateway
-    "PaymentGateway",
-    "PaymentMethod",
-    "PaymentStatus",
-    "PaymentInfo",
-    "payment_gateway",
-    # Security
-    "SecurityManager",
-    "KYCLevel",
-    "KYCInfo",
-    "TransactionLimit",
-    "security_manager",
-    # Compliance
-    "ComplianceManager",
-    "RiskLevel",
     "AMLCheck",
-    "ComplianceReport",
-    "compliance_manager",
+    "AddressGenerator",
+    "BankTransferClient",
     # Crypto
     "BitcoinClient",
-    "bitcoin_client",
-    "USDTClient",
-    "USDTNetwork",
-    "usdt_client",
-    "EthereumClient",
-    "ethereum_client",
+    # Compliance
+    "ComplianceManager",
+    "ComplianceReport",
     "CryptoWalletManager",
-    "crypto_wallet_manager",
-    "AddressGenerator",
-    "address_generator",
+    "EthereumClient",
+    "FlutterwaveClient",
+    "KYCInfo",
+    "KYCLevel",
+    # Payment Gateway
+    "PaymentGateway",
+    "PaymentInfo",
+    "PaymentMethod",
+    "PaymentStatus",
     # Fintech
     "PaystackClient",
-    "paystack_client",
-    "FlutterwaveClient",
-    "flutterwave_client",
-    "BankTransferClient",
+    "RiskLevel",
+    # Security
+    "SecurityManager",
+    "Transaction",
+    "TransactionLimit",
+    # Transactions
+    "TransactionManager",
+    "TransactionStatus",
+    "TransactionType",
+    "USDTClient",
+    "USDTNetwork",
+    "Wallet",
+    # Wallet
+    "WalletManager",
+    "WalletStatus",
+    "WalletType",
+    "address_generator",
     "bank_transfer_client",
+    "bitcoin_client",
+    "compliance_manager",
+    "crypto_wallet_manager",
+    "ethereum_client",
+    "flutterwave_client",
+    "payment_gateway",
+    "paystack_client",
+    "security_manager",
+    "transaction_manager",
+    "usdt_client",
+    "wallet_manager",
 ]
 
 # Module metadata

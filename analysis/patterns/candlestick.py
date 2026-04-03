@@ -11,8 +11,7 @@ continuation patterns in OHLCV price data.
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 try:
     import pandas as pd  # type: ignore[import]
@@ -109,9 +108,7 @@ def _body_ratio(open_: float, close: float, high: float, low: float) -> float:
 # ---------------------------------------------------------------------------
 
 
-def _is_doji(
-    open_: float, close: float, high: float, low: float, threshold: float = 0.05
-) -> bool:
+def _is_doji(open_: float, close: float, high: float, low: float, threshold: float = 0.05) -> bool:
     """Body is less than *threshold* of the total range."""
     return _body_ratio(open_, close, high, low) < threshold
 
@@ -282,7 +279,7 @@ def _detect_doji_pattern(
     lower_ratio = lower / total
 
     # Dragonfly Doji: almost all range in lower shadow
-    if lower_ratio > 0.8 and upper_ratio < 0.1:  # noqa: PLR2004
+    if lower_ratio > 0.8 and upper_ratio < 0.1:
         return CandlestickPattern(
             pattern_name="Dragonfly Doji",
             pattern_type="reversal",
@@ -294,7 +291,7 @@ def _detect_doji_pattern(
         )
 
     # Gravestone Doji: almost all range in upper shadow
-    if upper_ratio > 0.8 and lower_ratio < 0.1:  # noqa: PLR2004
+    if upper_ratio > 0.8 and lower_ratio < 0.1:
         return CandlestickPattern(
             pattern_name="Gravestone Doji",
             pattern_type="reversal",
@@ -341,9 +338,7 @@ def _detect_engulfing(
     curr_open_below = opens[i] < closes[i - 1]
     curr_close_above = closes[i] > opens[i - 1]
 
-    is_bullish_engulfing = (
-        prev_bearish and curr_bullish and curr_open_below and curr_close_above
-    )
+    is_bullish_engulfing = prev_bearish and curr_bullish and curr_open_below and curr_close_above
     if is_bullish_engulfing:
         return CandlestickPattern(
             pattern_name="Bullish Engulfing",
@@ -360,9 +355,7 @@ def _detect_engulfing(
     curr_open_above = opens[i] > closes[i - 1]
     curr_close_below = closes[i] < opens[i - 1]
 
-    is_bearish_engulfing = (
-        prev_bullish and curr_bearish and curr_open_above and curr_close_below
-    )
+    is_bearish_engulfing = prev_bullish and curr_bearish and curr_open_above and curr_close_below
     if is_bearish_engulfing:
         return CandlestickPattern(
             pattern_name="Bearish Engulfing",
@@ -394,10 +387,7 @@ def _detect_harami(
 
     prev_high_body = max(opens[i - 1], closes[i - 1])
     prev_low_body = min(opens[i - 1], closes[i - 1])
-    curr_inside = (
-        prev_low_body <= opens[i] <= prev_high_body
-        and prev_low_body <= closes[i] <= prev_high_body
-    )
+    curr_inside = prev_low_body <= opens[i] <= prev_high_body and prev_low_body <= closes[i] <= prev_high_body
 
     if not curr_inside:
         return None
@@ -501,7 +491,7 @@ def _detect_three_soldiers_crows(
     i: int,
 ) -> CandlestickPattern | None:
     """Three White Soldiers / Three Black Crows ending at index *i*."""
-    if i < 2:  # noqa: PLR2004
+    if i < 2:
         return None
 
     all_bullish, all_bearish, rising, falling = _three_candle_trend(opens, closes, i)
@@ -537,7 +527,7 @@ def _detect_morning_evening_star(
     i: int,
 ) -> CandlestickPattern | None:
     """Morning Star / Evening Star ending at index *i*."""
-    if i < 2:  # noqa: PLR2004
+    if i < 2:
         return None
 
     first_body = _candle_body(opens[i - 2], closes[i - 2])
@@ -618,9 +608,7 @@ class CandlestickPatternDetector:
         self.wick_ratio: float = float(cfg.get("wick_ratio", 2.0))
         self.marubozu_threshold: float = float(cfg.get("marubozu_threshold", 0.05))
         self.max_patterns_per_type: int | None = (
-            int(cfg["max_patterns_per_type"])
-            if cfg.get("max_patterns_per_type") is not None
-            else None
+            int(cfg["max_patterns_per_type"]) if cfg.get("max_patterns_per_type") is not None else None
         )
 
     # ------------------------------------------------------------------
@@ -630,9 +618,7 @@ class CandlestickPatternDetector:
     def _get_ohlc(self, df: "pd.DataFrame"):
         """Extract OHLC lists from DataFrame; return None tuple on failure."""
         if not HAS_PANDAS:
-            logger.warning(
-                "pandas is not available; DataFrame input cannot be processed."
-            )
+            logger.warning("pandas is not available; DataFrame input cannot be processed.")
             return None, None, None, None
         if not isinstance(df, pd.DataFrame) or df.empty:
             return None, None, None, None
@@ -667,14 +653,11 @@ class CandlestickPatternDetector:
             List of CandlestickPattern objects.
         """
         if not HAS_PANDAS:
-            logger.warning(
-                "pandas is not available; detect_patterns cannot process "
-                "DataFrame input."
-            )
+            logger.warning("pandas is not available; detect_patterns cannot process DataFrame input.")
             return []
         if not isinstance(df, pd.DataFrame) or df.empty:
             return []
-        opens, highs, lows, closes = self._get_ohlc(df)
+        opens, _, _, _ = self._get_ohlc(df)
         if opens is None:
             return []
 
@@ -685,9 +668,7 @@ class CandlestickPatternDetector:
 
         return [p for p in patterns if p.confidence >= min_confidence]
 
-    def detect_single_candle_patterns(
-        self, df: "pd.DataFrame"
-    ) -> list[CandlestickPattern]:
+    def detect_single_candle_patterns(self, df: "pd.DataFrame") -> list[CandlestickPattern]:
         """
         Detect single-candle patterns (Doji, Hammer, Shooting Star, Marubozu).
 
@@ -742,9 +723,7 @@ class CandlestickPatternDetector:
 
         return patterns
 
-    def detect_two_candle_patterns(
-        self, df: "pd.DataFrame"
-    ) -> list[CandlestickPattern]:
+    def detect_two_candle_patterns(self, df: "pd.DataFrame") -> list[CandlestickPattern]:
         """
         Detect two-candle patterns (Engulfing, Harami, Piercing/Dark Cloud).
 
@@ -754,7 +733,7 @@ class CandlestickPatternDetector:
         Returns:
             List of detected CandlestickPattern objects.
         """
-        opens, highs, lows, closes = self._get_ohlc(df)
+        opens, _, _, closes = self._get_ohlc(df)
         if opens is None:
             return []
 
@@ -774,9 +753,7 @@ class CandlestickPatternDetector:
 
         return patterns
 
-    def detect_three_candle_patterns(
-        self, df: "pd.DataFrame"
-    ) -> list[CandlestickPattern]:
+    def detect_three_candle_patterns(self, df: "pd.DataFrame") -> list[CandlestickPattern]:
         """
         Detect three-candle patterns (Three Soldiers/Crows, Morning/Evening Star).
 
@@ -786,7 +763,7 @@ class CandlestickPatternDetector:
         Returns:
             List of detected CandlestickPattern objects.
         """
-        opens, highs, lows, closes = self._get_ohlc(df)
+        opens, _, _, closes = self._get_ohlc(df)
         if opens is None:
             return []
 

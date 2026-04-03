@@ -8,11 +8,12 @@ Root conftest.py — ensures both the project root and src/ are on sys.path
 so that namespace packages (hopefx, src/hopefx) merge correctly.
 """
 
-import sys
 import os
+import sys
+from pathlib import Path
 
-_repo_root = os.path.dirname(__file__)
-_src_dir = os.path.join(_repo_root, "src")
+_repo_root = Path(__file__).parent
+_src_dir = Path(_repo_root) / "src"
 
 # Add src/ so that src/hopefx/* merges into the hopefx namespace package
 for _p in (_repo_root, _src_dir):

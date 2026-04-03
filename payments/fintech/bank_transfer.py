@@ -9,10 +9,9 @@ Bank Transfer Integration
 Direct bank transfer handling for Nigerian banks.
 """
 
-from datetime import datetime, timezone
-UTC = timezone.utc
-from decimal import Decimal
 import logging
+from datetime import UTC, datetime
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +37,7 @@ class BankTransferClient:
             bank_name = self.nigerian_banks.get(bank_code, "Unknown Bank")
 
             # Simplified validation
-            if len(account_number) != 10:  # noqa: PLR2004
+            if len(account_number) != 10:
                 return {"valid": False, "message": "Invalid account number length"}
 
             return {
@@ -49,12 +48,11 @@ class BankTransferClient:
                 "bank_name": bank_name,
             }
         except Exception as e:
-            logger.error(f"Error validating account: {e}")
+            logger.error("Error validating account: %s", e)
+
             raise
 
-    def initiate_transfer(
-        self, user_id: str, amount: Decimal, bank_code: str, account_number: str
-    ) -> dict:
+    def initiate_transfer(self, user_id: str, amount: Decimal, bank_code: str, account_number: str) -> dict:
         """Initiate bank transfer"""
         try:
             transfer_id = f"BT-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
@@ -82,11 +80,13 @@ class BankTransferClient:
             }
 
             self.transfers[transfer_id] = transfer
-            logger.info(f"Bank transfer initiated: {transfer_id}")
+            logger.info("Bank transfer initiated: %s", transfer_id)
+
 
             return transfer
         except Exception as e:
-            logger.error(f"Error initiating bank transfer: {e}")
+            logger.error("Error initiating bank transfer: %s", e)
+
             raise
 
     def get_transfer_status(self, transfer_id: str) -> dict:

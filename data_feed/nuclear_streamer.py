@@ -41,7 +41,8 @@ Usage
     asyncio.run(streamer.run())
 
     # Or as a background task inside an existing event loop:
-    asyncio.create_task(streamer.run())
+    _t = asyncio.create_task(streamer.run())
+    _t.add_done_callback(lambda _: None)
 
 Environment variables
 ---------------------
@@ -56,6 +57,7 @@ Environment variables
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -65,7 +67,6 @@ from typing import Any
 
 import websockets
 from prometheus_client import Gauge, start_http_server
-import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -79,8 +80,7 @@ except ImportError:
     _TDClient = None  # type: ignore
     _TWELVE_AVAILABLE = False
     logger.warning(
-        "twelvedata package not installed — Twelve Data stream will be skipped. "
-        "Install with: pip install twelvedata"
+        "twelvedata package not installed — Twelve Data stream will be skipped. Install with: pip install twelvedata"
     )
 
 try:
@@ -90,10 +90,7 @@ try:
 except ImportError:
     _aioredis = None  # type: ignore
     _REDIS_AVAILABLE = False
-    logger.warning(
-        "redis package not installed — Redis publishing will be skipped. "
-        "Install with: pip install redis"
-    )
+    logger.warning("redis package not installed — Redis publishing will be skipped. Install with: pip install redis")
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -225,9 +222,7 @@ class NuclearStreamer:
                 )
             except OSError:
                 # Port already bound (e.g. multiple instances in tests).
-                logger.debug(
-                    "Prometheus port %d already in use — skipping", self.prometheus_port
-                )
+                logger.debug("Prometheus port %d already in use — skipping", self.prometheus_port)
 
         if _REDIS_AVAILABLE:
             self._redis = _aioredis.Redis(
@@ -245,29 +240,17 @@ class NuclearStreamer:
 
         tasks = []
         if self._finnhub_key:
-            tasks.append(
-                asyncio.create_task(
-                    self._run_with_backoff("finnhub", self._finnhub_stream)
-                )
-            )
+            tasks.append(asyncio.create_task(self._run_with_backoff("finnhub", self._finnhub_stream)))
         else:
             logger.warning("FINNHUB_API_KEY not set — Finnhub stream disabled")
 
         if self._twelve_key and _TWELVE_AVAILABLE:
-            tasks.append(
-                asyncio.create_task(
-                    self._run_with_backoff("twelvedata", self._twelve_stream)
-                )
-            )
+            tasks.append(asyncio.create_task(self._run_with_backoff("twelvedata", self._twelve_stream)))
         elif not self._twelve_key:
             logger.warning("TWELVE_API_KEY not set — Twelve Data stream disabled")
 
         if self._polygon_key:
-            tasks.append(
-                asyncio.create_task(
-                    self._run_with_backoff("polygon", self._polygon_stream)
-                )
-            )
+            tasks.append(asyncio.create_task(self._run_with_backoff("polygon", self._polygon_stream)))
         else:
             logger.warning("POLYGON_API_KEY not set — Polygon stream disabled")
 
@@ -381,12 +364,8 @@ class NuclearStreamer:
             if self._last_price is not None:
                 pct_change = abs((price - self._last_price) / self._last_price) * 100.0
                 if pct_change > self.anomaly_jump_pct:
-                    self._anomaly_counts[source] = (
-                        self._anomaly_counts.get(source, 0) + 1
-                    )
-                    _ANOMALY_COUNTER_GAUGE.labels(source=source).set(
-                        self._anomaly_counts[source]
-                    )
+                    self._anomaly_counts[source] = self._anomaly_counts.get(source, 0) + 1
+                    _ANOMALY_COUNTER_GAUGE.labels(source=source).set(self._anomaly_counts[source])
                     logger.warning(
                         "ANOMALY ALERT [%s]: %.2f%% jump (%.4f → %.4f) — tick discarded",
                         source,
@@ -458,7 +437,7 @@ class NuclearStreamer:
         # Finnhub symbol for spot gold via OANDA feed.
         finnhub_symbol = "OANDA:XAU_USD"
 
-        logger.info("Finnhub: connecting to %s", url.split("?")[0])
+        logger.info("Finnhub: connecting to %s", url.split("?", maxsplit=1)[0])
         async with websockets.connect(
             url,
             ping_interval=20,
@@ -546,8 +525,8 @@ class NuclearStreamer:
                     if price is None or ts_raw is None:
                         continue
                     # Normalise timestamp to Unix seconds.
-                    if isinstance(ts_raw, (int, float)):
-                        ts = float(ts_raw) / 1000.0 if ts_raw > 1e10 else float(ts_raw)  # noqa: PLR2004
+                    if isinstance(ts_raw, int | float):
+                        ts = float(ts_raw) / 1000.0 if ts_raw > 1e10 else float(ts_raw)
                     else:
                         try:
                             ts = datetime.fromisoformat(str(ts_raw)).timestamp()
@@ -567,9 +546,7 @@ class NuclearStreamer:
 
                 elif event == "error":
                     logger.error("Twelve Data error: %s", data)
-                    raise RuntimeError(
-                        f"Twelve Data server error: {data.get('message')}"
-                    )
+                    raise RuntimeError(f"Twelve Data server error: {data.get('message')}")
 
     # ── Polygon stream ─────────────────────────────────────────────────────────
 
@@ -656,10 +633,7 @@ class NuclearStreamer:
                         "open_at": self._circuit_open_at.get(src),
                         "cooldown_remaining": max(
                             0,
-                            self.circuit_breaker_cooldown
-                            - (
-                                time.monotonic() - (self._circuit_open_at.get(src) or 0)
-                            ),
+                            self.circuit_breaker_cooldown - (time.monotonic() - (self._circuit_open_at.get(src) or 0)),
                         ),
                     }
                     if self._circuit_open_at.get(src)

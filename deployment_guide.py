@@ -30,6 +30,7 @@ import socket
 import subprocess  # nosec B404 - list-form calls with fixed tool names; no shell=True, no user input
 import sys
 import urllib.parse
+from pathlib import Path
 
 # ── result collectors ─────────────────────────────────────────────────────────
 _errors: list[str] = []
@@ -62,8 +63,7 @@ def check_python_version() -> None:
         _err(f"Python {major}.{minor} detected — 3.10+ required")
     elif (major, minor) > (3, 11):
         _warn(
-            f"Python {major}.{minor} detected — Dockerfile uses 3.10. "
-            "Serialised ML models (.pkl) may be incompatible."
+            f"Python {major}.{minor} detected — Dockerfile uses 3.10. Serialised ML models (.pkl) may be incompatible."
         )
     else:
         _good(f"Python {major}.{minor}")
@@ -110,7 +110,7 @@ def check_kill_switch() -> None:
     print("\n── Kill switch ───────────────────────────────────────────────")
     flag = pathlib.Path("kill_switch.flag")
     if flag.exists():
-        content = flag.read_text().strip()
+        content = flag.read_text(encoding="utf-8").strip()
         _err(
             f"kill_switch.flag exists — trading is halted.\n"
             f"         Content: {content}\n"
@@ -136,11 +136,11 @@ def check_ml_model() -> None:
         try:
             import joblib
 
-            model = joblib.load(model_path)
+            model = joblib.load(model_path)  # nosec B301 - model_path is hardcoded to ml/saved_models
         except Exception:
             import pickle  # nosec B403
 
-            with open(model_path, "rb") as fh:
+            with Path(model_path).open("rb") as fh:
                 model = pickle.load(fh)  # nosec B301 - joblib failed; legacy pickle fallback for deployment check only
         _good(f"advanced_oos.pkl loads cleanly ({type(model).__name__})")
     except Exception as exc:
@@ -153,7 +153,7 @@ def check_ml_model() -> None:
     if meta_path.exists():
         import json
 
-        meta = json.loads(meta_path.read_text())
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
         oos_acc = meta.get("oos_accuracy", 0)
         sharpe = meta.get("sharpe_gate", {}).get("sharpe", 0)
         _good(f"Model meta: OOS accuracy={oos_acc:.1%}  Sharpe={sharpe:.2f}")
@@ -261,7 +261,7 @@ def check_redis_connectivity() -> None:
         client.close()
         return
     except ImportError:
-        pass  # fall through to raw TCP
+        ...  # nosec B110
     except Exception as exc:
         _err(
             f"Redis unreachable at {redis_url.split('@')[-1]} — {exc}\n"
@@ -275,9 +275,7 @@ def check_redis_connectivity() -> None:
         host = parsed.hostname or "localhost"
         port = parsed.port or 6379
         with socket.create_connection((host, port), timeout=5):
-            _good(
-                f"TCP connection to Redis {host}:{port} succeeded (redis-py not installed)"
-            )
+            _good(f"TCP connection to Redis {host}:{port} succeeded (redis-py not installed)")
     except OSError as exc:
         _err(f"Cannot reach Redis at {host}:{port} — {exc}")
 
@@ -292,7 +290,10 @@ def check_port_availability() -> None:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            sock.bind(("0.0.0.0", port))  # nosec B104 - port availability check only, socket closed immediately
+            # Bind to loopback only — sufficient to detect port conflicts since
+            # a port in use on 127.0.0.1 is unavailable system-wide.
+            # The socket is closed immediately in the finally block.
+            sock.bind(("127.0.0.1", port))
             _good(f"Port {port} ({label}) is free")
         except OSError:
             _err(
@@ -308,21 +309,17 @@ def check_disk_space() -> None:
     """Warn if free disk space is below the recommended minimum (20 GB)."""
     print("\n── Disk space ────────────────────────────────────────────────")
     try:
-        _stat = pathlib.Path(".").stat()
-        usage = pathlib.Path(".").resolve()
+        _stat = pathlib.Path().stat()
+        usage = pathlib.Path().resolve()
         import shutil
 
-        total, used, free = shutil.disk_usage(usage)
+        total, _, free = shutil.disk_usage(usage)
         free_gb = free / (1024**3)
         total_gb = total / (1024**3)
-        if free_gb < 5:  # noqa: PLR2004
-            _err(
-                f"Only {free_gb:.1f} GB free of {total_gb:.1f} GB — minimum 20 GB recommended"
-            )
-        elif free_gb < 20:  # noqa: PLR2004
-            _warn(
-                f"{free_gb:.1f} GB free of {total_gb:.1f} GB — 20 GB recommended for ML training"
-            )
+        if free_gb < 5:
+            _err(f"Only {free_gb:.1f} GB free of {total_gb:.1f} GB — minimum 20 GB recommended")
+        elif free_gb < 20:
+            _warn(f"{free_gb:.1f} GB free of {total_gb:.1f} GB — 20 GB recommended for ML training")
         else:
             _good(f"{free_gb:.1f} GB free of {total_gb:.1f} GB")
     except Exception as exc:
@@ -344,24 +341,18 @@ def check_env_file() -> None:
 
     # Scan for unresolved placeholders
     placeholders = []
-    with open(env_path) as fh:
+    with Path(env_path).open(encoding="utf-8") as fh:
         for lineno, _line in enumerate(fh, 1):
             line = _line.strip()
             if line.startswith("#") or "=" not in line:
                 continue
             key, _, val = line.partition("=")
             val = val.strip().strip('"').strip("'")
-            if any(
-                marker in val
-                for marker in ("CHANGE_ME", "CHANGEME", "your_", "<", "TODO")
-            ):
+            if any(marker in val for marker in ("CHANGE_ME", "CHANGEME", "your_", "<", "TODO")):
                 placeholders.append(f"  line {lineno}: {key.strip()}")
 
     if placeholders:
-        _err(
-            f".env contains {len(placeholders)} unresolved placeholder(s):\n"
-            + "\n".join(placeholders)
-        )
+        _err(f".env contains {len(placeholders)} unresolved placeholder(s):\n" + "\n".join(placeholders))
     else:
         _good(".env has no placeholder values")
 
@@ -371,9 +362,7 @@ def check_env_file() -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="HOPEFX pre-flight deployment checker")
-    parser.add_argument(
-        "--strict", action="store_true", help="Exit 1 on any warning (not just errors)"
-    )
+    parser.add_argument("--strict", action="store_true", help="Exit 1 on any warning (not just errors)")
     args = parser.parse_args()
 
     # Load .env if present
@@ -382,7 +371,7 @@ def main() -> int:
 
         load_dotenv(override=False)
     except ImportError:
-        pass
+        ...  # nosec B110
 
     print("=" * 60)
     print("  HOPEFX AI Trading — Pre-flight Deployment Check")
@@ -403,9 +392,7 @@ def main() -> int:
     check_docker()
 
     print("\n" + "=" * 60)
-    print(
-        f"  Results: {len(_ok)} OK  |  {len(_warnings)} warnings  |  {len(_errors)} errors"
-    )
+    print(f"  Results: {len(_ok)} OK  |  {len(_warnings)} warnings  |  {len(_errors)} errors")
     print("=" * 60)
 
     if _errors:

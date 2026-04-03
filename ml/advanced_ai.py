@@ -25,13 +25,12 @@ Dependencies (install as needed):
 from __future__ import annotations
 
 import logging
-import os
-import joblib
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+import joblib
 import numpy as np
 import pandas as pd
 
@@ -184,7 +183,7 @@ class TradingEnv(gym.Env if _GYM_AVAILABLE else object):  # type: ignore[misc]
         self._equity *= 1 + pnl - total_cost
 
         # Update position after costs are assessed on the OLD position
-        self._position = new_position
+        self._position = new_position  # pylint: disable=attribute-defined-outside-init
 
         self._step += 1
         done = self._step >= self._n - 1
@@ -232,8 +231,7 @@ class PPORLAgent:
     ) -> None:
         if not (_SB3_AVAILABLE and _GYM_AVAILABLE):
             raise ImportError(
-                "stable-baselines3 and gymnasium are required for PPORLAgent. "
-                "pip install stable-baselines3 gymnasium",
+                "stable-baselines3 and gymnasium are required for PPORLAgent. pip install stable-baselines3 gymnasium",
             )
         self.total_timesteps = total_timesteps
         self.policy = policy
@@ -453,7 +451,7 @@ class VectorRAGNewsSentiment:
 
         weighted_score = 0.0
         total_weight = 0.0
-        similar: list[str] = []
+        similar: list[str] = field(default_factory=list)
 
         for sim, idx in zip(sims, idxs, strict=False):
             if idx < 0:
@@ -546,7 +544,10 @@ class OnlineRetrainer:
 
         if df is not None and len(df) >= self.buffer_size:
             threading.Thread(
+                target=self._retrain_async,
+                args=(df,),
                 name=f"OnlineRetrain-{self._retrain_count}",
+                daemon=True,
             ).start()
 
     def _retrain_async(self, df: pd.DataFrame) -> None:
@@ -555,8 +556,8 @@ class OnlineRetrainer:
             self.agent.online_update(df, timesteps=self.retrain_timesteps)
             self._retrain_count += 1
             logger.info("online_retrainer.done count=%d", self._retrain_count)
-        except Exception as exc:
-            logger.exception("online_retrainer.error: %s", exc)
+        except Exception:
+            logger.exception("online_retrainer.error: %s")
 
 
 # ---------------------------------------------------------------------------
@@ -658,7 +659,7 @@ class AdvancedAIEnsemble:
         rl_score = rl_action * rl_conf  # ∈ [-1, 1]
         combined = self.rl_weight * rl_score + self.sentiment_weight * sentiment
 
-        direction = int(np.sign(combined)) if abs(combined) > 0.1 else 0  # noqa: PLR2004
+        direction = int(np.sign(combined)) if abs(combined) > 0.1 else 0
         size = float(np.clip(abs(combined), 0.0, 1.0))
 
         return self.Signal(
@@ -684,14 +685,14 @@ class AdvancedAIEnsemble:
 
     def save(self) -> None:
         if self._rl is not None:
-            self._rl.save(os.path.join(self.model_dir, "ppo/ppo_hopefx"))
+            self._rl.save(Path(self.model_dir) / "ppo/ppo_hopefx")
         if self._rag is not None:
-            self._rag.save(os.path.join(self.model_dir, "rag"))
+            self._rag.save(Path(self.model_dir) / "rag")
 
     def load(self) -> None:
-        rl_path = os.path.join(self.model_dir, "ppo/ppo_hopefx.zip")
+        rl_path = Path(self.model_dir) / "ppo/ppo_hopefx.zip"
         if self._rl is not None and Path(rl_path).exists():
             self._rl.load(rl_path)
-        rag_dir = os.path.join(self.model_dir, "rag")
+        rag_dir = Path(self.model_dir) / "rag"
         if self._rag is not None and Path(rag_dir).exists():
             self._rag.load(rag_dir)

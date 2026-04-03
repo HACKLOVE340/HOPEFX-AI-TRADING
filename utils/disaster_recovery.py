@@ -10,14 +10,14 @@ Automated backup, failover, and state restoration
 """
 
 import asyncio
-import json
 import gzip
-from typing import TYPE_CHECKING
-from dataclasses import dataclass, asdict
-from datetime import datetime, timezone
-UTC = timezone.utc
-from pathlib import Path
 import hashlib
+import json
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import TYPE_CHECKING
+
 import aiofiles
 
 if TYPE_CHECKING:
@@ -42,9 +42,7 @@ class ContinuousBackup:
     Continuous incremental backup with point-in-time recovery.
     """
 
-    def __init__(
-        self, backup_path: str = "backups/", snapshot_interval_minutes: int = 5
-    ):
+    def __init__(self, backup_path: str = "backups/", snapshot_interval_minutes: int = 5):
         self.backup_path = Path(backup_path)
         self.snapshot_interval = snapshot_interval_minutes
         self.backup_path.mkdir(parents=True, exist_ok=True)
@@ -75,22 +73,16 @@ class ContinuousBackup:
 
         state = SystemState(
             timestamp=datetime.now(UTC).isoformat(),
-            event_store_position=event_store._sequence
-            if hasattr(event_store, "_sequence")
-            else 0,
+            event_store_position=event_store._sequence if hasattr(event_store, "_sequence") else 0,
             strategy_states={
                 sid: {
                     "is_active": strat.is_active,
-                    "performance": strat.performance
-                    if hasattr(strat, "performance")
-                    else {},
+                    "performance": strat.performance if hasattr(strat, "performance") else {},
                 }
                 for sid, strat in orchestra.strategies.items()
             },
             open_positions=[],  # Query from database
-            risk_metrics=asdict(risk_engine.current_risk)
-            if risk_engine.current_risk
-            else {},
+            risk_metrics=asdict(risk_engine.current_risk) if risk_engine.current_risk else {},
             performance_cache={},
             checksum="",  # Calculated below
         )
@@ -123,7 +115,7 @@ class ContinuousBackup:
 
         session = aiobotocore.get_session()
         async with session.create_client("s3", region_name=self.s3_region) as client:
-            with open(local_path, "rb") as f:
+            with Path(local_path).open("rb") as f:
                 await client.put_object(
                     Bucket=self.s3_bucket,
                     Key=f"hopefx/snapshots/{filename}",
@@ -134,7 +126,7 @@ class ContinuousBackup:
     async def _cleanup_old_snapshots(self):
         """Keep only last 100 local snapshots"""
         snapshots = sorted(self.backup_path.glob("snapshot_*.json.gz"))
-        if len(snapshots) > 100:  # noqa: PLR2004
+        if len(snapshots) > 100:
             for old in snapshots[:-100]:
                 old.unlink()
 
@@ -150,9 +142,7 @@ class ContinuousBackup:
         # Verify checksum
         state_copy = state_dict.copy()
         stored_checksum = state_copy.pop("checksum")
-        calculated = hashlib.sha256(
-            json.dumps(state_copy, sort_keys=True).encode()
-        ).hexdigest()
+        calculated = hashlib.sha256(json.dumps(state_copy, sort_keys=True).encode()).hexdigest()
 
         if stored_checksum != calculated:
             raise ValueError("Snapshot checksum verification failed!")
@@ -190,7 +180,7 @@ class FailoverManager:
         # In production, use proper consensus (etcd, Consul)
 
         # Assume highest node ID wins
-        all_nodes = sorted([self.node_id] + self.peers)
+        all_nodes = sorted([self.node_id, *self.peers])
         self.is_primary = all_nodes[-1] == self.node_id
 
         if self.is_primary:
@@ -207,17 +197,11 @@ class FailoverManager:
 
             # Check if primary is alive
             if not self.is_primary:
-                primary = max([self.node_id] + self.peers)  # Assume highest is primary
+                primary = max([self.node_id, *self.peers])  # Assume highest is primary
                 if primary != self.node_id:
                     last_seen = self.last_peer_heartbeat.get(primary)
-                    if (
-                        last_seen
-                        and (datetime.now(UTC) - last_seen).seconds
-                        > self.failover_timeout
-                    ):
-                        print(
-                            f"⚠️ Primary {primary} appears down! Triggering failover..."
-                        )
+                    if last_seen and (datetime.now(UTC) - last_seen).seconds > self.failover_timeout:
+                        print(f"⚠️ Primary {primary} appears down! Triggering failover...")
                         await self._trigger_failover()
 
             await asyncio.sleep(self.heartbeat_interval)
@@ -247,13 +231,11 @@ class FailoverManager:
 
         # Lazily create a shared session
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=3.0)
-            )
+            self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=3.0))
 
         try:
             async with self._session.post(url, json=payload) as resp:
-                if resp.status < 300:  # noqa: PLR2004
+                if resp.status < 300:
                     self.last_peer_heartbeat[peer] = datetime.now(UTC)
                 else:
                     print(f"⚠️ Heartbeat to {peer} returned HTTP {resp.status}")

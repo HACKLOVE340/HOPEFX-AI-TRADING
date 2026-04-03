@@ -7,13 +7,12 @@
 
 from __future__ import annotations
 
-import joblib
-import pickle
 from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
 from typing import Any
 
+import joblib
 import numpy as np
 import structlog
 from hmmlearn.hmm import GaussianHMM
@@ -110,7 +109,7 @@ class RegimeDetector:
             return MarketRegime.UNKNOWN, 0.0
 
         # Decode hidden state
-        logprob, state = self.hmm.decode(obs, algorithm="viterbi")
+        _logprob, state = self.hmm.decode(obs, algorithm="viterbi")
 
         # Update history
         self._state_history.append(state[0])
@@ -126,7 +125,7 @@ class RegimeDetector:
 
         # Volatility overlay
         vol_regime = self._classify_volatility(features.volatility)
-        if vol_regime == MarketRegime.HIGH_VOL and confidence < 0.9:  # noqa: PLR2004
+        if vol_regime == MarketRegime.HIGH_VOL and confidence < 0.9:
             regime = MarketRegime.HIGH_VOL
 
         # Calculate duration in current regime
@@ -139,9 +138,9 @@ class RegimeDetector:
 
     def _classify_volatility(self, vol: float) -> MarketRegime:
         """Classify volatility regime."""
-        if vol > 0.5:  # noqa: PLR2004
+        if vol > 0.5:
             return MarketRegime.HIGH_VOL
-        elif vol < 0.1:  # noqa: PLR2004
+        if vol < 0.1:
             return MarketRegime.LOW_VOL
         return MarketRegime.UNKNOWN
 
@@ -157,7 +156,7 @@ class RegimeDetector:
 
     def _estimate_transition(self, state: int) -> float:
         """Estimate probability of regime change."""
-        if len(self._state_history) < 2:  # noqa: PLR2004
+        if len(self._state_history) < 2:
             return 0.0
 
         recent = self._state_history[-20:]
@@ -178,32 +177,32 @@ class RegimeDetector:
             vol = np.sqrt(cov[0, 0])
 
             # Classify based on return mean and volatility
-            if ret_mean > 0.001 and vol < 0.3:  # noqa: PLR2004
+            if ret_mean > 0.001 and vol < 0.3:
                 self._regime_map[i] = MarketRegime.TRENDING_UP
-            elif ret_mean < -0.001 and vol < 0.3:  # noqa: PLR2004
+            elif ret_mean < -0.001 and vol < 0.3:
                 self._regime_map[i] = MarketRegime.TRENDING_DOWN
-            elif vol > 0.4:  # noqa: PLR2004
+            elif vol > 0.4:
                 self._regime_map[i] = MarketRegime.HIGH_VOL
-            elif abs(ret_mean) < 0.0005:  # noqa: PLR2004
+            elif abs(ret_mean) < 0.0005:
                 self._regime_map[i] = MarketRegime.RANGE_BOUND
             else:
                 self._regime_map[i] = MarketRegime.MEAN_REVERTING
 
         self._is_fitted = True
 
-        # Save
+        # Save using joblib (safer than pickle for sklearn/hmmlearn objects)
         self.model_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.model_path, "wb") as f:
-            pickle.dump(
-                {
-                    "hmm": self.hmm,
-                    "vol_gmm": self.vol_gmm,
-                    "regime_map": self._regime_map,
-                },
-                f,
-            )
+        joblib.dump(
+            {
+                "hmm": self.hmm,
+                "vol_gmm": self.vol_gmm,
+                "regime_map": self._regime_map,
+            },
+            self.model_path,
+        )
 
-        logger.info(f"Regime model trained: {self._regime_map}")
+        logger.info("Regime model trained: %s", self._regime_map)
+
 
     def get_regime_statistics(self) -> dict[str, Any]:
         """Get statistics for each regime."""

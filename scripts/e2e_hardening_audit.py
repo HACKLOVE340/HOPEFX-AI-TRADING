@@ -32,8 +32,7 @@ import ast
 import pathlib
 import re
 import sys
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 # Ensure repo root is on sys.path so data_layer imports work when the
 # script is run from scripts/ or from the repo root.
@@ -76,7 +75,7 @@ def section(title: str) -> None:
 
 
 def read(path: str) -> str:
-    return pathlib.Path(path).read_text()
+    return pathlib.Path(path).read_text(encoding="utf-8")
 
 
 def contains(path: str, text: str) -> bool:
@@ -106,7 +105,7 @@ sub_modules = (
     "data_layer.replay.",
 )
 
-for path in sorted(pathlib.Path(".").rglob("*.py")):
+for path in sorted(pathlib.Path().rglob("*.py")):
     ps = str(path)
     if "__pycache__" in ps or ".git" in ps:
         continue
@@ -237,13 +236,9 @@ else:
     fail("MicrostructureEngine: missing inject_l2_depth() method")
 
 if "self._reset_session_unlocked()" in micro:
-    ok(
-        "MicrostructureEngine: _process_tick calls _reset_session_unlocked (not reset_session)"
-    )
+    ok("MicrostructureEngine: _process_tick calls _reset_session_unlocked (not reset_session)")
 else:
-    fail(
-        "MicrostructureEngine: _process_tick still calls reset_session() — deadlock risk"
-    )
+    fail("MicrostructureEngine: _process_tick still calls reset_session() — deadlock risk")
 
 try:
     ast.parse(micro)
@@ -313,7 +308,7 @@ if "maxmemory_unlimited" in redis_src:
 else:
     fail("RedisStore: missing maxmemory_unlimited key in health dict")
 
-if redis_src.count("self.get_memory_info()") >= 2:  # noqa: PLR2004
+if redis_src.count("self.get_memory_info()") >= 2:
     ok("RedisStore: get_memory_info() called in both Sentinel and URL connect paths")
 else:
     fail("RedisStore: get_memory_info() not called in both connect paths")
@@ -362,10 +357,7 @@ if "ts >= ts_end" in replay:
 else:
     fail("MarketReplayEngine: missing causal hard stop — end tick could leak")
 
-if (
-    "ts_start = pd.Timestamp(start" in replay
-    and "ts_end   = pd.Timestamp(end" in replay
-):
+if "ts_start = pd.Timestamp(start" in replay and "ts_end   = pd.Timestamp(end" in replay:
     ok("MarketReplayEngine: Timestamp bounds pre-computed outside loop")
 else:
     fail("MarketReplayEngine: Timestamp bounds still computed inside loop")
@@ -419,9 +411,7 @@ else:
 if "await _dl_orch.start()" in engine:
     ok("hopefx_engine: orchestrator.start() called in engine.start()")
 else:
-    fail(
-        "hopefx_engine: orchestrator.start() NOT called — data layer never starts standalone"
-    )
+    fail("hopefx_engine: orchestrator.start() NOT called — data layer never starts standalone")
 
 if "await self._dl_orchestrator.stop()" in engine:
     ok("hopefx_engine: orchestrator.stop() called in engine.stop()")
@@ -508,7 +498,7 @@ else:
 section("12. Code quality: no bare except:pass")
 
 bare_excepts = []
-for path in sorted(pathlib.Path(".").rglob("*.py")):
+for path in sorted(pathlib.Path().rglob("*.py")):
     ps = str(path)
     if "__pycache__" in ps or ".git" in ps:
         continue
@@ -523,7 +513,7 @@ for path in sorted(pathlib.Path(".").rglob("*.py")):
 if bare_excepts:
     for b in bare_excepts[:5]:
         fail(f"Bare except:pass: {b}")
-    if len(bare_excepts) > 5:  # noqa: PLR2004
+    if len(bare_excepts) > 5:
         fail(f"... and {len(bare_excepts) - 5} more bare except:pass")
 else:
     ok("No bare except:pass found")
@@ -537,7 +527,7 @@ section("13. Code quality: no mock/stub/fake in production paths")
 mock_in_prod = []
 # Exclude test files, example files, and audit/validation scripts themselves
 _MOCK_EXCLUDE = ("test", "example", "e2e_hardening_audit", "e2e_production_validation")
-for path in sorted(pathlib.Path(".").rglob("*.py")):
+for path in sorted(pathlib.Path().rglob("*.py")):
     ps = str(path)
     if "__pycache__" in ps or ".git" in ps:
         continue
@@ -604,7 +594,7 @@ try:
     from data_layer.orchestrator import orchestrator
 
     features = orchestrator.get_ml_features()
-    if len(features) >= 20:  # noqa: PLR2004
+    if len(features) >= 20:
         ok(f"Orchestrator: {len(features)} ML features available")
     else:
         fail(f"Orchestrator: only {len(features)} ML features (expected ≥20)")
@@ -681,13 +671,9 @@ try:
     ema1, ema2, seen_count = asyncio.run(_test_dedup())
 
     if ema1 == ema2:
-        ok(
-            f"NewsSentimentEngine: duplicate article correctly skipped (EMA unchanged: {ema1:.4f})"
-        )
+        ok(f"NewsSentimentEngine: duplicate article correctly skipped (EMA unchanged: {ema1:.4f})")
     else:
-        fail(
-            f"NewsSentimentEngine: duplicate article NOT skipped (EMA changed: {ema1:.4f} → {ema2:.4f})"
-        )
+        fail(f"NewsSentimentEngine: duplicate article NOT skipped (EMA changed: {ema1:.4f} → {ema2:.4f})")
 
     if seen_count == 1:
         ok("NewsSentimentEngine: _seen_urls has exactly 1 entry (dedup working)")
@@ -705,7 +691,7 @@ section("17. Functional: MicrostructureEngine session reset (no deadlock)")
 
 try:
     from data_layer.microstructure.engine import MicrostructureEngine
-    from data_layer.types import GoldTick, FeedSource, TickQuality
+    from data_layer.types import FeedSource, GoldTick, TickQuality
 
     micro_eng = MicrostructureEngine()
 
@@ -747,7 +733,7 @@ section("18. Functional: NormalizationPipeline tick_to_ohlcv unit volume")
 
 try:
     from data_layer.normalization.pipeline import normalization_pipeline
-    from data_layer.types import GoldTick, FeedSource, TickQuality
+    from data_layer.types import FeedSource, GoldTick, TickQuality
 
     ticks = [
         GoldTick(
@@ -770,18 +756,12 @@ try:
         raw_volume = df["volume"].iloc[0] if "volume" in df.columns else None
         # After log1p normalisation, log1p(20) ≈ 3.04
         # If spread*1000 was used, volume would be ~500
-        if raw_volume is not None and raw_volume < 100:  # noqa: PLR2004
-            ok(
-                f"NormalizationPipeline: tick_to_ohlcv volume={raw_volume:.2f} (unit-based, not spread*1000)"
-            )
+        if raw_volume is not None and raw_volume < 100:
+            ok(f"NormalizationPipeline: tick_to_ohlcv volume={raw_volume:.2f} (unit-based, not spread*1000)")
         elif raw_volume is not None:
-            fail(
-                f"NormalizationPipeline: tick_to_ohlcv volume={raw_volume:.2f} — suspiciously large (spread*1000?)"
-            )
+            fail(f"NormalizationPipeline: tick_to_ohlcv volume={raw_volume:.2f} — suspiciously large (spread*1000?)")
         else:
-            ok(
-                "NormalizationPipeline: tick_to_ohlcv returned DataFrame (volume col not present after norm)"
-            )
+            ok("NormalizationPipeline: tick_to_ohlcv returned DataFrame (volume col not present after norm)")
     else:
         fail("NormalizationPipeline: tick_to_ohlcv returned empty DataFrame")
 
@@ -792,12 +772,12 @@ except Exception as e:
 # =============================================================================
 # SUMMARY
 # =============================================================================
-print(f"\n{BOLD}{'='*60}{RESET}")
+print(f"\n{BOLD}{'=' * 60}{RESET}")
 print(f"{BOLD}HARDENING AUDIT SUMMARY{RESET}")
 print(f"  {GREEN}Passed:   {len(passed)}{RESET}")
 print(f"  {YELLOW}Warnings: {len(warned)}{RESET}")
 print(f"  {RED}Failed:   {len(failed)}{RESET}")
-print(f"{BOLD}{'='*60}{RESET}")
+print(f"{BOLD}{'=' * 60}{RESET}")
 
 if failed:
     print(f"\n{RED}FAILED CHECKS:{RESET}")

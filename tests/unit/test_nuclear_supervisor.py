@@ -17,9 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 os.environ.setdefault("APP_ENV", "test")
-os.environ.setdefault(
-    "SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!"
-)
+os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -99,12 +97,10 @@ class TestNuclearHopeFXSupervisor:
             )
             with patch("brain.nuclear_supervisor._get_notifications") as mock_notif:
                 mock_notif.return_value = MagicMock(send_critical_alert=AsyncMock())
-                result = await supervisor.on_new_event(
-                    _make_event("geopolitical tension")
-                )
+                result = await supervisor.on_new_event(_make_event("geopolitical tension"))
 
         assert result["action_taken"] == "hedge"
-        assert supervisor.nuclear_level == 2  # noqa: PLR2004
+        assert supervisor.nuclear_level == 2
 
     @pytest.mark.asyncio
     async def test_critical_severity_nuclear_action(self, supervisor):
@@ -116,16 +112,17 @@ class TestNuclearHopeFXSupervisor:
         mock_ks.activate = MagicMock()
         mock_ks.is_active = MagicMock(return_value=True)
 
-        with patch("brain.nuclear_supervisor._get_kill_switch", return_value=mock_ks), patch("brain.nuclear_supervisor._get_risk_orchestrator") as mock_ro:
+        with (
+            patch("brain.nuclear_supervisor._get_kill_switch", return_value=mock_ks),
+            patch("brain.nuclear_supervisor._get_risk_orchestrator") as mock_ro,
+        ):
             mock_ro.return_value = MagicMock(set_max_risk=AsyncMock())
             with patch("brain.nuclear_supervisor._get_notifications") as mock_notif:
                 mock_notif.return_value = MagicMock(send_critical_alert=AsyncMock())
-                result = await supervisor.on_new_event(
-                    _make_event("nuclear strike alert")
-                )
+                result = await supervisor.on_new_event(_make_event("nuclear strike alert"))
 
         assert result["action_taken"] == "nuclear"
-        assert supervisor.nuclear_level == 3  # noqa: PLR2004
+        assert supervisor.nuclear_level == 3
         assert supervisor.trading_paused is True
         assert supervisor._monitoring_only is True
         # Kill switch must have been activated
@@ -142,7 +139,10 @@ class TestNuclearHopeFXSupervisor:
         mock_ks.is_active = MagicMock(return_value=True)
         mock_ks.deactivate = MagicMock()
 
-        with patch("brain.nuclear_supervisor._get_kill_switch", return_value=mock_ks), patch("brain.nuclear_supervisor._get_risk_orchestrator") as mock_ro:
+        with (
+            patch("brain.nuclear_supervisor._get_kill_switch", return_value=mock_ks),
+            patch("brain.nuclear_supervisor._get_risk_orchestrator") as mock_ro,
+        ):
             mock_ro.return_value = MagicMock(
                 set_max_risk=AsyncMock(),
                 deactivate_hedge_mode=AsyncMock(),
@@ -183,7 +183,7 @@ class TestNuclearHopeFXSupervisor:
         )
         for _ in range(110):
             await supervisor.on_new_event(_make_event("noise"))
-        assert len(supervisor._event_history) <= 100  # noqa: PLR2004
+        assert len(supervisor._event_history) <= 100
 
     def test_normalize_obs_passthrough_without_vecnorm(self, supervisor):
         """_normalize_obs returns raw obs when no VecNormalize is loaded."""
@@ -200,6 +200,7 @@ class TestNuclearHopeFXSupervisor:
         Severity >= 9 always fires regardless of cooldown (safety override).
         """
         import time as _time
+
         import brain.nuclear_supervisor as _ns_mod
 
         supervisor._cooldown_seconds = 9999  # very long cooldown
@@ -212,9 +213,7 @@ class TestNuclearHopeFXSupervisor:
         )
 
         mock_ro = MagicMock(set_max_risk=AsyncMock(), activate_hedge_mode=AsyncMock())
-        mock_notif = MagicMock(
-            send_critical_alert=AsyncMock(), send_warning=AsyncMock()
-        )
+        mock_notif = MagicMock(send_critical_alert=AsyncMock(), send_warning=AsyncMock())
 
         original_ro = _ns_mod._risk_orchestrator
         original_notif = _ns_mod._notifications
@@ -223,9 +222,9 @@ class TestNuclearHopeFXSupervisor:
         try:
             # Trigger while in cooldown — severity 7 < 9 → suppressed
             result = await supervisor.on_new_event(_make_event("geopolitical tension"))
-            assert (
-                result["action_taken"] == "hedge_cooldown_suppressed"
-            ), f"Expected cooldown suppression, got {result['action_taken']}"
+            assert result["action_taken"] == "hedge_cooldown_suppressed", (
+                f"Expected cooldown suppression, got {result['action_taken']}"
+            )
             # Orchestrator should NOT have been called (suppressed)
             mock_ro.set_max_risk.assert_not_called()
         finally:
@@ -279,7 +278,7 @@ class TestRiskOrchestrator:
         import json
 
         data = json.loads(state_file.read_text())
-        assert abs(data["max_risk"] - 0.15) < 1e-6  # noqa: PLR2004
+        assert abs(data["max_risk"] - 0.15) < 1e-6
 
     @pytest.mark.asyncio
     async def test_activate_hedge_mode_no_broker(self, orchestrator):
@@ -318,7 +317,7 @@ class TestRiskOrchestrator:
         ro2 = RiskOrchestrator(state_file=sf)
         assert ro2._hedge_active is True
         assert len(ro2._hedge_positions) == 1
-        assert abs(ro2.get_max_risk() - 0.15) < 1e-6  # noqa: PLR2004
+        assert abs(ro2.get_max_risk() - 0.15) < 1e-6
 
     @pytest.mark.asyncio
     async def test_deactivate_clears_state_file(self, orchestrator, tmp_path):
@@ -365,7 +364,6 @@ class TestEngineKillSwitchHooks:
     @pytest.fixture
     def engine(self):
         """Minimal HopeFXEngine with no broker or brain wired."""
-        import os
 
         os.environ["APP_ENV"] = "test"
         os.environ["BROKER"] = "paper"
@@ -435,12 +433,9 @@ class TestEngineKillSwitchHooks:
 
     def test_validate_startup_environment_test_mode(self):
         """validate_startup_environment() does not raise in APP_ENV=test."""
-        import os
 
         os.environ["APP_ENV"] = "test"
-        os.environ["SECURITY_JWT_SECRET"] = (
-            "test-only-jwt-secret-key-minimum-32-chars!!"
-        )
+        os.environ["SECURITY_JWT_SECRET"] = "test-only-jwt-secret-key-minimum-32-chars!!"
         from hopefx_engine import validate_startup_environment
 
         # Should not raise even with missing broker credentials
@@ -450,7 +445,6 @@ class TestEngineKillSwitchHooks:
 
     def test_validate_startup_environment_short_jwt_warns(self):
         """Short JWT secret is flagged as an error."""
-        import os
 
         original = os.environ.get("SECURITY_JWT_SECRET")
         try:
@@ -464,14 +458,11 @@ class TestEngineKillSwitchHooks:
         finally:
             # Always restore a valid secret regardless of test outcome
             os.environ["SECURITY_JWT_SECRET"] = (
-                original
-                if original and len(original) >= 32  # noqa: PLR2004
-                else "test-only-jwt-secret-key-minimum-32-chars!!"
+                original if original and len(original) >= 32 else "test-only-jwt-secret-key-minimum-32-chars!!"
             )
 
     def test_validate_startup_environment_oanda_missing_key(self):
         """BROKER=oanda without OANDA_API_KEY is flagged."""
-        import os
 
         os.environ["APP_ENV"] = "test"
         os.environ["BROKER"] = "oanda"

@@ -47,8 +47,7 @@ import os
 import random
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -63,14 +62,10 @@ _ADV_LOTS = float(os.getenv("SHADOW_ADV_LOTS", "100.0"))
 try:
     from prometheus_client import Counter, Gauge
 
-    _prom_shadow_trades = Counter(
-        "hopefx_shadow_trades_total", "Shadow trades executed"
-    )
+    _prom_shadow_trades = Counter("hopefx_shadow_trades_total", "Shadow trades executed")
     _prom_shadow_pnl = Gauge("hopefx_shadow_pnl_usd", "Shadow cumulative PnL USD")
     _prom_shadow_equity = Gauge("hopefx_shadow_equity_usd", "Shadow equity USD")
-    _prom_live_gap = Gauge(
-        "hopefx_shadow_live_pnl_gap_usd", "Shadow vs live PnL gap USD"
-    )
+    _prom_live_gap = Gauge("hopefx_shadow_live_pnl_gap_usd", "Shadow vs live PnL gap USD")
     _PROM_OK = True
 except Exception:
     _PROM_OK = False
@@ -127,9 +122,7 @@ class PaperFillSimulator:
         side: "long" | "short"
         """
         half_spread = mid * _HALF_SPREAD_BPS / 10_000
-        market_impact = (
-            mid * _IMPACT_BPS / 10_000 * math.sqrt(lots / max(_ADV_LOTS, 0.01))
-        )
+        market_impact = mid * _IMPACT_BPS / 10_000 * math.sqrt(lots / max(_ADV_LOTS, 0.01))
         noise = mid * _NOISE_BPS / 10_000 * random.gauss(0, 1)
 
         total_cost = half_spread + market_impact + abs(noise)
@@ -247,12 +240,8 @@ class ShadowTradingEngine:
             return
         closed = []
         for pos in self._positions:
-            hit_sl = (pos.side == "long" and mid <= pos.stop_loss) or (
-                pos.side == "short" and mid >= pos.stop_loss
-            )
-            hit_tp = (pos.side == "long" and mid >= pos.take_profit) or (
-                pos.side == "short" and mid <= pos.take_profit
-            )
+            hit_sl = (pos.side == "long" and mid <= pos.stop_loss) or (pos.side == "short" and mid >= pos.stop_loss)
+            hit_tp = (pos.side == "long" and mid >= pos.take_profit) or (pos.side == "short" and mid <= pos.take_profit)
             if hit_sl or hit_tp:
                 if pos.side == "long":
                     pnl = (mid - pos.entry_price) * pos.lots * 100.0
@@ -347,9 +336,7 @@ class ShadowTradingEngine:
             "win_rate": round(len(wins) / max(len(closed_fills), 1), 4),
             "live_pnl": round(self._live_pnl, 2),
             "live_gap_usd": round(self._pnl - self._live_pnl, 2),
-            "avg_slippage_bps": round(
-                sum(f.slippage_bps for f in self._fills) / max(len(self._fills), 1), 3
-            ),
+            "avg_slippage_bps": round(sum(f.slippage_bps for f in self._fills) / max(len(self._fills), 1), 3),
         }
 
     def get_comparison_report(self) -> dict[str, Any]:
@@ -361,9 +348,7 @@ class ShadowTradingEngine:
             "live_trades": self._live_fills,
             "live_pnl": round(self._live_pnl, 2),
             "pnl_gap": round(self._pnl - self._live_pnl, 2),
-            "avg_slippage_bps": round(
-                sum(f.slippage_bps for f in self._fills) / max(len(self._fills), 1), 3
-            ),
+            "avg_slippage_bps": round(sum(f.slippage_bps for f in self._fills) / max(len(self._fills), 1), 3),
             "slippage_model_accuracy": self._slippage_accuracy(),
         }
 
@@ -382,12 +367,8 @@ class ShadowTradingEngine:
         """
         # Include any fill where live_slippage_bps has been recorded,
         # regardless of whether the shadow position is still open.
-        paired = [
-            (f.slippage_bps, f.live_slippage_bps)
-            for f in self._fills
-            if f.live_slippage_bps is not None
-        ]
-        if len(paired) < 2:  # noqa: PLR2004
+        paired = [(f.slippage_bps, f.live_slippage_bps) for f in self._fills if f.live_slippage_bps is not None]
+        if len(paired) < 2:
             return 0.0
 
         _shadow_vals = [p[0] for p in paired]
@@ -397,7 +378,7 @@ class ShadowTradingEngine:
         ss_res = sum((s - lv) ** 2 for s, lv in paired)
         ss_tot = sum((lv - mean_live) ** 2 for lv in live_vals)
 
-        if ss_tot < 1e-12:  # noqa: PLR2004
+        if ss_tot < 1e-12:
             return 1.0  # perfect prediction (zero variance in live)
         return max(0.0, round(1.0 - ss_res / ss_tot, 4))
 

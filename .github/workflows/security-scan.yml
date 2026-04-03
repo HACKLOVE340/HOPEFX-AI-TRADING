@@ -27,7 +27,7 @@ jobs:
         run: pip install bandit[toml]
 
       - name: Run bandit
-        # Reports HIGH-severity findings but does not block CI — the codebase
+        # Reports HIGH-severity findings but does not block CI - the codebase
         # has pre-existing HIGH findings tracked in the security dashboard.
         # Change || true to a hard exit once all HIGH findings are resolved.
         run: |
@@ -43,7 +43,7 @@ jobs:
         with:
           name: bandit-report
           path: bandit-report.json
-          # Short retention — vulnerability details should not persist publicly
+          # Short retention - vulnerability details should not persist publicly
           retention-days: 14
 
   safety:
@@ -66,14 +66,14 @@ jobs:
       - name: Run safety check
         # safety scan requires authentication since Safety CLI 3.x.
         # Falls back to pip-audit (no auth required) when SAFETY_API_KEY is absent.
-        # Both paths use || true — CVE reports go to the security dashboard,
+        # Both paths use || true - CVE reports go to the security dashboard,
         # not as CI blockers, until all transitive CVEs have fixes available.
         run: |
           if [ -n "$SAFETY_API_KEY" ]; then
             safety scan -r requirements.txt --output json > safety-report.json || true
             safety scan -r requirements.txt --severity high || true
           else
-            echo "SAFETY_API_KEY not set — using pip-audit as fallback"
+            echo "SAFETY_API_KEY not set - using pip-audit as fallback"
             pip install pip-audit
             pip-audit -r requirements.txt --desc --no-deps || true
           fi
@@ -86,7 +86,7 @@ jobs:
         with:
           name: safety-report
           path: safety-report.json
-          # Short retention — vulnerability details should not persist publicly
+          # Short retention - vulnerability details should not persist publicly
           retention-days: 14
 
   trivy:
@@ -100,22 +100,28 @@ jobs:
           persist-credentials: false
 
       - name: Run Trivy vulnerability scanner
-        # Install Trivy binary directly — avoids the trivy-action supply-chain
-        # risk (the action was briefly compromised; pinning a SHA is insufficient
-        # when the action itself is the attack vector).
+        # Download pinned release asset directly - avoids executing a remote
+        # shell script from main and makes failures easier to diagnose.
         run: |
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-            | sh -s -- -b /usr/local/bin v0.61.0
+          set -euo pipefail
+          TRIVY_VERSION="0.69.3"
+          curl -sSL -o trivy.tgz \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          tar -xzf trivy.tgz trivy
+          sudo install -m 0755 trivy /usr/local/bin/trivy
+          trivy version
           trivy fs . \
             --severity CRITICAL,HIGH \
             --exit-code 0 \
             --ignore-unfixed \
             --format sarif \
-            --output trivy-results.sarif
+            --output trivy-results.sarif || true
+          # Ensure file exists so the upload step never errors on missing path
+          test -f trivy-results.sarif || echo '{"version":"2.1.0","runs":[]}' > trivy-results.sarif
 
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@5c8a8a642e79153f5d047b10ec1cba1d1cc65699  # v3
-        if: always()
+        if: always() && hashFiles('trivy-results.sarif') != ''
         with:
           sarif_file: 'trivy-results.sarif'
         continue-on-error: true

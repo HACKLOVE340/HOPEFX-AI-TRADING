@@ -11,7 +11,6 @@ Monte Carlo simulation with GARCH volatility and copula correlation
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Dict, List, Optional, Tuple  # noqa: F401
 
 import numpy as np
 import pandas as pd
@@ -49,7 +48,7 @@ class GARCHModel:
             negative_alpha = alpha < 0
             negative_beta = beta < 0
             non_stationary = alpha + beta >= 1
-            invalid_df = nu <= 2  # Student-t requires df > 2 for finite variance  # noqa: PLR2004
+            invalid_df = nu <= 2  # Student-t requires df > 2 for finite variance
             return non_positive_omega or negative_alpha or negative_beta or non_stationary or invalid_df
 
         def neg_log_likelihood(params):
@@ -61,15 +60,11 @@ class GARCHModel:
             variance[0] = np.var(returns)
 
             for t in range(1, len(returns)):
-                variance[t] = (
-                    omega + alpha * returns[t - 1] ** 2 + beta * variance[t - 1]
-                )
+                variance[t] = omega + alpha * returns[t - 1] ** 2 + beta * variance[t - 1]
 
             # Student-t log-likelihood
             log_likelihood = -np.sum(
-                np.log(
-                    stats.t.pdf(returns / np.sqrt(variance), nu) / np.sqrt(variance)
-                ),
+                np.log(stats.t.pdf(returns / np.sqrt(variance), nu) / np.sqrt(variance)),
             )
             return log_likelihood
 
@@ -103,11 +98,7 @@ class GARCHModel:
         variance = np.ones(n_sims) * self.omega / (1 - self.alpha - self.beta)
 
         for t in range(horizon):
-            variance = (
-                self.omega
-                + self.alpha * simulated[:, t - 1] ** 2
-                + self.beta * variance
-            )
+            variance = self.omega + self.alpha * simulated[:, t - 1] ** 2 + self.beta * variance
             simulated[:, t] = np.sqrt(variance) * stats.t.rvs(self.nu, size=n_sims)
 
         return simulated
@@ -186,9 +177,7 @@ class MonteCarloRiskEngine:
                 scaled_returns[col] = copula_sims[col] * vol[: len(copula_sims)]
 
         # Calculate portfolio returns
-        portfolio_returns = sum(
-            scaled_returns[col] * weights.get(col, 0) for col in scaled_returns.columns
-        )
+        portfolio_returns = sum(scaled_returns[col] * weights.get(col, 0) for col in scaled_returns.columns)
 
         # Risk metrics
         var_95 = np.percentile(portfolio_returns, 5)
@@ -215,15 +204,13 @@ class MonteCarloRiskEngine:
     def _stress_correlation(self, weights: dict[str, float]) -> float:
         """Calculate correlation under stress (tail dependence)"""
         # Simplified: use historical correlation in worst 5% of days
-        if len(self.historical_returns) < 100:  # noqa: PLR2004
+        if len(self.historical_returns) < 100:
             return 0.5
 
         worst_days = self.historical_returns.sum(axis=1).quantile(0.05)
-        stress_data = self.historical_returns[
-            self.historical_returns.sum(axis=1) <= worst_days
-        ]
+        stress_data = self.historical_returns[self.historical_returns.sum(axis=1) <= worst_days]
 
-        if len(stress_data) < 10:  # noqa: PLR2004
+        if len(stress_data) < 10:
             return 0.5
 
         return float(stress_data.corr().values.mean())
@@ -251,10 +238,7 @@ class RealTimeRiskMonitor:
         """Recalculate risk with current positions"""
         total_value = sum(positions[s] * prices[s] for s in positions)
 
-        weights = {
-            s: float(positions[s] * prices[s] / total_value) if total_value > 0 else 0
-            for s in positions
-        }
+        weights = {s: float(positions[s] * prices[s] / total_value) if total_value > 0 else 0 for s in positions}
 
         self.current_risk = self.risk_engine.calculate_portfolio_risk(weights)
         return self._check_limits()

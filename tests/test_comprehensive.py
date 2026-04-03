@@ -4,14 +4,15 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 import unittest
+
 import pytest
 
 try:
     from auth_module import Auth
-    from market_data_module import MarketData
-    from trading_module import TradingExecution
-    from portfolio_management_module import PortfolioManagement
     from backtesting_module import Backtester
+    from market_data_module import MarketData
+    from portfolio_management_module import PortfolioManagement
+    from trading_module import TradingExecution
 
     HAS_LEGACY_MODULES = True
 except ImportError:

@@ -7,8 +7,7 @@
 Mobile Authentication
 """
 
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 
 
 class MobileAuth:
@@ -17,14 +16,10 @@ class MobileAuth:
     def __init__(self):
         self.tokens = {}
 
-    def authenticate_biometric(
-        self, user_id: str, biometric_data: str, device_id: str
-    ) -> str | None:
+    def authenticate_biometric(self, user_id: str, biometric_data: str, device_id: str) -> str | None:
         """Authenticate using biometrics"""
         # Generate JWT token
-        token = (
-            f"MOB_TOKEN_{user_id}_{device_id}_{datetime.now(UTC).timestamp()}"
-        )
+        token = f"MOB_TOKEN_{user_id}_{device_id}_{datetime.now(UTC).timestamp()}"
         self.tokens[token] = {
             "user_id": user_id,
             "device_id": device_id,

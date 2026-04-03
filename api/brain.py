@@ -89,7 +89,7 @@ async def generate_strategy(
         try:
             from brain.llm_agent import LLMAgent
 
-            agent = LLMAgent(openai_api_key=openai_key)
+            agent = LLMAgent(api_key=openai_key)
             result = await agent.generate_strategy(
                 prompt=req.prompt,
                 symbol=req.symbol,
@@ -118,22 +118,21 @@ async def generate_strategy(
                 error=getattr(result, "error", None),
             )
         except Exception as exc:
-            logger.warning("LLM agent error: %s", exc)
+            logger.warning("LLM agent error: %s", exc, exc_info=True)
             return GenerateResponse(
                 success=False,
                 strategy_name="",
                 strategy_code="",
                 backtest=None,
                 iterations=0,
-                error=str(exc),
+                error="Strategy generation failed — check server logs",
             )
 
     # No LLM API key configured — cannot generate strategy
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail=(
-            "LLM backend not configured. "
-            "Set OPENAI_API_KEY or ANTHROPIC_API_KEY to enable AI strategy generation."
+            "LLM backend not configured. Set OPENAI_API_KEY or ANTHROPIC_API_KEY to enable AI strategy generation."
         ),
     )
 
@@ -166,8 +165,8 @@ async def deploy_strategy(
             strategy_id=strategy_id,
         )
     except Exception as exc:
-        logger.warning("Deploy error: %s", exc)
+        logger.warning("Deploy error: %s", exc, exc_info=True)
         return DeployResponse(
             success=False,
-            message=f"Deploy failed: {exc}",
+            message="Deploy failed — check server logs",
         )

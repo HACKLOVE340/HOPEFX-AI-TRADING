@@ -8,6 +8,7 @@ Configuration Management System
 """
 
 import base64
+import contextlib
 import fcntl
 import hashlib
 import json
@@ -17,7 +18,6 @@ import secrets
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-import contextlib
 
 try:
     from cryptography.fernet import Fernet
@@ -41,11 +41,11 @@ class EncryptionManager:
             # so the same key survives process restarts within the same directory.
             key_file = Path(".encryption_key")
             if key_file.exists():
-                key = key_file.read_text().strip()
+                key = key_file.read_text(encoding="utf-8").strip()
             else:
                 key = secrets.token_hex(32)
                 with contextlib.suppress(OSError):
-                    key_file.write_text(key)
+                    key_file.write_text(key, encoding="utf-8")
             logger.warning(
                 "CONFIG_ENCRYPTION_KEY not set — using auto-generated key (not for production)",
             )
@@ -83,7 +83,7 @@ class EncryptionManager:
             return self._fernet.decrypt(token.encode()).decode()
         return base64.b64decode(token.encode()).decode()
 
-    def hash_password(self, password: str, salt: bytes = None) -> str:
+    def hash_password(self, password: str, salt: bytes | None = None) -> str:
         if salt is None:
             salt = secrets.token_bytes(16)
         dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 100_000)
@@ -135,18 +135,12 @@ class DatabaseConfig:
         if self.db_type == "sqlite":
             return f"sqlite:///{self.database}"
         if self.db_type == "postgresql":
-            base = (
-                f"postgresql://{self.username}:{self.password}"
-                f"@{self.host}:{self.port}/{self.database}"
-            )
+            base = f"postgresql://{self.username}:{self.password}@{self.host}:{self.port}/{self.database}"
             if self.ssl_enabled:
                 base += f"?sslmode={self.ssl_mode}"
             return base
         if self.db_type == "mysql":
-            base = (
-                f"mysql+pymysql://{self.username}:{self.password}"
-                f"@{self.host}:{self.port}/{self.database}"
-            )
+            base = f"mysql+pymysql://{self.username}:{self.password}@{self.host}:{self.port}/{self.database}"
             if self.ssl_enabled:
                 base += "?ssl=true"
             return base
@@ -168,7 +162,7 @@ class TradingConfig:
     def validate(self) -> bool:
         if self.max_position_size <= 0:
             return False
-        if self.max_leverage <= 0 or self.max_leverage > 100:  # noqa: PLR2004
+        if self.max_leverage <= 0 or self.max_leverage > 100:
             return False
         return self.risk_per_trade > 0
 
@@ -231,23 +225,21 @@ class AppConfig:
         db_d = d.get("database", {})
         if db_d:
             cfg.database = DatabaseConfig(
-                **{
-                    k: db_d[k] for k in DatabaseConfig.__dataclass_fields__ if k in db_d
-                },
+                **{k: db_d[k] for k in DatabaseConfig.__dataclass_fields__ if k in db_d},  # pylint: disable=no-member
             )
         tr_d = d.get("trading", {})
         if tr_d:
             cfg.trading = TradingConfig(
-                **{k: tr_d[k] for k in TradingConfig.__dataclass_fields__ if k in tr_d},
+                **{k: tr_d[k] for k in TradingConfig.__dataclass_fields__ if k in tr_d},  # pylint: disable=no-member
             )
         lg_d = d.get("logging", {})
         if lg_d:
             cfg.logging = LoggingConfig(
-                **{k: lg_d[k] for k in LoggingConfig.__dataclass_fields__ if k in lg_d},
+                **{k: lg_d[k] for k in LoggingConfig.__dataclass_fields__ if k in lg_d},  # pylint: disable=no-member
             )
         for name, api_d in d.get("api_configs", {}).items():
             cfg.api_configs[name] = APIConfig(
-                **{k: api_d[k] for k in APIConfig.__dataclass_fields__ if k in api_d},
+                **{k: api_d[k] for k in APIConfig.__dataclass_fields__ if k in api_d},  # pylint: disable=no-member
             )
         return cfg
 
@@ -281,8 +273,8 @@ class ConfigManager:
         if self._encryption_key:
             try:
                 self._enc = EncryptionManager(master_key=self._encryption_key)
-            except Exception as e:
-                logger.warning(f"EncryptionManager init failed: {e}")
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.warning("EncryptionManager init failed: %s", e)
 
         self.config: AppConfig | None = None
         self._environment: str | None = None
@@ -306,7 +298,7 @@ class ConfigManager:
         if self._enc and value:
             try:
                 return self._enc.decrypt(value)
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
                 return value
         return value
 
@@ -317,10 +309,10 @@ class ConfigManager:
 
     def _write_config(self, cfg: AppConfig, path: Path) -> None:
         d = cfg.to_dict()
-        for _name, api_d in d.get("api_configs", {}).items():
+        for api_d in d.get("api_configs", {}).values():
             api_d["api_key"] = self._encrypt_value(api_d.get("api_key", ""))
             api_d["api_secret"] = self._encrypt_value(api_d.get("api_secret", ""))
-        with open(path, "w") as f:
+        with Path(path).open("w", encoding="utf-8") as f:
             try:
                 fcntl.flock(f, fcntl.LOCK_EX)
                 json.dump(d, f, indent=2)
@@ -328,13 +320,13 @@ class ConfigManager:
                 fcntl.flock(f, fcntl.LOCK_UN)
 
     def _read_config(self, path: Path) -> AppConfig:
-        with open(path) as f:
+        with Path(path).open(encoding="utf-8") as f:
             try:
                 fcntl.flock(f, fcntl.LOCK_SH)
                 d = json.load(f)
             finally:
                 fcntl.flock(f, fcntl.LOCK_UN)
-        for _name, api_d in d.get("api_configs", {}).items():
+        for api_d in d.get("api_configs", {}).values():
             api_d["api_key"] = self._decrypt_value(api_d.get("api_key", ""))
             api_d["api_secret"] = self._decrypt_value(api_d.get("api_secret", ""))
         return AppConfig.from_dict(d)
@@ -413,7 +405,7 @@ _manager: ConfigManager | None = None
 
 
 def get_config_manager() -> ConfigManager:
-    global _manager
+    global _manager  # pylint: disable=global-statement
     if _manager is None:
         _manager = ConfigManager()
     return _manager

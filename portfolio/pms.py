@@ -10,12 +10,11 @@ Real-time P&L, exposure, and portfolio optimization
 """
 
 import contextlib
-import numpy as np
-from typing import Optional
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from decimal import Decimal
+
+import numpy as np
 
 
 @dataclass
@@ -23,11 +22,11 @@ class Position:
     """Portfolio position with real-time P&L"""
 
     symbol: str
-    quantity: Decimal = Decimal("0")
-    avg_entry_price: Decimal = Decimal("0")
-    market_price: Decimal = Decimal("0")
-    unrealized_pnl: Decimal = Decimal("0")
-    realized_pnl: Decimal = Decimal("0")
+    quantity: Decimal = Decimal(0)
+    avg_entry_price: Decimal = Decimal(0)
+    market_price: Decimal = Decimal(0)
+    unrealized_pnl: Decimal = Decimal(0)
+    realized_pnl: Decimal = Decimal(0)
     opened_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     trades: list[dict] = field(default_factory=list)
 
@@ -52,36 +51,26 @@ class Position:
             # Increase long or reduce short
             if self.quantity >= 0:
                 # Adding to long
-                total_cost = (self.quantity * self.avg_entry_price) + (
-                    trade_qty * trade_price
-                )
+                total_cost = (self.quantity * self.avg_entry_price) + (trade_qty * trade_price)
                 self.quantity += trade_qty
-                self.avg_entry_price = (
-                    total_cost / self.quantity if self.quantity != 0 else Decimal("0")
-                )
+                self.avg_entry_price = total_cost / self.quantity if self.quantity != 0 else Decimal(0)
             else:
                 # Reducing short
                 self.realized_pnl += trade_qty * (self.avg_entry_price - trade_price)
                 self.quantity += trade_qty
                 if self.quantity == 0:
-                    self.avg_entry_price = Decimal("0")
+                    self.avg_entry_price = Decimal(0)
         elif self.quantity <= 0:
             # Adding to short
-            total_cost = (abs(self.quantity) * self.avg_entry_price) + (
-                trade_qty * trade_price
-            )
+            total_cost = (abs(self.quantity) * self.avg_entry_price) + (trade_qty * trade_price)
             self.quantity -= trade_qty
-            self.avg_entry_price = (
-                total_cost / abs(self.quantity)
-                if self.quantity != 0
-                else Decimal("0")
-            )
+            self.avg_entry_price = total_cost / abs(self.quantity) if self.quantity != 0 else Decimal(0)
         else:
             # Reducing long
             self.realized_pnl += trade_qty * (trade_price - self.avg_entry_price)
             self.quantity -= trade_qty
             if self.quantity == 0:
-                self.avg_entry_price = Decimal("0")
+                self.avg_entry_price = Decimal(0)
 
         self.update_market_price(trade_price)
 
@@ -102,12 +91,12 @@ class PortfolioManager:
     def __init__(self, base_currency: str = "USD"):
         self.base_currency = base_currency
         self.positions: dict[str, Position] = {}
-        self.cash: Decimal = Decimal("0")
-        self.margin_used: Decimal = Decimal("0")
-        self.daily_pnl: Decimal = Decimal("0")
-        self.total_pnl: Decimal = Decimal("0")
-        self.peak_value: Decimal = Decimal("0")
-        self.max_drawdown: Decimal = Decimal("0")
+        self.cash: Decimal = Decimal(0)
+        self.margin_used: Decimal = Decimal(0)
+        self.daily_pnl: Decimal = Decimal(0)
+        self.total_pnl: Decimal = Decimal(0)
+        self.peak_value: Decimal = Decimal(0)
+        self.max_drawdown: Decimal = Decimal(0)
         self.trade_history: list[dict] = []
         self.last_update: datetime = datetime.now(UTC)
 
@@ -151,8 +140,7 @@ class PortfolioManager:
             "quantity": quantity,
             "price": price,
             "commission": commission,
-            "realized_pnl": pos.realized_pnl
-            - sum(t.get("realized_pnl", 0) for t in self.trade_history[-10:]),
+            "realized_pnl": pos.realized_pnl - sum(t.get("realized_pnl", 0) for t in self.trade_history[-10:]),
             "position_after": pos.quantity,
         }
         self.trade_history.append(trade_record)
@@ -161,18 +149,12 @@ class PortfolioManager:
 
     def _recalculate_portfolio(self):
         """Recalculate all portfolio metrics"""
-        total_value = self.cash + sum(
-            pos.market_value for pos in self.positions.values()
-        )
+        total_value = self.cash + sum(pos.market_value for pos in self.positions.values())
 
         # Update peak and drawdown
         self.peak_value = max(self.peak_value, total_value)
 
-        current_drawdown = (
-            (self.peak_value - total_value) / self.peak_value
-            if self.peak_value > 0
-            else Decimal("0")
-        )
+        current_drawdown = (self.peak_value - total_value) / self.peak_value if self.peak_value > 0 else Decimal(0)
         self.max_drawdown = max(self.max_drawdown, current_drawdown)
 
         # Update P&L
@@ -182,29 +164,19 @@ class PortfolioManager:
 
     def get_portfolio_summary(self) -> dict:
         """Get complete portfolio summary"""
-        long_exposure = sum(
-            pos.market_value for pos in self.positions.values() if pos.quantity > 0
-        )
-        short_exposure = sum(
-            abs(pos.market_value) for pos in self.positions.values() if pos.quantity < 0
-        )
+        long_exposure = sum(pos.market_value for pos in self.positions.values() if pos.quantity > 0)
+        short_exposure = sum(abs(pos.market_value) for pos in self.positions.values() if pos.quantity < 0)
 
         return {
             "timestamp": self.last_update.isoformat(),
             "cash": float(self.cash),
-            "total_value": float(
-                self.cash + sum(pos.market_value for pos in self.positions.values())
-            ),
+            "total_value": float(self.cash + sum(pos.market_value for pos in self.positions.values())),
             "long_exposure": float(long_exposure),
             "short_exposure": float(short_exposure),
             "net_exposure": float(long_exposure - short_exposure),
             "gross_exposure": float(long_exposure + short_exposure),
-            "unrealized_pnl": float(
-                sum(pos.unrealized_pnl for pos in self.positions.values())
-            ),
-            "realized_pnl": float(
-                sum(pos.realized_pnl for pos in self.positions.values())
-            ),
+            "unrealized_pnl": float(sum(pos.unrealized_pnl for pos in self.positions.values())),
+            "realized_pnl": float(sum(pos.realized_pnl for pos in self.positions.values())),
             "total_pnl": float(self.total_pnl),
             "max_drawdown": float(self.max_drawdown),
             "margin_used": float(self.margin_used),
@@ -220,7 +192,6 @@ class PortfolioManager:
                 if pos.quantity != 0
             },
         }
-
 
     # ── Rebalancer integration ────────────────────────────────────────────────
 
@@ -244,6 +215,7 @@ class PortfolioManager:
             rebalancer.update_strategy_returns("smc_ict", returns_series)
         """
         from portfolio.rebalancer import DynamicRebalancer
+
         self._rebalancer = DynamicRebalancer(
             method=method,
             max_weight=max_weight,
@@ -251,12 +223,10 @@ class PortfolioManager:
             interval_hours=interval_hours,
         )
         # Seed current drawdown from portfolio state
-        self._rebalancer.update_drawdown(
-            "portfolio", float(self.max_drawdown)
-        )
+        self._rebalancer.update_drawdown("portfolio", float(self.max_drawdown))
         return self._rebalancer
 
-    def run_rebalance(self, force: bool = False) -> Optional[dict]:
+    def run_rebalance(self, force: bool = False) -> dict | None:
         """
         Run the rebalancer and return target weights (or None if no rebalance needed).
 
@@ -303,7 +273,7 @@ class PortfolioOptimizer:
         if symbol not in self.returns_history:
             self.returns_history[symbol] = []
         self.returns_history[symbol].append(daily_return)
-        if len(self.returns_history[symbol]) > 252:  # 1 year  # noqa: PLR2004
+        if len(self.returns_history[symbol]) > 252:  # 1 year
             self.returns_history[symbol].pop(0)
 
     def calculate_kelly_sizes(self) -> dict[str, float]:
@@ -314,7 +284,7 @@ class PortfolioOptimizer:
         kelly_sizes = {}
 
         for symbol, returns in self.returns_history.items():
-            if len(returns) < 30:  # noqa: PLR2004
+            if len(returns) < 30:
                 continue
 
             returns_arr = np.array(returns)
@@ -332,11 +302,7 @@ class PortfolioOptimizer:
 
             # Kelly fraction
             win_loss_ratio = avg_win / avg_loss if avg_loss > 0 else 0
-            kelly = (
-                (win_rate * win_loss_ratio - loss_rate) / win_loss_ratio
-                if win_loss_ratio > 0
-                else 0
-            )
+            kelly = (win_rate * win_loss_ratio - loss_rate) / win_loss_ratio if win_loss_ratio > 0 else 0
 
             # Half-Kelly for safety
             kelly_sizes[symbol] = max(0, kelly * 0.5)
@@ -348,14 +314,12 @@ class PortfolioOptimizer:
         Mean-variance optimization with target volatility.
         """
         symbols = list(self.returns_history.keys())
-        if len(symbols) < 2:  # noqa: PLR2004
+        if len(symbols) < 2:
             return dict.fromkeys(symbols, 1.0)
 
         # Build returns matrix
         min_len = min(len(r) for r in self.returns_history.values())
-        returns_matrix = np.array(
-            [self.returns_history[sym][-min_len:] for sym in symbols]
-        )
+        returns_matrix = np.array([self.returns_history[sym][-min_len:] for sym in symbols])
 
         # Calculate expected returns and covariance
         expected_returns = np.mean(returns_matrix, axis=1)

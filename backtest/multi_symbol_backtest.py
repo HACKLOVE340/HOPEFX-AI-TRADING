@@ -51,9 +51,9 @@ import json
 import logging
 import sys
 import warnings
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import ClassVar
 
 import numpy as np
 import pandas as pd
@@ -98,15 +98,13 @@ TARGET_N_SE010 = 919
 
 def fetch_ohlcv(ticker: str, years: int, smoke: bool = False) -> pd.DataFrame:
     """Fetch daily OHLCV from yfinance with CSV cache fallback."""
-    cache_path = (
-        ROOT / "data" / f"{ticker.replace('=','_').replace('-','_')}_{years}Y.csv"
-    )
+    cache_path = ROOT / "data" / f"{ticker.replace('=', '_').replace('-', '_')}_{years}Y.csv"
 
     if cache_path.exists():
         try:
             df = pd.read_csv(cache_path, index_col=0, parse_dates=True)
             df.columns = [c.lower() for c in df.columns]
-            if len(df) > 50:  # noqa: PLR2004
+            if len(df) > 50:
                 logger.info("Loaded %s from cache: %d bars", ticker, len(df))
                 return df
         except Exception as _exc:
@@ -171,11 +169,8 @@ def _synthetic_ohlcv_smoke(ticker: str) -> pd.DataFrame:
     when smoke=True and yfinance is unavailable (e.g. in CI without
     network access).
     """
-    import warnings
-
     warnings.warn(
-        f"_synthetic_ohlcv_smoke({ticker!r}): using synthetic GBM data. "
-        "Results are not valid for strategy evaluation.",
+        f"_synthetic_ohlcv_smoke({ticker!r}): using synthetic GBM data. Results are not valid for strategy evaluation.",
         UserWarning,
         stacklevel=3,
     )
@@ -184,9 +179,7 @@ def _synthetic_ohlcv_smoke(ticker: str) -> pd.DataFrame:
     base = 1800.0 if "GC" in ticker else (40000.0 if "BTC" in ticker else 2500.0)
     returns = rng.standard_normal(n) * 0.015
     close = base * np.exp(np.cumsum(returns))
-    idx = pd.date_range(
-        end=datetime.now(UTC).date(), periods=n, freq="B", tz="UTC"
-    )
+    idx = pd.date_range(end=datetime.now(UTC).date(), periods=n, freq="B", tz="UTC")
     return pd.DataFrame(
         {
             "open": close * (1 + rng.standard_normal(n) * 0.002),
@@ -204,9 +197,7 @@ def _synthetic_ohlcv_smoke(ticker: str) -> pd.DataFrame:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def build_features(
-    ohlcv: pd.DataFrame, smoke: bool = False
-) -> tuple[pd.DataFrame, pd.Series]:
+def build_features(ohlcv: pd.DataFrame, smoke: bool = False) -> tuple[pd.DataFrame, pd.Series]:
     """Build feature matrix using extended 200+ feature builder."""
     try:
         from ml.features_extended import build_extended_features
@@ -258,12 +249,12 @@ def backtest_symbol(
     logger.info("=== %s (%s) ===", display_name, ticker)
 
     ohlcv = fetch_ohlcv(ticker, years, smoke=smoke)
-    if len(ohlcv) < 100:  # noqa: PLR2004
+    if len(ohlcv) < 100:
         logger.warning("%s: insufficient data (%d bars)", ticker, len(ohlcv))
         return {"symbol": display_name, "error": "insufficient data", "n_trades": 0}
 
     X, y = build_features(ohlcv, smoke=smoke)
-    if len(X) < 50:  # noqa: PLR2004
+    if len(X) < 50:
         logger.warning("%s: too few samples after filtering (%d)", ticker, len(X))
         return {"symbol": display_name, "error": "too few samples", "n_trades": 0}
 
@@ -272,7 +263,7 @@ def backtest_symbol(
     X_train, y_train = X.iloc[:-oos_n], y.iloc[:-oos_n]
     X_oos, y_oos = X.iloc[-oos_n:], y.iloc[-oos_n:]
 
-    if len(X_train) < 30:  # noqa: PLR2004
+    if len(X_train) < 30:
         return {"symbol": display_name, "error": "train set too small", "n_trades": 0}
 
     # Train calibrated XGBoost
@@ -297,20 +288,21 @@ def backtest_symbol(
 
     # OOS predictions
     proba = model.predict_proba(X_oos)[:, 1]
-    _preds = (proba >= 0.55).astype(int)  # threshold: 0.55 for signal  # noqa: PLR2004
+    _preds = (proba >= 0.55).astype(int)  # threshold: 0.55 for signal
 
     # Align OOS prices for PnL calculation
     oos_close = ohlcv["close"].reindex(X_oos.index)
 
     # Transaction cost model — applied to every trade
     from backtest.transaction_costs import get_tc_model
+
     tc = get_tc_model()
 
     # Simulate trades: enter on signal, exit next bar
     # Net PnL = raw close-to-close return − round-trip spread − commission
     trades = []
     for i in range(len(X_oos) - 1):
-        if proba[i] >= 0.58:  # long signal  # noqa: PLR2004
+        if proba[i] >= 0.58:  # long signal
             entry = float(oos_close.iloc[i])
             exit_ = float(oos_close.iloc[i + 1])
             raw_pnl_pct = (exit_ - entry) / entry
@@ -324,7 +316,7 @@ def backtest_symbol(
                     "prob": float(proba[i]),
                 }
             )
-        elif proba[i] <= 0.42:  # short signal  # noqa: PLR2004
+        elif proba[i] <= 0.42:  # short signal
             entry = float(oos_close.iloc[i])
             exit_ = float(oos_close.iloc[i + 1])
             raw_pnl_pct = (entry - exit_) / entry
@@ -358,16 +350,15 @@ def backtest_symbol(
     raw_sharpe = float(raw_pnls.mean() / (raw_pnls.std(ddof=1) or 1e-6) * np.sqrt(252))
 
     # Classification metrics
-    acc = accuracy_score(y_oos, (proba >= 0.5).astype(int))  # noqa: PLR2004
-    f1 = f1_score(y_oos, (proba >= 0.5).astype(int), zero_division=0)  # noqa: PLR2004
+    acc = accuracy_score(y_oos, (proba >= 0.5).astype(int))
+    f1 = f1_score(y_oos, (proba >= 0.5).astype(int), zero_division=0)
     try:
         auc = roc_auc_score(y_oos, proba)
     except (ValueError, RuntimeError):
         auc = 0.5
 
     logger.info(
-        "%s: N=%d trades | Sharpe=%.2f (raw=%.2f) | WinRate=%.1f%% | "
-        "Acc=%.3f | MaxDD=%.1f%% | AvgTC=%.4f%%",
+        "%s: N=%d trades | Sharpe=%.2f (raw=%.2f) | WinRate=%.1f%% | Acc=%.3f | MaxDD=%.1f%% | AvgTC=%.4f%%",
         display_name,
         n_trades,
         sharpe,
@@ -379,8 +370,7 @@ def backtest_symbol(
     )
 
     # Log TC summary at INFO so operators can see the cost drag
-    from backtest.transaction_costs import get_tc_model as _get_tc
-    _tc_summary = _get_tc().cost_summary(
+    _tc_summary = get_tc_model().cost_summary(
         entry_price=float(oos_close.dropna().iloc[-1]) if len(oos_close.dropna()) > 0 else 1.0,
         ticker=ticker,
     )
@@ -401,7 +391,7 @@ def backtest_symbol(
         "std_pnl_pct": round(float(std_pnl), 6),
         "sharpe": round(sharpe, 4),
         "sharpe_gross": round(raw_sharpe, 4),  # before transaction costs
-        "mean_tc_pct": round(mean_tc, 6),       # average cost per trade
+        "mean_tc_pct": round(mean_tc, 6),  # average cost per trade
         "max_drawdown": round(float(max_dd), 4),
         "accuracy": round(acc, 4),
         "f1": round(f1, 4),
@@ -438,35 +428,30 @@ def _detect_sharpe_outliers(symbol_results: list[dict]) -> tuple[list[str], list
 
     Returns (outlier_symbols, reasons) — parallel lists.
     """
-    outliers: list[str] = []
-    reasons: list[str] = []
+    outliers: ClassVar[list[str]] = []
+    reasons: ClassVar[list[str]] = []
     for r in symbol_results:
         sym = r.get("symbol", "?")
         sharpe = r.get("sharpe", 0.0)
         win_rate = r.get("win_rate", 0.0)
         n = r.get("n_trades", 0)
-        flags: list[str] = []
-        if sharpe > 5.0:  # noqa: PLR2004
+        flags: ClassVar[list[str]] = []
+        if sharpe > 5.0:
             flags.append(f"Sharpe={sharpe:.2f} > 5.0 (implausible for daily bars)")
-        if win_rate > 0.75 and n > 50:  # noqa: PLR2004
-            flags.append(
-                f"win_rate={win_rate:.1%} on {n} trades (implausible for direction model)"
-            )
+        if win_rate > 0.75 and n > 50:
+            flags.append(f"win_rate={win_rate:.1%} on {n} trades (implausible for direction model)")
         if flags:
             outliers.append(sym)
             reasons.append("; ".join(flags))
             logger.warning(
-                "Sharpe outlier detected: %s — %s. "
-                "Excluding from honest pooled Sharpe.",
+                "Sharpe outlier detected: %s — %s. Excluding from honest pooled Sharpe.",
                 sym,
                 "; ".join(flags),
             )
     return outliers, reasons
 
 
-def _pool_pnls(
-    symbol_results: list[dict], exclude: list[str] | None = None
-) -> tuple[np.ndarray, int]:
+def _pool_pnls(symbol_results: list[dict], exclude: list[str] | None = None) -> tuple[np.ndarray, int]:
     """
     Pool per-trade P&Ls across symbols, optionally excluding named symbols.
 
@@ -482,9 +467,9 @@ def _pool_pnls(
     import os as _os
 
     exclude_set = set(exclude or [])
-    all_pnls: list[float] = []
+    all_pnls: ClassVar[list[float]] = []
     n_total = 0
-    skipped_symbols: list[str] = []
+    skipped_symbols: ClassVar[list[str]] = []
     _is_production = _os.getenv("APP_ENV", "production").lower() == "production"
 
     for r in symbol_results:
@@ -540,18 +525,13 @@ def _sharpe_stats(pnls: np.ndarray, n_total: int, target_n: int) -> dict:
     sr = abs(sharpe)
     se = float(np.sqrt((1 + 0.5 * sr**2) / max(n_total, 1)))
     gate_passed = n_total >= target_n
-    credible = se <= 0.10  # noqa: PLR2004
+    credible = se <= 0.10
     n_req = int(np.ceil((1 + 0.5 * sr**2) / 0.01))
     if gate_passed:
-        se_note = f"SE={se:.3f}" + (
-            " (credible)" if credible else f" (need N>={n_req} for SE<=0.10)"
-        )
+        se_note = f"SE={se:.3f}" + (" (credible)" if credible else f" (need N>={n_req} for SE<=0.10)")
         msg = f"Sharpe gate PASSED: N={n_total} >= {target_n}. {se_note}"
     else:
-        msg = (
-            f"Sharpe gate BLOCKED: N={n_total} < {target_n}. "
-            f"SE={se:.3f} (SE<=0.10 requires N>={n_req})."
-        )
+        msg = f"Sharpe gate BLOCKED: N={n_total} < {target_n}. SE={se:.3f} (SE<=0.10 requires N>={n_req})."
     return {
         "n_total_trades": n_total,
         "pooled_sharpe": round(float(sharpe), 4),
@@ -624,9 +604,7 @@ def compute_pooled_metrics(symbol_results: list[dict], target_n: int = 600) -> d
     result = dict(full_stats)
     result["_validation"] = {
         "outlier_symbols": outlier_syms,
-        "outlier_reasons": {
-            sym: reason for sym, reason in zip(outlier_syms, outlier_reasons, strict=False)
-        },
+        "outlier_reasons": {sym: reason for sym, reason in zip(outlier_syms, outlier_reasons, strict=False)},
         "honest_pooled": honest_stats,
         "gate_uses_honest_pool": bool(outlier_syms),
         "note": (
@@ -642,10 +620,7 @@ def compute_pooled_metrics(symbol_results: list[dict], target_n: int = 600) -> d
     if honest_stats is not None:
         result["sharpe_gate_passed"] = honest_stats["sharpe_gate_passed"]
         result["sharpe_credible"] = honest_stats["sharpe_credible"]
-        result["message"] = (
-            f"[HONEST POOL — {','.join(outlier_syms)} excluded] "
-            + honest_stats["message"]
-        )
+        result["message"] = f"[HONEST POOL — {','.join(outlier_syms)} excluded] " + honest_stats["message"]
 
     return result
 
@@ -693,11 +668,9 @@ def run_backtest(
                 smoke=smoke,
             )
             symbol_results.append(result)
-        except Exception as exc:
-            logger.error("Backtest failed for %s: %s", display_name, exc)
-            symbol_results.append(
-                {"symbol": display_name, "error": str(exc), "n_trades": 0}
-            )
+        except Exception:
+            logger.exception("Backtest failed for %s: %s", display_name)
+            symbol_results.append({"symbol": display_name, "error": "Backtest failed — check server logs", "n_trades": 0})
 
     pooled = compute_pooled_metrics(symbol_results, target_n=target_n)
 
@@ -714,16 +687,12 @@ def run_backtest(
     }
 
     # Save report — extended run gets its own file
-    report_filename = (
-        "multi_symbol_report_extended.json" if extended else "multi_symbol_report.json"
-    )
+    report_filename = "multi_symbol_report_extended.json" if extended else "multi_symbol_report.json"
     report_path = RESULTS_DIR / report_filename
     # Strip trade-level data for the saved report (keep summary only)
     report_slim = {
         **report,
-        "symbols": [
-            {k: v for k, v in r.items() if k != "trades"} for r in symbol_results
-        ],
+        "symbols": [{k: v for k, v in r.items() if k != "trades"} for r in symbol_results],
     }
     report_path.write_text(json.dumps(report_slim, indent=2))
     logger.info("Report saved → %s", report_path)
@@ -739,7 +708,7 @@ def run_backtest(
             print(
                 f"  {r['symbol']:12s}: N={r['n_trades']:4d} trades | "
                 f"Sharpe={r.get('sharpe', 0):.2f} | "
-                f"WinRate={r.get('win_rate', 0)*100:.1f}% | "
+                f"WinRate={r.get('win_rate', 0) * 100:.1f}% | "
                 f"Acc={r.get('accuracy', 0):.3f}"
             )
     print()
@@ -758,23 +727,15 @@ def run_backtest(
 def main():
     parser = argparse.ArgumentParser(description="Multi-symbol backtest engine")
     parser.add_argument("--years", type=int, default=10, help="Years of history")
-    parser.add_argument(
-        "--oos-frac", type=float, default=0.3, help="OOS fraction (default 0.3)"
-    )
-    parser.add_argument(
-        "--target-n", type=int, default=600, help="Target N trades for Sharpe gate"
-    )
-    parser.add_argument(
-        "--smoke", action="store_true", help="Fast smoke test (3 years)"
-    )
+    parser.add_argument("--oos-frac", type=float, default=0.3, help="OOS fraction (default 0.3)")
+    parser.add_argument("--target-n", type=int, default=600, help="Target N trades for Sharpe gate")
+    parser.add_argument("--smoke", action="store_true", help="Fast smoke test (3 years)")
     parser.add_argument(
         "--extended",
         action="store_true",
         help="Run 7-symbol extended set (XAU+BTC+ETH+EUR/USD+GBP/USD+Silver+Oil), target N>919",
     )
-    parser.add_argument(
-        "--symbols", nargs="+", default=None, help="Override symbols: e.g. GC=F BTC-USD"
-    )
+    parser.add_argument("--symbols", nargs="+", default=None, help="Override symbols: e.g. GC=F BTC-USD")
     args = parser.parse_args()
 
     syms = None

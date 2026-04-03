@@ -5,11 +5,10 @@
 # No commercial use without explicit permission.
 """transparency/engine.py — ExecutionTransparencyEngine."""
 
-from typing import Any
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
 import logging
 import statistics
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 # Pip multipliers: 1 pip = 0.0001 for FX pairs, 0.01 for metals/indices
 
@@ -101,19 +100,13 @@ class ExecutionTransparencyEngine:
         slippage = executed_price - requested_price if side == "BUY" else requested_price - executed_price
 
         # Convert slippage to pips using appropriate multiplier
-        slippage_pips = (
-            slippage * FOREX_PIP_MULTIPLIER
-            if "USD" in symbol
-            else slippage * METAL_PIP_MULTIPLIER
-        )
+        slippage_pips = slippage * FOREX_PIP_MULTIPLIER if "USD" in symbol else slippage * METAL_PIP_MULTIPLIER
 
         # Calculate slippage cost
         slippage_cost = slippage * executed_size
 
         # Calculate fill ratio
-        fill_ratio = (
-            (executed_size / requested_size * 100) if requested_size > 0 else 100
-        )
+        fill_ratio = (executed_size / requested_size * 100) if requested_size > 0 else 100
 
         execution = ExecutionRecord(
             execution_id=f"exec_{len(self.executions) + 1}_{int(datetime.now(UTC).timestamp())}",
@@ -134,9 +127,8 @@ class ExecutionTransparencyEngine:
         )
 
         self.executions.append(execution)
-        logger.info(
-            f"Recorded execution {execution.execution_id}: slippage={slippage_pips:.2f} pips"
-        )
+        logger.info("Recorded execution %s: slippage=%s pips", execution.execution_id, slippage_pips)
+
         return execution
 
     def generate_report(
@@ -172,9 +164,7 @@ class ExecutionTransparencyEngine:
             return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
         # Filter executions
-        filtered = [
-            e for e in self.executions if period_start <= _ts(e.timestamp) <= period_end
-        ]
+        filtered = [e for e in self.executions if period_start <= _ts(e.timestamp) <= period_end]
 
         if symbol:
             filtered = [e for e in filtered if e.symbol == symbol]
@@ -244,57 +234,51 @@ class ExecutionTransparencyEngine:
         )
 
         self.reports[report.report_id] = report
-        logger.info(
-            f"Generated report {report.report_id}: {len(filtered)} executions analyzed"
-        )
+        logger.info("Generated report %s: %s executions analyzed", report.report_id, len(filtered))
+
         return report
 
-    def _calculate_quality(
-        self, avg_slippage: float, avg_latency: float, avg_fill_ratio: float
-    ) -> ExecutionQuality:
+    def _calculate_quality(self, avg_slippage: float, avg_latency: float, avg_fill_ratio: float) -> ExecutionQuality:
         """Calculate overall execution quality rating."""
         score = 100
 
         # Slippage impact (higher slippage = lower score)
-        if avg_slippage > 5:  # noqa: PLR2004
+        if avg_slippage > 5:
             score -= 30
-        elif avg_slippage > 2:  # noqa: PLR2004
+        elif avg_slippage > 2:
             score -= 15
-        elif avg_slippage > 0.5:  # noqa: PLR2004
+        elif avg_slippage > 0.5:
             score -= 5
         elif avg_slippage < 0:  # Positive slippage (improvement)
             score += 5
 
         # Latency impact
-        if avg_latency > 500:  # noqa: PLR2004
+        if avg_latency > 500:
             score -= 20
-        elif avg_latency > 200:  # noqa: PLR2004
+        elif avg_latency > 200:
             score -= 10
-        elif avg_latency > 100:  # noqa: PLR2004
+        elif avg_latency > 100:
             score -= 5
 
         # Fill ratio impact
-        if avg_fill_ratio < 90:  # noqa: PLR2004
+        if avg_fill_ratio < 90:
             score -= 20
-        elif avg_fill_ratio < 95:  # noqa: PLR2004
+        elif avg_fill_ratio < 95:
             score -= 10
-        elif avg_fill_ratio < 99:  # noqa: PLR2004
+        elif avg_fill_ratio < 99:
             score -= 5
 
-        if score >= 90:  # noqa: PLR2004
+        if score >= 90:
             return ExecutionQuality.EXCELLENT
-        elif score >= 75:  # noqa: PLR2004
+        if score >= 75:
             return ExecutionQuality.GOOD
-        elif score >= 60:  # noqa: PLR2004
+        if score >= 60:
             return ExecutionQuality.AVERAGE
-        elif score >= 40:  # noqa: PLR2004
+        if score >= 40:
             return ExecutionQuality.POOR
-        else:
-            return ExecutionQuality.VERY_POOR
+        return ExecutionQuality.VERY_POOR
 
-    def _compare_brokers(
-        self, executions: list[ExecutionRecord]
-    ) -> dict[str, dict[str, float]]:
+    def _compare_brokers(self, executions: list[ExecutionRecord]) -> dict[str, dict[str, float]]:
         """Compare execution quality across brokers."""
         broker_data: dict[str, list[ExecutionRecord]] = {}
 
@@ -329,9 +313,7 @@ class ExecutionTransparencyEngine:
         period_end = period_end or datetime.now(UTC)
         period_start = period_start or (period_end - timedelta(days=30))
 
-        filtered = [
-            e for e in self.executions if period_start <= e.timestamp <= period_end
-        ]
+        filtered = [e for e in self.executions if period_start <= e.timestamp <= period_end]
 
         if not filtered:
             return {"buckets": [], "counts": []}
@@ -343,7 +325,7 @@ class ExecutionTransparencyEngine:
         counts = [0] * 7
 
         for s in slippages:
-            if s < -2:  # noqa: PLR2004
+            if s < -2:
                 counts[0] += 1
             elif s < -1:
                 counts[1] += 1
@@ -353,7 +335,7 @@ class ExecutionTransparencyEngine:
                 counts[3] += 1
             elif s < 1:
                 counts[4] += 1
-            elif s < 2:  # noqa: PLR2004
+            elif s < 2:
                 counts[5] += 1
             else:
                 counts[6] += 1
@@ -395,14 +377,10 @@ class ExecutionTransparencyEngine:
         return {
             "dates": dates,
             "latencies": avg_latencies,
-            "trend": "improving"
-            if len(avg_latencies) > 1 and avg_latencies[-1] < avg_latencies[0]
-            else "stable",
+            "trend": "improving" if len(avg_latencies) > 1 and avg_latencies[-1] < avg_latencies[0] else "stable",
         }
 
-    def get_execution_audit_trail(
-        self, order_id: str | None = None, limit: int = 100
-    ) -> list[dict[str, Any]]:
+    def get_execution_audit_trail(self, order_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
         """Get execution audit trail."""
         filtered = [e for e in self.executions if e.order_id == order_id] if order_id else self.executions[-limit:]
 

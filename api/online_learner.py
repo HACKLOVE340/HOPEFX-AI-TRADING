@@ -32,18 +32,32 @@ Endpoints
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-UTC = timezone.utc
+import re
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from api.auth import get_current_user, require_role, TokenPayload
+from api.auth import TokenPayload, get_current_user, require_role
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/online-learner", tags=["Online Learner"])
+
+# Allowlist for symbol names — only alphanumeric and underscore permitted.
+# This prevents path-traversal attacks when symbols are used in file paths.
+_SYMBOL_RE = re.compile(r"^[A-Za-z0-9_]{1,32}$")
+
+
+def _validate_symbol(symbol: str) -> str:
+    """Raise HTTPException 422 if symbol contains path-unsafe characters."""
+    if not _SYMBOL_RE.match(symbol):
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid symbol: only alphanumeric characters and underscores are allowed.",
+        )
+    return symbol
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -56,10 +70,11 @@ def _get_registry() -> dict[str, Any]:
 
         return _learner_registry
     except ImportError as exc:
+        logger.error("ml.online_learner unavailable: %s", exc)
         raise HTTPException(
             status_code=503,
-            detail=f"ml.online_learner unavailable: {exc}",
-        ) from exc
+            detail="ml.online_learner unavailable — check server logs",
+        ) from None
 
 
 def _get_learner(symbol: str):
@@ -69,10 +84,11 @@ def _get_learner(symbol: str):
 
         return get_online_learner(symbol=symbol)
     except ImportError as exc:
+        logger.error("ml.online_learner unavailable: %s", exc)
         raise HTTPException(
             status_code=503,
-            detail=f"ml.online_learner unavailable: {exc}",
-        ) from exc
+            detail="ml.online_learner unavailable — check server logs",
+        ) from None
 
 
 def _fetch_bars(symbol: str, lookback: int = 200):
@@ -101,15 +117,14 @@ def _fetch_bars(symbol: str, lookback: int = 200):
         df = yf.download(ticker, period="60d", interval="1h", progress=False)
         if df is None or df.empty:
             raise ValueError(f"No data returned for {ticker}")
-        df.columns = [
-            c.lower() if isinstance(c, str) else c[0].lower() for c in df.columns
-        ]
+        df.columns = [c.lower() if isinstance(c, str) else c[0].lower() for c in df.columns]
         return df.tail(lookback)
     except Exception as exc:
+        logger.warning("Could not fetch OHLCV for %s: %s", symbol, exc)
         raise HTTPException(
             status_code=502,
-            detail=f"Could not fetch OHLCV for {symbol}: {exc}",
-        ) from exc
+            detail=f"Could not fetch OHLCV for {symbol} — check server logs",
+        ) from None
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -132,12 +147,8 @@ class LearnerStatusResponse(BaseModel):
 
 
 class PartialFitRequest(BaseModel):
-    symbol: str = Field(
-        "XAU_USD", description="Symbol to update (e.g. XAU_USD, BTC_USD)"
-    )
-    lookback: int = Field(
-        200, ge=50, le=2000, description="Number of recent OHLCV bars to use"
-    )
+    symbol: str = Field("XAU_USD", description="Symbol to update (e.g. XAU_USD, BTC_USD)")
+    lookback: int = Field(200, ge=50, le=2000, description="Number of recent OHLCV bars to use")
 
 
 class PartialFitResponse(BaseModel):
@@ -239,9 +250,7 @@ async def online_learner_status(
         try:
             raw = learner.status()
         except Exception as exc:
-            logger.warning(
-                "online_learner_status: status() failed for %s: %s", sym, exc
-            )
+            logger.warning("online_learner_status: status() failed for %s: %s", sym, exc)
             raw = {
                 "symbol": sym,
                 "fitted": False,
@@ -291,8 +300,9 @@ async def partial_fit(
     import asyncio
     import functools
 
-    learner = _get_learner(req.symbol)
-    bars = _fetch_bars(req.symbol, lookback=req.lookback)
+    symbol = _validate_symbol(req.symbol)
+    learner = _get_learner(symbol)
+    bars = _fetch_bars(symbol, lookback=req.lookback)
 
     loop = asyncio.get_event_loop()
     try:
@@ -300,12 +310,12 @@ async def partial_fit(
             None,
             functools.partial(learner.partial_fit, bars),
         )
-    except Exception as exc:
-        logger.exception("partial_fit failed for %s: %s", req.symbol, exc)
+    except Exception:
+        logger.exception("partial_fit failed for %s: %s", req.symbol)
         raise HTTPException(
             status_code=500,
-            detail=f"partial_fit raised: {exc}",
-        ) from exc
+            detail="Online learning update failed — check server logs",
+        ) from None
 
     updated_at = datetime.now(UTC).isoformat()
     # Stamp last_fit_at on the learner for status reporting
@@ -320,8 +330,7 @@ async def partial_fit(
         bars_used=len(bars),
         updated_at=updated_at,
         message=(
-            f"partial_fit completed for {req.symbol} — "
-            f"{len(bars)} bars, update #{raw.get('update_count', 0)}"
+            f"partial_fit completed for {req.symbol} — {len(bars)} bars, update #{raw.get('update_count', 0)}"
             if success
             else f"partial_fit returned False for {req.symbol} — check logs"
         ),
@@ -407,27 +416,27 @@ async def reset_online_learner(
     Requires admin role.
     """
     reset_at = datetime.now(UTC).isoformat()
+    symbol = _validate_symbol(req.symbol)
     try:
         from research.pipeline.online_learning import reset_online_learner as _reset
 
-        removed = _reset(symbol=req.symbol)
+        removed = _reset(symbol=symbol)
     except Exception as exc:
+        logger.error("reset_online_learner failed for %s: %s", symbol, type(exc).__name__)
         raise HTTPException(
             status_code=500,
-            detail=f"reset_online_learner failed: {exc}",
-        ) from exc
+            detail="Online learner reset failed — check server logs",
+        ) from None
 
     msg = (
-        f"OnlineLearnerStore for {req.symbol.upper()} removed from registry — "
+        f"OnlineLearnerStore for {symbol.upper()} removed from registry — "
         "fresh instance will be created on next inference call."
         if removed
-        else f"No OnlineLearnerStore found for {req.symbol.upper()} — nothing to reset."
+        else f"No OnlineLearnerStore found for {symbol.upper()} — nothing to reset."
     )
-    logger.info(
-        "online_learner reset: symbol=%s removed=%s", req.symbol.upper(), removed
-    )
+    logger.info("online_learner reset: symbol=%s removed=%s", symbol.upper(), removed)
     return ResetResponse(
-        symbol=req.symbol.upper(),
+        symbol=symbol.upper(),
         reset=removed,
         message=msg,
         reset_at=reset_at,

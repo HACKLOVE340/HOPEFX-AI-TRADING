@@ -9,7 +9,7 @@ Unit tests for Broker connectors.
 
 import pytest
 
-from brokers.base import OrderType, OrderSide, OrderStatus
+from brokers.base import OrderSide, OrderStatus, OrderType
 
 
 @pytest.mark.unit
@@ -18,7 +18,7 @@ class TestPaperTradingBroker:
 
     def test_broker_initialization(self, paper_broker):
         """Test broker initialization."""
-        assert paper_broker.balance == 100000  # noqa: PLR2004
+        assert paper_broker.balance == 100000
         assert len(paper_broker.positions) == 0
         assert len(paper_broker.orders) == 0
 
@@ -155,11 +155,8 @@ class TestPaperTradingBroker:
 
         assert result
         # Balance after close = balance_before_close + gross_pnl - close_commission
-        assert paper_broker.balance == pytest.approx(
-            balance_before_close + net_pnl, abs=1e-4
-        ), (
-            f"Expected balance {balance_before_close + net_pnl:.4f}, "
-            f"got {paper_broker.balance:.4f}"
+        assert paper_broker.balance == pytest.approx(balance_before_close + net_pnl, abs=1e-4), (
+            f"Expected balance {balance_before_close + net_pnl:.4f}, got {paper_broker.balance:.4f}"
         )
         # Net P&L must be positive (20 pip move >> commission)
         assert paper_broker.balance > balance_before_close
@@ -194,9 +191,7 @@ class TestPaperTradingBroker:
         net_pnl = gross_pnl - close_commission
 
         assert result
-        assert paper_broker.balance == pytest.approx(
-            balance_before_close + net_pnl, abs=1e-4
-        )
+        assert paper_broker.balance == pytest.approx(balance_before_close + net_pnl, abs=1e-4)
         # Net P&L must be negative
         assert paper_broker.balance < balance_before_close
 
@@ -209,7 +204,7 @@ class TestPaperTradingBroker:
         assert hasattr(info, "equity")
         assert hasattr(info, "margin_used")
         assert hasattr(info, "margin_available")
-        assert info.balance == 100000  # noqa: PLR2004
+        assert info.balance == 100000
 
     def test_insufficient_balance(self, paper_broker):
         """Test placing order with very large quantity."""
@@ -231,7 +226,7 @@ class TestPaperTradingBroker:
         # First test with a known symbol
         price = paper_broker.get_market_price("BTC/USD")
         assert price > 0
-        assert isinstance(price, (int, float))
+        assert isinstance(price, int | float)
 
         # Test with unknown symbol - should return 0.0
         price = paper_broker.get_market_price("EUR_USD")

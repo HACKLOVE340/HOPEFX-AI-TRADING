@@ -44,9 +44,10 @@ import sys
 import time
 import traceback
 import warnings
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from collections.abc import Callable
+from typing import ClassVar
 
 # ── Environment bootstrap ─────────────────────────────────────────────────────
 # Must happen before any app module is imported so startup validators see
@@ -146,15 +147,11 @@ def _run_stage(
     try:
         detail = fn() or ""
         elapsed = time.perf_counter() - t0
-        result = StageResult(
-            name=name, passed=True, elapsed_s=elapsed, detail=detail, sla_s=sla
-        )
+        result = StageResult(name=name, passed=True, elapsed_s=elapsed, detail=detail, sla_s=sla)
     except Exception as exc:
         elapsed = time.perf_counter() - t0
         tb = traceback.format_exc()
-        result = StageResult(
-            name=name, passed=False, elapsed_s=elapsed, detail=f"{exc}\n{tb}", sla_s=sla
-        )
+        result = StageResult(name=name, passed=False, elapsed_s=elapsed, detail=f"{exc}\n{tb}", sla_s=sla)
 
     if not quiet:
         _print_result(result)
@@ -189,10 +186,7 @@ def _print_summary(report: ValidationReport) -> None:
     print(f"\n{_BOLD}{'═' * 60}{_RESET}")
     colour = _GREEN if report.passed else _RED
     label = "ALL STAGES PASSED" if report.passed else "VALIDATION FAILED"
-    print(
-        f"{colour}{_BOLD}  {label}  "
-        f"({report.n_passed}/{len(report.results)} stages){_RESET}"
-    )
+    print(f"{colour}{_BOLD}  {label}  ({report.n_passed}/{len(report.results)} stages){_RESET}")
     if not report.passed:
         print(f"\n  {_RED}Failed stages:{_RESET}")
         for r in report.results:
@@ -261,7 +255,7 @@ def stage_data_loading() -> str:
     df["timestamp"] = pd.to_datetime(df["timestamp"])
     df = df.set_index("timestamp").sort_index()
 
-    if len(df) < 200:  # noqa: PLR2004
+    if len(df) < 200:
         raise ValueError(f"Insufficient rows: {len(df)} (need ≥ 200)")
 
     # Sanity checks on price data
@@ -293,7 +287,7 @@ def stage_feature_engineering() -> str:
         raise ValueError("Feature engineering returned empty DataFrame")
 
     n_rows, n_cols = features.shape
-    if n_cols < 10:  # noqa: PLR2004
+    if n_cols < 10:
         raise ValueError(f"Too few features: {n_cols}")
 
     # No NaN-only columns
@@ -383,16 +377,12 @@ def stage_online_learning() -> str:
 
     status = learner.status()
     update_count = status.get("update_count", 0)
-    if update_count < 2:  # noqa: PLR2004
+    if update_count < 2:
         raise ValueError(f"update_count too low: {update_count}")
 
     ctx.online_learner = learner
     prob_str = f"{prob:.4f}" if prob is not None else "None"
-    return (
-        f"updates={update_count}  "
-        f"rolling_acc={status.get('rolling_accuracy', 'n/a')}  "
-        f"predict_proba={prob_str}"
-    )
+    return f"updates={update_count}  rolling_acc={status.get('rolling_accuracy', 'n/a')}  predict_proba={prob_str}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -401,7 +391,7 @@ def stage_online_learning() -> str:
 
 
 def stage_brain_signal() -> str:
-    from brain.hopefx_brain import HOPEFXBrain, BrainDecision
+    from brain.hopefx_brain import BrainDecision, HOPEFXBrain
 
     _ensure_ohlcv()
     brain = HOPEFXBrain()
@@ -409,9 +399,7 @@ def stage_brain_signal() -> str:
     decision = brain.process_bar(ctx.ohlcv_df.tail(300), symbol="XAUUSD")
 
     if not isinstance(decision, BrainDecision):
-        raise TypeError(
-            f"process_bar() returned {type(decision)}, expected BrainDecision"
-        )
+        raise TypeError(f"process_bar() returned {type(decision)}, expected BrainDecision")
 
     if decision.action not in ("long", "short", "hold"):
         raise ValueError(f"unexpected action: {decision.action!r}")
@@ -435,7 +423,7 @@ def stage_brain_signal() -> str:
 
 
 def stage_risk_sizing() -> str:
-    from risk.manager import RiskManager, RiskConfig
+    from risk.manager import RiskConfig, RiskManager
 
     _ensure_ohlcv()
     rm = RiskManager(
@@ -455,7 +443,7 @@ def stage_risk_sizing() -> str:
         confidence = 0.72
         probability = 0.65
         data_quality = 1.0
-        features: dict = {}
+        features: ClassVar[dict] = {}
         tick_mid = last_close
         tick_spread = 1.0
 
@@ -482,9 +470,7 @@ def stage_risk_sizing() -> str:
         if sizing.take_profit_usd <= 0:
             raise ValueError(f"take_profit_usd not set: {sizing.take_profit_usd}")
         if sizing.stop_loss_usd >= sizing.take_profit_usd:
-            raise ValueError(
-                f"stop ({sizing.stop_loss_usd}) >= tp ({sizing.take_profit_usd})"
-            )
+            raise ValueError(f"stop ({sizing.stop_loss_usd}) >= tp ({sizing.take_profit_usd})")
 
     ctx.risk_manager = rm
     ctx.sizing_result = sizing
@@ -503,8 +489,9 @@ def stage_risk_sizing() -> str:
 
 def stage_order_execution() -> str:
     import asyncio
+
+    from brokers.base import OrderSide, OrderStatus, OrderType
     from brokers.paper_trading import PaperTradingBroker
-    from brokers.base import OrderSide, OrderType, OrderStatus
 
     _ensure_ohlcv()
     broker = PaperTradingBroker(initial_balance=100_000.0)
@@ -514,18 +501,14 @@ def stage_order_execution() -> str:
     broker.market_prices["XAUUSD"] = mid
 
     # Market buy
-    order_buy = broker.place_order(
-        "XAUUSD", OrderSide.BUY, OrderType.MARKET, quantity=0.1
-    )
+    order_buy = broker.place_order("XAUUSD", OrderSide.BUY, 0.1, OrderType.MARKET)
     if order_buy.status != OrderStatus.FILLED:
         raise RuntimeError(f"Market buy not filled: {order_buy.status}")
     if order_buy.average_price <= 0:
         raise ValueError(f"Fill price not set: {order_buy.average_price}")
 
     # Market sell
-    order_sell = broker.place_order(
-        "XAUUSD", OrderSide.SELL, OrderType.MARKET, quantity=0.1
-    )
+    order_sell = broker.place_order("XAUUSD", OrderSide.SELL, 0.1, OrderType.MARKET)
     if order_sell.status != OrderStatus.FILLED:
         raise RuntimeError(f"Market sell not filled: {order_sell.status}")
 
@@ -557,8 +540,9 @@ def stage_order_execution() -> str:
 
 def stage_position_accounting() -> str:
     import asyncio
-    from brokers.paper_trading import PaperTradingBroker
+
     from brokers.base import OrderSide, OrderType
+    from brokers.paper_trading import PaperTradingBroker
 
     _ensure_ohlcv()
     broker = PaperTradingBroker(initial_balance=50_000.0)
@@ -568,9 +552,7 @@ def stage_position_accounting() -> str:
     broker.market_prices["XAUUSD"] = mid
 
     # Open a long position
-    buy_order = broker.place_order(
-        "XAUUSD", OrderSide.BUY, OrderType.MARKET, quantity=1.0
-    )
+    buy_order = broker.place_order("XAUUSD", OrderSide.BUY, 1.0, OrderType.MARKET)
     if buy_order.status.name != "FILLED":
         raise RuntimeError(f"Buy order not filled: {buy_order.status}")
 
@@ -593,7 +575,7 @@ def stage_position_accounting() -> str:
     pnl = balance_after_close - 50_000.0
 
     # With a 1% up move on a long, realized P&L should be positive
-    if pnl <= -500:  # noqa: PLR2004
+    if pnl <= -500:
         raise ValueError(f"P&L unexpectedly negative after favourable move: {pnl:.2f}")
 
     # Position should be gone after close
@@ -615,14 +597,14 @@ def stage_position_accounting() -> str:
 
 def stage_kill_switch_gate() -> str:
     import tempfile
-    from pathlib import Path as _Path
+
     from brain.hopefx_brain import HOPEFXBrain
     from kill_switch import KillSwitch
 
     _ensure_ohlcv()
     with tempfile.TemporaryDirectory() as tmp:
-        flag_file = _Path(tmp) / "ks.flag"
-        ks = KillSwitch(flag_file=flag_file, deactivation_token="test-token")
+        flag_file = Path(tmp) / "ks.flag"
+        ks = KillSwitch(flag_file=flag_file, deactivation_token="test-token")  # nosec B106 — test-only token
 
         # Activate the kill switch
         ks.activate("validation_test")
@@ -635,23 +617,15 @@ def stage_kill_switch_gate() -> str:
 
         decision = brain.process_bar(ctx.ohlcv_df.tail(300), symbol="XAUUSD")
         if decision.action != "hold":
-            raise RuntimeError(
-                f"Brain returned {decision.action!r} with kill switch active "
-                f"(expected 'hold')"
-            )
+            raise RuntimeError(f"Brain returned {decision.action!r} with kill switch active (expected 'hold')")
         if decision.confidence != 0.0:
-            raise ValueError(
-                f"Brain confidence={decision.confidence} with kill switch active "
-                f"(expected 0.0)"
-            )
+            raise ValueError(f"Brain confidence={decision.confidence} with kill switch active (expected 0.0)")
 
         # Deactivate and verify brain can act again
         ks.deactivate("test-token")  # nosec B106 - test token in kill switch validation, not a real credential
         assert not ks.is_active(), "KillSwitch.deactivate() did not clear active state"
 
-    return (
-        "kill_switch activated → brain returned hold  |  deactivated → brain unblocked"
-    )
+    return "kill_switch activated → brain returned hold  |  deactivated → brain unblocked"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -697,9 +671,7 @@ _report = ValidationReport()
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="End-to-end ML flow validation for HOPEFX-AI-TRADING"
-    )
+    parser = argparse.ArgumentParser(description="End-to-end ML flow validation for HOPEFX-AI-TRADING")
     parser.add_argument(
         "--quiet",
         "-q",

@@ -17,12 +17,11 @@ Inspired by: MT5, Bookmap, NinjaTrader DOM features
 """
 
 import logging
-from datetime import datetime, timezone
-UTC = timezone.utc
-from dataclasses import dataclass, field, asdict
-from collections import deque
-from enum import Enum
 import threading
+from collections import deque
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
+from enum import Enum
 
 logger = logging.getLogger(__name__)
 
@@ -110,9 +109,7 @@ class OrderBook:
             return self.mid_price
 
         # Weight by inverse of volume (larger volume = closer to that side)
-        weighted = (
-            self.best_bid * ask_volume + self.best_ask * bid_volume
-        ) / total_volume
+        weighted = (self.best_bid * ask_volume + self.best_ask * bid_volume) / total_volume
         return round(weighted, 5)
 
     @property
@@ -287,14 +284,8 @@ class DepthOfMarketService:
             self._sequence += 1
 
             # Convert to OrderBookLevel objects
-            bid_levels = [
-                OrderBookLevel(price=price, size=size)
-                for price, size in bids[: self._max_levels]
-            ]
-            ask_levels = [
-                OrderBookLevel(price=price, size=size)
-                for price, size in asks[: self._max_levels]
-            ]
+            bid_levels = [OrderBookLevel(price=price, size=size) for price, size in bids[: self._max_levels]]
+            ask_levels = [OrderBookLevel(price=price, size=size) for price, size in asks[: self._max_levels]]
 
             # Create or update order book
             order_book = OrderBook(
@@ -312,7 +303,8 @@ class DepthOfMarketService:
                 self._history[symbol] = deque(maxlen=self._history_size)
             self._history[symbol].append(order_book)
 
-            logger.debug(f"Order book updated: {symbol}, seq={self._sequence}")
+            logger.debug("Order book updated: %s, seq=%s", symbol, self._sequence)
+
 
     def update_level(self, symbol: str, side: OrderBookSide, price: float, size: float):
         """
@@ -326,7 +318,8 @@ class DepthOfMarketService:
         """
         with self._lock:
             if symbol not in self._order_books:
-                logger.warning(f"No order book for {symbol}")
+                logger.warning("No order book for %s", symbol)
+
                 return
 
             order_book = self._order_books[symbol]
@@ -466,9 +459,9 @@ class DepthOfMarketService:
             selling_pressure = self._classify_pressure(-imbalance, positive=True)
 
             # Determine market bias
-            if imbalance > 0.2:  # noqa: PLR2004
+            if imbalance > 0.2:
                 market_bias = "bullish"
-            elif imbalance < -0.2:  # noqa: PLR2004
+            elif imbalance < -0.2:
                 market_bias = "bearish"
             else:
                 market_bias = "neutral"
@@ -495,9 +488,7 @@ class DepthOfMarketService:
                 market_bias=market_bias,
             )
 
-    def _find_key_levels(
-        self, levels: list[OrderBookLevel], top_n: int = 3
-    ) -> list[dict]:
+    def _find_key_levels(self, levels: list[OrderBookLevel], top_n: int = 3) -> list[dict]:
         """Find key price levels with high volume."""
         if not levels:
             return []
@@ -506,8 +497,7 @@ class DepthOfMarketService:
         sorted_levels = sorted(levels, key=lambda x: -x.size)
 
         return [
-            {"price": level.price, "size": level.size, "rank": i + 1}
-            for i, level in enumerate(sorted_levels[:top_n])
+            {"price": level.price, "size": level.size, "rank": i + 1} for i, level in enumerate(sorted_levels[:top_n])
         ]
 
     def _classify_pressure(self, value: float, positive: bool) -> str:
@@ -515,20 +505,17 @@ class DepthOfMarketService:
         if positive:
             value = abs(value)
 
-        if value > 0.4:  # noqa: PLR2004
+        if value > 0.4:
             return "strong"
-        elif value > 0.15:  # noqa: PLR2004
+        if value > 0.15:
             return "moderate"
-        else:
-            return "weak"
+        return "weak"
 
     # ================================================================
     # VISUALIZATION DATA
     # ================================================================
 
-    def get_dom_visualization_data(
-        self, symbol: str, levels: int = 20
-    ) -> dict | None:
+    def get_dom_visualization_data(self, symbol: str, levels: int = 20) -> dict | None:
         """
         Get data formatted for DOM visualization.
 
@@ -572,13 +559,12 @@ class DepthOfMarketService:
             _MIN_PRICE_GAP_THRESHOLD = 1e-9  # gaps below this are float-noise
             _TICK_SIZE_PRECISION = 10  # decimal places for tick rounding
             tick_size = 0.01
-            if len(all_prices) >= 2:  # noqa: PLR2004
+            if len(all_prices) >= 2:
                 sorted_prices = sorted(set(all_prices))
                 gaps = [
                     abs(sorted_prices[i + 1] - sorted_prices[i])
                     for i in range(len(sorted_prices) - 1)
-                    if abs(sorted_prices[i + 1] - sorted_prices[i])
-                    > _MIN_PRICE_GAP_THRESHOLD
+                    if abs(sorted_prices[i + 1] - sorted_prices[i]) > _MIN_PRICE_GAP_THRESHOLD
                 ]
                 if gaps:
                     tick_size = round(min(gaps), _TICK_SIZE_PRECISION)
@@ -603,12 +589,8 @@ class DepthOfMarketService:
 
             # Add scaled values
             for row in ladder:
-                row["bid_pct"] = (
-                    round(row["bid_size"] / max_bid * 100, 1) if max_bid > 0 else 0
-                )
-                row["ask_pct"] = (
-                    round(row["ask_size"] / max_ask * 100, 1) if max_ask > 0 else 0
-                )
+                row["bid_pct"] = round(row["bid_size"] / max_bid * 100, 1) if max_bid > 0 else 0
+                row["ask_pct"] = round(row["ask_size"] / max_ask * 100, 1) if max_ask > 0 else 0
 
             return {
                 "symbol": symbol,
@@ -685,9 +667,7 @@ class DepthOfMarketService:
                 "symbols_tracked": len(self._order_books),
                 "total_updates": self._sequence,
                 "symbols": list(self._order_books.keys()),
-                "history_sizes": {
-                    symbol: len(history) for symbol, history in self._history.items()
-                },
+                "history_sizes": {symbol: len(history) for symbol, history in self._history.items()},
             }
 
 

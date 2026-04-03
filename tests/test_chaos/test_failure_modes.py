@@ -11,10 +11,11 @@ broker errors, missing data, kill switch activation, and metric
 collection failures.
 """
 
-import pytest
+import contextlib
 import tempfile
 from pathlib import Path
-import contextlib
+
+import pytest
 
 
 class TestBrokerFailureModes:
@@ -38,7 +39,7 @@ class TestBrokerFailureModes:
         broker = PaperTradingBroker(initial_balance=10_000.0)
         await broker.connect()
         price = broker.get_market_price("UNKNOWN_PAIR")
-        assert isinstance(price, (int, float))
+        assert isinstance(price, int | float)
         await broker.disconnect()
 
     @pytest.mark.asyncio
@@ -68,7 +69,7 @@ class TestRiskManagerFailureModes:
     """RiskManager handles edge-case inputs without crashing."""
 
     def _risk(self):
-        from risk.manager import RiskManager, RiskConfig
+        from risk.manager import RiskConfig, RiskManager
 
         return RiskManager(
             config=RiskConfig(
@@ -96,7 +97,7 @@ class TestRiskManagerFailureModes:
             )
             assert result is not None
         except (ValueError, ZeroDivisionError):
-            pass  # Raising a clear error is also acceptable
+            ...  # nosec B110
 
     def test_drawdown_check_with_empty_equity_curve(self):
         risk = self._risk()
@@ -108,7 +109,7 @@ class TestRiskManagerFailureModes:
         risk = self._risk()
         result = risk.check_risk_limits()
         assert isinstance(result, tuple)
-        assert len(result) == 2  # noqa: PLR2004
+        assert len(result) == 2
 
 
 class TestKillSwitchFailureModes:

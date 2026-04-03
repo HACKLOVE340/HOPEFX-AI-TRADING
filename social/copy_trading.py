@@ -6,8 +6,7 @@
 """Copy trading engine."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from decimal import Decimal
 
 
@@ -59,15 +58,13 @@ class CopyTradingEngine:
     def sync_trade(self, trade_id: str, leader_id: str) -> dict[str, str]:
         """Propagate a leader trade to all active followers. Returns {copy_id: follower_id}."""
         result = {}
-        for _key, rel in self.relationships.items():
+        for rel in self.relationships.values():
             if rel.leader_id == leader_id and rel.is_active:
                 copy_id = f"COPY_{trade_id}_{rel.follower_id}"
                 result[copy_id] = rel.follower_id
         return result
 
-    def get_active_relationships(
-        self, user_id: str, as_follower: bool = True
-    ) -> list[CopyRelationship]:
+    def get_active_relationships(self, user_id: str, as_follower: bool = True) -> list[CopyRelationship]:
         out = []
         for rel in self.relationships.values():
             if not rel.is_active:
@@ -81,7 +78,6 @@ class RiskLimitExceededError(Exception):
     """Raised when a copy trade would exceed risk limits."""
 
 
-
 # Patch CopyTradingEngine with the methods tests expect
 def _ct_init_patched(self, config=None):
     self.relationships = {}
@@ -93,7 +89,7 @@ async def _copy_trade(
     leader_trade: dict,
     follower_config: dict,
     follower_balance: float = 100_000.0,
-    balance: float = None,
+    balance: float | None = None,
 ) -> dict:
     """Copy a leader trade proportionally, respecting follower risk limits."""
     if balance is not None:
@@ -115,9 +111,7 @@ async def _copy_trade(
     max_qty_by_risk = (follower_balance * max_pos_size) / price if price and price > 0 else leader_qty * max_pos_size
 
     if raw_qty > max_qty_by_risk:
-        raise RiskLimitExceededError(
-            f"Copied quantity {raw_qty:.4f} exceeds max allowed {max_qty_by_risk:.4f}"
-        )
+        raise RiskLimitExceededError(f"Copied quantity {raw_qty:.4f} exceeds max allowed {max_qty_by_risk:.4f}")
 
     return {
         "symbol": leader_trade["symbol"],
@@ -134,9 +128,7 @@ def _calculate_leaderboard(self, traders: list) -> list:
 
     scored = []
     for t in traders:
-        score = (
-            t.get("return", 0) * t.get("sharpe", 1) * math.log1p(t.get("followers", 0))
-        )
+        score = t.get("return", 0) * t.get("sharpe", 1) * math.log1p(t.get("followers", 0))
         scored.append({**t, "score": score})
     scored.sort(key=lambda x: x["score"], reverse=True)
     for i, t in enumerate(scored):

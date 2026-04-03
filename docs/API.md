@@ -2,7 +2,7 @@
 
 > HOPEFX REST API — base URL: `https://your-domain.com` (or `http://localhost:8000` locally).
 > All endpoints require a valid JWT unless noted. Trading endpoints also require an active subscription.
-> Last updated: 2026-07-14
+> Last updated: 2026-04-01
 
 ---
 
@@ -405,4 +405,4 @@ For the full endpoint reference including request/response schemas, see [API_REF
 
 ---
 
-*Last updated: 2026-07-14*
+*Last updated: 2026-04-01*

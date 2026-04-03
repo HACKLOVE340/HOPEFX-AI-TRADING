@@ -23,7 +23,6 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
@@ -60,6 +59,7 @@ class TestInitSentry:
         with patch.dict("sys.modules", {"sentry_sdk": None}):
             # Re-import to pick up the patched sys.modules
             import importlib
+
             import monitoring.sentry_config as sc
 
             importlib.reload(sc)

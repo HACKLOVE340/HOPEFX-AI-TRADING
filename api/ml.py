@@ -23,8 +23,8 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -113,16 +113,12 @@ def _get_predictor():
 
     try:
         import pathlib
+
         import joblib
 
-        path = (
-            pathlib.Path(__file__).parent.parent
-            / "ml"
-            / "saved_models"
-            / "xgb_macro.pkl"
-        )
+        path = pathlib.Path(__file__).parent.parent / "ml" / "saved_models" / "xgb_macro.pkl"
         if path.exists():
-            return joblib.load(str(path))
+            return joblib.load(str(path))  # nosec B301 - path is hardcoded to ml/saved_models
     except Exception as exc:
         logger.warning("Saved ML model load failed: %s", exc)
     return None
@@ -144,11 +140,9 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
     """
     import pathlib
 
-    import pandas as pd
-
     symbol_upper = symbol.upper().replace("-", "/").replace("/", "_")
     # Normalise: XAU/USD → XAU_USD, XAUUSD → XAU_USD
-    if "_" not in symbol_upper and len(symbol_upper) == 6:  # noqa: PLR2004
+    if "_" not in symbol_upper and len(symbol_upper) == 6:
         symbol_upper = symbol_upper[:3] + "_" + symbol_upper[3:]
 
     # 1. Live price engine async buffer — skip (sync context here)
@@ -167,10 +161,8 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
                 df = df.rename(columns={"timestamp": "time"}).set_index("time")
                 df = df[["open", "high", "low", "close", "volume"]].dropna()
                 df = df.tail(lookback)
-                if len(df) >= 20:  # noqa: PLR2004
-                    logger.debug(
-                        "ML predict: loaded %d bars from %s", len(df), csv_path.name
-                    )
+                if len(df) >= 20:
+                    logger.debug("ML predict: loaded %d bars from %s", len(df), csv_path.name)
                     return df
             except Exception as exc:
                 logger.debug("CSV load failed (%s): %s", csv_path, exc)
@@ -181,19 +173,13 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
 
         broker = getattr(app_state, "broker", None)
         if broker and hasattr(broker, "get_market_data"):
-            raw = broker.get_market_data(
-                symbol.upper().replace("_", ""), "1h", lookback
-            )
+            raw = broker.get_market_data(symbol.upper().replace("_", ""), "1h", lookback)
             if raw:
                 df = pd.DataFrame(raw)
                 df["time"] = pd.to_datetime(df["timestamp"], unit="s", utc=True)
-                df = df.set_index("time")[
-                    ["open", "high", "low", "close", "volume"]
-                ].dropna()
-                if len(df) >= 20:  # noqa: PLR2004
-                    logger.debug(
-                        "ML predict: loaded %d bars from paper broker", len(df)
-                    )
+                df = df.set_index("time")[["open", "high", "low", "close", "volume"]].dropna()
+                if len(df) >= 20:
+                    logger.debug("ML predict: loaded %d bars from paper broker", len(df))
                     return df
     except Exception as exc:
         logger.debug("Paper broker OHLCV load failed: %s", exc)
@@ -216,7 +202,7 @@ def _compute_atr_sl_tp(
     direction: str,
     sl_atr_mult: float = 1.5,
     tp_atr_mult: float = 3.0,
-) -> tuple:
+) -> tuple[float, float]:
     """
     Compute ATR(14)-based stop-loss and take-profit from an OHLCV DataFrame.
 
@@ -226,16 +212,15 @@ def _compute_atr_sl_tp(
 
     Returns (stop_loss, take_profit) rounded to 5 decimal places.
     """
-    import os as _os
     import numpy as _np
 
-    sl_mult = float(_os.getenv("SL_ATR_MULT", str(sl_atr_mult)))
-    tp_mult = float(_os.getenv("TP_ATR_MULT", str(tp_atr_mult)))
+    sl_mult = float(os.getenv("SL_ATR_MULT", str(sl_atr_mult)))
+    tp_mult = float(os.getenv("TP_ATR_MULT", str(tp_atr_mult)))
 
     atr: float | None = None
 
     try:
-        if ohlcv is not None and len(ohlcv) >= 15:  # noqa: PLR2004
+        if ohlcv is not None and len(ohlcv) >= 15:
             highs = ohlcv["high"].to_numpy(dtype=float)[-15:]
             lows = ohlcv["low"].to_numpy(dtype=float)[-15:]
             closes = ohlcv["close"].to_numpy(dtype=float)[-15:]
@@ -246,7 +231,7 @@ def _compute_atr_sl_tp(
                     _np.abs(lows[1:] - closes[:-1]),
                 ),
             )
-            if len(tr) >= 14:  # noqa: PLR2004
+            if len(tr) >= 14:
                 atr = float(_np.mean(tr[-14:]))
     except Exception as _exc:
         logger.debug("Suppressed exception: %s", _exc)
@@ -265,7 +250,7 @@ def _compute_atr_sl_tp(
     return sl, tp
 
 
-def _get_macro_df_for_symbol(symbol: str, lookback: int = 200):
+def _get_macro_df_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame | None:
     """
     Fetch aligned macro features from MacroStore for the given symbol.
 
@@ -279,9 +264,8 @@ def _get_macro_df_for_symbol(symbol: str, lookback: int = 200):
         if len(macro_store) == 0:
             return None
 
-        # Macro alignment requires real OHLCV data from the broker.
-        # Return None here; the caller will proceed without macro features.
-        return None
+        df = macro_store.get_aligned(symbol, lookback=lookback)
+        return df if df is not None and not df.empty else None
     except Exception as exc:
         logger.debug("MacroStore alignment failed (non-fatal): %s", exc)
         return None
@@ -416,34 +400,13 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
             try:
                 data = json.loads(p.read_text())
                 # Normalise field names across different file formats
-                accuracy = float(
-                    data.get("accuracy")
-                    or data.get("oos_accuracy")
-                    or data.get("test_accuracy")
-                    or 0.0
-                )
-                precision = float(
-                    data.get("precision")
-                    or data.get("test_precision")
-                    or data.get("oos_f1")
-                    or 0.0
-                )
-                recall = float(
-                    data.get("recall")
-                    or data.get("test_recall")
-                    or data.get("oos_auc")
-                    or 0.0
-                )
-                f1 = float(
-                    data.get("f1") or data.get("f1_score") or data.get("oos_f1") or 0.0
-                )
+                accuracy = float(data.get("accuracy") or data.get("oos_accuracy") or data.get("test_accuracy") or 0.0)
+                precision = float(data.get("precision") or data.get("test_precision") or data.get("oos_f1") or 0.0)
+                recall = float(data.get("recall") or data.get("test_recall") or data.get("oos_auc") or 0.0)
+                f1 = float(data.get("f1") or data.get("f1_score") or data.get("oos_f1") or 0.0)
                 # Sharpe: prefer multi-symbol pooled, then sharpe_gate, then direct key
                 sharpe_gate = data.get("sharpe_gate") or {}
-                multi = (
-                    data.get("multi_symbol_backtest_extended")
-                    or data.get("multi_symbol_backtest")
-                    or {}
-                )
+                multi = data.get("multi_symbol_backtest_extended") or data.get("multi_symbol_backtest") or {}
                 sharpe = float(
                     data.get("sharpe")
                     or data.get("sharpe_ratio")
@@ -461,20 +424,9 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                     or multi.get("pooled_n_trades")
                     or 0
                 )
-                model_id = str(
-                    data.get("model_id") or data.get("model_file") or "advanced_oos"
-                )
-                evaluated_at = (
-                    data.get("evaluated_at")
-                    or data.get("validated_at")
-                    or datetime.now(UTC).isoformat()
-                )
-                note = (
-                    data.get("note")
-                    or data.get("validation_notes")
-                    or data.get("sharpe_note")
-                    or ""
-                )
+                model_id = str(data.get("model_id") or data.get("model_file") or "advanced_oos")
+                evaluated_at = data.get("evaluated_at") or data.get("validated_at") or datetime.now(UTC).isoformat()
+                note = data.get("note") or data.get("validation_notes") or data.get("sharpe_note") or ""
 
                 # If accuracy is still 0 try to derive from InferenceEngine counters
                 if accuracy == 0.0:
@@ -489,10 +441,7 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                             accuracy = round(1.0 - fallback / total, 4)
                             win_rate = accuracy
                             total_signals = total
-                            note = (
-                                note
-                                or "Accuracy derived from live predict/fallback ratio"
-                            )
+                            note = note or "Accuracy derived from live predict/fallback ratio"
                     except Exception as _exc:
                         logger.debug("Suppressed exception: %s", _exc)
 
@@ -620,7 +569,26 @@ async def predict(
 
     Requires: Professional plan or above (enforced via plan_gate on user subscription).
     """
-    _check_subscription_gate(user)
+    # Subscription gate — Professional plan required for ML predictions.
+    # Admin role bypasses the plan gate (internal tooling / ops access).
+    if getattr(user, "role", "") != "admin":
+        try:
+            from monetization.subscription import plan_gate, subscription_manager
+
+            sub = subscription_manager.get_user_subscription(user.sub)
+            user_plan = sub.tier.value if (sub and sub.is_active() and hasattr(sub.tier, "value")) else "free"
+            if not plan_gate("professional", user_plan):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={
+                        "error": "PLAN_LIMIT_EXCEEDED",
+                        "required_plan": "professional",
+                        "current_plan": user_plan,
+                        "message": "ML predictions require a Professional subscription or above.",
+                    },
+                )
+        except ImportError:
+            ...  # nosec B110
     symbol_upper = symbol.upper().replace("-", "/")
     now_iso = datetime.now(UTC).isoformat()
     predictor = _get_predictor()
@@ -629,18 +597,80 @@ async def predict(
         try:
             ohlcv = _load_ohlcv_for_symbol(symbol_upper, body.lookback)
             if hasattr(predictor, "predict") and hasattr(predictor, "health"):
-                return _predict_with_inference_engine(predictor, ohlcv, symbol_upper, now_iso)
+                result = predictor.predict(ohlcv, symbol=symbol_upper)
+                direction_map = {"long": "BUY", "short": "SELL", "neutral": "HOLD"}
+                direction = direction_map.get(result.get("direction", "neutral"), "HOLD")
+                confidence = round(float(result.get("confidence", 0.0)) * 100, 1)
+                entry_price = result.get("last_close")
+                sl, tp = (None, None)
+                if entry_price and direction != "HOLD":
+                    sl, tp = _compute_atr_sl_tp(ohlcv, entry_price, direction)
+                return PredictResponse(
+                    symbol=symbol_upper,
+                    direction=direction,
+                    confidence=confidence,
+                    entry_price=entry_price,
+                    stop_loss=sl,
+                    take_profit=tp,
+                    features_used=result.get("bars_used", 0),
+                    model_id=result.get("model_version", "inference_engine"),
+                    generated_at=now_iso,
+                )
+
+            # AdvancedModelPredictor path
             if hasattr(predictor, "predict_signal"):
-                return _predict_with_advanced_predictor(predictor, ohlcv, symbol_upper, body.lookback, now_iso)
+                macro_df = _get_macro_df_for_symbol(symbol_upper, lookback=body.lookback)
+                result = predictor.predict_signal(ohlcv, macro_df=macro_df, symbol=symbol_upper)
+                direction_map = {"long": "BUY", "short": "SELL", "neutral": "HOLD"}
+                direction = direction_map.get(result.get("direction", "neutral"), "HOLD")
+                confidence = round(float(result.get("confidence", 0.0)) * 100, 1)
+                entry_price = result.get("last_close")
+                sl, tp = (None, None)
+                if entry_price and direction != "HOLD":
+                    sl, tp = _compute_atr_sl_tp(ohlcv, entry_price, direction)
+                return PredictResponse(
+                    symbol=symbol_upper,
+                    direction=direction,
+                    confidence=confidence,
+                    entry_price=entry_price,
+                    stop_loss=sl,
+                    take_profit=tp,
+                    features_used=result.get("bars_used", 0),
+                    model_id=result.get("model_version", "advanced_oos"),
+                    generated_at=now_iso,
+                )
+
+            # EnsemblePredictor / legacy path
             if hasattr(predictor, "predict_symbol"):
                 result = predictor.predict_symbol(symbol_upper, timeframe=body.timeframe)
-                return PredictResponse(symbol=symbol_upper, direction=result.get("direction", "HOLD"), confidence=float(result.get("confidence", 50.0)), entry_price=result.get("entry_price"), stop_loss=result.get("stop_loss"), take_profit=result.get("take_profit"), features_used=result.get("features_used", 0), model_id=result.get("model_id", "xgb_macro"), generated_at=now_iso)
+                return PredictResponse(
+                    symbol=symbol_upper,
+                    direction=result.get("direction", "HOLD"),
+                    confidence=float(result.get("confidence", 50.0)),
+                    entry_price=result.get("entry_price"),
+                    stop_loss=result.get("stop_loss"),
+                    take_profit=result.get("take_profit"),
+                    features_used=result.get("features_used", 0),
+                    model_id=result.get("model_id", "xgb_macro"),
+                    generated_at=now_iso,
+                )
         except Exception as exc:
             logger.warning("Predictor failed for %s: %s", symbol, exc)
             return _hold_response(symbol_upper, now_iso, "fallback")
 
+    # No predictor loaded — return a safe HOLD fallback
     logger.warning("No ML predictor loaded for %s — returning HOLD fallback", symbol_upper)
-    return _hold_response(symbol_upper, now_iso, "no_model")
+    return PredictResponse(
+        symbol=symbol_upper,
+        direction="HOLD",
+        confidence=0.0,
+        entry_price=None,
+        stop_loss=None,
+        take_profit=None,
+        features_used=0,
+        model_id="no_model",
+        generated_at=now_iso,
+    )
 
 
 @router.get(
@@ -660,14 +690,12 @@ async def get_feature_importances(user: TokenPayload = Depends(require_role("adm
 
     import joblib
 
-    model_path = (
-        pathlib.Path(__file__).parent.parent / "ml" / "saved_models" / "xgb_macro.pkl"
-    )
+    model_path = pathlib.Path(__file__).parent.parent / "ml" / "saved_models" / "xgb_macro.pkl"
     if not model_path.exists():
         return {"features": [], "note": "Model not trained yet"}
 
     try:
-        model = joblib.load(str(model_path))
+        model = joblib.load(str(model_path))  # nosec B301 - path is hardcoded to ml/saved_models
         if hasattr(model, "feature_importances_"):
             importances = model.feature_importances_.tolist()
             # Try to get feature names
@@ -713,12 +741,12 @@ async def trigger_retrain(
             import sys
 
             script = os.path.join(
-                os.path.dirname(__file__),
+                Path(__file__).parent,
                 "..",
                 "ml",
                 "train_with_macro.py",
             )
-            if os.path.exists(script):
+            if Path(script).exists():
                 subprocess.run(  # nosec B603 B607 - list-form call with sys.executable; no shell=True, no user input
                     [sys.executable, script, "--years", "8"],
                     timeout=3600,
@@ -770,19 +798,14 @@ async def signal_filter_stats(
                 "ev_window": int(os.getenv("EV_WINDOW", "50")),
                 "threshold_long": float(os.getenv("SIGNAL_THRESHOLD_LONG", "0.58")),
                 "threshold_short": float(os.getenv("SIGNAL_THRESHOLD_SHORT", "0.42")),
-                "regime_filter_enabled": os.getenv(
-                    "REGIME_FILTER_ENABLED", "true"
-                ).lower()
-                == "true",
-                "mtf_confluence_required": os.getenv(
-                    "MTF_CONFLUENCE_REQUIRED", "false"
-                ).lower()
-                == "true",
+                "regime_filter_enabled": os.getenv("REGIME_FILTER_ENABLED", "true").lower() == "true",
+                "mtf_confluence_required": os.getenv("MTF_CONFLUENCE_REQUIRED", "false").lower() == "true",
                 "sizing_method": os.getenv("POSITION_SIZING_METHOD", "volatility"),
             },
         }
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.error("signal_filter_stats failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Signal filter stats unavailable — check server logs") from None
 
 
 @router.get(
@@ -969,15 +992,25 @@ async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
     except Exception as exc:
         logger.warning("ml_engine_health: %s", exc)
         from fastapi.responses import JSONResponse
-        return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=MLEngineHealthResponse(status="unavailable", engine={}, macro_store={}, mtf_store={}, saved_model_files_kb={}, checked_at=checked_at, error=str(exc)).model_dump())
+
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content=MLEngineHealthResponse(
+                status="unavailable",
+                engine={},
+                macro_store={},
+                mtf_store={},
+                saved_model_files_kb={},
+                checked_at=checked_at,
+                error="ML engine unavailable — check server logs",
+            ).model_dump(),
+        )
 
 
 # ── RL Agent endpoints ────────────────────────────────────────────────────────
 
-from pydantic import BaseModel as _BaseModel
 
-
-class RLTrainRequest(_BaseModel):
+class RLTrainRequest(BaseModel):
     symbol: str = "XAU_USD"
     timeframe: str = "H1"
     candles: int = 2000
@@ -985,7 +1018,7 @@ class RLTrainRequest(_BaseModel):
     train_split: float = 0.8
 
 
-class RLWalkForwardRequest(_BaseModel):
+class RLWalkForwardRequest(BaseModel):
     symbol: str = "XAU_USD"
     timeframe: str = "H1"
     candles: int = 3000
@@ -1005,8 +1038,9 @@ async def rl_train(
     Requires: admin role.
     """
     try:
-        from ml.rl_agent import RLAgent, ForexTradingEnv
         import asyncio
+
+        from ml.rl_agent import ForexTradingEnv, RLAgent
 
         # Load candles from the data layer
         df = _load_ohlcv_for_symbol(req.symbol, req.candles)
@@ -1040,13 +1074,14 @@ async def rl_train(
             "metrics": metrics,
         }
     except ImportError as exc:
+        logger.error("rl_train: missing RL dependencies: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"RL dependencies not installed: {exc}",
-        ) from exc
+            detail="RL dependencies not installed — check server logs",
+        ) from None
     except Exception as exc:
         logger.error("rl_train failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="RL training failed — check server logs") from None
 
 
 @router.post("/rl/walk-forward", tags=["ML Models"])
@@ -1060,9 +1095,10 @@ async def rl_walk_forward(
     Requires: admin role.
     """
     try:
-        from ml.rl_agent import walk_forward_eval
         import asyncio
         from dataclasses import asdict
+
+        from ml.rl_agent import walk_forward_eval
 
         df = _load_ohlcv_for_symbol(req.symbol, req.candles)
         candles_list = df.to_dict("records")
@@ -1083,26 +1119,26 @@ async def rl_walk_forward(
         return asdict(result)
 
     except ImportError as exc:
+        logger.error("rl_walk_forward: missing RL dependencies: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"RL dependencies not installed: {exc}",
-        ) from exc
+            detail="RL dependencies not installed — check server logs",
+        ) from None
     except Exception as exc:
         logger.error("rl_walk_forward failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="RL walk-forward failed — check server logs") from None
 
 
 @router.get("/rl/status", tags=["ML Models"])
 async def rl_status(user: TokenPayload = Depends(get_current_user)) -> dict:
     """Return saved RL model files and their sizes."""
-    import os
     from ml.rl_agent import _MODEL_DIR
 
     models = []
-    if os.path.isdir(_MODEL_DIR):
+    if Path(_MODEL_DIR).is_dir():
         for fname in sorted(os.listdir(_MODEL_DIR)):
             if fname.endswith(".zip"):
-                fpath = os.path.join(_MODEL_DIR, fname)
+                fpath = Path(_MODEL_DIR) / fname
                 models.append(
                     {
                         "name": fname,

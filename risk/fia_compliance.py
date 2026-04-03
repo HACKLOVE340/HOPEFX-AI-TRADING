@@ -10,17 +10,16 @@ Reference: FIA 2024 Automated Trading Risk Controls Report
 """
 
 import logging
-from dataclasses import dataclass
-from datetime import datetime, timezone
-UTC = timezone.utc
-from enum import Enum
 from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from enum import Enum
 
 logger = logging.getLogger(__name__)
 
 
 class RiskControlStatus(Enum):
-    PASS = "pass"
+    PASS = "pass"  # nosec B105 — enum value, not a password
     WARNING = "warning"
     BLOCK = "block"
     KILL_SWITCH = "kill_switch"
@@ -32,7 +31,7 @@ class RiskCheckResult:
     rule: str
     message: str
     timestamp: datetime
-    metadata: dict = None
+    metadata: dict | None = None
 
 
 class FIAComplianceManager:
@@ -171,7 +170,8 @@ class FIAComplianceManager:
                 try:
                     callback(daily_pnl, loss_pct)
                 except Exception as e:
-                    logger.error(f"Kill switch callback error: {e}")
+                    logger.error("Kill switch callback error: %s", e)
+
 
             return RiskCheckResult(
                 status=RiskControlStatus.KILL_SWITCH,
@@ -202,10 +202,10 @@ class FIAComplianceManager:
         # Check timestamp staleness
         tick_time = tick_data.get("timestamp")
         if tick_time:
-            if isinstance(tick_time, (int, float)):
+            if isinstance(tick_time, int | float):
                 tick_time = datetime.fromtimestamp(tick_time)
             age = (datetime.now(UTC) - tick_time).total_seconds()
-            checks.append(("staleness", age < 30))  # 30 seconds max  # noqa: PLR2004
+            checks.append(("staleness", age < 30))  # 30 seconds max
 
         # Check price reasonability
         bid = tick_data.get("bid", 0)
@@ -215,7 +215,7 @@ class FIAComplianceManager:
         # Check spread reasonability
         if bid > 0:
             spread_pct = (ask - bid) / bid
-            checks.append(("reasonable_spread", spread_pct < 0.01))  # 1% max  # noqa: PLR2004
+            checks.append(("reasonable_spread", spread_pct < 0.01))  # 1% max
 
         failed = [name for name, passed in checks if not passed]
 
@@ -295,7 +295,7 @@ class FIAComplianceManager:
                     timestamp=datetime.now(UTC),
                     metadata={"order": order, "resting": resting},
                 )
-            elif order_side == "sell" and order_price <= resting_price:
+            if order_side == "sell" and order_price <= resting_price:
                 return RiskCheckResult(
                     status=RiskControlStatus.BLOCK,
                     rule="FIA_3.5_SELF_TRADE_PREVENTION",
@@ -355,8 +355,6 @@ class FIAComplianceManager:
                 RiskControlStatus.BLOCK,
                 RiskControlStatus.KILL_SWITCH,
             ]:
-                logger.warning(
-                    f"Risk control blocked: {result.rule} - {result.message}",
-                )
+                logger.warning("Risk control blocked: %s - %s", result.rule, result.message)
 
         return results

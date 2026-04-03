@@ -49,10 +49,9 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 logging.basicConfig(
     level=logging.INFO,
@@ -70,10 +69,7 @@ try:
     _DISCORD_AVAILABLE = True
 except ImportError:
     _DISCORD_AVAILABLE = False
-    logger.error(
-        "discord.py not installed. Run: pip install discord.py\n"
-        "Then re-run this script."
-    )
+    logger.error("discord.py not installed. Run: pip install discord.py\nThen re-run this script.")
     sys.exit(1)
 
 # ── paths ─────────────────────────────────────────────────────────────────────
@@ -217,9 +213,7 @@ async def result_cmd(
     uid = str(interaction.user.id)
 
     if uid not in testers:
-        await interaction.response.send_message(
-            "You're not registered yet. Use `/join` first.", ephemeral=True
-        )
+        await interaction.response.send_message("You're not registered yet. Use `/join` first.", ephemeral=True)
         return
 
     passed, reason = _check_pass(pnl_pct, drawdown_pct, trading_days)
@@ -263,9 +257,7 @@ async def result_cmd(
             ),
             color=discord.Color.gold(),
         )
-        embed.set_footer(
-            text=f"Submitted {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}"
-        )
+        embed.set_footer(text=f"Submitted {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}")
 
         await interaction.response.send_message(embed=embed)
 
@@ -278,14 +270,10 @@ async def result_cmd(
                     "The team will contact you shortly to activate your account."
                 )
             except discord.Forbidden:
-                logger.warning(
-                    "Could not DM winner %s (DMs disabled)", interaction.user
-                )
+                logger.warning("Could not DM winner %s (DMs disabled)", interaction.user)
 
             # Post to announcements channel
-            announce_ch = discord.utils.get(
-                interaction.guild.text_channels, name=ANNOUNCE_CHANNEL
-            )
+            announce_ch = discord.utils.get(interaction.guild.text_channels, name=ANNOUNCE_CHANNEL)
             if announce_ch:
                 await announce_ch.send(
                     f"🏆 **FIRST FTMO PASSER!** 🏆\n"
@@ -326,7 +314,7 @@ async def leaderboard_cmd(interaction: discord.Interaction):
         return
 
     # Best result per tester
-    rows: list[dict] = []
+    rows: ClassVar[list[dict]] = []
     for uid, t in testers.items():
         if not t.get("results"):
             continue
@@ -348,7 +336,7 @@ async def leaderboard_cmd(interaction: discord.Interaction):
     for i, row in enumerate(top10):
         badge = "✅" if row["passed"] else "  "
         lines.append(
-            f"{medals[i]} **{i+1}.** {row['name']} — "
+            f"{medals[i]} **{i + 1}.** {row['name']} — "
             f"P&L: **{row['pnl_pct']:+.2f}%** | DD: {row['dd_pct']:.2f}% {badge}"
         )
 
@@ -362,8 +350,7 @@ async def leaderboard_cmd(interaction: discord.Interaction):
 async def status_cmd(interaction: discord.Interaction):
     if not STATUS_FILE.exists():
         await interaction.response.send_message(
-            "No paper trading session found.\n"
-            "Start one with: `python scripts/paper_trading_starter.py`",
+            "No paper trading session found.\nStart one with: `python scripts/paper_trading_starter.py`",
             ephemeral=True,
         )
         return
@@ -371,9 +358,7 @@ async def status_cmd(interaction: discord.Interaction):
     try:
         s = json.loads(STATUS_FILE.read_text())
     except Exception:
-        await interaction.response.send_message(
-            "Status file unreadable.", ephemeral=True
-        )
+        await interaction.response.send_message("Status file unreadable.", ephemeral=True)
         return
 
     complete = s.get("complete", False)
@@ -382,19 +367,11 @@ async def status_cmd(interaction: discord.Interaction):
         title=f"📊 Paper Trading Status — {status_icon}",
         color=discord.Color.green() if complete else discord.Color.blue(),
     )
-    embed.add_field(
-        name="Balance", value=f"${s.get('current_balance', 0):,.2f}", inline=True
-    )
-    embed.add_field(
-        name="Start Balance", value=f"${s.get('start_balance', 0):,.2f}", inline=True
-    )
-    embed.add_field(
-        name="Drawdown", value=f"{s.get('drawdown_pct', 0):.2f}%", inline=True
-    )
+    embed.add_field(name="Balance", value=f"${s.get('current_balance', 0):,.2f}", inline=True)
+    embed.add_field(name="Start Balance", value=f"${s.get('start_balance', 0):,.2f}", inline=True)
+    embed.add_field(name="Drawdown", value=f"{s.get('drawdown_pct', 0):.2f}%", inline=True)
     embed.add_field(name="Trades", value=str(s.get("trade_count", 0)), inline=True)
-    embed.add_field(
-        name="Elapsed Days", value=f"{s.get('elapsed_days', 0):.1f}", inline=True
-    )
+    embed.add_field(name="Elapsed Days", value=f"{s.get('elapsed_days', 0):.1f}", inline=True)
     embed.add_field(name="Updated", value=s.get("updated_at", "unknown"), inline=False)
     embed.set_footer(text="HOPEFX AI Trading — Paper Mode")
 
@@ -420,11 +397,7 @@ async def stats_cmd(interaction: discord.Interaction):
     embed.add_field(name="Passed", value=str(passed), inline=True)
     embed.add_field(
         name="Pass Criteria",
-        value=(
-            f"P&L ≥ {MIN_PNL_PCT:.0f}% | "
-            f"DD ≤ {MAX_DD_PCT:.0f}% | "
-            f"Days ≥ {MIN_DAYS}"
-        ),
+        value=(f"P&L ≥ {MIN_PNL_PCT:.0f}% | DD ≤ {MAX_DD_PCT:.0f}% | Days ≥ {MIN_DAYS}"),
         inline=False,
     )
     embed.set_footer(text="First passer earns free lifetime access!")

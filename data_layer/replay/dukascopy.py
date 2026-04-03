@@ -28,9 +28,9 @@ import logging
 import lzma
 import os
 import struct
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import ClassVar
 
 import aiohttp
 import pandas as pd
@@ -40,9 +40,7 @@ logger = logging.getLogger(__name__)
 _BASE_URL = "https://datafeed.dukascopy.com/datafeed"
 _CACHE_DIR = Path(os.getenv("DUKASCOPY_CACHE_DIR", "data/dukascopy_cache"))
 _HTTP_TIMEOUT = aiohttp.ClientTimeout(total=30.0, connect=10.0)
-_TICK_STRUCT = struct.Struct(
-    ">IIIff"
-)  # big-endian: uint32, uint32, uint32, float32, float32
+_TICK_STRUCT = struct.Struct(">IIIff")  # big-endian: uint32, uint32, uint32, float32, float32
 _TICK_SIZE = _TICK_STRUCT.size  # 20 bytes
 _PRICE_FACTOR = 100_000.0  # Dukascopy stores price × 100000
 
@@ -104,8 +102,7 @@ def _parse_timeframe(tf) -> int:
         return int(s)
     except ValueError:
         raise ValueError(
-            f"DukascopyFetcher: unrecognised timeframe '{tf}'. "
-            f"Use minutes (int) or one of: {sorted(_TF_ALIASES)}"
+            f"DukascopyFetcher: unrecognised timeframe '{tf}'. Use minutes (int) or one of: {sorted(_TF_ALIASES)}"
         ) from None
 
 
@@ -128,9 +125,7 @@ class DukascopyFetcher:
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
             connector = aiohttp.TCPConnector(limit=20, ttl_dns_cache=300)
-            self._session = aiohttp.ClientSession(
-                timeout=_HTTP_TIMEOUT, connector=connector
-            )
+            self._session = aiohttp.ClientSession(timeout=_HTTP_TIMEOUT, connector=connector)
         return self._session
 
     async def close(self) -> None:
@@ -150,10 +145,7 @@ class DukascopyFetcher:
         m = dt.month - 1  # 0-indexed!
         d = dt.day
         h = dt.hour
-        return (
-            f"{_BASE_URL}/{symbol.upper()}"
-            f"/{y:04d}/{m:02d}/{d:02d}/{h:02d}h_ticks.bi5"
-        )
+        return f"{_BASE_URL}/{symbol.upper()}/{y:04d}/{m:02d}/{d:02d}/{h:02d}h_ticks.bi5"
 
     # ── Cache ─────────────────────────────────────────────────────────────────
 
@@ -192,7 +184,7 @@ class DukascopyFetcher:
 
         try:
             async with session.get(url) as resp:
-                if resp.status == 404:  # noqa: PLR2004
+                if resp.status == 404:
                     # No data for this hour (weekend, holiday) — cache empty marker
                     self._save_cache(symbol, hour, b"")
                     return None
@@ -200,7 +192,7 @@ class DukascopyFetcher:
                 data = await resp.read()
                 if data:
                     self._save_cache(symbol, hour, data)
-                return data if data else None
+                return data or None
         except TimeoutError:
             logger.warning("Dukascopy timeout: %s", url)
             return None
@@ -218,23 +210,17 @@ class DukascopyFetcher:
         Returns DataFrame with columns: timestamp (UTC), bid, ask, bid_vol, ask_vol
         """
         if not data:
-            return pd.DataFrame(
-                columns=["timestamp", "bid", "ask", "bid_vol", "ask_vol"]
-            )
+            return pd.DataFrame(columns=["timestamp", "bid", "ask", "bid_vol", "ask_vol"])
 
         try:
             raw = lzma.decompress(data)
         except lzma.LZMAError as exc:
             logger.warning("Dukascopy LZMA decode error: %s", exc)
-            return pd.DataFrame(
-                columns=["timestamp", "bid", "ask", "bid_vol", "ask_vol"]
-            )
+            return pd.DataFrame(columns=["timestamp", "bid", "ask", "bid_vol", "ask_vol"])
 
         n_ticks = len(raw) // _TICK_SIZE
         if n_ticks == 0:
-            return pd.DataFrame(
-                columns=["timestamp", "bid", "ask", "bid_vol", "ask_vol"]
-            )
+            return pd.DataFrame(columns=["timestamp", "bid", "ask", "bid_vol", "ask_vol"])
 
         records = []
         hour_epoch_ms = int(hour.timestamp() * 1000)
@@ -244,25 +230,19 @@ class DukascopyFetcher:
             chunk = raw[offset : offset + _TICK_SIZE]
             if len(chunk) < _TICK_SIZE:
                 break
-            ms_from_hour, ask_raw, bid_raw, ask_vol, bid_vol = _TICK_STRUCT.unpack(
-                chunk
-            )
+            ms_from_hour, ask_raw, bid_raw, ask_vol, bid_vol = _TICK_STRUCT.unpack(chunk)
             ts_ms = hour_epoch_ms + ms_from_hour
             ask = ask_raw / _PRICE_FACTOR
             bid = bid_raw / _PRICE_FACTOR
             records.append((ts_ms, bid, ask, float(bid_vol), float(ask_vol)))
 
         if not records:
-            return pd.DataFrame(
-                columns=["timestamp", "bid", "ask", "bid_vol", "ask_vol"]
-            )
+            return pd.DataFrame(columns=["timestamp", "bid", "ask", "bid_vol", "ask_vol"])
 
-        df = pd.DataFrame(
-            records, columns=["ts_ms", "bid", "ask", "bid_vol", "ask_vol"]
-        )
+        df = pd.DataFrame(records, columns=["ts_ms", "bid", "ask", "bid_vol", "ask_vol"])
         df["timestamp"] = pd.to_datetime(df["ts_ms"], unit="ms", utc=True)
         df = df.drop(columns=["ts_ms"])
-        df["mid"] = (df["bid"] + df["ask"]) / 2.0
+        df["mid"] = (df["bid"] + df["ask"]) / 2.0  # pylint: disable=unsubscriptable-object,unsupported-assignment-operation
         return df.set_index("timestamp").sort_index()
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -281,7 +261,7 @@ class DukascopyFetcher:
         and UTC DatetimeIndex.
         """
         # Enumerate all hours in range
-        hours: list[datetime] = []
+        hours: ClassVar[list[datetime]] = []
         cur = start.replace(minute=0, second=0, microsecond=0, tzinfo=UTC)
         end_utc = end.replace(tzinfo=UTC) if end.tzinfo is None else end
 
@@ -316,8 +296,7 @@ class DukascopyFetcher:
         combined = pd.concat(frames).sort_index()
         # Filter to exact range
         combined = combined[
-            (combined.index >= pd.Timestamp(start, tz="UTC"))
-            & (combined.index <= pd.Timestamp(end, tz="UTC"))
+            (combined.index >= pd.Timestamp(start, tz="UTC")) & (combined.index <= pd.Timestamp(end, tz="UTC"))
         ]
         return combined
 
@@ -345,11 +324,7 @@ class DukascopyFetcher:
             return pd.DataFrame()
 
         freq = f"{tf_min}min"
-        mid = (
-            ticks["mid"]
-            if "mid" in ticks.columns
-            else (ticks["bid"] + ticks["ask"]) / 2
-        )
+        mid = ticks["mid"] if "mid" in ticks.columns else (ticks["bid"] + ticks["ask"]) / 2
 
         ohlcv = mid.resample(freq).agg(
             open="first",

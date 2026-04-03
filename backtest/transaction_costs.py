@@ -55,44 +55,44 @@ logger = logging.getLogger(__name__)
 
 # ── Half-spread in basis points (1 bp = 0.0001 of notional) ──────────────────
 _HALF_SPREAD_BPS: dict[str, float] = {
-    "GC=F":     1.50,
-    "XAU/USD":  1.50,
-    "XAUUSD":   1.50,
-    "BTC-USD":  1.00,
-    "BTC/USD":  1.00,
-    "ETH-USD":  1.67,
-    "ETH/USD":  1.67,
+    "GC=F": 1.50,
+    "XAU/USD": 1.50,
+    "XAUUSD": 1.50,
+    "BTC-USD": 1.00,
+    "BTC/USD": 1.00,
+    "ETH-USD": 1.67,
+    "ETH/USD": 1.67,
     "EURUSD=X": 0.92,
-    "EUR/USD":  0.92,
+    "EUR/USD": 0.92,
     "GBPUSD=X": 0.95,
-    "GBP/USD":  0.95,
-    "SI=F":     8.33,
-    "Silver":   8.33,
-    "CL=F":     4.00,
-    "Crude Oil":4.00,
+    "GBP/USD": 0.95,
+    "SI=F": 8.33,
+    "Silver": 8.33,
+    "CL=F": 4.00,
+    "Crude Oil": 4.00,
 }
 
 # ── Round-trip commission in basis points ─────────────────────────────────────
 _COMMISSION_BPS: dict[str, float] = {
-    "GC=F":     3.50,
-    "XAU/USD":  3.50,
-    "XAUUSD":   3.50,
-    "SI=F":     3.50,
-    "Silver":   3.50,
-    "CL=F":     3.50,
-    "Crude Oil":3.50,
-    "BTC-USD":  10.00,
-    "BTC/USD":  10.00,
-    "ETH-USD":  10.00,
-    "ETH/USD":  10.00,
+    "GC=F": 3.50,
+    "XAU/USD": 3.50,
+    "XAUUSD": 3.50,
+    "SI=F": 3.50,
+    "Silver": 3.50,
+    "CL=F": 3.50,
+    "Crude Oil": 3.50,
+    "BTC-USD": 10.00,
+    "BTC/USD": 10.00,
+    "ETH-USD": 10.00,
+    "ETH/USD": 10.00,
     "EURUSD=X": 3.00,
-    "EUR/USD":  3.00,
+    "EUR/USD": 3.00,
     "GBPUSD=X": 3.00,
-    "GBP/USD":  3.00,
+    "GBP/USD": 3.00,
 }
 
 _DEFAULT_HALF_SPREAD_BPS = 2.0
-_DEFAULT_COMMISSION_BPS  = 10.0
+_DEFAULT_COMMISSION_BPS = 10.0
 
 
 class TransactionCostModel:
@@ -151,7 +151,7 @@ class TransactionCostModel:
     def cost_summary(self, entry_price: float, ticker: str) -> dict:
         """Return a breakdown dict for logging/reporting."""
         half_spread_bps = _HALF_SPREAD_BPS.get(ticker, _DEFAULT_HALF_SPREAD_BPS)
-        commission_bps  = _COMMISSION_BPS.get(ticker, _DEFAULT_COMMISSION_BPS)
+        commission_bps = _COMMISSION_BPS.get(ticker, _DEFAULT_COMMISSION_BPS)
         total_bps = 2.0 * half_spread_bps + commission_bps + self._extra_spread_bps * 2.0
         total_frac = total_bps / 10_000.0
         return {

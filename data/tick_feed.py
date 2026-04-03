@@ -44,6 +44,7 @@ Usage
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -51,10 +52,8 @@ import time
 from abc import ABC, abstractmethod
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, timezone
-UTC = timezone.utc
-from typing import Any, Callable, Dict, List, Optional
-import contextlib
+from datetime import UTC, datetime
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -65,11 +64,12 @@ _PRICE_MAX = 10_000.0
 # ── Back-off config ───────────────────────────────────────────────────────────
 _BACKOFF_INITIAL = 1.0
 _BACKOFF_MAX = 60.0
-_CIRCUIT_THRESHOLD = 5       # consecutive failures before circuit opens
-_CIRCUIT_COOLDOWN = 60.0     # seconds before circuit retries
+_CIRCUIT_THRESHOLD = 5  # consecutive failures before circuit opens
+_CIRCUIT_COOLDOWN = 60.0  # seconds before circuit retries
 
 
 # ── Tick dataclass ────────────────────────────────────────────────────────────
+
 
 @dataclass
 class Tick:
@@ -88,7 +88,7 @@ class Tick:
     def spread(self) -> float:
         return self.ask - self.bid
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "symbol": self.symbol,
             "timestamp": self.timestamp.isoformat(),
@@ -103,6 +103,7 @@ class Tick:
 
 # ── OHLCV Bar ─────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class OHLCVBar:
     symbol: str
@@ -113,9 +114,9 @@ class OHLCVBar:
     close: float
     volume: float
     tick_count: int
-    timeframe_s: int   # bar duration in seconds
+    timeframe_s: int  # bar duration in seconds
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "symbol": self.symbol,
             "timestamp": self.timestamp.isoformat(),
@@ -131,6 +132,7 @@ class OHLCVBar:
 
 # ── Tick validation ───────────────────────────────────────────────────────────
 
+
 def _is_valid_tick(tick: Tick) -> bool:
     if tick.bid <= 0 or tick.ask <= 0:
         return False
@@ -142,6 +144,7 @@ def _is_valid_tick(tick: Tick) -> bool:
 
 # ── Abstract tick source ──────────────────────────────────────────────────────
 
+
 class TickSource(ABC):
     """Base class for all tick data providers."""
 
@@ -149,8 +152,8 @@ class TickSource(ABC):
         self.symbol = symbol
         self._running = False
         self._fail_count = 0
-        self._circuit_open_at: Optional[float] = None
-        self._on_tick: Optional[Callable] = None
+        self._circuit_open_at: float | None = None
+        self._on_tick: Callable | None = None
 
     def set_callback(self, callback: Callable) -> None:
         self._on_tick = callback
@@ -177,13 +180,16 @@ class TickSource(ABC):
                 self._fail_count += 1
                 logger.warning(
                     "%s: connection error (%d): %s",
-                    self.__class__.__name__, self._fail_count, exc,
+                    self.__class__.__name__,
+                    self._fail_count,
+                    exc,
                 )
                 if self._fail_count >= _CIRCUIT_THRESHOLD:
                     self._circuit_open_at = time.monotonic()
                     logger.error(
                         "%s: circuit breaker OPEN after %d failures",
-                        self.__class__.__name__, self._fail_count,
+                        self.__class__.__name__,
+                        self._fail_count,
                     )
                 if self._running:
                     await asyncio.sleep(min(backoff, _BACKOFF_MAX))
@@ -209,6 +215,7 @@ class TickSource(ABC):
 
 # ── OANDA streaming tick source ───────────────────────────────────────────────
 
+
 class OandaTickSource(TickSource):
     """
     OANDA v20 streaming prices API.
@@ -224,11 +231,7 @@ class OandaTickSource(TickSource):
         self._api_key = os.getenv("OANDA_API_KEY", "")
         self._account_id = os.getenv("OANDA_ACCOUNT_ID", "")
         practice = os.getenv("OANDA_PRACTICE", "true").lower() != "false"
-        self._stream_url = (
-            "https://stream-fxpractice.oanda.com"
-            if practice
-            else "https://stream-fxtrade.oanda.com"
-        )
+        self._stream_url = "https://stream-fxpractice.oanda.com" if practice else "https://stream-fxtrade.oanda.com"
 
     async def connect(self) -> None:
         if not self._api_key or not self._account_id:
@@ -243,61 +246,62 @@ class OandaTickSource(TickSource):
             await asyncio.sleep(60)
             return
 
-        url = (
-            f"{self._stream_url}/v3/accounts/{self._account_id}"
-            f"/pricing/stream?instruments={self.symbol}"
-        )
+        url = f"{self._stream_url}/v3/accounts/{self._account_id}/pricing/stream?instruments={self.symbol}"
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Accept-Datetime-Format": "RFC3339",
         }
 
         logger.info("OandaTickSource: connecting to %s", url)
-        async with aiohttp.ClientSession() as session, session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=None)) as resp:
-                if resp.status != 200:  # noqa: PLR2004
-                    body = await resp.text()
-                    raise ConnectionError(f"OANDA stream HTTP {resp.status}: {body[:200]}")
+        async with (
+            aiohttp.ClientSession() as session,
+            session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=None)) as resp,
+        ):
+            if resp.status != 200:
+                body = await resp.text()
+                raise ConnectionError(f"OANDA stream HTTP {resp.status}: {body[:200]}")
 
-                logger.info("OandaTickSource: stream connected")
-                async for line in resp.content:
-                    if not self._running:
-                        break
-                    line = line.strip()  # noqa: PLW2901
-                    if not line:
-                        continue
-                    try:
-                        msg = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
+            logger.info("OandaTickSource: stream connected")
+            async for raw_line in resp.content:
+                if not self._running:
+                    break
+                line = raw_line.strip()
+                if not line:
+                    continue
+                try:
+                    msg = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
 
-                    if msg.get("type") != "PRICE":
-                        continue
+                if msg.get("type") != "PRICE":
+                    continue
 
-                    bids = msg.get("bids", [])
-                    asks = msg.get("asks", [])
-                    if not bids or not asks:
-                        continue
+                bids = msg.get("bids", [])
+                asks = msg.get("asks", [])
+                if not bids or not asks:
+                    continue
 
-                    bid = float(bids[0]["price"])
-                    ask = float(asks[0]["price"])
-                    ts_str = msg.get("time", "")
-                    try:
-                        ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-                    except Exception:
-                        ts = datetime.now(UTC)
+                bid = float(bids[0]["price"])
+                ask = float(asks[0]["price"])
+                ts_str = msg.get("time", "")
+                try:
+                    ts = datetime.fromisoformat(ts_str)
+                except Exception:
+                    ts = datetime.now(UTC)
 
-                    tick = Tick(
-                        symbol=self.symbol,
-                        timestamp=ts,
-                        bid=bid,
-                        ask=ask,
-                        volume=0.0,
-                        source="oanda",
-                    )
-                    await self._emit(tick)
+                tick = Tick(
+                    symbol=self.symbol,
+                    timestamp=ts,
+                    bid=bid,
+                    ask=ask,
+                    volume=0.0,
+                    source="oanda",
+                )
+                await self._emit(tick)
 
 
 # ── Finnhub WebSocket tick source ─────────────────────────────────────────────
+
 
 class FinnhubTickSource(TickSource):
     """
@@ -366,6 +370,7 @@ class FinnhubTickSource(TickSource):
 
 
 # ── Polygon WebSocket tick source ─────────────────────────────────────────────
+
 
 class PolygonTickSource(TickSource):
     """
@@ -436,6 +441,7 @@ class PolygonTickSource(TickSource):
 
 # ── Tick Aggregator (ticks → OHLCV bars) ─────────────────────────────────────
 
+
 class TickAggregator:
     """
     Aggregates raw ticks into OHLCV bars at configurable timeframes.
@@ -447,9 +453,9 @@ class TickAggregator:
     def __init__(self, symbol: str, timeframe_s: int = 60):
         self.symbol = symbol
         self.timeframe_s = timeframe_s
-        self._bar_callbacks: List[Callable] = []
-        self._current_bar: Optional[Dict[str, Any]] = None
-        self._bar_start: Optional[float] = None
+        self._bar_callbacks: list[Callable] = []
+        self._current_bar: dict[str, Any] | None = None
+        self._bar_start: float | None = None
 
     def add_bar_callback(self, cb: Callable) -> None:
         self._bar_callbacks.append(cb)
@@ -502,6 +508,7 @@ class TickAggregator:
 
 # ── Tick Bus ──────────────────────────────────────────────────────────────────
 
+
 class TickBus:
     """
     Fan-out hub: receives ticks from all sources and delivers to all subscribers.
@@ -511,11 +518,11 @@ class TickBus:
     """
 
     def __init__(self, dedup_window_ms: float = 50.0):
-        self._subscribers: List[Any] = []
+        self._subscribers: list[Any] = []
         self._dedup_window_ms = dedup_window_ms
         self._recent: deque = deque(maxlen=20)  # (timestamp_ms, mid)
         self._tick_count = 0
-        self._last_tick: Optional[Tick] = None
+        self._last_tick: Tick | None = None
 
     def subscribe(self, component: Any) -> None:
         """Register a subscriber with an async on_tick(tick) method."""
@@ -535,7 +542,7 @@ class TickBus:
         now_ms = tick.timestamp.timestamp() * 1000
         mid = tick.mid
         for prev_ms, prev_mid in self._recent:
-            if abs(now_ms - prev_ms) <= self._dedup_window_ms and abs(mid - prev_mid) < 0.001:  # noqa: PLR2004
+            if abs(now_ms - prev_ms) <= self._dedup_window_ms and abs(mid - prev_mid) < 0.001:
                 return
 
         self._recent.append((now_ms, mid))
@@ -559,10 +566,10 @@ class TickBus:
         return self._tick_count
 
     @property
-    def last_tick(self) -> Optional[Tick]:
+    def last_tick(self) -> Tick | None:
         return self._last_tick
 
-    def status(self) -> Dict[str, Any]:
+    def status(self) -> dict[str, Any]:
         return {
             "subscribers": len(self._subscribers),
             "tick_count": self._tick_count,
@@ -571,6 +578,7 @@ class TickBus:
 
 
 # ── Tick Feed Manager ─────────────────────────────────────────────────────────
+
 
 class TickFeedManager:
     """
@@ -593,12 +601,12 @@ class TickFeedManager:
         self.symbol = symbol
         self._bus = TickBus()
         self._aggregator = TickAggregator(symbol, timeframe_s=bar_timeframe_s)
-        self._sources: List[TickSource] = [
+        self._sources: list[TickSource] = [
             OandaTickSource(symbol),
             FinnhubTickSource(symbol),
             PolygonTickSource(symbol),
         ]
-        self._tasks: List[asyncio.Task] = []
+        self._tasks: list[asyncio.Task] = []
         self._running = False
 
         # Wire sources → bus
@@ -628,7 +636,8 @@ class TickFeedManager:
             self._tasks.append(task)
         logger.info(
             "TickFeedManager: started %d sources for %s",
-            len(self._sources), self.symbol,
+            len(self._sources),
+            self.symbol,
         )
 
     async def stop(self) -> None:
@@ -643,15 +652,17 @@ class TickFeedManager:
         self._tasks.clear()
         logger.info("TickFeedManager: stopped")
 
-    def status(self) -> Dict[str, Any]:
+    def status(self) -> dict[str, Any]:
         source_status = []
         for src in self._sources:
-            source_status.append({
-                "source": src.__class__.__name__,
-                "running": src._running,
-                "fail_count": src._fail_count,
-                "circuit_open": src._is_circuit_open(),
-            })
+            source_status.append(
+                {
+                    "source": src.__class__.__name__,
+                    "running": src._running,
+                    "fail_count": src._fail_count,
+                    "circuit_open": src._is_circuit_open(),
+                }
+            )
         return {
             "symbol": self.symbol,
             "running": self._running,
@@ -664,13 +675,13 @@ class TickFeedManager:
         return self._bus
 
     @property
-    def last_tick(self) -> Optional[Tick]:
+    def last_tick(self) -> Tick | None:
         return self._bus.last_tick
 
 
 # ── module-level singleton ────────────────────────────────────────────────────
 
-_manager: Optional[TickFeedManager] = None
+_manager: TickFeedManager | None = None
 
 
 def get_tick_feed(symbol: str = "XAU_USD", bar_timeframe_s: int = 60) -> TickFeedManager:

@@ -28,16 +28,15 @@ from __future__ import annotations
 import logging
 import os
 import uuid
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
-from decimal import Decimal
-from enum import Enum
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from enum import StrEnum
 
-from .pricing import SubscriptionTier
-from .subscription import subscription_manager, SubscriptionStatus
 from .access_codes import access_code_generator
 from .invoices import invoice_generator
+from .pricing import SubscriptionTier
+from .subscription import SubscriptionStatus, subscription_manager
 
 logger = logging.getLogger(__name__)
 
@@ -51,17 +50,14 @@ try:
 except ImportError:
     _stripe = None  # type: ignore
     _STRIPE_AVAILABLE = False
-    logger.warning(
-        "stripe package not installed — Stripe payment processing disabled. "
-        "Run: pip install stripe"
-    )
+    logger.warning("stripe package not installed — Stripe payment processing disabled. Run: pip install stripe")
 
 # Dunning schedule: retry at 24h, 72h, 168h (7 days) then suspend
 _DUNNING_DELAYS_HOURS = [24, 72, 168]
 _MAX_RETRIES = len(_DUNNING_DELAYS_HOURS)
 
 
-class PaymentStatus(str, Enum):
+class PaymentStatus(StrEnum):
     PENDING = "pending"
     PROCESSING = "processing"
     SUCCEEDED = "succeeded"
@@ -135,15 +131,11 @@ class Payment:
             "payment_method": self.payment_method,
             "status": self.status.value,
             "created_at": self.created_at.isoformat(),
-            "processed_at": self.processed_at.isoformat()
-            if self.processed_at
-            else None,
+            "processed_at": self.processed_at.isoformat() if self.processed_at else None,
             "stripe_payment_intent_id": self.stripe_payment_intent_id,
             "error_message": self.error_message,
             "retry_count": self.retry_count,
-            "next_retry_at": self.next_retry_at.isoformat()
-            if self.next_retry_at
-            else None,
+            "next_retry_at": self.next_retry_at.isoformat() if self.next_retry_at else None,
         }
 
 
@@ -260,9 +252,7 @@ class PaymentProcessor:
                 )
             else:
                 intent = _stripe.PaymentIntent.create(**create_kwargs)
-            logger.info(
-                "stripe.payment_intent.created id=%s amount=%s", intent.id, amount
-            )
+            logger.info("stripe.payment_intent.created id=%s amount=%s", intent.id, amount)
             return intent.id
         except _stripe.error.StripeError as exc:
             logger.error("stripe.payment_intent.error: %s", exc)
@@ -317,12 +307,13 @@ class PaymentProcessor:
             )
             return True
 
-        except Exception as exc:
-            payment.mark_failed(str(exc))
+        except Exception:
+            logger.exception("Payment processing failed for %s: %s", payment_id)
+            payment.mark_failed("Payment processing error — check server logs")
             self._handle_payment_failed(
                 {
                     "payment_id": payment_id,
-                    "error": str(exc),
+                    "error": "Payment processing error — check server logs",
                     "user_id": payment.user_id,
                     "subscription_id": payment.subscription_id,
                 }
@@ -359,11 +350,7 @@ class PaymentProcessor:
 
         refund_amount = amount or payment.amount
 
-        if (
-            _STRIPE_AVAILABLE
-            and self._stripe_api_key
-            and payment.stripe_payment_intent_id
-        ):
+        if _STRIPE_AVAILABLE and self._stripe_api_key and payment.stripe_payment_intent_id:
             _stripe.api_key = self._stripe_api_key
             refund_kwargs: dict = {
                 "payment_intent": payment.stripe_payment_intent_id,
@@ -384,8 +371,7 @@ class PaymentProcessor:
                 return False
         else:
             logger.info(
-                "refund.logged_only id=%s amount=%s "
-                "(Stripe not configured — process manually in Stripe Dashboard)",
+                "refund.logged_only id=%s amount=%s (Stripe not configured — process manually in Stripe Dashboard)",
                 payment_id,
                 refund_amount,
             )
@@ -534,10 +520,7 @@ class PaymentProcessor:
         customer_id = event_data.get("customer", "")
         logger.warning("webhook.invoice_payment_failed customer=%s", customer_id)
         for payment in self._payments.values():
-            if (
-                payment.stripe_customer_id == customer_id
-                and payment.status == PaymentStatus.SUCCEEDED
-            ):
+            if payment.stripe_customer_id == customer_id and payment.status == PaymentStatus.SUCCEEDED:
                 payment.mark_failed("Invoice payment failed (Stripe)")
                 if payment.retry_count < _MAX_RETRIES:
                     idx = min(payment.retry_count, len(_DUNNING_DELAYS_HOURS) - 1)
@@ -567,11 +550,7 @@ class PaymentProcessor:
             recipient = getattr(sub, "email", "") if sub else ""
             if not recipient:
                 return
-            next_str = (
-                payment.next_retry_at.strftime("%Y-%m-%d %H:%M UTC")
-                if payment.next_retry_at
-                else "soon"
-            )
+            next_str = payment.next_retry_at.strftime("%Y-%m-%d %H:%M UTC") if payment.next_retry_at else "soon"
             send_risk_halt_email(
                 reason=(
                     f"Payment of ${payment.amount} failed. "
@@ -618,23 +597,11 @@ class PaymentProcessor:
 
     def get_payment_stats(self) -> dict:
         total = len(self._payments)
-        succeeded = sum(
-            1 for p in self._payments.values() if p.status == PaymentStatus.SUCCEEDED
-        )
-        failed = sum(
-            1 for p in self._payments.values() if p.status == PaymentStatus.FAILED
-        )
-        pending = sum(
-            1 for p in self._payments.values() if p.status == PaymentStatus.PENDING
-        )
-        refunded = sum(
-            1 for p in self._payments.values() if p.status == PaymentStatus.REFUNDED
-        )
-        total_revenue = sum(
-            p.amount
-            for p in self._payments.values()
-            if p.status == PaymentStatus.SUCCEEDED
-        )
+        succeeded = sum(1 for p in self._payments.values() if p.status == PaymentStatus.SUCCEEDED)
+        failed = sum(1 for p in self._payments.values() if p.status == PaymentStatus.FAILED)
+        pending = sum(1 for p in self._payments.values() if p.status == PaymentStatus.PENDING)
+        refunded = sum(1 for p in self._payments.values() if p.status == PaymentStatus.REFUNDED)
+        total_revenue = sum(p.amount for p in self._payments.values() if p.status == PaymentStatus.SUCCEEDED)
         return {
             "total_payments": total,
             "succeeded": succeeded,

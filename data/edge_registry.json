@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "saved_at": "2026-04-02T15:12:58.608372+00:00",
+  "pods": {
+    "xgb_horizon5": {
+      "name": "xgb_horizon5",
+      "oos_sharpe": 1.52,
+      "oos_n": 2016,
+      "oos_se": 0.0327,
+      "factor_exposures": {
+        "rates": -0.12,
+        "vol": 0.18,
+        "momentum": 0.31,
+        "carry": -0.05,
+        "macro": 0.09,
+        "dxy": -0.22
+      },
+      "description": "XGBoost horizon=5 model. OOS accuracy=59.9% (p=0.0, N=2016). Trained on 50Y XAUUSD with 222 features.",
+      "enabled": true,
+      "gate_passed": true,
+      "registered_at": "2026-04-02T15:12:58.608334+00:00",
+      "last_updated": "2026-04-02T15:12:58.608350+00:00"
+    }
+  }
+}

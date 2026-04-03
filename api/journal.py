@@ -25,8 +25,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -235,7 +234,7 @@ async def get_stats(user: TokenPayload = Depends(get_current_user)) -> JournalSt
     pnls = [e["pnl"] for e in closed]
     wins = [p for p in pnls if p > 0]
 
-    all_tags = set(t for e in closed for t in e.get("tags", []))
+    all_tags = {t for e in closed for t in e.get("tags", [])}
     tag_stats = []
     for tag in all_tags:
         tagged = [e for e in closed if tag in e.get("tags", [])]
@@ -250,7 +249,7 @@ async def get_stats(user: TokenPayload = Depends(get_current_user)) -> JournalSt
             ),
         )
 
-    all_emotions = set(e.get("emotion") for e in closed if e.get("emotion"))
+    all_emotions = {e.get("emotion") for e in closed if e.get("emotion")}
     emotion_stats = []
     for em in all_emotions:
         em_entries = [e for e in closed if e.get("emotion") == em]
@@ -260,9 +259,7 @@ async def get_stats(user: TokenPayload = Depends(get_current_user)) -> JournalSt
             TagStats(
                 tag=em,
                 count=len(em_entries),
-                win_rate=round(len(em_wins) / len(em_entries) * 100, 1)
-                if em_entries
-                else 0,
+                win_rate=round(len(em_wins) / len(em_entries) * 100, 1) if em_entries else 0,
                 avg_pnl=round(sum(em_pnls) / len(em_pnls), 2) if em_pnls else 0,
             ),
         )
@@ -275,9 +272,7 @@ async def get_stats(user: TokenPayload = Depends(get_current_user)) -> JournalSt
         worst_trade_pnl=min(pnls),
         by_tag=sorted(tag_stats, key=lambda x: x.count, reverse=True),
         by_emotion=sorted(emotion_stats, key=lambda x: x.count, reverse=True),
-        rule_deviation_count=sum(
-            1 for e in entries if not e.get("followed_rules", True)
-        ),
+        rule_deviation_count=sum(1 for e in entries if not e.get("followed_rules", True)),
     )
 
 

@@ -80,8 +80,7 @@ import logging
 import os
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 import numpy as np
 
@@ -209,16 +208,12 @@ class TCARecorder:
         self._pending: dict[str, dict] = {}
 
         # Completed records: keyed by (broker, symbol) for fast aggregation
-        self._records: dict[str, deque[TCARecord]] = defaultdict(
-            lambda: deque(maxlen=TCA_MAX_MEMORY_RECORDS)
-        )
+        self._records: dict[str, deque[TCARecord]] = defaultdict(lambda: deque(maxlen=TCA_MAX_MEMORY_RECORDS))
         # Flat list for cross-slice queries
         self._all_records: deque[TCARecord] = deque(maxlen=TCA_MAX_MEMORY_RECORDS * 10)
 
         # Rolling slippage window per broker for alert evaluation
-        self._broker_slippage: dict[str, deque[float]] = defaultdict(
-            lambda: deque(maxlen=TCA_ALERT_WINDOW)
-        )
+        self._broker_slippage: dict[str, deque[float]] = defaultdict(lambda: deque(maxlen=TCA_ALERT_WINDOW))
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -343,9 +338,7 @@ class TCARecorder:
         total_slip_usd = sum(r.slippage_usd for r in records)
 
         mean_slip = float(np.mean(slippages))
-        rolling_mean = float(
-            np.mean(list(self._broker_slippage.get(broker or "", [])) or [mean_slip])
-        )
+        rolling_mean = float(np.mean(list(self._broker_slippage.get(broker or "", [])) or [mean_slip]))
         alert = rolling_mean > TCA_ALERT_THRESHOLD_BPS
 
         report = TCAReport(
@@ -386,7 +379,7 @@ class TCARecorder:
         Used by the execution engine to flag broker routing issues.
         """
         window = list(self._broker_slippage.get(broker, []))
-        if len(window) < 10:  # noqa: PLR2004
+        if len(window) < 10:
             return False
         return float(np.mean(window)) > TCA_ALERT_THRESHOLD_BPS
 
@@ -412,7 +405,7 @@ class TCARecorder:
     def _check_alert(self, broker: str, record: TCARecord) -> None:
         """Fire an alert if rolling mean slippage exceeds threshold."""
         window = list(self._broker_slippage[broker])
-        if len(window) < 10:  # noqa: PLR2004
+        if len(window) < 10:
             return
         rolling_mean = float(np.mean(window))
         if rolling_mean > TCA_ALERT_THRESHOLD_BPS:
@@ -426,9 +419,7 @@ class TCARecorder:
             )
             self._fire_alert(broker, rolling_mean, record)
 
-    def _fire_alert(
-        self, broker: str, mean_slippage_bps: float, record: TCARecord
-    ) -> None:
+    def _fire_alert(self, broker: str, mean_slippage_bps: float, record: TCARecord) -> None:
         """Publish a TCA alert to the outbox and alert engine."""
         try:
             from core.outbox import write_outbox_event_standalone
@@ -459,6 +450,7 @@ class TCARecorder:
         """Write TCA record to Redis sorted set (score = fill timestamp)."""
         try:
             import asyncio
+
             from cache.redis_client import get_redis
 
             async def _write():
@@ -475,9 +467,10 @@ class TCARecorder:
 
             try:
                 loop = asyncio.get_running_loop()
-                loop.create_task(_write(), name="tca_redis_write")
+                _t = loop.create_task(_write(), name="tca_redis_write")
+                _t.add_done_callback(lambda _: None)
             except RuntimeError:
-                pass  # No event loop — skip Redis persistence
+                ...  # nosec B110
         except Exception as exc:
             logger.debug("TCA Redis persist failed: %s", exc)
 
@@ -498,11 +491,11 @@ class TCARecorder:
     def _get_session(dt: datetime) -> str:
         """Classify a UTC datetime into a trading session."""
         hour = dt.hour
-        if 7 <= hour < 16:  # noqa: PLR2004
+        if 7 <= hour < 16:
             return "london"
-        elif 13 <= hour < 22:  # noqa: PLR2004
+        if 13 <= hour < 22:
             return "new_york"
-        elif 0 <= hour < 9:  # noqa: PLR2004
+        if 0 <= hour < 9:
             return "asia"
         return "off_hours"
 

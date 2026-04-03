@@ -98,12 +98,11 @@ import logging
 import os
 import socket
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
-from enum import Enum
-from typing import Any
 from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -129,15 +128,9 @@ try:
     from prometheus_client import Counter, Gauge, Histogram
 
     _prom_role = Gauge("hopefx_standby_role", "Current pod role: 1=primary 0=standby")
-    _prom_promotions = Counter(
-        "hopefx_standby_promotions_total", "Number of standby→primary promotions"
-    )
-    _prom_heartbeat_age = Gauge(
-        "hopefx_standby_heartbeat_age_s", "Seconds since last primary heartbeat"
-    )
-    _prom_state_version = Gauge(
-        "hopefx_standby_state_version", "Current replicated state version"
-    )
+    _prom_promotions = Counter("hopefx_standby_promotions_total", "Number of standby→primary promotions")
+    _prom_heartbeat_age = Gauge("hopefx_standby_heartbeat_age_s", "Seconds since last primary heartbeat")
+    _prom_state_version = Gauge("hopefx_standby_state_version", "Current replicated state version")
     _prom_repl_lag_ms = Histogram(
         "hopefx_standby_replication_lag_ms",
         "State replication write latency ms",
@@ -148,7 +141,7 @@ except Exception:
     _PROM_OK = False
 
 
-class Role(str, Enum):
+class Role(StrEnum):
     PRIMARY = "primary"
     STANDBY = "standby"
 
@@ -178,9 +171,7 @@ class ReplicationStats:
     promotions: int = 0
     last_replication_ms: float = 0.0
     is_leader: bool = False
-    started_at: str = field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
-    )
+    started_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 class HotStandbyReplicator:
@@ -302,19 +293,9 @@ class HotStandbyReplicator:
     async def _start_as_primary(self) -> None:
         self._stats.is_leader = True
         logger.info("HotStandbyReplicator: starting as PRIMARY pod=%s", self._pod_id)
-        self._tasks.append(
-            asyncio.create_task(self._heartbeat_loop(), name="standby_heartbeat")
-        )
-        self._tasks.append(
-            asyncio.create_task(
-                self._state_replication_loop(), name="standby_state_repl"
-            )
-        )
-        self._tasks.append(
-            asyncio.create_task(
-                self._leader_refresh_loop(), name="standby_leader_refresh"
-            )
-        )
+        self._tasks.append(asyncio.create_task(self._heartbeat_loop(), name="standby_heartbeat"))
+        self._tasks.append(asyncio.create_task(self._state_replication_loop(), name="standby_state_repl"))
+        self._tasks.append(asyncio.create_task(self._leader_refresh_loop(), name="standby_leader_refresh"))
 
     async def _heartbeat_loop(self) -> None:
         """Write heartbeat key every HEARTBEAT_INTERVAL_S seconds."""
@@ -372,9 +353,7 @@ class HotStandbyReplicator:
     async def _start_as_standby(self) -> None:
         self._stats.is_leader = False
         logger.info("HotStandbyReplicator: starting as STANDBY pod=%s", self._pod_id)
-        self._tasks.append(
-            asyncio.create_task(self._monitor_loop(), name="standby_monitor")
-        )
+        self._tasks.append(asyncio.create_task(self._monitor_loop(), name="standby_monitor"))
 
     async def _monitor_loop(self) -> None:
         """
@@ -459,9 +438,7 @@ class HotStandbyReplicator:
 
     async def _promote(self) -> None:
         """Promote this standby to primary."""
-        logger.warning(
-            "HotStandbyReplicator: PROMOTING to PRIMARY pod=%s", self._pod_id
-        )
+        logger.warning("HotStandbyReplicator: PROMOTING to PRIMARY pod=%s", self._pod_id)
         self._role = Role.PRIMARY
         self._stats.role = Role.PRIMARY
         self._stats.is_leader = True
@@ -487,9 +464,7 @@ class HotStandbyReplicator:
 
     async def _demote(self) -> None:
         """Demote this primary to standby (lost leader key)."""
-        logger.critical(
-            "HotStandbyReplicator: DEMOTING to STANDBY pod=%s", self._pod_id
-        )
+        logger.critical("HotStandbyReplicator: DEMOTING to STANDBY pod=%s", self._pod_id)
         self._role = Role.STANDBY
         self._stats.role = Role.STANDBY
         self._stats.is_leader = False
@@ -548,10 +523,7 @@ class HotStandbyReplicator:
             ver_raw = await self._redis.get(_KEY_VERSION)
 
             if not pos_raw or not equity_raw:
-                logger.warning(
-                    "HotStandbyReplicator: no state snapshot in Redis — "
-                    "starting with empty state"
-                )
+                logger.warning("HotStandbyReplicator: no state snapshot in Redis — starting with empty state")
                 return None
 
             positions = json.loads(pos_raw.decode())
@@ -577,8 +549,7 @@ class HotStandbyReplicator:
             self._stats.state_version = version
 
             logger.info(
-                "HotStandbyReplicator: restored state version=%d positions=%d "
-                "equity=%.2f from pod=%s captured_at=%s",
+                "HotStandbyReplicator: restored state version=%d positions=%d equity=%.2f from pod=%s captured_at=%s",
                 version,
                 len(positions),
                 snapshot.equity,

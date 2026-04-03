@@ -52,8 +52,8 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
+from typing import ClassVar
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -74,8 +74,7 @@ WS_AUTH_REQUIRED: bool = os.getenv("WS_AUTH_REQUIRED", "true").lower() == "true"
 
 def _validate_ws_token(token: str) -> dict | None:
     """Validate a Bearer token from a WS auth message. Returns payload or None."""
-    if token.startswith("Bearer "):
-        token = token[7:]
+    token = token.removeprefix("Bearer ")
     try:
         from auth.jwt import decode_access_token
 
@@ -171,7 +170,7 @@ class LiveConnectionManager:
         Send to all connections subscribed to channel.
         Empty subscription set = subscribed to all channels.
         """
-        dead: list[str] = []
+        dead: ClassVar[list[str]] = []
         for cid, subs in list(self._subscriptions.items()):
             if channel in subs or not subs:
                 ws = self._connections.get(cid)
@@ -189,7 +188,7 @@ class LiveConnectionManager:
         Send a message only to connections belonging to a specific user.
         Used for per-user channels: account updates, position fills, alerts.
         """
-        dead: list[str] = []
+        dead: ClassVar[list[str]] = []
         for cid, uid in list(self._user_ids.items()):
             if uid != user_id:
                 continue
@@ -283,9 +282,7 @@ def _get_live_price(symbol: str) -> float | None:
             broker_key = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
             tick = pe.get_last_price(broker_key)
             if tick is not None:
-                mid = getattr(tick, "mid", None) or (
-                    (getattr(tick, "bid", 0) + getattr(tick, "ask", 0)) / 2
-                )
+                mid = getattr(tick, "mid", None) or ((getattr(tick, "bid", 0) + getattr(tick, "ask", 0)) / 2)
                 if mid and mid > 0:
                     return float(mid)
 
@@ -349,7 +346,7 @@ async def _eventbus_tick_broadcaster() -> None:
     (Redis unavailable) so the dashboard always shows something.
     """
     try:
-        from core.event_bus import bus, CH_TICK
+        from core.event_bus import CH_TICK, bus
 
         await bus.connect()
         logger.info("WS live: connected to EventBus — streaming real ticks.")
@@ -451,7 +448,69 @@ def _compute_atr_sl_tp(
     sl_mult = float(os.getenv("SL_ATR_MULT", str(sl_atr_mult)))
     tp_mult = float(os.getenv("TP_ATR_MULT", str(tp_atr_mult)))
 
-    atr = _atr_from_buffer(symbol) or _atr_from_csv(symbol)
+    atr: float | None = None
+
+    # ── 1. Signal engine data buffer ─────────────────────────────────────────
+    try:
+        from core.signal_engine import _data_buffers  # type: ignore[attr-defined]  # pylint: disable=no-name-in-module
+
+        broker_sym = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
+        buf = _data_buffers.get(broker_sym) or _data_buffers.get(symbol)
+        if buf is not None and len(buf) >= 15:
+            import numpy as _np
+
+            highs = _np.array([b["high"] for b in list(buf)[-15:]], dtype=float)
+            lows = _np.array([b["low"] for b in list(buf)[-15:]], dtype=float)
+            closes = _np.array([b["close"] for b in list(buf)[-15:]], dtype=float)
+            tr = _np.maximum(
+                highs[1:] - lows[1:],
+                _np.maximum(
+                    _np.abs(highs[1:] - closes[:-1]),
+                    _np.abs(lows[1:] - closes[:-1]),
+                ),
+            )
+            if len(tr) >= 14:
+                atr = float(_np.mean(tr[-14:]))
+    except Exception as exc:
+        logger.debug(
+            "_compute_sl_tp: signal engine ATR calc failed, trying CSV fallback: %s",
+            exc,
+        )
+
+    # ── 2. CSV fallback ───────────────────────────────────────────────────────
+    if atr is None:
+        try:
+            import pathlib
+
+            import pandas as _pd
+
+            broker_sym = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
+            csv_path = pathlib.Path(f"data/{broker_sym}_H1.csv")
+            if not csv_path.exists():
+                csv_path = pathlib.Path(f"data/{symbol.replace('/', '')}_H1.csv")
+            if csv_path.exists():
+                df = _pd.read_csv(csv_path, usecols=["high", "low", "close"]).tail(20)
+                if len(df) >= 15:
+                    highs = df["high"].to_numpy(dtype=float)
+                    lows = df["low"].to_numpy(dtype=float)
+                    closes = df["close"].to_numpy(dtype=float)
+                    import numpy as _np
+
+                    tr = _np.maximum(
+                        highs[1:] - lows[1:],
+                        _np.maximum(
+                            _np.abs(highs[1:] - closes[:-1]),
+                            _np.abs(lows[1:] - closes[:-1]),
+                        ),
+                    )
+                    atr = float(_np.mean(tr[-14:]))
+        except Exception as exc:
+            logger.debug(
+                "_compute_sl_tp: CSV ATR calc failed, using percentage fallback: %s",
+                exc,
+            )
+
+    # ── 3. Percentage fallback ────────────────────────────────────────────────
     if atr is None or atr <= 0:
         atr = mid * 0.01  # 1% percentage fallback
 
@@ -467,7 +526,7 @@ async def _eventbus_signal_broadcaster() -> None:
     subscribed to the 'signals' channel.
     """
     try:
-        from core.event_bus import bus, CH_SIGNAL
+        from core.event_bus import CH_SIGNAL, bus
 
         await bus.connect()
         async for msg in bus.subscribe(CH_SIGNAL):
@@ -478,13 +537,7 @@ async def _eventbus_signal_broadcaster() -> None:
             # Normalise to the frontend WsMessage schema:
             # { type: "signal", data: Signal }
             direction_raw = (msg.get("direction") or "neutral").lower()
-            direction_fe = (
-                "long"
-                if direction_raw == "buy"
-                else "short"
-                if direction_raw == "sell"
-                else "neutral"
-            )
+            direction_fe = "long" if direction_raw == "buy" else "short" if direction_raw == "sell" else "neutral"
             mid = msg.get("mid", 0.0)
             symbol = msg.get("symbol", "XAU/USD")
 
@@ -533,10 +586,7 @@ async def _broadcast_no_live_feed() -> None:
                 "prices",
                 {
                     "type": "no_live_feed",
-                    "message": (
-                        "No live broker connection. "
-                        "Connect a broker in Settings to receive real-time prices."
-                    ),
+                    "message": ("No live broker connection. Connect a broker in Settings to receive real-time prices."),
                     "timestamp": int(datetime.now(UTC).timestamp() * 1000),
                 },
             )
@@ -551,7 +601,7 @@ async def _price_broadcaster_live_only() -> None:
     a broker is connected (e.g. paper broker with market_prices populated).
     Sends no_live_feed when no live price is available for a symbol.
     """
-    _no_feed_warned: set[str] = set()
+    _no_feed_warned: ClassVar[set[str]] = set()
     while True:
         await asyncio.sleep(1)
         if _manager.connection_count == 0:
@@ -570,9 +620,7 @@ async def _price_broadcaster_live_only() -> None:
                     {
                         "type": "no_live_feed",
                         "symbol": symbol,
-                        "message": (
-                            f"No live price for {symbol}. Connect a broker in Settings."
-                        ),
+                        "message": (f"No live price for {symbol}. Connect a broker in Settings."),
                         "timestamp": int(datetime.now(UTC).timestamp() * 1000),
                     },
                 )
@@ -612,13 +660,11 @@ async def _heartbeat_broadcaster() -> None:
         await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
         if _manager.connection_count == 0:
             continue
-        dead: list[str] = []
+        dead: ClassVar[list[str]] = []
         for cid in list(_manager._connections.keys()):
             misses = _manager.record_hb_miss(cid)
             if misses > HEARTBEAT_MISS_LIMIT:
-                logger.info(
-                    "WS closing stale connection %s (missed %d heartbeats)", cid, misses
-                )
+                logger.info("WS closing stale connection %s (missed %d heartbeats)", cid, misses)
                 dead.append(cid)
             else:
                 await _manager.send(cid, {"type": "heartbeat"})
@@ -638,11 +684,13 @@ async def _heartbeat_broadcaster() -> None:
 
 def start_broadcasters() -> None:
     """Start background tasks (call once from app lifespan)."""
-    global _broadcast_task  # noqa: PLW0602
     loop = asyncio.get_event_loop()
-    loop.create_task(_price_broadcaster())
-    loop.create_task(_heartbeat_broadcaster())
-    loop.create_task(_eventbus_signal_broadcaster())
+    _t = loop.create_task(_price_broadcaster())
+    _t.add_done_callback(lambda _: None)
+    _t = loop.create_task(_heartbeat_broadcaster())
+    _t.add_done_callback(lambda _: None)
+    _t = loop.create_task(_eventbus_signal_broadcaster())
+    _t.add_done_callback(lambda _: None)
     logger.info("WS live broadcasters started (EventBus → broker poll → no_live_feed)")
 
 
@@ -671,7 +719,7 @@ async def ws_live(websocket: WebSocket) -> None:
       Max WS_MAX_CONNECTIONS_PER_MINUTE new connections per IP per minute (default 20).
       Excess connections are rejected with close code 1008 before accept().
     """
-    from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+    from rate_limiting.websocket_limiter import get_client_ip, get_ws_limiter
 
     limiter = get_ws_limiter()
     client_ip = get_client_ip(websocket)
@@ -694,8 +742,35 @@ async def ws_live(websocket: WebSocket) -> None:
     )
 
     if WS_AUTH_REQUIRED:
-        if not await _ws_auth_gate(cid, websocket):
-            return
+        try:
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=AUTH_TIMEOUT_SECONDS)
+            msg = json.loads(raw)
+            if msg.get("type") != "auth":
+                await _manager.send(
+                    cid,
+                    {
+                        "type": "error",
+                        "code": "AUTH_REQUIRED",
+                        "message": "First message must be {type: auth, token: ...}",
+                    },
+                )
+                await websocket.close(code=4001)
+                _manager.disconnect(cid)
+                return
+
+            payload = _validate_ws_token(msg.get("token", ""))
+            if payload is None:
+                await _manager.send(
+                    cid,
+                    {
+                        "type": "error",
+                        "code": "AUTH_FAILED",
+                        "message": "Invalid or expired token",
+                    },
+                )
+                await websocket.close(code=4001)
+                _manager.disconnect(cid)
+                return
 
     try:
         await _ws_message_loop(cid, websocket)
@@ -777,6 +852,8 @@ async def _ws_message_loop(cid: str, websocket: Any) -> None:
     except Exception as exc:
         logger.error("WS live error [%s]: %s", cid, exc)
         _manager.disconnect(cid)
+    finally:
+        await get_ws_limiter().release(get_client_ip(websocket))
 
 
 # ─── REST helpers ─────────────────────────────────────────────────────────────

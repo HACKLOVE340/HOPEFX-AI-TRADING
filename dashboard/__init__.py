@@ -11,11 +11,11 @@ wired (app_state/broker/orchestrator), falling back to empty structures
 when not wired — same pattern as MobileAPI.
 """
 
-from typing import Dict, List, Optional, Any  # noqa: F401
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -66,8 +66,8 @@ class DashboardService:
     def __init__(
         self,
         config: dict[str, Any] | None = None,
-        app_state: Any = None,
-        orchestrator: Any = None,
+        app_state: Any | None = None,
+        orchestrator: Any | None = None,
     ):
         self.config = config or {}
         self._app_state = app_state
@@ -112,9 +112,7 @@ class DashboardService:
                 {"row": 2, "col": 6, "width": 6, "height": 2},
             ),
         ]
-        layout = DashboardLayout(
-            "default", "Default Trading Dashboard", default_widgets, is_default=True
-        )
+        layout = DashboardLayout("default", "Default Trading Dashboard", default_widgets, is_default=True)
         self.layouts["default"] = layout
         self.active_layout_id = "default"
 
@@ -126,9 +124,7 @@ class DashboardService:
             return self.layouts.get(self.active_layout_id)
         return None
 
-    def create_layout(
-        self, name: str, widgets: list[DashboardWidget]
-    ) -> DashboardLayout:
+    def create_layout(self, name: str, widgets: list[DashboardWidget]) -> DashboardLayout:
         layout_id = f"layout_{len(self.layouts) + 1}"
         layout = DashboardLayout(layout_id=layout_id, name=name, widgets=widgets)
         self.layouts[layout_id] = layout
@@ -277,12 +273,8 @@ class DashboardService:
                     except Exception as exc:
                         logger.warning("DashboardService get_strategy_status: %s", exc)
         if strategies_raw:
-            items = (
-                strategies_raw if isinstance(strategies_raw, list) else [strategies_raw]
-            )
-            strategies = [
-                self._to_dict(s) for s in items if self._to_dict(s) is not None
-            ]
+            items = strategies_raw if isinstance(strategies_raw, list) else [strategies_raw]
+            strategies = [self._to_dict(s) for s in items if self._to_dict(s) is not None]
             return {"strategies": strategies, "data_source": "app_state"}
         return {"strategies": [], "data_source": "none"}
 
@@ -322,10 +314,7 @@ class DashboardService:
         tick = self._safe_orch("get_latest_tick")
         gold_price: float | None = None
         if tick is not None:
-            gold_price = (
-                float(getattr(tick, "mid", None) or getattr(tick, "price", None) or 0.0)
-                or None
-            )
+            gold_price = float(getattr(tick, "mid", None) or getattr(tick, "price", None) or 0.0) or None
 
         for sym in symbols:
             price: float | None = None
@@ -336,14 +325,9 @@ class DashboardService:
             else:
                 raw_quote = self._to_dict(self._safe_broker("get_quote", sym))
                 if raw_quote:
-                    price = (
-                        float(raw_quote.get("mid") or raw_quote.get("last") or 0.0)
-                        or None
-                    )
+                    price = float(raw_quote.get("mid") or raw_quote.get("last") or 0.0) or None
                     source = "broker" if price else "none"
-            markets.append(
-                {"symbol": sym, "price": price, "change": None, "data_source": source}
-            )
+            markets.append({"symbol": sym, "price": price, "change": None, "data_source": source})
 
         return {"markets": markets}
 

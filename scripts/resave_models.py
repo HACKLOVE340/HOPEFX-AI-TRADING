@@ -62,7 +62,7 @@ def resave_all() -> int:
     for pkl in pkls:
         log.info("Processing %s ...", pkl.name)
         try:
-            model = joblib.load(pkl)
+            model = joblib.load(pkl)  # nosec B301 - pkl iterates ml/saved_models directory
         except Exception as exc:
             log.warning("  SKIP — cannot load %s: %s", pkl.name, exc)
             errors += 1
@@ -86,9 +86,7 @@ def resave_all() -> int:
 
     if errors:
         log.warning("%d file(s) could not be processed — retrain required.", errors)
-        log.warning(
-            "  docker compose run --rm app python ml/train_advanced.py --years 50 --oos-years 3"
-        )
+        log.warning("  docker compose run --rm app python ml/train_advanced.py --years 50 --oos-years 3")
     else:
         log.info("All models re-saved successfully. Restart the app to reload.")
 

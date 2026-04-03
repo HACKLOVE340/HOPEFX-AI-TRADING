@@ -10,10 +10,7 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
-
-if TYPE_CHECKING:
-    pass
+from typing import Any, Literal
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -104,9 +101,9 @@ class SecuritySettings(BaseSettings):
     def _resolve_jwt_secret(cls, values: Any) -> Any:
         """Accept JWT_SECRET_KEY as a fallback alias for SECURITY_JWT_SECRET."""
         if isinstance(values, dict) and not values.get("jwt_secret"):
-                alias = os.getenv("JWT_SECRET_KEY", "")
-                if alias:
-                    values["jwt_secret"] = alias
+            alias = os.getenv("JWT_SECRET_KEY", "")
+            if alias:
+                values["jwt_secret"] = alias
         return values
 
     @field_validator("jwt_secret", mode="before")
@@ -148,8 +145,8 @@ class Settings(BaseSettings):
     def validate_paths(self) -> Settings:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.log_dir.mkdir(parents=True, exist_ok=True)
-        self.ml.model_path.mkdir(parents=True, exist_ok=True)
-        self.ml.feature_store_path.mkdir(parents=True, exist_ok=True)
+        self.ml.model_path.mkdir(parents=True, exist_ok=True)  # pylint: disable=no-member
+        self.ml.feature_store_path.mkdir(parents=True, exist_ok=True)  # pylint: disable=no-member
         return self
 
 

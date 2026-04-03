@@ -41,8 +41,7 @@ Bug fixes vs prior version
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
 import pandas as pd
@@ -87,6 +86,15 @@ MACRO_COLUMNS: list[str] = [
     "macro_risk_off_score",
     "macro_gold_tailwind",
     "macro_gold_headwind",
+    # WGC gold demand features (quarterly/monthly, forward-filled)
+    # Rising central bank demand and investment demand are structurally bullish.
+    "macro_wgc_total_demand_chg",  # QoQ change in total demand (tonnes)
+    "macro_wgc_investment_chg",  # QoQ change in investment demand (tonnes)
+    "macro_wgc_central_bank_chg",  # QoQ change in central bank purchases (tonnes)
+    "macro_wgc_jewellery_chg",  # QoQ change in jewellery demand (tonnes)
+    "macro_wgc_etf_flow",  # Monthly ETF net flow (tonnes, level)
+    "macro_wgc_etf_flow_z4",  # ETF flow z-score over 4 quarters
+    "macro_wgc_demand_score",  # Composite WGC demand score (0–3, bullish count)
 ]
 
 
@@ -221,7 +229,7 @@ def add_macro_features(
         df["macro_vix_level"] = vix
         df["macro_vix_ret"] = vix.pct_change(fill_method=None).fillna(0.0)
         df["macro_vix_z20"] = _zscore(vix, lookback)
-        df["macro_vix_spike"] = (vix > 30).astype(float)  # noqa: PLR2004
+        df["macro_vix_spike"] = (vix > 30).astype(float)
     else:
         df["macro_vix_level"] = df["macro_vix_ret"] = 0.0
         df["macro_vix_z20"] = df["macro_vix_spike"] = 0.0
@@ -241,9 +249,7 @@ def add_macro_features(
     else:
         df["macro_yield_5y_chg"] = 0.0
 
-    y10_raw = (
-        macro["yield_10y"] if _has("yield_10y") else pd.Series(0.0, index=df.index)
-    )
+    y10_raw = macro["yield_10y"] if _has("yield_10y") else pd.Series(0.0, index=df.index)
     y5_raw = macro["yield_5y"] if _has("yield_5y") else pd.Series(0.0, index=df.index)
     spread = (y10_raw - y5_raw).reindex(df.index).fillna(0.0)
     df["macro_yield_spread"] = spread
@@ -277,6 +283,47 @@ def add_macro_features(
     else:
         df["macro_spx_ret"] = df["macro_spx_z20"] = 0.0
 
+    # ── WGC gold demand features ──────────────────────────────────────────────
+    # WGC series are quarterly/monthly — forward-filled to hourly bars by
+    # MacroStore.align_to_hourly(). We compute QoQ changes and z-scores here.
+    #
+    # Signal logic:
+    #   Rising central bank demand → structural bullish (sovereign accumulation)
+    #   Rising investment demand   → risk-off / inflation hedge demand
+    #   Positive ETF flow          → institutional positioning bullish
+    #   Falling jewellery demand   → consumer price sensitivity (mild bearish)
+
+    def _wgc_chg(col_in: str, col_out: str) -> None:
+        """Compute period-over-period change for a WGC series."""
+        if _has(col_in):
+            raw = macro[col_in]
+            # Use diff() on the forward-filled series; consecutive identical
+            # values (within a quarter) produce 0 change — correct behaviour.
+            df[col_out] = raw.diff().fillna(0.0)
+        else:
+            df[col_out] = 0.0
+
+    _wgc_chg("wgc_total_demand", "macro_wgc_total_demand_chg")
+    _wgc_chg("wgc_investment", "macro_wgc_investment_chg")
+    _wgc_chg("wgc_central_bank", "macro_wgc_central_bank_chg")
+    _wgc_chg("wgc_jewellery", "macro_wgc_jewellery_chg")
+
+    # ETF flow: use level (already a flow, not a stock) + z-score over 4 quarters
+    if _has("wgc_etf_flow"):
+        etf_flow = macro["wgc_etf_flow"]
+        df["macro_wgc_etf_flow"] = etf_flow
+        df["macro_wgc_etf_flow_z4"] = _zscore(etf_flow, 4)
+    else:
+        df["macro_wgc_etf_flow"] = 0.0
+        df["macro_wgc_etf_flow_z4"] = 0.0
+
+    # Composite WGC demand score (0–3): count of bullish demand signals
+    df["macro_wgc_demand_score"] = (
+        (df["macro_wgc_central_bank_chg"] > 0).astype(float)  # CB buying more
+        + (df["macro_wgc_investment_chg"] > 0).astype(float)  # investment rising
+        + (df["macro_wgc_etf_flow"] > 0).astype(float)  # ETF inflows
+    )
+
     # ── Composite scores ─────────────────────────────────────────────────────
     # Risk-off score (0–4): conditions that drive safe-haven gold demand
     df["macro_risk_off_score"] = (
@@ -287,17 +334,19 @@ def add_macro_features(
     )
 
     # Gold tailwind: bullish signals minus bearish signals.
-    # Bullish: weak DXY, elevated VIX, falling real rates, SPX down
+    # Bullish: weak DXY, elevated VIX, falling real rates, SPX down,
+    #          WGC demand score (central bank buying, investment demand, ETF inflows)
     # Bearish: rising 10Y yield (opportunity cost), strong DXY
     # FIX: old code used (yield_spread_chg > 0) as bullish — incorrect.
     bullish = (
-        (df["macro_dxy_z20"] < -0.5).astype(float)  # noqa: PLR2004
-        + (df["macro_vix_level"] > 20).astype(float)  # noqa: PLR2004
+        (df["macro_dxy_z20"] < -0.5).astype(float)
+        + (df["macro_vix_level"] > 20).astype(float)
         + (df["macro_real_rate_proxy"] < 0).astype(float)
-        + (df["macro_spx_ret"] < -0.005).astype(float)  # noqa: PLR2004
+        + (df["macro_spx_ret"] < -0.005).astype(float)
+        + (df["macro_wgc_demand_score"] >= 2).astype(float)
     )
     bearish = (df["macro_yield_10y_chg"] > 0).astype(float) + (
-        df["macro_dxy_z20"] > 0.5  # noqa: PLR2004
+        df["macro_dxy_z20"] > 0.5
     ).astype(float)
     df["macro_gold_tailwind"] = bullish - bearish
     df["macro_gold_headwind"] = bearish
@@ -353,9 +402,7 @@ def add_regime_features(df: pd.DataFrame, lookback: int = 60) -> pd.DataFrame:
     # Vol regime: 0=low, 1=normal, 2=high
     pct = rv.rolling(lookback).rank(pct=True).fillna(0.5)
     df["regime_vol_regime"] = (
-        pd.cut(pct, bins=[0, 0.33, 0.67, 1.0], labels=[0, 1, 2], include_lowest=True)
-        .astype(float)
-        .fillna(1.0)
+        pd.cut(pct, bins=[0, 0.33, 0.67, 1.0], labels=[0, 1, 2], include_lowest=True).astype(float).fillna(1.0)
     )
 
     # 20-day momentum z-score
@@ -398,7 +445,7 @@ def _rolling_hurst(series: pd.Series, window: int = 40) -> pd.Series:
     """
 
     def _hurst_scalar(x: np.ndarray) -> float:
-        if len(x) < 8:  # noqa: PLR2004
+        if len(x) < 8:
             return 0.5
         try:
             lags = range(2, min(len(x) // 2, 12))
@@ -407,7 +454,7 @@ def _rolling_hurst(series: pd.Series, window: int = 40) -> pd.Series:
                 chunks = [x[i : i + lag] for i in range(0, len(x) - lag, lag)]
                 rs_chunk = []
                 for chunk in chunks:
-                    if len(chunk) < 2:  # noqa: PLR2004
+                    if len(chunk) < 2:
                         continue
                     dev = np.cumsum(chunk - np.mean(chunk))
                     r = dev.max() - dev.min()
@@ -416,7 +463,7 @@ def _rolling_hurst(series: pd.Series, window: int = 40) -> pd.Series:
                         rs_chunk.append(r / s)
                 if rs_chunk:
                     rs_vals.append(np.mean(rs_chunk))
-            if len(rs_vals) < 2:  # noqa: PLR2004
+            if len(rs_vals) < 2:
                 return 0.5
             log_lags = np.log(list(lags)[: len(rs_vals)])
             log_rs = np.log(rs_vals)

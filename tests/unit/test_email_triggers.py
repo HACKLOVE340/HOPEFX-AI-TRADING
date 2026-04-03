@@ -20,7 +20,6 @@ from __future__ import annotations
 import os
 from unittest.mock import patch
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
@@ -217,9 +216,7 @@ class TestTemplateContext:
         with patch("notifications.email_triggers._send", side_effect=fake_send):
             from notifications.email_triggers import send_daily_report_email
 
-            send_daily_report_email(
-                "2026-03-25", 100.0, 0.1, 2, 50.0, 100100.0, to="t@e.com"
-            )
+            send_daily_report_email("2026-03-25", 100.0, 0.1, 2, 50.0, 100100.0, to="t@e.com")
 
         assert captured[0] == "daily_report.html"
 
@@ -244,15 +241,16 @@ class TestTemplateContext:
 class TestTemplateRenderFailure:
     def test_render_failure_falls_back_to_none_html(self):
         """If render_email raises, _send is still called (log-only path returns True)."""
-        with _no_channel(), patch(
-            "notifications.email_renderer.render_email",
-            side_effect=Exception("jinja2 missing"),
+        with (
+            _no_channel(),
+            patch(
+                "notifications.email_renderer.render_email",
+                side_effect=Exception("jinja2 missing"),
+            ),
         ):
             from notifications.email_triggers import send_trade_fill_email
 
             # Should not raise
-            result = send_trade_fill_email(
-                "XAUUSD", "buy", 0.1, 2050.0, to="t@example.com"
-            )
+            result = send_trade_fill_email("XAUUSD", "buy", 0.1, 2050.0, to="t@example.com")
         # Log-only path returns True even with render failure
         assert result is True

@@ -8,26 +8,25 @@ HOPEFX Security Module
 Encryption, key management, and secure credential storage
 """
 
-import os
 import base64
 import hashlib
-import secrets
 import logging
+import os
+import secrets
 from dataclasses import dataclass
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 try:
     from cryptography.fernet import Fernet
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-    from cryptography.hazmat.primitives.ciphers.aead import AESGCM  # noqa: F401
 
     CRYPTO_AVAILABLE = True
 except ImportError:
     CRYPTO_AVAILABLE = False
-    logging.warning("cryptography not available, using base64 obfuscation only")
-
-logger = logging.getLogger(__name__)
+    logger.warning("cryptography not available, using base64 obfuscation only")
 
 
 @dataclass
@@ -58,18 +57,14 @@ class SecureVault:
 
         if not self._master_key:
             logger.warning("No master key provided, generating temporary key")
-            self._master_key = base64.urlsafe_b64encode(
-                secrets.token_bytes(32)
-            ).decode()
+            self._master_key = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode()
 
         self._initialize_cipher()
 
     def _initialize_cipher(self):
         """Initialize encryption cipher"""
         if not CRYPTO_AVAILABLE:
-            logger.warning(
-                "Using base64 obfuscation (install cryptography for real encryption)"
-            )
+            logger.warning("Using base64 obfuscation (install cryptography for real encryption)")
             return
 
         # Derive salt from environment or generate new
@@ -82,9 +77,8 @@ class SecureVault:
                 self._salt = secrets.token_bytes(16)
         else:
             self._salt = secrets.token_bytes(16)
-            logger.warning(
-                f"Generated new salt: {self._salt.hex()[:16]}... (set HOPEFX_SALT for persistence)"
-            )
+            logger.warning("Generated new salt: %s... (set HOPEFX_SALT for persistence)", self._salt.hex()[:16])
+
 
         # Derive key using PBKDF2
         kdf = PBKDF2HMAC(
@@ -112,12 +106,11 @@ class SecureVault:
                     version=1,
                 )
             except Exception as e:
-                logger.error(f"Encryption failed: {e}")
+                logger.error("Encryption failed: %s", e)
+
 
         # Fallback to base64
-        return EncryptedCredential(
-            ciphertext=base64.b64encode(plaintext.encode()).decode(), salt="", version=0
-        )
+        return EncryptedCredential(ciphertext=base64.b64encode(plaintext.encode()).decode(), salt="", version=0)
 
     def decrypt(self, credential: EncryptedCredential) -> str:
         """
@@ -138,7 +131,8 @@ class SecureVault:
         try:
             return self._cipher.decrypt(credential.ciphertext.encode()).decode()
         except Exception as e:
-            logger.error(f"Decryption failed: {e}")
+            logger.error("Decryption failed: %s", e)
+
             return ""
 
     def rotate_key(self, new_master_key: str) -> bool:
@@ -156,7 +150,8 @@ class SecureVault:
             return True
 
         except Exception as e:
-            logger.error(f"Key rotation failed: {e}")
+            logger.error("Key rotation failed: %s", e)
+
             return False
 
 
@@ -171,9 +166,7 @@ class APICredentialManager:
         self._cache: dict[str, str] = {}  # Decrypted cache (short-lived)
         self._credential_file = Path("config/credentials.enc")
 
-    def store_credential(
-        self, service: str, key_name: str, value: str, persist: bool = True
-    ) -> bool:
+    def store_credential(self, service: str, key_name: str, value: str, persist: bool = True) -> bool:
         """
         Store encrypted credential
         """
@@ -191,11 +184,13 @@ class APICredentialManager:
             # Update cache
             self._cache[f"{service}:{key_name}"] = value
 
-            logger.info(f"Credential stored: {service}/{key_name}")
+            logger.info("Credential stored: %s/%s", service, key_name)
+
             return True
 
         except Exception as e:
-            logger.error(f"Failed to store credential: {e}")
+            logger.error("Failed to store credential: %s", e)
+
             return False
 
     def get_credential(self, service: str, key_name: str) -> str | None:
@@ -209,17 +204,11 @@ class APICredentialManager:
             return self._cache[cache_key]
 
         # Load from memory
-        if (
-            service not in self._credentials
-            or key_name not in self._credentials[service]
-        ):
+        if service not in self._credentials or key_name not in self._credentials[service]:
             # Try loading from disk
             self._load_from_disk()
 
-            if (
-                service not in self._credentials
-                or key_name not in self._credentials[service]
-            ):
+            if service not in self._credentials or key_name not in self._credentials[service]:
                 return None
 
         # Decrypt
@@ -241,7 +230,8 @@ class APICredentialManager:
                 return True
             return False
         except Exception as e:
-            logger.error(f"Failed to delete credential: {e}")
+            logger.error("Failed to delete credential: %s", e)
+
             return False
 
     def _save_to_disk(self):
@@ -270,7 +260,8 @@ class APICredentialManager:
             self._credential_file.chmod(0o600)  # Owner read/write only
 
         except Exception as e:
-            logger.error(f"Failed to save credentials: {e}")
+            logger.error("Failed to save credentials: %s", e)
+
 
     def _load_from_disk(self):
         """Load credentials from disk"""
@@ -292,10 +283,12 @@ class APICredentialManager:
                         version=cred_data.get("version", 1),
                     )
 
-            logger.info(f"Loaded credentials for {len(self._credentials)} services")
+            logger.info("Loaded credentials for %s services", len(self._credentials))
+
 
         except Exception as e:
-            logger.error(f"Failed to load credentials: {e}")
+            logger.error("Failed to load credentials: %s", e)
+
 
     def get_all_services(self) -> list[str]:
         """List all services with stored credentials"""
@@ -320,9 +313,7 @@ def hash_password(password: str, salt: str | None = None) -> tuple[str, str]:
         salt = secrets.token_hex(16)
 
     # Use 100,000 iterations
-    key = hashlib.pbkdf2_hmac(
-        "sha256", password.encode("utf-8"), salt.encode("utf-8"), 100000
-    )
+    key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 100000)
 
     return key.hex(), salt
 

@@ -26,7 +26,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
@@ -106,11 +105,11 @@ class TestInMemoryCache:
         for i in range(3):
             cache.set("SYM", f"ts-{i}", pd.DataFrame({"v": [float(i)]}))
 
-        assert len(cache._mem) == 3  # noqa: PLR2004
+        assert len(cache._mem) == 3
 
         # Adding a 4th should evict the oldest
         cache.set("SYM", "ts-3", pd.DataFrame({"v": [3.0]}))
-        assert len(cache._mem) == 3  # noqa: PLR2004
+        assert len(cache._mem) == 3
 
     def test_invalidate_clears_all_entries(self):
         cache = _make_cache()
@@ -166,7 +165,7 @@ class TestRedisPath:
         assert result is None
 
     def test_redis_set_calls_setex_with_ttl(self):
-        from ml.live_inference import _FeatureCache, _CACHE_TTL
+        from ml.live_inference import _CACHE_TTL, _FeatureCache
 
         cache = _FeatureCache()
         cache._connected = True

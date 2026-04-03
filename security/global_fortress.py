@@ -22,7 +22,8 @@ Integration
 Start the brain in connect_to_life.py::
 
     from security.global_fortress import start_brain
-    asyncio.create_task(start_brain(app))
+    _t = asyncio.create_task(start_brain(app))
+    _t.add_done_callback(lambda _: None)
 
 The sub-router is mounted automatically when ``start_brain`` is called.
 """
@@ -34,9 +35,9 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timezone
-UTC = timezone.utc
-from typing import Any
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, ClassVar
 
 import httpx
 import numpy as np
@@ -47,9 +48,7 @@ logger = logging.getLogger(__name__)
 # ── Config ────────────────────────────────────────────────────────────────────
 SCAN_INTERVAL: int = int(os.getenv("BRAIN_SCAN_INTERVAL", "30"))  # seconds
 HEAL_INTERVAL: int = int(os.getenv("BRAIN_HEAL_INTERVAL", "1800"))  # 30 min
-FLASHPOINT_API: str = os.getenv(
-    "FLASHPOINT_API_URL", "https://api.flashpoint.io/v1/iocs"
-)
+FLASHPOINT_API: str = os.getenv("FLASHPOINT_API_URL", "https://api.flashpoint.io/v1/iocs")
 FLASHPOINT_KEY: str = os.getenv("FLASHPOINT_API_KEY", "")
 ARGOCD_WEBHOOK: str = os.getenv("ARGOCD_ROLLBACK_WEBHOOK", "")
 REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -109,13 +108,13 @@ def _get_rl_agent() -> Any | None:
             from stable_baselines3 import PPO
 
             model_path = os.path.join(
-                os.path.dirname(__file__),
+                Path(__file__).parent,
                 "..",
                 "ml",
                 "rl_models",
                 "nuclear_decision_ppo.zip",
             )
-            if os.path.exists(model_path):
+            if Path(model_path).exists():
                 _rl_agent = PPO.load(model_path)
                 logger.info("HOPEFXBrain: RL agent loaded from %s", model_path)
             else:
@@ -199,8 +198,8 @@ class HOPEFXBrain:
                 await self.trace_attacks()
                 await self.auto_heal()
                 await self._sync_flashpoint_iocs()
-            except Exception as exc:
-                logger.error("HOPEFXBrain loop error: %s", exc, exc_info=True)
+            except Exception:
+                logger.exception("HOPEFXBrain loop error: %s")
             await asyncio.sleep(SCAN_INTERVAL)
 
     # ── Endpoint scanner ──────────────────────────────────────────────────────
@@ -211,27 +210,21 @@ class HOPEFXBrain:
         Routes that return non-2xx are flagged in Redis for alerting.
         """
         redis = await _get_redis()
-        flagged: list[str] = []
+        flagged: ClassVar[list[str]] = []
 
         for route in self.app.routes:
             path: str = getattr(route, "path", "")
             if not path or path in ("/health", "/ready", "/metrics"):
                 continue
             # Mark trader/broker/data routes as high-priority
-            priority = (
-                "high"
-                if any(k in path for k in ("trader", "broker", "data", "order"))
-                else "normal"
-            )
+            priority = "high" if any(k in path for k in ("trader", "broker", "data", "order")) else "normal"
             if priority == "high":
                 flagged.append(path)
 
         if redis and flagged:
             await redis.set(
                 "brain:scanned_routes",
-                json.dumps(
-                    {"ts": datetime.now(UTC).isoformat(), "routes": flagged}
-                ),
+                json.dumps({"ts": datetime.now(UTC).isoformat(), "routes": flagged}),
                 ex=120,
             )
 
@@ -273,9 +266,7 @@ class HOPEFXBrain:
 
             # Persist to Redis for dashboard polling
             if redis:
-                await redis.hset(
-                    "brain:attack_log", ip, json.dumps(self.attack_log[ip])
-                )
+                await redis.hset("brain:attack_log", ip, json.dumps(self.attack_log[ip]))
                 await redis.expire("brain:attack_log", 86400)  # 24 h TTL
 
             # RL decision
@@ -286,10 +277,8 @@ class HOPEFXBrain:
         """Geo-locate an IP via ip-api.com (free, no key required)."""
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.get(
-                    f"http://ip-api.com/json/{ip}?fields=country,city,lat,lon,isp,org"
-                )
-                if resp.status_code == 200:  # noqa: PLR2004
+                resp = await client.get(f"http://ip-api.com/json/{ip}?fields=country,city,lat,lon,isp,org")
+                if resp.status_code == 200:
                     return resp.json()
         except Exception as exc:
             logger.debug("Geo lookup failed for %s: %s", ip, exc)
@@ -341,20 +330,18 @@ class HOPEFXBrain:
                 logger.debug("RL predict failed: %s", exc)
 
         # Rule-based fallback
-        if severity >= 0.8:  # noqa: PLR2004
+        if severity >= 0.8:
             return ACTION_NUCLEAR
-        if severity >= 0.5:  # noqa: PLR2004
+        if severity >= 0.5:
             return ACTION_BLOCK
-        if severity >= 0.3:  # noqa: PLR2004
+        if severity >= 0.3:
             return ACTION_RATE_LIMIT
         return ACTION_MONITOR
 
     async def _execute_action(self, action: int, ip: str) -> None:
         """Execute the chosen action for *ip*."""
         redis = await _get_redis()
-        action_name = {0: "monitor", 1: "rate_limit", 2: "block", 3: "nuclear"}.get(
-            action, "monitor"
-        )
+        action_name = {0: "monitor", 1: "rate_limit", 2: "block", 3: "nuclear"}.get(action, "monitor")
         logger.info("HOPEFXBrain: action=%s ip=%s", action_name, ip)
 
         if redis:
@@ -406,7 +393,7 @@ class HOPEFXBrain:
         redis = await _get_redis()
 
         # Drain up to 10 vulnerability entries per cycle
-        raw_entries: list[str] = []
+        raw_entries: ClassVar[list[str]] = []
         if redis:
             raw_entries = await redis.lrange("scan:vuln_queue", 0, 9)
             if raw_entries:
@@ -429,9 +416,7 @@ class HOPEFXBrain:
             rule = entry.get("rule", "unknown")
 
             if not code:
-                logger.debug(
-                    "HOPEFXBrain: empty code snippet for %s — skipping", endpoint
-                )
+                logger.debug("HOPEFXBrain: empty code snippet for %s — skipping", endpoint)
                 continue
 
             try:
@@ -458,9 +443,7 @@ class HOPEFXBrain:
                         rule,
                     )
             except Exception as exc:
-                logger.warning(
-                    "HOPEFXBrain: auto-heal failed for %s: %s", endpoint, exc
-                )
+                logger.warning("HOPEFXBrain: auto-heal failed for %s: %s", endpoint, exc)
 
     # ── Flashpoint IOC sync ───────────────────────────────────────────────────
 
@@ -475,7 +458,7 @@ class HOPEFXBrain:
                     headers={"Authorization": f"Bearer {FLASHPOINT_KEY}"},
                     params={"limit": 100},
                 )
-                if resp.status_code == 200:  # noqa: PLR2004
+                if resp.status_code == 200:
                     iocs = resp.json().get("data", [])
                     redis = await _get_redis()
                     if redis and iocs:
@@ -579,10 +562,7 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
             for _i, raw in enumerate(raw_list):
                 try:
                     rec = json.loads(raw)
-                    if (
-                        rec.get("endpoint") == endpoint
-                        and rec.get("status") == "pending"
-                    ):
+                    if rec.get("endpoint") == endpoint and rec.get("status") == "pending":
                         fix_record = rec
                         # Remove this entry from the queue
                         await redis.lrem("fixes:queue", 1, raw)
@@ -612,7 +592,7 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
             )
         except Exception as exc:
             logger.error("HOPEFXBrain: PR publisher error for %s: %s", endpoint, exc)
-            pr_result = {"status": "error", "error": str(exc)}
+            pr_result = {"status": "error", "error": "PR publish failed — check server logs"}
 
         # Persist approved record with PR metadata
         approved_record = {
@@ -663,10 +643,7 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
             for raw in raw_list:
                 try:
                     rec = json.loads(raw)
-                    if (
-                        rec.get("endpoint") == endpoint
-                        and rec.get("status") == "pending"
-                    ):
+                    if rec.get("endpoint") == endpoint and rec.get("status") == "pending":
                         await redis.lrem("fixes:queue", 1, raw)
                         declined_record = {
                             **rec,
@@ -680,9 +657,7 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
                 except json.JSONDecodeError:
                     continue
 
-        logger.info(
-            "HOPEFXBrain: fix declined endpoint=%s by=%s", endpoint, declined_by
-        )
+        logger.info("HOPEFXBrain: fix declined endpoint=%s by=%s", endpoint, declined_by)
         return {"status": "declined", "endpoint": endpoint}
 
     @router.get("/fixes/approved")
@@ -758,7 +733,8 @@ async def start_brain(app: FastAPI) -> HOPEFXBrain:
     Call from connect_to_life.py lifespan or startup_event::
 
         from security.global_fortress import start_brain
-        asyncio.create_task(start_brain(app))
+        _t = asyncio.create_task(start_brain(app))
+        _t.add_done_callback(lambda _: None)
     """
     global _brain_instance
     if _brain_instance is not None:
@@ -780,7 +756,8 @@ async def start_brain(app: FastAPI) -> HOPEFXBrain:
         asyncio.get_event_loop().run_in_executor(None, _get_encoder)
 
     # Start the eternal loop
-    asyncio.create_task(brain.monitor_24_7(), name="hopefx-brain-24-7")
+    _t = asyncio.create_task(brain.monitor_24_7(), name="hopefx-brain-24-7")
+    _t.add_done_callback(lambda _: None)
     logger.info("HOPEFXBrain: 24/7 monitor task created")
 
     return brain

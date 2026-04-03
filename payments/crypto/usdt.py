@@ -9,12 +9,12 @@ USDT Payment Integration
 Handles USDT deposits and withdrawals on TRC20 (TRON) and ERC20 (Ethereum) networks.
 """
 
-from datetime import datetime, timezone
-UTC = timezone.utc
+import hashlib
+import logging
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
-import logging
-import hashlib
+from typing import ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ class USDTNetwork(Enum):
 class USDTClient:
     """USDT payment client supporting multiple networks"""
 
-    REQUIRED_CONFIRMATIONS = {USDTNetwork.TRC20: 19, USDTNetwork.ERC20: 12}
+    REQUIRED_CONFIRMATIONS: ClassVar[dict] = {USDTNetwork.TRC20: 19, USDTNetwork.ERC20: 12}
     MIN_DEPOSIT = Decimal("10.00")  # USD
     NETWORK_FEE = Decimal("2.00")  # USD
 
@@ -37,9 +37,7 @@ class USDTClient:
         self.addresses: dict[str, dict] = {}
         self.transactions: dict[str, dict] = {}
 
-    def generate_deposit_address(
-        self, user_id: str, network: USDTNetwork = USDTNetwork.TRC20
-    ) -> dict:
+    def generate_deposit_address(self, user_id: str, network: USDTNetwork = USDTNetwork.TRC20) -> dict:
         """Generate USDT deposit address"""
         try:
             # Generate network-specific address
@@ -56,7 +54,8 @@ class USDTClient:
                 "created_at": datetime.now(UTC).isoformat(),
             }
 
-            logger.info(f"Generated USDT {network.value} address for user {user_id}")
+            logger.info("Generated USDT %s address for user %s", network.value, user_id)
+
 
             return {
                 "address": address,
@@ -66,7 +65,8 @@ class USDTClient:
                 "confirmations_required": self.REQUIRED_CONFIRMATIONS[network],
             }
         except Exception as e:
-            logger.error(f"Error generating USDT address: {e}")
+            logger.error("Error generating USDT address: %s", e)
+
             raise
 
     def process_deposit(
@@ -80,7 +80,8 @@ class USDTClient:
         """Process USDT deposit"""
         try:
             if amount < self.MIN_DEPOSIT:
-                logger.warning(f"USDT deposit below minimum: {amount}")
+                logger.warning("USDT deposit below minimum: %s", amount)
+
                 return None
 
             required_conf = self.REQUIRED_CONFIRMATIONS[network]
@@ -97,18 +98,16 @@ class USDTClient:
             }
 
             self.transactions[tx_hash] = transaction
-            logger.info(
-                f"USDT deposit processed: {tx_hash} - {amount} USDT on {network.value}"
-            )
+            logger.info("USDT deposit processed: %s - %s USDT on %s", tx_hash, amount, network.value)
+
 
             return transaction
         except Exception as e:
-            logger.error(f"Error processing USDT deposit: {e}")
+            logger.error("Error processing USDT deposit: %s", e)
+
             return None
 
-    def process_withdrawal(
-        self, user_id: str, amount: Decimal, destination: str, network: USDTNetwork
-    ) -> dict:
+    def process_withdrawal(self, user_id: str, amount: Decimal, destination: str, network: USDTNetwork) -> dict:
         """Process USDT withdrawal"""
         try:
             total_fee = self.NETWORK_FEE
@@ -117,9 +116,7 @@ class USDTClient:
             if net_amount <= 0:
                 raise ValueError("Amount too small after fees")
 
-            tx_hash = hashlib.sha256(
-                f"USDT{user_id}{amount}{destination}".encode()
-            ).hexdigest()
+            tx_hash = hashlib.sha256(f"USDT{user_id}{amount}{destination}".encode()).hexdigest()
 
             return {
                 "tx_hash": tx_hash,
@@ -131,7 +128,8 @@ class USDTClient:
                 "status": "broadcasting",
             }
         except Exception as e:
-            logger.error(f"Error processing USDT withdrawal: {e}")
+            logger.error("Error processing USDT withdrawal: %s", e)
+
             raise
 
 

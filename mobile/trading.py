@@ -23,9 +23,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from datetime import datetime, timezone
-UTC = timezone.utc
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +40,8 @@ class MobileTradingEngine:
 
     def __init__(
         self,
-        app_state: Any = None,
-        broker: Any = None,
+        app_state: Any | None = None,
+        broker: Any | None = None,
     ) -> None:
         self._app_state = app_state
         self._broker = broker
@@ -64,10 +63,7 @@ class MobileTradingEngine:
             loop = asyncio.get_event_loop()
             if loop.is_running():
                 # Already inside an event loop — caller must await directly
-                raise RuntimeError(
-                    "Cannot call _run() inside a running event loop. "
-                    "Use the async variant instead."
-                )
+                raise RuntimeError("Cannot call _run() inside a running event loop. Use the async variant instead.")
             return loop.run_until_complete(coro)
         except RuntimeError:
             return asyncio.run(coro)
@@ -137,14 +133,12 @@ class MobileTradingEngine:
                 "take_profit": take_profit,
                 "timestamp": datetime.now(UTC).isoformat(),
             }
-        except Exception as exc:
-            logger.error(
-                "MobileTradingEngine.place_order_async: %s", exc, exc_info=True
-            )
+        except Exception:
+            logger.exception("MobileTradingEngine.place_order_async: %s")
             return {
                 "order_id": None,
                 "status": "error",
-                "error": str(exc),
+                "error": "Operation failed — check server logs",
                 "user_id": user_id,
                 "symbol": symbol,
             }
@@ -186,12 +180,12 @@ class MobileTradingEngine:
                 )
                 result["preset_id"] = preset_id
                 return result
-            except Exception as exc:
-                logger.error("MobileTradingEngine.quick_order: %s", exc, exc_info=True)
+            except Exception:
+                logger.exception("MobileTradingEngine.quick_order: %s")
                 return {
                     "order_id": None,
                     "status": "error",
-                    "error": str(exc),
+                    "error": "Operation failed — check server logs",
                     "preset_id": preset_id,
                 }
         else:
@@ -247,9 +241,7 @@ class MobileTradingEngine:
                     "position_id": position_id,
                 }
 
-            result = await fn(
-                user_id=user_id, position_id=position_id, quantity=quantity
-            )
+            result = await fn(user_id=user_id, position_id=position_id, quantity=quantity)
             logger.info(
                 "MobileTradingEngine: position closed user=%s id=%s",
                 user_id,
@@ -258,17 +250,13 @@ class MobileTradingEngine:
             return {
                 "status": "closed",
                 "position_id": position_id,
-                "close_price": result.get("close_price")
-                if isinstance(result, dict)
-                else None,
+                "close_price": result.get("close_price") if isinstance(result, dict) else None,
                 "pnl": result.get("pnl") if isinstance(result, dict) else None,
                 "timestamp": datetime.now(UTC).isoformat(),
             }
-        except Exception as exc:
-            logger.error(
-                "MobileTradingEngine.close_position_async: %s", exc, exc_info=True
-            )
-            return {"status": "error", "error": str(exc), "position_id": position_id}
+        except Exception:
+            logger.exception("MobileTradingEngine.close_position_async: %s")
+            return {"status": "error", "error": "Operation failed — check server logs", "position_id": position_id}
 
     async def close_all_positions_async(
         self,
@@ -286,19 +274,15 @@ class MobileTradingEngine:
         # Fetch open positions first
         positions: list[dict[str, Any]] = []
         try:
-            fn = getattr(broker, "get_positions", None) or getattr(
-                broker, "get_open_trades", None
-            )
+            fn = getattr(broker, "get_positions", None) or getattr(broker, "get_open_trades", None)
             if fn:
                 raw = await fn(user_id)
                 positions = raw if isinstance(raw, list) else []
         except Exception as exc:
-            logger.warning(
-                "MobileTradingEngine.close_all: get_positions failed: %s", exc
-            )
+            logger.warning("MobileTradingEngine.close_all: get_positions failed: %s", exc)
 
         closed = 0
-        errors: list[str] = []
+        errors: ClassVar[list[str]] = []
         for pos in positions:
             pos_id = pos.get("id") or pos.get("position_id") or pos.get("trade_id")
             if not pos_id:
@@ -339,15 +323,13 @@ class MobileTradingEngine:
             }
         try:
             return self._run(self.close_all_positions_async(user_id))
-        except Exception as exc:
-            logger.error(
-                "MobileTradingEngine.close_all_positions: %s", exc, exc_info=True
-            )
+        except Exception:
+            logger.exception("MobileTradingEngine.close_all_positions: %s")
             return {
                 "action": "close_all",
                 "user_id": user_id,
                 "status": "error",
-                "error": str(exc),
+                "error": "Operation failed — check server logs",
                 "positions_closed": 0,
             }
 
@@ -372,19 +354,15 @@ class MobileTradingEngine:
                     "order_id": order_id,
                 }
             _result = await fn(user_id=user_id, order_id=order_id)
-            logger.info(
-                "MobileTradingEngine: order cancelled user=%s id=%s", user_id, order_id
-            )
+            logger.info("MobileTradingEngine: order cancelled user=%s id=%s", user_id, order_id)
             return {
                 "status": "cancelled",
                 "order_id": order_id,
                 "timestamp": datetime.now(UTC).isoformat(),
             }
-        except Exception as exc:
-            logger.error(
-                "MobileTradingEngine.cancel_order_async: %s", exc, exc_info=True
-            )
-            return {"status": "error", "error": str(exc), "order_id": order_id}
+        except Exception:
+            logger.exception("MobileTradingEngine.cancel_order_async: %s")
+            return {"status": "error", "error": "Operation failed — check server logs", "order_id": order_id}
 
     # ── Position / order queries ──────────────────────────────────────────────
 
@@ -394,9 +372,7 @@ class MobileTradingEngine:
         if broker is None:
             return []
         try:
-            fn = getattr(broker, "get_positions", None) or getattr(
-                broker, "get_open_trades", None
-            )
+            fn = getattr(broker, "get_positions", None) or getattr(broker, "get_open_trades", None)
             if fn is None:
                 return []
             raw = await fn(user_id)
@@ -411,9 +387,7 @@ class MobileTradingEngine:
         if broker is None:
             return []
         try:
-            fn = getattr(broker, "get_orders", None) or getattr(
-                broker, "get_pending_orders", None
-            )
+            fn = getattr(broker, "get_orders", None) or getattr(broker, "get_pending_orders", None)
             if fn is None:
                 return []
             raw = await fn(user_id)

@@ -19,8 +19,8 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
+from typing import ClassVar
 
 from data_layer.feeds.news.base import NewsFeedBase
 from data_layer.types import NewsArticle, NewsSource
@@ -41,7 +41,7 @@ class FinnhubFeed(NewsFeedBase):
         if not self.is_configured:
             return []
 
-        articles: list[NewsArticle] = []
+        articles: ClassVar[list[NewsArticle]] = []
         try:
             data = await self._get(
                 f"{_BASE}/news",
@@ -64,11 +64,7 @@ class FinnhubFeed(NewsFeedBase):
                     continue
 
                 ts = item.get("datetime", 0)
-                published = (
-                    datetime.fromtimestamp(ts, tz=UTC)
-                    if ts
-                    else datetime.now(UTC)
-                )
+                published = datetime.fromtimestamp(ts, tz=UTC) if ts else datetime.now(UTC)
 
                 articles.append(
                     NewsArticle(

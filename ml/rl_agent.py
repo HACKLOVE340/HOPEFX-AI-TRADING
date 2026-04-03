@@ -48,17 +48,18 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass
+import threading
+from dataclasses import dataclass, field
+from datetime import UTC
+from pathlib import Path
 from typing import Any
 
 import numpy as np
-from datetime import timezone
-UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 
-_MODEL_DIR = os.path.join(os.path.dirname(__file__), "saved_models", "rl")
-os.makedirs(_MODEL_DIR, exist_ok=True)
+_MODEL_DIR = os.path.join(Path(__file__).parent, "saved_models", "rl")
+Path(_MODEL_DIR).mkdir(parents=True, exist_ok=True)
 
 _WINDOW = 50  # observation window (must match vector_store._WINDOW)
 _FEATURE_DIM = 32
@@ -154,10 +155,9 @@ class ForexTradingEnv:
                 self._features.append(vec)
                 self._prices.append(float(df.at[i, "close"]))
 
-        if len(self._features) < 10:  # noqa: PLR2004
+        if len(self._features) < 10:
             raise ValueError(
-                f"Not enough valid windows: {len(self._features)} "
-                f"(need at least 10, have {len(df)} candles)",
+                f"Not enough valid windows: {len(self._features)} (need at least 10, have {len(df)} candles)",
             )
 
         obs_dim = _FEATURE_DIM + 3
@@ -195,7 +195,7 @@ class ForexTradingEnv:
         if action == 1 and self._position != 1:  # BUY
             self._close_position(price)
             self._open_position(1, price)
-        elif action == 2 and self._position != -1:  # SELL  # noqa: PLR2004
+        elif action == 2 and self._position != -1:  # SELL
             self._close_position(price)
             self._open_position(-1, price)
         # action == 0 → HOLD
@@ -228,17 +228,14 @@ class ForexTradingEnv:
         # Normalise by rolling 20-bar PnL std so the reward is scale-invariant.
         # Clip to [-reward_clip, +reward_clip] before scaling to prevent gradient
         # explosions from outlier bars (news spikes, data errors).
-        if len(self._pnl_history) > 20:  # noqa: PLR2004
+        if len(self._pnl_history) > 20:
             std = float(np.std(self._pnl_history[-20:])) + 1e-9
             raw_reward = float(delta_pnl / std)
         else:
             # Insufficient history — normalise by initial balance
             raw_reward = float(delta_pnl / self.initial_balance)
 
-        reward = (
-            float(np.clip(raw_reward, -self.reward_clip, self.reward_clip))
-            * self.reward_scaling
-        )
+        reward = float(np.clip(raw_reward, -self.reward_clip, self.reward_clip)) * self.reward_scaling
 
         info = {
             "equity": new_equity,
@@ -258,9 +255,7 @@ class ForexTradingEnv:
         feat = self._features[self._step_idx].copy()
         price = self._prices[self._step_idx]
         upnl = (
-            self._position * (price - self._entry_price) / (self._entry_price + 1e-9)
-            if self._entry_price > 0
-            else 0.0
+            self._position * (price - self._entry_price) / (self._entry_price + 1e-9) if self._entry_price > 0 else 0.0
         )
         extra = np.array(
             [
@@ -288,9 +283,7 @@ class ForexTradingEnv:
         self._balance -= cost
         self._position = direction
         # Effective entry price includes slippage adverse fill
-        slip = (
-            price * self.slippage_bps * direction
-        )  # positive for BUY, negative for SELL
+        slip = price * self.slippage_bps * direction  # positive for BUY, negative for SELL
         self._entry_price = price + slip
         self._steps_held = 0
 
@@ -342,8 +335,8 @@ class RLAgent:
 
     def __init__(self, model_name: str = "hopefx_ppo"):
         self.model_name = model_name
-        self.model_path = os.path.join(_MODEL_DIR, f"{model_name}.zip")
-        self._model: Any = None
+        self.model_path = Path(_MODEL_DIR) / f"{model_name}.zip"
+        self._model: Any | None = None
 
     # ── training ──────────────────────────────────────────────────────────────
 
@@ -357,7 +350,7 @@ class RLAgent:
         """Train PPO on the given environment."""
         try:
             from stable_baselines3 import PPO
-            from stable_baselines3.common.env_checker import check_env  # noqa: F401
+
         except ImportError:
             raise ImportError(
                 "stable-baselines3 required: pip install stable-baselines3",
@@ -376,7 +369,7 @@ class RLAgent:
             clip_range=0.2,
             ent_coef=0.01,
             verbose=verbose,
-            tensorboard_log=os.path.join(_MODEL_DIR, "tb_logs"),
+            tensorboard_log=Path(_MODEL_DIR) / "tb_logs",
         )
         self._model.learn(total_timesteps=timesteps)
         self._model.save(self.model_path)
@@ -384,7 +377,7 @@ class RLAgent:
 
     def load(self) -> bool:
         """Load a previously saved model. Returns True if successful."""
-        if not os.path.exists(self.model_path):
+        if not Path(self.model_path).exists():
             logger.warning("No saved model at %s", self.model_path)
             return False
         try:
@@ -459,7 +452,7 @@ class RLAgent:
 
         while True:
             action, _ = self._model.predict(obs, deterministic=True)
-            obs, reward, done, _, info = env.step(int(action))
+            obs, _, done, _, info = env.step(int(action))
             eq = info.get("equity", prev_equity)
             equity_curve.append(eq)
             if eq > prev_equity:
@@ -513,21 +506,17 @@ class RLAgentTrainer:
 
     def __init__(
         self,
-        candle_source: Any = None,
+        candle_source: Any | None = None,
         model_name: str = "hopefx_ppo",
         # Backwards-compat alias — remove after all call sites are updated.
-        oanda_stream: Any = None,
+        oanda_stream: Any | None = None,
     ):
         if candle_source is None and oanda_stream is not None:
-            logger.warning(
-                "RLAgentTrainer: 'oanda_stream' parameter is deprecated — "
-                "use 'candle_source' instead."
-            )
+            logger.warning("RLAgentTrainer: 'oanda_stream' parameter is deprecated — use 'candle_source' instead.")
             candle_source = oanda_stream
         if candle_source is None:
             raise ValueError(
-                "RLAgentTrainer requires a 'candle_source' with a "
-                "get_candles(symbol, timeframe, count) coroutine."
+                "RLAgentTrainer requires a 'candle_source' with a get_candles(symbol, timeframe, count) coroutine."
             )
         self.stream = candle_source
         self.agent = RLAgent(model_name=model_name)
@@ -552,7 +541,7 @@ class RLAgentTrainer:
             timeframe,
         )
         raw = await self.stream.get_candles(symbol, timeframe, candles)
-        if len(raw) < 200:  # noqa: PLR2004
+        if len(raw) < 200:
             raise ValueError(f"Only {len(raw)} candles returned — need at least 200")
 
         split = int(len(raw) * train_split)
@@ -666,7 +655,7 @@ def walk_forward_eval(
     """
     import pandas as pd
 
-    if len(candles) < 200:  # noqa: PLR2004
+    if len(candles) < 200:
         raise ValueError(f"Need at least 200 candles, got {len(candles)}")
 
     df = pd.DataFrame(candles)
@@ -675,7 +664,7 @@ def walk_forward_eval(
 
     total = len(df)
     fold_size = total // n_folds
-    folds_results: list[WalkForwardFold] = []
+    folds_results: list[WalkForwardFold] = field(default_factory=list)
 
     logger.info(
         "Walk-forward eval: %d candles, %d folds, %d steps/fold",
@@ -690,7 +679,7 @@ def walk_forward_eval(
         fold_df = df.iloc[:fold_end].reset_index(drop=True)
 
         split = int(len(fold_df) * train_pct)
-        if split < 100 or (len(fold_df) - split) < 50:  # noqa: PLR2004
+        if split < 100 or (len(fold_df) - split) < 50:
             logger.warning(
                 "Fold %d: insufficient data (%d rows), skipping",
                 fold_idx + 1,
@@ -714,9 +703,7 @@ def walk_forward_eval(
             logger.warning("Fold %d env creation failed: %s", fold_idx + 1, exc)
             continue
 
-        logger.info(
-            "Fold %d/%d: training %d steps …", fold_idx + 1, n_folds, timesteps_per_fold
-        )
+        logger.info("Fold %d/%d: training %d steps …", fold_idx + 1, n_folds, timesteps_per_fold)
         agent.train(train_env, timesteps=timesteps_per_fold, verbose=0)
 
         metrics = agent.evaluate(test_env)
@@ -787,7 +774,7 @@ def walk_forward_eval(
 # ── Module-level singleton ─────────────────────────────────────────────────────
 
 _rl_agent_singleton: RLAgent | None = None
-_rl_agent_lock = __import__("threading").Lock()
+_rl_agent_lock = threading.Lock()
 
 
 def get_rl_agent(model_name: str = "hopefx_ppo") -> RLAgent | None:

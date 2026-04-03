@@ -121,11 +121,7 @@ async def get_trader_signals(trader_id: str, limit: int = 10):
     """
     from api.social_feed import _feed_items
 
-    signals = [
-        item
-        for item in _feed_items.values()
-        if item.get("trader_id") == trader_id and item.get("is_public")
-    ]
+    signals = [item for item in _feed_items.values() if item.get("trader_id") == trader_id and item.get("is_public")]
     signals.sort(key=lambda x: x.get("created_at", ""), reverse=True)
     return {"signals": signals[:limit], "total": len(signals)}
 

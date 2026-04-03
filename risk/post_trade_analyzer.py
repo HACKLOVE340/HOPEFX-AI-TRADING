@@ -47,8 +47,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import numpy as np
@@ -65,15 +64,9 @@ try:
         "Fill slippage in bps",
         buckets=[0, 1, 2, 5, 10, 20, 50, 100],
     )
-    _prom_is = Gauge(
-        "hopefx_post_trade_impl_shortfall_bps", "Avg implementation shortfall bps"
-    )
-    _prom_fill_quality = Gauge(
-        "hopefx_post_trade_fill_quality", "Rolling avg fill quality score"
-    )
-    _prom_adverse_sel = Counter(
-        "hopefx_post_trade_adverse_selection_total", "Adverse selection events"
-    )
+    _prom_is = Gauge("hopefx_post_trade_impl_shortfall_bps", "Avg implementation shortfall bps")
+    _prom_fill_quality = Gauge("hopefx_post_trade_fill_quality", "Rolling avg fill quality score")
+    _prom_adverse_sel = Counter("hopefx_post_trade_adverse_selection_total", "Adverse selection events")
     _PROM_OK = True
 except Exception:
     _PROM_OK = False
@@ -122,21 +115,15 @@ class FillRecord:
 
         # Implementation shortfall: fill vs decision price
         if self.side == "long":
-            self.impl_shortfall_bps = (
-                (self.fill_price - self.decision_price) / self.decision_price * 10_000
-            )
+            self.impl_shortfall_bps = (self.fill_price - self.decision_price) / self.decision_price * 10_000
         else:
-            self.impl_shortfall_bps = (
-                (self.decision_price - self.fill_price) / self.decision_price * 10_000
-            )
+            self.impl_shortfall_bps = (self.decision_price - self.fill_price) / self.decision_price * 10_000
 
         # Market impact: half-spread proxy
         self.market_impact_bps = self.spread_at_fill / mid * 10_000 / 2
 
         # Execution cost in USD
-        self.execution_cost_usd = (
-            abs(self.slippage_bps) / 10_000 * mid * self.lots * 100.0
-        )
+        self.execution_cost_usd = abs(self.slippage_bps) / 10_000 * mid * self.lots * 100.0
 
         # Fill quality: 1 = filled at best price in bar, 0 = worst
         bar_range = self.bar_high - self.bar_low
@@ -171,7 +158,7 @@ class PostTradeAnalyzer:
     statistics for slippage model calibration.
     """
 
-    def __init__(self, lineage_store: Any = None) -> None:
+    def __init__(self, lineage_store: Any | None = None) -> None:
         self._lineage = lineage_store
         self._fills: list[FillRecord] = []
         self._start_ts = time.time()

@@ -23,12 +23,10 @@ Covered modules
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # connect_to_life — DrawdownMonitor
@@ -50,7 +48,7 @@ class TestDrawdownMonitor:
         dd = self._make(100_000)
         dd.update(100_000)  # peak = 100k
         result = dd.update(97_000)
-        assert abs(result - 0.03) < 1e-6  # noqa: PLR2004
+        assert abs(result - 0.03) < 1e-6
 
     def test_peak_updates_on_new_high(self):
         dd = self._make(100_000)
@@ -62,7 +60,7 @@ class TestDrawdownMonitor:
         dd = self._make(100_000)
         dd.update(100_000)
         dd.update(95_000)
-        assert abs(dd.daily_drawdown - 0.05) < 1e-6  # noqa: PLR2004
+        assert abs(dd.daily_drawdown - 0.05) < 1e-6
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -74,7 +72,7 @@ class TestEventBus:
     @pytest.mark.asyncio
     async def test_local_fallback_publish_subscribe(self):
         """When Redis is unavailable the local bus delivers messages."""
-        from core.event_bus import EventBus, CH_TICK
+        from core.event_bus import CH_TICK, EventBus
 
         bus = EventBus()
         # Force degraded mode (no Redis)
@@ -91,12 +89,12 @@ class TestEventBus:
         # Give the local bus a moment to deliver
         await asyncio.sleep(0.01)
         assert len(received) == 1
-        assert received[0]["bid"] == 1920.0  # noqa: PLR2004
+        assert received[0]["bid"] == 1920.0
 
     @pytest.mark.asyncio
     async def test_publish_retries_then_falls_back(self):
         """publish() exhausts retries and routes to local fallback."""
-        from core.event_bus import EventBus, CH_SIGNAL
+        from core.event_bus import CH_SIGNAL, EventBus
 
         bus = EventBus()
         # Simulate Redis that always fails
@@ -106,7 +104,7 @@ class TestEventBus:
         bus._degraded = False
 
         received: list = []
-        bus.subscribe_local(CH_SIGNAL, lambda m: received.append(m))  # noqa: PLW0108
+        bus.subscribe_local(CH_SIGNAL, received.append)
 
         # Patch sleep to avoid waiting during retries
         with patch("core.event_bus.asyncio.sleep", new_callable=AsyncMock):
@@ -171,7 +169,8 @@ class TestStalenessGuard:
     @pytest.mark.asyncio
     async def test_breach_fires_when_stale(self):
         import time
-        from data.market_ingest import _StalenessGuard, STALE_TIMEOUT_S
+
+        from data.market_ingest import STALE_TIMEOUT_S, _StalenessGuard
 
         guard = _StalenessGuard()
         # Wind back the last tick time past the timeout
@@ -223,9 +222,9 @@ class TestOHLCVBuffer:
         for p in prices:
             buf.push(p, 0.5, "2025-01-01T00:00:00Z")
         df = buf.to_dataframe()
-        assert df.iloc[0]["open"] == 1900.0  # noqa: PLR2004
-        assert df.iloc[0]["high"] == 1950.0  # noqa: PLR2004
-        assert df.iloc[0]["low"] == 1880.0  # noqa: PLR2004
+        assert df.iloc[0]["open"] == 1900.0
+        assert df.iloc[0]["high"] == 1950.0
+        assert df.iloc[0]["low"] == 1880.0
         assert df.iloc[0]["close"] == prices[-1]
 
     def test_not_ready_below_min_bars(self):
@@ -260,7 +259,7 @@ class TestMLPredictorFallback:
         df = pd.DataFrame()  # empty — won't be used
         direction, confidence = pred.predict(df, ema_cross=0.5, symbol="XAU/USD")
         assert direction == "BUY"
-        assert confidence == 0.60  # noqa: PLR2004
+        assert confidence == 0.60
 
     def test_ema_sell_when_cross_negative(self):
         from strategy.engine import _MLPredictor
@@ -271,9 +270,7 @@ class TestMLPredictorFallback:
 
         import pandas as pd
 
-        direction, confidence = pred.predict(
-            pd.DataFrame(), ema_cross=-0.5, symbol="XAU/USD"
-        )
+        direction, _ = pred.predict(pd.DataFrame(), ema_cross=-0.5, symbol="XAU/USD")
         assert direction == "SELL"
 
     def test_hold_when_cross_zero(self):
@@ -396,7 +393,7 @@ class TestFaultGuard:
                     async with fg.protect("test_module"):
                         raise RuntimeError("simulated failure")
                 except RuntimeError:
-                    pass
+                    ...  # nosec B110
 
         assert fg.state_of("test_module") == "OPEN"
         assert fg.is_healthy("test_module") is False
@@ -404,7 +401,8 @@ class TestFaultGuard:
     @pytest.mark.asyncio
     async def test_recovers_to_half_open_after_timeout(self):
         import time
-        from utils.fault_guard import FaultGuard, FAILURE_THRESHOLD, RECOVER_S
+
+        from utils.fault_guard import FAILURE_THRESHOLD, RECOVER_S, FaultGuard
 
         fg = FaultGuard()
         fg.register("test_module")
@@ -417,7 +415,7 @@ class TestFaultGuard:
                     async with fg.protect("test_module"):
                         raise RuntimeError("fail")
                 except RuntimeError:
-                    pass
+                    ...  # nosec B110
 
         # Wind back the failure timestamp past recovery window
         fg._modules["test_module"].last_failure_ts = time.monotonic() - RECOVER_S - 1
@@ -427,7 +425,7 @@ class TestFaultGuard:
             async with fg.protect("test_module"):
                 pass  # success
         except RuntimeError:
-            pass
+            ...  # nosec B110
 
         assert fg.state_of("test_module") == "CLOSED"
 
@@ -443,12 +441,11 @@ class TestFaultGuard:
     @pytest.mark.asyncio
     async def test_stale_heartbeat_publishes_breach(self):
         import time
+
         from utils.fault_guard import HEARTBEAT_TIMEOUT_S
 
         fg = self._make()
-        fg._modules["test_module"].last_heartbeat = (
-            time.monotonic() - HEARTBEAT_TIMEOUT_S - 1
-        )
+        fg._modules["test_module"].last_heartbeat = time.monotonic() - HEARTBEAT_TIMEOUT_S - 1
 
         with patch("utils.fault_guard.bus") as mock_bus:
             mock_bus.publish_breach = AsyncMock()
@@ -520,7 +517,6 @@ class TestNewsCalendarFeed:
     @pytest.mark.asyncio
     async def test_write_redis_calls_pipeline(self):
         from data.news_calendar_feed import NewsCalendarFeed
-        from datetime import datetime
 
         feed = NewsCalendarFeed()
         events = [datetime.now(UTC) + timedelta(hours=i) for i in range(3)]
@@ -534,12 +530,10 @@ class TestNewsCalendarFeed:
         mock_redis.pipeline = MagicMock(return_value=mock_pipe)
         mock_redis.aclose = AsyncMock()
 
-        with patch(
-            "data.news_calendar_feed.aioredis.from_url", return_value=mock_redis
-        ):
+        with patch("data.news_calendar_feed.aioredis.from_url", return_value=mock_redis):
             count = await feed._write_redis(events)
 
-        assert count == 3  # noqa: PLR2004
+        assert count == 3
         mock_pipe.delete.assert_called_once()
         mock_pipe.rpush.assert_called_once()
         mock_pipe.expire.assert_called_once()
@@ -564,9 +558,7 @@ class TestFIXRouter:
         router._fallback = MagicMock()
 
         # Should return without calling fallback
-        await router._route(
-            {"type": "order_request", "symbol": "XAU/USD", "direction": "BUY"}
-        )
+        await router._route({"type": "order_request", "symbol": "XAU/USD", "direction": "BUY"})
         router._fallback.send.assert_not_called()
 
     @pytest.mark.asyncio

@@ -31,6 +31,7 @@ class SecureVault:
     """Hardware-backed or keyring-backed secure vault."""
 
     _instance: SecureVault | None = None
+    _initialized: bool = False  # declared here so pylint sees it before __new__ sets it
     # passlib uses "argon2" as the scheme name (wraps argon2-cffi which
     # defaults to Argon2id internally).
     _pwd_context = CryptContext(
@@ -81,9 +82,7 @@ class SecureVault:
             # structlog) can surface the root error alongside the VaultError.
             import logging as _logging
 
-            _logging.getLogger(__name__).error(
-                "Vault initialization failed: %s", e, exc_info=True
-            )
+            _logging.getLogger(__name__).error("Vault initialization failed: %s", e, exc_info=True)
             raise VaultError(f"Vault initialization failed: {e}") from e
 
     def _derive_key(self, password: str) -> bytes:
@@ -131,9 +130,9 @@ class SecureVault:
         """Hash password with Argon2id."""
         return self._pwd_context.hash(password)
 
-    def verify_password(self, password: str, hash: str) -> bool:
+    def verify_password(self, password: str, password_hash: str) -> bool:
         """Verify password against Argon2id hash."""
-        return self._pwd_context.verify(password, hash)
+        return self._pwd_context.verify(password, password_hash)
 
     def rotate_key(self, new_password: str) -> None:
         """Rotate encryption key (re-encrypt all data)."""
@@ -152,9 +151,7 @@ class SecureVault:
                 "SecureVault.secure_delete: keyring wipe failed: %s",
                 e,
             )
-            raise VaultError(
-                f"Keyring wipe failed — key may still be stored: {e}"
-            ) from e
+            raise VaultError(f"Keyring wipe failed — key may still be stored: {e}") from e
         finally:
             # Always zero the in-memory key regardless of keyring outcome
             self._fernet = None

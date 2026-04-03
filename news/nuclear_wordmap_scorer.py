@@ -36,6 +36,7 @@ import json
 import logging
 import re
 from pathlib import Path
+from typing import ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -276,7 +277,7 @@ class NuclearWordMapScorer:
 
         # ── Step 1: WORDMAP keyword matching ─────────────────────────────────
         category_scores: dict[str, float] = {}
-        matched_terms: list[dict] = []
+        matched_terms: ClassVar[list[dict]] = []
 
         for category, terms in self._keywords.items():
             cat_score = 0.0
@@ -340,10 +341,9 @@ class NuclearWordMapScorer:
             "n_categories_matched": n_categories,
         }
 
-        if severity >= 5:  # noqa: PLR2004
+        if severity >= 5:
             logger.warning(
-                "NuclearWordMapScorer: severity=%d action=%s score=%.3f "
-                "categories=%s vol=%.2f sentiment=%.2f",
+                "NuclearWordMapScorer: severity=%d action=%s score=%.3f categories=%s vol=%.2f sentiment=%.2f",
                 severity,
                 action,
                 raw_score,
@@ -362,9 +362,7 @@ class NuclearWordMapScorer:
 
     # ── Private helpers ───────────────────────────────────────────────────────
 
-    def _load_keywords(
-        self, wordmap_path: str | Path | None
-    ) -> dict[str, dict[str, float]]:
+    def _load_keywords(self, wordmap_path: str | Path | None) -> dict[str, dict[str, float]]:
         """
         Load keywords from WORDMAP.json (nuclear_risk section) merged with
         the built-in dictionary.  Falls back to built-in only if file is
@@ -378,7 +376,7 @@ class NuclearWordMapScorer:
             return keywords
 
         try:
-            data = json.loads(path.read_text())
+            data = json.loads(path.read_text(encoding="utf-8"))
             nuclear_section = data.get("nuclear_risk", {})
             if nuclear_section:
                 for category, terms in nuclear_section.items():

@@ -31,17 +31,16 @@ import asyncio
 import logging
 import os
 import time
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 
-from core.event_bus import bus, CH_ORDER, CH_BREACH
+from core.event_bus import CH_BREACH, CH_ORDER, bus
 from execution.fix_adapter import (
     FIXAdapter,
-    FIXOrder,
-    FIXSide,
-    FIXOrdType,
-    FIXFillReport,
     FIXExecType,
+    FIXFillReport,
+    FIXOrder,
+    FIXOrdType,
+    FIXSide,
 )
 
 logger = logging.getLogger(__name__)
@@ -97,17 +96,18 @@ class _OandaFallback:
             }
         }
 
-        async with aiohttp.ClientSession() as session, session.post(
-            url,
-            json=body,
-            headers=headers,
-            timeout=aiohttp.ClientTimeout(total=10),
-        ) as resp:
+        async with (
+            aiohttp.ClientSession() as session,
+            session.post(
+                url,
+                json=body,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp,
+        ):
             data = await resp.json()
             if resp.status not in (200, 201):
-                raise RuntimeError(
-                    f"OANDA REST order failed: HTTP {resp.status} — {data}"
-                )
+                raise RuntimeError(f"OANDA REST order failed: HTTP {resp.status} — {data}")
 
         fill = data.get("orderFillTransaction", {})
         price = float(fill.get("price", 0))
@@ -160,7 +160,8 @@ class FIXRouter:
             self._fix_available,
         )
         # Listen for kill/breach events in background
-        asyncio.create_task(self._breach_listener())
+        _t = asyncio.create_task(self._breach_listener())
+        _t.add_done_callback(lambda _: None)
         # Main order consumer
         await self._order_consumer()
 
@@ -271,9 +272,7 @@ class FIXRouter:
                         exc,
                     )
             else:
-                logger.warning(
-                    "FIXRouter: FIX circuit-breaker OPEN — using OANDA REST fallback."
-                )
+                logger.warning("FIXRouter: FIX circuit-breaker OPEN — using OANDA REST fallback.")
 
         # OANDA REST fallback
         try:
@@ -281,25 +280,21 @@ class FIXRouter:
             await self._on_fill(fill)
         except Exception as exc:
             self._reject_count += 1
-            logger.error(
-                "FIXRouter: all routes failed for order #%d: %s", self._order_count, exc
-            )
+            logger.error("FIXRouter: all routes failed for order #%d: %s", self._order_count, exc)
             await bus.publish_breach(
                 {
                     "reason": "order_route_failure",
                     "order_seq": self._order_count,
                     "symbol": symbol,
                     "direction": direction,
-                    "error": str(exc),
+                    "error": "All routes failed — check server logs",
                     "timestamp": datetime.now(UTC).isoformat(),
                 }
             )
 
     # ── FIX send ──────────────────────────────────────────────────────────────
 
-    async def _send_fix(
-        self, symbol: str, direction: str, units: float, order_request: dict
-    ) -> dict:
+    async def _send_fix(self, symbol: str, direction: str, units: float, order_request: dict) -> dict:
         """
         Format and send a FIX NewOrderSingle; await ExecutionReport.
 
@@ -365,9 +360,7 @@ class FIXRouter:
 
     # ── fill logger ───────────────────────────────────────────────────────────
 
-    def _log_fill(
-        self, report: FIXFillReport, latency_ms: float, order_request: dict
-    ) -> None:
+    def _log_fill(self, report: FIXFillReport, latency_ms: float, order_request: dict) -> None:
         """Log fill with slippage calculation."""
         expected_price = float(order_request.get("mid", report.avg_px))
         slippage = abs(report.avg_px - expected_price) if expected_price else 0.0
@@ -381,8 +374,7 @@ class FIXRouter:
             )
         else:
             logger.info(
-                "FIX FILL  cl_ord_id=%s  qty=%.0f  avg_px=%.5f  "
-                "slippage=%.5f  latency=%.1f ms",
+                "FIX FILL  cl_ord_id=%s  qty=%.0f  avg_px=%.5f  slippage=%.5f  latency=%.1f ms",
                 report.cl_ord_id,
                 report.cum_qty,
                 report.avg_px,

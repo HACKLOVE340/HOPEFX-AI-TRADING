@@ -17,20 +17,20 @@ Provides a single get_complete_analysis() method for a full snapshot.
 """
 
 import logging
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
+from typing import ClassVar
 
-from analysis.order_flow import OrderFlowAnalyzer, get_order_flow_analyzer
-from analysis.institutional_flow import (
-    InstitutionalFlowDetector,
-    get_institutional_detector,
-)
 from analysis.advanced_order_flow import (
     AdvancedOrderFlowAnalyzer,
     get_advanced_order_flow_analyzer,
 )
-from data.time_and_sales import TimeAndSalesService, get_time_and_sales_service
+from analysis.institutional_flow import (
+    InstitutionalFlowDetector,
+    get_institutional_detector,
+)
+from analysis.order_flow import OrderFlowAnalyzer, get_order_flow_analyzer
 from data.depth_of_market import DepthOfMarketService, get_dom_service
+from data.time_and_sales import TimeAndSalesService, get_time_and_sales_service
 
 logger = logging.getLogger(__name__)
 
@@ -131,9 +131,7 @@ class OrderFlowDashboard:
         # --- Institutional flow ---
         try:
             signals = self._inst.analyze_flow(symbol, lookback_minutes=lookback_minutes)
-            smart = self._inst.get_smart_money_direction(
-                symbol, lookback_minutes=lookback_minutes
-            )
+            smart = self._inst.get_smart_money_direction(symbol, lookback_minutes=lookback_minutes)
             inst_dict = {
                 "signals": [s.to_dict() for s in signals],
                 "smart_money_direction": smart.to_dict() if smart else None,
@@ -146,19 +144,11 @@ class OrderFlowDashboard:
 
         # --- Advanced metrics ---
         try:
-            aggression = self._adv.get_aggression_metrics(
-                symbol, lookback_minutes=lookback_minutes
-            )
-            clusters = self._adv.get_volume_clusters(
-                symbol, lookback_minutes=lookback_minutes * 4
-            )
-            divergence = self._adv.detect_delta_divergence(
-                symbol, lookback_minutes=lookback_minutes
-            )
+            aggression = self._adv.get_aggression_metrics(symbol, lookback_minutes=lookback_minutes)
+            clusters = self._adv.get_volume_clusters(symbol, lookback_minutes=lookback_minutes * 4)
+            divergence = self._adv.detect_delta_divergence(symbol, lookback_minutes=lookback_minutes)
             oscillator = self._adv.get_order_flow_oscillator(symbol)
-            stacked = self._adv.get_stacked_imbalances(
-                symbol, lookback_minutes=lookback_minutes
-            )
+            stacked = self._adv.get_stacked_imbalances(symbol, lookback_minutes=lookback_minutes)
             pressure = self._adv.get_pressure_gauges(symbol)
 
             adv_dict = {
@@ -177,13 +167,9 @@ class OrderFlowDashboard:
 
         # --- Time & Sales ---
         try:
-            ts_stats = self._ts.get_trade_statistics(
-                symbol, lookback_minutes=lookback_minutes
-            )
+            ts_stats = self._ts.get_trade_statistics(symbol, lookback_minutes=lookback_minutes)
             velocity = self._ts.get_trade_velocity(symbol)
-            aggressor = self._ts.get_aggressor_stats(
-                symbol, lookback_minutes=lookback_minutes
-            )
+            aggressor = self._ts.get_aggressor_stats(symbol, lookback_minutes=lookback_minutes)
             ts_dict = {
                 "statistics": ts_stats,
                 "velocity": velocity.to_dict() if velocity else None,
@@ -210,7 +196,7 @@ class OrderFlowDashboard:
 
     def _build_summary(self, analysis: dict) -> dict:
         """Build a high-level summary from the full analysis."""
-        signals: list[str] = []
+        signals: ClassVar[list[str]] = []
         bias = "neutral"
         strength = "weak"
 
@@ -240,10 +226,10 @@ class OrderFlowDashboard:
 
         if bull > bear:
             bias = "bullish"
-            strength = "strong" if bull >= 2 else "moderate"  # noqa: PLR2004
+            strength = "strong" if bull >= 2 else "moderate"
         elif bear > bull:
             bias = "bearish"
-            strength = "strong" if bear >= 2 else "moderate"  # noqa: PLR2004
+            strength = "strong" if bear >= 2 else "moderate"
 
         return {
             "bias": bias,
@@ -400,10 +386,52 @@ class OrderFlowDashboard:
             "signals": [],
         }
 
-        self._summary_dom(symbol, result)
-        self._summary_order_flow(symbol, lookback_minutes, result)
-        self._summary_institutional(symbol, lookback_minutes, result)
-        self._summary_advanced(symbol, lookback_minutes, result)
+        # DOM data
+        if self._dom is not None:
+            try:
+                dom_analysis = self._dom.get_order_book_analysis(symbol)
+                if dom_analysis:
+                    dom_dict = dom_analysis.to_dict() if hasattr(dom_analysis, "to_dict") else {}
+                    result["dom_imbalance"] = dom_dict.get("imbalance_ratio")
+                    result["spread"] = dom_dict.get("spread")
+            except Exception as exc:
+                logger.warning("DOM summary error for %s: %s", symbol, exc)
+
+        # Order flow data
+        if self._ofa is not None:
+            try:
+                of_analysis = self._ofa.analyze(symbol, lookback_minutes=lookback_minutes)
+                if of_analysis:
+                    of_dict = of_analysis.to_dict() if hasattr(of_analysis, "to_dict") else {}
+                    result["cumulative_delta"] = of_dict.get("cumulative_delta")
+                    result["buy_pressure"] = of_dict.get("buy_volume")
+                    result["sell_pressure"] = of_dict.get("sell_volume")
+            except Exception as exc:
+                logger.warning("Order flow summary error for %s: %s", symbol, exc)
+
+        # Institutional data
+        if self._inst is not None:
+            try:
+                smart = self._inst.get_smart_money_direction(symbol, lookback_minutes=lookback_minutes)
+                if smart is not None:
+                    if hasattr(smart, "to_dict"):
+                        direction = smart.to_dict().get("direction")
+                    elif hasattr(smart, "direction"):
+                        direction = smart.direction
+                    else:
+                        direction = smart
+                    result["smart_money_direction"] = direction
+            except Exception as exc:
+                logger.warning("Institutional summary error for %s: %s", symbol, exc)
+
+        # Advanced data
+        if self._adv is not None:
+            try:
+                stacked = self._adv.get_stacked_imbalances(symbol, lookback_minutes=lookback_minutes)
+                result["large_order_count"] = len(stacked) if stacked else 0
+            except Exception as exc:
+                logger.warning("Advanced summary error for %s: %s", symbol, exc)
+
         result["bias"] = self.get_bias(symbol)
         return result
 
@@ -423,17 +451,10 @@ class OrderFlowDashboard:
             logger.warning("DOM get_bias error for %s: %s", symbol, exc)
         return None
 
-    def _bias_vote_order_flow(self, symbol: str) -> str | None:
-        """Return order-flow bias vote or None."""
-        if self._ofa is None:
-            return None
-        try:
-            analysis = self._ofa.analyze(symbol)
-            if analysis and analysis.order_flow_signal in ("bullish", "bearish"):
-                return analysis.order_flow_signal
-        except Exception as exc:
-            logger.warning("Order flow get_bias error for %s: %s", symbol, exc)
-        return None
+        Returns:
+            'bullish', 'bearish', or 'neutral'
+        """
+        votes: ClassVar[list[str]] = []
 
     def _bias_vote_advanced(self, symbol: str) -> str | None:
         """Return advanced-flow bias vote or None."""
@@ -465,17 +486,15 @@ class OrderFlowDashboard:
         """
         Get aggregated directional bias for a symbol via majority vote.
 
-        Returns 'bullish', 'bearish', or 'neutral'.
-        """
-        votes = [
-            v for v in (
-                self._bias_vote_dom(symbol),
-                self._bias_vote_order_flow(symbol),
-                self._bias_vote_advanced(symbol),
-                self._bias_vote_institutional(symbol),
-            )
-            if v is not None
-        ]
+        if self._inst is not None:
+            try:
+                direction = self._inst.get_smart_money_direction(symbol)
+                if direction is not None:
+                    dir_str = direction.direction if hasattr(direction, "direction") else direction
+                    if dir_str in ("bullish", "bearish"):
+                        votes.append(dir_str)
+            except Exception as exc:
+                logger.warning("Institutional get_bias error for %s: %s", symbol, exc)
 
         if not votes:
             return "neutral"

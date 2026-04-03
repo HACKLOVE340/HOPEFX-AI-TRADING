@@ -53,13 +53,13 @@ import json
 import logging
 import os
 import time
-from typing import Any
+from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)
 
 # ── Optional FastAPI / WebSockets ─────────────────────────────────────────────
 try:
-    from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+    from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import JSONResponse
 
@@ -69,7 +69,7 @@ except ImportError:
     logger.warning("FastAPI not installed — nuclear WebSocket server disabled")
 
 # ── Internal imports ──────────────────────────────────────────────────────────
-from charting.nuclear_ai_chart_engine import get_chart_engine, NuclearAIChartEngine
+from charting.nuclear_ai_chart_engine import NuclearAIChartEngine, get_chart_engine
 
 NUCLEAR_WS_PORT: int = int(os.environ.get("NUCLEAR_WS_PORT", "8001"))
 HEARTBEAT_INTERVAL_S: int = 30
@@ -104,7 +104,7 @@ class NuclearConnectionManager:
         if not self._connections:
             return
         payload = json.dumps(message, default=str)
-        dead: set[WebSocket] = set()
+        dead: ClassVar[set[WebSocket]] = set()
         async with self._lock:
             connections = set(self._connections)
         for ws in connections:
@@ -145,9 +145,10 @@ def _sync_broadcast_callback(state: dict) -> None:
     try:
         loop = asyncio.get_event_loop()
         if loop.is_running():
-            loop.create_task(_async_broadcast(state))
+            _t = loop.create_task(_async_broadcast(state))
+            _t.add_done_callback(lambda _: None)
     except RuntimeError:
-        pass  # No event loop — standalone mode
+        ...  # nosec B110
 
 
 async def _async_broadcast(state: dict) -> None:
@@ -155,10 +156,7 @@ async def _async_broadcast(state: dict) -> None:
 
     # Also send an immediate nuclear_alert if severity is high
     nuclear = state.get("nuclear", {})
-    if (
-        nuclear.get("alert_active")
-        and nuclear.get("severity", 0) >= NUCLEAR_ALERT_SEVERITY
-    ):
+    if nuclear.get("alert_active") and nuclear.get("severity", 0) >= NUCLEAR_ALERT_SEVERITY:
         alert = {
             "type": "nuclear_alert",
             "ts": state.get("ts"),
@@ -177,9 +175,7 @@ async def _async_broadcast(state: dict) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def mount_nuclear_routes(
-    app: Any, engine: NuclearAIChartEngine | None = None
-) -> None:
+def mount_nuclear_routes(app: Any, engine: NuclearAIChartEngine | None = None) -> None:
     """
     Mount nuclear dashboard routes onto an existing FastAPI app.
 
@@ -198,7 +194,7 @@ def mount_nuclear_routes(
 
     @app.websocket("/ws/nuclear")
     async def nuclear_ws_endpoint(ws: WebSocket):
-        from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+        from rate_limiting.websocket_limiter import get_client_ip, get_ws_limiter
 
         limiter = get_ws_limiter()
         client_ip = get_client_ip(ws)
@@ -222,15 +218,11 @@ def mount_nuclear_routes(
                     await _handle_client_message(ws, msg, chart_engine)
                 except TimeoutError:
                     # Client silent for 60s — send ping
-                    await _manager.send_to(
-                        ws, {"type": "ping", "ts": int(time.time() * 1000)}
-                    )
+                    await _manager.send_to(ws, {"type": "ping", "ts": int(time.time() * 1000)})
                 except WebSocketDisconnect:
                     break
                 except json.JSONDecodeError:
-                    await _manager.send_to(
-                        ws, {"type": "error", "message": "Invalid JSON"}
-                    )
+                    await _manager.send_to(ws, {"type": "error", "message": "Invalid JSON"})
         finally:
             heartbeat_task.cancel()
             await _manager.disconnect(ws)
@@ -274,7 +266,8 @@ def mount_nuclear_routes(
             )
             return JSONResponse({"status": "resumed"})
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            logger.error("nuclear resume failed: %s", exc)
+            raise HTTPException(status_code=500, detail="Operation failed — check server logs") from None
 
     @app.get("/api/nuclear/history")
     async def nuclear_history(n: int = 20):
@@ -286,7 +279,8 @@ def mount_nuclear_routes(
             history = sup.get_event_history(n)
             return JSONResponse({"events": history})
         except Exception as exc:
-            return JSONResponse({"events": [], "error": str(exc)})
+            logger.warning("nuclear_history failed: %s", exc)
+            return JSONResponse({"events": [], "error": "History unavailable — check server logs"})
 
     @app.get("/api/nuclear/status")
     async def nuclear_status():
@@ -314,9 +308,7 @@ def mount_nuclear_routes(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-async def _handle_client_message(
-    ws: WebSocket, msg: dict, engine: NuclearAIChartEngine
-) -> None:
+async def _handle_client_message(ws: WebSocket, msg: dict, engine: NuclearAIChartEngine) -> None:
     msg_type = msg.get("type", "")
 
     if msg_type == "ping":
@@ -416,7 +408,8 @@ def create_standalone_app() -> Any:
 
     @app.on_event("startup")
     async def _startup():
-        asyncio.create_task(engine.start())
+        _t = asyncio.create_task(engine.start())
+        _t.add_done_callback(lambda _: None)
         logger.info("Nuclear chart engine started on app startup.")
 
     @app.on_event("shutdown")

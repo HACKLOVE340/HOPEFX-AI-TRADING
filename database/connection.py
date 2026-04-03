@@ -9,29 +9,31 @@ SQLAlchemy with connection pooling, retries, and monitoring
 """
 
 import logging
-import time
 import threading
-from collections.abc import Callable
+import time
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 try:
     from sqlalchemy import create_engine, event, text
     from sqlalchemy.engine import Engine
-    from sqlalchemy.orm import sessionmaker, Session
-    from sqlalchemy.pool import QueuePool
     from sqlalchemy.exc import (
-        SQLAlchemyError,  # noqa: F401
         OperationalError,
+    )
+    from sqlalchemy.exc import (
         TimeoutError as SATimeoutError,
     )
+    from sqlalchemy.orm import Session, sessionmaker
+    from sqlalchemy.pool import QueuePool
 
     SQLALCHEMY_AVAILABLE = True
 except ImportError:
     SQLALCHEMY_AVAILABLE = False
-    logging.warning("SQLAlchemy not available, database features disabled")
-
-logger = logging.getLogger(__name__)
+    Session = None  # type: ignore[assignment,misc]
+    logger.warning("SQLAlchemy not available, database features disabled")
 
 
 @dataclass
@@ -127,13 +129,10 @@ class DatabaseManager:
             with self._engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
 
-            logger.info(
-                f"Database initialized | Pool: {self.pool_size}/{self.max_overflow} | "
-                f"Engine: {self._engine.name}"
-            )
+            logger.info("Database initialized | Pool: %s/%s | Engine: %s", self.pool_size, self.max_overflow, self._engine.name)
 
         except Exception as e:
-            logger.critical(f"Database initialization failed: {e}")
+            logger.critical("Database initialization failed: %s", e)
             raise
 
     def _on_checkout(self, dbapi_conn, connection_record, connection_proxy):
@@ -157,9 +156,7 @@ class DatabaseManager:
             return True
 
         # Try recovery
-        if self._last_failure_time and (
-            time.time() - self._last_failure_time > self._circuit_recovery_time
-        ):
+        if self._last_failure_time and (time.time() - self._last_failure_time > self._circuit_recovery_time):
             self._circuit_open = False
             self._failure_count = 0
             logger.info("Database circuit breaker recovered")
@@ -178,12 +175,10 @@ class DatabaseManager:
 
         if self._failure_count >= self._circuit_threshold:
             self._circuit_open = True
-            logger.critical(
-                f"Database circuit breaker OPENED after {self._failure_count} failures"
-            )
+            logger.critical("Database circuit breaker OPENED after %s failures", self._failure_count)
 
     @contextmanager
-    def session(self):
+    def session(self) -> "Generator[Session, None, None]":
         """
         Get database session with automatic cleanup and retry logic
 
@@ -201,13 +196,10 @@ class DatabaseManager:
             try:
                 session = self._session_factory()
 
-                # Set query timeout
+                # Set query timeout — value is int-coerced, no user input
                 if "postgresql" in self.connection_string:
-                    session.execute(
-                        text(
-                            f"SET statement_timeout = '{int(self.query_timeout * 1000)}ms'"
-                        )
-                    )
+                    timeout_ms = int(self.query_timeout * 1000)
+                    session.execute(text(f"SET statement_timeout = '{timeout_ms}ms'"))  # nosec S608
 
                 yield session
 
@@ -226,13 +218,11 @@ class DatabaseManager:
                 if session:
                     session.rollback()
 
-                logger.warning(
-                    f"Database operational error (attempt {attempt + 1}): {e}"
-                )
+                logger.warning("Database operational error (attempt %s): %s", attempt + 1, e)
 
                 if attempt < self.max_retries - 1:
                     wait_time = 2**attempt  # Exponential backoff
-                    logger.info(f"Retrying in {wait_time}s...")
+                    logger.info("Retrying in %ss...", wait_time)
                     time.sleep(wait_time)
 
             except SATimeoutError as e:
@@ -242,7 +232,7 @@ class DatabaseManager:
                 if session:
                     session.rollback()
 
-                logger.error(f"Database query timeout: {e}")
+                logger.error("Database query timeout: %s", e)
 
                 with self._metrics_lock:
                     self._metrics.slow_query_count += 1
@@ -256,7 +246,7 @@ class DatabaseManager:
                 if session:
                     session.rollback()
 
-                logger.error(f"Database error: {e}")
+                logger.error("Database error: %s", e)
                 raise
 
             finally:
@@ -275,9 +265,7 @@ class DatabaseManager:
             except OperationalError as e:
                 if attempt < self.max_retries - 1:
                     wait_time = 2**attempt
-                    logger.warning(
-                        f"DB retry {attempt + 1}/{self.max_retries} in {wait_time}s: {e}"
-                    )
+                    logger.warning("DB retry %s/%s in %ss: %s", attempt + 1, self.max_retries, wait_time, e)
                     time.sleep(wait_time)
                 else:
                     raise
@@ -292,7 +280,7 @@ class DatabaseManager:
                 conn.execute(text("SELECT 1"))
             return True
         except Exception as e:
-            logger.error(f"Database health check failed: {e}")
+            logger.error("Database health check failed: %s", e)
             return False
 
     def get_metrics(self) -> DatabaseMetrics:
@@ -370,7 +358,7 @@ class DatabaseMigrationManager:
                     count = result.scalar()
                     stats[table_name] = count
                 except Exception as e:
-                    logger.error(f"Error getting count for {table_name}: {e}")
+                    logger.error("Error getting count for %s: %s", table_name, e)
                     stats[table_name] = -1
 
         return stats
@@ -382,7 +370,6 @@ _db_manager: DatabaseManager | None = None
 
 def get_db_manager() -> DatabaseManager | None:
     """Get global database manager"""
-    global _db_manager  # noqa: PLW0602
     return _db_manager
 
 
@@ -401,12 +388,13 @@ def init_db_manager(connection_string: str, **kwargs) -> DatabaseManager:
 # singleton so the first import does not require DATABASE_URL to be set.
 
 import os as _os
+from pathlib import Path as _Path
 
 
 def _default_db_url() -> str:
     return _os.getenv(
         "DATABASE_URL",
-        f"sqlite:///{_os.path.join(_os.path.dirname(__file__), '..', 'hopefx.db')}",
+        f"sqlite:///{_os.path.join(_Path(__file__).parent, '..', 'hopefx.db')}",
     )
 
 
@@ -470,6 +458,4 @@ else:
     SessionLocal = None  # type: ignore[assignment]
 
     def get_db():  # type: ignore[misc]
-        raise RuntimeError(
-            "SQLAlchemy is not installed — database features unavailable."
-        )
+        raise RuntimeError("SQLAlchemy is not installed — database features unavailable.")

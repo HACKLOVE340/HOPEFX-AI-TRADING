@@ -12,12 +12,11 @@ import asyncio
 import logging
 import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
-from collections.abc import Callable
 
 import psutil
 
@@ -119,7 +118,8 @@ class HealthChecker:
     def register_check(self, name: str, check_fn: Callable):
         """Register a health check"""
         self._checks[name] = check_fn
-        logger.info(f"Registered health check: {name}")
+        logger.info("Registered health check: %s", name)
+
 
     async def run_check(self, name: str) -> HealthCheck:
         """Run single health check"""
@@ -206,18 +206,18 @@ class HealthChecker:
         # CPU usage
         cpu_percent = psutil.cpu_percent(interval=0.1)
         details["cpu_percent"] = cpu_percent
-        if cpu_percent > 90:  # noqa: PLR2004
+        if cpu_percent > 90:
             issues.append(f"High CPU usage: {cpu_percent}%")
-        elif cpu_percent > 70:  # noqa: PLR2004
+        elif cpu_percent > 70:
             issues.append(f"Elevated CPU usage: {cpu_percent}%")
 
         # Memory usage
         memory = psutil.virtual_memory()
         details["memory_percent"] = memory.percent
         details["memory_available_mb"] = memory.available / 1024 / 1024
-        if memory.percent > 90:  # noqa: PLR2004
+        if memory.percent > 90:
             issues.append(f"High memory usage: {memory.percent}%")
-        elif memory.percent > 80:  # noqa: PLR2004
+        elif memory.percent > 80:
             issues.append(f"Elevated memory usage: {memory.percent}%")
 
         # Disk usage
@@ -225,7 +225,7 @@ class HealthChecker:
         disk_percent = (disk.used / disk.total) * 100
         details["disk_percent"] = disk_percent
         details["disk_free_gb"] = disk.free / 1024 / 1024 / 1024
-        if disk_percent > 90:  # noqa: PLR2004
+        if disk_percent > 90:
             issues.append(f"Low disk space: {disk_percent:.1f}% used")
 
         # Determine status
@@ -297,19 +297,14 @@ class HealthChecker:
                     status=HealthStatus.HEALTHY,
                     response_time_ms=(time.time() - start) * 1000,
                     message="Cache connection OK",
-                    details={
-                        "using_fallback": getattr(
-                            self.app.cache, "_using_fallback", False
-                        )
-                    },
+                    details={"using_fallback": getattr(self.app.cache, "_using_fallback", False)},
                 )
-            else:
-                return HealthCheck(
-                    name="cache",
-                    status=HealthStatus.DEGRADED,
-                    response_time_ms=0,
-                    message="Cache unhealthy, using fallback",
-                )
+            return HealthCheck(
+                name="cache",
+                status=HealthStatus.DEGRADED,
+                response_time_ms=0,
+                message="Cache unhealthy, using fallback",
+            )
         except Exception as e:
             return HealthCheck(
                 name="cache",
@@ -340,9 +335,7 @@ class HealthChecker:
                 )
 
             # Try to get account info
-            account = await asyncio.wait_for(
-                self.app.broker.get_account_info(), timeout=5.0
-            )
+            account = await asyncio.wait_for(self.app.broker.get_account_info(), timeout=5.0)
 
             return HealthCheck(
                 name="broker",
@@ -389,7 +382,7 @@ class HealthChecker:
 
             for symbol in getattr(engine, "symbols", []):
                 tick = engine.get_last_price(symbol)
-                if tick and (current_time - tick.timestamp) > 300:  # 5 min stale  # noqa: PLR2004
+                if tick and (current_time - tick.timestamp) > 300:  # 5 min stale
                     stale_symbols.append(symbol)
 
             if stale_symbols:
@@ -444,9 +437,7 @@ class HealthChecker:
                     status=HealthStatus.DEGRADED,
                     response_time_ms=0,
                     message="Circuit breaker open",
-                    details={
-                        "failure_count": health["circuit_breaker"]["failure_count"]
-                    },
+                    details={"failure_count": health["circuit_breaker"]["failure_count"]},
                 )
 
             return HealthCheck(
@@ -481,18 +472,19 @@ class HealthChecker:
 
                 # Log if unhealthy
                 if health.status != HealthStatus.HEALTHY:
-                    logger.warning(f"Health check: {health.status.value}")
+                    logger.warning("Health check: %s", health.status.value)
+
                     for check in health.checks:
                         if check.status != HealthStatus.HEALTHY:
-                            logger.warning(
-                                f"  {check.name}: {check.status.value} - {check.message}"
-                            )
+                            logger.warning("  %s: %s - %s", check.name, check.status.value, check.message)
+
 
                 # Wait for next check
                 await asyncio.sleep(self._check_interval)
 
             except Exception as e:
-                logger.error(f"Health monitoring error: {e}")
+                logger.error("Health monitoring error: %s", e)
+
                 await asyncio.sleep(5)
 
     def stop_monitoring(self):
@@ -502,12 +494,14 @@ class HealthChecker:
 
 # HTTP Server for health checks
 async def start_health_server(
-    host: str = "0.0.0.0", port: int = 8080, checker: HealthChecker | None = None  # nosec B104 - host configurable via parameter
+    host: str = "0.0.0.0",
+    port: int = 8080,
+    checker: HealthChecker | None = None,  # nosec B104 - host configurable via parameter
 ):
     """Start HTTP health check server"""
     if not AIOHTTP_AVAILABLE:
         logger.error("aiohttp required for health server")
-        return
+        return None
 
     async def health_handler(request):
         """Health check endpoint"""
@@ -515,11 +509,10 @@ async def start_health_server(
             health = await checker.run_all_checks()
             status = 200 if health.status == HealthStatus.HEALTHY else 503
             return web.json_response(health.to_dict(), status=status)
-        else:
-            return web.json_response(
-                {"status": "unknown", "message": "Health checker not configured"},
-                status=503,
-            )
+        return web.json_response(
+            {"status": "unknown", "message": "Health checker not configured"},
+            status=503,
+        )
 
     async def ready_handler(request):
         """Readiness check"""
@@ -545,16 +538,12 @@ async def start_health_server(
         metrics.append("# HELP hopefx_health Overall health status")
         metrics.append("# TYPE hopefx_health gauge")
         status_value = 1 if health.status == HealthStatus.HEALTHY else 0
-        metrics.append(
-            f'hopefx_health{{status="{health.status.value}"}} {status_value}'
-        )
+        metrics.append(f'hopefx_health{{status="{health.status.value}"}} {status_value}')
 
         for check in health.checks:
             check_value = 1 if check.status == HealthStatus.HEALTHY else 0
             metrics.append(f'hopefx_check_health{{name="{check.name}"}} {check_value}')
-            metrics.append(
-                f'hopefx_check_response_time{{name="{check.name}"}} {check.response_time_ms}'
-            )
+            metrics.append(f'hopefx_check_response_time{{name="{check.name}"}} {check.response_time_ms}')
 
         return web.Response(text="\n".join(metrics), content_type="text/plain")
 
@@ -569,11 +558,16 @@ async def start_health_server(
     site = web.TCPSite(runner, host, port)
     await site.start()
 
-    logger.info(f"Health server started on http://{host}:{port}")
-    logger.info(f"  - Health:  http://{host}:{port}/health")
-    logger.info(f"  - Ready:   http://{host}:{port}/ready")
-    logger.info(f"  - Live:    http://{host}:{port}/live")
-    logger.info(f"  - Metrics: http://{host}:{port}/metrics")
+    logger.info("Health server started on http://%s:%s", host, port)
+
+    logger.info("  - Health:  http://%s:%s/health", host, port)
+
+    logger.info("  - Ready:   http://%s:%s/ready", host, port)
+
+    logger.info("  - Live:    http://%s:%s/live", host, port)
+
+    logger.info("  - Metrics: http://%s:%s/metrics", host, port)
+
 
     return runner
 

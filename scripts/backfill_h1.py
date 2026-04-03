@@ -45,8 +45,7 @@ import asyncio
 import logging
 import os
 import sys
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Ensure project root is on path
@@ -59,7 +58,7 @@ try:
 
     load_dotenv(_ROOT / ".env")
 except ImportError:
-    pass
+    ...  # nosec B110
 
 logging.basicConfig(
     level=logging.INFO,
@@ -117,20 +116,13 @@ def _parse_args() -> argparse.Namespace:
 
 
 async def _run(args: argparse.Namespace) -> None:
-    from data.scheduler import backfill, _csv_path, TIMEFRAME_SECONDS
+    from data.scheduler import TIMEFRAME_SECONDS, _csv_path, backfill
 
     from_dt = datetime.fromisoformat(args.from_date).replace(tzinfo=UTC)
-    to_dt = (
-        datetime.fromisoformat(args.to_date).replace(tzinfo=UTC)
-        if args.to_date
-        else datetime.now(UTC)
-    )
+    to_dt = datetime.fromisoformat(args.to_date).replace(tzinfo=UTC) if args.to_date else datetime.now(UTC)
 
     if args.granularity not in TIMEFRAME_SECONDS:
-        print(
-            f"Unknown granularity '{args.granularity}'. "
-            f"Supported: {', '.join(TIMEFRAME_SECONDS)}"
-        )
+        print(f"Unknown granularity '{args.granularity}'. Supported: {', '.join(TIMEFRAME_SECONDS)}")
         sys.exit(1)
 
     bar_secs = TIMEFRAME_SECONDS[args.granularity]
@@ -145,9 +137,7 @@ async def _run(args: argparse.Namespace) -> None:
     print(f"  To          : {to_dt.strftime('%Y-%m-%d')}")
     print(f"  Est. bars   : ~{total_bars_estimate:,}")
     print(f"  Output      : {output_path}")
-    print(
-        f"  OANDA key   : {'SET' if os.getenv('OANDA_API_KEY') else 'NOT SET (yfinance fallback)'}"
-    )
+    print(f"  OANDA key   : {'SET' if os.getenv('OANDA_API_KEY') else 'NOT SET (yfinance fallback)'}")
     print()
 
     if args.dry_run:

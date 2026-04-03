@@ -67,12 +67,11 @@ import os
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum
 from queue import Empty, Queue
-from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -238,9 +237,7 @@ class MT5ZmqBridge:
             pub.bind(f"tcp://*:{self.pub_port}")
             self._pub = pub
 
-            self._recv_thread = threading.Thread(
-                target=self._recv_loop, daemon=True, name="mt5-zmq-recv"
-            )
+            self._recv_thread = threading.Thread(target=self._recv_loop, daemon=True, name="mt5-zmq-recv")
             self._recv_thread.start()
 
             self._status = BridgeStatus.CONNECTED
@@ -340,9 +337,7 @@ class MT5ZmqBridge:
         payload: dict = {"cmd": "CLOSE", "id": cmd_id, "ticket": ticket}
         if lots is not None:
             payload["lots"] = lots
-        return self._send_and_wait(
-            cmd_id, payload, symbol="", side="CLOSE", lots=lots or 0.0
-        )
+        return self._send_and_wait(cmd_id, payload, symbol="", side="CLOSE", lots=lots or 0.0)
 
     def modify_position(
         self,
@@ -438,8 +433,7 @@ class MT5ZmqBridge:
 
         if self._status != BridgeStatus.CONNECTED:
             raise RuntimeError(
-                f"MT5ZmqBridge is not connected (status={self._status.value}). "
-                "Call bridge.start() first."
+                f"MT5ZmqBridge is not connected (status={self._status.value}). Call bridge.start() first."
             )
 
         q: Queue[dict] = Queue(maxsize=1)
@@ -456,10 +450,7 @@ class MT5ZmqBridge:
             try:
                 resp = q.get(timeout=self.order_timeout_s)
             except Empty:
-                raise TimeoutError(
-                    f"No response from MT5 for command {cmd_id} "
-                    f"after {self.order_timeout_s}s"
-                ) from None
+                raise TimeoutError(f"No response from MT5 for command {cmd_id} after {self.order_timeout_s}s") from None
 
             return self._parse_response(resp, cmd_id, symbol, side, lots)
 
@@ -495,9 +486,7 @@ class MT5ZmqBridge:
                 symbol=msg.get("symbol", ""),
                 bid=float(msg.get("bid", 0)),
                 ask=float(msg.get("ask", 0)),
-                timestamp=datetime.fromtimestamp(
-                    msg.get("ts", time.time() * 1000) / 1000.0, tz=UTC
-                ),
+                timestamp=datetime.fromtimestamp(msg.get("ts", time.time() * 1000) / 1000.0, tz=UTC),
             )
             for cb in self._tick_callbacks:
                 try:

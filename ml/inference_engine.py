@@ -37,10 +37,9 @@ import logging
 import os
 import time
 from collections import deque
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
@@ -51,13 +50,25 @@ _SAVED = Path(__file__).parent / "saved_models"
 _MIN_BARS = 100
 _THRESHOLD_LONG = float(os.getenv("SIGNAL_THRESHOLD_LONG", "0.58"))
 _THRESHOLD_SHORT = float(os.getenv("SIGNAL_THRESHOLD_SHORT", "0.42"))
-_ONLINE_LEARNING_ENABLED = (
-    os.getenv("FEATURE_ONLINE_LEARNING", "false").lower() == "true"
-)
+_ONLINE_LEARNING_ENABLED = os.getenv("FEATURE_ONLINE_LEARNING", "false").lower() == "true"
 _MTF_FUSION_ENABLED = os.getenv("FEATURE_MTF_FUSION", "true").lower() == "true"
 
 # Rolling window size for non-neutral rate tracking
 _SIGNAL_WINDOW = int(os.getenv("SIGNAL_QUALITY_WINDOW", "100"))
+
+# ── Stale model detection ─────────────────────────────────────────────────────
+# Block inference when the model file is older than MODEL_MAX_AGE_DAYS.
+# Default: 30 days.  Set to 0 to disable the check.
+_MODEL_MAX_AGE_DAYS = float(os.getenv("MODEL_MAX_AGE_DAYS", "30"))
+
+# ── Feature drift guard ───────────────────────────────────────────────────────
+# Warn (and optionally block) when live feature means deviate from training
+# means by more than DRIFT_Z_THRESHOLD standard deviations.
+# Default: 4.0 (warn only).  Set DRIFT_BLOCK=true to block on drift.
+_DRIFT_Z_THRESHOLD = float(os.getenv("DRIFT_Z_THRESHOLD", "4.0"))
+_DRIFT_BLOCK = os.getenv("DRIFT_BLOCK", "false").lower() == "true"
+# Rolling window of recent feature vectors for drift detection
+_DRIFT_WINDOW = int(os.getenv("DRIFT_WINDOW", "50"))
 
 # ── Prometheus metrics (optional — degrades gracefully if not installed) ──────
 
@@ -88,7 +99,7 @@ def _init_prometheus():
             return self._C()
 
     try:
-        from prometheus_client import Counter, Gauge, Histogram, REGISTRY
+        from prometheus_client import REGISTRY, Counter, Gauge, Histogram
 
         def _counter(name, doc, labels=None):
             try:
@@ -153,8 +164,7 @@ def _init_prometheus():
 
     except ImportError:
         logger.debug(
-            "prometheus_client not installed — inference metrics disabled. "
-            "Install with: pip install prometheus-client"
+            "prometheus_client not installed — inference metrics disabled. Install with: pip install prometheus-client"
         )
         return _Noop()
     except Exception as exc:
@@ -195,6 +205,21 @@ class InferenceEngine:
         self._previous_model_path: Path | None = None
         self._rollback_count: int = 0
 
+        # ── Stale model detection ──────────────────────────────────────────
+        # Cached result of the last staleness check (re-evaluated each call).
+        self._model_stale: bool = False
+        self._model_age_days: float | None = None
+
+        # ── Feature drift guard ────────────────────────────────────────────
+        # Rolling buffer of recent feature vectors (last _DRIFT_WINDOW rows).
+        # Used to compute live feature means for KS-test drift detection.
+        self._drift_buffer: deque[np.ndarray] = deque(maxlen=_DRIFT_WINDOW)
+        # Training feature stats loaded from saved_models/feature_stats.json
+        # Format: {feature_name: {"mean": float, "std": float}}
+        self._train_stats: dict[str, dict] | None = None
+        self._drift_detected: bool = False
+        self._drift_z_max: float = 0.0  # max z-score across features (last check)
+
     # ── Lazy loaders ──────────────────────────────────────────────────────────
 
     def _get_predictor(self):
@@ -224,9 +249,7 @@ class InferenceEngine:
                     from data_layer.orchestrator import orchestrator
 
                     if not orchestrator._macro_bridge.is_loaded:
-                        logger.debug(
-                            "MacroStoreBridge not yet loaded — using CSV defaults"
-                        )
+                        logger.debug("MacroStoreBridge not yet loaded — using CSV defaults")
                 except Exception as _exc:
                     logger.debug("Suppressed exception: %s", _exc)
                 macro_store.load_defaults()
@@ -288,7 +311,7 @@ class InferenceEngine:
         try:
             import joblib
 
-            self._calibrator = joblib.load(cal_path)
+            self._calibrator = joblib.load(cal_path)  # nosec B301 - cal_path derived from saved_models
             logger.debug("InferenceEngine: isotonic calibrator loaded")
             return self._calibrator
         except Exception as exc:
@@ -338,8 +361,7 @@ class InferenceEngine:
                 )
             except Exception as dl_exc:
                 logger.debug(
-                    "build_extended_features_with_data_layer failed (%s) — "
-                    "falling back to build_extended_features",
+                    "build_extended_features_with_data_layer failed (%s) — falling back to build_extended_features",
                     dl_exc,
                 )
                 from ml.features_extended import build_extended_features
@@ -362,9 +384,7 @@ class InferenceEngine:
                     new_cols = [c for c in mtf_aligned.columns if c not in X.columns]
                     if new_cols:
                         X = pd.concat([X, mtf_aligned[new_cols]], axis=1)
-                        logger.debug(
-                            "MTF: appended %d columns for %s", len(new_cols), symbol
-                        )
+                        logger.debug("MTF: appended %d columns for %s", len(new_cols), symbol)
                 except Exception as mtf_exc:
                     logger.debug("MTF append failed: %s", mtf_exc)
 
@@ -411,26 +431,154 @@ class InferenceEngine:
             if label == 1:
                 # Ensure last close > first close so the learner sees a win
                 bars = ohlcv.copy()
-                if (
-                    "close" in bars.columns
-                    and bars["close"].iloc[-1] <= bars["close"].iloc[0]
-                ):
+                if "close" in bars.columns and bars["close"].iloc[-1] <= bars["close"].iloc[0]:
                     bars.loc[bars.index[-1], "close"] = bars["close"].iloc[0] * 1.001
             else:
                 bars = ohlcv.copy()
-                if (
-                    "close" in bars.columns
-                    and bars["close"].iloc[-1] >= bars["close"].iloc[0]
-                ):
+                if "close" in bars.columns and bars["close"].iloc[-1] >= bars["close"].iloc[0]:
                     bars.loc[bars.index[-1], "close"] = bars["close"].iloc[0] * 0.999
 
             ok = learner.partial_fit(bars)
             if ok:
-                logger.debug(
-                    "InferenceEngine: online learner updated with label=%d", label
-                )
+                logger.debug("InferenceEngine: online learner updated with label=%d", label)
         except Exception as exc:
             logger.debug("Online learner update failed: %s", exc)
+
+    # ── Stale model detection ─────────────────────────────────────────────────
+
+    def _check_model_staleness(self) -> bool:
+        """
+        Return True when the active model file is older than MODEL_MAX_AGE_DAYS.
+
+        Uses the mtime of advanced_oos.pkl (or the active model path if set).
+        When MODEL_MAX_AGE_DAYS=0 the check is disabled and always returns False.
+
+        Side-effects: updates self._model_stale and self._model_age_days.
+        """
+        if _MODEL_MAX_AGE_DAYS <= 0:
+            self._model_stale = False
+            self._model_age_days = None
+            return False
+
+        model_path = self._active_model_path or (_SAVED / "advanced_oos.pkl")
+        if not model_path.exists():
+            # No model file — not stale (just unavailable; handled elsewhere)
+            self._model_stale = False
+            self._model_age_days = None
+            return False
+
+        try:
+            age_seconds = time.time() - model_path.stat().st_mtime
+            age_days = age_seconds / 86_400.0
+            self._model_age_days = round(age_days, 2)
+            self._model_stale = age_days > _MODEL_MAX_AGE_DAYS
+            if self._model_stale:
+                logger.warning(
+                    "STALE MODEL: %s is %.1f days old (max=%s days). Retrain or set MODEL_MAX_AGE_DAYS=0 to suppress.",
+                    model_path.name,
+                    age_days,
+                    _MODEL_MAX_AGE_DAYS,
+                )
+            return self._model_stale
+        except Exception as exc:
+            logger.debug("Staleness check failed: %s", exc)
+            self._model_stale = False
+            return False
+
+    # ── Feature drift guard ───────────────────────────────────────────────────
+
+    def _load_train_stats(self) -> dict[str, dict] | None:
+        """
+        Load training feature statistics from saved_models/feature_stats.json.
+
+        Format expected:
+            {
+              "feature_name": {"mean": 0.123, "std": 0.045},
+              ...
+            }
+
+        Generated by the training pipeline (train_advanced.py) after fitting.
+        Returns None when the file does not exist (drift guard disabled).
+        """
+        if self._train_stats is not None:
+            return self._train_stats
+        stats_path = _SAVED / "feature_stats.json"
+        if not stats_path.exists():
+            return None
+        try:
+            self._train_stats = json.loads(stats_path.read_text())
+            logger.info(
+                "InferenceEngine: loaded feature stats for %d features from %s",
+                len(self._train_stats),
+                stats_path,
+            )
+            return self._train_stats
+        except Exception as exc:
+            logger.warning("feature_stats.json load failed: %s", exc)
+            return None
+
+    def _check_feature_drift(self, X_row: pd.DataFrame) -> bool:
+        """
+        Detect feature distribution drift using z-score comparison.
+
+        Appends the current feature vector to the rolling drift buffer.
+        When the buffer is full, computes the mean of each feature over the
+        last _DRIFT_WINDOW predictions and compares it to the training mean
+        using a z-score: z = |live_mean - train_mean| / max(train_std, 1e-9).
+
+        Returns True when any feature's z-score exceeds _DRIFT_Z_THRESHOLD.
+
+        Side-effects: updates self._drift_detected and self._drift_z_max.
+        """
+        train_stats = self._load_train_stats()
+        if train_stats is None:
+            # No training stats available — drift guard disabled
+            return False
+
+        try:
+            row_values = X_row.values[0].astype(float)
+            col_names = list(X_row.columns)
+            self._drift_buffer.append(row_values)
+
+            if len(self._drift_buffer) < _DRIFT_WINDOW:
+                # Not enough data yet — skip check
+                return False
+
+            buffer_arr = np.array(self._drift_buffer)  # shape: (window, n_features)
+            live_means = buffer_arr.mean(axis=0)
+
+            max_z = 0.0
+            drifted_features: ClassVar[list[str]] = []
+
+            for i, feat_name in enumerate(col_names):
+                if feat_name not in train_stats:
+                    continue
+                train_mean = float(train_stats[feat_name].get("mean", 0.0))
+                train_std = float(train_stats[feat_name].get("std", 1.0))
+                z = abs(live_means[i] - train_mean) / max(train_std, 1e-9)
+                max_z = max(max_z, z)
+                if z > _DRIFT_Z_THRESHOLD:
+                    drifted_features.append(f"{feat_name}(z={z:.1f})")
+
+            self._drift_z_max = round(max_z, 3)
+            self._drift_detected = len(drifted_features) > 0
+
+            if self._drift_detected:
+                logger.warning(
+                    "FEATURE DRIFT detected: %d features exceed z=%.1f threshold. Top drifted: %s. max_z=%.2f. %s",
+                    len(drifted_features),
+                    _DRIFT_Z_THRESHOLD,
+                    ", ".join(drifted_features[:5]),
+                    max_z,
+                    "BLOCKING inference (DRIFT_BLOCK=true)."
+                    if _DRIFT_BLOCK
+                    else "Continuing (set DRIFT_BLOCK=true to block).",
+                )
+            return self._drift_detected
+
+        except Exception as exc:
+            logger.debug("Feature drift check failed: %s", exc)
+            return False
 
     # ── Main predict ──────────────────────────────────────────────────────────
 
@@ -487,9 +635,7 @@ class InferenceEngine:
 
         if len(ohlcv) < _MIN_BARS:
             base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
-            _PROM.fallback_total.labels(
-                symbol=sym_label, reason="insufficient_bars"
-            ).inc()
+            _PROM.fallback_total.labels(symbol=sym_label, reason="insufficient_bars").inc()
             return base_result
 
         # Step 0: Timeframe alignment — resample intraday bars to daily when
@@ -498,6 +644,7 @@ class InferenceEngine:
         # instead of months and volatility features are scaled to intraday noise.
         try:
             from ml.daily_aggregator import ensure_daily, needs_resampling
+
             if needs_resampling(ohlcv):
                 daily_ohlcv = ensure_daily(ohlcv, min_bars=_MIN_BARS)
                 if daily_ohlcv is None:
@@ -509,9 +656,7 @@ class InferenceEngine:
                     )
                     base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
                     base_result["direction"] = "neutral"
-                    _PROM.fallback_total.labels(
-                        symbol=sym_label, reason="insufficient_daily_bars"
-                    ).inc()
+                    _PROM.fallback_total.labels(symbol=sym_label, reason="insufficient_daily_bars").inc()
                     return base_result
                 logger.debug(
                     "InferenceEngine: resampled %d intraday → %d daily bars for %s",
@@ -537,9 +682,42 @@ class InferenceEngine:
         if X is None:
             base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
             self._fallback_count += 1
-            _PROM.fallback_total.labels(
-                symbol=sym_label, reason="feature_build_failed"
-            ).inc()
+            _PROM.fallback_total.labels(symbol=sym_label, reason="feature_build_failed").inc()
+            return base_result
+
+        # Step 3a: Stale model detection
+        # Check whether the model file is older than MODEL_MAX_AGE_DAYS.
+        # A stale model degrades to neutral — it does not raise, so the
+        # system stays alive and the operator is alerted via logs + health().
+        stale = self._check_model_staleness()
+        if stale:
+            base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
+            base_result["model_version"] = "stale"
+            base_result["stale_model"] = True
+            base_result["model_age_days"] = self._model_age_days
+            self._fallback_count += 1
+            _PROM.fallback_total.labels(symbol=sym_label, reason="stale_model").inc()
+            logger.warning(
+                "STALE MODEL: returning neutral for %s (age=%.1f days > max=%.0f). "
+                "Retrain the model or set MODEL_MAX_AGE_DAYS=0 to suppress.",
+                sym_label,
+                self._model_age_days or 0,
+                _MODEL_MAX_AGE_DAYS,
+            )
+            return base_result
+
+        # Step 3b: Feature drift guard
+        # Compare live feature distribution to training distribution.
+        # When DRIFT_BLOCK=true and drift is detected, degrade to neutral.
+        # When DRIFT_BLOCK=false (default), log a warning and continue.
+        drift = self._check_feature_drift(X)
+        if drift and _DRIFT_BLOCK:
+            base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
+            base_result["model_version"] = "drift_blocked"
+            base_result["feature_drift"] = True
+            base_result["drift_z_max"] = self._drift_z_max
+            self._fallback_count += 1
+            _PROM.fallback_total.labels(symbol=sym_label, reason="feature_drift").inc()
             return base_result
 
         # Step 4: Model prediction
@@ -549,9 +727,7 @@ class InferenceEngine:
 
         if predictor is not None and predictor.is_available:
             try:
-                raw_prob = predictor.predict_proba(
-                    ohlcv, macro_df=macro_df, symbol=symbol
-                )
+                raw_prob = predictor.predict_proba(ohlcv, macro_df=macro_df, symbol=symbol)
                 model_version = predictor.version
             except Exception as exc:
                 logger.warning("Predictor failed: %s", exc)
@@ -683,7 +859,7 @@ class InferenceEngine:
 
             # Data quality gate — refuse to nudge on bad data
             tick = orchestrator.get_latest_tick()
-            if tick is not None and tick.confidence < 0.30:  # noqa: PLR2004
+            if tick is not None and tick.confidence < 0.30:
                 logger.debug(
                     "InferenceEngine: data quality %.3f too low — suppressing nudge",
                     tick.confidence,
@@ -702,7 +878,7 @@ class InferenceEngine:
             self._last_macro_impact = impact
 
             # Hard suppress during blackout windows
-            if blackout > 0.5:  # noqa: PLR2004
+            if blackout > 0.5:
                 return 0.0
 
             # Dampen all nudges proportional to macro impact uncertainty
@@ -785,7 +961,6 @@ class InferenceEngine:
         """
         try:
             import hashlib
-            import json
             import uuid
 
             # Access lineage store via orchestrator — single entry point rule.
@@ -798,12 +973,7 @@ class InferenceEngine:
             features_hash = ""
             if features_df is not None and not features_df.empty:
                 try:
-                    feat_dict = (
-                        features_df.iloc[-1]
-                        .replace([float("inf"), float("-inf")], 0.0)
-                        .fillna(0.0)
-                        .to_dict()
-                    )
+                    feat_dict = features_df.iloc[-1].replace([float("inf"), float("-inf")], 0.0).fillna(0.0).to_dict()
                     # Round to 4dp to avoid float noise in hash
                     feat_dict = {k: round(float(v), 4) for k, v in feat_dict.items()}
                     blob = json.dumps(feat_dict, sort_keys=True, separators=(",", ":"))
@@ -875,16 +1045,10 @@ class InferenceEngine:
         checked_at           : str  — ISO timestamp of this health call
         """
         predictor = self._get_predictor()
-        model_available = predictor is not None and getattr(
-            predictor, "is_available", False
-        )
+        model_available = predictor is not None and getattr(predictor, "is_available", False)
 
         # ── Fallback rate ─────────────────────────────────────────────────────
-        fallback_rate = (
-            round(self._fallback_count / self._predict_count, 4)
-            if self._predict_count > 0
-            else 0.0
-        )
+        fallback_rate = round(self._fallback_count / self._predict_count, 4) if self._predict_count > 0 else 0.0
 
         # ── Non-neutral rate (signal quality) ─────────────────────────────────
         window = list(self._signal_window)
@@ -976,6 +1140,17 @@ class InferenceEngine:
         else:
             status = "unavailable"
 
+        # ── Stale model ───────────────────────────────────────────────────────
+        # Re-run the staleness check so health() always reflects current state.
+        self._check_model_staleness()
+
+        # ── Feature drift ─────────────────────────────────────────────────────
+        train_stats_available = self._load_train_stats() is not None
+
+        # Degrade status when model is stale or drift is blocking
+        if (self._model_stale or (self._drift_detected and _DRIFT_BLOCK)) and status == "ok":
+            status = "degraded"
+
         return {
             "status": status,
             "model_available": model_available,
@@ -1004,9 +1179,19 @@ class InferenceEngine:
             "threshold_short": _THRESHOLD_SHORT,
             "signal_filter": signal_filter_stats,
             "rollback_count": self._rollback_count,
-            "active_model_path": str(self._active_model_path)
-            if self._active_model_path
-            else None,
+            "active_model_path": str(self._active_model_path) if self._active_model_path else None,
+            # ── Stale model ────────────────────────────────────────────────
+            "stale_model": self._model_stale,
+            "model_age_days": self._model_age_days,
+            "model_max_age_days": _MODEL_MAX_AGE_DAYS if _MODEL_MAX_AGE_DAYS > 0 else None,
+            # ── Feature drift ──────────────────────────────────────────────
+            "feature_drift_detected": self._drift_detected,
+            "feature_drift_z_max": self._drift_z_max,
+            "feature_drift_threshold": _DRIFT_Z_THRESHOLD,
+            "feature_drift_blocking": _DRIFT_BLOCK,
+            "feature_drift_buffer_size": len(self._drift_buffer),
+            "feature_drift_window": _DRIFT_WINDOW,
+            "train_stats_available": train_stats_available,
             "checked_at": datetime.now(UTC).isoformat(),
         }
 
@@ -1051,9 +1236,7 @@ class InferenceEngine:
                 return False
             # Force-load the model now so failures surface here, not at predict time
             if not new_predictor._load():
-                logger.error(
-                    "reload_model: model file exists but failed to load: %s", target
-                )
+                logger.error("reload_model: model file exists but failed to load: %s", target)
                 return False
             self._predictor = new_predictor
             self._active_model_path = target
@@ -1085,9 +1268,7 @@ class InferenceEngine:
         if success:
             self._rollback_count += 1
             _PROM.rollback_total.labels(reason="manual_rollback").inc()
-            logger.warning(
-                "rollback_model: rollback complete (count=%d)", self._rollback_count
-            )
+            logger.warning("rollback_model: rollback complete (count=%d)", self._rollback_count)
         return success
 
 

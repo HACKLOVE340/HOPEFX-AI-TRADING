@@ -55,8 +55,8 @@ def client() -> Generator[TestClient, None, None]:
     app = FastAPI()
 
     from api.admin import router as admin_router
-    from api.brain import router as brain_router
     from api.alerts import router as alerts_router
+    from api.brain import router as brain_router
 
     app.include_router(admin_router)
     app.include_router(brain_router)
@@ -104,40 +104,40 @@ ADMIN_POST_ROUTES = [
 def test_admin_get_rejects_unauthenticated(client: TestClient, path: str):
     """GET admin routes must return 401 without a token."""
     resp = client.get(path)
-    assert resp.status_code == 401, f"{path} returned {resp.status_code}, expected 401"  # noqa: PLR2004
+    assert resp.status_code == 401, f"{path} returned {resp.status_code}, expected 401"
 
 
 @pytest.mark.parametrize("path", ADMIN_GET_ROUTES)
 def test_admin_get_rejects_user_role(client: TestClient, path: str):
     """GET admin routes must return 403 for role='user'."""
     resp = client.get(path, headers=auth("user"))
-    assert resp.status_code == 403, f"{path} returned {resp.status_code}, expected 403"  # noqa: PLR2004
+    assert resp.status_code == 403, f"{path} returned {resp.status_code}, expected 403"
 
 
 @pytest.mark.parametrize("path", ADMIN_GET_ROUTES)
 def test_admin_get_rejects_trader_role(client: TestClient, path: str):
     """GET admin routes must return 403 for role='trader'."""
     resp = client.get(path, headers=auth("trader"))
-    assert resp.status_code == 403, f"{path} returned {resp.status_code}, expected 403"  # noqa: PLR2004
+    assert resp.status_code == 403, f"{path} returned {resp.status_code}, expected 403"
 
 
 @pytest.mark.parametrize("path", ADMIN_POST_ROUTES)
 def test_admin_post_rejects_unauthenticated(client: TestClient, path: str):
     """POST admin routes must return 401 without a token."""
     resp = client.post(path)
-    assert resp.status_code == 401, f"{path} returned {resp.status_code}, expected 401"  # noqa: PLR2004
+    assert resp.status_code == 401, f"{path} returned {resp.status_code}, expected 401"
 
 
 @pytest.mark.parametrize("path", ADMIN_POST_ROUTES)
 def test_admin_post_rejects_trader_role(client: TestClient, path: str):
     """POST admin routes must return 403 for role='trader'."""
     resp = client.post(path, headers=auth("trader"))
-    assert resp.status_code == 403, f"{path} returned {resp.status_code}, expected 403"  # noqa: PLR2004
+    assert resp.status_code == 403, f"{path} returned {resp.status_code}, expected 403"
 
 
 def test_admin_settings_post_rejects_unauthenticated(client: TestClient):
     resp = client.post("/api/admin/settings", json={"max_risk_per_trade": 1.0})
-    assert resp.status_code == 401  # noqa: PLR2004
+    assert resp.status_code == 401
 
 
 def test_admin_settings_post_rejects_user_role(client: TestClient):
@@ -146,7 +146,7 @@ def test_admin_settings_post_rejects_user_role(client: TestClient):
         json={"max_risk_per_trade": 1.0},
         headers=auth("user"),
     )
-    assert resp.status_code == 403  # noqa: PLR2004
+    assert resp.status_code == 403
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -159,7 +159,7 @@ def test_generate_strategy_rejects_unauthenticated(client: TestClient):
         "/api/brain/generate-strategy",
         json={"prompt": "RSI crossover strategy"},
     )
-    assert resp.status_code == 401  # noqa: PLR2004
+    assert resp.status_code == 401
 
 
 def test_generate_strategy_rejects_user_role(client: TestClient):
@@ -168,7 +168,7 @@ def test_generate_strategy_rejects_user_role(client: TestClient):
         json={"prompt": "RSI crossover strategy"},
         headers=auth("user"),
     )
-    assert resp.status_code == 403  # noqa: PLR2004
+    assert resp.status_code == 403
 
 
 def test_generate_strategy_rejects_trader_role(client: TestClient):
@@ -177,7 +177,7 @@ def test_generate_strategy_rejects_trader_role(client: TestClient):
         json={"prompt": "RSI crossover strategy"},
         headers=auth("trader"),
     )
-    assert resp.status_code == 403  # noqa: PLR2004
+    assert resp.status_code == 403
 
 
 def test_generate_strategy_allows_admin(client: TestClient):
@@ -198,7 +198,7 @@ def test_deploy_strategy_rejects_unauthenticated(client: TestClient):
         "/api/brain/deploy-strategy",
         json={"strategy_name": "Test", "strategy_code": "pass"},
     )
-    assert resp.status_code == 401  # noqa: PLR2004
+    assert resp.status_code == 401
 
 
 def test_deploy_strategy_rejects_trader_role(client: TestClient):
@@ -207,7 +207,7 @@ def test_deploy_strategy_rejects_trader_role(client: TestClient):
         json={"strategy_name": "Test", "strategy_code": "pass"},
         headers=auth("trader"),
     )
-    assert resp.status_code == 403  # noqa: PLR2004
+    assert resp.status_code == 403
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -231,14 +231,14 @@ ALERT_POST_ROUTES = [
 def test_alert_get_rejects_unauthenticated(client: TestClient, path: str):
     """Alert GET routes must return 401 without a token."""
     resp = client.get(path)
-    assert resp.status_code == 401, f"{path} returned {resp.status_code}, expected 401"  # noqa: PLR2004
+    assert resp.status_code == 401, f"{path} returned {resp.status_code}, expected 401"
 
 
 @pytest.mark.parametrize("path", ALERT_POST_ROUTES)
 def test_alert_post_rejects_unauthenticated(client: TestClient, path: str):
     """Alert POST routes must return 401 without a token."""
     resp = client.post(path)
-    assert resp.status_code == 401, f"{path} returned {resp.status_code}, expected 401"  # noqa: PLR2004
+    assert resp.status_code == 401, f"{path} returned {resp.status_code}, expected 401"
 
 
 def test_alert_create_rejects_unauthenticated(client: TestClient):
@@ -250,9 +250,9 @@ def test_alert_create_rejects_unauthenticated(client: TestClient):
             "conditions": [{"type": "price_above", "threshold": 2500.0}],
         },
     )
-    assert resp.status_code == 401  # noqa: PLR2004
+    assert resp.status_code == 401
 
 
 def test_alert_delete_rejects_unauthenticated(client: TestClient):
     resp = client.delete("/api/alerts/some-alert-id")
-    assert resp.status_code == 401  # noqa: PLR2004
+    assert resp.status_code == 401

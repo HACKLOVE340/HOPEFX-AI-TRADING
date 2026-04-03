@@ -46,8 +46,7 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -56,7 +55,7 @@ try:
 
     load_dotenv()
 except ImportError:
-    pass
+    ...  # nosec B110
 
 logging.basicConfig(
     level=logging.INFO,
@@ -146,9 +145,7 @@ class OANDATransactionClient:
                         "pl": txn.get("pl", "0"),
                         "account_balance": txn.get("accountBalance", "0"),
                         "order_id": txn.get("orderID", ""),
-                        "trade_id": txn.get(
-                            "tradeID", txn.get("tradeOpened", {}).get("tradeID", "")
-                        ),
+                        "trade_id": txn.get("tradeID", txn.get("tradeOpened", {}).get("tradeID", "")),
                         "reason": txn.get("reason", ""),
                     }
                 )
@@ -226,8 +223,7 @@ def _update_gate_file(ledger: dict[str, Any]) -> None:
         "first_fill_at": ledger["first_fill_at"],
         "last_sync_at": ledger["last_sync_at"],
         "phase3_enabled_at": (
-            existing.get("phase3_enabled_at")
-            or (datetime.now(UTC).isoformat() if gate_passed else None)
+            existing.get("phase3_enabled_at") or (datetime.now(UTC).isoformat() if gate_passed else None)
         ),
     }
     GATE_FILE.write_text(json.dumps(gate, indent=2))
@@ -245,7 +241,7 @@ def sync_fills(client: OANDATransactionClient, ledger: dict[str, Any]) -> int:
     from_id = ledger.get("last_transaction_id")
     logger.info(
         "Fetching fills from OANDA (from_id=%s) …",
-        from_id if from_id else "beginning",
+        from_id or "beginning",
     )
 
     new_fills = client.fetch_fills_since(from_id)
@@ -358,8 +354,7 @@ def main() -> int:
 
         if not api_key or not account_id:
             logger.error(
-                "OANDA_API_KEY and OANDA_ACCOUNT_ID must be set. "
-                "Use --report to view local ledger without an API call."
+                "OANDA_API_KEY and OANDA_ACCOUNT_ID must be set. Use --report to view local ledger without an API call."
             )
             return 2
 

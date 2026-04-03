@@ -24,7 +24,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-
 # ── Generic wrappers ──────────────────────────────────────────────────────────
 
 
@@ -143,9 +142,7 @@ class PerformanceSummaryResponse(BaseModel):
 class RegimeResponse(BaseModel):
     """Current market regime classification."""
 
-    regime: str = Field(
-        ..., description="trending_bull | trending_bear | ranging | volatile"
-    )
+    regime: str = Field(..., description="trending_bull | trending_bear | ranging | volatile")
     confidence: float = Field(..., ge=0.0, le=1.0)
     active_strategy: str
     hurst_exponent: float | None = None

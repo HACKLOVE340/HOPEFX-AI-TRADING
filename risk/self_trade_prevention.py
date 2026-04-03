@@ -77,7 +77,9 @@ class SelfTradePrevention:
                 continue
 
             # Check if prices cross
-            if (new_order.side == "buy" and new_order.price >= resting.price) or (new_order.side == "sell" and new_order.price <= resting.price):
+            if (new_order.side == "buy" and new_order.price >= resting.price) or (
+                new_order.side == "sell" and new_order.price <= resting.price
+            ):
                 return self._handle_cross(new_order, resting)
 
         return None
@@ -87,24 +89,21 @@ class SelfTradePrevention:
         if self.level == "firm":
             return True  # All orders in firm
 
-        elif self.level == "group":
+        if self.level == "group":
             # Would need group ID
             return order1.strategy_id == order2.strategy_id
 
-        elif self.level == "account":
+        if self.level == "account":
             return order1.account_id == order2.account_id
 
-        elif self.level == "strategy":
+        if self.level == "strategy":
             return order1.strategy_id == order2.strategy_id
 
         return False
 
     def _handle_cross(self, new_order: Order, resting_order: Order) -> dict:
         """Determine action when self-trade detected"""
-        logger.warning(
-            f"Self-trade detected: {new_order.id} vs {resting_order.id} "
-            f"on {new_order.symbol}",
-        )
+        logger.warning("Self-trade detected: %s vs %s on %s", new_order.id, resting_order.id, new_order.symbol)
 
         if self.action == SelfTradeAction.CANCEL_RESTING:
             return {
@@ -114,14 +113,14 @@ class SelfTradePrevention:
                 "allow_new": True,
             }
 
-        elif self.action == SelfTradeAction.CANCEL_NEW:
+        if self.action == SelfTradeAction.CANCEL_NEW:
             return {
                 "action": "reject",
                 "reason": "self_trade_prevention",
                 "message": "Order would self-match with resting order",
             }
 
-        elif self.action == SelfTradeAction.CANCEL_BOTH:
+        if self.action == SelfTradeAction.CANCEL_BOTH:
             return {
                 "action": "cancel_both",
                 "orders_to_cancel": [resting_order.id],
@@ -129,7 +128,7 @@ class SelfTradePrevention:
                 "reason": "self_trade_prevention",
             }
 
-        elif self.action == SelfTradeAction.DECREMENT_SIZE:
+        if self.action == SelfTradeAction.DECREMENT_SIZE:
             min_size = min(new_order.size, resting_order.size)
             return {
                 "action": "decrement",
@@ -149,6 +148,4 @@ class SelfTradePrevention:
     def remove_resting_order(self, order_id: str, symbol: str) -> None:
         """Remove filled or cancelled order"""
         if symbol in self.resting_orders:
-            self.resting_orders[symbol] = [
-                o for o in self.resting_orders[symbol] if o.id != order_id
-            ]
+            self.resting_orders[symbol] = [o for o in self.resting_orders[symbol] if o.id != order_id]

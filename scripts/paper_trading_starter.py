@@ -44,8 +44,7 @@ import os
 import signal
 import sys
 import time
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -55,7 +54,7 @@ try:
 
     load_dotenv()
 except ImportError:
-    pass  # dotenv optional; env vars may already be set
+    ...  # nosec B110
 
 # ── logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -116,16 +115,14 @@ def send_telegram(token: str, chat_id: str, text: str) -> bool:
         logger.warning("Telegram not configured — skipping alert")
         return False
     try:
-        import urllib.request
         import urllib.parse
+        import urllib.request
 
         url = f"https://api.telegram.org/bot{token}/sendMessage"
-        data = urllib.parse.urlencode(
-            {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
-        ).encode()
+        data = urllib.parse.urlencode({"chat_id": chat_id, "text": text, "parse_mode": "HTML"}).encode()
         req = urllib.request.Request(url, data=data, method="POST")
         with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310 - API URL is always https://
-            return resp.status == 200  # noqa: PLR2004
+            return resp.status == 200
     except Exception as exc:
         logger.warning("Telegram send failed: %s", exc)
         return False
@@ -159,9 +156,7 @@ class OANDAPaperClient:
 
         url = f"{self.base_url}{path}"
         data = json.dumps(body).encode()
-        req = urllib.request.Request(
-            url, data=data, headers=self._headers, method="POST"
-        )
+        req = urllib.request.Request(url, data=data, headers=self._headers, method="POST")
         with urllib.request.urlopen(req, timeout=15) as resp:  # nosec B310 - API URL is always https://
             return json.loads(resp.read())
 
@@ -170,9 +165,7 @@ class OANDAPaperClient:
 
     def get_price(self, instrument: str) -> float | None:
         try:
-            resp = self._get(
-                f"/v3/accounts/{self.account_id}/pricing?instruments={instrument}"
-            )
+            resp = self._get(f"/v3/accounts/{self.account_id}/pricing?instruments={instrument}")
             prices = resp.get("prices", [])
             if prices:
                 bid = float(prices[0].get("bids", [{}])[0].get("price", 0))
@@ -219,11 +212,11 @@ class TradeLogger:
 
     def _init_csv(self) -> None:
         if not self.path.exists():
-            with open(self.path, "w", newline="") as f:
+            with Path(self.path).open("w", newline="", encoding="utf-8") as f:
                 csv.DictWriter(f, fieldnames=CSV_HEADERS).writeheader()
 
     def log(self, record: dict[str, Any]) -> None:
-        with open(self.path, "a", newline="") as f:
+        with Path(self.path).open("a", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=CSV_HEADERS)
             writer.writerow({k: record.get(k, "") for k in CSV_HEADERS})
 
@@ -257,9 +250,7 @@ class PaperTradingRunner:
         self.tg_chat = _env("TELEGRAM_CHAT_ID")
         self.max_dd_pct = float(_env("PAPER_MAX_DD_PCT", "0.03"))
         self.duration_s = float(_env("PAPER_DURATION_DAYS", "30")) * 86400
-        self.instruments = [
-            i.strip() for i in _env("OANDA_INSTRUMENTS", "XAU_USD,EUR_USD").split(",")
-        ]
+        self.instruments = [i.strip() for i in _env("OANDA_INSTRUMENTS", "XAU_USD,EUR_USD").split(",")]
         self.poll_interval = 60  # seconds between signal checks
 
         self.client = OANDAPaperClient(self.api_key, self.account_id, self.environment)
@@ -335,9 +326,9 @@ class PaperTradingRunner:
         """
         history = self._price_history[instrument]
         history.append(price)
-        if len(history) > 20:  # noqa: PLR2004
+        if len(history) > 20:
             history.pop(0)
-        if len(history) < 20:  # noqa: PLR2004
+        if len(history) < 20:
             return None
         sma = sum(history) / len(history)
         if price > sma * 1.001:
@@ -364,7 +355,7 @@ class PaperTradingRunner:
                 self.tg_token,
                 self.tg_chat,
                 f"🚨 <b>HOPEFX KILL SWITCH</b>\n"
-                f"Drawdown {dd*100:.2f}% exceeded {self.max_dd_pct*100:.0f}% limit.\n"
+                f"Drawdown {dd * 100:.2f}% exceeded {self.max_dd_pct * 100:.0f}% limit.\n"
                 f"All positions closed. Session halted.",
             )
             self._running = False
@@ -379,8 +370,8 @@ class PaperTradingRunner:
             f"📊 <b>HOPEFX Daily Paper Report</b>\n"
             f"Day {elapsed_days:.1f} / {self._duration_days()}\n"
             f"Balance: <b>${self.current_balance:,.2f}</b>\n"
-            f"P&L: {'+'if pnl>=0 else ''}{pnl:,.2f}\n"
-            f"Drawdown: {dd*100:.2f}%\n"
+            f"P&L: {'+' if pnl >= 0 else ''}{pnl:,.2f}\n"
+            f"Drawdown: {dd * 100:.2f}%\n"
             f"Trades: {self.trade_count}\n"
             f"Instruments: {', '.join(self.instruments)}"
         )
@@ -409,7 +400,7 @@ class PaperTradingRunner:
                 logger.error("Tick error: %s", exc)
 
             # Daily Telegram alert
-            if time.time() - last_daily_alert >= 86400:  # noqa: PLR2004
+            if time.time() - last_daily_alert >= 86400:
                 dd = self._check_drawdown()
                 self._send_daily_summary(dd)
                 last_daily_alert = time.time()
@@ -514,9 +505,7 @@ class PaperTradingRunner:
                         "current_balance": self.current_balance,
                         "drawdown_pct": round(dd * 100, 4),
                         "trade_count": self.trade_count,
-                        "elapsed_days": round(
-                            (time.time() - self.start_time) / 86400, 2
-                        ),
+                        "elapsed_days": round((time.time() - self.start_time) / 86400, 2),
                     }
                 )
 

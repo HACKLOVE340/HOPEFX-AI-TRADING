@@ -45,7 +45,7 @@ def mock_strategy():
     """Factory that creates a mock BaseStrategy instance."""
 
     def _factory(name: str = "MockStrategy", symbol: str = "EUR_USD"):
-        from strategies.base import StrategyConfig, BaseStrategy
+        from strategies.base import BaseStrategy, StrategyConfig
 
         cfg = StrategyConfig(name=name, symbol=symbol, timeframe="1H")
 
@@ -53,7 +53,7 @@ def mock_strategy():
             def analyze(self, data):
                 return {}
 
-            def generate_signal(self, data):
+            def generate_signal(self, analysis):
                 return None
 
         return _MockStrategy(cfg)

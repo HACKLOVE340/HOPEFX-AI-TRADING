@@ -13,27 +13,27 @@ Production Mobile API v2.0
 - Rate limiting & caching
 """
 
-import logging
-from typing import Any
-from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
-import uuid
 import asyncio
+import logging
+import os
+import uuid
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
+import bcrypt
+import jwt
 from fastapi import (
-    FastAPI,
-    HTTPException,
-    Depends,
-    WebSocket,
-    Header,
-    Query,
     BackgroundTasks,
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Query,
+    WebSocket,
     status,
 )
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, validator
-import jwt
-import bcrypt
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +50,7 @@ class MobileUserRegistration(BaseModel):
     platform: str  # ios, android
 
     @validator("platform")
+    @classmethod
     def validate_platform(cls, v):
         if v.lower() not in ["ios", "android"]:
             raise ValueError("Platform must be ios or android")
@@ -164,7 +165,7 @@ class MobileAPIServer:
         self,
         host: str = "0.0.0.0",  # nosec B104 - host configurable via parameter
         port: int = 8001,
-        jwt_secret: str = None,
+        jwt_secret: str | None = None,
         broker=None,
         db=None,
         notification_service=None,
@@ -172,12 +173,8 @@ class MobileAPIServer:
         rate_limiter=None,
     ):
         """Initialize mobile API"""
-        import os
-
-        resolved_secret = (
-            jwt_secret or os.getenv("SECURITY_JWT_SECRET") or os.getenv("JWT_SECRET")
-        )
-        if not resolved_secret or len(resolved_secret) < 32:  # noqa: PLR2004
+        resolved_secret = jwt_secret or _os.getenv("SECURITY_JWT_SECRET") or _os.getenv("JWT_SECRET")
+        if not resolved_secret or len(resolved_secret) < 32:
             raise ValueError(
                 "jwt_secret must be >= 32 characters. "
                 "Set SECURITY_JWT_SECRET env var or pass jwt_secret= explicitly. "
@@ -204,11 +201,7 @@ class MobileAPIServer:
         # explicit allowlist sourced from the environment; default to no
         # cross-origin access so misconfigured deployments fail closed.
         _raw_origins = os.getenv("MOBILE_CORS_ORIGINS", "")
-        _allowed_origins: list[str] = (
-            [o.strip() for o in _raw_origins.split(",") if o.strip()]
-            if _raw_origins
-            else []
-        )
+        _allowed_origins: list[str] = [o.strip() for o in _raw_origins.split(",") if o.strip()] if _raw_origins else []
         self.app.add_middleware(
             CORSMiddleware,
             allow_origins=_allowed_origins,
@@ -293,7 +286,8 @@ class MobileAPIServer:
             except HTTPException:
                 raise
             except Exception as e:
-                logger.error(f"Registration failed: {e}")
+                logger.error("Registration failed: %s", e)
+
                 raise HTTPException(status_code=500, detail="Registration failed") from e
 
         @self.app.post("/api/v2/auth/login", response_model=AuthToken, tags=["Auth"])
@@ -310,16 +304,12 @@ class MobileAPIServer:
                     raise HTTPException(status_code=401, detail="Invalid credentials")
 
                 # Verify password
-                if not bcrypt.checkpw(
-                    password.encode(), user["password_hash"].encode()
-                ):
+                if not bcrypt.checkpw(password.encode(), user["password_hash"].encode()):
                     raise HTTPException(status_code=401, detail="Invalid credentials")
 
                 # Generate tokens
                 access_token = self._generate_token(user["user_id"], expires_hours=24)
-                refresh_token = self._generate_token(
-                    user["user_id"], expires_hours=7 * 24
-                )
+                refresh_token = self._generate_token(user["user_id"], expires_hours=7 * 24)
 
                 logger.info("User logged in: user_id=%s", user["user_id"])
 
@@ -332,7 +322,8 @@ class MobileAPIServer:
             except HTTPException:
                 raise
             except Exception as e:
-                logger.error(f"Login failed: {e}")
+                logger.error("Login failed: %s", e)
+
                 raise HTTPException(status_code=500, detail="Login failed") from e
 
         @self.app.post("/api/v2/auth/refresh", response_model=AuthToken, tags=["Auth"])
@@ -340,9 +331,7 @@ class MobileAPIServer:
             """Refresh access token"""
 
             try:
-                payload = jwt.decode(
-                    refresh_token, self.jwt_secret, algorithms=["HS256"]
-                )
+                payload = jwt.decode(refresh_token, self.jwt_secret, algorithms=["HS256"])
                 user_id = payload["user_id"]
 
                 new_access_token = self._generate_token(user_id, expires_hours=24)
@@ -400,15 +389,14 @@ class MobileAPIServer:
             except HTTPException:
                 raise
             except Exception as e:
-                logger.error(f"Failed to fetch account: {e}")
+                logger.error("Failed to fetch account: %s", e)
+
                 raise HTTPException(status_code=500, detail="Failed to fetch account") from e
 
     # ── Trading ───────────────────────────────────────────────────────────────
 
     def _register_trading_routes(self) -> None:
-        @self.app.get(
-            "/api/v2/quotes/{symbol}", response_model=QuoteData, tags=["Trading"]
-        )
+        @self.app.get("/api/v2/quotes/{symbol}", response_model=QuoteData, tags=["Trading"])
         async def get_quote(symbol: str, user_id: str = Depends(self._verify_token)):
             """Get real-time quote"""
 
@@ -431,12 +419,11 @@ class MobileAPIServer:
             except HTTPException:
                 raise
             except Exception as e:
-                logger.error(f"Failed to fetch quote: {e}")
+                logger.error("Failed to fetch quote: %s", e)
+
                 raise HTTPException(status_code=500, detail="Failed to fetch quote") from e
 
-        @self.app.post(
-            "/api/v2/orders", response_model=dict[str, Any], tags=["Trading"]
-        )
+        @self.app.post("/api/v2/orders", response_model=dict[str, Any], tags=["Trading"])
         async def place_order(
             order: PlaceOrderRequest,
             background_tasks: BackgroundTasks,
@@ -486,7 +473,8 @@ class MobileAPIServer:
                         body=f"{order.side} {order.quantity} {order.symbol}",
                     )
 
-                logger.info(f"Order placed by {user_id}: {order.symbol}")
+                logger.info("Order placed by %s: %s", user_id, order.symbol)
+
 
                 return {
                     "order_id": result.get("order_id", str(uuid.uuid4())),
@@ -497,16 +485,16 @@ class MobileAPIServer:
                 }
 
             except ValueError as e:
-                raise HTTPException(status_code=400, detail=str(e)) from e
+                logger.warning("Order validation failed for %s: %s", user_id, e)
+                raise HTTPException(status_code=400, detail="Invalid order parameters") from None
             except HTTPException:
                 raise
             except Exception as e:
-                logger.error(f"Order placement failed: {e}")
-                raise HTTPException(status_code=500, detail="Order placement failed") from e
+                logger.error("Order placement failed: %s", e)
 
-        @self.app.get(
-            "/api/v2/trades", response_model=list[TradeData], tags=["Trading"]
-        )
+                raise HTTPException(status_code=500, detail="Order placement failed") from None
+
+        @self.app.get("/api/v2/trades", response_model=list[TradeData], tags=["Trading"])
         async def get_open_trades(user_id: str = Depends(self._verify_token)):
             """Get all open trades"""
 
@@ -528,10 +516,7 @@ class MobileAPIServer:
                         pnl_percentage=float(t["pnl_percentage"]),
                         entry_time=datetime.fromisoformat(t["entry_time"]),
                         duration_seconds=int(
-                            (
-                                datetime.now(UTC)
-                                - datetime.fromisoformat(t["entry_time"])
-                            ).total_seconds()
+                            (datetime.now(UTC) - datetime.fromisoformat(t["entry_time"])).total_seconds()
                         ),
                         spread=float(t.get("spread", 0)),
                     )
@@ -541,14 +526,15 @@ class MobileAPIServer:
             except HTTPException:
                 raise
             except Exception as e:
-                logger.error(f"Failed to fetch trades: {e}")
+                logger.error("Failed to fetch trades: %s", e)
+
                 raise HTTPException(status_code=500, detail="Failed to fetch trades") from e
 
         @self.app.post("/api/v2/trades/{trade_id}/close", tags=["Trading"])
         async def close_trade(
             trade_id: str,
             user_id: str = Depends(self._verify_token),
-            background_tasks: BackgroundTasks = None,
+            background_tasks: BackgroundTasks | None = None,
         ):
             """Close specific trade"""
 
@@ -577,7 +563,8 @@ class MobileAPIServer:
             except HTTPException:
                 raise
             except Exception as e:
-                logger.error(f"Failed to close trade: {e}")
+                logger.error("Failed to close trade: %s", e)
+
                 raise HTTPException(status_code=500, detail="Failed to close trade") from e
 
     # ── Performance ───────────────────────────────────────────────────────────
@@ -614,10 +601,9 @@ class MobileAPIServer:
             except HTTPException:
                 raise
             except Exception as e:
-                logger.error(f"Failed to fetch performance: {e}")
-                raise HTTPException(
-                    status_code=500, detail="Failed to fetch performance"
-                ) from e
+                logger.error("Failed to fetch performance: %s", e)
+
+                raise HTTPException(status_code=500, detail="Failed to fetch performance") from e
 
     # ── News ──────────────────────────────────────────────────────────────────
 
@@ -634,7 +620,8 @@ class MobileAPIServer:
                 return []
 
             except Exception as e:
-                logger.error(f"Failed to fetch news: {e}")
+                logger.error("Failed to fetch news: %s", e)
+
                 raise HTTPException(status_code=500, detail="Failed to fetch news") from e
 
     # ── Notifications ─────────────────────────────────────────────────────────
@@ -651,17 +638,12 @@ class MobileAPIServer:
                     return NotificationPreferences()
 
                 prefs = self.db.get_notification_preferences(user_id)
-                return (
-                    NotificationPreferences(**prefs)
-                    if prefs
-                    else NotificationPreferences()
-                )
+                return NotificationPreferences(**prefs) if prefs else NotificationPreferences()
 
             except Exception as e:
-                logger.error(f"Failed to fetch preferences: {e}")
-                raise HTTPException(
-                    status_code=500, detail="Failed to fetch preferences"
-                ) from e
+                logger.error("Failed to fetch preferences: %s", e)
+
+                raise HTTPException(status_code=500, detail="Failed to fetch preferences") from e
 
         @self.app.post("/api/v2/notifications/preferences", tags=["Notifications"])
         async def update_notification_preferences(
@@ -677,10 +659,9 @@ class MobileAPIServer:
                 return {"status": "updated"}
 
             except Exception as e:
-                logger.error(f"Failed to update preferences: {e}")
-                raise HTTPException(
-                    status_code=500, detail="Failed to update preferences"
-                ) from e
+                logger.error("Failed to update preferences: %s", e)
+
+                raise HTTPException(status_code=500, detail="Failed to update preferences") from e
 
     # ── WebSocket ─────────────────────────────────────────────────────────────
 
@@ -688,7 +669,7 @@ class MobileAPIServer:
         @self.app.websocket("/api/v2/ws/quotes")
         async def websocket_quotes(websocket: WebSocket, symbols: str = Query(...)):
             """WebSocket for real-time quotes"""
-            from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+            from rate_limiting.websocket_limiter import get_client_ip, get_ws_limiter
 
             limiter = get_ws_limiter()
             client_ip = get_client_ip(websocket)
@@ -722,7 +703,8 @@ class MobileAPIServer:
                     await asyncio.sleep(0.5)
 
             except Exception as e:
-                logger.error(f"WebSocket error: {e}")
+                logger.error("WebSocket error: %s", e)
+
                 await websocket.close()
             finally:
                 await limiter.release(client_ip)
@@ -730,7 +712,7 @@ class MobileAPIServer:
         @self.app.websocket("/api/v2/ws/trades")
         async def websocket_trades(websocket: WebSocket, user_id: str = Query(...)):
             """WebSocket for real-time trade updates"""
-            from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+            from rate_limiting.websocket_limiter import get_client_ip, get_ws_limiter
 
             limiter = get_ws_limiter()
             client_ip = get_client_ip(websocket)
@@ -754,7 +736,8 @@ class MobileAPIServer:
                         await websocket.send_text("pong")
 
             except Exception as e:
-                logger.error(f"WebSocket error: {e}")
+                logger.error("WebSocket error: %s", e)
+
 
             finally:
                 if websocket in self.active_connections.get(user_id, []):
@@ -779,7 +762,7 @@ class MobileAPIServer:
         try:
             parts = authorization.split()
 
-            if len(parts) != 2 or parts[0] != "Bearer":  # noqa: PLR2004
+            if len(parts) != 2 or parts[0] != "Bearer":
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid auth scheme",
@@ -790,26 +773,19 @@ class MobileAPIServer:
             return payload["user_id"]
 
         except jwt.ExpiredSignatureError:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired"
-            ) from None
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired") from None
         except jwt.DecodeError:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
-            ) from None
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from None
         except Exception as e:
-            logger.error(f"Token verification failed: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication failed"
-            ) from e
+            logger.error("Token verification failed: %s", e)
+
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication failed") from e
 
     def run(self, reload: bool = False):
         """Run the API server"""
         import uvicorn
 
-        uvicorn.run(
-            self.app, host=self.host, port=self.port, log_level="info", reload=reload
-        )
+        uvicorn.run(self.app, host=self.host, port=self.port, log_level="info", reload=reload)
 
 
 # ---------------------------------------------------------------------------
@@ -824,15 +800,13 @@ class MobileAPIServer:
 # if the secret is absent or too short — there is no fallback or placeholder.
 
 import os as _os
+
 from fastapi import APIRouter as _APIRouter
 
 
 def _build_module_app() -> "FastAPI":
-    _secret = (
-        _os.getenv("SECURITY_JWT_SECRET", "").strip()
-        or _os.getenv("JWT_SECRET", "").strip()
-    )
-    if not _secret or len(_secret) < 32:  # noqa: PLR2004
+    _secret = _os.getenv("SECURITY_JWT_SECRET", "").strip() or _os.getenv("JWT_SECRET", "").strip()
+    if not _secret or len(_secret) < 32:
         raise RuntimeError(
             "SECURITY_JWT_SECRET (or JWT_SECRET) must be set to at least 32 characters. "
             "Set it in your .env file or environment before starting the server."

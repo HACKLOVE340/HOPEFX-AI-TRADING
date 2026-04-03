@@ -120,9 +120,7 @@ class RiskOrchestrator:
     """
 
     # Default path for hedge-state persistence (env-overridable)
-    _DEFAULT_STATE_FILE = Path(
-        os.environ.get("RISK_ORCHESTRATOR_STATE_FILE", "risk_orchestrator_state.json")
-    )
+    _DEFAULT_STATE_FILE = Path(os.environ.get("RISK_ORCHESTRATOR_STATE_FILE", "risk_orchestrator_state.json"))
 
     def __init__(
         self,
@@ -139,9 +137,7 @@ class RiskOrchestrator:
         self._trading_allowed: bool = True
         self._lock = asyncio.Lock()
         self._history: list[dict[str, Any]] = []  # last 200 risk events
-        self._state_file: Path = (
-            Path(state_file) if state_file is not None else self._DEFAULT_STATE_FILE
-        )
+        self._state_file: Path = Path(state_file) if state_file is not None else self._DEFAULT_STATE_FILE
 
         # Restore hedge positions from the previous process so we know which
         # hedges are already open and don't double-open them on restart.
@@ -174,7 +170,7 @@ class RiskOrchestrator:
                     for p in self._hedge_positions
                 ],
             }
-            self._state_file.write_text(json.dumps(state, indent=2))
+            self._state_file.write_text(json.dumps(state, indent=2), encoding="utf-8")
             logger.debug("RiskOrchestrator state persisted to %s", self._state_file)
         except OSError as exc:
             logger.warning("RiskOrchestrator: could not persist state: %s", exc)
@@ -184,7 +180,7 @@ class RiskOrchestrator:
         if not self._state_file.exists():
             return
         try:
-            data = json.loads(self._state_file.read_text())
+            data = json.loads(self._state_file.read_text(encoding="utf-8"))
             self._max_risk = float(data.get("max_risk", self._max_risk))
             self._trading_allowed = bool(data.get("trading_allowed", True))
             self._hedge_active = bool(data.get("hedge_active", False))
@@ -199,8 +195,7 @@ class RiskOrchestrator:
                 for p in data.get("hedge_positions", [])
             ]
             logger.info(
-                "RiskOrchestrator state restored | max_risk=%.2f hedge_active=%s "
-                "hedge_positions=%d",
+                "RiskOrchestrator state restored | max_risk=%.2f hedge_active=%s hedge_positions=%d",
                 self._max_risk,
                 self._hedge_active,
                 len(self._hedge_positions),
@@ -295,12 +290,8 @@ class RiskOrchestrator:
 
             if hasattr(risk_manager, "config"):
                 # RiskConfig.max_risk_per_trade is the primary lever
-                risk_manager.config.max_risk_per_trade = (
-                    fraction * 0.02
-                )  # 2% base × fraction
-                risk_manager.config.max_portfolio_risk = (
-                    fraction * 0.06
-                )  # 6% base × fraction
+                risk_manager.config.max_risk_per_trade = fraction * 0.02  # 2% base × fraction
+                risk_manager.config.max_portfolio_risk = fraction * 0.06  # 6% base × fraction
                 logger.debug(
                     "RiskManager updated: max_risk_per_trade=%.4f max_portfolio_risk=%.4f",
                     risk_manager.config.max_risk_per_trade,
@@ -337,18 +328,13 @@ class RiskOrchestrator:
                         order_type="MARKET",
                         label="NUCLEAR_HEDGE",
                     )
-                    order_id = (
-                        str(result.get("id", ""))
-                        if isinstance(result, dict)
-                        else str(result)
-                    )
+                    order_id = str(result.get("id", "")) if isinstance(result, dict) else str(result)
                     logger.info("Hedge order placed: %s", order_id)
                 except Exception as exc:
                     logger.error("Hedge order failed: %s", exc)
             else:
                 logger.warning(
-                    "No broker available — hedge position NOT placed. "
-                    "Manual hedge required on %s (%.0f units short)",
+                    "No broker available — hedge position NOT placed. Manual hedge required on %s (%.0f units short)",
                     symbol,
                     self._hedge_units,
                 )
@@ -497,7 +483,7 @@ class RiskOrchestrator:
                 **data,
             }
         )
-        if len(self._history) > 200:  # noqa: PLR2004
+        if len(self._history) > 200:
             self._history.pop(0)
 
 
@@ -513,7 +499,7 @@ def create_orchestrator_router(orchestrator_instance: RiskOrchestrator):
                            prefix="/risk/orchestrator", tags=["risk"])
     """
     try:
-        from fastapi import APIRouter, HTTPException  # noqa: F401
+        from fastapi import APIRouter
         from pydantic import BaseModel, Field
     except ImportError:
         return None

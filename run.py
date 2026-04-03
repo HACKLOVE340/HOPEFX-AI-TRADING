@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -52,7 +53,6 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-import contextlib
 
 # ── logging setup (overridden by --log flag after arg parse) ──────────────────
 logging.basicConfig(
@@ -142,10 +142,7 @@ def _setup_env(args: argparse.Namespace) -> None:
     elif args.mode == "live":
         practice = os.environ.get("OANDA_PRACTICE", "true").lower()
         if practice == "true":
-            logger.warning(
-                "Mode=live but OANDA_PRACTICE=true — "
-                "set OANDA_PRACTICE=false in .env to trade real money."
-            )
+            logger.warning("Mode=live but OANDA_PRACTICE=true — set OANDA_PRACTICE=false in .env to trade real money.")
 
     # Map broker flag to exchange identifier used by MarketIngest
     broker_exchange_map = {
@@ -168,17 +165,14 @@ def _setup_env(args: argparse.Namespace) -> None:
     # Prop-firm enforcement
     if getattr(args, "prop", False):
         try:
-            import json as _json
-            from pathlib import Path as _Path
-
-            cfg_path = _Path(args.config)
+            cfg_path = Path(args.config)
             cfg = {}
             if cfg_path.exists():
-                with open(cfg_path) as f:
-                    cfg = _json.load(f)
+                with Path(cfg_path).open(encoding="utf-8") as f:
+                    cfg = json.load(f)
             cfg["enabled"] = True
-            with open(cfg_path, "w") as f:
-                _json.dump(cfg, f, indent=2)
+            with Path(cfg_path).open("w", encoding="utf-8") as f:
+                json.dump(cfg, f, indent=2)
             logger.info("Prop-firm enforcement ENABLED in %s", cfg_path)
         except Exception as exc:
             logger.warning("Could not enable prop-firm mode: %s", exc)
@@ -198,7 +192,7 @@ def _load_prop_config(path: str) -> dict:
     if not p.exists():
         logger.warning("prop_firm_mode.json not found at %s — using defaults.", path)
         return {}
-    with p.open() as fh:
+    with p.open(encoding="utf-8") as fh:
         cfg = json.load(fh)
     logger.info("Loaded prop config from %s", path)
     return cfg
@@ -272,9 +266,9 @@ def _get_pipeline(mode: str) -> list[str]:
             "Gatekeeper (prop-firm risk checks)",
             "FIXRouter (order execution + OANDA REST fallback)",
         ]
-    elif mode == "api":
+    if mode == "api":
         return ["FastAPI server (uvicorn)", "WebSocket live broadcaster"]
-    elif mode == "backtest":
+    if mode == "backtest":
         return ["BacktestEngine (historical OHLCV)"]
     return []
 
@@ -302,8 +296,9 @@ async def _run_trading(args: argparse.Namespace) -> None:
     )
 
     try:
-        from hopefx_engine import HopeFXEngine
         import signal as _signal
+
+        from hopefx_engine import HopeFXEngine
 
         engine = HopeFXEngine()
         loop = asyncio.get_running_loop()
@@ -325,6 +320,7 @@ async def _run_api() -> None:
     """Start the FastAPI server with uvicorn."""
     try:
         import uvicorn
+
         from app import app as fastapi_app
 
         config = uvicorn.Config(
@@ -345,8 +341,11 @@ async def _run_backtest(args: argparse.Namespace) -> None:
     try:
         from backtesting.engine import BacktestEngine
 
-        engine = BacktestEngine(prop_config_path=args.config)
-        await engine.run()
+        engine = BacktestEngine()
+        from datetime import datetime
+        start_dt = datetime.fromisoformat(args.start_date) if hasattr(args, "start_date") and args.start_date else None
+        end_dt = datetime.fromisoformat(args.end_date) if hasattr(args, "end_date") and args.end_date else None
+        engine.run(start_date=start_dt, end_date=end_dt)
     except ImportError:
         # Fallback to the existing backtest runner
         import subprocess  # nosec B404 - list-form call with sys.executable; no shell=True, no user input
@@ -402,10 +401,7 @@ def main() -> None:
                 "Set OANDA_PRACTICE=false in .env to trade real money."
             )
             sys.exit(1)
-        confirm = input(
-            "\n⚠️  LIVE MODE — real money will be traded.\n"
-            "   Type 'CONFIRM LIVE' to proceed: "
-        ).strip()
+        confirm = input("\n⚠️  LIVE MODE — real money will be traded.\n   Type 'CONFIRM LIVE' to proceed: ").strip()
         if confirm != "CONFIRM LIVE":
             print("Aborted.")
             sys.exit(0)

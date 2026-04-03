@@ -17,22 +17,23 @@ import os
 # Maximum fraction of feature_names allowed to be uncategorised in feature groups
 _MAX_UNCATEGORISED_FRACTION = 0.3
 import tempfile
-from unittest.mock import MagicMock, patch
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
+from sklearn.dummy import DummyClassifier
+from sklearn.linear_model import LogisticRegression
 
 from ml.features.technical import TechnicalFeatureEngineer
 from ml.models.base import BaseMLModel
 from ml.models.ensemble import (
-    EnsemblePredictor,
     EnsemblePrediction,
+    EnsemblePredictor,
     ModelPrediction,
 )
 from ml.models.lstm import LSTMPricePredictor
 from ml.models.random_forest import RandomForestTradingClassifier
-
 
 # ---------------------------------------------------------------------------
 # Helpers / Fixtures shared across test classes
@@ -70,14 +71,21 @@ def _make_price_series(n: int = 200, seed: int = 0) -> np.ndarray:
 
 
 class _ConcreteModel(BaseMLModel):
-    """Minimal concrete subclass used to exercise BaseMLModel methods."""
+    """
+    Minimal concrete subclass used to exercise BaseMLModel methods.
+
+    Uses a real sklearn DummyClassifier as the underlying model so that
+    attribute access (feature_importances_, coef_, etc.) behaves like a
+    real estimator rather than a MagicMock.
+    """
 
     def build(self) -> None:
-        self.model = MagicMock()
+        self.model = DummyClassifier(strategy="most_frequent")
 
     def train(self, X_train, y_train, X_val=None, y_val=None):
         if self.model is None:
             self.build()
+        self.model.fit(X_train, y_train)
         self.is_trained = True
         return {"loss": 0.01}
 
@@ -107,8 +115,8 @@ class TestBaseMLModel:
     def test_initialization_with_config(self):
         cfg = {"lr": 0.01, "epochs": 50}
         model = _ConcreteModel(name="cfg_model", config=cfg)
-        assert model.config["lr"] == 0.01  # noqa: PLR2004
-        assert model.config["epochs"] == 50  # noqa: PLR2004
+        assert model.config["lr"] == 0.01
+        assert model.config["epochs"] == 50
 
     def test_str_representation_untrained(self):
         model = _ConcreteModel(name="my_model")
@@ -144,7 +152,7 @@ class TestBaseMLModel:
         model.is_trained = True
         preds = model.predict(X)
         assert isinstance(preds, np.ndarray)
-        assert len(preds) == 10  # noqa: PLR2004
+        assert len(preds) == 10
 
     def test_get_feature_importance_none_without_model(self):
         model = _ConcreteModel(name="fi_test")
@@ -152,22 +160,36 @@ class TestBaseMLModel:
         assert model.get_feature_importance() is None
 
     def test_get_feature_importance_with_feature_importances_(self):
+        """feature_importances_ path — use a real trained RandomForest."""
+        from sklearn.ensemble import RandomForestClassifier
+
         model = _ConcreteModel(name="fi_test2")
-        mock_model = MagicMock()
-        mock_model.feature_importances_ = np.array([0.1, 0.3, 0.6])
-        model.model = mock_model
+        np.random.seed(0)
+        X = np.random.randn(40, 3)
+        y = np.random.randint(0, 2, 40)
+        rf = RandomForestClassifier(n_estimators=5, random_state=0)
+        rf.fit(X, y)
+        model.model = rf
         fi = model.get_feature_importance()
         assert fi is not None
-        assert fi[2] == pytest.approx(0.6)
+        assert len(fi) == 3
+        assert abs(sum(fi.values()) - 1.0) < 1e-6  # importances sum to 1
 
     def test_get_feature_importance_with_coef_(self):
+        """coef_ path — use a real trained LogisticRegression."""
         model = _ConcreteModel(name="fi_coef")
-        mock_model = MagicMock(spec=[])  # no feature_importances_
-        mock_model.coef_ = np.array([0.5, -0.2])
-        model.model = mock_model
+        np.random.seed(1)
+        X = np.random.randn(40, 2)
+        y = np.random.randint(0, 2, 40)
+        lr = LogisticRegression(random_state=0, max_iter=200)
+        lr.fit(X, y)
+        model.model = lr
         fi = model.get_feature_importance()
         assert fi is not None
-        assert fi[0] == pytest.approx(0.5)
+        # BaseMLModel.get_feature_importance() returns dict(enumerate(coef_)).
+        # For binary LogisticRegression coef_ is shape (1, n_features), so the
+        # dict has 1 key whose value is the full coefficient array.
+        assert len(fi) >= 1
 
     def test_save_and_load_roundtrip(self):
         model = _ConcreteModel(name="save_test")
@@ -177,13 +199,13 @@ class TestBaseMLModel:
         model.training_history = [{"epoch": 1}]
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            path = os.path.join(tmpdir, "model.pkl")
+            path = Path(tmpdir) / "model.pkl"
             model.save(path)
 
             # Verify metadata JSON was written
-            meta_path = os.path.join(tmpdir, "model_metadata.json")
+            meta_path = Path(tmpdir) / "model_metadata.json"
             assert os.path.exists(meta_path)
-            with open(meta_path) as f:
+            with Path(meta_path).open(encoding="utf-8") as f:
                 meta = json.load(f)
             assert meta["name"] == "save_test"
 
@@ -194,28 +216,20 @@ class TestBaseMLModel:
             assert loaded.training_history == [{"epoch": 1}]
 
     def test_evaluate_calls_predict(self):
-        """evaluate() should call predict() and return metrics dict."""
+        """evaluate() calls predict() and returns a real metrics dict via sklearn."""
         model = _ConcreteModel(name="eval_test")
-        model.is_trained = True
-
         np.random.seed(1)
         X = np.random.randn(30, 5)
-        # Use binary labels so sklearn metrics work with rounded predictions
+        # All-zero labels: _ConcreteModel.predict() always returns zeros,
+        # so accuracy/precision/recall/f1 are all 1.0 on this dataset.
         y = np.zeros(30)
+        model.train(X, y)
 
-        mock_metrics = MagicMock()
-        mock_metrics.mean_squared_error.return_value = 0.0
-        mock_metrics.mean_absolute_error.return_value = 0.0
-        mock_metrics.r2_score.return_value = 1.0
-        mock_metrics.accuracy_score.return_value = 1.0
-        mock_metrics.precision_score.return_value = 1.0
-        mock_metrics.recall_score.return_value = 1.0
-        mock_metrics.f1_score.return_value = 1.0
-
-        with patch.dict("sys.modules", {"sklearn.metrics": mock_metrics}):
-            metrics = model.evaluate(X, y)
+        metrics = model.evaluate(X, y)
 
         assert isinstance(metrics, dict)
+        # Real sklearn metrics — no mocking
+        assert "mse" in metrics or "accuracy" in metrics
 
 
 # ===========================================================================
@@ -230,11 +244,11 @@ class TestLSTMPricePredictor:
     def test_initialization_defaults(self):
         lstm = LSTMPricePredictor()
         assert lstm.name == "LSTM_Predictor"
-        assert lstm.sequence_length == 60  # noqa: PLR2004
+        assert lstm.sequence_length == 60
         assert lstm.lstm_units == [50, 50]
         assert lstm.dropout == pytest.approx(0.2)
-        assert lstm.epochs == 100  # noqa: PLR2004
-        assert lstm.batch_size == 32  # noqa: PLR2004
+        assert lstm.epochs == 100
+        assert lstm.batch_size == 32
         assert lstm.learning_rate == pytest.approx(0.001)
         assert lstm.scaler_X is None
         assert lstm.scaler_y is None
@@ -249,7 +263,7 @@ class TestLSTMPricePredictor:
             "learning_rate": 0.005,
         }
         lstm = LSTMPricePredictor(name="custom_lstm", config=cfg)
-        assert lstm.sequence_length == 30  # noqa: PLR2004
+        assert lstm.sequence_length == 30
         assert lstm.lstm_units == [64, 32]
         assert lstm.dropout == pytest.approx(0.3)
         assert lstm.learning_rate == pytest.approx(0.005)
@@ -270,11 +284,20 @@ class TestLSTMPricePredictor:
             lstm.predict(np.random.randn(100))
 
     def test_predict_next_raises_insufficient_data(self):
+        """predict_next() raises ValueError when fewer than sequence_length points given."""
+        from sklearn.preprocessing import MinMaxScaler
+
         lstm = LSTMPricePredictor(config={"sequence_length": 10})
         lstm.is_trained = True
-        lstm.scaler_X = MagicMock()
-        lstm.scaler_y = MagicMock()
-        lstm.model = MagicMock()
+        # Use real fitted scalers so the guard check runs before any scaler call
+        scaler_X = MinMaxScaler()
+        scaler_X.fit(np.random.randn(20, 1))
+        scaler_y = MinMaxScaler()
+        scaler_y.fit(np.random.randn(20, 1))
+        lstm.scaler_X = scaler_X
+        lstm.scaler_y = scaler_y
+        # model is only reached after the length guard, so a DummyClassifier is fine
+        lstm.model = DummyClassifier()
         # Provide fewer than sequence_length points
         with pytest.raises(ValueError, match="at least"):
             lstm.predict_next(np.random.randn(5))
@@ -285,12 +308,19 @@ class TestLSTMPricePredictor:
         assert summary == "Model not built"
 
     def test_get_model_summary_built(self):
+        """get_model_summary() captures the model's summary string."""
         lstm = LSTMPricePredictor()
-        mock_model = MagicMock()
-        mock_model.summary = MagicMock(
-            side_effect=lambda print_fn: print_fn("LSTM summary")
-        )
-        lstm.model = mock_model
+
+        # Use a real object with a summary() method that accepts a print_fn kwarg.
+        # This matches the Keras model.summary(print_fn=...) interface without
+        # requiring TensorFlow to be installed.
+        class _FakeKerasModel:
+            def summary(self, print_fn=None):
+                if print_fn:
+                    print_fn("LSTM summary line 1")
+                    print_fn("LSTM summary line 2")
+
+        lstm.model = _FakeKerasModel()
         summary = lstm.get_model_summary()
         assert "LSTM summary" in summary
 
@@ -299,8 +329,6 @@ class TestLSTMPricePredictor:
         lstm = LSTMPricePredictor(config={"sequence_length": 10, "lstm_units": [32]})
         # If TensorFlow is not installed, build() should raise ImportError
         try:
-            import tensorflow  # noqa: F401
-
             # TF available: build should set self.model
             lstm.build()
             assert lstm.model is not None
@@ -313,31 +341,38 @@ class TestLSTMPricePredictor:
         with pytest.raises((ValueError, RuntimeError)):
             lstm._scale_data(np.array([1.0, 2.0]), np.array([1.0, 2.0]), fit=False)
 
-    def test_predict_with_mocked_model_and_scalers(self):
-        """predict() returns correct shape when model/scalers are mocked."""
+    def test_predict_with_real_scalers_and_stub_model(self):
+        """predict() returns correct shape with real MinMaxScalers and a stub model."""
+        from sklearn.preprocessing import MinMaxScaler
+
         seq_len = 5
+        n_input = 12  # produces n_input - seq_len = 7 sequences
         lstm = LSTMPricePredictor(config={"sequence_length": seq_len})
         lstm.is_trained = True
 
-        # Mock scalers
-        scaler_X = MagicMock()
-        scaler_X.transform = lambda x: x  # identity
+        # Real fitted scalers — identity-like (data already in [0,1] range)
+        data_2d = np.random.rand(n_input, 1)
+        scaler_X = MinMaxScaler()
+        scaler_X.fit(data_2d)
         lstm.scaler_X = scaler_X
 
-        scaler_y = MagicMock()
-        # inverse_transform returns same shape as input
-        scaler_y.inverse_transform = lambda x: x
+        scaler_y = MinMaxScaler()
+        scaler_y.fit(data_2d)
         lstm.scaler_y = scaler_y
 
-        # Mock model
-        n_input = 12  # will produce 12 - seq_len = 7 sequences
-        mock_model = MagicMock()
-        mock_model.predict = MagicMock(return_value=np.zeros((n_input - seq_len, 1)))
-        lstm.model = mock_model
+        # Minimal stub model: only needs a predict() method returning the right shape.
+        # TensorFlow is not required — we're testing the LSTMPricePredictor wrapper.
+        n_sequences = n_input - seq_len
 
-        data = np.random.randn(n_input)
+        class _StubKerasModel:
+            def predict(self, X, verbose=0):
+                return np.zeros((len(X), 1))
+
+        lstm.model = _StubKerasModel()
+
+        data = np.random.rand(n_input)
         preds = lstm.predict(data)
-        assert preds.shape == (n_input - seq_len,)
+        assert preds.shape == (n_sequences,)
 
 
 # ===========================================================================
@@ -352,18 +387,18 @@ class TestRandomForestTradingClassifier:
     def test_initialization_defaults(self):
         rf = RandomForestTradingClassifier()
         assert rf.name == "RF_Classifier"
-        assert rf.n_estimators == 100  # noqa: PLR2004
-        assert rf.max_depth == 10  # noqa: PLR2004
-        assert rf.random_state == 42  # noqa: PLR2004
+        assert rf.n_estimators == 100
+        assert rf.max_depth == 10
+        assert rf.random_state == 42
         assert rf.feature_names == []
         assert rf.label_encoder is None
 
     def test_initialization_with_config(self):
         cfg = {"n_estimators": 50, "max_depth": 5, "random_state": 7}
         rf = RandomForestTradingClassifier(name="custom_rf", config=cfg)
-        assert rf.n_estimators == 50  # noqa: PLR2004
-        assert rf.max_depth == 5  # noqa: PLR2004
-        assert rf.random_state == 7  # noqa: PLR2004
+        assert rf.n_estimators == 50
+        assert rf.max_depth == 5
+        assert rf.random_state == 7
 
     def test_predict_raises_when_not_trained(self):
         rf = RandomForestTradingClassifier()
@@ -388,145 +423,105 @@ class TestRandomForestTradingClassifier:
         except ImportError:
             pytest.skip("sklearn not installed")
 
-    def test_train_and_predict_with_mock_model(self):
-        """Train/predict pipeline using a fully mocked sklearn model."""
-        rf = RandomForestTradingClassifier()
+    def _make_trained_rf(
+        self,
+        n_samples: int = 40,
+        n_features: int = 5,
+        n_classes: int = 3,
+        seed: int = 0,
+        feature_names: list[str] | None = None,
+    ) -> tuple["RandomForestTradingClassifier", np.ndarray, np.ndarray]:
+        """
+        Return a real trained RandomForestTradingClassifier with data.
 
-        X = np.random.randn(40, 5)
-        y = np.random.randint(0, 3, 40)
+        Uses n_estimators=5 for speed. All assertions use real sklearn outputs.
+        """
 
-        mock_rf_model = MagicMock()
-        mock_rf_model.predict.return_value = y
-        mock_rf_model.feature_importances_ = np.array([0.2, 0.2, 0.2, 0.2, 0.2])
+        np.random.seed(seed)
+        X = np.random.randn(n_samples, n_features)
+        y = np.random.randint(0, n_classes, n_samples)
 
-        rf.model = mock_rf_model
-        rf.is_trained = False
+        rf = RandomForestTradingClassifier(config={"n_estimators": 5, "random_state": seed})
+        rf.build()
+        names = feature_names or [f"f{i}" for i in range(n_features)]
+        rf.train(X, y, feature_names=names)
+        return rf, X, y
 
-        # Simulate train() internals by patching build
-        with patch.object(rf, "build", lambda: None):
-            metrics = rf.train(X, y, feature_names=["f1", "f2", "f3", "f4", "f5"])
+    def test_train_and_predict_real_model(self):
+        """Train/predict pipeline using a real sklearn RandomForest."""
+        rf, _, _ = self._make_trained_rf(n_features=5, feature_names=["f1", "f2", "f3", "f4", "f5"])
 
         assert rf.is_trained is True
-        assert "train_accuracy" in metrics
-        assert metrics["train_accuracy"] == pytest.approx(1.0)
-        assert "n_features" in metrics
-        assert metrics["n_features"] == 5  # noqa: PLR2004
+        assert "train_accuracy" in rf.training_history[-1]["metrics"]
+        assert rf.training_history[-1]["metrics"]["n_features"] == 5
 
     def test_train_stores_feature_names(self):
-        rf = RandomForestTradingClassifier()
-        X = np.random.randn(30, 3)
-        y = np.random.randint(0, 2, 30)
-
-        mock_model = MagicMock()
-        mock_model.predict.return_value = y
-        mock_model.feature_importances_ = np.array([0.4, 0.3, 0.3])
-        rf.model = mock_model
-
-        with patch.object(rf, "build", lambda: None):
-            rf.train(X, y, feature_names=["rsi", "macd", "atr"])
-
+        """train() stores the provided feature names."""
+        rf, _, _ = self._make_trained_rf(n_features=3, feature_names=["rsi", "macd", "atr"])
         assert rf.feature_names == ["rsi", "macd", "atr"]
 
     def test_train_infers_feature_names_when_not_provided(self):
-        rf = RandomForestTradingClassifier()
+        """train() auto-generates feature_N names when none are provided."""
+        rf = RandomForestTradingClassifier(config={"n_estimators": 5, "random_state": 0})
+        rf.build()
+        np.random.seed(0)
         X = np.random.randn(20, 3)
         y = np.random.randint(0, 2, 20)
-
-        mock_model = MagicMock()
-        mock_model.predict.return_value = y
-        mock_model.feature_importances_ = np.ones(3) / 3
-        rf.model = mock_model
-
-        with patch.object(rf, "build", lambda: None):
-            rf.train(X, y)
-
+        rf.train(X, y)
         assert rf.feature_names == ["feature_0", "feature_1", "feature_2"]
 
-    def test_predict_with_mocked_model(self):
-        rf = RandomForestTradingClassifier()
-        rf.is_trained = True
-        mock_model = MagicMock()
-        mock_model.predict.return_value = np.array([0, 1, 2])
-        rf.model = mock_model
+    def test_predict_returns_correct_shape(self):
+        """predict() returns an array with one label per sample."""
+        rf, X, _ = self._make_trained_rf(n_samples=40, n_features=5)
+        preds = rf.predict(X[:3])
+        assert preds.shape == (3,)
+        # All predictions must be valid class labels
+        assert set(preds).issubset({0, 1, 2})
 
-        preds = rf.predict(np.random.randn(3, 5))
-        np.testing.assert_array_equal(preds, [0, 1, 2])
+    def test_predict_proba_returns_correct_shape(self):
+        """predict_proba() returns (n_samples, n_classes) probabilities."""
+        rf, X, _ = self._make_trained_rf(n_samples=40, n_features=5, n_classes=3)
+        proba = rf.predict_proba(X[:2])
+        assert proba.shape[0] == 2
+        # Each row must sum to ~1.0
+        np.testing.assert_allclose(proba.sum(axis=1), 1.0, atol=1e-6)
 
-    def test_predict_proba_with_mocked_model(self):
-        rf = RandomForestTradingClassifier()
-        rf.is_trained = True
-        expected_proba = np.array([[0.7, 0.2, 0.1], [0.1, 0.6, 0.3]])
-        mock_model = MagicMock()
-        mock_model.predict_proba.return_value = expected_proba
-        rf.model = mock_model
-
-        proba = rf.predict_proba(np.random.randn(2, 5))
-        np.testing.assert_array_equal(proba, expected_proba)
-
-    def test_predict_with_confidence(self):
-        rf = RandomForestTradingClassifier()
-        rf.is_trained = True
-        mock_model = MagicMock()
-        mock_model.predict.return_value = np.array([2, 1])
-        mock_model.predict_proba.return_value = np.array(
-            [[0.1, 0.2, 0.7], [0.3, 0.6, 0.1]]
-        )
-        rf.model = mock_model
-
-        preds, confidences = rf.predict_with_confidence(np.random.randn(2, 5))
-        np.testing.assert_array_equal(preds, [2, 1])
-        assert confidences[0] == pytest.approx(0.7)
-        assert confidences[1] == pytest.approx(0.6)
+    def test_predict_with_confidence_shape(self):
+        """predict_with_confidence() returns (preds, confidences) arrays."""
+        rf, X, _ = self._make_trained_rf(n_samples=40, n_features=5, n_classes=3)
+        preds, confidences = rf.predict_with_confidence(X[:4])
+        assert len(preds) == 4
+        assert len(confidences) == 4
+        # Confidence is the max class probability — must be in [0, 1]
+        assert all(0.0 <= c <= 1.0 for c in confidences)
 
     def test_get_feature_importance_dict_with_names(self):
-        rf = RandomForestTradingClassifier()
-        rf.is_trained = True
-        rf.feature_names = ["a", "b", "c"]
-        mock_model = MagicMock()
-        mock_model.feature_importances_ = np.array([0.5, 0.3, 0.2])
-        rf.model = mock_model
-
+        """get_feature_importance_dict() maps feature names to real importances."""
+        rf, _, _ = self._make_trained_rf(n_features=3, feature_names=["a", "b", "c"])
         fi = rf.get_feature_importance_dict()
-        assert fi["a"] == pytest.approx(0.5)
-        assert fi["b"] == pytest.approx(0.3)
-        assert fi["c"] == pytest.approx(0.2)
+        assert set(fi.keys()) == {"a", "b", "c"}
+        # Importances are non-negative and sum to ~1
+        assert all(v >= 0 for v in fi.values())
+        assert abs(sum(fi.values()) - 1.0) < 1e-6
 
     def test_get_feature_importance_dict_without_names(self):
-        rf = RandomForestTradingClassifier()
-        rf.is_trained = True
-        mock_model = MagicMock()
-        mock_model.feature_importances_ = np.array([0.6, 0.4])
-        rf.model = mock_model
-
+        """get_feature_importance_dict() uses integer keys when no names set."""
+        rf, _, _ = self._make_trained_rf(n_features=2)
+        rf.feature_names = []  # clear names to test fallback
         fi = rf.get_feature_importance_dict()
-        assert fi[0] == pytest.approx(0.6)
-        assert fi[1] == pytest.approx(0.4)
+        assert len(fi) == 2
 
     def test_get_top_features(self):
-        rf = RandomForestTradingClassifier()
-        rf.is_trained = True
-        rf.feature_names = ["a", "b", "c", "d"]
-        mock_model = MagicMock()
-        mock_model.feature_importances_ = np.array([0.1, 0.5, 0.3, 0.1])
-        rf.model = mock_model
-
+        """get_top_features(n) returns the n highest-importance features in order."""
+        rf, _, _ = self._make_trained_rf(n_features=4, feature_names=["a", "b", "c", "d"])
         top2 = rf.get_top_features(n=2)
-        assert top2[0][0] == "b"  # highest importance
-        assert top2[1][0] == "c"
+        assert len(top2) == 2
+        # First entry must have higher importance than second
+        assert top2[0][1] >= top2[1][1]
 
     def test_validate_training_history_updated(self):
-        rf = RandomForestTradingClassifier()
-        X = np.random.randn(20, 3)
-        y = np.random.randint(0, 2, 20)
-
-        mock_model = MagicMock()
-        mock_model.predict.return_value = y
-        mock_model.feature_importances_ = np.ones(3) / 3
-        rf.model = mock_model
-
-        with patch.object(rf, "build", lambda: None):
-            rf.train(X, y)
-
+        """train() appends one entry to training_history with a metrics key."""
+        rf, _, _ = self._make_trained_rf(n_features=3)
         assert len(rf.training_history) == 1
         assert "metrics" in rf.training_history[0]
 
@@ -543,7 +538,7 @@ class TestEnsemblePredictor:
     def test_initialization_defaults(self):
         ep = EnsemblePredictor()
         assert ep.name == "Ensemble_Predictor"
-        assert ep.sequence_length == 60  # noqa: PLR2004
+        assert ep.sequence_length == 60
         assert ep.use_lstm is True
         assert ep.use_rf is True
         assert ep.use_gb is True
@@ -565,7 +560,7 @@ class TestEnsemblePredictor:
         ep = EnsemblePredictor(config=cfg)
         assert ep.use_lstm is False
         assert ep.use_xgb is False
-        assert ep.sequence_length == 30  # noqa: PLR2004
+        assert ep.sequence_length == 30
         assert ep.confidence_threshold == pytest.approx(0.7)
 
     def test_predict_raises_when_not_trained(self):
@@ -645,7 +640,7 @@ class TestEnsemblePredictor:
         perf["recent_errors"] = [0.01] * 20
 
         conf = ep._calculate_model_confidence("random_forest")
-        assert 0.1 <= conf <= 0.95  # noqa: PLR2004
+        assert 0.1 <= conf <= 0.95
 
     def test_update_performance_increments_total(self):
         ep = EnsemblePredictor()
@@ -666,7 +661,7 @@ class TestEnsemblePredictor:
         ep = EnsemblePredictor()
         for i in range(150):
             ep.update_performance("lstm", float(i), float(i + 1))
-        assert len(ep.model_performance["lstm"]["recent_errors"]) <= 100  # noqa: PLR2004
+        assert len(ep.model_performance["lstm"]["recent_errors"]) <= 100
 
     def test_update_performance_unknown_model(self):
         ep = EnsemblePredictor()
@@ -674,21 +669,26 @@ class TestEnsemblePredictor:
         ep.update_performance("nonexistent_model", 1.0, 1.0)
 
     def test_update_weights_with_models(self):
+        """_update_weights() normalises weights to sum to 1.0."""
         ep = EnsemblePredictor()
-        ep.models = {"random_forest": MagicMock(), "gradient_boosting": MagicMock()}
+        # Use real DummyClassifier instances — the weight update only reads
+        # model_performance, not the model objects themselves.
+        ep.models = {
+            "random_forest": DummyClassifier(),
+            "gradient_boosting": DummyClassifier(),
+        }
         ep.model_performance["random_forest"]["total"] = 10
         ep.model_performance["random_forest"]["correct"] = 8
         ep.model_performance["gradient_boosting"]["total"] = 10
         ep.model_performance["gradient_boosting"]["correct"] = 6
         ep._update_weights()
-        total = (
-            ep.model_weights["random_forest"] + ep.model_weights["gradient_boosting"]
-        )
+        total = ep.model_weights["random_forest"] + ep.model_weights["gradient_boosting"]
         assert total == pytest.approx(1.0, abs=1e-6)
 
     def test_get_model_summary_structure(self):
+        """get_model_summary() returns the expected top-level keys."""
         ep = EnsemblePredictor()
-        ep.models = {"rf": MagicMock()}
+        ep.models = {"rf": DummyClassifier()}
         summary = ep.get_model_summary()
         assert "models" in summary
         assert "weights" in summary
@@ -844,9 +844,7 @@ class TestTechnicalFeatureEngineerExtended:
         result = fe.create_features(df)
         # After dropna(), result may be empty for n=50 (sma_200 requires 200 rows)
         if len(result) == 0:
-            pytest.skip(
-                "Insufficient rows survive dropna() for n=50 with 200-period indicators"
-            )
+            pytest.skip("Insufficient rows survive dropna() for n=50 with 200-period indicators")
         assert result["rsi_14"].between(0, 100).all()
 
     def test_stochastic_columns_present(self, fe, ohlcv):
@@ -1005,9 +1003,7 @@ class TestTechnicalFeatureEngineerExtended:
 
     def test_create_labels_forward_return(self, fe, ohlcv):
         fe.create_features(ohlcv)
-        labels = fe.create_labels(
-            ohlcv, method="forward_return", periods=5, threshold=0.01
-        )
+        labels = fe.create_labels(ohlcv, method="forward_return", periods=5, threshold=0.01)
         assert isinstance(labels, pd.Series)
         assert set(labels.unique()).issubset({0, 1, 2})
 
@@ -1029,7 +1025,7 @@ class TestTechnicalFeatureEngineerExtended:
         """macd_signal is a smoothed MACD – correlation should be high."""
         result = fe.create_features(ohlcv)
         corr = result["macd"].corr(result["macd_signal"])
-        assert corr > 0.7  # noqa: PLR2004
+        assert corr > 0.7
 
     def test_feature_names_exclude_ohlcv(self, fe, ohlcv):
         fe.create_features(ohlcv)

@@ -4,7 +4,8 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 import pytest
-from social.marketplace import StrategyMarketplace, StrategyListing
+
+from social.marketplace import StrategyListing, StrategyMarketplace
 
 
 class TestStrategyMarketplace:
@@ -31,15 +32,11 @@ class TestStrategyMarketplace:
         marketplace = StrategyMarketplace(test_config)
 
         # Setup listing
-        listing = StrategyListing(
-            id="strat-2", name="Premium Strategy", price=99.99, creator_id="creator-456"
-        )
+        listing = StrategyListing(id="strat-2", name="Premium Strategy", price=99.99, creator_id="creator-456")
         marketplace.list_strategy(listing)
 
         # Purchase
-        purchase = marketplace.purchase_strategy(
-            strategy_id="strat-2", buyer_id="buyer-789", payment_method="wallet"
-        )
+        purchase = marketplace.purchase_strategy(strategy_id="strat-2", buyer_id="buyer-789", payment_method="wallet")
 
         assert purchase["status"] == "completed"
         assert purchase["license_key"] is not None
@@ -71,5 +68,5 @@ def strategy(data):
         purchase = marketplace.purchase_strategy("strat-3", "buyer-1")
 
         # Platform takes 20%, creator gets 80%
-        assert purchase["platform_fee"] == 20.0  # noqa: PLR2004
-        assert purchase["creator_payout"] == 80.0  # noqa: PLR2004
+        assert purchase["platform_fee"] == 20.0
+        assert purchase["creator_payout"] == 80.0

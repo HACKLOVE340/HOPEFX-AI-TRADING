@@ -24,8 +24,7 @@ import logging
 import os
 import warnings
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -55,7 +54,7 @@ except ImportError:
     logger.error("xgboost not installed. Install: pip install xgboost>=2.0.0")
 
 try:
-    from sklearn.metrics import accuracy_score, classification_report, roc_auc_score  # noqa: F401
+    from sklearn.metrics import accuracy_score, roc_auc_score
     from sklearn.preprocessing import StandardScaler
 
     _SKLEARN = True
@@ -222,9 +221,7 @@ class FeatureEngineer:
         feats["vol_zscore"] = (v - vol_mean) / (vol_std + 1e-10)
 
         # Price position in range
-        feats["range_pos"] = (c - lo.rolling(20).min()) / (
-            h.rolling(20).max() - lo.rolling(20).min() + 1e-10
-        )
+        feats["range_pos"] = (c - lo.rolling(20).min()) / (h.rolling(20).max() - lo.rolling(20).min() + 1e-10)
 
         # Momentum
         feats["mom_10"] = c / c.shift(10) - 1
@@ -289,7 +286,7 @@ class StationarityTester:
             )
 
         series = series.dropna()
-        if len(series) < 30:  # noqa: PLR2004
+        if len(series) < 30:
             return StationarityResult(
                 feature=name,
                 adf_statistic=0.0,
@@ -379,8 +376,7 @@ class WalkForwardValidator:
         remaining = n - min_train
         if remaining < self._n_folds:
             raise ValueError(
-                f"Insufficient data for {self._n_folds} folds: "
-                f"n={n}, min_train={min_train}, remaining={remaining}",
+                f"Insufficient data for {self._n_folds} folds: n={n}, min_train={min_train}, remaining={remaining}",
             )
 
         fold_size = remaining // self._n_folds
@@ -509,7 +505,7 @@ class XGBoostPredictor:
     def load(self, path: str) -> None:
         import joblib
 
-        obj = joblib.load(path)
+        obj = joblib.load(path)  # nosec B301 - path set by class constructor from saved_models
         self._model = obj["model"]
         self._scaler = obj["scaler"]
         self._feature_names = obj["features"]
@@ -609,8 +605,7 @@ class MLPipeline:
         self._validation_report = report
 
         logger.info(
-            "MLPipeline: OOS accuracy=%.4f (target=%.2f) p=%.6f (target=%.4f) "
-            "AUC=%.4f folds=%d",
+            "MLPipeline: OOS accuracy=%.4f (target=%.2f) p=%.6f (target=%.4f) AUC=%.4f folds=%d",
             report.oos_accuracy,
             self.OOS_ACCURACY_TARGET,
             report.p_value,
@@ -634,9 +629,7 @@ class MLPipeline:
 
         # ── 4. Final model training (full dataset) ────────────────────────────
         if report.passes_accuracy_gate and report.passes_pvalue_gate:
-            logger.info(
-                "MLPipeline: gates passed — training final model on full dataset."
-            )
+            logger.info("MLPipeline: gates passed — training final model on full dataset.")
             self._predictor.fit(X, y)
             model_path = str(self._model_dir / "xgb_xauusd.pkl")
             self._predictor.save(model_path)
@@ -657,10 +650,10 @@ class MLPipeline:
         n = len(X)
         splits = self._validator.split(n)
 
-        fold_results: list[WalkForwardFold] = []
-        all_oos_preds: list[int] = []
-        all_oos_true: list[int] = []
-        all_oos_proba: list[float] = []
+        fold_results: list[WalkForwardFold] = field(default_factory=list)
+        all_oos_preds: list[int] = field(default_factory=list)
+        all_oos_true: list[int] = field(default_factory=list)
+        all_oos_proba: list[float] = field(default_factory=list)
 
         for i, (train_idx, test_idx) in enumerate(splits):
             X_train = X.iloc[list(train_idx)]
@@ -682,9 +675,9 @@ class MLPipeline:
 
             fold = WalkForwardFold(
                 fold_idx=i,
-                train_start=list(train_idx)[0],
+                train_start=next(iter(train_idx)),
                 train_end=list(train_idx)[-1],
-                test_start=list(test_idx)[0],
+                test_start=next(iter(test_idx)),
                 test_end=list(test_idx)[-1],
                 accuracy=acc,
                 auc=auc,
@@ -742,7 +735,7 @@ class MLPipeline:
     def _save_report(self, report: ValidationReport) -> None:
         self._model_dir.mkdir(parents=True, exist_ok=True)
         path = self._model_dir / "validation_report.json"
-        with open(path, "w") as f:
+        with Path(path).open("w", encoding="utf-8") as f:
             json.dump(report.to_dict(), f, indent=2)
         logger.info("MLPipeline: validation report saved to %s", path)
 

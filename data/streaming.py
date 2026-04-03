@@ -18,10 +18,9 @@ import logging
 import threading
 import time
 from collections import defaultdict, deque
-from datetime import datetime, timezone
-UTC = timezone.utc
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from enum import Enum
 
 logger = logging.getLogger(__name__)
@@ -243,14 +242,10 @@ class StreamingService:
         self._tick_buffers: dict[str, deque] = {}
 
         # Bar aggregators per timeframe
-        self._aggregators: dict[int, TickAggregator] = {
-            tf: TickAggregator(tf) for tf in self._timeframes
-        }
+        self._aggregators: dict[int, TickAggregator] = {tf: TickAggregator(tf) for tf in self._timeframes}
 
         # Completed bars per symbol per timeframe
-        self._bars: dict[str, dict[str, deque]] = defaultdict(
-            lambda: defaultdict(lambda: deque(maxlen=500))
-        )
+        self._bars: dict[str, dict[str, deque]] = defaultdict(lambda: defaultdict(lambda: deque(maxlen=500)))
 
         # Thread safety
         self._lock = threading.RLock()
@@ -288,9 +283,7 @@ class StreamingService:
         """Unsubscribe a callback from a symbol."""
         with self._lock:
             if symbol == "*":
-                self._global_listeners = [
-                    c for c in self._global_listeners if c is not callback
-                ]
+                self._global_listeners = [c for c in self._global_listeners if c is not callback]
             else:
                 self._subscriptions[symbol].discard(callback)
 
@@ -317,7 +310,7 @@ class StreamingService:
 
             # Aggregate into bars
             completed_bars = []
-            for _tf, aggregator in self._aggregators.items():
+            for aggregator in self._aggregators.values():
                 bar = aggregator.add_tick(tick)
                 if bar is not None:
                     self._bars[tick.symbol][bar.timeframe].append(bar)
@@ -505,8 +498,9 @@ def create_streaming_router(service: StreamingService):
     Returns:
         FastAPI APIRouter
     """
-    from fastapi import APIRouter, WebSocket, WebSocketDisconnect
     import json
+
+    from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
     router = APIRouter(prefix="/api/stream", tags=["Streaming"])
 
@@ -530,7 +524,7 @@ def create_streaming_router(service: StreamingService):
     @router.websocket("/{symbol}/ws")
     async def websocket_stream(websocket: WebSocket, symbol: str):
         """WebSocket endpoint for real-time tick streaming."""
-        from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+        from rate_limiting.websocket_limiter import get_client_ip, get_ws_limiter
 
         limiter = get_ws_limiter()
         client_ip = get_client_ip(websocket)
@@ -556,7 +550,7 @@ def create_streaming_router(service: StreamingService):
 
                 await asyncio.sleep(0.01)
         except WebSocketDisconnect:
-            pass  # normal client disconnect
+            ...  # nosec B110
         except Exception as exc:
             logger.debug("websocket_stream(%s): connection error: %s", symbol, exc)
         finally:

@@ -13,10 +13,10 @@ import logging
 import threading
 import time
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
-from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -66,12 +66,10 @@ class MetricCollector:
         label_key = json.dumps(labels or {}, sort_keys=True)
 
         with self._lock:
-            self._values[label_key].append(
-                MetricValue(value=value, timestamp=time.time(), labels=labels or {})
-            )
+            self._values[label_key].append(MetricValue(value=value, timestamp=time.time(), labels=labels or {}))
 
             # Keep only last 1000 values per label set
-            if len(self._values[label_key]) > 1000:  # noqa: PLR2004
+            if len(self._values[label_key]) > 1000:
                 self._values[label_key] = self._values[label_key][-1000:]
 
     def get_values(self, labels: dict[str, str] | None = None) -> list[MetricValue]:
@@ -163,9 +161,7 @@ class Histogram(MetricCollector):
     ):
         super().__init__(name, MetricType.HISTOGRAM, description, labels)
         self.buckets = buckets or self.DEFAULT_BUCKETS
-        self._bucket_counts: dict[str, list[int]] = defaultdict(
-            lambda: [0] * len(self.buckets)
-        )
+        self._bucket_counts: dict[str, list[int]] = defaultdict(lambda: [0] * len(self.buckets))
         self._sums: dict[str, float] = defaultdict(float)
         self._counts: dict[str, int] = defaultdict(int)
 
@@ -227,11 +223,11 @@ class MetricsRegistry:
         return cls._instance
 
     def __init__(self):
-        if self._initialized:
+        if self._initialized:  # pylint: disable=access-member-before-definition
             return
 
         with self._lock:
-            if self._initialized:
+            if self._initialized:  # pylint: disable=access-member-before-definition
                 return
 
             self._collectors: dict[str, MetricCollector] = {}
@@ -245,9 +241,7 @@ class MetricsRegistry:
         """Initialize default HOPEFX metrics"""
 
         # Trading metrics
-        self.create_counter(
-            "trades_total", "Total number of trades", ["symbol", "side", "outcome"]
-        )
+        self.create_counter("trades_total", "Total number of trades", ["symbol", "side", "outcome"])
         self.create_gauge("positions_open", "Number of open positions", ["symbol"])
         self.create_gauge("account_equity", "Current account equity")
         self.create_gauge("account_balance", "Current account balance")
@@ -286,30 +280,20 @@ class MetricsRegistry:
         self.create_counter("circuit_breaker_opens_total", "Circuit breaker opens")
 
         # Business metrics
-        self.create_counter(
-            "signals_generated_total", "Trading signals generated", ["strategy"]
-        )
-        self.create_counter(
-            "orders_submitted_total", "Orders submitted", ["symbol", "type"]
-        )
+        self.create_counter("signals_generated_total", "Trading signals generated", ["strategy"])
+        self.create_counter("orders_submitted_total", "Orders submitted", ["symbol", "type"])
         self.create_counter("orders_filled_total", "Orders filled", ["symbol", "type"])
-        self.create_counter(
-            "orders_rejected_total", "Orders rejected", ["symbol", "reason"]
-        )
+        self.create_counter("orders_rejected_total", "Orders rejected", ["symbol", "reason"])
 
         # ── Grafana-aligned trading metrics ──────────────────────────────────
         # Counters / gauges that Grafana dashboards query by name.
-        self.create_counter(
-            "hopefx_signals_total", "Total trading signals generated", ["direction"]
-        )
+        self.create_counter("hopefx_signals_total", "Total trading signals generated", ["direction"])
         self.create_histogram(
             "hopefx_signal_confidence_bucket",
             "Signal confidence score distribution",
             buckets=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
         )
-        self.create_gauge(
-            "hopefx_model_accuracy_pct", "Rolling model prediction accuracy (0–100)"
-        )
+        self.create_gauge("hopefx_model_accuracy_pct", "Rolling model prediction accuracy (0–100)")
         self.create_gauge(
             "hopefx_market_regime",
             "Current market regime: 0=ranging, 1=trending, 2=volatile",
@@ -328,9 +312,7 @@ class MetricsRegistry:
             "Broker connection status (1=connected, 0=disconnected)",
             ["broker"],
         )
-        self.create_counter(
-            "hopefx_broker_failover_total", "Number of broker failover events"
-        )
+        self.create_counter("hopefx_broker_failover_total", "Number of broker failover events")
         self.create_counter(
             "hopefx_broker_rejections_total",
             "Number of orders rejected by the broker",
@@ -379,9 +361,7 @@ class MetricsRegistry:
             ["broker"],
             buckets=[1, 5, 10, 25, 50, 100, 250, 500, 1000],
         )
-        self.create_gauge(
-            "hopefx_db_pool_active", "Active database connection pool connections"
-        )
+        self.create_gauge("hopefx_db_pool_active", "Active database connection pool connections")
         self.create_gauge("hopefx_equity", "Current account equity in account currency")
         self.create_gauge(
             "hopefx_infra_active_positions",
@@ -391,24 +371,16 @@ class MetricsRegistry:
             "hopefx_infra_pnl_realized",
             "Realized P&L for the current trading day (infrastructure layer)",
         )
-        self.create_gauge(
-            "hopefx_drawdown_current", "Current drawdown as a percentage (0–100)"
-        )
-        self.create_gauge(
-            "hopefx_model_drift_score", "Feature drift score (0=no drift, 1=full drift)"
-        )
+        self.create_gauge("hopefx_drawdown_current", "Current drawdown as a percentage (0–100)")
+        self.create_gauge("hopefx_model_drift_score", "Feature drift score (0=no drift, 1=full drift)")
 
-    def create_counter(
-        self, name: str, description: str, labels: list[str] | None = None
-    ) -> Counter:
+    def create_counter(self, name: str, description: str, labels: list[str] | None = None) -> Counter:
         """Create and register a counter"""
         counter = Counter(name, description, labels)
         self._collectors[name] = counter
         return counter
 
-    def create_gauge(
-        self, name: str, description: str, labels: list[str] | None = None
-    ) -> Gauge:
+    def create_gauge(self, name: str, description: str, labels: list[str] | None = None) -> Gauge:
         """Create and register a gauge"""
         gauge = Gauge(name, description, labels)
         self._collectors[name] = gauge
@@ -441,9 +413,7 @@ class MetricsRegistry:
         """Record trade metrics"""
         outcome = "win" if pnl > 0 else "loss" if pnl < 0 else "breakeven"
 
-        self.get_collector("trades_total").inc(
-            1, {"symbol": symbol, "side": side, "outcome": outcome}
-        )
+        self.get_collector("trades_total").inc(1, {"symbol": symbol, "side": side, "outcome": outcome})
         self.get_collector("trade_pnl").observe(pnl, {"symbol": symbol})
 
         # Update equity (approximate)
@@ -463,9 +433,7 @@ class MetricsRegistry:
 
     def record_error(self, component: str, error_type: str):
         """Record error"""
-        self.get_collector("errors_total").inc(
-            1, {"component": component, "type": error_type}
-        )
+        self.get_collector("errors_total").inc(1, {"component": component, "type": error_type})
 
     def record_cache_hit(self, cache_type: str = "redis"):
         """Record cache hit"""
@@ -487,11 +455,10 @@ class MetricsRegistry:
 
             self.get_collector("system_cpu_percent").set(cpu)
             self.get_collector("system_memory_percent").set(memory.percent)
-            self.get_collector("system_disk_free_gb").set(
-                disk.free / 1024 / 1024 / 1024
-            )
+            self.get_collector("system_disk_free_gb").set(disk.free / 1024 / 1024 / 1024)
         except Exception as e:
-            logger.error(f"Error updating system metrics: {e}")
+            logger.error("Error updating system metrics: %s", e)
+
 
     def register_custom_collector(self, collector_fn: Callable):
         """Register a custom metrics collector function"""
@@ -518,7 +485,8 @@ class MetricsRegistry:
                 custom_metrics = collector_fn()
                 metrics["collectors"].update(custom_metrics)
             except Exception as e:
-                logger.error(f"Custom collector error: {e}")
+                logger.error("Custom collector error: %s", e)
+
 
         return metrics
 
@@ -531,7 +499,7 @@ class MetricsRegistry:
             lines.append(f"# TYPE {name} {collector.metric_type.value}")
 
             if isinstance(collector, Counter) or isinstance(collector, Gauge):
-                for _label_key, values in collector.get_all_values().items():
+                for values in collector.get_all_values().values():
                     if values:
                         labels = values[-1].labels
                         label_str = ",".join([f'{k}="{v}"' for k, v in labels.items()])
@@ -548,20 +516,12 @@ class MetricsRegistry:
                     for i, bucket in enumerate(collector.buckets):
                         bucket_labels = labels.copy()
                         bucket_labels["le"] = str(bucket)
-                        bucket_str = ",".join(
-                            [f'{k}="{v}"' for k, v in bucket_labels.items()]
-                        )
-                        lines.append(
-                            f"{name}_bucket{{{bucket_str}}} {bucket_counts[i]}"
-                        )
+                        bucket_str = ",".join([f'{k}="{v}"' for k, v in bucket_labels.items()])
+                        lines.append(f"{name}_bucket{{{bucket_str}}} {bucket_counts[i]}")
 
                     # Sum and count
-                    lines.append(
-                        f"{name}_sum{{{label_str}}} {collector.get_sum(labels)}"
-                    )
-                    lines.append(
-                        f"{name}_count{{{label_str}}} {collector.get_count(labels)}"
-                    )
+                    lines.append(f"{name}_sum{{{label_str}}} {collector.get_sum(labels)}")
+                    lines.append(f"{name}_count{{{label_str}}} {collector.get_count(labels)}")
 
             lines.append("")  # Empty line between metrics
 
@@ -576,7 +536,8 @@ class MetricsRegistry:
                 self.update_system_metrics()
                 await asyncio.sleep(interval)
 
-        asyncio.create_task(collect())
+        _t = asyncio.create_task(collect())
+        _t.add_done_callback(lambda _: None)
 
     def clear(self):
         """Clear all metrics (use with caution)"""
