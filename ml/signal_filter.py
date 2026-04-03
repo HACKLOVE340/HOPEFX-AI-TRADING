@@ -94,6 +94,20 @@ _CB_MIN_ACCURACY = float(os.getenv("CB_MIN_ACCURACY", "0.45"))
 # Circuit-breaker: minimum outcomes before the breaker can trip
 _CB_MIN_OUTCOMES = int(os.getenv("CB_MIN_OUTCOMES", "30"))
 
+# Lazy import — avoids circular dependency; called only inside _gate_regime
+def _is_parabolic(ohlcv: Any) -> bool:
+    """Return True when OHLCV data is in a parabolic-bubble or post-bubble regime."""
+    try:
+        import pandas as pd
+        from ml.regime_conditional import is_parabolic_bubble_regime
+
+        df = ohlcv if isinstance(ohlcv, pd.DataFrame) else None
+        if df is not None and "close" in df.columns:
+            return is_parabolic_bubble_regime(df)
+    except Exception as exc:
+        logger.debug("_is_parabolic: import/call failed: %s", exc)
+    return False
+
 
 # ── Prometheus metrics (optional) ────────────────────────────────────────────
 
@@ -488,10 +502,15 @@ class SignalFilter:
         Determine the current market regime for threshold tightening.
 
         Priority:
-        1. Orchestrator ML features (macro_is_blackout, micro_ofi)
-        2. OHLCV-based Hurst + volatility (same logic as _gate_regime)
-        3. "unknown" fallback
+        1. Parabolic-bubble check (always evaluated first — fold-2 filter)
+        2. Orchestrator ML features (macro_is_blackout, micro_ofi)
+        3. OHLCV-based Hurst + volatility (same logic as _gate_regime)
+        4. "unknown" fallback
         """
+        # ── Priority 1: parabolic-bubble override ─────────────────────────────
+        if ohlcv is not None and _is_parabolic(ohlcv):
+            return "HIGH_VOL_PARABOLIC"
+
         # Try orchestrator first
         try:
             from data_layer.orchestrator import orchestrator
@@ -553,6 +572,9 @@ class SignalFilter:
             tighten = 0.05
         elif regime == "HIGH_VOL":
             tighten = 0.03
+        elif regime == "HIGH_VOL_PARABOLIC":
+            # Parabolic regime: very high tighten — in practice _gate_regime blocks first
+            tighten = 0.10
 
         threshold_long = _THRESHOLD_LONG + tighten
         threshold_short = _THRESHOLD_SHORT - tighten
@@ -647,6 +669,8 @@ class SignalFilter:
         Gate 3: Block signals in regimes where the model historically underperforms.
 
         Uses a lightweight volatility-based regime classifier:
+        - HIGH_VOL_PARABOLIC: parabolic blow-off or post-bubble crash → block all signals
+          (Fold-2 failure: 44.4% accuracy in 1979-1981/2010-2012 gold bubble regimes)
         - HIGH_VOL: realised vol > 2× 90-day median → block (model accuracy drops)
         - MEAN_REVERTING: price oscillates around mean → block directional signals
 
@@ -656,6 +680,21 @@ class SignalFilter:
             closes = np.array(ohlcv["close"].values[-100:], dtype=float)
             if len(closes) < 20:
                 return FilterResult(passed=True, confidence=confidence, regime="unknown")
+
+            # ── HIGH_VOL_PARABOLIC: fold-2 failure regime ─────────────────────
+            # Check before generic HIGH_VOL because parabolic regimes are more severe
+            if _is_parabolic(ohlcv):
+                return FilterResult(
+                    passed=False,
+                    gate="regime",
+                    reason=(
+                        "HIGH_VOL_PARABOLIC regime: parabolic blow-off or post-bubble crash detected. "
+                        "Model accuracy drops to below-chance (Fold-2: 44.4%). "
+                        "See docs/FOLD2_REGIME_ANALYSIS.md for details."
+                    ),
+                    confidence=confidence,
+                    regime="HIGH_VOL_PARABOLIC",
+                )
 
             # Realised vol: 14-bar rolling std of log returns
             log_ret = np.diff(np.log(closes))
