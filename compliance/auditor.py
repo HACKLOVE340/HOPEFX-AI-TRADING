@@ -16,6 +16,7 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +143,7 @@ class ImmutableAuditLog:
             + "\n"
         )
         try:
-            with open(filename, "a", encoding="utf-8") as fh:
+            with Path(filename).open("a", encoding="utf-8") as fh:
                 fh.write(line)
         except Exception as exc:
             logger.error("Audit sync write failed: %s", exc)

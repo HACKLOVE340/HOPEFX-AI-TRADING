@@ -49,7 +49,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC
 from pathlib import Path
 from typing import Any
@@ -664,7 +664,7 @@ def walk_forward_eval(
 
     total = len(df)
     fold_size = total // n_folds
-    folds_results: list[WalkForwardFold] = []
+    folds_results: list[WalkForwardFold] = field(default_factory=list)
 
     logger.info(
         "Walk-forward eval: %d candles, %d folds, %d steps/fold",

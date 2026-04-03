@@ -168,10 +168,10 @@ def _setup_env(args: argparse.Namespace) -> None:
             cfg_path = Path(args.config)
             cfg = {}
             if cfg_path.exists():
-                with open(cfg_path, encoding="utf-8") as f:
+                with Path(cfg_path).open(encoding="utf-8") as f:
                     cfg = json.load(f)
             cfg["enabled"] = True
-            with open(cfg_path, "w", encoding="utf-8") as f:
+            with Path(cfg_path).open("w", encoding="utf-8") as f:
                 json.dump(cfg, f, indent=2)
             logger.info("Prop-firm enforcement ENABLED in %s", cfg_path)
         except Exception as exc:

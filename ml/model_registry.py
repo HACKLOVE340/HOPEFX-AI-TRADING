@@ -113,7 +113,7 @@ _REQUIRE_SHARPE_GATE: bool = os.getenv("REGISTRY_REQUIRE_SHARPE_GATE", "true").l
 def sha256_file(path: Path, chunk: int = 1 << 20) -> str:
     """Return the hex SHA-256 digest of *path* (streaming, 1 MiB chunks)."""
     h = hashlib.sha256()
-    with open(path, "rb") as fh:
+    with Path(path).open("rb") as fh:
         while True:
             block = fh.read(chunk)
             if not block:

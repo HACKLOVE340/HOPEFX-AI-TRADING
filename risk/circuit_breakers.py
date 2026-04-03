@@ -266,9 +266,7 @@ class CircuitBreaker:
                 if not remaining:
                     logger.info("✅ All positions closed successfully")
                     break
-                logger.warning(
-                    f"⚠️ {len(remaining)} positions still open, retrying...",
-                )
+                logger.warning("⚠️ %s positions still open, retrying...", len(remaining))
 
             except Exception as e:
                 logger.error("Kill switch attempt %s failed: %s", attempt + 1, e)
@@ -278,9 +276,7 @@ class CircuitBreaker:
         # Final verification
         final_positions = self.broker.get_positions()
         if final_positions:
-            logger.critical(
-                f"🚨 FAILED TO CLOSE {len(final_positions)} POSITIONS - MANUAL INTERVENTION REQUIRED",
-            )
+            logger.critical("🚨 FAILED TO CLOSE %s POSITIONS - MANUAL INTERVENTION REQUIRED", len(final_positions))
             # Send emergency notification
             self._send_emergency_alert(
                 f"Kill switch partial failure: {len(final_positions)} positions remain",
@@ -290,9 +286,7 @@ class CircuitBreaker:
         """Schedule automatic recovery attempt after cooldown"""
         cooldown = self.limits.circuit_breaker_cooldown_minutes * 60
 
-        logger.info(
-            f"⏱️ Circuit breaker active. Recovery attempt in {self.limits.circuit_breaker_cooldown_minutes} minutes",
-        )
+        logger.info("⏱️ Circuit breaker active. Recovery attempt in %s minutes", self.limits.circuit_breaker_cooldown_minutes)
 
         await asyncio.sleep(cooldown)
 

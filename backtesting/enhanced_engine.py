@@ -48,12 +48,13 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import Enum, IntEnum, auto
+from pathlib import Path
 from typing import Any
 
 # Performance libraries — imported for availability checks; used conditionally
 try:
-    import numba  # pylint: disable=unused-import
-    from numba import cuda, jit, njit, prange  # pylint: disable=unused-import
+    import numba  # pylint: disable=unused-import  # noqa: F401
+    from numba import cuda, jit, njit, prange  # pylint: disable=unused-import  # noqa: F401
 
     NUMBA_AVAILABLE = True
 except ImportError:
@@ -61,16 +62,16 @@ except ImportError:
     warnings.warn("Numba unavailable - performance degraded", stacklevel=2)
 
 try:
-    import cupy as cp  # pylint: disable=unused-import
-    from cupy.cuda import Device  # pylint: disable=unused-import
+    import cupy as cp  # pylint: disable=unused-import  # noqa: F401
+    from cupy.cuda import Device  # pylint: disable=unused-import  # noqa: F401
 
     CUDA_AVAILABLE = True
 except ImportError:
     CUDA_AVAILABLE = False
 
 try:
-    from scipy import interpolate, optimize, stats  # pylint: disable=unused-import
-    from scipy.optimize import differential_evolution, minimize  # pylint: disable=unused-import
+    from scipy import interpolate, optimize, stats  # pylint: disable=unused-import  # noqa: F401
+    from scipy.optimize import differential_evolution, minimize  # pylint: disable=unused-import  # noqa: F401
 
     SCIPY_AVAILABLE = True
 except ImportError:
@@ -1394,10 +1395,7 @@ class InstitutionalRiskManager:
             "daily_pnl": self.daily_pnl,
         }
         self.risk_events.append(event)
-        logger.log(
-            logging.CRITICAL if severity >= RiskEventSeverity.CRITICAL else logging.WARNING,
-            f"Risk Event [{severity.name}]: {message}",
-        )
+        logger.log("Risk Event [%s]: %s", severity.name, message, logging.CRITICAL if severity >= RiskEventSeverity.CRITICAL else logging.WARNING)
 
     def _estimate_var_change(self, symbol: str, size: float, price: float) -> float:
         """Estimate how VaR changes with new position"""
@@ -2178,7 +2176,7 @@ class EnhancedBacktestEngine:
             with gzip.open(filepath, "wt") as f:
                 json.dump(state, f, default=str, indent=2)
         else:
-            with open(filepath, "w", encoding="utf-8") as f:
+            with Path(filepath).open("w", encoding="utf-8") as f:
                 json.dump(state, f, default=str, indent=2)
 
         logger.info("State saved to %s (%s)", filepath, 'compressed' if compress else 'raw')

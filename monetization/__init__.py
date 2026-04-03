@@ -36,7 +36,7 @@ from .affiliate import (
     AffiliateManager,
     AffiliateStatus,
     Payout,
-    PayoutStatus,
+    PayoutStatus,  # noqa: F401
     Referral,
     ReferralStatus,
     affiliate_manager,
@@ -82,7 +82,7 @@ from .license import LicenseValidator, ValidationResult, license_validator
 # Strategy Marketplace
 from .marketplace import (
     MarketplaceStrategy,
-    PurchaseStatus,
+    PurchaseStatus,  # noqa: F401
     StrategyCategory,
     StrategyLicenseType,
     StrategyMarketplace,

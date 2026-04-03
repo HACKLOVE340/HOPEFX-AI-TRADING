@@ -30,7 +30,7 @@ import os
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Any
+from typing import Any, ClassVar
 
 from .pricing import BillingCycle, SubscriptionTier
 
@@ -172,7 +172,7 @@ class StripeIntegration:
     """
 
     # Price IDs loaded from env vars configured in the Stripe Dashboard.
-    PRICE_IDS: dict[tuple, str | None] = {
+    PRICE_IDS: ClassVar[dict[tuple, str | None]] = {
         (SubscriptionTier.FREE, BillingCycle.MONTHLY): None,
         (SubscriptionTier.STARTER, BillingCycle.MONTHLY): os.getenv(
             "STRIPE_PRICE_STARTER_MONTHLY", "price_starter_monthly"

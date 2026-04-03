@@ -68,7 +68,7 @@ except ImportError:
     warnings.warn("TensorFlow not available - deep learning disabled", stacklevel=2)
 
 try:
-    import torch
+    import torch  # noqa: F401
     PYTORCH_AVAILABLE = True
 except ImportError:
     PYTORCH_AVAILABLE = False
@@ -101,13 +101,13 @@ except ImportError:
     LIGHTGBM_AVAILABLE = False
 
 try:
-    import optuna
+    import optuna  # noqa: F401
     OPTUNA_AVAILABLE = True
 except ImportError:
     OPTUNA_AVAILABLE = False
 
 try:
-    import shap
+    import shap  # noqa: F401
     SHAP_AVAILABLE = True
 except ImportError:
     SHAP_AVAILABLE = False
@@ -1884,10 +1884,12 @@ class EnhancedMLPredictor:
             if recent_accuracy < trigger_threshold:
                 self._consecutive_degraded_windows = getattr(self, "_consecutive_degraded_windows", 0) + 1
                 logger.warning(
-                    f"Accuracy degraded: recent={recent_accuracy:.1%} "
-                    f"baseline={baseline:.1%} "
-                    f"threshold={trigger_threshold:.1%} "
-                    f"(window {self._consecutive_degraded_windows}/{consecutive_windows_required})"
+                    "Accuracy degraded: recent=%s baseline=%s threshold=%s (window %s/%s)",
+                    f"{recent_accuracy:.1%}",
+                    f"{baseline:.1%}",
+                    f"{trigger_threshold:.1%}",
+                    self._consecutive_degraded_windows,
+                    consecutive_windows_required,
                 )
 
                 if self._consecutive_degraded_windows >= consecutive_windows_required:
@@ -1896,9 +1898,11 @@ class EnhancedMLPredictor:
                     cooldown_hours = 24
                     if last_retrain is None or (now - last_retrain).total_seconds() > cooldown_hours * 3600:
                         logger.warning(
-                            f"Triggering online update after {consecutive_windows_required} "
-                            f"consecutive degraded windows. "
-                            f"Accuracy {recent_accuracy:.1%} vs baseline {baseline:.1%}."
+                            "Triggering online update after %s consecutive degraded windows. "
+                            "Accuracy %s vs baseline %s.",
+                            consecutive_windows_required,
+                            f"{recent_accuracy:.1%}",
+                            f"{baseline:.1%}",
                         )
                         self._last_retrain_time = now
                         self._consecutive_degraded_windows = 0

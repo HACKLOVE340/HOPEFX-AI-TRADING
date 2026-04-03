@@ -600,7 +600,7 @@ class PipelineOrchestrator:
             "val_report": {k: v for k, v in val_report.items() if k != "classification_report"},
             "test_report": {k: v for k, v in test_report.items() if k != "classification_report"},
         }
-        with open(run_dir / "run_meta.json", "w", encoding="utf-8") as f:
+        with Path(run_dir / "run_meta.json").open("w", encoding="utf-8") as f:
             json.dump(meta, f, indent=2, default=str)
 
         logger.info("Artefacts saved → %s", run_dir)

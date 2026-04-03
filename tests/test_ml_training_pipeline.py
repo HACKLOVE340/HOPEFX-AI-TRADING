@@ -191,7 +191,7 @@ def test_advanced_training_report_exists():
 
 
 def test_advanced_training_report_keys():
-    with open(MODELS / "advanced_training_report.json", encoding="utf-8") as f:
+    with Path(MODELS / "advanced_training_report.json").open(encoding="utf-8") as f:
         report = json.load(f)
     required = ["symbol", "years", "feature_count", "walkforward", "trained_at"]
     for key in required:
@@ -199,7 +199,7 @@ def test_advanced_training_report_keys():
 
 
 def test_advanced_training_report_feature_count(monkeypatch):
-    with open(MODELS / "advanced_training_report.json", encoding="utf-8") as f:
+    with Path(MODELS / "advanced_training_report.json").open(encoding="utf-8") as f:
         report = json.load(f)
     fc = report.get("feature_count", 0)
     # Smoke mode uses 100 features (no macro); full run uses 122

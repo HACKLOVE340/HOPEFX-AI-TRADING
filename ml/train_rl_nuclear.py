@@ -55,7 +55,7 @@ from __future__ import annotations
 import argparse
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 
@@ -112,7 +112,7 @@ if _GYM_AVAILABLE:
         low severity costs P&L).
         """
 
-        metadata = {"render_modes": []}
+        metadata: ClassVar[dict] = {"render_modes": []}
 
         def __init__(
             self,
@@ -354,8 +354,8 @@ def train(
 
     # progress_bar requires tqdm+rich; degrade gracefully if absent
     try:
-        import rich  # pylint: disable=unused-import
-        import tqdm  # pylint: disable=unused-import
+        import rich  # pylint: disable=unused-import  # noqa: F401
+        import tqdm  # pylint: disable=unused-import  # noqa: F401
 
         _progress_bar = True
     except ImportError:

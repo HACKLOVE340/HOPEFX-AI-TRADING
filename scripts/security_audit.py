@@ -39,7 +39,7 @@ def scan_file(filepath: Path) -> list[tuple[int, str, str]]:
     issues = []
 
     try:
-        with open(filepath, encoding="utf-8") as f:
+        with Path(filepath).open(encoding="utf-8") as f:
             content = f.read()
             lines = content.split("\n")
     except (OSError, UnicodeDecodeError):
@@ -73,12 +73,12 @@ def check_env_file() -> list[str]:
         # Check if .env is in .gitignore
         gitignore = Path(".gitignore")
         if gitignore.exists():
-            with open(gitignore, encoding="utf-8") as f:
+            with Path(gitignore).open(encoding="utf-8") as f:
                 if ".env" not in f.read():
                     issues.append("CRITICAL: .env not in .gitignore")
 
         # Check for default/example values
-        with open(env_file, encoding="utf-8") as f:
+        with Path(env_file).open(encoding="utf-8") as f:
             content = f.read()
             if "your-" in content or "example" in content.lower():
                 issues.append("WARNING: .env contains placeholder values")

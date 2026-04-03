@@ -86,7 +86,7 @@ class MetalsDevFeed(GoldFeedBase):
         during the connection window.
         """
         try:
-            import websockets  # pylint: disable=unused-import  # type: ignore[import]
+            import websockets  # pylint: disable=unused-import  # type: ignore[import]  # noqa: F401
         except ImportError:
             logger.debug("Metals.dev WebSocket: websockets package not installed")
             return

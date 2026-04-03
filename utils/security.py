@@ -309,7 +309,8 @@ class SecurityAuditor:
 
             self.audit_logger.log(
                 log_level,
-                f"[{event_type.value}] {action} on {resource} - Success: {success} - User: {user_id or 'N/A'}",
+                "[%s] %s on %s - Success: %s - User: %s",
+                event_type.value, action, resource, success, user_id or "N/A",
             )
 
         return event

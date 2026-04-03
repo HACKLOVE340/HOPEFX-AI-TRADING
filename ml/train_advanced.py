@@ -885,7 +885,7 @@ def oos_eval_advanced(
         ),
     }
     meta_path = MODEL_DIR / "advanced_oos_meta.json"
-    with open(meta_path, "w", encoding="utf-8") as f:
+    with Path(meta_path).open("w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2)
     logger.info("Saved OOS metadata → %s", meta_path)
 
@@ -1142,7 +1142,7 @@ def main():
     }
 
     report_path = MODEL_DIR / "advanced_training_report.json"
-    with open(report_path, "w", encoding="utf-8") as f:
+    with Path(report_path).open("w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
     logger.info("Report saved → %s", report_path)
 

@@ -171,7 +171,7 @@ def run_pipeline(
         }
 
     manifest_path = Path(out_dir) / "manifest.json"
-    with open(manifest_path, "w", encoding="utf-8") as f:
+    with Path(manifest_path).open("w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
     logger.info("Manifest written: %s", manifest_path)
 

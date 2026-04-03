@@ -99,7 +99,7 @@ class PaperTradingGate:
         }
         if self._state_path.exists():
             try:
-                with open(self._state_path, encoding="utf-8") as f:
+                with Path(self._state_path).open(encoding="utf-8") as f:
                     loaded = json.load(f)
                 # Merge: file values override defaults
                 default.update(loaded)
@@ -112,7 +112,7 @@ class PaperTradingGate:
         """Persist current state to disk."""
         try:
             self._state_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self._state_path, "w", encoding="utf-8") as f:
+            with Path(self._state_path).open("w", encoding="utf-8") as f:
                 json.dump(self._state, f, indent=2, default=str)
         except Exception as exc:
             logger.warning("PaperTradingGate: state save failed: %s", exc)

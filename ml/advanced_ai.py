@@ -451,7 +451,7 @@ class VectorRAGNewsSentiment:
 
         weighted_score = 0.0
         total_weight = 0.0
-        similar: list[str] = []
+        similar: list[str] = field(default_factory=list)
 
         for sim, idx in zip(sims, idxs, strict=False):
             if idx < 0:

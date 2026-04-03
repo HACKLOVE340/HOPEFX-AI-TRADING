@@ -137,11 +137,7 @@ class CommissionTracker:
             self._user_commissions[user_id] = []
         self._user_commissions[user_id].append(commission_id)
 
-        logger.info(
-            f"Calculated commission {commission_id}: "
-            f"${commission_amount:.2f} ({commission_rate:.2%}) "
-            f"for trade {trade_id}"
-        )
+        logger.info("Calculated commission %s: $%s (%s) for trade %s", commission_id, commission_amount, commission_rate, trade_id)
 
         return commission
 

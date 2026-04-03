@@ -49,7 +49,7 @@ except ImportError:
     REDIS_AVAILABLE = False
 
 try:
-    import zmq
+    import zmq  # noqa: F401
     ZMQ_AVAILABLE = True
 except ImportError:
     ZMQ_AVAILABLE = False
@@ -859,11 +859,7 @@ class ConsensusAggregator:
 
         if price_range > consensus_price * self.outlier_threshold:
             self.stats["disagreements"] += 1
-            logger.warning(
-                f"Price disagreement for {symbol}: "
-                f"range={price_range:.5f} ({price_range / consensus_price * 10000:.1f} bps), "
-                f"sources={[t.source for _, t in scored_ticks]}"
-            )
+            logger.warning("Price disagreement for %s: range=%s (%s bps), sources=%s", symbol, price_range, price_range / consensus_price * 10000, [t.source for _, t in scored_ticks])
 
         # Create consensus tick
         consensus = MarketTick(

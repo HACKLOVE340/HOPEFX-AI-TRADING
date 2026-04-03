@@ -363,10 +363,7 @@ class PaperExecutor:
             }
         )
 
-        logger.info(
-            f"Executed {order.side} {order.qty} {order.symbol} @ {fill_price:.2f} "
-            f"(slip: ${slippage:.2f}, comm: ${commission:.2f})"
-        )
+        logger.info("Executed %s %s %s @ %s (slip: $%s, comm: $%s)", order.side, order.qty, order.symbol, fill_price, slippage, commission)
 
         return result
 
@@ -557,10 +554,7 @@ class SmartOrderRouter:
             if self._error_count[name] >= self._ERROR_EXCLUSION:
                 exclusion_secs = 60.0 * self._error_count[name]
                 self._excluded_until[name] = time.monotonic() + exclusion_secs
-                logger.warning(
-                    f"SmartOrderRouter: broker '{name}' excluded for "
-                    f"{exclusion_secs:.0f}s after {self._error_count[name]} consecutive errors"
-                )
+                logger.warning("SmartOrderRouter: broker '%s' excluded for %ss after %s consecutive errors", name, exclusion_secs, self._error_count[name])
 
     def route_order(self, order: Any, **kwargs) -> ExecutionResult:
         """
@@ -588,9 +582,7 @@ class SmartOrderRouter:
                 latency_ms = (time.monotonic() - t0) * 1000
                 success = result.status == OrderStatus.FILLED
                 self._update_metrics(name, latency_ms, success)
-                logger.debug(
-                    f"SmartOrderRouter: routed to '{name}' latency={latency_ms:.1f}ms status={result.status.value}"
-                )
+                logger.debug("SmartOrderRouter: routed to '%s' latency=%sms status=%s", name, latency_ms, result.status.value)
                 return result
             except Exception as exc:
                 latency_ms = (time.monotonic() - t0) * 1000

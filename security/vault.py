@@ -111,7 +111,7 @@ class HSMVault:
         key = kdf.derive(password.encode())
 
         # Store salt for future derivation
-        with open(f"{self.key_store_path}salt.bin", "wb") as f:
+        with Path(f"{self.key_store_path}salt.bin").open("wb") as f:
             f.write(salt)
 
         return key
@@ -213,7 +213,7 @@ class HSMVault:
         # Persist the encrypted copy for disaster recovery (KMS Decrypt to recover)
         enc_path = Path(self.key_store_path) / "master.key.kms"
         try:
-            with open(enc_path, "wb") as f:
+            with Path(enc_path).open("wb") as f:
                 f.write(encrypted_key)
             Path(enc_path).chmod(0o600)
             logger.info("AWS KMS encrypted key blob saved to %s", enc_path)
@@ -287,7 +287,7 @@ class HSMVault:
         # Persist the wrapped copy for disaster recovery (unwrap via Key Vault)
         wrapped_path = Path(self.key_store_path) / "master.key.azure"
         try:
-            with open(wrapped_path, "wb") as f:
+            with Path(wrapped_path).open("wb") as f:
                 f.write(wrapped_key)
             Path(wrapped_path).chmod(0o600)
             logger.info("Azure Key Vault wrapped key saved to %s", wrapped_path)
@@ -313,7 +313,7 @@ class HSMVault:
             raise RuntimeError("Cannot save master key: vault not initialised")
         key_path = Path(self.key_store_path) / "master.key"
         try:
-            with open(key_path, "w", encoding="utf-8") as f:
+            with Path(key_path).open("w", encoding="utf-8") as f:
                 f.write(self._master_key.hex())
             Path(key_path).chmod(0o600)
             logger.info("Master key saved to %s (mode 0600)", key_path)

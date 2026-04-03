@@ -9,7 +9,7 @@ Multi-channel alerts: Discord, Telegram, Email, SMS, Webhooks
 """
 
 import asyncio
-import json
+import json  # noqa: F401
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -250,7 +250,7 @@ class NotificationManager:
 # Simple alert function for compatibility
 async def send_alert(level: str, message: str, **kwargs):
     """Global alert function"""
-    logger.log(getattr(logging, level.upper(), logging.INFO), f"ALERT [{level}]: {message}")
+    logger.log(getattr(logging, level.upper(), logging.INFO), "ALERT [%s]: %s", level, message)
 
 
 # Compatibility alias
@@ -344,6 +344,6 @@ class _NotificationsSingleton:
 notifications = _NotificationsSingleton()
 
 try:
-    from notifications.manager import NotificationChannel
+    from notifications.manager import NotificationChannel  # noqa: F401
 except Exception as _exc:
     logging.getLogger(__name__).debug("NotificationChannel unavailable: %s", _exc)

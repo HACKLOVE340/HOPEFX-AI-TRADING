@@ -861,7 +861,7 @@ def require_plan(minimum_plan: str):
     async def _dependency(request: "Request", user=None):  # type: ignore[name-defined]
         # Import here to avoid circular imports
         try:
-            from fastapi.security import HTTPBearer as _HTTPBearer
+            from fastapi.security import HTTPBearer as _HTTPBearer  # noqa: F401
             from fastapi.security.http import HTTPAuthorizationCredentials as _Creds
 
             from api.auth import get_current_user

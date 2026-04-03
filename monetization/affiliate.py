@@ -216,9 +216,7 @@ class Referral:
         self.subscription_amount = subscription_amount
         self.commission_amount = subscription_amount * commission_rate
 
-        logger.info(
-            f"Referral {self.referral_id} converted: ${subscription_amount} -> ${self.commission_amount} commission"
-        )
+        logger.info("Referral %s converted: $%s -> $%s commission", self.referral_id, subscription_amount, self.commission_amount)
         return self.commission_amount
 
     def mark_paid(self) -> None:

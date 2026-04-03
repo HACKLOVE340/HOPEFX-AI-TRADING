@@ -20,7 +20,7 @@ from enum import Enum
 from typing import Any
 
 try:
-    from redis.exceptions import TimeoutError as RedisTimeoutError  # re-exported
+    from redis.exceptions import TimeoutError as RedisTimeoutError  # re-exported  # noqa: F401
 
     import redis
     from redis import Redis

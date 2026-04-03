@@ -45,7 +45,7 @@ import logging
 import time
 from collections.abc import Callable
 from enum import IntEnum
-from typing import Any
+from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +96,7 @@ class CircuitBreaker:
     """
 
     # Global registry so the same breaker is reused across call sites
-    _registry: dict[str, CircuitBreaker] = {}
+    _registry: ClassVar[dict[str, CircuitBreaker]] = {}
 
     def __init__(
         self,

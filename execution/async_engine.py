@@ -316,7 +316,7 @@ class AsyncExecutionEngine:
 
         # Fetch fresh
         positions = []
-        for venue in self.brokers.keys():
+        for venue in self.brokers:
             try:
                 pos = await self._rate_limited_request(venue, "get_positions")
                 for p in pos:

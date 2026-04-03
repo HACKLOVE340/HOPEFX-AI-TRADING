@@ -264,7 +264,7 @@ def main() -> None:
 
     if args.check:
         try:
-            import PIL
+            import PIL  # noqa: F401
 
             print("Pillow is available.")
             sys.exit(0)

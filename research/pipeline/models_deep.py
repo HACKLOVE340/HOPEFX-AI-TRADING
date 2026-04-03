@@ -61,7 +61,7 @@ except ImportError:
 
 # ── TensorFlow / Keras fallback ───────────────────────────────────────────────
 try:
-    import tensorflow as tf
+    import tensorflow as tf  # noqa: F401
 
     TF_AVAILABLE = True
 except ImportError:

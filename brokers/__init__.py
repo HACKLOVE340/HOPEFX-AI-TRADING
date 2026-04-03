@@ -27,7 +27,7 @@ except ImportError:
     logger.warning("aiohttp not available, OANDA broker disabled")
 
 try:
-    import numpy as np
+    import numpy as np  # noqa: F401
 
     NUMPY_AVAILABLE = True
 except ImportError:

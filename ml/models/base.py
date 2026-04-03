@@ -157,7 +157,7 @@ class BaseMLModel(ABC):
 
         # Save metadata
         metadata_path = filepath.parent / f"{filepath.stem}_metadata.json"
-        with open(metadata_path, "w", encoding="utf-8") as f:
+        with Path(metadata_path).open("w", encoding="utf-8") as f:
             json.dump(self.metadata, f, indent=2)
 
         # Save model using joblib (safer than raw pickle for sklearn objects)
@@ -209,7 +209,7 @@ class BaseMLModel(ABC):
         # Load metadata if exists
         metadata_path = Path(filepath).parent / f"{Path(filepath).stem}_metadata.json"
         if metadata_path.exists():
-            with open(metadata_path, encoding="utf-8") as f:
+            with Path(metadata_path).open(encoding="utf-8") as f:
                 self.metadata = json.load(f)
 
         self.logger.info("Model loaded from %s", filepath)

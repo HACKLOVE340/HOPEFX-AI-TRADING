@@ -8,6 +8,7 @@
 import enum as _enum
 import json
 import logging
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -77,7 +78,7 @@ class Chart:
         }
 
     def export_to_json(self, filepath: str) -> None:
-        with open(filepath, "w", encoding="utf-8") as f:
+        with Path(filepath).open("w", encoding="utf-8") as f:
             json.dump(self.render(), f, indent=2, default=str)
 
     def clear(self) -> None:

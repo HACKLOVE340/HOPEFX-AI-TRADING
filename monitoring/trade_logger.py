@@ -141,7 +141,7 @@ def _append_csv(path: Path, headers: list, row: dict) -> None:
     """Append one row to a CSV file, writing headers if the file is new."""
     path.parent.mkdir(parents=True, exist_ok=True)
     write_header = not path.exists() or path.stat().st_size == 0
-    with open(path, "a", newline="", encoding="utf-8") as f:
+    with Path(path).open("a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=headers, extrasaction="ignore")
         if write_header:
             writer.writeheader()

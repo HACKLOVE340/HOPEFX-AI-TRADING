@@ -440,7 +440,7 @@ class EnsemblePredictor:
         try:
             obj = joblib.load(path)  # nosec B301 - path confined to ml/saved_models above
         except Exception:
-            with open(path, "rb") as f:
+            with Path(path).open("rb") as f:
                 obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
         if not isinstance(obj, cls):
             raise TypeError(f"Expected EnsemblePredictor, got {type(obj)}")
@@ -572,7 +572,7 @@ class DeepEnsembleStore:
                     try:
                         self._scaler = joblib.load(self.scaler_path)
                     except Exception:
-                        with open(self.scaler_path, "rb") as f:
+                        with Path(self.scaler_path).open("rb") as f:
                             self._scaler = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
                     logger.debug("DeepEnsembleStore: scaler loaded ← %s", self.scaler_path)
                 except Exception as exc:
@@ -598,7 +598,7 @@ class DeepEnsembleStore:
             logger.debug("DeepEnsembleStore: %s", self._gate_failure_reason)
             return False
         try:
-            with open(self.meta_path, encoding="utf-8") as f:
+            with Path(self.meta_path).open(encoding="utf-8") as f:
                 meta = json.load(f)
 
             self._oos_accuracy = float(meta.get("oos_accuracy", 0.0))

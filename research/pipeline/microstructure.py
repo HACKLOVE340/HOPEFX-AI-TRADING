@@ -80,7 +80,7 @@ try:
     from pathlib import Path
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from data.order_book import OrderBook
+    from data.order_book import OrderBook  # noqa: F401
 
     OB_AVAILABLE = True
 except ImportError:

@@ -38,7 +38,7 @@ def _load_config() -> None:
     if _config is not None:
         return
     try:
-        with open(_CONFIG_PATH, encoding="utf-8") as f:
+        with Path(_CONFIG_PATH).open(encoding="utf-8") as f:
             _config = json.load(f)
         if not _config.get("enabled", False):
             logger.info("Prop-firm mode disabled (prop_firm_mode.json enabled=false)")

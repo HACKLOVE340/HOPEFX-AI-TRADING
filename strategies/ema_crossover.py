@@ -46,9 +46,7 @@ class EMAcrossoverStrategy(BaseStrategy):
         super().__init__(name, symbol, config)
         self.fast_period = fast_period
         self.slow_period = slow_period
-        self.logger.info(
-            f"EMA Crossover Strategy initialized: fast={fast_period}, slow={slow_period}",
-        )
+        self.logger.info("EMA Crossover Strategy initialized: fast=%s, slow=%s", fast_period, slow_period)
 
     def generate_signal(self, analysis: pd.DataFrame) -> dict[str, Any]:  # type: ignore[override]
         market_data = analysis

@@ -45,9 +45,7 @@ class BreakoutStrategy(BaseStrategy):
         super().__init__(name, symbol, config)
         self.lookback_period = lookback_period
         self.breakout_threshold = breakout_threshold
-        self.logger.info(
-            f"Breakout Strategy initialized: lookback={lookback_period}, threshold={breakout_threshold}",
-        )
+        self.logger.info("Breakout Strategy initialized: lookback=%s, threshold=%s", lookback_period, breakout_threshold)
 
     def identify_support_resistance(self, market_data: pd.DataFrame) -> tuple:
         """

@@ -43,7 +43,7 @@ def perf():
     path = RESULTS / "performance.json"
     if not path.exists():
         pytest.skip("performance.json not generated yet — run examples/generate_proof_artifacts.py")
-    with open(path, encoding="utf-8") as f:
+    with Path(path).open(encoding="utf-8") as f:
         return json.load(f)
 
 

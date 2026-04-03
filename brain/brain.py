@@ -131,10 +131,7 @@ class CircuitBreaker:
 
             if self.failure_count >= self.failure_threshold and not self.is_open:
                 self.is_open = True
-                logger.critical(
-                    f"Circuit breaker OPENED after {self.failure_count} consecutive failures. "
-                    f"Recovery timeout: {self.recovery_timeout}s"
-                )
+                logger.critical("Circuit breaker OPENED after %s consecutive failures. Recovery timeout: %ss", self.failure_count, self.recovery_timeout)
 
     async def check_recovery(self) -> bool:
         """Check if circuit can be closed automatically"""
@@ -468,9 +465,7 @@ class HOPEFXBrain:
 
                     # Log regime changes
                     if old_regime != regime:
-                        logger.info(
-                            f"Regime change for {symbol}: {old_regime.value if old_regime else 'None'} -> {regime.value}"
-                        )
+                        logger.info("Regime change for %s: %s -> %s", symbol, old_regime.value if old_regime else 'None', regime.value)
                         self.regime_history.append(
                             {
                                 "timestamp": time.time(),
@@ -889,9 +884,7 @@ class HOPEFXBrain:
                         }
                     )
 
-                    logger.info(
-                        f"Executed {action.upper()} {size} {symbol} @ {order.average_fill_price:.5f} (ID: {order.id})"
-                    )
+                    logger.info("Executed %s %s %s @ %s (ID: %s)", action.upper(), size, symbol, order.average_fill_price, order.id)
 
                 elif action == "close":
                     position_id = signal.get("position_id")
@@ -928,14 +921,7 @@ class HOPEFXBrain:
             # Calculate average cycle time
             avg_cycle_time = sum(self._cycle_times) / len(self._cycle_times) if self._cycle_times else 0
 
-            logger.info(
-                f"State Summary [Cycle {self._cycle_count}] | "
-                f"Equity: ${state_dict['equity']:,.2f} | "
-                f"Positions: {state_dict['open_trades_count']} | "
-                f"Regimes: {len(state_dict['market_regime'])} | "
-                f"Avg Cycle: {avg_cycle_time * 1000:.1f}ms | "
-                f"Circuit: {'OPEN' if self._circuit_breaker.is_open else 'CLOSED'}"
-            )
+            logger.info("State Summary [Cycle %s] | Equity: $%s | Positions: %s | Regimes: %s | Avg Cycle: %sms | Circuit: %s", self._cycle_count, state_dict['equity'], state_dict['open_trades_count'], len(state_dict['market_regime']), avg_cycle_time * 1000, 'OPEN' if self._circuit_breaker.is_open else 'CLOSED')
         except Exception as e:
             logger.error("Error logging state: %s", e)
 

@@ -355,8 +355,6 @@ class FIAComplianceManager:
                 RiskControlStatus.BLOCK,
                 RiskControlStatus.KILL_SWITCH,
             ]:
-                logger.warning(
-                    f"Risk control blocked: {result.rule} - {result.message}",
-                )
+                logger.warning("Risk control blocked: %s - %s", result.rule, result.message)
 
         return results

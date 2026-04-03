@@ -422,7 +422,7 @@ class PortfolioAnalytics:
 
         # Save JSON report
         report_path = Path(output_dir) / f"portfolio_report_{timestamp}.json"
-        with open(report_path, "w", encoding="utf-8") as f:
+        with Path(report_path).open("w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, default=str)
 
         # Save metrics CSV

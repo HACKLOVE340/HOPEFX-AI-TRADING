@@ -64,7 +64,7 @@ def run(verbose: bool = False) -> int:
     # ── Check alembic is installed ────────────────────────────────────────────
     try:
         from alembic.config import Config as AlembicConfig
-        from alembic.runtime.migration import MigrationContext
+        from alembic.runtime.migration import MigrationContext  # noqa: F401
         from alembic.script import ScriptDirectory
         from sqlalchemy import create_engine, inspect, text
 

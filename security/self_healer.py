@@ -118,7 +118,7 @@ async def _get_redis() -> Any | None:
 def _sha256(path: Path) -> str:
     h = hashlib.sha256()
     try:
-        with open(path, "rb") as f:
+        with Path(path).open("rb") as f:
             for chunk in iter(lambda: f.read(65536), b""):
                 h.update(chunk)
     except OSError:
@@ -207,7 +207,7 @@ def _git_rollback(path: Path) -> bool:
 def _import_ok(path: Path) -> bool:
     """Return True if the Python file compiles without syntax errors."""
     try:
-        with open(path, "rb") as f:
+        with Path(path).open("rb") as f:
             source = f.read()
         compile(source, str(path), "exec")
         return True

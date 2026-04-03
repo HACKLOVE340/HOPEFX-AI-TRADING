@@ -32,6 +32,7 @@ import os
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -1122,7 +1123,7 @@ NOTE: Sharpe is trade-level (corrected). Bar-level Sharpe is inflated
             "trades": self.results.trades,
         }
 
-        with open(filepath, "w", encoding="utf-8") as f:
+        with Path(filepath).open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, default=str)
 
         logger.info("Backtest results exported to %s", filepath)

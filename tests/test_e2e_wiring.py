@@ -36,9 +36,10 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
+from typing import ClassVar
 
 import pytest
-from pathlib import Path
 
 # ── Ensure project root is on path ───────────────────────────────────────────
 _ROOT = os.path.dirname(Path(__file__).parent)
@@ -441,7 +442,7 @@ class TestPreTradeGate:
             daily_starting_equity = 100.0
             config = _ExplodingConfig()  # raises on attribute access
             current_drawdown = 0.0
-            open_positions = []
+            open_positions: ClassVar[list] = []
 
         gate = PreTradeGate(_BrokenRiskManager())
         order = GateOrder(symbol="XAUUSD", side="BUY", quantity=1.0)

@@ -14,6 +14,7 @@ import logging
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
+from typing import ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ class USDTNetwork(Enum):
 class USDTClient:
     """USDT payment client supporting multiple networks"""
 
-    REQUIRED_CONFIRMATIONS = {USDTNetwork.TRC20: 19, USDTNetwork.ERC20: 12}
+    REQUIRED_CONFIRMATIONS: ClassVar[dict] = {USDTNetwork.TRC20: 19, USDTNetwork.ERC20: 12}
     MIN_DEPOSIT = Decimal("10.00")  # USD
     NETWORK_FEE = Decimal("2.00")  # USD
 

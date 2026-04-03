@@ -225,7 +225,7 @@ class PerformanceMetrics:
 
     def save(self, filepath: str):
         """Save metrics to JSON"""
-        with open(filepath, "w", encoding="utf-8") as f:
+        with Path(filepath).open("w", encoding="utf-8") as f:
             json.dump(self.to_dict(), f, indent=2)
 
 
@@ -765,7 +765,7 @@ class BacktestEngine:
             "data_frequency": self.data_frequency,
         }
 
-        with open(f"{filepath_prefix}_state.json", "w", encoding="utf-8") as f:
+        with Path(f"{filepath_prefix}_state.json").open("w", encoding="utf-8") as f:
             json.dump(state, f, indent=2)
 
         print(f"Results saved to {filepath_prefix}*")

@@ -10,7 +10,7 @@ The5ers is a prop trading firm offering funded forex accounts.
 """
 
 import logging
-from typing import Any
+from typing import Any, ClassVar
 
 from ..mt5 import MT5Connector
 
@@ -40,7 +40,7 @@ class The5ersConnector(MT5Connector):
         the5ers.connect()
     """
 
-    THE5ERS_SERVERS = [
+    THE5ERS_SERVERS: ClassVar[list] = [
         "The5ers-Demo",
         "The5ers-Live",
         "The5ers-Server",

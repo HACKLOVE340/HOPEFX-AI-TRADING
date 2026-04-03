@@ -361,7 +361,7 @@ def _load_existing_timestamps(path: Path) -> set:
         return set()
     timestamps: ClassVar[set] = set()
     try:
-        with open(path, newline="", encoding="utf-8") as f:
+        with Path(path).open(newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 ts = row.get("timestamp", "")
@@ -397,7 +397,7 @@ def _append_bars(path: Path, bars: list[dict]) -> int:
     write_header = not path.exists() or path.stat().st_size == 0
 
     fieldnames = ["timestamp", "open", "high", "low", "close", "volume"]
-    with open(path, "a", newline="", encoding="utf-8") as f:
+    with Path(path).open("a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
         if write_header:
             writer.writeheader()

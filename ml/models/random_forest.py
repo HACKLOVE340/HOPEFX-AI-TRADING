@@ -78,9 +78,7 @@ class RandomForestTradingClassifier(BaseMLModel):
                 n_jobs=-1,  # Use all CPU cores
             )
 
-            self.logger.info(
-                f"Random Forest built with {self.n_estimators} trees, max_depth={self.max_depth}",
-            )
+            self.logger.info("Random Forest built with %s trees, max_depth=%s", self.n_estimators, self.max_depth)
 
         except Exception as e:
             self.logger.error("Error building Random Forest: %s", e)
@@ -166,9 +164,7 @@ class RandomForestTradingClassifier(BaseMLModel):
                 },
             )
 
-            self.logger.info(
-                f"Random Forest training complete. Train accuracy: {train_accuracy:.3f}",
-            )
+            self.logger.info("Random Forest training complete. Train accuracy: %s", train_accuracy)
 
             return metrics
 
@@ -403,8 +399,6 @@ class RandomForestTradingClassifier(BaseMLModel):
             },
         }
 
-        self.logger.info(
-            f"Hyperparameter optimization complete. Best score: {results['best_score']:.3f}",
-        )
+        self.logger.info("Hyperparameter optimization complete. Best score: %s", results['best_score'])
 
         return results

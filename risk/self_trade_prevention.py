@@ -103,9 +103,7 @@ class SelfTradePrevention:
 
     def _handle_cross(self, new_order: Order, resting_order: Order) -> dict:
         """Determine action when self-trade detected"""
-        logger.warning(
-            f"Self-trade detected: {new_order.id} vs {resting_order.id} on {new_order.symbol}",
-        )
+        logger.warning("Self-trade detected: %s vs %s on %s", new_order.id, resting_order.id, new_order.symbol)
 
         if self.action == SelfTradeAction.CANCEL_RESTING:
             return {

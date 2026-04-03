@@ -48,9 +48,7 @@ class MACDStrategy(BaseStrategy):
         self.fast_period = fast_period
         self.slow_period = slow_period
         self.signal_period = signal_period
-        logger.info(
-            f"MACD Strategy initialized: fast={fast_period}, slow={slow_period}, signal={signal_period}",
-        )
+        logger.info("MACD Strategy initialized: fast=%s, slow=%s, signal=%s", fast_period, slow_period, signal_period)
 
     def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
         """Compute MACD from OHLCV data dict."""
