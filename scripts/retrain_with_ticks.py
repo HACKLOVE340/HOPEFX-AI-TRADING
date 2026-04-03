@@ -51,11 +51,15 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
+
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv(ROOT / ".env", override=False)
 except ImportError:
     pass
@@ -79,7 +83,7 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-async def fetch_h1_ticks(tick_days: int) -> "pd.DataFrame":
+async def fetch_h1_ticks(tick_days: int) -> pd.DataFrame:
     """Download and aggregate Dukascopy ticks to H1 OHLCV."""
     from data_layer.replay.engine import MarketReplayEngine
     from data_layer.replay.dukascopy import DukascopyFetcher
@@ -92,7 +96,11 @@ async def fetch_h1_ticks(tick_days: int) -> "pd.DataFrame":
 
     logger.info("Downloading %d days of XAUUSD H1 tick data...", tick_days)
     ohlcv = await engine.build_ohlcv_dataframe(
-        start=start, end=end, symbol="XAUUSD", timeframe_minutes=60, normalize=False,
+        start=start,
+        end=end,
+        symbol="XAUUSD",
+        timeframe_minutes=60,
+        normalize=False,
     )
     await fetcher.close()
 
@@ -103,14 +111,13 @@ async def fetch_h1_ticks(tick_days: int) -> "pd.DataFrame":
     return ohlcv
 
 
-def compute_tick_features(h1_ohlcv: "pd.DataFrame") -> "pd.DataFrame":
+def compute_tick_features(h1_ohlcv: pd.DataFrame) -> pd.DataFrame:
     """
     Compute tick-derived features on H1 bars.
 
     These are the same features that live inference receives from the
     NuclearStreamer tick feed — training on them closes the train/live gap.
     """
-    import numpy as np
     import pandas as pd
 
     if h1_ohlcv.empty:
@@ -129,9 +136,9 @@ def compute_tick_features(h1_ohlcv: "pd.DataFrame") -> "pd.DataFrame":
     # On H1 bars: positive close-to-open = buying pressure
     bar_ret = df["close"] - df["open"]
     df["dl_volume_delta"] = np.sign(bar_ret) * vol
-    df["dl_volume_delta_z20"] = (
-        df["dl_volume_delta"] - df["dl_volume_delta"].rolling(20).mean()
-    ) / (df["dl_volume_delta"].rolling(20).std() + 1e-9)
+    df["dl_volume_delta_z20"] = (df["dl_volume_delta"] - df["dl_volume_delta"].rolling(20).mean()) / (
+        df["dl_volume_delta"].rolling(20).std() + 1e-9
+    )
 
     # Tick count proxy (bar range / typical spread)
     spread_proxy = (df["high"] - df["low"]).clip(lower=1e-4)
@@ -145,21 +152,24 @@ def compute_tick_features(h1_ohlcv: "pd.DataFrame") -> "pd.DataFrame":
     df["dl_depth_imbalance"] = (lower_wick - upper_wick) / total_wick  # +1=all buying, -1=all selling
 
     # Spread z-score (bar range relative to 20-bar mean)
-    df["dl_spread_z20"] = (
-        spread_proxy - spread_proxy.rolling(20).mean()
-    ) / (spread_proxy.rolling(20).std() + 1e-9)
+    df["dl_spread_z20"] = (spread_proxy - spread_proxy.rolling(20).mean()) / (spread_proxy.rolling(20).std() + 1e-9)
 
     tick_cols = [
-        "dl_vwap", "dl_vwap_dev", "dl_volume_delta", "dl_volume_delta_z20",
-        "dl_tick_count", "dl_depth_imbalance", "dl_spread_z20",
+        "dl_vwap",
+        "dl_vwap_dev",
+        "dl_volume_delta",
+        "dl_volume_delta_z20",
+        "dl_tick_count",
+        "dl_depth_imbalance",
+        "dl_spread_z20",
     ]
     return df[tick_cols].fillna(0.0)
 
 
 def merge_tick_features_into_daily(
-    daily: "pd.DataFrame",
-    h1_tick_features: "pd.DataFrame",
-) -> "pd.DataFrame":
+    daily: pd.DataFrame,
+    h1_tick_features: pd.DataFrame,
+) -> pd.DataFrame:
     """
     Forward-fill H1 tick features into the daily OHLCV frame.
 
@@ -176,8 +186,7 @@ def merge_tick_features_into_daily(
     h1_daily = h1_tick_features.resample("D").last().ffill()
 
     # Align to daily index
-    daily_idx = pd.DatetimeIndex(daily.index if hasattr(daily.index, 'tz') else
-                                  pd.to_datetime(daily.index, utc=True))
+    daily_idx = pd.DatetimeIndex(daily.index if hasattr(daily.index, "tz") else pd.to_datetime(daily.index, utc=True))
     h1_daily.index = h1_daily.index.tz_localize("UTC") if h1_daily.index.tz is None else h1_daily.index
 
     merged = daily.copy()
@@ -187,7 +196,9 @@ def merge_tick_features_into_daily(
     n_enriched = merged[h1_tick_features.columns[0]].notna().sum()
     logger.info(
         "Merged %d tick feature columns into %d daily bars (%d bars enriched)",
-        len(h1_tick_features.columns), len(merged), n_enriched,
+        len(h1_tick_features.columns),
+        len(merged),
+        n_enriched,
     )
     return merged
 
@@ -232,6 +243,7 @@ async def main() -> None:
     macro_df = None
     try:
         from ml.macro_store import macro_store
+
         macro_df = macro_store.align_to_hourly(enriched.index)
         logger.info("Macro data loaded: %d rows × %d cols", len(macro_df), len(macro_df.columns))
     except Exception as exc:
@@ -240,6 +252,7 @@ async def main() -> None:
     # ── 5. Build features ─────────────────────────────────────────────────────
     logger.info("Building feature matrix...")
     from ml.advanced_features import build_advanced_features
+
     X, y = build_advanced_features(
         enriched,
         macro_df=macro_df,
@@ -271,17 +284,21 @@ async def main() -> None:
 
     # Run train_advanced.py as subprocess so it uses its own validated pipeline
     import subprocess
+
     cmd = [
-        sys.executable, str(ROOT / "ml" / "train_advanced.py"),
-        "--years", "50",
-        "--oos-years", "3",
+        sys.executable,
+        str(ROOT / "ml" / "train_advanced.py"),
+        "--years",
+        "50",
+        "--oos-years",
+        "3",
         "--stacking",
     ]
     if args.smoke:
         cmd += ["--smoke"]
 
     logger.info("Running: %s", " ".join(cmd))
-    proc = subprocess.run(cmd, cwd=str(ROOT), capture_output=False)
+    proc = subprocess.run(cmd, cwd=str(ROOT), capture_output=False, check=False)
     if proc.returncode != 0:
         logger.error("train_advanced.py exited with code %d", proc.returncode)
         sys.exit(proc.returncode)
@@ -298,9 +315,9 @@ async def main() -> None:
         logger.info("Saving new model (%s: %.4f → %.4f)", action, existing_acc, new_acc)
     else:
         logger.warning(
-            "New accuracy (%.4f) did not improve over existing (%.4f) — "
-            "model NOT replaced. Use --force to override.",
-            new_acc, existing_acc,
+            "New accuracy (%.4f) did not improve over existing (%.4f) — model NOT replaced. Use --force to override.",
+            new_acc,
+            existing_acc,
         )
 
     # Save comparison report

@@ -56,7 +56,7 @@ _YAHOO_SERIES: dict[str, str] = {
     "HG=F": "copper",
     "CL=F": "oil",
     "CNY=X": "usdcny",
-    "DX-Y.NYB": "dxy_yahoo",   # DXY cross-check against FRED DTWEXBGS
+    "DX-Y.NYB": "dxy_yahoo",  # DXY cross-check against FRED DTWEXBGS
 }
 
 
@@ -78,8 +78,7 @@ class YahooMacroFeed:
         try:
             import yfinance as yf
         except ImportError:
-            logger.warning("yfinance not installed — Yahoo macro feed disabled. "
-                           "Install with: pip install yfinance")
+            logger.warning("yfinance not installed — Yahoo macro feed disabled. Install with: pip install yfinance")
             return {}
 
         start = (datetime.now(UTC) - timedelta(days=365 * years)).strftime("%Y-%m-%d")
@@ -99,7 +98,9 @@ class YahooMacroFeed:
                 results[name] = close
                 logger.info(
                     "Yahoo: fetched %s (%s) — %d obs, latest=%.4f on %s",
-                    name, ticker, len(close),
+                    name,
+                    ticker,
+                    len(close),
                     float(close.iloc[-1]),
                     close.index[-1].date().isoformat(),
                 )
@@ -111,6 +112,7 @@ class YahooMacroFeed:
     def _inject_into_macro_store(self, series_dict: dict[str, pd.Series]) -> None:
         try:
             from ml.macro_store import macro_store
+
             for name, series in series_dict.items():
                 if series.empty:
                     continue
@@ -167,9 +169,7 @@ class YahooMacroFeed:
         """Fetch immediately then refresh daily at 22:00 UTC."""
         self._running = True
         await self.fetch_and_inject()
-        self._task = asyncio.create_task(
-            self._daily_refresh_loop(), name="yahoo_macro_refresh"
-        )
+        self._task = asyncio.create_task(self._daily_refresh_loop(), name="yahoo_macro_refresh")
 
     async def stop(self) -> None:
         self._running = False

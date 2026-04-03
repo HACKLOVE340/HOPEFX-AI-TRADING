@@ -86,18 +86,26 @@ async def test_broker_connection(req: BrokerTestRequest) -> BrokerTestResponse:
     )
 
 
-def _oanda_response_from_status(
-    status_code: int, account_id: str, data: dict, latency: int
-) -> BrokerTestResponse:
+def _oanda_response_from_status(status_code: int, account_id: str, data: dict, latency: int) -> BrokerTestResponse:
     """Map an OANDA HTTP status code to a BrokerTestResponse."""
-    if status_code == 401:  # noqa: PLR2004
-        return BrokerTestResponse(ok=False, broker="oanda", error="401 Unauthorized — check your API token", latency_ms=latency)
-    if status_code == 404:  # noqa: PLR2004
-        return BrokerTestResponse(ok=False, broker="oanda", error=f"Account {account_id!r} not found", latency_ms=latency)
-    if status_code != 200:  # noqa: PLR2004
+    if status_code == 401:
+        return BrokerTestResponse(
+            ok=False, broker="oanda", error="401 Unauthorized — check your API token", latency_ms=latency
+        )
+    if status_code == 404:
+        return BrokerTestResponse(
+            ok=False, broker="oanda", error=f"Account {account_id!r} not found", latency_ms=latency
+        )
+    if status_code != 200:
         return BrokerTestResponse(ok=False, broker="oanda", error=f"HTTP {status_code}", latency_ms=latency)
     account = data.get("account", {})
-    return BrokerTestResponse(ok=True, broker="oanda", latency_ms=latency, balance=account.get("balance", "?"), currency=account.get("currency", ""))
+    return BrokerTestResponse(
+        ok=True,
+        broker="oanda",
+        latency_ms=latency,
+        balance=account.get("balance", "?"),
+        currency=account.get("currency", ""),
+    )
 
 
 async def _test_oanda(req: BrokerTestRequest, start: float) -> BrokerTestResponse:
@@ -113,6 +121,7 @@ async def _test_oanda(req: BrokerTestRequest, start: float) -> BrokerTestRespons
 
     try:
         import httpx
+
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(url, headers=headers)
         latency = int((time.monotonic() - start) * 1000)
@@ -168,7 +177,12 @@ async def _test_oanda(req: BrokerTestRequest, start: float) -> BrokerTestRespons
                 latency_ms=int((time.monotonic() - start) * 1000),
             )
     except Exception as exc:
-        return BrokerTestResponse(ok=False, broker="oanda", error=f"Connection error: {exc}", latency_ms=int((time.monotonic() - start) * 1000))
+        return BrokerTestResponse(
+            ok=False,
+            broker="oanda",
+            error=f"Connection error: {exc}",
+            latency_ms=int((time.monotonic() - start) * 1000),
+        )
 
     if resp.status_code == 401:
         return BrokerTestResponse(

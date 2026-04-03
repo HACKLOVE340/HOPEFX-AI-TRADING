@@ -556,7 +556,7 @@ async def list_strategy(request: StrategyListRequest):
 
 
 @router.get("/marketplace/strategies")
-async def search_strategies(  # noqa: PLR0913
+async def search_strategies(
     query: str | None = None,
     category: str | None = None,
     min_price: float | None = None,

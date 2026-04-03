@@ -47,11 +47,14 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import pandas as pd
+
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv(ROOT / ".env", override=False)
 except ImportError:
     pass
@@ -80,7 +83,7 @@ async def download_and_aggregate(
     symbol: str,
     start: datetime,
     end: datetime,
-) -> "pd.DataFrame":
+) -> pd.DataFrame:
     """Download Dukascopy ticks and aggregate to H1 OHLCV."""
     from data_layer.replay.engine import MarketReplayEngine
     from data_layer.replay.dukascopy import DukascopyFetcher
@@ -107,12 +110,11 @@ async def download_and_aggregate(
 
 
 def run_backtest(
-    ohlcv: "pd.DataFrame",
+    ohlcv: pd.DataFrame,
     capital: float,
 ) -> dict:
     """Run the production ML model on tick-aggregated H1 bars."""
     import numpy as np
-    import pandas as pd
     import joblib
 
     # Load production model
@@ -126,6 +128,7 @@ def run_backtest(
 
     # Build features
     from ml.advanced_features import build_advanced_features
+
     try:
         X, y = build_advanced_features(ohlcv, horizon=1)
     except Exception as exc:
@@ -133,9 +136,9 @@ def run_backtest(
         sys.exit(1)
 
     # Drop NaN warm-up rows
-    mask = ~(np.isnan(X.values if hasattr(X, 'values') else X).any(axis=1))
-    X_clean = X[mask] if hasattr(X, '__getitem__') else X[mask]
-    y_clean = y[mask] if hasattr(y, '__getitem__') else y[mask]
+    mask = ~(np.isnan(X.values if hasattr(X, "values") else X).any(axis=1))
+    X_clean = X[mask]
+    y_clean = y[mask]
 
     if len(X_clean) < 10:
         logger.error("Not enough clean bars (%d) for backtest", len(X_clean))
@@ -144,15 +147,16 @@ def run_backtest(
     logger.info("Running model on %d bars...", len(X_clean))
 
     # Get probabilities
-    X_vals = X_clean.values if hasattr(X_clean, 'values') else X_clean
+    X_vals = X_clean.values if hasattr(X_clean, "values") else X_clean
     probs = model.predict_proba(X_vals)[:, 1]
 
     # Signal thresholds
-    threshold_long = float(__import__('os').getenv("SIGNAL_THRESHOLD_LONG", "0.60"))
-    threshold_short = float(__import__('os').getenv("SIGNAL_THRESHOLD_SHORT", "0.40"))
+    threshold_long = float(__import__("os").getenv("SIGNAL_THRESHOLD_LONG", "0.60"))
+    threshold_short = float(__import__("os").getenv("SIGNAL_THRESHOLD_SHORT", "0.40"))
 
     # Simulate trades with AlmgrenChriss fills
     from execution.market_impact import FillSimulator
+
     fill_sim = FillSimulator()
 
     trades = []
@@ -161,12 +165,12 @@ def run_backtest(
     max_dd = 0.0
     position = 0  # 0=flat, 1=long, -1=short
     entry_price = 0.0
-    entry_bar = None
+    _entry_bar = None  # reserved for future bar-tracking logic
 
-    closes = ohlcv["close"].values if hasattr(ohlcv, 'values') else ohlcv["close"]
-    highs = ohlcv["high"].values if hasattr(ohlcv, 'values') else ohlcv["high"]
-    lows = ohlcv["low"].values if hasattr(ohlcv, 'values') else ohlcv["low"]
-    volumes = ohlcv["volume"].values if hasattr(ohlcv, 'values') else ohlcv["volume"]
+    closes = ohlcv["close"].values if hasattr(ohlcv, "values") else ohlcv["close"]
+    highs = ohlcv["high"].values if hasattr(ohlcv, "values") else ohlcv["high"]
+    lows = ohlcv["low"].values if hasattr(ohlcv, "values") else ohlcv["low"]
+    volumes = ohlcv["volume"].values if hasattr(ohlcv, "values") else ohlcv["volume"]
 
     # Align indices
     n = len(probs)
@@ -174,12 +178,12 @@ def run_backtest(
     highs_aligned = highs[-n:]
     lows_aligned = lows[-n:]
     volumes_aligned = volumes[-n:]
-    y_vals = y_clean.values if hasattr(y_clean, 'values') else y_clean
+    y_vals = y_clean.values if hasattr(y_clean, "values") else y_clean
 
     adv = float(np.mean(volumes_aligned[volumes_aligned > 0])) if np.any(volumes_aligned > 0) else 50_000.0
     vol_daily = float(np.std(np.diff(np.log(closes_aligned + 1e-9)))) * np.sqrt(24)
 
-    for i, (prob, actual) in enumerate(zip(probs, y_vals)):
+    for i, (prob, _actual) in enumerate(zip(probs, y_vals, strict=False)):
         price = float(closes_aligned[i])
         bar_high = float(highs_aligned[i])
         bar_low = float(lows_aligned[i])
@@ -189,20 +193,31 @@ def run_backtest(
         if position != 0:
             side = "SELL" if position == 1 else "BUY"
             fill = fill_sim.simulate_fill(
-                signal_price=price, side=side, quantity=1.0,
-                bar_high=bar_high, bar_low=bar_low, bar_volume=bar_vol,
-                adv=adv, volatility_daily=vol_daily,
+                signal_price=price,
+                side=side,
+                quantity=1.0,
+                bar_high=bar_high,
+                bar_low=bar_low,
+                bar_volume=bar_vol,
+                adv=adv,
+                volatility_daily=vol_daily,
             )
             pnl = (fill.fill_price - entry_price) * position
             equity += pnl
             peak_equity = max(peak_equity, equity)
             dd = (peak_equity - equity) / peak_equity
             max_dd = max(max_dd, dd)
-            trades.append({
-                "bar": i, "side": "exit", "entry": entry_price,
-                "exit": fill.fill_price, "pnl": pnl,
-                "slippage_bps": fill.slippage_bps, "equity": equity,
-            })
+            trades.append(
+                {
+                    "bar": i,
+                    "side": "exit",
+                    "entry": entry_price,
+                    "exit": fill.fill_price,
+                    "pnl": pnl,
+                    "slippage_bps": fill.slippage_bps,
+                    "equity": equity,
+                }
+            )
             position = 0
 
         # Enter new position
@@ -216,9 +231,14 @@ def run_backtest(
             continue  # abstain
 
         fill = fill_sim.simulate_fill(
-            signal_price=price, side=side, quantity=1.0,
-            bar_high=bar_high, bar_low=bar_low, bar_volume=bar_vol,
-            adv=adv, volatility_daily=vol_daily,
+            signal_price=price,
+            side=side,
+            quantity=1.0,
+            bar_high=bar_high,
+            bar_low=bar_low,
+            bar_volume=bar_vol,
+            adv=adv,
+            volatility_daily=vol_daily,
         )
         position = new_pos
         entry_price = fill.fill_price
@@ -234,10 +254,7 @@ def run_backtest(
     win_rate = wins / len(pnls) if pnls else 0.0
 
     # Accuracy: did signal direction match actual next-bar direction?
-    correct = int(np.sum(
-        ((probs >= threshold_long) & (y_vals == 1)) |
-        ((probs <= threshold_short) & (y_vals == 0))
-    ))
+    correct = int(np.sum(((probs >= threshold_long) & (y_vals == 1)) | ((probs <= threshold_short) & (y_vals == 0))))
     signals = int(np.sum((probs >= threshold_long) | (probs <= threshold_short)))
     accuracy = correct / signals if signals > 0 else 0.0
 
@@ -267,6 +284,7 @@ def run_backtest(
 
 def save_results(results: dict, output_path: str) -> None:
     import csv
+
     trades = results.get("trade_log", [])
     if not trades:
         return
@@ -286,7 +304,9 @@ async def main() -> None:
         start = now - timedelta(days=3)
         end = now - timedelta(hours=1)
     else:
-        start = datetime.strptime(args.start, "%Y-%m-%d").replace(tzinfo=UTC) if args.start else now - timedelta(days=30)
+        start = (
+            datetime.strptime(args.start, "%Y-%m-%d").replace(tzinfo=UTC) if args.start else now - timedelta(days=30)
+        )
         end = datetime.strptime(args.end, "%Y-%m-%d").replace(tzinfo=UTC) if args.end else now - timedelta(hours=1)
 
     logger.info("Tick backtest: %s  %s → %s", args.symbol, start.date(), end.date())
@@ -314,6 +334,7 @@ async def main() -> None:
 
     # Save summary to data/
     import json
+
     summary_path = ROOT / "data" / "tick_backtest_results.json"
     summary = {k: v for k, v in results.items() if k != "trade_log"}
     summary["symbol"] = args.symbol

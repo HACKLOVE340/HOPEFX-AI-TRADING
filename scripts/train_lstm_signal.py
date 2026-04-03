@@ -50,11 +50,15 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
+
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv(ROOT / ".env", override=False)
 except ImportError:
     pass
@@ -88,8 +92,9 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def load_ohlcv(path: str) -> "pd.DataFrame":
+def load_ohlcv(path: str) -> pd.DataFrame:
     import pandas as pd
+
     df = pd.read_csv(path)
     # Normalise column names
     df.columns = [c.lower() for c in df.columns]
@@ -108,7 +113,7 @@ def load_ohlcv(path: str) -> "pd.DataFrame":
     return df
 
 
-def build_features(ohlcv: "pd.DataFrame", smoke: bool) -> "tuple[np.ndarray, np.ndarray]":
+def build_features(ohlcv: pd.DataFrame, smoke: bool) -> tuple[np.ndarray, np.ndarray]:
     import numpy as np
     from ml.advanced_features import build_advanced_features
 
@@ -131,9 +136,10 @@ def train(args: argparse.Namespace) -> None:
     # ── Check PyTorch ─────────────────────────────────────────────────────────
     try:
         import torch
-        logger.info("PyTorch %s available (device: %s)",
-                    torch.__version__,
-                    "cuda" if torch.cuda.is_available() else "cpu")
+
+        logger.info(
+            "PyTorch %s available (device: %s)", torch.__version__, "cuda" if torch.cuda.is_available() else "cpu"
+        )
     except ImportError:
         logger.error(
             "PyTorch not installed.\n"
@@ -193,10 +199,9 @@ def train(args: argparse.Namespace) -> None:
         label_smoothing=0.05,
     )
 
-    logger.info("Training LSTM (epochs=%d, features=%d, seq_len=%d)...",
-                epochs, n_features, args.seq_len)
+    logger.info("Training LSTM (epochs=%d, features=%d, seq_len=%d)...", epochs, n_features, args.seq_len)
     t0 = time.time()
-    history = predictor.fit(X_train, y_train, X_val, y_val)
+    predictor.fit(X_train, y_train, X_val, y_val)
     elapsed = time.time() - t0
 
     # ── Evaluate ──────────────────────────────────────────────────────────────

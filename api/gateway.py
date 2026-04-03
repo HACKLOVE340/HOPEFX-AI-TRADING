@@ -167,6 +167,7 @@ class APIGateway:
 
     def _setup_info_routes(self) -> None:
         """Register health, status, and portfolio read routes."""
+
         @self.app.get("/health")
         async def health():
             return {
@@ -184,7 +185,12 @@ class APIGateway:
         @self.app.get("/api/v1/status")
         async def status(credentials: HTTPAuthorizationCredentials = Depends(self.security)):
             self._verify_token(credentials.credentials)
-            return {"system": self.mcc.get_status() if hasattr(self.mcc, "get_status") else {}, "orchestra": self.orchestra.get_heatmap_data(), "portfolio": self.pms.get_portfolio_summary(), "timestamp": datetime.now(UTC).isoformat()}
+            return {
+                "system": self.mcc.get_status() if hasattr(self.mcc, "get_status") else {},
+                "orchestra": self.orchestra.get_heatmap_data(),
+                "portfolio": self.pms.get_portfolio_summary(),
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
 
             return {
                 "system": self.mcc.get_status() if hasattr(self.mcc, "get_status") else {},
@@ -195,14 +201,21 @@ class APIGateway:
 
     def _setup_strategy_routes(self) -> None:
         """Register strategy control routes."""
+
         @self.app.post("/api/v1/strategies/{strategy_id}/activate")
-        async def activate_strategy(strategy_id: str, credentials: HTTPAuthorizationCredentials = Depends(self.security)):
+        async def activate_strategy(
+            strategy_id: str, credentials: HTTPAuthorizationCredentials = Depends(self.security)
+        ):
             self._verify_token(credentials.credentials, required_role="admin")
             self.orchestra.activate_strategy(strategy_id)
             return {"success": True, "strategy_id": strategy_id, "action": "activated"}
 
         @self.app.post("/api/v1/strategies/{strategy_id}/deactivate")
-        async def deactivate_strategy(strategy_id: str, reason: str = "api_request", credentials: HTTPAuthorizationCredentials = Depends(self.security)):
+        async def deactivate_strategy(
+            strategy_id: str,
+            reason: str = "api_request",
+            credentials: HTTPAuthorizationCredentials = Depends(self.security),
+        ):
             self._verify_token(credentials.credentials, required_role="admin")
             self.orchestra.deactivate_strategy(strategy_id, reason)
             return {"success": True, "strategy_id": strategy_id, "action": "deactivated"}
@@ -216,6 +229,7 @@ class APIGateway:
 
     def _setup_order_routes(self) -> None:
         """Register order management routes."""
+
         @self.app.post("/api/v1/orders")
         async def create_order(order: dict, credentials: HTTPAuthorizationCredentials = Depends(self.security)):
             self._verify_token(credentials.credentials, required_role="trader")
@@ -230,12 +244,34 @@ class APIGateway:
                 raise HTTPException(status_code=400, detail=f"quantity must be > 0, got {quantity}")
             try:
                 from app import app_state
+
                 trade_executor = getattr(app_state, "trade_executor", None)
                 if trade_executor is None:
-                    raise HTTPException(status_code=503, detail="TradeExecutor not initialised — server is still starting up")
-                signal = {"symbol": symbol, "action": action, "size": quantity, "price": order.get("price"), "stop_loss": order.get("stop_loss"), "take_profit": order.get("take_profit"), "strategy_id": order.get("strategy_id", "gateway_api"), "position_id": order.get("position_id")}
+                    raise HTTPException(
+                        status_code=503, detail="TradeExecutor not initialised — server is still starting up"
+                    )
+                signal = {
+                    "symbol": symbol,
+                    "action": action,
+                    "size": quantity,
+                    "price": order.get("price"),
+                    "stop_loss": order.get("stop_loss"),
+                    "take_profit": order.get("take_profit"),
+                    "strategy_id": order.get("strategy_id", "gateway_api"),
+                    "position_id": order.get("position_id"),
+                }
                 result = await trade_executor.execute_signal(signal)
-                return {"success": result.success, "order_id": result.order_id, "status": result.status.value, "filled_quantity": result.filled_quantity, "average_price": result.average_price, "commission": result.commission, "latency_ms": result.latency_ms, "message": result.message, "timestamp": datetime.now(UTC).isoformat()}
+                return {
+                    "success": result.success,
+                    "order_id": result.order_id,
+                    "status": result.status.value,
+                    "filled_quantity": result.filled_quantity,
+                    "average_price": result.average_price,
+                    "commission": result.commission,
+                    "latency_ms": result.latency_ms,
+                    "message": result.message,
+                    "timestamp": datetime.now(UTC).isoformat(),
+                }
             except HTTPException:
                 raise
             except Exception:
@@ -247,6 +283,7 @@ class APIGateway:
 
     def _setup_ws_routes(self) -> None:
         """Register WebSocket streaming route."""
+
         @self.app.websocket("/ws/v1/stream")
         async def websocket_stream(websocket: WebSocket):
             from rate_limiting.websocket_limiter import get_client_ip, get_ws_limiter
@@ -265,7 +302,11 @@ class APIGateway:
             await websocket.accept()
             try:
                 while True:
-                    data = {"timestamp": datetime.now(UTC).isoformat(), "portfolio": self.pms.get_portfolio_summary(), "heatmap": self.orchestra.get_heatmap_data()}
+                    data = {
+                        "timestamp": datetime.now(UTC).isoformat(),
+                        "portfolio": self.pms.get_portfolio_summary(),
+                        "heatmap": self.orchestra.get_heatmap_data(),
+                    }
                     await websocket.send_json(data)
                     await asyncio.sleep(1)
             except Exception as e:

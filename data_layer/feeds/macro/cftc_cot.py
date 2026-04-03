@@ -69,9 +69,7 @@ logger = logging.getLogger(__name__)
 UTC = timezone.utc
 
 # CFTC disaggregated futures COT — current year and historical
-_CFTC_CURRENT_URL = (
-    "https://www.cftc.gov/files/dea/history/fut_disagg_txt_{year}.zip"
-)
+_CFTC_CURRENT_URL = "https://www.cftc.gov/files/dea/history/fut_disagg_txt_{year}.zip"
 _CFTC_HIST_BASE = "https://www.cftc.gov/files/dea/history/"
 
 # COMEX Gold futures contract code in the CFTC report
@@ -157,18 +155,14 @@ class CFTCCOTFeed:
     def _filter_gold(self, df: pd.DataFrame) -> pd.DataFrame:
         """Keep only COMEX gold rows and extract relevant columns."""
         # Filter by contract code (most reliable) or market name
-        mask = df.get("CFTC_Contract_MarketCode", pd.Series(dtype=str)).astype(
-            str
-        ).str.strip() == _GOLD_CONTRACT_CODE
+        mask = df.get("CFTC_Contract_MarketCode", pd.Series(dtype=str)).astype(str).str.strip() == _GOLD_CONTRACT_CODE
         gold = df[mask].copy()
 
         if gold.empty:
             # Fallback: filter by market name substring
             name_col = "Market_and_Exchange_Names"
             if name_col in df.columns:
-                gold = df[
-                    df[name_col].astype(str).str.upper().str.contains("GOLD")
-                ].copy()
+                gold = df[df[name_col].astype(str).str.upper().str.contains("GOLD")].copy()
 
         if gold.empty:
             return pd.DataFrame()
@@ -179,9 +173,7 @@ class CFTCCOTFeed:
 
         # Parse date — CFTC uses YYMMDD format
         if "report_date" in gold.columns:
-            gold["date"] = pd.to_datetime(
-                gold["report_date"].astype(str), format="%y%m%d", errors="coerce"
-            )
+            gold["date"] = pd.to_datetime(gold["report_date"].astype(str), format="%y%m%d", errors="coerce")
             gold = gold.dropna(subset=["date"])
             gold["date"] = gold["date"].dt.tz_localize("UTC")
 
@@ -302,9 +294,7 @@ class CFTCCOTFeed:
         # Initial fetch
         await self.fetch_and_inject()
         # Schedule weekly refresh
-        self._task = asyncio.create_task(
-            self._weekly_refresh_loop(), name="cftc_cot_refresh"
-        )
+        self._task = asyncio.create_task(self._weekly_refresh_loop(), name="cftc_cot_refresh")
 
     async def stop(self) -> None:
         self._running = False
@@ -320,9 +310,7 @@ class CFTCCOTFeed:
             days_until_friday = (4 - now.weekday()) % 7  # Friday = weekday 4
             if days_until_friday == 0 and now.hour >= 21:
                 days_until_friday = 7  # already past this Friday's publish time
-            next_friday = now.replace(
-                hour=21, minute=0, second=0, microsecond=0
-            ) + timedelta(days=days_until_friday)
+            next_friday = now.replace(hour=21, minute=0, second=0, microsecond=0) + timedelta(days=days_until_friday)
             wait_s = (next_friday - now).total_seconds()
             logger.info(
                 "COT: next refresh in %.1f hours (Friday 21:00 UTC)",

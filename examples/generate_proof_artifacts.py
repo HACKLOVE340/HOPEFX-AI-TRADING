@@ -36,6 +36,7 @@ Enhanced features (v3):
 
 import json
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 
@@ -78,7 +79,6 @@ def fetch_real_xauusd(years: int = 40) -> pd.DataFrame:
     """
     import yfinance as yf
 
-
     end = datetime.now(UTC)
     start = end - timedelta(days=years * 365)
     raw = yf.download(
@@ -95,9 +95,7 @@ def fetch_real_xauusd(years: int = 40) -> pd.DataFrame:
     if isinstance(raw.columns, pd.MultiIndex):
         raw.columns = [c[0].lower() for c in raw.columns]
     else:
-        raw.columns = [
-            c.lower() if isinstance(c, str) else c[0].lower() for c in raw.columns
-        ]
+        raw.columns = [c.lower() if isinstance(c, str) else c[0].lower() for c in raw.columns]
     raw.index = pd.to_datetime(raw.index).tz_localize(None)
     raw = raw.dropna(subset=["close"])
     return raw
@@ -118,7 +116,7 @@ def generate_xauusd_synthetic(start="2019-01-02", n_days=1260, seed=42) -> pd.Da
     dates = []
     d = datetime.strptime(start, "%Y-%m-%d")
     while len(dates) < n_days:
-        if d.weekday() < 5:
+        if d.weekday() < 5:  # noqa: PLR2004
             dates.append(d)
         d += timedelta(days=1)
 
@@ -170,8 +168,7 @@ except Exception as exc:
     import warnings
 
     warnings.warn(
-        f"yfinance unavailable ({exc}). Falling back to SYNTHETIC GBM data. "
-        "Results are NOT based on real market data.",
+        f"yfinance unavailable ({exc}). Falling back to SYNTHETIC GBM data. Results are NOT based on real market data.",
         UserWarning,
         stacklevel=1,
     )
@@ -212,7 +209,7 @@ def _rolling_hurst(series, window=40):
     """Approximate Hurst exponent via R/S analysis."""
 
     def _h(x):
-        if len(x) < 8:
+        if len(x) < 8:  # noqa: PLR2004
             return 0.5
         try:
             lags = range(2, min(len(x) // 2, 12))
@@ -221,7 +218,7 @@ def _rolling_hurst(series, window=40):
                 chunks = [x[i : i + lag] for i in range(0, len(x) - lag, lag)]
                 rs_c = []
                 for c in chunks:
-                    if len(c) < 2:
+                    if len(c) < 2:  # noqa: PLR2004
                         continue
                     dev = np.cumsum(c - np.mean(c))
                     r = dev.max() - dev.min()
@@ -230,7 +227,7 @@ def _rolling_hurst(series, window=40):
                         rs_c.append(r / s)
                 if rs_c:
                     rs_vals.append(np.mean(rs_c))
-            if len(rs_vals) < 2:
+            if len(rs_vals) < 2:  # noqa: PLR2004
                 return 0.5
             h = np.polyfit(np.log(list(lags)[: len(rs_vals)]), np.log(rs_vals), 1)[0]
             return float(np.clip(h, 0.0, 1.0))
@@ -267,9 +264,7 @@ def add_features(df: pd.DataFrame, macro_df=None) -> pd.DataFrame:
     ema26 = c.ewm(span=26, adjust=False).mean()
     macd = ema12 - ema26
     d["macd_norm"] = (macd / c.replace(0, np.nan)).fillna(0.0)
-    d["macd_hist_norm"] = (
-        (macd - macd.ewm(span=9, adjust=False).mean()) / c.replace(0, np.nan)
-    ).fillna(0.0)
+    d["macd_hist_norm"] = ((macd - macd.ewm(span=9, adjust=False).mean()) / c.replace(0, np.nan)).fillna(0.0)
 
     sma20 = c.rolling(20).mean()
     std20 = c.rolling(20).std()
@@ -285,9 +280,7 @@ def add_features(df: pd.DataFrame, macro_df=None) -> pd.DataFrame:
 
     # ── Volatility ────────────────────────────────────────────────────────────
     d["rvol_20"] = d["ret_1"].rolling(20).std() * np.sqrt(252)
-    d["vol_ratio_5_20"] = (
-        d["ret_1"].rolling(5).std() / d["ret_1"].rolling(20).std().replace(0, np.nan)
-    ).fillna(1.0)
+    d["vol_ratio_5_20"] = (d["ret_1"].rolling(5).std() / d["ret_1"].rolling(20).std().replace(0, np.nan)).fillna(1.0)
     d["atr_pct"] = (atr14 / c.replace(0, np.nan)).fillna(0.0)
 
     # ── Regime features ───────────────────────────────────────────────────────
@@ -343,7 +336,7 @@ def add_features(df: pd.DataFrame, macro_df=None) -> pd.DataFrame:
         if "vix" in macro.columns:
             vix = macro["vix"]
             d["macro_vix_level"] = vix
-            d["macro_vix_spike"] = (vix > 30).astype(float)
+            d["macro_vix_spike"] = (vix > 30).astype(float)  # noqa: PLR2004
         else:
             d["macro_vix_level"] = d["macro_vix_spike"] = 0.0
 
@@ -367,11 +360,9 @@ def add_features(df: pd.DataFrame, macro_df=None) -> pd.DataFrame:
             dxy_ret = macro["dxy"].pct_change(fill_method=None).fillna(0.0)
             yield_chg = macro["yield_10y"].diff().fillna(0.0)
             d["cot_cb_buying_proxy"] = (
-                (gold_ret > 0.002) & (dxy_ret > 0) & (yield_chg > 0)
+                (gold_ret > 0.002) & (dxy_ret > 0) & (yield_chg > 0)  # noqa: PLR2004
             ).astype(float)
-            d["cot_cb_buying_freq20"] = (
-                d["cot_cb_buying_proxy"].rolling(20).mean().fillna(0.0)
-            )
+            d["cot_cb_buying_freq20"] = d["cot_cb_buying_proxy"].rolling(20).mean().fillna(0.0)
         else:
             d["cot_cb_buying_proxy"] = d["cot_cb_buying_freq20"] = 0.0
     else:
@@ -412,17 +403,11 @@ try:
     _frames = {}
     for name, ticker in _macro_tickers.items():
         try:
-            raw = yf.download(
-                ticker, start=_macro_start, progress=False, auto_adjust=True
-            )
+            raw = yf.download(ticker, start=_macro_start, progress=False, auto_adjust=True)
             if not raw.empty:
                 # Handle MultiIndex columns from yfinance >= 0.2.x
                 if isinstance(raw.columns, pd.MultiIndex):
-                    close = (
-                        raw[("Close", ticker)]
-                        if ("Close", ticker) in raw.columns
-                        else raw.iloc[:, 0]
-                    )
+                    close = raw[("Close", ticker)] if ("Close", ticker) in raw.columns else raw.iloc[:, 0]
                 else:
                     close = raw["Close"] if "Close" in raw.columns else raw.iloc[:, 0]
                 close = close.squeeze()
@@ -449,17 +434,13 @@ FEATURE_COLS = [c for c in dff.columns if c not in EXCLUDE]
 # Sanitise: replace inf/-inf with NaN then forward-fill, then zero-fill.
 # Early bars in a 40-year dataset have insufficient rolling history and can
 # produce inf values (e.g. division by near-zero ATR in the first 200 bars).
-dff[FEATURE_COLS] = (
-    dff[FEATURE_COLS].replace([np.inf, -np.inf], np.nan).ffill().fillna(0.0)
-)
+dff[FEATURE_COLS] = dff[FEATURE_COLS].replace([np.inf, -np.inf], np.nan).ffill().fillna(0.0)
 # Drop any remaining rows with NaN in target
 dff = dff.dropna(subset=["target"])
 
 X = dff[FEATURE_COLS].values
 y = dff["target"].values
-print(
-    f"  {len(X)} samples, {len(FEATURE_COLS)} features, class balance: {y.mean():.2%} up-days"
-)
+print(f"  {len(X)} samples, {len(FEATURE_COLS)} features, class balance: {y.mean():.2%} up-days")
 
 
 # ── 3. Train RandomForest ─────────────────────────────────────────────────────
@@ -489,13 +470,9 @@ clf.fit(X_train_s, y_train)
 y_pred = clf.predict(X_test_s)
 y_prob = clf.predict_proba(X_test_s)[:, 1]
 
-report = classification_report(
-    y_test, y_pred, target_names=["Down", "Up"], output_dict=True
-)
+report = classification_report(y_test, y_pred, target_names=["Down", "Up"], output_dict=True)
 print(f"  Test accuracy: {report['accuracy']:.3f}")
-print(
-    f"  Up precision:  {report['Up']['precision']:.3f}  recall: {report['Up']['recall']:.3f}"
-)
+print(f"  Up precision:  {report['Up']['precision']:.3f}  recall: {report['Up']['recall']:.3f}")
 
 # Save model + scaler
 model_path = MODEL_DIR / "rf_xauusd.pkl"
@@ -512,7 +489,7 @@ test_df["signal_prob"] = y_prob
 # Threshold 0.50: take all model signals to maximise trade count.
 # Target ≥ 300 trades for Sharpe SE ≤ ±0.3.
 # N=45 trades (SE ≈ ±0.54) was insufficient; N=300 gives SE ≈ ±0.21.
-test_df["signal"] = (y_prob >= 0.50).astype(int)
+test_df["signal"] = (y_prob >= 0.50).astype(int)  # noqa: PLR2004
 # Recompute ATR14 on the test slice for position sizing (atr_pct is normalised;
 # we need the raw ATR in price units for stop/TP calculation)
 test_df["_atr14"] = _atr(test_df, 14)
@@ -598,14 +575,8 @@ n_trades = len(trades_df)
 if n_trades > 0:
     wins = (trades_df["net_pnl"] > 0).sum()
     win_rate = wins / n_trades
-    avg_win = (
-        trades_df.loc[trades_df["net_pnl"] > 0, "net_pnl"].mean() if wins > 0 else 0
-    )
-    avg_loss = (
-        trades_df.loc[trades_df["net_pnl"] <= 0, "net_pnl"].mean()
-        if (n_trades - wins) > 0
-        else 0
-    )
+    avg_win = trades_df.loc[trades_df["net_pnl"] > 0, "net_pnl"].mean() if wins > 0 else 0
+    avg_loss = trades_df.loc[trades_df["net_pnl"] <= 0, "net_pnl"].mean() if (n_trades - wins) > 0 else 0
     profit_factor = (
         trades_df.loc[trades_df["net_pnl"] > 0, "net_pnl"].sum()
         / abs(trades_df.loc[trades_df["net_pnl"] <= 0, "net_pnl"].sum())
@@ -666,9 +637,7 @@ perf = {
         "Do not commit live capital until 30+ days of OANDA paper trading is complete.",
     ],
     "dataset": _data_label,
-    "data_source": "Yahoo Finance GC=F (real)"
-    if _USING_REAL_DATA
-    else "Synthetic GBM (fallback)",
+    "data_source": "Yahoo Finance GC=F (real)" if _USING_REAL_DATA else "Synthetic GBM (fallback)",
     "real_data": _USING_REAL_DATA,
     "model": f"RandomForestClassifier (300 trees, depth 8, {len(FEATURE_COLS)} stationary features)",
     "backtest_period": f"{test_df.index[0].date()} – {test_df.index[-1].date()}",
@@ -725,12 +694,8 @@ if n_trades > 0:
 
 # ── 6. Equity curve plot ──────────────────────────────────────────────────────
 
-fig, axes = plt.subplots(
-    3, 1, figsize=(12, 10), gridspec_kw={"height_ratios": [3, 1, 1]}
-)
-_data_tag = (
-    "Real GC=F Data" if _USING_REAL_DATA else "⚠ SYNTHETIC DATA — NOT real market data"
-)
+fig, axes = plt.subplots(3, 1, figsize=(12, 10), gridspec_kw={"height_ratios": [3, 1, 1]})
+_data_tag = "Real GC=F Data" if _USING_REAL_DATA else "⚠ SYNTHETIC DATA — NOT real market data"
 fig.suptitle(
     f"HOPEFX · XAUUSD RandomForest Strategy · Backtest Results\n"
     f"({_data_tag}, {_actual_years}Y, {_data_start} – {_data_end})",
@@ -773,17 +738,15 @@ ax1.grid(True, alpha=0.3)
 # Annotate final return
 ret_color = "#4CAF50" if total_return >= 0 else "#F44336"
 ax1.annotate(
-    f"Return: {total_return*100:+.1f}%\n"
+    f"Return: {total_return * 100:+.1f}%\n"
     f"Sharpe: {sharpe:.2f} ±{sharpe_se:.2f} (N={n_trades})\n"
-    f"Max DD: {abs(max_dd)*100:.1f}%\n"
+    f"Max DD: {abs(max_dd) * 100:.1f}%\n"
     f"OOS acc: 68.0% p=0.0000",
     xy=(0.02, 0.97),
     xycoords="axes fraction",
     va="top",
     fontsize=8,
-    bbox=dict(
-        boxstyle="round,pad=0.4", facecolor="white", alpha=0.85, edgecolor=ret_color
-    ),
+    bbox=dict(boxstyle="round,pad=0.4", facecolor="white", alpha=0.85, edgecolor=ret_color),
 )
 
 # Panel 2: drawdown

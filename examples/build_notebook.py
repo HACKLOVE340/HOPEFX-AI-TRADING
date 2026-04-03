@@ -39,15 +39,11 @@ def stdout(text):
 
 
 def display_img(b64):
-    return new_output(
-        "display_data", data={"image/png": b64, "text/plain": ["<Figure>"]}
-    )
+    return new_output("display_data", data={"image/png": b64, "text/plain": ["<Figure>"]})
 
 
 def display_html(html):
-    return new_output(
-        "display_data", data={"text/html": [html], "text/plain": ["<HTML>"]}
-    )
+    return new_output("display_data", data={"text/html": [html], "text/plain": ["<HTML>"]})
 
 
 # ── cells ─────────────────────────────────────────────────────────────────────
@@ -163,7 +159,7 @@ FEATURES = [
 ]
 dff = add_features(df)
 print(f"Feature matrix: {dff[FEATURES].shape}  |  up-days: {dff['target'].mean():.1%}")""",
-        [stdout(f"Feature matrix: ({len(df)-50}, 17)  |  up-days: 48.0%\n")],
+        [stdout(f"Feature matrix: ({len(df) - 50}, 17)  |  up-days: 48.0%\n")],
     )
 )
 
@@ -279,6 +275,7 @@ cells.append(md("## 6 · Feature Importance"))
 fi_lines = ""
 try:
     import joblib as _joblib
+
     _bundle = _joblib.load(ROOT / "ml" / "saved_models" / "rf_xauusd.pkl")
     _clf = _bundle["model"]
     fi = sorted(zip(_bundle["features"], _clf.feature_importances_, strict=False), key=lambda x: -x[1])

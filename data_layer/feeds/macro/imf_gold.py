@@ -48,7 +48,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 import aiohttp
@@ -263,9 +263,7 @@ class IMFGoldFeed:
         """
         self._running = True
         await self.fetch_and_inject()
-        self._task = asyncio.create_task(
-            self._monthly_refresh_loop(), name="imf_gold_refresh"
-        )
+        self._task = asyncio.create_task(self._monthly_refresh_loop(), name="imf_gold_refresh")
 
     async def stop(self) -> None:
         self._running = False
@@ -280,18 +278,11 @@ class IMFGoldFeed:
             # Next 5th at 06:00 UTC
             if now.day < 5 or (now.day == 5 and now.hour < 6):
                 next_run = now.replace(day=5, hour=6, minute=0, second=0, microsecond=0)
+            # Move to next month
+            elif now.month == 12:
+                next_run = now.replace(year=now.year + 1, month=1, day=5, hour=6, minute=0, second=0, microsecond=0)
             else:
-                # Move to next month
-                if now.month == 12:
-                    next_run = now.replace(
-                        year=now.year + 1, month=1, day=5,
-                        hour=6, minute=0, second=0, microsecond=0
-                    )
-                else:
-                    next_run = now.replace(
-                        month=now.month + 1, day=5,
-                        hour=6, minute=0, second=0, microsecond=0
-                    )
+                next_run = now.replace(month=now.month + 1, day=5, hour=6, minute=0, second=0, microsecond=0)
             wait_s = (next_run - now).total_seconds()
             logger.info(
                 "IMF: next refresh in %.1f days (5th of month 06:00 UTC)",

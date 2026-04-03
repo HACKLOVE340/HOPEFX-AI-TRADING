@@ -59,22 +59,15 @@ logger = logging.getLogger(__name__)
 _MTF_STORE_SINGLETON: MTFFusionStore | None = None
 
 
-def get_mtf_store() -> "MTFFusionStore | None":
-    """
-    Return the bootstrapped MTFFusionStore singleton, or None if not yet ready.
-
-    Called by ml/signal_filter.py _gate_mtf_confluence() to retrieve live
-    H4/D1 trend features without importing the full startup stack.
-    Returns None gracefully when the store has not been initialised yet
-    (e.g. during tests or before startup completes) — the gate passes through.
-    """
+def _get_bootstrapped_mtf_store() -> MTFFusionStore | None:
+    """Return the startup-bootstrapped singleton (may be None before startup)."""
     return _MTF_STORE_SINGLETON
 
 
 async def init_mtf_store_standalone(
     symbol: str = "XAUUSD",
     data_dir: str = "data",
-) -> "MTFFusionStore":
+) -> MTFFusionStore:
     """
     Bootstrap MTFFusionStore outside the full app startup sequence.
 
