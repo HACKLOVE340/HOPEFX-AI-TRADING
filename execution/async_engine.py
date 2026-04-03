@@ -151,7 +151,6 @@ class AsyncExecutionEngine:
 
         logger.info("Initialized %s broker connections", len(self.brokers))
 
-
     async def submit_order(self, order: Order, priority: int = 5) -> str:
         """
         Submit order with smart routing and latency optimization.
@@ -191,7 +190,6 @@ class AsyncExecutionEngine:
 
                 if latency > 100:
                     logger.warning("High submission latency: %sms", latency)
-
 
             except TimeoutError:
                 logger.error("Order submission timeout: %s", order.id)
@@ -305,7 +303,6 @@ class AsyncExecutionEngine:
         order_ids = await self.batch_submit(orders)
         logger.info("Flattened %s positions", len(orders))
 
-
         return [oid for oid in order_ids if not isinstance(oid, Exception)]
 
     async def get_positions(self) -> list[dict]:
@@ -325,7 +322,6 @@ class AsyncExecutionEngine:
                     positions.append(p)
             except (OSError, ValueError, RuntimeError, AttributeError) as e:
                 logger.error("Failed to get positions from %s: %s", venue, e)
-
 
         self._position_cache_time = time.time()
         return positions
@@ -490,13 +486,11 @@ class AsyncExecutionEngine:
                 except (RuntimeError, ValueError, AttributeError) as e:
                     logger.error("Fill callback error: %s", e)
 
-
             if self.on_order_update:
                 try:
                     self.on_order_update(order)
                 except (RuntimeError, ValueError, AttributeError) as e:
                     logger.error("Order update callback error: %s", e)
-
 
     async def _monitor_fills(self, order: Order):
         """Monitor for fills from live broker"""
@@ -538,7 +532,6 @@ class AsyncExecutionEngine:
 
             except (OSError, ValueError, RuntimeError, AttributeError) as e:
                 logger.error("Fill monitoring error: %s", e)
-
 
             await asyncio.sleep(check_interval)
 
@@ -678,9 +671,7 @@ class AsyncExecutionEngine:
         """Risk check before submission"""
         # Position limit check
         current = self.position_cache.get(order.symbol, {}).get("quantity", 0)
-        if (
-            abs(current + (order.quantity if order.side == "buy" else -order.quantity)) > 100
-        ):
+        if abs(current + (order.quantity if order.side == "buy" else -order.quantity)) > 100:
             return False, "position_limit_exceeded"
 
         # Price sanity check

@@ -140,7 +140,7 @@ class NewsAPIProvider(NewsProvider):
             data = response.json()
 
             if data.get("status") != "ok":
-                self.logger.error("NewsAPI error: %s", data.get('message'))
+                self.logger.error("NewsAPI error: %s", data.get("message"))
 
                 return []
 
@@ -228,7 +228,7 @@ class AlphaVantageNewsProvider(NewsProvider):
             data = response.json()
 
             if "Error Message" in data:
-                self.logger.error("Alpha Vantage error: %s", data['Error Message'])
+                self.logger.error("Alpha Vantage error: %s", data["Error Message"])
 
                 return []
 
@@ -337,7 +337,6 @@ class RSSFeedProvider(NewsProvider):
                         continue
 
                 self.logger.info("Retrieved articles from %s", feed_name)
-
 
             except Exception as e:
                 self.logger.error("Error parsing RSS feed %s: %s", feed_name, e)

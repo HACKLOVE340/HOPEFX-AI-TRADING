@@ -559,7 +559,6 @@ class RealTimeSignalService:
 
             logger.info("Alert triggered: %s by signal %s", alert.id, signal.id)
 
-
     def delete_alert(self, alert_id: str):
         """Delete an alert."""
         with self._lock:
@@ -586,7 +585,6 @@ class RealTimeSignalService:
         self.subscribers.append(callback)
         logger.debug("New subscriber added. Total: %s", len(self.subscribers))
 
-
     def unsubscribe(self, callback: Callable):
         """Unsubscribe from signal events."""
         if callback in self.subscribers:
@@ -605,7 +603,6 @@ class RealTimeSignalService:
                 callback(event_type, event)
             except Exception as e:
                 logger.error("Error in subscriber callback: %s", e)
-
 
     # ============================================================
     # HISTORY & ANALYTICS

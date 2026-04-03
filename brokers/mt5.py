@@ -149,7 +149,6 @@ class MT5Connector(BrokerConnector):
 
                 logger.info("Leverage: 1:%s", account_info.leverage)
 
-
             return True
 
         except Exception as e:

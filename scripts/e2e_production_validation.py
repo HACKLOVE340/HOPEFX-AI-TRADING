@@ -395,9 +395,7 @@ def check_sentiment_scorer() -> str:
         fetched_at=datetime.now(UTC),
     )
     scored = scorer.score(article)
-    assert (
-        scored.gold_relevance > 0.3
-    ), f"Gold relevance too low: {scored.gold_relevance}"
+    assert scored.gold_relevance > 0.3, f"Gold relevance too low: {scored.gold_relevance}"
     assert -1.0 <= scored.sentiment_score <= 1.0
     return (
         f"relevance={scored.gold_relevance:.2f} sentiment={scored.sentiment_score:.2f} label={scored.sentiment_label}"

@@ -120,7 +120,6 @@ class HealthChecker:
         self._checks[name] = check_fn
         logger.info("Registered health check: %s", name)
 
-
     async def run_check(self, name: str) -> HealthCheck:
         """Run single health check"""
         if name not in self._checks:
@@ -478,7 +477,6 @@ class HealthChecker:
                         if check.status != HealthStatus.HEALTHY:
                             logger.warning("  %s: %s - %s", check.name, check.status.value, check.message)
 
-
                 # Wait for next check
                 await asyncio.sleep(self._check_interval)
 
@@ -567,7 +565,6 @@ async def start_health_server(
     logger.info("  - Live:    http://%s:%s/live", host, port)
 
     logger.info("  - Metrics: http://%s:%s/metrics", host, port)
-
 
     return runner
 

@@ -173,7 +173,6 @@ class EnsemblePredictor(BaseMLModel):
 
             self.logger.info("Ensemble built with models: %s", list(self.models.keys()))
 
-
         except Exception as e:
             self.logger.error("Error building ensemble: %s", e)
 
@@ -298,9 +297,7 @@ class EnsemblePredictor(BaseMLModel):
                 np.mean(window),  # SMA
                 np.std(window),  # Volatility
                 np.mean(window[-10:]),  # Short-term MA
-                np.mean(window[-20:])
-                if len(window) >= 20
-                else np.mean(window),  # Medium MA
+                np.mean(window[-20:]) if len(window) >= 20 else np.mean(window),  # Medium MA
                 window[-1] - window[-2] if len(window) >= 2 else 0,  # Momentum 1
                 window[-1] - window[-5] if len(window) >= 5 else 0,  # Momentum 5
                 np.max(window) - np.min(window),  # Range
@@ -384,8 +381,7 @@ class EnsemblePredictor(BaseMLModel):
                     "loss": float(history.history["loss"][-1]),
                     "val_loss": float(history.history.get("val_loss", [0])[-1]),
                 }
-                self.logger.info("LSTM trained: loss=%s", results['lstm']['loss'])
-
+                self.logger.info("LSTM trained: loss=%s", results["lstm"]["loss"])
 
             # Train Random Forest
             if "random_forest" in self.models:

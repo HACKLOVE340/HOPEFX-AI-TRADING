@@ -187,7 +187,6 @@ class Subscription:
         self.updated_at = datetime.now(UTC)
         logger.info("Subscription %s renewed until %s", self.subscription_id, self.end_date)
 
-
     def cancel(self) -> None:
         """Cancel subscription"""
         self.status = SubscriptionStatus.CANCELLED
@@ -195,13 +194,11 @@ class Subscription:
         self.updated_at = datetime.now(UTC)
         logger.info("Subscription %s cancelled", self.subscription_id)
 
-
     def suspend(self) -> None:
         """Suspend subscription"""
         self.status = SubscriptionStatus.SUSPENDED
         self.updated_at = datetime.now(UTC)
         logger.info("Subscription %s suspended", self.subscription_id)
-
 
     def reactivate(self) -> None:
         """Reactivate subscription"""
@@ -211,7 +208,6 @@ class Subscription:
             self.status = SubscriptionStatus.ACTIVE
         self.updated_at = datetime.now(UTC)
         logger.info("Subscription %s reactivated", self.subscription_id)
-
 
     def to_dict(self) -> dict:
         """Convert to dictionary"""

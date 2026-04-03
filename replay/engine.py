@@ -102,7 +102,6 @@ class ChartReplayEngine:
 
         logger.info("Loaded %s bars for %s", len(self.data_cache.get(data_key, [])), data_key)
 
-
     def _generate_sample_data(self, session: ReplaySession) -> list[ReplayBar]:
         """
         Generate bar data for replay.
@@ -193,7 +192,13 @@ class ChartReplayEngine:
             }
             interval = _TF_MAP.get(session.timeframe, "1d")
 
-            logger.info("Fetching %s [%s] %s → %s via yfinance", ticker, interval, session.start_date.date(), session.end_date.date())
+            logger.info(
+                "Fetching %s [%s] %s → %s via yfinance",
+                ticker,
+                interval,
+                session.start_date.date(),
+                session.end_date.date(),
+            )
             df = yf.download(
                 ticker,
                 start=session.start_date,
@@ -464,7 +469,6 @@ class ChartReplayEngine:
                 callback(*args)
             except Exception as e:
                 logger.error("Callback error: %s", e)
-
 
     def get_session_summary(self, session_id: str | None = None) -> dict[str, Any]:
         """Get summary of replay session."""

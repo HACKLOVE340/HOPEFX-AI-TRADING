@@ -475,7 +475,6 @@ class PerformanceTests:
         throughput = len(ticks) / duration
         logger.info("Backtest throughput: %s ticks/sec", throughput)
 
-
         assert throughput > 1000  # Minimum 1000 ticks/sec  # nosec B101
 
     async def test_prediction_latency(self):
@@ -498,7 +497,6 @@ class PerformanceTests:
 
         avg_latency = np.mean(latencies)
         logger.info("Prediction latency: %s ms", avg_latency)
-
 
         assert avg_latency < 100  # Sub-100ms  # nosec B101
 
@@ -529,7 +527,6 @@ class PerformanceTests:
 
         rate = received / 5
         logger.info("Data ingestion rate: %s ticks/sec", rate)
-
 
         assert rate > 10  # At least 10 consensus ticks/sec  # nosec B101
 
@@ -747,7 +744,6 @@ class ComprehensiveTestFramework:
         with Path(filepath).open("w") as f:
             json.dump(self._generate_report(0), f, indent=2, default=str)
         logger.info("Test report exported to %s", filepath)
-
 
 
 # =============================================================================

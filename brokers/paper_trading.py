@@ -664,7 +664,6 @@ class PaperTradingBroker(BrokerConnector):
         self.market_prices[symbol] = price
         logger.debug("Updated %s price to $%s", symbol, price)
 
-
     def _update_position(
         self,
         symbol: str,

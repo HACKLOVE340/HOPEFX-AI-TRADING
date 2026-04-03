@@ -91,7 +91,6 @@ class Team:
                 logger.info("Strategy %s shared with %s", strategy_id, user_id)
 
 
-
 class TeamManager:
     """Manage teams"""
 

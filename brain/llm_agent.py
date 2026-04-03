@@ -550,7 +550,7 @@ class LLMAgent:
         # ── History trimming — keep system prompt + last N turns ──────────────
         max_msgs = 1 + _CHAT_MAX_HISTORY_TURNS * 2  # system + (user+assistant)*N
         if len(self._history) > max_msgs:
-            self._history = [self._history[0], *self._history[-(max_msgs - 1):]]
+            self._history = [self._history[0], *self._history[-(max_msgs - 1) :]]
 
         # ── Live market context injection ─────────────────────────────────────
         live_context = self._build_live_context()
@@ -567,7 +567,11 @@ class LLMAgent:
 
         if ephemeral_parts:
             ephemeral_msg = "\n\n".join(ephemeral_parts)
-            messages_with_context = [*list(self._history), {"role": "system", "content": ephemeral_msg}, {"role": "user", "content": message}]
+            messages_with_context = [
+                *list(self._history),
+                {"role": "system", "content": ephemeral_msg},
+                {"role": "user", "content": message},
+            ]
             response_text, error = await self._call_llm_with_messages(messages_with_context)
             if not error:
                 # Persist the exchange without the ephemeral context

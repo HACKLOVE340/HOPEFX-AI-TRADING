@@ -118,7 +118,6 @@ class CircuitBreaker:
                 self.failure_count -= 1
                 logger.debug("Circuit breaker: failure count decreased to %s", self.failure_count)
 
-
             if self.failure_count == 0 and self.is_open:
                 self.is_open = False
                 logger.info("Circuit breaker CLOSED (recovered)")
@@ -131,7 +130,11 @@ class CircuitBreaker:
 
             if self.failure_count >= self.failure_threshold and not self.is_open:
                 self.is_open = True
-                logger.critical("Circuit breaker OPENED after %s consecutive failures. Recovery timeout: %ss", self.failure_count, self.recovery_timeout)
+                logger.critical(
+                    "Circuit breaker OPENED after %s consecutive failures. Recovery timeout: %ss",
+                    self.failure_count,
+                    self.recovery_timeout,
+                )
 
     async def check_recovery(self) -> bool:
         """Check if circuit can be closed automatically"""
@@ -235,7 +238,7 @@ class HOPEFXBrain:
             missing.append("price_engine")
 
         if missing:
-            logger.error("CRITICAL: Missing components: %s", ', '.join(missing))
+            logger.error("CRITICAL: Missing components: %s", ", ".join(missing))
 
         else:
             logger.info("All critical components injected into Brain")
@@ -339,7 +342,6 @@ class HOPEFXBrain:
         self.error_history.append(error_info)
 
         logger.exception("Error in brain cycle %s: %s", self._cycle_count)
-
 
         # Record failure
         await self._circuit_breaker.record_failure()
@@ -465,7 +467,12 @@ class HOPEFXBrain:
 
                     # Log regime changes
                     if old_regime != regime:
-                        logger.info("Regime change for %s: %s -> %s", symbol, old_regime.value if old_regime else 'None', regime.value)
+                        logger.info(
+                            "Regime change for %s: %s -> %s",
+                            symbol,
+                            old_regime.value if old_regime else "None",
+                            regime.value,
+                        )
                         self.regime_history.append(
                             {
                                 "timestamp": time.time(),
@@ -477,7 +484,6 @@ class HOPEFXBrain:
 
             except Exception as e:
                 logger.error("Regime detection error for %s: %s", symbol, e)
-
 
     async def _detect_regime(self, symbol: str) -> MarketRegime:
         """Detect market regime using price action - ROBUST VERSION"""
@@ -532,9 +538,7 @@ class HOPEFXBrain:
         tr2 = np.abs(highs_arr[1:] - closes_arr[:-1])
         tr3 = np.abs(lows_arr[1:] - closes_arr[:-1])
         true_range = np.maximum(np.maximum(tr1, tr2), tr3)
-        atr = (
-            np.mean(true_range[-14:]) if len(true_range) >= 14 else np.mean(true_range)
-        )
+        atr = np.mean(true_range[-14:]) if len(true_range) >= 14 else np.mean(true_range)
 
         # Classification
         current_price = closes_arr[-1]
@@ -612,7 +616,6 @@ class HOPEFXBrain:
             elif margin_ratio > 0.5:
                 logger.info("Moderate margin usage: %s", margin_ratio)
 
-
             # Check daily loss limit
             if balance > 0:
                 daily_loss_pct = abs(daily_pnl) / balance
@@ -636,7 +639,6 @@ class HOPEFXBrain:
 
         except Exception as e:
             logger.error("Risk assessment error: %s", e)
-
 
     async def _check_emergency_conditions(self) -> bool:
         """Check if emergency stop is needed - ROBUST"""
@@ -668,7 +670,6 @@ class HOPEFXBrain:
                     except Exception as e:
                         logger.error("Error checking data staleness for %s: %s", symbol, e)
 
-
             # Check for too many consecutive errors
             if self._circuit_breaker.failure_count > 10:
                 logger.critical("Too many consecutive failures, emergency stopping")
@@ -676,7 +677,6 @@ class HOPEFXBrain:
 
         except Exception as e:
             logger.error("Emergency check error: %s", e)
-
 
         return False
 
@@ -709,7 +709,6 @@ class HOPEFXBrain:
 
             except Exception as e:
                 logger.error("Error cancelling orders: %s", e)
-
 
         # Notify
         await self._safe_notify(
@@ -747,15 +746,13 @@ class HOPEFXBrain:
                 try:
                     success = await asyncio.wait_for(self.broker.close_position(pos["id"]), timeout=5.0)
                     if success:
-                        logger.info("Reduced exposure: closed position %s", pos['id'])
+                        logger.info("Reduced exposure: closed position %s", pos["id"])
 
                 except Exception as e:
-                    logger.error("Error reducing position %s: %s", pos['id'], e)
-
+                    logger.error("Error reducing position %s: %s", pos["id"], e)
 
         except Exception as e:
             logger.error("Error in reduce_exposure: %s", e)
-
 
     async def _make_strategy_decisions(self):
         """Execute strategy logic - WITH TIMEOUTS AND CONCURRENCY CONTROL"""
@@ -792,7 +789,6 @@ class HOPEFXBrain:
             logger.warning("Strategy decision timeout")
         except Exception as e:
             logger.error("Strategy decision error: %s", e)
-
 
     def _publish_to_signal_service(self, signal: dict) -> None:
         """
@@ -884,7 +880,14 @@ class HOPEFXBrain:
                         }
                     )
 
-                    logger.info("Executed %s %s %s @ %s (ID: %s)", action.upper(), size, symbol, order.average_fill_price, order.id)
+                    logger.info(
+                        "Executed %s %s %s @ %s (ID: %s)",
+                        action.upper(),
+                        size,
+                        symbol,
+                        order.average_fill_price,
+                        order.id,
+                    )
 
                 elif action == "close":
                     position_id = signal.get("position_id")
@@ -893,13 +896,11 @@ class HOPEFXBrain:
                         if success:
                             logger.info("Closed position %s", position_id)
 
-
             except TimeoutError:
-                logger.error("Signal execution timeout: %s", signal.get('symbol'))
+                logger.error("Signal execution timeout: %s", signal.get("symbol"))
 
             except Exception as e:
                 logger.error("Signal execution error: %s", e)
-
 
     async def _safe_notify(self, level: str, message: str, data: dict | None = None):
         """Safe notification with error handling"""
@@ -911,7 +912,6 @@ class HOPEFXBrain:
         except Exception as e:
             logger.error("Notification failed: %s", e)
 
-
     async def _log_periodic_state(self):
         """Log periodic state summary"""
         try:
@@ -921,10 +921,17 @@ class HOPEFXBrain:
             # Calculate average cycle time
             avg_cycle_time = sum(self._cycle_times) / len(self._cycle_times) if self._cycle_times else 0
 
-            logger.info("State Summary [Cycle %s] | Equity: $%s | Positions: %s | Regimes: %s | Avg Cycle: %sms | Circuit: %s", self._cycle_count, state_dict['equity'], state_dict['open_trades_count'], len(state_dict['market_regime']), avg_cycle_time * 1000, 'OPEN' if self._circuit_breaker.is_open else 'CLOSED')
+            logger.info(
+                "State Summary [Cycle %s] | Equity: $%s | Positions: %s | Regimes: %s | Avg Cycle: %sms | Circuit: %s",
+                self._cycle_count,
+                state_dict["equity"],
+                state_dict["open_trades_count"],
+                len(state_dict["market_regime"]),
+                avg_cycle_time * 1000,
+                "OPEN" if self._circuit_breaker.is_open else "CLOSED",
+            )
         except Exception as e:
             logger.error("Error logging state: %s", e)
-
 
     async def _pause_trading(self):
         """Pause trading but keep monitoring"""

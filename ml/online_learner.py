@@ -720,8 +720,7 @@ def _assert_safe_model_path(path: pathlib.Path) -> None:
         resolved.relative_to(_MODEL_ROOT)
     except ValueError as exc:
         raise ValueError(
-            f"Model path '{resolved}' is outside the permitted directory "
-            f"'{_MODEL_ROOT}'. Refusing to load/save."
+            f"Model path '{resolved}' is outside the permitted directory '{_MODEL_ROOT}'. Refusing to load/save."
         ) from exc
 
 
@@ -829,6 +828,7 @@ class XGBoostOnlineModel:
     ) -> None:
         try:
             import xgboost as xgb
+
             self._xgb = xgb  # retain reference; used in fit/predict
         except ImportError as exc:
             raise ImportError("xgboost is required for XGBoostOnlineModel. Install with: pip install xgboost") from exc

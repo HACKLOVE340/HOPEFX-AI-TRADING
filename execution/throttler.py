@@ -131,7 +131,6 @@ class MessageThrottler:
         )
         logger.warning("Throttling activated for %ss", cooldown)
 
-
     def _calculate_level(self) -> ThrottleLevel:
         """Calculate current throttle level"""
         second_usage = len(self.second_window) / self.max_per_second

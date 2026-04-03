@@ -410,9 +410,7 @@ class NuclearStreamer:
         if not self._subscribers:
             return
         tasks = [
-            asyncio.create_task(sub.on_new_price(price))
-            for sub in self._subscribers
-            if hasattr(sub, "on_new_price")
+            asyncio.create_task(sub.on_new_price(price)) for sub in self._subscribers if hasattr(sub, "on_new_price")
         ]
         if tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)

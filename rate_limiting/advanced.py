@@ -72,7 +72,6 @@ except ImportError:
     KEY_PREFIX = "hopefx:rl:"
 
 
-
 # ── Parse a rate string into (count, window_seconds) ─────────────────────────
 
 _PERIOD_SECONDS = {

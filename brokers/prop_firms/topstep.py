@@ -30,7 +30,6 @@ class TopstepTraderConnector(MT5Connector):
         self.account_type = config.get("account_type", "combine")
         logger.info("TopstepTrader initialized: %s account", self.account_type)
 
-
     def get_topstep_rules(self) -> dict[str, Any]:
         return {
             "max_daily_loss": "$2,000-$3,000",

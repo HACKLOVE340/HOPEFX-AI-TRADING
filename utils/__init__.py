@@ -81,7 +81,6 @@ class RetryWithExponentialBackoff:
                     delay = self.base_delay * (2**attempt)
                     logger.warning("%s failed (attempt %s), retrying in %ss: %s", func.__name__, attempt + 1, delay, e)
 
-
                     if self.on_retry:
                         self.on_retry(attempt, e)
 
@@ -100,7 +99,6 @@ class RetryWithExponentialBackoff:
 
                     delay = self.base_delay * (2**attempt)
                     logger.warning("%s failed (attempt %s), retrying in %ss: %s", func.__name__, attempt + 1, delay, e)
-
 
                     if self.on_retry:
                         self.on_retry(attempt, e)
@@ -207,7 +205,6 @@ def timeit(func: Callable) -> Callable:
             elapsed = time.perf_counter() - start
             logger.debug("%s took %sms", func.__name__, elapsed * 1000)
 
-
     @functools.wraps(func)
     def sync_wrapper(*args, **kwargs):
         start = time.perf_counter()
@@ -216,7 +213,6 @@ def timeit(func: Callable) -> Callable:
         finally:
             elapsed = time.perf_counter() - start
             logger.debug("%s took %sms", func.__name__, elapsed * 1000)
-
 
     return async_wrapper if inspect.iscoroutinefunction(func) else sync_wrapper
 

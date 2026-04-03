@@ -459,7 +459,6 @@ class MetricsRegistry:
         except Exception as e:
             logger.error("Error updating system metrics: %s", e)
 
-
     def register_custom_collector(self, collector_fn: Callable):
         """Register a custom metrics collector function"""
         self._custom_collectors.append(collector_fn)
@@ -486,7 +485,6 @@ class MetricsRegistry:
                 metrics["collectors"].update(custom_metrics)
             except Exception as e:
                 logger.error("Custom collector error: %s", e)
-
 
         return metrics
 

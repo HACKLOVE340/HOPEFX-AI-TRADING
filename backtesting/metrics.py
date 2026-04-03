@@ -240,9 +240,8 @@ class PerformanceMetrics:
             return 0.0
         if "entry_time" in self.trade_history.columns and "exit_time" in self.trade_history.columns:
             with contextlib.suppress(Exception):
-                durations = (
-                    pd.to_datetime(self.trade_history["exit_time"])
-                    - pd.to_datetime(self.trade_history["entry_time"])
+                durations = pd.to_datetime(self.trade_history["exit_time"]) - pd.to_datetime(
+                    self.trade_history["entry_time"]
                 )
                 return float(durations.dt.total_seconds().mean() / 86400)
         return 0.0

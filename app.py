@@ -303,6 +303,7 @@ async def lifespan(_app: FastAPI):
     # Start Prometheus sync loop (replaces deprecated @app.on_event("startup"))
     try:
         from prometheus_monitoring import _sync_loop as _prom_sync_loop
+
         _prom_interval = float(os.getenv("PROMETHEUS_SCRAPE_INTERVAL_SECONDS", "15"))
         _t = asyncio.create_task(_prom_sync_loop(_prom_interval))
         _t.add_done_callback(lambda _: None)
@@ -641,7 +642,6 @@ def run_server():
     logger.info("Starting API server on %s:%s", host, port)
 
     logger.info("Workers: %s, Reload: %s", workers, reload)
-
 
     uvicorn.run(
         "app:app",

@@ -305,7 +305,6 @@ class DepthOfMarketService:
 
             logger.debug("Order book updated: %s, seq=%s", symbol, self._sequence)
 
-
     def update_level(self, symbol: str, side: OrderBookSide, price: float, size: float):
         """
         Update a single level in the order book.

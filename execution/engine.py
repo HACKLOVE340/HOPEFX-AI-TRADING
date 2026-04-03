@@ -364,9 +364,7 @@ class ExecutionEngine:
     # execute() sub-steps — each ≤ 30 lines, independently testable
     # ------------------------------------------------------------------
 
-    def _enrich_price_from_data_layer(
-        self, request: ExecutionRequest, t0: float
-    ) -> "ExecutionRequest | ExecutionReport":
+    def _enrich_price_from_data_layer(self, request: ExecutionRequest, t0: float) -> ExecutionRequest | ExecutionReport:
         """
         Check data-layer safety and inject the current mid-price when absent.
 
@@ -379,9 +377,7 @@ class ExecutionEngine:
 
             if orchestrator._started and not orchestrator.is_safe_to_trade():
                 self._total_blocks += 1
-                return self._blocked_report(
-                    request, "[DATA_LAYER] Unsafe trading conditions (blackout/no feed)", t0
-                )
+                return self._blocked_report(request, "[DATA_LAYER] Unsafe trading conditions (blackout/no feed)", t0)
 
             if request.price is None and request.order_type == "MARKET":
                 tick = orchestrator.get_latest_tick(request.symbol)
@@ -438,9 +434,7 @@ class ExecutionEngine:
             metadata={**request.metadata, **extra_meta},
         )
 
-    def _check_pre_submission_guards(
-        self, request: ExecutionRequest, t0: float
-    ) -> "ExecutionReport | None":
+    def _check_pre_submission_guards(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
         """
         Check kill-switch and engine-stopped state synchronously.
 
@@ -458,9 +452,7 @@ class ExecutionEngine:
 
         return None
 
-    async def _check_pre_trade_gate(
-        self, request: ExecutionRequest, t0: float
-    ) -> "ExecutionReport | None":
+    async def _check_pre_trade_gate(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
         """
         Run circuit-breaker check then pre-trade risk gate.
 
@@ -486,9 +478,7 @@ class ExecutionEngine:
 
         return None
 
-    async def _try_algo_routing(
-        self, request: ExecutionRequest, t0: float
-    ) -> "ExecutionReport | None":
+    async def _try_algo_routing(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
         """
         Route large orders through the algo layer (TWAP/VWAP/Iceberg).
 
@@ -542,9 +532,7 @@ class ExecutionEngine:
 
         return _broker_fn
 
-    def _check_sharpe_circuit_breaker(
-        self, request: ExecutionRequest, t0: float
-    ) -> "ExecutionReport | None":
+    def _check_sharpe_circuit_breaker(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
         """
         Gate the model out when its rolling live Sharpe is below threshold.
 
@@ -592,9 +580,7 @@ class ExecutionEngine:
         except Exception as exc:
             logger.debug("TCA record_signal failed: %s", exc)
 
-    async def _submit_and_process(
-        self, request: ExecutionRequest, t0: float
-    ) -> ExecutionReport:
+    async def _submit_and_process(self, request: ExecutionRequest, t0: float) -> ExecutionReport:
         """
         Submit to broker and run all post-fill processing.
 
@@ -630,9 +616,7 @@ class ExecutionEngine:
 
         return report
 
-    async def _handle_fill_success(
-        self, request: ExecutionRequest, report: ExecutionReport
-    ) -> None:
+    async def _handle_fill_success(self, request: ExecutionRequest, report: ExecutionReport) -> None:
         """
         Run all post-fill side-effects for a successful order.
 
@@ -657,9 +641,7 @@ class ExecutionEngine:
         self._update_sharpe_circuit_breaker(request, report)
         self._warn_on_latency_breach(request, report)
 
-    def _update_sharpe_circuit_breaker(
-        self, request: ExecutionRequest, report: ExecutionReport
-    ) -> None:
+    def _update_sharpe_circuit_breaker(self, request: ExecutionRequest, report: ExecutionReport) -> None:
         """Record trade P&L in the Sharpe circuit breaker for live model gating."""
         model_version = request.metadata.get("model_version") or request.strategy_id
         if not model_version:
@@ -672,9 +654,7 @@ class ExecutionEngine:
         except Exception as exc:
             logger.debug("SharpeCircuitBreaker record failed: %s", exc)
 
-    def _warn_on_latency_breach(
-        self, request: ExecutionRequest, report: ExecutionReport
-    ) -> None:
+    def _warn_on_latency_breach(self, request: ExecutionRequest, report: ExecutionReport) -> None:
         """Log a warning when fill latency exceeds the configured target."""
         if report.latency_ms > self._max_latency_ms:
             logger.warning(
@@ -950,9 +930,7 @@ class ExecutionEngine:
         """Return execution metrics snapshot."""
         avg_latency = sum(self._latencies_ms) / len(self._latencies_ms) if self._latencies_ms else 0.0
         p99_latency = (
-            sorted(self._latencies_ms)[int(len(self._latencies_ms) * 0.99)]
-            if len(self._latencies_ms) >= 100
-            else 0.0
+            sorted(self._latencies_ms)[int(len(self._latencies_ms) * 0.99)] if len(self._latencies_ms) >= 100 else 0.0
         )
         return {
             "total_orders": self._total_orders,

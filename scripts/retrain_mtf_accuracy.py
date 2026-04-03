@@ -54,12 +54,13 @@ MODELS_DIR = PROJECT_ROOT / "ml" / "saved_models"
 HORIZON = 5
 OOS_YEARS = 8
 MIN_MOVE_ATR = 0.25
-PURGE_BARS = 5          # bars to purge between train/test in walk-forward
+PURGE_BARS = 5  # bars to purge between train/test in walk-forward
 N_SPLITS = 8
 ABSTAIN_THRESHOLD = 0.55  # only trade when confidence > this
 
 
 # ── Data loading ──────────────────────────────────────────────────────────────
+
 
 def load_58y_data() -> pd.DataFrame:
     path_50y = DATA_DIR / "XAUUSD_50Y.csv"
@@ -84,6 +85,7 @@ def load_58y_data() -> pd.DataFrame:
 
 # ── Feature building ──────────────────────────────────────────────────────────
 
+
 def build_full_feature_matrix(df: pd.DataFrame) -> pd.DataFrame:
     """Build base + extended + MTF features."""
     # Keep a copy of the raw OHLCV for MTF (needs full date range)
@@ -93,6 +95,7 @@ def build_full_feature_matrix(df: pd.DataFrame) -> pd.DataFrame:
     X_base, y_base = None, None
     try:
         from ml.advanced_features import build_advanced_features
+
         result = build_advanced_features(df, horizon=HORIZON, min_move_atr=MIN_MOVE_ATR)
         # Returns (X_df, y_series)
         X_base, y_base = result
@@ -107,6 +110,7 @@ def build_full_feature_matrix(df: pd.DataFrame) -> pd.DataFrame:
     logger.info("Building extended features (features_extended.py)…")
     try:
         from ml.features_extended import build_extended_features
+
         if X_base is not None:
             # build_extended_features expects the raw OHLCV aligned to X_base index
             # Re-align raw OHLCV to the filtered index from advanced_features
@@ -123,8 +127,12 @@ def build_full_feature_matrix(df: pd.DataFrame) -> pd.DataFrame:
             ext_result = build_extended_features(raw_ohlcv)
             ext_df = ext_result[0] if isinstance(ext_result, tuple) else ext_result
             # Merge extended features onto X_base by position
-            ext_cols = [c for c in ext_df.columns if c not in X_base.columns
-                        and c not in ("open","high","low","close","volume","Date","date","target")]
+            ext_cols = [
+                c
+                for c in ext_df.columns
+                if c not in X_base.columns
+                and c not in ("open", "high", "low", "close", "volume", "Date", "date", "target")
+            ]
             if len(ext_cols) > 0 and len(ext_df) == len(X_base):
                 for col in ext_cols:
                     X_base[col] = ext_df[col].values
@@ -135,6 +143,7 @@ def build_full_feature_matrix(df: pd.DataFrame) -> pd.DataFrame:
     logger.info("Building MTF features (mtf_features.py)…")
     try:
         from ml.mtf_features import build_mtf_features
+
         mtf_df = build_mtf_features(raw_ohlcv)
         mtf_cols = [c for c in mtf_df.columns if c.startswith("mtf_")]
         logger.info("MTF features: %d columns computed on %d rows", len(mtf_cols), len(mtf_df))
@@ -148,7 +157,7 @@ def build_full_feature_matrix(df: pd.DataFrame) -> pd.DataFrame:
                 x_dates = pd.to_datetime(X_base["Date"])
             else:
                 # Use the raw_ohlcv dates at the same positions
-                x_dates = pd.to_datetime(raw_ohlcv["Date"].iloc[:len(X_base)].values)
+                x_dates = pd.to_datetime(raw_ohlcv["Date"].iloc[: len(X_base)].values)
 
             mtf_aligned = mtf_indexed.reindex(x_dates.values, method="ffill")
             for col in mtf_cols:
@@ -183,11 +192,20 @@ def prepare_xy(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series, list[str]]:
 
     # Feature columns: exclude metadata and target
     exclude = {
-        "Date", "date", "open", "high", "low", "close", "volume",
-        target_col, "target_filtered", "label",
+        "Date",
+        "date",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        target_col,
+        "target_filtered",
+        "label",
     }
     feature_cols = [
-        c for c in df.columns
+        c
+        for c in df.columns
         if c not in exclude
         and df[c].dtype in (np.float64, np.float32, np.int64, np.int32, float, int)
         and not df[c].isna().all()
@@ -217,6 +235,7 @@ def prepare_xy(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series, list[str]]:
 
 # ── Purged walk-forward CV ────────────────────────────────────────────────────
 
+
 def purged_walk_forward_cv(
     X: pd.DataFrame, y: pd.Series, n_splits: int, purge: int
 ) -> list[tuple[np.ndarray, np.ndarray]]:
@@ -241,6 +260,7 @@ def purged_walk_forward_cv(
 
 # ── Model training ────────────────────────────────────────────────────────────
 
+
 def train_xgboost(X_train, y_train, X_test, y_test):
     from sklearn.calibration import CalibratedClassifierCV
     from xgboost import XGBClassifier
@@ -261,7 +281,8 @@ def train_xgboost(X_train, y_train, X_test, y_test):
         n_jobs=-1,
     )
     model.fit(
-        X_train, y_train,
+        X_train,
+        y_train,
         eval_set=[(X_test, y_test)],
         verbose=False,
     )
@@ -310,7 +331,8 @@ def train_lightgbm(X_train, y_train, X_test, y_test):
             verbose=-1,
         )
         model.fit(
-            X_train, y_train,
+            X_train,
+            y_train,
             eval_set=[(X_test, y_test)],
             callbacks=[lgb.early_stopping(50, verbose=False), lgb.log_evaluation(-1)],
         )
@@ -339,9 +361,7 @@ def train_stacking_ensemble(X_train, y_train, X_test, y_test):
     base_learners = [m for m in [xgb, rf, lgb] if m is not None]
 
     # Build meta-features from base learner OOF predictions
-    meta_X = np.column_stack([
-        m.predict_proba(X_test)[:, 1] for m in base_learners
-    ])
+    meta_X = np.column_stack([m.predict_proba(X_test)[:, 1] for m in base_learners])
 
     meta = LogisticRegression(C=1.0, random_state=42)
     meta.fit(meta_X, y_test)
@@ -354,10 +374,12 @@ def train_stacking_ensemble(X_train, y_train, X_test, y_test):
 
 # ── SHAP feature selection ────────────────────────────────────────────────────
 
+
 def shap_feature_selection(model, X: pd.DataFrame, top_k: int = 150) -> list[str]:
     """Use SHAP values to select the top_k most important features."""
     try:
         import shap
+
         explainer = shap.TreeExplainer(model.estimator if hasattr(model, "estimator") else model)
         shap_values = explainer.shap_values(X.iloc[:500])
         if isinstance(shap_values, list):
@@ -373,6 +395,7 @@ def shap_feature_selection(model, X: pd.DataFrame, top_k: int = 150) -> list[str
 
 
 # ── Evaluation ────────────────────────────────────────────────────────────────
+
 
 def evaluate(model_or_ensemble, X_test, y_test, base_learners=None):
     from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
@@ -408,11 +431,14 @@ def evaluate(model_or_ensemble, X_test, y_test, base_learners=None):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+
 def main() -> int:
     import joblib
     from sklearn.preprocessing import StandardScaler
+
     try:
         from scipy.stats import binomtest as _binomtest
+
         def binom_test(k, n, p, alternative):
             return _binomtest(k, n, p, alternative=alternative).pvalue
     except ImportError:
@@ -468,6 +494,7 @@ def main() -> int:
     # 6. SHAP feature selection on a quick XGB fit
     logger.info("Running SHAP feature selection…")
     from xgboost import XGBClassifier
+
     quick_xgb = XGBClassifier(n_estimators=100, max_depth=4, random_state=42, n_jobs=-1, eval_metric="logloss")
     quick_xgb.fit(X_train_s, y_train, verbose=False)
     selected_features = shap_feature_selection(quick_xgb, X_train_s, top_k=min(200, len(feature_cols)))
@@ -491,9 +518,14 @@ def main() -> int:
         from xgboost import XGBClassifier
 
         fold_xgb = XGBClassifier(
-            n_estimators=300, max_depth=5, learning_rate=0.05,
-            subsample=0.8, colsample_bytree=0.7, random_state=42,
-            n_jobs=-1, eval_metric="logloss",
+            n_estimators=300,
+            max_depth=5,
+            learning_rate=0.05,
+            subsample=0.8,
+            colsample_bytree=0.7,
+            random_state=42,
+            n_jobs=-1,
+            eval_metric="logloss",
         )
         fold_xgb.fit(Xtr, ytr, verbose=False)
         fold_cal = CalibratedClassifierCV(fold_xgb, method="isotonic", cv="prefit")
@@ -507,14 +539,21 @@ def main() -> int:
         cv_aucs.append(auc)
         logger.info(
             "Fold %d/%d  acc=%.3f  auc=%.3f  train=%d  test=%d",
-            i + 1, len(splits), acc, auc, len(tr_idx), len(te_idx),
+            i + 1,
+            len(splits),
+            acc,
+            auc,
+            len(tr_idx),
+            len(te_idx),
         )
 
     cv_acc_mean = np.mean(cv_accs)
     cv_acc_std = np.std(cv_accs)
     logger.info(
         "Walk-forward: acc=%.3f±%.3f  auc=%.3f",
-        cv_acc_mean, cv_acc_std, np.mean(cv_aucs),
+        cv_acc_mean,
+        cv_acc_std,
+        np.mean(cv_aucs),
     )
 
     # 8. Train final stacking ensemble on full train set
@@ -607,12 +646,16 @@ def main() -> int:
     print(f"  OOS acc confident: {oos_metrics['accuracy_confident']:.3f}  (conf > {ABSTAIN_THRESHOLD})")
     print(f"  OOS AUC:           {oos_metrics['auc']:.3f}")
     print(f"  OOS F1:            {oos_metrics['f1']:.3f}")
-    print(f"  OOS p-value:       {oos_metrics['p_value']:.4f}  {'✓ significant' if oos_metrics['significant'] else '✗ not significant'}")
-    print(f"  Abstain rate:      {oos_metrics['abstain_rate']*100:.1f}%")
+    print(
+        f"  OOS p-value:       {oos_metrics['p_value']:.4f}  {'✓ significant' if oos_metrics['significant'] else '✗ not significant'}"
+    )
+    print(f"  Abstain rate:      {oos_metrics['abstain_rate'] * 100:.1f}%")
     print()
 
     target_met = oos_metrics["accuracy_confident"] >= 0.68
-    print(f"  Target (68%+):     {'✓ MET' if target_met else '✗ NOT MET'} — {oos_metrics['accuracy_confident']*100:.1f}%")
+    print(
+        f"  Target (68%+):     {'✓ MET' if target_met else '✗ NOT MET'} — {oos_metrics['accuracy_confident'] * 100:.1f}%"
+    )
     print()
     print(f"  Saved: {ensemble_path}")
     print(f"  Meta:  {meta_path}")

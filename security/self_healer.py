@@ -100,10 +100,12 @@ async def _get_redis() -> Any | None:
     if _redis_client is None:
         try:
             from cache.redis_client import get_redis as _gr
+
             _redis_client = await _gr()
         except Exception:
             try:
                 import redis.asyncio as aioredis
+
                 _redis_client = aioredis.from_url(
                     os.getenv("REDIS_URL", "redis://localhost:6379/0"),
                     decode_responses=True,
@@ -114,6 +116,7 @@ async def _get_redis() -> Any | None:
 
 
 # ── Manifest helpers ──────────────────────────────────────────────────────────
+
 
 def _sha256(path: Path) -> str:
     h = hashlib.sha256()
@@ -166,6 +169,7 @@ def _save_manifest(manifest: dict[str, str]) -> None:
 
 # ── Quarantine ────────────────────────────────────────────────────────────────
 
+
 def _quarantine(path: Path) -> Path:
     """Copy a suspicious file to the quarantine directory before touching it."""
     QUARANTINE_DIR.mkdir(parents=True, exist_ok=True)
@@ -180,6 +184,7 @@ def _quarantine(path: Path) -> Path:
 
 
 # ── Git rollback ──────────────────────────────────────────────────────────────
+
 
 def _git_rollback(path: Path) -> bool:
     """Revert a single file to its last committed state via git checkout."""
@@ -204,6 +209,7 @@ def _git_rollback(path: Path) -> bool:
 
 # ── Import smoke-test ─────────────────────────────────────────────────────────
 
+
 def _import_ok(path: Path) -> bool:
     """Return True if the Python file compiles without syntax errors."""
     try:
@@ -219,6 +225,7 @@ def _import_ok(path: Path) -> bool:
 
 
 # ── Patch applier ─────────────────────────────────────────────────────────────
+
 
 def _apply_patch(target_path: Path, new_code: str) -> tuple[bool, str]:
     """
@@ -264,6 +271,7 @@ def _apply_patch(target_path: Path, new_code: str) -> tuple[bool, str]:
 
 # ── Diff generator ────────────────────────────────────────────────────────────
 
+
 def _unified_diff(original: str, patched: str, filename: str) -> str:
     lines_a = original.splitlines(keepends=True)
     lines_b = patched.splitlines(keepends=True)
@@ -272,6 +280,7 @@ def _unified_diff(original: str, patched: str, filename: str) -> str:
 
 
 # ── SelfHealer ────────────────────────────────────────────────────────────────
+
 
 class SelfHealer:
     """
@@ -345,13 +354,15 @@ class SelfHealer:
             if not actual_hash:
                 drift.append({"path": rel_path, "type": "deleted", "ts": datetime.now(UTC).isoformat()})
             elif actual_hash != expected_hash:
-                drift.append({
-                    "path": rel_path,
-                    "type": "modified",
-                    "expected": expected_hash[:16],
-                    "actual": actual_hash[:16],
-                    "ts": datetime.now(UTC).isoformat(),
-                })
+                drift.append(
+                    {
+                        "path": rel_path,
+                        "type": "modified",
+                        "expected": expected_hash[:16],
+                        "actual": actual_hash[:16],
+                        "ts": datetime.now(UTC).isoformat(),
+                    }
+                )
 
         for rel_path in current:
             if rel_path not in self._baseline:
@@ -372,12 +383,14 @@ class SelfHealer:
             for event in drift:
                 await redis.rpush(
                     "alerts:critical",
-                    json.dumps({
-                        "type": "file_integrity_drift",
-                        "ip": "internal",
-                        "ts": event["ts"],
-                        "detail": event,
-                    }),
+                    json.dumps(
+                        {
+                            "type": "file_integrity_drift",
+                            "ip": "internal",
+                            "ts": event["ts"],
+                            "detail": event,
+                        }
+                    ),
                 )
                 # Trim to last 1000 alerts
                 await redis.ltrim("alerts:critical", -1000, -1)
@@ -585,9 +598,11 @@ class SelfHealer:
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────
 
+
 def _require_auth(request: Request) -> dict[str, Any]:
     try:
         from auth.jwt_handler import verify_token
+
         token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         if not token:
             raise HTTPException(status_code=401, detail="Authentication required")

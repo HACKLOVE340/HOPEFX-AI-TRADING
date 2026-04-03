@@ -184,7 +184,9 @@ def create_news_router():
             }
         except Exception as exc:
             logger.error("World Monitor URLs error: %s", exc)
-            raise HTTPException(status_code=500, detail="World Monitor integration unavailable — check server logs") from None
+            raise HTTPException(
+                status_code=500, detail="World Monitor integration unavailable — check server logs"
+            ) from None
 
     # ── Economic calendar endpoint ─────────────────────────────────────────
 

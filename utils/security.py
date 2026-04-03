@@ -310,7 +310,11 @@ class SecurityAuditor:
             self.audit_logger.log(
                 log_level,
                 "[%s] %s on %s - Success: %s - User: %s",
-                event_type.value, action, resource, success, user_id or "N/A",
+                event_type.value,
+                action,
+                resource,
+                success,
+                user_id or "N/A",
             )
 
         return event
@@ -357,7 +361,6 @@ class CredentialRotationTracker:
         self._credentials[credential_name] = created_at or datetime.now(UTC)
         logger.info("Registered credential for rotation tracking: %s", credential_name)
 
-
     def get_credential_age(self, credential_name: str) -> timedelta | None:
         """Get the age of a credential"""
         if credential_name not in self._credentials:
@@ -383,11 +386,7 @@ class CredentialRotationTracker:
                 "age_days": age.days,
                 "needs_rotation": age.days >= self.rotation_days,
                 "days_until_rotation": days_until_rotation,
-                "status": "expired"
-                if days_until_rotation == 0
-                else "warning"
-                if days_until_rotation <= 14
-                else "ok",
+                "status": "expired" if days_until_rotation == 0 else "warning" if days_until_rotation <= 14 else "ok",
             }
 
         return status

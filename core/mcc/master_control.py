@@ -263,10 +263,7 @@ class MasterControlCore:
                         mean_r = sum(returns) / len(returns)
                         variance = sum((r - mean_r) ** 2 for r in returns) / len(returns)
                         # If variance is near zero the series is flat — treat as correlated
-                        if (
-                            variance < 1e-12
-                            or abs(mean_r) > self.config.correlation_threshold
-                        ):
+                        if variance < 1e-12 or abs(mean_r) > self.config.correlation_threshold:
                             return True
                         continue  # not correlated enough
 

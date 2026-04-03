@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 if sys.version_info >= (3, 11):
     from enum import StrEnum
 else:
+
     class StrEnum(str, enum.Enum):
         """Backport of enum.StrEnum for Python < 3.11."""
 

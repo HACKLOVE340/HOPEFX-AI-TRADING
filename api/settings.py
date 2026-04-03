@@ -397,4 +397,3 @@ async def _send_telegram(bot_token: str, chat_id: str) -> None:
             raise ValueError(
                 f"Telegram error: {data.get('description', 'unknown')}",
             )
-

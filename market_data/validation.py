@@ -177,7 +177,6 @@ class MarketDataValidator:
         if critical_issues:
             logger.critical("Critical data quality issues for %s: %s", symbol, critical_issues)
 
-
         return result
 
     def _is_trading_hours(self, dt: datetime, symbol: str) -> bool:

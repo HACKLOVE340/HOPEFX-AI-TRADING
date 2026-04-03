@@ -284,7 +284,6 @@ def _build_ohlcv_df(data: dict[str, Any]) -> "pd.DataFrame":
     >= 100 bars for reliable rolling-window feature computation.
     """
 
-
     prices = data.get("prices", [data["close"]])
     highs = data.get("highs", [data["high"]])
     lows = data.get("lows", [data["low"]])
@@ -328,7 +327,6 @@ def _fetch_macro_df(
     Returns a DataFrame of macro features or None if both stages fail.
     None is safe — the predictor falls back to OHLCV-only features.
     """
-
 
     _store = _get_macro_store()
     if _store is None or len(_store) == 0:
@@ -587,7 +585,6 @@ def _predict_basic(
     Returns (prob, model_ver).
     """
 
-
     prices = data.get("prices", [data["close"]])
     closes = pd.Series(prices)
     feat = {
@@ -599,9 +596,7 @@ def _predict_basic(
         "ret_1": closes.pct_change(1).iloc[-1] if len(closes) > 1 else 0,
         "ret_5": closes.pct_change(5).iloc[-1] if len(closes) > 5 else 0,
         "ret_20": closes.pct_change(20).iloc[-1] if len(closes) > 20 else 0,
-        "vol_20": (
-            closes.pct_change().rolling(20).std().iloc[-1] if len(closes) > 20 else 0
-        ),
+        "vol_20": (closes.pct_change().rolling(20).std().iloc[-1] if len(closes) > 20 else 0),
     }
     X = pd.DataFrame([feat])
 
@@ -1070,9 +1065,7 @@ async def _assess_risk_and_size(
     if not _run_signal_filter(signal_payload, ohlcv_proxy, symbol):
         return None
 
-    signal_strength = _compute_signal_strength(
-        signal_payload, symbol, direction, entry, sl_price, equity, data
-    )
+    signal_strength = _compute_signal_strength(signal_payload, symbol, direction, entry, sl_price, equity, data)
     volatility = _estimate_annualised_volatility(data, entry)
 
     sizing = risk_manager.calculate_position_size(
@@ -1256,9 +1249,7 @@ async def _execute_if_approved(
         return
 
     try:
-        quantity = await _assess_risk_and_size(
-            broker, risk_manager, symbol, direction, signal_payload, data
-        )
+        quantity = await _assess_risk_and_size(broker, risk_manager, symbol, direction, signal_payload, data)
     except Exception as exc:
         logger.error("Risk assessment failed in signal engine for %s: %s", symbol, exc)
         return

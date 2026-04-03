@@ -12,9 +12,11 @@ from sklearn.model_selection import cross_val_score, train_test_split
 # pandas_ta requires Python >=3.12; use the `ta` library on Python 3.10.
 try:
     import pandas_ta as _pta
+
     _TA_BACKEND = "pandas_ta"
 except ImportError:
     import ta as _ta_lib
+
     _TA_BACKEND = "ta"
 
 

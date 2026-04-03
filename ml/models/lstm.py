@@ -98,7 +98,6 @@ class LSTMPricePredictor(BaseMLModel):
             self.model = model
             self.logger.info("LSTM model built with architecture: %s", self.lstm_units)
 
-
         except ImportError:
             self.logger.error(
                 "TensorFlow not installed. Please install: pip install tensorflow",
@@ -239,7 +238,7 @@ class LSTMPricePredictor(BaseMLModel):
                 },
             )
 
-            self.logger.info("LSTM training complete. Final loss: %s", history.history['loss'][-1])
+            self.logger.info("LSTM training complete. Final loss: %s", history.history["loss"][-1])
 
             return {
                 "loss": history.history["loss"],

@@ -55,12 +55,8 @@ def add_price_action_features(df: pd.DataFrame) -> pd.DataFrame:
     d["pa_lower_wick"] = ((pd.concat([o, c], axis=1).min(axis=1) - l) / candle_range).fillna(0.0)
     d["pa_bull_candle"] = (c > o).astype(int)
     d["pa_doji"] = (d["pa_body_ratio"] < 0.1).astype(int)
-    d["pa_pin_bar_bull"] = (
-        (d["pa_lower_wick"] > 0.6) & (d["pa_body_ratio"] < 0.3)
-    ).astype(int)
-    d["pa_pin_bar_bear"] = (
-        (d["pa_upper_wick"] > 0.6) & (d["pa_body_ratio"] < 0.3)
-    ).astype(int)
+    d["pa_pin_bar_bull"] = ((d["pa_lower_wick"] > 0.6) & (d["pa_body_ratio"] < 0.3)).astype(int)
+    d["pa_pin_bar_bear"] = ((d["pa_upper_wick"] > 0.6) & (d["pa_body_ratio"] < 0.3)).astype(int)
 
     # Engulfing patterns
     prev_body = (d["close"].shift(1) - d["open"].shift(1)).abs()
@@ -518,9 +514,7 @@ def add_cot_proxy_features(
             dxy_ret = macro["dxy"].pct_change(fill_method=None).fillna(0.0)
             yield_chg = macro["yield_10y"].diff().fillna(0.0)
             # All three rising simultaneously = central bank / geopolitical demand
-            d["cot_cb_buying_proxy"] = (
-                (gold_ret > 0.002) & (dxy_ret > 0) & (yield_chg > 0)
-            ).astype(float)
+            d["cot_cb_buying_proxy"] = ((gold_ret > 0.002) & (dxy_ret > 0) & (yield_chg > 0)).astype(float)
             # Rolling 20-bar frequency of this pattern (persistence measure)
             d["cot_cb_buying_freq20"] = d["cot_cb_buying_proxy"].rolling(20).mean().fillna(0.0)
         else:

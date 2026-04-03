@@ -47,6 +47,7 @@ def initialize_database(db_url: str | None = None) -> None:
     # Create tables defined in both model modules.
     try:
         from database.models import Base as CoreBase
+
         CoreBase.metadata.create_all(engine)
         logger.info("Core tables created/verified")
     except Exception as exc:
@@ -54,6 +55,7 @@ def initialize_database(db_url: str | None = None) -> None:
 
     try:
         from database.user_models import Base as UserBase
+
         UserBase.metadata.create_all(engine)
         logger.info("User tables created/verified")
     except Exception as exc:
@@ -96,6 +98,7 @@ def validate_schema(engine) -> dict[str, list[str]]:
     for base_path in ("database.models", "database.user_models"):
         try:
             import importlib
+
             mod = importlib.import_module(base_path)
             base = getattr(mod, "Base", None)
             if base is not None:

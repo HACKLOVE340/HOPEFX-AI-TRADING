@@ -259,9 +259,7 @@ class AdvancedOrderFlowAnalyzer:
         score = round((buy_vol - sell_vol) / total_vol * 100, 2)
         dominant = "buyers" if score > 0 else ("sellers" if score < 0 else "neutral")
         abs_score = abs(score)
-        strength = (
-            "strong" if abs_score > 60 else ("moderate" if abs_score > 30 else "weak")
-        )
+        strength = "strong" if abs_score > 60 else ("moderate" if abs_score > 30 else "weak")
 
         return AggressionMetrics(
             symbol=symbol,
@@ -374,11 +372,7 @@ class AdvancedOrderFlowAnalyzer:
             prices = [s["price"] for s in stack]
             total_vol = sum(s["total_volume"] for s in stack)
             avg_imb = sum(abs(s["imbalance"]) for s in stack) / len(stack)
-            strength = (
-                "strong"
-                if avg_imb > 0.5
-                else ("moderate" if avg_imb > 0.25 else "weak")
-            )
+            strength = "strong" if avg_imb > 0.5 else ("moderate" if avg_imb > 0.25 else "weak")
             results.append(
                 StackedImbalance(
                     symbol=symbol,

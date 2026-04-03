@@ -48,13 +48,11 @@ def cmd_init(args):
         config = initialize_config(environment=args.environment)
         logger.info("✓ Configuration initialized: %s", config.environment)
 
-
         # Create database
         connection_string = config.database.get_connection_string()
         engine = create_engine(connection_string)
         Base.metadata.create_all(engine)
         logger.info("✓ Database tables created: %s", config.database.db_type)
-
 
         # Create required directories
         Path("logs").mkdir(exist_ok=True)
@@ -85,13 +83,11 @@ def cmd_status(args):
 
         logger.info("  Debug: %s", config.debug)
 
-
         # Check database
         connection_string = config.database.get_connection_string()
         engine = create_engine(connection_string)
         engine.connect()
         logger.info("✓ Database: Connected (%s)", config.database.db_type)
-
 
         # Check cache
         try:
@@ -113,7 +109,6 @@ def cmd_status(args):
         # Check API configs
         logger.info("✓ API Configurations: %s configured", len(config.api_configs))
 
-
         # Check directories
         dirs = {
             "logs": Path("logs"),
@@ -126,7 +121,6 @@ def cmd_status(args):
 
             else:
                 logger.warning("⚠ Directory '%s': Not found", name)
-
 
         logger.info("\n✓ System status check complete")
         return 0
@@ -194,7 +188,6 @@ def cmd_cache(args):
             logger.info("  Hit rate: %s%", stats.hit_rate)
 
             logger.info("  Memory usage: %s MB", stats.memory_usage_bytes / 1024 / 1024)
-
 
         elif args.action == "clear":
             if cache.clear_all():

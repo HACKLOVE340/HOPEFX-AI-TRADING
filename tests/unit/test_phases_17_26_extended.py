@@ -777,7 +777,6 @@ class TestExecutionTransparencyExtended:
         assert trend is not None
 
     def test_latency_trend_with_limit(self, engine, sample_executions):
-
         trend = engine.get_latency_trend(
             period_start=datetime.now(UTC) - timedelta(hours=1),
             period_end=datetime.now(UTC) + timedelta(hours=1),

@@ -50,6 +50,7 @@ except ImportError:
 
 try:
     import zmq  # noqa: F401
+
     ZMQ_AVAILABLE = True
 except ImportError:
     ZMQ_AVAILABLE = False
@@ -311,7 +312,6 @@ class DataProvider(ABC):
             except Exception as e:
                 logger.error("Callback error in %s: %s", self.name, e)
 
-
     async def start(self):
         """Start with automatic reconnection"""
         self._running = True
@@ -522,7 +522,6 @@ class OandaProvider(DataProvider):
                 except Exception as e:
                     logger.error("OANDA parse error: %s", e)
 
-
     async def disconnect(self):
         if self.session:
             await self.session.close()
@@ -708,7 +707,6 @@ class ConsensusAggregator:
             except Exception as e:
                 logger.warning("Redis unavailable: %s", e)
 
-
         # State
         self.providers: dict[str, DataProvider] = {}
         self.latest_ticks: dict[str, dict[str, MarketTick]] = defaultdict(dict)
@@ -743,7 +741,6 @@ class ConsensusAggregator:
         self.venue_scores[provider.name] = 1.0
 
         logger.info("Added provider: %s (priority=%s, weight=%s)", provider.name, provider.priority, provider.weight)
-
 
     async def _process_tick(self, tick: MarketTick):
         """Process incoming tick from any provider"""
@@ -781,9 +778,7 @@ class ConsensusAggregator:
         # Check freshness (< 1 second old)
         now = time.time_ns()
         fresh_ticks = [
-            t
-            for t in ticks
-            if (now - (t.timestamp.seconds * 1_000_000_000 + t.timestamp.nanoseconds)) < 1_000_000_000
+            t for t in ticks if (now - (t.timestamp.seconds * 1_000_000_000 + t.timestamp.nanoseconds)) < 1_000_000_000
         ]
 
         # Check if we have enough fresh data
@@ -859,7 +854,13 @@ class ConsensusAggregator:
 
         if price_range > consensus_price * self.outlier_threshold:
             self.stats["disagreements"] += 1
-            logger.warning("Price disagreement for %s: range=%s (%s bps), sources=%s", symbol, price_range, price_range / consensus_price * 10000, [t.source for _, t in scored_ticks])
+            logger.warning(
+                "Price disagreement for %s: range=%s (%s bps), sources=%s",
+                symbol,
+                price_range,
+                price_range / consensus_price * 10000,
+                [t.source for _, t in scored_ticks],
+            )
 
         # Create consensus tick
         consensus = MarketTick(
@@ -895,7 +896,6 @@ class ConsensusAggregator:
         except Exception as e:
             logger.error("Redis cache error: %s", e)
 
-
     async def _notify_consensus(self, tick: MarketTick):
         """Notify all consensus subscribers"""
         for callback in self._consensus_callbacks:
@@ -907,7 +907,6 @@ class ConsensusAggregator:
                     callback(tick)
             except Exception as e:
                 logger.error("Consensus callback error: %s", e)
-
 
     def on_consensus(self, callback: Callable[[MarketTick], Any]):
         """Subscribe to consensus ticks"""

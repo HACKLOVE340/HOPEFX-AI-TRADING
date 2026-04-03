@@ -45,7 +45,6 @@ class DataHandler:
 
         logger.info("Initializing DataHandler for %s symbols from %s to %s", len(symbols), start_date, end_date)
 
-
     def load_data(self):
         """Load historical data for all symbols."""
         for symbol in self.symbols:
@@ -71,10 +70,8 @@ class DataHandler:
                 self.data[symbol] = df
                 logger.info("Loaded %s bars for %s", len(df), symbol)
 
-
             except Exception as e:
                 logger.error("Error loading data for %s: %s", symbol, e)
-
 
         if not self.data:
             raise ValueError("No data loaded for any symbol")
@@ -113,7 +110,6 @@ class DataHandler:
             self.data[symbol] = self.data[symbol].reindex(common_index)
 
         logger.info("Aligned data to %s common dates", len(common_index))
-
 
     def get_latest_bars(self, symbol: str, n: int = 1) -> pd.DataFrame | None:
         """

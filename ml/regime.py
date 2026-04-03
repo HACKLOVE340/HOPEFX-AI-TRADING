@@ -203,7 +203,6 @@ class RegimeDetector:
 
         logger.info("Regime model trained: %s", self._regime_map)
 
-
     def get_regime_statistics(self) -> dict[str, Any]:
         """Get statistics for each regime."""
         if not self._is_fitted:

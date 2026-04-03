@@ -483,5 +483,4 @@ async def start_api_server(host: str = "0.0.0.0", port: int = 8000, trading_app=
 
     logger.info("  - Metrics:  http://%s:%s/metrics", host, port)
 
-
     await server.serve()

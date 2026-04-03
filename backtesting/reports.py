@@ -75,4 +75,3 @@ class ReportGenerator:
             f.write(report)
 
         logger.info("Report saved to %s", filename)
-

@@ -64,18 +64,15 @@ class Commission:
         self.collected_at = datetime.now(UTC)
         logger.info("Commission %s marked as collected", self.commission_id)
 
-
     def mark_failed(self) -> None:
         """Mark commission as failed"""
         self.status = CommissionStatus.FAILED
         logger.warning("Commission %s marked as failed", self.commission_id)
 
-
     def refund(self) -> None:
         """Refund commission"""
         self.status = CommissionStatus.REFUNDED
         logger.info("Commission %s refunded", self.commission_id)
-
 
     def to_dict(self) -> dict:
         """Convert to dictionary"""
@@ -137,7 +134,13 @@ class CommissionTracker:
             self._user_commissions[user_id] = []
         self._user_commissions[user_id].append(commission_id)
 
-        logger.info("Calculated commission %s: $%s (%s) for trade %s", commission_id, commission_amount, commission_rate, trade_id)
+        logger.info(
+            "Calculated commission %s: $%s (%s) for trade %s",
+            commission_id,
+            commission_amount,
+            commission_rate,
+            trade_id,
+        )
 
         return commission
 

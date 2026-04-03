@@ -269,7 +269,6 @@ class MarketDataCache:
 
         logger.info("MarketDataCache initialized (Redis: %s:%s)", host, port)
 
-
     def _connect_with_retry(self) -> Redis | None:
         """Attempt Redis connection with retries; return client or None on failure."""
         for attempt in range(self.max_retries):
@@ -339,7 +338,6 @@ class MarketDataCache:
 
                 if attempt > 0:
                     logger.info("Redis reconnected after %s attempts", attempt)
-
 
                 return client
 
@@ -898,7 +896,6 @@ class MarketDataCache:
         for key, value in stats.to_dict().items():
             logger.info("  %s: %s", key, value)
 
-
     def reset_statistics(self) -> None:
         """Reset cache statistics"""
         with self._stats_lock:
@@ -937,7 +934,6 @@ class MarketDataCache:
                 logger.info("Redis connection closed")
         except Exception as e:
             logger.error("Error closing Redis: %s", e)
-
 
     def __enter__(self):
         return self

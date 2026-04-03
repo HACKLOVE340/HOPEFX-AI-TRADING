@@ -73,6 +73,7 @@ AV_REPORT_PATH = PROJECT_ROOT / "data" / "av_last_scan.json"
 
 try:
     import yara  # type: ignore[import]
+
     YARA_AVAILABLE = True
 except ImportError:
     YARA_AVAILABLE = False
@@ -82,6 +83,7 @@ except ImportError:
 
 try:
     import clamd  # type: ignore[import]
+
     CLAMD_AVAILABLE = True
 except ImportError:
     CLAMD_AVAILABLE = False
@@ -91,6 +93,7 @@ except ImportError:
 
 try:
     import psutil
+
     PSUTIL_AVAILABLE = True
 except ImportError:
     PSUTIL_AVAILABLE = False
@@ -190,6 +193,7 @@ SKIP_PATHS: set[str] = {
 
 # ── Entropy calculator ────────────────────────────────────────────────────────
 
+
 def _shannon_entropy(data: bytes) -> float:
     if not data:
         return 0.0
@@ -201,6 +205,7 @@ def _shannon_entropy(data: bytes) -> float:
 
 
 # ── Threat record ─────────────────────────────────────────────────────────────
+
 
 class Threat(BaseModel):
     id: str
@@ -215,6 +220,7 @@ class Threat(BaseModel):
 
 
 # ── Scanner ───────────────────────────────────────────────────────────────────
+
 
 class AntivirusScanner:
     """
@@ -395,7 +401,9 @@ rule SuspiciousImport {
                 existing_keys.add(key)
                 logger.warning(
                     "AV: THREAT DETECTED path=%s type=%s severity=%s",
-                    t["path"], t["threat_type"], t["severity"],
+                    t["path"],
+                    t["threat_type"],
+                    t["severity"],
                 )
 
         # Keep last 1000 threats
@@ -416,7 +424,9 @@ rule SuspiciousImport {
         AV_REPORT_PATH.write_text(json.dumps(summary, indent=2))
         logger.info(
             "AV: scan complete — %d files, %d new threats, %.1fs",
-            scanned, len(new_threats), elapsed,
+            scanned,
+            len(new_threats),
+            elapsed,
         )
         return summary
 
@@ -428,7 +438,8 @@ rule SuspiciousImport {
 
             # Prune excluded directories in-place
             dirs[:] = [
-                d for d in dirs
+                d
+                for d in dirs
                 if not any(skip in (root_path / d).parts for skip in SKIP_PATHS)
                 and not any(rel_root.startswith(skip) for skip in SKIP_PATHS)
             ]
@@ -457,11 +468,15 @@ rule SuspiciousImport {
                 matches = self._yara_rules.match(data=raw)
                 for m in matches:
                     severity = m.meta.get("severity", "medium")
-                    threats.append(self._make_threat(
-                        rel, "yara_match", severity,
-                        f"YARA rule '{m.rule}' matched: {m.meta.get('description', '')}",
-                        sha256,
-                    ))
+                    threats.append(
+                        self._make_threat(
+                            rel,
+                            "yara_match",
+                            severity,
+                            f"YARA rule '{m.rule}' matched: {m.meta.get('description', '')}",
+                            sha256,
+                        )
+                    )
             except Exception as exc:
                 logger.debug("AV: YARA scan error on %s: %s", path, exc)
 
@@ -471,10 +486,15 @@ rule SuspiciousImport {
                 result = self._clamd.instream(raw)
                 status, virus_name = result.get("stream", ("OK", ""))
                 if status == "FOUND":
-                    threats.append(self._make_threat(
-                        rel, "clamav_detection", "critical",
-                        f"ClamAV: {virus_name}", sha256,
-                    ))
+                    threats.append(
+                        self._make_threat(
+                            rel,
+                            "clamav_detection",
+                            "critical",
+                            f"ClamAV: {virus_name}",
+                            sha256,
+                        )
+                    )
             except Exception as exc:
                 logger.debug("AV: ClamAV scan error on %s: %s", path, exc)
 
@@ -482,11 +502,15 @@ rule SuspiciousImport {
         if path.suffix.lower() in SCAN_EXTENSIONS:
             entropy = _shannon_entropy(raw)
             if entropy > 7.2:
-                threats.append(self._make_threat(
-                    rel, "high_entropy", "high",
-                    f"Shannon entropy={entropy:.3f} (>7.2) — possible obfuscated payload",
-                    sha256,
-                ))
+                threats.append(
+                    self._make_threat(
+                        rel,
+                        "high_entropy",
+                        "high",
+                        f"Shannon entropy={entropy:.3f} (>7.2) — possible obfuscated payload",
+                        sha256,
+                    )
+                )
 
         # Layer 4: Suspicious patterns (text files only)
         if path.suffix.lower() in SCAN_EXTENSIONS:
@@ -494,10 +518,15 @@ rule SuspiciousImport {
                 text = raw.decode("utf-8", errors="replace")
                 for name, pattern, severity in SUSPICIOUS_PATTERNS:
                     if pattern.search(text):
-                        threats.append(self._make_threat(
-                            rel, f"pattern_{name}", severity,
-                            f"Suspicious pattern '{name}' detected", sha256,
-                        ))
+                        threats.append(
+                            self._make_threat(
+                                rel,
+                                f"pattern_{name}",
+                                severity,
+                                f"Suspicious pattern '{name}' detected",
+                                sha256,
+                            )
+                        )
             except Exception as exc:
                 logger.debug("AV: pattern scan error on %s: %s", path, exc)
 
@@ -512,13 +541,15 @@ rule SuspiciousImport {
                 try:
                     name = (proc.info.get("name") or "").lower()
                     if name in suspicious_names:
-                        threats.append(self._make_threat(
-                            f"process:{proc.info['pid']}:{name}",
-                            "suspicious_process",
-                            "critical",
-                            f"Suspicious process detected: {name} (pid={proc.info['pid']})",
-                            "",
-                        ))
+                        threats.append(
+                            self._make_threat(
+                                f"process:{proc.info['pid']}:{name}",
+                                "suspicious_process",
+                                "critical",
+                                f"Suspicious process detected: {name} (pid={proc.info['pid']})",
+                                "",
+                            )
+                        )
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     ...  # nosec B110
         except Exception as exc:
@@ -526,9 +557,7 @@ rule SuspiciousImport {
         return threats
 
     @staticmethod
-    def _make_threat(
-        path: str, threat_type: str, severity: str, detail: str, sha256: str
-    ) -> dict[str, Any]:
+    def _make_threat(path: str, threat_type: str, severity: str, detail: str, sha256: str) -> dict[str, Any]:
         threat_id = hashlib.sha256(f"{path}:{threat_type}:{detail}".encode()).hexdigest()[:16]
         return {
             "id": threat_id,
@@ -563,6 +592,7 @@ rule SuspiciousImport {
         dest = QUARANTINE_DIR / f"{ts}_{src.name}"
         try:
             import shutil
+
             shutil.move(str(src), str(dest))
             threat["quarantined"] = True
             threat["quarantine_path"] = str(dest.relative_to(PROJECT_ROOT))
@@ -635,9 +665,7 @@ rule SuspiciousImport {
                 raise HTTPException(status_code=400, detail="Invalid file path") from None
             if not path.exists():
                 raise HTTPException(status_code=404, detail="File not found")
-            threats = await asyncio.get_event_loop().run_in_executor(
-                None, scanner._scan_file_sync, path
-            )
+            threats = await asyncio.get_event_loop().run_in_executor(None, scanner._scan_file_sync, path)
             return {"file": sanitized, "threats": threats}
 
         @router.post("/quarantine")
@@ -658,9 +686,11 @@ rule SuspiciousImport {
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────
 
+
 def _require_auth(request: Request) -> dict[str, Any]:
     try:
         from auth.jwt_handler import verify_token
+
         token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         if not token:
             raise HTTPException(status_code=401, detail="Authentication required")

@@ -44,13 +44,16 @@ _store: dict[str, Any] = {}
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
 
+
 def _get_user_id(request: Request) -> str:
     """Extract user_id from JWT Bearer token; fall back to 'anonymous'."""
     try:
         import os
+
         auth = request.headers.get("Authorization", "")
         if auth.startswith("Bearer "):
             import jwt as pyjwt
+
             secret = os.getenv("SECURITY_JWT_SECRET", "")
             if secret:
                 payload = pyjwt.decode(auth[7:], secret, algorithms=["HS256"])
@@ -82,6 +85,7 @@ def _db_save(user_id: str, section: str, data: dict) -> bool:
             existing.changed_by = user_id
         else:
             from database.models import Configuration as Cfg
+
             record = Cfg(
                 environment="production",
                 config_key=key,
@@ -134,6 +138,7 @@ def _load(user_id: str, section: str, defaults: dict) -> dict:
 
 # ── Preferences (timezone / language) ────────────────────────────────────────
 
+
 class PreferencesBody(BaseModel):
     timezone: str = "UTC"
     language: str = "en"
@@ -155,6 +160,7 @@ async def save_preferences(body: PreferencesBody, request: Request):
 
 
 # ── Appearance ────────────────────────────────────────────────────────────────
+
 
 class AppearanceBody(BaseModel):
     theme: str = "dark"
@@ -182,6 +188,7 @@ async def save_appearance(body: AppearanceBody, request: Request):
 
 
 # ── Trading preferences ───────────────────────────────────────────────────────
+
 
 class TradingPrefsBody(BaseModel):
     default_symbol: str = "XAU_USD"
@@ -211,6 +218,7 @@ async def save_trading_prefs(body: TradingPrefsBody, request: Request):
     if body.kill_switch_enabled:
         try:
             from risk.risk_manager import RiskManager
+
             RiskManager().activate_kill_switch(reason="user settings")
         except Exception as exc:
             logger.debug("Kill switch propagation to RiskManager failed: %s", exc)
@@ -219,6 +227,7 @@ async def save_trading_prefs(body: TradingPrefsBody, request: Request):
 
 
 # ── Broker settings ───────────────────────────────────────────────────────────
+
 
 class BrokerSettingsBody(BaseModel):
     type: str = "paper"
@@ -237,6 +246,7 @@ async def save_broker_settings(body: BrokerSettingsBody, request: Request):
 
 
 # ── Password change ───────────────────────────────────────────────────────────
+
 
 class ChangePasswordBody(BaseModel):
     current_password: str
@@ -294,6 +304,7 @@ async def change_password(body: ChangePasswordBody, request: Request):
 
 
 # ── Account deletion ──────────────────────────────────────────────────────────
+
 
 @router.delete("/api/auth/account", summary="Delete authenticated user account")
 async def delete_account(request: Request):

@@ -88,7 +88,6 @@ class AccessCode:
         self.status = AccessCodeStatus.REVOKED
         logger.info("Access code %s revoked", self.code)
 
-
     def to_dict(self) -> dict:
         """Convert to dictionary"""
         return {

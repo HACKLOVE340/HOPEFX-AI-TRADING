@@ -56,7 +56,6 @@ class USDTClient:
 
             logger.info("Generated USDT %s address for user %s", network.value, user_id)
 
-
             return {
                 "address": address,
                 "network": network.value,
@@ -99,7 +98,6 @@ class USDTClient:
 
             self.transactions[tx_hash] = transaction
             logger.info("USDT deposit processed: %s - %s USDT on %s", tx_hash, amount, network.value)
-
 
             return transaction
         except Exception as e:

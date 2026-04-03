@@ -177,18 +177,14 @@ class RSIStrategy(BaseStrategy):
                     reason += " and falling"
 
             # Exit long position if RSI reaches neutral/overbought
-            elif (
-                hasattr(self, "position") and self.position == "LONG" and current_rsi > 50
-            ):
+            elif hasattr(self, "position") and self.position == "LONG" and current_rsi > 50:
                 if current_rsi > self.overbought or current_rsi < previous_rsi:
                     signal_type = "SELL"
                     confidence = 0.6
                     reason = f"Exit long: RSI = {current_rsi:.2f}"
 
             # Exit short position if RSI reaches neutral/oversold
-            elif (
-                hasattr(self, "position") and self.position == "SHORT" and current_rsi < 50
-            ):
+            elif hasattr(self, "position") and self.position == "SHORT" and current_rsi < 50:
                 if current_rsi < self.oversold or current_rsi > previous_rsi:
                     signal_type = "BUY"
                     confidence = 0.6

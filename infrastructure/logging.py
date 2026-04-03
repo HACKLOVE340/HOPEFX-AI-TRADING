@@ -319,7 +319,6 @@ class HOPEFXLogger:
             root_logger.addHandler(graylog_handler)
             logger.info("Graylog shipping enabled: %s:%s", graylog_host, graylog_port)
 
-
         # Audit log (for security events)
         audit_handler = logging.handlers.RotatingFileHandler(
             log_path / f"{app_name}_audit.log",
@@ -331,8 +330,9 @@ class HOPEFXLogger:
         self._audit_logger.addHandler(audit_handler)
         self._audit_logger.setLevel(logging.INFO)
 
-        logger.info("Logging initialized: level=%s, json=%s, async=%s, dir=%s", level, json_format, async_mode, log_path)
-
+        logger.info(
+            "Logging initialized: level=%s, json=%s, async=%s, dir=%s", level, json_format, async_mode, log_path
+        )
 
     def set_context(self, context: LogContext):
         """Set logging context for current thread"""

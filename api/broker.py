@@ -485,9 +485,7 @@ async def paper_clock_status():
         clock_data: dict = get_clock().status()
         # Mask the account_id before returning — expose only the last 4 chars.
         _raw_id: str = str(clock_data.get("account_id") or "")
-        clock_data["account_id"] = (
-            ("..." + _raw_id[-4:]) if len(_raw_id) > 4 else ("****" if _raw_id else None)
-        )
+        clock_data["account_id"] = ("..." + _raw_id[-4:]) if len(_raw_id) > 4 else ("****" if _raw_id else None)
         return clock_data
     except Exception as exc:
         logger.warning("paper_clock_status: %s", type(exc).__name__)

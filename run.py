@@ -343,6 +343,7 @@ async def _run_backtest(args: argparse.Namespace) -> None:
 
         engine = BacktestEngine()
         from datetime import datetime
+
         start_dt = datetime.fromisoformat(args.start_date) if hasattr(args, "start_date") and args.start_date else None
         end_dt = datetime.fromisoformat(args.end_date) if hasattr(args, "end_date") and args.end_date else None
         engine.run(start_date=start_dt, end_date=end_dt)

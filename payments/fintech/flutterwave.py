@@ -49,7 +49,6 @@ class FlutterwaveClient:
             self.payments[tx_ref] = payment
             logger.info("Flutterwave payment initialized: %s", tx_ref)
 
-
             return payment
         except Exception as e:
             logger.error("Error initializing Flutterwave payment: %s", e)

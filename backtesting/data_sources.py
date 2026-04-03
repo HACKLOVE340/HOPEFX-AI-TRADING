@@ -58,7 +58,6 @@ class YahooFinanceSource(DataSource):
         self.interval = interval
         logger.info("Initialized Yahoo Finance source with %s interval", interval)
 
-
     def get_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """Download data from Yahoo Finance."""
         try:
@@ -101,7 +100,6 @@ class CSVDataSource(DataSource):
         self.data_dir = data_dir
         self.date_column = date_column
         logger.info("Initialized CSV source from %s", data_dir)
-
 
     def get_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """Load data from CSV file."""
@@ -415,7 +413,7 @@ class CoinGeckoSource(DataSource):
             data = response.json()
 
             if "prices" not in data:
-                logger.error("CoinGecko error: %s", data.get('error', 'Unknown error'))
+                logger.error("CoinGecko error: %s", data.get("error", "Unknown error"))
 
                 return pd.DataFrame()
 
@@ -656,7 +654,6 @@ class DataManager:
         self.sources["exchangerate"] = ExchangeRateSource()
 
         logger.info("DataManager initialized with sources: %s", list(self.sources.keys()))
-
 
     def get_data(
         self,

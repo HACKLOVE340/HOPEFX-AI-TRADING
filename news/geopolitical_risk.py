@@ -353,7 +353,6 @@ class GeopoliticalRiskProvider:
 
         logger.info("GeopoliticalRiskProvider initialized with layers: %s", self.data_layers)
 
-
     def get_current_events(self, force_refresh: bool = False) -> list[GeopoliticalEvent]:
         """
         Get current geopolitical events.
@@ -1218,7 +1217,6 @@ class WorldMonitorAPIClient:
         self.cache_ttl = self.config.get("cache_ttl", 300)  # 5 minutes
 
         logger.info("WorldMonitorAPIClient initialized with base_url: %s", self.base_url)
-
 
     def _make_request(self, endpoint: str, params: dict | None = None) -> dict | None:
         """

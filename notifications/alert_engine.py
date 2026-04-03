@@ -787,7 +787,6 @@ class AlertEngine:
             except Exception as e:
                 logger.error("Notification handler error: %s", e)
 
-
     # ================================================================
     # HISTORY & STATISTICS
     # ================================================================
@@ -840,7 +839,6 @@ class AlertEngine:
                 self.check_alerts(market_data)
             except Exception as e:
                 logger.error("Alert monitoring error: %s", e)
-
 
             await asyncio.sleep(interval_seconds)
 

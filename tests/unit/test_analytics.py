@@ -161,7 +161,6 @@ class TestSimulationEngine:
         """Test Monte Carlo simulation statistics are reasonable."""
         engine = SimulationEngine()
 
-
         rng = np.random.default_rng(7)
         trade_pnls = list(rng.normal(100, 500, 200).tolist())
 

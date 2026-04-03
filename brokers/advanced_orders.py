@@ -377,7 +377,10 @@ class AdvancedOrderManager:
 
         logger.info(
             "Created trailing stop: %s - %s %s %s",
-            order.id, side.value, quantity, symbol,
+            order.id,
+            side.value,
+            quantity,
+            symbol,
         )
         return order
 
@@ -530,7 +533,10 @@ class AdvancedOrderManager:
 
         logger.info(
             "Created bracket order: %s - Entry@%s, SL@%s, TP@%s",
-            bracket.id, entry_price or "MARKET", stop_loss_price, take_profit_price,
+            bracket.id,
+            entry_price or "MARKET",
+            stop_loss_price,
+            take_profit_price,
         )
         return bracket
 
@@ -575,7 +581,8 @@ class AdvancedOrderManager:
 
         logger.info(
             "Created conditional order: %s with %s conditions",
-            conditional.id, len(conditions),
+            conditional.id,
+            len(conditions),
         )
         return conditional
 
@@ -818,7 +825,6 @@ class AdvancedOrderManager:
 
         logger.info("Order filled: %s - %s@%s", order_id, fill_quantity, fill_price)
 
-
     def _handle_oco_fill(self, oco_id: str, filled_order_id: str):
         """Handle OCO order fill - cancel the other order."""
         oco = self.oco_orders[oco_id]
@@ -834,7 +840,6 @@ class AdvancedOrderManager:
 
         logger.info("OCO triggered: %s - Cancelled %s", oco_id, other_order.id)
 
-
     def _handle_bracket_fill(self, bracket_id: str, filled_order_id: str):
         """Handle bracket order fill."""
         bracket = self.bracket_orders[bracket_id]
@@ -846,7 +851,6 @@ class AdvancedOrderManager:
             bracket.take_profit_order.status = OrderStatus.OPEN
             logger.info("Bracket entry filled: %s - SL and TP activated", bracket_id)
 
-
         # If SL or TP filled, cancel the other
         elif filled_order_id == bracket.stop_loss_order.id:
             bracket.take_profit_order.status = OrderStatus.CANCELLED
@@ -854,13 +858,11 @@ class AdvancedOrderManager:
             self.stats["brackets_completed"] += 1
             logger.info("Bracket completed: %s - SL hit", bracket_id)
 
-
         elif filled_order_id == bracket.take_profit_order.id:
             bracket.stop_loss_order.status = OrderStatus.CANCELLED
             bracket.status = OrderStatus.FILLED
             self.stats["brackets_completed"] += 1
             logger.info("Bracket completed: %s - TP hit", bracket_id)
-
 
     def cancel_order(self, order_id: str) -> bool:
         """Cancel an order."""

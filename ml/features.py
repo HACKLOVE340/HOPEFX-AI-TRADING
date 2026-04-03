@@ -375,7 +375,6 @@ class SignalEnsemble:
             except Exception as e:
                 logger.error("Model %s prediction error: %s", name, e)
 
-
         if total_weight == 0:
             return {"action": "hold", "confidence": 0, "probability": 0.5}
 

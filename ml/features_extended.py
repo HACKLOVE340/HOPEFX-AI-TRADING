@@ -514,9 +514,7 @@ def add_regime_interactions(df: pd.DataFrame) -> pd.DataFrame:
         d["ri_trend_vol_confirm"] = 0.0
 
     # Mean-reversion signal: RSI + BB combined
-    d["ri_mean_rev_score"] = (
-        d["ri_rsi_oversold"].astype(float) + (d["ri_bb_pct"] < 0.1).astype(float)
-    ) / 2.0 - (
+    d["ri_mean_rev_score"] = (d["ri_rsi_oversold"].astype(float) + (d["ri_bb_pct"] < 0.1).astype(float)) / 2.0 - (
         d["ri_rsi_overbought"].astype(float) + (d["ri_bb_pct"] > 0.9).astype(float)
     ) / 2.0
 

@@ -164,7 +164,6 @@ class WebSocketPriceFeed(PriceFeedBase):
             try:
                 logger.info("Connecting to WebSocket: %s", self.ws_url)
 
-
                 self._websocket = await websockets.connect(
                     self.ws_url, ping_interval=self.heartbeat_interval, ping_timeout=10
                 )
@@ -181,7 +180,6 @@ class WebSocketPriceFeed(PriceFeedBase):
                 self._reconnect_attempts = 0
 
                 logger.info("WebSocket connected, subscribed to %s symbols", len(self.symbols))
-
 
                 # Start tasks
                 self._receive_task = asyncio.create_task(self._receive_loop())
@@ -243,7 +241,6 @@ class WebSocketPriceFeed(PriceFeedBase):
         except Exception as e:
             logger.error("Receive loop error: %s", e)
 
-
     async def _process_message(self, data: dict):
         """Process incoming message"""
         msg_type = data.get("type")
@@ -279,7 +276,6 @@ class WebSocketPriceFeed(PriceFeedBase):
 
         elif msg_type == "error":
             logger.error("WebSocket error message: %s", data)
-
 
     def _update_ohlcv_buffers(self, symbol: str, tick: Tick):
         """Update OHLCV buffers with new tick"""
@@ -527,7 +523,6 @@ class RealTimePriceEngine:
         """Start price engine"""
         logger.info("Starting price engine for %s symbols", len(self.symbols))
 
-
         # Start fallback first
         try:
             await self._rest_feed.connect()
@@ -535,7 +530,6 @@ class RealTimePriceEngine:
             logger.info("REST fallback active")
         except Exception as e:
             logger.warning("REST fallback failed: %s", e)
-
 
         # Start primary WebSocket — skip when no URL is configured (e.g. tests)
         ws_url = self.config.get("websocket_url", "")
@@ -615,7 +609,6 @@ class RealTimePriceEngine:
                 callback(tick)
             except Exception as e:
                 logger.error("Price callback error: %s", e)
-
 
     async def _tick_flush_loop(self) -> None:
         """Periodically flush buffered ticks to the tick_data table."""
@@ -734,7 +727,6 @@ class RealTimePriceEngine:
                 }
 
                 logger.debug("Price engine stats: %s", avg_spreads)
-
 
                 await asyncio.sleep(60)  # Check every minute
 

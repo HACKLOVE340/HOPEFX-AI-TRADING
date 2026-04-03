@@ -57,7 +57,6 @@ class KeyManager:
 
         logger.info("KeyManager initialized with key_id: %s", self._key_id)
 
-
     def _validate_key_strength(self, key: str) -> None:
         """Ensure key meets cryptographic standards"""
         try:

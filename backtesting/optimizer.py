@@ -38,7 +38,6 @@ class ParameterOptimizer:
 
         logger.info("Initialized parameter optimizer for %s", strategy_class.__name__)
 
-
     def grid_search(self, param_grid: dict[str, list[Any]], metric: str = "sharpe_ratio") -> dict:
         """
         Perform grid search over parameter space.
@@ -58,7 +57,6 @@ class ParameterOptimizer:
         combinations = list(itertools.product(*param_values))
 
         logger.info("Testing %s parameter combinations...", len(combinations))
-
 
         results = []
         best_score = float("-inf")
@@ -101,13 +99,10 @@ class ParameterOptimizer:
 
                 logger.debug("Params: %s, %s: %s", params, metric, score)
 
-
             except Exception as e:
                 logger.error("Error testing params %s: %s", params, e)
 
-
         logger.info("Best %s: %s with params: %s", metric, best_score, best_params)
-
 
         return {
             "best_params": best_params,

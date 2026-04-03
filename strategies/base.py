@@ -195,7 +195,13 @@ class BaseStrategy(ABC):
                     )
                     return None
                 self._record_signal(signal)
-                logger.info("%s: Generated %s signal for %s at %s", self.config.name, signal.signal_type.value, signal.symbol, signal.price)
+                logger.info(
+                    "%s: Generated %s signal for %s at %s",
+                    self.config.name,
+                    signal.signal_type.value,
+                    signal.symbol,
+                    signal.price,
+                )
 
             return signal
 
@@ -210,24 +216,20 @@ class BaseStrategy(ABC):
         self.status = StrategyStatus.RUNNING
         logger.info("Started strategy: %s", self.config.name)
 
-
     def stop(self):
         """Stop strategy execution"""
         self.status = StrategyStatus.STOPPED
         logger.info("Stopped strategy: %s", self.config.name)
-
 
     def pause(self):
         """Pause strategy execution"""
         self.status = StrategyStatus.PAUSED
         logger.info("Paused strategy: %s", self.config.name)
 
-
     def resume(self):
         """Resume strategy execution"""
         self.status = StrategyStatus.RUNNING
         logger.info("Resumed strategy: %s", self.config.name)
-
 
     def _record_signal(self, signal: Signal):
         """Record signal in history"""

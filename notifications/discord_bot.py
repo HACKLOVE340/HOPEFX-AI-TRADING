@@ -284,6 +284,7 @@ class DiscordSignalBot:
     @staticmethod
     def _is_valid_discord_url(url: str) -> bool:
         from urllib.parse import urlparse
+
         try:
             p = urlparse(url)
             host = (p.hostname or "").lower()

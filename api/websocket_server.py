@@ -181,7 +181,6 @@ class WebSocketManager:
             except Exception as e:
                 logger.error("Error in connect callback: %s", e)
 
-
         logger.info("WebSocket registered: %s", connection_id)
 
         return connection_id
@@ -214,9 +213,7 @@ class WebSocketManager:
             except Exception as e:
                 logger.error("Error in disconnect callback: %s", e)
 
-
         logger.info("WebSocket unregistered: %s", connection_id)
-
 
     def get_connection_info(self, connection_id: str) -> ConnectionInfo | None:
         """Get information about a connection."""
@@ -521,7 +518,6 @@ class WebSocketManager:
             except Exception as e:
                 logger.error("Error in message callback: %s", e)
 
-
         return None
 
     async def _handle_auth(self, connection_id: str, token: str | None) -> dict:
@@ -573,7 +569,6 @@ class WebSocketManager:
                 if elapsed > timeout:
                     dead_connections.append(conn_id)
                     logger.warning("Connection timeout: %s", conn_id)
-
 
             # Clean up dead connections
             for conn_id in dead_connections:
