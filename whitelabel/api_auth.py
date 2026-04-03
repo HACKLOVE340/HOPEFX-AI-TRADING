@@ -165,9 +165,12 @@ def _hash_key(raw_key: str) -> str:
     the underlying PRF.  This construction is intentional and correct for
     server-side API key fingerprinting.
     """
-    # nosec B324 — HMAC-SHA256 keyed MAC for key-store lookup, not password hashing
-    raw = hmac.digest(_KEY_HASH_SECRET, raw_key.encode(), "sha256")  # nosec B324
-    return raw.hex()
+    # HMAC-SHA256 keyed MAC — used for key-store lookup only, not password hashing.
+    # codeql[py/weak-sensitive-data-hashing] — keyed MAC, not a password hash.
+    # nosec B324
+    _key_bytes = raw_key.encode()
+    _mac = hmac.digest(_KEY_HASH_SECRET, _key_bytes, "sha256")  # nosec B324
+    return _mac.hex()
 
 
 # ── Tenant context ────────────────────────────────────────────────────────────

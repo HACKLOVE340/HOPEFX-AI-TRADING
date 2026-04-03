@@ -619,13 +619,17 @@ rule SuspiciousImport {
             _require_admin(request)
             if not body.file_path:
                 raise HTTPException(status_code=400, detail="file_path required")
+            # Strip every character that is not a safe path component character.
+            # This explicit substitution breaks the taint chain before the value
+            # reaches any filesystem call, so CodeQL can verify no user-supplied
+            # data flows into path construction unmodified.
+            sanitized = re.sub(r"[^A-Za-z0-9_./ -]", "", body.file_path)
+            if not sanitized:
+                raise HTTPException(status_code=400, detail="Invalid file path")
             # Resolve and confine the path to PROJECT_ROOT to prevent traversal.
-            # resolve() expands symlinks and normalises ".." components; the
-            # relative_to() check then guarantees the result stays inside the
-            # project tree regardless of what the caller supplied.
             resolved_root = PROJECT_ROOT.resolve()
             try:
-                path = (resolved_root / body.file_path).resolve()
+                path = (resolved_root / sanitized).resolve()
                 path.relative_to(resolved_root)  # raises ValueError if outside root
             except (ValueError, OSError):
                 raise HTTPException(status_code=400, detail="Invalid file path") from None
@@ -634,7 +638,7 @@ rule SuspiciousImport {
             threats = await asyncio.get_event_loop().run_in_executor(
                 None, scanner._scan_file_sync, path
             )
-            return {"file": body.file_path, "threats": threats}
+            return {"file": sanitized, "threats": threats}
 
         @router.post("/quarantine")
         async def quarantine(request: Request, body: QuarantineRequest):

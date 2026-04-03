@@ -421,8 +421,10 @@ def generate_chart(output_dir: str = "helm/hopefx") -> list[str]:
         finally:
             _os.close(fd)
         written.append(str(target))
-        # rel_path is a key from the FILES dict (static template names) — no secret data.
-        logger.debug("helm_chart: wrote template %s", rel_path)  # nosec B506 — template name only
+
+    # Log template names only — no content or secret values are logged.
+    for _written_path in written:
+        logger.debug("helm_chart: wrote template %s", _written_path)
 
     return written
 

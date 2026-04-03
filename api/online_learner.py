@@ -32,6 +32,7 @@ Endpoints
 from __future__ import annotations
 
 import logging
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -43,6 +44,20 @@ from api.auth import TokenPayload, get_current_user, require_role
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/online-learner", tags=["Online Learner"])
+
+# Allowlist for symbol names — only alphanumeric and underscore permitted.
+# This prevents path-traversal attacks when symbols are used in file paths.
+_SYMBOL_RE = re.compile(r"^[A-Za-z0-9_]{1,32}$")
+
+
+def _validate_symbol(symbol: str) -> str:
+    """Raise HTTPException 422 if symbol contains path-unsafe characters."""
+    if not _SYMBOL_RE.match(symbol):
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid symbol: only alphanumeric characters and underscores are allowed.",
+        )
+    return symbol
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -285,8 +300,9 @@ async def partial_fit(
     import asyncio
     import functools
 
-    learner = _get_learner(req.symbol)
-    bars = _fetch_bars(req.symbol, lookback=req.lookback)
+    symbol = _validate_symbol(req.symbol)
+    learner = _get_learner(symbol)
+    bars = _fetch_bars(symbol, lookback=req.lookback)
 
     loop = asyncio.get_event_loop()
     try:
@@ -400,26 +416,27 @@ async def reset_online_learner(
     Requires admin role.
     """
     reset_at = datetime.now(UTC).isoformat()
+    symbol = _validate_symbol(req.symbol)
     try:
         from research.pipeline.online_learning import reset_online_learner as _reset
 
-        removed = _reset(symbol=req.symbol)
+        removed = _reset(symbol=symbol)
     except Exception as exc:
-        logger.error("reset_online_learner failed for %s: %s", req.symbol, exc)
+        logger.error("reset_online_learner failed for %s: %s", symbol, type(exc).__name__)
         raise HTTPException(
             status_code=500,
             detail="Online learner reset failed — check server logs",
         ) from None
 
     msg = (
-        f"OnlineLearnerStore for {req.symbol.upper()} removed from registry — "
+        f"OnlineLearnerStore for {symbol.upper()} removed from registry — "
         "fresh instance will be created on next inference call."
         if removed
-        else f"No OnlineLearnerStore found for {req.symbol.upper()} — nothing to reset."
+        else f"No OnlineLearnerStore found for {symbol.upper()} — nothing to reset."
     )
-    logger.info("online_learner reset: symbol=%s removed=%s", req.symbol.upper(), removed)
+    logger.info("online_learner reset: symbol=%s removed=%s", symbol.upper(), removed)
     return ResetResponse(
-        symbol=req.symbol.upper(),
+        symbol=symbol.upper(),
         reset=removed,
         message=msg,
         reset_at=reset_at,
