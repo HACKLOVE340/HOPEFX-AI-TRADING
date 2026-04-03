@@ -645,8 +645,8 @@ def _resolve_clock_start_time() -> datetime | None:
     if started_str:
         try:
             return datetime.fromisoformat(started_str)
-        except Exception:
-            logger.debug("Suppressed exception (no detail) in %s", __name__)
+        except Exception as exc:
+            logger.debug("Suppressed exception in %s: %s", __name__, exc)
     return datetime.now(UTC)
 
 
