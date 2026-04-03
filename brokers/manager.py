@@ -132,6 +132,11 @@ class BrokerManager:
         # FIX bridge (optional low-latency path)
         self._fix_bridge = None
 
+        # Ordered failover chain: [primary, ...live secondaries..., paper]
+        # Built by _auto_register(); pre-populated here so the attribute
+        # always exists even when brokers are registered manually.
+        self._failover_chain: list[str] = []
+
         logger.info(
             "BrokerManager initialised | primary=%s fix=%s",
             self._primary_name,
@@ -163,7 +168,15 @@ class BrokerManager:
         return mgr
 
     def _auto_register(self) -> None:
-        """Register all available brokers based on environment."""
+        """Register all available brokers based on environment.
+
+        Priority for live failover:
+          1. IBKR (primary live broker)
+          2. OANDA (live secondary — activated if OANDA_API_KEY is set)
+          3. Paper trading (last-resort fallback — always registered)
+        """
+        import os
+
         # Always register paper trading (no external deps)
         try:
             from brokers.paper_trading import PaperTradingBroker
@@ -182,6 +195,33 @@ class BrokerManager:
         except Exception as exc:
             logger.warning("IBKRConnector unavailable: %s", exc)
 
+        # Register OANDA as live secondary broker (failover target before paper).
+        # Activated when OANDA_API_KEY (or BROKER_OANDA_TOKEN) is present in the
+        # environment.  In practice-mode (OANDA_PRACTICE=true, default) this acts
+        # as a safe live-secondary that does NOT risk real capital.
+        _oanda_key = (
+            os.getenv("OANDA_API_KEY")
+            or os.getenv("BROKER_OANDA_TOKEN")
+            or os.getenv("OANDA_ACCESS_TOKEN")
+        )
+        if _oanda_key:
+            try:
+                from brokers.oanda_broker import OandaBroker
+
+                _oanda_cfg = {
+                    "login": os.getenv("OANDA_ACCOUNT_ID", ""),
+                    "password": _oanda_key,
+                    "server": "live" if os.getenv("OANDA_PRACTICE", "true").lower() == "false" else "practice",
+                }
+                self.register("oanda", OandaBroker(_oanda_cfg))
+            except Exception as exc:
+                logger.warning("OandaBroker unavailable: %s", exc)
+        else:
+            logger.info(
+                "BrokerManager: OANDA_API_KEY not set — OANDA secondary broker not registered. "
+                "Set OANDA_API_KEY to enable live failover."
+            )
+
         # Register FIX bridge if enabled
         if self._enable_fix:
             try:
@@ -190,6 +230,9 @@ class BrokerManager:
                 self._fix_bridge = IBKRFIXBridge.from_env(kill_switch=self._kill_switch)
             except Exception as exc:
                 logger.warning("IBKRFIXBridge unavailable: %s", exc)
+
+        # Determine failover chain: primary → secondary live broker → paper
+        self._failover_chain = self._build_failover_chain()
 
         # Set primary
         if self._primary_name in self._brokers:
@@ -203,6 +246,28 @@ class BrokerManager:
             )
         else:
             logger.critical("BrokerManager: no brokers registered.")
+
+    def _build_failover_chain(self) -> list[str]:
+        """
+        Return an ordered list of broker names for sequential failover.
+
+        Order: primary → other live brokers (not paper) → paper.
+        This ensures we never jump straight to paper if a live secondary is
+        available (e.g. IBKR primary fails → OANDA secondary → paper).
+        """
+        chain: list[str] = []
+        # Primary first
+        if self._primary_name in self._brokers:
+            chain.append(self._primary_name)
+        # Other live brokers (excludes paper and primary)
+        for name in self._brokers:
+            if name != self._primary_name and name != "paper":
+                chain.append(name)
+        # Paper always last
+        if "paper" in self._brokers:
+            chain.append("paper")
+        logger.info("BrokerManager: failover chain = %s", chain)
+        return chain
 
     def register(self, name: str, broker: BrokerConnector) -> None:
         """Register a broker instance."""
@@ -561,24 +626,53 @@ class BrokerManager:
         )
         self._capture_sentry(exc)
 
-        # Auto-failover to paper after threshold
+        # Auto-failover using the ordered failover chain (primary → live secondary → paper)
         if failures >= _MAX_CONSECUTIVE_FAILURES:
             with self._lock:
-                if "paper" in self._brokers and self._active_name != "paper":
+                chain = getattr(self, "_failover_chain", [])
+                # Build chain on-demand if empty (manual registration without _auto_register)
+                if not chain:
+                    chain = self._build_failover_chain()
+                    self._failover_chain = chain
+                current = self._active_name
+                # Find the next broker in the chain after the current one
+                try:
+                    current_idx = chain.index(current)
+                    next_brokers = chain[current_idx + 1:]
+                except ValueError:
+                    next_brokers = [b for b in chain if b != current]
+
+                target = next(
+                    (b for b in next_brokers if b in self._brokers and b != current),
+                    None,
+                )
+                if target is not None:
                     logger.critical(
-                        "BrokerManager: %d consecutive failures on '%s'. Auto-failing over to paper trading.",
+                        "BrokerManager: %d consecutive failures on '%s'. "
+                        "Auto-failing over to '%s'.",
                         failures,
                         name,
+                        target,
                     )
-                    self._active_name = "paper"
+                    self._active_name = target
+                    # Reset failure counter for the new active broker
+                    self._consecutive_failures[target] = 0
                     if _SENTRY:
                         try:
                             sentry_sdk.capture_message(
-                                f"BrokerManager auto-failover: {name} → paper after {failures} failures",
+                                f"BrokerManager auto-failover: {name} → {target} after {failures} failures",
                                 level="critical",
                             )
                         except Exception as _exc:
                             logger.debug("Suppressed exception: %s", _exc)
+                else:
+                    logger.critical(
+                        "BrokerManager: %d consecutive failures on '%s' and no further "
+                        "failover target available in chain %s.",
+                        failures,
+                        name,
+                        chain,
+                    )
 
     def _reset_failures(self) -> None:
         """Reset failure counter for active broker on success."""

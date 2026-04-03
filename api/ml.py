@@ -1253,3 +1253,233 @@ async def rl_status(user: TokenPayload = Depends(get_current_user)) -> dict:
         "models": models,
         "count": len(models),
     }
+
+
+# ── Model Card ─────────────────────────────────────────────────────────────────
+
+@router.get(
+    "/model-card",
+    summary="Formal Model Card — metadata, performance, drift status, limitations",
+    response_description=(
+        "Structured Model Card for the currently active production model, "
+        "following the Google Model Card 1.0 schema."
+    ),
+)
+async def get_model_card(
+    user: TokenPayload = Depends(get_current_user),
+) -> dict[str, Any]:
+    """
+    Return a formal Model Card for the active production ML model.
+
+    The card includes:
+    - **model_details**: name, version, type, training date, authors
+    - **intended_use**: trading signals for XAU/USD, not financial advice
+    - **training_data**: source, date range, feature count, OOS split
+    - **evaluation_results**: OOS accuracy, AUC, F1, Sharpe, walk-forward fold stats
+    - **drift_status**: live feature-distribution drift from the inference engine
+    - **quantitative_analysis**: feature importances (top 10), regime filter status
+    - **caveats_and_recommendations**: known limitations and risk warnings
+
+    Accessible by any authenticated user.  Useful for regulatory transparency,
+    model governance, and live monitoring dashboards.
+    """
+    import json
+    import pathlib
+
+    saved_dir = pathlib.Path(__file__).parent.parent / "ml" / "saved_models"
+    registry_path = saved_dir / "registry.json"
+    report_path = saved_dir / "advanced_training_report.json"
+    feature_stats_path = saved_dir / "feature_stats.json"
+    feat_imp_path = saved_dir / "feature_importances.json"
+
+    # ── Load model registry ──────────────────────────────────────────────
+    registry: dict[str, Any] = {}
+    active_meta: dict[str, Any] = {}
+    try:
+        if registry_path.exists():
+            registry = json.loads(registry_path.read_text())
+            active_version = registry.get("active_version", "")
+            active_meta = registry.get("versions", {}).get(active_version, {})
+    except Exception as exc:
+        logger.warning("model_card: could not read registry.json: %s", exc)
+
+    # ── Load training report ─────────────────────────────────────────────
+    training_report: dict[str, Any] = {}
+    try:
+        if report_path.exists():
+            training_report = json.loads(report_path.read_text())
+    except Exception as exc:
+        logger.warning("model_card: could not read training report: %s", exc)
+
+    # ── Load drift / feature stats ───────────────────────────────────────
+    feature_stats: dict[str, Any] = {}
+    try:
+        if feature_stats_path.exists():
+            _raw_stats = json.loads(feature_stats_path.read_text())
+            # surface top-level keys for the drift section
+            feature_stats["_available"] = True
+            feature_stats.update({k: v for k, v in _raw_stats.items() if not isinstance(v, dict)})
+    except Exception as exc:
+        logger.warning("model_card: could not read feature_stats.json: %s", exc)
+
+    # ── Load feature importances ─────────────────────────────────────────
+    feature_importances: list[dict] = []
+    try:
+        if feat_imp_path.exists():
+            raw = json.loads(feat_imp_path.read_text())
+            # Accept list[{feature, importance}] or dict{feature: importance}
+            if isinstance(raw, dict):
+                feature_importances = sorted(
+                    [{"feature": k, "importance": v} for k, v in raw.items()],
+                    key=lambda x: x["importance"],
+                    reverse=True,
+                )[:10]
+            elif isinstance(raw, list):
+                feature_importances = raw[:10]
+        elif active_meta.get("top_features"):
+            # Fall back to registry top_features list
+            feature_importances = [
+                {"feature": f, "importance": None}
+                for f in active_meta["top_features"][:10]
+            ]
+    except Exception as exc:
+        logger.warning("model_card: could not load feature importances: %s", exc)
+
+    # ── Live drift status from inference engine ──────────────────────────
+    drift_status: dict[str, Any] = {"available": False}
+    try:
+        eng = _get_predictor()
+        if eng is not None:
+            drift_status = {
+                "available": True,
+                "drift_detected": getattr(eng, "_drift_detected", False),
+                "drift_z_max": round(getattr(eng, "_drift_z_max", 0.0), 3),
+                "drift_z_threshold": float(os.getenv("DRIFT_Z_THRESHOLD", "4.0")),
+                "drift_window": int(os.getenv("DRIFT_WINDOW", "50")),
+                "block_on_drift": os.getenv("DRIFT_BLOCK", "false").lower() == "true",
+            }
+    except Exception as exc:
+        logger.debug("model_card: could not get drift status: %s", exc)
+
+    # ── Walk-forward fold summary ────────────────────────────────────────
+    wf = active_meta.get("walk_forward") or training_report.get("walk_forward") or {}
+
+    # ── Build the Model Card response ────────────────────────────────────
+    version = active_meta.get("name") or registry.get("active_version") or "unknown"
+    promoted_at = active_meta.get("promoted_at") or active_meta.get("registered_at") or ""
+
+    card: dict[str, Any] = {
+        "schema_version": "1.0",
+        "generated_at": datetime.now(UTC).isoformat(),
+
+        "model_details": {
+            "name": "HOPEFX XAU/USD Signal Classifier",
+            "version": version,
+            "type": active_meta.get("ensemble", "XGBoost gradient boosted trees"),
+            "task": "Binary classification — next-N-bar directional signal (BUY / SELL)",
+            "horizon_bars": active_meta.get("horizon", 5),
+            "symbol": active_meta.get("symbol", "GC=F (XAU/USD)"),
+            "promoted_at": promoted_at,
+            "registry_state": active_meta.get("state", "active"),
+            "pkl_file": active_meta.get("file", ""),
+            "sha256": active_meta.get("sha256", ""),
+            "authors": ["HOPEFX AI Team"],
+            "license": "AGPL-3.0",
+        },
+
+        "intended_use": {
+            "primary_use": (
+                "Generate directional trading signals for XAU/USD (Gold) on daily bars. "
+                "Signals are consumed by the HopeFXEngine for paper and live execution."
+            ),
+            "out_of_scope": [
+                "Financial advice or investment recommendations for end users",
+                "Real-time tick-level prediction (model uses daily bars)",
+                "Instruments other than XAU/USD without re-training",
+                "Leveraged position sizing beyond configured risk limits",
+            ],
+            "intended_users": ["Automated trading system only — not for direct human trading decisions"],
+        },
+
+        "training_data": {
+            "source": "Yahoo Finance (yfinance GC=F) — daily OHLCV bars",
+            "symbol": active_meta.get("symbol", "GC=F"),
+            "years": active_meta.get("years", "~50"),
+            "oos_years": active_meta.get("oos_years", 8),
+            "oos_period": active_meta.get("oos_period", ""),
+            "feature_count": active_meta.get("feature_count", 0),
+            "feature_layers": active_meta.get("feature_layers", ["base", "extended"]),
+            "macro_features": active_meta.get("macro_features", True),
+            "n_trades_oos": active_meta.get("n_trades", 0),
+        },
+
+        "evaluation_results": {
+            "oos_accuracy": active_meta.get("oos_accuracy"),
+            "oos_auc": active_meta.get("oos_auc"),
+            "oos_f1": active_meta.get("oos_f1"),
+            "oos_p_value": active_meta.get("oos_p_value"),
+            "oos_significant": active_meta.get("oos_significant", True),
+            "sharpe": active_meta.get("sharpe"),
+            "sharpe_se": active_meta.get("sharpe_se"),
+            "sharpe_gate_passed": active_meta.get("sharpe_gate_passed"),
+            "cv_accuracy": active_meta.get("cv_accuracy"),
+            "cv_accuracy_std": active_meta.get("cv_accuracy_std"),
+            "walk_forward": {
+                "folds": wf.get("folds", 6),
+                "mean_accuracy": wf.get("mean_accuracy"),
+                "std_accuracy": wf.get("std_accuracy"),
+                "mean_f1": wf.get("mean_f1"),
+                "mean_auc": wf.get("mean_auc"),
+                "regime_filter_applied": wf.get("regime_filter_applied", True),
+                "fold2_note": wf.get(
+                    "fold2_note",
+                    "Fold-2 below-chance accuracy caused by parabolic-bubble regime. "
+                    "Filter active. See docs/FOLD2_REGIME_ANALYSIS.md.",
+                ),
+            },
+        },
+
+        "quantitative_analysis": {
+            "feature_importances_top10": feature_importances,
+            "abstain_threshold": active_meta.get("abstain_threshold"),
+            "abstain_rate": active_meta.get("abstain_rate"),
+            "regime_filter": {
+                "enabled": True,
+                "type": "HIGH_VOL_PARABOLIC",
+                "rule": (
+                    "Abstain when close > 1.30 × MA200 "
+                    "OR (RV14 > 2.5 × RV90 AND close ≤ 75% of 200-bar peak)"
+                ),
+                "reference": "docs/FOLD2_REGIME_ANALYSIS.md",
+            },
+        },
+
+        "drift_monitoring": drift_status,
+
+        "caveats_and_recommendations": {
+            "known_limitations": [
+                "Walk-forward Fold-2 (gold parabolic bubble ~2011-2012) showed 44.4% accuracy. "
+                "Regime filter mitigates this but extreme market regimes may still degrade performance.",
+                "CV accuracy (99%) is inflated by CalibratedClassifierCV in-sample leakage. "
+                "OOS accuracy (59.9%) is the reliable performance estimate.",
+                "Model is trained on daily bars only. Intraday volatility is not captured.",
+                "Macro features (WGC data, DXY) are fetched at startup and may lag by 1–2 days.",
+            ],
+            "risk_warnings": [
+                "PAST PERFORMANCE IS NOT INDICATIVE OF FUTURE RESULTS.",
+                "This model produces signals, not guarantees. All trades carry risk of loss.",
+                "Daily loss limits, drawdown limits, and kill-switch mechanisms must remain active.",
+                "Paper trading mode is the default. Live trading requires explicit opt-in.",
+            ],
+            "recommended_monitoring": [
+                "Check /api/ml/model-card?drift_status.drift_detected daily",
+                "If drift_z_max > 4.0, investigate feature pipeline health",
+                "Compare rolling 30-day accuracy vs OOS baseline (target: within 5pp)",
+                "Review walk-forward Fold-2 regime filter activation rate weekly",
+            ],
+        },
+
+        "notes": active_meta.get("notes", ""),
+    }
+
+    return card
