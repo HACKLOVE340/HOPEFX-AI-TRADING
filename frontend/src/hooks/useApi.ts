@@ -206,6 +206,9 @@ export const superadminApi = {
   banUser:           (id: string, reason: string) => api.post(`/superadmin/users/${id}/ban`, { reason }),
   unbanUser:         (id: string)              => api.post(`/superadmin/users/${id}/unban`),
   userActivity:      (id: string)              => api.get(`/superadmin/users/${id}/activity`),
+  bulkBanUsers:      (userIds: string[], reason?: string) => api.post('/superadmin/users/bulk/ban', { user_ids: userIds, reason }),
+  bulkUnbanUsers:    (userIds: string[])       => api.post('/superadmin/users/bulk/unban', { user_ids: userIds }),
+  bulkExportUsers:   (userIds: string[])       => api.post('/superadmin/users/bulk/export', { user_ids: userIds }, { responseType: 'blob' }),
 
   // Platform settings
   platformConfig:    ()                        => api.get('/superadmin/platform/config'),

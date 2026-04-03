@@ -1,11 +1,11 @@
-// superadmin/UsersSection.tsx — full user management
+// superadmin/UsersSection.tsx — full user management with bulk operations
 import React, { useEffect, useState, useCallback } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import {
   SectionCard, StatusBadge, ActionBtn, Input, Select,
-  Spinner, ErrorState, LoadingRows, ConfirmDialog, SAStyles,
+  ErrorState, LoadingRows, ConfirmDialog, SAStyles,
 } from './ui';
-import type { SuperAdminUser } from './types';
+import type { SuperAdminUser, BulkUserResult } from './types';
 import { ROLE_BADGE_STYLES, ROLE_LABELS, PLAN_COLORS, PLAN_LABELS } from '../../lib/subscription';
 import type { UserRole } from '../../store';
 import type { Plan } from '../../lib/subscription';
@@ -21,7 +21,10 @@ const timeAgo = (iso: string | null) => {
   return `${Math.floor(h / 24)}d ago`;
 };
 
-const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+const fmtDate = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+// ── User detail drawer ────────────────────────────────────────────────────────
 
 interface UserDetailDrawerProps {
   user: SuperAdminUser;
@@ -39,12 +42,12 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user, onClose, onRe
   const doAction = async (action: string) => {
     setSaving(true); setMsg('');
     try {
-      if (action === 'ban')             await superadminApi.banUser(user.user_id, 'Admin action');
-      else if (action === 'unban')      await superadminApi.unbanUser(user.user_id);
-      else if (action === 'reset-pw')   await superadminApi.resetUserPassword(user.user_id);
+      if (action === 'ban')              await superadminApi.banUser(user.user_id, 'Admin action');
+      else if (action === 'unban')       await superadminApi.unbanUser(user.user_id);
+      else if (action === 'reset-pw')    await superadminApi.resetUserPassword(user.user_id);
       else if (action === 'impersonate') await superadminApi.impersonateUser(user.user_id);
-      else if (action === 'set-role')   await superadminApi.setUserRole(user.user_id, role);
-      else if (action === 'set-plan')   await superadminApi.setUserPlan(user.user_id, plan);
+      else if (action === 'set-role')    await superadminApi.setUserRole(user.user_id, role);
+      else if (action === 'set-plan')    await superadminApi.setUserPlan(user.user_id, plan);
       setMsg('Done');
       onRefresh();
     } catch (e: unknown) {
@@ -81,15 +84,14 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user, onClose, onRe
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#f8fafc' }}>User Detail</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 20 }}>×</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 20 }}>x</button>
         </div>
 
-        {/* Identity */}
         <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, padding: 16, marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
             <div style={{
               width: 44, height: 44, borderRadius: '50%',
-              background: `${roleStyle.bg}`, border: `2px solid ${roleStyle.border}`,
+              background: roleStyle.bg, border: `2px solid ${roleStyle.border}`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 18, fontWeight: 700, color: roleStyle.color,
             }}>
@@ -102,14 +104,14 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user, onClose, onRe
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {[
-              { label: 'Status',      value: <StatusBadge status={user.status} size="sm" /> },
-              { label: 'Role',        value: <span style={{ fontSize: 11, fontWeight: 700, color: roleStyle.color }}>{ROLE_LABELS[user.role as UserRole] ?? user.role}</span> },
-              { label: 'Plan',        value: <span style={{ fontSize: 11, fontWeight: 700, color: PLAN_COLORS[user.plan as Plan] ?? '#94a3b8' }}>{PLAN_LABELS[user.plan as Plan] ?? user.plan}</span> },
-              { label: '2FA',         value: <span style={{ color: user.two_fa_enabled ? '#4ade80' : '#f87171', fontSize: 11 }}>{user.two_fa_enabled ? 'Enabled' : 'Disabled'}</span> },
-              { label: 'Joined',      value: fmtDate(user.created_at) },
-              { label: 'Last Login',  value: timeAgo(user.last_login) },
-              { label: 'Trades',      value: user.total_trades.toLocaleString() },
-              { label: 'Revenue',     value: `$${user.revenue_generated.toFixed(2)}` },
+              { label: 'Status',     value: <StatusBadge status={user.status} size="sm" /> },
+              { label: 'Role',       value: <span style={{ fontSize: 11, fontWeight: 700, color: roleStyle.color }}>{ROLE_LABELS[user.role as UserRole] ?? user.role}</span> },
+              { label: 'Plan',       value: <span style={{ fontSize: 11, fontWeight: 700, color: PLAN_COLORS[user.plan as Plan] ?? '#94a3b8' }}>{PLAN_LABELS[user.plan as Plan] ?? user.plan}</span> },
+              { label: '2FA',        value: <span style={{ color: user.two_fa_enabled ? '#4ade80' : '#f87171', fontSize: 11 }}>{user.two_fa_enabled ? 'Enabled' : 'Disabled'}</span> },
+              { label: 'Joined',     value: fmtDate(user.created_at) },
+              { label: 'Last Login', value: timeAgo(user.last_login) },
+              { label: 'Trades',     value: user.total_trades.toLocaleString() },
+              { label: 'Revenue',    value: `$${user.revenue_generated.toFixed(2)}` },
             ].map(r => (
               <div key={r.label} style={{ background: '#1e293b', borderRadius: 6, padding: '8px 10px' }}>
                 <div style={{ fontSize: 10, color: '#475569', marginBottom: 3 }}>{r.label}</div>
@@ -119,47 +121,30 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user, onClose, onRe
           </div>
         </div>
 
-        {/* Change role */}
         <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, padding: 16, marginBottom: 16 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', marginBottom: 10 }}>Change Role</div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <Select
-              value={role}
-              onChange={e => setRole(e.target.value)}
-              options={[
-                { value: 'user',       label: 'User' },
-                { value: 'trader',     label: 'Trader' },
-                { value: 'admin',      label: 'Admin' },
-                { value: 'superadmin', label: 'Super Admin' },
-              ]}
-              style={{ flex: 1 }}
-            />
+            <Select value={role} onChange={e => setRole(e.target.value)} options={[
+              { value: 'user', label: 'User' }, { value: 'trader', label: 'Trader' },
+              { value: 'admin', label: 'Admin' }, { value: 'superadmin', label: 'Super Admin' },
+            ]} style={{ flex: 1 }} />
             <ActionBtn label="Apply" onClick={() => setConfirm({ action: 'set-role', label: 'Change Role' })} variant="primary" size="sm" loading={saving} />
           </div>
         </div>
 
-        {/* Change plan */}
         <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, padding: 16, marginBottom: 16 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', marginBottom: 10 }}>Change Plan</div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <Select
-              value={plan}
-              onChange={e => setPlan(e.target.value)}
-              options={[
-                { value: 'free',    label: 'Free' },
-                { value: 'starter', label: 'Starter' },
-                { value: 'pro',     label: 'Pro' },
-                { value: 'elite',   label: 'Elite' },
-              ]}
-              style={{ flex: 1 }}
-            />
+            <Select value={plan} onChange={e => setPlan(e.target.value)} options={[
+              { value: 'free', label: 'Free' }, { value: 'starter', label: 'Starter' },
+              { value: 'pro', label: 'Pro' }, { value: 'elite', label: 'Elite' },
+            ]} style={{ flex: 1 }} />
             <ActionBtn label="Apply" onClick={() => setConfirm({ action: 'set-plan', label: 'Change Plan' })} variant="primary" size="sm" loading={saving} />
           </div>
         </div>
 
-        {/* Actions */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <ActionBtn label="Reset Password" onClick={() => setConfirm({ action: 'reset-pw', label: 'Reset Password' })} variant="warning" icon="🔑" />
+          <ActionBtn label="Reset Password"   onClick={() => setConfirm({ action: 'reset-pw',    label: 'Reset Password'   })} variant="warning" icon="🔑" />
           <ActionBtn label="Impersonate User" onClick={() => setConfirm({ action: 'impersonate', label: 'Impersonate User' })} variant="primary" icon="👤" />
           {user.status === 'banned'
             ? <ActionBtn label="Unban User" onClick={() => setConfirm({ action: 'unban', label: 'Unban User' })} variant="success" icon="✅" />
@@ -182,30 +167,65 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user, onClose, onRe
   );
 };
 
+// ── Bulk result toast ─────────────────────────────────────────────────────────
+
+const BulkResultToast: React.FC<{ result: BulkUserResult; onClose: () => void }> = ({ result, onClose }) => (
+  <div style={{
+    position: 'fixed', bottom: 24, right: 24, zIndex: 900,
+    background: '#0a1628', border: '1px solid #1e293b', borderRadius: 12,
+    padding: '16px 20px', minWidth: 280, boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+    animation: 'sa-fadein 0.2s ease',
+  }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+      <span style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>Bulk Operation Complete</span>
+      <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 16 }}>x</button>
+    </div>
+    <div style={{ fontSize: 12, color: '#4ade80' }}>✅ {result.succeeded.length} succeeded</div>
+    {result.failed.length > 0 && (
+      <div style={{ fontSize: 12, color: '#f87171', marginTop: 4 }}>
+        ❌ {result.failed.length} failed
+        {result.failed.slice(0, 3).map(f => (
+          <div key={f.user_id} style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+            {f.user_id}: {f.reason}
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+);
+
+// ── Main section ──────────────────────────────────────────────────────────────
+
 const UsersSection: React.FC = () => {
-  const [users, setUsers]       = useState<SuperAdminUser[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState('');
-  const [search, setSearch]     = useState('');
+  const [users, setUsers]           = useState<SuperAdminUser[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState('');
+  const [search, setSearch]         = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [planFilter, setPlanFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [selected, setSelected] = useState<SuperAdminUser | null>(null);
-  const [page, setPage]         = useState(1);
+  const [selected, setSelected]     = useState<SuperAdminUser | null>(null);
+  const [page, setPage]             = useState(1);
   const PAGE_SIZE = 20;
+
+  const [checkedIds, setCheckedIds]   = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy]       = useState<string | null>(null);
+  const [bulkResult, setBulkResult]   = useState<BulkUserResult | null>(null);
+  const [bulkConfirm, setBulkConfirm] = useState<{ action: string; label: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
       const params: Record<string, string> = {};
-      if (search)       params.search = search;
-      if (roleFilter)   params.role   = roleFilter;
-      if (planFilter)   params.plan   = planFilter;
-      if (statusFilter) params.status = statusFilter;
+      if (search)       params.search    = search;
+      if (roleFilter)   params.role      = roleFilter;
+      if (planFilter)   params.plan      = planFilter;
+      if (statusFilter) params.status    = statusFilter;
       params.page      = String(page);
       params.page_size = String(PAGE_SIZE);
       const res = await superadminApi.users(params);
       setUsers(res.data.users ?? res.data);
+      setCheckedIds(new Set());
     } catch (e: unknown) {
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load users');
     } finally {
@@ -215,12 +235,65 @@ const UsersSection: React.FC = () => {
 
   useEffect(() => { load(); }, [load]);
 
+  const allChecked  = users.length > 0 && users.every(u => checkedIds.has(u.user_id));
+  const someChecked = !allChecked && users.some(u => checkedIds.has(u.user_id));
+
+  const toggleAll = () => {
+    if (allChecked) {
+      setCheckedIds(prev => { const n = new Set(prev); users.forEach(u => n.delete(u.user_id)); return n; });
+    } else {
+      setCheckedIds(prev => { const n = new Set(prev); users.forEach(u => n.add(u.user_id)); return n; });
+    }
+  };
+
+  const toggleOne = (id: string) =>
+    setCheckedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const doBulkAction = async (action: string) => {
+    const ids = Array.from(checkedIds);
+    if (!ids.length) return;
+    setBulkBusy(action);
+    try {
+      if (action === 'export') {
+        const res = await superadminApi.bulkExportUsers(ids);
+        const url = URL.createObjectURL(new Blob([res.data], { type: 'text/csv' }));
+        const a = document.createElement('a');
+        a.href = url; a.download = 'users_export.csv'; a.click();
+        URL.revokeObjectURL(url);
+        return;
+      }
+      const res = action === 'ban'
+        ? await superadminApi.bulkBanUsers(ids, 'Bulk admin action')
+        : await superadminApi.bulkUnbanUsers(ids);
+      setBulkResult(res.data);
+      load();
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Bulk action failed';
+      setBulkResult({ succeeded: [], failed: ids.map(id => ({ user_id: id, reason: msg })), total: ids.length });
+    } finally {
+      setBulkBusy(null);
+      setBulkConfirm(null);
+    }
+  };
+
   const roleStyle = (role: string) => ROLE_BADGE_STYLES[role as UserRole] ?? ROLE_BADGE_STYLES.user;
 
   return (
     <div style={{ animation: 'sa-fadein 0.2s ease' }}>
       <SAStyles />
       {selected && <UserDetailDrawer user={selected} onClose={() => setSelected(null)} onRefresh={load} />}
+      {bulkResult && <BulkResultToast result={bulkResult} onClose={() => setBulkResult(null)} />}
+
+      {bulkConfirm && (
+        <ConfirmDialog
+          title={`Bulk ${bulkConfirm.label}`}
+          message={`Apply "${bulkConfirm.label}" to ${checkedIds.size} selected user${checkedIds.size !== 1 ? 's' : ''}? This action is logged.`}
+          confirmLabel={bulkConfirm.label}
+          variant={bulkConfirm.action === 'ban' ? 'danger' : 'warning'}
+          onConfirm={() => doBulkAction(bulkConfirm.action)}
+          onCancel={() => setBulkConfirm(null)}
+        />
+      )}
 
       <SectionCard
         title="User Management"
@@ -237,43 +310,43 @@ const UsersSection: React.FC = () => {
             onChange={e => { setSearch(e.target.value); setPage(1); }}
             style={{ flex: 1, minWidth: 200 }}
           />
-          <Select
-            value={roleFilter}
-            onChange={e => { setRoleFilter(e.target.value); setPage(1); }}
+          <Select value={roleFilter} onChange={e => { setRoleFilter(e.target.value); setPage(1); }}
             options={[
-              { value: '', label: 'All Roles' },
-              { value: 'user',       label: 'User' },
-              { value: 'trader',     label: 'Trader' },
-              { value: 'admin',      label: 'Admin' },
+              { value: '', label: 'All Roles' }, { value: 'user', label: 'User' },
+              { value: 'trader', label: 'Trader' }, { value: 'admin', label: 'Admin' },
               { value: 'superadmin', label: 'Super Admin' },
-            ]}
-            style={{ width: 140 }}
-          />
-          <Select
-            value={planFilter}
-            onChange={e => { setPlanFilter(e.target.value); setPage(1); }}
+            ]} style={{ width: 140 }} />
+          <Select value={planFilter} onChange={e => { setPlanFilter(e.target.value); setPage(1); }}
             options={[
-              { value: '', label: 'All Plans' },
-              { value: 'free',    label: 'Free' },
-              { value: 'starter', label: 'Starter' },
-              { value: 'pro',     label: 'Pro' },
-              { value: 'elite',   label: 'Elite' },
-            ]}
-            style={{ width: 130 }}
-          />
-          <Select
-            value={statusFilter}
-            onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
+              { value: '', label: 'All Plans' }, { value: 'free', label: 'Free' },
+              { value: 'starter', label: 'Starter' }, { value: 'pro', label: 'Pro' },
+              { value: 'elite', label: 'Elite' },
+            ]} style={{ width: 130 }} />
+          <Select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
             options={[
-              { value: '', label: 'All Status' },
-              { value: 'active',   label: 'Active' },
-              { value: 'banned',   label: 'Banned' },
-              { value: 'pending',  label: 'Pending' },
+              { value: '', label: 'All Status' }, { value: 'active', label: 'Active' },
+              { value: 'banned', label: 'Banned' }, { value: 'pending', label: 'Pending' },
               { value: 'inactive', label: 'Inactive' },
-            ]}
-            style={{ width: 130 }}
-          />
+            ]} style={{ width: 130 }} />
         </div>
+
+        {/* Bulk toolbar */}
+        {checkedIds.size > 0 && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+            background: '#0f1f35', border: '1px solid #1e3a5f',
+            borderRadius: 8, padding: '10px 14px', marginBottom: 12,
+          }}>
+            <span style={{ fontSize: 12, color: '#93c5fd', fontWeight: 600 }}>
+              {checkedIds.size} selected
+            </span>
+            <div style={{ flex: 1 }} />
+            <ActionBtn label="Ban Selected"   onClick={() => setBulkConfirm({ action: 'ban',   label: 'Ban Users'   })} variant="danger"  size="sm" icon="🚫" loading={bulkBusy === 'ban'} />
+            <ActionBtn label="Unban Selected" onClick={() => setBulkConfirm({ action: 'unban', label: 'Unban Users' })} variant="success" size="sm" icon="✅" loading={bulkBusy === 'unban'} />
+            <ActionBtn label="Export CSV"     onClick={() => doBulkAction('export')}                                    variant="ghost"   size="sm" icon="⬇️" loading={bulkBusy === 'export'} />
+            <ActionBtn label="Clear"          onClick={() => setCheckedIds(new Set())}                                  variant="ghost"   size="sm" />
+          </div>
+        )}
 
         {/* Table */}
         {loading ? <LoadingRows rows={8} /> : error ? <ErrorState message={error} onRetry={load} /> : (
@@ -281,6 +354,15 @@ const UsersSection: React.FC = () => {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                  <th style={{ padding: '8px 12px', width: 36 }}>
+                    <input
+                      type="checkbox"
+                      checked={allChecked}
+                      ref={el => { if (el) el.indeterminate = someChecked; }}
+                      onChange={toggleAll}
+                      style={{ cursor: 'pointer', accentColor: '#3b82f6' }}
+                    />
+                  </th>
                   {['User', 'Role', 'Plan', 'Status', 'Trades', 'Last Login', 'Joined', ''].map(h => (
                     <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
                       {h}
@@ -291,21 +373,15 @@ const UsersSection: React.FC = () => {
               <tbody>
                 {users.map(u => {
                   const rs = roleStyle(u.role);
+                  const isChecked = checkedIds.has(u.user_id);
                   return (
-                    <tr
-                      key={u.user_id}
-                      className="sa-row"
-                      style={{ borderBottom: '1px solid #0f172a', cursor: 'pointer', transition: 'background 0.1s' }}
-                      onClick={() => setSelected(u)}
-                    >
-                      <td style={{ padding: '10px 12px' }}>
+                    <tr key={u.user_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a', transition: 'background 0.1s', background: isChecked ? '#0f1f35' : undefined }}>
+                      <td style={{ padding: '10px 12px' }} onClick={e => e.stopPropagation()}>
+                        <input type="checkbox" checked={isChecked} onChange={() => toggleOne(u.user_id)} style={{ cursor: 'pointer', accentColor: '#3b82f6' }} />
+                      </td>
+                      <td style={{ padding: '10px 12px', cursor: 'pointer' }} onClick={() => setSelected(u)}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{
-                            width: 28, height: 28, borderRadius: '50%',
-                            background: rs.bg, border: `1px solid ${rs.border}`,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 12, fontWeight: 700, color: rs.color, flexShrink: 0,
-                          }}>
+                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: rs.bg, border: `1px solid ${rs.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: rs.color, flexShrink: 0 }}>
                             {u.username[0].toUpperCase()}
                           </div>
                           <div>
@@ -314,23 +390,21 @@ const UsersSection: React.FC = () => {
                           </div>
                         </div>
                       </td>
-                      <td style={{ padding: '10px 12px' }}>
+                      <td style={{ padding: '10px 12px', cursor: 'pointer' }} onClick={() => setSelected(u)}>
                         <span style={{ fontSize: 11, fontWeight: 700, color: rs.color, background: rs.bg, border: `1px solid ${rs.border}`, borderRadius: 4, padding: '2px 7px' }}>
                           {ROLE_LABELS[u.role as UserRole] ?? u.role}
                         </span>
                       </td>
-                      <td style={{ padding: '10px 12px' }}>
+                      <td style={{ padding: '10px 12px', cursor: 'pointer' }} onClick={() => setSelected(u)}>
                         <span style={{ fontSize: 11, fontWeight: 700, color: PLAN_COLORS[u.plan as Plan] ?? '#94a3b8' }}>
                           {PLAN_LABELS[u.plan as Plan] ?? u.plan}
                         </span>
                       </td>
-                      <td style={{ padding: '10px 12px' }}><StatusBadge status={u.status} size="sm" /></td>
-                      <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{u.total_trades.toLocaleString()}</td>
-                      <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{timeAgo(u.last_login)}</td>
-                      <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{fmtDate(u.created_at)}</td>
-                      <td style={{ padding: '10px 12px' }}>
-                        <span style={{ fontSize: 11, color: '#3b82f6' }}>View →</span>
-                      </td>
+                      <td style={{ padding: '10px 12px', cursor: 'pointer' }} onClick={() => setSelected(u)}><StatusBadge status={u.status} size="sm" /></td>
+                      <td style={{ padding: '10px 12px', color: '#94a3b8', cursor: 'pointer' }} onClick={() => setSelected(u)}>{u.total_trades.toLocaleString()}</td>
+                      <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12, cursor: 'pointer' }} onClick={() => setSelected(u)}>{timeAgo(u.last_login)}</td>
+                      <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12, cursor: 'pointer' }} onClick={() => setSelected(u)}>{fmtDate(u.created_at)}</td>
+                      <td style={{ padding: '10px 12px', cursor: 'pointer' }} onClick={() => setSelected(u)}><span style={{ fontSize: 11, color: '#3b82f6' }}>View →</span></td>
                     </tr>
                   );
                 })}
