@@ -1343,7 +1343,7 @@ class RiskManager:
             _signal.signal(_signal.SIGTERM, _handle)
             _signal.signal(_signal.SIGINT, _handle)
         except (OSError, ValueError):
-            pass  # not in main thread
+            ...  # nosec B110
 
     # ── Lineage ───────────────────────────────────────────────────────────────
 

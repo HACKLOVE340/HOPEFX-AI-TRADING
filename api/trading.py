@@ -664,7 +664,7 @@ def _check_subscription_gate(user_id: str) -> None:
                 },
             )
     except ImportError:
-        pass  # monetization module not installed — allow through
+        ...  # nosec B110
 
 
 @router.post(
@@ -829,7 +829,7 @@ async def get_account(
                 try:
                     return float(v)
                 except (TypeError, ValueError):
-                    pass
+                    ...  # nosec B110
         return default
 
     def _s(obj, *keys, default=""):

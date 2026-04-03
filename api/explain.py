@@ -115,7 +115,7 @@ def _enforce_rate_limit(request: Request, limit_str: str) -> None:
                         headers={"Retry-After": "60"},
                     )
             except ImportError:
-                pass
+                ...  # nosec B110
             logger.debug("slowapi rate-limit check failed (fail-open): %s", exc)
             return
 

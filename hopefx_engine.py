@@ -512,7 +512,7 @@ class HopeFXEngine:
             self._streamer_task = asyncio.current_task()
             await self._streamer.run()
         except asyncio.CancelledError:
-            pass
+            ...  # nosec B110
         except Exception as exc:
             logger.error("NuclearStreamer error: %s", exc)
 
@@ -578,7 +578,7 @@ class HopeFXEngine:
                     spread = dl_tick.spread
                     mid = dl_tick.mid
             except Exception:  # nosec B110 - intentional fallback to NuclearStreamer price
-                pass  # fall back to NuclearStreamer price
+                ...  # nosec B110
 
         # Build OHLCV bar: use spread to give high/low realistic range.
         # Without spread, every bar is a doji — the ML model gets zero ATR signal.

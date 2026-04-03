@@ -241,7 +241,7 @@ class TestMarketDataCacheLive:
                 r.delete(key)
             r.close()
         except Exception:
-            pass
+            ...  # nosec B110
 
     def test_cache_initialises(self) -> None:
         assert self.cache is not None

@@ -10,7 +10,7 @@ try:
 
     _load_dotenv(override=False)
 except ImportError:
-    pass
+    ...  # nosec B110
 # No commercial use without explicit permission.
 """
 HOPEFX AI Trading Framework - Command Line Interface

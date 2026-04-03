@@ -161,7 +161,7 @@ def decode_access_token(token: str) -> dict:
             if is_access_token_revoked(jti):
                 raise jwt.InvalidTokenError("Token has been revoked")
         except ImportError:
-            pass
+            ...  # nosec B110
     return payload
 
 

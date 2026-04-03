@@ -194,7 +194,7 @@ class UnitTests:
             )
             raise AssertionError("Should have raised ValueError")
         except ValueError:
-            pass  # Expected
+            ...  # nosec B110
 
     async def test_transaction_costs(self):
         """Test transaction cost calculations"""

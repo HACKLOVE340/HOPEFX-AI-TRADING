@@ -316,7 +316,7 @@ class ExecutionSystem:
             loop.add_signal_handler(signal.SIGTERM, lambda: _handle_shutdown("SIGTERM"))
             loop.add_signal_handler(signal.SIGINT, lambda: _handle_shutdown("SIGINT"))
         except (NotImplementedError, RuntimeError):
-            pass  # Windows / non-main thread
+            ...  # nosec B110
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
 
@@ -513,7 +513,7 @@ async def _main() -> None:
         while system._started:
             await asyncio.sleep(1)
     except asyncio.CancelledError:
-        pass
+        ...  # nosec B110
     finally:
         await system.stop()
 

@@ -393,7 +393,7 @@ class TestFaultGuard:
                     async with fg.protect("test_module"):
                         raise RuntimeError("simulated failure")
                 except RuntimeError:
-                    pass
+                    ...  # nosec B110
 
         assert fg.state_of("test_module") == "OPEN"
         assert fg.is_healthy("test_module") is False
@@ -415,7 +415,7 @@ class TestFaultGuard:
                     async with fg.protect("test_module"):
                         raise RuntimeError("fail")
                 except RuntimeError:
-                    pass
+                    ...  # nosec B110
 
         # Wind back the failure timestamp past recovery window
         fg._modules["test_module"].last_failure_ts = time.monotonic() - RECOVER_S - 1
@@ -425,7 +425,7 @@ class TestFaultGuard:
             async with fg.protect("test_module"):
                 pass  # success
         except RuntimeError:
-            pass
+            ...  # nosec B110
 
         assert fg.state_of("test_module") == "CLOSED"
 

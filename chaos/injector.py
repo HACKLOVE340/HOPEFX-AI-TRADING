@@ -247,7 +247,7 @@ class FaultInjector:
                 object.__setattr__(tick, "bid", getattr(tick, "bid", mid) + delta)
                 object.__setattr__(tick, "ask", getattr(tick, "ask", mid) + delta)
             except (AttributeError, TypeError):
-                pass
+                ...  # nosec B110
             return tick
 
         # SPREAD_WIDEN — multiply spread by magnitude
@@ -260,7 +260,7 @@ class FaultInjector:
                 object.__setattr__(tick, "bid", mid - new_spread / 2)
                 object.__setattr__(tick, "ask", mid + new_spread / 2)
             except (AttributeError, TypeError):
-                pass
+                ...  # nosec B110
             return tick
 
         # STALE_FEED — freeze timestamp

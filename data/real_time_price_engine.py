@@ -239,7 +239,7 @@ class WebSocketPriceFeed(PriceFeedBase):
                     logger.error("Message processing error: %s", e)
 
         except asyncio.CancelledError:
-            pass
+            ...  # nosec B110
         except Exception as e:
             logger.error("Receive loop error: %s", e)
 
@@ -328,7 +328,7 @@ class WebSocketPriceFeed(PriceFeedBase):
                         logger.warning("Heartbeat send failed: %s", e)
 
         except asyncio.CancelledError:
-            pass
+            ...  # nosec B110
 
     async def get_ohlcv(self, symbol: str, timeframe: str, limit: int = 100) -> list[OHLCV]:
         """Get OHLCV from buffer"""

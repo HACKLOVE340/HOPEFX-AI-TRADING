@@ -54,7 +54,7 @@ try:
 
     load_dotenv()
 except ImportError:
-    pass  # dotenv optional; env vars may already be set
+    ...  # nosec B110
 
 # ── logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(

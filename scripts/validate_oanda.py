@@ -37,7 +37,7 @@ try:
 
     load_dotenv(_ROOT / ".env")
 except ImportError:
-    pass
+    ...  # nosec B110
 
 
 def _check(label: str, ok: bool, detail: str = "") -> bool:

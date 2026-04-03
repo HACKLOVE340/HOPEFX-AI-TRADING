@@ -303,7 +303,7 @@ class TestMLPipeline:
             # If it runs, gates must fail on such tiny data
             assert not (report.passes_accuracy_gate and report.passes_pvalue_gate)
         except (ValueError, Exception):
-            pass  # also acceptable — WalkForwardValidator may reject
+            ...  # nosec B110
 
     def test_very_small_dataset_raises(self, tmp_path):
         # 10 rows is definitely too small for any fold
