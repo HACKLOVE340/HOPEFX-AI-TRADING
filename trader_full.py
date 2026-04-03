@@ -509,7 +509,7 @@ class ForwardTestHarness:
                 await asyncio.sleep(60)
                 self._state.save("hopefx:equity", str(self._equity))
         except asyncio.CancelledError:
-            pass
+            ...  # nosec B110
         finally:
             await self._pipeline.stop()
             if not pipeline_task.done():

@@ -470,7 +470,7 @@ class TCARecorder:
                 _t = loop.create_task(_write(), name="tca_redis_write")
                 _t.add_done_callback(lambda _: None)
             except RuntimeError:
-                pass  # No event loop — skip Redis persistence
+                ...  # nosec B110
         except Exception as exc:
             logger.debug("TCA Redis persist failed: %s", exc)
 

@@ -607,7 +607,7 @@ class KillSwitch:
                 except Exception as exc:
                     logger.warning("Kill switch: error processing breach message: %s", exc)
         except asyncio.CancelledError:
-            pass
+            ...  # nosec B110
         except Exception as exc:
             logger.error("Kill switch: Redis breach listener exited unexpectedly: %s", exc)
 

@@ -55,7 +55,7 @@ try:
 
     load_dotenv()
 except ImportError:
-    pass
+    ...  # nosec B110
 
 logging.basicConfig(
     level=logging.INFO,

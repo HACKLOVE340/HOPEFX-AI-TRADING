@@ -47,7 +47,7 @@ try:
 
     load_dotenv(override=False)
 except ImportError:
-    pass
+    ...  # nosec B110
 
 HOST = os.environ.get("IBKR_HOST", "127.0.0.1")
 PORT = int(os.environ.get("IBKR_PORT", "7497"))

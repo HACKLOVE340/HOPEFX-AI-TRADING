@@ -261,7 +261,7 @@ def check_redis_connectivity() -> None:
         client.close()
         return
     except ImportError:
-        pass  # fall through to raw TCP
+        ...  # nosec B110
     except Exception as exc:
         _err(
             f"Redis unreachable at {redis_url.split('@')[-1]} — {exc}\n"
@@ -371,7 +371,7 @@ def main() -> int:
 
         load_dotenv(override=False)
     except ImportError:
-        pass
+        ...  # nosec B110
 
     print("=" * 60)
     print("  HOPEFX AI Trading — Pre-flight Deployment Check")

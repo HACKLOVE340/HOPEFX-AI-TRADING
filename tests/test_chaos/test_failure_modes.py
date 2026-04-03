@@ -97,7 +97,7 @@ class TestRiskManagerFailureModes:
             )
             assert result is not None
         except (ValueError, ZeroDivisionError):
-            pass  # Raising a clear error is also acceptable
+            ...  # nosec B110
 
     def test_drawdown_check_with_empty_equity_curve(self):
         risk = self._risk()

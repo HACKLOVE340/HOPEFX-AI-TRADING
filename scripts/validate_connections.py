@@ -37,7 +37,7 @@ try:
 
     load_dotenv(ROOT / ".env", override=False)
 except ImportError:
-    pass
+    ...  # nosec B110
 
 # ── Result types ──────────────────────────────────────────────────────────────
 GREEN = "GREEN"

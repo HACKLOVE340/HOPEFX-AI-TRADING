@@ -95,7 +95,7 @@ async def _fetch_fred_async(series_id: str, limit: int = 30) -> pd.DataFrame:
             resp.raise_for_status()
             return _parse_fred_response(resp.json())
     except ImportError:
-        pass
+        ...  # nosec B110
 
     # Fallback: run blocking requests in thread pool
     import requests

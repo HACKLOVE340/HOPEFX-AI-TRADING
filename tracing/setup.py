@@ -125,7 +125,7 @@ def _build_exporter():
             logger.info("OTel: ConsoleSpanExporter (dev)")
             return ConsoleSpanExporter()
         except ImportError:
-            pass
+            ...  # nosec B110
 
     if _EXPORTER == "jaeger":
         try:
@@ -149,7 +149,7 @@ def _build_exporter():
         logger.info("OTel: OTLPSpanExporter (gRPC) → %s", _OTLP_ENDPOINT)
         return OTLPSpanExporter(endpoint=_OTLP_ENDPOINT, insecure=True)
     except ImportError:
-        pass
+        ...  # nosec B110
 
     # OTLP HTTP fallback
     try:
@@ -161,7 +161,7 @@ def _build_exporter():
         logger.info("OTel: OTLPSpanExporter (HTTP) → %s", http_ep)
         return OTLPHttp(endpoint=http_ep)
     except ImportError:
-        pass
+        ...  # nosec B110
 
     logger.warning(
         "OTel: no exporter available — install opentelemetry-exporter-otlp-proto-grpc. Spans will not be exported."

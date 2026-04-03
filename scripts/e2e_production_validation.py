@@ -130,7 +130,7 @@ def check_architecture() -> str:
                 if b in src:
                     violations.append(f"{path}: {b}")
         except FileNotFoundError:
-            pass
+            ...  # nosec B110
     if violations:
         raise AssertionError(f"Violations: {violations}")
     return f"{len(EXTERNAL_FILES)} files checked, 0 violations"

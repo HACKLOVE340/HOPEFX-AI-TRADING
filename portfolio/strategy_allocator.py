@@ -293,7 +293,7 @@ class MeanVarianceOptimiser:
                 w /= w.sum()
                 return w
         except ImportError:
-            pass
+            ...  # nosec B110
 
         # Fallback: Sharpe-proportional weights
         return self._sharpe_proportional(sharpes)

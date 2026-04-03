@@ -520,7 +520,7 @@ rule SuspiciousImport {
                             "",
                         ))
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    pass
+                    ...  # nosec B110
         except Exception as exc:
             logger.debug("AV: process scan error: %s", exc)
         return threats

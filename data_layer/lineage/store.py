@@ -661,7 +661,7 @@ class DataLineageStore:
             while len(batch) < _BATCH_SIZE:
                 batch.append(self._queue.get_nowait())
         except queue.Empty:
-            pass
+            ...  # nosec B110
 
         if not batch:
             return

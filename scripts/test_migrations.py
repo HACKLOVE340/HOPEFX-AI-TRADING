@@ -46,7 +46,7 @@ try:
 
     load_dotenv(override=False)
 except ImportError:
-    pass
+    ...  # nosec B110
 
 PROJECT_ROOT = Path(__file__).parent.parent
 _PASS = "  ✓"  # nosec B105 — status symbol, not a password

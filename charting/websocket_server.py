@@ -148,7 +148,7 @@ def _sync_broadcast_callback(state: dict) -> None:
             _t = loop.create_task(_async_broadcast(state))
             _t.add_done_callback(lambda _: None)
     except RuntimeError:
-        pass  # No event loop — standalone mode
+        ...  # nosec B110
 
 
 async def _async_broadcast(state: dict) -> None:

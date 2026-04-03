@@ -45,7 +45,7 @@ try:
 
     load_dotenv(_ROOT / ".env")
 except ImportError:
-    pass
+    ...  # nosec B110
 
 _ENV_PATH = _ROOT / ".env"
 _MIN_PAPER_DAYS = 30

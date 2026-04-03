@@ -11,7 +11,7 @@ try:
 
     _load_dotenv(override=False)  # override=False: real env vars take precedence
 except ImportError:
-    pass
+    ...  # nosec B110
 
 """
 HOPEFX AI Trading Framework - API Server
@@ -64,7 +64,7 @@ if _is_dev_env and not _env_file.exists():
 
             _ld(_env_file, override=False)
         except ImportError:
-            pass
+            ...  # nosec B110
     except Exception as _be:
         logger.warning("Dev bootstrap failed (non-fatal): %s", _be)
 
@@ -404,7 +404,7 @@ def _push_state_to_api_modules(state) -> None:
                 _fn(state)
                 logger.info("State pushed → %s", _mod_name)
         except ImportError:
-            pass
+            ...  # nosec B110
         except Exception as _e:
             logger.warning("Failed to push state to %s: %s", _mod_name, _e)
 

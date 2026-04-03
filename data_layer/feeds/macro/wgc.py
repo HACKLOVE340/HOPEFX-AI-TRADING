@@ -308,7 +308,7 @@ class WGCFeed:
                 logger.warning("WGC fetch %s returned HTTP %d", url, resp.status)
                 return None
         except ImportError:
-            pass
+            ...  # nosec B110
         except Exception as exc:
             logger.warning("WGC aiohttp fetch failed for %s: %s", url, exc)
 

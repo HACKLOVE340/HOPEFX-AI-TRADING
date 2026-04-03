@@ -488,7 +488,7 @@ class TestKillSwitch:
             # If it returns without raising, the switch must still be active
             assert ks.is_active(), "Deactivation with wrong token must not clear the kill switch"
         except PermissionError:
-            pass  # expected — wrong token correctly rejected
+            ...  # nosec B110
         except Exception as exc:
             pytest.fail(f"Unexpected exception type on wrong token: {type(exc).__name__}: {exc}")
 

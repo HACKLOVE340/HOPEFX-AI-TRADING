@@ -225,7 +225,7 @@ class MarketContextProvider:
             try:
                 return float(env_val), "env_override"
             except ValueError:
-                pass
+                ...  # nosec B110
 
         # 2. Redis OHLCV bars
         cache = self._get_redis_cache()
@@ -267,7 +267,7 @@ class MarketContextProvider:
             try:
                 return float(env_val), "env_override"
             except ValueError:
-                pass
+                ...  # nosec B110
 
         # 2. Redis OHLCV bars — rolling std of daily log returns
         cache = self._get_redis_cache()

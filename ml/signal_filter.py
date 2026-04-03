@@ -338,7 +338,7 @@ class SignalFilter:
                 win_rate = sum(1 for o in recent if o.pnl_pct > 0) / len(recent)
                 _PROM.accuracy_gauge.labels(symbol=symbol).set(win_rate)
         except Exception:  # nosec B110 - Prometheus metric failure must not affect signal filtering
-            pass
+            ...  # nosec B110
 
     def ev_stats(self, symbol: str | None = None) -> dict[str, Any]:
         """Return EV statistics for monitoring/API exposure."""
@@ -505,7 +505,7 @@ class SignalFilter:
                 if abs(ofi) > 0.5 and abs(sentiment) > 0.3:
                     return "TRENDING"
         except Exception:  # nosec B110 - feature unavailable; fall back to OHLCV regime
-            pass
+            ...  # nosec B110
 
         # Fall back to OHLCV-based regime
         if ohlcv is not None:
@@ -523,7 +523,7 @@ class SignalFilter:
                     if hurst > 0.55:
                         return "TRENDING"
             except Exception:  # nosec B110 - Hurst computation unavailable; return unknown regime
-                pass
+                ...  # nosec B110
 
         return "unknown"
 

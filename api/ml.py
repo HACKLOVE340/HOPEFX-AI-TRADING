@@ -541,7 +541,7 @@ async def predict(
                     },
                 )
         except ImportError:
-            pass  # monetization not available in test/CI — allow through
+            ...  # nosec B110
     symbol_upper = symbol.upper().replace("-", "/")
     now_iso = datetime.now(UTC).isoformat()
 

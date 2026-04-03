@@ -272,7 +272,7 @@ class TestEdgeCases:
             if order is not None:
                 assert hasattr(order, "symbol") or hasattr(order, "id")
         except Exception:
-            pass  # Raising is also acceptable — just must not crash the process
+            ...  # nosec B110
         await broker.disconnect()
 
     @pytest.mark.asyncio

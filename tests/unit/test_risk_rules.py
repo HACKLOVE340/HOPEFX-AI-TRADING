@@ -128,7 +128,7 @@ class TestPropFirmRules:
             if result is not None:
                 assert result is not True
         except Exception:
-            pass  # Raising is the expected behaviour
+            ...  # nosec B110
 
     def test_healthy_account_passes_rules(self):
         """Account within all limits must not raise."""

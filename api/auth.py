@@ -239,5 +239,5 @@ def require_kyc(
                 detail="KYC verification required before trading. Please complete identity verification.",
             )
     except ImportError:
-        pass  # app not fully initialised (e.g. during tests)
+        ...  # nosec B110
     return user

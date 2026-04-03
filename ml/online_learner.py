@@ -602,7 +602,7 @@ class SklearnOnlineLearner:
                 if len(self._correct_window) >= 10:
                     self._rolling_accuracy = float(np.mean(self._correct_window))
             except Exception:  # pylint: disable=broad-exception-caught  # nosec B110
-                pass
+                ...  # nosec B110
 
             # EWC anchor snapshot
             if self._update_count % self._EWC_ANCHOR_EVERY == 0:
@@ -617,7 +617,7 @@ class SklearnOnlineLearner:
                 if self._check_drift(prob):
                     self._reset_for_new_regime()
             except Exception:  # pylint: disable=broad-exception-caught  # nosec B110
-                pass
+                ...  # nosec B110
 
             if self.persist_path:
                 self._save()

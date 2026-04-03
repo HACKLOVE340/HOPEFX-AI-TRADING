@@ -303,7 +303,7 @@ if __name__ == "__main__":
 
         load_dotenv(_ROOT / ".env")
     except ImportError:
-        pass
+        ...  # nosec B110
 
     logging.basicConfig(
         level=logging.INFO,

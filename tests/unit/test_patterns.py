@@ -389,7 +389,7 @@ class TestChartPatternDetector:
                 result = det.detect_patterns(bad_input)  # type: ignore[arg-type]
                 assert isinstance(result, list)
             except (AttributeError, TypeError):
-                pass  # acceptable – module lacks isinstance guard
+                ...  # nosec B110
 
     def test_patterns_have_valid_index_range(self):
         """Pattern start_index and end_index are within DataFrame bounds."""

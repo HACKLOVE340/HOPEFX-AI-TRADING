@@ -116,7 +116,7 @@ def _reset_global_kill_switch():
                 ks._active = False
                 ks._reason = ""
     except Exception:
-        pass
+        ...  # nosec B110
 
 
 @pytest.fixture
@@ -250,7 +250,7 @@ def _reset_kill_switch():
 
         _ks.reset_for_testing()
     except Exception:
-        pass
+        ...  # nosec B110
     yield
     # Also reset after the test in case it activated the switch
     try:
@@ -258,7 +258,7 @@ def _reset_kill_switch():
 
         _ks.reset_for_testing()
     except Exception:
-        pass
+        ...  # nosec B110
 
 
 # ── Additional fixtures required by root-level tests ─────────────────────────

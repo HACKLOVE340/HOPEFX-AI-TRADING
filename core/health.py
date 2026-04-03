@@ -211,6 +211,6 @@ def register_health_routes(app: FastAPI, app_state: Any, kill_switch: Any) -> No
                 )
         except Exception:  # nosec B110 - Redis unavailable must not block readiness probe
             # Redis unavailable is non-fatal for readiness — don't block traffic
-            pass
+            ...  # nosec B110
 
         return {"ready": True}

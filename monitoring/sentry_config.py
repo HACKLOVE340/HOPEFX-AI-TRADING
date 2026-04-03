@@ -243,7 +243,7 @@ def _build_sentry_integrations() -> list:
         integrations.append(FastApiIntegration())
         logger.debug("Sentry: FastAPI integration enabled")
     except ImportError:
-        pass
+        ...  # nosec B110
 
     try:
         from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
@@ -251,7 +251,7 @@ def _build_sentry_integrations() -> list:
         integrations.append(SqlalchemyIntegration())
         logger.debug("Sentry: SQLAlchemy integration enabled")
     except ImportError:
-        pass
+        ...  # nosec B110
 
     try:
         from sentry_sdk.integrations.redis import RedisIntegration
@@ -259,7 +259,7 @@ def _build_sentry_integrations() -> list:
         integrations.append(RedisIntegration())
         logger.debug("Sentry: Redis integration enabled")
     except ImportError:
-        pass
+        ...  # nosec B110
 
     try:
         from sentry_sdk.integrations.aiohttp import AioHttpIntegration
@@ -267,7 +267,7 @@ def _build_sentry_integrations() -> list:
         integrations.append(AioHttpIntegration())
         logger.debug("Sentry: aiohttp integration enabled")
     except ImportError:
-        pass
+        ...  # nosec B110
 
     return integrations
 

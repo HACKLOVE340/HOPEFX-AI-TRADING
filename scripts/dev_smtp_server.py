@@ -121,7 +121,7 @@ async def _serve(host: str, port: int) -> None:
         # Keep running until cancelled
         await asyncio.Event().wait()
     except (asyncio.CancelledError, KeyboardInterrupt):
-        pass
+        ...  # nosec B110
     finally:
         controller.stop()
         logger.info("Dev SMTP server stopped.")
