@@ -288,6 +288,7 @@ class OrderFlowAnalyzer:
         size: float,
         side: str,
         timestamp: datetime | None = None,
+        trade_id: str | None = None,
     ):
         """
         Add a trade for analysis.
@@ -298,6 +299,7 @@ class OrderFlowAnalyzer:
             size: Trade size
             side: 'buy' or 'sell'
             timestamp: Trade timestamp (defaults to now)
+            trade_id: Optional unique identifier for deduplication / audit trail
         """
         trade = Trade(
             timestamp=timestamp or datetime.now(UTC),
@@ -305,6 +307,8 @@ class OrderFlowAnalyzer:
             size=size,
             side=side.lower(),
         )
+        if trade_id is not None:
+            trade.trade_id = trade_id
         self._record_trade(symbol, trade)
 
     def add_trades(self, symbol: str, trades: list[dict]):
@@ -580,6 +584,25 @@ class OrderFlowAnalyzer:
             selling_pressure=round(selling_pressure, 2),
             order_flow_signal=self._classify_signal(imbalance_ratio),
         )
+
+    def _classify_signal(self, imbalance_ratio: float) -> str:
+        """
+        Translate an imbalance ratio into a directional order-flow signal.
+
+        Args:
+            imbalance_ratio: Signed ratio of (buy_vol - sell_vol) / total_vol,
+                             in the range [-1, +1].
+
+        Returns:
+            ``'bullish'`` when buyers clearly dominate,
+            ``'bearish'`` when sellers clearly dominate,
+            ``'neutral'`` otherwise.
+        """
+        if imbalance_ratio > self._imbalance_threshold:
+            return "bullish"
+        if imbalance_ratio < -self._imbalance_threshold:
+            return "bearish"
+        return "neutral"
 
     def _detect_absorption(self, trades: list[Trade]) -> list[dict]:
         """

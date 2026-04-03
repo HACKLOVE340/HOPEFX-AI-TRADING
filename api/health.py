@@ -438,7 +438,7 @@ async def prometheus_metrics() -> str:
     except ImportError:
         pass  # psutil is optional — skip memory metrics when not installed
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
 
     overall_healthy = 1 if all(c.status == "healthy" for c in components) else 0
     lines += [

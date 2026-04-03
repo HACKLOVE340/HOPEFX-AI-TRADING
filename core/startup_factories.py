@@ -646,7 +646,7 @@ def _resolve_clock_start_time() -> datetime | None:
         try:
             return datetime.fromisoformat(started_str)
         except Exception:
-            pass
+            logger.debug("Suppressed exception (no detail) in %s", __name__)
     return datetime.now(UTC)
 
 
@@ -2075,3 +2075,42 @@ def run_startup_stress_tests(risk_manager) -> None:
                 )
     except Exception as exc:
         logger.warning("Startup stress tests could not run: %s", exc)
+
+
+# ---------------------------------------------------------------------------
+# Broker manager accessor — used by MCC and integration tests
+# ---------------------------------------------------------------------------
+
+
+def get_broker_manager():
+    """
+    Return a ``BrokerManager`` instance backed by the active broker on
+    ``app_state``, or ``None`` when no broker is configured.
+
+    The manager is cached on ``app_state._mcc_broker_manager`` so
+    subsequent calls within the same process reuse the same instance.
+    A new manager is created whenever the active broker reference changes.
+    """
+    try:
+        from core.app_state import app_state
+        from brokers.manager import BrokerManager
+
+        broker = getattr(app_state, "broker", None)
+        if broker is None:
+            return None
+
+        # Return cached manager when the broker reference hasn't changed.
+        cached: BrokerManager | None = getattr(app_state, "_mcc_broker_manager", None)
+        if cached is not None and getattr(cached, "_mcc_broker_ref", None) is broker:
+            return cached
+
+        mgr = BrokerManager(primary_broker_name="primary")
+        mgr.register("primary", broker)
+        mgr.set_active("primary")
+        mgr._mcc_broker_ref = broker  # mark cache tag
+        app_state._mcc_broker_manager = mgr
+        return mgr
+
+    except Exception as exc:
+        logger.debug("get_broker_manager: could not build manager: %s", exc)
+        return None

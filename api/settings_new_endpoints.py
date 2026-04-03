@@ -68,7 +68,7 @@ def _get_user_id(request: Request) -> str:
                 payload = pyjwt.decode(auth[7:], secret, algorithms=["HS256"])
                 return str(payload.get("sub", "anonymous"))
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return "anonymous"
 
 
@@ -82,7 +82,7 @@ def _get_user_role(request: Request) -> str:
                 payload = pyjwt.decode(auth[7:], secret, algorithms=["HS256"])
                 return str(payload.get("role", "user"))
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return "user"
 
 
@@ -99,7 +99,7 @@ def _load_from_db(key: str, fallback: dict) -> dict:
         if stored:
             return {**fallback, **json.loads(stored)}
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return dict(fallback)
 
 
@@ -108,7 +108,7 @@ def _save_to_db(key: str, data: dict) -> None:
         from core.config_store import config_store
         config_store.set(key, json.dumps(data))
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
 
 
 # ── Integrations ──────────────────────────────────────────────────────────────
@@ -393,12 +393,12 @@ async def global_kill_switch(request: Request):
         from api.admin import log_activity
         log_activity("GLOBAL KILL SWITCH activated by admin")
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     try:
         from core.config_store import config_store
         config_store.set("global_kill_switch", "true")
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     logger.critical("GLOBAL KILL SWITCH activated")
     return {"status": "activated", "timestamp": int(time.time())}
 

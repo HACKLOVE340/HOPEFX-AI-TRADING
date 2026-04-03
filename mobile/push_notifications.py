@@ -170,8 +170,9 @@ class PushNotificationManager:
 
         if not self.fcm_enabled or not tokens:
             # Print to stdout so dev/test environments can observe notifications
-            # without a real FCM key. logger.info alone is not captured by capsys.
-            logger.debug("[FCM] %s -> %s: %s", user_id, title, body)
+            # without a real FCM key. logger.info alone is not captured by capsys
+            # (pytest's capsys only captures direct sys.stdout writes).
+            print(f"[FCM-LOG] {user_id} -> {title}: {body}")
             logger.info("[FCM-LOG] %s -> %s: %s", user_id, title, body)
             return True
 

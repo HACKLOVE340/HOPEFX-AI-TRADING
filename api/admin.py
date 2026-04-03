@@ -566,7 +566,7 @@ def get_activity(user: TokenPayload = Depends(require_role("admin"))):
         }
         for e in activity_log
     ]
-    return {"entries": entries, "count": len(entries)}
+    return {"events": entries, "count": len(entries)}
 
 
 def _dashboard_broker_stats(trading_stats: dict, module_status: dict) -> None:
