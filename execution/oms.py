@@ -277,7 +277,7 @@ class OrderLifecycleManager:
         current = order.status
 
         if new_status not in self.VALID_TRANSITIONS.get(current, set()):
-            print(f"❌ Invalid transition: {current.name} -> {new_status.name}")
+            logger.warning("Invalid transition: %s -> %s", current.name, new_status.name)
             return False
 
         # Execute transition

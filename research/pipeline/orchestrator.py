@@ -647,7 +647,7 @@ class PipelineOrchestrator:
             try:
                 regime_prob = float(self.regime_router.predict_proba(X_df.iloc[[-1]])[0])
                 ens_prob = 0.6 * ens_base + 0.4 * regime_prob
-            except Exception:
+            except Exception:  # nosec B110 — regime prediction fallback
                 ens_prob = ens_base
         else:
             ens_prob = ens_base

@@ -74,7 +74,7 @@ try:
     _prom_killed = Gauge("hopefx_mutation_killed", "Mutants killed by tests")
     _prom_total = Gauge("hopefx_mutation_total", "Total mutants generated")
     _PROM_OK = True
-except Exception:
+except ImportError:
     _PROM_OK = False
 
 
@@ -178,7 +178,7 @@ class MutationTestRunner:
                 check=False,
             )
             return result.returncode == 0
-        except Exception:
+        except (OSError, subprocess.SubprocessError):
             return False
 
     async def _run_mutmut(self) -> MutationReport:
@@ -329,7 +329,7 @@ class MutationTestRunner:
         try:
             source = py_file.read_text()
             tree = ast.parse(source)
-        except Exception:
+        except (OSError, SyntaxError):
             return []
 
         mutants = []

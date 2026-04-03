@@ -277,7 +277,7 @@ class TestDataSchedulerIntegration:
 # ---------------------------------------------------------------------------
 
 try:
-    import fastapi as _fastapi_check  # noqa: F401
+    import fastapi as _fastapi_check
 
     _FASTAPI_AVAILABLE = True
 except ImportError:

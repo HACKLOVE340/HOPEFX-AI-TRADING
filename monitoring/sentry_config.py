@@ -529,7 +529,7 @@ def start_transaction(name: str, op: str = "task") -> Any:
         import sentry_sdk
 
         return sentry_sdk.start_transaction(name=name, op=op)
-    except Exception:
+    except ImportError:
         import contextlib
 
         @contextlib.contextmanager

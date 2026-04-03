@@ -478,7 +478,7 @@ def oos_eval(
     try:
         proba = model.predict_proba(X_oos)[:, 1]
         auc = float(roc_auc_score(y_oos, proba))
-    except Exception:
+    except (ValueError, TypeError):
         auc = 0.5
 
     # One-sided binomial test: H0 = p(correct) <= 0.5

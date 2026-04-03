@@ -135,7 +135,7 @@ def _init_prometheus():
             )
 
         return _M()
-    except Exception:
+    except ImportError:
 
         class _Noop:
             class _C:
@@ -790,7 +790,7 @@ class SignalFilter:
             log_lags = np.log(list(lags[: len(rs_vals)]))
             hurst = float(np.polyfit(log_lags, rs_vals, 1)[0])
             return max(0.0, min(1.0, hurst))
-        except Exception:
+        except (ValueError, FloatingPointError):
             return 0.5
 
     def _compute_ev(self, symbol: str, confidence: float) -> float:

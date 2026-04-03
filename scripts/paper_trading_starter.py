@@ -44,7 +44,9 @@ import os
 import signal
 import sys
 import time
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+
+UTC = timezone.utc
 from pathlib import Path
 from typing import Any
 
@@ -54,7 +56,7 @@ try:
 
     load_dotenv()
 except ImportError:
-    ...  # nosec B110
+    pass  # dotenv optional; env vars may already be set
 
 # ── logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -115,8 +117,8 @@ def send_telegram(token: str, chat_id: str, text: str) -> bool:
         logger.warning("Telegram not configured — skipping alert")
         return False
     try:
-        import urllib.parse
         import urllib.request
+        import urllib.parse
 
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         data = urllib.parse.urlencode({"chat_id": chat_id, "text": text, "parse_mode": "HTML"}).encode()
@@ -212,11 +214,11 @@ class TradeLogger:
 
     def _init_csv(self) -> None:
         if not self.path.exists():
-            with Path(self.path).open("w", newline="", encoding="utf-8") as f:
+            with open(self.path, "w", newline="", encoding="utf-8") as f:
                 csv.DictWriter(f, fieldnames=CSV_HEADERS).writeheader()
 
     def log(self, record: dict[str, Any]) -> None:
-        with Path(self.path).open("a", newline="", encoding="utf-8") as f:
+        with open(self.path, "a", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=CSV_HEADERS)
             writer.writerow({k: record.get(k, "") for k in CSV_HEADERS})
 
@@ -316,56 +318,21 @@ class PaperTradingRunner:
             }
         )
 
-    # ── signal generation (ML engine) ────────────────────────────────────────
+    # ── signal generation (momentum) ─────────────────────────────────────────
 
     def _generate_signal(self, instrument: str, price: float) -> str | None:
         """
-        Generate a trading signal using the production ML model.
-
-        Calls core.signal_engine.SignalEngine if available, otherwise falls
-        back to the 20-bar SMA momentum rule for smoke testing.
-
-        Returns "BUY", "SELL", or None (abstain).
+        Simple 20-bar SMA momentum signal.
+        Returns "BUY", "SELL", or None.
+        Replace with hopefx_engine.generate_signal() for production.
         """
-        # Accumulate price history for both ML features and SMA fallback
         history = self._price_history[instrument]
         history.append(price)
-        if len(history) > 200:
+        if len(history) > 20:
             history.pop(0)
-
-        # Try ML signal engine first
-        try:
-            from core.signal_engine import _compute_ml_probability
-
-            if len(history) >= 50:
-                # Build minimal OHLCV dict from price history for ML features
-                closes = history[-100:] if len(history) >= 100 else history
-                ohlcv_data = {
-                    "close": closes,
-                    "open": closes,
-                    "high": [p * 1.001 for p in closes],
-                    "low": [p * 0.999 for p in closes],
-                    "volume": [10000.0] * len(closes),
-                }
-                prob = _compute_ml_probability(
-                    ohlcv_data,
-                    symbol=instrument.replace("_", ""),
-                )
-                threshold_long = float(os.getenv("SIGNAL_THRESHOLD_LONG", "0.60"))
-                threshold_short = float(os.getenv("SIGNAL_THRESHOLD_SHORT", "0.40"))
-                logger.debug("ML prob: %s %.4f", instrument, prob)
-                if prob >= threshold_long:
-                    return "BUY"
-                if prob <= threshold_short:
-                    return "SELL"
-                return None  # abstain
-        except Exception as exc:
-            logger.debug("ML engine unavailable (%s) — using SMA fallback", exc)
-
-        # SMA fallback (used when ML engine not yet bootstrapped)
         if len(history) < 20:
             return None
-        sma = sum(history[-20:]) / 20
+        sma = sum(history) / len(history)
         if price > sma * 1.001:
             return "BUY"
         if price < sma * 0.999:
@@ -419,35 +386,11 @@ class PaperTradingRunner:
 
     def run(self) -> None:
         self._bootstrap()
-        self._bootstrap_mtf()
         logger.info(
             "Starting %s-day paper session | Kill at %.0f%% DD",
             self._duration_days(),
             self.max_dd_pct * 100,
         )
-
-    def _bootstrap_mtf(self) -> None:
-        """Bootstrap MTFFusionStore so the MTF confluence gate has H4/D1 data."""
-        import asyncio
-        try:
-            from research.pipeline.mtf_fusion import init_mtf_store_standalone
-            store = asyncio.run(init_mtf_store_standalone(
-                symbol=os.getenv("ML_SYMBOLS", "XAUUSD"),
-                data_dir=str(DATA_DIR),
-            ))
-            if store.is_ready:
-                logger.info(
-                    "MTFFusionStore ready — H4=%d bars, D1=%d bars",
-                    store.status()["h4_bars"],
-                    store.status()["d1_bars"],
-                )
-            else:
-                logger.warning(
-                    "MTFFusionStore not ready (%s) — MTF gate will pass-through",
-                    store.status().get("bootstrap_error", "unknown"),
-                )
-        except Exception as exc:
-            logger.warning("MTFFusionStore bootstrap failed (non-fatal): %s", exc)
 
         last_daily_alert = time.time()
         end_time = self.start_time + self.duration_s

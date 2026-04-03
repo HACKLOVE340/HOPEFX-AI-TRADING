@@ -504,7 +504,7 @@ class StripeProductionClient:
 
             try:
                 return json.loads(payload)
-            except Exception:
+            except (ValueError, TypeError):
                 return None
 
         if not self._stripe_available:
@@ -512,7 +512,7 @@ class StripeProductionClient:
 
             try:
                 return json.loads(payload)
-            except Exception:
+            except (ValueError, TypeError):
                 return None
 
         try:

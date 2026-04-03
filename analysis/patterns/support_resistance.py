@@ -424,7 +424,7 @@ class SupportResistanceDetector:
                 return None
         try:
             cols = {str(c).lower(): c for c in df.columns}
-        except Exception:
+        except (AttributeError, TypeError):
             return None
         return cols
 

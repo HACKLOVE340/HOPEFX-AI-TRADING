@@ -64,10 +64,7 @@ class MasterControlCore:
     def __init__(self, config: MCCConfig | None = None):
         self.config = config or MCCConfig()
 
-        print("╔══════════════════════════════════════════════════╗")
-        print("║     HOPEFX MASTER CONTROL CORE v2.0              ║")
-        print("║     Integrating your existing infrastructure       ║")
-        print("╚══════════════════════════════════════════════════╝")
+        logger.info("MCC v2.0 initializing — integrating existing infrastructure")
 
         # Your existing components
         self.config_manager: ConfigManager | None = None
@@ -115,15 +112,15 @@ class MasterControlCore:
         self.cache = cache
         self.db_session = db_session
 
-        print("\n📡 Connecting to your infrastructure...")
-        print(f"   ✓ ConfigManager: {type(config_manager).__name__}")
-        print(f"   ✓ MarketDataCache: {type(cache).__name__}")
-        print(f"   ✓ Database: {'Connected' if db_session else 'Not connected'}")
+        logger.info("Connecting to infrastructure...")
+        logger.info("ConfigManager: %s", type(config_manager).__name__)
+        logger.info("MarketDataCache: %s", type(cache).__name__)
+        logger.info("Database: %s", "Connected" if db_session else "Not connected")
 
         # Load configuration
         self._load_mcc_config()
 
-        print("\n✅ MCC initialized and ready")
+        logger.info("MCC initialized and ready")
 
     def _load_mcc_config(self):
         """Load MCC-specific config from your config manager"""
@@ -163,7 +160,7 @@ class MasterControlCore:
             # Set callback so strategy can report to MCC
             strategy.mcc_callback = self._on_strategy_signal
 
-        print(f"   📊 Strategy registered: {name} (max alloc: {max_allocation})")
+        logger.info("Strategy registered: %s (max alloc: %s)", name, max_allocation)
 
     def activate_strategy(self, name: str):
         """Activate a strategy"""
@@ -171,7 +168,7 @@ class MasterControlCore:
             self.strategies[name].activate()
             if name not in self.active_strategies:
                 self.active_strategies.append(name)
-            print(f"   ▶️  Activated: {name}")
+            logger.info("Activated: %s", name)
 
     def deactivate_strategy(self, name: str, reason: str = ""):
         """Deactivate a strategy"""
@@ -179,7 +176,7 @@ class MasterControlCore:
             self.strategies[name].deactivate()
             if name in self.active_strategies:
                 self.active_strategies.remove(name)
-            print(f"   ⏸️  Deactivated: {name} {f'({reason})' if reason else ''}")
+            logger.info("Deactivated: %s %s", name, f"({reason})" if reason else "")
 
     def _on_strategy_signal(self, strategy_name: str, signal: StrategySignal):
         """
@@ -189,10 +186,12 @@ class MasterControlCore:
         if self.kill_switch_triggered:
             return
 
-        # Log signal
-        print(
-            f"📡 [{strategy_name}] Signal: {signal.action} "
-            f"(strength: {signal.strength:.2f}, conf: {signal.confidence:.2f})",
+        logger.info(
+            "[%s] Signal: %s (strength: %.2f, conf: %.2f)",
+            strategy_name,
+            signal.action,
+            signal.strength,
+            signal.confidence,
         )
 
         # Store latest signal for aggregation and correlation checks
@@ -200,7 +199,7 @@ class MasterControlCore:
 
         # Risk check
         if not self._check_signal_risk(strategy_name, signal):
-            print("   ⚠️ Risk check failed - signal rejected")
+            logger.warning("Risk check failed — signal from %s rejected", strategy_name)
             return
 
         # Aggregate with other signals
@@ -318,11 +317,96 @@ class MasterControlCore:
         }
 
     def _execute_signal(self, composite: dict):
-        """Send to execution"""
-        print(
-            f"🚀 EXECUTING: {composite['action']} (confidence: {composite['confidence']:.2f})",
+        """Route composite signal to the broker layer for execution.
+
+        The method attempts to obtain the *singleton* ``BrokerManager`` that is
+        already wired by ``core.startup_factories`` (or equivalent).  If no
+        broker is available (e.g. unit tests, paper-trading setup without a
+        connected broker) the signal is logged and discarded gracefully rather
+        than crashing.
+
+        Args:
+            composite: Dict produced by ``_aggregate_signals`` with keys
+                ``action`` (``"BUY"`` | ``"SELL"``), ``confidence`` (float),
+                and ``strength`` (float).
+        """
+        action = composite.get("action", "HOLD")
+        confidence = composite.get("confidence", 0.0)
+
+        logger.info(
+            "EXECUTING: %s (confidence: %.2f, strength: %.2f)",
+            action,
+            confidence,
+            composite.get("strength", 0.0),
         )
-        # Connect to your existing broker execution here
+
+        # --- Resolve broker manager -------------------------------------------
+        broker_mgr = None
+        try:
+            from core.startup_factories import get_broker_manager  # lazy import
+
+            broker_mgr = get_broker_manager()
+        except Exception as _imp_exc:  # pylint: disable=broad-exception-caught
+            logger.debug("BrokerManager not available via startup_factories: %s", _imp_exc)
+
+        if broker_mgr is None:
+            logger.warning(
+                "MCC._execute_signal: no BrokerManager available — signal %s discarded",
+                action,
+            )
+            return
+
+        # --- Map action → OrderSide -------------------------------------------
+        try:
+            from brokers.base import OrderSide, OrderType  # lazy import
+        except ImportError as _imp_exc2:
+            logger.error("Cannot import OrderSide/OrderType: %s", _imp_exc2)
+            return
+
+        side_map = {"BUY": OrderSide.BUY, "SELL": OrderSide.SELL}
+        order_side = side_map.get(action)
+        if order_side is None:
+            logger.debug("_execute_signal: unexpected action '%s' — ignoring", action)
+            return
+
+        # Determine the primary symbol being traded (first in current_prices,
+        # or fall back to "XAU_USD" which is the default trading pair).
+        symbol = next(iter(self.current_prices), "XAU_USD")
+        current_price = float(self.current_prices.get(symbol, Decimal("0")))
+
+        # Position size: base quantity driven by allocation & confidence.
+        # 1 unit as minimum; scale by confidence weight.
+        raw_qty = max(1.0, round(confidence * 10, 2))  # 6–10 units for 60–100% confidence
+
+        logger.info(
+            "Routing order → broker: symbol=%s side=%s qty=%.2f price~%.5f",
+            symbol,
+            order_side.value,
+            raw_qty,
+            current_price,
+        )
+
+        try:
+            order = broker_mgr.place_order(
+                symbol=symbol,
+                side=order_side,
+                order_type=OrderType.MARKET,
+                quantity=raw_qty,
+            )
+            logger.info(
+                "Order submitted: id=%s symbol=%s side=%s qty=%.2f",
+                getattr(order, "order_id", "?"),
+                symbol,
+                order_side.value,
+                raw_qty,
+            )
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            logger.error(
+                "Broker order placement failed for %s %s: %s",
+                order_side.value,
+                symbol,
+                exc,
+            )
 
     def on_price_update(
         self,
@@ -351,7 +435,7 @@ class MasterControlCore:
             try:
                 self.strategies[name].on_price(timestamp, price, bid, ask)
             except Exception as e:
-                print(f"   ⚠️ Error in {name}: {e}")
+                logger.error("Error in strategy %s: %s", name, e)
 
     def _detect_regime(self, symbol: str):
         """Detect market regime from price history"""
@@ -377,7 +461,7 @@ class MasterControlCore:
 
     def _on_regime_change(self, new_regime: str):
         """Adjust strategies based on regime"""
-        print(f"🌊 Regime change: {new_regime}")
+        logger.info("Regime change: %s", new_regime)
 
         # Activate/deactivate strategies based on suitability
         regime_strategies = {
@@ -403,14 +487,35 @@ class MasterControlCore:
         return Decimal(0)
 
     def trigger_kill_switch(self, reason: str):
-        """Emergency stop all trading"""
-        print(f"🚨 KILL SWITCH TRIGGERED: {reason}")
+        """Emergency stop all trading — deactivates all strategies and closes
+        all open broker positions."""
+        logger.critical("KILL SWITCH TRIGGERED: %s", reason)
         self.kill_switch_triggered = True
 
         for name in list(self.active_strategies):
             self.deactivate_strategy(name, "kill switch")
 
-        # Close all positions via your existing broker
+        # Close all open positions via the broker layer
+        try:
+            from core.startup_factories import get_broker_manager  # lazy import
+
+            broker_mgr = get_broker_manager()
+            if broker_mgr is not None:
+                positions = broker_mgr.get_positions()
+                for pos in positions:
+                    try:
+                        symbol = getattr(pos, "symbol", None)
+                        if symbol:
+                            broker_mgr.close_position(symbol)
+                            logger.info("Kill switch: closed position for %s", symbol)
+                    except Exception as _pos_exc:  # pylint: disable=broad-exception-caught
+                        logger.error(
+                            "Kill switch: failed to close position for %s: %s",
+                            getattr(pos, "symbol", "?"),
+                            _pos_exc,
+                        )
+        except Exception as _ks_exc:  # pylint: disable=broad-exception-caught
+            logger.error("Kill switch: could not close positions via broker: %s", _ks_exc)
 
     def get_heatmap_data(self) -> dict:
         """
@@ -441,17 +546,17 @@ class MasterControlCore:
     def run(self):
         """Main loop - integrate with your existing main.py"""
         self.is_running = True
-        print("\n🎯 MCC Running - coordinating all strategies")
+        logger.info("MCC running — coordinating all strategies")
 
         # Your existing main loop calls on_price_update()
         # This distributes to all strategies
 
     def stop(self):
         """Graceful shutdown"""
-        print("\n🛑 MCC Stopping...")
+        logger.info("MCC stopping...")
         self.is_running = False
 
         for name in list(self.active_strategies):
             self.deactivate_strategy(name, "shutdown")
 
-        print("   ✓ All strategies deactivated")
+        logger.info("All strategies deactivated")

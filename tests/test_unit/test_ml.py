@@ -18,7 +18,7 @@ try:
 except ImportError:
     try:
         # Fallback: check if xgboost is available at all
-        import xgboost  # noqa: F401
+        import xgboost
 
         HAS_ML_DEPS = False  # modules exist but classes may differ
     except ImportError:

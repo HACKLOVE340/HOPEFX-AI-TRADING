@@ -99,7 +99,7 @@ try:
 
     df = pd.read_csv(ROOT / "data" / "XAUUSD_2Y.csv", index_col=0, parse_dates=True)
     head_html = df.head().to_html(classes="dataframe", border=0)
-except Exception:
+except (ImportError, FileNotFoundError, ValueError):
     head_html = "<pre>see data/XAUUSD_2Y.csv</pre>"
 
 cells.append(md("## 1 · Load Dataset"))
@@ -258,7 +258,7 @@ try:
         .head(10)
         .to_html(classes="dataframe", border=0, index=False)
     )
-except Exception:
+except (ImportError, FileNotFoundError, ValueError):
     trades_html = "<pre>" + TRADES + "</pre>"
 
 cells.append(code("trades_df.head(10)", [display_html(trades_html)]))

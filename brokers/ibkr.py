@@ -390,7 +390,8 @@ class IBKRBroker:
         try:
             await self._ib.reqCurrentTimeAsync()
             return (time.monotonic() - t0) * 1000
-        except Exception:
+        except Exception as exc:
+            logger.warning("IBKRBroker.ping() failed: %s", exc)
             return 9999.0
 
     # ── IB event callbacks ────────────────────────────────────────────────────

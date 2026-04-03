@@ -299,14 +299,14 @@ class ChaosController:
         try:
             report = self._orch.get_quality_report("XAU_USD")
             return report.ticks_rejected if report else 0
-        except Exception:
+        except Exception:  # nosec B110
             return 0
 
     def _get_dqe_stale_count(self) -> int:
         try:
             report = self._orch.get_quality_report("XAU_USD")
             return report.stale_count if report else 0
-        except Exception:
+        except Exception:  # nosec B110
             return 0
 
     def _get_current_spread_bps(self) -> float:
@@ -315,13 +315,13 @@ class ChaosController:
             spread = features.get("micro_spread", 0.5)
             mid = self._orch.get_current_gold_price() or 2350.0
             return spread / mid * 10_000 * 10  # 10x widened
-        except Exception:
+        except Exception:  # nosec B110
             return 999.0  # assume wide if unavailable
 
     def _get_orchestrator_health(self) -> dict[str, Any]:
         try:
             return self._orch.health()
-        except Exception:
+        except Exception:  # nosec B110
             return {"started": False}
 
     # ── Report ────────────────────────────────────────────────────────────────

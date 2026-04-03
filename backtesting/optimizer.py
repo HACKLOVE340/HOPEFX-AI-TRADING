@@ -67,7 +67,7 @@ class ParameterOptimizer:
 
             try:
                 # Create strategy with these parameters
-                strategy = self.strategy_class(**params)
+                self.strategy_class(**params)
 
                 # Run backtest using the strategy's signal generator
                 engine = BacktestEngine(initial_capital=self.initial_capital)

@@ -65,7 +65,7 @@ def _probe_components(app_state: Any, kill_switch: Any) -> dict:
         try:
             ok = app_state.cache.health_check() if hasattr(app_state.cache, "health_check") else True
             components["cache"] = "healthy" if ok else "degraded"
-        except Exception:
+        except Exception:  # nosec B110 — health-check availability probe
             components["cache"] = "degraded"
     else:
         components["cache"] = "unavailable"

@@ -182,7 +182,7 @@ class PositionSizer:
             from ml.signal_filter import get_signal_filter
 
             stats = get_signal_filter().ev_stats(symbol)
-        except Exception:
+        except ImportError:
             stats = {}
 
         win_rate = stats.get("win_rate") or confidence

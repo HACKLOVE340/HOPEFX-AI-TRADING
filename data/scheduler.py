@@ -471,8 +471,7 @@ async def _update_timeframe(
                     granularity,
                     result.errors,
                 )
-    except Exception:
-        # Validator unavailable — persist all bars
+    except Exception:  # nosec B110 — validator unavailable; persist all bars
         valid_bars = bars
 
     return _append_bars(path, valid_bars)
@@ -656,7 +655,7 @@ async def backfill(
             last_ts = bars[-1]["timestamp"]
             cursor = datetime.fromisoformat(last_ts).replace(tzinfo=UTC)
             cursor += timedelta(seconds=bar_secs)
-        except Exception:
+        except (ValueError, TypeError, KeyError, IndexError):
             cursor += timedelta(seconds=chunk_secs)
 
         # Respect OANDA rate limits (120 req/min for practice)

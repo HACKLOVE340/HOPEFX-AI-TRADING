@@ -459,7 +459,8 @@ class NewsFilter:
             return True
         try:
             return not self._filter.is_trading_paused()
-        except Exception:
+        except Exception as exc:
+            logger.debug("NewsFilter safety check failed: %s — allowing trade", exc)
             return True
 
 

@@ -103,8 +103,8 @@ def cmd_status(args):
 
             else:
                 logger.warning("⚠ Cache: Connection failed")
-        except Exception:
-            logger.warning("⚠ Cache: Not available")
+        except Exception as exc:
+            logger.warning("⚠ Cache: Not available (%s)", exc)
 
         # Check API configs
         logger.info("✓ API Configurations: %s configured", len(config.api_configs))

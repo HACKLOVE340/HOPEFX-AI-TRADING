@@ -9,6 +9,7 @@ Multi-asset backtesting, portfolio optimization, correlation analysis, risk metr
 """
 
 import json
+import logging
 import warnings
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,6 +19,8 @@ import numpy as np
 import pandas as pd
 
 warnings.filterwarnings("ignore")
+
+logger = logging.getLogger(__name__)
 
 # Visualization
 import matplotlib.pyplot as plt
@@ -54,7 +57,7 @@ class PortfolioAnalytics:
         """Load historical returns data for analysis"""
         self.returns_data = returns_df.dropna()
         self.assets = list(returns_df.columns)
-        print(f"Loaded returns data: {len(self.returns_data)} periods, {len(self.assets)} assets")
+        logger.info("Loaded returns data: %d periods, %d assets", len(self.returns_data), len(self.assets))
 
     def calculate_correlation_matrix(self, save_path: str | None = None) -> pd.DataFrame:
         """Calculate and visualize correlation matrix"""
@@ -87,7 +90,7 @@ class PortfolioAnalytics:
         if save_path:
             Path(save_path).parent.mkdir(parents=True, exist_ok=True)
             plt.savefig(save_path, dpi=300, bbox_inches="tight")
-            print(f"Correlation matrix saved: {save_path}")
+            logger.info("Correlation matrix saved: %s", save_path)
 
         plt.show()
         return corr_matrix
@@ -315,7 +318,7 @@ class PortfolioAnalytics:
         if save_path:
             Path(save_path).parent.mkdir(parents=True, exist_ok=True)
             plt.savefig(save_path, dpi=300, bbox_inches="tight")
-            print(f"Efficient frontier saved: {save_path}")
+            logger.info("Efficient frontier saved: %s", save_path)
 
         plt.show()
         return df
@@ -441,7 +444,7 @@ class PortfolioAnalytics:
         weights_path = Path(output_dir) / f"portfolio_weights_{timestamp}.csv"
         weights_df.to_csv(weights_path, index=False)
 
-        print(f"Portfolio report saved to {output_dir}/")
+        logger.info("Portfolio report saved to %s/", output_dir)
         return str(report_path)
 
 
@@ -473,9 +476,9 @@ class MultiAssetBacktester:
             weights_df: DataFrame with target weights over time
             rebalance_freq: Rebalancing frequency
         """
-        print(f"Starting multi-asset backtest: ${self.initial_capital:,.2f}")
-        print(f"Assets: {list(prices_df.columns)}")
-        print(f"Rebalancing: {rebalance_freq}")
+        logger.info("Starting multi-asset backtest: $%.2f", self.initial_capital)
+        logger.info("Assets: %s", list(prices_df.columns))
+        logger.info("Rebalancing: %s", rebalance_freq)
 
         # Initialize positions
         for asset in prices_df.columns:
@@ -520,10 +523,10 @@ class MultiAssetBacktester:
         # Calculate performance metrics
         returns = equity_df["equity"].pct_change(fill_method=None).dropna()
 
-        print("\nBacktest complete:")
-        print(f"  Final equity: ${equity_df['equity'].iloc[-1]:,.2f}")
-        print(f"  Total return: {(equity_df['equity'].iloc[-1] / self.initial_capital - 1):.2%}")
-        print(f"  Sharpe ratio: {(returns.mean() * 252) / (returns.std() * np.sqrt(252)):.2f}")
+        logger.info("Backtest complete:")
+        logger.info("Final equity: $%.2f", equity_df["equity"].iloc[-1])
+        logger.info("Total return: %.2f%%", (equity_df["equity"].iloc[-1] / self.initial_capital - 1) * 100)
+        logger.info("Sharpe ratio: %.2f", (returns.mean() * 252) / (returns.std() * np.sqrt(252)))
 
         return equity_df
 
@@ -587,7 +590,7 @@ class MultiAssetBacktester:
         trades_path = Path(output_dir) / f"multi_asset_trades_{timestamp}.csv"
         trades_df.to_csv(trades_path, index=False)
 
-        print(f"Backtest results saved to {output_dir}/")
+        logger.info("Backtest results saved to %s/", output_dir)
 
 
 class RiskAnalyzer:
@@ -708,7 +711,7 @@ def create_portfolio_report(
     if weights is None:
         opt_result = analytics.optimize_portfolio(max_sharpe=True)
         weights = np.array(list(opt_result["weights"].values()))
-        print(f"Optimized portfolio - Sharpe: {opt_result['sharpe_ratio']:.2f}")
+        logger.info("Optimized portfolio — Sharpe: %.2f", opt_result["sharpe_ratio"])
 
     # Generate correlation matrix
     corr_path = Path(output_dir) / "correlation_matrix.png"
@@ -729,12 +732,14 @@ def create_portfolio_report(
     dd_path = Path(output_dir) / "drawdown_analysis.png"
     risk_analyzer.plot_drawdowns(save_path=str(dd_path))
 
-    print(f"\nPortfolio report complete: {report_path}")
-    print("Key metrics:")
-    print(f"  Sharpe Ratio: {metrics['sharpe_ratio']:.2f}")
-    print(f"  Sortino Ratio: {metrics['sortino_ratio']:.2f}")
-    print(f"  Max Drawdown: {metrics['max_drawdown']:.2%}")
-    print(f"  Calmar Ratio: {metrics['calmar_ratio']:.2f}")
+    logger.info("Portfolio report complete: %s", report_path)
+    logger.info(
+        "Key metrics — Sharpe: %.2f | Sortino: %.2f | MaxDD: %.2f%% | Calmar: %.2f",
+        metrics["sharpe_ratio"],
+        metrics["sortino_ratio"],
+        metrics["max_drawdown"] * 100,
+        metrics["calmar_ratio"],
+    )
 
     return report_path
 

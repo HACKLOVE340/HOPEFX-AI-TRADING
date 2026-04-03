@@ -595,7 +595,7 @@ def setup_rate_limiting(app):
         try:
             limiter = Limiter(key_func=get_remote_address, storage_uri=redis_url)
             logger.info("Rate limiter: Redis backend at %s", redis_url)
-        except Exception:
+        except Exception:  # nosec B110 — Redis optional for rate limiter
             limiter = Limiter(key_func=get_remote_address)
             logger.info("Rate limiter: in-memory backend (Redis unavailable)")
 
