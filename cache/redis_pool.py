@@ -42,12 +42,10 @@ from __future__ import annotations
 import logging
 import os
 import threading
-from typing import TYPE_CHECKING
 
 logger = logging.getLogger(__name__)
 
 try:
-    import redis
     from redis import ConnectionPool, Redis
 
     SYNC_REDIS_AVAILABLE = True
@@ -80,9 +78,9 @@ _HEALTH_CHECK_INTERVAL: int = int(os.getenv("REDIS_HEALTH_CHECK_INTERVAL", "30")
 # ---------------------------------------------------------------------------
 
 _lock: threading.Lock = threading.Lock()
-_sync_pool: "ConnectionPool | None" = None
-_sync_client: "Redis | None" = None
-_async_client: "aioredis.Redis | None" = None  # type: ignore[name-defined]
+_sync_pool: ConnectionPool | None = None
+_sync_client: Redis | None = None
+_async_client: aioredis.Redis | None = None  # type: ignore[name-defined]
 
 
 # ---------------------------------------------------------------------------
@@ -90,7 +88,7 @@ _async_client: "aioredis.Redis | None" = None  # type: ignore[name-defined]
 # ---------------------------------------------------------------------------
 
 
-def get_redis_pool() -> "ConnectionPool":
+def get_redis_pool() -> ConnectionPool:
     """
     Return the process-wide synchronous Redis ``ConnectionPool``, creating it
     on first call.
@@ -98,7 +96,7 @@ def get_redis_pool() -> "ConnectionPool":
     Raises:
         RuntimeError: If the ``redis`` package is not installed.
     """
-    global _sync_pool  # noqa: PLW0603
+    global _sync_pool
     if not SYNC_REDIS_AVAILABLE:
         raise RuntimeError(
             "redis package not installed.  "
@@ -125,7 +123,7 @@ def get_redis_pool() -> "ConnectionPool":
     return _sync_pool
 
 
-def get_sync_client() -> "Redis":
+def get_sync_client() -> Redis:
     """
     Return a synchronous ``redis.Redis`` client backed by the shared pool.
 
@@ -135,7 +133,7 @@ def get_sync_client() -> "Redis":
     Raises:
         RuntimeError: If the ``redis`` package is not installed.
     """
-    global _sync_client  # noqa: PLW0603
+    global _sync_client
     if _sync_client is not None:
         return _sync_client
     with _lock:
@@ -146,7 +144,7 @@ def get_sync_client() -> "Redis":
     return _sync_client
 
 
-async def get_async_client() -> "aioredis.Redis":  # type: ignore[name-defined]
+async def get_async_client() -> aioredis.Redis:  # type: ignore[name-defined]
     """
     Return an async ``redis.asyncio.Redis`` client backed by its own pool.
 
@@ -156,7 +154,7 @@ async def get_async_client() -> "aioredis.Redis":  # type: ignore[name-defined]
     Raises:
         RuntimeError: If the ``redis`` package is not installed.
     """
-    global _async_client  # noqa: PLW0603
+    global _async_client
     if not ASYNC_REDIS_AVAILABLE:
         raise RuntimeError(
             "redis[asyncio] not installed.  "
@@ -184,7 +182,7 @@ def reset_pool() -> None:
     Tear down and reset the connection pool (used in tests and graceful
     shutdown paths).  All existing connections are closed.
     """
-    global _sync_pool, _sync_client, _async_client  # noqa: PLW0603
+    global _sync_pool, _sync_client, _async_client
     with _lock:
         if _sync_pool is not None:
             try:

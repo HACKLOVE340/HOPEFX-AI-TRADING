@@ -140,7 +140,7 @@ class BrokerCircuitBreaker:
         self._total_failures: int = 0
 
         # Typed failure counters
-        self._failure_type_counts: dict[str, int] = {ft: 0 for ft in FAILURE_TYPES}
+        self._failure_type_counts: dict[str, int] = dict.fromkeys(FAILURE_TYPES, 0)
 
         self._lock = asyncio.Lock()
 

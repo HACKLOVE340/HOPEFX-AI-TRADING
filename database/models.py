@@ -67,7 +67,7 @@ except ImportError:
         "or: pip install -r requirements.txt"
     )
     if _STRICT_DEPS:
-        raise RuntimeError(_MISSING_MSG)
+        raise RuntimeError(_MISSING_MSG) from None
 
     # Log at ERROR level so operators see this in logs even in non-strict mode.
     logger.error(_MISSING_MSG)

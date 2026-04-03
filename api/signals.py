@@ -836,15 +836,15 @@ class _GenerateSignalRequest(_SignalBaseModel):
     direction: str
     confidence: float = 0.7
     price: float = 0.0
-    entry_price: Optional[float] = None
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
+    entry_price: float | None = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
     timeframe: str = "1H"
     strategies_agreeing: list[str] = _SignalField(default_factory=list)
     total_strategies: int = 1
     regime: str = "unknown"
     session: str = "london"
-    parameters: Optional[dict] = None
+    parameters: dict | None = None
 
 
 class _CreateAlertRequest(_SignalBaseModel):
@@ -853,7 +853,7 @@ class _CreateAlertRequest(_SignalBaseModel):
     symbol: str
     direction: str = "buy"
     min_confidence: float = 0.7
-    notify_webhook: Optional[str] = None
+    notify_webhook: str | None = None
 
 
 def _register_signal_write_routes(router: Any) -> None:

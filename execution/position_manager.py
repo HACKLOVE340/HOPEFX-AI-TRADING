@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
 import uuid
 from collections import deque
 from dataclasses import dataclass, field
@@ -161,7 +160,7 @@ class Position:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "Position":
+    def from_dict(cls, data: dict[str, Any]) -> Position:
         """Deserialise a position from a dictionary.
 
         Args:
@@ -594,7 +593,7 @@ class PositionManager:
 class _NullCtx:
     """Minimal context manager used when tracing is unavailable."""
 
-    def __enter__(self) -> "_NullCtx":
+    def __enter__(self) -> _NullCtx:
         return self
 
     def __exit__(self, *_: Any) -> None:

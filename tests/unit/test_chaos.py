@@ -107,7 +107,7 @@ class TestKillSwitchFaultInjection:
     def test_callback_fired_on_activation(self, kill_switch) -> None:
         """Registered callbacks must be called synchronously on activate()."""
         fired: list[str] = []
-        kill_switch.register_callback(lambda reason: fired.append(reason))
+        kill_switch.register_callback(fired.append)
         kill_switch.activate("cascade failure")
         assert fired == ["cascade failure"]
 
