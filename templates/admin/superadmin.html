@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HOPEFX — SuperAdmin Control Center</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+           background: #0d1117; color: #e6edf3; min-height: 100vh; }
+
+    /* Layout */
+    .layout { display: flex; min-height: 100vh; }
+    .sidebar { width: 240px; background: #161b22; border-right: 1px solid #30363d;
+               display: flex; flex-direction: column; flex-shrink: 0; }
+    .logo { padding: 20px; font-size: 18px; font-weight: 700; color: #ff6b35;
+            border-bottom: 1px solid #30363d; display: flex; align-items: center; gap: 8px; }
+    .nav-section { padding: 12px 0; border-bottom: 1px solid #30363d; }
+    .nav-section-label { padding: 4px 16px; font-size: 10px; font-weight: 700;
+                         color: #8b949e; text-transform: uppercase; letter-spacing: 1px; }
+    .nav-item { display: block; padding: 9px 16px; color: #c9d1d9; text-decoration: none;
+                font-size: 13px; display: flex; align-items: center; gap: 8px;
+                transition: background .15s; cursor: pointer; border: none; background: none;
+                width: 100%; text-align: left; }
+    .nav-item:hover, .nav-item.active { background: #21262d; color: #f0f6fc; }
+    .sidebar-footer { margin-top: auto; padding: 16px;
+                      border-top: 1px solid #30363d; font-size: 12px; color: #8b949e; }
+    .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+                  background: #3fb950; margin-right: 6px; }
+
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .topbar { background: #161b22; border-bottom: 1px solid #30363d; padding: 14px 24px;
+              display: flex; align-items: center; justify-content: space-between; }
+    .topbar-title { font-size: 16px; font-weight: 700; color: #f0f6fc; }
+    .topbar-badges { display: flex; gap: 10px; align-items: center; }
+    .badge { padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+    .badge-red { background: #da3633; color: #fff; }
+    .badge-green { background: #1f6feb; color: #fff; }
+    .badge-warn { background: #9e6a03; color: #fff; }
+    .badge-purple { background: #6e40c9; color: #fff; }
+    .content { flex: 1; overflow-y: auto; padding: 24px; }
+
+    /* Panel */
+    .panel { background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+             margin-bottom: 20px; }
+    .panel-header { padding: 14px 20px; border-bottom: 1px solid #30363d;
+                    display: flex; align-items: center; justify-content: space-between; }
+    .panel-title { font-size: 14px; font-weight: 600; color: #f0f6fc;
+                   display: flex; align-items: center; gap: 8px; }
+    .panel-body { padding: 20px; }
+
+    /* KPI grid */
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; }
+    .kpi { background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+           padding: 14px 16px; position: relative; overflow: hidden; }
+    .kpi::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--c, #1f6feb); }
+    .kpi.green  { --c: #3fb950; }
+    .kpi.red    { --c: #da3633; }
+    .kpi.yellow { --c: #9e6a03; }
+    .kpi.purple { --c: #6e40c9; }
+    .kpi-label { font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+    .kpi-value { font-size: 24px; font-weight: 700; color: #f0f6fc; }
+    .kpi-sub   { font-size: 11px; color: #8b949e; margin-top: 4px; }
+
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { padding: 10px 12px; text-align: left; background: #0d1117;
+         color: #8b949e; font-weight: 600; font-size: 11px; text-transform: uppercase;
+         letter-spacing: .5px; border-bottom: 1px solid #30363d; }
+    td { padding: 10px 12px; border-bottom: 1px solid #21262d; color: #c9d1d9; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #21262d; }
+
+    /* Buttons */
+    .btn { padding: 7px 14px; border-radius: 6px; border: none; cursor: pointer;
+           font-size: 12px; font-weight: 600; transition: opacity .15s; }
+    .btn:hover { opacity: .8; }
+    .btn-blue   { background: #1f6feb; color: #fff; }
+    .btn-green  { background: #3fb950; color: #000; }
+    .btn-red    { background: #da3633; color: #fff; }
+    .btn-orange { background: #d93f0b; color: #fff; }
+    .btn-gray   { background: #30363d; color: #c9d1d9; }
+    .btn-purple { background: #6e40c9; color: #fff; }
+    .btn-sm { padding: 5px 10px; font-size: 11px; }
+    .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 2px; padding: 14px 20px 0; border-bottom: 1px solid #30363d; }
+    .tab { padding: 8px 16px; font-size: 13px; cursor: pointer; border: none;
+           background: none; color: #8b949e; border-bottom: 2px solid transparent;
+           transition: color .15s; }
+    .tab.active, .tab:hover { color: #f0f6fc; }
+    .tab.active { border-bottom-color: #1f6feb; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* Forms */
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+    label { display: block; margin-bottom: 4px; font-size: 12px; color: #8b949e; }
+    input[type=text], input[type=number], input[type=email], select, textarea {
+      width: 100%; padding: 8px 10px; background: #0d1117; border: 1px solid #30363d;
+      border-radius: 6px; color: #c9d1d9; font-size: 13px; }
+    input:focus, select:focus { outline: none; border-color: #1f6feb; }
+    .toggle-row { display: flex; align-items: center; justify-content: space-between;
+                  padding: 10px 0; border-bottom: 1px solid #21262d; }
+    .toggle-row:last-child { border-bottom: none; }
+    .toggle-label { font-size: 13px; color: #c9d1d9; }
+    .toggle-desc { font-size: 11px; color: #8b949e; margin-top: 2px; }
+    input[type=checkbox] { width: 18px; height: 18px; cursor: pointer; }
+
+    /* Log feed */
+    .log-feed { background: #0d1117; border-radius: 6px; padding: 12px;
+                height: 220px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+    .log-line { padding: 2px 0; border-bottom: 1px solid #21262d; color: #8b949e; }
+    .log-line:last-child { border-bottom: none; }
+    .log-line .ts { color: #6e7681; margin-right: 8px; }
+    .log-line .ok { color: #3fb950; }
+    .log-line .warn { color: #e3b341; }
+    .log-line .err  { color: #f85149; }
+    .log-line .info { color: #58a6ff; }
+
+    /* Kill switch */
+    .kill-switch-panel { background: #161b22; border: 2px solid #da3633; border-radius: 8px;
+                          padding: 20px; display: flex; align-items: center; gap: 20px;
+                          margin-bottom: 20px; }
+    .kill-status { font-size: 32px; font-weight: 800; }
+    .kill-status.active { color: #da3633; }
+    .kill-status.inactive { color: #3fb950; }
+
+    /* User row actions */
+    .user-actions { display: flex; gap: 6px; }
+
+    /* Section nav */
+    .section { display: none; }
+    .section.active { display: block; }
+
+    /* Alerts */
+    .alert { padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 12px; }
+    .alert-success { background: #1b3a27; border: 1px solid #3fb950; color: #3fb950; }
+    .alert-error   { background: #3b1c1c; border: 1px solid #f85149; color: #f85149; }
+    .alert-info    { background: #1b2e4b; border: 1px solid #58a6ff; color: #58a6ff; }
+
+    /* Spinner */
+    .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid #30363d;
+            border-top-color: #58a6ff; border-radius: 50%; animation: spin .6s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0d1117; }
+    ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">🔐 SuperAdmin</div>
+
+    <div class="nav-section">
+      <div class="nav-section-label">Overview</div>
+      <button class="nav-item active" onclick="showSection('overview')">📊 Platform Overview</button>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-label">Users</div>
+      <button class="nav-item" onclick="showSection('users')">👥 All Users</button>
+      <button class="nav-item" onclick="showSection('kyc')">🛡️ KYC Queue</button>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-label">Platform</div>
+      <button class="nav-item" onclick="showSection('platform')">⚙️ Platform Config</button>
+      <button class="nav-item" onclick="showSection('engine')">🤖 Trading Engine</button>
+      <button class="nav-item" onclick="showSection('featureflags')">🚩 Feature Flags</button>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-label">Security</div>
+      <button class="nav-item" onclick="showSection('security')">🔒 Security</button>
+      <button class="nav-item" onclick="showSection('auditlog')">📋 Audit Log</button>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-label">System</div>
+      <button class="nav-item" onclick="showSection('infra')">🖥️ Infrastructure</button>
+      <button class="nav-item" onclick="showSection('ml')">🧠 ML / AI</button>
+      <button class="nav-item" onclick="showSection('financial')">💰 Financial</button>
+    </div>
+
+    <div class="sidebar-footer">
+      <div><span id="sa-status-dot" class="status-dot"></span><span id="sa-status-text">Connecting…</span></div>
+      <div style="margin-top:6px;">v1.0.0 &nbsp;|&nbsp; <a href="/api/admin/" style="color:#58a6ff;text-decoration:none;">Admin →</a></div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title" id="section-title">Platform Overview</div>
+      <div class="topbar-badges">
+        <span id="ks-badge" class="badge badge-green">🟢 Engine Running</span>
+        <span id="maint-badge" class="badge badge-gray" style="display:none;">🔧 Maintenance</span>
+        <span style="font-size:12px;color:#8b949e;" id="last-refresh-sa">—</span>
+        <button class="btn btn-gray btn-sm" onclick="refreshCurrent()">↻</button>
+        <a class="btn btn-gray btn-sm" href="/docs" target="_blank">API Docs</a>
+      </div>
+    </div>
+
+    <div class="content">
+      <div id="flash-msg" style="display:none;"></div>
+
+      <!-- ── OVERVIEW ───────────────────────────────────────────────── -->
+      <div id="section-overview" class="section active">
+
+        <!-- Kill Switch row -->
+        <div class="kill-switch-panel" id="ks-panel">
+          <div>
+            <div style="font-size:13px;color:#8b949e;margin-bottom:4px;">Global Kill Switch</div>
+            <div class="kill-status inactive" id="ks-status-text">● INACTIVE — Trading Active</div>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-red" onclick="toggleKillSwitch(true)">🛑 ACTIVATE Kill Switch</button>
+            <button class="btn btn-green" onclick="toggleKillSwitch(false)">▶ Resume Trading</button>
+          </div>
+          <div style="margin-left:auto;font-size:12px;color:#8b949e;" id="ks-last-action">—</div>
+        </div>
+
+        <!-- KPIs -->
+        <div class="kpi-grid" style="margin-bottom:20px;" id="overview-kpis">
+          <div class="kpi green"><div class="kpi-label">Total Users</div><div class="kpi-value" id="ov-users">—</div><div class="kpi-sub">Platform</div></div>
+          <div class="kpi"><div class="kpi-label">Active Sessions</div><div class="kpi-value" id="ov-sessions">—</div><div class="kpi-sub">Online now</div></div>
+          <div class="kpi yellow"><div class="kpi-label">Open Positions</div><div class="kpi-value" id="ov-positions">—</div><div class="kpi-sub">All brokers</div></div>
+          <div class="kpi purple"><div class="kpi-label">Revenue (MTD)</div><div class="kpi-value" id="ov-revenue">—</div><div class="kpi-sub">Subscriptions</div></div>
+          <div class="kpi red"><div class="kpi-label">KYC Pending</div><div class="kpi-value" id="ov-kyc">—</div><div class="kpi-sub">Needs review</div></div>
+          <div class="kpi"><div class="kpi-label">Uptime</div><div class="kpi-value" id="ov-uptime">—</div><div class="kpi-sub">Since last restart</div></div>
+        </div>
+
+        <!-- Engine status + Platform config -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">🤖 Engine Status</div></div>
+            <div class="panel-body" id="engine-status-panel" style="font-size:13px;">Loading…</div>
+          </div>
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">⚙️ Platform</div></div>
+            <div class="panel-body" id="platform-mini-panel" style="font-size:13px;">Loading…</div>
+          </div>
+        </div>
+
+        <!-- Recent Audit Log -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">📋 Recent Audit Log</div>
+            <button class="btn btn-gray btn-sm" onclick="showSection('auditlog')">View All</button>
+          </div>
+          <div class="panel-body" style="padding:0;">
+            <table id="audit-mini-table">
+              <thead><tr><th>Time</th><th>Admin</th><th>Action</th><th>Detail</th></tr></thead>
+              <tbody id="audit-mini-body"><tr><td colspan="4" style="color:#8b949e;text-align:center;padding:20px;">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── USERS ──────────────────────────────────────────────────── -->
+      <div id="section-users" class="section">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">👥 All Users</div>
+            <div class="btn-group">
+              <input id="user-search" type="text" placeholder="Search by email/username…" style="width:220px;padding:6px 10px;font-size:12px;">
+              <button class="btn btn-blue btn-sm" onclick="loadUsers()">Search</button>
+              <button class="btn btn-gray btn-sm" onclick="bulkExport()">⬇ Export</button>
+            </div>
+          </div>
+          <div class="panel-body" style="padding:0;overflow-x:auto;">
+            <table>
+              <thead><tr><th>ID</th><th>Username</th><th>Email</th><th>Role</th><th>Plan</th><th>Status</th><th>KYC</th><th>Actions</th></tr></thead>
+              <tbody id="users-tbody"><tr><td colspan="8" style="text-align:center;color:#8b949e;padding:30px;">Loading…</td></tr></tbody>
+            </table>
+          </div>
+          <div style="padding:12px 20px;display:flex;gap:10px;align-items:center;">
+            <button class="btn btn-gray btn-sm" onclick="usersPage(-1)" id="users-prev">← Prev</button>
+            <span id="users-page-info" style="font-size:12px;color:#8b949e;">Page 1</span>
+            <button class="btn btn-gray btn-sm" onclick="usersPage(1)" id="users-next">Next →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── KYC ────────────────────────────────────────────────────── -->
+      <div id="section-kyc" class="section">
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">🛡️ KYC Queue</div></div>
+          <div class="panel-body" style="padding:0;overflow-x:auto;">
+            <table>
+              <thead><tr><th>User ID</th><th>Username</th><th>Email</th><th>KYC Status</th><th>Submitted</th><th>Actions</th></tr></thead>
+              <tbody id="kyc-tbody"><tr><td colspan="6" style="text-align:center;color:#8b949e;padding:30px;">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── PLATFORM CONFIG ────────────────────────────────────────── -->
+      <div id="section-platform" class="section">
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">⚙️ Platform Configuration</div></div>
+          <div class="panel-body">
+            <div class="form-grid" id="platform-form-grid">Loading…</div>
+            <div style="margin-top:16px;">
+              <button class="btn btn-blue" onclick="savePlatformConfig()">💾 Save Platform Config</button>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">📢 Broadcast Message</div></div>
+          <div class="panel-body">
+            <div class="form-grid">
+              <div><label>Title</label><input id="bc-title" type="text" placeholder="Announcement title"></div>
+              <div><label>Type</label>
+                <select id="bc-type">
+                  <option value="info">ℹ Info</option>
+                  <option value="warning">⚠ Warning</option>
+                  <option value="success">✓ Success</option>
+                  <option value="error">✕ Error</option>
+                </select>
+              </div>
+              <div style="grid-column:span 2"><label>Message</label><textarea id="bc-body" rows="3" style="resize:vertical;" placeholder="Your message…"></textarea></div>
+            </div>
+            <div style="margin-top:12px;">
+              <button class="btn btn-orange" onclick="broadcastMsg()">📢 Send Broadcast</button>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">🔧 Maintenance Mode</div></div>
+          <div class="panel-body" style="display:flex;align-items:center;gap:20px;">
+            <div>
+              <label>Maintenance Message</label>
+              <input id="maint-msg" type="text" placeholder="e.g. Scheduled maintenance until 02:00 UTC" style="width:360px;">
+            </div>
+            <div class="btn-group" style="margin-top:18px;">
+              <button class="btn btn-orange" onclick="setMaintenance(true)">🔧 Enable Maintenance</button>
+              <button class="btn btn-green"  onclick="setMaintenance(false)">▶ Disable Maintenance</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TRADING ENGINE ─────────────────────────────────────────── -->
+      <div id="section-engine" class="section">
+        <!-- Kill switch -->
+        <div class="kill-switch-panel" id="ks-panel-engine">
+          <div>
+            <div style="font-size:13px;color:#8b949e;margin-bottom:4px;">Global Kill Switch</div>
+            <div class="kill-status inactive" id="ks-status-text-engine">● INACTIVE — Trading Active</div>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-red" onclick="toggleKillSwitch(true)">🛑 ACTIVATE</button>
+            <button class="btn btn-green" onclick="toggleKillSwitch(false)">▶ Resume</button>
+            <button class="btn btn-orange" onclick="pauseEngine()">⏸ Pause</button>
+            <button class="btn btn-blue" onclick="resumeEngine()">▶ Resume Engine</button>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">🤖 Engine Configuration</div></div>
+          <div class="panel-body">
+            <div class="form-grid" id="engine-form-grid">Loading…</div>
+            <div style="margin-top:16px;">
+              <button class="btn btn-blue" onclick="saveEngineConfig()">💾 Save Engine Config</button>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">📊 Engine Metrics</div></div>
+          <div class="panel-body">
+            <div class="kpi-grid" id="engine-metrics-grid">Loading…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── FEATURE FLAGS ──────────────────────────────────────────── -->
+      <div id="section-featureflags" class="section">
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">🚩 Feature Flags</div>
+            <button class="btn btn-gray btn-sm" onclick="loadFeatureFlags()">↻ Refresh</button>
+          </div>
+          <div class="panel-body" style="padding:0;overflow-x:auto;">
+            <table>
+              <thead><tr><th>Flag</th><th>Status</th><th>Rollout %</th><th>Description</th><th>Actions</th></tr></thead>
+              <tbody id="flags-tbody"><tr><td colspan="5" style="text-align:center;color:#8b949e;padding:30px;">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SECURITY ───────────────────────────────────────────────── -->
+      <div id="section-security" class="section">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">🔒 IP Blocking</div></div>
+            <div class="panel-body">
+              <div style="display:flex;gap:10px;margin-bottom:14px;">
+                <input id="block-ip-input" type="text" placeholder="IP address to block" style="flex:1;">
+                <input id="block-ip-reason" type="text" placeholder="Reason" style="flex:1;">
+                <button class="btn btn-red" onclick="blockIP()">Block</button>
+              </div>
+              <div id="ip-block-list" style="font-size:13px;color:#8b949e;">Loading…</div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">🔑 API Key Audit</div></div>
+            <div class="panel-body" style="padding:0;overflow-x:auto;max-height:300px;overflow-y:auto;">
+              <table>
+                <thead><tr><th>User</th><th>Key Prefix</th><th>Created</th><th>Last Used</th><th>Action</th></tr></thead>
+                <tbody id="apikey-tbody"><tr><td colspan="5" style="text-align:center;color:#8b949e;padding:20px;">Loading…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">🔍 Security Scan</div></div>
+          <div class="panel-body">
+            <div class="btn-group">
+              <button class="btn btn-blue" onclick="runScan('antivirus')">🦠 Run Antivirus Scan</button>
+              <button class="btn btn-purple" onclick="runScan('integrity')">🔎 Integrity Check</button>
+            </div>
+            <div id="scan-results" style="margin-top:14px;font-size:13px;color:#8b949e;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── AUDIT LOG ──────────────────────────────────────────────── -->
+      <div id="section-auditlog" class="section">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">📋 Full Audit Log</div>
+            <div class="btn-group">
+              <input id="audit-filter" type="text" placeholder="Filter…" style="width:180px;padding:6px 10px;font-size:12px;">
+              <button class="btn btn-gray btn-sm" onclick="loadAuditLog()">↻</button>
+              <a class="btn btn-gray btn-sm" href="/api/admin/audit-log/export" target="_blank">⬇ CSV</a>
+            </div>
+          </div>
+          <div class="panel-body" style="padding:0;overflow-x:auto;">
+            <table>
+              <thead><tr><th>Time</th><th>Admin</th><th>Action</th><th>Detail</th><th>IP</th></tr></thead>
+              <tbody id="audit-tbody"><tr><td colspan="5" style="text-align:center;color:#8b949e;padding:30px;">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── INFRASTRUCTURE ─────────────────────────────────────────── -->
+      <div id="section-infra" class="section">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">🖥️ System Resources</div></div>
+            <div class="panel-body" id="infra-resources">Loading…</div>
+          </div>
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">🗄️ Database Health</div></div>
+            <div class="panel-body" id="infra-db">Loading…</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">📝 Log Level Control</div>
+          </div>
+          <div class="panel-body">
+            <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+              <div><label>Logger Name</label><input id="log-logger" type="text" value="root" style="width:180px;"></div>
+              <div><label>Level</label>
+                <select id="log-level" style="width:120px;">
+                  <option>DEBUG</option><option selected>INFO</option>
+                  <option>WARNING</option><option>ERROR</option><option>CRITICAL</option>
+                </select>
+              </div>
+              <button class="btn btn-blue" onclick="setLogLevel()" style="margin-bottom:0;">Set Level</button>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">📜 System Log Stream</div></div>
+          <div class="panel-body" style="padding:0;">
+            <div class="log-feed" id="sa-log-feed">
+              <div class="log-line"><span class="ts">—</span><span class="info">Connecting to log stream…</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── ML / AI ────────────────────────────────────────────────── -->
+      <div id="section-ml" class="section">
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">🧠 ML / AI Status</div>
+            <button class="btn btn-gray btn-sm" onclick="loadML()">↻ Refresh</button>
+          </div>
+          <div class="panel-body" id="ml-panel">Loading…</div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">🔬 Model Registry</div></div>
+          <div class="panel-body" id="ml-registry">Loading…</div>
+        </div>
+      </div>
+
+      <!-- ── FINANCIAL ──────────────────────────────────────────────── -->
+      <div id="section-financial" class="section">
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">💰 Financial Overview</div>
+            <button class="btn btn-gray btn-sm" onclick="loadFinancial()">↻</button>
+          </div>
+          <div class="panel-body">
+            <div class="kpi-grid" id="financial-kpis">Loading…</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">📊 Revenue by Plan</div></div>
+          <div class="panel-body" id="financial-plans">Loading…</div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /layout -->
+
+<script>
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const TOKEN = localStorage.getItem('hopefx_token') || '';
+
+async function api(method, path, body) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json', ...(TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {}) },
+  };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + (await r.text().catch(() => '')));
+  return r.json().catch(() => ({}));
+}
+
+function flash(msg, type = 'info') {
+  const el = document.getElementById('flash-msg');
+  el.className = 'alert alert-' + type;
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
+function setText(id, v) { const el = document.getElementById(id); if (el) el.textContent = v ?? '—'; }
+
+function fmt$(v) { return v != null ? '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2 }) : '—'; }
+function fmtPct(v) { return v != null ? Number(v).toFixed(1) + '%' : '—'; }
+
+// ── Section nav ──────────────────────────────────────────────────────────────
+const SECTION_TITLES = {
+  overview: 'Platform Overview', users: 'All Users', kyc: 'KYC Queue',
+  platform: 'Platform Config', engine: 'Trading Engine', featureflags: 'Feature Flags',
+  security: 'Security', auditlog: 'Audit Log', infra: 'Infrastructure',
+  ml: 'ML / AI', financial: 'Financial',
+};
+let _currentSection = 'overview';
+
+function showSection(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  const sec = document.getElementById('section-' + name);
+  if (sec) sec.classList.add('active');
+  const btn = Array.from(document.querySelectorAll('.nav-item'))
+    .find(b => b.getAttribute('onclick') === `showSection('${name}')`);
+  if (btn) btn.classList.add('active');
+  setText('section-title', SECTION_TITLES[name] || name);
+  _currentSection = name;
+  loaders[name] && loaders[name]();
+}
+
+function refreshCurrent() { loaders[_currentSection] && loaders[_currentSection](); }
+
+// ── Kill switch ───────────────────────────────────────────────────────────────
+async function toggleKillSwitch(enable) {
+  if (enable && !confirm('ACTIVATE global kill switch? This will halt ALL trading immediately.')) return;
+  try {
+    await api('POST', '/api/superadmin/engine/kill-switch', { enabled: enable });
+    flash(enable ? '🛑 Kill switch ACTIVATED' : '▶ Kill switch deactivated — trading resumed', enable ? 'error' : 'success');
+    updateKSBadge(enable);
+  } catch (e) { flash('Kill switch error: ' + e.message, 'error'); }
+}
+
+function updateKSBadge(active) {
+  const badge = document.getElementById('ks-badge');
+  ['ks-status-text', 'ks-status-text-engine'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.className = 'kill-status ' + (active ? 'active' : 'inactive');
+    el.textContent = active ? '🛑 ACTIVE — Trading HALTED' : '● INACTIVE — Trading Active';
+  });
+  if (badge) {
+    badge.className = 'badge ' + (active ? 'badge-red' : 'badge-green');
+    badge.textContent = active ? '🛑 Kill Switch ACTIVE' : '🟢 Engine Running';
+  }
+  setText('ks-last-action', 'Changed: ' + new Date().toLocaleTimeString());
+}
+
+async function pauseEngine() {
+  try { await api('POST', '/api/superadmin/engine/pause', { reason: 'SuperAdmin manual pause' }); flash('⏸ Engine paused', 'info'); }
+  catch (e) { flash('Error: ' + e.message, 'error'); }
+}
+async function resumeEngine() {
+  try { await api('POST', '/api/superadmin/engine/resume'); flash('▶ Engine resumed', 'success'); }
+  catch (e) { flash('Error: ' + e.message, 'error'); }
+}
+
+// ── Overview ─────────────────────────────────────────────────────────────────
+async function loadOverview() {
+  try {
+    const d = await api('GET', '/api/superadmin/overview');
+    setText('ov-users', d.total_users ?? d.users?.total ?? '—');
+    setText('ov-sessions', d.active_sessions ?? '—');
+    setText('ov-positions', d.open_positions ?? '—');
+    setText('ov-revenue', fmt$(d.revenue_mtd ?? d.financial?.revenue_mtd));
+    setText('ov-kyc', d.kyc_pending ?? d.compliance?.kyc_pending ?? '—');
+    const up = d.uptime_seconds ?? d.system?.uptime_seconds;
+    if (up) {
+      const h = Math.floor(up / 3600), m = Math.floor((up % 3600) / 60);
+      setText('ov-uptime', h + 'h ' + m + 'm');
+    }
+    // KS status
+    const ks = d.kill_switch_active ?? d.trading?.kill_switch_active ?? false;
+    updateKSBadge(ks);
+
+    // Engine mini panel
+    const eng = d.engine_config ?? d.trading ?? {};
+    document.getElementById('engine-status-panel').innerHTML = `
+      <table><tbody>
+        <tr><td style="color:#8b949e;width:160px;">Mode</td><td>${eng.paper_trading_mode ? '📝 Paper Trading' : '🔴 Live Trading'}</td></tr>
+        <tr><td style="color:#8b949e;">Status</td><td>${eng.engine_status ?? 'running'}</td></tr>
+        <tr><td style="color:#8b949e;">Max Positions</td><td>${eng.max_open_positions ?? '—'}</td></tr>
+        <tr><td style="color:#8b949e;">Max Risk/Trade</td><td>${eng.max_risk_per_trade != null ? eng.max_risk_per_trade + '%' : '—'}</td></tr>
+        <tr><td style="color:#8b949e;">Kill Switch</td><td style="color:${ks ? '#f85149' : '#3fb950'}">${ks ? '🛑 ACTIVE' : '✓ Inactive'}</td></tr>
+      </tbody></table>`;
+
+    // Platform mini panel
+    const pl = d.platform_config ?? {};
+    document.getElementById('platform-mini-panel').innerHTML = `
+      <table><tbody>
+        <tr><td style="color:#8b949e;width:160px;">Platform</td><td>${pl.platform_name ?? 'HOPEFX AI'}</td></tr>
+        <tr><td style="color:#8b949e;">Registrations</td><td>${pl.allow_registrations ? '✓ Open' : '✗ Closed'}</td></tr>
+        <tr><td style="color:#8b949e;">Max Users</td><td>${pl.max_users ?? '∞'}</td></tr>
+        <tr><td style="color:#8b949e;">Maintenance</td><td style="color:${pl.maintenance_mode ? '#e3b341' : '#3fb950'}">${pl.maintenance_mode ? '🔧 ON' : '✓ Off'}</td></tr>
+        <tr><td style="color:#8b949e;">2FA (Admins)</td><td>${pl.force_2fa_for_admins ? '✓ Enforced' : 'Optional'}</td></tr>
+      </tbody></table>`;
+  } catch (e) {
+    document.getElementById('engine-status-panel').textContent = 'Error: ' + e.message;
+  }
+
+  // Audit mini
+  try {
+    const a = await api('GET', '/api/superadmin/audit?limit=8');
+    const rows = a.entries ?? a.logs ?? [];
+    document.getElementById('audit-mini-body').innerHTML = rows.length === 0
+      ? '<tr><td colspan="4" style="text-align:center;color:#8b949e;padding:20px;">No audit entries yet</td></tr>'
+      : rows.map(r => `<tr>
+          <td style="font-family:monospace;font-size:11px;">${(r.timestamp ?? r.created_at ?? '').substring(0,19).replace('T',' ')}</td>
+          <td>${r.admin_id ?? r.user_id ?? '—'}</td>
+          <td><code style="background:#21262d;padding:2px 6px;border-radius:4px;font-size:11px;">${r.action ?? '—'}</code></td>
+          <td style="font-size:12px;color:#8b949e;">${(r.detail ?? r.message ?? '').substring(0,60)}</td>
+        </tr>`).join('');
+  } catch (_) {}
+
+  setText('last-refresh-sa', new Date().toLocaleTimeString());
+}
+
+// ── Users ─────────────────────────────────────────────────────────────────────
+let _usersPage = 1;
+async function loadUsers() {
+  const search = document.getElementById('user-search')?.value || '';
+  try {
+    const d = await api('GET', `/api/superadmin/users?page=${_usersPage}&limit=20${search ? '&search=' + encodeURIComponent(search) : ''}`);
+    const users = d.users ?? d.items ?? [];
+    document.getElementById('users-tbody').innerHTML = users.length === 0
+      ? '<tr><td colspan="8" style="text-align:center;color:#8b949e;padding:30px;">No users found</td></tr>'
+      : users.map(u => `<tr>
+          <td style="font-family:monospace;font-size:11px;">${String(u.id ?? '').substring(0,8)}…</td>
+          <td>${u.username ?? '—'}</td>
+          <td>${u.email ?? '—'}</td>
+          <td><span style="background:#21262d;padding:2px 8px;border-radius:10px;font-size:11px;">${u.role ?? 'user'}</span></td>
+          <td>${u.plan ?? '—'}</td>
+          <td style="color:${u.status === 'banned' ? '#f85149' : '#3fb950'}">${u.status ?? 'active'}</td>
+          <td style="color:${u.kyc_status === 'approved' ? '#3fb950' : u.kyc_status === 'pending' ? '#e3b341' : '#8b949e'}">${u.kyc_status ?? '—'}</td>
+          <td class="user-actions">
+            <button class="btn btn-sm btn-gray" onclick="setRole('${u.id}')">Role</button>
+            ${u.status === 'banned'
+              ? `<button class="btn btn-sm btn-green" onclick="unbanUser('${u.id}')">Unban</button>`
+              : `<button class="btn btn-sm btn-red" onclick="banUser('${u.id}')">Ban</button>`}
+            <button class="btn btn-sm btn-purple" onclick="impersonate('${u.id}')">👤</button>
+          </td>
+        </tr>`).join('');
+    setText('users-page-info', `Page ${_usersPage} · ${users.length} shown`);
+  } catch (e) {
+    document.getElementById('users-tbody').innerHTML = `<tr><td colspan="8" style="color:#f85149;padding:20px;">${e.message}</td></tr>`;
+  }
+}
+function usersPage(d) { _usersPage = Math.max(1, _usersPage + d); loadUsers(); }
+async function banUser(id) {
+  const reason = prompt('Ban reason:', 'Policy violation');
+  if (!reason) return;
+  try { await api('POST', `/api/superadmin/users/${id}/ban`, { reason }); flash('User banned', 'error'); loadUsers(); }
+  catch (e) { flash('Error: ' + e.message, 'error'); }
+}
+async function unbanUser(id) {
+  try { await api('POST', `/api/superadmin/users/${id}/unban`); flash('User unbanned', 'success'); loadUsers(); }
+  catch (e) { flash('Error: ' + e.message, 'error'); }
+}
+async function setRole(id) {
+  const role = prompt('New role (user/trader/admin/superadmin):');
+  if (!role) return;
+  try { await api('PATCH', `/api/superadmin/users/${id}/role`, { role }); flash('Role updated', 'success'); loadUsers(); }
+  catch (e) { flash('Error: ' + e.message, 'error'); }
+}
+async function impersonate(id) {
+  if (!confirm('Impersonate this user?')) return;
+  try {
+    const d = await api('POST', `/api/superadmin/users/${id}/impersonate`);
+    if (d.token) { localStorage.setItem('hopefx_token', d.token); flash('Impersonating user — token set', 'info'); }
+  } catch (e) { flash('Error: ' + e.message, 'error'); }
+}
+async function bulkExport() {
+  try { window.open('/api/admin/audit-log/export', '_blank'); }
+  catch (e) { flash('Export error: ' + e.message, 'error'); }
+}
+
+// ── KYC ──────────────────────────────────────────────────────────────────────
+async function loadKYC() {
+  try {
+    const d = await api('GET', '/api/admin/kyc/pending');
+    const users = d.users ?? [];
+    document.getElementById('kyc-tbody').innerHTML = users.length === 0
+      ? '<tr><td colspan="6" style="text-align:center;color:#8b949e;padding:30px;">No pending KYC submissions</td></tr>'
+      : users.map(u => `<tr>
+          <td style="font-family:monospace;font-size:11px;">${String(u.user_id ?? '').substring(0,8)}…</td>
+          <td>${u.username ?? '—'}</td>
+          <td>${u.email ?? '—'}</td>
+          <td style="color:#e3b341;">${u.kyc_status ?? 'pending'}</td>
+          <td style="font-size:12px;">${(u.created_at ?? '').substring(0,10)}</td>
+          <td class="user-actions">
+            <button class="btn btn-sm btn-green" onclick="kycDecide('${u.user_id}','approve')">✓ Approve</button>
+            <button class="btn btn-sm btn-red" onclick="kycDecide('${u.user_id}','reject')">✗ Reject</button>
+          </td>
+        </tr>`).join('');
+  } catch (e) {
+    document.getElementById('kyc-tbody').innerHTML = `<tr><td colspan="6" style="color:#f85149;padding:20px;">${e.message}</td></tr>`;
+  }
+}
+async function kycDecide(userId, action) {
+  const notes = action === 'reject' ? (prompt('Rejection reason:') || '') : '';
+  try {
+    await api('POST', '/api/admin/kyc/decide', { user_id: userId, action, notes });
+    flash(`KYC ${action}d`, action === 'approve' ? 'success' : 'error');
+    loadKYC();
+  } catch (e) { flash('Error: ' + e.message, 'error'); }
+}
+
+// ── Platform Config ───────────────────────────────────────────────────────────
+let _platformCfg = {};
+async function loadPlatformConfig() {
+  try {
+    _platformCfg = await api('GET', '/api/superadmin/platform/config');
+    const grid = document.getElementById('platform-form-grid');
+    grid.innerHTML = [
+      ['platform_name', 'Platform Name', 'text'],
+      ['support_email', 'Support Email', 'email'],
+      ['max_users', 'Max Users', 'number'],
+      ['session_timeout_minutes', 'Session Timeout (min)', 'number'],
+      ['rate_limit_per_minute', 'Rate Limit / Min', 'number'],
+    ].map(([k, label, type]) => `
+      <div><label>${label}</label>
+        <input id="pc-${k}" type="${type}" value="${_platformCfg[k] ?? ''}"></div>`
+    ).join('') + [
+      ['allow_registrations', 'Allow Registrations'],
+      ['require_email_verification', 'Require Email Verification'],
+      ['force_2fa_for_admins', 'Force 2FA for Admins'],
+      ['ip_whitelist_enabled', 'IP Whitelist'],
+    ].map(([k, label]) => `
+      <div class="toggle-row"><div><div class="toggle-label">${label}</div></div>
+        <input type="checkbox" id="pc-${k}" ${_platformCfg[k] ? 'checked' : ''}></div>`
+    ).join('');
+  } catch (e) { document.getElementById('platform-form-grid').textContent = 'Error: ' + e.message; }
+}
+async function savePlatformConfig() {
+  const body = {};
+  ['platform_name','support_email'].forEach(k => { const el = document.getElementById('pc-' + k); if (el) body[k] = el.value; });
+  ['max_users','session_timeout_minutes','rate_limit_per_minute'].forEach(k => { const el = document.getElementById('pc-' + k); if (el && el.value) body[k] = parseInt(el.value); });
+  ['allow_registrations','require_email_verification','force_2fa_for_admins','ip_whitelist_enabled'].forEach(k => { const el = document.getElementById('pc-' + k); if (el) body[k] = el.checked; });
+  try { await api('PATCH', '/api/superadmin/platform/config', body); flash('Platform config saved ✓', 'success'); }
+  catch (e) { flash('Error: ' + e.message, 'error'); }
+}
+async function broadcastMsg() {
+  const title = document.getElementById('bc-title')?.value || '';
+  const body = document.getElementById('bc-body')?.value || '';
+  const type = document.getElementById('bc-type')?.value || 'info';
+  if (!title || !body) { flash('Title and message required', 'error'); return; }
+  try { await api('POST', '/api/superadmin/platform/broadcast', { title, body, type }); flash('Broadcast sent ✓', 'success'); }
+  catch (e) { flash('Error: ' + e.message, 'error'); }
+}
+async function setMaintenance(enabled) {
+  const msg = document.getElementById('maint-msg')?.value || '';
+  try {
+    await api('POST', '/api/superadmin/platform/maintenance', { enabled, message: msg });
+    const badge = document.getElementById('maint-badge');
+    badge.style.display = enabled ? 'inline-flex' : 'none';
+    flash(enabled ? '🔧 Maintenance mode ON' : '✓ Maintenance mode OFF', enabled ? 'info' : 'success');
+  } catch (e) { flash('Error: ' + e.message, 'error'); }
+}
+
+// ── Engine Config ─────────────────────────────────────────────────────────────
+async function loadEngineConfig() {
+  try {
+    const d = await api('GET', '/api/superadmin/engine/config');
+    document.getElementById('engine-form-grid').innerHTML = [
+      ['paper_trading_mode', 'Paper Trading Mode', 'checkbox'],
+      ['live_trading_enabled', 'Live Trading Enabled', 'checkbox'],
+      ['auto_trade_enabled', 'Auto Trade', 'checkbox'],
+      ['max_open_positions', 'Max Open Positions', 'number'],
+      ['max_risk_per_trade', 'Max Risk / Trade (%)', 'number'],
+      ['max_daily_loss_pct', 'Max Daily Loss (%)', 'number'],
+      ['max_drawdown_pct', 'Max Drawdown (%)', 'number'],
+      ['signal_confidence_threshold', 'Signal Confidence Threshold', 'number'],
+    ].map(([k, label, type]) => type === 'checkbox'
+      ? `<div class="toggle-row"><div class="toggle-label">${label}</div>
+           <input type="checkbox" id="ec-${k}" ${d[k] ? 'checked' : ''}></div>`
+      : `<div><label>${label}</label>
+           <input id="ec-${k}" type="number" step="any" value="${d[k] ?? ''}"></div>`
+    ).join('');
+
+    // Engine metrics
+    try {
+      const m = await api('GET', '/api/superadmin/engine/metrics');
+      document.getElementById('engine-metrics-grid').innerHTML = [
+        ['Trades Today', m.trades_today],
+        ['Open Positions', m.open_positions],
+        ['P&L Today', fmt$(m.pnl_today)],
+        ['Win Rate', fmtPct(m.win_rate_today)],
+        ['Uptime Hours', m.uptime_hours != null ? m.uptime_hours + 'h' : '—'],
+        ['Kill Switch Triggers', m.kill_switch_triggers],
+      ].map(([l, v]) => `<div class="kpi"><div class="kpi-label">${l}</div><div class="kpi-value" style="font-size:18px;">${v ?? '—'}</div></div>`).join('');
+    } catch (_) {}
+  } catch (e) { document.getElementById('engine-form-grid').textContent = 'Error: ' + e.message; }
+}
+async function saveEngineConfig() {
+  const body = {};
+  ['paper_trading_mode','live_trading_enabled','auto_trade_enabled'].forEach(k => {
+    const el = document.getElementById('ec-' + k); if (el) body[k] = el.checked;
+  });
+  ['max_open_positions','max_risk_per_trade','max_daily_loss_pct','max_drawdown_pct','signal_confidence_threshold'].forEach(k => {
+    const el = document.getElementById('ec-' + k); if (el && el.value !== '') body[k] = parseFloat(el.value);
+  });
+  try { await api('PATCH', '/api/superadmin/engine/config', body); flash('Engine config saved ✓', 'success'); }
+  catch (e) { flash('Error: ' + e.message, 'error'); }
+}
+
+// ── Feature Flags ─────────────────────────────────────────────────────────────
+async function loadFeatureFlags() {
+  try {
+    const d = await api('GET', '/api/admin/feature-flags');
+    const flags = d.flags ?? d ?? [];
+    document.getElementById('flags-tbody').innerHTML = !Array.isArray(flags) || flags.length === 0
+      ? '<tr><td colspan="5" style="text-align:center;color:#8b949e;padding:30px;">No feature flags configured</td></tr>'
+      : flags.map(f => `<tr>
+          <td><code style="background:#21262d;padding:2px 8px;border-radius:4px;font-size:12px;">${f.name ?? f.flag}</code></td>
+          <td style="color:${f.enabled ? '#3fb950' : '#8b949e'}">${f.enabled ? '✓ Enabled' : '✗ Disabled'}</td>
+          <td>${f.rollout_percentage != null ? f.rollout_percentage + '%' : '—'}</td>
+          <td style="font-size:12px;color:#8b949e;">${f.description ?? ''}</td>
+          <td class="user-actions">
+            <button class="btn btn-sm btn-green" onclick="toggleFlag('${f.name ?? f.flag}', true)">Enable</button>
+            <button class="btn btn-sm btn-gray"  onclick="toggleFlag('${f.name ?? f.flag}', false)">Disable</button>
+          </td>
+        </tr>`).join('');
+  } catch (e) {
+    document.getElementById('flags-tbody').innerHTML = `<tr><td colspan="5" style="color:#f85149;padding:20px;">${e.message}</td></tr>`;
+  }
+}
+async function toggleFlag(name, enable) {
+  try {
+    await api('POST', `/api/admin/feature-flags/${name}/${enable ? 'enable' : 'disable'}`);
+    flash(`Flag ${name} ${enable ? 'enabled' : 'disabled'}`, 'success');
+    loadFeatureFlags();
+  } catch (e) { flash('Error: ' + e.message, 'error'); }
+}
+
+// ── Security ──────────────────────────────────────────────────────────────────
+async function loadSecurity() {
+  try {
+    const d = await api('GET', '/api/superadmin/security/blocked-ips');
+    const ips = d.blocked_ips ?? d.ips ?? [];
+    document.getElementById('ip-block-list').innerHTML = ips.length === 0
+      ? '<span style="color:#8b949e;">No IPs blocked</span>'
+      : ips.map(ip => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #21262d;">
+          <span style="font-family:monospace;">${ip.ip ?? ip}</span>
+          <span style="font-size:11px;color:#8b949e;">${ip.reason ?? ''}</span>
+        </div>`).join('');
+  } catch (_) { document.getElementById('ip-block-list').innerHTML = '<span style="color:#8b949e;">Security module loading…</span>'; }
+  // API keys
+  try {
+    const d = await api('GET', '/api/superadmin/system/api-keys?limit=20');
+    const keys = d.keys ?? [];
+    document.getElementById('apikey-tbody').innerHTML = keys.length === 0
+      ? '<tr><td colspan="5" style="text-align:center;color:#8b949e;padding:20px;">No API keys</td></tr>'
+      : keys.map(k => `<tr>
+          <td style="font-size:11px;">${String(k.user_id ?? '').substring(0,8)}</td>
+          <td><code style="font-size:11px;">${k.prefix ?? ''}…</code></td>
+          <td style="font-size:11px;">${(k.created_at ?? '').substring(0,10)}</td>
+          <td style="font-size:11px;">${k.last_used ? k.last_used.substring(0,10) : '—'}</td>
+          <td><button class="btn btn-sm btn-red" onclick="revokeKey('${k.key_id}')">Revoke</button></td>
+        </tr>`).join('');
+  } catch (_) {}
+}
+async function blockIP() {
+  const ip = document.getElementById('block-ip-input')?.value;
+  const reason = document.getElementById('block-ip-reason')?.value || 'Manual block';
+  if (!ip) { flash('Enter an IP address', 'error'); return; }
+  try { await api('POST', '/api/superadmin/security/block-ip', { ip, reason }); flash('IP blocked: ' + ip, 'error'); loadSecurity(); }
+  catch (e) { flash('Error: ' + e.message, 'error'); }
+}
+async function revokeKey(id) {
+  if (!confirm('Revoke this API key?')) return;
+  try { await api('DELETE', `/api/superadmin/system/api-keys/${id}`); flash('API key revoked', 'info'); loadSecurity(); }
+  catch (e) { flash('Error: ' + e.message, 'error'); }
+}
+async function runScan(type) {
+  const el = document.getElementById('scan-results');
+  el.innerHTML = '<span class="spin"></span> Running scan…';
+  try {
+    const path = type === 'antivirus' ? '/api/superadmin/security-infra/antivirus/scan' : '/api/superadmin/security-infra/self-healer/scan';
+    const d = await api('POST', path, {});
+    el.innerHTML = `<div class="alert alert-info">Scan complete: ${JSON.stringify(d).substring(0,200)}</div>`;
+  } catch (e) { el.innerHTML = `<div class="alert alert-error">Scan error: ${e.message}</div>`; }
+}
+
+// ── Audit Log ─────────────────────────────────────────────────────────────────
+async function loadAuditLog() {
+  try {
+    const filter = document.getElementById('audit-filter')?.value || '';
+    const d = await api('GET', '/api/superadmin/audit?limit=100');
+    let rows = d.entries ?? d.logs ?? [];
+    if (filter) rows = rows.filter(r => JSON.stringify(r).toLowerCase().includes(filter.toLowerCase()));
+    document.getElementById('audit-tbody').innerHTML = rows.length === 0
+      ? '<tr><td colspan="5" style="text-align:center;color:#8b949e;padding:30px;">No audit entries</td></tr>'
+      : rows.map(r => `<tr>
+          <td style="font-family:monospace;font-size:11px;white-space:nowrap;">${(r.timestamp ?? r.created_at ?? '').substring(0,19).replace('T',' ')}</td>
+          <td style="font-size:12px;">${r.admin_id ?? r.user_id ?? '—'}</td>
+          <td><code style="background:#21262d;padding:2px 6px;border-radius:4px;font-size:11px;">${r.action ?? '—'}</code></td>
+          <td style="font-size:12px;color:#8b949e;">${(r.detail ?? r.message ?? '').substring(0,80)}</td>
+          <td style="font-family:monospace;font-size:11px;">${r.ip ?? '—'}</td>
+        </tr>`).join('');
+  } catch (e) {
+    document.getElementById('audit-tbody').innerHTML = `<tr><td colspan="5" style="color:#f85149;padding:20px;">${e.message}</td></tr>`;
+  }
+}
+
+// ── Infrastructure ────────────────────────────────────────────────────────────
+async function loadInfra() {
+  try {
+    const d = await api('GET', '/api/superadmin/infra/system-health');
+    document.getElementById('infra-resources').innerHTML = `
+      <table><tbody>
+        <tr><td style="color:#8b949e;width:140px;">CPU</td><td>${d.cpu_percent != null ? d.cpu_percent + '%' : '—'}</td></tr>
+        <tr><td style="color:#8b949e;">Memory</td><td>${d.memory_used_mb != null ? d.memory_used_mb + ' MB (' + d.memory_percent + '%)' : '—'}</td></tr>
+        <tr><td style="color:#8b949e;">Disk</td><td>${d.disk_percent != null ? d.disk_percent + '%' : '—'}</td></tr>
+        <tr><td style="color:#8b949e;">PID</td><td>${d.pid ?? '—'}</td></tr>
+        <tr><td style="color:#8b949e;">Uptime</td><td>${d.uptime ?? '—'}</td></tr>
+        <tr><td style="color:#8b949e;">Redis</td><td style="color:${d.redis_connected ? '#3fb950' : '#f85149'}">${d.redis_connected ? '✓ Connected' : '✗ Disconnected'}</td></tr>
+      </tbody></table>`;
+    document.getElementById('infra-db').innerHTML = `
+      <table><tbody>
+        <tr><td style="color:#8b949e;width:140px;">DB Status</td><td style="color:${d.db_connected ? '#3fb950' : '#f85149'}">${d.db_connected ? '✓ Connected' : '✗ Disconnected'}</td></tr>
+        <tr><td style="color:#8b949e;">Tables</td><td>${d.db_tables ?? '—'}</td></tr>
+        <tr><td style="color:#8b949e;">Users</td><td>${d.total_users ?? '—'}</td></tr>
+        <tr><td style="color:#8b949e;">Cache</td><td style="color:${d.cache_status === 'available' ? '#3fb950' : '#f85149'}">${d.cache_status ?? '—'}</td></tr>
+      </tbody></table>`;
+  } catch (e) {
+    document.getElementById('infra-resources').textContent = 'Error: ' + e.message;
+  }
+  // Log stream
+  try {
+    const d = await api('GET', '/api/superadmin/logs/recent?limit=40');
+    const logs = d.entries ?? d.logs ?? [];
+    const feed = document.getElementById('sa-log-feed');
+    feed.innerHTML = logs.length === 0
+      ? '<div class="log-line"><span class="ts">—</span><span class="info">No logs yet</span></div>'
+      : logs.map(l => {
+          const lvl = (l.level ?? 'info').toLowerCase();
+          const cls = lvl === 'error' || lvl === 'critical' ? 'err' : lvl === 'warning' ? 'warn' : lvl === 'debug' ? 'ts' : 'info';
+          return `<div class="log-line"><span class="ts">${(l.timestamp ?? '').substring(11,19)}</span><span class="${cls}">[${(l.level ?? 'INFO').toUpperCase()}] ${(l.message ?? '').substring(0,120)}</span></div>`;
+        }).join('');
+    feed.scrollTop = feed.scrollHeight;
+  } catch (_) {}
+}
+async function setLogLevel() {
+  const loggerName = document.getElementById('log-logger')?.value || 'root';
+  const level = document.getElementById('log-level')?.value || 'INFO';
+  try { await api('POST', '/api/superadmin/logs/set-level', { logger: loggerName, level }); flash(`Log level set: ${loggerName} → ${level}`, 'success'); }
+  catch (e) { flash('Error: ' + e.message, 'error'); }
+}
+
+// ── ML ────────────────────────────────────────────────────────────────────────
+async function loadML() {
+  try {
+    const d = await api('GET', '/api/superadmin/ml/status');
+    document.getElementById('ml-panel').innerHTML = `
+      <div class="kpi-grid">
+        ${[['Models Loaded', d.models_loaded ?? d.active_models ?? '—'],
+           ['Active Version', d.active_version ?? '—'],
+           ['Last Trained', (d.last_trained ?? d.last_training ?? '—').toString().substring(0,10)],
+           ['Accuracy', d.accuracy != null ? fmtPct(d.accuracy * 100) : '—'],
+           ['Sharpe', d.sharpe != null ? Number(d.sharpe).toFixed(3) : '—'],
+           ['Status', d.status ?? 'unknown']
+          ].map(([l, v]) => `<div class="kpi"><div class="kpi-label">${l}</div><div class="kpi-value" style="font-size:18px;">${v}</div></div>`).join('')}
+      </div>`;
+    const reg = d.registry ?? {};
+    document.getElementById('ml-registry').innerHTML = Object.keys(reg).length === 0
+      ? '<p style="color:#8b949e;">No model registry entries</p>'
+      : '<pre style="font-size:11px;color:#c9d1d9;background:#0d1117;padding:12px;border-radius:6px;overflow:auto;">' + JSON.stringify(reg, null, 2) + '</pre>';
+  } catch (e) { document.getElementById('ml-panel').textContent = 'ML status unavailable: ' + e.message; }
+}
+
+// ── Financial ────────────────────────────────────────────────────────────────
+async function loadFinancial() {
+  try {
+    const d = await api('GET', '/api/superadmin/financial/summary');
+    document.getElementById('financial-kpis').innerHTML = [
+      ['Revenue MTD', fmt$(d.revenue_mtd)],
+      ['Revenue YTD', fmt$(d.revenue_ytd)],
+      ['Active Subscriptions', d.active_subscriptions ?? '—'],
+      ['Churn Rate', fmtPct(d.churn_rate_pct)],
+      ['Avg Revenue/User', fmt$(d.avg_revenue_per_user)],
+      ['Pending Payouts', fmt$(d.pending_payouts)],
+    ].map(([l, v]) => `<div class="kpi"><div class="kpi-label">${l}</div><div class="kpi-value" style="font-size:18px;">${v}</div></div>`).join('');
+
+    const plans = d.revenue_by_plan ?? {};
+    document.getElementById('financial-plans').innerHTML = Object.keys(plans).length === 0
+      ? '<p style="color:#8b949e;">No plan data available</p>'
+      : `<table><thead><tr><th>Plan</th><th>Subscribers</th><th>Revenue</th></tr></thead><tbody>
+          ${Object.entries(plans).map(([plan, info]) => `<tr>
+            <td>${plan}</td>
+            <td>${info.count ?? '—'}</td>
+            <td>${fmt$(info.revenue)}</td>
+          </tr>`).join('')}
+        </tbody></table>`;
+  } catch (e) { document.getElementById('financial-kpis').textContent = 'Financial data unavailable: ' + e.message; }
+}
+
+// ── Sidebar status ────────────────────────────────────────────────────────────
+async function updateStatus() {
+  try {
+    const d = await api('GET', '/api/admin/system-info');
+    const dot  = document.getElementById('sa-status-dot');
+    const text = document.getElementById('sa-status-text');
+    if (d.status === 'running') {
+      dot.style.background  = '#3fb950';
+      text.textContent = 'Operational';
+    } else {
+      dot.style.background  = '#e3b341';
+      text.textContent = d.status || 'Unknown';
+    }
+  } catch (_) {
+    const dot = document.getElementById('sa-status-dot');
+    if (dot) dot.style.background = '#f85149';
+    setText('sa-status-text', 'Offline');
+  }
+}
+
+// ── Section loader map ────────────────────────────────────────────────────────
+const loaders = {
+  overview:     loadOverview,
+  users:        loadUsers,
+  kyc:          loadKYC,
+  platform:     loadPlatformConfig,
+  engine:       loadEngineConfig,
+  featureflags: loadFeatureFlags,
+  security:     loadSecurity,
+  auditlog:     loadAuditLog,
+  infra:        loadInfra,
+  ml:           loadML,
+  financial:    loadFinancial,
+};
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  updateStatus();
+  loadOverview();
+  setInterval(updateStatus, 30000);
+  setInterval(() => { if (_currentSection === 'overview') loadOverview(); }, 10000);
+});
+</script>
+</body>
+</html>

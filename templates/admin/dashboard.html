@@ -304,7 +304,7 @@
       <div style="color:#95a5a6;font-size:13px;">Loading audit log…</div>
     </div>
     <div style="margin-top:10px;">
-      <a class="btn-sm btn-gray" href="/admin/api/activity" target="_blank">📋 Full Audit Log</a>
+      <a class="btn-sm btn-gray" href="/api/admin/activity" target="_blank">📋 Full Audit Log</a>
     </div>
   </div>
 </div>
@@ -373,7 +373,7 @@
       <a class="btn-sm btn-gray"   href="/admin/monitoring">📡 Monitoring</a>
       <a class="btn-sm btn-blue"   href="/admin/settings">⚙️ Settings</a>
       <a class="btn-sm btn-gray"   href="/docs">📚 API Docs</a>
-      <a class="btn-sm btn-purple" href="/admin/api/component-map" target="_blank">🗺️ Component Map</a>
+      <a class="btn-sm btn-purple" href="/api/trading/component-map" target="_blank">🗺️ Component Map</a>
       <button class="btn-sm btn-blue" onclick="loadDashboard()">🔄 Refresh</button>
     </div>
   </div>
@@ -421,7 +421,7 @@ async function loadDashboard() {
   const ind = document.getElementById('refresh-indicator');
   if (ind) ind.className = 'loading';
   try {
-    const res = await fetch('/admin/api/dashboard-data');
+    const res = await fetch('/api/admin/dashboard-data');
     if (!res.ok) throw new Error('API error ' + res.status);
     const d = await res.json();
 
@@ -621,7 +621,7 @@ async function loadBrainPanel() {
 // ── Compliance / KYC panel ───────────────────────────────────────────────
 async function loadCompliancePanel() {
   try {
-    const r = await fetch('/admin/api/activity');
+    const r = await fetch('/api/admin/activity');
     if (!r.ok) return;
     const d = await r.json();
     const entries = Array.isArray(d) ? d : (d.entries || d.audit_log || []);

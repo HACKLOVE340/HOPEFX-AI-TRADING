@@ -556,7 +556,15 @@ def save_settings(
 @router.get("/activity")
 def get_activity(user: TokenPayload = Depends(require_role("admin"))):
     """All user activity logs. Requires: role >= 'admin'."""
-    return {"events": list(activity_log)}
+    entries = [
+        {
+            "action": e.get("message", ""),
+            "message": e.get("message", ""),
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(e.get("time", 0))),
+        }
+        for e in activity_log
+    ]
+    return {"entries": entries, "count": len(entries)}
 
 
 def _dashboard_broker_stats(trading_stats: dict, module_status: dict) -> None:
@@ -629,19 +637,134 @@ def _dashboard_signal_status(module_status: dict) -> None:
 @router.get("/dashboard-data")
 def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
     """Full system state. Requires: role >= 'admin'."""
-    trading_stats: dict[str, Any] = {"total_trades": 0, "open_positions": 0, "daily_pnl": 0.0}
-    module_status: dict[str, Any] = {"strategies": False, "brokers": False, "signal_engine": False}
+    import os as _os
+
+    trading_stats: dict[str, Any] = {
+        "total_trades": 0,
+        "open_positions": 0,
+        "daily_pnl": 0.0,
+        "total_strategies": 0,
+        "active_strategies": 0,
+        "total_pnl": 0.0,
+        "win_rate": 0.0,
+        "active_orders": 0,
+        "total_signals": 0,
+    }
+    module_status: dict[str, Any] = {
+        "strategies": False,
+        "brokers": False,
+        "signal_engine": False,
+        "config": True,
+        "database": False,
+        "cache": False,
+        "risk": False,
+        "ml": False,
+        "analytics": False,
+        "monetization": False,
+        "notifications": False,
+        "backtesting": True,
+    }
 
     _dashboard_broker_stats(trading_stats, module_status)
     risk_status = _dashboard_risk_stats(trading_stats)
     _dashboard_trade_stats(trading_stats)
     _dashboard_signal_status(module_status)
 
+    # Enrich module status from app_state
+    if app_state is not None:
+        module_status["database"] = getattr(app_state, "db_engine", None) is not None
+        module_status["cache"] = getattr(app_state, "cache", None) is not None
+        module_status["risk"] = getattr(app_state, "risk_manager", None) is not None
+
+    # Enrich trading stats from strategies
+    try:
+        if app_state is not None:
+            strategies = getattr(app_state, "strategies", None) or {}
+            if isinstance(strategies, dict):
+                trading_stats["total_strategies"] = len(strategies)
+                trading_stats["active_strategies"] = sum(
+                    1 for s in strategies.values()
+                    if getattr(s, "status", "").upper() == "RUNNING"
+                    or getattr(s, "is_running", False)
+                )
+    except Exception as exc:
+        logger.debug("dashboard-data strategy count failed: %s", exc)
+
+    # Enrich risk_status with fields expected by the template
+    current_settings = _get_risk_settings()
+    risk_status.setdefault("current_drawdown", risk_status.get("drawdown_pct", 0.0))
+    risk_status.setdefault("max_drawdown_limit", current_settings.get("max_drawdown", 10.0))
+    risk_status.setdefault("risk_utilization", 0.0)
+    risk_status.setdefault("daily_loss_pct", abs(risk_status.get("daily_pnl", 0.0)))
+    risk_status.setdefault("max_daily_loss", current_settings.get("max_daily_loss", 5.0))
+    risk_status.setdefault("open_positions", trading_stats.get("open_positions", 0))
+    risk_status.setdefault("max_positions", current_settings.get("max_open_positions", 5))
+    risk_status.setdefault("current_balance", 0.0)
+    try:
+        if app_state is not None:
+            rm = getattr(app_state, "risk_manager", None)
+            if rm is not None:
+                rm_status = rm.get_status() if hasattr(rm, "get_status") else {}
+                risk_status["current_balance"] = rm_status.get("balance", 0.0)
+                max_dd = current_settings.get("max_drawdown", 10.0)
+                if max_dd > 0:
+                    risk_status["risk_utilization"] = round(
+                        risk_status["current_drawdown"] / max_dd * 100, 1
+                    )
+    except Exception as exc:
+        logger.debug("dashboard-data risk_status enrichment failed: %s", exc)
+
+    # Market data section
+    market_data: dict[str, Any] = {
+        "data_feed": "Yahoo Finance",
+        "cached_symbols": 0,
+        "last_update": "—",
+        "status": "operational",
+    }
+    try:
+        if app_state is not None:
+            cache = getattr(app_state, "cache", None)
+            if cache is not None:
+                market_data["cached_symbols"] = getattr(cache, "symbol_count", 0) or len(
+                    getattr(cache, "_cache", {})
+                )
+                market_data["last_update"] = str(getattr(cache, "last_update", "—"))
+            nuclear = getattr(app_state, "nuclear_streamer", None)
+            if nuclear is not None:
+                ns_status = nuclear.status() if hasattr(nuclear, "status") else {}
+                market_data["data_feed"] = "Nuclear Streamer"
+                market_data["status"] = "operational" if ns_status.get("is_running") else "degraded"
+    except Exception as exc:
+        logger.debug("dashboard-data market_data failed: %s", exc)
+
+    # Recent activity for the template
+    recent = [
+        {"message": e["message"], "timestamp": time.strftime("%H:%M:%S", time.localtime(e["time"]))}
+        for e in activity_log[:10]
+    ]
+
+    # System health with all fields the template reads
+    uptime_secs = time.time() - _start_time
+    hours, rem = divmod(int(uptime_secs), 3600)
+    mins, secs = divmod(rem, 60)
+    uptime_str = f"{hours}h {mins}m {secs}s"
+
+    system_health = {
+        "status": "running",
+        "version": "1.0.0",
+        "environment": _os.getenv("APP_ENV", _os.getenv("ENVIRONMENT", "production")),
+        "uptime": uptime_str,
+        "uptime_seconds": uptime_secs,
+        "pid": _os.getpid(),
+    }
+
     return {
-        "system_health": {"status": "ok", "uptime": time.time() - _start_time},
+        "system_health": system_health,
         "trading_stats": trading_stats,
         "risk_status": risk_status,
         "module_status": module_status,
+        "market_data": market_data,
+        "recent_activity": recent,
     }
 
 
@@ -685,32 +808,65 @@ def _check_module(name: str) -> bool:
 
 # ── Admin HTML pages ──────────────────────────────────────────────────────────
 
+_TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 
-def _html_page(title: str, body: str) -> HTMLResponse:
-    return HTMLResponse(f"""<!DOCTYPE html>
-<html><head><title>HOPEFX Admin — {title}</title></head>
-<body><h1>HOPEFX Admin — {title}</h1>{body}</body></html>""")
+
+def _serve_admin_template(name: str, title: str) -> HTMLResponse:
+    """Render an admin template file, substituting the page title."""
+    path = _TEMPLATES_DIR / "admin" / name
+    if path.exists():
+        content = path.read_text(encoding="utf-8")
+        # Inject title into the Jinja2 block so it renders without a template engine
+        content = content.replace("{% block title %}", "").replace("{% endblock %}", "", 1)
+        # Wrap blocks: extend base inline
+        base_path = _TEMPLATES_DIR / "base.html"
+        if base_path.exists():
+            base = base_path.read_text(encoding="utf-8")
+            # Replace Jinja extends/block tags with plain HTML
+            import re
+            base = re.sub(r"\{%[-\s]*extends[^%]*%\}", "", base)
+            base = re.sub(r"\{%[-\s]*block title[-\s]*%\}.*?\{%[-\s]*endblock[-\s]*%\}", title, base, flags=re.DOTALL)
+            block_match = re.search(r"\{%[-\s]*block content[-\s]*%\}.*?\{%[-\s]*endblock[-\s]*%\}", content, flags=re.DOTALL)
+            block_body = ""
+            if block_match:
+                block_body = re.sub(r"\{%[-\s]*block content[-\s]*%\}", "", block_match.group())
+                block_body = re.sub(r"\{%[-\s]*endblock[-\s]*%\}", "", block_body)
+            # Replace {{ title }} in base
+            base = base.replace("{{ title }}", title)
+            full = base.replace("{% block content %}{% endblock %}", block_body)
+            full = re.sub(r"\{%[^%]*%\}", "", full)  # strip any remaining Jinja tags
+            return HTMLResponse(content=full)
+    # Fallback: minimal page
+    return HTMLResponse(content=f"""<!DOCTYPE html>
+<html><head><title>HOPEFX Admin — {title}</title>
+<meta charset="UTF-8">
+<style>body{{font-family:sans-serif;padding:40px;background:#f5f7fa;color:#2c3e50}}</style>
+</head>
+<body><h1>HOPEFX Admin — {title}</h1>
+<p style="color:#e74c3c;">Template not found: templates/admin/{name}</p>
+<a href="/api/admin/">← Back to Dashboard</a>
+</body></html>""")
 
 
 @router.get("/", response_class=HTMLResponse)
 def admin_dashboard(user: TokenPayload = Depends(require_role("admin"))):
     """Admin dashboard. Requires: role >= 'admin'."""
-    return _html_page("Dashboard", "<p>Dashboard</p>")
+    return _serve_admin_template("dashboard.html", "Dashboard")
 
 
 @router.get("/strategies", response_class=HTMLResponse)
 def admin_strategies(user: TokenPayload = Depends(require_role("admin"))):
     """Strategy management page. Requires: role >= 'admin'."""
-    return _html_page("Strategies", "<p>Strategies</p>")
+    return _serve_admin_template("strategies.html", "Strategies")
 
 
 @router.get("/settings-page", response_class=HTMLResponse)
 def admin_settings_page(user: TokenPayload = Depends(require_role("admin"))):
     """Settings HTML page. Requires: role >= 'admin'."""
-    return _html_page("Settings", "<p>Settings</p>")
+    return _serve_admin_template("settings.html", "Settings")
 
 
 @router.get("/monitoring", response_class=HTMLResponse)
 def admin_monitoring(user: TokenPayload = Depends(require_role("admin"))):
     """Monitoring page. Requires: role >= 'admin'."""
-    return _html_page("Monitoring", "<p>Monitoring</p>")
+    return _serve_admin_template("monitoring.html", "Monitoring")

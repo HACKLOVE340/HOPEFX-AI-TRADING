@@ -56,7 +56,7 @@
 <script>
 async function loadSettings() {
     try {
-        const resp = await fetch('/admin/api/settings');
+        const resp = await fetch('/api/admin/settings');
         if (!resp.ok) return;
         const d = await resp.json();
         if (d.max_risk_per_trade != null) document.getElementById('max_risk_per_trade').value = d.max_risk_per_trade;
@@ -85,7 +85,7 @@ document.getElementById('risk-form').addEventListener('submit', async function(e
             notifications_enabled: document.getElementById('notifications_enabled').checked,
             auto_trading_enabled: document.getElementById('auto_trading_enabled').checked,
         };
-        const resp = await fetch('/admin/api/settings', {
+        const resp = await fetch('/api/admin/settings', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(payload),
@@ -119,7 +119,7 @@ document.getElementById('system-form').addEventListener('submit', async function
             notifications_enabled: document.getElementById('notifications_enabled').checked,
             auto_trading_enabled: document.getElementById('auto_trading_enabled').checked,
         };
-        await fetch('/admin/api/settings', {
+        await fetch('/api/admin/settings', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(payload),
