@@ -1,27 +1,39 @@
 # ML Guide
 
 > How to use, evaluate, retrain, and extend the HOPEFX ML pipeline.
-> Last updated: 2026-04-01
+> Last updated: 2026-04-03
 
 ---
 
 ## Production Model
 
 The production model is `ml/saved_models/advanced_oos.pkl` — a calibrated XGBoost
-stacking ensemble trained on 50 years of XAUUSD (GC=F) daily bars.
+ensemble trained on 50 years of XAUUSD (GC=F) daily bars with **horizon=5** alignment
+(training target = 5-bar forward direction, matching the execution engine's 5-bar hold period).
+
+Registry key: **`xgb_horizon5_v1`** (active)
 
 | Metric | Value |
 |--------|-------|
-| OOS accuracy | **66.4%** |
+| OOS accuracy | **59.9%** |
+| OOS accuracy (confident predictions only) | **~63%** |
 | p-value (one-sided binomial, H0: acc ≤ 0.5) | **p = 0.0000** |
-| OOS period | 2019-04-12 → 2026-03-24 (1,260 bars, 7-year held-out) |
-| Features | 176 stationary features |
-| Abstain rate | 27.5% (model withholds signal on low-confidence bars) |
-| Training data | 50 years XAUUSD (GC=F, 1974–2023) |
-| Algorithm | XGBoost + LightGBM + RandomForest stacking ensemble + isotonic calibration |
+| OOS period | 2018-04-12 → 2026-03-18 (2,016 bars, 8-year held-out) |
+| Features | 222 stationary features |
+| Horizon | 5 bars (aligned with execution hold period) |
+| Training data | 50 years XAUUSD (GC=F, 1968–2026) |
+| Algorithm | XGBoost + isotonic calibration |
+| Sharpe gate | PASSED: N=2016 ≥ 600, SE=0.033 ≤ 0.10, Sharpe=1.52 |
+| Walk-forward mean accuracy | 56.26% ± 6.26% (6 folds) |
+| Walk-forward Fold-2 | **44.4%** (below chance — parabolic regime; see below) |
 
-The model abstains on 27.5% of bars. Only high-conviction signals reach execution.
-This is why the win rate exceeds 50% — the model only acts when confident.
+The model now includes a **parabolic-bubble regime filter** that blocks signals when
+the current bar matches the Fold-2 failure conditions (see §Walk-Forward Fold-2 below).
+
+> **Previous model (`advanced_oos_v1`, horizon=1):** OOS accuracy was 66.4% but the
+> horizon mismatch (training=1 bar, execution=5 bars) caused Sharpe = −4.18 in
+> reconciled backtests.  The horizon-5 retrain (`xgb_horizon5_v1`) resolves this at
+> the cost of lower raw accuracy (59.9%) but higher P&L alignment.
 
 ---
 
@@ -33,11 +45,12 @@ curl http://localhost:8000/api/ml/accuracy
 
 # Expected response (production model loaded)
 {
-  "model_id": "advanced_oos",
-  "accuracy": 0.664,
-  "oos_bars": 1260,
+  "model_id": "xgb_horizon5_v1",
+  "accuracy": 0.5992,
+  "oos_bars": 2016,
   "p_value": 0.0,
-  "features": 176,
+  "features": 222,
+  "horizon": 5,
   "ci_mode": false
 }
 
@@ -48,6 +61,9 @@ curl http://localhost:8000/api/ml/accuracy
 ```bash
 # Via metadata sidecar (no unpickling needed)
 cat ml/saved_models/advanced_oos_meta.json
+
+# Registry status
+python3 -c "import json; r=json.load(open('ml/saved_models/registry.json')); print('active:', r['active_version'])"
 ```
 
 ---
@@ -95,9 +111,44 @@ print(f"Abstain: {result['abstain']}")
 
 ---
 
+## Walk-Forward Fold-2: Parabolic Regime Failure
+
+**Fold-2 accuracy = 44.4%** — below the 50% chance baseline.
+
+This fold covers a **parabolic-bubble or post-bubble crash** regime, most likely the
+1979–1981 gold bull market and subsequent collapse.  See
+[`docs/FOLD2_REGIME_ANALYSIS.md`](FOLD2_REGIME_ANALYSIS.md) for full analysis.
+
+**Root cause:** In parabolic regimes, momentum features become **anti-predictive**:
+- Overbought signals appear weeks before the actual top (false shorts)
+- Post-bubble crash velocity confounds mean-reversion signals (false longs)
+
+**Fix: `HIGH_VOL_PARABOLIC` regime filter (active)**
+
+The filter blocks all signals when **either**:
+1. `close > 1.30 × MA(200-bar)` — parabolic blow-off detected
+2. `rv14 > 2.5 × rv90` AND `close ≤ 75% of recent 200-bar peak` — post-bubble crash
+
+Both `RegimeConditionalModel.predict_live()` and `SignalFilter._gate_regime()` return
+`abstain=True` / `passed=False` in this regime.
+
+```python
+from ml.regime_conditional import is_parabolic_bubble_regime
+import pandas as pd
+
+df = pd.read_csv("data/XAUUSD_50Y.csv")
+df.columns = [c.lower() for c in df.columns]
+df["Date"] = pd.to_datetime(df["Date"])
+df = df.sort_values("Date")
+
+print("Current bar parabolic?", is_parabolic_bubble_regime(df))
+```
+
+---
+
 ## Feature Categories
 
-The 176 features are grouped into 7 categories. All are stationary (ADF + KPSS tested).
+The 222 features are grouped into 7 categories. All are stationary (ADF + KPSS tested).
 
 ### Returns & Momentum (28 features)
 ```

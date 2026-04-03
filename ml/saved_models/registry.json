@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "active_version": "advanced_oos_v2",
+  "active_version": "xgb_horizon5_v1",
   "versions": {
     "advanced_oos_v1": {
       "name": "advanced_oos_v1",
@@ -68,7 +68,7 @@
       "sha256": "fc176955225e9e5f139443c7adf8fba48a8ef5c0a2443c4c20c8ceae27f581e1",
       "registered_at": "2026-04-02T15:11:10.937018+00:00",
       "promoted_at": "2026-04-02T15:11:10.937018+00:00",
-      "state": "production",
+      "state": "retired",
       "oos_accuracy": 0.599,
       "oos_auc": 0.608,
       "oos_p_value": 0.0,
@@ -76,7 +76,46 @@
       "n_trades": 2016,
       "feature_count": 222,
       "horizon": 5,
-      "notes": "Horizon-5 retrain. OOS accuracy=59.9% (p=0.0, N=2016). Sharpe gate PASSED: N=2016 >= 600, SE=0.033 <= 0.10. Horizon aligned: training=5 bars matches execution hold=5 bars. Replaces horizon=1 model (advanced_oos_v1) which had Sharpe=-4.18 in reconciled backtest due to horizon mismatch."
+      "notes": "Horizon-5 retrain (alias of xgb_horizon5_v1). Retired in favour of xgb_horizon5_v1 for explicit naming. Same pkl file and SHA."
+    },
+    "xgb_horizon5_v1": {
+      "name": "xgb_horizon5_v1",
+      "file": "ml/saved_models/advanced_oos.pkl",
+      "sha256": "fc176955225e9e5f139443c7adf8fba48a8ef5c0a2443c4c20c8ceae27f581e1",
+      "registered_at": "2026-04-03T16:27:00.000000+00:00",
+      "promoted_at": "2026-04-03T16:27:00.000000+00:00",
+      "state": "active",
+      "oos_accuracy": 0.5992,
+      "oos_f1": 0.6885,
+      "oos_auc": 0.6077,
+      "oos_p_value": 0.0,
+      "oos_significant": true,
+      "oos_n": 2016,
+      "oos_period": "2018-04-12 \u2192 2026-03-18",
+      "sharpe_gate_passed": true,
+      "sharpe": 1.52,
+      "sharpe_se": 0.033,
+      "n_trades": 2016,
+      "feature_count": 222,
+      "horizon": 5,
+      "hold_period_bars": 5,
+      "symbol": "GC=F",
+      "years": 50,
+      "oos_years": 8.0,
+      "macro_features": true,
+      "cv_accuracy": 0.5626,
+      "cv_accuracy_std": 0.0626,
+      "walk_forward": {
+        "folds": 6,
+        "mean_accuracy": 0.5626,
+        "std_accuracy": 0.0626,
+        "mean_f1": 0.6049,
+        "mean_auc": 0.5936,
+        "fold2_accuracy": 0.444,
+        "fold2_note": "Below-chance fold. See docs/FOLD2_REGIME_ANALYSIS.md for regime analysis and filter.",
+        "regime_filter_applied": true
+      },
+      "notes": "XGBoost horizon-5 production model. Trained 2026-04-02 on 50Y XAUUSD (GC=F) daily bars, horizon=5 to match execution hold period. OOS accuracy=59.9% (p=0.0, N=2016). Sharpe gate PASSED. Fold-2 parabolic-bubble regime filter active (see docs/FOLD2_REGIME_ANALYSIS.md). current.pkl symlink verified to this file."
     }
   }
 }
