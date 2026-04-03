@@ -807,12 +807,20 @@ def _register_signal_read_routes(router: Any) -> None:
 
     @router.get("/engine")
     async def get_engine_status():
-        try:
-            from core.signal_engine import get_signal_engine_status
+        except Exception:
+            logger.exception("Failed to get signal engine status")
+            engine_status = {
+                "status": "unavailable",
+                "error": "Signal engine status is temporarily unavailable."
+            }
             engine_status = get_signal_engine_status()
         except Exception as exc:
             engine_status = {"error": str(exc)}
-        svc = _get_signal_service()
+        return {
+            "engine": engine_status,
+            "recent_engine_signals": engine_signals,
+            "recent_engine_signal_count": len(engine_signals),
+        }
         recent = svc.get_signal_history(hours=1)
         engine_signals = [s.to_dict() for s in recent if s.metadata.get("source") == "signal_engine"][:10]
         return {"engine": engine_status, "recent_engine_signals": engine_signals, "recent_engine_signal_count": len(engine_signals)}
