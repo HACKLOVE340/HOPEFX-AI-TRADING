@@ -33,8 +33,13 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
+try:
+    from enum import StrEnum
+except ImportError:
+    from enum import Enum
+    class StrEnum(str, Enum):  # Python 3.10 compat
+        pass
 UTC = timezone.utc
-from enum import StrEnum
 
 import aiohttp
 

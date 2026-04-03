@@ -8,7 +8,13 @@ Trading domain enumerations.
 Institutional-grade type safety.
 """
 
-from enum import IntEnum, StrEnum
+from enum import IntEnum
+try:
+    from enum import StrEnum
+except ImportError:
+    from enum import Enum
+    class StrEnum(str, Enum):  # Python 3.10 compat
+        pass
 
 
 class TradeDirection(StrEnum):

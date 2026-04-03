@@ -72,7 +72,6 @@ Configuration (env vars)
 Usage
 -----
     from resilience.hot_standby import HotStandbyReplicator
-
     replicator = HotStandbyReplicator(
         redis_client=redis_client,
         on_promote_callback=my_promote_fn,   # async def promote(state_snapshot)
@@ -102,8 +101,14 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 UTC = timezone.utc
-from enum import StrEnum
 from typing import Any
+
+try:
+    from enum import StrEnum
+except ImportError:
+    from enum import Enum
+    class StrEnum(str, Enum):  # Python 3.10 compat
+        pass
 
 logger = logging.getLogger(__name__)
 

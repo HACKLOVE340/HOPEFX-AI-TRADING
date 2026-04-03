@@ -53,8 +53,13 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+try:
+    from enum import StrEnum
+except ImportError:
+    from enum import Enum
+    class StrEnum(str, Enum):  # Python 3.10 compat
+        pass
 UTC = timezone.utc
-from enum import StrEnum
 from typing import Any
 
 logger = logging.getLogger(__name__)
