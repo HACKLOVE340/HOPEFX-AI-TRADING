@@ -633,13 +633,27 @@ class ExecutionEngine:
     async def _handle_fill_success(
         self, request: ExecutionRequest, report: ExecutionReport
     ) -> None:
-        """Run all post-fill side-effects for a successful order."""
+        """
+        Run all post-fill side-effects for a successful order.
+
+        Each side-effect is individually guarded — a failure in Redis, TCA,
+        or callbacks must never prevent the ExecutionReport from being returned
+        to the caller. Circuit-breaker success and metrics are always recorded.
+        """
         await self._circuit_breaker.record_success()
         self._total_fills += 1
         self._record_latency(report.latency_ms)
-        await self._persist_to_redis(request, report)
-        await self._record_tca(request, report)
-        await self._notify_callbacks(report)
+
+        for coro, label in [
+            (self._persist_to_redis(request, report), "redis"),
+            (self._record_tca(request, report), "tca"),
+            (self._notify_callbacks(report), "callbacks"),
+        ]:
+            try:
+                await coro
+            except Exception as exc:
+                logger.warning("Post-fill %s failed (non-fatal): %s", label, exc)
+
         self._update_sharpe_circuit_breaker(request, report)
         self._warn_on_latency_breach(request, report)
 

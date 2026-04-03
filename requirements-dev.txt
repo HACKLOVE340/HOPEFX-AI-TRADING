@@ -18,6 +18,9 @@ types-pyyaml>=6.0.0,<7.0.0
 # types-python-jose removed: python-jose replaced by PyJWT
 pandas-stubs>=2.2.0,<3.0.0
 
+# Mutation testing
+mutmut>=2.4.0,<3.0.0
+
 # Security Scanning
 bandit>=1.8.0,<2.0.0
 safety>=3.3.0,<4.0.0
