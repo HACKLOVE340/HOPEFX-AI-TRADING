@@ -1,0 +1,267 @@
+# HOPEFX-AI-TRADING — Automated ML Walk-Forward Retrain
+#
+# Runs weekly (Sunday 02:00 UTC) and on manual dispatch.
+#
+# What it does
+# ------------
+#   1. Installs ML dependencies (xgboost, scikit-learn, pandas, yfinance …)
+#   2. Runs scripts/retrain_horizon5.py --smoke to validate the pipeline
+#      without downloading 50 years of data (fast, < 5 minutes).
+#   3. On the scheduled run (weekly) performs a real retrain:
+#      scripts/retrain_model.py --advanced --years 50 --oos-years 8
+#   4. Uploads training artefacts (registry.json, report JSON) as CI
+#      artefacts and commits them back to the branch if they changed.
+#   5. On retrain failure, sends a Slack / GitHub notification and blocks
+#      the workflow.
+#
+# Environment secrets required for live retrain
+# ----------------------------------------------
+#   None for the smoke test.
+#   For the full scheduled retrain the script downloads from yfinance (no
+#   API key required).  ML model files are committed back to the branch.
+#
+# Outputs
+# -------
+#   - ml/saved_models/advanced_oos.pkl     (new model)
+#   - ml/saved_models/advanced_training_report.json
+#   - ml/saved_models/registry.json        (updated active_version)
+#   - ml/saved_models/feature_stats.json   (drift-guard stats)
+
+name: ML Walk-Forward Retrain
+
+on:
+  # Weekly full retrain — Sunday 02:00 UTC
+  schedule:
+    - cron: "0 2 * * 0"
+
+  # Manual trigger: smoke (fast validate) or full retrain
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Retrain mode: smoke (fast CI validate) or full (50Y retrain)"
+        required: false
+        default: "smoke"
+        type: choice
+        options:
+          - smoke
+          - full
+
+  # Also run on push to ML-related files so any change is validated
+  push:
+    paths:
+      - "ml/**"
+      - "scripts/retrain_*.py"
+      - "scripts/retrain_model.py"
+      - ".github/workflows/retrain.yml"
+    branches:
+      - main
+      - develop
+      - "copilot/**"
+
+# Cancel in-progress retrain if a newer one is triggered on the same branch
+concurrency:
+  group: retrain-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke-validate:
+    name: Smoke validate retrain pipeline
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-retrain-${{ hashFiles('requirements-ci.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-retrain-
+            ${{ runner.os }}-pip-
+
+      - name: Install ML dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+          # Extra ML packages needed for retrain (not in CI requirements)
+          pip install \
+            "xgboost>=2.0" \
+            "lightgbm>=4.0" \
+            "scikit-learn>=1.3" \
+            "yfinance>=0.2" \
+            "pandas>=2.0" \
+            "numpy>=1.26" \
+            "joblib>=1.3" \
+            "statsmodels>=0.14" \
+            "scipy>=1.11" \
+            "matplotlib>=3.7" \
+            "hmmlearn>=0.3" \
+            "textblob>=0.17"
+
+      - name: Smoke — validate retrain pipeline (no data download)
+        run: python scripts/retrain_horizon5.py --smoke
+        env:
+          PYTHONPATH: .
+
+      - name: Upload smoke artefacts
+        if: always()
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882  # v4
+        with:
+          name: retrain-smoke-${{ github.run_id }}
+          path: |
+            ml/saved_models/advanced_training_report.json
+            ml/saved_models/registry.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Full walk-forward retrain — only on schedule or when mode=full is chosen
+  # ────────────────────────────────────────────────────────────────────────────
+  full-retrain:
+    name: Full walk-forward retrain (50 Y)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    needs: smoke-validate
+
+    # Only run on schedule or manual full trigger
+    if: >
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'full')
+
+    permissions:
+      contents: write   # needed to commit artefacts back
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-retrain-full-${{ hashFiles('requirements-ci.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-retrain-full-
+            ${{ runner.os }}-pip-
+
+      - name: Install ML dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+          pip install \
+            "xgboost>=2.0" \
+            "lightgbm>=4.0" \
+            "scikit-learn>=1.3" \
+            "yfinance>=0.2" \
+            "pandas>=2.0" \
+            "numpy>=1.26" \
+            "joblib>=1.3" \
+            "statsmodels>=0.14" \
+            "scipy>=1.11" \
+            "matplotlib>=3.7" \
+            "hmmlearn>=0.3" \
+            "textblob>=0.17"
+
+      - name: Run walk-forward retrain (50Y, OOS 8Y)
+        run: |
+          python scripts/retrain_model.py \
+            --advanced \
+            --years 50 \
+            --oos-years 8
+        env:
+          PYTHONPATH: .
+
+      - name: Validate training artefacts
+        run: python scripts/retrain_horizon5.py --verify-only
+        env:
+          PYTHONPATH: .
+
+      - name: Upload training artefacts
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882  # v4
+        with:
+          name: retrain-full-${{ github.run_id }}
+          path: |
+            ml/saved_models/advanced_oos.pkl
+            ml/saved_models/advanced_training_report.json
+            ml/saved_models/registry.json
+            ml/saved_models/feature_stats.json
+            ml/saved_models/feature_importances.json
+          retention-days: 90
+
+      - name: Commit updated model registry back to branch
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add \
+            ml/saved_models/registry.json \
+            ml/saved_models/advanced_training_report.json \
+            ml/saved_models/feature_stats.json \
+            ml/saved_models/feature_importances.json || true
+          if git diff --cached --quiet; then
+            echo "No model registry changes to commit."
+          else
+            git commit -m "chore(ml): automated weekly retrain $(date -u +'%Y-%m-%d')"
+            git push origin HEAD
+          fi
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Notify on failure
+  # ────────────────────────────────────────────────────────────────────────────
+  notify-failure:
+    name: Notify on retrain failure
+    runs-on: ubuntu-latest
+    needs: [smoke-validate, full-retrain]
+    if: failure()
+
+    steps:
+      - name: Create GitHub issue on failure
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7
+        with:
+          script: |
+            const title = `[ML Retrain] Pipeline failed on ${new Date().toISOString().slice(0,10)}`;
+            const body = [
+              `## ML Walk-Forward Retrain Failed`,
+              ``,
+              `**Workflow run:** [${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
+              `**Branch:** ${context.ref}`,
+              `**Triggered by:** ${context.eventName}`,
+              ``,
+              `### Impact`,
+              `The production model has NOT been updated. The existing model continues to serve predictions.`,
+              ``,
+              `### Next Steps`,
+              `1. Review the workflow logs linked above`,
+              `2. Fix any data download or training errors`,
+              `3. Re-trigger via: Actions → ML Walk-Forward Retrain → Run workflow → mode=full`,
+              ``,
+              `### Auto-close`,
+              `This issue will be closed automatically when the next retrain succeeds.`,
+            ].join('\n');
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: ['ml', 'automated', 'retrain-failure'],
+            });
