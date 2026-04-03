@@ -22,11 +22,17 @@ class StrategyConfig:
     """Enhanced config - backwards compatible with your existing"""
 
     name: str
-    symbol: str  # "XAUUSD" format
+    symbol: str = "XAUUSD"  # "XAUUSD" format
     timeframe: str = "5m"
     risk_per_trade: Decimal = Decimal("0.01")  # 1%
     max_position: Decimal = Decimal(10)
     enabled: bool = True
+
+    # Version string for model/strategy versioning and audit trails
+    version: str = "1.0"
+
+    # Minimum bars required before the strategy will produce signals
+    min_bars: int = 20
 
     # New fields (optional for existing strategies)
     regime_preference: list[str] = None  # ["trending", "ranging"]
@@ -162,10 +168,22 @@ class StrategyAdapter:
 
     def __init__(self, legacy_strategy):
         self.legacy = legacy_strategy
+        # Prefer config.name (set explicitly) over the bare .name attribute so
+        # tests and callers that set strategy.config = StrategyConfig(name=...)
+        # get the right name even when .name is a Mock.
+        cfg = getattr(legacy_strategy, "config", None)
+        name = (
+            getattr(cfg, "name", None)
+            or getattr(legacy_strategy, "name", None)
+            or "unknown"
+        )
+        # Only use a plain-string name; discard MagicMock / non-string values.
+        if not isinstance(name, str):
+            name = "unknown"
         self.config = StrategyConfig(
-            name=getattr(legacy_strategy, "name", "unknown"),
-            symbol=getattr(legacy_strategy, "symbol", "XAUUSD"),
-            timeframe=getattr(legacy_strategy, "timeframe", "5m"),
+            name=name,
+            symbol=getattr(cfg, "symbol", None) or getattr(legacy_strategy, "symbol", "XAUUSD"),
+            timeframe=getattr(cfg, "timeframe", None) or getattr(legacy_strategy, "timeframe", "5m"),
         )
 
     def on_price(self, timestamp, price, bid=None, ask=None):

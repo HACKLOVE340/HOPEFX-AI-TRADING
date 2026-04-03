@@ -65,7 +65,7 @@ def _prom_positions_open_set(symbol: str, value: float) -> None:
         try:
             _positions_open_gauge.labels(symbol=symbol).set(value)
         except Exception:
-            pass
+            logger.debug("Suppressed exception (no detail) in %s", __name__)
 
 
 def _prom_pnl_observe(pnl: float) -> None:
@@ -73,7 +73,7 @@ def _prom_pnl_observe(pnl: float) -> None:
         try:
             _position_pnl_histogram.observe(pnl)
         except Exception:
-            pass
+            logger.debug("Suppressed exception (no detail) in %s", __name__)
 
 
 def _prom_mutation(op: str) -> None:
@@ -81,7 +81,7 @@ def _prom_mutation(op: str) -> None:
         try:
             _position_mutations_counter.labels(operation=op).inc()
         except Exception:
-            pass
+            logger.debug("Suppressed exception (no detail) in %s", __name__)
 
 
 # ── Exceptions ─────────────────────────────────────────────────────────────────
@@ -268,7 +268,7 @@ class PositionManager:
             if tracer is not None:
                 return tracer.start_as_current_span(span_name)
         except Exception:
-            pass
+            logger.debug("Suppressed exception (no detail) in %s", __name__)
         return _NullCtx()
 
     # ------------------------------------------------------------------

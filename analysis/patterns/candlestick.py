@@ -685,40 +685,35 @@ class CandlestickPatternDetector:
 
         patterns: list[CandlestickPattern] = []
         n = len(closes)
+        bars = OHLCBars(opens=opens, highs=highs, lows=lows, closes=closes)
 
         for i in range(n):
-            p = _detect_doji_pattern(opens, highs, lows, closes, i, self.doji_threshold)
+            p = _detect_doji_pattern(bars, i, doji_threshold=self.doji_threshold)
             if p:
                 patterns.append(p)
                 continue
 
             p = _detect_hammer(
-                opens,
-                highs,
-                lows,
-                closes,
+                bars,
                 i,
-                self.doji_threshold,
-                self.wick_ratio,
+                doji_threshold=self.doji_threshold,
+                wick_ratio=self.wick_ratio,
             )
             if p:
                 patterns.append(p)
                 continue
 
             p = _detect_shooting_star(
-                opens,
-                highs,
-                lows,
-                closes,
+                bars,
                 i,
-                self.doji_threshold,
-                self.wick_ratio,
+                doji_threshold=self.doji_threshold,
+                wick_ratio=self.wick_ratio,
             )
             if p:
                 patterns.append(p)
                 continue
 
-            p = _detect_marubozu(opens, highs, lows, closes, i, self.marubozu_threshold)
+            p = _detect_marubozu(bars, i, marubozu_threshold=self.marubozu_threshold)
             if p:
                 patterns.append(p)
 

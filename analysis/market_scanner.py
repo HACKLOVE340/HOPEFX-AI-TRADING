@@ -530,6 +530,131 @@ class MarketScanner:
                     return True, {"direction": "bearish", "gap_pct": round(gap, 2)}
         return False, {}
 
+    def _check_rsi(self, params: dict, ctx: dict, *, overbought: bool) -> tuple:
+        """Return True when RSI is in the overbought or oversold zone."""
+        rsi = ctx.get("rsi")
+        if rsi is None:
+            return False, {}
+        if overbought:
+            threshold = params.get("threshold", 70)
+            if rsi >= threshold:
+                return True, {"direction": "bearish", "rsi": rsi, "threshold": threshold}
+        else:
+            threshold = params.get("threshold", 30)
+            if rsi <= threshold:
+                return True, {"direction": "bullish", "rsi": rsi, "threshold": threshold}
+        return False, {}
+
+    def _check_price_vs_ma(self, params: dict, data: dict, ctx: dict, *, above: bool) -> tuple:
+        """Return True when price is above (or below) a moving average."""
+        period = params.get("period", 20)
+        ma_key = f"ma_{period}"
+        ma = data.get(ma_key) or ctx.get(ma_key) or ctx.get(f"sma_{period}")
+        price = ctx["price"]
+        if ma is None or ma <= 0:
+            return False, {}
+        if above:
+            if price > ma:
+                return True, {"direction": "bullish", "price": price, "ma": ma, "period": period}
+        else:
+            if price < ma:
+                return True, {"direction": "bearish", "price": price, "ma": ma, "period": period}
+        return False, {}
+
+    def _check_momentum(self, params: dict, ctx: dict) -> tuple:
+        """Return True when the candle's percentage gain exceeds *min_change_pct*."""
+        min_change_pct = params.get("min_change_pct", 0.5)
+        price = ctx["price"]
+        open_price = ctx.get("open_price", price)
+        if open_price <= 0:
+            return False, {}
+        change_pct = (price - open_price) / open_price * 100
+        if abs(change_pct) >= min_change_pct:
+            direction = "bullish" if change_pct > 0 else "bearish"
+            return True, {"direction": direction, "change_pct": round(change_pct, 3)}
+        return False, {}
+
+    def _check_macd_cross(self, params: dict, data: dict, ctx: dict, *, bullish: bool) -> tuple:
+        """Return True when MACD crosses its signal line in the given direction."""
+        macd = data.get("macd")
+        signal = data.get("macd_signal")
+        prev_macd = data.get("prev_macd")
+        prev_signal = data.get("prev_macd_signal")
+        if any(v is None for v in (macd, signal, prev_macd, prev_signal)):
+            return False, {}
+        if bullish:
+            # Previous: macd below signal; Current: macd above signal
+            if prev_macd <= prev_signal and macd > signal:
+                return True, {"direction": "bullish", "macd": macd, "signal": signal}
+        else:
+            # Previous: macd above signal; Current: macd below signal
+            if prev_macd >= prev_signal and macd < signal:
+                return True, {"direction": "bearish", "macd": macd, "signal": signal}
+        return False, {}
+
+    def _check_trend(self, ctx: dict, *, uptrend: bool, data: dict | None = None) -> tuple:
+        """Return True when the short MA is above (uptrend) or below (downtrend) the long MA."""
+        _data = data or {}
+        sma_short = _data.get("ma_20") or ctx.get("sma_20") or ctx.get("ma_20") or ctx.get("high_20")
+        sma_long = _data.get("ma_50") or ctx.get("sma_50") or ctx.get("ma_50") or ctx.get("high_50")
+        if sma_short is None or sma_long is None:
+            # Fallback: compare current price to a single MA level
+            price = ctx.get("price", 0)
+            ma = _data.get("ma_50") or ctx.get("ma_50") or ctx.get("sma_50") or ctx.get("high_50")
+            if ma is None or ma <= 0:
+                return False, {}
+            if uptrend:
+                return (price > ma), {"direction": "bullish", "price": price, "ma": ma}
+            return (price < ma), {"direction": "bearish", "price": price, "ma": ma}
+        if uptrend:
+            if sma_short > sma_long:
+                return True, {"direction": "bullish", "sma_short": sma_short, "sma_long": sma_long}
+        else:
+            if sma_short < sma_long:
+                return True, {"direction": "bearish", "sma_short": sma_short, "sma_long": sma_long}
+        return False, {}
+
+    def _check_new_extreme(self, params: dict, data: dict, ctx: dict, *, new_high: bool) -> tuple:
+        """Return True when price (or high/low) sets a new n-period extreme."""
+        period = params.get("period", 20)
+        price = ctx["price"]
+        if new_high:
+            level = data.get(f"high_{period}") or ctx.get(f"high_{period}")
+            current = data.get("high", price)
+            if level is not None and current > level:
+                return True, {"direction": "bullish", "price": current, "period_high": level, "period": period}
+        else:
+            level = data.get(f"low_{period}") or ctx.get(f"low_{period}")
+            current = data.get("low", price)
+            if level is not None and current < level:
+                return True, {"direction": "bearish", "price": current, "period_low": level, "period": period}
+        return False, {}
+
+    def _check_ma_crossover(self, params: dict, data: dict, ctx: dict) -> tuple:
+        """Return True on a golden cross (fast MA crosses above slow MA) or death cross."""
+        fast_period = params.get("fast_period", 20)
+        slow_period = params.get("slow_period", 50)
+        fast_key = f"ma_{fast_period}"
+        slow_key = f"ma_{slow_period}"
+        prev_fast_key = f"prev_ma_{fast_period}"
+        prev_slow_key = f"prev_ma_{slow_period}"
+
+        fast = data.get(fast_key) or ctx.get(fast_key)
+        slow = data.get(slow_key) or ctx.get(slow_key)
+        prev_fast = data.get(prev_fast_key)
+        prev_slow = data.get(prev_slow_key)
+
+        if any(v is None for v in (fast, slow, prev_fast, prev_slow)):
+            return False, {}
+
+        # Golden cross: prev_fast ≤ prev_slow and fast > slow
+        if prev_fast <= prev_slow and fast > slow:
+            return True, {"direction": "bullish", "fast_ma": fast, "slow_ma": slow, "cross": "golden"}
+        # Death cross: prev_fast ≥ prev_slow and fast < slow
+        if prev_fast >= prev_slow and fast < slow:
+            return True, {"direction": "bearish", "fast_ma": fast, "slow_ma": slow, "cross": "death"}
+        return False, {}
+
     def _check_criterion(self, criterion: ScanCriteria, data: dict[str, Any]) -> tuple:
         """Check if a criterion is met. Returns (met: bool, details: dict)."""
         ctype = criterion.type
@@ -564,8 +689,8 @@ class MarketScanner:
             ScanCriteriaType.VOLUME_SPIKE: lambda: self._check_volume_spike(params, ctx),
             ScanCriteriaType.MACD_BULLISH_CROSS: lambda: self._check_macd_cross(params, data, ctx, bullish=True),
             ScanCriteriaType.MACD_BEARISH_CROSS: lambda: self._check_macd_cross(params, data, ctx, bullish=False),
-            ScanCriteriaType.UPTREND: lambda: self._check_trend(ctx, uptrend=True),
-            ScanCriteriaType.DOWNTREND: lambda: self._check_trend(ctx, uptrend=False),
+            ScanCriteriaType.UPTREND: lambda: self._check_trend(ctx, uptrend=True, data=data),
+            ScanCriteriaType.DOWNTREND: lambda: self._check_trend(ctx, uptrend=False, data=data),
             ScanCriteriaType.MA_CROSSOVER: lambda: self._check_ma_crossover(params, data, ctx),
             ScanCriteriaType.VOLATILITY_EXPANSION: lambda: self._check_volatility_expansion(params, ctx),
             ScanCriteriaType.NEW_HIGH: lambda: self._check_new_extreme(params, data, ctx, new_high=True),
