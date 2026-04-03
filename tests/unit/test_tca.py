@@ -22,8 +22,8 @@ import pytest
 # ── Python 3.10 StrEnum shim ─────────────────────────────────────────────────
 if not hasattr(enum, "StrEnum"):
 
-    class _StrEnum(StrEnum):
-        pass
+    class _StrEnum(str, enum.Enum):  # type: ignore[no-redef]
+        """Backport of enum.StrEnum for Python < 3.11."""
 
     enum.StrEnum = _StrEnum  # type: ignore[attr-defined]
 
