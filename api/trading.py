@@ -182,32 +182,50 @@ _redis_pool_lock = None
 
 
 def _get_redis_pool():
-    """Return (or lazily create) the module-level Redis connection pool."""
+    """Return (or lazily create) the module-level Redis connection pool.
+
+    Uses a threading.Lock for double-checked locking so that exactly one pool
+    is created even under concurrent requests.  The _redis_pool_lock itself is
+    created once at module load time — it never races because module import is
+    serialized by Python's import system.
+    """
     global _redis_pool, _redis_pool_lock
+    # Fast path — already initialised (no lock needed, assignment is atomic).
     if _redis_pool is not None:
         return _redis_pool
-    try:
-        import redis as _redis
 
-        # ConnectionPool is thread-safe and reuses existing connections.
-        # max_connections=10 is conservative — increase via REDIS_POOL_MAX_CONN.
-        _redis_pool = _redis.ConnectionPool(
-            host=os.getenv("REDIS_HOST", "localhost"),
-            port=int(os.getenv("REDIS_PORT", "6379")),
-            max_connections=int(os.getenv("REDIS_POOL_MAX_CONN", "10")),
-            socket_connect_timeout=0.5,
-            decode_responses=True,
-        )
-        logger.info(
-            "Trading API: Redis connection pool created (host=%s port=%s max_conn=%s)",
-            os.getenv("REDIS_HOST", "localhost"),
-            os.getenv("REDIS_PORT", "6379"),
-            os.getenv("REDIS_POOL_MAX_CONN", "10"),
-        )
-        return _redis_pool
-    except Exception as exc:  # pylint: disable=broad-exception-caught
-        logger.warning("Trading API: could not create Redis pool: %s — rate limiting will use in-memory fallback", exc)
-        return None
+    # Slow path — first call, possibly concurrent.  Use the module-level lock
+    # so only one thread creates the pool.
+    import threading as _threading
+
+    if _redis_pool_lock is None:
+        # This line itself is safe: module-level import is serialized.
+        _redis_pool_lock = _threading.Lock()
+
+    with _redis_pool_lock:
+        # Re-check inside the lock (double-checked locking pattern).
+        if _redis_pool is not None:
+            return _redis_pool
+        try:
+            import redis as _redis
+
+            _redis_pool = _redis.ConnectionPool(
+                host=os.getenv("REDIS_HOST", "localhost"),
+                port=int(os.getenv("REDIS_PORT", "6379")),
+                max_connections=int(os.getenv("REDIS_POOL_MAX_CONN", "10")),
+                socket_connect_timeout=0.5,
+                decode_responses=True,
+            )
+            logger.info(
+                "Trading API: Redis connection pool created (host=%s port=%s max_conn=%s)",
+                os.getenv("REDIS_HOST", "localhost"),
+                os.getenv("REDIS_PORT", "6379"),
+                os.getenv("REDIS_POOL_MAX_CONN", "10"),
+            )
+            return _redis_pool
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            logger.warning("Trading API: could not create Redis pool: %s — rate limiting will use in-memory fallback", exc)
+            return None
 
 
 def _reset_order_rl_cache() -> None:

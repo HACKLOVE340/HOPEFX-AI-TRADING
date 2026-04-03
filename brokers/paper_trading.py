@@ -319,18 +319,29 @@ class PaperTradingBroker(BrokerConnector):
             restored_positions = 0
             for pos_dict in state.get("positions", []):
                 sym = pos_dict.get("symbol")
-                if sym:
-                    self.positions[sym] = Position(
-                        id=pos_dict.get("id", str(uuid.uuid4())),
-                        symbol=sym,
-                        side=OrderSide(pos_dict.get("side", "buy")),
-                        quantity=float(pos_dict.get("quantity", 0)),
-                        entry_price=float(pos_dict.get("entry_price", 0)),
-                        current_price=float(pos_dict.get("current_price", 0)),
-                        unrealized_pnl=float(pos_dict.get("unrealized_pnl", 0)),
-                        realized_pnl=float(pos_dict.get("realized_pnl", 0)),
+                entry = float(pos_dict.get("entry_price", 0))
+                current = float(pos_dict.get("current_price", 0))
+                qty = float(pos_dict.get("quantity", 0))
+                if not sym or entry <= 0 or qty <= 0:
+                    logger.warning(
+                        "PaperTradingBroker: skipping invalid persisted position "
+                        "symbol=%s entry_price=%s qty=%s — position would produce incorrect P&L",
+                        sym,
+                        entry,
+                        qty,
                     )
-                    restored_positions += 1
+                    continue
+                self.positions[sym] = Position(
+                    id=pos_dict.get("id", str(uuid.uuid4())),
+                    symbol=sym,
+                    side=OrderSide(pos_dict.get("side", "buy")),
+                    quantity=qty,
+                    entry_price=entry,
+                    current_price=current if current > 0 else entry,
+                    unrealized_pnl=float(pos_dict.get("unrealized_pnl", 0)),
+                    realized_pnl=float(pos_dict.get("realized_pnl", 0)),
+                )
+                restored_positions += 1
             if restored_positions:
                 logger.info(
                     "PaperTradingBroker: restored %d open position(s) from Redis",

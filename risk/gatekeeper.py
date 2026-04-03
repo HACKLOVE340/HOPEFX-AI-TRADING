@@ -553,19 +553,6 @@ class Gatekeeper:
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
-    def _reset_daily_counter(self) -> None:
-        """Reset daily trade counter when the calendar day rolls over.
-
-        WARNING: Must only be called while holding self._lock to prevent
-        a race condition where two concurrent tasks both see a stale day
-        and both reset the counter, causing one trade to be double-counted.
-        Use _reset_daily_counter_locked() from within locked sections.
-        """
-        today = datetime.now(UTC).day
-        if today != self._trade_day:
-            self._daily_trades = 0
-            self._trade_day = today
-
     def _reset_daily_counter_locked(self) -> None:
         """Thread-safe daily counter reset.  Call only while holding self._lock."""
         today = datetime.now(UTC).day

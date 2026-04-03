@@ -43,6 +43,34 @@ _CHECK_TIMEOUT_SEC: float = 5.0
 _VERSION: str = os.getenv("APP_VERSION", "unknown")
 _SERVICE_NAME: str = os.getenv("OTEL_SERVICE_NAME", "hopefx-trading")
 
+# ── Module-level cached DB engine ─────────────────────────────────────────────
+# Creating a new SQLAlchemy engine on every health check is extremely expensive
+# (TCP handshake + SSL negotiation + pool creation).  The engine is created once
+# and reused; the pool_pre_ping=True flag verifies the connection is alive on
+# each use without full reconnect overhead.
+_db_engine = None
+_db_engine_url: str | None = None
+
+
+def _get_db_engine():
+    """Return the module-level DB engine, creating it if necessary."""
+    global _db_engine, _db_engine_url
+    db_url = os.getenv("DATABASE_URL", "")
+    if not db_url:
+        return None, None
+    # Re-create if the URL changed (e.g. environment update in tests).
+    if _db_engine is not None and _db_engine_url == db_url:
+        return _db_engine, db_url
+    try:
+        from sqlalchemy.ext.asyncio import create_async_engine  # type: ignore[import]
+
+        _db_engine = create_async_engine(db_url, pool_pre_ping=True, pool_size=1, max_overflow=0)
+        _db_engine_url = db_url
+        return _db_engine, db_url
+    except Exception as exc:
+        logger.warning("health.py: could not create DB engine: %s", exc)
+        return None, db_url
+
 
 # ── Pydantic models ────────────────────────────────────────────────────────────
 
@@ -111,25 +139,21 @@ async def _check_redis() -> ComponentStatus:
 
 
 async def _check_database() -> ComponentStatus:
-    """Ping the relational database via SQLAlchemy and return component status."""
+    """Ping the relational database via the module-level cached SQLAlchemy engine."""
     t0 = time.perf_counter()
+    engine, db_url = _get_db_engine()
+    if engine is None:
+        return ComponentStatus(
+            name="database",
+            status="unknown",
+            critical=True,
+            detail="DATABASE_URL not set" if not db_url else "Engine creation failed — check logs",
+        )
     try:
         from sqlalchemy import text  # type: ignore[import]
-        from sqlalchemy.ext.asyncio import create_async_engine  # type: ignore[import]
 
-        db_url = os.getenv("DATABASE_URL", "")
-        if not db_url:
-            return ComponentStatus(
-                name="database",
-                status="unknown",
-                critical=True,
-                detail="DATABASE_URL not set",
-            )
-
-        engine = create_async_engine(db_url, pool_pre_ping=True, pool_size=1, max_overflow=0)
         async with engine.connect() as conn:
             await asyncio.wait_for(conn.execute(text("SELECT 1")), timeout=_CHECK_TIMEOUT_SEC)
-        await engine.dispose()
         latency_ms = (time.perf_counter() - t0) * 1000
         return ComponentStatus(
             name="database",
