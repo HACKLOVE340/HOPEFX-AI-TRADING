@@ -58,6 +58,7 @@ def register_routers(
     from api.prop_firm import router as prop_firm_router
     from api.settings import router as settings_router
     from api.settings_extended import router as settings_extended_router
+    from api.settings_new_endpoints import router as settings_new_router
     from api.social_feed import leaderboard_router as social_leaderboard_router
     from api.social_feed import router as social_feed_router
     from api.status import router as status_router
@@ -82,6 +83,7 @@ def register_routers(
         payments_router,
         settings_router,
         settings_extended_router,
+        settings_new_router,
         status_router,
         brain_router,
         calendar_router,
