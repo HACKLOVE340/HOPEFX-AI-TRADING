@@ -44,6 +44,7 @@ def register_routers(
     from api.calendar import router as calendar_router
     from api.chat import router as chat_router
     from api.explain import router as explain_router
+    from api.health import router as health_router
     from api.landing import router as landing_router
     from api.macro import router as macro_router
     from api.ml import router as ml_router
@@ -62,6 +63,7 @@ def register_routers(
     from api.social_feed import leaderboard_router as social_leaderboard_router
     from api.social_feed import router as social_feed_router
     from api.status import router as status_router
+    from api.tracing import router as tracing_router
     from api.trading import router as trading_router
     from api.whitelabel_admin import router as whitelabel_router
     from auth.router import router as auth_router
@@ -96,8 +98,13 @@ def register_routers(
         ml_router,
         accounts_router,
         portfolio_router,
+        health_router,
+        tracing_router,
     ]:
         app.include_router(_router)
+
+    logger.info("Health router registered (/api/health)")
+    logger.info("Tracing router registered (/api/tracing)")
 
     # ── Feature-gated routers ─────────────────────────────────────────────────
     if feature_flags.TWO_FACTOR_AUTH:
