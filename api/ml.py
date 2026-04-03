@@ -34,6 +34,7 @@ from pydantic import BaseModel, Field
 from api.auth import TokenPayload, get_current_user, require_role
 
 logger = logging.getLogger(__name__)
+ML_MODELS_DIR = (Path(os.getenv("ML_MODELS_DIR", "models"))).resolve()
 # Prefix must match the frontend useApi.ts mlApi calls (/api/ml/*)
 router = APIRouter(prefix="/api/ml", tags=["ML Models"])
 
@@ -822,11 +823,24 @@ def _ml_health_meta(saved_dir: Any) -> tuple:
     """Read model metadata from disk. Returns (oos_accuracy, feature_count, model_file, last_trained_at)."""
     import json as _json
     import pathlib
-    meta_path = pathlib.Path(saved_dir) / "advanced_oos_meta.json"
+    # Constrain saved_dir to the configured ML_MODELS_DIR to avoid path traversal.
     oos_accuracy: float | None = None
     feature_count: int = 0
     model_file: str = "advanced_oos.pkl"
     last_trained_at: str | None = None
+    try:
+        raw_dir = pathlib.Path(str(saved_dir))
+        # Disallow absolute paths; interpret saved_dir as a subdirectory name.
+        if raw_dir.is_absolute():
+            raise ValueError("Absolute paths are not allowed for saved_dir")
+        candidate_dir = (ML_MODELS_DIR / raw_dir).resolve()
+        # Ensure the resolved path is within the ML_MODELS_DIR tree.
+        if ML_MODELS_DIR not in (candidate_dir, *candidate_dir.parents):
+            raise ValueError("saved_dir escapes ML_MODELS_DIR")
+        meta_path = candidate_dir / "advanced_oos_meta.json"
+    except Exception as exc:
+        logger.warning("ml_health: invalid saved_dir %r: %s", saved_dir, exc)
+        return oos_accuracy, feature_count, model_file, last_trained_at
     if meta_path.exists():
         try:
             meta = _json.loads(meta_path.read_text())
