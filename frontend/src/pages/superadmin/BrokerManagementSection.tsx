@@ -36,23 +36,35 @@ const FillRateBar: React.FC<{ pct: number }> = ({ pct }) => {
   );
 };
 
+interface RoutingRule {
+  broker_id: string;
+  symbol_pattern: string;
+  weight: number;
+  active: boolean;
+}
+
 const BrokerManagementSection: React.FC = () => {
-  const [brokers, setBrokers] = useState<BrokerHealth[]>([]);
-  const [tca, setTca]         = useState<TCAMetric[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState('');
-  const [busy, setBusy]       = useState<string | null>(null);
-  const [msg, setMsg]         = useState('');
+  const [brokers, setBrokers]   = useState<BrokerHealth[]>([]);
+  const [tca, setTca]           = useState<TCAMetric[]>([]);
+  const [routing, setRouting]   = useState<RoutingRule[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState('');
+  const [busy, setBusy]         = useState<string | null>(null);
+  const [msg, setMsg]           = useState('');
+  const [editRouting, setEditRouting] = useState(false);
+  const [routingDraft, setRoutingDraft] = useState<RoutingRule[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const [bRes, tRes] = await Promise.all([
+      const [bRes, tRes, rRes] = await Promise.all([
         superadminApi.brokerHealth(),
         superadminApi.tcaMetrics(),
+        superadminApi.brokerRouting(),
       ]);
       setBrokers(bRes.data.brokers ?? bRes.data);
       setTca(tRes.data.metrics ?? tRes.data);
+      setRouting(rRes.data.rules ?? rRes.data ?? []);
     } catch (e: unknown) {
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load broker data');
     } finally { setLoading(false); }
@@ -68,6 +80,29 @@ const BrokerManagementSection: React.FC = () => {
       setTimeout(load, 2000);
     } catch (e: unknown) {
       setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Reconnect failed');
+    } finally { setBusy(null); }
+  };
+
+  const disconnect = async (brokerId: string) => {
+    setBusy(`disconnect-${brokerId}`); setMsg('');
+    try {
+      await superadminApi.disconnectBroker(brokerId);
+      setMsg(`Broker ${brokerId} disconnected`);
+      setTimeout(load, 1500);
+    } catch (e: unknown) {
+      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Disconnect failed');
+    } finally { setBusy(null); }
+  };
+
+  const saveRouting = async () => {
+    setBusy('routing'); setMsg('');
+    try {
+      await superadminApi.updateBrokerRouting({ rules: routingDraft });
+      setRouting(routingDraft);
+      setEditRouting(false);
+      setMsg('Routing configuration saved');
+    } catch (e: unknown) {
+      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Save routing failed');
     } finally { setBusy(null); }
   };
 
@@ -134,6 +169,9 @@ const BrokerManagementSection: React.FC = () => {
                 <span style={{ fontSize: 11, color: '#334155' }}>Last heartbeat: {fmtDate(b.last_heartbeat)}</span>
                 {b.status !== 'connected' && (
                   <ActionBtn label="Reconnect" onClick={() => reconnect(b.broker_id)} variant="primary" size="sm" loading={busy === `reconnect-${b.broker_id}`} />
+                )}
+                {b.status === 'connected' && (
+                  <ActionBtn label="Disconnect" onClick={() => disconnect(b.broker_id)} variant="danger" size="sm" loading={busy === `disconnect-${b.broker_id}`} />
                 )}
               </div>
             </div>
