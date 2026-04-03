@@ -39,17 +39,37 @@ interface AuditRecord {
   signature: string | null;
 }
 
+interface SystemAuditEntry {
+  id: string;
+  timestamp: string;
+  user_id: string;
+  username: string;
+  action: string;
+  resource: string;
+  resource_id: string;
+  ip: string;
+  status: string;
+  details: Record<string, unknown>;
+}
+
 const AuditTrailSection: React.FC = () => {
-  const [records, setRecords]   = useState<AuditRecord[]>([]);
-  const [total, setTotal]       = useState(0);
-  const [page, setPage]         = useState(1);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState('');
-  const [busy, setBusy]         = useState(false);
-  const [msg, setMsg]           = useState('');
+  const [records, setRecords]     = useState<AuditRecord[]>([]);
+  const [total, setTotal]         = useState(0);
+  const [page, setPage]           = useState(1);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState('');
+  const [busy, setBusy]           = useState(false);
+  const [msg, setMsg]             = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
-  const [search, setSearch]     = useState('');
-  const [expanded, setExpanded] = useState<number | null>(null);
+  const [search, setSearch]       = useState('');
+  const [expanded, setExpanded]   = useState<number | null>(null);
+  const [mainTab, setMainTab]     = useState<'compliance' | 'system'>('compliance');
+  // System audit tab state
+  const [sysEntries, setSysEntries]   = useState<SystemAuditEntry[]>([]);
+  const [sysLoading, setSysLoading]   = useState(false);
+  const [sysSearch, setSysSearch]     = useState('');
+  const [sysPage, setSysPage]         = useState(1);
+  const [sysTotal, setSysTotal]       = useState(0);
 
   const load = useCallback(async (p = 1) => {
     setLoading(true); setError('');
@@ -76,6 +96,38 @@ const AuditTrailSection: React.FC = () => {
       a.href = url; a.download = `audit_trail_${new Date().toISOString().slice(0, 10)}.ndjson`; a.click();
       URL.revokeObjectURL(url);
       setMsg('Audit trail exported');
+    } catch (e: unknown) {
+      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Export failed');
+    } finally { setBusy(false); }
+  };
+
+  const loadSysAudit = useCallback(async (p = 1) => {
+    setSysLoading(true);
+    try {
+      const params: Record<string, string> = { page: String(p), limit: '50' };
+      if (sysSearch) params.search = sysSearch;
+      const res = await superadminApi.auditLog(params);
+      setSysEntries(res.data.entries ?? res.data ?? []);
+      setSysTotal(res.data.total ?? 0);
+      setSysPage(p);
+    } catch {
+      setSysEntries([]);
+    } finally { setSysLoading(false); }
+  }, [sysSearch]);
+
+  useEffect(() => {
+    if (mainTab === 'system') loadSysAudit(1);
+  }, [mainTab, loadSysAudit]);
+
+  const exportSysAudit = async () => {
+    setBusy(true); setMsg('');
+    try {
+      const res = await superadminApi.exportAudit();
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url; a.download = `system_audit_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+      URL.revokeObjectURL(url);
+      setMsg('System audit exported');
     } catch (e: unknown) {
       setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Export failed');
     } finally { setBusy(false); }
@@ -117,6 +169,17 @@ const AuditTrailSection: React.FC = () => {
         <KpiTile label="Hash-Chained" value="Yes" icon="🔗" accent="#4ade80" sub="Tamper-evident" />
       </div>
 
+      {/* Main tab switcher */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
+        {(['compliance', 'system'] as const).map(t => (
+          <button key={t} onClick={() => setMainTab(t)} style={{ background: mainTab === t ? '#1e293b' : 'transparent', border: `1px solid ${mainTab === t ? '#475569' : '#1e293b'}`, borderRadius: 8, color: mainTab === t ? '#f8fafc' : '#64748b', padding: '7px 16px', fontSize: 13, cursor: 'pointer' }}>
+            {{ compliance: '🔗 Compliance Audit Trail', system: '📋 System Audit Log' }[t]}
+          </button>
+        ))}
+      </div>
+
+      {mainTab === 'compliance' && (
+        <>
       {/* Compliance notice */}
       <div style={{
         background: 'rgba(167,139,250,0.05)', border: '1px solid #4c1d95',
@@ -248,6 +311,68 @@ const AuditTrailSection: React.FC = () => {
           <span style={{ fontSize: 13, color: '#64748b' }}>Page {page} of {Math.ceil(total / 100)}</span>
           <ActionBtn label="Next →" onClick={() => load(page + 1)} accent="#475569" size="sm" disabled={records.length < 100} />
         </div>
+      )}
+        </>
+      )}
+
+      {/* ── System Audit Log tab ── */}
+      {mainTab === 'system' && (
+        <>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <Input label="" placeholder="Search user, action, resource…" value={sysSearch} onChange={e => setSysSearch(e.target.value)} />
+            </div>
+            <ActionBtn label="Search" onClick={() => loadSysAudit(1)} loading={sysLoading} size="sm" />
+            <ActionBtn label="Export CSV" onClick={exportSysAudit} loading={busy} accent="#60a5fa" size="sm" />
+          </div>
+
+          <SectionCard title="System Audit Log" icon="📋" accent="#60a5fa"
+            subtitle={`${sysTotal.toLocaleString()} total admin actions`} noPad>
+            {sysLoading ? (
+              <LoadingRows rows={6} />
+            ) : sysEntries.length === 0 ? (
+              <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 32 }}>No system audit entries found.</div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                    {['User', 'Action', 'Resource', 'Resource ID', 'IP', 'Status', 'Timestamp'].map(h => (
+                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sysEntries.map((e) => (
+                    <tr key={e.id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
+                      <td style={{ padding: '8px 12px' }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9' }}>{e.username}</div>
+                        <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#475569' }}>{e.user_id}</div>
+                      </td>
+                      <td style={{ padding: '8px 12px', fontWeight: 600, color: '#a78bfa', fontSize: 12 }}>{e.action}</td>
+                      <td style={{ padding: '8px 12px', fontSize: 11 }}>
+                        <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 3, color: '#94a3b8', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>{e.resource}</span>
+                      </td>
+                      <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 11, color: '#60a5fa' }}>{e.resource_id || '—'}</td>
+                      <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 11, color: '#334155' }}>{e.ip}</td>
+                      <td style={{ padding: '8px 12px' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: e.status === 'success' ? '#4ade80' : '#f87171' }}>{e.status}</span>
+                      </td>
+                      <td style={{ padding: '8px 12px', fontSize: 11, color: '#475569', whiteSpace: 'nowrap' }}>{fmtDate(e.timestamp)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </SectionCard>
+
+          {sysTotal > 50 && (
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 16, alignItems: 'center' }}>
+              <ActionBtn label="← Prev" onClick={() => loadSysAudit(sysPage - 1)} accent="#475569" size="sm" disabled={sysPage <= 1} />
+              <span style={{ fontSize: 13, color: '#64748b' }}>Page {sysPage} of {Math.ceil(sysTotal / 50)}</span>
+              <ActionBtn label="Next →" onClick={() => loadSysAudit(sysPage + 1)} accent="#475569" size="sm" disabled={sysEntries.length < 50} />
+            </div>
+          )}
+        </>
       )}
     </>
   );
