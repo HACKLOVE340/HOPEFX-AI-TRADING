@@ -91,6 +91,7 @@ class TestOrderBlockingUnderLoad:
     def test_check_kill_switch_raises_503_when_active(self, tmp_path):
         """_check_kill_switch() must raise HTTP 503 when the switch is active."""
         from fastapi import HTTPException
+
         import api.trading as trading_mod
 
         ks = _make_ks(tmp_path)
@@ -100,7 +101,7 @@ class TestOrderBlockingUnderLoad:
         try:
             with pytest.raises(HTTPException) as exc_info:
                 trading_mod._check_kill_switch()
-            assert exc_info.value.status_code == 503  # noqa: PLR2004
+            assert exc_info.value.status_code == 503
             assert "kill switch" in exc_info.value.detail.lower()
         finally:
             trading_mod._set_kill_switch(None)
@@ -122,6 +123,7 @@ class TestOrderBlockingUnderLoad:
     async def test_50_concurrent_orders_all_blocked(self, tmp_path):
         """50 concurrent place_order calls must all get 503 when switch is active."""
         from fastapi import HTTPException
+
         import api.trading as trading_mod
 
         ks = _make_ks(tmp_path)
@@ -142,8 +144,8 @@ class TestOrderBlockingUnderLoad:
         finally:
             trading_mod._set_kill_switch(None)
 
-        assert all(r == 503 for r in results), f"Some orders slipped through: {results}"  # noqa: PLR2004
-        assert len(results) == 50  # noqa: PLR2004
+        assert all(r == 503 for r in results), f"Some orders slipped through: {results}"
+        assert len(results) == 50
 
 
 # ===========================================================================

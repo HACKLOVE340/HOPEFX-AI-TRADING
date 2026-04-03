@@ -3,9 +3,10 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
-import pytest
-import pandas as pd
 import numpy as np
+import pandas as pd
+import pytest
+
 from portfolio.manager import PortfolioManager
 
 
@@ -19,7 +20,7 @@ class TestPortfolioManager:
         portfolio = manager.create_portfolio(name="Test Portfolio", assets=assets, rebalancing="monthly")
 
         assert portfolio.total_exposure == 1.0
-        assert portfolio.asset_count == 4  # noqa: PLR2004
+        assert portfolio.asset_count == 4
 
     def test_correlation_matrix(self, test_config):
         """Test correlation calculation between assets."""
@@ -60,7 +61,7 @@ class TestPortfolioManager:
         )
 
         assert sum(optimal["weights"].values()) == pytest.approx(1.0)
-        assert all(w <= 0.5 for w in optimal["weights"].values())  # noqa: PLR2004
+        assert all(w <= 0.5 for w in optimal["weights"].values())
         assert optimal["expected_sharpe"] > 0
 
     def test_risk_contribution(self, test_config):

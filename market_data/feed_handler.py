@@ -12,11 +12,9 @@ Ultra-low latency tick processing with normalization
 import asyncio
 import json
 from collections import deque
-from dataclasses import dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
 from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
 
 try:
     import aiohttp
@@ -143,7 +141,7 @@ class FeedHandler:
         # Coinbase Pro format
         return Tick(
             symbol=raw.get("product_id", "").replace("-", ""),
-            timestamp=datetime.fromisoformat(raw.get("time", "").replace("Z", "+00:00")),
+            timestamp=datetime.fromisoformat(raw.get("time", "")),
             bid=float(raw.get("best_bid", 0)),
             ask=float(raw.get("best_ask", 0)),
             bid_size=float(raw.get("bid_size", 0)),
@@ -211,7 +209,8 @@ class ExchangeFeed:
         await self._send_subscription()
 
         # Start receive loop
-        asyncio.create_task(self._receive_loop())
+        _t = asyncio.create_task(self._receive_loop())
+        _t.add_done_callback(lambda _: None)
 
     async def _send_subscription(self):
         """Send subscription message"""

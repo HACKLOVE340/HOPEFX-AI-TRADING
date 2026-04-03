@@ -18,15 +18,13 @@ Inspired by: TradingView alerts, MT5 alerts, cTrader alerts
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from typing import Any
-from collections.abc import Callable
-from dataclasses import dataclass, field
-from enum import Enum
 import threading
 import uuid
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from enum import Enum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -399,7 +397,8 @@ class AlertEngine:
             type_key = condition_type.value
             self._stats["alerts_by_type"][type_key] = self._stats["alerts_by_type"].get(type_key, 0) + 1
 
-            logger.info(f"Alert created: {alert_id} - {name} for {symbol}")
+            logger.info("Alert created: %s - %s for %s", alert_id, name, symbol)
+
             return alert
 
     def create_complex_alert(
@@ -437,7 +436,8 @@ class AlertEngine:
                 self._alerts_by_symbol[symbol] = []
             self._alerts_by_symbol[symbol].append(alert_id)
 
-            logger.info(f"Complex alert created: {alert_id} with {len(conditions)} conditions")
+            logger.info("Complex alert created: %s with %s conditions", alert_id, len(conditions))
+
             return alert
 
     def update_alert(self, alert_id: str, **updates) -> Alert | None:
@@ -452,7 +452,8 @@ class AlertEngine:
                 if hasattr(alert, key):
                     setattr(alert, key, value)
 
-            logger.info(f"Alert updated: {alert_id}")
+            logger.info("Alert updated: %s", alert_id)
+
             return alert
 
     def delete_alert(self, alert_id: str) -> bool:
@@ -470,7 +471,8 @@ class AlertEngine:
                 ]
 
             del self._alerts[alert_id]
-            logger.info(f"Alert deleted: {alert_id}")
+            logger.info("Alert deleted: %s", alert_id)
+
             return True
 
     def pause_alert(self, alert_id: str) -> bool:
@@ -640,72 +642,72 @@ class AlertEngine:
         if ctype == AlertConditionType.PRICE_ABOVE:
             return price > threshold, price
 
-        elif ctype == AlertConditionType.PRICE_BELOW:
+        if ctype == AlertConditionType.PRICE_BELOW:
             return price < threshold, price
 
-        elif ctype == AlertConditionType.PRICE_CROSS_ABOVE:
+        if ctype == AlertConditionType.PRICE_CROSS_ABOVE:
             if previous_value is None:
                 return False, price
             return previous_value <= threshold < price, price
 
-        elif ctype == AlertConditionType.PRICE_CROSS_BELOW:
+        if ctype == AlertConditionType.PRICE_CROSS_BELOW:
             if previous_value is None:
                 return False, price
             return previous_value >= threshold > price, price
 
-        elif ctype == AlertConditionType.PRICE_INSIDE_RANGE:
+        if ctype == AlertConditionType.PRICE_INSIDE_RANGE:
             if threshold_2 is None:
                 return False, price
             return threshold <= price <= threshold_2, price
 
-        elif ctype == AlertConditionType.PRICE_OUTSIDE_RANGE:
+        if ctype == AlertConditionType.PRICE_OUTSIDE_RANGE:
             if threshold_2 is None:
                 return False, price
             return price < threshold or price > threshold_2, price
 
-        elif ctype == AlertConditionType.PRICE_CHANGE_PCT:
+        if ctype == AlertConditionType.PRICE_CHANGE_PCT:
             if previous_value is None or previous_value == 0:
                 return False, 0
             change_pct = ((price - previous_value) / previous_value) * 100
             return abs(change_pct) >= threshold, change_pct
 
-        elif ctype == AlertConditionType.PRICE_CHANGE_ABS:
+        if ctype == AlertConditionType.PRICE_CHANGE_ABS:
             if previous_value is None:
                 return False, 0
             change = abs(price - previous_value)
             return change >= threshold, change
 
         # Volume conditions
-        elif ctype == AlertConditionType.VOLUME_ABOVE:
+        if ctype == AlertConditionType.VOLUME_ABOVE:
             return volume > threshold, volume
 
-        elif ctype == AlertConditionType.VOLUME_SPIKE:
+        if ctype == AlertConditionType.VOLUME_SPIKE:
             # Would need average volume for comparison
             return volume > threshold, volume
 
         # Indicator conditions
-        elif ctype == AlertConditionType.INDICATOR_ABOVE:
+        if ctype == AlertConditionType.INDICATOR_ABOVE:
             indicator_value = indicators.get(condition.indicator, 0)
             return indicator_value > threshold, indicator_value
 
-        elif ctype == AlertConditionType.INDICATOR_BELOW:
+        if ctype == AlertConditionType.INDICATOR_BELOW:
             indicator_value = indicators.get(condition.indicator, 0)
             return indicator_value < threshold, indicator_value
 
         # RSI conditions
-        elif ctype == AlertConditionType.RSI_OVERBOUGHT:
+        if ctype == AlertConditionType.RSI_OVERBOUGHT:
             rsi = indicators.get("rsi", indicators.get("rsi_14", 50))
             return rsi > threshold, rsi
 
-        elif ctype == AlertConditionType.RSI_OVERSOLD:
+        if ctype == AlertConditionType.RSI_OVERSOLD:
             rsi = indicators.get("rsi", indicators.get("rsi_14", 50))
             return rsi < threshold, rsi
 
         # Spread/imbalance
-        elif ctype == AlertConditionType.SPREAD_ABOVE:
+        if ctype == AlertConditionType.SPREAD_ABOVE:
             return spread > threshold, spread
 
-        elif ctype == AlertConditionType.IMBALANCE_THRESHOLD:
+        if ctype == AlertConditionType.IMBALANCE_THRESHOLD:
             return abs(imbalance) > threshold, imbalance
 
         return False, 0
@@ -743,7 +745,8 @@ class AlertEngine:
         self._stats["total_triggers"] += 1
         self._stats["triggers_by_symbol"][alert.symbol] = self._stats["triggers_by_symbol"].get(alert.symbol, 0) + 1
 
-        logger.info(f"Alert triggered: {alert.id} - {alert.name}")
+        logger.info("Alert triggered: %s - %s", alert.id, alert.name)
+
         return trigger
 
     def _generate_message(self, alert: Alert, trigger_value: float, condition: AlertCondition) -> str:
@@ -782,7 +785,8 @@ class AlertEngine:
             try:
                 handler(trigger)
             except Exception as e:
-                logger.error(f"Notification handler error: {e}")
+                logger.error("Notification handler error: %s", e)
+
 
     # ================================================================
     # HISTORY & STATISTICS
@@ -835,7 +839,8 @@ class AlertEngine:
                 market_data = await data_provider()
                 self.check_alerts(market_data)
             except Exception as e:
-                logger.error(f"Alert monitoring error: {e}")
+                logger.error("Alert monitoring error: %s", e)
+
 
             await asyncio.sleep(interval_seconds)
 
@@ -885,7 +890,8 @@ def create_alert_router(alert_engine: AlertEngine):
             condition_type = AlertConditionType(request.condition_type)
             priority = AlertPriority(request.priority)
         except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e)) from e
+            logger.warning("create_alert validation error: %s", e)
+            raise HTTPException(status_code=400, detail="Invalid condition type or priority") from None
 
         alert = alert_engine.create_alert(
             name=request.name,

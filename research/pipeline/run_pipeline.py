@@ -78,7 +78,7 @@ def _parse_args() -> argparse.Namespace:
         description="HOPEFX Deep Prediction Pipeline",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    p.add_argument("--ticker", default="AAPL", help="Yahoo Finance ticker")
+    p.add_argument("--ticker", default="GC=F", help="Yahoo Finance ticker (default: GC=F Gold futures)")
     p.add_argument("--interval", default="1d", help="Bar interval: 1d | 5m | 15m | 1h")
     p.add_argument("--start", default="2000-01-01", help="Start date (daily only)")
     p.add_argument("--lookback", type=int, default=730, help="Lookback days (intraday)")
@@ -162,12 +162,12 @@ def main() -> None:
                 report = _run_single(args, ticker)
                 all_reports[ticker] = report
                 _print_report(report, ticker)
-            except Exception as exc:
-                logger.error("Failed %s: %s", ticker, exc)
-                all_reports[ticker] = {"error": str(exc)}
+            except Exception:
+                logger.exception("Failed %s: %s", ticker)
+                all_reports[ticker] = {"error": "Pipeline failed — check server logs"}
 
         if args.output:
-            with open(args.output, "w") as f:
+            with Path(args.output).open("w", encoding="utf-8") as f:
                 json.dump(all_reports, f, indent=2, default=str)
             logger.info("Batch report → %s", args.output)
 
@@ -176,7 +176,7 @@ def main() -> None:
         _print_report(report, args.ticker)
 
         if args.output:
-            with open(args.output, "w") as f:
+            with Path(args.output).open("w", encoding="utf-8") as f:
                 json.dump(report, f, indent=2, default=str)
             logger.info("Report → %s", args.output)
 

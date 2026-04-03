@@ -9,9 +9,7 @@ Pydantic v2 domain models with strict validation.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
@@ -109,7 +107,7 @@ class Order(BaseModel):
     direction: TradeDirection
     order_type: OrderType
     quantity: Decimal = Field(gt=0)
-    filled_quantity: Decimal = Field(default=Decimal("0"), ge=0)
+    filled_quantity: Decimal = Field(default=Decimal(0), ge=0)
     price: Decimal | None = Field(default=None, gt=0)
     stop_price: Decimal | None = Field(default=None, gt=0)
     time_in_force: TimeInForce = Field(default=TimeInForce.GTC)
@@ -140,8 +138,8 @@ class Position(BaseModel):
     entry_price: Decimal = Field(gt=0)
     quantity: Decimal = Field(gt=0)
     status: PositionStatus = Field(default=PositionStatus.OPEN)
-    unrealized_pnl: Decimal = Field(default=Decimal("0"))
-    realized_pnl: Decimal = Field(default=Decimal("0"))
+    unrealized_pnl: Decimal = Field(default=Decimal(0))
+    realized_pnl: Decimal = Field(default=Decimal(0))
     open_orders: list[UUID] = Field(default_factory=list)
     opened_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     closed_at: datetime | None = Field(default=None)
@@ -150,8 +148,7 @@ class Position(BaseModel):
         """Calculate unrealized P&L at current price."""
         if self.direction == TradeDirection.LONG:
             return (current_price - self.entry_price) * self.quantity
-        else:
-            return (self.entry_price - current_price) * self.quantity
+        return (self.entry_price - current_price) * self.quantity
 
 
 class Signal(BaseModel):
@@ -176,14 +173,14 @@ class Account(BaseModel):
 
     broker: BrokerType
     account_id: str
-    balance: Decimal = Field(default=Decimal("0"))
-    equity: Decimal = Field(default=Decimal("0"))
-    margin_used: Decimal = Field(default=Decimal("0"))
-    margin_available: Decimal = Field(default=Decimal("0"))
+    balance: Decimal = Field(default=Decimal(0))
+    equity: Decimal = Field(default=Decimal(0))
+    margin_used: Decimal = Field(default=Decimal(0))
+    margin_available: Decimal = Field(default=Decimal(0))
     open_positions: dict[str, Position] = Field(default_factory=dict)
-    daily_pnl: Decimal = Field(default=Decimal("0"))
-    total_pnl: Decimal = Field(default=Decimal("0"))
-    max_drawdown: Decimal = Field(default=Decimal("0"))
+    daily_pnl: Decimal = Field(default=Decimal(0))
+    total_pnl: Decimal = Field(default=Decimal(0))
+    max_drawdown: Decimal = Field(default=Decimal(0))
     prop_firm: PropFirm = Field(default=PropFirm.NONE)
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

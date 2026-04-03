@@ -17,13 +17,11 @@ Inspired by: MT5, Bookmap, NinjaTrader DOM features
 """
 
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from dataclasses import dataclass, field, asdict
-from collections import deque
-from enum import Enum
 import threading
+from collections import deque
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
+from enum import Enum
 
 logger = logging.getLogger(__name__)
 
@@ -305,7 +303,8 @@ class DepthOfMarketService:
                 self._history[symbol] = deque(maxlen=self._history_size)
             self._history[symbol].append(order_book)
 
-            logger.debug(f"Order book updated: {symbol}, seq={self._sequence}")
+            logger.debug("Order book updated: %s, seq=%s", symbol, self._sequence)
+
 
     def update_level(self, symbol: str, side: OrderBookSide, price: float, size: float):
         """
@@ -319,7 +318,8 @@ class DepthOfMarketService:
         """
         with self._lock:
             if symbol not in self._order_books:
-                logger.warning(f"No order book for {symbol}")
+                logger.warning("No order book for %s", symbol)
+
                 return
 
             order_book = self._order_books[symbol]
@@ -459,9 +459,9 @@ class DepthOfMarketService:
             selling_pressure = self._classify_pressure(-imbalance, positive=True)
 
             # Determine market bias
-            if imbalance > 0.2:  # noqa: PLR2004
+            if imbalance > 0.2:
                 market_bias = "bullish"
-            elif imbalance < -0.2:  # noqa: PLR2004
+            elif imbalance < -0.2:
                 market_bias = "bearish"
             else:
                 market_bias = "neutral"
@@ -505,12 +505,11 @@ class DepthOfMarketService:
         if positive:
             value = abs(value)
 
-        if value > 0.4:  # noqa: PLR2004
+        if value > 0.4:
             return "strong"
-        elif value > 0.15:  # noqa: PLR2004
+        if value > 0.15:
             return "moderate"
-        else:
-            return "weak"
+        return "weak"
 
     # ================================================================
     # VISUALIZATION DATA
@@ -560,7 +559,7 @@ class DepthOfMarketService:
             _MIN_PRICE_GAP_THRESHOLD = 1e-9  # gaps below this are float-noise
             _TICK_SIZE_PRECISION = 10  # decimal places for tick rounding
             tick_size = 0.01
-            if len(all_prices) >= 2:  # noqa: PLR2004
+            if len(all_prices) >= 2:
                 sorted_prices = sorted(set(all_prices))
                 gaps = [
                     abs(sorted_prices[i + 1] - sorted_prices[i])

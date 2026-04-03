@@ -17,14 +17,13 @@ tests/unit/test_risk_properties.py
   8. update_equity never produces negative current_drawdown
 """
 
-import numpy as np
 from pathlib import Path
 
-from hypothesis import given, settings, assume
+import numpy as np
+from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
-from risk.manager import RiskManager, RiskConfig
-
+from risk.manager import RiskConfig, RiskManager
 
 # ---------------------------------------------------------------------------
 # Shared strategy for valid price inputs
@@ -61,7 +60,7 @@ def test_position_size_never_negative(entry, stop_offset, tp_offset, equity, vol
     tp = entry + tp_offset
     assume(stop > 0)
 
-    result = rm._calculate_position_size_full(
+    result = rm._calculate_position_size_full(  # pylint: disable=unreachable
         symbol="XAUUSD",
         signal_strength=0.5,
         entry_price=entry,

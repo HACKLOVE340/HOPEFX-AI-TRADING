@@ -10,7 +10,7 @@ MyForexFunds is a prop trading firm offering forex funded accounts.
 """
 
 import logging
-from typing import Any
+from typing import Any, ClassVar
 
 from ..mt5 import MT5Connector
 
@@ -40,7 +40,7 @@ class MyForexFundsConnector(MT5Connector):
         mff.connect()
     """
 
-    MFF_SERVERS = [
+    MFF_SERVERS: ClassVar[list] = [
         "MyForexFunds-Demo",
         "MyForexFunds-Live",
         "MyForexFunds-Server",
@@ -50,15 +50,14 @@ class MyForexFundsConnector(MT5Connector):
         """Initialize MyForexFunds connector."""
         if "server" not in config:
             config["server"] = self.MFF_SERVERS[0]
-            logger.info(f"Auto-selected MyForexFunds server: {config['server']}")
+            logger.info("Auto-selected MyForexFunds server: %s", config['server'])
+
 
         super().__init__(config)
 
         self.account_size = config.get("account_size", 100000)
 
-        logger.info(
-            f"MyForexFunds Connector initialized for ${self.account_size} account",
-        )
+        logger.info("MyForexFunds Connector initialized for $%s account", self.account_size)
 
     def get_myforexfunds_rules(self) -> dict[str, Any]:
         """Get MyForexFunds rules and limits."""

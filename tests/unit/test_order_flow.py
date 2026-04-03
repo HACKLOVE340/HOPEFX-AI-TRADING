@@ -13,9 +13,7 @@ Tests for:
 - Delta/Cumulative Delta
 """
 
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 
 
 class TestTrade:
@@ -27,8 +25,8 @@ class TestTrade:
 
         trade = Trade(timestamp=datetime.now(UTC), price=1950.00, size=100.0, side="buy")
 
-        assert trade.price == 1950.00  # noqa: PLR2004
-        assert trade.size == 100.0  # noqa: PLR2004
+        assert trade.price == 1950.00
+        assert trade.size == 100.0
         assert trade.side == "buy"
 
     def test_trade_is_buy(self):
@@ -60,11 +58,11 @@ class TestVolumeProfileLevel:
             delta=200,
         )
 
-        assert level.price == 1950.00  # noqa: PLR2004
-        assert level.total_volume == 1000  # noqa: PLR2004
-        assert level.buy_volume == 600  # noqa: PLR2004
-        assert level.sell_volume == 400  # noqa: PLR2004
-        assert level.delta == 200  # noqa: PLR2004
+        assert level.price == 1950.00
+        assert level.total_volume == 1000
+        assert level.buy_volume == 600
+        assert level.sell_volume == 400
+        assert level.delta == 200
 
     def test_level_buy_pct(self):
         """Test buy percentage calculation."""
@@ -79,8 +77,8 @@ class TestVolumeProfileLevel:
             delta=400,
         )
 
-        assert level.buy_pct == 70.0  # noqa: PLR2004
-        assert level.sell_pct == 30.0  # noqa: PLR2004
+        assert level.buy_pct == 70.0
+        assert level.sell_pct == 30.0
 
     def test_level_imbalance(self):
         """Test imbalance calculation."""
@@ -95,7 +93,7 @@ class TestVolumeProfileLevel:
             delta=400,
         )
 
-        assert level.imbalance == 0.4  # (700-300)/1000  # noqa: PLR2004
+        assert level.imbalance == 0.4  # (700-300)/1000
 
     def test_level_to_dict(self):
         """Test level serialization."""
@@ -111,8 +109,8 @@ class TestVolumeProfileLevel:
         )
 
         result = level.to_dict()
-        assert result["price"] == 1950.00  # noqa: PLR2004
-        assert result["total_volume"] == 1000  # noqa: PLR2004
+        assert result["price"] == 1950.00
+        assert result["total_volume"] == 1000
         assert "imbalance" in result
 
 
@@ -147,7 +145,7 @@ class TestOrderFlowAnalyzer:
         analyzer.add_trade("XAUUSD", 1950.25, 75.0, "buy")
 
         trades = analyzer.get_trades("XAUUSD")
-        assert len(trades) == 3  # noqa: PLR2004
+        assert len(trades) == 3
 
     def test_add_trades_batch(self):
         """Test adding trades in batch."""
@@ -162,7 +160,7 @@ class TestOrderFlowAnalyzer:
         analyzer.add_trades("XAUUSD", trades)
 
         result = analyzer.get_trades("XAUUSD")
-        assert len(result) == 2  # noqa: PLR2004
+        assert len(result) == 2
 
     def test_cumulative_delta(self):
         """Test cumulative delta calculation."""
@@ -174,7 +172,7 @@ class TestOrderFlowAnalyzer:
         analyzer.add_trade("XAUUSD", 1950.25, 75.0, "buy")  # +75
 
         # Total delta = 100 - 50 + 75 = 125
-        assert analyzer._cumulative_delta["XAUUSD"] == 125  # noqa: PLR2004
+        assert analyzer._cumulative_delta["XAUUSD"] == 125
 
     def test_get_volume_profile(self):
         """Test volume profile calculation."""
@@ -375,7 +373,7 @@ class TestVolumeProfile:
         result = profile.to_dict()
         assert result["symbol"] == "XAUUSD"
         assert "levels" in result
-        assert result["poc_price"] == 1950.00  # noqa: PLR2004
+        assert result["poc_price"] == 1950.00
 
 
 class TestOrderFlowAnalysis:
@@ -406,5 +404,5 @@ class TestOrderFlowAnalysis:
 
         result = analysis.to_dict()
         assert result["symbol"] == "XAUUSD"
-        assert result["delta"] == 2000  # noqa: PLR2004
+        assert result["delta"] == 2000
         assert result["order_flow_signal"] == "bullish"

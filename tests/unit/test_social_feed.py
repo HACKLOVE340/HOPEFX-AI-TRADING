@@ -14,8 +14,8 @@ module-level attributes, which breaks when the module is already imported.
 
 from __future__ import annotations
 
-import uuid
 import time
+import uuid
 
 import pytest
 from fastapi import FastAPI
@@ -46,8 +46,8 @@ def stub_user() -> TokenPayload:
 
 @pytest.fixture
 def app(stub_user: TokenPayload) -> FastAPI:
-    import sys
     import importlib
+    import sys
 
     # Always use the canonical module instances — survive any sys.modules reloads
     # performed by other tests (e.g. test_oanda_paper_clock clears sys.modules).
@@ -121,7 +121,7 @@ class TestPublishSignal:
 class TestGetFeed:
     def test_empty_feed_returns_empty_list(self, client):
         r = client.get("/api/feed")
-        assert r.status_code == 200  # noqa: PLR2004
+        assert r.status_code == 200
         data = r.json()
         assert data["items"] == []
         assert data["total"] == 0
@@ -132,9 +132,9 @@ class TestGetFeed:
         sf._publish_signal(_make_signal("sig_a"), "alice", "t1")
         sf._publish_signal(_make_signal("sig_b"), "bob", "t2")
         r = client.get("/api/feed")
-        assert r.status_code == 200  # noqa: PLR2004
+        assert r.status_code == 200
         data = r.json()
-        assert data["total"] == 2  # noqa: PLR2004
+        assert data["total"] == 2
 
     def test_feed_filters_by_symbol(self, client):
         import api.social_feed as sf
@@ -160,7 +160,7 @@ class TestGetFeed:
             "t2",
         )
         r = client.get("/api/feed?symbol=XAU/USD")
-        assert r.status_code == 200  # noqa: PLR2004
+        assert r.status_code == 200
         data = r.json()
         assert data["total"] == 1
         assert data["items"][0]["signal_id"] == "sig_gold"
@@ -171,11 +171,11 @@ class TestGetFeed:
         for i in range(5):
             sf._publish_signal(_make_signal(f"sig_{i}"), f"user_{i}", f"t{i}")
         r = client.get("/api/feed?page=1&limit=3")
-        assert r.status_code == 200  # noqa: PLR2004
+        assert r.status_code == 200
         data = r.json()
-        assert len(data["items"]) == 3  # noqa: PLR2004
-        assert data["total"] == 5  # noqa: PLR2004
-        assert data["pages"] == 2  # noqa: PLR2004
+        assert len(data["items"]) == 3
+        assert data["total"] == 5
+        assert data["pages"] == 2
 
     def test_feed_sorted_newest_first(self, client):
         import api.social_feed as sf
@@ -202,7 +202,7 @@ class TestReactToSignal:
 
         sf._publish_signal(_make_signal("sig_react"), "alice", "t1")
         r = client.post("/api/feed/sig_react/react", json={"reaction": "up"})
-        assert r.status_code == 200  # noqa: PLR2004
+        assert r.status_code == 200
         data = r.json()
         assert data["thumbs_up"] == 1
         assert data["thumbs_down"] == 0
@@ -213,7 +213,7 @@ class TestReactToSignal:
 
         sf._publish_signal(_make_signal("sig_down"), "alice", "t1")
         r = client.post("/api/feed/sig_down/react", json={"reaction": "down"})
-        assert r.status_code == 200  # noqa: PLR2004
+        assert r.status_code == 200
         assert r.json()["thumbs_down"] == 1
 
     def test_same_reaction_twice_toggles_off(self, client):
@@ -238,14 +238,14 @@ class TestReactToSignal:
 
     def test_react_to_nonexistent_signal_returns_404(self, client):
         r = client.post("/api/feed/nonexistent_signal/react", json={"reaction": "up"})
-        assert r.status_code == 404  # noqa: PLR2004
+        assert r.status_code == 404
 
     def test_invalid_reaction_value_returns_422(self, client):
         import api.social_feed as sf
 
         sf._publish_signal(_make_signal("sig_invalid"), "alice", "t1")
         r = client.post("/api/feed/sig_invalid/react", json={"reaction": "sideways"})
-        assert r.status_code == 422  # noqa: PLR2004
+        assert r.status_code == 422
 
 
 class TestAddComment:
@@ -254,7 +254,7 @@ class TestAddComment:
 
         sf._publish_signal(_make_signal("sig_comment"), "alice", "t1")
         r = client.post("/api/feed/sig_comment/comment", json={"text": "Great signal!"})
-        assert r.status_code == 200  # noqa: PLR2004
+        assert r.status_code == 200
         data = r.json()
         assert data["text"] == "Great signal!"
         assert data["signal_id"] == "sig_comment"
@@ -266,25 +266,25 @@ class TestAddComment:
         sf._publish_signal(_make_signal("sig_count"), "alice", "t1")
         client.post("/api/feed/sig_count/comment", json={"text": "First!"})
         client.post("/api/feed/sig_count/comment", json={"text": "Second!"})
-        assert sf._feed_items["sig_count"]["comment_count"] == 2  # noqa: PLR2004
+        assert sf._feed_items["sig_count"]["comment_count"] == 2
 
     def test_add_comment_to_nonexistent_signal_returns_404(self, client):
         r = client.post("/api/feed/no_such_signal/comment", json={"text": "Hello?"})
-        assert r.status_code == 404  # noqa: PLR2004
+        assert r.status_code == 404
 
     def test_empty_comment_returns_422(self, client):
         import api.social_feed as sf
 
         sf._publish_signal(_make_signal("sig_empty"), "alice", "t1")
         r = client.post("/api/feed/sig_empty/comment", json={"text": ""})
-        assert r.status_code == 422  # noqa: PLR2004
+        assert r.status_code == 422
 
     def test_comment_too_long_returns_422(self, client):
         import api.social_feed as sf
 
         sf._publish_signal(_make_signal("sig_long"), "alice", "t1")
         r = client.post("/api/feed/sig_long/comment", json={"text": "x" * 501})
-        assert r.status_code == 422  # noqa: PLR2004
+        assert r.status_code == 422
 
 
 class TestGetComments:
@@ -293,7 +293,7 @@ class TestGetComments:
 
         sf._publish_signal(_make_signal("sig_nocomments"), "alice", "t1")
         r = client.get("/api/feed/sig_nocomments/comments")
-        assert r.status_code == 200  # noqa: PLR2004
+        assert r.status_code == 200
         assert r.json()["comments"] == []
 
     def test_get_comments_returns_all_comments(self, client):
@@ -304,12 +304,12 @@ class TestGetComments:
         client.post("/api/feed/sig_multi/comment", json={"text": "Second"})
         r = client.get("/api/feed/sig_multi/comments")
         data = r.json()
-        assert len(data["comments"]) == 2  # noqa: PLR2004
+        assert len(data["comments"]) == 2
         assert data["comments"][0]["text"] == "First"
 
     def test_get_comments_for_nonexistent_signal_returns_404(self, client):
         r = client.get("/api/feed/ghost_signal/comments")
-        assert r.status_code == 404  # noqa: PLR2004
+        assert r.status_code == 404
 
 
 class TestOptInOut:
@@ -317,7 +317,7 @@ class TestOptInOut:
         import api.social_feed as sf
 
         r = client.post("/api/feed/opt-in")
-        assert r.status_code == 200  # noqa: PLR2004
+        assert r.status_code == 200
         assert stub_user.sub in sf._opted_in
 
     def test_opt_out_removes_user_from_opted_in_set(self, client, stub_user):
@@ -325,7 +325,7 @@ class TestOptInOut:
 
         sf._opted_in.add(stub_user.sub)
         r = client.post("/api/feed/opt-out")
-        assert r.status_code == 200  # noqa: PLR2004
+        assert r.status_code == 200
         assert stub_user.sub not in sf._opted_in
 
     def test_opt_in_is_idempotent(self, client, stub_user):
@@ -333,5 +333,5 @@ class TestOptInOut:
 
         client.post("/api/feed/opt-in")
         r = client.post("/api/feed/opt-in")
-        assert r.status_code == 200  # noqa: PLR2004
+        assert r.status_code == 200
         assert stub_user.sub in sf._opted_in

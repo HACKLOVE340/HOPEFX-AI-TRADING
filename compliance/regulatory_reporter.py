@@ -58,9 +58,7 @@ import logging
 import os
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -152,7 +150,7 @@ class DeadLetterQueue:
             + "\n"
         )
         try:
-            with open(filename, "a") as fh:
+            with Path(filename).open("a", encoding="utf-8") as fh:
                 fh.write(entry)
             if _PROM_OK:
                 _prom_dlq_size.inc()
@@ -169,7 +167,7 @@ class DeadLetterQueue:
         entries = []
         for dlq_file in sorted(self._path.glob("dlq_*.jsonl")):
             try:
-                with open(dlq_file) as fh:
+                with Path(dlq_file).open(encoding="utf-8") as fh:
                     for _line in fh:
                         line = _line.strip()
                         if line:
@@ -186,10 +184,10 @@ class DeadLetterQueue:
         count = 0
         for dlq_file in self._path.glob("dlq_*.jsonl"):
             try:
-                with open(dlq_file) as fh:
+                with Path(dlq_file).open(encoding="utf-8") as fh:
                     count += sum(1 for line in fh if line.strip())
             except Exception:  # nosec B110 - file read failure is non-fatal for DLQ depth
-                pass
+                ...  # nosec B110
         return count
 
 
@@ -579,8 +577,8 @@ class RegulatoryReporter:
 
         except ImportError:
             # aiohttp not installed — use urllib (sync, wrapped in executor)
-            import urllib.request
             import urllib.error
+            import urllib.request
 
             def _sync_post():
                 from urllib.parse import urlparse as _urlparse

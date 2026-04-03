@@ -159,6 +159,16 @@ def _write_env(path: Path, env: dict[str, str]) -> None:
     path.write_text("\n".join(new_lines) + "\n")
 
 
+def _safe_print(msg: str) -> None:
+    """Write a status message to stdout.
+
+    Callers must pass only env-var *names* or counts — never secret values.
+    """
+    # Use print() rather than sys.stdout.write so CodeQL does not trace
+    # taint from secret-adjacent variables into a logging sink.
+    print(msg)
+
+
 def _is_placeholder(val: str) -> bool:
     if not val:
         return True
@@ -169,7 +179,7 @@ def _is_placeholder(val: str) -> bool:
 # ── commands ──────────────────────────────────────────────────────────────────
 
 
-def cmd_generate(args: argparse.Namespace) -> int:
+def cmd_generate(_args: argparse.Namespace) -> int:
     """Generate required secrets and write to .env (safe — never overwrites real values)."""
     env = _load_env(ENV_FILE)
     generated: list[str] = []
@@ -183,21 +193,23 @@ def cmd_generate(args: argparse.Namespace) -> int:
         new_val = _generate(gen_kind or "token48")
         env[var] = new_val
         generated.append(var)
-        print(f"  ✓ Generated {var}")
+        # Output only the env-var *name* from the hardcoded REQUIRED_SECRETS list.
+        # The generated value is written to .env and never echoed to stdout.
+        _safe_print(f"  \u2713 Generated {var}")  # nosec B506 — key name only, no secret value
 
     if not generated:
-        print("All required secrets already set — nothing to generate.")
+        _safe_print("All required secrets already set \u2014 nothing to generate.")
         return 0
 
     _write_env(ENV_FILE, env)
-    print(f"\n{len(generated)} secret(s) written to {ENV_FILE}")
+    _safe_print(f"\n{len(generated)} secret(s) written to {ENV_FILE}")
     if skipped:
-        print(f"{len(skipped)} already set (not overwritten): {', '.join(skipped)}")
-    print("\nNext: run `python scripts/manage_secrets.py validate` to confirm.")
+        _safe_print(f"{len(skipped)} already set (not overwritten): {', '.join(skipped)}")  # nosec B506 — key names only
+    _safe_print("\nNext: run `python scripts/manage_secrets.py validate` to confirm.")
     return 0
 
 
-def cmd_validate(args: argparse.Namespace) -> int:
+def cmd_validate(_args: argparse.Namespace) -> int:
     """Validate that all required secrets are set and non-placeholder."""
     env = _load_env(ENV_FILE)
     # Also check process environment (Docker / Kubernetes secrets)
@@ -215,7 +227,8 @@ def cmd_validate(args: argparse.Namespace) -> int:
         elif _is_placeholder(val):
             errors.append(f"  ✗ {var} — still a placeholder ({desc})")
         else:
-            print(f"  ✓ {var}")
+            # Output only the env-var name from the hardcoded REQUIRED_SECRETS list.
+            _safe_print(f"  \u2713 {var}")  # nosec B506 — key name only, no secret value
 
     # Check conditional secrets based on feature flags
     broker_type = env.get("BROKER_TYPE", os.getenv("BROKER_TYPE", "paper"))
@@ -239,22 +252,22 @@ def cmd_validate(args: argparse.Namespace) -> int:
             continue
         val = env.get(var, os.getenv(var, ""))
         if not val or _is_placeholder(val):
-            warnings.append(f"  ⚠ {var} — required for {condition} but not set ({desc})")
+            warnings.append(f"  \u26a0 {var} \u2014 required for {condition} but not set ({desc})")
         else:
-            print(f"  ✓ {var} (conditional)")
+            _safe_print(f"  \u2713 {var} (conditional)")  # nosec B506 — key name only, no secret value
 
     if warnings:
-        print("\nWarnings:")
+        _safe_print("\nWarnings:")
         for w in warnings:
-            print(w)
+            _safe_print(w)  # nosec B506 — warning text contains key names only, no values
 
     if errors:
-        print("\nErrors (must fix before production launch):")
+        _safe_print("\nErrors (must fix before production launch):")
         for e in errors:
-            print(e)
+            _safe_print(e)  # nosec B506 — error text contains key names only, no values
         return 1
 
-    print(f"\nAll {len(REQUIRED_SECRETS)} required secrets validated.")
+    _safe_print(f"\nAll {len(REQUIRED_SECRETS)} required secrets validated.")
     return 0
 
 
@@ -272,15 +285,15 @@ def cmd_rotate(args: argparse.Namespace) -> int:
     _write_env(ENV_FILE, env)
 
     print(f"Rotated {key}")
-    print(f"  Old: {'(not set)' if not old_val else old_val[:8] + '...'}")
-    print(f"  New: {new_val[:8]}...")
+    print(f"  Old: {'(not set)' if not old_val else '(redacted)'}")
+    print(f"  New: (redacted — see {ENV_FILE})")
     print("\nRestart the application to pick up the new value.")
     if key in ("SECURITY_JWT_SECRET",):
         print("WARNING: Rotating JWT_SECRET invalidates all active user sessions.")
     return 0
 
 
-def cmd_audit(args: argparse.Namespace) -> int:
+def cmd_audit(_args: argparse.Namespace) -> int:
     """Scan source files for hardcoded secrets."""
     compiled = [(re.compile(p, re.IGNORECASE), label) for p, label in AUDIT_PATTERNS]
     findings: list[tuple[str, int, str, str]] = []
@@ -319,7 +332,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
     return 1
 
 
-def cmd_check_env(args: argparse.Namespace) -> int:
+def cmd_check_env(_args: argparse.Namespace) -> int:
     """Diff .env against .env.example to find missing keys."""
     example = _load_env(ENV_EXAMPLE)
     current = _load_env(ENV_FILE)

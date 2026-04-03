@@ -46,9 +46,7 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -57,7 +55,7 @@ try:
 
     load_dotenv()
 except ImportError:
-    pass
+    ...  # nosec B110
 
 logging.basicConfig(
     level=logging.INFO,
@@ -243,7 +241,7 @@ def sync_fills(client: OANDATransactionClient, ledger: dict[str, Any]) -> int:
     from_id = ledger.get("last_transaction_id")
     logger.info(
         "Fetching fills from OANDA (from_id=%s) …",
-        from_id if from_id else "beginning",
+        from_id or "beginning",
     )
 
     new_fills = client.fetch_fills_since(from_id)

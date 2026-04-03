@@ -8,24 +8,22 @@ HOPEFX Logging Infrastructure
 Structured logging with JSON output, log rotation, and remote shipping
 """
 
+import json
 import logging
 import logging.handlers
-import json
-import sys
 import os
 import queue
+import sys
 import threading
 import traceback
+from datetime import UTC, datetime
 from typing import Any, Optional
-from datetime import datetime, timezone
-
-UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
-from pathlib import Path
+import socket
 from dataclasses import dataclass
 from enum import Enum
-import socket
+from pathlib import Path
 
 try:
     from pythonjsonlogger import jsonlogger  # noqa: F401
@@ -217,11 +215,11 @@ class HOPEFXLogger:
         return cls._instance
 
     def __init__(self):
-        if self._initialized:
+        if self._initialized:  # pylint: disable=access-member-before-definition
             return
 
         with self._lock:
-            if self._initialized:
+            if self._initialized:  # pylint: disable=access-member-before-definition
                 return
 
             self._loggers: dict[str, logging.Logger] = {}
@@ -319,7 +317,8 @@ class HOPEFXLogger:
         if enable_graylog and GRAYLOG_AVAILABLE and graylog_host:
             graylog_handler = graypy.GELFUDPHandler(graylog_host, graylog_port)
             root_logger.addHandler(graylog_handler)
-            logger.info(f"Graylog shipping enabled: {graylog_host}:{graylog_port}")
+            logger.info("Graylog shipping enabled: %s:%s", graylog_host, graylog_port)
+
 
         # Audit log (for security events)
         audit_handler = logging.handlers.RotatingFileHandler(
@@ -332,7 +331,8 @@ class HOPEFXLogger:
         self._audit_logger.addHandler(audit_handler)
         self._audit_logger.setLevel(logging.INFO)
 
-        logger.info(f"Logging initialized: level={level}, json={json_format}, async={async_mode}, dir={log_path}")
+        logger.info("Logging initialized: level=%s, json=%s, async=%s, dir=%s", level, json_format, async_mode, log_path)
+
 
     def set_context(self, context: LogContext):
         """Set logging context for current thread"""
@@ -363,7 +363,7 @@ class HOPEFXLogger:
 
     def audit(self, event: str, details: dict[str, Any]):
         """Log audit event"""
-        self._audit_logger.info(f"AUDIT: {event}", extra={"audit_details": details})
+        self._audit_logger.info("AUDIT: %s", event, extra={"audit_details": details})
 
     def get_metrics(self) -> dict:
         """Get logging metrics"""

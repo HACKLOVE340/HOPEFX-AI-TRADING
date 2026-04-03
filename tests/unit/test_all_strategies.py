@@ -8,12 +8,11 @@ Comprehensive strategy tests for all trading strategies.
 This file aims to increase test coverage to 80%+.
 """
 
-import pytest
-import pandas as pd
-import numpy as np
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-UTC = timezone.utc
+import numpy as np
+import pandas as pd
+import pytest
 
 from strategies.base import StrategyConfig
 
@@ -72,7 +71,7 @@ class TestSMCICTStrategyComprehensive:
         """Test SMC/ICT initialization."""
         assert smc_strategy.config.name == "SMC_Test"
         assert smc_strategy.config.symbol == "EUR_USD"
-        assert smc_strategy.ob_lookback == 20  # noqa: PLR2004
+        assert smc_strategy.ob_lookback == 20
 
     def test_smc_analyze(self, smc_strategy, smc_market_data):
         """Test SMC analyze method."""
@@ -164,8 +163,8 @@ class TestStrategyBrainComprehensive:
 
     def test_brain_initialization(self, brain_strategy, brain_config):
         """Test Strategy Brain initialization."""
-        assert brain_strategy.min_strategies_required == 2  # noqa: PLR2004
-        assert brain_strategy.consensus_threshold == 0.6  # noqa: PLR2004
+        assert brain_strategy.min_strategies_required == 2
+        assert brain_strategy.consensus_threshold == 0.6
 
 
 # ==================== MA CROSSOVER COMPREHENSIVE TESTS ====================
@@ -199,8 +198,8 @@ class TestMACrossoverComprehensive:
 
     def test_ma_initialization(self, ma_strategy):
         """Test MA initialization."""
-        assert ma_strategy.fast_period == 10  # noqa: PLR2004
-        assert ma_strategy.slow_period == 20  # noqa: PLR2004
+        assert ma_strategy.fast_period == 10
+        assert ma_strategy.slow_period == 20
 
     def test_ma_analyze(self, ma_strategy, ma_market_data):
         """Test MA analyze method."""
@@ -256,7 +255,7 @@ class TestStrategyManagerComprehensive:
         manager.register_strategy(strat2)
         manager.register_strategy(strat3)
 
-        assert len(manager.strategies) == 3  # noqa: PLR2004
+        assert len(manager.strategies) == 3
         assert "Strategy1" in manager.strategies
         assert "Strategy2" in manager.strategies
         assert "Strategy3" in manager.strategies
@@ -281,11 +280,11 @@ class TestStrategyManagerComprehensive:
         manager.register_strategy(strat2)
 
         count = 0
-        for _name, strategy in manager.strategies.items():
+        for strategy in manager.strategies.values():
             count += 1
             assert strategy is not None
 
-        assert count == 2  # noqa: PLR2004
+        assert count == 2
 
 
 # ==================== BASE STRATEGY TESTS ====================
@@ -311,9 +310,9 @@ class TestBaseStrategyComprehensive:
         assert config.symbol == "EUR_USD"
         assert config.timeframe == "1H"
         assert config.enabled
-        assert config.risk_per_trade == 2.0  # noqa: PLR2004
-        assert config.max_positions == 5  # noqa: PLR2004
-        assert config.parameters["fast"] == 10  # noqa: PLR2004
+        assert config.risk_per_trade == 2.0
+        assert config.max_positions == 5
+        assert config.parameters["fast"] == 10
 
     def test_signal_type_enum(self):
         """Test SignalType enum values."""
@@ -350,8 +349,8 @@ class TestBaseStrategyComprehensive:
 
         assert signal.signal_type == SignalType.BUY
         assert signal.symbol == "EUR_USD"
-        assert signal.price == 1.1000  # noqa: PLR2004
-        assert signal.confidence == 0.8  # noqa: PLR2004
+        assert signal.price == 1.1000
+        assert signal.confidence == 0.8
 
     def test_signal_invalid_confidence(self):
         """Test Signal with invalid confidence raises error."""

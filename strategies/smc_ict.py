@@ -17,9 +17,7 @@ This strategy implements Smart Money Concepts including:
 """
 
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 from .base import BaseStrategy, Signal, SignalType, StrategyConfig
@@ -67,7 +65,8 @@ class SMCICTStrategy(BaseStrategy):
         self.order_blocks = {"bullish": [], "bearish": []}
         self.fair_value_gaps = {"bullish": [], "bearish": []}
 
-        logger.info(f"SMC ICT Strategy initialized for {config.symbol}")
+        logger.info("SMC ICT Strategy initialized for %s", config.symbol)
+
 
     def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
         """
@@ -123,7 +122,8 @@ class SMCICTStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            logger.error(f"Error in SMC ICT analysis: {e}")
+            logger.error("Error in SMC ICT analysis: %s", e)
+
             return {"error": str(e)}
 
     def generate_signal(self, analysis: dict[str, Any]) -> Signal | None:
@@ -191,7 +191,7 @@ class SMCICTStrategy(BaseStrategy):
                 if liquidity_swept:
                     bullish_score += 0.1
 
-                if bullish_score >= 0.5:  # Need at least 50% confidence  # noqa: PLR2004
+                if bullish_score >= 0.5:  # Need at least 50% confidence
                     signal_type = SignalType.BUY
                     confidence = min(bullish_score, 1.0)
                     metadata = {
@@ -242,7 +242,7 @@ class SMCICTStrategy(BaseStrategy):
                 if liquidity_swept:
                     bearish_score += 0.1
 
-                if bearish_score >= 0.5:  # Need at least 50% confidence  # noqa: PLR2004
+                if bearish_score >= 0.5:  # Need at least 50% confidence
                     signal_type = SignalType.SELL
                     confidence = min(bearish_score, 1.0)
                     metadata = {
@@ -268,7 +268,8 @@ class SMCICTStrategy(BaseStrategy):
             return None
 
         except Exception as e:
-            logger.error(f"Error generating SMC ICT signal: {e}")
+            logger.error("Error generating SMC ICT signal: %s", e)
+
             return None
 
     def _analyze_market_structure(self, prices: list[dict]) -> dict[str, Any]:
@@ -303,7 +304,8 @@ class SMCICTStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            logger.error(f"Error analyzing market structure: {e}")
+            logger.error("Error analyzing market structure: %s", e)
+
             return {"trend": "neutral", "type": "unknown", "strength": 0}
 
     def _identify_order_blocks(self, prices: list[dict]) -> dict[str, list[float]]:
@@ -313,7 +315,7 @@ class SMCICTStrategy(BaseStrategy):
 
         try:
             for i in range(len(prices) - self.ob_lookback, len(prices) - 1):
-                if i < 2:  # noqa: PLR2004
+                if i < 2:
                     continue
 
                 # Bullish OB: Last down candle before strong up move
@@ -333,7 +335,8 @@ class SMCICTStrategy(BaseStrategy):
                     bearish_obs.append(prices[i]["high"])
 
         except Exception as e:
-            logger.error(f"Error identifying order blocks: {e}")
+            logger.error("Error identifying order blocks: %s", e)
+
 
         return {
             "bullish": bullish_obs[-5:] if bullish_obs else [],  # Keep last 5
@@ -372,7 +375,8 @@ class SMCICTStrategy(BaseStrategy):
                         )
 
         except Exception as e:
-            logger.error(f"Error identifying FVGs: {e}")
+            logger.error("Error identifying FVGs: %s", e)
+
 
         return {
             "bullish": bullish_fvgs[-3:] if bullish_fvgs else [],  # Keep last 3
@@ -401,7 +405,8 @@ class SMCICTStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            logger.error(f"Error analyzing liquidity: {e}")
+            logger.error("Error analyzing liquidity: %s", e)
+
             return {"swept_above": False, "swept_below": False}
 
     def _calculate_premium_discount(self, prices: list[dict]) -> dict[str, Any]:
@@ -433,7 +438,8 @@ class SMCICTStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            logger.error(f"Error calculating premium/discount: {e}")
+            logger.error("Error calculating premium/discount: %s", e)
+
             return {"zone": "neutral", "level": 0}
 
     def _calculate_ote_levels(
@@ -468,7 +474,8 @@ class SMCICTStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            logger.error(f"Error calculating OTE levels: {e}")
+            logger.error("Error calculating OTE levels: %s", e)
+
             return {"bullish": [], "bearish": []}
 
     def _price_near_level(

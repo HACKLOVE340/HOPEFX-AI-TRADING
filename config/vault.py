@@ -31,6 +31,7 @@ class SecureVault:
     """Hardware-backed or keyring-backed secure vault."""
 
     _instance: SecureVault | None = None
+    _initialized: bool = False  # declared here so pylint sees it before __new__ sets it
     # passlib uses "argon2" as the scheme name (wraps argon2-cffi which
     # defaults to Argon2id internally).
     _pwd_context = CryptContext(
@@ -129,9 +130,9 @@ class SecureVault:
         """Hash password with Argon2id."""
         return self._pwd_context.hash(password)
 
-    def verify_password(self, password: str, hash: str) -> bool:
+    def verify_password(self, password: str, password_hash: str) -> bool:
         """Verify password against Argon2id hash."""
-        return self._pwd_context.verify(password, hash)
+        return self._pwd_context.verify(password, password_hash)
 
     def rotate_key(self, new_password: str) -> None:
         """Rotate encryption key (re-encrypt all data)."""

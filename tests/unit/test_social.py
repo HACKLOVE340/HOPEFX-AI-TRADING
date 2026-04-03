@@ -9,9 +9,9 @@ Tests for the social trading module.
 
 from decimal import Decimal
 
-from social.copy_trading import CopyTradingEngine, CopyRelationship
-from social.leaderboards import LeaderboardManager, LeaderboardEntry
-from social.performance import PerformanceTracker, PerformanceMetric
+from social.copy_trading import CopyRelationship, CopyTradingEngine
+from social.leaderboards import LeaderboardEntry, LeaderboardManager
+from social.performance import PerformanceMetric, PerformanceTracker
 
 
 class TestCopyRelationship:
@@ -23,7 +23,7 @@ class TestCopyRelationship:
 
         assert relationship.follower_id == "user_1"
         assert relationship.leader_id == "user_2"
-        assert relationship.copy_ratio == 0.5  # noqa: PLR2004
+        assert relationship.copy_ratio == 0.5
         assert relationship.is_active is True
         assert relationship.started_at is not None
 
@@ -55,7 +55,7 @@ class TestCopyTradingEngine:
         assert relationship is not None
         assert relationship.follower_id == "follower_1"
         assert relationship.leader_id == "leader_1"
-        assert relationship.copy_ratio == 0.75  # noqa: PLR2004
+        assert relationship.copy_ratio == 0.75
         assert "follower_1_leader_1" in engine.relationships
 
     def test_start_copying_with_limits(self):
@@ -66,12 +66,12 @@ class TestCopyTradingEngine:
             follower_id="f1",
             leader_id="l1",
             copy_ratio=1.0,
-            max_allocation=Decimal("10000"),
-            max_per_trade=Decimal("500"),
+            max_allocation=Decimal(10000),
+            max_per_trade=Decimal(500),
         )
 
-        assert relationship.max_allocation == Decimal("10000")
-        assert relationship.max_per_trade == Decimal("500")
+        assert relationship.max_allocation == Decimal(10000)
+        assert relationship.max_per_trade == Decimal(500)
 
     def test_stop_copying(self):
         """Test stopping copy relationship."""
@@ -101,7 +101,7 @@ class TestCopyTradingEngine:
 
         copied_trades = engine.sync_trade("trade_123", "l1")
 
-        assert len(copied_trades) == 2  # noqa: PLR2004
+        assert len(copied_trades) == 2
         assert "COPY_trade_123_f1" in copied_trades
         assert "COPY_trade_123_f2" in copied_trades
 
@@ -126,7 +126,7 @@ class TestCopyTradingEngine:
 
         relationships = engine.get_active_relationships("f1", as_follower=True)
 
-        assert len(relationships) == 2  # noqa: PLR2004
+        assert len(relationships) == 2
 
     def test_get_active_relationships_as_leader(self):
         """Test getting active relationships as leader."""
@@ -138,7 +138,7 @@ class TestCopyTradingEngine:
 
         relationships = engine.get_active_relationships("l1", as_follower=False)
 
-        assert len(relationships) == 2  # noqa: PLR2004
+        assert len(relationships) == 2
 
 
 class TestLeaderboardEntry:
@@ -154,7 +154,7 @@ class TestLeaderboardEntry:
 
     def test_entry_default_rank(self):
         """Test default rank for entry."""
-        entry = LeaderboardEntry("user_1", Decimal("100"))
+        entry = LeaderboardEntry("user_1", Decimal(100))
 
         assert entry.rank == 0
 
@@ -173,7 +173,7 @@ class TestLeaderboardManager:
         """Test updating leaderboard creates new category."""
         manager = LeaderboardManager()
 
-        manager.update_leaderboard("pnl", "user_1", Decimal("500"))
+        manager.update_leaderboard("pnl", "user_1", Decimal(500))
 
         assert "pnl" in manager.leaderboards
         assert len(manager.leaderboards["pnl"]) == 1
@@ -182,30 +182,30 @@ class TestLeaderboardManager:
         """Test that leaderboard is correctly ranked."""
         manager = LeaderboardManager()
 
-        manager.update_leaderboard("pnl", "user_a", Decimal("100"))
-        manager.update_leaderboard("pnl", "user_b", Decimal("300"))
-        manager.update_leaderboard("pnl", "user_c", Decimal("200"))
+        manager.update_leaderboard("pnl", "user_a", Decimal(100))
+        manager.update_leaderboard("pnl", "user_b", Decimal(300))
+        manager.update_leaderboard("pnl", "user_c", Decimal(200))
 
         leaderboard = manager.get_leaderboard("pnl")
 
         assert leaderboard[0].user_id == "user_b"
         assert leaderboard[0].rank == 1
         assert leaderboard[1].user_id == "user_c"
-        assert leaderboard[1].rank == 2  # noqa: PLR2004
+        assert leaderboard[1].rank == 2
         assert leaderboard[2].user_id == "user_a"
-        assert leaderboard[2].rank == 3  # noqa: PLR2004
+        assert leaderboard[2].rank == 3
 
     def test_update_existing_entry(self):
         """Test updating existing entry."""
         manager = LeaderboardManager()
 
-        manager.update_leaderboard("pnl", "user_1", Decimal("100"))
-        manager.update_leaderboard("pnl", "user_1", Decimal("500"))
+        manager.update_leaderboard("pnl", "user_1", Decimal(100))
+        manager.update_leaderboard("pnl", "user_1", Decimal(500))
 
         leaderboard = manager.get_leaderboard("pnl")
 
         assert len(leaderboard) == 1
-        assert leaderboard[0].score == Decimal("500")
+        assert leaderboard[0].score == Decimal(500)
 
     def test_get_leaderboard_with_limit(self):
         """Test getting leaderboard with limit."""
@@ -216,8 +216,8 @@ class TestLeaderboardManager:
 
         top_5 = manager.get_leaderboard("pnl", limit=5)
 
-        assert len(top_5) == 5  # noqa: PLR2004
-        assert top_5[0].score == Decimal("900")  # Highest score
+        assert len(top_5) == 5
+        assert top_5[0].score == Decimal(900)  # Highest score
 
     def test_get_leaderboard_nonexistent(self):
         """Test getting non-existent leaderboard."""
@@ -231,13 +231,13 @@ class TestLeaderboardManager:
         """Test getting user's rank."""
         manager = LeaderboardManager()
 
-        manager.update_leaderboard("pnl", "user_1", Decimal("300"))
-        manager.update_leaderboard("pnl", "user_2", Decimal("100"))
-        manager.update_leaderboard("pnl", "user_3", Decimal("200"))
+        manager.update_leaderboard("pnl", "user_1", Decimal(300))
+        manager.update_leaderboard("pnl", "user_2", Decimal(100))
+        manager.update_leaderboard("pnl", "user_3", Decimal(200))
 
         rank = manager.get_user_rank("pnl", "user_3")
 
-        assert rank == 2  # noqa: PLR2004
+        assert rank == 2
 
     def test_get_user_rank_not_found(self):
         """Test getting rank for user not in leaderboard."""
@@ -276,25 +276,25 @@ class TestPerformanceTracker:
         """Test recording a trade."""
         tracker = PerformanceTracker()
 
-        tracker.record_trade("user_1", Decimal("100"))
+        tracker.record_trade("user_1", Decimal(100))
 
         metric = tracker.get_performance("user_1")
 
         assert metric.total_trades == 1
-        assert metric.total_return == Decimal("100")
+        assert metric.total_return == Decimal(100)
 
     def test_record_multiple_trades(self):
         """Test recording multiple trades."""
         tracker = PerformanceTracker()
 
-        tracker.record_trade("user_1", Decimal("100"))
-        tracker.record_trade("user_1", Decimal("-50"))
-        tracker.record_trade("user_1", Decimal("200"))
+        tracker.record_trade("user_1", Decimal(100))
+        tracker.record_trade("user_1", Decimal(-50))
+        tracker.record_trade("user_1", Decimal(200))
 
         metric = tracker.get_performance("user_1")
 
-        assert metric.total_trades == 3  # noqa: PLR2004
-        assert metric.total_return == Decimal("250")
+        assert metric.total_trades == 3
+        assert metric.total_return == Decimal(250)
 
     def test_get_performance_nonexistent(self):
         """Test getting performance for non-existent user."""
@@ -325,11 +325,11 @@ class TestPerformanceTracker:
         """Test recording trades with different periods."""
         tracker = PerformanceTracker()
 
-        tracker.record_trade("user_1", Decimal("100"), period="daily")
-        tracker.record_trade("user_1", Decimal("200"), period="monthly")
+        tracker.record_trade("user_1", Decimal(100), period="daily")
+        tracker.record_trade("user_1", Decimal(200), period="monthly")
 
         daily = tracker.get_performance("user_1", "daily")
         monthly = tracker.get_performance("user_1", "monthly")
 
-        assert daily.total_return == Decimal("100")
-        assert monthly.total_return == Decimal("200")
+        assert daily.total_return == Decimal(100)
+        assert monthly.total_return == Decimal(200)

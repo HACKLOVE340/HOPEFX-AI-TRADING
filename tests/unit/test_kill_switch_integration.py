@@ -16,14 +16,10 @@ tests/unit/test_kill_switch_integration.py
 """
 
 import json
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-
-from risk.manager import RiskManager, RiskConfig
-
+from risk.manager import RiskConfig, RiskManager
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -67,7 +63,7 @@ def test_halt_persists_to_disk(tmp_path):
     rm._halt_trading("test halt", duration_hours=1)
 
     assert halt_file.exists(), "Halt state file should be written to disk"
-    data = json.loads(halt_file.read_text())
+    data = json.loads(halt_file.read_text(encoding="utf-8"))
     assert data["halted"] is True
     assert data["reason"] == "test halt"
 

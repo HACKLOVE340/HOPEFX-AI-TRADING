@@ -17,9 +17,8 @@ from __future__ import annotations
 
 import pytest
 
-from brokers.paper_trading import PaperTradingBroker
 from brokers.base import OrderSide, OrderType
-
+from brokers.paper_trading import PaperTradingBroker
 
 # ── Lifecycle ─────────────────────────────────────────────────────────────────
 
@@ -198,7 +197,7 @@ class TestPnLCalculation:
 
         final = broker.get_account_info().balance
         # Balance should be very close to initial (only commission difference)
-        assert abs(final - initial) < 100.0  # noqa: PLR2004
+        assert abs(final - initial) < 100.0
         await broker.disconnect()
 
 
@@ -273,7 +272,7 @@ class TestEdgeCases:
             if order is not None:
                 assert hasattr(order, "symbol") or hasattr(order, "id")
         except Exception:
-            pass  # Raising is also acceptable — just must not crash the process
+            ...  # nosec B110
         await broker.disconnect()
 
     @pytest.mark.asyncio

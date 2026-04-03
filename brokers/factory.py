@@ -19,6 +19,7 @@ tick → signal → risk → execute pipeline through MT5Bridge.
 import logging
 import os
 from pathlib import Path
+from typing import ClassVar
 
 import yaml
 
@@ -31,7 +32,7 @@ _DEFAULT_BROKER = os.getenv("BROKER", "paper").lower()
 class BrokerFactory:
     """Factory for creating broker instances."""
 
-    _brokers: dict[str, type] = {}
+    _brokers: ClassVar[dict[str, type]] = {}
 
     @classmethod
     def _ensure_registered(cls) -> None:
@@ -127,10 +128,11 @@ class BrokerFactory:
                 exc,
             )
         cls._brokers[name.lower()] = broker_class
-        logger.info(f"Broker registered: {name}")
+        logger.info("Broker registered: %s", name)
+
 
     @classmethod
-    def create_broker(cls, name: str = None, config: dict = None):
+    def create_broker(cls, name: str | None = None, config: dict | None = None):
         """
         Create a broker instance by name (case-insensitive).
 
@@ -257,5 +259,5 @@ class BrokerFactory:
         if not config_path.exists():
             logger.error("Broker config not found: %s", config_path.resolve())
             return None
-        with config_path.open("r") as fh:
+        with config_path.open("r", encoding="utf-8") as fh:
             return yaml.safe_load(fh)

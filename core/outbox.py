@@ -30,7 +30,8 @@ Usage
     # Start the relay background task at startup:
     from core.outbox import OutboxRelay
     relay = OutboxRelay()
-    asyncio.create_task(relay.run())
+    _t = asyncio.create_task(relay.run())
+    _t.add_done_callback(lambda _: None)
 """
 
 from __future__ import annotations
@@ -39,9 +40,7 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -239,7 +238,7 @@ def _get_db_session():
         from app import app_state
 
         if app_state and app_state.db_session_factory:
-            return app_state.db_session_factory()
+            return app_state.db_session_factory()  # pylint: disable=not-callable
     except Exception as _exc:
         logger.debug("Suppressed exception: %s", _exc)
     return None

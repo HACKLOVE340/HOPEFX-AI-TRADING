@@ -9,10 +9,10 @@ Tests for the analytics module.
 
 import numpy as np
 
+from analytics.options import OptionsAnalyzer
 from analytics.portfolio import PortfolioOptimizer
 from analytics.risk import RiskAnalyzer
 from analytics.simulations import SimulationEngine
-from analytics.options import OptionsAnalyzer
 
 
 class TestPortfolioOptimizer:
@@ -39,7 +39,7 @@ class TestPortfolioOptimizer:
 
         # Weights should sum to approximately 1
         total_weight = sum(result["weights"].values())
-        assert abs(total_weight - 1.0) < 0.01  # noqa: PLR2004
+        assert abs(total_weight - 1.0) < 0.01
 
     def test_optimize_portfolio_with_method(self):
         """Test portfolio optimization with specific method."""
@@ -61,7 +61,7 @@ class TestPortfolioOptimizer:
 
         frontier = optimizer.efficient_frontier(assets, returns, num_portfolios=50)
 
-        assert len(frontier) == 50  # noqa: PLR2004
+        assert len(frontier) == 50
         assert all("risk" in p and "return" in p for p in frontier)
 
 
@@ -139,7 +139,6 @@ class TestSimulationEngine:
         engine = SimulationEngine()
 
         # Provide a realistic trade P&L sequence (100 trades, small random returns)
-        import numpy as np
 
         rng = np.random.default_rng(42)
         trade_pnls = list(rng.normal(50, 200, 100).tolist())
@@ -156,13 +155,12 @@ class TestSimulationEngine:
         assert "var_99" in result
         assert "paths" in result
         # paths is truncated to 100 entries max
-        assert len(result["paths"]) <= 1000  # noqa: PLR2004
+        assert len(result["paths"]) <= 1000
 
     def test_monte_carlo_simulation_statistics(self):
         """Test Monte Carlo simulation statistics are reasonable."""
         engine = SimulationEngine()
 
-        import numpy as np
 
         rng = np.random.default_rng(7)
         trade_pnls = list(rng.normal(100, 500, 200).tolist())
@@ -199,7 +197,7 @@ class TestSimulationEngine:
         assert "best_parameters" in result
         assert "fitness_score" in result
         assert "generations" in result
-        assert result["generations"] == 20  # noqa: PLR2004
+        assert result["generations"] == 20
         assert result["fitness_score"] >= 0
 
 
@@ -286,10 +284,10 @@ class TestOptionsAnalyzer:
         analyzer = OptionsAnalyzer()
 
         # CDF(0) should be 0.5
-        assert abs(analyzer._norm_cdf(0) - 0.5) < 0.001  # noqa: PLR2004
+        assert abs(analyzer._norm_cdf(0) - 0.5) < 0.001
 
         # CDF(-infinity) should approach 0
-        assert analyzer._norm_cdf(-10) < 0.001  # noqa: PLR2004
+        assert analyzer._norm_cdf(-10) < 0.001
 
         # CDF(+infinity) should approach 1
-        assert analyzer._norm_cdf(10) > 0.999  # noqa: PLR2004
+        assert analyzer._norm_cdf(10) > 0.999

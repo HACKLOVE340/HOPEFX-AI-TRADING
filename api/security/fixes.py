@@ -37,9 +37,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -56,16 +54,18 @@ router = APIRouter(prefix="/api/security/fixes", tags=["security-fixes"])
 def _require_auth(request: Request) -> dict[str, Any]:
     """Require any authenticated user."""
     try:
-        from auth.jwt_handler import decode_token
+        from auth.jwt_handler import verify_token as decode_token
 
         token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         if not token:
             raise HTTPException(status_code=401, detail="Missing token")
-        return decode_token(token)
+        _creds_exc = HTTPException(status_code=401, detail="Invalid token")
+        return decode_token(token, _creds_exc)
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
+        logger.warning("Security auth token decode failed: %s", exc)
+        raise HTTPException(status_code=401, detail="Invalid or expired token") from None
 
 
 def _require_admin(request: Request) -> dict[str, Any]:
@@ -261,7 +261,7 @@ async def approve_fix(
         )
     except Exception as exc:
         logger.error("fixes router: PR publisher error for %s: %s", endpoint, exc)
-        pr_result = {"status": "error", "error": str(exc)}
+        pr_result = {"status": "error", "error": "PR publish failed — check server logs"}
 
     # Archive approved record
     approved_record = {

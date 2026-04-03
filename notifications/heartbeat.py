@@ -49,11 +49,9 @@ import logging
 import os
 import threading
 import time
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from typing import Any
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +80,7 @@ async def _send_telegram(token: str, chat_id: str, text: str) -> bool:
             aiohttp.ClientSession() as session,
             session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=10)) as resp,
         ):
-            if resp.status == 200:  # noqa: PLR2004
+            if resp.status == 200:
                 return True
             body = await resp.text()
             logger.warning("Telegram heartbeat send failed: %d %s", resp.status, body[:200])
@@ -121,7 +119,7 @@ def _build_message(status: dict[str, Any], uptime_seconds: float) -> str:
     mode = status.get("mode", "paper")
 
     pnl_emoji = "🟢" if daily_pnl >= 0 else "🔴"
-    dd_emoji = "⚠️" if drawdown > 5 else ("🟡" if drawdown > 2 else "🟢")  # noqa: PLR2004
+    dd_emoji = "⚠️" if drawdown > 5 else ("🟡" if drawdown > 2 else "🟢")
 
     sig_text = ""
     if last_sig:
@@ -166,7 +164,7 @@ class HeartbeatService:
         chat_id: str = _TELEGRAM_CHAT_ID,
         interval_hours: float = _HEARTBEAT_INTERVAL_HOURS,
         get_status_fn: Callable[[], dict[str, Any]] | None = None,
-        app_state: Any = None,
+        app_state: Any | None = None,
     ) -> None:
         self._token = token
         self._chat_ids = [c.strip() for c in chat_id.split(",") if c.strip()]
@@ -323,7 +321,7 @@ _heartbeat: HeartbeatService | None = None
 
 def start_heartbeat(
     get_status_fn: Callable[[], dict[str, Any]] | None = None,
-    app_state: Any = None,
+    app_state: Any | None = None,
     token: str = _TELEGRAM_TOKEN,
     chat_id: str = _TELEGRAM_CHAT_ID,
     interval_hours: float = _HEARTBEAT_INTERVAL_HOURS,

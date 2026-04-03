@@ -26,9 +26,7 @@ import logging
 import os
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 
 import jwt
 
@@ -118,7 +116,7 @@ ALGORITHM = "HS256"
 
 def _get_secret() -> str:
     s = os.getenv("SECURITY_JWT_SECRET")
-    if not s or len(s) < 32:  # noqa: PLR2004
+    if not s or len(s) < 32:
         raise RuntimeError("SECURITY_JWT_SECRET not set or too short")
     return s
 
@@ -181,7 +179,6 @@ def decrypt_totp_secret(stored: str) -> str:
 # while auth.jwt used bcrypt, causing "hash could not be identified" on login.
 from auth.jwt import hash_password, verify_password
 
-
 # ── TOTP (2FA) ───────────────────────────────────────────────────────────────
 try:
     import pyotp as _pyotp
@@ -237,7 +234,7 @@ class AuthService:
         email = email.lower().strip()
         username = username.strip()
 
-        if len(password) < 8:  # noqa: PLR2004
+        if len(password) < 8:
             return False, "Password must be at least 8 characters", None
 
         with self._sf() as session:
@@ -403,7 +400,7 @@ class AuthService:
 
             # Issue tokens
             access_token = self._create_access_token(user)
-            raw_refresh, session_row = self._create_refresh_session(
+            raw_refresh, _ = self._create_refresh_session(
                 user,
                 ip_address,
                 device_info,
@@ -556,7 +553,7 @@ class AuthService:
     def reset_password(self, token: str, new_password: str) -> tuple[bool, str]:
         from database.user_models import User
 
-        if len(new_password) < 8:  # noqa: PLR2004
+        if len(new_password) < 8:
             return False, "Password must be at least 8 characters"
 
         token_hash = _hash_token(token)

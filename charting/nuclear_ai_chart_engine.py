@@ -76,14 +76,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from collections import deque
 from collections.abc import Callable
+from typing import ClassVar
 
 logger = logging.getLogger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-TICK_INTERVAL_S: float = float(__import__("os").environ.get("CHART_TICK_INTERVAL", "1.0"))
+TICK_INTERVAL_S: float = float(os.environ.get("CHART_TICK_INTERVAL", "1.0"))
 MAX_BARS: int = 500
 MAX_EQUITY_PTS: int = 500
 MAX_SIGNALS: int = 50
@@ -373,7 +375,7 @@ class NuclearAIChartEngine:
         try:
             if self._data_orch and hasattr(self._data_orch, "get_ohlcv"):
                 for tf in ("1m", "5m", "1h"):
-                    bars = self._data_orch.get_ohlcv(timeframe=tf, limit=300)
+                    bars = self._data_orch.get_ohlcv(timeframe=tf, bars=300)
                     if bars:
                         result[tf] = [
                             {
@@ -402,7 +404,7 @@ class NuclearAIChartEngine:
             self._nuclear_sup = _get_nuclear_supervisor()
 
         # Get supervisor state
-        sup_status: dict = {}
+        sup_status: ClassVar[dict] = {}
         if self._nuclear_sup:
             try:
                 sup_status = self._nuclear_sup.get_status()
@@ -479,7 +481,7 @@ class NuclearAIChartEngine:
         )
 
         # Enrich with structured explainability engine output
-        explain_detail: dict = {}
+        explain_detail: ClassVar[dict] = {}
         if self._explainer is None:
             self._explainer = _get_explainer()
         if self._explainer is not None:
@@ -553,7 +555,7 @@ class NuclearAIChartEngine:
         if severity == 0 and not trading_paused:
             return "All clear. No geopolitical risk detected. Normal trading conditions."
 
-        parts: list[str] = []
+        parts: ClassVar[list[str]] = []
 
         # RL decision
         agent_type = "RL agent (PPO)" if rl_loaded else "Rule-based fallback"
@@ -573,9 +575,9 @@ class NuclearAIChartEngine:
 
         # Amplifiers
         amplifiers = []
-        if vol_factor > 1.1:  # noqa: PLR2004
+        if vol_factor > 1.1:
             amplifiers.append(f"volatility spike (×{vol_factor:.2f})")
-        if sentiment_factor > 0.2:  # noqa: PLR2004
+        if sentiment_factor > 0.2:
             amplifiers.append(f"negative sentiment (+{sentiment_factor:.2f})")
         if amplifiers:
             parts.append(f"Amplified by: {', '.join(amplifiers)}.")
@@ -684,18 +686,18 @@ class NuclearAIChartEngine:
         mid = price_data.get("mid", self._last_price or 2650.0)
         severity = nuclear_data.get("severity", 0)
         now_s = int(time.time())
-        path: list[dict] = []
+        path: ClassVar[list[dict]] = []
 
         # Base drift per minute (annualised vol ~15% for gold)
         base_vol_per_min = mid * 0.0001  # ~0.01% per minute
 
         # Under nuclear conditions, widen cones dramatically
         vol_multiplier = 1.0
-        if severity >= 9:  # noqa: PLR2004
+        if severity >= 9:
             vol_multiplier = 8.0
-        elif severity >= 7:  # noqa: PLR2004
+        elif severity >= 7:
             vol_multiplier = 4.0
-        elif severity >= 5:  # noqa: PLR2004
+        elif severity >= 5:
             vol_multiplier = 2.0
 
         vol = base_vol_per_min * vol_multiplier
@@ -712,7 +714,7 @@ class NuclearAIChartEngine:
                     "price": round(base, 3),
                     "low": round(base - cone_width, 3),
                     "high": round(base + cone_width, 3),
-                    "scenario": "nuclear" if severity >= 7 else "normal",  # noqa: PLR2004
+                    "scenario": "nuclear" if severity >= 7 else "normal",
                 }
             )
 

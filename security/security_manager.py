@@ -14,17 +14,16 @@ Security Management
 import hashlib
 import hmac
 import logging
+import os
 import secrets
 import threading
 import time
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
 # CSRF token TTL in seconds (default 1 hour)
-_CSRF_TOKEN_TTL: int = int(__import__("os").getenv("CSRF_TOKEN_TTL", "3600"))
+_CSRF_TOKEN_TTL: int = int(os.getenv("CSRF_TOKEN_TTL", "3600"))
 
 
 class SecurityManager:
@@ -65,7 +64,7 @@ class SecurityManager:
     @staticmethod
     def validate_password(password: str) -> bool:
         """Validate password strength"""
-        if len(password) < 12:  # noqa: PLR2004
+        if len(password) < 12:
             return False
         if not any(c.isupper() for c in password):
             return False
@@ -85,7 +84,8 @@ class SecurityManager:
         self.request_log[user_id] = [req_time for req_time in self.request_log[user_id] if req_time > cutoff]
 
         if len(self.request_log[user_id]) >= self.rate_limit_requests:
-            logger.warning(f"Rate limit exceeded for {user_id}")
+            logger.warning("Rate limit exceeded for %s", user_id)
+
             return False
 
         self.request_log[user_id].append(now)
@@ -120,7 +120,7 @@ class SecurityManager:
         A length-only check (the previous implementation) allows any
         64-char string to pass — this replaces it with a real comparison.
         """
-        if not token or len(token) != 64:  # noqa: PLR2004
+        if not token or len(token) != 64:
             return False
         with self._csrf_lock:
             entry = self._csrf_store.get(user_id)

@@ -46,7 +46,8 @@ Usage
         allowed, reason = await limiter.check_and_register(ws, client_ip)
         if not allowed:
             await ws.close(code=1008, reason=reason)
-            return
+
+Return
         await ws.accept()
         try:
             ...
@@ -63,11 +64,11 @@ WS_RATE_WINDOW_SECONDS         — sliding window for rate cap (default: 60)
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import time
 from collections import defaultdict, deque
-import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +95,7 @@ class WebSocketConnectionLimiter:
         self._connected = False
         # In-process fallback state
         self._open_conns: dict[str, int] = defaultdict(int)
-        self._rate_window: dict[str, deque] = defaultdict(lambda: deque())
+        self._rate_window: dict[str, deque] = defaultdict(deque)
         self._lock = asyncio.Lock()
 
     # ── Redis connection ──────────────────────────────────────────────────────
@@ -242,11 +243,9 @@ class WebSocketConnectionLimiter:
         Must be called in the finally block of every WebSocket handler.
         """
         if self._redis is not None:
-            try:
+            with contextlib.suppress(Exception):
                 await self._redis_release(client_ip)
                 return
-            except Exception:
-                pass
         await self._local_release(client_ip)
 
     def stats(self) -> dict:
@@ -274,11 +273,9 @@ def get_client_ip(websocket) -> str:
     trusted = {ip.strip() for ip in trusted_raw.split(",") if ip.strip()}
 
     direct_ip = ""
-    try:
+    with contextlib.suppress(Exception):
         if websocket.client:
             direct_ip = websocket.client.host or ""
-    except Exception:
-        pass
 
     if direct_ip in trusted:
         # Connection is from a trusted proxy — honour X-Forwarded-For

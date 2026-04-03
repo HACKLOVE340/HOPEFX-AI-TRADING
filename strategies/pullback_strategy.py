@@ -52,9 +52,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import numpy as np
@@ -140,6 +138,7 @@ class PullbackStrategy(BaseStrategy):
         self.tp_atr_mult = tp_atr_mult
         self.vol_confirm_mult = vol_confirm_mult
         self.vwap_filter = vwap_filter
+        self._bar_buffer: list = []
 
         logger.info(
             "PullbackStrategy '%s' initialised: symbol=%s ema=%d/%d adx_min=%.0f "
@@ -158,7 +157,8 @@ class PullbackStrategy(BaseStrategy):
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def generate_signal(self, market_data: pd.DataFrame) -> dict[str, Any]:
+    def generate_signal(self, analysis: pd.DataFrame) -> dict[str, Any]:  # type: ignore[override]
+        market_data = analysis
         """
         Analyse OHLCV data and return a signal dict.
 
@@ -234,9 +234,9 @@ class PullbackStrategy(BaseStrategy):
             "size": 0,  # sized by RiskManager.filter_signals()
         }
 
-    def analyze(self, market_data: pd.DataFrame) -> dict[str, Any]:
+    def analyze(self, data: pd.DataFrame) -> dict[str, Any]:  # type: ignore[override]
         """Alias for generate_signal — satisfies BaseStrategy ABC."""
-        return self.generate_signal(market_data)
+        return self.generate_signal(data)
 
     def on_bar(self, bar: dict[str, Any]) -> Signal | None:
         """
@@ -246,9 +246,6 @@ class PullbackStrategy(BaseStrategy):
         generate_signal().  Returns None when no signal is generated.
         """
         # Accumulate bars in internal buffer
-        if not hasattr(self, "_bar_buffer"):
-            self._bar_buffer: list = []
-
         self._bar_buffer.append(bar)
         # Keep only the last _MIN_BARS + 50 bars to bound memory
         if len(self._bar_buffer) > _MIN_BARS + 50:
@@ -347,7 +344,7 @@ class PullbackStrategy(BaseStrategy):
             last_atr = float(atr.iloc[-1])
             last_adx = float(adx.iloc[-1])
             last_rsi = float(rsi.iloc[-1])
-            prev_rsi = float(rsi.iloc[-2]) if len(rsi) >= 2 else last_rsi  # noqa: PLR2004
+            prev_rsi = float(rsi.iloc[-2]) if len(rsi) >= 2 else last_rsi
             last_vol = float(v.iloc[-1])
             last_vol_ma = float(vol_ma20.iloc[-1]) if not np.isnan(vol_ma20.iloc[-1]) else 1.0
             last_vwap = float(vwap_20.iloc[-1])

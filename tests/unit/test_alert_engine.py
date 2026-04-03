@@ -13,9 +13,7 @@ Tests for:
 - Alert management
 """
 
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 
 
 class TestAlertConditionType:
@@ -78,7 +76,7 @@ class TestAlertCondition:
         condition = AlertCondition(type=AlertConditionType.PRICE_ABOVE, threshold=2000.00)
 
         assert condition.type == AlertConditionType.PRICE_ABOVE
-        assert condition.threshold == 2000.00  # noqa: PLR2004
+        assert condition.threshold == 2000.00
 
     def test_condition_with_indicator(self):
         """Test condition with indicator."""
@@ -96,7 +94,7 @@ class TestAlertCondition:
 
         result = condition.to_dict()
         assert result["type"] == "price_below"
-        assert result["threshold"] == 1900.00  # noqa: PLR2004
+        assert result["threshold"] == 1900.00
 
 
 class TestAlert:
@@ -214,7 +212,7 @@ class TestAlertEngine:
 
     def test_create_alert(self):
         """Test creating an alert."""
-        from notifications.alert_engine import AlertEngine, AlertConditionType
+        from notifications.alert_engine import AlertConditionType, AlertEngine
 
         engine = AlertEngine()
         alert = engine.create_alert(
@@ -231,8 +229,8 @@ class TestAlertEngine:
     def test_create_alert_with_options(self):
         """Test creating alert with all options."""
         from notifications.alert_engine import (
-            AlertEngine,
             AlertConditionType,
+            AlertEngine,
             AlertPriority,
         )
 
@@ -250,12 +248,12 @@ class TestAlertEngine:
         )
 
         assert alert.priority == AlertPriority.HIGH
-        assert alert.cooldown_minutes == 10  # noqa: PLR2004
-        assert alert.max_triggers == 5  # noqa: PLR2004
+        assert alert.cooldown_minutes == 10
+        assert alert.max_triggers == 5
 
     def test_get_alert(self):
         """Test getting an alert by ID."""
-        from notifications.alert_engine import AlertEngine, AlertConditionType
+        from notifications.alert_engine import AlertConditionType, AlertEngine
 
         engine = AlertEngine()
         alert = engine.create_alert(
@@ -280,7 +278,7 @@ class TestAlertEngine:
 
     def test_delete_alert(self):
         """Test deleting an alert."""
-        from notifications.alert_engine import AlertEngine, AlertConditionType
+        from notifications.alert_engine import AlertConditionType, AlertEngine
 
         engine = AlertEngine()
         alert = engine.create_alert(
@@ -297,8 +295,8 @@ class TestAlertEngine:
     def test_pause_resume_alert(self):
         """Test pausing and resuming an alert."""
         from notifications.alert_engine import (
-            AlertEngine,
             AlertConditionType,
+            AlertEngine,
             AlertStatus,
         )
 
@@ -320,7 +318,7 @@ class TestAlertEngine:
 
     def test_get_alerts(self):
         """Test getting all alerts."""
-        from notifications.alert_engine import AlertEngine, AlertConditionType
+        from notifications.alert_engine import AlertConditionType, AlertEngine
 
         engine = AlertEngine()
 
@@ -330,15 +328,15 @@ class TestAlertEngine:
 
         # Get all
         all_alerts = engine.get_alerts()
-        assert len(all_alerts) >= 3  # noqa: PLR2004
+        assert len(all_alerts) >= 3
 
         # Filter by symbol
         xauusd_alerts = engine.get_alerts(symbol="XAUUSD")
-        assert len(xauusd_alerts) >= 2  # noqa: PLR2004
+        assert len(xauusd_alerts) >= 2
 
     def test_get_active_alerts(self):
         """Test getting active alerts only."""
-        from notifications.alert_engine import AlertEngine, AlertConditionType
+        from notifications.alert_engine import AlertConditionType, AlertEngine
 
         engine = AlertEngine()
 
@@ -353,7 +351,7 @@ class TestAlertEngine:
 
     def test_check_alerts_price_above(self):
         """Test checking alerts for price above condition."""
-        from notifications.alert_engine import AlertEngine, AlertConditionType
+        from notifications.alert_engine import AlertConditionType, AlertEngine
 
         engine = AlertEngine()
         engine.create_alert(
@@ -371,7 +369,7 @@ class TestAlertEngine:
 
     def test_check_alerts_price_below(self):
         """Test checking alerts for price below condition."""
-        from notifications.alert_engine import AlertEngine, AlertConditionType
+        from notifications.alert_engine import AlertConditionType, AlertEngine
 
         engine = AlertEngine()
         engine.create_alert(
@@ -389,7 +387,7 @@ class TestAlertEngine:
 
     def test_check_alerts_not_triggered(self):
         """Test alerts not triggered when conditions not met."""
-        from notifications.alert_engine import AlertEngine, AlertConditionType
+        from notifications.alert_engine import AlertConditionType, AlertEngine
 
         engine = AlertEngine()
         engine.create_alert(
@@ -407,7 +405,7 @@ class TestAlertEngine:
 
     def test_check_alerts_rsi(self):
         """Test checking RSI alerts."""
-        from notifications.alert_engine import AlertEngine, AlertConditionType
+        from notifications.alert_engine import AlertConditionType, AlertEngine
 
         engine = AlertEngine()
         engine.create_alert(
@@ -425,7 +423,7 @@ class TestAlertEngine:
 
     def test_check_alerts_volume(self):
         """Test checking volume alerts."""
-        from notifications.alert_engine import AlertEngine, AlertConditionType
+        from notifications.alert_engine import AlertConditionType, AlertEngine
 
         engine = AlertEngine()
         engine.create_alert(
@@ -443,7 +441,7 @@ class TestAlertEngine:
 
     def test_get_trigger_history(self):
         """Test getting trigger history."""
-        from notifications.alert_engine import AlertEngine, AlertConditionType
+        from notifications.alert_engine import AlertConditionType, AlertEngine
 
         engine = AlertEngine()
         engine.create_alert(
@@ -462,7 +460,7 @@ class TestAlertEngine:
 
     def test_get_stats(self):
         """Test getting engine statistics."""
-        from notifications.alert_engine import AlertEngine, AlertConditionType
+        from notifications.alert_engine import AlertConditionType, AlertEngine
 
         engine = AlertEngine()
         engine.create_alert("Test", "XAUUSD", AlertConditionType.PRICE_ABOVE, 2000)
@@ -473,7 +471,7 @@ class TestAlertEngine:
 
     def test_notification_handler(self):
         """Test notification handler registration."""
-        from notifications.alert_engine import AlertEngine, AlertConditionType
+        from notifications.alert_engine import AlertConditionType, AlertEngine
 
         engine = AlertEngine()
 

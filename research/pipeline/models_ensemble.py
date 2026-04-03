@@ -381,7 +381,7 @@ class EnsemblePredictor:
 
         if self.calibrate:
             # Isotonic regression calibration; fall back to sigmoid if too few samples
-            method = "isotonic" if len(y) >= 1000 else "sigmoid"  # noqa: PLR2004
+            method = "isotonic" if len(y) >= 1000 else "sigmoid"
             self.stack_ = CalibratedClassifierCV(
                 self.stack_,
                 method=method,
@@ -408,7 +408,7 @@ class EnsemblePredictor:
 
     def evaluate(self, X: pd.DataFrame, y: np.ndarray) -> dict[str, float]:
         prob = self.predict_proba(X)
-        preds = (prob >= 0.5).astype(int)  # noqa: PLR2004
+        preds = (prob >= 0.5).astype(int)
         result: dict[str, float] = {
             "auc": float(roc_auc_score(y, prob)),
             "logloss": float(log_loss(y, prob)),
@@ -425,13 +425,22 @@ class EnsemblePredictor:
 
     @classmethod
     def load(cls, path: str | Path) -> EnsemblePredictor:
-        path = Path(path)
+        path = Path(path).resolve()
+        # Confine loads to the project's saved_models directory.
+        _ALLOWED_ROOT = (Path(__file__).resolve().parent.parent.parent / "ml" / "saved_models")
+        try:
+            path.relative_to(_ALLOWED_ROOT)
+        except ValueError as exc:
+            raise ValueError(
+                f"EnsemblePredictor.load: path '{path}' is outside the permitted "
+                f"directory '{_ALLOWED_ROOT}'"
+            ) from exc
         if not path.exists():
             raise FileNotFoundError(f"EnsemblePredictor not found: {path}")
         try:
-            obj = joblib.load(path)
+            obj = joblib.load(path)  # nosec B301 - path confined to ml/saved_models above
         except Exception:
-            with open(path, "rb") as f:
+            with Path(path).open("rb") as f:
                 obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
         if not isinstance(obj, cls):
             raise TypeError(f"Expected EnsemblePredictor, got {type(obj)}")
@@ -563,7 +572,7 @@ class DeepEnsembleStore:
                     try:
                         self._scaler = joblib.load(self.scaler_path)
                     except Exception:
-                        with open(self.scaler_path, "rb") as f:
+                        with Path(self.scaler_path).open("rb") as f:
                             self._scaler = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
                     logger.debug("DeepEnsembleStore: scaler loaded ← %s", self.scaler_path)
                 except Exception as exc:
@@ -589,7 +598,7 @@ class DeepEnsembleStore:
             logger.debug("DeepEnsembleStore: %s", self._gate_failure_reason)
             return False
         try:
-            with open(self.meta_path) as f:
+            with Path(self.meta_path).open(encoding="utf-8") as f:
                 meta = json.load(f)
 
             self._oos_accuracy = float(meta.get("oos_accuracy", 0.0))

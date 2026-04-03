@@ -20,7 +20,6 @@ Called by .github/workflows/update_docs.yml on every push to main.
 from __future__ import annotations
 
 import argparse
-import os
 import subprocess  # nosec B404 - list-form git calls; no shell=True, no user input
 import sys
 from pathlib import Path
@@ -81,7 +80,7 @@ def _font(size: int, bold: bool = True):
         "C:/Windows/Fonts/arial.ttf",
     ]
     for path in bold_paths if bold else reg_paths:
-        if os.path.exists(path):
+        if Path(path).exists():
             try:
                 return ImageFont.truetype(path, size)
             except Exception:  # nosec B112 - skip unreadable font file, try next path

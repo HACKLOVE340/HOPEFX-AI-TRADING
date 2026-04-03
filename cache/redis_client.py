@@ -1,6 +1,7 @@
 # HOPEFX-AI-TRADING
 # Copyright (c) 2025-2026
 # AGPL-3.0 — Share all modifications
+# pylint: disable=broad-exception-caught,global-statement
 """
 cache/redis_client.py
 =====================
@@ -72,12 +73,11 @@ async def _try_cluster(
     hosts_str: str,
     password: str | None,
     decode_responses: bool,
-    db: int,
+    db: int,  # pylint: disable=unused-argument  # cluster mode ignores db
 ) -> Any | None:
     """Attempt Redis Cluster connection. Returns client or None."""
     try:
-        from redis.asyncio.cluster import RedisCluster
-        from redis.asyncio.cluster import ClusterNode
+        from redis.asyncio.cluster import ClusterNode, RedisCluster
 
         hosts = _parse_hosts(hosts_str)
         startup_nodes = [ClusterNode(h, p) for h, p in hosts]
@@ -280,8 +280,9 @@ async def get_health() -> dict[str, Any]:
                 logger.debug("Suppressed exception: %s", _exc)
 
         return info
-    except Exception as exc:
-        return {"mode": _connection_mode, "connected": False, "error": str(exc)}
+    except Exception:
+        logger.exception("Redis health check failed: %s")
+        return {"mode": _connection_mode, "connected": False, "error": "Redis unavailable — check server logs"}
 
 
 def reset_redis_client() -> None:
@@ -301,3 +302,26 @@ async def get_sentinel() -> Any | None:
 def get_connection_mode() -> str:
     """Return the active connection mode: 'cluster' | 'sentinel' | 'direct' | 'none'."""
     return _connection_mode
+
+
+def get_sync_redis() -> Any | None:
+    """
+    Return a synchronous Redis client using the same env-var configuration as
+    get_redis().  Falls back gracefully to None when Redis is unavailable.
+
+    Used by components that cannot run in an async context (e.g. TCA recorder).
+    """
+    try:
+        import redis as _redis_sync
+    except ImportError:
+        logger.debug("redis package not available for sync client")
+        return None
+
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    try:
+        client = _redis_sync.Redis.from_url(redis_url, decode_responses=True, socket_connect_timeout=2)
+        client.ping()
+        return client
+    except Exception as exc:
+        logger.debug("Sync Redis connection failed: %s", exc)
+        return None

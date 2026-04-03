@@ -251,16 +251,17 @@ class AnomalyWeighter:
 
     @classmethod
     def load(cls, path: str | Path) -> AnomalyWeighter:
-        import joblib
         import pickle  # nosec B403 - joblib tried first; pickle only for legacy fallback
+
+        import joblib
 
         path = Path(path)
         if not path.exists():
             raise FileNotFoundError(f"AnomalyWeighter model not found: {path}")
         try:
-            obj = joblib.load(path)
+            obj = joblib.load(path)  # nosec B301 - path set by class constructor from saved_models
         except Exception:
-            with open(path, "rb") as f:
+            with Path(path).open("rb") as f:
                 obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
         if not isinstance(obj, cls):
             raise TypeError(f"Expected AnomalyWeighter, got {type(obj)}")
@@ -457,7 +458,7 @@ class AnomalyWeightStore:
             weighter = AnomalyWeighter(
                 contamination=self._contamination,
                 n_estimators=100,
-                use_lof=self.use_lof and len(X) >= 100,  # LOF needs enough neighbours  # noqa: PLR2004
+                use_lof=self.use_lof and len(X) >= 100,  # LOF needs enough neighbours
                 lof_neighbors=min(20, len(X) // 5),
             )
             weighter.fit(X)
@@ -467,7 +468,7 @@ class AnomalyWeightStore:
             logger.debug(
                 "AnomalyWeightStore: refitted on %d bars (LOF=%s)",
                 len(X),
-                self.use_lof and len(X) >= 100,  # noqa: PLR2004
+                self.use_lof and len(X) >= 100,
             )
             # Persist after successful refit
             if self.persist_path:

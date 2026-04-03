@@ -10,9 +10,8 @@ Complete SQLAlchemy models for all entities
 
 import enum
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+import uuid
+from datetime import UTC, datetime
 
 
 def _utcnow() -> datetime:
@@ -24,19 +23,18 @@ logger = logging.getLogger(__name__)
 
 try:
     from sqlalchemy import (
-        Column,
-        Integer,
         BigInteger,
-        String,
-        Float,
         Boolean,
+        Column,
         DateTime,
-        ForeignKey,
         Enum,
-        Text,
+        Float,
+        ForeignKey,
         Index,
+        Integer,
+        String,
+        Text,
         UniqueConstraint,
-        create_engine,
     )
     from sqlalchemy.sql import func
 
@@ -44,7 +42,7 @@ try:
         from sqlalchemy.orm import declarative_base
     except ImportError:
         from sqlalchemy.ext.declarative import declarative_base  # SQLAlchemy < 2.0
-    from sqlalchemy.orm import relationship, sessionmaker
+    from sqlalchemy.orm import relationship, sessionmaker  # pylint: disable=unused-import
 
     SQLALCHEMY_AVAILABLE = True
 except ImportError:
@@ -62,7 +60,7 @@ except ImportError:
             return self
 
     Column = BigInteger = Integer = String = Float = Boolean = _Stub()
-    DateTime = ForeignKey = Enum = Text = Index = UniqueConstraint = create_engine = _Stub()
+    DateTime = ForeignKey = Enum = Text = Index = UniqueConstraint = _Stub()
     relationship = sessionmaker = _Stub()
     func = _Stub()
 
@@ -463,7 +461,7 @@ class Position(Base):
 
     __tablename__ = "positions"
 
-    id = Column(String(50), primary_key=True, default=lambda: str(__import__("uuid").uuid4()))
+    id = Column(String(50), primary_key=True, default=lambda: str(uuid.uuid4()))
     account_id = Column(Integer, nullable=True, index=True)
     symbol = Column(String(20), nullable=False, index=True)
     side = Column(String(10), nullable=True)
@@ -694,13 +692,6 @@ class OrderStatus(enum.Enum):
     REJECTED = "rejected"
 
 
-class OrderType(enum.Enum):
-    MARKET = "market"
-    LIMIT = "limit"
-    STOP = "stop"
-    STOP_LIMIT = "stop_limit"
-
-
 class PositionStatus(enum.Enum):
     OPEN = "open"
     CLOSING = "closing"
@@ -733,7 +724,7 @@ class MarketDataType(enum.Enum):
 # `from database.models import User` keeps working, and so SQLAlchemy resolves
 # the "User" string reference in Account.user without a second class definition.
 try:
-    from database.user_models import User
+    from database.user_models import User  # pylint: disable=unused-import
 except Exception:
     # Fallback stub so imports never fail when user_models has a dep issue
     class User:  # type: ignore[no-redef]

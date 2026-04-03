@@ -26,6 +26,7 @@ os.environ.setdefault("SECURITY_JWT_SECRET", "test-secret-key-for-integration-te
 
 try:
     from fastapi.testclient import TestClient
+
     from app import app
 
     _import_error = None
@@ -72,7 +73,7 @@ def client():
     )
     # Instantiate without entering the lifespan context so Redis/DB timeouts
     # do not block the test suite.
-    yield TestClient(app, raise_server_exceptions=False)
+    return TestClient(app, raise_server_exceptions=False)
 
 
 @pytest.mark.integration
@@ -87,7 +88,7 @@ class TestHealthEndpoints:
         """
         response = client.get("/health")
 
-        assert response.status_code == 200  # noqa: PLR2004
+        assert response.status_code == 200
         data = response.json()
         assert data["status"] in ("healthy", "degraded")
 
@@ -96,7 +97,7 @@ class TestHealthEndpoints:
         # /status is the public HTML status page; /api/status/json is the JSON API.
         response = client.get("/api/status/json")
 
-        assert response.status_code == 200  # noqa: PLR2004
+        assert response.status_code == 200
         data = response.json()
         assert "status" in data
         assert "uptime_seconds" in data
@@ -110,7 +111,7 @@ class TestTradingEndpoints:
         """Test listing strategies."""
         response = client.get("/api/trading/strategies")
 
-        assert response.status_code == 200  # noqa: PLR2004
+        assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
 

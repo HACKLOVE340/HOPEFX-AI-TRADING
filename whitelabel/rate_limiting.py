@@ -76,12 +76,12 @@ class WhitelabelRateLimitMiddleware(BaseHTTPMiddleware):
         c = _counters[key_hash]
 
         # Minute window
-        if now - c["min"][1] >= 60.0:  # noqa: PLR2004
+        if now - c["min"][1] >= 60.0:
             c["min"] = [0, now]
         c["min"][0] += 1
 
         # Day window
-        if now - c["day"][1] >= 86400.0:  # noqa: PLR2004
+        if now - c["day"][1] >= 86400.0:
             c["day"] = [0, now]
         c["day"][0] += 1
 

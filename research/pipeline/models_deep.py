@@ -51,8 +51,7 @@ logger = logging.getLogger(__name__)
 # ── PyTorch (preferred; lighter than TF for this use-case) ───────────────────
 try:
     import torch
-    from torch import nn
-    from torch import optim
+    from torch import nn, optim
     from torch.utils.data import DataLoader, TensorDataset
 
     TORCH_AVAILABLE = True
@@ -63,7 +62,6 @@ except ImportError:
 # ── TensorFlow / Keras fallback ───────────────────────────────────────────────
 try:
     import tensorflow as tf  # noqa: F401
-    from tensorflow.keras import layers, Model  # noqa: F401
 
     TF_AVAILABLE = True
 except ImportError:
@@ -346,7 +344,7 @@ if TORCH_AVAILABLE:
             loss = -(target_smooth * torch.log(pred) + (1 - target_smooth) * torch.log(1 - pred))
             if self.pos_weight is not None:
                 weight = torch.where(
-                    target > 0.5,  # noqa: PLR2004
+                    target > 0.5,
                     torch.tensor(self.pos_weight, device=pred.device),
                     torch.ones_like(pred),
                 )
@@ -482,22 +480,21 @@ class DeepPredictor:
             min_lr=1e-6,
         )
         if self.task == "binary":
-            self.criterion = _LabelSmoothBCE(smoothing=self.label_smoothing, pos_weight=self.pos_weight)
+            self.criterion = _LabelSmoothBCE(smoothing=self.label_smoothing, pos_weight=self.pos_weight)  # pylint: disable=possibly-used-before-assignment
         else:
             self.criterion = nn.MSELoss()
 
     def _build_model(self, n_features: int, seq_len: int, **kwargs) -> nn.Module:
         arch = self.architecture.lower()
         if arch == "lstm":
-            return _LSTMNet(n_features, **kwargs)
-        elif arch == "transformer":
-            return _TransformerNet(n_features, seq_len=seq_len, **kwargs)
-        elif arch == "tcn":
-            return _TCNNet(n_features, **kwargs)
-        elif arch == "hybrid":
-            return _HybridNet(n_features, **kwargs)
-        else:
-            raise ValueError(f"Unknown architecture '{arch}'. Choose from: {list(self.ARCHITECTURES)}")
+            return _LSTMNet(n_features, **kwargs)  # pylint: disable=possibly-used-before-assignment
+        if arch == "transformer":
+            return _TransformerNet(n_features, seq_len=seq_len, **kwargs)  # pylint: disable=possibly-used-before-assignment
+        if arch == "tcn":
+            return _TCNNet(n_features, **kwargs)  # pylint: disable=possibly-used-before-assignment
+        if arch == "hybrid":
+            return _HybridNet(n_features, **kwargs)  # pylint: disable=possibly-used-before-assignment
+        raise ValueError(f"Unknown architecture '{arch}'. Choose from: {list(self.ARCHITECTURES)}")
 
     def _to_loader(self, X: np.ndarray, y: np.ndarray, shuffle: bool) -> DataLoader:
         X_t = torch.tensor(X, dtype=torch.float32)
@@ -555,8 +552,8 @@ class DeepPredictor:
             # ── Train ─────────────────────────────────────────────────────────
             self.model.train()
             train_losses = []
-            for X_b, y_b in train_loader:
-                X_b, y_b = X_b.to(self.device), y_b.to(self.device)  # noqa: PLW2901
+            for X_b_raw, y_b_raw in train_loader:
+                X_b, y_b = X_b_raw.to(self.device), y_b_raw.to(self.device)
                 self.optimizer.zero_grad(set_to_none=True)
 
                 if self.use_amp and self._scaler is not None:
@@ -587,8 +584,8 @@ class DeepPredictor:
                 self.model.eval()
                 val_losses = []
                 with torch.no_grad():
-                    for X_b, y_b in val_loader:
-                        X_b, y_b = X_b.to(self.device), y_b.to(self.device)  # noqa: PLW2901
+                    for X_b_raw, y_b_raw in val_loader:
+                        X_b, y_b = X_b_raw.to(self.device), y_b_raw.to(self.device)
                         pred = self.model(X_b)
                         val_losses.append(self.criterion(pred, y_b).item())
                 avg_val = float(np.mean(val_losses))
@@ -663,7 +660,7 @@ class DeepPredictor:
 
         Returns a dict with keys: accuracy, auc, f1, n_samples.
         """
-        from sklearn.metrics import accuracy_score, roc_auc_score, f1_score
+        from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
         proba = self.predict(X)
         preds = (proba >= threshold).astype(int)

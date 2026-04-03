@@ -8,17 +8,16 @@ HOPEFX Backtesting Engine - Event-Driven Architecture
 Production-grade backtesting with transaction cost modeling
 """
 
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from dataclasses import dataclass, field
-from typing import Any
-from collections.abc import Callable
-from enum import Enum
 import json
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from enum import Enum
 from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
 
 
 class OrderType(Enum):
@@ -226,7 +225,7 @@ class PerformanceMetrics:
 
     def save(self, filepath: str):
         """Save metrics to JSON"""
-        with open(filepath, "w") as f:
+        with Path(filepath).open("w", encoding="utf-8") as f:
             json.dump(self.to_dict(), f, indent=2)
 
 
@@ -766,7 +765,7 @@ class BacktestEngine:
             "data_frequency": self.data_frequency,
         }
 
-        with open(f"{filepath_prefix}_state.json", "w") as f:
+        with Path(f"{filepath_prefix}_state.json").open("w", encoding="utf-8") as f:
             json.dump(state, f, indent=2)
 
         print(f"Results saved to {filepath_prefix}*")
@@ -779,7 +778,7 @@ class CSVDataHandler:
     def __init__(self, filepath: str, date_format: str = "%Y-%m-%d %H:%M:%S"):
         self.filepath = filepath
         self.date_format = date_format
-        self.data: pd.DataFrame = None
+        self.data: pd.DataFrame | None = None
 
     def load(self):
         """Load CSV data"""
@@ -788,7 +787,7 @@ class CSVDataHandler:
         self.data.sort_values("timestamp", inplace=True)
         print(f"Loaded {len(self.data)} rows from {self.filepath}")
 
-    def get_data(self, start_date: datetime, end_date: datetime, symbols: list[str]):
+    def get_data(self, start_date: datetime, end_date: datetime, _symbols: list[str]):
         """Generator yielding (timestamp, symbol, tick)"""
         if self.data is None:
             self.load()
@@ -805,6 +804,38 @@ class CSVDataHandler:
                 volume=row.get("volume", 0.0),
             )
             yield row["timestamp"], row["symbol"], tick
+
+
+class DataFrameDataHandler:
+    """Adapts a pre-loaded OHLCV DataFrame for use with BacktestEngine.
+
+    The DataFrame must have a DatetimeIndex and columns:
+    open, high, low, close, volume.  Each bar is converted to a synthetic
+    TickData where bid = close and ask = close (mid-price approximation).
+    """
+
+    def __init__(self, df: "pd.DataFrame", symbol: str) -> None:
+        self._df = df
+        self._symbol = symbol
+
+    def get_data(
+        self,
+        start_date: "datetime",
+        end_date: "datetime",
+        _symbols: "list[str]",  # symbol is fixed at construction time
+    ):
+        """Yield (timestamp, symbol, TickData) for each bar in the date range."""
+        mask = (self._df.index >= start_date) & (self._df.index <= end_date)
+        for ts, row in self._df[mask].iterrows():
+            close = float(row["close"])
+            tick = TickData(
+                timestamp=ts,
+                symbol=self._symbol,
+                bid=close,
+                ask=close,
+                volume=float(row.get("volume", 0.0)),
+            )
+            yield ts, self._symbol, tick
 
 
 if __name__ == "__main__":

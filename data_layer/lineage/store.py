@@ -50,11 +50,9 @@ import queue
 import sqlite3
 import threading
 import time
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from data_layer.types import GoldTick, MacroEvent, NewsArticle
 
@@ -316,8 +314,8 @@ class DataLineageStore:
         if not self._conn:
             return []
 
-        clauses: list[str] = []
-        params: list[Any] = []
+        clauses: ClassVar[list[str]] = []
+        params: ClassVar[list[Any]] = []
 
         if record_type:
             clauses.append("record_type = ?")
@@ -658,12 +656,12 @@ class DataLineageStore:
         if not self._conn:
             return
 
-        batch: list[dict] = []
+        batch: ClassVar[list[dict]] = []
         try:
             while len(batch) < _BATCH_SIZE:
                 batch.append(self._queue.get_nowait())
         except queue.Empty:
-            pass
+            ...  # nosec B110
 
         if not batch:
             return

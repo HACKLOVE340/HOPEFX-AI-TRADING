@@ -9,9 +9,7 @@ Breakout/Momentum Trading Strategy
 This strategy identifies and trades breakouts from consolidation periods.
 """
 
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
@@ -47,9 +45,7 @@ class BreakoutStrategy(BaseStrategy):
         super().__init__(name, symbol, config)
         self.lookback_period = lookback_period
         self.breakout_threshold = breakout_threshold
-        self.logger.info(
-            f"Breakout Strategy initialized: lookback={lookback_period}, threshold={breakout_threshold}",
-        )
+        self.logger.info("Breakout Strategy initialized: lookback=%s, threshold=%s", lookback_period, breakout_threshold)
 
     def identify_support_resistance(self, market_data: pd.DataFrame) -> tuple:
         """
@@ -94,7 +90,8 @@ class BreakoutStrategy(BaseStrategy):
 
         return atr.iloc[-1]
 
-    def generate_signal(self, market_data: pd.DataFrame) -> dict[str, Any]:
+    def generate_signal(self, analysis: pd.DataFrame) -> dict[str, Any]:  # type: ignore[override]
+        market_data = analysis
         """
         Generate trading signal based on breakouts.
 
@@ -209,7 +206,8 @@ class BreakoutStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            self.logger.error(f"Error generating breakout signal: {e}")
+            self.logger.error("Error generating breakout signal: %s", e)
+
             return {
                 "type": "HOLD",
                 "confidence": 0.0,

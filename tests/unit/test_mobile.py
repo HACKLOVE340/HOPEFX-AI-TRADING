@@ -67,7 +67,7 @@ class TestMobileAPI:
 
         assert "order_id" in result
         assert result["symbol"] == "EUR/USD"
-        assert result["quantity"] == 1000.0  # noqa: PLR2004
+        assert result["quantity"] == 1000.0
 
     def test_place_order_mobile_confirm_required(self):
         """Test order requires confirmation by default."""

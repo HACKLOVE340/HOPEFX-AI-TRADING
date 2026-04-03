@@ -37,10 +37,8 @@ import logging
 import os
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from typing import Any
+from datetime import UTC, datetime, timedelta
+from typing import Any, ClassVar
 
 import aiohttp
 
@@ -126,7 +124,7 @@ def _gold_impact_score(event_name: str) -> float:
     # Partial match fallback
     for key, reaction in _GOLD_REACTION_USD.items():
         words = key.lower().split()
-        if any(w in name_lower for w in words if len(w) > 4):  # noqa: PLR2004
+        if any(w in name_lower for w in words if len(w) > 4):
             return (reaction / _MAX_REACTION) * 0.7
     return 0.05  # unknown event — minimal default
 
@@ -175,7 +173,7 @@ class MacroCalendarEngine:
 
     def _init_prometheus(self) -> None:
         try:
-            from prometheus_client import Gauge, REGISTRY
+            from prometheus_client import REGISTRY, Gauge
 
             def _gauge(name: str, doc: str):
                 try:
@@ -198,7 +196,8 @@ class MacroCalendarEngine:
 
     async def start(self) -> None:
         self._running = True
-        asyncio.create_task(self._refresh_loop(), name="macro_calendar_refresh")
+        _t = asyncio.create_task(self._refresh_loop(), name="macro_calendar_refresh")
+        _t.add_done_callback(lambda _: None)
         logger.info("MacroCalendarEngine started")
 
     async def stop(self) -> None:
@@ -269,7 +268,7 @@ class MacroCalendarEngine:
             logger.warning("Finnhub calendar fetch error: %s", exc)
             return []
 
-        events: list[MacroEvent] = []
+        events: ClassVar[list[MacroEvent]] = []
         for item in data.get("economicCalendar", []):
             name = item.get("event", "")
             country = item.get("country", "")
@@ -277,7 +276,7 @@ class MacroCalendarEngine:
 
             time_str = item.get("time", "")
             try:
-                scheduled = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+                scheduled = datetime.fromisoformat(time_str)
             except Exception:  # nosec B112 - skip malformed calendar entry
                 continue
 
@@ -356,16 +355,16 @@ class MacroCalendarEngine:
             dt_before_min = (event.scheduled_at - now).total_seconds() / 60.0
             dt_after_min = (now - event.scheduled_at).total_seconds() / 60.0
 
-            if -30.0 <= dt_before_min <= 0.0:  # noqa: PLR2004
+            if -30.0 <= dt_before_min <= 0.0:
                 # Approaching: ramp from 0 → gold_impact_score over 30 min
                 proximity = 1.0 - (abs(dt_before_min) / 30.0)
                 score = event.gold_impact_score * proximity
-            elif 0.0 <= dt_after_min <= 60.0:  # noqa: PLR2004
+            elif 0.0 <= dt_after_min <= 60.0:
                 # Post-release: decay from gold_impact_score → 0 over 60 min
                 decay = 1.0 - (dt_after_min / 60.0)
                 score = event.gold_impact_score * decay
                 # Amplify if surprise was large (>10%)
-                if event.surprise_pct and abs(event.surprise_pct) > 10.0:  # noqa: PLR2004
+                if event.surprise_pct and abs(event.surprise_pct) > 10.0:
                     score = min(1.0, score * 1.5)
             else:
                 continue
@@ -460,10 +459,10 @@ class MacroCalendarEngine:
                 continue
             dt_before_min = (event.scheduled_at - as_of).total_seconds() / 60.0
             dt_after_min = (as_of - event.scheduled_at).total_seconds() / 60.0
-            if -30.0 <= dt_before_min <= 0.0:  # noqa: PLR2004
+            if -30.0 <= dt_before_min <= 0.0:
                 proximity = 1.0 - (abs(dt_before_min) / 30.0)
                 score = event.gold_impact_score * proximity
-            elif 0.0 <= dt_after_min <= 60.0:  # noqa: PLR2004
+            elif 0.0 <= dt_after_min <= 60.0:
                 decay = 1.0 - (dt_after_min / 60.0)
                 score = event.gold_impact_score * decay
             else:

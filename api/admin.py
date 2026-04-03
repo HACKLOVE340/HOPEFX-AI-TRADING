@@ -95,7 +95,7 @@ def _load_persisted_risk_settings() -> dict[str, Any]:
     try:
         if not _RISK_SETTINGS_FILE.exists():
             return {}
-        return json.loads(_RISK_SETTINGS_FILE.read_text())
+        return json.loads(_RISK_SETTINGS_FILE.read_text(encoding="utf-8"))
     except Exception as exc:
         logger.warning("_load_persisted_risk_settings: %s", exc)
         return {}
@@ -123,7 +123,7 @@ def _save_risk_settings(settings: dict[str, Any], changed_by: str = "system") ->
 
     try:
         _RISK_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _RISK_SETTINGS_FILE.write_text(json.dumps(settings, indent=2))
+        _RISK_SETTINGS_FILE.write_text(json.dumps(settings, indent=2), encoding="utf-8")
         return True
     except Exception as file_exc:
         logger.error("_save_risk_settings fallback failed: %s", file_exc)
@@ -137,7 +137,6 @@ def apply_persisted_risk_settings() -> None:
     Also migrates any legacy JSON file to the shared store on first run.
     Called once at startup by app.py after app_state is initialised.
     """
-    global _risk_settings  # noqa: PLW0602
 
     # One-time migration: if the legacy JSON file exists and the shared store
     # has no value yet, migrate the file contents to the store.
@@ -146,7 +145,7 @@ def apply_persisted_risk_settings() -> None:
 
         if _RISK_SETTINGS_FILE.exists() and config_store.get(_RISK_SETTINGS_KEY) is None:
             try:
-                legacy = json.loads(_RISK_SETTINGS_FILE.read_text())
+                legacy = json.loads(_RISK_SETTINGS_FILE.read_text(encoding="utf-8"))
                 if legacy:
                     config_store.set(_RISK_SETTINGS_KEY, legacy, changed_by="migration")
                     logger.info(
@@ -369,7 +368,7 @@ async def list_pending_kyc(user: TokenPayload = Depends(require_role("admin"))):
 
         if not _state or not _state.db_session_factory:
             raise HTTPException(status_code=503, detail="Database not available")
-        with _state.db_session_factory() as session:
+        with _state.db_session_factory() as session:  # pylint: disable=not-callable
             pending = session.query(User).filter(User.kyc_status.in_(["pending", "submitted", "under_review"])).all()
             return {
                 "count": len(pending),
@@ -387,7 +386,8 @@ async def list_pending_kyc(user: TokenPayload = Depends(require_role("admin"))):
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.error("admin endpoint error: %s", exc)
+        raise HTTPException(status_code=500, detail="Operation failed — check server logs") from None
 
 
 @router.post("/kyc/decide")
@@ -414,7 +414,7 @@ async def decide_kyc(
         if not _state or not _state.db_session_factory:
             raise HTTPException(status_code=503, detail="Database not available")
 
-        with _state.db_session_factory() as session:
+        with _state.db_session_factory() as session:  # pylint: disable=not-callable
             target = session.query(User).filter_by(id=body.user_id).first()
             if not target:
                 raise HTTPException(status_code=404, detail="User not found")
@@ -438,7 +438,7 @@ async def decide_kyc(
             from core.email_service import _send
             from database.user_models import User as _User
 
-            with _state.db_session_factory() as session:
+            with _state.db_session_factory() as session:  # pylint: disable=not-callable
                 target = session.query(_User).filter_by(id=body.user_id).first()
                 if target:
                     subject_map = {
@@ -468,7 +468,8 @@ async def decide_kyc(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.error("admin endpoint error: %s", exc)
+        raise HTTPException(status_code=500, detail="Operation failed — check server logs") from None
 
 
 @router.get("/kyc/{user_id}")
@@ -483,7 +484,7 @@ async def get_kyc_status(
 
         if not _state or not _state.db_session_factory:
             raise HTTPException(status_code=503, detail="Database not available")
-        with _state.db_session_factory() as session:
+        with _state.db_session_factory() as session:  # pylint: disable=not-callable
             target = session.query(User).filter_by(id=user_id).first()
             if not target:
                 raise HTTPException(status_code=404, detail="User not found")
@@ -498,7 +499,8 @@ async def get_kyc_status(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.error("admin endpoint error: %s", exc)
+        raise HTTPException(status_code=500, detail="Operation failed — check server logs") from None
 
 
 # ── New endpoints expected by tests ──────────────────────────────────────────
@@ -558,11 +560,10 @@ def save_settings(
                 logger.warning("save_settings: RiskManager update failed: %s", rm_exc)
             log_activity(f"Settings updated by {user.sub}: {list(payload.keys())}")
             return {"status": "ok", "saved": list(payload.keys())}
-        else:
-            return {"status": "error", "detail": "Config store write failed"}
-    except Exception as exc:
-        logger.error("save_settings failed: %s", exc, exc_info=True)
-        return {"status": "error", "detail": str(exc)}
+        return {"status": "error", "detail": "Config store write failed"}
+    except Exception:
+        logger.exception("save_settings failed: %s")
+        return {"status": "error", "detail": "Settings save failed — check server logs"}
 
 
 @router.get("/activity")
@@ -619,9 +620,9 @@ def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
 
     # Trade logger stats
     try:
-        from core.trade_logger import TradeLogger
+        from monitoring.trade_logger import get_trade_logger
 
-        tl = TradeLogger.get_trade_logger()
+        tl = get_trade_logger()
         tl_stats = tl.get_stats() if hasattr(tl, "get_stats") else {}
         trading_stats["total_trades"] = tl_stats.get("total_fills", 0)
     except Exception as exc:

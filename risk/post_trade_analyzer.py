@@ -47,9 +47,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import numpy as np
@@ -160,7 +158,7 @@ class PostTradeAnalyzer:
     statistics for slippage model calibration.
     """
 
-    def __init__(self, lineage_store: Any = None) -> None:
+    def __init__(self, lineage_store: Any | None = None) -> None:
         self._lineage = lineage_store
         self._fills: list[FillRecord] = []
         self._start_ts = time.time()

@@ -51,10 +51,9 @@ import json
 import logging
 import sys
 import warnings
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import ClassVar
 
 import numpy as np
 import pandas as pd
@@ -105,7 +104,7 @@ def fetch_ohlcv(ticker: str, years: int, smoke: bool = False) -> pd.DataFrame:
         try:
             df = pd.read_csv(cache_path, index_col=0, parse_dates=True)
             df.columns = [c.lower() for c in df.columns]
-            if len(df) > 50:  # noqa: PLR2004
+            if len(df) > 50:
                 logger.info("Loaded %s from cache: %d bars", ticker, len(df))
                 return df
         except Exception as _exc:
@@ -170,8 +169,6 @@ def _synthetic_ohlcv_smoke(ticker: str) -> pd.DataFrame:
     when smoke=True and yfinance is unavailable (e.g. in CI without
     network access).
     """
-    import warnings
-
     warnings.warn(
         f"_synthetic_ohlcv_smoke({ticker!r}): using synthetic GBM data. Results are not valid for strategy evaluation.",
         UserWarning,
@@ -252,12 +249,12 @@ def backtest_symbol(
     logger.info("=== %s (%s) ===", display_name, ticker)
 
     ohlcv = fetch_ohlcv(ticker, years, smoke=smoke)
-    if len(ohlcv) < 100:  # noqa: PLR2004
+    if len(ohlcv) < 100:
         logger.warning("%s: insufficient data (%d bars)", ticker, len(ohlcv))
         return {"symbol": display_name, "error": "insufficient data", "n_trades": 0}
 
     X, y = build_features(ohlcv, smoke=smoke)
-    if len(X) < 50:  # noqa: PLR2004
+    if len(X) < 50:
         logger.warning("%s: too few samples after filtering (%d)", ticker, len(X))
         return {"symbol": display_name, "error": "too few samples", "n_trades": 0}
 
@@ -266,7 +263,7 @@ def backtest_symbol(
     X_train, y_train = X.iloc[:-oos_n], y.iloc[:-oos_n]
     X_oos, y_oos = X.iloc[-oos_n:], y.iloc[-oos_n:]
 
-    if len(X_train) < 30:  # noqa: PLR2004
+    if len(X_train) < 30:
         return {"symbol": display_name, "error": "train set too small", "n_trades": 0}
 
     # Train calibrated XGBoost
@@ -291,7 +288,7 @@ def backtest_symbol(
 
     # OOS predictions
     proba = model.predict_proba(X_oos)[:, 1]
-    _preds = (proba >= 0.55).astype(int)  # threshold: 0.55 for signal  # noqa: PLR2004
+    _preds = (proba >= 0.55).astype(int)  # threshold: 0.55 for signal
 
     # Align OOS prices for PnL calculation
     oos_close = ohlcv["close"].reindex(X_oos.index)
@@ -305,7 +302,7 @@ def backtest_symbol(
     # Net PnL = raw close-to-close return − round-trip spread − commission
     trades = []
     for i in range(len(X_oos) - 1):
-        if proba[i] >= 0.58:  # long signal  # noqa: PLR2004
+        if proba[i] >= 0.58:  # long signal
             entry = float(oos_close.iloc[i])
             exit_ = float(oos_close.iloc[i + 1])
             raw_pnl_pct = (exit_ - entry) / entry
@@ -319,7 +316,7 @@ def backtest_symbol(
                     "prob": float(proba[i]),
                 }
             )
-        elif proba[i] <= 0.42:  # short signal  # noqa: PLR2004
+        elif proba[i] <= 0.42:  # short signal
             entry = float(oos_close.iloc[i])
             exit_ = float(oos_close.iloc[i + 1])
             raw_pnl_pct = (entry - exit_) / entry
@@ -353,8 +350,8 @@ def backtest_symbol(
     raw_sharpe = float(raw_pnls.mean() / (raw_pnls.std(ddof=1) or 1e-6) * np.sqrt(252))
 
     # Classification metrics
-    acc = accuracy_score(y_oos, (proba >= 0.5).astype(int))  # noqa: PLR2004
-    f1 = f1_score(y_oos, (proba >= 0.5).astype(int), zero_division=0)  # noqa: PLR2004
+    acc = accuracy_score(y_oos, (proba >= 0.5).astype(int))
+    f1 = f1_score(y_oos, (proba >= 0.5).astype(int), zero_division=0)
     try:
         auc = roc_auc_score(y_oos, proba)
     except (ValueError, RuntimeError):
@@ -373,9 +370,7 @@ def backtest_symbol(
     )
 
     # Log TC summary at INFO so operators can see the cost drag
-    from backtest.transaction_costs import get_tc_model as _get_tc
-
-    _tc_summary = _get_tc().cost_summary(
+    _tc_summary = get_tc_model().cost_summary(
         entry_price=float(oos_close.dropna().iloc[-1]) if len(oos_close.dropna()) > 0 else 1.0,
         ticker=ticker,
     )
@@ -433,17 +428,17 @@ def _detect_sharpe_outliers(symbol_results: list[dict]) -> tuple[list[str], list
 
     Returns (outlier_symbols, reasons) — parallel lists.
     """
-    outliers: list[str] = []
-    reasons: list[str] = []
+    outliers: ClassVar[list[str]] = []
+    reasons: ClassVar[list[str]] = []
     for r in symbol_results:
         sym = r.get("symbol", "?")
         sharpe = r.get("sharpe", 0.0)
         win_rate = r.get("win_rate", 0.0)
         n = r.get("n_trades", 0)
-        flags: list[str] = []
-        if sharpe > 5.0:  # noqa: PLR2004
+        flags: ClassVar[list[str]] = []
+        if sharpe > 5.0:
             flags.append(f"Sharpe={sharpe:.2f} > 5.0 (implausible for daily bars)")
-        if win_rate > 0.75 and n > 50:  # noqa: PLR2004
+        if win_rate > 0.75 and n > 50:
             flags.append(f"win_rate={win_rate:.1%} on {n} trades (implausible for direction model)")
         if flags:
             outliers.append(sym)
@@ -472,9 +467,9 @@ def _pool_pnls(symbol_results: list[dict], exclude: list[str] | None = None) -> 
     import os as _os
 
     exclude_set = set(exclude or [])
-    all_pnls: list[float] = []
+    all_pnls: ClassVar[list[float]] = []
     n_total = 0
-    skipped_symbols: list[str] = []
+    skipped_symbols: ClassVar[list[str]] = []
     _is_production = _os.getenv("APP_ENV", "production").lower() == "production"
 
     for r in symbol_results:
@@ -530,7 +525,7 @@ def _sharpe_stats(pnls: np.ndarray, n_total: int, target_n: int) -> dict:
     sr = abs(sharpe)
     se = float(np.sqrt((1 + 0.5 * sr**2) / max(n_total, 1)))
     gate_passed = n_total >= target_n
-    credible = se <= 0.10  # noqa: PLR2004
+    credible = se <= 0.10
     n_req = int(np.ceil((1 + 0.5 * sr**2) / 0.01))
     if gate_passed:
         se_note = f"SE={se:.3f}" + (" (credible)" if credible else f" (need N>={n_req} for SE<=0.10)")
@@ -673,9 +668,9 @@ def run_backtest(
                 smoke=smoke,
             )
             symbol_results.append(result)
-        except Exception as exc:
-            logger.error("Backtest failed for %s: %s", display_name, exc)
-            symbol_results.append({"symbol": display_name, "error": str(exc), "n_trades": 0})
+        except Exception:
+            logger.exception("Backtest failed for %s: %s", display_name)
+            symbol_results.append({"symbol": display_name, "error": "Backtest failed — check server logs", "n_trades": 0})
 
     pooled = compute_pooled_metrics(symbol_results, target_n=target_n)
 

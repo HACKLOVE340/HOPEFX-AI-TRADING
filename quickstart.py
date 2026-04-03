@@ -4,6 +4,7 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 # File 19: Create a quickstart script for one-command setup
+from pathlib import Path
 
 quickstart_content = '''#!/usr/bin/env python3
 """
@@ -152,7 +153,7 @@ if __name__ == "__main__":
     sys.exit(main())
 '''
 
-with open("/mnt/kimi/output/hopefx_upgrade/quickstart.py", "w") as f:
+with Path("/mnt/kimi/output/hopefx_upgrade/quickstart.py").open("w") as f:
     f.write(quickstart_content)
 
 print("✅ quickstart.py created - One-command setup and demo")

@@ -13,9 +13,7 @@ Unit tests for TCA module:
 from __future__ import annotations
 
 import enum
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock
 
@@ -24,8 +22,8 @@ import pytest
 # ── Python 3.10 StrEnum shim ─────────────────────────────────────────────────
 if not hasattr(enum, "StrEnum"):
 
-    class _StrEnum(str, enum.Enum):
-        pass
+    class _StrEnum(str, enum.Enum):  # type: ignore[no-redef]
+        """Backport of enum.StrEnum for Python < 3.11."""
 
     enum.StrEnum = _StrEnum  # type: ignore[attr-defined]
 
@@ -136,7 +134,7 @@ class TestTCARecorder:
             self.recorder.record_fill(rid, 2000.5, 1.0, "oanda", 30.0)
         report = self.recorder.get_report(broker="oanda")
         assert report is not None
-        assert report.n_trades == 5  # noqa: PLR2004
+        assert report.n_trades == 5
         assert report.mean_slippage_bps == pytest.approx(2.5, rel=0.01)
 
     def test_get_report_filters_by_symbol(self):
@@ -154,7 +152,7 @@ class TestTCARecorder:
             self.recorder.record_signal(rid, "XAU_USD", "BUY", 2000.0, 1.0, "v1")
             self.recorder.record_fill(rid, 2001.0, 1.0, "oanda", 10.0)
         records = self.recorder.get_recent_records(n=3)
-        assert len(records) == 3  # noqa: PLR2004
+        assert len(records) == 3
         # Most recent first
         assert records[0]["request_id"] == "r2"
 
@@ -243,11 +241,11 @@ class TestAlmgrenChrissModel:
 
     def test_fill_price_buy_above_signal(self):
         est = self.model.estimate(100, 10000, 0.012, 3.0, 2000.0)
-        assert est.fill_price("BUY") > 2000.0  # noqa: PLR2004
+        assert est.fill_price("BUY") > 2000.0
 
     def test_fill_price_sell_below_signal(self):
         est = self.model.estimate(100, 10000, 0.012, 3.0, 2000.0)
-        assert est.fill_price("SELL") < 2000.0  # noqa: PLR2004
+        assert est.fill_price("SELL") < 2000.0
 
     def test_total_cost_usd_positive(self):
         est = self.model.estimate(100, 10000, 0.012, 3.0, 2000.0)
@@ -275,7 +273,7 @@ class TestFillSimulator:
             adv=10000,
             volatility_daily=0.012,
         )
-        assert fill.fill_price >= 2000.0  # noqa: PLR2004
+        assert fill.fill_price >= 2000.0
 
     def test_sell_fill_below_signal(self):
         fill = self.sim.simulate_fill(
@@ -288,7 +286,7 @@ class TestFillSimulator:
             adv=10000,
             volatility_daily=0.012,
         )
-        assert fill.fill_price <= 2000.0  # noqa: PLR2004
+        assert fill.fill_price <= 2000.0
 
     def test_fill_clamped_to_bar_range_buy(self):
         fill = self.sim.simulate_fill(
@@ -301,7 +299,7 @@ class TestFillSimulator:
             adv=10000,
             volatility_daily=0.012,
         )
-        assert fill.fill_price <= 2001.0  # noqa: PLR2004
+        assert fill.fill_price <= 2001.0
 
     def test_partial_fill_when_order_exceeds_liquidity(self):
         fill = self.sim.simulate_fill(
@@ -315,7 +313,7 @@ class TestFillSimulator:
             volatility_daily=0.012,
         )
         assert fill.partial_fill is True
-        assert fill.fill_quantity < 10000  # noqa: PLR2004
+        assert fill.fill_quantity < 10000
 
     def test_no_partial_fill_small_order(self):
         fill = self.sim.simulate_fill(
@@ -347,18 +345,18 @@ class TestFillSimulator:
 
     def test_batch_simulate(self):
         signals = [
-            dict(
-                signal_price=2000.0,
-                side="BUY",
-                quantity=10,
-                bar_high=2005.0,
-                bar_low=1995.0,
-                bar_volume=5000,
-            )
+            {
+                "signal_price": 2000.0,
+                "side": "BUY",
+                "quantity": 10,
+                "bar_high": 2005.0,
+                "bar_low": 1995.0,
+                "bar_volume": 5000,
+            }
             for _ in range(5)
         ]
         fills = self.sim.simulate_fills_batch(signals, adv=10000, volatility_daily=0.012)
-        assert len(fills) == 5  # noqa: PLR2004
+        assert len(fills) == 5
 
     def test_get_fill_simulator_singleton(self):
         from execution.market_impact import get_fill_simulator
@@ -437,7 +435,7 @@ class TestMarketContextProvider:
         vol, source = self.ctx.get_vol = self.ctx.get_volatility("XAU_USD")
         # Just check it returns a reasonable value
         assert source == "redis_ohlcv"
-        assert 0 < vol < 0.5  # noqa: PLR2004
+        assert 0 < vol < 0.5
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -448,7 +446,7 @@ class TestMarketContextProvider:
 class TestTCAEngine:
     def setup_method(self):
         # Patch StrEnum before importing tca module
-        from execution.tca import TCAEngine, MarketContextProvider
+        from execution.tca import MarketContextProvider, TCAEngine
 
         ctx = MarketContextProvider()
         self.engine = TCAEngine(market_context=ctx)
@@ -544,7 +542,7 @@ class TestTCAEngine:
         from execution.tca import BenchmarkType, Side
 
         fired = []
-        self.engine.register_cost_callback(lambda m: fired.append(m))
+        self.engine.register_cost_callback(fired.append)
         await self.engine.start_order(
             "ord5",
             "XAU_USD",
@@ -582,7 +580,7 @@ class TestTCAEngine:
             await self.engine.record_fill(oid, fill)
             await self.engine.complete_order(oid)
         stats = self.engine.get_stats()
-        assert stats["count"] == 5  # noqa: PLR2004
+        assert stats["count"] == 5
         assert "mean_cost_bps" in stats
         assert "adv_source_breakdown" in stats
 

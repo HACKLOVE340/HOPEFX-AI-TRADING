@@ -16,9 +16,7 @@ import random
 import time
 import uuid
 from collections import deque
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 from .base import (
@@ -185,11 +183,11 @@ class PaperTradingBroker(BrokerConnector):
 
     def __init__(
         self,
-        config: dict[str, Any] = None,
+        config: dict[str, Any] | None = None,
         session_factory=None,
         user_id: str = "paper",
-        initial_balance: float = None,
-        commission_per_lot: float = None,
+        initial_balance: float | None = None,
+        commission_per_lot: float | None = None,
         slippage_model: str = "gaussian",
     ):
         """
@@ -275,16 +273,16 @@ class PaperTradingBroker(BrokerConnector):
         await self.disconnect()
 
     async def connect(self) -> bool:
-        """Connect to paper trading broker (always succeeds)"""
+        """Connect to paper trading broker (always succeeds)."""
         self.connected = True
-        logger.info(f"Connected to {self.name} (Paper Trading)")
-        logger.info(f"Initial balance: ${self.initial_balance:,.2f}")
+        logger.info("Connected to %s (Paper Trading)", self.name)
+        logger.info("Initial balance: $%,.2f", self.initial_balance)
         return True
 
     async def disconnect(self) -> bool:
-        """Disconnect from paper trading broker"""
+        """Disconnect from paper trading broker."""
         self.connected = False
-        logger.info(f"Disconnected from {self.name}")
+        logger.info("Disconnected from %s", self.name)
         return True
 
     def place_order(
@@ -312,7 +310,8 @@ class PaperTradingBroker(BrokerConnector):
         # Get current market price
         current_price = self.market_prices.get(symbol, 0.0)
         if current_price == 0.0:
-            logger.warning(f"Unknown symbol {symbol}, using default price 1000.0")
+            logger.warning("Unknown symbol %s, using default price 1000.0", symbol)
+
             current_price = 1000.0
 
         # Create order
@@ -363,9 +362,7 @@ class PaperTradingBroker(BrokerConnector):
         else:
             # For limit/stop orders, just mark as open
             order.status = OrderStatus.OPEN
-            logger.info(
-                f"Limit order placed: {side.value} {quantity} {symbol} @ ${price}",
-            )
+            logger.info("Limit order placed: %s %s %s @ $%s", side.value, quantity, symbol, price)
 
         self.orders[order_id] = order
         return order
@@ -397,10 +394,12 @@ class PaperTradingBroker(BrokerConnector):
             order = self.orders[order_id]
             if order.status in [OrderStatus.PENDING, OrderStatus.OPEN]:
                 order.status = OrderStatus.CANCELLED
-                logger.info(f"Order cancelled: {order_id}")
+                logger.info("Order cancelled: %s", order_id)
+
                 return True
 
-        logger.warning(f"Cannot cancel order {order_id}")
+        logger.warning("Cannot cancel order %s", order_id)
+
         return False
 
     def get_order(self, order_id: str) -> Order | None:
@@ -430,16 +429,17 @@ class PaperTradingBroker(BrokerConnector):
         """Get all open positions."""
         return self._get_positions_sync()
 
-    def close_position(self, symbol_or_id: str) -> bool:
+    def close_position(self, symbol: str) -> bool:  # pylint: disable=arguments-differ
         """Close a position by symbol or position id."""
-        symbol = symbol_or_id
+        symbol_or_id = symbol
         if symbol_or_id not in self.positions:
             for sym, pos in self.positions.items():
                 if getattr(pos, "id", sym) == symbol_or_id:
                     symbol = sym
                     break
             else:
-                logger.warning(f"No open position for {symbol_or_id}")
+                logger.warning("No open position for %s", symbol_or_id)
+
                 return False
         if symbol not in self.positions:
             return False
@@ -551,7 +551,7 @@ class PaperTradingBroker(BrokerConnector):
         # Record a throttled equity snapshot (at most once per 60 seconds)
         # so the equity curve grows over time even without active trading.
         last_ts = self._equity_history[-1][0] if self._equity_history else 0.0
-        if time.time() - last_ts >= 60.0:  # noqa: PLR2004
+        if time.time() - last_ts >= 60.0:
             self._equity_history.append((time.time(), float(info.equity)))
         return info
 
@@ -662,7 +662,8 @@ class PaperTradingBroker(BrokerConnector):
             price: New price
         """
         self.market_prices[symbol] = price
-        logger.debug(f"Updated {symbol} price to ${price}")
+        logger.debug("Updated %s price to $%s", symbol, price)
+
 
     def _update_position(
         self,

@@ -30,6 +30,7 @@ Latency budget
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import json
 import logging
@@ -37,19 +38,17 @@ import os
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
-from risk.intra_trade_monitor import IntraTradeMonitor, OpenPosition as IntraPosition
-from risk.post_trade_analyzer import PostTradeAnalyzer
-from risk.drawdown_tracker import DrawdownTracker
-from shadow.trading_engine import ShadowTradingEngine
-from shadow.data_validator import ShadowDataValidator
 from resilience.hot_standby import HotStandbyReplicator
-import contextlib
+from risk.drawdown_tracker import DrawdownTracker
+from risk.intra_trade_monitor import IntraTradeMonitor
+from risk.intra_trade_monitor import OpenPosition as IntraPosition
+from risk.post_trade_analyzer import PostTradeAnalyzer
+from shadow.data_validator import ShadowDataValidator
+from shadow.trading_engine import ShadowTradingEngine
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +62,7 @@ _SIGNAL_COOLDOWN_S = float(os.getenv("ENGINE_SIGNAL_COOLDOWN_S", "30.0"))
 _STALE_TICK_THRESHOLD = float(os.getenv("ENGINE_STALE_TICK_S", "10.0"))
 
 
-class EngineState(str, Enum):
+class EngineState(StrEnum):
     IDLE = "idle"
     RUNNING = "running"
     PAUSED = "paused"
@@ -276,8 +275,8 @@ class HopeFXEngine:
                 await self._process_tick()
             except asyncio.CancelledError:
                 break
-            except Exception as exc:
-                logger.error("Tick loop error: %s", exc, exc_info=True)
+            except Exception:
+                logger.exception("Tick loop error: %s")
 
             elapsed = time.monotonic() - t0
             sleep_s = max(0.0, interval - elapsed)
@@ -467,9 +466,9 @@ class HopeFXEngine:
         sent = features.get("news_sentiment_score", 0.0)
         score = 0.5 * ofi + 0.3 * press + 0.2 * sent
 
-        if score > 0.15:  # noqa: PLR2004
+        if score > 0.15:
             return "long", min(0.5 + abs(score), 0.95), 0.5 + abs(score) * 0.5
-        if score < -0.15:  # noqa: PLR2004
+        if score < -0.15:
             return "short", min(0.5 + abs(score), 0.95), 0.5 + abs(score) * 0.5
         return "neutral", 0.0, 0.5
 
@@ -617,7 +616,7 @@ class HopeFXEngine:
             # OANDA XAU_USD: 1 lot = 100 units (oz).
             # If the fill quantity looks like units (>> requested lots),
             # convert to lots.
-            if raw_qty > requested_qty * 10 and requested_qty < 100:  # noqa: PLR2004
+            if raw_qty > requested_qty * 10 and requested_qty < 100:
                 quantity = raw_qty / 100.0
                 logger.debug(
                     "OANDA XAU_USD unit→lot conversion: %.0f units → %.4f lots",

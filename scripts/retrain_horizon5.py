@@ -74,9 +74,7 @@ import logging
 import os
 import subprocess  # nosec B404 - list-form call with sys.executable; no shell=True, no user input
 import sys
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Ensure project root is on sys.path regardless of invocation directory
@@ -244,8 +242,9 @@ def dry_run(args: argparse.Namespace) -> None:
     )
 
     try:
-        from ml.train_advanced import fetch_gold_ohlcv, fetch_macro
         from datetime import timedelta
+
+        from ml.train_advanced import fetch_gold_ohlcv, fetch_macro
 
         logger.info("Fetching OHLCV data (%d years)...", args.years)
         ohlcv = fetch_gold_ohlcv(
@@ -312,8 +311,8 @@ def dry_run(args: argparse.Namespace) -> None:
         print("=" * 60)
         sys.exit(0)
 
-    except Exception as exc:
-        logger.error("Dry run failed: %s", exc, exc_info=True)
+    except Exception:
+        logger.exception("Dry run failed: %s")
         sys.exit(1)
 
 

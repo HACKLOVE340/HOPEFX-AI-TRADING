@@ -25,12 +25,12 @@ Covers:
 from __future__ import annotations
 
 import json
-import numpy as np
-import pandas as pd
-import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import numpy as np
+import pandas as pd
+import pytest
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -113,7 +113,7 @@ class TestDeepEnsembleStore:
         store = self._cls()
         df = _make_ohlcv(100)
         result = store.blend(0.75, df)
-        assert result == 0.75  # noqa: PLR2004
+        assert result == 0.75
 
     def test_blend_with_active_mock_predictor(self, tmp_path):
         """When active, blend should return (1-w)*adv + w*deep."""
@@ -140,7 +140,7 @@ class TestDeepEnsembleStore:
         result = store.blend(0.80, df)
 
         expected = 0.80 * 0.80 + 0.20 * 0.60  # (1-0.2)*0.8 + 0.2*0.6 = 0.76
-        assert abs(result - expected) < 1e-4  # noqa: PLR2004
+        assert abs(result - expected) < 1e-4
 
     def test_blend_clamps_to_unit_interval(self):
         store = self._cls(deep_weight=0.5)
@@ -161,7 +161,7 @@ class TestDeepEnsembleStore:
         df = _make_ohlcv(100)
         with patch.object(self._cls, "_extract_features", side_effect=RuntimeError("boom")):
             result = store.blend(0.65, df)
-        assert result == 0.65  # noqa: PLR2004
+        assert result == 0.65
 
     def test_extract_features_shape(self):
         df = _make_ohlcv(100)
@@ -202,7 +202,7 @@ class TestDeepEnsembleStore:
         model.write_bytes(b"fake")
         store = self._cls(model_path=str(model), meta_path=str(meta))
         store._check_oos_gate()
-        assert abs(store.oos_accuracy - 0.72) < 1e-9  # noqa: PLR2004
+        assert abs(store.oos_accuracy - 0.72) < 1e-9
 
     def test_p_value_property(self, tmp_path):
         meta = tmp_path / "meta.json"
@@ -211,7 +211,7 @@ class TestDeepEnsembleStore:
         model.write_bytes(b"fake")
         store = self._cls(model_path=str(model), meta_path=str(meta))
         store._check_oos_gate()
-        assert abs(store.p_value - 0.0005) < 1e-9  # noqa: PLR2004
+        assert abs(store.p_value - 0.0005) < 1e-9
 
 
 # ── Signal engine integration ─────────────────────────────────────────────────
@@ -243,21 +243,21 @@ class TestDeepEnsembleSignalEngine:
         deep = 0.6
         w = 0.2
         blend = (1 - w) * adv + w * deep
-        assert abs(blend - 0.76) < 1e-9  # noqa: PLR2004
+        assert abs(blend - 0.76) < 1e-9
 
     def test_blend_weight_zero_leaves_prob_unchanged(self):
         adv = 0.75
         deep = 0.3
         w = 0.0
         blend = (1 - w) * adv + w * deep
-        assert abs(blend - adv) < 1e-9  # noqa: PLR2004
+        assert abs(blend - adv) < 1e-9
 
     def test_blend_weight_one_returns_deep_prob(self):
         adv = 0.75
         deep = 0.3
         w = 1.0
         blend = (1 - w) * adv + w * deep
-        assert abs(blend - deep) < 1e-9  # noqa: PLR2004
+        assert abs(blend - deep) < 1e-9
 
 
 # ── DeepPredictor architecture validation ─────────────────────────────────────
@@ -297,11 +297,11 @@ class TestDeepPredictorArchitectures:
         from research.pipeline.models_deep import DeepPredictor
 
         dp = DeepPredictor(architecture="lstm", n_features=10, seq_len=30)
-        assert dp.n_features == 10  # noqa: PLR2004
+        assert dp.n_features == 10
 
     @_skip_no_torch
     def test_seq_len_stored(self):
         from research.pipeline.models_deep import DeepPredictor
 
         dp = DeepPredictor(architecture="lstm", n_features=6, seq_len=45)
-        assert dp.seq_len == 45  # noqa: PLR2004
+        assert dp.seq_len == 45

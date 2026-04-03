@@ -10,9 +10,7 @@ This strategy trades when price deviates significantly from its mean,
 expecting it to revert back to the average.
 """
 
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
@@ -49,11 +47,11 @@ class MeanReversionStrategy(BaseStrategy):
         super().__init__(name, symbol, config)
         self.period = period
         self.std_dev = std_dev
-        self.logger.info(
-            f"Mean Reversion Strategy initialized: period={period}, std_dev={std_dev}",
-        )
+        self.position: str | None = None  # tracks current position side: "LONG", "SHORT", or None
+        self.logger.info("Mean Reversion Strategy initialized: period=%s, std_dev=%s", period, std_dev)
 
-    def generate_signal(self, market_data: pd.DataFrame) -> dict[str, Any]:
+    def generate_signal(self, analysis: pd.DataFrame) -> dict[str, Any]:  # type: ignore[override]
+        market_data = analysis
         """
         Generate trading signal based on mean reversion.
 
@@ -142,7 +140,8 @@ class MeanReversionStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            self.logger.error(f"Error generating signal: {e}")
+            self.logger.error("Error generating signal: %s", e)
+
             return {
                 "type": "HOLD",
                 "confidence": 0.0,

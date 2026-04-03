@@ -41,7 +41,8 @@ Usage
     asyncio.run(streamer.run())
 
     # Or as a background task inside an existing event loop:
-    asyncio.create_task(streamer.run())
+    _t = asyncio.create_task(streamer.run())
+    _t.add_done_callback(lambda _: None)
 
 Environment variables
 ---------------------
@@ -56,6 +57,7 @@ Environment variables
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -65,7 +67,6 @@ from typing import Any
 
 import websockets
 from prometheus_client import Gauge, start_http_server
-import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -409,7 +410,9 @@ class NuclearStreamer:
         if not self._subscribers:
             return
         tasks = [
-            asyncio.create_task(sub.on_new_price(price)) for sub in self._subscribers if hasattr(sub, "on_new_price")
+            asyncio.create_task(sub.on_new_price(price))
+            for sub in self._subscribers
+            if hasattr(sub, "on_new_price")
         ]
         if tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -434,7 +437,7 @@ class NuclearStreamer:
         # Finnhub symbol for spot gold via OANDA feed.
         finnhub_symbol = "OANDA:XAU_USD"
 
-        logger.info("Finnhub: connecting to %s", url.split("?")[0])
+        logger.info("Finnhub: connecting to %s", url.split("?", maxsplit=1)[0])
         async with websockets.connect(
             url,
             ping_interval=20,
@@ -523,7 +526,7 @@ class NuclearStreamer:
                         continue
                     # Normalise timestamp to Unix seconds.
                     if isinstance(ts_raw, int | float):
-                        ts = float(ts_raw) / 1000.0 if ts_raw > 1e10 else float(ts_raw)  # noqa: PLR2004
+                        ts = float(ts_raw) / 1000.0 if ts_raw > 1e10 else float(ts_raw)
                     else:
                         try:
                             ts = datetime.fromisoformat(str(ts_raw)).timestamp()

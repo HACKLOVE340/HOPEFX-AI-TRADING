@@ -51,7 +51,7 @@ import asyncio
 import io
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -59,7 +59,6 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-UTC = timezone.utc
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
@@ -171,7 +170,7 @@ def _parse_date_col(df: pd.DataFrame) -> pd.Series | None:
     # Try quarter format: "Q1 2024" → 2024-01-01
     def _parse_quarter(s: str) -> pd.Timestamp | None:
         s = s.strip()
-        if s.startswith("Q") and len(s) >= 7:  # noqa: PLR2004
+        if s.startswith("Q") and len(s) >= 7:
             try:
                 q = int(s[1])
                 year = int(s[3:7])
@@ -210,7 +209,7 @@ def _csv_to_series(
         header_idx = 0
         for i, line in enumerate(lines):
             # Header row has multiple comma-separated fields
-            if line.count(",") >= 3:  # noqa: PLR2004
+            if line.count(",") >= 3:
                 header_idx = i
                 break
 
@@ -300,14 +299,16 @@ class WGCFeed:
                 ),
                 "Accept": "text/csv,application/csv,text/plain,*/*",
             }
-            async with aiohttp.ClientSession(timeout=timeout) as session:  # noqa: SIM117
-                async with session.get(url, headers=headers, allow_redirects=True) as resp:
-                    if resp.status == 200:  # noqa: PLR2004
-                        return await resp.text(encoding="utf-8", errors="replace")
-                    logger.warning("WGC fetch %s returned HTTP %d", url, resp.status)
-                    return None
+            async with (
+                aiohttp.ClientSession(timeout=timeout) as session,
+                session.get(url, headers=headers, allow_redirects=True) as resp,
+            ):
+                if resp.status == 200:
+                    return await resp.text(encoding="utf-8", errors="replace")
+                logger.warning("WGC fetch %s returned HTTP %d", url, resp.status)
+                return None
         except ImportError:
-            pass
+            ...  # nosec B110
         except Exception as exc:
             logger.warning("WGC aiohttp fetch failed for %s: %s", url, exc)
 
@@ -327,7 +328,7 @@ class WGCFeed:
                     },
                     allow_redirects=True,
                 )
-                if r.status_code == 200:  # noqa: PLR2004
+                if r.status_code == 200:
                     return r.text
                 logger.warning("WGC requests fetch %s returned HTTP %d", url, r.status_code)
                 return None
@@ -379,7 +380,7 @@ class WGCFeed:
             return _csv_to_series(cached, _DEMAND_COL_VARIANTS)
 
         text = await self._fetch_url(_WGC_DEMAND_CSV_URL)
-        if text and "," in text and len(text) > 200:  # noqa: PLR2004
+        if text and "," in text and len(text) > 200:
             # Validate it looks like CSV (not an HTML error page)
             if not text.strip().startswith("<!"):
                 self._write_cache(_DEMAND_CACHE_FILE, text)
@@ -408,7 +409,7 @@ class WGCFeed:
             return _csv_to_series(cached, _ETF_COL_VARIANTS)
 
         text = await self._fetch_url(_WGC_ETF_CSV_URL)
-        if text and "," in text and len(text) > 200:  # noqa: PLR2004
+        if text and "," in text and len(text) > 200:
             if not text.strip().startswith("<!"):
                 self._write_cache(_ETF_CACHE_FILE, text)
                 return _csv_to_series(text, _ETF_COL_VARIANTS)
@@ -457,7 +458,7 @@ class WGCFeed:
         logger.info(
             "WGC: fetched %d series: %s",
             len(loaded),
-            loaded if loaded else "(none — check cache dir or download manually)",
+            loaded or "(none — check cache dir or download manually)",
         )
         return results
 

@@ -38,9 +38,7 @@ import logging
 import math
 import random
 import uuid
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -87,31 +85,38 @@ def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, init
     Raises ValueError when the strategy is not registered or data is unavailable.
     """
     try:
-        from backtesting.engine_config import BacktestEngine
+        from datetime import timedelta
 
-        engine = BacktestEngine()
-        result = engine.run(
-            strategy=strategy_name,
-            symbol=symbol,
-            days=duration_days,
+        from backtesting.engine_config import BacktestConfig, BacktestEngine
+
+        end_dt = datetime.now(UTC)
+        start_dt = end_dt - timedelta(days=duration_days)
+        config = BacktestConfig(
+            start_date=start_dt,
+            end_date=end_dt,
+            symbols=[symbol],
             initial_capital=initial_capital,
         )
+        engine = BacktestEngine(config=config)
+        import asyncio
+        result = asyncio.get_event_loop().run_until_complete(engine.run())
         return {
             "strategy": strategy_name,
-            "final_equity": round(float(result.get("final_equity", initial_capital)), 2),
-            "total_return": round(float(result.get("total_return_pct", 0.0)), 2),
-            "sharpe_ratio": round(float(result.get("sharpe_ratio", 0.0)), 3),
-            "max_drawdown": round(float(result.get("max_drawdown_pct", 0.0)), 2),
-            "total_trades": int(result.get("total_trades", 0)),
-            "win_rate": round(float(result.get("win_rate_pct", 0.0)), 2),
-            "equity_curve": result.get("equity_curve", []),
+            "final_equity": round(float(initial_capital * (1 + result.total_return)), 2),
+            "total_return": round(float(result.total_return * 100), 2),
+            "sharpe_ratio": round(float(result.sharpe_ratio), 3),
+            "max_drawdown": round(float(result.max_drawdown * 100), 2),
+            "total_trades": int(result.total_trades),
+            "win_rate": round(float(result.win_rate * 100), 2),
+            "equity_curve": result.equity_curve,
         }
     except ImportError:
         raise ValueError(
             "BacktestEngine is not available. Ensure the backtest module is installed and configured."
         ) from None
     except Exception as exc:
-        raise ValueError(f"Backtest failed for strategy '{strategy_name}': {exc}") from exc
+        logger.error("Backtest failed for strategy '%s': %s", strategy_name, exc)
+        raise ValueError(f"Backtest failed for strategy '{strategy_name}' — check server logs") from None
 
 
 @router.post("/api/ab-test/start", status_code=201)
@@ -130,7 +135,8 @@ async def start_ab_test(
         result_a = _run_real_backtest(req.strategy_a, req.symbol, req.duration_days, req.initial_capital)
         result_b = _run_real_backtest(req.strategy_b, req.symbol, req.duration_days, req.initial_capital)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        logger.warning("ab_test start failed: %s", exc)
+        raise HTTPException(status_code=422, detail="A/B test failed — check strategy names and data availability") from None
 
     # Winner by Sharpe ratio (risk-adjusted)
     winner = req.strategy_a if result_a["sharpe_ratio"] >= result_b["sharpe_ratio"] else req.strategy_b
@@ -240,10 +246,11 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
     Raises ValueError when no real data is available.
     """
     import pathlib
+
     import pandas as pd
 
     sym_key = symbol.upper().replace("/", "_").replace("-", "_")
-    if "_" not in sym_key and len(sym_key) == 6:  # noqa: PLR2004
+    if "_" not in sym_key and len(sym_key) == 6:
         sym_key = sym_key[:3] + "_" + sym_key[3:]
 
     data_dir = pathlib.Path(__file__).parent.parent / "data"
@@ -255,7 +262,7 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
         if csv_path.exists():
             try:
                 df = pd.read_csv(csv_path).tail(periods + 50)
-                if len(df) >= 20:  # noqa: PLR2004
+                if len(df) >= 20:
                     return {
                         "close": df["close"].tolist(),
                         "open": df["open"].tolist(),
@@ -273,9 +280,7 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
         broker = getattr(app_state, "broker", None)
         if broker and hasattr(broker, "get_market_data"):
             raw = broker.get_market_data(sym_key.replace("_", ""), "1h", periods + 50)
-            if raw and len(raw) >= 20:  # noqa: PLR2004
-                import pandas as pd
-
+            if raw and len(raw) >= 20:
                 df = pd.DataFrame(raw)
                 return {
                     "close": df["close"].tolist(),
@@ -293,239 +298,236 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
     )
 
 
-# ── Indicator formula AST helpers ────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Indicator math helpers (module-level so they are independently testable)
+# ─────────────────────────────────────────────────────────────────────────────
 
-_INDICATOR_ALLOWED_NAMES = frozenset(
+def _ind_sma(data: list[float], n: int) -> list[float | None]:
+    """Simple moving average over *data* with window *n*."""
+    result: list[float | None] = [None] * (n - 1)
+    for i in range(n - 1, len(data)):
+        result.append(sum(data[i - n + 1 : i + 1]) / n)
+    return result
+
+
+def _ind_ema(data: list[float], n: int) -> list[float | None]:
+    """Exponential moving average over *data* with window *n*."""
+    k = 2 / (n + 1)
+    result: list[float | None] = [None] * (n - 1)
+    ema_val = sum(data[:n]) / n
+    result.append(ema_val)
+    for price in data[n:]:
+        ema_val = price * k + ema_val * (1 - k)
+        result.append(ema_val)
+    return result
+
+
+def _ind_rsi(data: list[float], n: int = 14) -> list[float | None]:
+    """Relative Strength Index over *data* with period *n*."""
+    result: list[float | None] = [None] * n
+    gains: list[float] = []
+    losses: list[float] = []
+    for i in range(1, len(data)):
+        diff = data[i] - data[i - 1]
+        gains.append(max(diff, 0.0))
+        losses.append(max(-diff, 0.0))
+    for i in range(n - 1, len(gains)):
+        avg_gain = sum(gains[i - n + 1 : i + 1]) / n
+        avg_loss = sum(losses[i - n + 1 : i + 1]) / n
+        rs = avg_gain / avg_loss if avg_loss > 0 else 100.0
+        result.append(100.0 - 100.0 / (1.0 + rs))
+    return result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AST-based formula validator
+# ─────────────────────────────────────────────────────────────────────────────
+
+import ast as _ast
+
+_FORMULA_ALLOWED_NAMES: frozenset[str] = frozenset(
     {"EMA", "SMA", "RSI", "close", "open", "high", "low", "volume"}
 )
-
-_INDICATOR_ALLOWED_NODES = (
-    __import__("ast").Module,
-    __import__("ast").Expr,
-    __import__("ast").Expression,
-    __import__("ast").Constant,
-    __import__("ast").BinOp,
-    __import__("ast").UnaryOp,
-    __import__("ast").Add,
-    __import__("ast").Sub,
-    __import__("ast").Mult,
-    __import__("ast").Div,
-    __import__("ast").Pow,
-    __import__("ast").FloorDiv,
-    __import__("ast").Mod,
-    __import__("ast").UAdd,
-    __import__("ast").USub,
-    __import__("ast").Name,
-    __import__("ast").Load,
-    __import__("ast").Call,
-    __import__("ast").arguments,
+_FORMULA_ALLOWED_NODES = (
+    _ast.Module,
+    _ast.Expr,
+    _ast.Expression,
+    _ast.Constant,
+    _ast.BinOp,
+    _ast.UnaryOp,
+    _ast.Add,
+    _ast.Sub,
+    _ast.Mult,
+    _ast.Div,
+    _ast.Pow,
+    _ast.FloorDiv,
+    _ast.Mod,
+    _ast.UAdd,
+    _ast.USub,
+    _ast.Name,
+    _ast.Load,
+    _ast.Call,
+    _ast.arguments,
 )
+_FORMULA_MAX_LEN = 200
 
 
-def _validate_indicator_formula(formula_stripped: str) -> "ast.Expression":  # type: ignore[name-defined]
+def _validate_formula_ast(node: _ast.AST) -> None:
+    """Recursively validate that *node* contains only whitelisted AST constructs.
+
+    Raises ValueError on the first disallowed node, unknown name, or
+    non-whitelisted function call.
     """
-    Validate *formula_stripped* against the indicator AST whitelist.
+    if not isinstance(node, _FORMULA_ALLOWED_NODES):
+        raise ValueError(
+            f"Disallowed expression type '{type(node).__name__}' in formula. "
+            "Only arithmetic and EMA/SMA/RSI calls are permitted."
+        )
+    if isinstance(node, _ast.Name) and node.id not in _FORMULA_ALLOWED_NAMES:
+        raise ValueError(
+            f"Unknown name '{node.id}'. Allowed: {', '.join(sorted(_FORMULA_ALLOWED_NAMES))}"
+        )
+    if isinstance(node, _ast.Call):
+        if not isinstance(node.func, _ast.Name):
+            raise ValueError("Only direct function calls are allowed (e.g. EMA(...))")
+        if node.func.id not in {"EMA", "SMA", "RSI"}:
+            raise ValueError(f"Unknown function '{node.func.id}'. Allowed: EMA, SMA, RSI")
+        if node.keywords:
+            raise ValueError("Keyword arguments are not allowed in indicator formulas")
+    for child in _ast.iter_child_nodes(node):
+        _validate_formula_ast(child)
 
-    Raises ValueError for any disallowed construct (attribute access,
-    subscripts, imports, lambdas, comprehensions, etc.) before any
-    computation is attempted.
 
-    Allowed syntax
-    --------------
-    - Numeric literals (int, float)
-    - Names: close, open, high, low, volume, EMA, SMA, RSI
-    - Arithmetic operators: +, -, *, /, **, //, %  (unary -, unary +)
-    - Function calls to EMA, SMA, RSI only
-    - Parentheses for grouping
+def _parse_formula(formula: str) -> _ast.Expression:
+    """Parse and validate *formula*; return the AST Expression node.
 
-    Returns the parsed ``ast.Expression`` so callers can reuse it without
-    a second ``ast.parse`` call.
+    Raises ValueError on syntax errors, disallowed constructs, or length
+    violations.
     """
-    import ast
-
-    # ── AST whitelist ─────────────────────────────────────────────────────────
-    _ALLOWED_NAMES = frozenset({"EMA", "SMA", "RSI", "close", "open", "high", "low", "volume"})
-    _ALLOWED_NODES = (
-        ast.Module,
-        ast.Expr,
-        ast.Expression,
-        # Literals
-        ast.Constant,
-        # Arithmetic
-        ast.BinOp,
-        ast.UnaryOp,
-        ast.Add,
-        ast.Sub,
-        ast.Mult,
-        ast.Div,
-        ast.Pow,
-        ast.FloorDiv,
-        ast.Mod,
-        ast.UAdd,
-        ast.USub,
-        # Names and calls (validated separately)
-        ast.Name,
-        ast.Load,
-        ast.Call,
-        # Needed for multi-arg calls
-        ast.arguments,
-    )
-
-    def _check_node(node: ast.AST) -> None:
-        if not isinstance(node, _INDICATOR_ALLOWED_NODES):
-            raise ValueError(
-                f"Disallowed expression type '{type(node).__name__}' in formula. "
-                "Only arithmetic and EMA/SMA/RSI calls are permitted."
-            )
-        if isinstance(node, ast.Name) and node.id not in _ALLOWED_NAMES:
-            raise ValueError(f"Unknown name '{node.id}'. Allowed: {', '.join(sorted(_ALLOWED_NAMES))}")
-        if isinstance(node, ast.Call):
-            if not isinstance(node.func, ast.Name):
-                raise ValueError("Only direct function calls are allowed (e.g. EMA(...))")
-            if node.func.id not in {"EMA", "SMA", "RSI"}:
-                raise ValueError(f"Unknown function '{node.func.id}'. Allowed: EMA, SMA, RSI")
-            if node.keywords or node.starargs if hasattr(node, "starargs") else node.keywords:
-                raise ValueError("Keyword arguments are not allowed in indicator formulas")
-        for child in ast.iter_child_nodes(node):
-            _check_node(child)
-
-    if len(formula_stripped) > 200:  # noqa: PLR2004
-        raise ValueError("Formula too long (max 200 characters)")
+    stripped = formula.strip()
+    if len(stripped) > _FORMULA_MAX_LEN:
+        raise ValueError(f"Formula too long (max {_FORMULA_MAX_LEN} characters)")
     try:
-        tree = ast.parse(formula_stripped, mode="eval")
+        tree = _ast.parse(stripped, mode="eval")
     except SyntaxError as exc:
-        raise ValueError(f"Formula syntax error: {exc}") from exc
-    _check_node(tree)
+        # Surface a sanitized message — SyntaxError.msg is safe (describes the
+        # syntax problem, not internal state), but lineno/offset are omitted.
+        raise ValueError(f"Formula syntax error: {exc.msg}") from None
+    _validate_formula_ast(tree)
     return tree
 
 
-def _interp_formula_tree(tree: "ast.Expression", name_map: dict, fn_map: dict):  # type: ignore[name-defined]
-    """
-    Walk an already-validated AST expression tree and return the computed value.
+# ─────────────────────────────────────────────────────────────────────────────
+# AST interpreter (no eval/exec)
+# ─────────────────────────────────────────────────────────────────────────────
 
-    *name_map* maps allowed names to their data lists (or the function objects).
-    *fn_map* maps function names to callables (EMA, SMA, RSI).
-    Returns a scalar or a list of floats (with None for missing values).
-    """
-    import ast
+_INDICATOR_FN_MAP: dict[str, object] = {"EMA": _ind_ema, "SMA": _ind_sma, "RSI": _ind_rsi}
 
-    def _interp(node: ast.expr):  # type: ignore[name-defined]
-        if isinstance(node, ast.Constant):
-            return node.value
-        if isinstance(node, ast.Name):
-            return name_map[node.id]
-        if isinstance(node, ast.UnaryOp):
-            operand = _interp(node.operand)
-            if isinstance(node.op, ast.USub):
-                return [-v if v is not None else None for v in operand] if isinstance(operand, list) else -operand
-            return operand
-        if isinstance(node, ast.BinOp):
-            left = _interp(node.left)
-            right = _interp(node.right)
-            op = node.op
 
-            def _apply(a, b):
-                if isinstance(op, ast.Add):
-                    return a + b
-                if isinstance(op, ast.Sub):
-                    return a - b
-                if isinstance(op, ast.Mult):
-                    return a * b
-                if isinstance(op, ast.Div):
-                    return a / b if b != 0 else None
-                if isinstance(op, ast.Pow):
-                    return a ** b
-                if isinstance(op, ast.FloorDiv):
-                    return a // b
-                if isinstance(op, ast.Mod):
-                    return a % b
-                raise ValueError(f"Unsupported operator {type(op).__name__}")
+def _apply_binop(op: _ast.operator, a: float | None, b: float | None) -> float | None:
+    """Apply a single binary operator to two scalar values."""
+    if a is None or b is None:
+        return None
+    if isinstance(op, _ast.Add):
+        return a + b
+    if isinstance(op, _ast.Sub):
+        return a - b
+    if isinstance(op, _ast.Mult):
+        return a * b
+    if isinstance(op, _ast.Div):
+        return a / b if b != 0 else None
+    if isinstance(op, _ast.Pow):
+        return a**b
+    if isinstance(op, _ast.FloorDiv):
+        return a // b
+    if isinstance(op, _ast.Mod):
+        return a % b
+    raise ValueError(f"Unsupported operator {type(op).__name__}")
 
-            if isinstance(left, list) and isinstance(right, list):
-                return [
-                    _apply(a, b) if a is not None and b is not None else None for a, b in zip(left, right, strict=False)
-                ]
-            if isinstance(left, list):
-                return [_apply(a, right) if a is not None else None for a in left]
-            if isinstance(right, list):
-                return [_apply(left, b) if b is not None else None for b in right]
-            return _apply(left, right)
-        if isinstance(node, ast.Call):
-            fn = fn_map[node.func.id]  # type: ignore[attr-defined]
-            args = [_interp(a) for a in node.args]
-            return fn(*args)
-        raise ValueError(f"Unexpected node {type(node).__name__}")
 
-    return _interp(tree.body)
+def _broadcast_binop(
+    op: _ast.operator,
+    left: list | float,
+    right: list | float,
+) -> list | float:
+    """Apply *op* element-wise, broadcasting scalars against lists."""
+    if isinstance(left, list) and isinstance(right, list):
+        return [
+            _apply_binop(op, a, b)
+            for a, b in zip(left, right, strict=False)
+        ]
+    if isinstance(left, list):
+        return [_apply_binop(op, a, right) for a in left]
+    if isinstance(right, list):
+        return [_apply_binop(op, left, b) for b in right]
+    return _apply_binop(op, left, right)
 
+
+def _interp_node(node: _ast.expr, name_map: dict) -> list | float:  # type: ignore[name-defined]
+    """Recursively evaluate a validated AST node against *name_map*."""
+    if isinstance(node, _ast.Constant):
+        return node.value
+    if isinstance(node, _ast.Name):
+        return name_map[node.id]
+    if isinstance(node, _ast.UnaryOp):
+        operand = _interp_node(node.operand, name_map)
+        if isinstance(node.op, _ast.USub):
+            if isinstance(operand, list):
+                return [-v if v is not None else None for v in operand]
+            return -operand
+        return operand  # UAdd — no-op
+    if isinstance(node, _ast.BinOp):
+        left = _interp_node(node.left, name_map)
+        right = _interp_node(node.right, name_map)
+        return _broadcast_binop(node.op, left, right)
+    if isinstance(node, _ast.Call):
+        fn = _INDICATOR_FN_MAP[node.func.id]  # type: ignore[attr-defined]
+        args = [_interp_node(a, name_map) for a in node.args]
+        return fn(*args)
+    raise ValueError(f"Unexpected node {type(node).__name__}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Public entry point
+# ─────────────────────────────────────────────────────────────────────────────
 
 def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
-    """
-    Safe formula evaluator using AST-based parsing — no eval() or exec().
+    """Evaluate *formula* against real OHLCV data for *symbol*.
 
-    Delegates validation to ``_validate_indicator_formula`` and
-    evaluation to ``_interp_formula_tree``.
-    """
-    formula_stripped = formula.strip()
-    validated_tree = _validate_indicator_formula(formula_stripped)
+    Uses AST-based parsing — no eval() or exec().  Allowed syntax:
+    numeric literals, close/open/high/low/volume names, EMA/SMA/RSI calls,
+    and arithmetic operators (+, -, *, /, **, //, %).
 
-    # ── Build data namespace ──────────────────────────────────────────────────
+    Returns a list of ``{"index": int, "value": float}`` dicts for the last
+    *periods* bars where the result is non-None.
+    """
+    tree = _parse_formula(formula)
+
     ohlcv = _load_ohlcv_for_indicator(symbol, periods)
-    closes = ohlcv["close"]
-    opens  = ohlcv["open"]
-    highs  = ohlcv["high"]
-    lows   = ohlcv["low"]
-    volumes = ohlcv["volume"]
-
-    def sma(data: list[float], n: int) -> list[float]:
-        result: list = [None] * (n - 1)
-        for i in range(n - 1, len(data)):
-            result.append(sum(data[i - n + 1 : i + 1]) / n)
-        return result
-
-    def ema(data: list[float], n: int) -> list[float]:
-        k = 2 / (n + 1)
-        result: list = [None] * (n - 1)
-        ema_val = sum(data[:n]) / n
-        result.append(ema_val)
-        for price in data[n:]:
-            ema_val = price * k + ema_val * (1 - k)
-            result.append(ema_val)
-        return result
-
-    def rsi(data: list[float], n: int = 14) -> list[float]:
-        result: list = [None] * n
-        gains, losses = [], []
-        for i in range(1, len(data)):
-            diff = data[i] - data[i - 1]
-            gains.append(max(diff, 0))
-            losses.append(max(-diff, 0))
-        for i in range(n - 1, len(gains)):
-            avg_gain = sum(gains[i - n + 1 : i + 1]) / n
-            avg_loss = sum(losses[i - n + 1 : i + 1]) / n
-            rs = avg_gain / avg_loss if avg_loss > 0 else 100
-            result.append(100 - 100 / (1 + rs))
-        return result
-
-    fn_map   = {"EMA": ema, "SMA": sma, "RSI": rsi}
-    name_map = {
-        "close": closes, "open": opens, "high": highs,
-        "low": lows, "volume": volumes, **fn_map,
+    name_map: dict = {
+        "close": ohlcv["close"],
+        "open": ohlcv["open"],
+        "high": ohlcv["high"],
+        "low": ohlcv["low"],
+        "volume": ohlcv["volume"],
+        **_INDICATOR_FN_MAP,
     }
 
     try:
-        result = _interp_formula_tree(validated_tree, name_map, fn_map)
+        result = _interp_node(tree.body, name_map)
     except Exception as exc:
-        raise ValueError(f"Formula evaluation error: {exc}") from exc
+        logger.warning("Formula evaluation error: %s", exc)
+        raise ValueError("Formula evaluation error — check formula syntax and variable names") from None
 
-    if isinstance(result, (int, float)):  # noqa: UP038
+    closes = ohlcv["close"]
+    if isinstance(result, (int, float)):
         result = [result] * len(closes)
 
-    output = []
-    for i, val in enumerate(result[-periods:]):
-        if val is not None:
-            output.append({"index": i, "value": round(float(val), 5)})
-    return output
+    return [
+        {"index": i, "value": round(float(val), 5)}
+        for i, val in enumerate(result[-periods:])
+        if val is not None
+    ]
 
 
 @router.post("/api/indicators/preview")
@@ -546,7 +548,8 @@ async def preview_indicator(
             "points": len(data),
         }
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.warning("evaluate_indicator validation error: %s", exc)
+        raise HTTPException(status_code=400, detail="Invalid formula or symbol") from None
 
 
 @router.get("/api/indicators")
@@ -611,12 +614,12 @@ async def _collect_return_series(
                 ohlcv = price_engine.get_ohlcv(sym, "1d", window + 5)
                 if asyncio.iscoroutine(ohlcv):
                     ohlcv = await ohlcv
-                if ohlcv and len(ohlcv) >= 5:  # noqa: PLR2004
+                if ohlcv and len(ohlcv) >= 5:
                     closes = [
                         float(
                             bar.get(
                                 "close",
-                                bar[-2] if isinstance(bar, (list, tuple)) else 0,  # noqa: UP038
+                                bar[-2] if isinstance(bar, list | tuple) else 0,
                             )
                         )
                         for bar in ohlcv
@@ -650,13 +653,27 @@ async def _collect_return_series(
                     returns = [
                         (closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes)) if closes[i - 1] > 0
                     ]
-                    if len(returns) >= 5:  # noqa: PLR2004
+                    if len(returns) >= 5:
                         series[sym] = returns
                         break
                 except Exception as exc:
                     logger.debug("correlation CSV miss for %s: %s", sym, exc)
 
-    return series
+    # Require at least 2 symbols with real data
+    if len(series) < 2:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "insufficient_data",
+                "message": (
+                    "Correlation matrix requires real OHLCV history for at least 2 symbols. "
+                    f"Found data for: {list(series.keys()) or 'none'}. "
+                    "Connect a broker or add CSV files to data/ to enable this feature."
+                ),
+                "symbols_with_data": list(series.keys()),
+                "symbols_requested": sym_list,
+            },
+        )
 
 
 def _compute_correlation_matrix(
@@ -689,7 +706,7 @@ def _compute_correlation_matrix(
             if s1 >= s2:
                 continue
             c = matrix[s1][s2]
-            if abs(c) >= 0.6:  # noqa: PLR2004
+            if abs(c) >= 0.6:
                 direction = "positively" if c > 0 else "negatively"
                 insights.append(f"{s1} and {s2} are {direction} correlated ({c:+.2f})")
 
@@ -781,7 +798,7 @@ async def get_cot_gold():
                     "short_positions": int(rec.get("noncomm_positions_short_all", 0)),
                     "sentiment": "BULLISH" if net_long > 0 else "BEARISH",
                     "sentiment_strength": "STRONG"
-                    if abs(net_long) > 100000  # noqa: PLR2004
+                    if abs(net_long) > 100000
                     else "MODERATE",
                     "source": "CFTC",
                     "note": "Non-commercial (speculator) net positions in COMEX gold futures.",
@@ -896,7 +913,7 @@ async def run_monte_carlo(
     n_trades = int(result.get("total_trades", 0))
     capital = req.initial_capital or float(result.get("initial_capital", 10000))
 
-    if n_trades < 10:  # noqa: PLR2004
+    if n_trades < 10:
         raise HTTPException(
             status_code=422,
             detail=(

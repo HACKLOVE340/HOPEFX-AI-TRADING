@@ -55,9 +55,7 @@ import asyncio
 import logging
 import os
 import time
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -265,7 +263,7 @@ class DiscordSignalBot:
                 ):
                     if resp.status in (200, 204):
                         return True
-                    if resp.status == 429:  # noqa: PLR2004
+                    if resp.status == 429:
                         retry_after = float((await resp.json()).get("retry_after", 1.0))
                         logger.debug("Discord rate limited — retrying in %.1f s", retry_after)
                         await asyncio.sleep(retry_after)
@@ -283,9 +281,22 @@ class DiscordSignalBot:
             return False
         return False
 
+    @staticmethod
+    def _is_valid_discord_url(url: str) -> bool:
+        from urllib.parse import urlparse
+        try:
+            p = urlparse(url)
+            host = (p.hostname or "").lower()
+            return p.scheme == "https" and host in ("discord.com", "discordapp.com")
+        except Exception:
+            return False
+
     def _post_sync(self, webhook_url: str, payload: dict[str, Any]) -> bool:
         """Synchronous fallback using requests."""
         if not webhook_url:
+            return False
+        if not self._is_valid_discord_url(webhook_url):
+            logger.warning("Discord webhook URL is not a valid HTTPS discord.com URL — skipping")
             return False
         try:
             import requests

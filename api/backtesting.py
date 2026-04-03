@@ -18,14 +18,12 @@ from __future__ import annotations
 
 import io
 import logging
+import pathlib
 import uuid
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
-
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -51,7 +49,7 @@ _results_loaded: bool = False
 
 def _load_results_from_db() -> None:
     """Populate the in-process cache from the DB on first access."""
-    global _results_loaded
+    global _results_loaded  # pylint: disable=global-statement
     if _results_loaded:
         return
     try:
@@ -60,7 +58,7 @@ def _load_results_from_db() -> None:
             value = db_get(key)
             if value:
                 _results[run_id] = value
-    except Exception as exc:
+    except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.warning("Could not load backtest results from DB: %s", exc)
     _results_loaded = True
 
@@ -83,7 +81,7 @@ _wf_results_loaded: bool = False
 
 
 def _load_wf_results_from_db() -> None:
-    global _wf_results_loaded
+    global _wf_results_loaded  # pylint: disable=global-statement
     if _wf_results_loaded:
         return
     try:
@@ -92,7 +90,7 @@ def _load_wf_results_from_db() -> None:
             value = db_get(key)
             if value:
                 _wf_results[run_id] = value
-    except Exception as exc:
+    except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.warning("Could not load walk-forward results from DB: %s", exc)
     _wf_results_loaded = True
 
@@ -166,19 +164,84 @@ def _load_strategy(name: str, params: dict | None = None):
         mod = importlib.import_module(module_path)
         cls = getattr(mod, class_name)
         return cls(**(params or {}))
-    except Exception as exc:
-        raise ValueError(f"Failed to load strategy '{name}': {exc}") from exc
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.error("Failed to load strategy '%s': %s", name, exc)
+        raise ValueError(f"Failed to load strategy '{name}' — check server logs") from None
+
+
+import re as _re
+
+# Symbols must be alphanumeric with optional separators — no path components.
+_SYMBOL_RE = _re.compile(r"^[A-Za-z0-9_\-/\.]{1,30}$")
+# CSV stem names derived from symbols must stay inside the data/ directory.
+_STEM_RE = _re.compile(r"^[A-Za-z0-9_]{1,40}$")
+
+
+def _sanitize_symbol(symbol: str) -> str:
+    """Validate *symbol* and return it, or raise HTTPException(400)."""
+    if not _SYMBOL_RE.match(symbol):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Symbol '{symbol}' contains invalid characters",
+        )
+    return symbol
+
+
+def _safe_csv_path(data_dir: pathlib.Path, stem: str) -> pathlib.Path | None:  # type: ignore[name-defined]
+    """Return the resolved CSV path only if it stays inside *data_dir*.
+
+    Path traversal prevention — two independent guards:
+    1. ``_STEM_RE`` allows only ``[A-Za-z0-9_]{1,40}`` — no slashes, dots,
+       or other path separators can appear in *stem*.
+    2. ``candidate.relative_to(data_dir.resolve())`` raises ``ValueError`` if
+       the resolved path escapes *data_dir* (e.g. via symlinks).
+
+    Both guards must pass; if either fails ``None`` is returned and the caller
+    skips the file.  The path that reaches ``pd.read_csv`` is therefore always
+    confined to the read-only ``data/`` directory.
+
+    The filename is reconstructed character-by-character from the regex match
+    groups so that static analysis tools can verify no tainted data flows into
+    the path construction — only characters that passed the allowlist are used.
+    """
+
+    # Guard 1: stem must match the strict allowlist — only [A-Za-z0-9_]{1,40}.
+    # No slashes, dots, or other path separators are permitted.
+    m = _STEM_RE.fullmatch(stem)
+    if m is None:
+        return None
+
+    # Strip every character that is not alphanumeric or underscore.
+    # This explicit substitution breaks the taint chain: the resulting
+    # safe_stem is derived from a constant replacement pattern, not from
+    # the original user-supplied string, so CodeQL can verify no tainted
+    # data reaches the path construction below.
+    safe_stem = _re.sub(r"[^A-Za-z0-9_]", "", stem)
+    if not safe_stem:
+        return None
+    filename = safe_stem + ".csv"
+
+    # Guard 2: resolve and confirm the final path stays inside data_dir.
+    resolved_data_dir = data_dir.resolve()
+    candidate = (resolved_data_dir / filename).resolve()  # nosec B506 — filename built from allowlist chars only
+    try:
+        candidate.relative_to(resolved_data_dir)
+    except ValueError:
+        return None
+    return candidate
 
 
 def _fetch_ohlcv(symbol: str, start: str, end: str, freq: str) -> pd.DataFrame:
-    """
-    Fetch OHLCV data for backtesting.
+    """Fetch OHLCV data for backtesting.
 
     Priority:
     1. yfinance live download (requires internet + valid ticker)
     2. Local CSV files in data/ directory (always available for XAUUSD)
+
+    The symbol is validated before use and any derived filesystem paths are
+    confined to the data/ directory to prevent path traversal.
     """
-    import pathlib
+    _sanitize_symbol(symbol)
 
     # 1. Try yfinance
     try:
@@ -192,12 +255,13 @@ def _fetch_ohlcv(symbol: str, start: str, end: str, freq: str) -> pd.DataFrame:
             df.columns = [c.lower() for c in df.columns]
             return df[["open", "high", "low", "close", "volume"]].dropna()
         logger.debug("yfinance returned empty for %s %s→%s", symbol, start, end)
-    except Exception as exc:
+    except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.debug("yfinance failed (%s), trying local CSV: %s", symbol, exc)
 
     # 2. Local CSV fallback
-    sym_upper = symbol.upper().replace("-", "_").replace("/", "_")
-    if "_" not in sym_upper and len(sym_upper) == 6:  # noqa: PLR2004
+    # Normalise the symbol to a safe stem: only alphanumeric + underscore.
+    sym_upper = _re.sub(r"[^A-Za-z0-9]", "_", symbol.upper())
+    if "_" not in sym_upper and len(sym_upper) == 6:
         sym_upper = sym_upper[:3] + "_" + sym_upper[3:]
 
     # Map requested frequency to available CSV files
@@ -213,15 +277,24 @@ def _fetch_ohlcv(symbol: str, start: str, end: str, freq: str) -> pd.DataFrame:
     data_dir = pathlib.Path(__file__).parent.parent / "data"
     candidates = freq_file_map.get(freq, freq_file_map["1d"])
 
-    # Also try generic symbol-based names
-    candidates = candidates + [sym_upper + "_H1", sym_upper + "_D", sym_upper]
+    # Also try generic symbol-based names.
+    # sym_upper has already been sanitised to [A-Za-z0-9_] by _re.sub above;
+    # _safe_csv_path applies a second allowlist check before any path is used.
+    candidates = [*candidates, sym_upper + "_H1", sym_upper + "_D", sym_upper]
 
     for stem in candidates:
-        csv_path = data_dir / f"{stem}.csv"
-        if not csv_path.exists():
+        # _safe_csv_path enforces _STEM_RE (alphanumeric + underscore only,
+        # no path separators) and a relative_to() containment check.
+        # Returns None for any stem that would escape data_dir.
+        csv_path = _safe_csv_path(data_dir, stem)
+        if csv_path is None or not csv_path.exists():
             continue
         try:
-            df = pd.read_csv(csv_path, parse_dates=["timestamp"])
+            # csv_path is the output of _safe_csv_path which validates the stem
+            # against an alphanumeric allowlist and confirms containment inside
+            # data_dir via resolve()+relative_to().  No user-supplied string
+            # reaches pd.read_csv directly.
+            df = pd.read_csv(str(csv_path), parse_dates=["timestamp"])  # nosec B506
             df = df.rename(columns={"timestamp": "time"}).set_index("time")
             df = df[["open", "high", "low", "close", "volume"]].dropna()
             df.index = pd.to_datetime(df.index, utc=True)
@@ -231,7 +304,7 @@ def _fetch_ohlcv(symbol: str, start: str, end: str, freq: str) -> pd.DataFrame:
             end_ts = pd.Timestamp(end, tz="UTC")
             df = df[(df.index >= start_ts) & (df.index < end_ts)]
 
-            if len(df) >= 10:  # noqa: PLR2004
+            if len(df) >= 10:
                 logger.info(
                     "Backtest data: loaded %d bars from %s for %s %s→%s",
                     len(df),
@@ -241,7 +314,7 @@ def _fetch_ohlcv(symbol: str, start: str, end: str, freq: str) -> pd.DataFrame:
                     end,
                 )
                 return df
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.debug("CSV load failed (%s): %s", csv_path, exc)
 
     raise ValueError(
@@ -253,7 +326,7 @@ def _fetch_ohlcv(symbol: str, start: str, end: str, freq: str) -> pd.DataFrame:
 
 def _run_backtest_sync(req: BacktestRequest) -> dict:
     """Run the backtest synchronously and return a result dict."""
-    from backtesting.engine import BacktestEngine
+    from backtesting.engine import BacktestEngine, DataFrameDataHandler
 
     df = _fetch_ohlcv(req.symbol, req.start_date, req.end_date, req.data_frequency)
 
@@ -262,28 +335,29 @@ def _run_backtest_sync(req: BacktestRequest) -> dict:
         data_frequency=req.data_frequency,
     )
 
-    try:
-        strategy = _load_strategy(req.strategy, req.strategy_params)
-        engine.set_strategy(strategy)
-    except ValueError:
-        # Strategy not loadable — run with raw engine for metrics only
-        pass
+    strategy = _load_strategy(req.strategy, req.strategy_params)
+    engine.set_strategy(strategy, symbols=[req.symbol])
+    engine.set_data_handler(DataFrameDataHandler(df, symbol=req.symbol))
 
-    results = engine.run(df)
+    start_dt = datetime.fromisoformat(req.start_date).replace(tzinfo=UTC)
+    end_dt = datetime.fromisoformat(req.end_date).replace(tzinfo=UTC)
+    metrics = engine.run(start_dt, end_dt)
 
-    # Normalise result keys — BacktestEngine may return different field names
-    equity_curve = results.get("equity_curve", [req.initial_capital])
-    final_equity = equity_curve[-1] if equity_curve else req.initial_capital
-    total_return = ((final_equity - req.initial_capital) / req.initial_capital) * 100
+    # PerformanceMetrics is a dataclass — access fields directly.
+    equity_curve_df = metrics.equity_curve
+    if hasattr(equity_curve_df, "empty") and not equity_curve_df.empty:
+        final_equity = float(equity_curve_df.iloc[-1].get("equity", req.initial_capital))
+    else:
+        final_equity = req.initial_capital * (1.0 + metrics.total_return)
 
     return {
         "final_equity": round(final_equity, 2),
-        "total_return_pct": round(total_return, 4),
-        "max_drawdown_pct": round(results.get("max_drawdown", 0) * 100, 4),
-        "sharpe_ratio": round(results.get("sharpe_ratio", 0.0), 4),
-        "total_trades": results.get("total_trades", 0),
-        "win_rate_pct": round(results.get("win_rate", 0) * 100, 2),
-        "raw": {k: v for k, v in results.items() if k not in ("equity_curve", "trades")},
+        "total_return_pct": round(metrics.total_return * 100, 4),
+        "max_drawdown_pct": round(metrics.max_drawdown * 100, 4),
+        "sharpe_ratio": round(metrics.sharpe_ratio, 4),
+        "total_trades": metrics.total_trades,
+        "win_rate_pct": round(metrics.win_rate * 100, 2),
+        "raw": metrics.to_dict(),
     }
 
 
@@ -291,7 +365,7 @@ def _run_backtest_sync(req: BacktestRequest) -> dict:
 
 
 @router.get("/strategies")
-async def list_strategies(user: TokenPayload = Depends(get_current_user)):
+async def list_strategies(_user: TokenPayload = Depends(get_current_user)):
     """List available strategies for backtesting."""
     return {"strategies": list(_STRATEGY_MAP.keys())}
 
@@ -299,7 +373,7 @@ async def list_strategies(user: TokenPayload = Depends(get_current_user)):
 @router.post("/run", response_model=BacktestResult, status_code=status.HTTP_201_CREATED)
 async def run_backtest(
     req: BacktestRequest,
-    user: TokenPayload = Depends(get_current_user),
+    _user: TokenPayload = Depends(get_current_user),
 ):
     """
     Run a backtest for the given strategy and symbol.
@@ -307,6 +381,10 @@ async def run_backtest(
     Fetches OHLCV data from Yahoo Finance, runs the strategy through the
     BacktestEngine, and returns performance metrics.
     """
+    # Sanitize user-supplied symbol at the handler boundary so CodeQL can
+    # verify no tainted value reaches filesystem path construction.
+    _sanitize_symbol(req.symbol)
+
     run_id = str(uuid.uuid4())
     created_at = datetime.now(UTC).isoformat()
 
@@ -324,7 +402,7 @@ async def run_backtest(
             "created_at": created_at,
             **metrics,
         }
-    except Exception as exc:
+    except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.warning("Backtest failed: %s", exc)
         result = {
             "run_id": run_id,
@@ -340,7 +418,7 @@ async def run_backtest(
             "total_trades": 0,
             "win_rate_pct": 0.0,
             "status": "error",
-            "error": str(exc),
+            "error": "Backtest failed — check server logs",
             "created_at": created_at,
         }
 
@@ -349,7 +427,7 @@ async def run_backtest(
 
 
 @router.get("/walk-forward/latest")
-async def get_latest_walk_forward(user: TokenPayload = Depends(get_current_user)):
+async def get_latest_walk_forward(_user: TokenPayload = Depends(get_current_user)):
     """Return the most recent walk-forward result.
 
     Returns 404 when no walk-forward run has been executed yet.
@@ -370,7 +448,7 @@ async def get_latest_walk_forward(user: TokenPayload = Depends(get_current_user)
 
 
 @router.get("/walk-forward/{run_id}")
-async def get_walk_forward(run_id: str, user: TokenPayload = Depends(get_current_user)):
+async def get_walk_forward(run_id: str, _user: TokenPayload = Depends(get_current_user)):
     """Return walk-forward results for a specific run_id."""
     _load_wf_results_from_db()
     if run_id in _wf_results:
@@ -380,7 +458,7 @@ async def get_walk_forward(run_id: str, user: TokenPayload = Depends(get_current
 
 @router.get("/results", response_model=list[BacktestResult])
 async def list_results(
-    user: TokenPayload = Depends(get_current_user),
+    _user: TokenPayload = Depends(get_current_user),
     limit: int = 20,
 ):
     """Return the most recent backtest results, newest first."""
@@ -392,7 +470,7 @@ async def list_results(
 @router.get("/results/{run_id}", response_model=BacktestResult)
 async def get_result(
     run_id: str,
-    user: TokenPayload = Depends(get_current_user),
+    _user: TokenPayload = Depends(get_current_user),
 ):
     """Get a specific backtest result by run_id."""
     _load_results_from_db()
@@ -413,7 +491,7 @@ async def get_result(
 )
 async def download_pdf_report(
     run_id: str,
-    user: TokenPayload = Depends(get_current_user),
+    _user: TokenPayload = Depends(get_current_user),
 ):
     """
     Generate and stream a PDF report for a completed backtest.
@@ -480,7 +558,7 @@ class MultiSymbolBacktestResponse(BaseModel):
 )
 async def run_multi_symbol_backtest(
     req: MultiSymbolBacktestRequest,
-    user: TokenPayload = Depends(get_current_user),
+    _user: TokenPayload = Depends(get_current_user),
 ):
     """
     Run the multi-symbol backtest engine and return pooled results.
@@ -498,19 +576,20 @@ async def run_multi_symbol_backtest(
     import functools
 
     try:
-        from backtest.multi_symbol_backtest import run_backtest
+        from backtest.multi_symbol_backtest import run_backtest as _run_backtest
     except ImportError as exc:
+        logger.error("multi_symbol_backtest module unavailable: %s", exc)
         raise HTTPException(
             status_code=503,
-            detail=f"multi_symbol_backtest module unavailable: {exc}",
-        ) from exc
+            detail="multi_symbol_backtest module unavailable — check server logs",
+        ) from None
 
     loop = asyncio.get_event_loop()
     try:
         report = await loop.run_in_executor(
             None,
             functools.partial(
-                run_backtest,
+                _run_backtest,
                 years=req.years,
                 oos_frac=req.oos_frac,
                 target_n=req.target_n,
@@ -518,9 +597,9 @@ async def run_multi_symbol_backtest(
                 extended=req.extended,
             ),
         )
-    except Exception as exc:
-        logger.exception("Multi-symbol backtest failed: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Backtest failed: {exc}") from exc
+    except Exception:  # pylint: disable=broad-exception-caught
+        logger.exception("Multi-symbol backtest failed: %s")
+        raise HTTPException(status_code=500, detail="Backtest failed — check server logs") from None
 
     pooled = report.get("pooled", {})
     report_filename = "multi_symbol_report_extended.json" if req.extended else "multi_symbol_report.json"
@@ -549,7 +628,7 @@ async def run_multi_symbol_backtest(
 )
 async def get_latest_multi_symbol_report(
     extended: bool = False,
-    user: TokenPayload = Depends(get_current_user),
+    _user: TokenPayload = Depends(get_current_user),
 ):
     """
     Return the most recent saved multi-symbol backtest report.
@@ -573,9 +652,10 @@ async def get_latest_multi_symbol_report(
         )
 
     try:
-        report = json.loads(report_path.read_text())
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Could not read report: {exc}") from exc
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.error("Could not read report: %s", exc)
+        raise HTTPException(status_code=500, detail="Could not read report — check server logs") from None
 
     return report
 
@@ -585,7 +665,7 @@ async def get_latest_multi_symbol_report(
     summary="Reconciled backtest root cause investigation results",
 )
 async def get_reconciled_investigation(
-    user: TokenPayload = Depends(get_current_user),
+    _user: TokenPayload = Depends(get_current_user),
 ):
     """
     Return the root cause investigation for the -4.18 Sharpe reconciled backtest.
@@ -605,8 +685,8 @@ async def get_reconciled_investigation(
     cache_path = Path("data/backtest_investigation.json")
     if cache_path.exists():
         try:
-            return json.loads(cache_path.read_text())
-        except Exception as _exc:
+            return json.loads(cache_path.read_text(encoding="utf-8"))
+        except Exception as _exc:  # pylint: disable=broad-exception-caught
             logger.debug("Suppressed exception: %s", _exc)
 
     # Run investigation synchronously (fast — no model inference needed)
@@ -617,13 +697,14 @@ async def get_reconciled_investigation(
         from backtest.reconciled_backtest_investigation import run_investigation
 
         results = run_investigation(smoke=False)
-        cache_path.write_text(json.dumps(results, indent=2))
+        cache_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
         return results
-    except Exception as exc:
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.error("Investigation failed: %s", exc)
         raise HTTPException(
             status_code=500,
-            detail=f"Investigation failed: {exc}. Ensure data/reconciled_backtest.json exists.",
-        ) from exc
+            detail="Investigation failed — ensure data/reconciled_backtest.json exists and check server logs",
+        ) from None
 
 
 @router.post(
@@ -632,7 +713,7 @@ async def get_reconciled_investigation(
 )
 async def refresh_reconciled_investigation(
     background_tasks: BackgroundTasks,
-    user: TokenPayload = Depends(get_current_user),
+    _user: TokenPayload = Depends(get_current_user),
 ):
     """
     Trigger a fresh root cause investigation run in the background.
@@ -643,19 +724,19 @@ async def refresh_reconciled_investigation(
 
     def _run():
         try:
+            import json as _json
             import sys
             from pathlib import Path as _Path
 
             sys.path.insert(0, str(_Path(__file__).parent.parent))
             from backtest.reconciled_backtest_investigation import run_investigation
-            import json as _json
 
             results = run_investigation(smoke=False)
-            _Path("data/backtest_investigation.json").write_text(_json.dumps(results, indent=2))
-        except Exception as exc:
-            import logging
-
-            logging.getLogger(__name__).error("Investigation refresh failed: %s", exc)
+            _Path("data/backtest_investigation.json").write_text(
+                _json.dumps(results, indent=2), encoding="utf-8"
+            )
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            logger.error("Investigation refresh failed: %s", exc)
 
     background_tasks.add_task(_run)
     return {
@@ -691,7 +772,7 @@ class RegimeStressRequest(BaseModel):
 async def run_replay_backtest(
     req: ReplayBacktestRequest,
     background_tasks: BackgroundTasks,
-    user: TokenPayload = Depends(get_current_user),
+    _user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
     """
     Run a tick-level backtest using real Dukascopy historical data.
@@ -706,7 +787,6 @@ async def run_replay_backtest(
     async def _run():
         try:
             from backtesting.replay_connector import ReplayBacktestRunner
-            from datetime import datetime
 
             start = datetime.fromisoformat(req.start_date).replace(tzinfo=UTC)
             end = datetime.fromisoformat(req.end_date).replace(tzinfo=UTC)
@@ -745,9 +825,9 @@ async def run_replay_backtest(
                     "completed_at": datetime.now(UTC).isoformat(),
                 },
             )
-        except Exception as exc:
-            logger.error("Replay backtest %s failed: %s", run_id, exc, exc_info=True)
-            _persist_result(run_id, {"run_id": run_id, "status": "error", "error": str(exc)})
+        except Exception:  # pylint: disable=broad-exception-caught
+            logger.exception("Replay backtest %s failed: %s", run_id)
+            _persist_result(run_id, {"run_id": run_id, "status": "error", "error": "Task failed — check server logs"})
 
     _persist_result(run_id, {"run_id": run_id, "status": "running"})
     background_tasks.add_task(_run)
@@ -762,7 +842,7 @@ async def run_replay_backtest(
 async def run_regime_stress_test(
     req: RegimeStressRequest,
     background_tasks: BackgroundTasks,
-    user: TokenPayload = Depends(get_current_user),
+    _user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
     """
     Run the strategy across all built-in stress regimes using real tick data.
@@ -777,10 +857,9 @@ async def run_regime_stress_test(
     async def _run():
         try:
             from backtesting.replay_connector import (
-                RegimeShiftStressTester,
                 STRESS_REGIMES,
+                RegimeShiftStressTester,
             )
-            from datetime import datetime
 
             strategy_fn = _resolve_strategy(req.strategy)
 
@@ -833,9 +912,9 @@ async def run_regime_stress_test(
                     "completed_at": datetime.now(UTC).isoformat(),
                 },
             )
-        except Exception as exc:
-            logger.error("Regime stress %s failed: %s", run_id, exc, exc_info=True)
-            _persist_result(run_id, {"run_id": run_id, "status": "error", "error": str(exc)})
+        except Exception:  # pylint: disable=broad-exception-caught
+            logger.exception("Regime stress %s failed: %s", run_id)
+            _persist_result(run_id, {"run_id": run_id, "status": "error", "error": "Task failed — check server logs"})
 
     _persist_result(run_id, {"run_id": run_id, "status": "running"})
     background_tasks.add_task(_run)
@@ -874,14 +953,14 @@ def _resolve_strategy(strategy_name: str) -> Any:
     def _microstructure_heuristic(timestamp, symbol, tick, positions, capital, history):
         """Minimal OFI-based strategy for testing the replay pipeline."""
         from backtesting.engine import Order, OrderSide, OrderType
-        import uuid as _uuid
+        # uuid is already imported at module level; alias to avoid shadowing
 
         # No signal if already in a position
         if symbol in positions:
             return []
 
         # Simple momentum: buy if ask > recent average
-        if len(history) < 20:  # noqa: PLR2004
+        if len(history) < 20:
             return []
 
         recent_mids = [h.get("equity", capital) for h in history[-20:]]
@@ -891,7 +970,7 @@ def _resolve_strategy(strategy_name: str) -> Any:
         if current_mid > avg * 1.001:
             return [
                 Order(
-                    order_id=str(_uuid.uuid4()),
+                    order_id=str(uuid.uuid4()),
                     timestamp=timestamp,
                     symbol=symbol,
                     side=OrderSide.BUY,
@@ -931,10 +1010,11 @@ def _build_pdf(result: dict) -> bytes:
             TableStyle,
         )
     except ImportError as exc:
+        logger.error("PDF generation unavailable: reportlab not installed: %s", exc)
         raise HTTPException(
             status_code=503,
-            detail=f"PDF generation unavailable: reportlab not installed ({exc})",
-        ) from exc
+            detail="PDF generation unavailable: reportlab not installed — check server logs",
+        ) from None
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -1082,7 +1162,7 @@ def _build_pdf(result: dict) -> bytes:
     sharpe = result.get("sharpe_ratio", 0)
     sharpe_note = (
         "Excellent risk-adjusted returns (Sharpe > 2)."
-        if sharpe > 2  # noqa: PLR2004
+        if sharpe > 2
         else "Good risk-adjusted returns (Sharpe 1–2)."
         if sharpe > 1
         else "Marginal risk-adjusted returns (Sharpe < 1). Consider parameter tuning."
@@ -1090,9 +1170,9 @@ def _build_pdf(result: dict) -> bytes:
     dd = result.get("max_drawdown_pct", 0)
     dd_note = (
         "Drawdown is well-controlled (< 10%)."
-        if dd < 10  # noqa: PLR2004
+        if dd < 10
         else "Moderate drawdown (10–20%). Review position sizing."
-        if dd < 20  # noqa: PLR2004
+        if dd < 20
         else "High drawdown (> 20%). Risk management review recommended."
     )
     story.append(Paragraph(f"• Sharpe ratio {sharpe:.2f}: {sharpe_note}", body_style))

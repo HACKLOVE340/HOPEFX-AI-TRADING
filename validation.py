@@ -151,12 +151,12 @@ class OrderValidator:
             )
 
         stop_distance_pct = abs(current_price - order.stop_loss) / current_price
-        if stop_distance_pct < 0.001:  # noqa: PLR2004
+        if stop_distance_pct < 0.001:
             return ValidationResult(
                 valid=False,
                 reason="Stop loss too tight (< 0.1%) - will be hit by noise",
             )
-        if stop_distance_pct > 0.05:  # noqa: PLR2004
+        if stop_distance_pct > 0.05:
             return ValidationResult(valid=False, reason="Stop loss too wide (> 5%) - excessive risk")
         return None
 

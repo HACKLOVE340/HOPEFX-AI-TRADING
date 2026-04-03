@@ -21,10 +21,8 @@ All write endpoints require admin role.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -251,8 +249,6 @@ async def run_mutation_tests(
     Returns immediately with run_id. Poll /api/chaos/mutation/results
     for completion.
     """
-    global _mutation_running  # noqa: PLW0602
-
     if _mutation_running:
         raise HTTPException(
             status_code=409,
@@ -302,7 +298,7 @@ async def run_mutation_tests(
     )
 
 
-@router.get("/mutation/results", response_model=Optional[MutationResultOut])
+@router.get("/mutation/results", response_model=MutationResultOut | None)
 async def get_mutation_results() -> MutationResultOut | None:
     """Return the last mutation test report, or null if none has run."""
     if _last_mutation_report is None:

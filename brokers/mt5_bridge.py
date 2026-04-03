@@ -37,9 +37,7 @@ import os
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from enum import Enum, auto
 from pathlib import Path
 from typing import Any
@@ -232,7 +230,7 @@ class EX5SignalExporter:
                 text = path.read_text(encoding="utf-8")
                 return json.loads(text)
             except json.JSONDecodeError:
-                if attempt < 2:  # noqa: PLR2004
+                if attempt < 2:
                     _wait.wait(timeout=0.1)
         return {}
 

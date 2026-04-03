@@ -80,7 +80,8 @@ class AdvancedFeatureEngineer:
         # Remove NaN values
         features_df = features_df.dropna()
 
-        logger.info(f"Engineered {len(features_df.columns)} features")
+        logger.info("Engineered %s features", len(features_df.columns))
+
         return features_df
 
     def _add_price_features(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -244,7 +245,6 @@ class AdvancedFeatureEngineer:
         body = abs(df["close"] - df["open"])
         upper_shadow = df["high"] - np.maximum(df["close"], df["open"])
         lower_shadow = np.minimum(df["close"], df["open"]) - df["low"]
-        df["high"] - df["low"]
 
         # Hammer/Hanging Man
         df["hammer_score"] = (lower_shadow > 2 * upper_shadow).astype(int) * (body < body.rolling(20).mean()).astype(
@@ -448,7 +448,7 @@ class AdvancedFeatureEngineer:
                 ordering = tuple(np.argsort(prices[i : i + order]))
                 orderings.append(ordering)
 
-            unique, counts = np.unique(orderings, return_counts=True)
+            _, counts = np.unique(orderings, return_counts=True)
             probs = counts / len(orderings)
             entropy = -np.sum(probs * np.log(probs + 1e-10))
 
@@ -459,7 +459,7 @@ class AdvancedFeatureEngineer:
     def _calculate_hurst(self, prices: np.ndarray) -> float:
         """Calculate Hurst exponent"""
         try:
-            if len(prices) < 10:  # noqa: PLR2004
+            if len(prices) < 10:
                 return 0.5
 
             returns = np.diff(np.log(prices))
@@ -486,7 +486,7 @@ class AdvancedFeatureEngineer:
     def _calculate_dfa(self, prices: np.ndarray) -> float:
         """Calculate Detrended Fluctuation Analysis"""
         try:
-            if len(prices) < 10:  # noqa: PLR2004
+            if len(prices) < 10:
                 return 0.5
 
             # Simple DFA approximation

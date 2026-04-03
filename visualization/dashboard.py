@@ -8,12 +8,11 @@ HOPEFX Real-Time Dashboard
 Web interface for monitoring the Master Control Core
 """
 
+import asyncio
+from datetime import UTC, datetime
+
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse
-import asyncio
-from datetime import datetime, timezone
-
-UTC = timezone.utc
 
 
 class DashboardServer:
@@ -41,7 +40,7 @@ class DashboardServer:
 
         @self.app.websocket("/ws")
         async def ws(websocket: WebSocket):
-            from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+            from rate_limiting.websocket_limiter import get_client_ip, get_ws_limiter
 
             limiter = get_ws_limiter()
             client_ip = get_client_ip(websocket)

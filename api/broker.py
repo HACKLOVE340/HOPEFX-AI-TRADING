@@ -20,12 +20,18 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import UTC
+from http import HTTPStatus
 
 from fastapi import APIRouter
 from pydantic import BaseModel
-from datetime import timezone
 
-UTC = timezone.utc
+_HTTP_OK = HTTPStatus.OK.value
+_HTTP_UNAUTHORIZED = HTTPStatus.UNAUTHORIZED.value
+_HTTP_NOT_FOUND = HTTPStatus.NOT_FOUND.value
+_HTTP_FORBIDDEN = HTTPStatus.FORBIDDEN.value
+# Minimum broker name length for validation
+_MIN_BROKER_NAME_LEN = 4
 
 logger = logging.getLogger(__name__)
 
@@ -116,21 +122,21 @@ async def _test_oanda(req: BrokerTestRequest, start: float) -> BrokerTestRespons
                 lambda: _req.get(url, headers=headers, timeout=10),
             )
             latency = int((time.monotonic() - start) * 1000)
-            if resp_sync.status_code == 401:  # noqa: PLR2004
+            if resp_sync.status_code == 401:
                 return BrokerTestResponse(
                     ok=False,
                     broker="oanda",
                     error="401 Unauthorized — check your API token",
                     latency_ms=latency,
                 )
-            if resp_sync.status_code == 404:  # noqa: PLR2004
+            if resp_sync.status_code == 404:
                 return BrokerTestResponse(
                     ok=False,
                     broker="oanda",
                     error=f"Account {req.accountId!r} not found",
                     latency_ms=latency,
                 )
-            if resp_sync.status_code != 200:  # noqa: PLR2004
+            if resp_sync.status_code != 200:
                 return BrokerTestResponse(
                     ok=False,
                     broker="oanda",
@@ -163,21 +169,21 @@ async def _test_oanda(req: BrokerTestRequest, start: float) -> BrokerTestRespons
 
     latency = int((time.monotonic() - start) * 1000)
 
-    if resp.status_code == 401:  # noqa: PLR2004
+    if resp.status_code == 401:
         return BrokerTestResponse(
             ok=False,
             broker="oanda",
             error="401 Unauthorized — check your API token",
             latency_ms=latency,
         )
-    if resp.status_code == 404:  # noqa: PLR2004
+    if resp.status_code == 404:
         return BrokerTestResponse(
             ok=False,
             broker="oanda",
             error=f"Account {req.accountId!r} not found",
             latency_ms=latency,
         )
-    if resp.status_code != 200:  # noqa: PLR2004
+    if resp.status_code != 200:
         return BrokerTestResponse(
             ok=False,
             broker="oanda",
@@ -218,14 +224,14 @@ async def _test_alpaca(req: BrokerTestRequest, start: float) -> BrokerTestRespon
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(url, headers=headers)
         latency = int((time.monotonic() - start) * 1000)
-        if resp.status_code == 403:  # noqa: PLR2004
+        if resp.status_code == 403:
             return BrokerTestResponse(
                 ok=False,
                 broker="alpaca",
                 error="403 Forbidden — check API key and secret",
                 latency_ms=latency,
             )
-        if resp.status_code != 200:  # noqa: PLR2004
+        if resp.status_code != 200:
             return BrokerTestResponse(
                 ok=False,
                 broker="alpaca",
@@ -325,8 +331,8 @@ async def broker_status():
                 elif hasattr(broker, "balance"):
                     balance = broker.balance
             except Exception as exc:
-                broker_error = str(exc)
-                logger.warning("broker_status: account info error: %s", exc)
+                broker_error = "Account info unavailable — check server logs"
+                logger.warning("broker_status: account info error: %s", exc, exc_info=True)
 
             try:
                 if hasattr(broker, "get_positions"):
@@ -393,9 +399,10 @@ async def broker_status():
                     "note": "NuclearStreamer not active — no streaming API keys set",
                 }
             except Exception as exc:
+                logger.warning("broker_status: price engine status failed: %s", exc)
                 data_feed = {
                     "active": False,
-                    "error": str(exc),
+                    "error": "Price engine unavailable — check server logs",
                     "source": "RealTimePriceEngine",
                 }
         elif price_engine is not None:
@@ -435,7 +442,10 @@ async def broker_status():
                 "pipeline": h.get("pipeline", {}),
             }
         except Exception as ml_exc:
-            ml_engine["error"] = str(ml_exc)
+            # Log the full exception server-side; return a generic message to
+            # avoid leaking internal ML engine details to API callers.
+            logger.warning("broker_status: ML engine health check failed: %s", ml_exc)
+            ml_engine["error"] = "ML engine unavailable — check server logs"
 
         return {
             "broker": broker_section,
@@ -445,10 +455,10 @@ async def broker_status():
             "checked_at": checked_at,
         }
 
-    except Exception as exc:
-        logger.exception("broker_status: unexpected error: %s", exc)
+    except Exception:
+        logger.exception("broker_status: unexpected error: %s")
         return {
-            "broker": {"connected": False, "broker_type": "unknown", "error": str(exc)},
+            "broker": {"connected": False, "broker_type": "unknown", "error": "Unavailable — check server logs"},
             "data_feed": {"active": False, "source": "unknown"},
             "ml_engine": {"status": "unavailable"},
             "signal_engine_running": False,
@@ -472,9 +482,15 @@ async def paper_clock_status():
     try:
         from brokers.oanda_paper_clock import get_clock
 
-        return get_clock().status()
+        clock_data: dict = get_clock().status()
+        # Mask the account_id before returning — expose only the last 4 chars.
+        _raw_id: str = str(clock_data.get("account_id") or "")
+        clock_data["account_id"] = (
+            ("..." + _raw_id[-4:]) if len(_raw_id) > 4 else ("****" if _raw_id else None)
+        )
+        return clock_data
     except Exception as exc:
-        logger.warning("paper_clock_status: %s", exc)
+        logger.warning("paper_clock_status: %s", type(exc).__name__)
         from datetime import datetime
 
         return {
@@ -484,7 +500,7 @@ async def paper_clock_status():
             "complete": False,
             "account_id": None,
             "pending_real_account": True,
-            "note": f"Clock unavailable: {exc}",
+            "note": "Clock unavailable — check server logs",
             "checked_at": datetime.now(UTC).isoformat(),
         }
 
@@ -537,8 +553,8 @@ async def stamp_oanda_clock(req: StampOandaRequest):
             ),
             "clock": status,
         }
-    except Exception as exc:
-        logger.exception("stamp_oanda_clock: %s", exc)
+    except Exception:
+        logger.exception("stamp_oanda_clock: %s")
         from fastapi import HTTPException
 
-        raise HTTPException(status_code=500, detail=str(exc)) from None
+        raise HTTPException(status_code=500, detail="Internal error — check server logs") from None

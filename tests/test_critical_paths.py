@@ -20,14 +20,12 @@ that the CI 90% coverage gate enforces.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from decimal import Decimal
 from pathlib import Path
 
-
 import numpy as np
 import pytest
-import contextlib
-
 
 # ── kill_switch.py ────────────────────────────────────────────────────────────
 
@@ -85,7 +83,7 @@ class TestKillSwitch:
     def test_callback_called_on_activate(self, tmp_path):
         ks = self._make_ks(tmp_path)
         called = []
-        ks.register_callback(lambda r: called.append(r))
+        ks.register_callback(called.append)
         ks.activate("cb-test")
         assert called == ["cb-test"]
 
@@ -151,8 +149,8 @@ class TestAlmgrenChriss:
 
         model = AlmgrenChrissModel()
         impact = model.estimate(100.0, 10_000.0, 0.012, 3.0, 2000.0)
-        assert impact.fill_price("BUY") > 2000.0  # noqa: PLR2004
-        assert impact.fill_price("SELL") < 2000.0  # noqa: PLR2004
+        assert impact.fill_price("BUY") > 2000.0
+        assert impact.fill_price("SELL") < 2000.0
 
     def test_zero_adv_spread_only(self):
         from execution.market_impact import AlmgrenChrissModel
@@ -178,7 +176,7 @@ class TestAlmgrenChriss:
             volatility_daily=0.012,
         )
         assert fill.partial_fill
-        assert fill.fill_quantity < 1000.0  # noqa: PLR2004
+        assert fill.fill_quantity < 1000.0
 
     def test_fill_simulator_price_clamped_to_bar(self):
         from execution.market_impact import FillSimulator
@@ -194,7 +192,7 @@ class TestAlmgrenChriss:
             adv=10_000.0,
             volatility_daily=0.012,
         )
-        assert fill.fill_price <= 2001.0  # noqa: PLR2004
+        assert fill.fill_price <= 2001.0
 
     def test_fill_simulator_sell_clamped(self):
         from execution.market_impact import FillSimulator
@@ -210,7 +208,7 @@ class TestAlmgrenChriss:
             adv=10_000.0,
             volatility_daily=0.012,
         )
-        assert fill.fill_price >= 1999.0  # noqa: PLR2004
+        assert fill.fill_price >= 1999.0
 
 
 # ── execution/algo_orders.py ──────────────────────────────────────────────────
@@ -242,7 +240,7 @@ class TestAlgoOrders:
         )
         report = await order.run()
         assert report.filled_quantity == pytest.approx(10.0, abs=0.01)
-        assert len(fills) == 5  # noqa: PLR2004
+        assert len(fills) == 5
 
     @pytest.mark.asyncio
     async def test_iceberg_completes(self):
@@ -269,7 +267,7 @@ class TestAlgoOrders:
         )
         report = await order.run()
         assert report.filled_quantity == pytest.approx(5.0, abs=0.01)
-        assert len(fills) == 5  # noqa: PLR2004
+        assert len(fills) == 5
 
     @pytest.mark.asyncio
     async def test_vwap_completes(self):
@@ -308,7 +306,7 @@ class TestAlgoOrders:
 
     @pytest.mark.asyncio
     async def test_algo_manager_cancel(self):
-        from execution.algo_orders import AlgoOrderManager, TWAPOrder, AlgoStatus
+        from execution.algo_orders import AlgoOrderManager, AlgoStatus, TWAPOrder
 
         mgr = AlgoOrderManager()
 
@@ -384,7 +382,7 @@ class TestCompliance:
         gate = AMLGate()
         result = gate.check_withdrawal(
             user_id="u1",
-            amount=Decimal("15000"),
+            amount=Decimal(15000),
             kyc_status="approved",
         )
         assert not result.allowed
@@ -396,7 +394,7 @@ class TestCompliance:
         gate = AMLGate()
         result = gate.check_withdrawal(
             user_id="u2",
-            amount=Decimal("2000"),
+            amount=Decimal(2000),
             kyc_status="unverified",
         )
         assert not result.allowed
@@ -408,7 +406,7 @@ class TestCompliance:
         gate = AMLGate()
         result = gate.check_withdrawal(
             user_id="u3",
-            amount=Decimal("500"),
+            amount=Decimal(500),
             kyc_status="approved",
         )
         assert result.allowed
@@ -441,6 +439,7 @@ class TestCompliance:
         os.environ["KYC_PROVIDER"] = "mock"
         # Re-import to pick up env var
         import importlib
+
         import compliance.kyc_provider as _kyc_mod
 
         importlib.reload(_kyc_mod)
@@ -459,6 +458,7 @@ class TestCompliance:
 
         os.environ["KYC_PROVIDER"] = "mock"
         import importlib
+
         import compliance.kyc_provider as _kyc_mod
 
         importlib.reload(_kyc_mod)
@@ -475,6 +475,7 @@ class TestCompliance:
 
         os.environ["KYC_PROVIDER"] = "mock"
         import importlib
+
         import compliance.kyc_provider as _kyc_mod
 
         importlib.reload(_kyc_mod)
@@ -496,8 +497,8 @@ class TestMonteCarlo:
 
         engine = MonteCarloEngine(n_paths=100)
         result = engine.run(self._pnls())
-        assert result.n_paths == 100  # noqa: PLR2004
-        assert result.n_trades == 200  # noqa: PLR2004
+        assert result.n_paths == 100
+        assert result.n_trades == 200
         assert result.sharpe_ci_95[0] <= result.sharpe_ci_95[1]
         assert result.max_dd_ci_95[0] <= result.max_dd_ci_95[1]
 
@@ -520,7 +521,7 @@ class TestMonteCarlo:
 
         engine = MonteCarloEngine(n_paths=100)
         result = engine.run(self._pnls(), method="block")
-        assert result.n_paths == 100  # noqa: PLR2004
+        assert result.n_paths == 100
 
     def test_empty_pnls_returns_empty(self):
         from analytics.monte_carlo import MonteCarloEngine
@@ -533,7 +534,7 @@ class TestMonteCarlo:
         from analytics.monte_carlo import run_bootstrap
 
         result = run_bootstrap(self._pnls(), n_paths=100)
-        assert result.n_trades == 200  # noqa: PLR2004
+        assert result.n_trades == 200
 
     def test_summary_dict_keys(self):
         from analytics.monte_carlo import run_bootstrap
@@ -565,13 +566,14 @@ class TestSharpeCircuitBreaker:
             cb.record_trade(pnl=-100.0, model_version="bad_model")
         state = cb._states.get("bad_model")
         assert state is not None
-        assert state.total_trades == 60  # noqa: PLR2004
+        assert state.total_trades == 60
 
     @pytest.mark.asyncio
     async def test_circuit_trips_on_bad_sharpe(self):
-        from ml.sharpe_circuit_breaker import SharpeCircuitBreaker, CircuitState
-        import ml.sharpe_circuit_breaker as _scb_mod
         import collections
+
+        import ml.sharpe_circuit_breaker as _scb_mod
+        from ml.sharpe_circuit_breaker import CircuitState, SharpeCircuitBreaker
 
         cb = SharpeCircuitBreaker()
 

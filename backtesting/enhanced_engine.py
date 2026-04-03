@@ -39,23 +39,22 @@ _ATR_FALLBACK_VOL = 0.001  # fallback volatility when realized variance is zero
 # ── Risk check severity constants ─────────────────────────────────────────────
 _CIRCUIT_BREAKER_HALT_LEVEL = 2  # circuit_breaker_level at which trading halts
 
-from dataclasses import dataclass, field
-from typing import Any
-from collections.abc import Callable
-from enum import Enum, IntEnum, auto
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from collections import deque, defaultdict
-import logging
-import json
 import gzip
+import json
+import logging
 import warnings
+from collections import defaultdict, deque
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from enum import Enum, IntEnum, auto
+from pathlib import Path
+from typing import Any
 
-# Performance libraries
+# Performance libraries — imported for availability checks; used conditionally
 try:
-    import numba  # noqa: F401
-    from numba import jit, prange, njit, cuda  # noqa: F401
+    import numba  # pylint: disable=unused-import  # noqa: F401
+    from numba import cuda, jit, njit, prange  # pylint: disable=unused-import  # noqa: F401
 
     NUMBA_AVAILABLE = True
 except ImportError:
@@ -63,16 +62,16 @@ except ImportError:
     warnings.warn("Numba unavailable - performance degraded", stacklevel=2)
 
 try:
-    import cupy as cp  # noqa: F401
-    from cupy.cuda import Device  # noqa: F401
+    import cupy as cp  # pylint: disable=unused-import  # noqa: F401
+    from cupy.cuda import Device  # pylint: disable=unused-import  # noqa: F401
 
     CUDA_AVAILABLE = True
 except ImportError:
     CUDA_AVAILABLE = False
 
 try:
-    from scipy import stats, optimize, interpolate  # noqa: F401
-    from scipy.optimize import minimize, differential_evolution  # noqa: F401
+    from scipy import interpolate, optimize, stats  # pylint: disable=unused-import  # noqa: F401
+    from scipy.optimize import differential_evolution, minimize  # pylint: disable=unused-import  # noqa: F401
 
     SCIPY_AVAILABLE = True
 except ImportError:
@@ -391,7 +390,7 @@ class TransactionCostModel:
         perm_impact = self.permanent_impact_coefficient * daily_volatility * participation_rate
 
         # Adjust for order flow toxicity (VPIN-like)
-        if self.use_order_flow_toxicity and order_flow_toxicity > 0.5:  # noqa: PLR2004
+        if self.use_order_flow_toxicity and order_flow_toxicity > 0.5:
             # Toxic flow = higher impact
             toxicity_multiplier = 1 + (order_flow_toxicity - 0.5) * 2
             temp_impact *= toxicity_multiplier
@@ -401,7 +400,7 @@ class TransactionCostModel:
             "permanent_bps": perm_impact * 10000,
             "total_bps": (temp_impact + perm_impact) * 10000,
             "temporary_decay_time": self._estimate_decay_time(participation_rate),
-            "is_toxic": order_flow_toxicity > 0.7,  # noqa: PLR2004
+            "is_toxic": order_flow_toxicity > 0.7,
         }
 
     def _estimate_decay_time(self, participation_rate: float) -> timedelta:
@@ -461,10 +460,8 @@ class TransactionCostModel:
         If fewer than min_samples are provided, returns the current parameters
         unchanged with a warning.
         """
-        import warnings as _w
-
         if len(executions) < min_samples:
-            _w.warn(
+            warnings.warn(
                 f"calibrate_from_executions: only {len(executions)} samples "
                 f"(need >= {min_samples}). Parameters unchanged.",
                 RuntimeWarning,
@@ -481,12 +478,11 @@ class TransactionCostModel:
             }
 
         try:
-            import numpy as _np
             from scipy.optimize import curve_fit as _curve_fit
 
-            x_arr = _np.array([e["participation_rate"] for e in executions])
-            s_arr = _np.array([e["daily_volatility"] for e in executions])
-            y_arr = _np.array([e["observed_impact_bps"] for e in executions]) / 10000  # → fraction
+            x_arr = np.array([e["participation_rate"] for e in executions])
+            s_arr = np.array([e["daily_volatility"] for e in executions])
+            y_arr = np.array([e["observed_impact_bps"] for e in executions]) / 10000  # → fraction
 
             def _model(X, eta, gamma, beta):
                 x, s = X
@@ -505,12 +501,12 @@ class TransactionCostModel:
                 maxfev=5000,
             )
             eta_fit, gamma_fit, beta_fit = popt
-            perr = _np.sqrt(_np.diag(pcov))
+            perr = np.sqrt(np.diag(pcov))
 
             # Goodness of fit
             y_pred = _model((x_arr, s_arr), *popt)
-            ss_res = _np.sum((y_arr - y_pred) ** 2)
-            ss_tot = _np.sum((y_arr - _np.mean(y_arr)) ** 2)
+            ss_res = np.sum((y_arr - y_pred) ** 2)
+            ss_tot = np.sum((y_arr - np.mean(y_arr)) ** 2)
             r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
 
             self.temporary_impact_coefficient = float(eta_fit)
@@ -539,7 +535,7 @@ class TransactionCostModel:
 
         except (ValueError, RuntimeError, TypeError) as exc:
             logger.warning("calibrate_from_executions failed: %s", exc)
-            return {"calibrated": False, "error": str(exc)}
+            return {"calibrated": False, "error": "Calibration failed — check server logs"}
 
     def total_cost(self, order_size: float, price: float, is_maker: bool = False, **kwargs) -> dict[str, float]:
         """Calculate all-in transaction cost"""
@@ -869,7 +865,7 @@ class MarketMicrostructureAnalyzer:
 
     def _update_microstructure_metrics(self):
         """Update spread and impact metrics"""
-        if len(self.ticks) < 20:  # noqa: PLR2004
+        if len(self.ticks) < 20:
             return
 
         recent_ticks = list(self.ticks)[-20:]
@@ -886,7 +882,7 @@ class MarketMicrostructureAnalyzer:
 
     def _update_toxicity_metrics(self):
         """Calculate VPIN-like order flow toxicity"""
-        if len(self.trade_flow) < 50:  # noqa: PLR2004
+        if len(self.trade_flow) < 50:
             return
 
         recent_flow = list(self.trade_flow)[-50:]
@@ -903,7 +899,7 @@ class MarketMicrostructureAnalyzer:
 
     def _detect_regime(self):
         """Detect current market regime using multiple classifiers"""
-        if len(self.ticks) < 50:  # noqa: PLR2004
+        if len(self.ticks) < 50:
             self.current_regime = MarketRegime.UNKNOWN
             return
 
@@ -917,23 +913,23 @@ class MarketMicrostructureAnalyzer:
         self._calculate_hurst()
 
         # Classify
-        if volatility > 0.05:  # >5% realized vol  # noqa: PLR2004
+        if volatility > 0.05:  # >5% realized vol
             if self.realized_skewness < -1:
                 self.current_regime = MarketRegime.HIGH_VOLATILITY_BREAKOUT
             else:
                 self.current_regime = MarketRegime.HIGH_VOLATILITY_MEAN_REVERSION
-        elif self.hurst_exponent > 0.6:  # noqa: PLR2004
+        elif self.hurst_exponent > 0.6:
             if self.returns and np.mean(list(self.returns)[-10:]) > 0:
                 self.current_regime = MarketRegime.TRENDING_STRONG_BULL
             else:
                 self.current_regime = MarketRegime.TRENDING_STRONG_BEAR
-        elif self.hurst_exponent > 0.5:  # noqa: PLR2004
+        elif self.hurst_exponent > 0.5:
             self.current_regime = (
                 MarketRegime.TRENDING_WEAK_BULL
                 if (self.returns and np.mean(list(self.returns)[-10:]) > 0)
                 else MarketRegime.TRENDING_WEAK_BEAR
             )
-        elif volatility < 0.01:  # noqa: PLR2004
+        elif volatility < 0.01:
             self.current_regime = MarketRegime.RANGING_NARROW
         else:
             self.current_regime = MarketRegime.RANGING_WIDE
@@ -1126,7 +1122,8 @@ class InstitutionalRiskManager:
         # Callbacks for emergency actions
         self.emergency_callbacks: list[Callable] = []
 
-        logger.info(f"RiskManager initialized: ${initial_capital:,.2f} capital")
+        logger.info("RiskManager initialized: $%s capital", initial_capital)
+
 
     def register_emergency_callback(self, callback: Callable):
         """Register callback for kill switch activation"""
@@ -1251,7 +1248,7 @@ class InstitutionalRiskManager:
             )
 
         # Check for unusual trading patterns
-        if self.daily_trades > 1000:  # >1000 trades/day is unusual  # noqa: PLR2004
+        if self.daily_trades > 1000:  # >1000 trades/day is unusual
             self._log_risk_event("High trade frequency detected", RiskEventSeverity.WARNING)
 
         return True, "OK"
@@ -1278,7 +1275,7 @@ class InstitutionalRiskManager:
         """
         Calculate Value at Risk using specified method.
         """
-        if len(self.returns_history) < 30:  # noqa: PLR2004
+        if len(self.returns_history) < 30:
             # Not enough data - use parametric fallback
             return self.current_capital * 0.02  # Conservative 2%
 
@@ -1286,11 +1283,11 @@ class InstitutionalRiskManager:
 
         if method == "historical":
             return np.percentile(returns, (1 - confidence) * 100) * self.current_capital
-        elif method == "parametric" and SCIPY_AVAILABLE:
+        if method == "parametric" and SCIPY_AVAILABLE:
             mu, sigma = np.mean(returns), np.std(returns)
             z_score = stats.norm.ppf(1 - confidence)
             return (mu + z_score * sigma) * self.current_capital
-        elif method == "cornish_fisher" and SCIPY_AVAILABLE:
+        if method == "cornish_fisher" and SCIPY_AVAILABLE:
             # Adjust for skewness and kurtosis
             z = stats.norm.ppf(1 - confidence)
             s = stats.skew(returns)
@@ -1312,7 +1309,7 @@ class InstitutionalRiskManager:
         Calculate optimal Kelly fraction based on trade history.
         f* = (bp - q) / b
         """
-        if len(self.trade_history) < 20:  # noqa: PLR2004
+        if len(self.trade_history) < 20:
             return self.kelly_fraction  # Default
 
         wins = [t.net_pnl for t in self.trade_history if t.net_pnl > 0]
@@ -1368,10 +1365,14 @@ class InstitutionalRiskManager:
 
         logger.critical("=" * 70)
         logger.critical("KILL SWITCH ACTIVATED")
-        logger.critical(f"Reason: {reason}")
-        logger.critical(f"Daily P&L: ${self.daily_pnl:,.2f}")
-        logger.critical(f"Current Capital: ${self.current_capital:,.2f}")
-        logger.critical(f"Drawdown: {(self.peak_capital - self.current_capital) / self.peak_capital:.2%}")
+        logger.critical("Reason: %s", reason)
+
+        logger.critical("Daily P&L: $%s", self.daily_pnl)
+
+        logger.critical("Current Capital: $%s", self.current_capital)
+
+        logger.critical("Drawdown: %s", (self.peak_capital - self.current_capital) / self.peak_capital)
+
         logger.critical("=" * 70)
 
         # Execute emergency callbacks
@@ -1379,7 +1380,8 @@ class InstitutionalRiskManager:
             try:
                 callback(reason, self.daily_pnl, self.current_capital)
             except (RuntimeError, ValueError, AttributeError) as e:
-                logger.error(f"Emergency callback failed: {e}")
+                logger.error("Emergency callback failed: %s", e)
+
 
         self._log_risk_event(f"Kill switch: {reason}", RiskEventSeverity.KILL_SWITCH)
 
@@ -1393,10 +1395,7 @@ class InstitutionalRiskManager:
             "daily_pnl": self.daily_pnl,
         }
         self.risk_events.append(event)
-        logger.log(
-            logging.CRITICAL if severity >= RiskEventSeverity.CRITICAL else logging.WARNING,
-            f"Risk Event [{severity.name}]: {message}",
-        )
+        logger.log("Risk Event [%s]: %s", severity.name, message, logging.CRITICAL if severity >= RiskEventSeverity.CRITICAL else logging.WARNING)
 
     def _estimate_var_change(self, symbol: str, size: float, price: float) -> float:
         """Estimate how VaR changes with new position"""
@@ -1453,6 +1452,194 @@ class InstitutionalRiskManager:
 
 
 # =============================================================================
+# =============================================================================
+# PERFORMANCE REPORT HELPERS
+# Module-level functions extracted from get_performance_report() so each
+# metric section is independently testable without instantiating the engine.
+# =============================================================================
+
+# Annualisation factor: minute bars assumed (252 trading days × 390 min/day).
+_ANNUAL_BARS = 252 * 390
+
+
+def _compute_drawdown_series(
+    equity_curve: list[tuple],
+    initial_capital: float,
+) -> tuple[float, list[dict]]:
+    """
+    Compute maximum drawdown and completed drawdown periods from an equity curve.
+
+    Returns (max_drawdown_fraction, drawdown_periods_list).
+    max_drawdown_fraction is in [0, 1]; multiply by 100 for percentage.
+    """
+    peak = initial_capital
+    max_dd = 0.0
+    dd_start = None
+    dd_periods: list[dict] = []
+
+    for ts, eq in equity_curve:
+        if eq > peak:
+            if dd_start is not None:
+                ts_dt = ts.to_datetime() if hasattr(ts, "to_datetime") else datetime.now(UTC)
+                if (ts_dt - dd_start).total_seconds() > 0:
+                    dd_periods.append({
+                        "start": dd_start.isoformat(),
+                        "end": ts_dt.isoformat(),
+                        "max_dd": max_dd,
+                    })
+            peak = eq
+            max_dd = 0.0
+            dd_start = None
+        else:
+            dd = (peak - eq) / peak if peak > 0 else 0.0
+            if dd > max_dd:
+                max_dd = dd
+                if dd_start is None:
+                    dd_start = ts.to_datetime() if hasattr(ts, "to_datetime") else datetime.now(UTC)
+
+    return max_dd, dd_periods
+
+
+def _calculate_sortino(returns: "np.ndarray", target: float = 0.0) -> float:
+    """Sortino ratio: excess return over target divided by downside deviation."""
+    downside = returns[returns < target]
+    if len(downside) == 0:
+        return 0.0
+    downside_std = float(np.std(downside))
+    return float((np.mean(returns) - target) / downside_std) if downside_std > 0 else 0.0
+
+
+def _calculate_calmar(returns: "np.ndarray", max_dd: float) -> float:
+    """Calmar ratio: annualised return divided by maximum drawdown."""
+    if max_dd <= 0 or len(returns) == 0:
+        return 0.0
+    annual_return = float(np.mean(returns)) * _ANNUAL_BARS
+    return annual_return / max_dd
+
+
+def _build_report_metadata(engine: "EnhancedBacktestEngine") -> dict[str, Any]:
+    """Build the metadata section of the performance report."""
+    return {
+        "generated_at": datetime.now(UTC).isoformat(),
+        "initial_capital": engine.initial_capital,
+        "final_capital": engine.capital,
+        "total_return_pct": (engine.capital - engine.initial_capital) / engine.initial_capital * 100,
+        "backtest_periods": len(engine.equity_curve),
+        "execution_quality": engine.execution_quality.name,
+    }
+
+
+def _build_trade_statistics(trades: list, pnls: list[float]) -> dict[str, Any]:
+    """Compute win/loss counts, profit factor, payoff ratio, and P&L distribution."""
+    wins = [p for p in pnls if p > 0]
+    losses = [p for p in pnls if p < 0]
+    return {
+        "total_trades": len(trades),
+        "winning_trades": len(wins),
+        "losing_trades": len(losses),
+        "win_rate": len(wins) / len(trades) if trades else 0,
+        "profit_factor": abs(sum(wins) / sum(losses)) if losses else float("inf"),
+        "payoff_ratio": abs(float(np.mean(wins)) / float(np.mean(losses))) if wins and losses else 0,
+        "total_pnl": sum(pnls),
+        "avg_trade_pnl": float(np.mean(pnls)),
+        "avg_win": float(np.mean(wins)) if wins else 0,
+        "avg_loss": float(np.mean(losses)) if losses else 0,
+        "largest_win": max(wins) if wins else 0,
+        "largest_loss": min(losses) if losses else 0,
+        "std_dev_pnl": float(np.std(pnls)),
+    }
+
+
+def _build_time_analysis(trades: list) -> dict[str, Any]:
+    """Compute trade duration statistics in seconds and minutes."""
+    durations = [t.duration_seconds for t in trades]
+    return {
+        "avg_duration_sec": float(np.mean(durations)) if durations else 0,
+        "avg_duration_min": float(np.mean(durations)) / 60 if durations else 0,
+        "max_duration_sec": max(durations) if durations else 0,
+        "min_duration_sec": min(durations) if durations else 0,
+    }
+
+
+def _build_risk_metrics(
+    returns: list[float],
+    equity_returns: "np.ndarray",
+    max_dd: float,
+    dd_periods: list[dict],
+    current_capital: float,
+    risk_manager: "InstitutionalRiskManager",
+) -> dict[str, Any]:
+    """
+    Compute Sharpe, Sortino, Calmar, VaR, CVaR, skewness, and kurtosis.
+
+    All ratio metrics use the annualisation factor _ANNUAL_BARS (minute bars).
+    """
+    eq_std = float(np.std(equity_returns)) if len(equity_returns) > 1 else 0.0
+    eq_mean = float(np.mean(equity_returns)) if len(equity_returns) > 1 else 0.0
+    sharpe = (eq_mean / eq_std * np.sqrt(_ANNUAL_BARS)) if eq_std > 0 else 0.0
+    annual_vol = eq_std * np.sqrt(_ANNUAL_BARS) if len(equity_returns) > 1 else 0.0
+
+    ret_arr = np.array(returns)
+    var_95 = float(np.percentile(ret_arr, 5)) if len(returns) > 10 else 0.0
+    cvar_95 = float(np.mean(ret_arr[ret_arr <= var_95])) if len(returns) > 10 else 0.0
+
+    skewness = float(stats.skew(returns)) if SCIPY_AVAILABLE and len(returns) > 2 else 0.0
+    kurtosis = float(stats.kurtosis(returns)) if SCIPY_AVAILABLE and len(returns) > 2 else 0.0
+
+    current_dd_pct = (
+        (risk_manager.peak_capital - current_capital) / risk_manager.peak_capital * 100
+        if risk_manager.peak_capital > 0
+        else 0.0
+    )
+
+    return {
+        "max_drawdown_pct": max_dd * 100,
+        "max_drawdown_periods": dd_periods,
+        "current_drawdown_pct": current_dd_pct,
+        "volatility_annual": annual_vol,
+        "sharpe_ratio": float(sharpe),
+        "sortino_ratio": _calculate_sortino(equity_returns),
+        "calmar_ratio": _calculate_calmar(equity_returns, max_dd),
+        "var_95": var_95,
+        "cvar_95": cvar_95,
+        "skewness": skewness,
+        "kurtosis": kurtosis,
+    }
+
+
+def _build_execution_quality(
+    execution_log: list[dict],
+    positions: dict,
+    initial_capital: float,
+    cost_model: "TransactionCostModel",
+) -> dict[str, Any]:
+    """Aggregate slippage, latency, commission, and overnight financing costs."""
+    total_financing = sum(p.total_financing_paid for p in positions.values())
+    total_cost = sum(e["costs"].get("total_cost", 0) for e in execution_log if "costs" in e)
+    return {
+        "avg_slippage_bps": float(np.mean([e.get("slippage_bps", 0) for e in execution_log])) if execution_log else 0,
+        "avg_latency_ms": float(np.mean([e.get("latency_ms", 0) for e in execution_log])) if execution_log else 0,
+        "total_commission": sum(e["costs"].get("commission", 0) for e in execution_log if "costs" in e),
+        "total_slippage_cost": sum(e["costs"].get("market_impact", 0) for e in execution_log if "costs" in e),
+        "cost_drag_pct": (total_cost / initial_capital * 100) if initial_capital > 0 else 0,
+        "total_financing_paid": total_financing,
+        "financing_drag_pct": (total_financing / initial_capital * 100) if initial_capital > 0 else 0,
+        "overnight_rate_annual_pct": getattr(cost_model, "overnight_rate_annual", 0.004) * 100,
+    }
+
+
+def _build_mfe_mae_analysis(trades: list) -> dict[str, Any]:
+    """Compute MFE/MAE efficiency metrics across all closed trades."""
+    total_mae = sum(t.mae for t in trades)
+    return {
+        "avg_mfe_pct": float(np.mean([t.mfe_pct for t in trades])),
+        "avg_mae_pct": float(np.mean([t.mae_pct for t in trades])),
+        "avg_efficiency": float(np.mean([t.net_pnl / t.mfe if t.mfe > 0 else 0 for t in trades])),
+        "profit_factor_mfe": sum(t.mfe for t in trades) / total_mae if total_mae > 0 else 0,
+    }
+
+
+# =============================================================================
 # MAIN BACKTEST ENGINE
 # =============================================================================
 
@@ -1503,8 +1690,10 @@ class EnhancedBacktestEngine:
         # Slippage model parameters based on execution quality
         self.latency_model = self._get_latency_model()
 
-        logger.info(f"BacktestEngine initialized: ${initial_capital:,.2f}")
-        logger.info(f"Execution quality: {execution_quality.name}")
+        logger.info("BacktestEngine initialized: $%s", initial_capital)
+
+        logger.info("Execution quality: %s", execution_quality.name)
+
         if self.enable_gpu:
             logger.info("GPU acceleration enabled")
 
@@ -1651,7 +1840,7 @@ class EnhancedBacktestEngine:
         current_price = history[-1]
 
         # Pre-trade risk check
-        allowed, reason, risk_meta = self.risk_manager.check_pre_trade_risk(symbol, side, size, current_price, {})
+        allowed, reason, _ = self.risk_manager.check_pre_trade_risk(symbol, side, size, current_price, {})
 
         if not allowed:
             return False, reason, None
@@ -1816,7 +2005,8 @@ class EnhancedBacktestEngine:
             else:
                 return False, {"error": "Invalid order type"}
         except ValueError as exc:
-            return False, {"error": str(exc), "status": "pending"}
+            logger.warning("Order fill resolution failed: %s", exc)
+            return False, {"error": "Invalid order parameters", "status": "pending"}
 
         # ── Calculate transaction costs ────────────────────────────────────
         costs = self.cost_model.total_cost(
@@ -1935,114 +2125,11 @@ class EnhancedBacktestEngine:
         position.realized_pnl += net_pnl
         position.size = position.size + (closing_size if position.size > 0 else -closing_size)
 
-        if is_full_close or abs(position.size) < 0.0001:  # noqa: PLR2004
+        if is_full_close or abs(position.size) < 0.0001:
             # Archive position
             position.closing_trades.append({"trade_id": trade.trade_id, "exit_price": exit_price, "pnl": net_pnl})
 
         return trade
-
-    # ── Performance report helpers ────────────────────────────────────────────
-
-    def _compute_drawdown_periods(
-        self,
-    ) -> tuple[float, list[dict]]:
-        """
-        Walk the equity curve and return (max_drawdown_fraction, dd_periods).
-
-        max_drawdown_fraction is in [0, 1]. dd_periods is a list of dicts
-        with keys start, end, max_dd for each completed drawdown episode.
-        """
-        peak = self.initial_capital
-        max_dd = 0.0
-        dd_start = None
-        dd_periods: list[dict] = []
-
-        for ts, eq in self.equity_curve:
-            if eq > peak:
-                if dd_start and (ts.to_datetime() - dd_start).total_seconds() > 0:
-                    dd_periods.append(
-                        {
-                            "start": dd_start.isoformat() if isinstance(dd_start, datetime) else str(dd_start),
-                            "end": ts.to_datetime().isoformat() if hasattr(ts, "to_datetime") else str(ts),
-                            "max_dd": max_dd,
-                        }
-                    )
-                peak = eq
-                max_dd = 0.0
-                dd_start = None
-            else:
-                dd = (peak - eq) / peak
-                if dd > max_dd:
-                    max_dd = dd
-                    if dd_start is None:
-                        dd_start = ts.to_datetime() if hasattr(ts, "to_datetime") else datetime.now(UTC)
-
-        return max_dd, dd_periods
-
-    def _build_risk_metrics_section(
-        self,
-        equity_returns: Any,
-        returns: list[float],
-        max_dd: float,
-    ) -> dict[str, Any]:
-        """
-        Build the risk_metrics sub-dict for ``get_performance_report``.
-
-        Parameters
-        ----------
-        equity_returns : np.ndarray — point-to-point equity returns.
-        returns        : list[float] — per-trade return percentages.
-        max_dd         : float — max drawdown fraction (0–1).
-        """
-
-        def _sortino(rets: Any, target: float = 0.0) -> float:
-            downside = [r for r in rets if r < target]
-            if not downside:
-        def _sortino(rets: Any, target: float = 0.0) -> float:
-            downside = [r for r in rets if r < target]
-            if not downside:
-                return 0.0
-            return (np.mean(rets) - target) / np.std(downside) if np.std(downside) > 0 else 0.0
-            return (np.mean(returns) - target) / np.std(downside) if np.std(downside) > 0 else 0.0
-
-        def _calmar(rets: Any, mdd: float) -> float:
-            if mdd <= 0:
-                return 0.0
-            annual_return = np.mean(rets) * 252 * 390
-            return annual_return / mdd
-
-        current_dd = (
-            (self.risk_manager.peak_capital - self.capital)
-            / self.risk_manager.peak_capital
-            * 100
-            if self.risk_manager.peak_capital > 0
-            else 0
-        )
-
-        return {
-            "max_drawdown_pct": max_dd * 100,
-            "current_drawdown_pct": current_dd,
-            "volatility_annual": np.std(equity_returns) * np.sqrt(252 * 390)
-            if len(equity_returns) > 1
-            else 0,
-            "sharpe_ratio": np.mean(equity_returns)
-            / np.std(equity_returns)
-            * np.sqrt(252 * 390)
-            if len(equity_returns) > 1 and np.std(equity_returns) > 0
-            else 0,
-            "sortino_ratio": _sortino(equity_returns),
-            "calmar_ratio": _calmar(equity_returns, max_dd),
-            "var_95": np.percentile(returns, 5) if len(returns) > 10 else 0,  # noqa: PLR2004
-            "cvar_95": np.mean([r for r in returns if r <= np.percentile(returns, 5)])
-            if len(returns) > 10  # noqa: PLR2004
-            else 0,
-            "skewness": stats.skew(returns)
-            if SCIPY_AVAILABLE and len(returns) > 2  # noqa: PLR2004
-            else 0,
-            "kurtosis": stats.kurtosis(returns)
-            if SCIPY_AVAILABLE and len(returns) > 2  # noqa: PLR2004
-            else 0,
-        }
 
     def get_performance_report(self) -> dict[str, Any]:
         """Generate comprehensive institutional-grade performance report."""
@@ -2052,108 +2139,24 @@ class EnhancedBacktestEngine:
         trades = self.closed_trades
         pnls = [t.net_pnl for t in trades]
         returns = [t.return_pct for t in trades]
-        wins = [p for p in pnls if p > 0]
-        losses = [p for p in pnls if p < 0]
-        durations = [t.duration_seconds for t in trades]
-
         equity_values = [e[1] for e in self.equity_curve]
         equity_returns = (
-            np.diff(equity_values) / equity_values[:-1]
-            if len(equity_values) > 1
-            else np.array([])
+            np.diff(equity_values) / equity_values[:-1] if len(equity_values) > 1 else np.array([])
         )
+        max_dd, dd_periods = _compute_drawdown_series(self.equity_curve, self.initial_capital)
 
-        max_dd, dd_periods = self._compute_drawdown_periods()
-        risk_metrics = self._build_risk_metrics_section(equity_returns, returns, max_dd)
-        risk_metrics["max_drawdown_periods"] = dd_periods
-
-        report = {
-            "metadata": {
-                "generated_at": datetime.now(UTC).isoformat(),
-                "initial_capital": self.initial_capital,
-                "final_capital": self.capital,
-                "total_return_pct": (self.capital - self.initial_capital) / self.initial_capital * 100,
-                "backtest_periods": len(self.equity_curve),
-                "execution_quality": self.execution_quality.name,
-            },
-            "trade_statistics": {
-                "total_trades": len(trades),
-                "winning_trades": len(wins),
-                "losing_trades": len(losses),
-                "win_rate": len(wins) / len(trades) if trades else 0,
-                "profit_factor": abs(sum(wins) / sum(losses)) if losses else float("inf"),
-                "payoff_ratio": abs(np.mean(wins) / np.mean(losses)) if wins and losses else 0,
-                "total_pnl": sum(pnls),
-                "avg_trade_pnl": np.mean(pnls),
-                "avg_win": np.mean(wins) if wins else 0,
-                "avg_loss": np.mean(losses) if losses else 0,
-                "largest_win": max(wins) if wins else 0,
-                "largest_loss": min(losses) if losses else 0,
-                "std_dev_pnl": np.std(pnls),
-            },
-            "time_analysis": {
-                "avg_duration_sec": np.mean(durations),
-                "avg_duration_min": np.mean(durations) / 60,
-                "max_duration_sec": max(durations) if durations else 0,
-                "min_duration_sec": min(durations) if durations else 0,
-            },
-            "risk_metrics": {
-                "max_drawdown_pct": max_dd * 100,
-                "max_drawdown_periods": dd_periods,
-                "current_drawdown_pct": (self.risk_manager.peak_capital - self.capital)
-                / self.risk_manager.peak_capital
-                * 100
-                if self.risk_manager.peak_capital > 0
-                else 0,
-                "volatility_annual": np.std(equity_returns) * np.sqrt(252 * 390) if len(equity_returns) > 1 else 0,
-                "sharpe_ratio": np.mean(equity_returns) / np.std(equity_returns) * np.sqrt(252 * 390)
-                if len(equity_returns) > 1 and np.std(equity_returns) > 0
-                else 0,
-                "sortino_ratio": calculate_sortino(equity_returns),
-                "calmar_ratio": calculate_calmar(equity_returns, max_dd),
-                "var_95": np.percentile(returns, 5) if len(returns) > 10 else 0,  # noqa: PLR2004
-                "cvar_95": np.mean([r for r in returns if r <= np.percentile(returns, 5)])
-                if len(returns) > 10  # noqa: PLR2004
-                else 0,
-                "skewness": stats.skew(returns)
-                if SCIPY_AVAILABLE and len(returns) > 2  # noqa: PLR2004
-                else 0,
-                "kurtosis": stats.kurtosis(returns)
-                if SCIPY_AVAILABLE and len(returns) > 2  # noqa: PLR2004
-                else 0,
-            },
-            "execution_quality": {
-                "avg_slippage_bps": np.mean([e.get("slippage_bps", 0) for e in self.execution_log]),
-                "avg_latency_ms": np.mean([e.get("latency_ms", 0) for e in self.execution_log]),
-                "total_commission": sum(e["costs"].get("commission", 0) for e in self.execution_log if "costs" in e),
-                "total_slippage_cost": sum(
-                    e["costs"].get("market_impact", 0) for e in self.execution_log if "costs" in e
-                ),
-                "cost_drag_pct": (
-                    sum(e["costs"].get("total_cost", 0) for e in self.execution_log if "costs" in e)
-                    / self.initial_capital
-                )
-                * 100
-                if self.initial_capital > 0
-                else 0,
-                # Overnight financing totals across all positions (open + closed)
-                "total_financing_paid": sum(p.total_financing_paid for p in self.positions.values()),
-                "financing_drag_pct": (
-                    sum(p.total_financing_paid for p in self.positions.values()) / self.initial_capital * 100
-                )
-                if self.initial_capital > 0
-                else 0,
-                "overnight_rate_annual_pct": getattr(self.cost_model, "overnight_rate_annual", 0.004) * 100,
-            },
+        return {
+            "metadata": _build_report_metadata(self),
+            "trade_statistics": _build_trade_statistics(trades, pnls),
+            "time_analysis": _build_time_analysis(trades),
+            "risk_metrics": _build_risk_metrics(
+                returns, equity_returns, max_dd, dd_periods, self.capital, self.risk_manager
+            ),
+            "execution_quality": _build_execution_quality(
+                self.execution_log, self.positions, self.initial_capital, self.cost_model
+            ),
             "regime_performance": self._analyze_regime_performance(),
-            "mfe_mae_analysis": {
-                "avg_mfe_pct": np.mean([t.mfe_pct for t in trades]),
-                "avg_mae_pct": np.mean([t.mae_pct for t in trades]),
-                "avg_efficiency": np.mean([t.net_pnl / t.mfe if t.mfe > 0 else 0 for t in trades]),
-                "profit_factor_mfe": sum(t.mfe for t in trades) / sum(t.mae for t in trades)
-                if sum(t.mae for t in trades) > 0
-                else 0,
-            },
+            "mfe_mae_analysis": _build_mfe_mae_analysis(trades),
             "risk_manager_report": self.risk_manager.get_risk_report(),
             "monthly_returns": self._calculate_monthly_returns(),
             "equity_curve_sample": [
@@ -2162,12 +2165,11 @@ class EnhancedBacktestEngine:
             ],
         }
 
-        return report
-
     def _analyze_regime_performance(self) -> dict[str, dict]:
-        """Analyze performance by market regime"""
-        regime_stats = defaultdict(lambda: {"trades": 0, "pnl": 0.0, "wins": 0, "losses": 0})
-
+        """Aggregate trade P&L and win-rate by entry market regime."""
+        regime_stats: dict[str, dict] = defaultdict(
+            lambda: {"trades": 0, "pnl": 0.0, "wins": 0, "losses": 0}
+        )
         for trade in self.closed_trades:
             regime = trade.entry_regime.name
             regime_stats[regime]["trades"] += 1
@@ -2179,33 +2181,30 @@ class EnhancedBacktestEngine:
 
         return {
             regime: {
-                "total_trades": stats["trades"],
-                "total_pnl": stats["pnl"],
-                "win_rate": stats["wins"] / stats["trades"] if stats["trades"] > 0 else 0,
-                "avg_pnl": stats["pnl"] / stats["trades"] if stats["trades"] > 0 else 0,
+                "total_trades": s["trades"],
+                "total_pnl": s["pnl"],
+                "win_rate": s["wins"] / s["trades"] if s["trades"] > 0 else 0,
+                "avg_pnl": s["pnl"] / s["trades"] if s["trades"] > 0 else 0,
             }
-            for regime, stats in regime_stats.items()
+            for regime, s in regime_stats.items()
         }
 
     def _calculate_monthly_returns(self) -> dict[str, float]:
-        """Calculate monthly returns from equity curve"""
+        """Compute month-over-month equity returns from the equity curve."""
         if not self.equity_curve:
             return {}
-
-        monthly_equity = {}
+        monthly_equity: dict[str, float] = {}
         for ts, eq in self.equity_curve:
             dt = ts.to_datetime() if hasattr(ts, "to_datetime") else datetime.fromtimestamp(float(ts))
-            month_key = dt.strftime("%Y-%m")
-            monthly_equity[month_key] = eq  # Last equity of month
+            monthly_equity[dt.strftime("%Y-%m")] = eq  # last equity value wins per month
 
-        months = sorted(monthly_equity.keys())
-        returns = {}
-        for i, month in enumerate(months[1:], 1):
-            prev_eq = monthly_equity[months[i - 1]]
-            curr_eq = monthly_equity[month]
-            returns[month] = (curr_eq - prev_eq) / prev_eq if prev_eq > 0 else 0
-
-        return returns
+        months = sorted(monthly_equity)
+        return {
+            month: (monthly_equity[month] - monthly_equity[months[i - 1]]) / monthly_equity[months[i - 1]]
+            if monthly_equity[months[i - 1]] > 0
+            else 0.0
+            for i, month in enumerate(months[1:], 1)
+        }
 
     def save_state(self, filepath: str, compress: bool = True):
         """Save complete engine state to disk"""
@@ -2238,10 +2237,11 @@ class EnhancedBacktestEngine:
             with gzip.open(filepath, "wt") as f:
                 json.dump(state, f, default=str, indent=2)
         else:
-            with open(filepath, "w") as f:
+            with Path(filepath).open("w", encoding="utf-8") as f:
                 json.dump(state, f, default=str, indent=2)
 
-        logger.info(f"State saved to {filepath} ({'compressed' if compress else 'raw'})")
+        logger.info("State saved to %s (%s)", filepath, 'compressed' if compress else 'raw')
+
 
     def load_state(self, filepath: str):
         """Load engine state from disk"""
@@ -2267,7 +2267,8 @@ class EnhancedBacktestEngine:
             )
             self.positions[symbol] = pos
 
-        logger.info(f"State loaded from {filepath}")
+        logger.info("State loaded from %s", filepath)
+
         return state
 
 
@@ -2365,7 +2366,7 @@ def _load_real_ticks(symbol: str = "XAUUSD", max_bars: int = 5000) -> list["Tick
         exchange = _ccxt.binance({"enableRateLimit": True, "options": {"defaultType": "spot"}})
         since_ms = exchange.parse8601("2022-01-01T00:00:00Z")
         df = rdb.fetch_ohlcv_paginated(exchange, "XAU/USDT", "1h", since_ms=since_ms, max_bars=max_bars)
-        if df is None or len(df) < 100:  # noqa: PLR2004
+        if df is None or len(df) < 100:
             return None
 
         ticks: list[TickData] = []
@@ -2493,7 +2494,7 @@ def _run_ma_crossover_loop(
                 return None
             threshold = 0.0002
             if fast_ma > slow_ma * (1 + threshold):
-                return (OrderSide.BUY, 0.8)
+                return (OrderSide.BUY, 0.8)  # 80% confidence
             if fast_ma < slow_ma * (1 - threshold):
                 return (OrderSide.SELL, 0.8)
             return None
@@ -2507,7 +2508,9 @@ def _run_ma_crossover_loop(
 
         if signal and result["can_trade"]:
             side, confidence = signal
-            if confidence > 0.7:  # noqa: PLR2004
+
+            # Risk-based position sizing
+            if confidence > 0.7:
                 size = position_size * confidence
 
                 # Check if we need to reverse

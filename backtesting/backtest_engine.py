@@ -9,9 +9,10 @@ Backtesting engine — runs signal-based backtests on OHLCV DataFrames.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+
 import numpy as np
 import pandas as pd
-from dataclasses import dataclass, field
 
 
 @dataclass
@@ -103,7 +104,6 @@ class BacktestEngine:
         for i in range(1, len(data)):
             prev_sig = signals.iloc[i - 1]
             price = data["close"].iloc[i]
-            data["close"].iloc[i - 1]
 
             # Close existing position on signal flip or exit
             if position != 0 and (prev_sig == 0 or prev_sig != entry_signal):

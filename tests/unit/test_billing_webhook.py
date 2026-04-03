@@ -13,10 +13,10 @@ All external calls (Stripe SDK, HTTP) are mocked.
 
 from __future__ import annotations
 
-import pytest
-from unittest.mock import MagicMock, patch
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
 
+import pytest
 
 # ── Stripe webhook ────────────────────────────────────────────────────────────
 
@@ -29,6 +29,7 @@ class TestStripeWebhook:
         try:
             from fastapi import FastAPI
             from fastapi.testclient import TestClient
+
             from api.billing import router
 
             app = FastAPI()
@@ -58,7 +59,7 @@ class TestStripeWebhook:
                 headers={"stripe-signature": "t=123,v1=abc"},
             )
             # Must ack (200) even when stripe package missing
-            assert res.status_code == 200  # noqa: PLR2004
+            assert res.status_code == 200
             assert res.json().get("received") is True
 
     def test_webhook_processes_valid_event(self, client):
@@ -72,7 +73,7 @@ class TestStripeWebhook:
                 content=b'{"type":"checkout.session.completed","data":{}}',
                 headers={"stripe-signature": "t=123,v1=abc"},
             )
-            assert res.status_code == 200  # noqa: PLR2004
+            assert res.status_code == 200
             assert res.json().get("received") is True
 
 
@@ -183,6 +184,7 @@ class TestFreeTierActivation:
         try:
             from fastapi import FastAPI
             from fastapi.testclient import TestClient
+
             from api.billing import router
 
             app = FastAPI()

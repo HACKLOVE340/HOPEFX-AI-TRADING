@@ -42,7 +42,7 @@ DEFAULT_ADMIN_EMAIL = "admin@hopefx.io"
 DEFAULT_ADMIN_USERNAME = "admin"
 # Password is generated once at bootstrap time and written to .env.
 # Never hardcoded — read back from .env after generation.
-_ADMIN_PASSWORD_KEY = "BOOTSTRAP_ADMIN_PASSWORD"
+_ADMIN_PASSWORD_KEY = "BOOTSTRAP_ADMIN_PASSWORD"  # nosec B105 — env var key name, not a password
 
 
 def _generate_env() -> bool:
@@ -83,7 +83,15 @@ BROKER_TYPE=paper
 # ── Sentry (disabled in dev) ──────────────────────────────────────────────────
 # SENTRY_DSN=
 """
-    ENV_PATH.write_text(content, encoding="utf-8")
+    # Write with mode 0o600 so the generated secrets are not world-readable.
+    # os.open with O_CREAT|O_WRONLY|O_TRUNC and mode=0o600 creates the file
+    # with restricted permissions atomically — no world-readable window.
+    # The file is gitignored and never committed to source control.
+    fd = os.open(str(ENV_PATH), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, content.encode("utf-8"))
+    finally:
+        os.close(fd)
     return True
 
 
@@ -114,12 +122,14 @@ def _seed_admin() -> str:
     if not admin_password:
         raise RuntimeError(f"{_ADMIN_PASSWORD_KEY} not found in environment. Run bootstrap_dev.py to regenerate .env.")
 
-    from database.models import Base
-    from database.user_models import User, UserRole, UserStatus
-    from auth.service import hash_password
+    import uuid
+
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    import uuid
+
+    from auth.service import hash_password
+    from database.models import Base
+    from database.user_models import User, UserRole, UserStatus
 
     db_url = os.environ["DATABASE_URL"]
     connect_args = {"check_same_thread": False} if db_url.startswith("sqlite") else {}
@@ -159,17 +169,18 @@ def bootstrap(verbose: bool = True) -> None:
         print(f"  ✅  Generated .env  →  {ENV_PATH}")
 
     try:
-        admin_password = _seed_admin()
+        _seed_admin()
         if verbose and created:
             print("  ✅  Admin user seeded")
             print(f"      Email    : {DEFAULT_ADMIN_EMAIL}")
             print(f"      Username : {DEFAULT_ADMIN_USERNAME}")
-            print(f"      Password : {admin_password}  ← save this now")
+            # Direct users to the .env file — never echo the password value.
+            sys.stdout.write(f"      Password : see {ENV_PATH} (BOOTSTRAP_ADMIN_PASSWORD)\n")
             print("─" * 58)
             print("  Start the server:  python app.py")
             print("  Login at:          http://localhost:8000/login")
             print("─" * 58 + "\n")
-    except Exception as exc:
+    except Exception as exc:  # pylint: disable=broad-exception-caught
         if verbose:
             print(f"  ⚠️  Admin seed skipped: {exc}")
 

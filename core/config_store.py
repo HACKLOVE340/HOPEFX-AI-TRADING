@@ -31,9 +31,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -78,7 +76,7 @@ class ConfigStore:
             from app import app_state
 
             if app_state and app_state.db_session_factory:
-                return app_state.db_session_factory()
+                return app_state.db_session_factory()  # pylint: disable=not-callable
         except Exception as _exc:
             logger.debug("Suppressed exception: %s", _exc)
         return None
@@ -148,7 +146,7 @@ class ConfigStore:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def get(self, key: str, default: Any = None) -> Any:
+    def get(self, key: str, default: Any | None = None) -> Any:
         """
         Read a config value.
 

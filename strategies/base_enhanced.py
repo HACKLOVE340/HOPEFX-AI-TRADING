@@ -11,9 +11,7 @@ and adds MCC integration.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -26,7 +24,7 @@ class StrategyConfig:
     symbol: str  # "XAUUSD" format
     timeframe: str = "5m"
     risk_per_trade: Decimal = Decimal("0.01")  # 1%
-    max_position: Decimal = Decimal("10")
+    max_position: Decimal = Decimal(10)
     enabled: bool = True
 
     # New fields (optional for existing strategies)
@@ -61,7 +59,7 @@ class StrategySignal:
         self.timestamp = datetime.now(UTC)
 
     def is_valid(self) -> bool:
-        return self.action in ["BUY", "SELL", "HOLD"] and self.confidence > 0.5  # noqa: PLR2004
+        return self.action in ["BUY", "SELL", "HOLD"] and self.confidence > 0.5
 
 
 class EnhancedStrategy(ABC):
@@ -77,8 +75,8 @@ class EnhancedStrategy(ABC):
             "trades": 0,
             "wins": 0,
             "losses": 0,
-            "total_pnl": Decimal("0"),
-            "current_drawdown": Decimal("0"),
+            "total_pnl": Decimal(0),
+            "current_drawdown": Decimal(0),
         }
         self.price_history: list[tuple] = []  # (timestamp, price)
         self.max_history = 1000
@@ -115,7 +113,7 @@ class EnhancedStrategy(ABC):
 
         # Report to MCC if connected
         if signal and signal.is_valid() and self.mcc_callback:
-            self.mcc_callback(self.config.name, signal)
+            self.mcc_callback(self.config.name, signal)  # pylint: disable=not-callable
 
         return signal
 

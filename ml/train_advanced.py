@@ -54,9 +54,7 @@ import json
 import logging
 import sys
 import warnings
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import joblib
@@ -77,6 +75,7 @@ MODEL_DIR = ROOT / "ml" / "saved_models"
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 import os as _os
+from typing import ClassVar
 
 # When HOPEFX_CI=1 (set by tests/conftest.py) use minimal model params so
 # every test that trains a model finishes well within the 20 s timeout.
@@ -363,7 +362,7 @@ def walk_forward_eval(
         X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
         y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
 
-        if len(y_train.unique()) < 2:  # noqa: PLR2004
+        if len(y_train.unique()) < 2:
             logger.warning("Fold %d: only one class in training — skipping", fold + 1)
             continue
 
@@ -410,7 +409,7 @@ def walk_forward_eval(
 
     # ttest_1samp returns NaN when there is only one fold (std=0); fall back
     # to a neutral p_value of 1.0 so callers always get a valid float in [0,1].
-    if len(accs) >= 2:  # noqa: PLR2004
+    if len(accs) >= 2:
         t_stat, p_value = stats.ttest_1samp(accs, 0.5)
         if np.isnan(p_value):
             t_stat, p_value = 0.0, 1.0
@@ -425,7 +424,7 @@ def walk_forward_eval(
         "mean_auc": round(float(np.mean(aucs)), 4),
         "t_stat": round(float(t_stat), 4),
         "p_value": round(float(p_value), 4),
-        "significant": bool(p_value < 0.05 and np.mean(accs) > 0.55),  # noqa: PLR2004
+        "significant": bool(p_value < 0.05 and np.mean(accs) > 0.55),
     }
 
 
@@ -584,7 +583,7 @@ def _sharpe_se(n_trades: int, sr_est: float = 1.52) -> float:
 
     Gate: require N >= 600 trades before treating Sharpe as a credible metric.
     """
-    if n_trades < 2:  # noqa: PLR2004
+    if n_trades < 2:
         return float("inf")
     return float(np.sqrt((1 + 0.5 * sr_est**2) / n_trades))
 
@@ -604,7 +603,7 @@ def sharpe_gate_check(n_trades: int, sharpe: float = 1.52, target_n: int = 600) 
     # Solve for N where SE = 0.10: N = (1 + 0.5*SR²) / 0.01
     n_required = int(np.ceil((1 + 0.5 * sharpe**2) / 0.01))
     gate_passed = n_trades >= target_n
-    credible = se <= 0.10  # noqa: PLR2004
+    credible = se <= 0.10
 
     if gate_passed and credible:
         msg = f"Sharpe gate PASSED: N={n_trades} >= {target_n}, SE={se:.3f} <= 0.10"
@@ -657,7 +656,7 @@ class SharpeProgressTracker:
         target_sharpe: float = 1.5,
         annualise: int = 252,
     ) -> None:
-        if target_n < 2:  # noqa: PLR2004
+        if target_n < 2:
             raise ValueError("target_n must be >= 2")
         if annualise <= 0:
             raise ValueError("annualise must be > 0")
@@ -691,7 +690,7 @@ class SharpeProgressTracker:
     def status(self) -> dict:
         """Return the current progress snapshot without recording a new trade."""
         n = len(self._returns)
-        if n < 2:  # noqa: PLR2004
+        if n < 2:
             return {
                 "n_trades": n,
                 "sharpe": 0.0,
@@ -712,11 +711,11 @@ class SharpeProgressTracker:
 
         ann_return = mean_r * self._annualise
         ann_vol = std_r * np.sqrt(self._annualise)
-        sharpe = (ann_return / ann_vol) if ann_vol > 1e-12 else 0.0  # noqa: PLR2004
+        sharpe = (ann_return / ann_vol) if ann_vol > 1e-12 else 0.0
         se = _sharpe_se(n, sr_est=sharpe if sharpe > 0 else 1.52)
 
         gate_passed = bool(n >= self._target_n and sharpe >= self._target_sharpe)
-        credible = bool(se <= 0.10)  # noqa: PLR2004
+        credible = bool(se <= 0.10)
 
         pct = round(min(n / self._target_n * 100, 100.0), 1)
 
@@ -825,7 +824,7 @@ def oos_eval_advanced(
         auc = 0.5
 
     n = len(y_oos)
-    k = int(round(acc * n))
+    k = round(acc * n)
     binom_result = binomtest(k, n, p=0.5, alternative="greater")
     p_value = float(binom_result.pvalue)
 
@@ -841,7 +840,7 @@ def oos_eval_advanced(
         n,
         k,
         p_value,
-        p_value < 0.05,  # noqa: PLR2004
+        p_value < 0.05,
     )
     logger.info("\n%s", classification_report(y_oos, preds))
 
@@ -872,7 +871,7 @@ def oos_eval_advanced(
         "oos_f1": round(f1, 4),
         "oos_auc": round(auc, 4),
         "oos_p_value": round(p_value, 4),
-        "oos_significant": bool(p_value < 0.05),  # noqa: PLR2004
+        "oos_significant": bool(p_value < 0.05),
         "oos_n": n,
         "oos_period": f"{oos_start} → {oos_end}",
         "train_size": len(X_train),
@@ -886,7 +885,7 @@ def oos_eval_advanced(
         ),
     }
     meta_path = MODEL_DIR / "advanced_oos_meta.json"
-    with open(meta_path, "w") as f:
+    with Path(meta_path).open("w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2)
     logger.info("Saved OOS metadata → %s", meta_path)
 
@@ -899,7 +898,7 @@ def oos_eval_advanced(
         "f1": round(f1, 4),
         "auc": round(auc, 4),
         "p_value_binomial": round(p_value, 4),
-        "significant": bool(p_value < 0.05),  # noqa: PLR2004
+        "significant": bool(p_value < 0.05),
         "oos_period": f"{oos_start} → {oos_end}",
         "test": "one-sided binomial (H0: accuracy <= 0.5)",
         "sharpe_gate": sharpe_gate,
@@ -1048,7 +1047,7 @@ def main():
     logger.info("Feature matrix: %d rows × %d columns", *X.shape)
     logger.info("Class balance: %s", y.value_counts().to_dict())
 
-    if len(X) < 100:  # noqa: PLR2004
+    if len(X) < 100:
         logger.error("Too few samples (%d) after filtering — reduce --min-move", len(X))
         sys.exit(1)
 
@@ -1061,11 +1060,11 @@ def main():
     X_oos, y_oos = None, None
 
     if args.oos_years > 0:
-        oos_n = int(round(args.oos_years * 252))  # ~252 trading days/year
+        oos_n = round(args.oos_years * 252)  # ~252 trading days/year
         # Cap at 40% of data so the training set always has at least 60%.
         # 8yr OOS on 50yr data = ~16%, well within this limit.
         oos_n = min(oos_n, int(len(X) * 0.40))
-        if oos_n < 100:  # noqa: PLR2004
+        if oos_n < 100:
             # < 100 bars gives SE > ±0.5 on accuracy — not meaningful.
             logger.warning(
                 "--oos-years %.1f produces only %d bars (need >= 100 for SE <= ±0.5). Increase --oos-years or --years.",
@@ -1117,7 +1116,7 @@ def main():
         logger.info("Top features: %s", list(importance.keys())[:10])
 
     # ── Held-out OOS evaluation ───────────────────────────────────────────────
-    oos_metrics: dict = {}
+    oos_metrics: ClassVar[dict] = {}
     if X_oos is not None:
         logger.info("\n=== Held-out OOS evaluation (%d bars) ===", oos_n)
         oos_metrics = oos_eval_advanced(X_cv, y_cv, X_oos, y_oos)
@@ -1143,7 +1142,7 @@ def main():
     }
 
     report_path = MODEL_DIR / "advanced_training_report.json"
-    with open(report_path, "w") as f:
+    with Path(report_path).open("w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
     logger.info("Report saved → %s", report_path)
 
@@ -1201,15 +1200,15 @@ def main():
     # Evaluate against OOS target (68% validated) rather than in-sample target
     oos_acc = oos_metrics.get("accuracy", 0) if oos_metrics else 0
     final_acc = final_metrics["accuracy"]
-    if oos_acc >= 0.68:  # noqa: PLR2004
+    if oos_acc >= 0.68:
         print(f"  ✓ OOS TARGET MET: {oos_acc:.1%} >= 68.0% (validated production threshold)")
-    elif oos_acc >= 0.55:  # noqa: PLR2004
+    elif oos_acc >= 0.55:
         print(f"  ⚠ OOS above chance ({oos_acc:.1%}) but below 68% production threshold")
     elif oos_acc > 0:
         print(f"  ✗ OOS below target ({oos_acc:.1%}) — check feature quality and data volume")
-    elif final_acc >= 0.85:  # noqa: PLR2004
+    elif final_acc >= 0.85:
         print("  ✓ In-sample target met (no OOS run — use --oos-years 8 for validation)")
-    elif final_acc >= 0.70:  # noqa: PLR2004
+    elif final_acc >= 0.70:
         print("  ⚠ Partial in-sample accuracy — run with --oos-years 8 to validate")
     else:
         print("  ✗ Below target — check feature quality and data volume")

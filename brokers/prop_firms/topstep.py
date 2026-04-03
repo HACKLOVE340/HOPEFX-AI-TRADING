@@ -6,7 +6,7 @@
 """TopstepTrader Connector — futures prop firm via MT5."""
 
 import logging
-from typing import Any
+from typing import Any, ClassVar
 
 from ..mt5 import MT5Connector
 
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class TopstepTraderConnector(MT5Connector):
     """TopstepTrader prop firm connector (MT5-based)."""
 
-    TOPSTEP_SERVERS = [
+    TOPSTEP_SERVERS: ClassVar[list] = [
         "TopstepTrader-Server01",
         "TopstepTrader-Server02",
         "TopstepTrader-Demo",
@@ -28,7 +28,8 @@ class TopstepTraderConnector(MT5Connector):
             config["server"] = self.TOPSTEP_SERVERS[0]
         super().__init__(config)
         self.account_type = config.get("account_type", "combine")
-        logger.info(f"TopstepTrader initialized: {self.account_type} account")
+        logger.info("TopstepTrader initialized: %s account", self.account_type)
+
 
     def get_topstep_rules(self) -> dict[str, Any]:
         return {

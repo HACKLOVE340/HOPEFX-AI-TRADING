@@ -44,7 +44,7 @@ def k6_source() -> str:
 
 def test_k6_script_exists():
     assert K6_SCRIPT.exists()
-    assert K6_SCRIPT.stat().st_size > 1000, "k6/load_tests.js appears empty"  # noqa: PLR2004
+    assert K6_SCRIPT.stat().st_size > 1000, "k6/load_tests.js appears empty"
 
 
 def test_k6_runner_exists():

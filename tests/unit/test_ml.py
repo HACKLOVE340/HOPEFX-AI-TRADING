@@ -7,9 +7,9 @@
 Tests for the ML module.
 """
 
-import pytest
 import numpy as np
 import pandas as pd
+import pytest
 
 from ml.features.technical import TechnicalFeatureEngineer
 
@@ -73,7 +73,7 @@ class TestTechnicalFeatureEngineer:
         result = fe.create_features(sample_ohlcv_data)
 
         # Check that features were created
-        assert len(result.columns) > 5  # More than just OHLCV  # noqa: PLR2004
+        assert len(result.columns) > 5  # More than just OHLCV
         assert len(fe.feature_names) > 0
 
     def test_create_features_no_nan_in_result(self, sample_ohlcv_data):

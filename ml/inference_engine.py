@@ -37,11 +37,9 @@ import logging
 import os
 import time
 from collections import deque
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
@@ -101,7 +99,7 @@ def _init_prometheus():
             return self._C()
 
     try:
-        from prometheus_client import Counter, Gauge, Histogram, REGISTRY
+        from prometheus_client import REGISTRY, Counter, Gauge, Histogram
 
         def _counter(name, doc, labels=None):
             try:
@@ -313,7 +311,7 @@ class InferenceEngine:
         try:
             import joblib
 
-            self._calibrator = joblib.load(cal_path)
+            self._calibrator = joblib.load(cal_path)  # nosec B301 - cal_path derived from saved_models
             logger.debug("InferenceEngine: isotonic calibrator loaded")
             return self._calibrator
         except Exception as exc:
@@ -550,7 +548,7 @@ class InferenceEngine:
             live_means = buffer_arr.mean(axis=0)
 
             max_z = 0.0
-            drifted_features: list[str] = []
+            drifted_features: ClassVar[list[str]] = []
 
             for i, feat_name in enumerate(col_names):
                 if feat_name not in train_stats:
@@ -861,7 +859,7 @@ class InferenceEngine:
 
             # Data quality gate — refuse to nudge on bad data
             tick = orchestrator.get_latest_tick()
-            if tick is not None and tick.confidence < 0.30:  # noqa: PLR2004
+            if tick is not None and tick.confidence < 0.30:
                 logger.debug(
                     "InferenceEngine: data quality %.3f too low — suppressing nudge",
                     tick.confidence,
@@ -880,7 +878,7 @@ class InferenceEngine:
             self._last_macro_impact = impact
 
             # Hard suppress during blackout windows
-            if blackout > 0.5:  # noqa: PLR2004
+            if blackout > 0.5:
                 return 0.0
 
             # Dampen all nudges proportional to macro impact uncertainty
@@ -963,7 +961,6 @@ class InferenceEngine:
         """
         try:
             import hashlib
-            import json
             import uuid
 
             # Access lineage store via orchestrator — single entry point rule.

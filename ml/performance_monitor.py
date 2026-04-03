@@ -34,7 +34,8 @@ Usage
     from ml.performance_monitor import get_monitor
 
     monitor = get_monitor()
-    asyncio.create_task(monitor.run())
+    _t = asyncio.create_task(monitor.run())
+    _t.add_done_callback(lambda _: None)
 
     # In trade executor, after every fill:
     monitor.record_trade(pnl=42.5, model_version="advanced_oos_v4")
@@ -46,9 +47,7 @@ import asyncio
 import collections
 import logging
 import os
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 

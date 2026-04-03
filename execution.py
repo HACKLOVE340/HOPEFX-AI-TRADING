@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from validation import OrderValidator, Order
+from validation import Order, OrderValidator  # pylint: disable=no-name-in-module
 
 logger = logging.getLogger("execution")
 
@@ -122,7 +122,7 @@ class PaperExecutor:
             # Fixed $0.05 slippage for XAUUSD
             return 0.05 if symbol == "XAUUSD" else base_price * 0.0001
 
-        elif self.slippage_model == "variable":
+        if self.slippage_model == "variable":
             # Variable slippage based on size and volatility
             base_slippage = 0.02  # $0.02 base for XAUUSD
 
@@ -178,7 +178,8 @@ class PaperExecutor:
             )
 
             if not validation.valid:
-                logger.error(f"Order {order_id} rejected: {validation.reason}")
+                logger.error("Order %s rejected: %s", order_id, validation.reason)
+
                 return ExecutionResult(
                     order_id=order_id,
                     status=OrderStatus.REJECTED,
@@ -194,11 +195,11 @@ class PaperExecutor:
 
         # Determine fill price
         if order.side == "buy":
-            base_price = ask if ask else current_price + 0.02
+            base_price = ask or current_price + 0.02
             slippage = self._calculate_slippage(order.symbol, order.side, order.qty, base_price, volatility)
             fill_price = base_price + slippage
         else:
-            base_price = bid if bid else current_price - 0.02
+            base_price = bid or current_price - 0.02
             slippage = self._calculate_slippage(order.symbol, order.side, order.qty, base_price, volatility)
             fill_price = base_price - slippage
 
@@ -208,7 +209,7 @@ class PaperExecutor:
         # Execute based on order type
         if order.order_type == "market":
             return self._execute_market_order(order_id, order, fill_price, slippage, commission, timestamp)
-        elif order.order_type == "limit":
+        if order.order_type == "limit":
             return self._execute_limit_order(
                 order_id,
                 order,
@@ -218,17 +219,16 @@ class PaperExecutor:
                 commission,
                 timestamp,
             )
-        else:
-            return ExecutionResult(
-                order_id=order_id,
-                status=OrderStatus.REJECTED,
-                filled_qty=0.0,
-                avg_price=0.0,
-                slippage=0.0,
-                commission=0.0,
-                message=f"Unsupported order type: {order.order_type}",
-                timestamp=timestamp,
-            )
+        return ExecutionResult(
+            order_id=order_id,
+            status=OrderStatus.REJECTED,
+            filled_qty=0.0,
+            avg_price=0.0,
+            slippage=0.0,
+            commission=0.0,
+            message=f"Unsupported order type: {order.order_type}",
+            timestamp=timestamp,
+        )
 
     def _execute_market_order(
         self,
@@ -272,7 +272,8 @@ class PaperExecutor:
                     del self.positions[order.symbol]
                 else:
                     old_pos["qty"] -= close_qty
-                logger.info(f"Closed short {order.symbol} qty={close_qty} P&L=${pnl:.2f}")
+                logger.info("Closed short %s qty=%s P&L=$%s", order.symbol, close_qty, pnl)
+
             else:
                 # Open or add to long — deduct cash
                 self.cash -= total_cost
@@ -362,10 +363,7 @@ class PaperExecutor:
             }
         )
 
-        logger.info(
-            f"Executed {order.side} {order.qty} {order.symbol} @ {fill_price:.2f} "
-            f"(slip: ${slippage:.2f}, comm: ${commission:.2f})"
-        )
+        logger.info("Executed %s %s %s @ %s (slip: $%s, comm: $%s)", order.side, order.qty, order.symbol, fill_price, slippage, commission)
 
         return result
 
@@ -434,8 +432,7 @@ class PaperExecutor:
 
         if pos["side"] == "long":
             return (current_price - pos["entry_price"]) * pos["qty"]
-        else:
-            return (pos["entry_price"] - current_price) * pos["qty"]
+        return (pos["entry_price"] - current_price) * pos["qty"]
 
     def close_all_positions(self, current_prices: dict[str, float]) -> list:
         """Close all open positions."""
@@ -519,7 +516,8 @@ class SmartOrderRouter:
         self._excluded_until[name] = 0.0
         if is_default or self.default_broker is None:
             self.default_broker = name
-        logger.info(f"SmartOrderRouter: registered broker '{name}' (fee={fee_bps}bps, spread={spread_bps}bps)")
+        logger.info("SmartOrderRouter: registered broker '%s' (fee=%sbps, spread=%sbps)", name, fee_bps, spread_bps)
+
 
     def _score_broker(self, name: str) -> float:
         """Compute routing score for a broker (higher = preferred)."""
@@ -556,10 +554,7 @@ class SmartOrderRouter:
             if self._error_count[name] >= self._ERROR_EXCLUSION:
                 exclusion_secs = 60.0 * self._error_count[name]
                 self._excluded_until[name] = time.monotonic() + exclusion_secs
-                logger.warning(
-                    f"SmartOrderRouter: broker '{name}' excluded for "
-                    f"{exclusion_secs:.0f}s after {self._error_count[name]} consecutive errors"
-                )
+                logger.warning("SmartOrderRouter: broker '%s' excluded for %ss after %s consecutive errors", name, exclusion_secs, self._error_count[name])
 
     def route_order(self, order: Any, **kwargs) -> ExecutionResult:
         """
@@ -577,7 +572,8 @@ class SmartOrderRouter:
         for name in ranked:
             broker = self.brokers[name]
             if not hasattr(broker, "submit_order"):
-                logger.warning(f"SmartOrderRouter: broker '{name}' has no submit_order — skipping")
+                logger.warning("SmartOrderRouter: broker '%s' has no submit_order — skipping", name)
+
                 continue
 
             t0 = time.monotonic()
@@ -586,14 +582,13 @@ class SmartOrderRouter:
                 latency_ms = (time.monotonic() - t0) * 1000
                 success = result.status == OrderStatus.FILLED
                 self._update_metrics(name, latency_ms, success)
-                logger.debug(
-                    f"SmartOrderRouter: routed to '{name}' latency={latency_ms:.1f}ms status={result.status.value}"
-                )
+                logger.debug("SmartOrderRouter: routed to '%s' latency=%sms status=%s", name, latency_ms, result.status.value)
                 return result
             except Exception as exc:
                 latency_ms = (time.monotonic() - t0) * 1000
                 self._update_metrics(name, latency_ms, False)
-                logger.warning(f"SmartOrderRouter: broker '{name}' raised {exc!r} — trying next")
+                logger.warning("SmartOrderRouter: broker '%s' raised %s — trying next", name, exc)
+
                 last_error = exc
 
         raise RuntimeError(f"SmartOrderRouter: all brokers failed. Last error: {last_error}")

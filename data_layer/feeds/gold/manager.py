@@ -26,24 +26,22 @@ Responsibilities
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
 import time
 import uuid
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 from data_layer.feeds.gold.base import CircuitState, GoldFeedBase
+from data_layer.feeds.gold.commodity_api import CommodityAPIFeed
 from data_layer.feeds.gold.goldapi import GoldAPIFeed
 from data_layer.feeds.gold.metalpriceapi import MetalpriceAPIFeed
 from data_layer.feeds.gold.metals_api import MetalsAPIFeed
 from data_layer.feeds.gold.metals_dev import MetalsDevFeed
-from data_layer.feeds.gold.commodity_api import CommodityAPIFeed
 from data_layer.quality.engine import dqe
 from data_layer.types import FeedSource, GoldTick, TickQuality
-import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +100,7 @@ class GoldFeedManager:
 
     def _init_prometheus(self) -> None:
         try:
-            from prometheus_client import Counter, Gauge, REGISTRY
+            from prometheus_client import REGISTRY, Counter, Gauge
 
             def _gauge(name: str, doc: str):
                 try:
@@ -202,13 +200,13 @@ class GoldFeedManager:
                     # REST APIs occasionally return cached/stale prices; this
                     # catches them before they corrupt the consensus.
                     tick_age_s = received_at - raw_tick.timestamp.timestamp()
-                    if tick_age_s > 300.0:  # noqa: PLR2004
+                    if tick_age_s > 300.0:
                         logger.warning(
                             "GoldFeedManager: %s tick too old (age=%.1fs) — discarded",
                             src.value,
                             tick_age_s,
                         )
-                    elif tick_age_s < -10.0:  # noqa: PLR2004
+                    elif tick_age_s < -10.0:
                         logger.warning(
                             "GoldFeedManager: %s tick from future (age=%.1fs) — discarded",
                             src.value,
@@ -276,7 +274,7 @@ class GoldFeedManager:
         if not live:
             return
 
-        consensus_mid, confidence, weights = dqe.cross_source_consensus(live)
+        consensus_mid, confidence, _ = dqe.cross_source_consensus(live)
         if consensus_mid <= 0:
             return
 

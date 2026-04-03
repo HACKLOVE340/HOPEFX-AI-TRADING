@@ -12,9 +12,7 @@ import asyncio
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +72,8 @@ class PositionTracker:
         async with self._lock:
             self.positions[position.id] = position
             self._price_subscriptions[position.symbol].append(position.id)
-            logger.info(f"Position added: {position.id} ({position.symbol})")
+            logger.info("Position added: %s (%s)", position.id, position.symbol)
+
             return True
 
     async def update_position(self, position_id: str, **updates) -> bool:
@@ -119,11 +118,7 @@ class PositionTracker:
             if position_id in self._price_subscriptions[pos.symbol]:
                 self._price_subscriptions[pos.symbol].remove(position_id)
 
-            logger.info(
-                f"Position closed: {position_id} | "
-                f"Realized P&L: ${pos.realized_pnl:.2f} | "
-                f"Commission: ${pos.commission:.2f}",
-            )
+            logger.info("Position closed: %s | Realized P&L: $%s | Commission: $%s", position_id, pos.realized_pnl, pos.commission)
 
             return pos
 
@@ -155,14 +150,13 @@ class PositionTracker:
                 "short": sum(p.quantity for p in positions if p.side == "short"),
                 "net": sum(p.quantity if p.side == "long" else -p.quantity for p in positions),
             }
-        else:
-            total_long = sum(p.quantity for p in self.positions.values() if p.side == "long")
-            total_short = sum(p.quantity for p in self.positions.values() if p.side == "short")
-            return {
-                "long": total_long,
-                "short": total_short,
-                "net": total_long - total_short,
-            }
+        total_long = sum(p.quantity for p in self.positions.values() if p.side == "long")
+        total_short = sum(p.quantity for p in self.positions.values() if p.side == "short")
+        return {
+            "long": total_long,
+            "short": total_short,
+            "net": total_long - total_short,
+        }
 
     def get_total_pnl(self) -> dict[str, float]:
         """Get total P&L across all positions"""

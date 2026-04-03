@@ -51,9 +51,7 @@ import logging
 import os
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import numpy as np
@@ -347,7 +345,7 @@ class OandaL2Feed:
         while self._running:
             try:
                 async with self._session.get(url) as resp:
-                    if resp.status == 200:  # noqa: PLR2004
+                    if resp.status == 200:
                         data = await resp.json()
                         ob = data.get("orderBook", {})
                         buckets = ob.get("buckets", [])
@@ -371,7 +369,7 @@ class OandaL2Feed:
                                 len(bids),
                                 len(asks),
                             )
-                    elif resp.status == 429:  # noqa: PLR2004
+                    elif resp.status == 429:
                         logger.warning("OANDA L2: rate limited — backing off 30s")
                         await asyncio.sleep(30)
                         continue
@@ -403,7 +401,7 @@ class IBKROrderBookFeed:
     async def start(self, symbols: list[str]) -> None:
         """Connect to TWS and subscribe to market depth."""
         try:
-            from ib_insync import IB, Forex, Contract  # noqa: F401
+            from ib_insync import IB, Forex
         except ImportError:
             logger.warning("ib_insync not installed — IBKR L2 feed disabled")
             return
@@ -417,7 +415,7 @@ class IBKROrderBookFeed:
                 self._books[symbol] = OrderBook(symbol)
                 # Build contract — XAU/USD is a Forex contract in IBKR
                 parts = symbol.replace("_", "/").split("/")
-                if len(parts) == 2:  # noqa: PLR2004
+                if len(parts) == 2:
                     contract = Forex(parts[0] + parts[1])
                     await self._ib.qualifyContractsAsync(contract)
                     ticker = self._ib.reqMktDepth(contract, numRows=L2_DEPTH_LEVELS)
@@ -460,9 +458,7 @@ class MockL2Feed:
     """
 
     def __init__(self) -> None:
-        import os as _os
-
-        _env = _os.getenv("APP_ENV", "production").lower()
+        _env = os.getenv("APP_ENV", "production").lower()
         if _env in ("production", "staging"):
             raise RuntimeError(
                 f"MockL2Feed cannot be used in {_env} (APP_ENV={_env}). "

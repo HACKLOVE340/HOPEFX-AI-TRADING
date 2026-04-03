@@ -9,11 +9,12 @@ LSTM, XGBoost, Random Forest with model saving/loading, hyperparameter tuning, e
 """
 
 import json
+import logging
 import warnings
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 from typing import Any
 
 import joblib
@@ -56,11 +57,8 @@ except ImportError:
 # Enhanced macro + regime features (DXY, VIX, yields, SPX cross-asset)
 try:
     from ml.macro_features import (
-        MACRO_COLUMNS,  # noqa: F401
         add_macro_features,
         add_regime_features,
-        build_enhanced_feature_matrix,  # noqa: F401
-        fetch_macro_history,  # noqa: F401
     )
 
     ENHANCED_MACRO_AVAILABLE = True
@@ -69,14 +67,13 @@ except ImportError:
 
 # TensorFlow/Keras
 try:
-    import tensorflow as tf  # noqa: F401
     from tensorflow.keras.callbacks import (
         EarlyStopping,
         ModelCheckpoint,
         ReduceLROnPlateau,
     )
-    from tensorflow.keras.layers import GRU, LSTM, Bidirectional, Dense, Dropout  # noqa: F401
-    from tensorflow.keras.models import Sequential, load_model, save_model  # noqa: F401
+    from tensorflow.keras.layers import LSTM, Dense, Dropout
+    from tensorflow.keras.models import Sequential, load_model
     from tensorflow.keras.optimizers import Adam
 
     TENSORFLOW_AVAILABLE = True
@@ -216,9 +213,7 @@ class FeatureEngineer:
                     lookback=lookback_window,
                 )
             except Exception as _macro_exc:
-                import logging as _log
-
-                _log.getLogger(__name__).warning(
+                logging.getLogger(__name__).warning(
                     "Macro feature injection failed (continuing without): %s",
                     _macro_exc,
                 )
@@ -228,9 +223,7 @@ class FeatureEngineer:
             try:
                 data = add_regime_features(data, lookback=lookback_window * 3)
             except Exception as _reg_exc:
-                import logging as _log
-
-                _log.getLogger(__name__).warning(
+                logging.getLogger(__name__).warning(
                     "Regime feature injection failed (continuing without): %s",
                     _reg_exc,
                 )
@@ -287,7 +280,7 @@ class FeatureEngineer:
 
     def load_scaler(self, filepath: str):
         """Load fitted scaler"""
-        self.scaler = joblib.load(filepath)
+        self.scaler = joblib.load(filepath)  # nosec B301 - filepath set by caller from saved_models
 
     @staticmethod
     def _calculate_rsi(prices: pd.Series, period: int = 14) -> pd.Series:
@@ -340,7 +333,7 @@ class LSTMModel:
         self,
         sequence_length: int = 60,
         n_features: int = 10,
-        lstm_units: list[int] = None,
+        lstm_units: list[int] | None = None,
         dropout_rate: float = 0.2,
         learning_rate: float = 0.001,
         model_name: str = "lstm_model",
@@ -506,7 +499,7 @@ class LSTMModel:
             ".keras",
             "_config.json",
         )
-        with open(config_path, "w") as f:
+        with Path(config_path).open("w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
 
         print(f"LSTM model saved: {filepath}")
@@ -522,7 +515,7 @@ class LSTMModel:
             "_config.json",
         )
         if Path(config_path).exists():
-            with open(config_path) as f:
+            with Path(config_path).open(encoding="utf-8") as f:
                 config = json.load(f)
                 self.sequence_length = config.get(
                     "sequence_length",
@@ -584,17 +577,16 @@ class XGBoostModel:
                 "use_label_encoder": False,
                 # scale_pos_weight is set dynamically in fit() from training labels
             }
-        else:
-            return {
-                "objective": "reg:squarederror",
-                "eval_metric": "rmse",
-                "max_depth": 6,
-                "learning_rate": 0.1,
-                "n_estimators": 300,
-                "subsample": 0.8,
-                "colsample_bytree": 0.8,
-                "random_state": 42,
-            }
+        return {
+            "objective": "reg:squarederror",
+            "eval_metric": "rmse",
+            "max_depth": 6,
+            "learning_rate": 0.1,
+            "n_estimators": 300,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "random_state": 42,
+        }
 
     def build_model(self):
         """Build XGBoost model"""
@@ -640,7 +632,7 @@ class XGBoostModel:
         import xgboost as _xgb_ver
 
         _xgb_major = int(_xgb_ver.__version__.split(".")[0])
-        if _xgb_major < 2 and len(eval_set) > 1:  # noqa: PLR2004
+        if _xgb_major < 2 and len(eval_set) > 1:
             fit_kwargs["early_stopping_rounds"] = early_stopping_rounds
 
         self.model.fit(X_train, y_train, **fit_kwargs)
@@ -705,7 +697,7 @@ class XGBoostModel:
             ".pkl",
             "_config.json",
         )
-        with open(config_path, "w") as f:
+        with Path(config_path).open("w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
 
         # Save feature importance if available
@@ -726,7 +718,7 @@ class XGBoostModel:
                 self.build_model()
             self.model.load_model(filepath)
         else:
-            self.model = joblib.load(filepath)
+            self.model = joblib.load(filepath)  # nosec B301 - filepath set by caller from saved_models
 
         print(f"XGBoost model loaded: {filepath}")
 
@@ -751,14 +743,13 @@ class XGBoostModel:
                 "f1": f1,
                 "confusion_matrix": cm.tolist(),
             }
-        else:
-            # Regression metrics
-            mse = mean_squared_error(y_test, predictions)
-            rmse = np.sqrt(mse)
-            mae = mean_absolute_error(y_test, predictions)
-            r2 = r2_score(y_test, predictions)
+        # Regression metrics
+        mse = mean_squared_error(y_test, predictions)
+        rmse = np.sqrt(mse)
+        mae = mean_absolute_error(y_test, predictions)
+        r2 = r2_score(y_test, predictions)
 
-            return {"mse": mse, "rmse": rmse, "mae": mae, "r2": r2}
+        return {"mse": mse, "rmse": rmse, "mae": mae, "r2": r2}
 
 
 class RandomForestModel:
@@ -876,7 +867,7 @@ class RandomForestModel:
         }
 
         config_path = filepath.replace(".pkl", "_config.json")
-        with open(config_path, "w") as f:
+        with Path(config_path).open("w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
 
         # Save feature importance
@@ -889,7 +880,7 @@ class RandomForestModel:
 
     def load(self, filepath: str):
         """Load model from disk"""
-        self.model = joblib.load(filepath)
+        self.model = joblib.load(filepath)  # nosec B301 - filepath set by caller from saved_models
 
         print(f"Random Forest model loaded: {filepath}")
 
@@ -912,13 +903,12 @@ class RandomForestModel:
                 "f1": f1,
                 "confusion_matrix": cm.tolist(),
             }
-        else:
-            mse = mean_squared_error(y_test, predictions)
-            rmse = np.sqrt(mse)
-            mae = mean_absolute_error(y_test, predictions)
-            r2 = r2_score(y_test, predictions)
+        mse = mean_squared_error(y_test, predictions)
+        rmse = np.sqrt(mse)
+        mae = mean_absolute_error(y_test, predictions)
+        r2 = r2_score(y_test, predictions)
 
-            return {"mse": mse, "rmse": rmse, "mae": mae, "r2": r2}
+        return {"mse": mse, "rmse": rmse, "mae": mae, "r2": r2}
 
 
 class EnsembleModel:
@@ -982,7 +972,7 @@ class EnsembleModel:
             "models": list(self.models.keys()),
         }
 
-        with open(f"{base_dir}/ensemble_config.json", "w") as f:
+        with Path(f"{base_dir}/ensemble_config.json").open("w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
 
         return saved_paths
@@ -1098,7 +1088,7 @@ class HyperparameterTuner:
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 
         # Save best params
-        with open(f"{output_dir}/best_params_{self.model_type}.json", "w") as f:
+        with Path(f"{output_dir}/best_params_{self.model_type}.json").open("w", encoding="utf-8") as f:
             json.dump(self.best_params, f, indent=2)
 
         # Save CV results
@@ -1141,7 +1131,7 @@ class MLEvaluationReport:
             },
         }
 
-        with open(report_path, "w") as f:
+        with Path(report_path).open("w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, default=str)
 
         # Save feature importance
@@ -1207,7 +1197,7 @@ class MLEvaluationReport:
 # Convenience function for full ML pipeline
 def train_ml_pipeline(
     df: pd.DataFrame,
-    model_types: list[str] = None,
+    model_types: list[str] | None = None,
     prediction_horizon: int = 1,
     test_size: float = 0.2,
     model_dir: str = "ml/models",
@@ -1271,21 +1261,18 @@ def train_ml_pipeline(
     # every training bar gets the macro values that were available on that date.
     if ENHANCED_MACRO_AVAILABLE:
         try:
-            import logging as _log
-
             from ml.macro_features import fetch_macro_history
 
-            _macro_logger = _log.getLogger(__name__)
+            _macro_logger = logger
             # Determine date range from the full df (train + test)
             _idx = df.index if hasattr(df.index, "min") else pd.RangeIndex(len(df))
             if hasattr(_idx, "min") and hasattr(_idx[0], "year"):
                 _start = pd.Timestamp(_idx.min()).to_pydatetime().replace(tzinfo=UTC)
                 _end = pd.Timestamp(_idx.max()).to_pydatetime().replace(tzinfo=UTC)
             else:
-                from datetime import datetime as _dt
                 from datetime import timedelta as _td
 
-                _end = _dt.now(UTC)
+                _end = datetime.now(UTC)
                 _start = _end - _td(days=len(df) + 30)
 
             macro_hist = fetch_macro_history(_start, _end, interval="1d")
@@ -1318,9 +1305,7 @@ def train_ml_pipeline(
     elif MACRO_AVAILABLE:
         # Fallback: point-in-time broadcast (introduces look-ahead bias for
         # historical training data — acceptable only for live inference).
-        import warnings as _w
-
-        _w.warn(
+        warnings.warn(
             "MacroFeed().as_ml_features() broadcasts today's macro values to all "
             "training rows. This introduces look-ahead bias for historical data. "
             "Install yfinance for bias-free historical macro features.",
@@ -1554,7 +1539,7 @@ def walk_forward_validate(
             prediction_horizon=prediction_horizon,
         )
 
-        if len(X_train) < 10 or len(X_test) < 5:  # noqa: PLR2004
+        if len(X_train) < 10 or len(X_test) < 5:
             continue
 
         X_tr_sc, X_te_sc = fe_fold.scale_features(X_train, X_test)

@@ -27,9 +27,7 @@ MacroFeed (FRED) → MacroStore (in-memory, forward-fill) → live_inference
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException, status
@@ -191,7 +189,7 @@ async def macro_refresh():
         logger.warning("macro refresh failed (FRED unavailable): %s", exc)
         return {
             "status": "unavailable",
-            "error": str(exc),
+            "error": "FRED fetch failed — check server logs for details",
             "note": "FRED fetch failed. Set FRED_API_KEY in .env for live data.",
         }
 
@@ -222,11 +220,14 @@ async def macro_features():
         feed = get_macro_feed()
         return feed.as_ml_features()
     except Exception as exc:
+        # Log the full exception server-side. Suppress the chain (from None) so
+        # the original exception object is not attached to the HTTPException and
+        # cannot be serialised into the response by any middleware.
         logger.warning("macro features failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Macro features unavailable: {exc}",
-        ) from exc
+            detail="Macro features unavailable — check server logs",
+        ) from None
 
 
 @router.get("/store", summary="MacroStore snapshot — all loaded series with latest values")
@@ -284,11 +285,13 @@ async def macro_store_update(req: MacroUpdateRequest = Body(...)):
             "total_observations": snap["n_observations"] if snap else 1,
         }
     except Exception as exc:
+        # Log the full exception server-side; return a generic detail to avoid
+        # leaking internal error messages to API callers.
         logger.warning("MacroStore.update failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Update failed: {exc}",
-        ) from exc
+            detail="MacroStore update failed — check server logs",
+        ) from None
 
 
 # ── WGC endpoints ─────────────────────────────────────────────────────────────
@@ -388,7 +391,7 @@ async def wgc_refresh():
         logger.warning("WGC refresh failed: %s", exc)
         return {
             "status": "error",
-            "error": str(exc),
+            "error": "WGC fetch failed — check server logs for details",
             "note": (
                 "WGC fetch failed. Check WGC_CACHE_DIR or place CSV files manually. "
                 "See data_layer/feeds/macro/wgc.py for download instructions."

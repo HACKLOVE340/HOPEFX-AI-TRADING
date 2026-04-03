@@ -19,7 +19,6 @@ from __future__ import annotations
 import os
 from unittest.mock import MagicMock, patch
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
@@ -107,7 +106,7 @@ class TestDeviceTokens:
         mgr.register_device("user-d", "tok-1")
         mgr.register_device("user-d", "tok-2")
         tokens = mgr.get_tokens("user-d")
-        assert len(tokens) == 2  # noqa: PLR2004
+        assert len(tokens) == 2
 
 
 # ── FCM HTTP call (mocked) ────────────────────────────────────────────────────
@@ -179,7 +178,7 @@ class TestSignalConfidenceThreshold:
 
         # Simulate the confidence check inline
         confidence = 0.75
-        if confidence >= 0.70:  # noqa: PLR2004
+        if confidence >= 0.70:
             svc._push_fcm_to_all_users(MagicMock())
 
         svc._push_fcm_to_all_users.assert_called_once()
@@ -192,7 +191,7 @@ class TestSignalConfidenceThreshold:
         svc._push_fcm_to_all_users = MagicMock()
 
         confidence = 0.65
-        if confidence >= 0.70:  # noqa: PLR2004
+        if confidence >= 0.70:
             svc._push_fcm_to_all_users(MagicMock())
 
         svc._push_fcm_to_all_users.assert_not_called()

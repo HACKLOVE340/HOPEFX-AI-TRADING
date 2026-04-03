@@ -55,6 +55,7 @@ Optional:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -62,13 +63,11 @@ import pathlib
 import signal
 import sys
 import time
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from typing import Any
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, ClassVar
 
 from dotenv import load_dotenv
-import contextlib
 
 # ── Nuclear chart engine (optional — graceful degradation if unavailable) ─────
 _chart_engine = None
@@ -297,7 +296,8 @@ class LifeSupervisor:
 
         # Start nuclear chart engine tick loop as a background task
         if self._chart_engine is not None:
-            asyncio.create_task(self._chart_engine.start(), name="nuclear-chart-engine")
+            _t = asyncio.create_task(self._chart_engine.start(), name="nuclear-chart-engine")
+            _t.add_done_callback(lambda _: None)
             logger.info("NuclearAIChartEngine tick loop started")
 
         # Start HOPEFXBrain — 24/7 security engine (global_fortress)
@@ -321,6 +321,36 @@ class LifeSupervisor:
                 logger.info("HOPEFXBrain started in CLI mode (minimal FastAPI instance)")
         except Exception as _brain_exc:
             logger.warning("HOPEFXBrain failed to start (non-fatal): %s", _brain_exc)
+
+        # Start AntivirusScanner — multi-layer malware detection
+        try:
+            from security.antivirus import start_av_scanner as _start_av
+
+            try:
+                from app import app as _fastapi_app_av
+                await _start_av(_fastapi_app_av)
+            except ImportError:
+                from fastapi import FastAPI as _FastAPI
+                _minimal_av_app = _FastAPI(title="AV-CLI")
+                await _start_av(_minimal_av_app)
+            logger.info("AntivirusScanner started")
+        except Exception as _av_exc:
+            logger.warning("AntivirusScanner failed to start (non-fatal): %s", _av_exc)
+
+        # Start SelfHealer — code integrity monitor + auto-patch applier
+        try:
+            from security.self_healer import start_healer as _start_healer
+
+            try:
+                from app import app as _fastapi_app_heal
+                await _start_healer(_fastapi_app_heal)
+            except ImportError:
+                from fastapi import FastAPI as _FastAPI
+                _minimal_heal_app = _FastAPI(title="SelfHealer-CLI")
+                await _start_healer(_minimal_heal_app)
+            logger.info("SelfHealer code integrity monitor started")
+        except Exception as _heal_exc:
+            logger.warning("SelfHealer failed to start (non-fatal): %s", _heal_exc)
 
         # Send startup Telegram notification
         nuclear_status = "RL-supervisor=ON" if self._nuclear_supervisor is not None else "RL-supervisor=OFF"
@@ -466,7 +496,7 @@ class LifeSupervisor:
         if self._nuclear_supervisor is None:
             return None
         ns = self._nuclear_supervisor.get_status()
-        if ns.get("nuclear_level", 0) >= 2:  # noqa: PLR2004
+        if ns.get("nuclear_level", 0) >= 2:
             return f"NUC-L{ns['nuclear_level']}"
         if ns.get("trading_paused"):
             return "PAUSED"
@@ -496,7 +526,7 @@ class LifeSupervisor:
 
     def _maybe_log_heartbeat(self, status: dict, dd_pct: float, heartbeat_ts: float) -> float:
         """Log a heartbeat if 60 s have elapsed; return updated timestamp."""
-        if time.monotonic() - heartbeat_ts < 60:  # noqa: PLR2004
+        if time.monotonic() - heartbeat_ts < 60:
             return heartbeat_ts
         logger.info(
             "HEARTBEAT  equity=%.2f balance=%.2f daily_pnl=%+.2f dd=%.2f%% fills=%d broker=%s%s",
@@ -605,7 +635,7 @@ class LifeSupervisor:
     async def _checkpoint(self) -> None:
         """Persist final status to disk for post-restart recovery."""
         status = self._read_status()
-        nuclear_state: dict = {}
+        nuclear_state: ClassVar[dict] = {}
         if self._nuclear_supervisor is not None:
             try:
                 nuclear_state = self._nuclear_supervisor.get_status()
@@ -626,7 +656,7 @@ class LifeSupervisor:
         }
         try:
             pathlib.Path(CHECKPOINT_FILE).parent.mkdir(parents=True, exist_ok=True)
-            with open(CHECKPOINT_FILE, "w") as fh:
+            with Path(CHECKPOINT_FILE).open("w", encoding="utf-8") as fh:
                 json.dump(state, fh, indent=2)
             logger.info("Checkpoint saved → %s", CHECKPOINT_FILE)
         except OSError as exc:

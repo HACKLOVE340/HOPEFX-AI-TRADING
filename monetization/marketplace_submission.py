@@ -26,10 +26,8 @@ import ast
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +48,7 @@ _FORBIDDEN_MODULES = frozenset(
 )
 
 
-class AuditStatus(str, Enum):
+class AuditStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     PASSED = "passed"
@@ -58,7 +56,7 @@ class AuditStatus(str, Enum):
     MANUAL_REVIEW = "manual_review"
 
 
-class SubmissionStatus(str, Enum):
+class SubmissionStatus(StrEnum):
     DRAFT = "draft"
     PENDING_REVIEW = "pending_review"
     UNDER_AUDIT = "under_audit"
@@ -241,7 +239,7 @@ class StrategyAuditor:
         )
 
     def _check_description(self, desc: str) -> AuditCheck:
-        if len(desc.strip()) >= 100:  # noqa: PLR2004
+        if len(desc.strip()) >= 100:
             return AuditCheck("description", True, "Description meets minimum length")
         return AuditCheck(
             "description",

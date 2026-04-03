@@ -106,7 +106,7 @@ class _FeatureCache:
                 entry = self._mem.get(key)
                 if entry and entry[0] > time.monotonic():
                     return pd.DataFrame([json.loads(entry[1])])
-                elif entry:
+                if entry:
                     del self._mem[key]
         except Exception as exc:
             logger.debug("Feature cache get error: %s", exc)
@@ -275,13 +275,11 @@ class AdvancedModelPredictor:
 
                 dl_features = orchestrator.get_ml_features()
                 if dl_features:
-                    import pandas as _pd
-
-                    dl_row = _pd.DataFrame([dl_features], index=result.index)
+                    dl_row = pd.DataFrame([dl_features], index=result.index)
                     # Only add columns not already present
                     new_cols = [c for c in dl_row.columns if c not in result.columns]
                     if new_cols:
-                        result = _pd.concat([result, dl_row[new_cols]], axis=1)
+                        result = pd.concat([result, dl_row[new_cols]], axis=1)
                         logger.debug(
                             "Data layer injected %d features for %s",
                             len(new_cols),
@@ -447,9 +445,7 @@ def get_advanced_predictor() -> AdvancedModelPredictor:
 import asyncio
 import threading
 from collections.abc import Callable
-from datetime import timezone
-
-UTC = timezone.utc
+from datetime import UTC
 
 
 class LiveInferenceLoop:

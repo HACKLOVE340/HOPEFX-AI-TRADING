@@ -12,16 +12,13 @@ latency optimization, and fill simulation.
 import asyncio
 import logging
 import time
+import uuid
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum, auto
 from typing import Any
-from collections.abc import Callable
-
-import uuid
 
 import aiohttp
 import numpy as np
@@ -107,6 +104,7 @@ class AsyncExecutionEngine:
         self.order_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self.pending_orders: set[str] = set()
         self.position_cache: dict[str, dict] = {}
+        self._position_cache_time: float = 0.0
 
         # Performance tracking
         self.latency_stats: dict[str, list[float]] = defaultdict(list)
@@ -151,7 +149,8 @@ class AsyncExecutionEngine:
             task = asyncio.create_task(self._price_feed_loop(name))
             self._tasks.add(task)
 
-        logger.info(f"Initialized {len(self.brokers)} broker connections")
+        logger.info("Initialized %s broker connections", len(self.brokers))
+
 
     async def submit_order(self, order: Order, priority: int = 5) -> str:
         """
@@ -174,7 +173,8 @@ class AsyncExecutionEngine:
             if not allowed:
                 order.status = OrderStatus.REJECTED
                 order.metadata["reject_reason"] = reason
-                logger.warning(f"Order {order.id} rejected: {reason}")
+                logger.warning("Order %s rejected: %s", order.id, reason)
+
                 return order.id
 
             # Select best venue
@@ -189,18 +189,21 @@ class AsyncExecutionEngine:
                 latency = (time.time() - start_time) * 1000  # ms
                 self.latency_stats["submit"].append(latency)
 
-                if latency > 100:  # noqa: PLR2004
-                    logger.warning(f"High submission latency: {latency:.1f}ms")
+                if latency > 100:
+                    logger.warning("High submission latency: %sms", latency)
+
 
             except TimeoutError:
-                logger.error(f"Order submission timeout: {order.id}")
+                logger.error("Order submission timeout: %s", order.id)
+
                 order.status = OrderStatus.REJECTED
                 order.metadata["reject_reason"] = "timeout"
 
                 # Try backup venue
                 backup = self._get_backup_venue(venue)
                 if backup:
-                    logger.info(f"Retrying on backup venue: {backup}")
+                    logger.info("Retrying on backup venue: %s", backup)
+
                     await self._submit_to_venue(order, backup)
 
         return order.id
@@ -235,7 +238,8 @@ class AsyncExecutionEngine:
                 return True
 
             except (OSError, ValueError, RuntimeError, AttributeError) as e:
-                logger.error(f"Cancel failed for {order_id}: {e}")
+                logger.error("Cancel failed for %s: %s", order_id, e)
+
                 return False
 
     async def modify_order(
@@ -256,6 +260,7 @@ class AsyncExecutionEngine:
 
             # Create new
             new_order = Order(
+                id=str(uuid.uuid4()),
                 symbol=old_order.symbol,
                 side=old_order.side,
                 quantity=new_qty or old_order.remaining_qty,
@@ -287,6 +292,7 @@ class AsyncExecutionEngine:
             close_side = "sell" if pos["quantity"] > 0 else "buy"
 
             order = Order(
+                id=str(uuid.uuid4()),
                 symbol=pos["symbol"],
                 side=close_side,
                 quantity=abs(pos["quantity"]),
@@ -297,19 +303,20 @@ class AsyncExecutionEngine:
 
         # Submit all concurrently
         order_ids = await self.batch_submit(orders)
-        logger.info(f"Flattened {len(orders)} positions")
+        logger.info("Flattened %s positions", len(orders))
+
 
         return [oid for oid in order_ids if not isinstance(oid, Exception)]
 
     async def get_positions(self) -> list[dict]:
         """Get current positions with caching"""
         # Return cached if recent
-        if hasattr(self, "_position_cache_time") and time.time() - self._position_cache_time < 1.0:  # 1 second cache
+        if time.time() - self._position_cache_time < 1.0:  # 1 second cache
             return list(self.position_cache.values())
 
         # Fetch fresh
         positions = []
-        for venue, _broker in self.brokers.items():
+        for venue in self.brokers:
             try:
                 pos = await self._rate_limited_request(venue, "get_positions")
                 for p in pos:
@@ -317,7 +324,8 @@ class AsyncExecutionEngine:
                     self.position_cache[p["symbol"]] = p
                     positions.append(p)
             except (OSError, ValueError, RuntimeError, AttributeError) as e:
-                logger.error(f"Failed to get positions from {venue}: {e}")
+                logger.error("Failed to get positions from %s: %s", venue, e)
+
 
         self._position_cache_time = time.time()
         return positions
@@ -339,7 +347,7 @@ class AsyncExecutionEngine:
         payload = self._format_order(order, broker)
 
         async with self.rate_limiters[venue], session.post(f"{broker['url']}/orders", json=payload) as resp:
-            if resp.status == 200:  # noqa: PLR2004
+            if resp.status == 200:
                 data = await resp.json()
                 order.status = OrderStatus.SUBMITTED
                 order.metadata["broker_id"] = data.get("id")
@@ -377,6 +385,7 @@ class AsyncExecutionEngine:
 
         slippage = self._rng.normal(0, volatility * size_factor)
 
+        fill_price = base_price * (1 + slippage)  # default: market fill
         if order.order_type == OrderType.MARKET:
             fill_price = base_price * (1 + slippage)
         elif order.order_type == OrderType.LIMIT:
@@ -386,9 +395,10 @@ class AsyncExecutionEngine:
                 fill_price = order.price
             else:
                 # Limit not hit - simulate partial fill probability
-                if self._rng.random() < 0.3:  # 30% chance of no fill  # noqa: PLR2004
+                if self._rng.random() < 0.3:  # 30% chance of no fill
                     order.status = OrderStatus.SUBMITTED
-                    asyncio.create_task(self._delayed_fill_simulation(order))
+                    _t = asyncio.create_task(self._delayed_fill_simulation(order))
+                    _t.add_done_callback(lambda _: None)
                     return
                 fill_price = order.price
 
@@ -396,7 +406,7 @@ class AsyncExecutionEngine:
         remaining = order.quantity
         fills = []
 
-        while remaining > 0 and len(fills) < 5:  # Max 5 partial fills  # noqa: PLR2004
+        while remaining > 0 and len(fills) < 5:  # Max 5 partial fills
             fill_qty = min(remaining, self._rng.uniform(0.1, 0.5) * order.quantity)
             fill_qty = min(fill_qty, remaining)
 
@@ -443,7 +453,7 @@ class AsyncExecutionEngine:
             order.side == "sell" and current >= order.price
         )
 
-        if would_fill or self._rng.random() < 0.1:  # 10% chance of fill anyway  # noqa: PLR2004
+        if would_fill or self._rng.random() < 0.1:  # 10% chance of fill anyway
             fill = Fill(
                 order_id=order.id,
                 symbol=order.symbol,
@@ -478,13 +488,15 @@ class AsyncExecutionEngine:
                 try:
                     self.on_fill(fill)
                 except (RuntimeError, ValueError, AttributeError) as e:
-                    logger.error(f"Fill callback error: {e}")
+                    logger.error("Fill callback error: %s", e)
+
 
             if self.on_order_update:
                 try:
                     self.on_order_update(order)
                 except (RuntimeError, ValueError, AttributeError) as e:
-                    logger.error(f"Order update callback error: {e}")
+                    logger.error("Order update callback error: %s", e)
+
 
     async def _monitor_fills(self, order: Order):
         """Monitor for fills from live broker"""
@@ -525,7 +537,8 @@ class AsyncExecutionEngine:
                     await self._apply_fill(order, fill)
 
             except (OSError, ValueError, RuntimeError, AttributeError) as e:
-                logger.error(f"Fill monitoring error: {e}")
+                logger.error("Fill monitoring error: %s", e)
+
 
             await asyncio.sleep(check_interval)
 
@@ -577,7 +590,7 @@ class AsyncExecutionEngine:
                         try:
                             params = {"instruments": ",".join(symbols)}
                             async with session.get(price_url, params=params) as resp:
-                                if resp.status == 200:  # noqa: PLR2004
+                                if resp.status == 200:
                                     data = await resp.json()
                                     # Normalise: support both OANDA-style and generic dicts
                                     prices_list = data.get("prices") or data.get("ticks") or []
@@ -606,7 +619,8 @@ class AsyncExecutionEngine:
                 await asyncio.sleep(0.1)  # 10Hz update
 
             except (OSError, ValueError, RuntimeError, AttributeError) as e:
-                logger.error(f"Price feed error: {e}")
+                logger.error("Price feed error: %s", e)
+
                 await asyncio.sleep(1)
 
     async def _rate_limited_request(self, venue: str, method: str, *args) -> Any:
@@ -615,18 +629,18 @@ class AsyncExecutionEngine:
             # Enforce minimum interval between requests
             last = self.last_request_time.get(venue, 0)
             elapsed = time.time() - last
-            if elapsed < 0.1:  # Max 10 req/sec  # noqa: PLR2004
+            if elapsed < 0.1:  # Max 10 req/sec
                 await asyncio.sleep(0.1 - elapsed)
 
             self.last_request_time[venue] = time.time()
 
-            # Execute
-            self.brokers[venue]
+            # Execute via the registered broker for this venue
+            _broker = self.brokers[venue]
             if method == "get_positions":
                 return []  # Implement actual API call
-            elif method == "cancel":
+            if method == "cancel":
                 return True
-            elif method == "get_fills":
+            if method == "get_fills":
                 return []
 
             return None
@@ -665,7 +679,7 @@ class AsyncExecutionEngine:
         # Position limit check
         current = self.position_cache.get(order.symbol, {}).get("quantity", 0)
         if (
-            abs(current + (order.quantity if order.side == "buy" else -order.quantity)) > 100  # noqa: PLR2004
+            abs(current + (order.quantity if order.side == "buy" else -order.quantity)) > 100
         ):
             return False, "position_limit_exceeded"
 
@@ -675,7 +689,7 @@ class AsyncExecutionEngine:
 
         if market:
             mid = market["mid"]
-            if order.price and abs(order.price - mid) / mid > 0.05:  # noqa: PLR2004
+            if order.price and abs(order.price - mid) / mid > 0.05:
                 return False, "price_deviation_too_large"
 
         return True, ""

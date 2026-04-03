@@ -78,12 +78,11 @@ class RandomForestTradingClassifier(BaseMLModel):
                 n_jobs=-1,  # Use all CPU cores
             )
 
-            self.logger.info(
-                f"Random Forest built with {self.n_estimators} trees, max_depth={self.max_depth}",
-            )
+            self.logger.info("Random Forest built with %s trees, max_depth=%s", self.n_estimators, self.max_depth)
 
         except Exception as e:
-            self.logger.error(f"Error building Random Forest: {e}")
+            self.logger.error("Error building Random Forest: %s", e)
+
             raise
 
     def train(
@@ -165,14 +164,13 @@ class RandomForestTradingClassifier(BaseMLModel):
                 },
             )
 
-            self.logger.info(
-                f"Random Forest training complete. Train accuracy: {train_accuracy:.3f}",
-            )
+            self.logger.info("Random Forest training complete. Train accuracy: %s", train_accuracy)
 
             return metrics
 
         except Exception as e:
-            self.logger.error(f"Error training Random Forest: {e}")
+            self.logger.error("Error training Random Forest: %s", e)
+
             raise
 
     def predict(self, X: np.ndarray) -> np.ndarray:
@@ -198,7 +196,8 @@ class RandomForestTradingClassifier(BaseMLModel):
             return predictions
 
         except Exception as e:
-            self.logger.error(f"Error making predictions: {e}")
+            self.logger.error("Error making predictions: %s", e)
+
             raise
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
@@ -219,7 +218,8 @@ class RandomForestTradingClassifier(BaseMLModel):
             return probabilities
 
         except Exception as e:
-            self.logger.error(f"Error predicting probabilities: {e}")
+            self.logger.error("Error predicting probabilities: %s", e)
+
             raise
 
     def predict_with_confidence(self, X: np.ndarray) -> tuple:
@@ -254,8 +254,7 @@ class RandomForestTradingClassifier(BaseMLModel):
 
         if self.feature_names:
             return dict(zip(self.feature_names, importances, strict=False))
-        else:
-            return dict(enumerate(importances))
+        return dict(enumerate(importances))
 
     def get_top_features(self, n: int = 10) -> list[tuple]:
         """
@@ -308,7 +307,7 @@ class RandomForestTradingClassifier(BaseMLModel):
 
         # Calculate metrics
         accuracy = accuracy_score(y_test_encoded, predictions)
-        precision, recall, f1, support = precision_recall_fscore_support(
+        precision, recall, f1, _ = precision_recall_fscore_support(
             y_test_encoded,
             predictions,
             average="weighted",
@@ -400,8 +399,6 @@ class RandomForestTradingClassifier(BaseMLModel):
             },
         }
 
-        self.logger.info(
-            f"Hyperparameter optimization complete. Best score: {results['best_score']:.3f}",
-        )
+        self.logger.info("Hyperparameter optimization complete. Best score: %s", results['best_score'])
 
         return results

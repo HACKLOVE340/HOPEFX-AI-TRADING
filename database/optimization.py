@@ -7,11 +7,13 @@
 
 ## Query Analysis & Performance Monitoring
 
-import time
 import logging
+import time
+
 from sqlalchemy import create_engine, text
 
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Configure your database connection
 DATABASE_URI = "your_database_uri_here"
@@ -25,7 +27,7 @@ def analyze_query_performance(query):
         result.fetchall()  # Fetch all results to measure execution time
     end_time = time.time()  # End timing
     execution_time = end_time - start_time
-    logging.info(f"Query executed in: {execution_time:.4f} seconds")
+    logger.info("Query executed in: %.4f seconds", execution_time)
     return result
 
 

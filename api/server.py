@@ -9,9 +9,16 @@ FastAPI application with logging, health checks, and metrics
 """
 
 import asyncio
-import logging
 from contextlib import asynccontextmanager
 from typing import Any
+
+import contextlib
+
+from infrastructure.health import HealthStatus, get_health_checker
+from infrastructure.logging import get_logger
+from infrastructure.metrics import get_metrics_registry
+
+logger = get_logger(__name__)
 
 try:
     from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
@@ -22,16 +29,7 @@ try:
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False
-    logging.warning("FastAPI not available, API server disabled")
-
-from infrastructure.health import HealthStatus, get_health_checker
-from infrastructure.logging import get_logger
-from infrastructure.metrics import get_metrics_registry
-import contextlib
-
-logger = logging.getLogger(__name__)
-
-logger = get_logger(__name__)
+    logger.warning("FastAPI not available, API server disabled")
 
 
 # Pydantic models
@@ -88,7 +86,8 @@ def create_api_app(trading_app=None) -> Any | None:
     async def lifespan(_app: FastAPI):
         logger.info("API server starting...")
         if trading_app:
-            asyncio.create_task(health_checker.start_monitoring())
+            _t = asyncio.create_task(health_checker.start_monitoring())
+            _t.add_done_callback(lambda _: None)
 
         # ── NuclearStreamer — live tick stream → EventBus → WebSocket clients ──
         # Streams XAUUSD from Finnhub / Twelve Data / Polygon concurrently.
@@ -107,8 +106,8 @@ def create_api_app(trading_app=None) -> Any | None:
 
         if _has_any_stream_key:
             try:
+                from core.event_bus import CH_TICK, bus
                 from data_feed import NuclearStreamer
-                from core.event_bus import bus, CH_TICK
 
                 class _EventBusSubscriber:
                     """Bridge: forwards NuclearStreamer ticks onto the EventBus."""
@@ -140,6 +139,7 @@ def create_api_app(trading_app=None) -> Any | None:
         _scheduler = None
         try:
             from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore
+
             from reports.weekly_report import schedule_weekly_report
 
             _scheduler = AsyncIOScheduler()
@@ -297,7 +297,7 @@ def _register_trading_routes(app, trading_app, get_current_user, require_trader,
             return await trading_app.broker.get_account_info()
         except Exception as exc:
             logger.error("Error getting account info: %s", exc)
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            raise HTTPException(status_code=500, detail="Failed to retrieve account info — check server logs") from None
 
     @app.get("/api/v1/positions")
     async def get_positions(user=Depends(get_current_user)):
@@ -308,7 +308,7 @@ def _register_trading_routes(app, trading_app, get_current_user, require_trader,
             return {"positions": [p.to_dict() for p in positions], "count": len(positions)}
         except Exception as exc:
             logger.error("Error getting positions: %s", exc)
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            raise HTTPException(status_code=500, detail="Failed to retrieve positions — check server logs") from None
 
     @app.post("/api/v1/orders", status_code=201)
     async def place_order(
@@ -350,7 +350,7 @@ def _register_trading_routes(app, trading_app, get_current_user, require_trader,
             }
         except Exception as exc:
             logger.error("Order error for user=%s: %s", user.sub, exc)
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise HTTPException(status_code=400, detail="Order failed — check server logs") from None
 
     @app.delete("/api/v1/positions/{position_id}")
     async def close_position(position_id: str, user=Depends(require_trader)):
@@ -366,7 +366,7 @@ def _register_trading_routes(app, trading_app, get_current_user, require_trader,
             raise
         except Exception as exc:
             logger.error("Error closing position: %s", exc)
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            raise HTTPException(status_code=500, detail="Failed to close position — check server logs") from None
 
 
 def _register_brain_routes(app, trading_app, get_current_user, require_admin):
@@ -408,8 +408,8 @@ def _register_system_routes(app, trading_app, require_admin):
 
     @app.get("/api/v1/logs/recent")
     async def get_recent_logs(lines: int = 100, user=Depends(require_admin)):
-        import os as _os
         import json as _json
+        import os as _os
         from pathlib import Path as _Path
 
         log_dir = _os.getenv("LOG_DIR", "logs")
@@ -421,7 +421,7 @@ def _register_system_routes(app, trading_app, require_admin):
 
         try:
             max_bytes = 512 * 1024
-            with open(log_path, "rb") as fh:
+            with _Path(log_path).open("rb") as fh:
                 fh.seek(0, 2)
                 file_size = fh.tell()
                 fh.seek(max(0, file_size - max_bytes))
@@ -436,8 +436,10 @@ def _register_system_routes(app, trading_app, require_admin):
                     parsed.append({"message": line})
             return {"logs": parsed, "source": str(log_path), "total_returned": len(parsed)}
         except OSError as exc:
+            # Log the full exception server-side; return a generic message to
+            # the caller to avoid leaking internal filesystem paths or OS errors.
             logger.warning("get_recent_logs: could not read %s: %s", log_path, exc)
-            return {"logs": [], "source": str(log_path), "error": str(exc)}
+            return {"logs": [], "source": str(log_path), "error": "Log file unavailable — check server logs"}
 
     @app.post("/api/v1/system/shutdown")
     async def shutdown_system(background_tasks: BackgroundTasks, user=Depends(require_admin)):
@@ -473,9 +475,13 @@ async def start_api_server(host: str = "0.0.0.0", port: int = 8000, trading_app=
 
     server = uvicorn.Server(config)
 
-    logger.info(f"API server starting on http://{host}:{port}")
-    logger.info(f"  - API docs: http://{host}:{port}/docs")
-    logger.info(f"  - Health:   http://{host}:{port}/health")
-    logger.info(f"  - Metrics:  http://{host}:{port}/metrics")
+    logger.info("API server starting on http://%s:%s", host, port)
+
+    logger.info("  - API docs: http://%s:%s/docs", host, port)
+
+    logger.info("  - Health:   http://%s:%s/health", host, port)
+
+    logger.info("  - Metrics:  http://%s:%s/metrics", host, port)
+
 
     await server.serve()

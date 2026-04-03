@@ -12,9 +12,7 @@ Captures price discrepancies across multiple venues
 import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from decimal import Decimal
 
 
@@ -109,7 +107,7 @@ class ArbitrageDetector:
     async def update_prices(self):
         """Fetch prices from all exchanges"""
         tasks = []
-        for _name, ex in self.exchanges.items():
+        for ex in self.exchanges.values():
             for symbol in ["BTCUSD", "ETHUSD", "XAUUSD"]:
                 tasks.append(self._fetch_price(ex, symbol))
 
@@ -142,18 +140,18 @@ class ArbitrageDetector:
         best_ask = None
 
         for ex_name, data in prices.items():
-            if not best_bid or data["bid"] > best_bid["price"]:
+            if not best_bid or data["bid"] > best_bid["price"]:  # pylint: disable=unsubscriptable-object
                 best_bid = {"exchange": ex_name, "price": data["bid"]}
-            if not best_ask or data["ask"] < best_ask["price"]:
+            if not best_ask or data["ask"] < best_ask["price"]:  # pylint: disable=unsubscriptable-object
                 best_ask = {"exchange": ex_name, "price": data["ask"]}
 
         if not best_bid or not best_ask:
             return opportunities
 
         # Check profitability
-        if best_bid["price"] > best_ask["price"]:
+        if best_bid["price"] > best_ask["price"]:  # pylint: disable=unsubscriptable-object
             gross_profit_bps = float(
-                (best_bid["price"] - best_ask["price"]) / best_ask["price"] * 10000,
+                (best_bid["price"] - best_ask["price"]) / best_ask["price"] * 10000,  # pylint: disable=unsubscriptable-object
             )
 
             if gross_profit_bps > self.min_profit_bps:
@@ -304,12 +302,12 @@ class CrossExchangeEngine:
         self.detector = ArbitrageDetector(min_profit_bps=5.0)
         self.executor = ArbitrageExecutor()
         self.is_running = False
-        self.stats = {"detected": 0, "executed": 0, "profit": Decimal("0")}
+        self.stats = {"detected": 0, "executed": 0, "profit": Decimal(0)}
 
     def add_exchange(self, connector: ExchangeConnector):
         self.detector.add_exchange(connector)
 
-    async def run(self, symbols: list[str] = None):
+    async def run(self, symbols: list[str] | None = None):
         """Main arbitrage loop"""
         if symbols is None:
             symbols = ["BTCUSD", "ETHUSD", "XAUUSD"]

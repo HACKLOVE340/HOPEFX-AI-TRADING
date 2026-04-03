@@ -9,10 +9,11 @@ Unit tests for social/copy_trading.py.
 Tests use the real CopyTradingEngine from the production module — no mocks.
 """
 
-import pytest
 from decimal import Decimal
 
-from social.copy_trading import CopyTradingEngine, CopyRelationship, RiskLimitExceededError
+import pytest
+
+from social.copy_trading import CopyRelationship, CopyTradingEngine, RiskLimitExceededError
 
 
 class TestCopyRelationship:
@@ -26,15 +27,15 @@ class TestCopyRelationship:
 
     def test_custom_ratio(self):
         rel = CopyRelationship(follower_id="f1", leader_id="l1", copy_ratio=0.5)
-        assert rel.copy_ratio == 0.5  # noqa: PLR2004
+        assert rel.copy_ratio == 0.5
 
     def test_max_allocation_stored(self):
         rel = CopyRelationship(
             follower_id="f1",
             leader_id="l1",
-            max_allocation=Decimal("5000"),
+            max_allocation=Decimal(5000),
         )
-        assert rel.max_allocation == Decimal("5000")
+        assert rel.max_allocation == Decimal(5000)
 
 
 class TestCopyTradingEngine:
@@ -51,7 +52,7 @@ class TestCopyTradingEngine:
         assert isinstance(rel, CopyRelationship)
         assert rel.follower_id == "follower-1"
         assert rel.leader_id == "leader-1"
-        assert rel.copy_ratio == 0.5  # noqa: PLR2004
+        assert rel.copy_ratio == 0.5
         assert rel.is_active is True
 
     def test_stop_copying_deactivates(self):
@@ -73,7 +74,7 @@ class TestCopyTradingEngine:
         engine.start_copying("f1", "l2")
         engine.start_copying("f2", "l1")
         rels = engine.get_active_relationships("f1", as_follower=True)
-        assert len(rels) == 2  # noqa: PLR2004
+        assert len(rels) == 2
         leaders = {r.leader_id for r in rels}
         assert leaders == {"l1", "l2"}
 
@@ -82,7 +83,7 @@ class TestCopyTradingEngine:
         engine.start_copying("f1", "l1")
         engine.start_copying("f2", "l1")
         rels = engine.get_active_relationships("l1", as_follower=False)
-        assert len(rels) == 2  # noqa: PLR2004
+        assert len(rels) == 2
 
     def test_inactive_relationship_excluded(self):
         engine = self._engine()
@@ -98,7 +99,7 @@ class TestCopyTradingEngine:
         engine.start_copying("f1", "leader-1")
         engine.start_copying("f2", "leader-1")
         result = engine.sync_trade("TRADE_001", "leader-1")
-        assert len(result) == 2  # noqa: PLR2004
+        assert len(result) == 2
         follower_ids = set(result.values())
         assert follower_ids == {"f1", "f2"}
 
@@ -199,10 +200,10 @@ class TestCopyTradingEngine:
             {"id": "trader-3", "return": 0.30, "sharpe": 1.2, "followers": 20},
         ]
         leaderboard = engine.calculate_leaderboard(traders)
-        assert len(leaderboard) == 3  # noqa: PLR2004
+        assert len(leaderboard) == 3
         assert leaderboard[0]["rank"] == 1
-        assert leaderboard[1]["rank"] == 2  # noqa: PLR2004
-        assert leaderboard[2]["rank"] == 3  # noqa: PLR2004
+        assert leaderboard[1]["rank"] == 2
+        assert leaderboard[2]["rank"] == 3
 
     def test_leaderboard_rank_1_has_highest_score(self):
         engine = self._engine()

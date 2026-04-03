@@ -39,7 +39,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 # ─── Data classes ─────────────────────────────────────────────────────────────
 
 
@@ -292,7 +291,7 @@ class NuclearExplainabilityEngine:
 
         # Risk exposure
         exposure = risk_data.get("current_exposure", 0.0)
-        if exposure > 0.3:  # noqa: PLR2004
+        if exposure > 0.3:
             scores.append(
                 FeatureScore(
                     name="portfolio_exposure",
@@ -346,9 +345,9 @@ class NuclearExplainabilityEngine:
 
         # Step 3: Amplifiers
         amp_parts = []
-        if vol_factor > 1.05:  # noqa: PLR2004
+        if vol_factor > 1.05:
             amp_parts.append(f"volatility ×{vol_factor:.2f}")
-        if sentiment_factor > 0.1:  # noqa: PLR2004
+        if sentiment_factor > 0.1:
             amp_parts.append(f"negative sentiment +{sentiment_factor:.2f}")
         if amp_parts:
             trace.append(f"[3] Score amplified by: {', '.join(amp_parts)}.")
@@ -408,30 +407,29 @@ class NuclearExplainabilityEngine:
         exposure = risk_data.get("current_exposure", 0.0)
         drawdown = risk_data.get("drawdown_pct", 0.0)
 
-        if severity >= 9:  # noqa: PLR2004
+        if severity >= 9:
             return (
                 f"CRITICAL geopolitical event detected. At current exposure "
                 f"({exposure * 100:.1f}%), CVaR-95 is {cvar * 100:.2f}%. "
                 f"Historical gold moves of +8–15% in 48h are typical for this severity. "
                 f"Full liquidation is the only risk-safe response."
             )
-        elif severity >= 7:  # noqa: PLR2004
+        if severity >= 7:
             return (
                 f"HIGH geopolitical risk. Exposure {exposure * 100:.1f}%, "
                 f"CVaR-95 {cvar * 100:.2f}%. Hedge mode reduces max loss by ~60%. "
                 f"Gold typically moves +2–6% in the first 24h at this severity."
             )
-        elif severity >= 5:  # noqa: PLR2004
+        if severity >= 5:
             return (
                 f"ELEVATED geopolitical noise. Exposure {exposure * 100:.1f}%. "
                 f"Pausing new entries limits additional risk accumulation. "
                 f"Current drawdown: {drawdown:.2f}%."
             )
-        else:
-            return (
-                f"Normal conditions. Exposure {exposure * 100:.1f}%, "
-                f"drawdown {drawdown:.2f}%. No protective action required."
-            )
+        return (
+            f"Normal conditions. Exposure {exposure * 100:.1f}%, "
+            f"drawdown {drawdown:.2f}%. No protective action required."
+        )
 
     # ── Historical analog ─────────────────────────────────────────────────────
 

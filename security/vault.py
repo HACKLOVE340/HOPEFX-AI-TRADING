@@ -16,9 +16,8 @@ import logging
 import os
 import secrets
 from dataclasses import dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +52,7 @@ class HSMVault:
         self._key_cache: dict[str, bytes] = {}
         self._initialized = False
 
-        os.makedirs(key_store_path, exist_ok=True)
+        Path(key_store_path).mkdir(parents=True, exist_ok=True)
 
     def initialize(self, password: str | None = None, hardware_token: str | None = None) -> None:
         """
@@ -112,7 +111,7 @@ class HSMVault:
         key = kdf.derive(password.encode())
 
         # Store salt for future derivation
-        with open(f"{self.key_store_path}salt.bin", "wb") as f:
+        with Path(f"{self.key_store_path}salt.bin").open("wb") as f:
             f.write(salt)
 
         return key
@@ -168,14 +167,13 @@ class HSMVault:
 
         if provider == "aws":
             return self._derive_key_aws_kms()
-        elif provider == "azure":
+        if provider == "azure":
             return self._derive_key_azure_keyvault()
-        else:
-            raise RuntimeError(
-                "CLOUD_HSM_PROVIDER is not set or unrecognised. "
-                "Set it to 'aws' or 'azure' and configure the required env vars "
-                "before using hsm_type='cloudhsm'."
-            )
+        raise RuntimeError(
+            "CLOUD_HSM_PROVIDER is not set or unrecognised. "
+            "Set it to 'aws' or 'azure' and configure the required env vars "
+            "before using hsm_type='cloudhsm'."
+        )
 
     def _derive_key_aws_kms(self) -> bytes:
         """Generate a 256-bit data key via AWS KMS GenerateDataKey.
@@ -213,11 +211,11 @@ class HSMVault:
         encrypted_key: bytes = response["CiphertextBlob"]
 
         # Persist the encrypted copy for disaster recovery (KMS Decrypt to recover)
-        enc_path = os.path.join(self.key_store_path, "master.key.kms")
+        enc_path = Path(self.key_store_path) / "master.key.kms"
         try:
-            with open(enc_path, "wb") as f:
+            with Path(enc_path).open("wb") as f:
                 f.write(encrypted_key)
-            os.chmod(enc_path, 0o600)
+            Path(enc_path).chmod(0o600)
             logger.info("AWS KMS encrypted key blob saved to %s", enc_path)
         except OSError as exc:
             logger.warning("Could not persist KMS encrypted key blob: %s", exc)
@@ -233,12 +231,12 @@ class HSMVault:
         plaintext key as the vault master key.
         """
         try:
+            from azure.identity import ClientSecretCredential  # type: ignore[import]
+            from azure.keyvault.keys import KeyClient  # type: ignore[import]
             from azure.keyvault.keys.crypto import (  # type: ignore[import]
                 CryptographyClient,
                 KeyWrapAlgorithm,
             )
-            from azure.keyvault.keys import KeyClient  # type: ignore[import]
-            from azure.identity import ClientSecretCredential  # type: ignore[import]
         except ImportError:
             raise RuntimeError(
                 "azure-keyvault-keys and azure-identity are required for Azure Key Vault "
@@ -287,11 +285,11 @@ class HSMVault:
             raise RuntimeError(f"Azure Key Vault wrap_key failed: {exc}") from exc
 
         # Persist the wrapped copy for disaster recovery (unwrap via Key Vault)
-        wrapped_path = os.path.join(self.key_store_path, "master.key.azure")
+        wrapped_path = Path(self.key_store_path) / "master.key.azure"
         try:
-            with open(wrapped_path, "wb") as f:
+            with Path(wrapped_path).open("wb") as f:
                 f.write(wrapped_key)
-            os.chmod(wrapped_path, 0o600)
+            Path(wrapped_path).chmod(0o600)
             logger.info("Azure Key Vault wrapped key saved to %s", wrapped_path)
         except OSError as exc:
             logger.warning("Could not persist Azure wrapped key: %s", exc)
@@ -313,11 +311,11 @@ class HSMVault:
         """
         if not self._master_key:
             raise RuntimeError("Cannot save master key: vault not initialised")
-        key_path = os.path.join(self.key_store_path, "master.key")
+        key_path = Path(self.key_store_path) / "master.key"
         try:
-            with open(key_path, "w") as f:
+            with Path(key_path).open("w", encoding="utf-8") as f:
                 f.write(self._master_key.hex())
-            os.chmod(key_path, 0o600)
+            Path(key_path).chmod(0o600)
             logger.info("Master key saved to %s (mode 0600)", key_path)
         except OSError as exc:
             logger.error("Failed to save master key: %s", exc)

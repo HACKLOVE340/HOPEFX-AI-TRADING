@@ -27,11 +27,9 @@ import hmac
 import logging
 import os
 import uuid
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 from typing import Any
-from enum import Enum
 
 from .pricing import SubscriptionTier, pricing_manager
 
@@ -115,7 +113,7 @@ def _verify_license_key(license_key: str, user_id: str, tier: SubscriptionTier) 
     return hmac.compare_digest(license_key, expected)
 
 
-class SubscriptionStatus(str, Enum):
+class SubscriptionStatus(StrEnum):
     """Subscription status enumeration"""
 
     ACTIVE = "active"
@@ -187,20 +185,23 @@ class Subscription:
         self.end_date = datetime.now(UTC) + timedelta(days=duration_days)
         self.status = SubscriptionStatus.ACTIVE
         self.updated_at = datetime.now(UTC)
-        logger.info(f"Subscription {self.subscription_id} renewed until {self.end_date}")
+        logger.info("Subscription %s renewed until %s", self.subscription_id, self.end_date)
+
 
     def cancel(self) -> None:
         """Cancel subscription"""
         self.status = SubscriptionStatus.CANCELLED
         self.auto_renew = False
         self.updated_at = datetime.now(UTC)
-        logger.info(f"Subscription {self.subscription_id} cancelled")
+        logger.info("Subscription %s cancelled", self.subscription_id)
+
 
     def suspend(self) -> None:
         """Suspend subscription"""
         self.status = SubscriptionStatus.SUSPENDED
         self.updated_at = datetime.now(UTC)
-        logger.info(f"Subscription {self.subscription_id} suspended")
+        logger.info("Subscription %s suspended", self.subscription_id)
+
 
     def reactivate(self) -> None:
         """Reactivate subscription"""
@@ -209,7 +210,8 @@ class Subscription:
         else:
             self.status = SubscriptionStatus.ACTIVE
         self.updated_at = datetime.now(UTC)
-        logger.info(f"Subscription {self.subscription_id} reactivated")
+        logger.info("Subscription %s reactivated", self.subscription_id)
+
 
     def to_dict(self) -> dict:
         """Convert to dictionary"""
@@ -266,7 +268,8 @@ class SubscriptionManager:
         self._subscriptions[subscription_id] = subscription
         self._user_subscriptions[user_id] = subscription_id
 
-        logger.info(f"Created subscription {subscription_id} for user {user_id}")
+        logger.info("Created subscription %s for user %s", subscription_id, user_id)
+
         return subscription
 
     def get_subscription(self, subscription_id: str) -> Subscription | None:
@@ -284,17 +287,20 @@ class SubscriptionManager:
         """Activate a subscription with access code"""
         subscription = self.get_subscription(subscription_id)
         if not subscription:
-            logger.error(f"Subscription {subscription_id} not found")
+            logger.error("Subscription %s not found", subscription_id)
+
             return False
 
         if subscription.access_code != access_code:
-            logger.error(f"Invalid access code for subscription {subscription_id}")
+            logger.error("Invalid access code for subscription %s", subscription_id)
+
             return False
 
         subscription.status = SubscriptionStatus.ACTIVE
         subscription.updated_at = datetime.now(UTC)
 
-        logger.info(f"Activated subscription {subscription_id}")
+        logger.info("Activated subscription %s", subscription_id)
+
         return True
 
     def upgrade_subscription(self, subscription_id: str, new_tier: SubscriptionTier) -> bool:
@@ -306,13 +312,15 @@ class SubscriptionManager:
         # Check if upgrade is valid
         upgrade_path = pricing_manager.get_upgrade_path(subscription.tier)
         if new_tier not in upgrade_path:
-            logger.error(f"Invalid upgrade from {subscription.tier} to {new_tier}")
+            logger.error("Invalid upgrade from %s to %s", subscription.tier, new_tier)
+
             return False
 
         subscription.tier = new_tier
         subscription.updated_at = datetime.now(UTC)
 
-        logger.info(f"Upgraded subscription {subscription_id} to {new_tier}")
+        logger.info("Upgraded subscription %s to %s", subscription_id, new_tier)
+
         return True
 
     def downgrade_subscription(self, subscription_id: str, new_tier: SubscriptionTier) -> bool:
@@ -324,13 +332,15 @@ class SubscriptionManager:
         # Check if downgrade is valid
         downgrade_path = pricing_manager.get_downgrade_path(subscription.tier)
         if new_tier not in downgrade_path:
-            logger.error(f"Invalid downgrade from {subscription.tier} to {new_tier}")
+            logger.error("Invalid downgrade from %s to %s", subscription.tier, new_tier)
+
             return False
 
         subscription.tier = new_tier
         subscription.updated_at = datetime.now(UTC)
 
-        logger.info(f"Downgraded subscription {subscription_id} to {new_tier}")
+        logger.info("Downgraded subscription %s to %s", subscription_id, new_tier)
+
         return True
 
     def renew_subscription(self, subscription_id: str, duration_days: int = 30) -> bool:
@@ -410,9 +420,7 @@ class SubscriptionManager:
         stripe_customer_id: str | None = None,
     ) -> "Subscription":
         """Create a new subscription (overrides base to add Stripe fields)."""
-        import uuid as _uuid
-
-        subscription_id = f"SUB-{_uuid.uuid4().hex[:12].upper()}"
+        subscription_id = f"SUB-{uuid.uuid4().hex[:12].upper()}"
         start_date = datetime.now(UTC)
         end_date = start_date + timedelta(days=duration_days)
 
@@ -729,9 +737,9 @@ def create_subscription_router(manager: SubscriptionManager | None = None):
                 cancel_url=req.cancel_url,
                 email=req.email,
             )
-        except Exception as exc:
-            logger.exception("subscribe endpoint error: %s", exc)
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+        except Exception:
+            logger.exception("subscribe endpoint error: %s")
+            raise HTTPException(status_code=500, detail="Subscription failed — check server logs") from None
 
         return session
 
@@ -748,10 +756,11 @@ def create_subscription_router(manager: SubscriptionManager | None = None):
         try:
             result = _mgr.handle_stripe_webhook(payload, stripe_signature)
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        except Exception as exc:
-            logger.exception("webhook processing error: %s", exc)
-            raise HTTPException(status_code=500, detail="Webhook processing failed") from exc
+            logger.warning("Stripe webhook signature validation failed: %s", exc)
+            raise HTTPException(status_code=400, detail="Invalid webhook signature") from None
+        except Exception:
+            logger.exception("webhook processing error: %s")
+            raise HTTPException(status_code=500, detail="Webhook processing failed") from None
 
         return result
 
@@ -852,9 +861,10 @@ def require_plan(minimum_plan: str):
     async def _dependency(request: "Request", user=None):  # type: ignore[name-defined]
         # Import here to avoid circular imports
         try:
-            from api.auth import get_current_user, TokenPayload  # noqa: F401
             from fastapi.security import HTTPBearer as _HTTPBearer  # noqa: F401
             from fastapi.security.http import HTTPAuthorizationCredentials as _Creds
+
+            from api.auth import get_current_user
         except ImportError:
             # auth module not available (e.g. unit tests) — allow through
             return user
@@ -886,7 +896,8 @@ def require_plan(minimum_plan: str):
                 current_plan = tier.value if hasattr(tier, "value") else str(tier)
 
         if _plan_rank(current_plan) < _plan_rank(minimum_plan):
-            from fastapi import HTTPException, status as _status
+            from fastapi import HTTPException
+            from fastapi import status as _status
 
             raise HTTPException(
                 status_code=_status.HTTP_403_FORBIDDEN,

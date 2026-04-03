@@ -11,9 +11,7 @@ Trader Profiles Management
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 
 @dataclass
@@ -28,8 +26,8 @@ class TraderProfile:
     website: str | None = None
     verified: bool = False
     verification_date: datetime | None = None
-    created_at: datetime = None
-    updated_at: datetime = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     # Statistics
     total_followers: int = 0

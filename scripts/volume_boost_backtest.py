@@ -46,9 +46,7 @@ import argparse
 import json
 import logging
 import sys
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -347,7 +345,7 @@ def print_summary(label: str, summary: dict, mc: dict) -> None:
         for k, v in mc.items():
             print(f"  {k:<28} {v}")
     print(f"{'=' * 62}")
-    if summary.get("total_trades", 0) < 200:  # noqa: PLR2004
+    if summary.get("total_trades", 0) < 200:
         logger.warning(
             "Trade count %d < 200 target (expected for daily bars — "
             "use --interval 1h or run 15m mode for higher frequency)",

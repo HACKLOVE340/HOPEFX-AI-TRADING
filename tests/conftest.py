@@ -21,18 +21,17 @@ os.environ.setdefault(
     "test-only-jwt-secret-key-minimum-32-chars!!",
 )
 
-import pytest
 import asyncio
-import numpy as np
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-UTC = timezone.utc
+import numpy as np
+import pytest
 
 # Import core components for testing
 from brokers import PaperTradingBroker
-from risk.manager import RiskManager, RiskConfig
+from data.real_time_price_engine import OHLCV, Tick
+from risk.manager import RiskConfig, RiskManager
 from strategies.manager import StrategyManager
-from data.real_time_price_engine import Tick, OHLCV
 
 
 @pytest.fixture
@@ -75,7 +74,7 @@ def _restore_critical_env_vars():
         else:
             os.environ[k] = v
     # Always guarantee a valid JWT secret after teardown
-    if len(os.environ.get("SECURITY_JWT_SECRET", "")) < 32:  # noqa: PLR2004
+    if len(os.environ.get("SECURITY_JWT_SECRET", "")) < 32:
         os.environ["SECURITY_JWT_SECRET"] = _CANONICAL_JWT_SECRET
 
 
@@ -117,7 +116,7 @@ def _reset_global_kill_switch():
                 ks._active = False
                 ks._reason = ""
     except Exception:
-        pass
+        ...  # nosec B110
 
 
 @pytest.fixture
@@ -251,7 +250,7 @@ def _reset_kill_switch():
 
         _ks.reset_for_testing()
     except Exception:
-        pass
+        ...  # nosec B110
     yield
     # Also reset after the test in case it activated the switch
     try:
@@ -259,7 +258,7 @@ def _reset_kill_switch():
 
         _ks.reset_for_testing()
     except Exception:
-        pass
+        ...  # nosec B110
 
 
 # ── Additional fixtures required by root-level tests ─────────────────────────
@@ -280,7 +279,8 @@ def test_config():
 @pytest.fixture
 def mock_broker():
     """Lightweight synchronous mock broker for unit tests."""
-    from unittest.mock import MagicMock, AsyncMock as _AsyncMock
+    from unittest.mock import AsyncMock as _AsyncMock
+    from unittest.mock import MagicMock
 
     broker = MagicMock()
     broker.get_account_info = _AsyncMock(
@@ -334,13 +334,13 @@ def mock_strategy():
         )
 
         class _MockStrategy(BaseStrategy):
-            def analyze(self, market_data):
+            def analyze(self, data):
                 return {}
 
             def generate_signal(self, analysis):
                 return None
 
-        return _MockStrategy(config=config)
+        return _MockStrategy(config_or_name=config)
 
     return _factory
 
@@ -349,7 +349,6 @@ def mock_strategy():
 def sample_market_data():
     """Multi-asset OHLCV dict for portfolio tests."""
     import pandas as pd
-    import numpy as np
 
     rng = np.random.default_rng(42)
     dates = pd.date_range("2023-01-01", periods=252, freq="B")

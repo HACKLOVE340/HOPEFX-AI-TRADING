@@ -39,12 +39,10 @@ import asyncio
 import logging
 import os
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from typing import Any
 from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -278,7 +276,7 @@ class ShadowDataValidator:
 
         # ── Stale shadow feed ─────────────────────────────────────────────
         shadow_age_s = now - shadow["received_at"]
-        if shadow_age_s > 30.0:  # noqa: PLR2004
+        if shadow_age_s > 30.0:
             self._emit(
                 DivergenceEvent(
                     timestamp=datetime.now(UTC),
@@ -294,7 +292,7 @@ class ShadowDataValidator:
     def _emit(self, event: DivergenceEvent) -> None:
         self._total_diverge += 1
         self._divergences.append(event)
-        if len(self._divergences) > 1000:  # noqa: PLR2004
+        if len(self._divergences) > 1000:
             self._divergences = self._divergences[-500:]
 
         if _PROM_OK:

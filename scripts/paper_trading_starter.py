@@ -44,9 +44,7 @@ import os
 import signal
 import sys
 import time
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -56,7 +54,7 @@ try:
 
     load_dotenv()
 except ImportError:
-    pass  # dotenv optional; env vars may already be set
+    ...  # nosec B110
 
 # ── logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -117,14 +115,14 @@ def send_telegram(token: str, chat_id: str, text: str) -> bool:
         logger.warning("Telegram not configured — skipping alert")
         return False
     try:
-        import urllib.request
         import urllib.parse
+        import urllib.request
 
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         data = urllib.parse.urlencode({"chat_id": chat_id, "text": text, "parse_mode": "HTML"}).encode()
         req = urllib.request.Request(url, data=data, method="POST")
         with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310 - API URL is always https://
-            return resp.status == 200  # noqa: PLR2004
+            return resp.status == 200
     except Exception as exc:
         logger.warning("Telegram send failed: %s", exc)
         return False
@@ -214,11 +212,11 @@ class TradeLogger:
 
     def _init_csv(self) -> None:
         if not self.path.exists():
-            with open(self.path, "w", newline="") as f:
+            with Path(self.path).open("w", newline="", encoding="utf-8") as f:
                 csv.DictWriter(f, fieldnames=CSV_HEADERS).writeheader()
 
     def log(self, record: dict[str, Any]) -> None:
-        with open(self.path, "a", newline="") as f:
+        with Path(self.path).open("a", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=CSV_HEADERS)
             writer.writerow({k: record.get(k, "") for k in CSV_HEADERS})
 
@@ -328,9 +326,9 @@ class PaperTradingRunner:
         """
         history = self._price_history[instrument]
         history.append(price)
-        if len(history) > 20:  # noqa: PLR2004
+        if len(history) > 20:
             history.pop(0)
-        if len(history) < 20:  # noqa: PLR2004
+        if len(history) < 20:
             return None
         sma = sum(history) / len(history)
         if price > sma * 1.001:
@@ -402,7 +400,7 @@ class PaperTradingRunner:
                 logger.error("Tick error: %s", exc)
 
             # Daily Telegram alert
-            if time.time() - last_daily_alert >= 86400:  # noqa: PLR2004
+            if time.time() - last_daily_alert >= 86400:
                 dd = self._check_drawdown()
                 self._send_daily_summary(dd)
                 last_daily_alert = time.time()

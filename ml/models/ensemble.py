@@ -21,9 +21,7 @@ Features:
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import numpy as np
@@ -173,10 +171,12 @@ class EnsemblePredictor(BaseMLModel):
             if self.use_xgb:
                 self._build_xgboost()
 
-            self.logger.info(f"Ensemble built with models: {list(self.models.keys())}")
+            self.logger.info("Ensemble built with models: %s", list(self.models.keys()))
+
 
         except Exception as e:
-            self.logger.error(f"Error building ensemble: {e}")
+            self.logger.error("Error building ensemble: %s", e)
+
             raise
 
     def _build_lstm(self):
@@ -299,10 +299,10 @@ class EnsemblePredictor(BaseMLModel):
                 np.std(window),  # Volatility
                 np.mean(window[-10:]),  # Short-term MA
                 np.mean(window[-20:])
-                if len(window) >= 20  # noqa: PLR2004
+                if len(window) >= 20
                 else np.mean(window),  # Medium MA
-                window[-1] - window[-2] if len(window) >= 2 else 0,  # Momentum 1  # noqa: PLR2004
-                window[-1] - window[-5] if len(window) >= 5 else 0,  # Momentum 5  # noqa: PLR2004
+                window[-1] - window[-2] if len(window) >= 2 else 0,  # Momentum 1
+                window[-1] - window[-5] if len(window) >= 5 else 0,  # Momentum 5
                 np.max(window) - np.min(window),  # Range
                 (window[-1] - np.min(window)) / (np.max(window) - np.min(window) + 1e-8),  # %K
                 np.mean(np.diff(window)),  # Trend
@@ -322,7 +322,7 @@ class EnsemblePredictor(BaseMLModel):
         for i in range(self.sequence_length, len(data)):
             X.append(data[i - self.sequence_length : i])
             y.append(data[i])
-        return np.array(X).reshape(-1, self.sequence_length, 1), np.array(y)
+        return np.array(X).reshape(-1, self.sequence_length, 1), np.array(y)  # pylint: disable=too-many-function-args
 
     def train(
         self,
@@ -384,7 +384,8 @@ class EnsemblePredictor(BaseMLModel):
                     "loss": float(history.history["loss"][-1]),
                     "val_loss": float(history.history.get("val_loss", [0])[-1]),
                 }
-                self.logger.info(f"LSTM trained: loss={results['lstm']['loss']:.6f}")
+                self.logger.info("LSTM trained: loss=%s", results['lstm']['loss'])
+
 
             # Train Random Forest
             if "random_forest" in self.models:
@@ -419,7 +420,8 @@ class EnsemblePredictor(BaseMLModel):
             return results
 
         except Exception as e:
-            self.logger.error(f"Error training ensemble: {e}")
+            self.logger.error("Error training ensemble: %s", e)
+
             raise
 
     def predict(self, X: np.ndarray) -> np.ndarray:
@@ -531,7 +533,8 @@ class EnsemblePredictor(BaseMLModel):
             return predictions
 
         except Exception as e:
-            self.logger.error(f"Error making ensemble predictions: {e}")
+            self.logger.error("Error making ensemble predictions: %s", e)
+
             raise
 
     def _combine_predictions(
@@ -555,7 +558,7 @@ class EnsemblePredictor(BaseMLModel):
         weight_total = 0.0
         all_predictions = []
 
-        for _name, mp in model_predictions.items():
+        for mp in model_predictions.values():
             combined_weight = mp.weight * mp.confidence
             weighted_sum += mp.prediction * combined_weight
             weight_total += combined_weight
@@ -570,11 +573,11 @@ class EnsemblePredictor(BaseMLModel):
             mean_pred = np.mean(all_predictions)
             cv = std_dev / abs(mean_pred) if mean_pred != 0 else 1.0
 
-            if cv < 0.05:  # noqa: PLR2004
+            if cv < 0.05:
                 consensus = "strong"
-            elif cv < 0.15:  # noqa: PLR2004
+            elif cv < 0.15:
                 consensus = "moderate"
-            elif cv < 0.30:  # noqa: PLR2004
+            elif cv < 0.30:
                 consensus = "weak"
             else:
                 consensus = "divergent"

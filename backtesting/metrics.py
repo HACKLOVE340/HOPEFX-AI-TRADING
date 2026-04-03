@@ -9,9 +9,11 @@ Performance Metrics Calculator
 Calculates comprehensive trading performance metrics.
 """
 
-import pandas as pd
-import numpy as np
+import contextlib
 import logging
+
+import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +94,7 @@ class PerformanceMetrics:
 
     def calculate_annual_return(self) -> float:
         """Calculate annualized return."""
-        if self.equity_curve.empty or len(self.equity_curve) < 2:  # noqa: PLR2004
+        if self.equity_curve.empty or len(self.equity_curve) < 2:
             return 0.0
 
         days = (self.equity_curve.index[-1] - self.equity_curve.index[0]).days
@@ -111,7 +113,7 @@ class PerformanceMetrics:
 
     def calculate_sharpe_ratio(self) -> float:
         """Calculate Sharpe ratio."""
-        if self.equity_curve.empty or len(self.equity_curve) < 2:  # noqa: PLR2004
+        if self.equity_curve.empty or len(self.equity_curve) < 2:
             return 0.0
 
         returns = self.equity_curve["equity"].pct_change().dropna()
@@ -125,7 +127,7 @@ class PerformanceMetrics:
 
     def calculate_sortino_ratio(self) -> float:
         """Calculate Sortino ratio (downside deviation)."""
-        if self.equity_curve.empty or len(self.equity_curve) < 2:  # noqa: PLR2004
+        if self.equity_curve.empty or len(self.equity_curve) < 2:
             return 0.0
 
         returns = self.equity_curve["equity"].pct_change().dropna()
@@ -161,7 +163,7 @@ class PerformanceMetrics:
 
     def calculate_volatility(self) -> float:
         """Calculate annualized volatility."""
-        if self.equity_curve.empty or len(self.equity_curve) < 2:  # noqa: PLR2004
+        if self.equity_curve.empty or len(self.equity_curve) < 2:
             return 0.0
 
         returns = self.equity_curve["equity"].pct_change().dropna()
@@ -232,8 +234,15 @@ class PerformanceMetrics:
         losing_trades = self.trade_history[self.trade_history["pnl"] < 0]["pnl"]
         return losing_trades.min() if len(losing_trades) > 0 else 0.0
 
-    def calculate_avg_trade_duration(self) -> float | None:
+    def calculate_avg_trade_duration(self) -> float:
         """Calculate average trade duration in days."""
-        # This would require entry/exit timestamps in trade history
-        # Simplified implementation
-        return None
+        if self.trade_history.empty:
+            return 0.0
+        if "entry_time" in self.trade_history.columns and "exit_time" in self.trade_history.columns:
+            with contextlib.suppress(Exception):
+                durations = (
+                    pd.to_datetime(self.trade_history["exit_time"])
+                    - pd.to_datetime(self.trade_history["entry_time"])
+                )
+                return float(durations.dt.total_seconds().mean() / 86400)
+        return 0.0

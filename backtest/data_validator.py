@@ -63,9 +63,7 @@ import asyncio
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 import numpy as np
 import pandas as pd
@@ -267,7 +265,7 @@ async def _fetch_alpha_vantage(
             aiohttp.ClientSession() as session,
             session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp,
         ):
-            if resp.status != 200:  # noqa: PLR2004
+            if resp.status != 200:
                 return None
             data = await resp.json()
 

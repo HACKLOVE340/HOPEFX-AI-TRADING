@@ -26,13 +26,14 @@ Imports
 The legacy shim at backtest/engine.py re-exports from here.
 """
 
+import json
 import logging
 import os
-from typing import Any
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-import json
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -177,7 +178,8 @@ class HistoricalDataLoader:
         except FileNotFoundError:
             raise  # propagate the explicit error above
         except Exception as e:
-            logger.error(f"Failed to load data for {symbol}: {e}")
+            logger.error("Failed to load data for %s: %s", symbol, e)
+
             raise
 
 
@@ -352,7 +354,7 @@ class SimulatedBroker:
                     vol_daily = 0.012  # 1.2% default (gold ~1%)
 
                 # Spread: use config pips converted to bps
-                pip = 0.10 if price > 100 else 0.0001  # noqa: PLR2004
+                pip = 0.10 if price > 100 else 0.0001
                 spread_bps = (self.config.slippage_pips * pip / price) * 10_000
 
                 impact = model.estimate(
@@ -370,7 +372,7 @@ class SimulatedBroker:
         if self.config.slippage_model == "fixed":
             # Gold pip = $0.10; forex pip = $0.0001.
             # Detect gold by price > $100 (gold trades ~$1500–$3000).
-            pip = 0.10 if price > 100 else 0.0001  # noqa: PLR2004
+            pip = 0.10 if price > 100 else 0.0001
             return (self.config.slippage_pips * pip) / price
 
         if self.config.slippage_model in ("variable", "almgren_chriss"):
@@ -456,7 +458,8 @@ class BacktestEngine:
         Args:
             progress_callback: Called with (current_step, total_steps, current_time)
         """
-        logger.info(f"Starting backtest: {self.config.start_date} to {self.config.end_date}")
+        logger.info("Starting backtest: %s to %s", self.config.start_date, self.config.end_date)
+
 
         # Load data for all symbols
         all_data: dict[str, pd.DataFrame] = {}
@@ -464,13 +467,14 @@ class BacktestEngine:
             df = await self.data_loader.load_data(symbol, "1h", self.config.start_date, self.config.end_date)
             if df is not None:
                 all_data[symbol] = df
-                logger.info(f"Loaded {len(df)} bars for {symbol}")
+                logger.info("Loaded %s bars for %s", len(df), symbol)
+
 
         if not all_data:
             raise ValueError("No data loaded for backtest")
 
         # Combine timestamps
-        all_timestamps = sorted(set(ts for df in all_data.values() for ts in df["timestamp"]))
+        all_timestamps = sorted({ts for df in all_data.values() for ts in df["timestamp"]})
 
         total_steps = len(all_timestamps)
 
@@ -505,7 +509,8 @@ class BacktestEngine:
                         self._process_signal(signal, timestamp, current_prices, current_bars)
 
                 except Exception as e:
-                    logger.error(f"Strategy error at {timestamp}: {e}")
+                    logger.error("Strategy error at %s: %s", timestamp, e)
+
 
             # Progress callback
             if progress_callback and i % 100 == 0:
@@ -514,7 +519,8 @@ class BacktestEngine:
         # Calculate results
         self.results = self._calculate_results()
 
-        logger.info(f"Backtest complete: {self.results.total_trades} trades")
+        logger.info("Backtest complete: %s trades", self.results.total_trades)
+
 
         return self.results
 
@@ -540,7 +546,7 @@ class BacktestEngine:
         available_cash = self.broker.cash
 
         trades = self.broker.trades
-        if len(trades) < 20:  # noqa: PLR2004
+        if len(trades) < 20:
             # Not enough history — use fixed risk_per_trade with ATR stop
             stop_distance = signal.get("stop_distance", current_price * 0.01)
             if stop_distance > 0:
@@ -727,7 +733,7 @@ class BacktestEngine:
         """
         start = max(0, entry_idx - lookback)
         window = equity_curve[start : entry_idx + 1]
-        if len(window) < 2:  # noqa: PLR2004
+        if len(window) < 2:
             return "ranging"
 
         prices = np.array([e["equity"] for e in window])
@@ -741,9 +747,9 @@ class BacktestEngine:
 
         if vol > vol_threshold:
             return "high_vol"
-        if trend > 0.001:  # noqa: PLR2004
+        if trend > 0.001:
             return "trending_bull"
-        if trend < -0.001:  # noqa: PLR2004
+        if trend < -0.001:
             return "trending_bear"
         return "ranging"
 
@@ -845,7 +851,7 @@ class BacktestEngine:
         sharpe = 0.0
         sharpe_se = 0.0
         trade_pnls = np.array([t["net_pnl"] for t in trades], dtype=float)
-        if len(trade_pnls) >= 2 and np.std(trade_pnls) > 0:  # noqa: PLR2004
+        if len(trade_pnls) >= 2 and np.std(trade_pnls) > 0:
             # Estimate average hold time in days from equity curve length
             n_bars = len(equity_values)
             avg_hold_bars = n_bars / max(total_trades, 1)
@@ -883,7 +889,7 @@ class BacktestEngine:
         # ── Skewness / Kurtosis ───────────────────────────────────────
         skewness = 0.0
         kurtosis = 0.0
-        if len(bar_returns) > 3:  # noqa: PLR2004
+        if len(bar_returns) > 3:
             if SCIPY_AVAILABLE and _scipy_stats is not None:
                 skewness = float(_scipy_stats.skew(bar_returns))
                 kurtosis = float(_scipy_stats.kurtosis(bar_returns))
@@ -902,18 +908,18 @@ class BacktestEngine:
         is_significant = False
         sample_size = len(trade_returns_arr)
 
-        if sample_size < 100:  # noqa: PLR2004
+        if sample_size < 100:
             logger.warning(
                 "Backtest significance test: sample_size=%d < 100 — results may not be reliable",
                 sample_size,
             )
 
-        if sample_size >= 2:  # noqa: PLR2004
+        if sample_size >= 2:
             if SCIPY_AVAILABLE and _scipy_stats is not None:
                 t_result = _scipy_stats.ttest_1samp(trade_returns_arr, popmean=0.0)
                 t_stat = float(t_result.statistic)
                 p_val = float(t_result.pvalue)
-                is_significant = bool(p_val < 0.05)  # noqa: PLR2004
+                is_significant = bool(p_val < 0.05)
             else:
                 # Manual t-statistic
                 mean_r = float(np.mean(trade_returns_arr))
@@ -985,7 +991,7 @@ class BacktestEngine:
                 f"N={total_trades} — SE≈±{sharpe_se:.2f}. "
                 + (
                     "Statistically robust (N≥250)."
-                    if total_trades >= 250  # noqa: PLR2004
+                    if total_trades >= 250
                     else "Not statistically robust — use OOS accuracy as credible number."
                 )
             ),
@@ -1050,7 +1056,7 @@ class BacktestEngine:
         se_str = f"±{r.sharpe_se:.2f}" if r.sharpe_se > 0 else "n/a"
         robust_str = (
             "✅ robust"
-            if r.total_trades >= 250  # noqa: PLR2004
+            if r.total_trades >= 250
             else f"⚠️  N={r.total_trades} (need ≥250)"
         )
         report = f"""
@@ -1117,10 +1123,11 @@ NOTE: Sharpe is trade-level (corrected). Bar-level Sharpe is inflated
             "trades": self.results.trades,
         }
 
-        with open(filepath, "w") as f:
+        with Path(filepath).open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, default=str)
 
-        logger.info(f"Backtest results exported to {filepath}")
+        logger.info("Backtest results exported to %s", filepath)
+
 
 
 # Convenience functions

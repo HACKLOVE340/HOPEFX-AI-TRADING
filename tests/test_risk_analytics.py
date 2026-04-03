@@ -17,8 +17,8 @@ from risk.analytics import (
     ESResult,
     PreTradeRiskReport,
     RegimeDriftScore,
-    SlippageSimResult,
     SharpeResult,
+    SlippageSimResult,
     VaRResult,
     compute_es,
     compute_max_drawdown,
@@ -69,7 +69,7 @@ class TestComputeVaR:
         var10 = compute_var(RETURNS_NORMAL, confidence=0.95, horizon_days=10)
         # 10-day VaR should be ~sqrt(10) times 1-day VaR
         ratio = var10.var / (var1.var + 1e-10)
-        assert 2.5 < ratio < 4.5  # sqrt(10) ≈ 3.16  # noqa: PLR2004
+        assert 2.5 < ratio < 4.5  # sqrt(10) ≈ 3.16
 
     def test_fat_tails_cornish_fisher_higher(self):
         """Cornish-Fisher should be >= parametric for fat-tailed returns."""
@@ -179,7 +179,7 @@ class TestComputeRegimeDrift:
         cur = RNG.normal(0.0005, 0.05, 20)  # 10x higher vol
         result = compute_regime_drift(ref, cur, drift_threshold=1.0)
         assert result.regime_changed
-        assert result.vol_ratio > 5.0  # noqa: PLR2004
+        assert result.vol_ratio > 5.0
 
     def test_insufficient_data_returns_zero_score(self):
         result = compute_regime_drift(np.array([0.01]), np.array([0.01]))
@@ -223,7 +223,7 @@ class TestComputeSharpe:
         # since SE depends on sample size and SR magnitude (Lo 2002)
         high_sharpe = np.full(500, 0.001) + RNG.normal(0, 0.0003, 500)
         result = compute_sharpe(high_sharpe, sharpe_target=1.5, se_target=99.0)
-        assert result.sharpe > 1.5  # Sharpe gate passes  # noqa: PLR2004
+        assert result.sharpe > 1.5  # Sharpe gate passes
         assert result.passes_gate
 
     def test_fails_gate_low_sharpe(self):

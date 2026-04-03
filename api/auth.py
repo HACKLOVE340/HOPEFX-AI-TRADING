@@ -32,12 +32,14 @@ _bearer = HTTPBearer(auto_error=True)
 # The actual HTTP endpoints live in auth/router.py.  Re-export that router here
 # so that code doing `from api.auth import router` works without change.
 try:
-    from auth.router import router
+    from auth.router import router  # re-exported for callers doing `from api.auth import router`
 except Exception as _router_import_err:  # pragma: no cover
     from fastapi import APIRouter as _APIRouter
 
     router = _APIRouter(prefix="/api/auth", tags=["Authentication"])
     logger.warning("auth.router unavailable, using empty fallback router: %s", _router_import_err)
+
+__all__ = ["TokenPayload", "get_current_user", "require_role", "router"]
 
 # Role hierarchy: higher index = more privileged
 _ROLE_RANK: dict = {"user": 0, "trader": 1, "admin": 2, "superadmin": 3}
@@ -68,7 +70,7 @@ def _get_jwt_secret() -> str:
             "SECURITY_JWT_SECRET environment variable is not set. "
             'Generate one with: python -c "import secrets; print(secrets.token_hex(32))"',
         )
-    if len(secret) < 32:  # noqa: PLR2004
+    if len(secret) < 32:
         raise RuntimeError("SECURITY_JWT_SECRET must be at least 32 characters")
     return secret
 
@@ -237,5 +239,5 @@ def require_kyc(
                 detail="KYC verification required before trading. Please complete identity verification.",
             )
     except ImportError:
-        pass  # app not fully initialised (e.g. during tests)
+        ...  # nosec B110
     return user

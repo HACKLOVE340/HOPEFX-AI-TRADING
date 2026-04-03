@@ -20,9 +20,7 @@ Features:
 """
 
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import numpy as np
@@ -108,7 +106,8 @@ class StrategyBrain:
         # Calculate initial weight (equal weight, updated by performance)
         self._recalculate_weights()
 
-        logger.info(f"Strategy Brain: Registered {strategy_name}")
+        logger.info("Strategy Brain: Registered %s", strategy_name)
+
 
     def unregister_strategy(self, strategy_name: str):
         """
@@ -120,7 +119,8 @@ class StrategyBrain:
         if strategy_name in self.strategies:
             del self.strategies[strategy_name]
             self._recalculate_weights()
-            logger.info(f"Strategy Brain: Unregistered {strategy_name}")
+            logger.info("Strategy Brain: Unregistered %s", strategy_name)
+
 
     def analyze_joint(self, data: dict[str, Any]) -> dict[str, Any]:
         """
@@ -148,7 +148,8 @@ class StrategyBrain:
                     if signal:
                         strategy_signals[name] = signal
                 except Exception as e:
-                    logger.error(f"Error getting signal from {name}: {e}")
+                    logger.error("Error getting signal from %s: %s", name, e)
+
 
             # If not enough strategies provided signals, return neutral
             if len(strategy_signals) < self.min_strategies_required:
@@ -193,7 +194,8 @@ class StrategyBrain:
             return consensus_result
 
         except Exception as e:
-            logger.error(f"Error in joint analysis: {e}")
+            logger.error("Error in joint analysis: %s", e)
+
             return {
                 "consensus_reached": False,
                 "reason": "Analysis error",
@@ -283,7 +285,7 @@ class StrategyBrain:
 
                 consensus_signal = Signal(
                     signal_type=SignalType.BUY,
-                    symbol=list(strategy_signals.values())[0].symbol,
+                    symbol=next(iter(strategy_signals.values())).symbol,
                     price=avg_price,
                     timestamp=datetime.now(UTC),
                     confidence=min(consensus_confidence, 1.0),
@@ -315,7 +317,7 @@ class StrategyBrain:
 
                 consensus_signal = Signal(
                     signal_type=SignalType.SELL,
-                    symbol=list(strategy_signals.values())[0].symbol,
+                    symbol=next(iter(strategy_signals.values())).symbol,
                     price=avg_price,
                     timestamp=datetime.now(UTC),
                     confidence=min(consensus_confidence, 1.0),
@@ -358,7 +360,8 @@ class StrategyBrain:
             }
 
         except Exception as e:
-            logger.error(f"Error calculating consensus: {e}")
+            logger.error("Error calculating consensus: %s", e)
+
             return {
                 "consensus_reached": False,
                 "reason": "Consensus calculation error",
@@ -396,9 +399,7 @@ class StrategyBrain:
         # Recalculate strategy weights
         self._recalculate_weights()
 
-        logger.info(
-            f"Updated performance for {strategy_name}: Win rate: {perf['win_rate']:.2%}, PnL: ${perf['total_pnl']:.2f}",
-        )
+        logger.info("Updated performance for %s: Win rate: %s, PnL: $%s", strategy_name, perf['win_rate'], perf['total_pnl'])
 
     def _recalculate_weights(self):
         """Recalculate strategy weights based on performance"""

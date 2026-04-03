@@ -19,9 +19,10 @@ tests/unit/test_backtest_engine.py
   10. _max_consecutive correctly counts streaks
 """
 
-import pytest
-import numpy as np
 from datetime import datetime, timedelta
+
+import numpy as np
+import pytest
 
 from backtest.engine import (
     BacktestConfig,
@@ -29,7 +30,6 @@ from backtest.engine import (
     BacktestResult,
     SimulatedBroker,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -176,7 +176,7 @@ def test_significance_test_with_clear_edge():
     trade_pnls = rng.normal(50.0, 100.0, 200)
     t_stat, p_val = stats.ttest_1samp(trade_pnls, popmean=0.0)
 
-    assert p_val < 0.05, f"Expected p < 0.05 for clear edge, got p={p_val:.4f}"  # noqa: PLR2004
+    assert p_val < 0.05, f"Expected p < 0.05 for clear edge, got p={p_val:.4f}"
     assert t_stat > 0, "t-statistic should be positive for positive-mean returns"
 
 
@@ -331,5 +331,5 @@ def test_max_consecutive_counts_correctly():
         {"net_pnl": -5},  # loss  ← streak of 2
     ]
 
-    assert engine._max_consecutive(trades, "win") == 3  # noqa: PLR2004
-    assert engine._max_consecutive(trades, "loss") == 2  # noqa: PLR2004
+    assert engine._max_consecutive(trades, "win") == 3
+    assert engine._max_consecutive(trades, "loss") == 2

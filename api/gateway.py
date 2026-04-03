@@ -31,9 +31,7 @@ order requests through the main app's TradeExecutor so pre-trade risk checks
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, WebSocket
@@ -314,17 +312,17 @@ class APIGateway:
 
             except HTTPException:
                 raise
-            except Exception as exc:
-                logger.exception("Gateway order execution error: %s", exc)
+            except Exception:
+                logger.exception("Gateway order execution error: %s")
                 raise HTTPException(
                     status_code=500,
-                    detail=f"Order execution failed: {exc}",
-                ) from exc
+                    detail="Order execution failed — check server logs",
+                ) from None
 
         # WebSocket for real-time data
         @self.app.websocket("/ws/v1/stream")
         async def websocket_stream(websocket: WebSocket):
-            from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+            from rate_limiting.websocket_limiter import get_client_ip, get_ws_limiter
 
             limiter = get_ws_limiter()
             client_ip = get_client_ip(websocket)
@@ -444,7 +442,7 @@ def build_gateway_app():
         pms = getattr(app_state, "portfolio_manager", None)
         auth_secret = os.getenv("SECURITY_JWT_SECRET") or os.getenv("JWT_SECRET_KEY", "")
 
-        if not auth_secret or len(auth_secret) < 32:  # noqa: PLR2004
+        if not auth_secret or len(auth_secret) < 32:
             logger.warning(
                 "build_gateway_app: SECURITY_JWT_SECRET not set or too short — "
                 "gateway not mounted. Set SECURITY_JWT_SECRET (>=32 chars)."

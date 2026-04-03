@@ -35,14 +35,12 @@ import asyncio
 import logging
 import os
 from collections import deque
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
 
-from core.event_bus import bus, CH_TICK
+from core.event_bus import CH_TICK, bus
 
 logger = logging.getLogger(__name__)
 
@@ -220,10 +218,9 @@ class _MLPredictor:
 
                     if raw_dir == "long":
                         return "BUY", confidence
-                    elif raw_dir == "short":
+                    if raw_dir == "short":
                         return "SELL", confidence
-                    else:
-                        return "HOLD", confidence
+                    return "HOLD", confidence
 
             except Exception as exc:
                 logger.warning("StrategyEngine: ML predict error (%s) — EMA fallback.", exc)
@@ -231,7 +228,7 @@ class _MLPredictor:
         # EMA-crossover fallback
         if ema_cross > 0:
             return "BUY", 0.60
-        elif ema_cross < 0:
+        if ema_cross < 0:
             return "SELL", 0.60
         return "HOLD", 0.50
 

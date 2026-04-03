@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from typing import ClassVar
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -82,7 +83,7 @@ def setup_security_headers(app: FastAPI) -> None:
     from starlette.requests import Request as _Req
 
     class _SecurityHeaders(BaseHTTPMiddleware):
-        _HEADERS = {
+        _HEADERS: ClassVar[dict] = {
             "X-Content-Type-Options": "nosniff",
             "X-Frame-Options": "DENY",
             "X-XSS-Protection": "1; mode=block",
@@ -111,6 +112,7 @@ def setup_metrics_middleware(app: FastAPI) -> None:
     """Add Prometheus HTTP metrics middleware."""
     try:
         from starlette.middleware.base import BaseHTTPMiddleware
+
         from core.metrics import make_metrics_middleware
 
         app.add_middleware(BaseHTTPMiddleware, dispatch=make_metrics_middleware())

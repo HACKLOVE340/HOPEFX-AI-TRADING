@@ -62,6 +62,7 @@ const AuditLog             = React.lazy(() => import('./pages/AuditLog'));
 const AdminPanel           = React.lazy(() => import('./pages/AdminPanel'));
 const WhitelabelAdmin      = React.lazy(() => import('./pages/WhitelabelAdmin'));
 const SecurityDashboard    = React.lazy(() => import('./pages/SecurityDashboard'));
+const AutoHealDashboard    = React.lazy(() => import('./pages/AutoHealDashboard'));
 
 // Commerce
 const Marketplace          = React.lazy(() => import('./pages/Marketplace'));
@@ -161,6 +162,7 @@ const NAV_ITEMS = [
   { path: '/sub-accounts',  label: 'Sub-Accounts',    icon: '👥', auth: true  },
   { path: '/tca',           label: 'TCA',             icon: '📊', auth: true  },
   { path: '/security',      label: 'Security Ops',    icon: '🛡️', auth: true  },
+  { path: '/auto-heal',     label: 'Auto-Heal',       icon: '🩺', auth: true  },
   { path: '/status',        label: 'Status',          icon: '🟢', auth: false },
   { path: '/settings',      label: 'Settings',        icon: '⚙️', auth: true  },
 ];
@@ -367,6 +369,7 @@ const AppShell: React.FC = () => {
           <Route path="/sub-accounts" element={wrap(<AuthGuard><SubAccounts /></AuthGuard>)} />
           <Route path="/tca"          element={wrap(<AuthGuard><TCADashboard /></AuthGuard>)} />
           <Route path="/security"     element={wrap(<AuthGuard requiredRole="admin"><SecurityDashboard /></AuthGuard>)} />
+          <Route path="/auto-heal"    element={wrap(<AuthGuard requiredRole="admin"><AutoHealDashboard /></AuthGuard>)} />
 
           {/* Fallback — redirect unknown shell paths to dashboard */}
           <Route path="*"             element={<Navigate to="/dashboard" replace />} />

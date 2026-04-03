@@ -17,10 +17,8 @@ Identifies institutional vs retail trading activity through:
 
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -297,7 +295,7 @@ class InstitutionalFlowDetector:
         cutoff = now - timedelta(minutes=lookback_minutes)
         trades = [(ts, price, size, side) for ts, price, size, side in self._trades.get(symbol, []) if ts >= cutoff]
 
-        if len(trades) < 5:  # noqa: PLR2004
+        if len(trades) < 5:
             return []
 
         # Build volume windows
@@ -311,7 +309,7 @@ class InstitutionalFlowDetector:
             else:
                 windows[epoch]["sell"] += size
 
-        if len(windows) < 2:  # noqa: PLR2004
+        if len(windows) < 2:
             return []
 
         volumes = [w["volume"] for w in windows.values()]
@@ -367,7 +365,7 @@ class InstitutionalFlowDetector:
         cutoff = datetime.now(UTC) - timedelta(minutes=lookback_minutes)
         trades = [(ts, price, size, side) for ts, price, size, side in self._trades.get(symbol, []) if ts >= cutoff]
 
-        if len(trades) < 10:  # noqa: PLR2004
+        if len(trades) < 10:
             return []
 
         # Group trades into time windows
@@ -382,7 +380,7 @@ class InstitutionalFlowDetector:
 
         signals = []
         for epoch, group in windows.items():
-            if len(group) < 3:  # noqa: PLR2004
+            if len(group) < 3:
                 continue
 
             prices = [t[1] for t in group]
@@ -459,8 +457,8 @@ class InstitutionalFlowDetector:
         confidence = min(1.0, confidence)
         classification = (
             "institutional"
-            if confidence >= 0.4  # noqa: PLR2004
-            else ("retail" if confidence < 0.2 else "unknown")  # noqa: PLR2004
+            if confidence >= 0.4
+            else ("retail" if confidence < 0.2 else "unknown")
         )
 
         return InstitutionalTrade(
@@ -525,9 +523,9 @@ class InstitutionalFlowDetector:
         total_vol = buy_vol + sell_vol
         net = (buy_vol - sell_vol) / total_vol if total_vol > 0 else 0.0
 
-        if net > 0.1 or bullish_signals > bearish_signals:  # noqa: PLR2004
+        if net > 0.1 or bullish_signals > bearish_signals:
             direction = "bullish"
-        elif net < -0.1 or bearish_signals > bullish_signals:  # noqa: PLR2004
+        elif net < -0.1 or bearish_signals > bullish_signals:
             direction = "bearish"
         else:
             direction = "neutral"

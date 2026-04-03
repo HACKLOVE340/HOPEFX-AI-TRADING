@@ -24,20 +24,19 @@ in data/macro/ (the original MacroStore.load_defaults() path).
 from __future__ import annotations
 
 import asyncio
-import logging
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-
-from data_layer.feeds.macro.fred import FREDFeed, FRED_SERIES, fred_feed
-from data_layer.feeds.macro.wgc import WGCFeed, wgc_feed
 import contextlib
+import logging
+import os
+from datetime import UTC, datetime, timedelta
+
+from data_layer.feeds.macro.fred import FRED_SERIES, FREDFeed, fred_feed
+from data_layer.feeds.macro.wgc import WGCFeed, wgc_feed
 
 logger = logging.getLogger(__name__)
 
 # Startup retry config
-_STARTUP_MAX_RETRIES = int(__import__("os").getenv("MACRO_BRIDGE_STARTUP_RETRIES", "3"))
-_STARTUP_RETRY_DELAY = float(__import__("os").getenv("MACRO_BRIDGE_STARTUP_RETRY_S", "5.0"))
+_STARTUP_MAX_RETRIES = int(os.getenv("MACRO_BRIDGE_STARTUP_RETRIES", "3"))
+_STARTUP_RETRY_DELAY = float(os.getenv("MACRO_BRIDGE_STARTUP_RETRY_S", "5.0"))
 
 
 class MacroStoreBridge:
@@ -79,7 +78,7 @@ class MacroStoreBridge:
 
     def _init_prometheus(self) -> None:
         try:
-            from prometheus_client import Gauge, REGISTRY
+            from prometheus_client import REGISTRY, Gauge
 
             def _gauge(name: str, doc: str):
                 try:
@@ -135,7 +134,8 @@ class MacroStoreBridge:
         # Load WGC demand data (non-blocking — failure is non-fatal)
         await self._load_wgc_into_store()
 
-        asyncio.create_task(self._daily_refresh_loop(), name="macro_store_bridge_refresh")
+        _t = asyncio.create_task(self._daily_refresh_loop(), name="macro_store_bridge_refresh")
+        _t.add_done_callback(lambda _: None)
 
     async def stop(self) -> None:
         """Close FRED HTTP session and stop refresh loop."""

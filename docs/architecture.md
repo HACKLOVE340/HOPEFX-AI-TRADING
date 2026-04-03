@@ -1,6 +1,6 @@
 # HOPEFX AI Trading — System Architecture
 
-> Last updated: 2026-07-14 (v1.17)
+> Last updated: 2026-04-01 (v1.17)
 
 This document describes the production architecture of HOPEFX AI Trading.
 For a history of fixes and before/after ratings, see `docs/COMPREHENSIVE_FIXES.md`.

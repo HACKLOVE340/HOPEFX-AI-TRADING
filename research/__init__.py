@@ -10,14 +10,12 @@ Provides Jupyter-style notebook integration for quantitative research,
 strategy development, and data analysis.
 """
 
-from typing import Dict, List, Optional, Any  # noqa: F401
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from enum import Enum
-import logging
 import json
+import logging
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from enum import Enum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +127,7 @@ This notebook provides a structured approach to developing trading strategies.
 # Import required libraries
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 # Load market data
 # data = load_market_data('XAUUSD', '1H', days=365)
@@ -283,7 +281,8 @@ print("Feature engineering functions ready")
 
         self.templates["ml_development"] = ml_template
 
-        logger.info(f"Created {len(self.templates)} notebook templates")
+        logger.info("Created %s notebook templates", len(self.templates))
+
 
     def create_notebook(self, title: str, description: str, author: str, is_template: bool = False) -> ResearchNotebook:
         """
@@ -312,7 +311,8 @@ print("Feature engineering functions ready")
         )
 
         self.notebooks[notebook_id] = notebook
-        logger.info(f"Created notebook: {title}")
+        logger.info("Created notebook: %s", title)
+
         return notebook
 
     def add_cell(self, notebook_id: str, cell_type: CellType, content: str) -> NotebookCell | None:
@@ -329,7 +329,8 @@ print("Feature engineering functions ready")
         """
         notebook = self.notebooks.get(notebook_id)
         if not notebook:
-            logger.error(f"Notebook not found: {notebook_id}")
+            logger.error("Notebook not found: %s", notebook_id)
+
             return None
 
         cell_id = f"cell_{len(notebook.cells) + 1}"
@@ -409,8 +410,8 @@ print("Feature engineering functions ready")
         blocked at the Python level — deploy behind a container/seccomp
         boundary in production.
         """
-        import io
         import contextlib
+        import io
 
         stdout_capture = io.StringIO()
         exec_globals: dict = {
@@ -422,7 +423,7 @@ print("Feature engineering functions ready")
             with contextlib.redirect_stdout(stdout_capture):
                 exec(compile(code, "<cell>", "exec"), exec_globals)  # nosec B102 - research notebook cell executor; code is user-authored research, not untrusted input
             output = stdout_capture.getvalue()
-            return output if output else "Cell executed successfully (no output)"
+            return output or "Cell executed successfully (no output)"
         except Exception as exc:
             raise RuntimeError(f"Cell execution error: {exc}") from exc
 
@@ -455,13 +456,13 @@ print("Feature engineering functions ready")
 
         return notebook
 
-    def export_notebook(self, notebook_id: str, format: str = "json") -> str | None:
+    def export_notebook(self, notebook_id: str, export_format: str = "json") -> str | None:
         """Export notebook to file format."""
         notebook = self.notebooks.get(notebook_id)
         if not notebook:
             return None
 
-        if format == "json":
+        if export_format == "json":
             data = {
                 "notebook_id": notebook.notebook_id,
                 "title": notebook.title,
@@ -481,7 +482,7 @@ print("Feature engineering functions ready")
             }
             return json.dumps(data, indent=2)
 
-        elif format == "python":
+        if export_format == "python":
             # Export as Python script
             lines = [
                 f"# {notebook.title}",
@@ -569,7 +570,8 @@ def create_research_router(engine: "ResearchNotebookEngine"):
     """
     from fastapi import APIRouter, Depends, HTTPException
     from pydantic import BaseModel
-    from api.auth import require_role, TokenPayload
+
+    from api.auth import TokenPayload, require_role
 
     router = APIRouter(prefix="/api/research", tags=["Research"])
 
@@ -585,7 +587,7 @@ def create_research_router(engine: "ResearchNotebookEngine"):
 
     @router.get("/notebooks")
     async def list_notebooks(query: str | None = None, author: str | None = None):
-        """List all research notebooks (excluding templates)."""
+        """list all research notebooks (excluding templates)."""
         return engine.search_notebooks(query=query, author=author)
 
     @router.post("/notebooks")
@@ -639,16 +641,16 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         return {"notebook_id": notebook_id, "results": results}
 
     @router.get("/notebooks/{notebook_id}/export")
-    async def export_notebook(notebook_id: str, format: str = "json"):
+    async def export_notebook(notebook_id: str, export_format: str = "json"):
         """Export a notebook as JSON or Python script."""
-        exported = engine.export_notebook(notebook_id, format)
+        exported = engine.export_notebook(notebook_id, export_format)
         if exported is None:
             raise HTTPException(status_code=404, detail=f"Notebook {notebook_id} not found")
-        return {"notebook_id": notebook_id, "format": format, "content": exported}
+        return {"notebook_id": notebook_id, "format": export_format, "content": exported}
 
     @router.get("/templates")
     async def list_templates():
-        """List available notebook templates."""
+        """list available notebook templates."""
         return engine.get_templates()
 
     @router.post("/notebooks/from-template/{template_id}")
@@ -667,7 +669,7 @@ def calculate_sharpe_ratio(returns, risk_free_rate=0.02):
     Calculate the annualised Sharpe Ratio.
 
     Args:
-        returns: List or array-like of periodic returns.
+        returns: list or array-like of periodic returns.
         risk_free_rate: Annual risk-free rate (default 2%).
 
     Returns:
@@ -688,7 +690,7 @@ def calculate_max_drawdown(equity_curve):
     Calculate the Maximum Drawdown from an equity curve.
 
     Args:
-        equity_curve: List or array-like of equity values.
+        equity_curve: list or array-like of equity values.
 
     Returns:
         Maximum drawdown as a non-negative float (e.g. 0.10 = 10% drawdown).

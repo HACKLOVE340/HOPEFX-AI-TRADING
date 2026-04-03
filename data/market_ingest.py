@@ -28,9 +28,7 @@ import asyncio
 import logging
 import os
 import time
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 # ccxt.pro for async WebSocket streaming
 try:
@@ -188,7 +186,8 @@ class MarketIngest:
         logger.info("MarketIngest starting — symbol=%s exchange=%s", SYMBOL, EXCHANGE_ID)
 
         # Run staleness checker in background
-        asyncio.create_task(self._staleness_loop())
+        _t = asyncio.create_task(self._staleness_loop())
+        _t.add_done_callback(lambda _: None)
 
         try:
             if CCXT_PRO_AVAILABLE:
@@ -270,7 +269,7 @@ class MarketIngest:
                         params={"instruments": instrument},
                         timeout=aiohttp.ClientTimeout(total=5),
                     ) as resp:
-                        if resp.status == 200:  # noqa: PLR2004
+                        if resp.status == 200:
                             data = await resp.json()
                             prices = data.get("prices", [])
                             if prices:

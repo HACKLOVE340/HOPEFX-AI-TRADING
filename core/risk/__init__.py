@@ -11,7 +11,6 @@ Monte Carlo simulation with GARCH volatility and copula correlation
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Dict, List, Optional, Tuple  # noqa: F401
 
 import numpy as np
 import pandas as pd
@@ -49,7 +48,7 @@ class GARCHModel:
             negative_alpha = alpha < 0
             negative_beta = beta < 0
             non_stationary = alpha + beta >= 1
-            invalid_df = nu <= 2  # Student-t requires df > 2 for finite variance  # noqa: PLR2004
+            invalid_df = nu <= 2  # Student-t requires df > 2 for finite variance
             return non_positive_omega or negative_alpha or negative_beta or non_stationary or invalid_df
 
         def neg_log_likelihood(params):
@@ -205,13 +204,13 @@ class MonteCarloRiskEngine:
     def _stress_correlation(self, weights: dict[str, float]) -> float:
         """Calculate correlation under stress (tail dependence)"""
         # Simplified: use historical correlation in worst 5% of days
-        if len(self.historical_returns) < 100:  # noqa: PLR2004
+        if len(self.historical_returns) < 100:
             return 0.5
 
         worst_days = self.historical_returns.sum(axis=1).quantile(0.05)
         stress_data = self.historical_returns[self.historical_returns.sum(axis=1) <= worst_days]
 
-        if len(stress_data) < 10:  # noqa: PLR2004
+        if len(stress_data) < 10:
             return 0.5
 
         return float(stress_data.corr().values.mean())

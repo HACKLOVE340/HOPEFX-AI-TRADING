@@ -50,20 +50,17 @@ logger = logging.getLogger(__name__)
 # ── Import config ─────────────────────────────────────────────────────────────
 try:
     from rate_limiting_configuration import (
-        GLOBAL_DEFAULT_RATE,
-        AUTH_RATE,
-        TRADING_RATE,
-        MARKET_DATA_RATE,
         ADMIN_RATE,
-        WEBSOCKET_RATE,
+        AUTH_RATE,
         BACKTEST_RATE,
-        WITHDRAWAL_RATE,
-        REDIS_URL,
         KEY_PREFIX,
-        ENDPOINT_RATES,
+        MARKET_DATA_RATE,
+        REDIS_URL,
+        TRADING_RATE,
+        WEBSOCKET_RATE,
+        WITHDRAWAL_RATE,
     )
 except ImportError:
-    GLOBAL_DEFAULT_RATE = "120 per minute"
     AUTH_RATE = "10 per minute"
     TRADING_RATE = "60 per minute"
     MARKET_DATA_RATE = "300 per minute"
@@ -73,7 +70,7 @@ except ImportError:
     WITHDRAWAL_RATE = "5 per minute"
     REDIS_URL = "redis://localhost:6379/1"
     KEY_PREFIX = "hopefx:rl:"
-    ENDPOINT_RATES = {"default": GLOBAL_DEFAULT_RATE}
+
 
 
 # ── Parse a rate string into (count, window_seconds) ─────────────────────────
@@ -92,9 +89,9 @@ def _parse_rate(rate_str: str) -> tuple:
 
     Only the first clause is used when multiple are joined with "; ".
     """
-    first = rate_str.split(";")[0].strip()
+    first = rate_str.split(";", maxsplit=1)[0].strip()
     parts = first.lower().split()
-    if len(parts) != 3 or parts[1] != "per":  # noqa: PLR2004
+    if len(parts) != 3 or parts[1] != "per":
         raise ValueError(f"Invalid rate string: {rate_str!r}")
     count = int(parts[0])
     period = _PERIOD_SECONDS.get(parts[2])
@@ -219,7 +216,7 @@ def rate_limit_dependency(rate_str: str, key_func: Callable | None = None):
         ):
             ...
     """
-    from fastapi import Request, HTTPException, status
+    from fastapi import HTTPException, Request, status
 
     try:
         limit, window = _parse_rate(rate_str)

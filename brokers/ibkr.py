@@ -46,12 +46,10 @@ import logging
 import os
 import time
 import uuid
-from dataclasses import dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from typing import Any
 from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -59,16 +57,12 @@ logger = logging.getLogger(__name__)
 try:
     from ib_insync import (  # type: ignore[import]
         IB,
-        CFD,  # noqa: F401
         Commodity,
-        Contract,  # noqa: F401
         Future,
         LimitOrder,
         MarketOrder,
-        StopOrder,
         StopLimitOrder,
-        Trade,  # noqa: F401
-        util,  # noqa: F401
+        StopOrder,
     )
 
     _IB_AVAILABLE = True
@@ -285,9 +279,9 @@ class IBKRBroker:
 
             return fill_result
 
-        except Exception as exc:
-            logger.error("IBKRBroker place_order: %s", exc)
-            return {"status": "rejected", "reason": str(exc), "broker": "ibkr"}
+        except Exception:
+            logger.exception("IBKRBroker place_order: %s")
+            return {"status": "rejected", "reason": "Order failed — check server logs", "broker": "ibkr"}
 
     def _build_gold_contract(self, symbol: str, use_futures: bool = False) -> Any:
         """Build IBKR XAUUSD contract. Never fetches price data."""
@@ -303,18 +297,17 @@ class IBKRBroker:
         qty = float(quantity)
         if order_type == "MARKET":
             return MarketOrder(action, qty)
-        elif order_type == "LIMIT":
+        if order_type == "LIMIT":
             price = float(req.get("mid_price", 0))
             return LimitOrder(action, qty, price)
-        elif order_type == "STOP":
+        if order_type == "STOP":
             stop_price = float(req.get("stop_price", req.get("mid_price", 0)))
             return StopOrder(action, qty, stop_price)
-        elif order_type == "STOP_LIMIT":
+        if order_type == "STOP_LIMIT":
             lmt = float(req.get("mid_price", 0))
             stop = float(req.get("stop_price", lmt))
             return StopLimitOrder(action, qty, lmt, stop)
-        else:
-            return MarketOrder(action, qty)
+        return MarketOrder(action, qty)
 
     async def _wait_for_fill(self, trade: Any, client_ref: str) -> dict:
         """Poll trade status until filled, cancelled, or timeout."""

@@ -44,6 +44,7 @@ Usage
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -51,11 +52,8 @@ import time
 from abc import ABC, abstractmethod
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from typing import Any, Callable, Dict, List, Optional
-import contextlib
+from datetime import UTC, datetime
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +88,7 @@ class Tick:
     def spread(self) -> float:
         return self.ask - self.bid
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "symbol": self.symbol,
             "timestamp": self.timestamp.isoformat(),
@@ -118,7 +116,7 @@ class OHLCVBar:
     tick_count: int
     timeframe_s: int  # bar duration in seconds
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "symbol": self.symbol,
             "timestamp": self.timestamp.isoformat(),
@@ -154,8 +152,8 @@ class TickSource(ABC):
         self.symbol = symbol
         self._running = False
         self._fail_count = 0
-        self._circuit_open_at: Optional[float] = None
-        self._on_tick: Optional[Callable] = None
+        self._circuit_open_at: float | None = None
+        self._on_tick: Callable | None = None
 
     def set_callback(self, callback: Callable) -> None:
         self._on_tick = callback
@@ -259,15 +257,15 @@ class OandaTickSource(TickSource):
             aiohttp.ClientSession() as session,
             session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=None)) as resp,
         ):
-            if resp.status != 200:  # noqa: PLR2004
+            if resp.status != 200:
                 body = await resp.text()
                 raise ConnectionError(f"OANDA stream HTTP {resp.status}: {body[:200]}")
 
             logger.info("OandaTickSource: stream connected")
-            async for line in resp.content:
+            async for raw_line in resp.content:
                 if not self._running:
                     break
-                line = line.strip()  # noqa: PLW2901
+                line = raw_line.strip()
                 if not line:
                     continue
                 try:
@@ -287,7 +285,7 @@ class OandaTickSource(TickSource):
                 ask = float(asks[0]["price"])
                 ts_str = msg.get("time", "")
                 try:
-                    ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                    ts = datetime.fromisoformat(ts_str)
                 except Exception:
                     ts = datetime.now(UTC)
 
@@ -455,9 +453,9 @@ class TickAggregator:
     def __init__(self, symbol: str, timeframe_s: int = 60):
         self.symbol = symbol
         self.timeframe_s = timeframe_s
-        self._bar_callbacks: List[Callable] = []
-        self._current_bar: Optional[Dict[str, Any]] = None
-        self._bar_start: Optional[float] = None
+        self._bar_callbacks: list[Callable] = []
+        self._current_bar: dict[str, Any] | None = None
+        self._bar_start: float | None = None
 
     def add_bar_callback(self, cb: Callable) -> None:
         self._bar_callbacks.append(cb)
@@ -520,11 +518,11 @@ class TickBus:
     """
 
     def __init__(self, dedup_window_ms: float = 50.0):
-        self._subscribers: List[Any] = []
+        self._subscribers: list[Any] = []
         self._dedup_window_ms = dedup_window_ms
         self._recent: deque = deque(maxlen=20)  # (timestamp_ms, mid)
         self._tick_count = 0
-        self._last_tick: Optional[Tick] = None
+        self._last_tick: Tick | None = None
 
     def subscribe(self, component: Any) -> None:
         """Register a subscriber with an async on_tick(tick) method."""
@@ -544,7 +542,7 @@ class TickBus:
         now_ms = tick.timestamp.timestamp() * 1000
         mid = tick.mid
         for prev_ms, prev_mid in self._recent:
-            if abs(now_ms - prev_ms) <= self._dedup_window_ms and abs(mid - prev_mid) < 0.001:  # noqa: PLR2004
+            if abs(now_ms - prev_ms) <= self._dedup_window_ms and abs(mid - prev_mid) < 0.001:
                 return
 
         self._recent.append((now_ms, mid))
@@ -568,10 +566,10 @@ class TickBus:
         return self._tick_count
 
     @property
-    def last_tick(self) -> Optional[Tick]:
+    def last_tick(self) -> Tick | None:
         return self._last_tick
 
-    def status(self) -> Dict[str, Any]:
+    def status(self) -> dict[str, Any]:
         return {
             "subscribers": len(self._subscribers),
             "tick_count": self._tick_count,
@@ -603,12 +601,12 @@ class TickFeedManager:
         self.symbol = symbol
         self._bus = TickBus()
         self._aggregator = TickAggregator(symbol, timeframe_s=bar_timeframe_s)
-        self._sources: List[TickSource] = [
+        self._sources: list[TickSource] = [
             OandaTickSource(symbol),
             FinnhubTickSource(symbol),
             PolygonTickSource(symbol),
         ]
-        self._tasks: List[asyncio.Task] = []
+        self._tasks: list[asyncio.Task] = []
         self._running = False
 
         # Wire sources → bus
@@ -654,7 +652,7 @@ class TickFeedManager:
         self._tasks.clear()
         logger.info("TickFeedManager: stopped")
 
-    def status(self) -> Dict[str, Any]:
+    def status(self) -> dict[str, Any]:
         source_status = []
         for src in self._sources:
             source_status.append(
@@ -677,13 +675,13 @@ class TickFeedManager:
         return self._bus
 
     @property
-    def last_tick(self) -> Optional[Tick]:
+    def last_tick(self) -> Tick | None:
         return self._bus.last_tick
 
 
 # ── module-level singleton ────────────────────────────────────────────────────
 
-_manager: Optional[TickFeedManager] = None
+_manager: TickFeedManager | None = None
 
 
 def get_tick_feed(symbol: str = "XAU_USD", bar_timeframe_s: int = 60) -> TickFeedManager:

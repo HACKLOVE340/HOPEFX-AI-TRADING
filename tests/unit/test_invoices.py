@@ -7,11 +7,10 @@
 Tests for Invoice Generation System
 """
 
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from datetime import datetime, timedelta, timezone
 
-UTC = timezone.utc
-from monetization.invoices import Invoice, InvoiceStatus, InvoiceGenerator
+from monetization.invoices import Invoice, InvoiceGenerator, InvoiceStatus
 from monetization.pricing import SubscriptionTier
 
 
@@ -197,7 +196,7 @@ class TestInvoiceGenerator:
         )
 
         user_invoices = generator.get_user_invoices("user-123")
-        assert len(user_invoices) == 3  # noqa: PLR2004
+        assert len(user_invoices) == 3
 
     def test_mark_invoice_paid(self):
         """Test marking invoice as paid via generator"""
@@ -276,7 +275,7 @@ class TestInvoiceGenerator:
 
         stats = generator.get_invoice_stats(user_id="user-123")
 
-        assert stats["total_invoices"] == 2  # noqa: PLR2004
+        assert stats["total_invoices"] == 2
         assert stats["pending_invoices"] == 1
         assert stats["paid_invoices"] == 1
         # Amount will vary based on tier pricing, so just check it exists

@@ -85,9 +85,7 @@ class TestBuildAdvancedFeatures:
 
         df = _make_ohlcv()
         X, y = build_advanced_features(df, macro_df=None)
-        assert (
-            X.shape[1] == 100  # noqa: PLR2004
-        ), f"Expected 100 features without macro, got {X.shape[1]}"
+        assert X.shape[1] == 100, f"Expected 100 features without macro, got {X.shape[1]}"
 
     def test_feature_count_with_macro(self):
         from ml.advanced_features import build_advanced_features
@@ -95,7 +93,7 @@ class TestBuildAdvancedFeatures:
         df = _make_ohlcv()
         macro = _make_macro(df.index)
         X, y = build_advanced_features(df, macro_df=macro)
-        assert X.shape[1] == 129, f"Expected 129 features with macro, got {X.shape[1]}"  # noqa: PLR2004
+        assert X.shape[1] == 129, f"Expected 129 features with macro, got {X.shape[1]}"
 
     def test_no_nan_in_features(self):
         from ml.advanced_features import build_advanced_features
@@ -160,7 +158,7 @@ class TestWalkForwardEval:
 
         X, y = xy
         result = walk_forward_eval(X, y, n_splits=2)
-        assert len(result["folds"]) == 2  # noqa: PLR2004
+        assert len(result["folds"]) == 2
 
 
 # ── OOS evaluation ────────────────────────────────────────────────────────────
@@ -193,8 +191,8 @@ class TestOosEvalAdvanced:
         assert 0.0 <= result["p_value_binomial"] <= 1.0
 
     def test_saves_advanced_oos_pkl(self, cv_oos_split, tmp_path):
-        from ml.train_advanced import oos_eval_advanced
         import ml.train_advanced as ta
+        from ml.train_advanced import oos_eval_advanced
 
         original = ta.MODEL_DIR
         ta.MODEL_DIR = tmp_path
@@ -221,9 +219,9 @@ def _make_cv_oos_split():
 class TestTrainFinalModel:
     @pytest.fixture(scope="class")
     def trained(self, tmp_path_factory):
+        import ml.train_advanced as ta
         from ml.advanced_features import build_advanced_features
         from ml.train_advanced import train_final_model
-        import ml.train_advanced as ta
 
         tmp = tmp_path_factory.mktemp("models_final")
         original = ta.MODEL_DIR
@@ -250,7 +248,7 @@ class TestTrainFinalModel:
 
     def test_feature_count_in_metrics(self, trained):
         _, metrics, _ = trained
-        assert metrics["feature_count"] == 100  # noqa: PLR2004
+        assert metrics["feature_count"] == 100
 
 
 # ── Feature importance ────────────────────────────────────────────────────────
@@ -258,9 +256,9 @@ class TestTrainFinalModel:
 
 class TestExtractFeatureImportance:
     def test_returns_nonempty_dict(self, tmp_path):
-        from ml.advanced_features import build_advanced_features
-        from ml.train_advanced import train_final_model, extract_feature_importance
         import ml.train_advanced as ta
+        from ml.advanced_features import build_advanced_features
+        from ml.train_advanced import extract_feature_importance, train_final_model
 
         original = ta.MODEL_DIR
         ta.MODEL_DIR = tmp_path
@@ -275,9 +273,9 @@ class TestExtractFeatureImportance:
             ta.MODEL_DIR = original
 
     def test_importance_values_are_floats(self, tmp_path):
-        from ml.advanced_features import build_advanced_features
-        from ml.train_advanced import train_final_model, extract_feature_importance
         import ml.train_advanced as ta
+        from ml.advanced_features import build_advanced_features
+        from ml.train_advanced import extract_feature_importance, train_final_model
 
         original = ta.MODEL_DIR
         ta.MODEL_DIR = tmp_path
@@ -314,13 +312,11 @@ class TestCLIDefaults:
 
     def test_default_years_is_50(self):
         ns = self._parse([])
-        assert ns.years == 50, f"Default --years should be 50, got {ns.years}"  # noqa: PLR2004
+        assert ns.years == 50, f"Default --years should be 50, got {ns.years}"
 
     def test_default_oos_years_is_8(self):
         ns = self._parse([])
-        assert (
-            ns.oos_years == 8.0  # noqa: PLR2004
-        ), f"Default --oos-years should be 8.0, got {ns.oos_years}"
+        assert ns.oos_years == 8.0, f"Default --oos-years should be 8.0, got {ns.oos_years}"
 
     def test_default_symbol_is_gcf(self):
         ns = self._parse([])
@@ -328,11 +324,11 @@ class TestCLIDefaults:
 
     def test_override_years(self):
         ns = self._parse(["--years", "10"])
-        assert ns.years == 10  # noqa: PLR2004
+        assert ns.years == 10
 
     def test_override_oos_years(self):
         ns = self._parse(["--oos-years", "3"])
-        assert ns.oos_years == 3.0  # noqa: PLR2004
+        assert ns.oos_years == 3.0
 
 
 # ── OOS cap logic ─────────────────────────────────────────────────────────────
@@ -343,9 +339,9 @@ class TestOosCap:
 
     def _compute_oos_n(self, total_samples: int, oos_years: float) -> int:
         """Replicate the OOS-n calculation from main()."""
-        oos_n = int(round(oos_years * 252))
+        oos_n = round(oos_years * 252)
         oos_n = min(oos_n, int(total_samples * 0.40))
-        if oos_n < 100:  # noqa: PLR2004
+        if oos_n < 100:
             return 0
         return oos_n
 
@@ -353,7 +349,7 @@ class TestOosCap:
         # 50yr * 252 * 0.727 (filtered) ≈ 9200 samples; 8yr = 2016 bars
         total = 9200
         oos_n = self._compute_oos_n(total, 8.0)
-        assert oos_n == 2016, f"Expected 2016, got {oos_n}"  # noqa: PLR2004
+        assert oos_n == 2016, f"Expected 2016, got {oos_n}"
         assert oos_n <= int(total * 0.40), "OOS exceeds 40% cap"
 
     def test_cap_at_40_pct(self):

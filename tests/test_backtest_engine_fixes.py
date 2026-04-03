@@ -22,25 +22,24 @@ import numpy as np
 
 from backtest.engine import BacktestConfig, BacktestEngine, SimulatedBroker
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
 def _make_config(**kwargs) -> BacktestConfig:
-    defaults = dict(
-        start_date=datetime(2024, 1, 1),
-        end_date=datetime(2024, 6, 1),
-        symbols=["XAUUSD"],
-        initial_capital=100_000.0,
-        commission_per_trade=7.0,
-        slippage_pips=3.0,
-        slippage_model="fixed",
-        kelly_fraction=0.25,
-        risk_per_trade=0.01,
-        min_rr_ratio=1.5,
-    )
+    defaults = {
+        "start_date": datetime(2024, 1, 1),
+        "end_date": datetime(2024, 6, 1),
+        "symbols": ["XAUUSD"],
+        "initial_capital": 100_000.0,
+        "commission_per_trade": 7.0,
+        "slippage_pips": 3.0,
+        "slippage_model": "fixed",
+        "kelly_fraction": 0.25,
+        "risk_per_trade": 0.01,
+        "min_rr_ratio": 1.5,
+    }
     defaults.update(kwargs)
     return BacktestConfig(**defaults)
 
@@ -81,7 +80,7 @@ class TestGoldSlippage:
         broker = SimulatedBroker(cfg)
         slip = broker._calculate_slippage(2000.0)
         # 3 * 0.10 / 2000 = 0.00015
-        assert abs(slip - 0.00015) < 1e-8, f"Expected 0.00015, got {slip}"  # noqa: PLR2004
+        assert abs(slip - 0.00015) < 1e-8, f"Expected 0.00015, got {slip}"
 
     def test_fixed_slippage_gold_dollar_value(self):
         """Dollar slippage at $2000 gold with 3 pips = $0.30."""
@@ -89,7 +88,7 @@ class TestGoldSlippage:
         broker = SimulatedBroker(cfg)
         slip = broker._calculate_slippage(2000.0)
         dollar_slip = slip * 2000.0
-        assert abs(dollar_slip - 0.30) < 1e-6, f"Expected $0.30, got ${dollar_slip:.6f}"  # noqa: PLR2004
+        assert abs(dollar_slip - 0.30) < 1e-6, f"Expected $0.30, got ${dollar_slip:.6f}"
 
     def test_fixed_slippage_forex_uses_pip_0001(self):
         """Forex (price < $100) still uses 0.0001 pip."""
@@ -97,7 +96,7 @@ class TestGoldSlippage:
         broker = SimulatedBroker(cfg)
         slip = broker._calculate_slippage(1.2000)  # EURUSD
         # 1 * 0.0001 / 1.2 = 0.0000833...
-        assert abs(slip - (0.0001 / 1.2)) < 1e-8  # noqa: PLR2004
+        assert abs(slip - (0.0001 / 1.2)) < 1e-8
 
     def test_no_slippage_model(self):
         cfg = _make_config(slippage_model="none")
@@ -122,7 +121,7 @@ class TestGoldSlippage:
 class TestCommission:
     def test_default_commission_is_7(self):
         cfg = _make_config()
-        assert cfg.commission_per_trade == 7.0  # noqa: PLR2004
+        assert cfg.commission_per_trade == 7.0
 
     def test_commission_deducted_on_buy(self):
         cfg = _make_config(slippage_model="none")
@@ -193,9 +192,7 @@ class TestTradeLevelSharpe:
             )
         result = engine._calculate_results()
         expected_se = 1.0 / math.sqrt(2.0 * (n - 1))
-        assert (
-            abs(result.sharpe_se - expected_se) < 1e-6  # noqa: PLR2004
-        ), f"Expected SE={expected_se:.6f}, got {result.sharpe_se:.6f}"
+        assert abs(result.sharpe_se - expected_se) < 1e-6, f"Expected SE={expected_se:.6f}, got {result.sharpe_se:.6f}"
 
     def test_sharpe_se_decreases_with_more_trades(self):
         """More trades → smaller SE → more reliable Sharpe."""
@@ -224,12 +221,12 @@ class TestTradeLevelSharpe:
     def test_sharpe_se_at_600_trades(self):
         """At N=600, SE ≤ ±0.029 — well within the ±0.3 target."""
         se = 1.0 / math.sqrt(2.0 * (600 - 1))
-        assert se < 0.03, f"SE at N=600 should be < 0.03, got {se:.4f}"  # noqa: PLR2004
+        assert se < 0.03, f"SE at N=600 should be < 0.03, got {se:.4f}"
 
     def test_sharpe_se_at_250_trades(self):
         """At N=250, SE ≤ ±0.045 — within the ±0.3 target."""
         se = 1.0 / math.sqrt(2.0 * (250 - 1))
-        assert se < 0.05, f"SE at N=250 should be < 0.05, got {se:.4f}"  # noqa: PLR2004
+        assert se < 0.05, f"SE at N=250 should be < 0.05, got {se:.4f}"
 
     def test_sharpe_note_in_metrics(self):
         """metrics dict must contain sharpe_note and sharpe_se."""
@@ -303,7 +300,7 @@ class TestKellyPositionSizing:
         engine = BacktestEngine(cfg)
         signal = {"size": 5.0, "stop_distance": 10.0}
         qty = engine._kelly_position_size(signal, 2000.0)
-        assert qty == 5.0  # noqa: PLR2004
+        assert qty == 5.0
 
 
 # ---------------------------------------------------------------------------
@@ -370,20 +367,20 @@ class TestRRFilter:
 class TestBacktestConfigDefaults:
     def test_commission_default(self):
         cfg = _make_config()
-        assert cfg.commission_per_trade == 7.0  # noqa: PLR2004
+        assert cfg.commission_per_trade == 7.0
 
     def test_slippage_pips_default(self):
         cfg = _make_config()
-        assert cfg.slippage_pips == 3.0  # noqa: PLR2004
+        assert cfg.slippage_pips == 3.0
 
     def test_kelly_fraction_default(self):
         cfg = _make_config()
-        assert cfg.kelly_fraction == 0.25  # noqa: PLR2004
+        assert cfg.kelly_fraction == 0.25
 
     def test_risk_per_trade_default(self):
         cfg = _make_config()
-        assert cfg.risk_per_trade == 0.01  # noqa: PLR2004
+        assert cfg.risk_per_trade == 0.01
 
     def test_min_rr_ratio_default(self):
         cfg = _make_config()
-        assert cfg.min_rr_ratio == 1.5  # noqa: PLR2004
+        assert cfg.min_rr_ratio == 1.5

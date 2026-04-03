@@ -11,9 +11,7 @@ and potential reversals.
 """
 
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
@@ -48,9 +46,7 @@ class BollingerBandsStrategy(BaseStrategy):
         super().__init__(config)
         self.period = period
         self.std_dev = std_dev
-        logger.info(
-            f"Bollinger Bands Strategy initialized: period={period}, std_dev={std_dev}",
-        )
+        logger.info("Bollinger Bands Strategy initialized: period=%s, std_dev=%s", period, std_dev)
 
     def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
         """Compute Bollinger Bands from OHLCV data dict."""
@@ -74,16 +70,15 @@ class BollingerBandsStrategy(BaseStrategy):
             "prev_lower": float(lower.iloc[-2]) if len(lower) > 1 else None,
         }
 
-    def generate_signal(self, data) -> Any:
+    def generate_signal(self, analysis) -> Any:
         """
         Dual-dispatch: accepts either a dict (from analyze()) or a DataFrame.
         - dict  → returns Optional[Signal]  (BaseStrategy contract)
         - DataFrame → returns dict signal   (legacy backtesting / test contract)
         """
-        if isinstance(data, pd.DataFrame):
-            return self._generate_dict_signal(data)
+        if isinstance(analysis, pd.DataFrame):
+            return self._generate_dict_signal(analysis)
         # dict path — BaseStrategy abstract method contract
-        analysis = data
         upper = analysis.get("upper")
         lower = analysis.get("lower")
         price = analysis.get("price")
@@ -151,7 +146,7 @@ class BollingerBandsStrategy(BaseStrategy):
             # Calculate band squeeze (volatility)
             avg_std = (
                 std.rolling(window=50).mean().iloc[-1]
-                if len(std) >= 50  # noqa: PLR2004
+                if len(std) >= 50
                 else current_std
             )
             is_squeeze = current_std < avg_std * 0.75 if not pd.isna(avg_std) else False
@@ -209,13 +204,13 @@ class BollingerBandsStrategy(BaseStrategy):
                 reason = "Bollinger Band squeeze breakout (bearish)"
 
             # Walking the bands
-            elif percent_b > 0.9 and current_price > current_sma:  # noqa: PLR2004
+            elif percent_b > 0.9 and current_price > current_sma:
                 # Walking the upper band (strong uptrend)
                 signal_type = "BUY"
                 confidence = 0.55
                 reason = "Walking upper band (strong uptrend)"
 
-            elif percent_b < 0.1 and current_price < current_sma:  # noqa: PLR2004
+            elif percent_b < 0.1 and current_price < current_sma:
                 # Walking the lower band (strong downtrend)
                 signal_type = "SELL"
                 confidence = 0.55
@@ -241,7 +236,8 @@ class BollingerBandsStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            self.logger.error(f"Error generating Bollinger Bands signal: {e}")
+            self.logger.error("Error generating Bollinger Bands signal: %s", e)
+
             return {
                 "type": "HOLD",
                 "confidence": 0.0,

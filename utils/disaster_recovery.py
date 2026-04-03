@@ -10,15 +10,14 @@ Automated backup, failover, and state restoration
 """
 
 import asyncio
-import json
 import gzip
-from typing import TYPE_CHECKING
-from dataclasses import dataclass, asdict
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from pathlib import Path
 import hashlib
+import json
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import TYPE_CHECKING
+
 import aiofiles
 
 if TYPE_CHECKING:
@@ -116,7 +115,7 @@ class ContinuousBackup:
 
         session = aiobotocore.get_session()
         async with session.create_client("s3", region_name=self.s3_region) as client:
-            with open(local_path, "rb") as f:
+            with Path(local_path).open("rb") as f:
                 await client.put_object(
                     Bucket=self.s3_bucket,
                     Key=f"hopefx/snapshots/{filename}",
@@ -127,7 +126,7 @@ class ContinuousBackup:
     async def _cleanup_old_snapshots(self):
         """Keep only last 100 local snapshots"""
         snapshots = sorted(self.backup_path.glob("snapshot_*.json.gz"))
-        if len(snapshots) > 100:  # noqa: PLR2004
+        if len(snapshots) > 100:
             for old in snapshots[:-100]:
                 old.unlink()
 
@@ -181,7 +180,7 @@ class FailoverManager:
         # In production, use proper consensus (etcd, Consul)
 
         # Assume highest node ID wins
-        all_nodes = sorted([self.node_id] + self.peers)
+        all_nodes = sorted([self.node_id, *self.peers])
         self.is_primary = all_nodes[-1] == self.node_id
 
         if self.is_primary:
@@ -198,7 +197,7 @@ class FailoverManager:
 
             # Check if primary is alive
             if not self.is_primary:
-                primary = max([self.node_id] + self.peers)  # Assume highest is primary
+                primary = max([self.node_id, *self.peers])  # Assume highest is primary
                 if primary != self.node_id:
                     last_seen = self.last_peer_heartbeat.get(primary)
                     if last_seen and (datetime.now(UTC) - last_seen).seconds > self.failover_timeout:
@@ -236,7 +235,7 @@ class FailoverManager:
 
         try:
             async with self._session.post(url, json=payload) as resp:
-                if resp.status < 300:  # noqa: PLR2004
+                if resp.status < 300:
                     self.last_peer_heartbeat[peer] = datetime.now(UTC)
                 else:
                     print(f"⚠️ Heartbeat to {peer} returned HTTP {resp.status}")

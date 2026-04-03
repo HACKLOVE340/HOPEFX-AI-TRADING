@@ -17,8 +17,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from cache.market_data_cache import (
-    CacheStatistics,
     CachedTickData,
+    CacheStatistics,
     MarketDataCache,
     OHLCVData,
     Timeframe,
@@ -93,7 +93,7 @@ class TestMarketDataCacheInit:
         mock_connect.return_value = _make_redis_mock()
         cache = MarketDataCache()
         assert cache.host == "localhost"
-        assert cache.port == 6379  # noqa: PLR2004
+        assert cache.port == 6379
         assert cache.db == 0
         assert cache.decode_responses is True
         assert cache.max_retries == 1
@@ -111,10 +111,10 @@ class TestMarketDataCacheInit:
             retry_delay=0.5,
         )
         assert cache.host == "redis.example.com"
-        assert cache.port == 6380  # noqa: PLR2004
-        assert cache.db == 2  # noqa: PLR2004
-        assert cache.max_retries == 5  # noqa: PLR2004
-        assert cache.retry_delay == 0.5  # noqa: PLR2004
+        assert cache.port == 6380
+        assert cache.db == 2
+        assert cache.max_retries == 5
+        assert cache.retry_delay == 0.5
 
     @patch.object(MarketDataCache, "_connect_with_retry")
     def test_init_stats_zeroed(self, mock_connect):
@@ -210,7 +210,7 @@ class TestCacheOhlcv:
         ohlcv = _make_ohlcv(1)
         self.cache.cache_ohlcv("XAUUSD", Timeframe.ONE_HOUR, ohlcv, ttl=9999)
         call_args = self.mock_redis.setex.call_args[0]
-        assert 9999 in call_args  # noqa: PLR2004
+        assert 9999 in call_args
 
     def test_get_ohlcv_hit(self):
         ohlcv = _make_ohlcv(2)
@@ -219,7 +219,7 @@ class TestCacheOhlcv:
 
         result = self.cache.get_ohlcv("XAUUSD", Timeframe.ONE_HOUR)
         assert result is not None
-        assert len(result) == 2  # noqa: PLR2004
+        assert len(result) == 2
         assert isinstance(result[0], OHLCVData)
         assert self.cache.stats.total_hits == 1
 
@@ -270,13 +270,13 @@ class TestCacheTick:
         tick = _make_tick()
         self.cache.cache_tick("XAUUSD", tick)
         call_args = self.mock_redis.setex.call_args[0]
-        assert 300 in call_args  # default TTL for tick  # noqa: PLR2004
+        assert 300 in call_args  # default TTL for tick
 
     def test_cache_tick_custom_ttl(self):
         tick = _make_tick()
         self.cache.cache_tick("XAUUSD", tick, ttl=60)
         call_args = self.mock_redis.setex.call_args[0]
-        assert 60 in call_args  # noqa: PLR2004
+        assert 60 in call_args
 
     def test_get_tick_hit(self):
         tick = _make_tick()
@@ -306,7 +306,7 @@ class TestCacheTick:
         assert result is True
         call_args_str = self.mock_redis.setex.call_args[0][2]
         data = json.loads(call_args_str)
-        assert data["count"] == 50  # noqa: PLR2004
+        assert data["count"] == 50
 
     def test_get_ticks_hit(self):
         ticks = [_make_tick(ts=1_700_000_000 + i) for i in range(3)]
@@ -320,7 +320,7 @@ class TestCacheTick:
         self.mock_redis.get.return_value = serialised
         result = self.cache.get_ticks("XAUUSD")
         assert result is not None
-        assert len(result) == 3  # noqa: PLR2004
+        assert len(result) == 3
         assert isinstance(result[0], CachedTickData)
 
     def test_get_ticks_miss(self):
@@ -373,7 +373,7 @@ class TestAppendOhlcv:
         assert result is True
         stored_json = self.mock_redis.setex.call_args[0][2]
         stored_data = json.loads(stored_json)
-        assert len(stored_data["data"]) == 50  # noqa: PLR2004
+        assert len(stored_data["data"]) == 50
 
 
 @pytest.mark.unit
@@ -393,14 +393,14 @@ class TestMultiTimeframe:
         }
         result = self.cache.cache_multi_timeframe("XAUUSD", data)
         assert result is True
-        assert self.mock_redis.setex.call_count == 2  # noqa: PLR2004
+        assert self.mock_redis.setex.call_count == 2
 
     def test_cache_multi_timeframe_custom_ttl(self):
         data = {Timeframe.ONE_HOUR: _make_ohlcv(1)}
         ttl = {Timeframe.ONE_HOUR: 1234}
         self.cache.cache_multi_timeframe("XAUUSD", data, ttl=ttl)
         call_args = self.mock_redis.setex.call_args[0]
-        assert 1234 in call_args  # noqa: PLR2004
+        assert 1234 in call_args
 
     def test_get_multi_timeframe(self):
         ohlcv = _make_ohlcv(1)
@@ -472,7 +472,7 @@ class TestCacheStatisticsOperations:
         self.mock_redis.info.return_value = {"used_memory": 2048}
         stats = self.cache.get_statistics()
         assert isinstance(stats, CacheStatistics)
-        assert stats.memory_usage_bytes == 2048  # noqa: PLR2004
+        assert stats.memory_usage_bytes == 2048
 
     def test_get_statistics_counts_keys(self):
         call_count = {"n": 0}
@@ -517,7 +517,7 @@ class TestCacheStatisticsOperations:
         self.mock_redis.get.return_value = None
         self.cache.get_ohlcv("BTC", Timeframe.ONE_HOUR)
 
-        assert self.cache.stats.total_hits == 2  # noqa: PLR2004
+        assert self.cache.stats.total_hits == 2
         assert self.cache.stats.total_misses == 1
 
     def test_print_statistics_no_exception(self):
@@ -589,7 +589,7 @@ class TestCacheThreadSafety:
         for t in threads:
             t.join()
 
-        assert cache.stats.total_hits == 200  # noqa: PLR2004
+        assert cache.stats.total_hits == 200
 
 
 # ---------------------------------------------------------------------------
@@ -618,7 +618,7 @@ class TestEncryptionManagerExtended:
         monkeypatch.chdir(tmp_path)
         mgr = EncryptionManager()
         assert mgr.master_key  # non-empty key was generated
-        assert len(mgr.master_key) == 64  # 32 bytes hex = 64 chars  # noqa: PLR2004
+        assert len(mgr.master_key) == 64  # 32 bytes hex = 64 chars
 
     def test_explicit_key_overrides_env(self, monkeypatch):
         monkeypatch.delenv("CONFIG_ENCRYPTION_KEY", raising=False)
@@ -652,7 +652,7 @@ class TestEncryptionManagerExtended:
         mgr = EncryptionManager()
         result = mgr.hash_password("password")
         parts = result.split("$")
-        assert len(parts) == 2  # noqa: PLR2004
+        assert len(parts) == 2
 
     def test_verify_password_with_explicit_salt(self):
         import secrets as sec
@@ -694,7 +694,7 @@ class TestAPIConfigExtended:
 
     def test_rate_limit_default(self):
         cfg = APIConfig(provider="p", api_key="k", api_secret="s")
-        assert cfg.rate_limit == 100  # noqa: PLR2004
+        assert cfg.rate_limit == 100
 
 
 @pytest.mark.unit
@@ -966,12 +966,12 @@ class TestConfigManagerLoadConfig:
         mgr = ConfigManager(config_dir=str(tmp_path))
         cfg = mgr.load_config("testing")
         assert cfg.app_name == "Custom App"
-        assert cfg.trading.max_position_size == 5000.0  # noqa: PLR2004
+        assert cfg.trading.max_position_size == 5000.0
 
     def test_load_trading_section_values(self, tmp_path):
         mgr = ConfigManager(config_dir=str(tmp_path))
         cfg = mgr.load_config("development")
-        assert cfg.trading.max_position_size == 10000.0  # noqa: PLR2004
+        assert cfg.trading.max_position_size == 10000.0
         assert cfg.trading.paper_trading_mode is True
         assert cfg.trading.trading_enabled is False
 
@@ -1010,7 +1010,7 @@ class TestConfigManagerSaveConfig:
         mgr2 = ConfigManager(config_dir=str(tmp_path))
         loaded = mgr2.load_config("test")
         assert loaded.app_name == "RoundTrip"
-        assert loaded.trading.max_leverage == 2.0  # noqa: PLR2004
+        assert loaded.trading.max_leverage == 2.0
 
     def test_save_encrypts_api_credentials(self, tmp_path):
         mgr = ConfigManager(config_dir=str(tmp_path))
@@ -1177,7 +1177,7 @@ class TestConfigManagerDefaultsFallback:
         (tmp_path / "config.partial.json").write_text(json.dumps({"trading": {"max_leverage": 3.0}}))
         mgr = ConfigManager(config_dir=str(tmp_path))
         cfg = mgr.load_config("partial")
-        assert cfg.trading.max_leverage == 3.0  # noqa: PLR2004
+        assert cfg.trading.max_leverage == 3.0
         assert cfg.trading.risk_per_trade == 1.0  # default
 
 

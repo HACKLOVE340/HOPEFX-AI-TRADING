@@ -28,7 +28,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 
@@ -96,7 +95,7 @@ class TestComputeDailyRegime:
         df = _make_daily(300)
         result = self._fn(df)
         rsi = result["d_rsi_14"].dropna()
-        assert (rsi >= 0).all() and (rsi <= 100).all()  # noqa: PLR2004
+        assert (rsi >= 0).all() and (rsi <= 100).all()
 
     def test_no_future_leakage_in_returns(self):
         """d_ret_1d at index i must use close[i-1] → close[i], not close[i+1]."""
@@ -152,7 +151,8 @@ class TestAlignToIntraday:
 
     def test_shift_prevents_look_ahead(self):
         """After shift_periods=1, the first intraday bar within a day must see
-        the *previous* day's regime, not the current day's."""
+        the *previous* day's regime, not the current day's.
+        """
         daily = _make_daily(50)
         from research.pipeline.mtf_fusion import _compute_daily_regime
 
@@ -181,8 +181,8 @@ class TestMTFFusionEnrich:
         result = self._fusion.enrich(intraday, daily)
         d_cols = [c for c in result.columns if c.startswith("d_")]
         h_cols = [c for c in result.columns if c.startswith("h_")]
-        assert len(d_cols) >= 10  # noqa: PLR2004
-        assert len(h_cols) >= 4  # noqa: PLR2004
+        assert len(d_cols) >= 10
+        assert len(h_cols) >= 4
 
     def test_enrich_no_nan_in_regime_cols(self):
         intraday = _make_ohlcv(500, freq="1h")
@@ -286,7 +286,7 @@ class TestMTFFusionStore:
         assert result is not None
         assert len(result) == len(h1)
         d_cols = [c for c in result.columns if c.startswith("d_")]
-        assert len(d_cols) >= 5  # noqa: PLR2004
+        assert len(d_cols) >= 5
 
     @pytest.mark.asyncio
     async def test_align_to_h1_no_nan_in_output(self):

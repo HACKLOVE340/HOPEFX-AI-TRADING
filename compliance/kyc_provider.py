@@ -58,9 +58,7 @@ import os
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -112,22 +110,18 @@ class KYCProvider(ABC):
     @abstractmethod
     async def create_applicant(self, user_id: str, metadata: dict[str, Any]) -> KYCApplicant:
         """Create a new applicant and return SDK token for frontend."""
-        ...
 
     @abstractmethod
     async def get_status(self, applicant_id: str) -> VerificationStatus:
         """Poll provider for current verification status."""
-        ...
 
     @abstractmethod
     def verify_webhook(self, payload: bytes, signature: str) -> bool:
         """Verify webhook signature from provider."""
-        ...
 
     @abstractmethod
     def parse_webhook(self, payload: dict[str, Any]) -> tuple[str, VerificationStatus]:
         """Parse webhook payload → (applicant_id, new_status)."""
-        ...
 
 
 # ── Sumsub provider ───────────────────────────────────────────────────────────
@@ -226,7 +220,7 @@ class SumsubProvider(KYCProvider):
                 headers=self._headers("GET", path),
             ) as resp,
         ):
-            if resp.status != 200:  # noqa: PLR2004
+            if resp.status != 200:
                 return VerificationStatus.PENDING
             data = await resp.json()
 
@@ -235,9 +229,9 @@ class SumsubProvider(KYCProvider):
         answer = review.get("reviewAnswer", "")
         if answer == "GREEN":
             return VerificationStatus.APPROVED
-        elif answer == "RED":
+        if answer == "RED":
             return VerificationStatus.REJECTED
-        elif answer == "RETRY":
+        if answer == "RETRY":
             return VerificationStatus.REVIEW
         return VerificationStatus.PENDING
 
@@ -353,7 +347,7 @@ class OnfidoProvider(KYCProvider):
                 headers=self._headers(),
             ) as resp,
         ):
-            if resp.status != 200:  # noqa: PLR2004
+            if resp.status != 200:
                 return VerificationStatus.PENDING
             data = await resp.json()
 
@@ -444,7 +438,12 @@ class RefinitivScreener:
     def _auth_header(self, method: str, path: str, body: str = "") -> dict[str, str]:
         ts = str(int(time.time() * 1000))
         msg = f"{self._api_key}{ts}{method.upper()}{path}{body}"
-        sig = hmac.new(self._api_secret.encode(), msg.encode(), hashlib.sha256).hexdigest()
+        # HMAC-SHA256 as required by the Refinitiv World-Check REST API spec.
+        # codeql[py/weak-sensitive-data-hashing] — keyed MAC mandated by the
+        # Refinitiv API spec; not a password hash.  nosec B324
+        _secret_bytes = self._api_secret.encode()
+        _msg_bytes = msg.encode()
+        sig = hmac.digest(_secret_bytes, _msg_bytes, "sha256").hex()  # nosec B324
         return {
             "Authorization": f"Refinitiv-HMAC-SHA256 Id={self._api_key},Timestamp={ts},Signature={sig}",
             "Content-Type": "application/json",
@@ -525,9 +524,9 @@ class RefinitivScreener:
             lists_hit = [
                 r.get("category", "")
                 for r in results
-                if r.get("matchStrength", 0) > 50  # noqa: PLR2004
+                if r.get("matchStrength", 0) > 50
             ]
-            is_match = score >= 0.7  # noqa: PLR2004
+            is_match = score >= 0.7
 
             return SanctionsResult(
                 screened=True,
@@ -537,7 +536,7 @@ class RefinitivScreener:
                 details=best.get("name", ""),
                 provider="refinitiv",
             )
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("Refinitiv screen error: %s", exc)
             return SanctionsResult(
                 screened=False,
@@ -572,7 +571,7 @@ class LocalSDNScreener:
                 aiohttp.ClientSession() as session,
                 session.get(self.SDN_URL, timeout=aiohttp.ClientTimeout(total=30)) as resp,
             ):
-                if resp.status == 200:  # noqa: PLR2004
+                if resp.status == 200:
                     text = await resp.text()
                     # Extract names from XML (simplified parser)
                     import re
@@ -582,17 +581,15 @@ class LocalSDNScreener:
                     self._names = [n.upper().strip() for n in self._names]
                     self._loaded = True
                     logger.info("LocalSDN: loaded %d name entries", len(self._names))
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.warning("LocalSDN: failed to load SDN list: %s", exc)
 
     async def screen(self, full_name: str, **_kwargs: Any) -> SanctionsResult:
-        import os as _os
-
         # In CI/test environments skip the live SDN download entirely.
         # Return safe default (screened=False, is_match=False) so tests that
         # verify the "not loaded" path pass without network access.
-        _env = _os.getenv("ENVIRONMENT", "").lower()
-        _ci = _os.getenv("HOPEFX_CI") or _env in ("testing", "test", "ci")
+        _env = os.getenv("ENVIRONMENT", "").lower()
+        _ci = os.getenv("HOPEFX_CI") or _env in ("testing", "test", "ci")
 
         if not self._loaded:
             if _ci:
@@ -617,14 +614,14 @@ class LocalSDNScreener:
             )
 
         name_upper = full_name.upper()
-        parts = [p for p in name_upper.split() if len(p) > 3]  # noqa: PLR2004
+        parts = [p for p in name_upper.split() if len(p) > 3]
         # Require whole-word match to avoid false positives (e.g. "ALICE" in
         # a longer SDN entry that happens to contain those letters).
         matched = any(
             part == sdn_name or sdn_name.startswith(part + " ") or sdn_name.endswith(" " + part)
             for part in parts
             for sdn_name in self._names
-            if len(sdn_name) > 3  # noqa: PLR2004
+            if len(sdn_name) > 3
         )
         return SanctionsResult(
             screened=True,
@@ -665,9 +662,9 @@ class KYCGateway:
         name = KYC_PROVIDER.lower().strip()
         if name == "sumsub":
             return SumsubProvider()
-        elif name == "onfido":
+        if name == "onfido":
             return OnfidoProvider()
-        elif name == "mock":
+        if name == "mock":
             # Allowed only in development/test environments.
             _app_env = os.getenv("APP_ENV", "production").lower()
             if _app_env in ("production", "staging"):
@@ -681,13 +678,12 @@ class KYCGateway:
                 "This is only acceptable in development/test environments."
             )
             return MockKYCProvider()
-        else:
-            raise RuntimeError(
-                f"Unknown KYC_PROVIDER={KYC_PROVIDER!r}. "
-                "Valid values: 'sumsub', 'onfido'. "
-                "Set the KYC_PROVIDER environment variable and configure the "
-                "corresponding API credentials (SUMSUB_APP_TOKEN / ONFIDO_API_TOKEN)."
-            )
+        raise RuntimeError(
+            f"Unknown KYC_PROVIDER={KYC_PROVIDER!r}. "
+            "Valid values: 'sumsub', 'onfido'. "
+            "Set the KYC_PROVIDER environment variable and configure the "
+            "corresponding API credentials (SUMSUB_APP_TOKEN / ONFIDO_API_TOKEN)."
+        )
 
     async def create_applicant(self, user_id: str, metadata: dict[str, Any]) -> KYCApplicant:
         """
@@ -771,7 +767,7 @@ class KYCGateway:
             logger.warning("KYCGateway: invalid webhook signature — rejected")
             return False
 
-        applicant_id, status = self._provider.parse_webhook(raw_payload)
+        applicant_id, _status = self._provider.parse_webhook(raw_payload)
         if applicant_id:
             await self.check_status(applicant_id)
         return True
@@ -814,7 +810,7 @@ _kyc_gateway: KYCGateway | None = None
 
 def get_kyc_gateway() -> KYCGateway:
     """Return the module-level KYCGateway singleton."""
-    global _kyc_gateway
+    global _kyc_gateway  # pylint: disable=global-statement
     if _kyc_gateway is None:
         _kyc_gateway = KYCGateway()
     return _kyc_gateway
@@ -822,7 +818,7 @@ def get_kyc_gateway() -> KYCGateway:
 
 def init_kyc_gateway(compliance_manager: Any) -> KYCGateway:
     """Wire the KYCGateway with a ComplianceManager. Call once at startup."""
-    global _kyc_gateway
+    global _kyc_gateway  # pylint: disable=global-statement
     _kyc_gateway = KYCGateway(compliance_manager=compliance_manager)
     logger.info("KYCGateway initialised (provider=%s)", KYC_PROVIDER)
     return _kyc_gateway

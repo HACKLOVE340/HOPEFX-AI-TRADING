@@ -47,9 +47,7 @@ import os
 import random
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -370,7 +368,7 @@ class ShadowTradingEngine:
         # Include any fill where live_slippage_bps has been recorded,
         # regardless of whether the shadow position is still open.
         paired = [(f.slippage_bps, f.live_slippage_bps) for f in self._fills if f.live_slippage_bps is not None]
-        if len(paired) < 2:  # noqa: PLR2004
+        if len(paired) < 2:
             return 0.0
 
         _shadow_vals = [p[0] for p in paired]
@@ -380,7 +378,7 @@ class ShadowTradingEngine:
         ss_res = sum((s - lv) ** 2 for s, lv in paired)
         ss_tot = sum((lv - mean_live) ** 2 for lv in live_vals)
 
-        if ss_tot < 1e-12:  # noqa: PLR2004
+        if ss_tot < 1e-12:
             return 1.0  # perfect prediction (zero variance in live)
         return max(0.0, round(1.0 - ss_res / ss_tot, 4))
 

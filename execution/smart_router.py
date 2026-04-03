@@ -38,11 +38,8 @@ import os
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
-
 
 from execution.algo_orders import AlgoOrderManager, get_algo_manager
 
@@ -210,6 +207,9 @@ class SmartRouter:
         # orders flow through the same broker selection logic.
         self._algo.set_broker_submit_fn(self._submit_child_order)
 
+        # Pending algo orders: algo_id → order_request
+        self._pending_algo_orders: dict[str, Any] = {}
+
     def add_broker(self, broker_id: str, broker_instance: Any) -> None:
         """Register a broker. Broker must implement place_order(order_dict)."""
         self._brokers[broker_id] = broker_instance
@@ -322,7 +322,6 @@ class SmartRouter:
         )
 
         # Store the original order context so child fills can reference it
-        self._pending_algo_orders = getattr(self, "_pending_algo_orders", {})
 
         algo_id = await self._algo.submit_auto(
             symbol=symbol,
@@ -481,10 +480,10 @@ class SmartRouter:
             return f"macro_impact_blackout:{impact_score:.3f}"
 
         # OFI strongly against direction — adverse microstructure
-        if direction == "long" and ofi < -0.70:  # noqa: PLR2004
+        if direction == "long" and ofi < -0.70:
             logger.warning("Router: OFI=%.3f strongly against long — rejecting", ofi)
             return f"adverse_ofi:{ofi:.3f}"
-        if direction == "short" and ofi > 0.70:  # noqa: PLR2004
+        if direction == "short" and ofi > 0.70:
             logger.warning("Router: OFI=%.3f strongly against short — rejecting", ofi)
             return f"adverse_ofi:{ofi:.3f}"
 
@@ -605,15 +604,15 @@ class SmartRouter:
         if not state:
             return "only_available"
         reasons = []
-        if state.ema_latency_ms < 50:  # noqa: PLR2004
+        if state.ema_latency_ms < 50:
             reasons.append("low_latency")
-        if state.fill_rate > 0.97:  # noqa: PLR2004
+        if state.fill_rate > 0.97:
             reasons.append("high_fill_rate")
-        if state.avg_slippage_bps < 3:  # noqa: PLR2004
+        if state.avg_slippage_bps < 3:
             reasons.append("low_slippage")
-        if abs(ofi) > 0.3:  # noqa: PLR2004
+        if abs(ofi) > 0.3:
             reasons.append(f"ofi_aligned:{ofi:.2f}")
-        if abs(sentiment) < 0.2:  # noqa: PLR2004
+        if abs(sentiment) < 0.2:
             reasons.append("neutral_sentiment")
         return ",".join(reasons) if reasons else "best_composite_score"
 

@@ -36,10 +36,8 @@ Credential resolution
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, ClassVar
 
 import aiohttp
 
@@ -124,8 +122,8 @@ class OANDAStream:
         account_id: str,
         instruments: list[str],
         practice: bool = True,
-        event_bus: Any = None,
-        on_tick: Any = None,  # accepted but ignored — streaming is forbidden
+        event_bus: Any | None = None,
+        on_tick: Any | None = None,  # accepted but ignored — streaming is forbidden
     ) -> None:
         if not api_key or not account_id:
             raise ValueError("api_key and account_id are required")
@@ -197,7 +195,7 @@ class OANDAStream:
 
         Live price streaming is handled by data_feed.NuclearStreamer.
         """
-        raise StreamingForbiddenError()
+        raise StreamingForbiddenError
 
     # ── Account ───────────────────────────────────────────────────────────────
 
@@ -230,7 +228,7 @@ class OANDAStream:
             url = f"{self._rest_base}/v3/accounts/{self.account_id}/openPositions"
             async with self._session.get(url, timeout=aiohttp.ClientTimeout(total=_DEFAULT_TIMEOUT)) as r:
                 r.raise_for_status()
-                out: list[Position] = []
+                out: ClassVar[list[Position]] = []
                 for p in (await r.json()).get("positions", []):
                     lu = float(p.get("long", {}).get("units", 0))
                     su = float(p.get("short", {}).get("units", 0))

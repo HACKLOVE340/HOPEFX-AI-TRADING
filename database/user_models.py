@@ -13,10 +13,15 @@ live in the same database and share the same Base / session factory.
 from __future__ import annotations
 
 import enum
+import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-UTC = timezone.utc
+if sys.version_info >= (3, 11):
+    from enum import StrEnum
+else:
+    class StrEnum(str, enum.Enum):
+        """Backport of enum.StrEnum for Python < 3.11."""
 
 
 def _utcnow() -> datetime:
@@ -24,28 +29,28 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
-from database.models import Base
-
 from sqlalchemy import (
-    Column,
-    String,
     Boolean,
+    Column,
     DateTime,
-    Integer,
     ForeignKey,
     Index,
+    Integer,
+    String,
 )
 from sqlalchemy.orm import relationship
 
+from database.models import Base
 
-class UserRole(str, enum.Enum):
+
+class UserRole(StrEnum):
     USER = "user"
     TRADER = "trader"
     ADMIN = "admin"
     SUPERADMIN = "superadmin"
 
 
-class UserStatus(str, enum.Enum):
+class UserStatus(StrEnum):
     ACTIVE = "active"
     SUSPENDED = "suspended"
     PENDING_VERIFICATION = "pending_verification"

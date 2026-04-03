@@ -12,9 +12,7 @@ Tests for:
 - Opportunity Detection
 """
 
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 
 
 class TestScanCriteriaType:
@@ -77,8 +75,8 @@ class TestScanCriteria:
         criteria = ScanCriteria(type=ScanCriteriaType.RSI_OVERSOLD, parameters={"threshold": 30}, weight=1.5)
 
         assert criteria.type == ScanCriteriaType.RSI_OVERSOLD
-        assert criteria.parameters["threshold"] == 30  # noqa: PLR2004
-        assert criteria.weight == 1.5  # noqa: PLR2004
+        assert criteria.parameters["threshold"] == 30
+        assert criteria.weight == 1.5
 
     def test_criteria_to_dict(self):
         """Test criteria serialization."""
@@ -88,7 +86,7 @@ class TestScanCriteria:
 
         result = criteria.to_dict()
         assert result["type"] == "breakout"
-        assert result["parameters"]["period"] == 20  # noqa: PLR2004
+        assert result["parameters"]["period"] == 20
 
 
 class TestScanResult:
@@ -109,8 +107,8 @@ class TestScanResult:
         )
 
         assert result.symbol == "XAUUSD"
-        assert len(result.criteria_met) == 2  # noqa: PLR2004
-        assert result.signal_strength == 75.0  # noqa: PLR2004
+        assert len(result.criteria_met) == 2
+        assert result.signal_strength == 75.0
 
     def test_result_to_dict(self):
         """Test result serialization."""
@@ -152,8 +150,8 @@ class TestMarketOpportunity:
         )
 
         assert opportunity.symbol == "XAUUSD"
-        assert opportunity.strength == 80.0  # noqa: PLR2004
-        assert opportunity.risk_reward == 2.0  # noqa: PLR2004
+        assert opportunity.strength == 80.0
+        assert opportunity.risk_reward == 2.0
 
     def test_opportunity_is_valid(self):
         """Test opportunity validity check."""
@@ -224,7 +222,7 @@ class TestMarketScanner:
         symbols = scanner.get_symbols()
         assert "XAUUSD" in symbols
         assert "EURUSD" in symbols
-        assert len(symbols) == 3  # noqa: PLR2004
+        assert len(symbols) == 3
 
     def test_set_symbols(self):
         """Test setting symbols."""
@@ -236,7 +234,7 @@ class TestMarketScanner:
 
         symbols = scanner.get_symbols()
         assert "XAUUSD" not in symbols
-        assert len(symbols) == 2  # noqa: PLR2004
+        assert len(symbols) == 2
 
     def test_remove_symbol(self):
         """Test removing a symbol."""
@@ -259,7 +257,7 @@ class TestMarketScanner:
         scanner.add_criteria(ScanCriteriaType.UPTREND)
 
         criteria = scanner.get_criteria()
-        assert len(criteria) == 2  # noqa: PLR2004
+        assert len(criteria) == 2
 
     def test_clear_criteria(self):
         """Test clearing criteria."""
@@ -417,7 +415,7 @@ class TestMarketScanner:
         scanner.scan(market_data, min_strength=0)
 
         top = scanner.get_top_opportunities(limit=2)
-        assert len(top) <= 2  # noqa: PLR2004
+        assert len(top) <= 2
 
     def test_on_opportunity_callback(self):
         """Test opportunity callback."""
@@ -430,7 +428,7 @@ class TestMarketScanner:
         scanner.add_criteria(ScanCriteriaType.MOMENTUM)
 
         callbacks = []
-        scanner.on_opportunity(lambda opp: callbacks.append(opp))
+        scanner.on_opportunity(callbacks.append)
 
         market_data = {
             "XAUUSD": {
@@ -484,4 +482,4 @@ class TestMarketScanner:
         }
 
         results = scanner.scan(market_data, min_strength=0)
-        assert len(results) >= 3  # 3 are oversold  # noqa: PLR2004
+        assert len(results) >= 3  # 3 are oversold

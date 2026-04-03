@@ -36,16 +36,15 @@ On any breach
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-UTC = timezone.utc
-
-from core.event_bus import bus, CH_SIGNAL, CH_BREACH
+from core.event_bus import CH_BREACH, CH_SIGNAL, bus
 
 logger = logging.getLogger(__name__)
 
@@ -98,16 +97,15 @@ class _NewsCalendar:
         """Register a high-impact event datetime (timezone-aware)."""
         self._events.append(dt)
 
-    def is_blackout(self, window_minutes: int = None) -> bool:
+    def is_blackout(self, window_minutes: int | None = None) -> bool:
         """Return True if any registered event is within *window_minutes* of now."""
         window = window_minutes if window_minutes is not None else self._BLACKOUT_MINUTES
         now = datetime.now(UTC)
         cutoff = timedelta(minutes=window)
         for ev in self._events:
             # Normalise naive datetimes to UTC
-            if ev.tzinfo is None:
-                ev = ev.replace(tzinfo=UTC)  # noqa: PLW2901
-            if abs(now - ev) <= cutoff:
+            ev_aware = ev.replace(tzinfo=UTC) if ev.tzinfo is None else ev
+            if abs(now - ev_aware) <= cutoff:
                 return True
         return False
 
@@ -188,7 +186,8 @@ class Gatekeeper:
             _MAX_DD_LIMIT * 100,
             _MIN_CONFIDENCE,
         )
-        asyncio.create_task(self._breach_listener(), name="gatekeeper_breach_listener")
+        _t = asyncio.create_task(self._breach_listener(), name="gatekeeper_breach_listener")
+        _t.add_done_callback(lambda _: None)
         await self._signal_consumer()
 
     async def stop(self) -> None:
@@ -495,10 +494,9 @@ class Gatekeeper:
         """
         # Orchestrator is authoritative — check first when available.
         if getattr(self, "_orch", None) is not None:
-            try:
+            with contextlib.suppress(Exception):
                 return self._orch.is_blackout_window()
-            except Exception:
-                pass  # fall through to local calendar
+            # fall through to local calendar
 
         # Local calendar fallback (tests / standalone mode)
         cal = getattr(self, "_calendar", None)

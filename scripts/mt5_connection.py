@@ -10,9 +10,10 @@ try:
 except ImportError as e:
     raise SystemExit(f"MetaTrader5 not available (Windows-only): {e}") from e
 
-import time
 import logging
 import os
+import time
+
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -24,13 +25,14 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
+logger = logging.getLogger(__name__)
 
 
 def validate_mt5_installation():
     if not mt5.initialize():
-        logging.error("MetaTrader 5 initialization failed")
+        logger.error("MetaTrader 5 initialization failed")
         return False
-    logging.info("MetaTrader 5 initialized successfully")
+    logger.info("MetaTrader 5 initialized successfully")
     return True
 
 
@@ -41,19 +43,18 @@ def connect_to_account():
 
     for attempt in range(5):
         if mt5.login(login, password, server):
-            logging.info("Connected to account successfully")
+            logger.info("Connected to account successfully")
             return True
-        else:
-            logging.warning(f"Connection attempt {attempt + 1} failed: {mt5.last_error()}")
-            time.sleep(2**attempt)  # Exponential backoff
-    logging.error("All connection attempts failed")
+        logger.warning("Connection attempt %s failed: %s", attempt + 1, mt5.last_error())
+        time.sleep(2**attempt)  # Exponential backoff
+    logger.error("All connection attempts failed")
     return False
 
 
 def get_symbol_info(symbol):
     info = mt5.symbol_info(symbol)
     if info is None:
-        logging.error(f"Failed to retrieve symbol info for {symbol}: {mt5.last_error()}")
+        logger.error("Failed to retrieve symbol info for %s: %s", symbol, mt5.last_error())
         return None
     return info
 
@@ -61,7 +62,7 @@ def get_symbol_info(symbol):
 def fetch_last_ticks(symbol, num_ticks):
     ticks = mt5.copy_ticks_from(symbol, mt5.symbol_info_tick(symbol).time, num_ticks, mt5.COPY_TICKS_ALL)
     if ticks is None:
-        logging.error(f"Failed to fetch ticks for {symbol}: {mt5.last_error()}")
+        logger.error("Failed to fetch ticks for %s: %s", symbol, mt5.last_error())
         return []
     return ticks
 
@@ -72,7 +73,7 @@ def print_ticks_info(ticks):
         ask = tick["ask"]
         spread = ask - bid
         print(f"Bid: {bid}, Ask: {ask}, Spread: {spread}")
-        logging.info(f"Bid: {bid}, Ask: {ask}, Spread: {spread}")
+        logger.info("Bid: %s, Ask: %s, Spread: %s", bid, ask, spread)
 
 
 def main():
@@ -91,7 +92,7 @@ def main():
     print_ticks_info(last_ticks)
 
     mt5.shutdown()
-    logging.info("MT5 shutdown")
+    logger.info("MT5 shutdown")
 
 
 if __name__ == "__main__":

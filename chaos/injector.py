@@ -47,16 +47,14 @@ Usage
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from enum import Enum
-from typing import Any
 from collections.abc import Callable
-import contextlib
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +76,7 @@ except Exception:
     _PROM_OK = False
 
 
-class FaultType(str, Enum):
+class FaultType(StrEnum):
     FEED_DROP = "feed_drop"
     TICK_DELAY = "tick_delay"
     PRICE_SPIKE = "price_spike"
@@ -249,7 +247,7 @@ class FaultInjector:
                 object.__setattr__(tick, "bid", getattr(tick, "bid", mid) + delta)
                 object.__setattr__(tick, "ask", getattr(tick, "ask", mid) + delta)
             except (AttributeError, TypeError):
-                pass
+                ...  # nosec B110
             return tick
 
         # SPREAD_WIDEN — multiply spread by magnitude
@@ -262,7 +260,7 @@ class FaultInjector:
                 object.__setattr__(tick, "bid", mid - new_spread / 2)
                 object.__setattr__(tick, "ask", mid + new_spread / 2)
             except (AttributeError, TypeError):
-                pass
+                ...  # nosec B110
             return tick
 
         # STALE_FEED — freeze timestamp

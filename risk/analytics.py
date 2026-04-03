@@ -253,7 +253,7 @@ def compute_var(
         All values are expressed as positive losses (e.g. 0.02 = 2% loss).
     """
     returns = np.asarray(returns, dtype=float)
-    if len(returns) < 30:  # noqa: PLR2004
+    if len(returns) < 30:
         raise ValueError(f"Insufficient returns for VaR: need >=30, got {len(returns)}")
     if not 0 < confidence < 1:
         raise ValueError(f"confidence must be in (0,1), got {confidence}")
@@ -306,7 +306,7 @@ def compute_es(
         ESResult with historical and parametric ES.
     """
     returns = np.asarray(returns, dtype=float)
-    if len(returns) < 30:  # noqa: PLR2004
+    if len(returns) < 30:
         raise ValueError(f"Insufficient returns for ES: need >=30, got {len(returns)}")
 
     alpha = 1 - confidence
@@ -437,7 +437,7 @@ def compute_regime_drift(
     ref = np.asarray(reference_returns, dtype=float)
     cur = np.asarray(current_returns, dtype=float)
 
-    if len(ref) < 10 or len(cur) < 5:  # noqa: PLR2004
+    if len(ref) < 10 or len(cur) < 5:
         return RegimeDriftScore(
             ks_statistic=0.0,
             ks_pvalue=1.0,
@@ -499,7 +499,7 @@ def compute_sharpe(
     """
     returns = np.asarray(returns, dtype=float)
     n = len(returns)
-    if n < 30:  # noqa: PLR2004
+    if n < 30:
         raise ValueError(f"Insufficient returns for Sharpe: need >=30, got {n}")
 
     rf_per_period = risk_free_rate / periods_per_year
@@ -508,7 +508,7 @@ def compute_sharpe(
     mean_excess = np.mean(excess)
     std_excess = np.std(excess, ddof=1)
 
-    if std_excess < 1e-10:  # noqa: PLR2004
+    if std_excess < 1e-10:
         return SharpeResult(
             sharpe=0.0,
             sharpe_se=999.0,
@@ -555,7 +555,7 @@ def compute_max_drawdown(equity_curve: NDArray[np.float64]) -> float:
         Maximum drawdown as a positive fraction (e.g. 0.08 = 8%).
     """
     equity = np.asarray(equity_curve, dtype=float)
-    if len(equity) < 2:  # noqa: PLR2004
+    if len(equity) < 2:
         return 0.0
     peak = np.maximum.accumulate(equity)
     drawdown = (peak - equity) / (peak + 1e-10)
@@ -647,7 +647,7 @@ def generate_pre_trade_report(
         side=side,
         mid_price=mid_price,
         bid_ask_spread_bps=bid_ask_spread_bps,
-        vol_daily=float(np.std(returns, ddof=1)) if len(returns) >= 2 else 0.01,  # noqa: PLR2004
+        vol_daily=float(np.std(returns, ddof=1)) if len(returns) >= 2 else 0.01,
     )
     if slip_result.p99_slippage_bps > max_slippage_bps:
         block_reasons.append(
@@ -656,7 +656,7 @@ def generate_pre_trade_report(
 
     # Regime drift
     ref = reference_returns if reference_returns is not None else returns
-    recent = returns[-20:] if len(returns) >= 20 else returns  # noqa: PLR2004
+    recent = returns[-20:] if len(returns) >= 20 else returns
     regime = compute_regime_drift(ref, recent)
     if regime.drift_score > max_drift_score:
         block_reasons.append(
@@ -671,7 +671,7 @@ def generate_pre_trade_report(
         )
 
     # Max drawdown
-    if equity_curve is not None and len(equity_curve) >= 2:  # noqa: PLR2004
+    if equity_curve is not None and len(equity_curve) >= 2:
         mdd = compute_max_drawdown(equity_curve)
     else:
         # Estimate from returns
@@ -698,7 +698,7 @@ def generate_pre_trade_report(
         logger.info(
             "PRE-TRADE RISK REPORT: APPROVED | symbol=%s side=%s qty=%.4f "
             "notional=%.2f var95=%.4f es99=%.4f slip_p99=%.1fbps "
-            "drift=%.2f sharpe=%.2f mdd=%.2%%",
+            "drift=%.2f sharpe=%.2f mdd=%.2f%%",
             symbol,
             side,
             quantity,
@@ -831,7 +831,7 @@ def calculate_var_ewma(
         EWMAVaRResult with current conditional vol and VaR.
     """
     returns = np.asarray(returns, dtype=float)
-    if len(returns) < 30:  # noqa: PLR2004
+    if len(returns) < 30:
         raise ValueError(f"Need >=30 returns for EWMA VaR, got {len(returns)}")
     if not 0 < lambda_ < 1:
         raise ValueError(f"lambda_ must be in (0,1), got {lambda_}")
@@ -919,7 +919,7 @@ def calculate_var_garch(
     from scipy.optimize import minimize
 
     returns = np.asarray(returns, dtype=float)
-    if len(returns) < 100:  # noqa: PLR2004
+    if len(returns) < 100:
         raise ValueError(f"Need >=100 returns for GARCH VaR, got {len(returns)}")
 
     # Initial parameter guess: small omega, typical alpha/beta

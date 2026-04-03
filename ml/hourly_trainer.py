@@ -41,9 +41,7 @@ import asyncio
 import logging
 import os
 import time
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -141,8 +139,8 @@ class HourlyTrainer:
                 await self._run_cycle()
             except asyncio.CancelledError:
                 break
-            except Exception as exc:
-                logger.error("HourlyTrainer cycle error: %s", exc, exc_info=True)
+            except Exception:
+                logger.exception("HourlyTrainer cycle error: %s")
 
             elapsed = time.monotonic() - cycle_start
             sleep_secs = max(0.0, self.interval_secs - elapsed)
@@ -188,7 +186,7 @@ class HourlyTrainer:
                 return
 
             bars = await self._fetch_recent_bars(symbol, n=24)
-            if bars is None or len(bars) < 5:  # noqa: PLR2004
+            if bars is None or len(bars) < 5:
                 logger.debug(
                     "OnlineUpdate %s: insufficient bars (%s)",
                     symbol,
@@ -253,10 +251,11 @@ class HourlyTrainer:
     async def _reload_live_inference(self, symbol: str) -> None:
         """Reload the live inference model after a full retrain."""
         try:
-            from ml.live_inference import LiveInference
+            from ml.live_inference import AdvancedModelPredictor
 
-            infer = LiveInference(symbol=symbol, model_dir=self.model_dir)
-            infer.reload()
+            model_path = Path(self.model_dir) / f"{symbol}_advanced_oos.pkl"
+            infer = AdvancedModelPredictor(model_path=model_path if model_path.exists() else None)
+            infer._load()  # pylint: disable=protected-access
             logger.info("LiveInference reloaded for %s", symbol)
         except Exception as exc:
             logger.warning("LiveInference reload failed for %s: %s", symbol, exc)
@@ -304,7 +303,7 @@ if __name__ == "__main__":
 
         load_dotenv(_ROOT / ".env")
     except ImportError:
-        pass
+        ...  # nosec B110
 
     logging.basicConfig(
         level=logging.INFO,
@@ -317,12 +316,12 @@ if __name__ == "__main__":
     parser.add_argument("--full-retrain", action="store_true", help="Force a full retrain now")
     args = parser.parse_args()
 
-    symbols = [args.symbol] if args.symbol else _SYMBOLS
-    trainer = HourlyTrainer(enabled=True, symbols=symbols)
+    _run_symbols = [args.symbol] if args.symbol else _SYMBOLS
+    trainer = HourlyTrainer(enabled=True, symbols=_run_symbols)
 
     async def _main():
         if args.full_retrain:
-            for sym in symbols:
+            for sym in _run_symbols:
                 await trainer._full_retrain(sym)
         elif args.once:
             await trainer._run_cycle()

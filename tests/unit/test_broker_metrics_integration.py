@@ -13,7 +13,6 @@ registry, kill switch, and data scheduler imports.
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # PaperTradingBroker + RiskManager integration
 # ---------------------------------------------------------------------------
@@ -28,7 +27,7 @@ class TestBrokerRiskIntegration:
         return PaperTradingBroker(initial_balance=balance)
 
     def _make_risk(self, balance: float = 10_000.0):
-        from risk.manager import RiskManager, RiskConfig
+        from risk.manager import RiskConfig, RiskManager
 
         cfg = RiskConfig(
             max_position_size_pct=0.02,
@@ -158,7 +157,7 @@ class TestMetricsRegistryIntegration:
         before_count = hist.get_count()
         hist.observe(42.0)
         assert hist.get_count() == before_count + 1
-        assert hist.get_sum() >= 42.0  # noqa: PLR2004
+        assert hist.get_sum() >= 42.0
 
     def test_prometheus_export_contains_metric_names(self):
         output = self.registry.export_prometheus()
@@ -216,6 +215,7 @@ class TestKillSwitchIntegration:
         """Create an isolated KillSwitch with its own flag/state files."""
         import tempfile
         from pathlib import Path
+
         from kill_switch import KillSwitch
 
         if tmp_path is None:
@@ -297,6 +297,7 @@ class TestPrometheusMonitoringIntegration:
     @_skip_no_fastapi
     def test_setup_on_fastapi_app(self):
         from fastapi import FastAPI
+
         import prometheus_monitoring
 
         app = FastAPI()
@@ -308,6 +309,7 @@ class TestPrometheusMonitoringIntegration:
     def test_idempotent_setup(self):
         """Calling setup twice must not raise or duplicate the route."""
         from fastapi import FastAPI
+
         import prometheus_monitoring
 
         app = FastAPI()

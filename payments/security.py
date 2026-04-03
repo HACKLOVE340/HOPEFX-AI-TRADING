@@ -9,13 +9,11 @@ Security Module
 Handles 2FA, KYC verification, transaction limits, and fraud detection.
 """
 
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+import logging
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from enum import Enum
-from dataclasses import dataclass
-import logging
 
 import pyotp
 
@@ -52,9 +50,9 @@ class TransactionLimit:
     daily_limit: Decimal
     monthly_limit: Decimal
     per_transaction_limit: Decimal
-    daily_used: Decimal = Decimal("0")
-    monthly_used: Decimal = Decimal("0")
-    last_reset: datetime = None
+    daily_used: Decimal = Decimal(0)
+    monthly_used: Decimal = Decimal(0)
+    last_reset: datetime | None = None
 
     def __post_init__(self):
         if self.last_reset is None:
@@ -166,7 +164,8 @@ class SecurityManager:
         # Update transaction limits
         self._update_limits(user_id, level)
 
-        logger.info(f"KYC level set to {level.value} for user {user_id}")
+        logger.info("KYC level set to %s for user %s", level.value, user_id)
+
 
     def get_kyc_info(self, user_id: str) -> KYCInfo:
         """Get KYC information"""
@@ -243,11 +242,11 @@ class SecurityManager:
 
         # Reset daily if day changed
         if limits.last_reset.date() != now.date():
-            limits.daily_used = Decimal("0")
+            limits.daily_used = Decimal(0)
 
         # Reset monthly if month changed
         if limits.last_reset.month != now.month:
-            limits.monthly_used = Decimal("0")
+            limits.monthly_used = Decimal(0)
 
         limits.last_reset = now
 
@@ -304,19 +303,22 @@ class SecurityManager:
         if user_id in self.transaction_limits:
             limits = self.transaction_limits[user_id]
             if amount > limits.per_transaction_limit * 10:
-                logger.warning(f"Suspicious: Large amount for user {user_id}")
+                logger.warning("Suspicious: Large amount for user %s", user_id)
+
                 return True
 
         # Check failed attempts
         failed = self.failed_attempts.get(user_id, [])
         recent_failed = [f for f in failed if datetime.now(UTC) - f < timedelta(hours=1)]
-        if len(recent_failed) > 5:  # noqa: PLR2004
-            logger.warning(f"Suspicious: Multiple failed attempts for user {user_id}")
+        if len(recent_failed) > 5:
+            logger.warning("Suspicious: Multiple failed attempts for user %s", user_id)
+
             return True
 
         # Check IP whitelist if configured
         if ip_address and user_id in self.ip_whitelist and ip_address not in self.ip_whitelist[user_id]:
-            logger.warning(f"Suspicious: Unknown IP for user {user_id}")
+            logger.warning("Suspicious: Unknown IP for user %s", user_id)
+
             return True
 
         return False
@@ -335,7 +337,8 @@ class SecurityManager:
 
         if ip_address not in self.ip_whitelist[user_id]:
             self.ip_whitelist[user_id].append(ip_address)
-            logger.info(f"IP {ip_address} added to whitelist for user {user_id}")
+            logger.info("IP %s added to whitelist for user %s", ip_address, user_id)
+
 
     def get_security_status(self, user_id: str) -> dict:
         """Get security status for user"""

@@ -10,9 +10,7 @@ Live correlation, regime detection, and risk visualization
 """
 
 from collections import deque
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 
 import numpy as np
 
@@ -57,7 +55,7 @@ class RealtimeHeatmapEngine:
 
     def _detect_regime(self, symbol: str):
         """Detect current market regime"""
-        if len(self.price_history[symbol]) < 50:  # noqa: PLR2004
+        if len(self.price_history[symbol]) < 50:
             return
 
         prices = [p for _, p in self.price_history[symbol]]
@@ -69,8 +67,8 @@ class RealtimeHeatmapEngine:
         adx = self._calculate_adx(prices[-50:])
 
         # Classify regime
-        if volatility > 0.001:  # noqa: PLR2004
-            if abs(trend) > 0.0005 and adx > 25:  # noqa: PLR2004
+        if volatility > 0.001:
+            if abs(trend) > 0.0005 and adx > 25:
                 regime = "trending_up" if trend > 0 else "trending_down"
             else:
                 regime = "volatile"
@@ -116,16 +114,16 @@ class RealtimeHeatmapEngine:
 
     def get_correlation_matrix(self, symbols: list[str]) -> np.ndarray:
         """Calculate real-time correlation matrix"""
-        if len(symbols) < 2:  # noqa: PLR2004
+        if len(symbols) < 2:
             return np.eye(1)
 
         # Build returns matrix
         returns_list = []
         for sym in symbols:
-            if sym in self.returns_history and len(self.returns_history[sym]) > 10:  # noqa: PLR2004
+            if sym in self.returns_history and len(self.returns_history[sym]) > 10:
                 returns_list.append(list(self.returns_history[sym])[-100:])
 
-        if len(returns_list) < 2:  # noqa: PLR2004
+        if len(returns_list) < 2:
             return np.eye(len(symbols))
 
         # Pad to same length

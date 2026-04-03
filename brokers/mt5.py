@@ -16,10 +16,10 @@ Supported:
 """
 
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 try:
     import MetaTrader5 as mt5
@@ -27,7 +27,7 @@ try:
     MT5_AVAILABLE = True
 except ImportError:
     MT5_AVAILABLE = False
-    logging.warning("MetaTrader5 package not installed. MT5 connector will not work.")
+    logger.warning("MetaTrader5 package not installed. MT5 connector will not work.")
 
 from .base import (
     AccountInfo,
@@ -38,8 +38,6 @@ from .base import (
     OrderType,
     Position,
 )
-
-logger = logging.getLogger(__name__)
 
 
 class MT5Connector(BrokerConnector):
@@ -116,10 +114,12 @@ class MT5Connector(BrokerConnector):
             # Initialize MT5
             if self.path:
                 if not mt5.initialize(path=self.path, portable=self.portable):
-                    logger.error(f"MT5 initialize failed: {mt5.last_error()}")
+                    logger.error("MT5 initialize failed: %s", mt5.last_error())
+
                     return False
             elif not mt5.initialize(portable=self.portable):
-                logger.error(f"MT5 initialize failed: {mt5.last_error()}")
+                logger.error("MT5 initialize failed: %s", mt5.last_error())
+
                 return False
 
             # Login to server
@@ -131,7 +131,8 @@ class MT5Connector(BrokerConnector):
             )
 
             if not authorized:
-                logger.error(f"MT5 login failed: {mt5.last_error()}")
+                logger.error("MT5 login failed: %s", mt5.last_error())
+
                 mt5.shutdown()
                 return False
 
@@ -140,15 +141,20 @@ class MT5Connector(BrokerConnector):
             # Get account info
             account_info = mt5.account_info()
             if account_info:
-                logger.info(f"Connected to MT5: {account_info.server}")
-                logger.info(f"Account: {account_info.login}")
-                logger.info(f"Balance: ${account_info.balance:.2f}")
-                logger.info(f"Leverage: 1:{account_info.leverage}")
+                logger.info("Connected to MT5: %s", account_info.server)
+
+                logger.info("Account: %s", account_info.login)
+
+                logger.info("Balance: $%s", account_info.balance)
+
+                logger.info("Leverage: 1:%s", account_info.leverage)
+
 
             return True
 
         except Exception as e:
-            logger.error(f"MT5 connection error: {e}")
+            logger.error("MT5 connection error: %s", e)
+
             return False
 
     def disconnect(self) -> bool:
@@ -159,16 +165,18 @@ class MT5Connector(BrokerConnector):
             logger.info("Disconnected from MT5")
             return True
         except Exception as e:
-            logger.error(f"MT5 disconnect error: {e}")
+            logger.error("MT5 disconnect error: %s", e)
+
             return False
 
-    def place_order(
+    def place_order(  # pylint: disable=arguments-differ
         self,
         symbol: str,
         side: OrderSide,
-        quantity: float,
+        quantity: float = 0.0,
         order_type: OrderType = OrderType.MARKET,
         price: float | None = None,
+        stop_price: float | None = None,
         stop_loss: float | None = None,
         take_profit: float | None = None,
         **kwargs,
@@ -196,11 +204,13 @@ class MT5Connector(BrokerConnector):
             # Get symbol info
             symbol_info = mt5.symbol_info(symbol)
             if symbol_info is None:
-                logger.error(f"Symbol {symbol} not found")
+                logger.error("Symbol %s not found", symbol)
+
                 return None
 
             if not symbol_info.visible and not mt5.symbol_select(symbol, True):
-                logger.error(f"Failed to select symbol {symbol}")
+                logger.error("Failed to select symbol %s", symbol)
+
                 return None
 
             # Determine order type
@@ -211,14 +221,16 @@ class MT5Connector(BrokerConnector):
             elif order_type == OrderType.STOP:
                 mt5_order_type = mt5.ORDER_TYPE_BUY_STOP if side == OrderSide.BUY else mt5.ORDER_TYPE_SELL_STOP
             else:
-                logger.error(f"Unsupported order type: {order_type}")
+                logger.error("Unsupported order type: %s", order_type)
+
                 return None
 
             # Get current price for market orders
             if order_type == OrderType.MARKET:
                 tick = mt5.symbol_info_tick(symbol)
                 if tick is None:
-                    logger.error(f"Failed to get tick for {symbol}")
+                    logger.error("Failed to get tick for %s", symbol)
+
                     return None
                 price = tick.ask if side == OrderSide.BUY else tick.bid
 
@@ -246,7 +258,8 @@ class MT5Connector(BrokerConnector):
             result = mt5.order_send(request)
 
             if result.retcode != mt5.TRADE_RETCODE_DONE:
-                logger.error(f"Order failed: {result.comment}")
+                logger.error("Order failed: %s", result.comment)
+
                 return None
 
             # Create Order object
@@ -267,11 +280,13 @@ class MT5Connector(BrokerConnector):
                 },
             )
 
-            logger.info(f"Order placed: {symbol} {side.value} {quantity} @ {price}")
+            logger.info("Order placed: %s %s %s @ %s", symbol, side.value, quantity, price)
+
             return order
 
         except Exception as e:
-            logger.error(f"Place order error: {e}")
+            logger.error("Place order error: %s", e)
+
             return None
 
     def cancel_order(self, order_id: str) -> bool:
@@ -289,7 +304,8 @@ class MT5Connector(BrokerConnector):
             return result.retcode == mt5.TRADE_RETCODE_DONE
 
         except Exception as e:
-            logger.error(f"Cancel order error: {e}")
+            logger.error("Cancel order error: %s", e)
+
             return False
 
     def get_order(self, order_id: str) -> Order | None:
@@ -305,7 +321,8 @@ class MT5Connector(BrokerConnector):
                         return self._mt5_order_to_order(mt5_order)
             return None
         except Exception as e:
-            logger.error(f"Get order error: {e}")
+            logger.error("Get order error: %s", e)
+
             return None
 
     def get_positions(self, symbol: str | None = None) -> list[Position]:
@@ -340,7 +357,8 @@ class MT5Connector(BrokerConnector):
             return result
 
         except Exception as e:
-            logger.error(f"Get positions error: {e}")
+            logger.error("Get positions error: %s", e)
+
             return []
 
     def close_position(self, symbol: str, quantity: float | None = None) -> bool:
@@ -351,7 +369,8 @@ class MT5Connector(BrokerConnector):
         try:
             positions = mt5.positions_get(symbol=symbol)
             if not positions:
-                logger.warning(f"No position found for {symbol}")
+                logger.warning("No position found for %s", symbol)
+
                 return False
 
             for position in positions:
@@ -364,7 +383,7 @@ class MT5Connector(BrokerConnector):
                     continue
 
                 close_price = tick.bid if close_type == mt5.ORDER_TYPE_SELL else tick.ask
-                close_volume = quantity if quantity else position.volume
+                close_volume = quantity or position.volume
 
                 request = {
                     "action": mt5.TRADE_ACTION_DEAL,
@@ -382,14 +401,17 @@ class MT5Connector(BrokerConnector):
 
                 result = mt5.order_send(request)
                 if result.retcode != mt5.TRADE_RETCODE_DONE:
-                    logger.error(f"Close position failed: {result.comment}")
+                    logger.error("Close position failed: %s", result.comment)
+
                     return False
 
-            logger.info(f"Closed position: {symbol}")
+            logger.info("Closed position: %s", symbol)
+
             return True
 
         except Exception as e:
-            logger.error(f"Close position error: {e}")
+            logger.error("Close position error: %s", e)
+
             return False
 
     def get_account_info(self) -> AccountInfo | None:
@@ -412,14 +434,15 @@ class MT5Connector(BrokerConnector):
             )
 
         except Exception as e:
-            logger.error(f"Get account info error: {e}")
+            logger.error("Get account info error: %s", e)
+
             return None
 
-    def get_market_data(
+    def get_market_data(  # pylint: disable=arguments-differ
         self,
         symbol: str,
         timeframe: str = "H1",
-        count: int = 100,
+        limit: int = 100,
     ) -> list[dict[str, Any]] | None:
         """
         Get historical market data.
@@ -452,7 +475,7 @@ class MT5Connector(BrokerConnector):
             mt5_timeframe = timeframe_map.get(timeframe.upper(), mt5.TIMEFRAME_H1)
 
             # Get candles
-            rates = mt5.copy_rates_from_pos(symbol, mt5_timeframe, 0, count)
+            rates = mt5.copy_rates_from_pos(symbol, mt5_timeframe, 0, limit)
             if rates is None:
                 return None
 
@@ -472,7 +495,8 @@ class MT5Connector(BrokerConnector):
             return candles
 
         except Exception as e:
-            logger.error(f"Get market data error: {e}")
+            logger.error("Get market data error: %s", e)
+
             return None
 
     def get_symbols(self) -> list[str]:
@@ -486,7 +510,8 @@ class MT5Connector(BrokerConnector):
                 return [s.name for s in symbols if s.visible]
             return []
         except Exception as e:
-            logger.error(f"Get symbols error: {e}")
+            logger.error("Get symbols error: %s", e)
+
             return []
 
     def _mt5_order_to_order(self, mt5_order) -> Order:

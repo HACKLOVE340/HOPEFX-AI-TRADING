@@ -62,10 +62,8 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -81,7 +79,7 @@ except ImportError:
 # ── Regime ────────────────────────────────────────────────────────────────────
 
 
-class Regime(str, Enum):
+class Regime(StrEnum):
     TRENDING_UP = "trending_up"
     TRENDING_DOWN = "trending_down"
     RANGING = "ranging"
@@ -277,7 +275,7 @@ class HOPEFXBrain:
 
             if not getattr(flags, "LSTM_SIGNAL_ENABLED", False):
                 return None
-            from ml.lstm_signal_layer import get_lstm_signal_layer, LSTM_SIGNAL_WEIGHT
+            from ml.lstm_signal_layer import LSTM_SIGNAL_WEIGHT, get_lstm_signal_layer
 
             if LSTM_SIGNAL_WEIGHT <= 0.0:
                 return None
@@ -332,7 +330,7 @@ class HOPEFXBrain:
             highs = ohlcv["high"].values.astype(float)
             lows = ohlcv["low"].values.astype(float)
 
-            if len(closes) < 20:  # noqa: PLR2004
+            if len(closes) < 20:
                 return Regime.UNKNOWN
 
             # ── ATR (14-bar) ──────────────────────────────────────────────────
@@ -340,7 +338,7 @@ class HOPEFXBrain:
             tr2 = np.abs(highs[1:] - closes[:-1])
             tr3 = np.abs(lows[1:] - closes[:-1])
             tr = np.maximum(np.maximum(tr1, tr2), tr3)
-            atr = float(np.mean(tr[-14:])) if len(tr) >= 14 else float(np.mean(tr))  # noqa: PLR2004
+            atr = float(np.mean(tr[-14:])) if len(tr) >= 14 else float(np.mean(tr))
 
             current_price = float(closes[-1])
             if current_price <= 0:
@@ -359,9 +357,9 @@ class HOPEFXBrain:
             range_atr_ratio = price_range / atr if atr > 0 else 0
 
             # ── Classification ────────────────────────────────────────────────
-            if volatility_pct > 2.0:  # noqa: PLR2004
+            if volatility_pct > 2.0:
                 regime = Regime.VOLATILE
-            elif abs(norm_slope) > 0.0008 and range_atr_ratio > 3.0:  # noqa: PLR2004
+            elif abs(norm_slope) > 0.0008 and range_atr_ratio > 3.0:
                 regime = Regime.TRENDING_UP if norm_slope > 0 else Regime.TRENDING_DOWN
             else:
                 regime = Regime.RANGING
@@ -422,11 +420,11 @@ class HOPEFXBrain:
             "mtf_alignment": "unknown",
         }
 
-        if d1_ohlcv is not None and len(d1_ohlcv) >= 20:  # noqa: PLR2004
+        if d1_ohlcv is not None and len(d1_ohlcv) >= 20:
             d1_regime = self.detect_regime(d1_ohlcv, symbol=f"{symbol}_D1")
             ctx["d1_regime"] = d1_regime.value
 
-        if h4_ohlcv is not None and len(h4_ohlcv) >= 20:  # noqa: PLR2004
+        if h4_ohlcv is not None and len(h4_ohlcv) >= 20:
             h4_regime = self.detect_regime(h4_ohlcv, symbol=f"{symbol}_H4")
             ctx["h4_regime"] = h4_regime.value
 
@@ -598,6 +596,23 @@ class HOPEFXBrain:
                 latency_ms=(time.perf_counter() - t0) * 1000,
             )
 
+        # ── Risk-manager halt check ───────────────────────────────────────────
+        if self._risk_manager is not None and getattr(self._risk_manager, "_trading_halted", False):
+            return BrainDecision(
+                action="hold",
+                confidence=0.0,
+                regime=Regime.UNKNOWN.value,
+                strategy="none",
+                ml_probability=0.5,
+                ml_confidence=0.0,
+                ml_abstain=True,
+                strategy_signal="neutral",
+                strategy_confidence=0.0,
+                reason="risk_halted",
+                symbol=symbol,
+                latency_ms=(time.perf_counter() - t0) * 1000,
+            )
+
         # ── Regime detection ──────────────────────────────────────────────────
         regime = self.detect_regime(ohlcv, symbol=symbol)
 
@@ -630,9 +645,9 @@ class HOPEFXBrain:
         if lstm_layer is not None and lstm_layer.is_available():
             try:
                 from ml.lstm_signal_layer import (
-                    LSTM_SIGNAL_WEIGHT,
-                    LSTM_ABSTAIN_LOW,
                     LSTM_ABSTAIN_HIGH,
+                    LSTM_ABSTAIN_LOW,
+                    LSTM_SIGNAL_WEIGHT,
                 )
 
                 lstm_result = lstm_layer.predict(ohlcv, macro_df=macro_df, symbol=symbol)

@@ -26,7 +26,7 @@ Changes
    risk settings, auto-pause config, and FOMC regime overrides.
 """
 
-from typing import Sequence, Union
+from typing import Sequence
 
 import sqlalchemy as sa
 from alembic import op

@@ -10,9 +10,7 @@ This strategy uses RSI to identify overbought and oversold conditions.
 """
 
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
@@ -51,9 +49,8 @@ class RSIStrategy(BaseStrategy):
         self.period = period
         self.oversold = oversold
         self.overbought = overbought
-        logger.info(
-            f"RSI Strategy initialized: period={period}, oversold={oversold}, overbought={overbought}",
-        )
+        self.position: str | None = None  # tracks current position side: "LONG", "SHORT", or None
+        logger.info("RSI Strategy initialized: period=%s, oversold=%s, overbought=%s", period, oversold, overbought)
 
     def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
         """Compute RSI from OHLCV data dict."""
@@ -69,11 +66,11 @@ class RSIStrategy(BaseStrategy):
             "overbought": self.overbought,
         }
 
-    def generate_signal(self, data) -> Any:
+    def generate_signal(self, analysis) -> Any:
         """Dual-dispatch: DataFrame → dict signal, dict → Optional[Signal]."""
-        if isinstance(data, pd.DataFrame):
-            return self._generate_dict_signal(data)
-        analysis = data
+        if isinstance(analysis, pd.DataFrame):
+            return self._generate_dict_signal(analysis)
+        # dict path — BaseStrategy abstract method contract
         rsi = analysis.get("rsi")
         if rsi is None:
             return None
@@ -181,7 +178,7 @@ class RSIStrategy(BaseStrategy):
 
             # Exit long position if RSI reaches neutral/overbought
             elif (
-                hasattr(self, "position") and self.position == "LONG" and current_rsi > 50  # noqa: PLR2004
+                hasattr(self, "position") and self.position == "LONG" and current_rsi > 50
             ):
                 if current_rsi > self.overbought or current_rsi < previous_rsi:
                     signal_type = "SELL"
@@ -190,7 +187,7 @@ class RSIStrategy(BaseStrategy):
 
             # Exit short position if RSI reaches neutral/oversold
             elif (
-                hasattr(self, "position") and self.position == "SHORT" and current_rsi < 50  # noqa: PLR2004
+                hasattr(self, "position") and self.position == "SHORT" and current_rsi < 50
             ):
                 if current_rsi < self.oversold or current_rsi > previous_rsi:
                     signal_type = "BUY"
@@ -215,7 +212,8 @@ class RSIStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            self.logger.error(f"Error generating RSI signal: {e}")
+            self.logger.error("Error generating RSI signal: %s", e)
+
             return {
                 "type": "HOLD",
                 "confidence": 0.0,

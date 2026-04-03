@@ -8,11 +8,11 @@ Tests for the component status utilities module.
 """
 
 from utils.component_status import (
-    ComponentStatus,
     ComponentHealth,
-    get_framework_version,
-    get_component_status,
+    ComponentStatus,
     get_all_component_statuses,
+    get_component_status,
+    get_framework_version,
 )
 
 
@@ -38,7 +38,7 @@ class TestComponentStatus:
         assert status.available is True
         assert status.version == "1.0.0"
         assert status.health == ComponentHealth.HEALTHY
-        assert len(status.features) == 2  # noqa: PLR2004
+        assert len(status.features) == 2
 
     def test_component_status_to_dict(self):
         """Test ComponentStatus to_dict method."""

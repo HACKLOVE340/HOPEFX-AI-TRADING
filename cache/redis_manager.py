@@ -3,6 +3,7 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
+# pylint: disable=broad-exception-caught
 # cache/redis_manager.py
 """
 Redis cache manager with JSON serialization and TTL.
@@ -14,8 +15,8 @@ DataFrame.to_json / pd.read_json.
 
 import json
 import logging
-from typing import Any
 from datetime import timedelta
+from typing import Any
 
 logger = logging.getLogger(__name__)
 

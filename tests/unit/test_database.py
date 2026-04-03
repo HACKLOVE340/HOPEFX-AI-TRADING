@@ -8,23 +8,23 @@ Tests for the database models module.
 """
 
 from database.models import (
-    Base,
+    Account,
     # Enums
     AccountStatus,
-    TradeType,
+    Base,
+    MarketDataType,
+    Order,
     OrderStatus,
     OrderType,
+    Position,
     PositionStatus,
     PredictionType,
     RiskLevel,
-    MarketDataType,
+    Session,
+    Trade,
+    TradeType,
     # Models
     User,
-    Session,
-    Account,
-    Trade,
-    Order,
-    Position,
 )
 
 

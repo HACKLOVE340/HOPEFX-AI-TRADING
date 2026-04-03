@@ -7,9 +7,7 @@
 Tests for Institutional Flow Detector (analysis/institutional_flow.py)
 """
 
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 
 
 class TestInstitutionalTrade:
@@ -31,7 +29,7 @@ class TestInstitutionalTrade:
 
         d = trade.to_dict()
         assert d["classification"] == "institutional"
-        assert d["confidence"] == 0.8  # noqa: PLR2004
+        assert d["confidence"] == 0.8
         assert "large_order_size" in d["indicators"]
 
 
@@ -55,7 +53,7 @@ class TestFlowSignal:
         d = signal.to_dict()
         assert d["signal_type"] == "iceberg"
         assert d["direction"] == "bullish"
-        assert d["details"]["fill_count"] == 5  # noqa: PLR2004
+        assert d["details"]["fill_count"] == 5
 
 
 class TestInstitutionalFlowDetector:
@@ -86,7 +84,7 @@ class TestInstitutionalFlowDetector:
 
         large = detector.detect_large_orders("XAUUSD")
         assert len(large) == 1
-        assert large[0].size == 500.0  # noqa: PLR2004
+        assert large[0].size == 500.0
         assert large[0].classification == "institutional"
 
     def test_detect_large_orders_empty(self):
@@ -173,7 +171,7 @@ class TestInstitutionalFlowDetector:
         result = detector.classify_trade(price=1950.0, size=500.0, side="buy")
 
         assert result.classification == "institutional"
-        assert result.confidence > 0.4  # noqa: PLR2004
+        assert result.confidence > 0.4
 
     def test_classify_trade_retail(self):
         from analysis.institutional_flow import InstitutionalFlowDetector
@@ -182,7 +180,7 @@ class TestInstitutionalFlowDetector:
         result = detector.classify_trade(price=1950.0, size=10.0, side="sell")
 
         assert result.classification == "retail"
-        assert result.confidence < 0.4  # noqa: PLR2004
+        assert result.confidence < 0.4
 
     def test_analyze_flow_returns_list(self):
         from analysis.institutional_flow import InstitutionalFlowDetector

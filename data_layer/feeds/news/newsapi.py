@@ -20,9 +20,8 @@ from __future__ import annotations
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
+from typing import ClassVar
 
 from data_layer.feeds.news.base import NewsFeedBase
 from data_layer.types import NewsArticle, NewsSource
@@ -63,7 +62,7 @@ class NewsAPIFeed(NewsFeedBase):
         return await self._fetch_newsapi_org(limit)
 
     async def _fetch_newsapi_org(self, limit: int) -> list[NewsArticle]:
-        articles: list[NewsArticle] = []
+        articles: ClassVar[list[NewsArticle]] = []
         try:
             data = await self._get(
                 f"{_NEWSAPI_ORG_BASE}/everything",
@@ -86,7 +85,7 @@ class NewsAPIFeed(NewsFeedBase):
 
                 pub_str = item.get("publishedAt", "")
                 try:
-                    published = datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
+                    published = datetime.fromisoformat(pub_str)
                 except Exception:
                     published = datetime.now(UTC)
 
@@ -111,7 +110,7 @@ class NewsAPIFeed(NewsFeedBase):
 
     async def _fetch_newsapi_ai(self, limit: int) -> list[NewsArticle]:
         """NewsAPI.ai uses EventRegistry API with richer entity extraction."""
-        articles: list[NewsArticle] = []
+        articles: ClassVar[list[NewsArticle]] = []
         try:
             data = await self._get(
                 f"{_NEWSAPI_AI_BASE}/article/getArticles",
@@ -139,7 +138,7 @@ class NewsAPIFeed(NewsFeedBase):
 
                 pub_str = item.get("dateTime", item.get("date", ""))
                 try:
-                    published = datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
+                    published = datetime.fromisoformat(pub_str)
                 except Exception:
                     published = datetime.now(UTC)
 

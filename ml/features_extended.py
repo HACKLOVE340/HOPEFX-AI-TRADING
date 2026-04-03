@@ -24,11 +24,11 @@ Total output: 230+ features when combined with build_advanced_features().
 
 from __future__ import annotations
 
+import contextlib
 import logging
 
 import numpy as np
 import pandas as pd
-import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +86,7 @@ def add_orderflow_features(df: pd.DataFrame) -> pd.DataFrame:
     # Volume surge
     vol_ma20 = v.rolling(20).mean().replace(0, np.nan)
     d["of_vol_surge"] = (v / vol_ma20).fillna(1.0).clip(0, 10)
-    d["of_vol_surge_flag"] = (d["of_vol_surge"] > 2.0).astype(int)  # noqa: PLR2004
+    d["of_vol_surge_flag"] = (d["of_vol_surge"] > 2.0).astype(int)
 
     # Tape speed: number of consecutive same-direction closes
     direction = np.sign(c - c.shift(1)).fillna(0)
@@ -175,14 +175,14 @@ def _rolling_hfd(series: pd.Series, window: int, k_max: int) -> pd.Series:
             lm_cnt = 0
             for m in range(1, k + 1):
                 idxs = np.arange(m - 1, window, k)
-                if len(idxs) < 2:  # noqa: PLR2004
+                if len(idxs) < 2:
                     continue
                 xm = x[idxs]
                 lm_sum += np.sum(np.abs(np.diff(xm))) * (window - 1) / (k * len(xm))
                 lm_cnt += 1
             if lm_cnt:
                 lk.append(lm_sum / lm_cnt)
-        if len(lk) >= 2:  # noqa: PLR2004
+        if len(lk) >= 2:
             log_k = np.log(np.arange(1, len(lk) + 1))
             log_lk = np.log(np.array(lk) + 1e-10)
             with contextlib.suppress(Exception):
@@ -251,7 +251,7 @@ def _rolling_dfa(series: pd.Series, window: int) -> pd.Series:
 
     # Compute DFA exponent from log-log slope
     valid_scales = [(s, fv) for s, fv in zip(scales, f_vals, strict=False) if fv is not None]
-    if len(valid_scales) < 2:  # noqa: PLR2004
+    if len(valid_scales) < 2:
         return pd.Series(out, index=series.index)
 
     log_s = np.log(np.array([s for s, _ in valid_scales], dtype=float))
@@ -265,7 +265,7 @@ def _rolling_dfa(series: pd.Series, window: int) -> pd.Series:
     sy = log_f.sum(axis=0)
     sxy = (log_s[:, np.newaxis] * log_f).sum(axis=0)
     denom = ns * sx2 - sx**2
-    if abs(denom) > 1e-12:  # noqa: PLR2004
+    if abs(denom) > 1e-12:
         slopes = (ns * sxy - sx * sy) / denom
         out[window - 1 :] = np.clip(slopes, -2.0, 2.0)
 
@@ -427,7 +427,7 @@ def _rolling_corr_dim(series: pd.Series, window: int) -> pd.Series:
             if eps == 0:
                 continue
             c_vals.append((dist < eps).sum() / max(window * (window - 1), 1))
-        if len(c_vals) >= 2:  # noqa: PLR2004
+        if len(c_vals) >= 2:
             log_eps = np.log(eps_vals[: len(c_vals)] + 1e-10)
             log_c = np.log(np.array(c_vals) + 1e-10)
             with contextlib.suppress(Exception):
@@ -455,8 +455,8 @@ def add_regime_interactions(df: pd.DataFrame) -> pd.DataFrame:
     rs = gain / loss
     d["ri_rsi_14"] = (100 - 100 / (1 + rs)).fillna(50.0)
     d["ri_rsi_z20"] = _zscore(d["ri_rsi_14"], 20)
-    d["ri_rsi_overbought"] = (d["ri_rsi_14"] > 70).astype(int)  # noqa: PLR2004
-    d["ri_rsi_oversold"] = (d["ri_rsi_14"] < 30).astype(int)  # noqa: PLR2004
+    d["ri_rsi_overbought"] = (d["ri_rsi_14"] > 70).astype(int)
+    d["ri_rsi_oversold"] = (d["ri_rsi_14"] < 30).astype(int)
 
     # MACD
     ema12 = c.ewm(span=12, adjust=False).mean()
@@ -515,9 +515,9 @@ def add_regime_interactions(df: pd.DataFrame) -> pd.DataFrame:
 
     # Mean-reversion signal: RSI + BB combined
     d["ri_mean_rev_score"] = (
-        d["ri_rsi_oversold"].astype(float) + (d["ri_bb_pct"] < 0.1).astype(float)  # noqa: PLR2004
+        d["ri_rsi_oversold"].astype(float) + (d["ri_bb_pct"] < 0.1).astype(float)
     ) / 2.0 - (
-        d["ri_rsi_overbought"].astype(float) + (d["ri_bb_pct"] > 0.9).astype(float)  # noqa: PLR2004
+        d["ri_rsi_overbought"].astype(float) + (d["ri_bb_pct"] > 0.9).astype(float)
     ) / 2.0
 
     # Momentum quality: alignment of RSI, MACD, price momentum
@@ -529,13 +529,13 @@ def add_regime_interactions(df: pd.DataFrame) -> pd.DataFrame:
     # Composite bull/bear score
     d["ri_bull_score"] = (
         d["ri_rsi_oversold"].astype(float) * 0.2
-        + (d["ri_bb_pct"] < 0.2).astype(float) * 0.2  # noqa: PLR2004
+        + (d["ri_bb_pct"] < 0.2).astype(float) * 0.2
         + d["ri_macd_cross_bull"].astype(float) * 0.3
         + d["ri_tk_cross_bull"].astype(float) * 0.3
     )
     d["ri_bear_score"] = (
         d["ri_rsi_overbought"].astype(float) * 0.2
-        + (d["ri_bb_pct"] > 0.8).astype(float) * 0.2  # noqa: PLR2004
+        + (d["ri_bb_pct"] > 0.8).astype(float) * 0.2
         + d["ri_macd_cross_bear"].astype(float) * 0.3
         + d["ri_tk_cross_bear"].astype(float) * 0.3
     )
@@ -655,8 +655,8 @@ def add_institutional_edge_features(df: pd.DataFrame) -> pd.DataFrame:
     # Rolling sum of consecutive dominance (stacked = 3+ in a row)
     d["inst_buy_stack_3"] = buy_dominant.rolling(3).sum().fillna(0).astype(int)
     d["inst_sell_stack_3"] = sell_dominant.rolling(3).sum().fillna(0).astype(int)
-    d["inst_buy_stacked"] = (d["inst_buy_stack_3"] >= 3).astype(int)  # noqa: PLR2004
-    d["inst_sell_stacked"] = (d["inst_sell_stack_3"] >= 3).astype(int)  # noqa: PLR2004
+    d["inst_buy_stacked"] = (d["inst_buy_stack_3"] >= 3).astype(int)
+    d["inst_sell_stacked"] = (d["inst_sell_stack_3"] >= 3).astype(int)
 
     # ── Volume profile: POC, VAH, VAL ─────────────────────────────────────────
     # Computed over a rolling 50-bar window using price buckets.
@@ -684,7 +684,7 @@ def add_institutional_edge_features(df: pd.DataFrame) -> pd.DataFrame:
     d["inst_absorption_ratio"] = ((v / vol_ma20) / (price_move / c.replace(0, np.nan))).fillna(0.0).clip(0, 100)
     d["inst_absorption_z"] = _zscore(d["inst_absorption_ratio"], 20)
     # High absorption = large vol, small move (institutional accumulation/distribution)
-    d["inst_high_absorption"] = (d["inst_absorption_z"] > 1.5).astype(int)  # noqa: PLR2004
+    d["inst_high_absorption"] = (d["inst_absorption_z"] > 1.5).astype(int)
 
     # ── Smart Money Index (SMI) ───────────────────────────────────────────────
     # SMI = close - open (first 30 min proxy) + close - open (last 30 min proxy)

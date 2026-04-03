@@ -10,9 +10,7 @@ This strategy uses MACD indicator for trend-following signals.
 """
 
 import logging
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
@@ -50,9 +48,7 @@ class MACDStrategy(BaseStrategy):
         self.fast_period = fast_period
         self.slow_period = slow_period
         self.signal_period = signal_period
-        logger.info(
-            f"MACD Strategy initialized: fast={fast_period}, slow={slow_period}, signal={signal_period}",
-        )
+        logger.info("MACD Strategy initialized: fast=%s, slow=%s, signal=%s", fast_period, slow_period, signal_period)
 
     def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
         """Compute MACD from OHLCV data dict."""
@@ -70,11 +66,11 @@ class MACDStrategy(BaseStrategy):
             "price": float(series.iloc[-1]),
         }
 
-    def generate_signal(self, data) -> Any:
+    def generate_signal(self, analysis) -> Any:
         """Dual-dispatch: DataFrame → dict signal, dict → Optional[Signal]."""
-        if isinstance(data, pd.DataFrame):
-            return self._generate_dict_signal(data)
-        analysis = data
+        if isinstance(analysis, pd.DataFrame):
+            return self._generate_dict_signal(analysis)
+        # dict path — BaseStrategy abstract method contract
         macd = analysis.get("macd")
         sig = analysis.get("signal_line")
         prev_macd = analysis.get("prev_macd")
@@ -243,7 +239,8 @@ class MACDStrategy(BaseStrategy):
             }
 
         except Exception as e:
-            self.logger.error(f"Error generating MACD signal: {e}")
+            self.logger.error("Error generating MACD signal: %s", e)
+
             return {
                 "type": "HOLD",
                 "confidence": 0.0,

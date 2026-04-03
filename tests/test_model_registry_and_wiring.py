@@ -73,7 +73,7 @@ class TestModelRegistryRegister:
         )
         assert entry["name"] == "v1"
         assert entry["state"] == "staging"
-        assert len(entry["sha256"]) == 64  # noqa: PLR2004
+        assert len(entry["sha256"]) == 64
         assert entry["oos_accuracy"] == pytest.approx(0.65)
         pkl.unlink()
 
@@ -132,7 +132,7 @@ class TestModelRegistryRegister:
                 sharpe_gate_passed=True,
             )
             pkl.unlink()
-        assert len(reg.list_versions()) == 3  # noqa: PLR2004
+        assert len(reg.list_versions()) == 3
 
 
 # ===========================================================================
@@ -261,7 +261,7 @@ class TestModelRegistryVerify:
         pkl = _tmp_pkl(b"production-model")
         reg.register("v_prod", pkl, oos_accuracy=0.65, oos_p_value=0.001, sharpe_gate_passed=True)
         reg.promote("v_prod")
-        ok, msg = reg.verify_active()
+        ok, _ = reg.verify_active()
         assert ok is True
         pkl.unlink()
 
@@ -516,15 +516,15 @@ class TestLiveTradingGateNullCheck:
         assert "pooled" in msg.lower() or "BLOCKED" in msg
 
     def test_pooled_empty_dict_is_blocked(self, tmp_path):
-        passed, msg = self._run_check(tmp_path, {"pooled": {}})
+        passed, _ = self._run_check(tmp_path, {"pooled": {}})
         assert passed is False
 
     def test_pooled_key_absent_is_blocked(self, tmp_path):
-        passed, msg = self._run_check(tmp_path, {"symbols": []})
+        passed, _ = self._run_check(tmp_path, {"symbols": []})
         assert passed is False
 
     def test_pooled_wrong_type_is_blocked(self, tmp_path):
-        passed, msg = self._run_check(tmp_path, {"pooled": "not-a-dict"})
+        passed, _ = self._run_check(tmp_path, {"pooled": "not-a-dict"})
         assert passed is False
 
     def test_valid_pooled_gate_passed(self, tmp_path):
@@ -560,7 +560,7 @@ class TestLiveTradingGateNullCheck:
         original = g.ROOT
         g.ROOT = tmp_path  # no backtest/results/ dir → file not found
         gate = g.LiveTradingGate()
-        passed, msg = gate._check_sharpe_gate()
+        passed, _ = gate._check_sharpe_gate()
         g.ROOT = original
         # Without meta either, should be blocked
         assert passed is False
@@ -591,7 +591,7 @@ class TestOandaPaperClockTrackerWiring:
         for r in [0.01, -0.005, 0.008, 0.003, -0.002]:
             clock.record_fill(r)
         s = clock.sharpe_status()
-        assert s["n_trades"] == 5  # noqa: PLR2004
+        assert s["n_trades"] == 5
 
     def test_record_fill_returns_status_dict(self, tmp_path):
         clock = self._make_clock(tmp_path)

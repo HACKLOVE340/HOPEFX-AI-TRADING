@@ -38,19 +38,16 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import os
 import time
 from collections import deque
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from data_layer.feeds.news.alpha_vantage import AlphaVantageNewsFeed
 from data_layer.feeds.news.base import NewsFeedBase
 from data_layer.feeds.news.finnhub import FinnhubFeed
 from data_layer.feeds.news.fmp import FMPFeed
-import os
-
 from data_layer.feeds.news.newsapi import NewsAPIFeed
 from data_layer.feeds.news.newsdata import NewsDataFeed
 from data_layer.sentiment.scorer import GoldSentimentScorer, gold_sentiment_scorer
@@ -122,7 +119,7 @@ class NewsSentimentEngine:
 
     def _init_prometheus(self) -> None:
         try:
-            from prometheus_client import Counter, Gauge, REGISTRY
+            from prometheus_client import REGISTRY, Counter, Gauge
 
             def _gauge(name: str, doc: str):
                 try:

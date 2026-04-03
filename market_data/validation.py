@@ -8,14 +8,13 @@
 Market Data Validation - FIA 3.1 Market Data Reasonability Checks
 """
 
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from dataclasses import dataclass
-from enum import Enum
 import logging
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from enum import Enum
+
+import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -165,7 +164,7 @@ class MarketDataValidator:
             self.last_valid_data[symbol] = datetime.now(UTC)
 
         result = ValidationResult(
-            is_valid=is_valid and quality_score >= 0.8,  # noqa: PLR2004
+            is_valid=is_valid and quality_score >= 0.8,
             quality_score=quality_score,
             issues=issues,
             timestamp=datetime.now(UTC),
@@ -176,7 +175,8 @@ class MarketDataValidator:
         # Log critical issues
         critical_issues = [i for i in issues if i["severity"] == "critical"]
         if critical_issues:
-            logger.critical(f"Critical data quality issues for {symbol}: {critical_issues}")
+            logger.critical("Critical data quality issues for %s: %s", symbol, critical_issues)
+
 
         return result
 
@@ -191,7 +191,7 @@ class MarketDataValidator:
 
         # Check for NaN values
         nan_pct = data.isnull().sum().sum() / (len(data) * len(data.columns))
-        if nan_pct > 0.05:  # More than 5% NaN  # noqa: PLR2004
+        if nan_pct > 0.05:  # More than 5% NaN
             issues.append(
                 {
                     "type": "excessive_nan",

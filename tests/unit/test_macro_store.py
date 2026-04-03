@@ -19,7 +19,6 @@ Verifies:
 
 from __future__ import annotations
 
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -90,7 +89,7 @@ class TestLoadCsv:
         csv.write_text("date,value\n2026-01-05,102.34\n2026-01-06,101.89\n2026-01-07,103.10\n")
         store = _make_store()
         n = store.load_csv(csv, "dxy")
-        assert n == 3  # noqa: PLR2004
+        assert n == 3
         assert "dxy" in store.series_names()
         assert store._series["dxy"].iloc[0] == pytest.approx(102.34)
 
@@ -105,14 +104,14 @@ class TestLoadCsv:
         csv.write_text("dt,yield_val\n2026-01-05,4.25\n2026-01-06,4.30\n")
         store = _make_store()
         n = store.load_csv(csv, "us10y", date_col="dt", value_col="yield_val")
-        assert n == 2  # noqa: PLR2004
+        assert n == 2
 
     def test_load_csv_drops_na_rows(self, tmp_path):
         csv = tmp_path / "data.csv"
         csv.write_text("date,value\n2026-01-05,102.34\n2026-01-06,\n2026-01-07,103.10\n")
         store = _make_store()
         n = store.load_csv(csv, "dxy")
-        assert n == 2  # NaN row dropped  # noqa: PLR2004
+        assert n == 2  # NaN row dropped
 
 
 # ── align_to_hourly() ─────────────────────────────────────────────────────────
@@ -160,7 +159,7 @@ class TestAlignToHourly:
 
         result = store.align_to_hourly(ohlcv)
         assert "dxy" in result.columns
-        assert len(result) == 24  # noqa: PLR2004
+        assert len(result) == 24
 
     def test_result_has_same_length_as_ohlcv(self):
         store = _make_store()
@@ -207,4 +206,4 @@ class TestSnapshot:
         store = _make_store()
         store.update("dxy", "2026-01-05", 102.0)
         store.update("us10y", "2026-01-05", 4.25)
-        assert len(store) == 2  # noqa: PLR2004
+        assert len(store) == 2

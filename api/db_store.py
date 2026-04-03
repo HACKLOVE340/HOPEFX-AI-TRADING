@@ -25,16 +25,17 @@ logger = logging.getLogger(__name__)
 
 
 def _get_session():
-    """Return a SQLAlchemy session or None if DB unavailable."""
+    """Return a live SQLAlchemy Session, or None when the DB is unavailable."""
     try:
         from database.connection import get_db_manager
 
         mgr = get_db_manager()
         if not mgr:
             return None
-        return mgr.get_session()
-    except Exception as exc:
-        logger.debug("db_store: could not obtain DB session: %s", exc)
+        ctx = mgr.session()
+        return ctx.__enter__()  # caller closes/rolls back in finally block
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.debug("db_store: could not obtain DB session: %s", exc)  # nosec B105 - logs exception type, no secrets
         return None
 
 
@@ -52,8 +53,8 @@ def db_get(key: str) -> Any | None:
         record = session.query(Configuration).filter_by(config_key=key).first()
         if record and record.config_value:
             return json.loads(record.config_value)
-    except Exception as exc:
-        logger.debug("db_get(%s) failed: %s", key, exc)
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.debug("db_get failed: %s", type(exc).__name__)
     return None
 
 
@@ -85,8 +86,8 @@ def db_set(key: str, value: Any, changed_by: str = "system") -> bool:
             session.add(record)
         session.commit()
         return True
-    except Exception as exc:
-        logger.debug("db_set(%s) failed: %s", key, exc)
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.debug("db_set failed: %s", type(exc).__name__)
         return False
 
 
@@ -101,8 +102,8 @@ def db_delete(key: str) -> bool:
         session.query(Configuration).filter_by(config_key=key).delete()
         session.commit()
         return True
-    except Exception as exc:
-        logger.debug("db_delete(%s) failed: %s", key, exc)
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.debug("db_delete failed: %s", type(exc).__name__)
         return False
 
 
@@ -116,6 +117,6 @@ def db_keys_prefix(prefix: str) -> list[str]:
             return []
         records = session.query(Configuration.config_key).filter(Configuration.config_key.like(f"{prefix}%")).all()
         return [r[0] for r in records]
-    except Exception as exc:
+    except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.debug("db_keys_prefix(%s) failed: %s", prefix, exc)
         return []

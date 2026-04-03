@@ -170,7 +170,7 @@ class RiskOrchestrator:
                     for p in self._hedge_positions
                 ],
             }
-            self._state_file.write_text(json.dumps(state, indent=2))
+            self._state_file.write_text(json.dumps(state, indent=2), encoding="utf-8")
             logger.debug("RiskOrchestrator state persisted to %s", self._state_file)
         except OSError as exc:
             logger.warning("RiskOrchestrator: could not persist state: %s", exc)
@@ -180,7 +180,7 @@ class RiskOrchestrator:
         if not self._state_file.exists():
             return
         try:
-            data = json.loads(self._state_file.read_text())
+            data = json.loads(self._state_file.read_text(encoding="utf-8"))
             self._max_risk = float(data.get("max_risk", self._max_risk))
             self._trading_allowed = bool(data.get("trading_allowed", True))
             self._hedge_active = bool(data.get("hedge_active", False))
@@ -483,7 +483,7 @@ class RiskOrchestrator:
                 **data,
             }
         )
-        if len(self._history) > 200:  # noqa: PLR2004
+        if len(self._history) > 200:
             self._history.pop(0)
 
 
@@ -499,7 +499,7 @@ def create_orchestrator_router(orchestrator_instance: RiskOrchestrator):
                            prefix="/risk/orchestrator", tags=["risk"])
     """
     try:
-        from fastapi import APIRouter, HTTPException  # noqa: F401
+        from fastapi import APIRouter
         from pydantic import BaseModel, Field
     except ImportError:
         return None

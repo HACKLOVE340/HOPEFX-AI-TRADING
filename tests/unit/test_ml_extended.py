@@ -12,11 +12,10 @@ Covers:
 - LSTMPricePredictor (non-TF parts)
 """
 
-import pytest
 import numpy as np
 import pandas as pd
+import pytest
 from sklearn.ensemble import RandomForestClassifier
-
 
 # ---------------------------------------------------------------------------
 # RandomForestTradingClassifier tests
@@ -74,8 +73,8 @@ class TestRandomForestClassifierExtended:
 
     def test_build_custom_params(self, rf_custom):
         rf_custom.build()
-        assert rf_custom.model.n_estimators == 10  # noqa: PLR2004
-        assert rf_custom.model.max_depth == 5  # noqa: PLR2004
+        assert rf_custom.model.n_estimators == 10
+        assert rf_custom.model.max_depth == 5
 
     # --- train ---
 
@@ -133,9 +132,9 @@ class TestRandomForestClassifierExtended:
     # --- predict ---
 
     def test_predict_integer_labels(self, trained_rf, training_data):
-        X, y = training_data
+        X, _ = training_data
         predictions = trained_rf.predict(X[:10])
-        assert len(predictions) == 10  # noqa: PLR2004
+        assert len(predictions) == 10
 
     def test_predict_string_labels(self, training_data):
         from ml.models.random_forest import RandomForestTradingClassifier
@@ -155,10 +154,10 @@ class TestRandomForestClassifierExtended:
             rf.predict(np.random.randn(5, 10))
 
     def test_predict_proba(self, trained_rf, training_data):
-        X, y = training_data
+        X, _ = training_data
         proba = trained_rf.predict_proba(X[:10])
-        assert proba.shape[0] == 10  # noqa: PLR2004
-        assert proba.shape[1] >= 2  # noqa: PLR2004
+        assert proba.shape[0] == 10
+        assert proba.shape[1] >= 2
         # Probabilities should sum to ~1
         np.testing.assert_allclose(proba.sum(axis=1), np.ones(10), atol=1e-6)
 
@@ -170,23 +169,23 @@ class TestRandomForestClassifierExtended:
             rf.predict_proba(np.random.randn(5, 10))
 
     def test_predict_with_confidence(self, trained_rf, training_data):
-        X, y = training_data
+        X, _ = training_data
         predictions, confidences = trained_rf.predict_with_confidence(X[:20])
-        assert len(predictions) == 20  # noqa: PLR2004
-        assert len(confidences) == 20  # noqa: PLR2004
+        assert len(predictions) == 20
+        assert len(confidences) == 20
         assert all(0 <= c <= 1 for c in confidences)
 
     # --- feature importance ---
 
     def test_get_feature_importance_dict(self, trained_rf, training_data):
-        X, y = training_data
+        X, _ = training_data
         importance = trained_rf.get_feature_importance_dict()
         assert len(importance) == X.shape[1]
         assert all(v >= 0 for v in importance.values())
 
     def test_get_top_features(self, trained_rf):
         top = trained_rf.get_top_features(n=5)
-        assert len(top) == 5  # noqa: PLR2004
+        assert len(top) == 5
         # Should be sorted descending
         importances = [v for _, v in top]
         assert importances == sorted(importances, reverse=True)
@@ -314,7 +313,7 @@ class TestEnsemblePredictorExtended:
             ensemble_no_lstm.update_performance("random_forest", 1905.0, 1903.0)
         # Weights should still sum to ~1
         total_weight = sum(ensemble_no_lstm.model_weights.get(m, 0) for m in ensemble_no_lstm.models)
-        assert abs(total_weight - 1.0) < 0.01  # noqa: PLR2004
+        assert abs(total_weight - 1.0) < 0.01
 
     def test_get_model_summary(self, ensemble_no_lstm, prices):
         ensemble_no_lstm.build()
@@ -352,7 +351,7 @@ class TestEnsemblePredictorExtended:
             }
         )
         conf = e._calculate_model_confidence("random_forest")
-        assert conf == 0.5  # Default confidence  # noqa: PLR2004
+        assert conf == 0.5  # Default confidence
 
     def test_calculate_model_confidence_with_history(self, ensemble_no_lstm, prices):
         ensemble_no_lstm.build()
@@ -360,7 +359,7 @@ class TestEnsemblePredictorExtended:
         for _ in range(20):
             ensemble_no_lstm.update_performance("random_forest", 1905.0, 1903.0)
         conf = ensemble_no_lstm._calculate_model_confidence("random_forest")
-        assert 0.1 <= conf <= 0.95  # noqa: PLR2004
+        assert 0.1 <= conf <= 0.95
 
     def test_prepare_features(self):
         from ml.models.ensemble import EnsemblePredictor
@@ -376,7 +375,7 @@ class TestEnsemblePredictorExtended:
         )
         data = np.linspace(1900, 2000, 100)
         features, targets = e._prepare_features(data)
-        assert features.shape[1] == 10  # 10 feature columns  # noqa: PLR2004
+        assert features.shape[1] == 10  # 10 feature columns
         assert len(targets) == len(data) - 20
 
 
@@ -395,26 +394,26 @@ class TestLSTMPricePredictorExtended:
         return LSTMPricePredictor(config={"sequence_length": 10})
 
     def test_init_params(self, lstm):
-        assert lstm.sequence_length == 10  # noqa: PLR2004
+        assert lstm.sequence_length == 10
         assert lstm.lstm_units == [50, 50]
-        assert lstm.dropout == 0.2  # noqa: PLR2004
+        assert lstm.dropout == 0.2
 
     def test_prepare_sequences(self, lstm):
         data = np.arange(50).reshape(-1, 1).astype(float)
         X, y = lstm._prepare_sequences(data)
-        assert X.shape[0] == 40  # 50 - 10  # noqa: PLR2004
-        assert X.shape[1] == 10  # noqa: PLR2004
-        assert len(y) == 40  # noqa: PLR2004
+        assert X.shape[0] == 40  # 50 - 10
+        assert X.shape[1] == 10
+        assert len(y) == 40
 
     def test_scale_data_fit(self, lstm):
         X = np.random.randn(100)
         y = np.random.randn(100)
-        X_scaled, y_scaled = lstm._scale_data(X, y, fit=True)
+        X_scaled, _ = lstm._scale_data(X, y, fit=True)
         assert lstm.scaler_X is not None
         assert lstm.scaler_y is not None
         # Scaled values should be in [0, 1]
-        assert X_scaled.min() >= -0.01  # noqa: PLR2004
-        assert X_scaled.max() <= 1.01  # noqa: PLR2004
+        assert X_scaled.min() >= -0.01
+        assert X_scaled.max() <= 1.01
 
     def test_scale_data_transform_raises_without_fit(self, lstm):
         X = np.random.randn(100)
@@ -428,8 +427,8 @@ class TestLSTMPricePredictorExtended:
         lstm._scale_data(X, y, fit=True)
         X_val = np.random.randn(20)
         y_val = np.random.randn(20)
-        X_scaled, y_scaled = lstm._scale_data(X_val, y_val, fit=False)
-        assert X_scaled.shape[0] == 20  # noqa: PLR2004
+        X_scaled, _ = lstm._scale_data(X_val, y_val, fit=False)
+        assert X_scaled.shape[0] == 20
 
     def test_predict_raises_if_not_trained(self, lstm):
         with pytest.raises(ValueError, match="not trained"):
@@ -450,9 +449,9 @@ class TestLSTMPricePredictorExtended:
         try:
             lstm.build()
         except (ImportError, ModuleNotFoundError):
-            pass  # Expected when TensorFlow is not installed
+            ...  # nosec B110
         except Exception:
-            pass  # Other errors also acceptable
+            ...  # nosec B110
 
     def test_initialization_custom_config(self):
         from ml.models.lstm import LSTMPricePredictor
@@ -467,7 +466,7 @@ class TestLSTMPricePredictorExtended:
                 "learning_rate": 0.0005,
             }
         )
-        assert lstm.sequence_length == 30  # noqa: PLR2004
+        assert lstm.sequence_length == 30
         assert lstm.lstm_units == [64, 32, 16]
-        assert lstm.dropout == 0.3  # noqa: PLR2004
-        assert lstm.epochs == 50  # noqa: PLR2004
+        assert lstm.dropout == 0.3
+        assert lstm.epochs == 50

@@ -8,15 +8,14 @@ HOPEFX Portfolio Analytics Module
 Multi-asset backtesting, portfolio optimization, correlation analysis, risk metrics
 """
 
-import pandas as pd
-import numpy as np
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from typing import Any
-from pathlib import Path
 import json
 import warnings
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
 
 warnings.filterwarnings("ignore")
 
@@ -216,8 +215,7 @@ class PortfolioAnalytics:
                 "sharpe_ratio": sharpe,
                 "allocation": pd.Series(optimal_weights, index=self.assets).sort_values(ascending=False),
             }
-        else:
-            return {"success": False, "message": result.message}
+        return {"success": False, "message": result.message}
 
     def generate_efficient_frontier(self, n_portfolios: int = 100, save_path: str | None = None) -> pd.DataFrame:
         """
@@ -424,7 +422,7 @@ class PortfolioAnalytics:
 
         # Save JSON report
         report_path = Path(output_dir) / f"portfolio_report_{timestamp}.json"
-        with open(report_path, "w") as f:
+        with Path(report_path).open("w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, default=str)
 
         # Save metrics CSV
@@ -545,7 +543,7 @@ class MultiAssetBacktester:
 
         # Execute trades
         for asset, trade_value in trades.items():
-            if abs(trade_value) > 0.01:  # Minimum trade size  # noqa: PLR2004
+            if abs(trade_value) > 0.01:  # Minimum trade size
                 trade_quantity = trade_value / prices[asset]
                 commission = abs(trade_value) * self.commission_rate
 
@@ -776,24 +774,22 @@ class PortfolioOptimizer:
         returns : np.ndarray shape (T, N)
         method  : "max_sharpe" | "min_variance" | "equal_weight"
         """
-        import numpy as np
-
         returns = np.asarray(returns)
-        n = returns.shape[1] if returns.ndim == 2 else len(assets)  # noqa: PLR2004
+        n = returns.shape[1] if returns.ndim == 2 else len(assets)
 
-        if method == "equal_weight" or returns.shape[0] < 10:  # noqa: PLR2004
+        if method == "equal_weight" or returns.shape[0] < 10:
             w = np.ones(n) / n
         else:
             # Maximise Sharpe via SLSQP (deterministic, no random search)
             mu = np.mean(returns, axis=0) * 252
             cov = np.cov(returns.T) * 252 if n > 1 else np.array([[np.var(returns) * 252]])
-            self.risk_free_rate / 252
+            rf_annual = self.risk_free_rate
 
             def neg_sharpe(weights: np.ndarray) -> float:
                 port_ret = float(np.dot(weights, mu))
                 port_var = float(weights @ cov @ weights)
                 port_vol = np.sqrt(max(port_var, 1e-12))
-                return -(port_ret - self.risk_free_rate) / port_vol
+                return -(port_ret - rf_annual) / port_vol
 
             constraints = [{"type": "eq", "fun": lambda ww: np.sum(ww) - 1.0}]
             bounds = [(0.0, 1.0)] * n
@@ -833,12 +829,11 @@ class PortfolioOptimizer:
         Sweeps target returns from min to max and solves min-variance at each
         target via SLSQP — deterministic, no random sampling.
         """
-        import numpy as np
         from scipy.optimize import minimize as _minimize
 
         returns = np.asarray(returns)
-        n = returns.shape[1] if returns.ndim == 2 else len(assets)  # noqa: PLR2004
-        if returns.shape[0] < 5 or n < 2:  # noqa: PLR2004
+        n = returns.shape[1] if returns.ndim == 2 else len(assets)
+        if returns.shape[0] < 5 or n < 2:
             # Insufficient data — return equal-weight single point
             w = np.full(n, 1.0 / n)
             port_ret = float(np.mean(returns @ w) * 252)
@@ -919,7 +914,7 @@ def _pa_optimize(
     constraints = [{"type": "eq", "fun": lambda w: np.sum(w) - 1.0}]
     bounds = [(0.0, 1.0)] * n
 
-    if method == "equal_weight" or n < 2:  # noqa: PLR2004
+    if method == "equal_weight" or n < 2:
         w = w0
     elif method == "min_variance":
         res = _minimize(

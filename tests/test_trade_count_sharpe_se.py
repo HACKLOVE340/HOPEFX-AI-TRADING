@@ -24,7 +24,6 @@ import math
 import numpy as np
 import pandas as pd
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -72,7 +71,7 @@ class TestTradeLevelSharpe:
 
         rng = np.random.default_rng(0)
         pnls = rng.normal(loc=50.0, scale=20.0, size=100).tolist()
-        sharpe, se = trade_level_sharpe(pnls)
+        sharpe, _ = trade_level_sharpe(pnls)
         assert sharpe > 0
 
     def test_negative_sharpe_for_negative_mean_pnl(self):
@@ -80,7 +79,7 @@ class TestTradeLevelSharpe:
 
         rng = np.random.default_rng(1)
         pnls = rng.normal(loc=-50.0, scale=20.0, size=100).tolist()
-        sharpe, se = trade_level_sharpe(pnls)
+        sharpe, _ = trade_level_sharpe(pnls)
         assert sharpe < 0
 
     def test_se_formula_exact(self):
@@ -92,7 +91,7 @@ class TestTradeLevelSharpe:
         pnls = rng.normal(50, 20, n).tolist()
         _, se = trade_level_sharpe(pnls)
         expected = 1.0 / math.sqrt(2.0 * (n - 1))
-        assert abs(se - expected) < 1e-9  # noqa: PLR2004
+        assert abs(se - expected) < 1e-9
 
     def test_se_decreases_with_more_trades(self):
         from real_data_backtest import trade_level_sharpe
@@ -106,23 +105,23 @@ class TestTradeLevelSharpe:
     def test_se_at_600_trades_below_003(self):
         """At N=600, SE ≤ ±0.029 — well within the ±0.3 target."""
         se = 1.0 / math.sqrt(2.0 * (600 - 1))
-        assert se < 0.03, f"SE at N=600 = {se:.4f}, expected < 0.03"  # noqa: PLR2004
+        assert se < 0.03, f"SE at N=600 = {se:.4f}, expected < 0.03"
 
     def test_se_at_250_trades_below_005(self):
         """At N=250, SE ≤ ±0.045."""
         se = 1.0 / math.sqrt(2.0 * (250 - 1))
-        assert se < 0.05, f"SE at N=250 = {se:.4f}, expected < 0.05"  # noqa: PLR2004
+        assert se < 0.05, f"SE at N=250 = {se:.4f}, expected < 0.05"
 
     def test_se_at_48_trades_above_01(self):
         """At N=48 (original reported count), SE ≈ ±0.10 — not robust."""
         se = 1.0 / math.sqrt(2.0 * (48 - 1))
-        assert se > 0.10, f"SE at N=48 = {se:.4f}, expected > 0.10"  # noqa: PLR2004
+        assert se > 0.10, f"SE at N=48 = {se:.4f}, expected > 0.10"
 
     def test_zero_std_returns_zero(self):
         """All-identical PnLs → std=0 → Sharpe=0."""
         from real_data_backtest import trade_level_sharpe
 
-        sharpe, se = trade_level_sharpe([100.0] * 50)
+        sharpe, _ = trade_level_sharpe([100.0] * 50)
         assert sharpe == 0.0
 
     def test_avg_hold_hours_affects_annualisation(self):
@@ -149,7 +148,7 @@ class TestRunBacktestSignature:
         df = _make_ohlcv(300)
         result = run_backtest(df)
         assert isinstance(result, tuple)
-        assert len(result) == 2  # noqa: PLR2004
+        assert len(result) == 2
         equity_df, trade_pnls = result
         assert isinstance(equity_df, pd.DataFrame)
         assert isinstance(trade_pnls, list)
@@ -171,12 +170,12 @@ class TestRunBacktestSignature:
             assert isinstance(pnl, float)
 
     def test_equity_starts_near_initial_capital(self):
-        from real_data_backtest import run_backtest, INITIAL_CAPITAL
+        from real_data_backtest import INITIAL_CAPITAL, run_backtest
 
         df = _make_ohlcv(300)
         equity_df, _ = run_backtest(df, INITIAL_CAPITAL)
         # First bar equity should be within $100 of initial (entry commission)
-        assert abs(equity_df["equity"].iloc[0] - INITIAL_CAPITAL) < 100.0  # noqa: PLR2004
+        assert abs(equity_df["equity"].iloc[0] - INITIAL_CAPITAL) < 100.0
 
     def test_no_trades_on_constant_price(self):
         """Constant price → no ATR expansion → no signals → no trades."""
@@ -193,7 +192,7 @@ class TestRunBacktestSignature:
             },
             index=pd.date_range("2021-01-01", periods=n, freq="h", name="timestamp"),
         )
-        equity_df, trade_pnls = run_backtest(df)
+        _, trade_pnls = run_backtest(df)
         # Constant price → all rolling windows produce NaN → dropna() removes all bars
         # Result: zero trades
         assert len(trade_pnls) == 0
@@ -282,9 +281,9 @@ class TestWalkForwardBacktest:
         df = _make_ohlcv(1000)
         result = walk_forward_backtest(df)
         n = result["test_trade_count"]
-        if n >= 2:  # noqa: PLR2004
+        if n >= 2:
             expected_se = 1.0 / math.sqrt(2.0 * (n - 1))
-            assert abs(result["test_sharpe_se"] - expected_se) < 1e-6  # noqa: PLR2004
+            assert abs(result["test_sharpe_se"] - expected_se) < 1e-6
 
     def test_full_equity_is_concatenation(self):
         from real_data_backtest import walk_forward_backtest
@@ -302,19 +301,19 @@ class TestWalkForwardBacktest:
 
 class TestPipValue:
     def test_gold_pip_value(self):
-        from real_data_backtest import _pip_value_for_price, GOLD_PIP_VALUE
+        from real_data_backtest import GOLD_PIP_VALUE, _pip_value_for_price
 
         assert _pip_value_for_price(2000.0) == GOLD_PIP_VALUE
 
     def test_crypto_pip_value(self):
-        from real_data_backtest import _pip_value_for_price, CRYPTO_PIP_VALUE
+        from real_data_backtest import CRYPTO_PIP_VALUE, _pip_value_for_price
 
         assert _pip_value_for_price(1.2) == CRYPTO_PIP_VALUE
 
     def test_gold_slippage_dollar_value(self):
         """3 pips × $0.10/pip = $0.30 slippage at gold price."""
-        from real_data_backtest import _pip_value_for_price, SLIPPAGE_PIPS
+        from real_data_backtest import SLIPPAGE_PIPS, _pip_value_for_price
 
         pip_val = _pip_value_for_price(2000.0)
         dollar_slip = SLIPPAGE_PIPS * pip_val
-        assert abs(dollar_slip - 0.30) < 1e-9, f"Expected $0.30, got ${dollar_slip}"  # noqa: PLR2004
+        assert abs(dollar_slip - 0.30) < 1e-9, f"Expected $0.30, got ${dollar_slip}"

@@ -32,12 +32,10 @@ import asyncio
 import logging
 import os
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-UTC = timezone.utc
-from typing import Any
 from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +90,7 @@ _XAUUSD_VOLUME_PROFILE_RAW = [
 _total = sum(_XAUUSD_VOLUME_PROFILE_RAW)
 # Normalise so the profile always sums to exactly 1.0
 _XAUUSD_VOLUME_PROFILE = [v / _total for v in _XAUUSD_VOLUME_PROFILE_RAW]
-if abs(sum(_XAUUSD_VOLUME_PROFILE) - 1.0) >= 1e-9:  # noqa: PLR2004
+if abs(sum(_XAUUSD_VOLUME_PROFILE) - 1.0) >= 1e-9:
     raise ValueError("Volume profile must sum to 1")
 
 
@@ -247,7 +245,7 @@ class TWAPExecutor:
         )
     """
 
-    def __init__(self, router: Any = None, lineage_store: Any = None) -> None:
+    def __init__(self, router: Any | None = None, lineage_store: Any | None = None) -> None:
         self._router = router
         self._lineage = lineage_store
         self._child_orders: list[ChildOrder] = []
@@ -353,7 +351,7 @@ class TWAPExecutor:
         return {
             "parent_id": parent_id,
             "algo": "twap",
-            "status": "filled" if fill_rate > 0.99 else "partial",  # noqa: PLR2004
+            "status": "filled" if fill_rate > 0.99 else "partial",
             "filled_lots": round(filled_lots, 4),
             "target_lots": total_lots,
             "fill_rate": round(fill_rate, 4),
@@ -379,7 +377,7 @@ class VWAPExecutor:
         )
     """
 
-    def __init__(self, router: Any = None, lineage_store: Any = None) -> None:
+    def __init__(self, router: Any | None = None, lineage_store: Any | None = None) -> None:
         self._router = router
         self._lineage = lineage_store
 
@@ -456,7 +454,7 @@ class VWAPExecutor:
         return {
             "parent_id": parent_id,
             "algo": "vwap",
-            "status": "filled" if fill_rate > 0.99 else "partial",  # noqa: PLR2004
+            "status": "filled" if fill_rate > 0.99 else "partial",
             "filled_lots": round(filled_lots, 4),
             "target_lots": total_lots,
             "fill_rate": round(fill_rate, 4),

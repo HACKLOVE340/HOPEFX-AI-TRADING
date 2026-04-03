@@ -72,6 +72,8 @@ if TYPE_CHECKING:
     import pandas as pd
 
 # ── Component imports ─────────────────────────────────────────────────────────
+import contextlib
+
 from data_layer.cache.redis_store import DataLayerRedisStore, dl_redis_store
 from data_layer.calendar.engine import MacroCalendarEngine, macro_calendar_engine
 from data_layer.feeds.gold.manager import GoldFeedManager
@@ -85,8 +87,7 @@ from data_layer.normalization.pipeline import (
 from data_layer.quality.engine import DataQualityEngine, dqe
 from data_layer.replay.engine import MarketReplayEngine, market_replay_engine
 from data_layer.sentiment.engine import NewsSentimentEngine, news_sentiment_engine
-from data_layer.types import GoldTick, QualityReport, TickQuality
-import contextlib
+from data_layer.types import FeedSource, GoldTick, QualityReport, TickQuality
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +139,7 @@ class MarketDataOrchestrator:
 
     def _init_prometheus(self) -> None:
         try:
-            from prometheus_client import Counter, Gauge, REGISTRY
+            from prometheus_client import REGISTRY, Counter, Gauge
 
             def _gauge(name: str, doc: str):
                 try:
@@ -362,8 +363,6 @@ class MarketDataOrchestrator:
             cached = self._redis_store.get_tick(symbol)
             if cached:
                 try:
-                    from data_layer.types import FeedSource
-
                     # Require source to be present and a known FeedSource value.
                     # Missing or unrecognised source → fall through to live feed
                     # rather than labelling the tick with a fabricated origin.
@@ -571,18 +570,17 @@ class MarketDataOrchestrator:
 
         # Check tick quality
         tick = self.get_latest_tick()
-        if tick is not None and tick.confidence < 0.30:  # noqa: PLR2004
+        if tick is not None and tick.confidence < 0.30:
             return False
 
-        # Check at least one feed alive
-        if self._gold_feed and not self._gold_feed.active_sources():
-            # No active sources — but only block if we've been running > 30s
-            import time
-
-            if self._started and (time.time() - self._start_ts) > 30.0:  # noqa: PLR2004
-                return False
-
-        return True
+        # No active sources — but only block if we've been running > 30s
+        feed_stalled = (
+            self._gold_feed
+            and not self._gold_feed.active_sources()
+            and self._started
+            and (time.time() - self._start_ts) > 30.0
+        )
+        return not feed_stalled
 
     def get_ohlcv(
         self,
@@ -686,11 +684,9 @@ class MarketDataOrchestrator:
         """
         try:
             raw_ticks = self._redis_store.get_tick_history(symbol, limit=max_ticks)
-            if len(raw_ticks) < 2:  # noqa: PLR2004
+            if len(raw_ticks) < 2:
                 return None
 
-            from datetime import datetime
-            from data_layer.types import FeedSource, TickQuality
 
             ticks = []
             for r in raw_ticks:
@@ -715,7 +711,7 @@ class MarketDataOrchestrator:
                 except Exception:  # nosec B112 - skip malformed tick record during replay
                     continue
 
-            if len(ticks) < 2:  # noqa: PLR2004
+            if len(ticks) < 2:
                 return None
 
             return self._norm.tick_to_ohlcv(ticks, timeframe_minutes=timeframe_minutes)
@@ -774,7 +770,7 @@ class MarketDataOrchestrator:
         """
         # Try OHLCVStore (broker feed) first
         df = self.get_ohlcv(symbol=symbol, bars=bars, timeframe=timeframe)
-        if df is not None and len(df) >= 10:  # noqa: PLR2004
+        if df is not None and len(df) >= 10:
             return df
 
         # Fall back to tick-based reconstruction

@@ -8,13 +8,19 @@
 Tests for validation module.
 """
 
-import pytest
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from validation import OrderValidator, Order, PropFirmValidator, validate_order_safe
+from validation import (  # pylint: disable=no-name-in-module
+    Order,
+    OrderValidator,
+    PropFirmValidator,
+    validate_order_safe,
+)
 
 
 class TestOrderValidator:
@@ -101,7 +107,7 @@ class TestPropFirmValidator:
 
     def test_within_limits(self):
         """Test validation within limits."""
-        valid, msg = self.validator.check_limits(current_equity=100000.0)
+        valid, _ = self.validator.check_limits(current_equity=100000.0)
         assert valid is True
 
     def test_drawdown_violation(self):
@@ -117,7 +123,7 @@ class TestPropFirmValidator:
     def test_daily_loss_tracking(self):
         """Test daily loss accumulation."""
         self.validator.record_pnl(-2000)  # $2k loss
-        valid, msg = self.validator.check_limits(current_equity=100000.0)
+        valid, _ = self.validator.check_limits(current_equity=100000.0)
         assert valid is True  # 2% is within 5% daily limit
 
         # Add more losses

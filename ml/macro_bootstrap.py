@@ -33,9 +33,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -64,7 +62,6 @@ def _fetch_series(ticker: str, years: int = _HISTORY_YEARS) -> pd.DataFrame | No
     """Fetch `years` of daily close data for `ticker` via yfinance."""
     try:
         import yfinance as yf
-        import pandas as pd
 
         end = datetime.now(UTC)
         start = end - timedelta(days=years * 365)
@@ -116,7 +113,7 @@ def bootstrap(force: bool = False) -> int:
         # Skip if file is fresh (< 24 h) and force=False
         if not force and csv_path.exists():
             age_hours = (datetime.now().timestamp() - csv_path.stat().st_mtime) / 3600
-            if age_hours < 24:  # noqa: PLR2004
+            if age_hours < 24:
                 logger.debug(
                     "MacroBootstrap: %s is %.1f h old — skipping (use force=True to refresh)",
                     csv_path.name,

@@ -26,14 +26,12 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import UTC
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from api.auth import TokenPayload, get_current_user
-from datetime import timezone
-
-UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +46,6 @@ _EXPLAIN_LATEST_LIMIT = os.getenv("EXPLAIN_LATEST_RATE_LIMIT", "60/minute")
 def _get_limiter():
     """Return the slowapi Limiter from app state, or None if not configured."""
     try:
-        from fastapi import Request as _Req  # noqa: F401
         from slowapi import Limiter
         from slowapi.util import get_remote_address
 
@@ -118,7 +115,7 @@ def _enforce_rate_limit(request: Request, limit_str: str) -> None:
                         headers={"Retry-After": "60"},
                     )
             except ImportError:
-                pass
+                ...  # nosec B110
             logger.debug("slowapi rate-limit check failed (fail-open): %s", exc)
             return
 
@@ -182,13 +179,13 @@ def _build_explanation(signal_id: str) -> SignalExplanation:
     so the UI always has something to show.
     """
     try:
-        from core.signal_engine import SignalEngine
+        import core.signal_engine as _signal_engine_mod  # module, not a class
         from explainability.explainer import AIExplainer
 
         explainer = AIExplainer()
-        # Attempt to fetch the signal from the signal engine
-        engine = SignalEngine()
-        signal = engine.get_signal(signal_id) if hasattr(engine, "get_signal") else None
+        # Attempt to fetch the signal from the signal engine module
+        _get_signal = getattr(_signal_engine_mod, "get_signal", None)
+        signal = _get_signal(signal_id) if _get_signal is not None else None
 
         if signal and hasattr(signal, "features") and hasattr(signal, "model"):
             explanation = explainer.explain_prediction(
@@ -216,10 +213,10 @@ def _build_explanation(signal_id: str) -> SignalExplanation:
                 signal_id=signal_id,
                 symbol=getattr(signal, "symbol", "XAUUSD"),
                 direction=explanation.prediction_class,
-                confidence=explanation.confidence_score,
+                confidence=explanation.confidence,
                 regime=getattr(signal, "regime", "unknown"),
                 top_features=features,
-                plain_english=explanation.natural_language_explanation
+                plain_english=explanation.natural_language
                 or _template_summary(features, explanation.prediction_class),
                 timestamp=explanation.timestamp.isoformat(),
             )
@@ -308,10 +305,11 @@ async def explain_signal(
     try:
         return _build_explanation(signal_id)
     except (RuntimeError, ValueError, KeyError, AttributeError) as exc:
+        logger.warning("Explanation unavailable for signal %s: %s", signal_id, exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Explanation unavailable: {exc}",
-        ) from exc
+            detail="Explanation unavailable — check server logs",
+        ) from None
 
 
 @router.get(

@@ -9,9 +9,10 @@ Data Handler for Backtesting
 Manages historical data loading, validation, and access for backtesting.
 """
 
-import pandas as pd
-from datetime import datetime
 import logging
+from datetime import datetime
+
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,8 @@ class DataHandler:
         self.current_index = 0
         self.continue_backtest = True
 
-        logger.info(f"Initializing DataHandler for {len(symbols)} symbols from {start_date} to {end_date}")
+        logger.info("Initializing DataHandler for %s symbols from %s to %s", len(symbols), start_date, end_date)
+
 
     def load_data(self):
         """Load historical data for all symbols."""
@@ -52,23 +54,27 @@ class DataHandler:
 
                 # Validate data
                 if df is None or df.empty:
-                    logger.warning(f"No data found for {symbol}")
+                    logger.warning("No data found for %s", symbol)
+
                     continue
 
                 # Ensure required columns
                 required_cols = ["open", "high", "low", "close", "volume"]
                 if not all(col in df.columns for col in required_cols):
-                    logger.error(f"Missing required columns for {symbol}")
+                    logger.error("Missing required columns for %s", symbol)
+
                     continue
 
                 # Clean data
                 df = self._clean_data(df)
 
                 self.data[symbol] = df
-                logger.info(f"Loaded {len(df)} bars for {symbol}")
+                logger.info("Loaded %s bars for %s", len(df), symbol)
+
 
             except Exception as e:
-                logger.error(f"Error loading data for {symbol}: {e}")
+                logger.error("Error loading data for %s: %s", symbol, e)
+
 
         if not self.data:
             raise ValueError("No data loaded for any symbol")
@@ -99,14 +105,15 @@ class DataHandler:
 
         # Find common dates
         common_index = None
-        for _symbol, df in self.data.items():
+        for df in self.data.values():
             common_index = df.index if common_index is None else common_index.intersection(df.index)
 
         # Reindex all dataframes
         for symbol in self.data:
             self.data[symbol] = self.data[symbol].reindex(common_index)
 
-        logger.info(f"Aligned data to {len(common_index)} common dates")
+        logger.info("Aligned data to %s common dates", len(common_index))
+
 
     def get_latest_bars(self, symbol: str, n: int = 1) -> pd.DataFrame | None:
         """
@@ -154,7 +161,7 @@ class DataHandler:
             return None
 
         # Get datetime from first symbol
-        symbol = list(self.data.keys())[0]
+        symbol = next(iter(self.data.keys()))
         return self.data[symbol].index[self.current_index - 1]
 
     def reset(self):

@@ -29,7 +29,6 @@ import time
 try:
     from prometheus_client import (
         CONTENT_TYPE_LATEST,
-        CollectorRegistry,  # noqa: F401
         Counter,
         Gauge,
         Histogram,
@@ -174,7 +173,7 @@ def _normalise_path(path: str) -> str:
     parts = path.split("/")
     normalised = []
     for p in parts:
-        if p.isdigit() or (len(p) == 36 and p.count("-") == 4):  # UUID  # noqa: PLR2004
+        if p.isdigit() or (len(p) == 36 and p.count("-") == 4):  # UUID
             normalised.append("{id}")
         else:
             normalised.append(p)

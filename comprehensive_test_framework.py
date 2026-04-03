@@ -4,23 +4,26 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 # comprehensive_test_framework.py
+# pylint: disable=abstract-class-instantiated
 """
 Comprehensive Testing Framework v3.0
 Unit | Integration | E2E | Performance | Chaos Engineering
 """
 
 import asyncio
-import pytest
-import numpy as np
-import pandas as pd
-from typing import Any
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
-from dataclasses import dataclass
-from enum import Enum
 import logging
 import time
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from enum import Enum
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
+import pytest
+
+logger = logging.getLogger(__name__)
 
 # Import components to test
 try:
@@ -29,16 +32,14 @@ try:
         TickData,
         TransactionCostModel,
     )
-    from enhanced_realtime_engine import MultiSourceAggregator, MarketTick, MockProvider  # noqa: F401
     from enhanced_ml_predictor import EnhancedMLPredictor, FeatureEngineering
-    from enhanced_smart_router import SmartOrderRouter, Order, OrderSide, OrderType
+    from enhanced_realtime_engine import MockProvider, MultiSourceAggregator
+    from enhanced_smart_router import Order, OrderSide, OrderType, SmartOrderRouter
 
     COMPONENTS_AVAILABLE = True
 except ImportError as e:
     COMPONENTS_AVAILABLE = False
-    logging.warning(f"Component imports failed: {e}")
-
-logger = logging.getLogger(__name__)
+    logger.warning("Component imports failed: %s", e)
 
 
 class TestCategory(Enum):
@@ -109,6 +110,7 @@ class TestDataGenerator:
             ticks.append(
                 TickData(
                     timestamp=datetime(2024, 1, 1) + timedelta(minutes=i),
+                    symbol="XAUUSD",
                     bid=price - half_spread,
                     ask=price + half_spread,
                     bid_size=np.random.exponential(10),
@@ -171,18 +173,20 @@ class UnitTests:
         # Valid tick
         tick = TickData(
             timestamp=datetime.now(UTC),
+            symbol="XAUUSD",
             bid=1950.0,
             ask=1950.05,
             bid_size=10.0,
             ask_size=15.0,
         )
-        assert tick.mid == 1950.025  # nosec B101  # noqa: PLR2004
-        assert tick.spread == 0.05  # nosec B101  # noqa: PLR2004
+        assert tick.mid == 1950.025  # nosec B101
+        assert tick.spread == 0.05  # nosec B101
 
         # Invalid tick should raise
         try:
             TickData(
                 timestamp=datetime.now(UTC),
+                symbol="XAUUSD",
                 bid=1950.0,
                 ask=1949.0,  # Invalid: ask < bid
                 bid_size=10.0,
@@ -190,7 +194,7 @@ class UnitTests:
             )
             raise AssertionError("Should have raised ValueError")
         except ValueError:
-            pass  # Expected
+            ...  # nosec B110
 
     async def test_transaction_costs(self):
         """Test transaction cost calculations"""
@@ -201,7 +205,7 @@ class UnitTests:
 
         costs = cost_model.total_cost(order_size=100000, price=1950.0, volatility=0.001, volume=10000)
 
-        assert costs["commission"] == 7.0  # nosec B101  # noqa: PLR2004
+        assert costs["commission"] == 7.0  # nosec B101
         assert costs["spread_cost"] > 0  # nosec B101
         assert costs["total_cost"] > 0  # nosec B101
 
@@ -235,8 +239,8 @@ class UnitTests:
             price=1950.0,
         )
 
-        assert order.remaining_size == 100.0  # nosec B101  # noqa: PLR2004
-        assert order.notional == 195000.0  # nosec B101  # noqa: PLR2004
+        assert order.remaining_size == 100.0  # nosec B101
+        assert order.notional == 195000.0  # nosec B101
 
     async def test_market_impact_model(self):
         """Test Almgren-Chriss impact model"""
@@ -254,7 +258,7 @@ class UnitTests:
         )
 
         assert temp_impact > 0  # nosec B101
-        assert temp_impact < 0.01  # Less than 1%  # nosec B101  # noqa: PLR2004
+        assert temp_impact < 0.01  # Less than 1%  # nosec B101
 
 
 class IntegrationTests:
@@ -308,7 +312,7 @@ class IntegrationTests:
         ticks = TestDataGenerator.generate_ticks(n=500)
 
         # Initialize engine
-        engine = EnhancedBacktestEngine(initial_capital=100000, cost_model=TransactionCostModel(), parallel=False)
+        engine = EnhancedBacktestEngine(initial_capital=100000, cost_model=TransactionCostModel(), parallel_workers=1)
 
         # Run simple strategy
         position = 0
@@ -316,7 +320,7 @@ class IntegrationTests:
             engine.process_tick(tick)
 
             # Simple MA crossover
-            if i > 20:  # noqa: PLR2004
+            if i > 20:
                 prices = [t.mid for t in ticks[i - 20 : i]]
                 ma_fast = np.mean(prices[-5:])
                 ma_slow = np.mean(prices)
@@ -469,9 +473,10 @@ class PerformanceTests:
         duration = time.time() - start
 
         throughput = len(ticks) / duration
-        logger.info(f"Backtest throughput: {throughput:.0f} ticks/sec")
+        logger.info("Backtest throughput: %s ticks/sec", throughput)
 
-        assert throughput > 1000  # Minimum 1000 ticks/sec  # nosec B101  # noqa: PLR2004
+
+        assert throughput > 1000  # Minimum 1000 ticks/sec  # nosec B101
 
     async def test_prediction_latency(self):
         """Test ML prediction latency"""
@@ -492,9 +497,10 @@ class PerformanceTests:
             latencies.append((time.time() - start) * 1000)
 
         avg_latency = np.mean(latencies)
-        logger.info(f"Prediction latency: {avg_latency:.2f} ms")
+        logger.info("Prediction latency: %s ms", avg_latency)
 
-        assert avg_latency < 100  # Sub-100ms  # nosec B101  # noqa: PLR2004
+
+        assert avg_latency < 100  # Sub-100ms  # nosec B101
 
     async def test_data_ingestion_rate(self):
         """Test realtime data ingestion"""
@@ -522,9 +528,10 @@ class PerformanceTests:
         task.cancel()
 
         rate = received / 5
-        logger.info(f"Data ingestion rate: {rate:.0f} ticks/sec")
+        logger.info("Data ingestion rate: %s ticks/sec", rate)
 
-        assert rate > 10  # At least 10 consensus ticks/sec  # nosec B101  # noqa: PLR2004
+
+        assert rate > 10  # At least 10 consensus ticks/sec  # nosec B101
 
 
 class ChaosTests:
@@ -737,9 +744,10 @@ class ComprehensiveTestFramework:
         """Export test report to JSON"""
         import json
 
-        with open(filepath, "w") as f:
+        with Path(filepath).open("w") as f:
             json.dump(self._generate_report(0), f, indent=2, default=str)
-        logger.info(f"Test report exported to {filepath}")
+        logger.info("Test report exported to %s", filepath)
+
 
 
 # =============================================================================
@@ -795,5 +803,6 @@ if __name__ == "__main__":
         print(f"\nExit code: {exit_code}")
 
     except Exception as e:
-        logger.error(f"Test framework error: {e}")
+        logger.error("Test framework error: %s", e)
+
         raise

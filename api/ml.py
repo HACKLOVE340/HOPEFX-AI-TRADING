@@ -23,9 +23,8 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -114,11 +113,12 @@ def _get_predictor():
 
     try:
         import pathlib
+
         import joblib
 
         path = pathlib.Path(__file__).parent.parent / "ml" / "saved_models" / "xgb_macro.pkl"
         if path.exists():
-            return joblib.load(str(path))
+            return joblib.load(str(path))  # nosec B301 - path is hardcoded to ml/saved_models
     except Exception as exc:
         logger.warning("Saved ML model load failed: %s", exc)
     return None
@@ -140,11 +140,9 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
     """
     import pathlib
 
-    import pandas as pd
-
     symbol_upper = symbol.upper().replace("-", "/").replace("/", "_")
     # Normalise: XAU/USD → XAU_USD, XAUUSD → XAU_USD
-    if "_" not in symbol_upper and len(symbol_upper) == 6:  # noqa: PLR2004
+    if "_" not in symbol_upper and len(symbol_upper) == 6:
         symbol_upper = symbol_upper[:3] + "_" + symbol_upper[3:]
 
     # 1. Live price engine async buffer — skip (sync context here)
@@ -163,7 +161,7 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
                 df = df.rename(columns={"timestamp": "time"}).set_index("time")
                 df = df[["open", "high", "low", "close", "volume"]].dropna()
                 df = df.tail(lookback)
-                if len(df) >= 20:  # noqa: PLR2004
+                if len(df) >= 20:
                     logger.debug("ML predict: loaded %d bars from %s", len(df), csv_path.name)
                     return df
             except Exception as exc:
@@ -180,7 +178,7 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
                 df = pd.DataFrame(raw)
                 df["time"] = pd.to_datetime(df["timestamp"], unit="s", utc=True)
                 df = df.set_index("time")[["open", "high", "low", "close", "volume"]].dropna()
-                if len(df) >= 20:  # noqa: PLR2004
+                if len(df) >= 20:
                     logger.debug("ML predict: loaded %d bars from paper broker", len(df))
                     return df
     except Exception as exc:
@@ -204,7 +202,7 @@ def _compute_atr_sl_tp(
     direction: str,
     sl_atr_mult: float = 1.5,
     tp_atr_mult: float = 3.0,
-) -> tuple:
+) -> tuple[float, float]:
     """
     Compute ATR(14)-based stop-loss and take-profit from an OHLCV DataFrame.
 
@@ -214,16 +212,15 @@ def _compute_atr_sl_tp(
 
     Returns (stop_loss, take_profit) rounded to 5 decimal places.
     """
-    import os as _os
     import numpy as _np
 
-    sl_mult = float(_os.getenv("SL_ATR_MULT", str(sl_atr_mult)))
-    tp_mult = float(_os.getenv("TP_ATR_MULT", str(tp_atr_mult)))
+    sl_mult = float(os.getenv("SL_ATR_MULT", str(sl_atr_mult)))
+    tp_mult = float(os.getenv("TP_ATR_MULT", str(tp_atr_mult)))
 
     atr: float | None = None
 
     try:
-        if ohlcv is not None and len(ohlcv) >= 15:  # noqa: PLR2004
+        if ohlcv is not None and len(ohlcv) >= 15:
             highs = ohlcv["high"].to_numpy(dtype=float)[-15:]
             lows = ohlcv["low"].to_numpy(dtype=float)[-15:]
             closes = ohlcv["close"].to_numpy(dtype=float)[-15:]
@@ -234,7 +231,7 @@ def _compute_atr_sl_tp(
                     _np.abs(lows[1:] - closes[:-1]),
                 ),
             )
-            if len(tr) >= 14:  # noqa: PLR2004
+            if len(tr) >= 14:
                 atr = float(_np.mean(tr[-14:]))
     except Exception as _exc:
         logger.debug("Suppressed exception: %s", _exc)
@@ -253,7 +250,7 @@ def _compute_atr_sl_tp(
     return sl, tp
 
 
-def _get_macro_df_for_symbol(symbol: str, lookback: int = 200):
+def _get_macro_df_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame | None:
     """
     Fetch aligned macro features from MacroStore for the given symbol.
 
@@ -267,9 +264,8 @@ def _get_macro_df_for_symbol(symbol: str, lookback: int = 200):
         if len(macro_store) == 0:
             return None
 
-        # Macro alignment requires real OHLCV data from the broker.
-        # Return None here; the caller will proceed without macro features.
-        return None
+        df = macro_store.get_aligned(symbol, lookback=lookback)
+        return df if df is not None and not df.empty else None
     except Exception as exc:
         logger.debug("MacroStore alignment failed (non-fatal): %s", exc)
         return None
@@ -530,15 +526,13 @@ async def predict(
     # Admin role bypasses the plan gate (internal tooling / ops access).
     if getattr(user, "role", "") != "admin":
         try:
-            from monetization.subscription import subscription_manager, plan_gate
+            from monetization.subscription import plan_gate, subscription_manager
 
             sub = subscription_manager.get_user_subscription(user.sub)
             user_plan = sub.tier.value if (sub and sub.is_active() and hasattr(sub.tier, "value")) else "free"
             if not plan_gate("professional", user_plan):
-                from fastapi import HTTPException as _HTTPException, status as _status
-
-                raise _HTTPException(
-                    status_code=_status.HTTP_403_FORBIDDEN,
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
                     detail={
                         "error": "PLAN_LIMIT_EXCEEDED",
                         "required_plan": "professional",
@@ -547,7 +541,7 @@ async def predict(
                     },
                 )
         except ImportError:
-            pass  # monetization not available in test/CI — allow through
+            ...  # nosec B110
     symbol_upper = symbol.upper().replace("-", "/")
     now_iso = datetime.now(UTC).isoformat()
 
@@ -670,7 +664,7 @@ async def get_feature_importances(user: TokenPayload = Depends(require_role("adm
         return {"features": [], "note": "Model not trained yet"}
 
     try:
-        model = joblib.load(str(model_path))
+        model = joblib.load(str(model_path))  # nosec B301 - path is hardcoded to ml/saved_models
         if hasattr(model, "feature_importances_"):
             importances = model.feature_importances_.tolist()
             # Try to get feature names
@@ -716,12 +710,12 @@ async def trigger_retrain(
             import sys
 
             script = os.path.join(
-                os.path.dirname(__file__),
+                Path(__file__).parent,
                 "..",
                 "ml",
                 "train_with_macro.py",
             )
-            if os.path.exists(script):
+            if Path(script).exists():
                 subprocess.run(  # nosec B603 B607 - list-form call with sys.executable; no shell=True, no user input
                     [sys.executable, script, "--years", "8"],
                     timeout=3600,
@@ -779,7 +773,8 @@ async def signal_filter_stats(
             },
         }
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.error("signal_filter_stats failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Signal filter stats unavailable — check server logs") from None
 
 
 @router.get(
@@ -1042,17 +1037,15 @@ async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
                 mtf_store={},
                 saved_model_files_kb={},
                 checked_at=checked_at,
-                error=str(exc),
+                error="ML engine unavailable — check server logs",
             ).model_dump(),
         )
 
 
 # ── RL Agent endpoints ────────────────────────────────────────────────────────
 
-from pydantic import BaseModel as _BaseModel
 
-
-class RLTrainRequest(_BaseModel):
+class RLTrainRequest(BaseModel):
     symbol: str = "XAU_USD"
     timeframe: str = "H1"
     candles: int = 2000
@@ -1060,7 +1053,7 @@ class RLTrainRequest(_BaseModel):
     train_split: float = 0.8
 
 
-class RLWalkForwardRequest(_BaseModel):
+class RLWalkForwardRequest(BaseModel):
     symbol: str = "XAU_USD"
     timeframe: str = "H1"
     candles: int = 3000
@@ -1080,8 +1073,9 @@ async def rl_train(
     Requires: admin role.
     """
     try:
-        from ml.rl_agent import RLAgent, ForexTradingEnv
         import asyncio
+
+        from ml.rl_agent import ForexTradingEnv, RLAgent
 
         # Load candles from the data layer
         df = _load_ohlcv_for_symbol(req.symbol, req.candles)
@@ -1115,13 +1109,14 @@ async def rl_train(
             "metrics": metrics,
         }
     except ImportError as exc:
+        logger.error("rl_train: missing RL dependencies: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"RL dependencies not installed: {exc}",
-        ) from exc
+            detail="RL dependencies not installed — check server logs",
+        ) from None
     except Exception as exc:
         logger.error("rl_train failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="RL training failed — check server logs") from None
 
 
 @router.post("/rl/walk-forward", tags=["ML Models"])
@@ -1135,9 +1130,10 @@ async def rl_walk_forward(
     Requires: admin role.
     """
     try:
-        from ml.rl_agent import walk_forward_eval
         import asyncio
         from dataclasses import asdict
+
+        from ml.rl_agent import walk_forward_eval
 
         df = _load_ohlcv_for_symbol(req.symbol, req.candles)
         candles_list = df.to_dict("records")
@@ -1158,26 +1154,26 @@ async def rl_walk_forward(
         return asdict(result)
 
     except ImportError as exc:
+        logger.error("rl_walk_forward: missing RL dependencies: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"RL dependencies not installed: {exc}",
-        ) from exc
+            detail="RL dependencies not installed — check server logs",
+        ) from None
     except Exception as exc:
         logger.error("rl_walk_forward failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="RL walk-forward failed — check server logs") from None
 
 
 @router.get("/rl/status", tags=["ML Models"])
 async def rl_status(user: TokenPayload = Depends(get_current_user)) -> dict:
     """Return saved RL model files and their sizes."""
-    import os
     from ml.rl_agent import _MODEL_DIR
 
     models = []
-    if os.path.isdir(_MODEL_DIR):
+    if Path(_MODEL_DIR).is_dir():
         for fname in sorted(os.listdir(_MODEL_DIR)):
             if fname.endswith(".zip"):
-                fpath = os.path.join(_MODEL_DIR, fname)
+                fpath = Path(_MODEL_DIR) / fname
                 models.append(
                     {
                         "name": fname,

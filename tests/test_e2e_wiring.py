@@ -36,11 +36,13 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
 # ── Ensure project root is on path ───────────────────────────────────────────
-_ROOT = os.path.dirname(os.path.dirname(__file__))
+_ROOT = os.path.dirname(Path(__file__).parent)
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
@@ -81,8 +83,8 @@ class TestStartupValidator:
         monkeypatch.delenv("REDIS_URL", raising=False)
 
         from config.startup_validator import (
-            validate_environment,
             StartupValidationError,
+            validate_environment,
         )
 
         with pytest.raises(StartupValidationError) as exc_info:
@@ -97,8 +99,8 @@ class TestStartupValidator:
         monkeypatch.setenv("SECURITY_JWT_SECRET", "CHANGE_ME_generate_a_random_48_char_secret")
 
         from config.startup_validator import (
-            validate_environment,
             StartupValidationError,
+            validate_environment,
         )
 
         with pytest.raises(StartupValidationError) as exc_info:
@@ -177,6 +179,7 @@ class TestMacroStoreWiring:
     def test_align_to_hourly_forward_fills(self):
         """align_to_hourly() forward-fills daily values to hourly bars."""
         import pandas as pd
+
         from ml.macro_store import MacroStore
 
         store = MacroStore()
@@ -188,13 +191,14 @@ class TestMacroStoreWiring:
         aligned = store.align_to_hourly(ohlcv)
 
         assert "dxy" in aligned.columns
-        assert aligned.shape[0] == 48  # noqa: PLR2004
+        assert aligned.shape[0] == 48
         assert aligned["dxy"].iloc[0] == pytest.approx(102.5)
         assert aligned["dxy"].iloc[24] == pytest.approx(103.0)
 
     def test_missing_series_fills_zero(self):
         """Missing series in align_to_hourly() fills with 0.0."""
         import pandas as pd
+
         from ml.macro_store import MacroStore
 
         store = MacroStore()
@@ -207,11 +211,12 @@ class TestMacroStoreWiring:
     def test_macro_store_api_endpoint(self, monkeypatch):
         """GET /api/macro/store returns store state via TestClient."""
         _set_jwt(monkeypatch)
-        import ml.macro_store as _ms
-        from ml.macro_store import MacroStore
-        from fastapi.testclient import TestClient
-        from api.macro import router as macro_router
         from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        import ml.macro_store as _ms
+        from api.macro import router as macro_router
+        from ml.macro_store import MacroStore
 
         app = FastAPI()
         app.include_router(macro_router)
@@ -223,7 +228,7 @@ class TestMacroStoreWiring:
         try:
             client = TestClient(app)
             resp = client.get("/api/macro/store")
-            assert resp.status_code == 200  # noqa: PLR2004
+            assert resp.status_code == 200
             data = resp.json()
             assert data["status"] == "ok"
             assert data["total_series"] >= 1
@@ -234,11 +239,12 @@ class TestMacroStoreWiring:
     def test_macro_store_update_endpoint(self, monkeypatch):
         """POST /api/macro/store/update upserts a value."""
         _set_jwt(monkeypatch)
-        import ml.macro_store as _ms
-        from ml.macro_store import MacroStore
-        from fastapi.testclient import TestClient
-        from api.macro import router as macro_router
         from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        import ml.macro_store as _ms
+        from api.macro import router as macro_router
+        from ml.macro_store import MacroStore
 
         app = FastAPI()
         app.include_router(macro_router)
@@ -256,7 +262,7 @@ class TestMacroStoreWiring:
                     "value": 4.25,
                 },
             )
-            assert resp.status_code == 200  # noqa: PLR2004
+            assert resp.status_code == 200
             data = resp.json()
             assert data["status"] == "updated"
             assert data["series"] == "us10y"
@@ -267,11 +273,12 @@ class TestMacroStoreWiring:
     def test_macro_features_prefers_store(self, monkeypatch):
         """GET /api/macro/features returns store values when populated."""
         _set_jwt(monkeypatch)
-        import ml.macro_store as _ms
-        from ml.macro_store import MacroStore
-        from fastapi.testclient import TestClient
-        from api.macro import router as macro_router
         from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        import ml.macro_store as _ms
+        from api.macro import router as macro_router
+        from ml.macro_store import MacroStore
 
         app = FastAPI()
         app.include_router(macro_router)
@@ -284,7 +291,7 @@ class TestMacroStoreWiring:
         try:
             client = TestClient(app)
             resp = client.get("/api/macro/features")
-            assert resp.status_code == 200  # noqa: PLR2004
+            assert resp.status_code == 200
             data = resp.json()
             assert "macro_dxy" in data
             assert data["macro_dxy"] == pytest.approx(102.5)
@@ -301,10 +308,11 @@ class TestMLEndpoints:
     @pytest.fixture
     def ml_client(self, monkeypatch):
         _set_jwt(monkeypatch)
-        from fastapi.testclient import TestClient
-        from api.ml import router
-        from api.auth import get_current_user, require_role, TokenPayload
         from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.auth import TokenPayload, get_current_user, require_role
+        from api.ml import router
 
         # Stub auth so tests don't need a real JWT
         _stub_user = TokenPayload(sub="test-user", role="admin", exp=9999999999)
@@ -318,7 +326,7 @@ class TestMLEndpoints:
     def test_accuracy_endpoint_shape(self, ml_client):
         """GET /api/ml/accuracy returns AccuracyResponse fields."""
         resp = ml_client.get("/api/ml/accuracy")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         data = resp.json()
         for field in (
             "model_id",
@@ -337,23 +345,23 @@ class TestMLEndpoints:
     def test_models_endpoint_returns_list(self, ml_client):
         """GET /api/ml/models returns a list."""
         resp = ml_client.get("/api/ml/models")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         assert isinstance(resp.json(), list)
 
     def test_predict_endpoint_fallback(self, ml_client):
         """POST /api/ml/predict/{symbol} returns PredictResponse even without model."""
         resp = ml_client.post("/api/ml/predict/XAUUSD", json={"timeframe": "H1", "lookback": 100})
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         data = resp.json()
         assert data["symbol"] == "XAUUSD"
         assert data["direction"] in ("BUY", "SELL", "HOLD")
-        assert 0.0 <= data["confidence"] <= 100.0  # noqa: PLR2004
+        assert 0.0 <= data["confidence"] <= 100.0
         assert "generated_at" in data
 
     def test_predict_normalises_symbol(self, ml_client):
         """Symbol is uppercased and dashes replaced with slashes."""
         resp = ml_client.post("/api/ml/predict/xau-usd", json={"timeframe": "H1", "lookback": 50})
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         assert resp.json()["symbol"] == "XAU/USD"
 
 
@@ -376,8 +384,6 @@ class TestCORSSafety:
         from fastapi.middleware.cors import CORSMiddleware
 
         # Simulate what app.py does
-        import os
-
         raw = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
         allowed = [o.strip() for o in raw.split(",") if o.strip()]
         assert "*" not in allowed, "Wildcard origin must not be used with allow_credentials=True"
@@ -409,10 +415,10 @@ class TestPreTradeGate:
         """
         _set_jwt(monkeypatch)
         from risk.pre_trade_gate import (
-            PreTradeGate,
             GateOrder,
-            TradeBlockedError,
+            PreTradeGate,
             RiskManagerError,
+            TradeBlockedError,
         )
 
         class _ExplodingConfig:
@@ -436,7 +442,7 @@ class TestPreTradeGate:
             daily_starting_equity = 100.0
             config = _ExplodingConfig()  # raises on attribute access
             current_drawdown = 0.0
-            open_positions = []
+            open_positions: ClassVar[list] = []
 
         gate = PreTradeGate(_BrokenRiskManager())
         order = GateOrder(symbol="XAUUSD", side="BUY", quantity=1.0)
@@ -478,11 +484,11 @@ class TestKillSwitch:
 
         # Wrong token must raise PermissionError or return falsy — never silently deactivate
         try:
-            _result = ks.deactivate("wrong-token")
+            _result = ks.deactivate("wrong-token")  # pylint: disable=assignment-from-none
             # If it returns without raising, the switch must still be active
             assert ks.is_active(), "Deactivation with wrong token must not clear the kill switch"
         except PermissionError:
-            pass  # expected — wrong token correctly rejected
+            ...  # nosec B110
         except Exception as exc:
             pytest.fail(f"Unexpected exception type on wrong token: {type(exc).__name__}: {exc}")
 
@@ -496,9 +502,10 @@ class TestSocialLeaderboard:
     @pytest.fixture
     def leaderboard_client(self, monkeypatch):
         _set_jwt(monkeypatch)
-        from fastapi.testclient import TestClient
-        from api.social_feed import leaderboard_router
         from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.social_feed import leaderboard_router
 
         app = FastAPI()
         app.include_router(leaderboard_router)
@@ -507,7 +514,7 @@ class TestSocialLeaderboard:
     def test_leaderboard_returns_ranked_list(self, leaderboard_client):
         """GET /api/social/leaderboard returns a list (may be empty in test env)."""
         resp = leaderboard_client.get("/api/social/leaderboard")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         data = resp.json()
         assert isinstance(data, list)
         # Empty list is valid — no real trader data in test environment
@@ -526,9 +533,7 @@ class TestSocialLeaderboard:
         """period= query param is accepted without error."""
         for period in ("monthly", "quarterly", "all"):
             resp = leaderboard_client.get(f"/api/social/leaderboard?period={period}")
-            assert (
-                resp.status_code == 200  # noqa: PLR2004
-            ), f"period={period} returned {resp.status_code}"
+            assert resp.status_code == 200, f"period={period} returned {resp.status_code}"
 
     def test_leaderboard_ranks_are_sequential(self, leaderboard_client):
         """Ranks start at 1 and are sequential."""

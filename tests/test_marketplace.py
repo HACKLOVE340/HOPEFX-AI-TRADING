@@ -4,7 +4,8 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 import pytest
-from social.marketplace import StrategyMarketplace, StrategyListing
+
+from social.marketplace import StrategyListing, StrategyMarketplace
 
 
 class TestStrategyMarketplace:
@@ -67,5 +68,5 @@ def strategy(data):
         purchase = marketplace.purchase_strategy("strat-3", "buyer-1")
 
         # Platform takes 20%, creator gets 80%
-        assert purchase["platform_fee"] == 20.0  # noqa: PLR2004
-        assert purchase["creator_payout"] == 80.0  # noqa: PLR2004
+        assert purchase["platform_fee"] == 20.0
+        assert purchase["creator_payout"] == 80.0

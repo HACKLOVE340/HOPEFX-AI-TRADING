@@ -18,13 +18,10 @@ from __future__ import annotations
 import json
 import pathlib
 import sys
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -119,7 +116,7 @@ class TestStampOandaPaperStart:
         data = json.loads(stamp.read_text())
         assert data["environment"] == "practice"
         assert "started_utc" in data
-        assert data["target_days"] == 30  # noqa: PLR2004
+        assert data["target_days"] == 30
 
     def test_does_not_overwrite_existing_stamp(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
@@ -184,7 +181,7 @@ class TestPaperTradingClockLogic:
         result = _compute_clock_status(stamp, oanda_key="")
         assert result["started"] is False
         assert result["elapsed_days"] == 0.0
-        assert result["remaining_days"] == 30.0  # noqa: PLR2004
+        assert result["remaining_days"] == 30.0
         assert result["complete"] is False
 
     def test_creds_set_but_not_connected(self, tmp_path):
@@ -200,8 +197,8 @@ class TestPaperTradingClockLogic:
         stamp = _write_stamp(data_dir, ten_days_ago)
         result = _compute_clock_status(stamp)
         assert result["started"] is True
-        assert 9.9 <= result["elapsed_days"] <= 10.1  # noqa: PLR2004
-        assert 19.9 <= result["remaining_days"] <= 20.1  # noqa: PLR2004
+        assert 9.9 <= result["elapsed_days"] <= 10.1
+        assert 19.9 <= result["remaining_days"] <= 20.1
         assert result["complete"] is False
 
     def test_complete_after_31_days(self, tmp_path):
@@ -213,7 +210,7 @@ class TestPaperTradingClockLogic:
         assert result["started"] is True
         assert result["complete"] is True
         assert result["remaining_days"] == 0.0
-        assert result["elapsed_days"] >= 30.0  # noqa: PLR2004
+        assert result["elapsed_days"] >= 30.0
 
     def test_remaining_days_never_negative(self, tmp_path):
         data_dir = tmp_path / "data"
@@ -237,7 +234,7 @@ class TestPaperTradingClockLogic:
         stamp = _write_stamp(data_dir, fifteen_days_ago)
         result = _compute_clock_status(stamp)
         total = result["elapsed_days"] + result["remaining_days"]
-        assert abs(total - 30.0) < 0.1  # within 2.4 hours tolerance  # noqa: PLR2004
+        assert abs(total - 30.0) < 0.1  # within 2.4 hours tolerance
 
 
 # ---------------------------------------------------------------------------
@@ -268,7 +265,7 @@ class TestInitBrokerSelection:
         MockPaperClass = MagicMock(return_value=mock_paper_instance)
 
         _INJECTED = ("api.admin", "brokers.paper_trading", "core.startup_factories")
-        with MagicMock() as mock_admin:
+        with MagicMock() as mock_admin:  # pylint: disable=not-context-manager
             mock_admin.log_activity = MagicMock()
             # Snapshot only the keys we will mutate — never clear sys.modules
             # globally as that drops all cached modules and breaks subsequent tests.
@@ -277,6 +274,7 @@ class TestInitBrokerSelection:
             sys.modules["brokers.paper_trading"] = MagicMock(PaperTradingBroker=MockPaperClass)
             try:
                 import importlib
+
                 import core.startup_factories as sf
 
                 importlib.reload(sf)
@@ -306,13 +304,14 @@ class TestInitBrokerSelection:
         MockPaperClass = MagicMock(return_value=mock_paper_instance)
 
         _INJECTED = ("api.admin", "brokers.paper_trading", "core.startup_factories")
-        with MagicMock() as mock_admin:
+        with MagicMock() as mock_admin:  # pylint: disable=not-context-manager
             mock_admin.log_activity = MagicMock()
             _saved = {k: sys.modules.get(k) for k in _INJECTED}
             sys.modules["api.admin"] = mock_admin
             sys.modules["brokers.paper_trading"] = MagicMock(PaperTradingBroker=MockPaperClass)
             try:
                 import importlib
+
                 import core.startup_factories as sf
 
                 importlib.reload(sf)

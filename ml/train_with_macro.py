@@ -55,9 +55,7 @@ import json
 import logging
 import sys
 import warnings
-from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -160,7 +158,7 @@ def build_features(
         include_regime=True,
         macro_df=macro_df,
     )
-    X, y_class, y_reg, _ = fe.create_features(
+    X, y_class, _y_reg, _ = fe.create_features(
         ohlcv,
         target_col="close",
         prediction_horizon=prediction_horizon,
@@ -205,7 +203,7 @@ def _compute_fold_sharpe(
     signal = np.where(preds == 1, 1.0, -1.0)
     strategy_returns = signal * bar_returns
 
-    if len(strategy_returns) < 2:  # noqa: PLR2004
+    if len(strategy_returns) < 2:
         return 0.0
 
     mu = np.mean(strategy_returns)
@@ -271,7 +269,7 @@ def walk_forward_eval(
 
         model.fit(X_train, y_train)
         preds = model.predict(X_test)
-        (model.predict_proba(X_test)[:, 1] if hasattr(model, "predict_proba") else preds)
+        _proba = model.predict_proba(X_test)[:, 1] if hasattr(model, "predict_proba") else preds
 
         acc = accuracy_score(y_test, preds)
         f1 = f1_score(y_test, preds, zero_division=0)
@@ -321,7 +319,7 @@ def walk_forward_eval(
         "mean_sharpe": round(float(np.mean(sharpes)), 4),
         "t_stat": round(float(t_stat), 4),
         "p_value": round(float(p_value), 4),
-        "significant": bool(p_value < 0.05),  # noqa: PLR2004
+        "significant": bool(p_value < 0.05),
     }
 
 
@@ -471,7 +469,7 @@ def oos_eval(
     acc = accuracy_score(y_oos, preds)
     f1 = f1_score(y_oos, preds, zero_division=0)
     n = len(y_oos)
-    k = int(round(acc * n))
+    k = round(acc * n)
 
     # Accuracy SE: sqrt(p*(1-p)/n)
     acc_se = float(np.sqrt(acc * (1 - acc) / max(n, 1)))
@@ -501,7 +499,7 @@ def oos_eval(
         n,
         k,
         p_value,
-        p_value < 0.05,  # noqa: PLR2004
+        p_value < 0.05,
     )
     logger.info("\n%s", classification_report(y_oos, preds))
 
@@ -528,7 +526,7 @@ def oos_eval(
         "f1": round(f1, 4),
         "auc": round(auc, 4),
         "p_value_binomial": round(p_value, 4),
-        "significant": bool(p_value < 0.05),  # noqa: PLR2004
+        "significant": bool(p_value < 0.05),
         "oos_period": f"{oos_start} → {oos_end}",
         "test": "one-sided binomial (H0: accuracy <= 0.5)",
         "top_features": top10,
@@ -612,9 +610,9 @@ def main():
     X_oos, y_oos = None, None
 
     if args.oos_years > 0:
-        oos_n = int(round(args.oos_years * 252))  # ~252 trading days/year
+        oos_n = round(args.oos_years * 252)  # ~252 trading days/year
         oos_n = min(oos_n, len(X) // 4)  # cap at 25% of data
-        if oos_n < 100:  # noqa: PLR2004
+        if oos_n < 100:
             # < 100 bars gives accuracy SE > ±0.05 — not meaningful for production.
             logger.warning(
                 "--oos-years %.1f produces only %d bars (need >= 100 for SE <= ±0.05). "
@@ -676,7 +674,7 @@ def main():
 
     # ── Save report ───────────────────────────────────────────────────────────
     report_path = MODEL_DIR / "training_report.json"
-    with open(report_path, "w") as f:
+    with Path(report_path).open("w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
     logger.info("Training report saved to %s", report_path)
 

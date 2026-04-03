@@ -8,11 +8,12 @@ Unit tests for core components.
 """
 
 import asyncio
+
 import pytest
 
-from core.exceptions import HopeFXError, RiskViolation
 from config.settings import Settings
-from core.event_bus import EventBus, MemoryMappedEventStore, DomainEvent
+from core.event_bus import DomainEvent, EventBus, MemoryMappedEventStore
+from core.exceptions import HopeFXError, RiskViolation
 
 
 @pytest.mark.asyncio
@@ -46,7 +47,7 @@ async def test_event_bus(tmp_path):
 
     assert len(received) == 1
     assert received[0]["symbol"] == "XAUUSD"
-    assert received[0]["bid"] == 1800.0  # noqa: PLR2004
+    assert received[0]["bid"] == 1800.0
 
 
 @pytest.mark.asyncio
@@ -93,6 +94,6 @@ def test_exceptions():
     )
 
     assert error.rule == "max_position"
-    assert error.limit == 100.0  # noqa: PLR2004
-    assert error.actual == 150.0  # noqa: PLR2004
+    assert error.limit == 100.0
+    assert error.actual == 150.0
     assert isinstance(error, HopeFXError)
