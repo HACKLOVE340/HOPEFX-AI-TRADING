@@ -405,6 +405,15 @@ class SklearnOnlineLearner:
           - 4 data layer scalars: sentiment, OFI, macro_impact, blackout
 
         All values are padded/truncated to ``n_features``.
+
+        Schema contract
+        ---------------
+        When the raw feature count differs from ``n_features``, a WARNING is
+        emitted describing the delta.  Silent truncation destroys the positional
+        meaning of every feature beyond the truncation point; silent padding
+        introduces artificial zero-valued features that corrupt model weights.
+        Operators MUST reconcile the mismatch by retraining or adjusting
+        ``n_features`` rather than relying on this fallback indefinitely.
         """
         try:
             cols = [c for c in ["open", "high", "low", "close", "volume"] if c in bars.columns]
@@ -439,17 +448,41 @@ class SklearnOnlineLearner:
 
             flat = np.concatenate([flat, dl_extra])
 
-            # Pad or truncate to n_features
-            if len(flat) < self.n_features:
-                flat = np.pad(flat, (0, self.n_features - len(flat)))
-            else:
-                flat = flat[: self.n_features]
+            # ── Feature count validation ──────────────────────────────────────
+            # Pad or truncate to n_features, but ALWAYS log when the raw count
+            # differs from the expected schema.  Silent truncation/padding is a
+            # known source of model degradation and must never go unnoticed.
+            raw_len = len(flat)
+            if raw_len != self.n_features:
+                delta = raw_len - self.n_features
+                if raw_len < self.n_features:
+                    logger.warning(
+                        "SklearnOnlineLearner[%s]: feature count mismatch — got %d, expected %d "
+                        "(padding %d zeros at tail). Retrain model to fix feature schema.",
+                        self.symbol,
+                        raw_len,
+                        self.n_features,
+                        self.n_features - raw_len,
+                    )
+                    flat = np.pad(flat, (0, self.n_features - raw_len))
+                else:
+                    logger.warning(
+                        "SklearnOnlineLearner[%s]: feature count mismatch — got %d, expected %d "
+                        "(truncating %d tail features). Positional feature semantics beyond index %d "
+                        "are LOST. Retrain model to fix feature schema.",
+                        self.symbol,
+                        raw_len,
+                        self.n_features,
+                        delta,
+                        self.n_features,
+                    )
+                    flat = flat[: self.n_features]
 
             # Replace inf/nan
             flat = np.where(np.isfinite(flat), flat, 0.0)
             return flat.reshape(1, -1)
         except Exception as exc:  # pylint: disable=broad-exception-caught
-            logger.debug("SklearnOnlineLearner._extract_features: %s", exc)
+            logger.warning("SklearnOnlineLearner._extract_features failed for %s: %s", self.symbol, exc)
             return None
 
     def _extract_label(self, bars: pd.DataFrame) -> np.ndarray | None:

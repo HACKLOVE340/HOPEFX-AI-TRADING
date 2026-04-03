@@ -48,8 +48,20 @@ try:
     SQLALCHEMY_AVAILABLE = True
 except ImportError:
     SQLALCHEMY_AVAILABLE = False
+    # Log at ERROR level — SQLAlchemy unavailability means trade records, audit
+    # trails, and all database persistence are silently disabled.  This is NOT
+    # a warning; it is a critical operational gap that must be resolved before
+    # running in production.
+    logger.error(
+        "CRITICAL DEPENDENCY MISSING: SQLAlchemy is not installed. "
+        "All database persistence (trades, orders, audit trail, user accounts) "
+        "is DISABLED. Fix with: pip install sqlalchemy>=2.0 "
+        "or: pip install -r requirements.txt"
+    )
 
-    # Stub everything so class bodies that reference Column etc. don't NameError
+    # Stub everything so class bodies that reference Column etc. don't NameError.
+    # These stubs allow the application to start in a degraded state so operators
+    # can see the error and install the dependency without a crash loop.
     class _Stub:
         def __init__(self, *a, **kw):
             pass

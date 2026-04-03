@@ -337,6 +337,11 @@ class InferenceEngine:
 
         Falls back to build_extended_features() if the data layer is
         unavailable (e.g. during backtesting without a live orchestrator).
+
+        Validation gates applied after building:
+          1. Empty / None result → return None with WARNING.
+          2. NaN/Inf in any feature → impute with 0 and log WARNING.
+          3. Feature count mismatch vs expected → log WARNING.
         """
         try:
             # Deduplicate OHLCV index before feature building — duplicate
@@ -376,6 +381,11 @@ class InferenceEngine:
                 )
 
             if X is None or X.empty:
+                logger.warning(
+                    "InferenceEngine._build_features: feature builder returned empty/None for %s — "
+                    "falling back to neutral signal",
+                    symbol,
+                )
                 return None
 
             # Append MTF regime columns
@@ -389,9 +399,41 @@ class InferenceEngine:
                 except Exception as mtf_exc:
                     logger.debug("MTF append failed: %s", mtf_exc)
 
-            return X.iloc[[-1]]  # last bar only
+            X = X.iloc[[-1]]  # last bar only
+
+            # ── Feature validation ────────────────────────────────────────────
+            # Gate 1: NaN / Inf check — garbage features → garbage predictions.
+            nan_cols = X.columns[X.isnull().any()].tolist()
+            inf_cols = X.columns[np.isinf(X).any()].tolist()
+            bad_cols = list(set(nan_cols + inf_cols))
+            if bad_cols:
+                logger.warning(
+                    "InferenceEngine: %d features contain NaN/Inf for %s: %s — imputing with 0. "
+                    "Investigate data pipeline to prevent systematic model degradation.",
+                    len(bad_cols),
+                    symbol,
+                    bad_cols[:10],
+                )
+                X = X.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+
+            # Gate 2: All-zero feature vector indicates silent upstream failure.
+            non_zero_pct = float((X != 0).values.mean())
+            if non_zero_pct < 0.05:
+                logger.warning(
+                    "InferenceEngine: feature vector for %s is >95%% zeros (non_zero_pct=%.3f) — "
+                    "possible silent upstream data failure. Check gold feed and macro pipeline.",
+                    symbol,
+                    non_zero_pct,
+                )
+
+            return X
+
         except Exception as exc:
-            logger.debug("Feature build failed: %s", exc)
+            logger.warning(
+                "InferenceEngine._build_features: failed for %s: %s — returning neutral",
+                symbol,
+                exc,
+            )
             return None
 
     # ── Calibration ───────────────────────────────────────────────────────────

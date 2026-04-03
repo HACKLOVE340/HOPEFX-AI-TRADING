@@ -179,6 +179,8 @@ class KillSwitch:
         # Remove both the state file and the flag file so the next process
         # restart starts clean and does not re-activate from stale files.
         self._clear_state()
+        # Clear the Redis distributed latch so restarting pods do not re-activate.
+        self._clear_redis_latch()
         logger.warning("Kill switch DEACTIVATED — trading may resume")
 
     def is_active(self) -> bool:
@@ -225,6 +227,13 @@ class KillSwitch:
             return
         self._running = True
 
+        # Check Redis distributed latch at startup — any pod that starts while
+        # the kill switch is active (even if Redis pub/sub was down when it was
+        # first activated) will detect the latch and activate immediately.
+        # This prevents the split-brain scenario where a restarting pod resumes
+        # trading while sibling pods are halted.
+        await self._check_redis_latch()
+
         # Wire up legacy in-process event-bus subscription (kept for backward compat)
         if self._event_bus is not None:
             try:
@@ -247,6 +256,98 @@ class KillSwitch:
             self._flag_file,
             self._poll_interval,
         )
+
+    # ---------------------------------------------------------------------- #
+    # Redis distributed latch — prevents split-brain on pod restart           #
+    # ---------------------------------------------------------------------- #
+
+    _REDIS_LATCH_KEY = "hopefx:kill_switch:active"
+    _REDIS_REASON_KEY = "hopefx:kill_switch:reason"
+
+    async def _check_redis_latch(self) -> None:
+        """
+        Check for a persistent Redis kill-switch latch on startup.
+
+        The latch is written by _write_redis_latch() when the kill switch is
+        activated.  Any pod that starts after activation (including pods that
+        restarted after a crash) will find the latch and activate immediately.
+
+        This closes the split-brain window where:
+          1. Pod A activates the kill switch and writes the latch.
+          2. Pod B crashes and restarts.
+          3. Pod B does not receive the Redis pub/sub event (already fired).
+          4. Without the latch, Pod B resumes trading — split-brain.
+          5. With the latch, Pod B reads the key at startup and halts.
+        """
+        try:
+            from core.event_bus import bus as _bus
+
+            r = getattr(_bus, "_redis", None) or getattr(_bus, "_client", None)
+            if r is None:
+                # Try a direct Redis connection as fallback
+                try:
+                    import redis as _redis_lib
+
+                    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+                    r = _redis_lib.from_url(redis_url, decode_responses=True)
+                except Exception:
+                    return
+
+            latch_val = r.get(self._REDIS_LATCH_KEY)
+            if latch_val and str(latch_val).lower() == "true":
+                reason = r.get(self._REDIS_REASON_KEY) or "redis latch (kill switch was active on peer pod)"
+                if not self._active:
+                    logger.critical(
+                        "Kill switch: Redis distributed latch detected at startup — activating. Reason: %s",
+                        reason,
+                    )
+                    self._activate_internal(f"[redis-latch] {reason}")
+        except Exception as exc:
+            logger.debug("Kill switch: Redis latch check failed (non-fatal): %s", exc)
+
+    def _write_redis_latch(self, reason: str) -> None:
+        """
+        Write the persistent Redis kill-switch latch.
+
+        Called from _activate_internal() so that any pod restarting after this
+        activation will read the latch and halt immediately (see _check_redis_latch).
+
+        The latch is a plain string key (not pub/sub) so it survives Redis
+        restarts and is available to pods that come up after the pub/sub event.
+        TTL is set to 7 days to prevent stale latches from blocking trading
+        indefinitely after an intended manual reset.
+        """
+        _LATCH_TTL = 7 * 24 * 3600  # 7 days
+        try:
+            from core.event_bus import bus as _bus
+
+            r = getattr(_bus, "_redis", None) or getattr(_bus, "_client", None)
+            if r is None:
+                import redis as _redis_lib
+
+                redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+                r = _redis_lib.from_url(redis_url, decode_responses=True)
+            r.set(self._REDIS_LATCH_KEY, "true", ex=_LATCH_TTL)
+            r.set(self._REDIS_REASON_KEY, reason, ex=_LATCH_TTL)
+            logger.info("Kill switch: Redis distributed latch written (TTL=%ds)", _LATCH_TTL)
+        except Exception as exc:
+            logger.warning("Kill switch: could not write Redis latch (non-fatal): %s", exc)
+
+    def _clear_redis_latch(self) -> None:
+        """Remove the Redis kill-switch latch on deactivation."""
+        try:
+            from core.event_bus import bus as _bus
+
+            r = getattr(_bus, "_redis", None) or getattr(_bus, "_client", None)
+            if r is None:
+                import redis as _redis_lib
+
+                redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+                r = _redis_lib.from_url(redis_url, decode_responses=True)
+            r.delete(self._REDIS_LATCH_KEY, self._REDIS_REASON_KEY)
+            logger.info("Kill switch: Redis distributed latch cleared")
+        except Exception as exc:
+            logger.debug("Kill switch: could not clear Redis latch (non-fatal): %s", exc)
 
     async def stop(self) -> None:
         """Stop background polling and Redis subscription."""
@@ -314,6 +415,10 @@ class KillSwitch:
 
         # Persist state to JSON so the next process restart can restore it.
         self._persist_state()
+
+        # Write Redis distributed latch so pods that restart after this activation
+        # will read the latch and halt immediately (prevents split-brain).
+        self._write_redis_latch(reason)
 
         # Send Sentry critical alert (fire-and-forget)
         try:

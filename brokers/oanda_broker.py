@@ -27,8 +27,10 @@ Usage
     await broker.disconnect()
 """
 
+import asyncio
 import logging
 import os
+import uuid as _uuid_mod
 
 import aiohttp
 
@@ -39,6 +41,14 @@ _LIVE_BASE = "https://api-fxtrade.oanda.com"
 
 # Default request timeout (seconds).
 _DEFAULT_TIMEOUT = 10
+
+# Retry configuration for transient network errors and rate-limits.
+# Max retries (not counting the initial attempt).
+_MAX_RETRIES = 3
+# Base delay in seconds for the first retry; doubles on each subsequent attempt.
+_RETRY_BASE_DELAY = 0.5
+# HTTP status codes that are safe to retry (transient failures).
+_RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 
 
 def _resolve_env(value: object) -> str:
@@ -224,12 +234,27 @@ class OandaBroker:
             sl_distance (float) — stop-loss distance in price units (optional)
             tp_price    (float) — take-profit price (optional)
             time_in_force (str) — "FOK" (default for MARKET) | "GTC" | "GFD"
-            client_id   (str)   — optional client order ID
+            client_id   (str)   — optional client order ID (used as idempotency key)
 
         Returns
         -------
         Dict with keys: ``success`` (bool), ``order_id`` (str), ``trade_id`` (str),
         ``fill_price`` (float), ``comment`` (str).
+
+        Retry behaviour
+        ---------------
+        Transient network errors (aiohttp.ClientError) and server-side failures
+        (HTTP 500/502/503/504) are retried up to _MAX_RETRIES times with
+        exponential backoff.  HTTP 429 (rate-limit) respects the Retry-After
+        header when present.  Non-retryable failures (400, 401, 403, 404) are
+        returned immediately.
+
+        Idempotency
+        -----------
+        A UUID idempotency key is generated for every order (or taken from
+        ``client_id``) and sent as the OANDA clientExtensions ID.  This
+        prevents duplicate fills when the network fails after submission but
+        before a response is received.
         """
         if not self._assert_connected("place_order"):
             return {"success": False, "order_id": None, "comment": "Not connected"}
@@ -241,7 +266,8 @@ class OandaBroker:
         sl_distance = order_params.get("sl_distance")
         tp_price = order_params.get("tp_price")
         time_in_force = order_params.get("time_in_force", "FOK" if order_type == "MARKET" else "GTC")
-        client_id = order_params.get("client_id")
+        # Generate a stable idempotency key for this order attempt.
+        client_id = order_params.get("client_id") or str(_uuid_mod.uuid4())
 
         order_body: dict = {
             "type": order_type,
@@ -265,47 +291,127 @@ class OandaBroker:
                 "timeInForce": "GTC",
             }
 
-        if client_id:
-            order_body["clientExtensions"] = {"id": client_id}
+        # Always attach the idempotency key so OANDA deduplicates on retry.
+        order_body["clientExtensions"] = {"id": client_id[:128]}
 
         payload = {"order": order_body}
+        url = f"{self._base_url}/v3/accounts/{self._account_id}/orders"
 
-        try:
-            async with self._session.post(
-                f"{self._base_url}/v3/accounts/{self._account_id}/orders",
-                json=payload,
-            ) as resp:
-                data = await resp.json()
-                if resp.status in (200, 201):
-                    fill = data.get("orderFillTransaction", {})
-                    created = data.get("orderCreateTransaction", {})
-                    order_id = fill.get("orderID") or created.get("id")
-                    trade_id = fill.get("tradeOpened", {}).get("tradeID")
-                    fill_price = fill.get("price")
-                    logger.info(
-                        "OANDA order placed | instrument=%s | units=%s | order_id=%s | trade_id=%s",
+        last_error: str = "Unknown error"
+        for attempt in range(_MAX_RETRIES + 1):
+            try:
+                async with self._session.post(url, json=payload) as resp:
+                    # Non-retryable client errors — return immediately.
+                    if resp.status in (400, 401, 403, 404):
+                        data = await resp.json()
+                        error_msg = data.get("errorMessage", str(data))
+                        logger.warning(
+                            "OANDA order rejected (non-retryable) | status=%s | error=%s | instrument=%s",
+                            resp.status,
+                            error_msg,
+                            instrument,
+                        )
+                        return {"success": False, "order_id": None, "comment": error_msg}
+
+                    if resp.status == 429:
+                        # Rate-limited — honour Retry-After if present.
+                        retry_after = float(resp.headers.get("Retry-After", _RETRY_BASE_DELAY * (2**attempt)))
+                        logger.warning(
+                            "OANDA rate-limited (429) | retry_after=%.1fs | attempt=%d/%d",
+                            retry_after,
+                            attempt + 1,
+                            _MAX_RETRIES + 1,
+                        )
+                        if attempt < _MAX_RETRIES:
+                            await asyncio.sleep(retry_after)
+                            continue
+                        return {"success": False, "order_id": None, "comment": "Rate limited — max retries exceeded"}
+
+                    if resp.status in (500, 502, 503, 504):
+                        last_error = f"HTTP {resp.status}"
+                        if attempt < _MAX_RETRIES:
+                            delay = _RETRY_BASE_DELAY * (2**attempt)
+                            logger.warning(
+                                "OANDA server error %s | retrying in %.1fs | attempt=%d/%d",
+                                resp.status,
+                                delay,
+                                attempt + 1,
+                                _MAX_RETRIES + 1,
+                            )
+                            await asyncio.sleep(delay)
+                            continue
+                        return {"success": False, "order_id": None, "comment": last_error}
+
+                    data = await resp.json()
+                    if resp.status in (200, 201):
+                        fill = data.get("orderFillTransaction", {})
+                        created = data.get("orderCreateTransaction", {})
+                        order_id = fill.get("orderID") or created.get("id")
+                        trade_id = fill.get("tradeOpened", {}).get("tradeID")
+                        fill_price = fill.get("price")
+                        logger.info(
+                            "OANDA order placed | instrument=%s | units=%s | order_id=%s | trade_id=%s | attempt=%d",
+                            instrument,
+                            units,
+                            order_id,
+                            trade_id,
+                            attempt + 1,
+                        )
+                        return {
+                            "success": True,
+                            "order_id": order_id,
+                            "trade_id": trade_id,
+                            "fill_price": float(fill_price) if fill_price else None,
+                            "comment": "OK",
+                            "idempotency_key": client_id,
+                        }
+                    error_msg = data.get("errorMessage", str(data))
+                    logger.warning(
+                        "OANDA order failed | status=%s | error=%s | instrument=%s",
+                        resp.status,
+                        error_msg,
                         instrument,
-                        units,
-                        order_id,
-                        trade_id,
                     )
-                    return {
-                        "success": True,
-                        "order_id": order_id,
-                        "trade_id": trade_id,
-                        "fill_price": float(fill_price) if fill_price else None,
-                        "comment": "OK",
-                    }
-                error_msg = data.get("errorMessage", str(data))
-                logger.warning("OANDA order failed | status=%s | error=%s", resp.status, error_msg)
-                return {"success": False, "order_id": None, "comment": error_msg}
-        except aiohttp.ClientError:
-            logger.exception("OandaBroker.place_order network error: %s")
-            return {"success": False, "order_id": None, "comment": "Network error — check server logs"}
+                    return {"success": False, "order_id": None, "comment": error_msg}
+
+            except aiohttp.ClientConnectionError as exc:
+                last_error = f"Connection error: {exc}"
+                if attempt < _MAX_RETRIES:
+                    delay = _RETRY_BASE_DELAY * (2**attempt)
+                    logger.warning(
+                        "OANDA connection error | retrying in %.1fs | attempt=%d/%d | error=%s",
+                        delay,
+                        attempt + 1,
+                        _MAX_RETRIES + 1,
+                        exc,
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                logger.error("OandaBroker.place_order: connection failed after %d attempts: %s", _MAX_RETRIES + 1, exc)
+                return {"success": False, "order_id": None, "comment": last_error}
+            except aiohttp.ServerTimeoutError as exc:
+                last_error = f"Timeout: {exc}"
+                if attempt < _MAX_RETRIES:
+                    delay = _RETRY_BASE_DELAY * (2**attempt)
+                    logger.warning(
+                        "OANDA timeout | retrying in %.1fs | attempt=%d/%d",
+                        delay,
+                        attempt + 1,
+                        _MAX_RETRIES + 1,
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                logger.error("OandaBroker.place_order: timed out after %d attempts", _MAX_RETRIES + 1)
+                return {"success": False, "order_id": None, "comment": last_error}
+            except aiohttp.ClientError as exc:
+                logger.exception("OandaBroker.place_order: non-retryable client error: %s", exc)
+                return {"success": False, "order_id": None, "comment": f"Network error: {exc}"}
+
+        return {"success": False, "order_id": None, "comment": last_error}
 
     async def close_trade(self, trade_id: str, units: str | None = "ALL") -> dict:
         """
-        Close an open trade (full or partial).
+        Close an open trade (full or partial) with exponential-backoff retry.
 
         Parameters
         ----------
@@ -315,40 +421,83 @@ class OandaBroker:
         if not self._assert_connected("close_trade"):
             return {"success": False, "comment": "Not connected"}
         payload = {"units": units}
-        try:
-            async with self._session.put(
-                f"{self._base_url}/v3/accounts/{self._account_id}/trades/{trade_id}/close",
-                json=payload,
-            ) as resp:
-                data = await resp.json()
-                if resp.status == 200:
-                    logger.info("OANDA trade closed | trade_id=%s | units=%s", trade_id, units)
-                    return {"success": True, "comment": "OK", "data": data}
-                error_msg = data.get("errorMessage", "Close rejected")
-                return {"success": False, "comment": error_msg}
-        except aiohttp.ClientError:
-            logger.exception("OandaBroker.close_trade network error: %s")
-            return {"success": False, "comment": "Network error — check server logs"}
+        url = f"{self._base_url}/v3/accounts/{self._account_id}/trades/{trade_id}/close"
+
+        last_error = "Unknown error"
+        for attempt in range(_MAX_RETRIES + 1):
+            try:
+                async with self._session.put(url, json=payload) as resp:
+                    if resp.status in (400, 401, 403, 404):
+                        data = await resp.json()
+                        return {"success": False, "comment": data.get("errorMessage", "Close rejected")}
+                    if resp.status in _RETRYABLE_STATUSES and attempt < _MAX_RETRIES:
+                        delay = _RETRY_BASE_DELAY * (2**attempt)
+                        if resp.status == 429:
+                            delay = float(resp.headers.get("Retry-After", delay))
+                        logger.warning(
+                            "OANDA close_trade %s | retrying in %.1fs | attempt=%d/%d",
+                            resp.status,
+                            delay,
+                            attempt + 1,
+                            _MAX_RETRIES + 1,
+                        )
+                        await asyncio.sleep(delay)
+                        continue
+                    data = await resp.json()
+                    if resp.status == 200:
+                        logger.info("OANDA trade closed | trade_id=%s | units=%s", trade_id, units)
+                        return {"success": True, "comment": "OK", "data": data}
+                    error_msg = data.get("errorMessage", "Close rejected")
+                    return {"success": False, "comment": error_msg}
+            except aiohttp.ClientConnectionError as exc:
+                last_error = f"Connection error: {exc}"
+                if attempt < _MAX_RETRIES:
+                    await asyncio.sleep(_RETRY_BASE_DELAY * (2**attempt))
+                    continue
+                logger.error("OandaBroker.close_trade: connection failed: %s", exc)
+                return {"success": False, "comment": last_error}
+            except aiohttp.ClientError as exc:
+                logger.exception("OandaBroker.close_trade: network error: %s", exc)
+                return {"success": False, "comment": f"Network error: {exc}"}
+
+        return {"success": False, "comment": last_error}
 
     async def cancel_order(self, order_id: str) -> dict:
-        """Cancel a pending order by ID."""
+        """Cancel a pending order by ID with exponential-backoff retry."""
         if not self._assert_connected("cancel_order"):
             return {"success": False, "comment": "Not connected"}
-        try:
-            async with self._session.put(
-                f"{self._base_url}/v3/accounts/{self._account_id}/orders/{order_id}/cancel"
-            ) as resp:
-                if resp.status == 200:
-                    logger.info("OANDA order cancelled | order_id=%s", order_id)
-                    return {"success": True, "comment": "OK"}
-                data = await resp.json()
-                return {
-                    "success": False,
-                    "comment": data.get("errorMessage", "Cancel rejected"),
-                }
-        except aiohttp.ClientError:
-            logger.exception("OandaBroker.cancel_order network error: %s")
-            return {"success": False, "comment": "Network error — check server logs"}
+        url = f"{self._base_url}/v3/accounts/{self._account_id}/orders/{order_id}/cancel"
+
+        last_error = "Unknown error"
+        for attempt in range(_MAX_RETRIES + 1):
+            try:
+                async with self._session.put(url) as resp:
+                    if resp.status in (400, 401, 403, 404):
+                        data = await resp.json()
+                        return {"success": False, "comment": data.get("errorMessage", "Cancel rejected")}
+                    if resp.status in _RETRYABLE_STATUSES and attempt < _MAX_RETRIES:
+                        delay = _RETRY_BASE_DELAY * (2**attempt)
+                        if resp.status == 429:
+                            delay = float(resp.headers.get("Retry-After", delay))
+                        await asyncio.sleep(delay)
+                        continue
+                    if resp.status == 200:
+                        logger.info("OANDA order cancelled | order_id=%s", order_id)
+                        return {"success": True, "comment": "OK"}
+                    data = await resp.json()
+                    return {"success": False, "comment": data.get("errorMessage", "Cancel rejected")}
+            except aiohttp.ClientConnectionError as exc:
+                last_error = f"Connection error: {exc}"
+                if attempt < _MAX_RETRIES:
+                    await asyncio.sleep(_RETRY_BASE_DELAY * (2**attempt))
+                    continue
+                logger.error("OandaBroker.cancel_order: connection failed: %s", exc)
+                return {"success": False, "comment": last_error}
+            except aiohttp.ClientError as exc:
+                logger.exception("OandaBroker.cancel_order: network error: %s", exc)
+                return {"success": False, "comment": f"Network error: {exc}"}
+
+        return {"success": False, "comment": last_error}
 
     async def get_tick(self, instrument: str = "XAU_USD") -> dict | None:
         """Return the latest bid/ask for *instrument*."""
