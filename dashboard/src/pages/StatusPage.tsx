@@ -21,28 +21,6 @@ interface HistoryDay {
   uptime_pct: number;
 }
 
-// ── Mock data ─────────────────────────────────────────────────────────────────
-
-const MOCK_STATUS: StatusData = {
-  status: 'healthy',
-  uptime_seconds: 86400 * 12 + 3600 * 4,
-  uptime_human: '12d 4h',
-  checked_at: new Date().toISOString(),
-  components: {
-    api:         { status: 'healthy',  message: 'API responding' },
-    database:    { status: 'healthy',  message: 'PostgreSQL connected, 4ms' },
-    cache:       { status: 'healthy',  message: 'Redis connected, 1ms' },
-    broker:      { status: 'healthy',  message: 'Paper broker active' },
-    price_feed:  { status: 'healthy',  message: 'OANDA feed live' },
-    brain:       { status: 'healthy',  message: 'Decision engine running' },
-  },
-};
-
-const MOCK_HISTORY: HistoryDay[] = Array.from({ length: 90 }, (_, i) => ({
-  date: new Date(Date.now() - (89 - i) * 86400000).toISOString().slice(0, 10),
-  uptime_pct: i < 85 ? 100 : i === 86 ? 94.2 : 100,
-}));
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const STATUS_COLOR: Record<string, string> = {
@@ -118,9 +96,11 @@ const StatusPage: React.FC = () => {
   const [data, setData] = useState<StatusData | null>(null);
   const [history, setHistory] = useState<HistoryDay[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
   const load = useCallback(async () => {
+    setError(null);
     try {
       const [statusRes, histRes] = await Promise.all([
         fetch('/api/status/json'),
@@ -129,17 +109,19 @@ const StatusPage: React.FC = () => {
       if (statusRes.ok) {
         setData(await statusRes.json());
       } else {
-        setData(MOCK_STATUS);
+        setData(null);
+        setError('Could not fetch system status.');
       }
       if (histRes.ok) {
         const h = await histRes.json();
         setHistory(h.history ?? []);
       } else {
-        setHistory(MOCK_HISTORY);
+        setHistory([]);
       }
     } catch (_) {
-      setData(MOCK_STATUS);
-      setHistory(MOCK_HISTORY);
+      setData(null);
+      setError('Could not fetch system status.');
+      setHistory([]);
     } finally {
       setLoading(false);
       setLastRefresh(new Date());
@@ -167,21 +149,35 @@ const StatusPage: React.FC = () => {
 
   return (
     <div style={styles.page}>
-      {/* Banner */}
-      <div style={{
-        ...styles.banner,
-        background: STATUS_BG[status],
-        borderColor: STATUS_BORDER[status],
-      }}>
-        <span style={{ fontSize: 32 }}>{STATUS_ICON[status]}</span>
-        <div>
-          <div style={styles.bannerTitle}>{STATUS_TEXT[status]}</div>
-          <div style={styles.bannerSub}>
-            Uptime: {data?.uptime_human ?? '—'} &nbsp;·&nbsp; Checked: {data ? fmtTime(data.checked_at) : '—'}
+      {/* Banner or error banner */}
+      {error && !data ? (
+        <div style={{
+          ...styles.banner,
+          background: '#450a0a',
+          borderColor: '#dc262633',
+        }}>
+          <span style={{ fontSize: 32 }}>❌</span>
+          <div>
+            <div style={styles.bannerTitle}>Could not fetch system status. Retrying…</div>
           </div>
+          <button onClick={load} style={styles.refreshBtn} title="Retry now">↻ Retry</button>
         </div>
-        <button onClick={load} style={styles.refreshBtn} title="Refresh now">↻</button>
-      </div>
+      ) : (
+        <div style={{
+          ...styles.banner,
+          background: STATUS_BG[status],
+          borderColor: STATUS_BORDER[status],
+        }}>
+          <span style={{ fontSize: 32 }}>{STATUS_ICON[status]}</span>
+          <div>
+            <div style={styles.bannerTitle}>{STATUS_TEXT[status]}</div>
+            <div style={styles.bannerSub}>
+              Uptime: {data?.uptime_human ?? '—'} &nbsp;·&nbsp; Checked: {data ? fmtTime(data.checked_at) : '—'}
+            </div>
+          </div>
+          <button onClick={load} style={styles.refreshBtn} title="Refresh now">↻</button>
+        </div>
+      )}
 
       {/* Components */}
       <div style={styles.sectionTitle}>Components</div>
