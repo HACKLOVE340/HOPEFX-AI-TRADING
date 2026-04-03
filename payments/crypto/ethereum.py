@@ -41,7 +41,6 @@ class EthereumClient:
 
             logger.info("Generated Ethereum address for user %s", user_id)
 
-
             return {
                 "address": address,
                 "network": "ethereum",
@@ -75,7 +74,6 @@ class EthereumClient:
 
             self.transactions[tx_hash] = transaction
             logger.info("ETH deposit processed: %s - %s ETH", tx_hash, amount)
-
 
             return transaction
         except Exception as e:

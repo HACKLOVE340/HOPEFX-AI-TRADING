@@ -568,7 +568,6 @@ class NotificationManager:
 
         logger.info("Notification channels initialized: %s", list(self.channels.keys()))
 
-
     async def start(self):
         """Start notification processor"""
         if self._running:
@@ -657,10 +656,8 @@ class NotificationManager:
                         if not success:
                             logger.warning("Failed to send to %s", channel_name)
 
-
                     except Exception as e:
                         logger.error("Error sending to %s: %s", channel_name, e)
-
 
                 self._notification_queue.task_done()
 
@@ -670,7 +667,6 @@ class NotificationManager:
                 break
             except Exception as e:
                 logger.error("Notification processor error: %s", e)
-
 
     # ------------------------------------------------------------------
     # Sync API (used by tests)
@@ -789,6 +785,7 @@ class NotificationManager:
             logger.debug("Discord webhook not configured; skipping")
             return
         from urllib.parse import urlparse as _urlparse
+
         _p = _urlparse(webhook_url)
         _host = (_p.hostname or "").lower()
         if _p.scheme != "https" or _host not in ("discord.com", "discordapp.com"):
@@ -803,7 +800,6 @@ class NotificationManager:
             resp.raise_for_status()
         except Exception as exc:
             logger.error("Discord send failed: %s", exc)
-
 
     def _send_telegram(self, message: str, level: "NotificationLevel" = None, metadata: dict | None = None) -> None:
         """Send message via Telegram Bot API (sync)."""
@@ -825,7 +821,6 @@ class NotificationManager:
             resp.raise_for_status()
         except Exception as exc:
             logger.error("Telegram send failed: %s", exc)
-
 
     def _send_email(self, message: str, level: "NotificationLevel" = None, metadata: dict | None = None) -> None:
         """Send email notification — SendGrid primary, SMTP fallback (sync)."""

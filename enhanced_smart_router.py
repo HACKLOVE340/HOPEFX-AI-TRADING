@@ -268,7 +268,6 @@ class TWAPStrategy(ExecutionStrategy):
         """Execute TWAP slices"""
         logger.info("Starting TWAP: %s in %s slices", self.order.size, self.num_slices)
 
-
         for i in range(self.num_slices):
             if self.is_complete:
                 break
@@ -291,7 +290,6 @@ class TWAPStrategy(ExecutionStrategy):
             if fill:
                 self.update_order(fill)
                 logger.info("Slice %s/%s filled: %s @ %s", i + 1, self.num_slices, fill.size, fill.price)
-
 
             # Wait for next interval
             if i < self.num_slices - 1:
@@ -484,7 +482,6 @@ class ImplementationShortfallStrategy(ExecutionStrategy):
 
                 logger.info("Slice %s: IS = %s", i + 1, shortfall)
 
-
             await asyncio.sleep(6)  # 10 slices over 1 minute
 
         return self.fills
@@ -529,7 +526,6 @@ class SmartOrderRouter:
         }
 
         logger.info("SmartOrderRouter initialized with %s venues", len(self.venues))
-
 
     def _default_venues(self) -> list[Venue]:
         """Create default venue configuration"""
@@ -623,7 +619,6 @@ class SmartOrderRouter:
         Execute order with full lifecycle management.
         """
         logger.info("Routing order %s: %s %s %s", order.id, order.side.name, order.size, order.symbol)
-
 
         # Route to strategy
         strategy = self.route_order(order)

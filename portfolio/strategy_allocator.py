@@ -70,6 +70,7 @@ REGISTRY_PATH = Path(__file__).parent.parent / "data" / "edge_registry.json"
 
 # ── Data classes ──────────────────────────────────────────────────────────────
 
+
 @dataclass
 class StrategyPod:
     """
@@ -102,11 +103,7 @@ class StrategyPod:
 
     @property
     def gate_passed(self) -> bool:
-        return (
-            self.oos_sharpe >= SHARPE_GATE_MIN
-            and self.oos_n >= N_TRADES_MIN
-            and self.oos_se <= SE_MAX
-        )
+        return self.oos_sharpe >= SHARPE_GATE_MIN and self.oos_n >= N_TRADES_MIN and self.oos_se <= SE_MAX
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -125,6 +122,7 @@ class StrategyPod:
 
 # ── Validated Edge Registry ───────────────────────────────────────────────────
 
+
 class ValidatedEdgeRegistry:
     """
     Persistent registry of validated strategy pods.
@@ -140,7 +138,10 @@ class ValidatedEdgeRegistry:
         self._save()
         logger.info(
             "EdgeRegistry: registered '%s' sharpe=%.2f n=%d gate=%s",
-            pod.name, pod.oos_sharpe, pod.oos_n, pod.gate_passed,
+            pod.name,
+            pod.oos_sharpe,
+            pod.oos_n,
+            pod.gate_passed,
         )
 
     def update_metrics(
@@ -212,6 +213,7 @@ class ValidatedEdgeRegistry:
 
 # ── Correlation tracker ───────────────────────────────────────────────────────
 
+
 class CorrelationMatrix:
     """Compute pairwise return correlations between pods."""
 
@@ -231,7 +233,7 @@ class CorrelationMatrix:
         for i, pod in enumerate(pods):
             h = pod.return_history
             if h:
-                matrix[-len(h):, i] = h
+                matrix[-len(h) :, i] = h
 
         # Pearson correlation
         with np.errstate(invalid="ignore", divide="ignore"):
@@ -242,6 +244,7 @@ class CorrelationMatrix:
 
 
 # ── Optimiser ─────────────────────────────────────────────────────────────────
+
 
 class MeanVarianceOptimiser:
     """
@@ -282,7 +285,8 @@ class MeanVarianceOptimiser:
             w0 = np.ones(n) / n
 
             result = minimize(
-                neg_objective, w0,
+                neg_objective,
+                w0,
                 method="SLSQP",
                 bounds=bounds,
                 constraints=constraints,
@@ -311,6 +315,7 @@ class MeanVarianceOptimiser:
 
 
 # ── Strategy Allocator ────────────────────────────────────────────────────────
+
 
 class StrategyAllocator:
     """
@@ -413,7 +418,9 @@ class StrategyAllocator:
                 for i in range(len(names))
                 for j in range(i + 1, len(names))
                 if abs(self._last_corr[i][j]) > CORR_THRESHOLD
-            ] if self._last_corr else [],
+            ]
+            if self._last_corr
+            else [],
         }
 
     # ── FastAPI router ────────────────────────────────────────────────────────
@@ -494,7 +501,10 @@ class StrategyAllocator:
             _require_admin(request)
             try:
                 alloc.registry.update_metrics(
-                    body.name, body.oos_sharpe, body.oos_n, body.oos_se,
+                    body.name,
+                    body.oos_sharpe,
+                    body.oos_n,
+                    body.oos_se,
                     body.factor_exposures,
                 )
                 return {"updated": body.name}
@@ -520,9 +530,11 @@ class StrategyAllocator:
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────
 
+
 def _require_auth(request: Request) -> dict[str, Any]:
     try:
         from auth.jwt_handler import verify_token
+
         token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         if not token:
             raise HTTPException(status_code=401, detail="Authentication required")

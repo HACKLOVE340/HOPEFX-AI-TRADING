@@ -130,7 +130,6 @@ class BrokerFactory:
         cls._brokers[name.lower()] = broker_class
         logger.info("Broker registered: %s", name)
 
-
     @classmethod
     def create_broker(cls, name: str | None = None, config: dict | None = None):
         """

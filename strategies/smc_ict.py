@@ -67,7 +67,6 @@ class SMCICTStrategy(BaseStrategy):
 
         logger.info("SMC ICT Strategy initialized for %s", config.symbol)
 
-
     def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
         """
         Analyze market using Smart Money Concepts.
@@ -337,7 +336,6 @@ class SMCICTStrategy(BaseStrategy):
         except Exception as e:
             logger.error("Error identifying order blocks: %s", e)
 
-
         return {
             "bullish": bullish_obs[-5:] if bullish_obs else [],  # Keep last 5
             "bearish": bearish_obs[-5:] if bearish_obs else [],
@@ -376,7 +374,6 @@ class SMCICTStrategy(BaseStrategy):
 
         except Exception as e:
             logger.error("Error identifying FVGs: %s", e)
-
 
         return {
             "bullish": bullish_fvgs[-3:] if bullish_fvgs else [],  # Keep last 3

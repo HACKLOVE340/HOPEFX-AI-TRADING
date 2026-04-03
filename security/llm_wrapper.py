@@ -48,8 +48,7 @@ async def call_llm(prompt: str) -> str:
     if LLM_BACKEND == "openai" and OPENAI_API_KEY:
         return await _call_openai(prompt)
     raise RuntimeError(
-        f"LLM backend '{LLM_BACKEND}' is not configured. "
-        "Set ANTHROPIC_API_KEY or OPENAI_API_KEY in your environment."
+        f"LLM backend '{LLM_BACKEND}' is not configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY in your environment."
     )
 
 

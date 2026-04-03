@@ -26,6 +26,7 @@ except ImportError:
 
 try:
     import plotly  # type: ignore[import]  # noqa: F401
+
     PLOTLY_AVAILABLE = True
 except ImportError:
     PLOTLY_AVAILABLE = False
@@ -50,13 +51,11 @@ class DashboardWebSocketManager:
             self.clients.add(ws)
             logger.info("Dashboard client connected. Total: %s", len(self.clients))
 
-
     async def unregister(self, ws: web.WebSocketResponse):
         """Unregister client"""
         async with self._lock:
             self.clients.discard(ws)
             logger.info("Dashboard client disconnected. Total: %s", len(self.clients))
-
 
     async def broadcast(self, message: dict):
         """Broadcast message to all clients"""
@@ -131,7 +130,6 @@ class DashboardDataSource:
                 except Exception as e:
                     logger.error("Error getting account: %s", e)
 
-
             # Positions
             positions = []
             if self.app.broker:
@@ -154,7 +152,6 @@ class DashboardDataSource:
                 except Exception as e:
                     logger.error("Error getting positions: %s", e)
 
-
             # Brain state
             brain_state = {}
             if self.app.brain:
@@ -173,7 +170,6 @@ class DashboardDataSource:
                     }
                 except Exception as e:
                     logger.error("Error getting brain state: %s", e)
-
 
             # Price data
             price_data = {}

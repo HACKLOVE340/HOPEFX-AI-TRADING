@@ -19,10 +19,7 @@ Test strategy:
   - All tests are deterministic and hermetic — no real network calls.
 """
 
-import asyncio
 import os
-import tempfile
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -36,6 +33,7 @@ os.environ.pop("HOPEFX_KILL_SWITCH", None)
 # ---------------------------------------------------------------------------
 # KillSwitch fault injection
 # ---------------------------------------------------------------------------
+
 
 class TestKillSwitchFaultInjection:
     """
@@ -123,6 +121,7 @@ class TestKillSwitchFaultInjection:
 
     def test_callback_exception_does_not_prevent_activation(self, kill_switch) -> None:
         """A failing callback must not prevent the kill switch from activating."""
+
         def bad_callback(reason):
             raise RuntimeError("callback exploded")
 
@@ -135,6 +134,7 @@ class TestKillSwitchFaultInjection:
 # ---------------------------------------------------------------------------
 # EngineCircuitBreaker fault injection
 # ---------------------------------------------------------------------------
+
 
 class TestCircuitBreakerFaultInjection:
     """
@@ -212,6 +212,7 @@ class TestCircuitBreakerFaultInjection:
 # ExecutionEngine fault injection (broker failures)
 # ---------------------------------------------------------------------------
 
+
 class TestExecutionEngineBrokerFaultInjection:
     """
     The ExecutionEngine must handle broker failures gracefully:
@@ -241,8 +242,7 @@ class TestExecutionEngineBrokerFaultInjection:
     @pytest.mark.asyncio
     async def test_kill_switch_active_blocks_order(self) -> None:
         """An active kill switch must block the order before any broker call."""
-        from execution.engine import ExecutionEngine, ExecutionRequest, ExecutionStatus
-        from kill_switch import KillSwitch
+        from execution.engine import ExecutionRequest, ExecutionStatus
 
         engine, broker = self._make_engine()
         ks = MagicMock()
@@ -250,10 +250,7 @@ class TestExecutionEngineBrokerFaultInjection:
         ks._reason = "emergency halt"
         engine._kill_switch = ks
 
-        request = ExecutionRequest(
-            symbol="XAUUSD", side="BUY", quantity=0.1,
-            order_type="MARKET", strategy_id="test"
-        )
+        request = ExecutionRequest(symbol="XAUUSD", side="BUY", quantity=0.1, order_type="MARKET", strategy_id="test")
         report = await engine.execute(request)
 
         assert report.status == ExecutionStatus.BLOCKED
@@ -263,15 +260,12 @@ class TestExecutionEngineBrokerFaultInjection:
     @pytest.mark.asyncio
     async def test_engine_stopped_blocks_order(self) -> None:
         """A stopped engine must block the order immediately."""
-        from execution.engine import ExecutionEngine, ExecutionRequest, ExecutionStatus
+        from execution.engine import ExecutionRequest, ExecutionStatus
 
         engine, broker = self._make_engine()
         engine._running = False
 
-        request = ExecutionRequest(
-            symbol="XAUUSD", side="BUY", quantity=0.1,
-            order_type="MARKET", strategy_id="test"
-        )
+        request = ExecutionRequest(symbol="XAUUSD", side="BUY", quantity=0.1, order_type="MARKET", strategy_id="test")
         report = await engine.execute(request)
 
         assert report.status == ExecutionStatus.BLOCKED
@@ -281,17 +275,14 @@ class TestExecutionEngineBrokerFaultInjection:
     @pytest.mark.asyncio
     async def test_open_circuit_breaker_blocks_order(self) -> None:
         """An open circuit breaker must block the order before broker submission."""
-        from execution.engine import ExecutionEngine, ExecutionRequest, ExecutionStatus
+        from execution.engine import ExecutionRequest, ExecutionStatus
 
         engine, broker = self._make_engine()
         # Force the circuit breaker open
         for _ in range(engine._circuit_breaker._max_failures):
             await engine._circuit_breaker.record_failure()
 
-        request = ExecutionRequest(
-            symbol="XAUUSD", side="BUY", quantity=0.1,
-            order_type="MARKET", strategy_id="test"
-        )
+        request = ExecutionRequest(symbol="XAUUSD", side="BUY", quantity=0.1, order_type="MARKET", strategy_id="test")
         report = await engine.execute(request)
 
         assert report.status == ExecutionStatus.BLOCKED
@@ -305,7 +296,7 @@ class TestExecutionEngineBrokerFaultInjection:
         ExecutionReport from being returned — post-fill side-effects are
         best-effort.
         """
-        from execution.engine import ExecutionEngine, ExecutionRequest, ExecutionStatus
+        from execution.engine import ExecutionRequest, ExecutionStatus
 
         engine, broker = self._make_engine()
 
@@ -317,15 +308,15 @@ class TestExecutionEngineBrokerFaultInjection:
         mock_report.request_id = "test-req-001"
         mock_report.status = ExecutionStatus.FILLED
 
-        with patch.object(engine, "_submit_to_broker", AsyncMock(return_value=mock_report)), \
-             patch.object(engine, "_run_pre_trade_gate", AsyncMock(return_value=None)), \
-             patch.object(engine, "_persist_to_redis", AsyncMock(side_effect=RuntimeError("redis down"))), \
-             patch.object(engine, "_record_tca", AsyncMock(side_effect=RuntimeError("tca down"))), \
-             patch.object(engine, "_notify_callbacks", AsyncMock(return_value=None)):
-
+        with (
+            patch.object(engine, "_submit_to_broker", AsyncMock(return_value=mock_report)),
+            patch.object(engine, "_run_pre_trade_gate", AsyncMock(return_value=None)),
+            patch.object(engine, "_persist_to_redis", AsyncMock(side_effect=RuntimeError("redis down"))),
+            patch.object(engine, "_record_tca", AsyncMock(side_effect=RuntimeError("tca down"))),
+            patch.object(engine, "_notify_callbacks", AsyncMock(return_value=None)),
+        ):
             request = ExecutionRequest(
-                symbol="XAUUSD", side="BUY", quantity=0.1,
-                order_type="MARKET", strategy_id="test"
+                symbol="XAUUSD", side="BUY", quantity=0.1, order_type="MARKET", strategy_id="test"
             )
             # Must not raise even though Redis and TCA are down
             report = await engine.execute(request)
@@ -337,6 +328,7 @@ class TestExecutionEngineBrokerFaultInjection:
 # ---------------------------------------------------------------------------
 # Signal engine gate fault injection
 # ---------------------------------------------------------------------------
+
 
 class TestSignalEngineGateFaultInjection:
     """
@@ -381,8 +373,10 @@ class TestSignalEngineGateFaultInjection:
         from core.signal_engine import _execute_if_approved
 
         app_state = self._make_app_state()
-        with patch("core.signal_engine._AUTO_TRADE", True), \
-             patch("core.signal_engine._check_live_trading_gate", return_value=False):
+        with (
+            patch("core.signal_engine._AUTO_TRADE", True),
+            patch("core.signal_engine._check_live_trading_gate", return_value=False),
+        ):
             await _execute_if_approved(app_state, "XAUUSD", self._make_signal_payload())
 
         app_state.broker.place_market_order.assert_not_called()
@@ -395,8 +389,10 @@ class TestSignalEngineGateFaultInjection:
         app_state = self._make_app_state()
         app_state.risk_manager = None
 
-        with patch("core.signal_engine._AUTO_TRADE", True), \
-             patch("core.signal_engine._check_live_trading_gate", return_value=True):
+        with (
+            patch("core.signal_engine._AUTO_TRADE", True),
+            patch("core.signal_engine._check_live_trading_gate", return_value=True),
+        ):
             await _execute_if_approved(app_state, "XAUUSD", self._make_signal_payload())
 
         app_state.broker.place_market_order.assert_not_called()
@@ -408,10 +404,11 @@ class TestSignalEngineGateFaultInjection:
 
         app_state = self._make_app_state()
 
-        with patch("core.signal_engine._AUTO_TRADE", True), \
-             patch("core.signal_engine._check_live_trading_gate", return_value=True), \
-             patch("core.signal_engine._assess_risk_and_size",
-                   AsyncMock(side_effect=RuntimeError("risk db down"))):
+        with (
+            patch("core.signal_engine._AUTO_TRADE", True),
+            patch("core.signal_engine._check_live_trading_gate", return_value=True),
+            patch("core.signal_engine._assess_risk_and_size", AsyncMock(side_effect=RuntimeError("risk db down"))),
+        ):
             await _execute_if_approved(app_state, "XAUUSD", self._make_signal_payload())
 
         app_state.broker.place_market_order.assert_not_called()
@@ -425,9 +422,11 @@ class TestSignalEngineGateFaultInjection:
         broker.place_market_order = AsyncMock(side_effect=ConnectionError("broker unreachable"))
         app_state = self._make_app_state(broker=broker)
 
-        with patch("core.signal_engine._AUTO_TRADE", True), \
-             patch("core.signal_engine._check_live_trading_gate", return_value=True), \
-             patch("core.signal_engine._assess_risk_and_size", AsyncMock(return_value=0.5)):
+        with (
+            patch("core.signal_engine._AUTO_TRADE", True),
+            patch("core.signal_engine._check_live_trading_gate", return_value=True),
+            patch("core.signal_engine._assess_risk_and_size", AsyncMock(return_value=0.5)),
+        ):
             # Must not raise — broker errors are caught inside _execute_if_approved
             await _execute_if_approved(app_state, "XAUUSD", self._make_signal_payload())
 
@@ -440,8 +439,10 @@ class TestSignalEngineGateFaultInjection:
         payload = self._make_signal_payload()
         payload["direction"] = "HOLD"  # invalid
 
-        with patch("core.signal_engine._AUTO_TRADE", True), \
-             patch("core.signal_engine._check_live_trading_gate", return_value=True):
+        with (
+            patch("core.signal_engine._AUTO_TRADE", True),
+            patch("core.signal_engine._check_live_trading_gate", return_value=True),
+        ):
             await _execute_if_approved(app_state, "XAUUSD", payload)
 
         app_state.broker.place_market_order.assert_not_called()
@@ -450,6 +451,7 @@ class TestSignalEngineGateFaultInjection:
 # ---------------------------------------------------------------------------
 # Startup factory fault injection
 # ---------------------------------------------------------------------------
+
 
 class TestStartupFactoryFaultInjection:
     """
@@ -463,8 +465,10 @@ class TestStartupFactoryFaultInjection:
         from core.startup_factories import init_anomaly_store
 
         state = MagicMock()
-        with patch("core.startup_factories._is_feature_enabled", return_value=True), \
-             patch.dict("sys.modules", {"research.pipeline.anomaly": None}):
+        with (
+            patch("core.startup_factories._is_feature_enabled", return_value=True),
+            patch.dict("sys.modules", {"research.pipeline.anomaly": None}),
+        ):
             result = await init_anomaly_store(state)
         assert result is None
 
@@ -474,8 +478,10 @@ class TestStartupFactoryFaultInjection:
         from core.startup_factories import init_online_learner_store
 
         state = MagicMock()
-        with patch("core.startup_factories._is_feature_enabled", return_value=True), \
-             patch.dict("sys.modules", {"research.pipeline.online_learning": None}):
+        with (
+            patch("core.startup_factories._is_feature_enabled", return_value=True),
+            patch.dict("sys.modules", {"research.pipeline.online_learning": None}),
+        ):
             result = await init_online_learner_store(state)
         assert result is None
 
@@ -485,8 +491,10 @@ class TestStartupFactoryFaultInjection:
         from core.startup_factories import init_deep_ensemble_store
 
         state = MagicMock()
-        with patch("core.startup_factories._is_feature_enabled", return_value=True), \
-             patch.dict("sys.modules", {"research.pipeline.models_ensemble": None}):
+        with (
+            patch("core.startup_factories._is_feature_enabled", return_value=True),
+            patch.dict("sys.modules", {"research.pipeline.models_ensemble": None}),
+        ):
             result = await init_deep_ensemble_store(state)
         assert result is None
 
@@ -515,11 +523,16 @@ class TestStartupFactoryFaultInjection:
         from core.startup_factories import _resolve_clock_start_time
 
         stamp = tmp_path / "stamp.json"
-        stamp.write_text(json.dumps({
-            "started_utc": "2025-01-01T00:00:00+00:00",
-            "requires_real_account": False,
-            "account_id": "ABC12345…",
-        }), encoding="utf-8")
+        stamp.write_text(
+            json.dumps(
+                {
+                    "started_utc": "2025-01-01T00:00:00+00:00",
+                    "requires_real_account": False,
+                    "account_id": "ABC12345…",
+                }
+            ),
+            encoding="utf-8",
+        )
 
         with patch("core.startup_factories._OANDA_PAPER_STAMP_PATH", stamp):
             result = _resolve_clock_start_time()

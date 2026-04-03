@@ -228,8 +228,7 @@ class LicenseValidator:
             # Clear entire cache
             self._validation_cache.clear()
 
-        logger.info("Cleared validation cache for user: %s", user_id or 'all')
-
+        logger.info("Cleared validation cache for user: %s", user_id or "all")
 
 
 # Global license validator instance

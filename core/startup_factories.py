@@ -22,7 +22,7 @@ import asyncio
 import logging
 import os
 import sys
-from datetime import UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -599,7 +599,7 @@ def _stamp_oanda_paper_start(account_id: str, practice: bool) -> None:
     )
 
 
-def _resolve_clock_start_time() -> "datetime | None":
+def _resolve_clock_start_time() -> datetime | None:
     """
     Determine the UTC start time for the 30-day paper trading clock.
 
@@ -610,15 +610,14 @@ def _resolve_clock_start_time() -> "datetime | None":
       - datetime.now(UTC) when no stamp file exists yet.
     """
     import json
-    from datetime import datetime as _dt
 
     if not _OANDA_PAPER_STAMP_PATH.exists():
-        return _dt.now(UTC)
+        return datetime.now(UTC)
 
     try:
         existing = json.loads(_OANDA_PAPER_STAMP_PATH.read_text(encoding="utf-8"))
     except Exception:
-        return _dt.now(UTC)
+        return datetime.now(UTC)
 
     if not existing.get("requires_real_account", False):
         # Real account already stamped — preserve the running clock.
@@ -633,10 +632,10 @@ def _resolve_clock_start_time() -> "datetime | None":
     started_str = existing.get("started_utc")
     if started_str:
         try:
-            return _dt.fromisoformat(started_str)
+            return datetime.fromisoformat(started_str)
         except Exception:
             pass
-    return _dt.now(UTC)
+    return datetime.now(UTC)
 
 
 async def init_price_engine(s: Any) -> Any:

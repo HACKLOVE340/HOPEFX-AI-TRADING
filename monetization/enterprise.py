@@ -163,19 +163,16 @@ class Partner:
         self.contract_start = datetime.now(UTC)
         logger.info("Partner %s approved", self.partner_id)
 
-
     def suspend(self) -> None:
         """Suspend partner"""
         self.status = PartnerStatus.SUSPENDED
         logger.info("Partner %s suspended", self.partner_id)
-
 
     def terminate(self) -> None:
         """Terminate partnership"""
         self.status = PartnerStatus.TERMINATED
         self.contract_end = datetime.now(UTC)
         logger.info("Partner %s terminated", self.partner_id)
-
 
     def record_sale(self, amount: Decimal) -> Decimal:
         """Record a sale and calculate commission"""
@@ -245,30 +242,25 @@ class WhiteLabelInstance:
         self.deployed_at = datetime.now(UTC)
         logger.info("White-label instance %s deployed", self.instance_id)
 
-
     def enter_maintenance(self) -> None:
         """Enter maintenance mode"""
         self.status = WhiteLabelStatus.MAINTENANCE
         logger.info("White-label instance %s in maintenance", self.instance_id)
-
 
     def suspend(self) -> None:
         """Suspend instance"""
         self.status = WhiteLabelStatus.SUSPENDED
         logger.info("White-label instance %s suspended", self.instance_id)
 
-
     def update_config(self, new_config: WhiteLabelConfig) -> None:
         """Update branding configuration"""
         self.config = new_config
         logger.info("White-label instance %s config updated", self.instance_id)
 
-
     def update_enterprise_features(self, features: EnterpriseFeatures) -> None:
         """Update enterprise features"""
         self.enterprise_features = features
         logger.info("White-label instance %s features updated", self.instance_id)
-
 
     def is_active(self) -> bool:
         """Check if instance is active"""
@@ -346,24 +338,20 @@ class EnterpriseCustomer:
         self.features.sso_config = config
         logger.info("SSO configured for %s: %s", self.customer_id, provider)
 
-
     def set_api_rate_limit(self, limit: int) -> None:
         """Set custom API rate limit"""
         self.features.api_rate_limit_override = limit
         logger.info("API rate limit set for %s: %s", self.customer_id, limit)
-
 
     def set_ip_whitelist(self, ips: list[str]) -> None:
         """Set IP whitelist"""
         self.features.ip_whitelist = ips
         logger.info("IP whitelist set for %s", self.customer_id)
 
-
     def enable_mfa(self) -> None:
         """Enable mandatory MFA"""
         self.features.mfa_required = True
         logger.info("MFA enabled for %s", self.customer_id)
-
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary"""
@@ -485,7 +473,6 @@ class EnterpriseManager:
         self._white_label_instances[instance_id] = instance
         logger.info("Created white-label instance %s for partner %s", instance_id, partner_id)
 
-
         return instance
 
     def get_white_label_instance(self, instance_id: str) -> WhiteLabelInstance | None:
@@ -529,7 +516,6 @@ class EnterpriseManager:
 
         self._enterprise_customers[customer_id] = customer
         logger.info("Registered enterprise customer %s: %s", customer_id, company_name)
-
 
         return customer
 

@@ -69,6 +69,7 @@ except ImportError:
 
 try:
     import torch  # noqa: F401
+
     PYTORCH_AVAILABLE = True
 except ImportError:
     PYTORCH_AVAILABLE = False
@@ -102,12 +103,14 @@ except ImportError:
 
 try:
     import optuna  # noqa: F401
+
     OPTUNA_AVAILABLE = True
 except ImportError:
     OPTUNA_AVAILABLE = False
 
 try:
     import shap  # noqa: F401
+
     SHAP_AVAILABLE = True
 except ImportError:
     SHAP_AVAILABLE = False
@@ -430,15 +433,9 @@ class AdvancedFeatureEngineer:
             features["month_cos"] = np.cos(2 * np.pi * df.index.month / 12)
 
             # Session indicators
-            features["is_market_open"] = (
-                (df.index.hour >= 9) & (df.index.hour < 16)
-            ).astype(int)
-            features["is_london"] = (
-                (df.index.hour >= 8) & (df.index.hour < 17)
-            ).astype(int)
-            features["is_ny"] = ((df.index.hour >= 13) & (df.index.hour < 22)).astype(
-                int
-            )
+            features["is_market_open"] = ((df.index.hour >= 9) & (df.index.hour < 16)).astype(int)
+            features["is_london"] = ((df.index.hour >= 8) & (df.index.hour < 17)).astype(int)
+            features["is_ny"] = ((df.index.hour >= 13) & (df.index.hour < 22)).astype(int)
 
         # Cross-sectional features (if multiple symbols)
         # Would add relative strength, correlation, etc.
@@ -536,7 +533,9 @@ class AdvancedFeatureEngineer:
             if TENSORFLOW_AVAILABLE and isinstance(model, Model):
                 preds = model.predict(X.values, verbose=0)
                 # preds may be a dict (multi-output) or an array
-                direction_probs = preds.get("direction", next(iter(preds.values()))) if isinstance(preds, dict) else preds
+                direction_probs = (
+                    preds.get("direction", next(iter(preds.values()))) if isinstance(preds, dict) else preds
+                )
                 if len(direction_probs.shape) > 1:
                     return float(np.mean(np.max(direction_probs, axis=1)))
                 return float(np.mean(np.abs(direction_probs - 0.5) + 0.5))
@@ -703,7 +702,6 @@ class DeepLearningModel:
 
         if self.model:
             logger.info("Total parameters: %s", self.model.count_params())
-
 
     def _build_lstm_stack(self, x, cfg: ModelConfig):
         """Standard LSTM architecture"""
@@ -878,7 +876,6 @@ class DeepLearningModel:
         if X_val is not None:
             logger.info("Validation samples: %s", len(X_val))
 
-
         self.history = self.model.fit(
             X_train,
             y_train_dict,
@@ -1034,7 +1031,6 @@ class DeepLearningModel:
 
         logger.info("Online update completed with lr=%s", new_lr)
 
-
     def save(self, filepath: str):
         """Save model and configuration"""
         if self.model:
@@ -1053,7 +1049,6 @@ class DeepLearningModel:
 
             logger.info("Model saved to %s", filepath)
 
-
     def load(self, filepath: str):
         """Load model and configuration"""
         if TENSORFLOW_AVAILABLE:
@@ -1066,7 +1061,6 @@ class DeepLearningModel:
 
             self.is_trained = True
             logger.info("Model loaded from %s", filepath)
-
 
 
 # =============================================================================
@@ -1108,7 +1102,6 @@ class EnsemblePredictor:
         self.performance_history[name] = deque(maxlen=100)
         logger.info("Added model '%s' to ensemble (weight=%s)", name, weight)
 
-
     def fit(
         self,
         X: pd.DataFrame,
@@ -1140,7 +1133,6 @@ class EnsemblePredictor:
 
         logger.info("Train: %s bars | Val: %s bars | Features: %s", len(X_train), len(X_val), X_train.shape[1])
 
-
         # Train each model — track val accuracy explicitly per model
         logger.info("Training %s models...", len(self.models))
 
@@ -1154,8 +1146,7 @@ class EnsemblePredictor:
             if isinstance(model, DeepLearningModel):
                 result = model.fit(X_train.values, y_train.values, X_val.values, y_val.values)
                 score = result.get("best_val_accuracy", result.get("final_direction_accuracy", 0.5))
-                logger.info("  %s: %s epochs, val_accuracy=%s", name, result['epochs_trained'], score)
-
+                logger.info("  %s: %s epochs, val_accuracy=%s", name, result["epochs_trained"], score)
 
             elif SKLEARN_AVAILABLE and hasattr(model, "fit"):
                 model.fit(X_train, y_train)
@@ -1173,10 +1164,8 @@ class EnsemblePredictor:
                     except Exception as cal_exc:
                         logger.warning("  %s: calibration failed (%s), using raw probabilities", name, cal_exc)
 
-
                 score = float(model.score(X_val, y_val))
                 logger.info("  %s: val_accuracy=%s", name, score)
-
 
             val_scores[name] = score
             self.performance_history[name].append(score)
@@ -1236,7 +1225,6 @@ class EnsemblePredictor:
 
         self.weights = {name: float(w) for name, w in zip(names, softmax_weights, strict=False)}
         logger.info("Optimized weights (softmax over val accuracy): %s", self.weights)
-
 
     def _train_meta_learner(self, X_val: pd.DataFrame, y_val: pd.Series):
         """Train meta-learner for stacking"""
@@ -1392,7 +1380,6 @@ class EnsemblePredictor:
                 except Exception as e:
                     logger.error("Online update failed for %s: %s", name, e)
 
-
         # Periodically re-optimize weights using the most recent validation window
         first_key = next(iter(self.models.keys()))
         if len(self.performance_history[first_key]) % 50 == 0:
@@ -1518,7 +1505,6 @@ class EnhancedMLPredictor:
 
         logger.info("  Auto-optimize: %s", self.auto_optimize)
 
-
     def build_ensemble(self, model_types: list[str] | None = None, use_stacking: bool = False):
         """Build ensemble with specified model types"""
         model_types = model_types or ["lstm", "xgboost", "random_forest"]
@@ -1594,7 +1580,6 @@ class EnhancedMLPredictor:
 
         logger.info("Built ensemble with %s models", len(self.ensemble.models))
 
-
     def optimize_hyperparameters(self, X: pd.DataFrame, y: pd.Series, n_trials: int = 50) -> ModelConfig:
         """Use Optuna for hyperparameter optimization"""
         if not OPTUNA_AVAILABLE:
@@ -1640,7 +1625,6 @@ class EnhancedMLPredictor:
 
         self.best_config = best_config
         logger.info("Best config found: %s", best_config)
-
 
         return best_config
 
@@ -1812,7 +1796,6 @@ class EnhancedMLPredictor:
                 prediction.prediction = "uncertain"
                 logger.warning("Low confidence prediction: %s", prediction.confidence)
 
-
             return prediction
 
         except Exception as e:
@@ -1830,13 +1813,7 @@ class EnhancedMLPredictor:
         last_pred = self.prediction_history[-1]
 
         # Determine if prediction was correct
-        actual_direction = (
-            "up"
-            if actual_return > 0.001
-            else "down"
-            if actual_return < -0.001
-            else "neutral"
-        )
+        actual_direction = "up" if actual_return > 0.001 else "down" if actual_return < -0.001 else "neutral"
         correct = last_pred.prediction == actual_direction
 
         self.performance_tracker.append(

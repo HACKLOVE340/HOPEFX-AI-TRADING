@@ -256,9 +256,7 @@ async def disable_2fa(
             detail="2FA state inconsistent — no secret found.",
         )
 
-    valid = (len(req.code) == 8 and _verify_backup_code(user.sub, req.code)) or (
-        _verify_totp(secret, req.code)
-    )
+    valid = (len(req.code) == 8 and _verify_backup_code(user.sub, req.code)) or (_verify_totp(secret, req.code))
 
     if valid:
         _set_enabled(user.sub, False)

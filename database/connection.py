@@ -129,7 +129,9 @@ class DatabaseManager:
             with self._engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
 
-            logger.info("Database initialized | Pool: %s/%s | Engine: %s", self.pool_size, self.max_overflow, self._engine.name)
+            logger.info(
+                "Database initialized | Pool: %s/%s | Engine: %s", self.pool_size, self.max_overflow, self._engine.name
+            )
 
         except Exception as e:
             logger.critical("Database initialization failed: %s", e)

@@ -328,9 +328,11 @@ class LifeSupervisor:
 
             try:
                 from app import app as _fastapi_app_av
+
                 await _start_av(_fastapi_app_av)
             except ImportError:
                 from fastapi import FastAPI as _FastAPI
+
                 _minimal_av_app = _FastAPI(title="AV-CLI")
                 await _start_av(_minimal_av_app)
             logger.info("AntivirusScanner started")
@@ -343,9 +345,11 @@ class LifeSupervisor:
 
             try:
                 from app import app as _fastapi_app_heal
+
                 await _start_healer(_fastapi_app_heal)
             except ImportError:
                 from fastapi import FastAPI as _FastAPI
+
                 _minimal_heal_app = _FastAPI(title="SelfHealer-CLI")
                 await _start_healer(_minimal_heal_app)
             logger.info("SelfHealer code integrity monitor started")

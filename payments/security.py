@@ -166,7 +166,6 @@ class SecurityManager:
 
         logger.info("KYC level set to %s for user %s", level.value, user_id)
 
-
     def get_kyc_info(self, user_id: str) -> KYCInfo:
         """Get KYC information"""
         if user_id not in self.kyc_info:
@@ -338,7 +337,6 @@ class SecurityManager:
         if ip_address not in self.ip_whitelist[user_id]:
             self.ip_whitelist[user_id].append(ip_address)
             logger.info("IP %s added to whitelist for user %s", ip_address, user_id)
-
 
     def get_security_status(self, user_id: str) -> dict:
         """Get security status for user"""

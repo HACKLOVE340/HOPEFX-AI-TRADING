@@ -104,7 +104,6 @@ class NoCodeStrategyBuilder:
 
         logger.info("Created %s strategy templates", len(self.templates))
 
-
     def create_strategy(self, name: str, description: str, symbol: str, timeframe: str) -> NoCodeStrategy:
         """
         Create a new no-code strategy.

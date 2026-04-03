@@ -475,7 +475,6 @@ class MobileAPIServer:
 
                 logger.info("Order placed by %s: %s", user_id, order.symbol)
 
-
                 return {
                     "order_id": result.get("order_id", str(uuid.uuid4())),
                     "status": result.get("status", "pending"),
@@ -737,7 +736,6 @@ class MobileAPIServer:
 
             except Exception as e:
                 logger.error("WebSocket error: %s", e)
-
 
             finally:
                 if websocket in self.active_connections.get(user_id, []):

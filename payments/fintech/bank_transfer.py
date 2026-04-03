@@ -82,7 +82,6 @@ class BankTransferClient:
             self.transfers[transfer_id] = transfer
             logger.info("Bank transfer initiated: %s", transfer_id)
 
-
             return transfer
         except Exception as e:
             logger.error("Error initiating bank transfer: %s", e)

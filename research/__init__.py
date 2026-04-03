@@ -283,7 +283,6 @@ print("Feature engineering functions ready")
 
         logger.info("Created %s notebook templates", len(self.templates))
 
-
     def create_notebook(self, title: str, description: str, author: str, is_template: bool = False) -> ResearchNotebook:
         """
         Create a new research notebook.

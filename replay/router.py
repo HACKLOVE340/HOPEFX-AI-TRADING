@@ -55,7 +55,9 @@ def create_replay_router(engine: "ChartReplayEngine"):
             end = datetime.fromisoformat(req.end_date)
         except ValueError as exc:
             logger.warning("Invalid date format in replay request: %s", exc)
-            raise HTTPException(status_code=400, detail="Invalid date format — use ISO 8601 (e.g. 2024-01-15T00:00:00)") from None
+            raise HTTPException(
+                status_code=400, detail="Invalid date format — use ISO 8601 (e.g. 2024-01-15T00:00:00)"
+            ) from None
         session = engine.create_session(
             symbol=req.symbol,
             timeframe=req.timeframe,

@@ -482,7 +482,9 @@ async def _route_to_broker(order: "OrderRequest") -> Any:
             ORDERS_TOTAL.labels(symbol=order.symbol, side=order.side, status="error").inc()
         except Exception as _exc:
             logger.debug("Suppressed exception: %s", _exc)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Order submission failed — check server logs") from None
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Order submission failed — check server logs"
+        ) from None
 
 
 async def _broadcast_fill_ws(order: "OrderRequest", result: Any) -> None:
@@ -1318,11 +1320,7 @@ def _make_strategy_router():
 
             # Period in days
             ts_list = [t for t, _ in equity_history]
-            period_days = (
-                max(1, round((ts_list[-1] - ts_list[0]) / 86400))
-                if len(ts_list) >= 2
-                else 1
-            )
+            period_days = max(1, round((ts_list[-1] - ts_list[0]) / 86400)) if len(ts_list) >= 2 else 1
 
             return {
                 "total_return": round(total_return, 4),

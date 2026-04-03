@@ -427,13 +427,12 @@ class EnsemblePredictor:
     def load(cls, path: str | Path) -> EnsemblePredictor:
         path = Path(path).resolve()
         # Confine loads to the project's saved_models directory.
-        _ALLOWED_ROOT = (Path(__file__).resolve().parent.parent.parent / "ml" / "saved_models")
+        _ALLOWED_ROOT = Path(__file__).resolve().parent.parent.parent / "ml" / "saved_models"
         try:
             path.relative_to(_ALLOWED_ROOT)
         except ValueError as exc:
             raise ValueError(
-                f"EnsemblePredictor.load: path '{path}' is outside the permitted "
-                f"directory '{_ALLOWED_ROOT}'"
+                f"EnsemblePredictor.load: path '{path}' is outside the permitted directory '{_ALLOWED_ROOT}'"
             ) from exc
         if not path.exists():
             raise FileNotFoundError(f"EnsemblePredictor not found: {path}")

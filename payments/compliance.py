@@ -315,7 +315,6 @@ class ComplianceManager:
             self.blacklist.append(user_id)
             logger.warning("User added to blacklist: %s", user_id)
 
-
     def remove_from_blacklist(self, user_id: str) -> bool:
         """Remove user from blacklist"""
         if user_id in self.blacklist:

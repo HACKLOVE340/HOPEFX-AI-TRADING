@@ -75,7 +75,6 @@ class TechnicalFeatureEngineer:
 
         self.logger.info("Created %s features", len(self.feature_names))
 
-
         return df
 
     def _add_trend_features(self, df: pd.DataFrame) -> pd.DataFrame:

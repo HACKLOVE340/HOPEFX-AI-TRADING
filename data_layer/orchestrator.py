@@ -687,7 +687,6 @@ class MarketDataOrchestrator:
             if len(raw_ticks) < 2:
                 return None
 
-
             ticks = []
             for r in raw_ticks:
                 try:

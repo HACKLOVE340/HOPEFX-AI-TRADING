@@ -153,7 +153,6 @@ class AIExplainer:
         except Exception as e:
             logger.warning("Could not extract feature importances: %s", e)
 
-
         # If no contributions from model, use simple sensitivity analysis
         if not contributions:
             contributions = self._sensitivity_analysis(features, prediction)
@@ -222,19 +221,13 @@ class AIExplainer:
                 contribution = impact * (1 if value >= 1.0 else -1) * (1 if bullish else -1)
             elif "support_distance" in name:
                 # Close to support (small value) → bullish
-                contribution = (
-                    impact * (1 if value < 0.5 else -1) * (1 if bullish else -1)
-                )
+                contribution = impact * (1 if value < 0.5 else -1) * (1 if bullish else -1)
             elif "resistance_distance" in name:
                 # Far from resistance (large value) → bullish
-                contribution = (
-                    impact * (1 if value > 0.5 else -1) * (1 if bullish else -1)
-                )
+                contribution = impact * (1 if value > 0.5 else -1) * (1 if bullish else -1)
             else:
                 # Unknown feature: use sign of (value - 0.5) as a neutral heuristic
-                contribution = (
-                    impact * (1 if value >= 0.5 else -1) * (1 if bullish else -1)
-                )
+                contribution = impact * (1 if value >= 0.5 else -1) * (1 if bullish else -1)
 
             contributions.append(
                 FeatureContribution(
@@ -285,7 +278,6 @@ class AIExplainer:
         except Exception as e:
             logger.debug("Could not extract decision path: %s", e)
 
-
         return path
 
     def _calculate_confidence_interval(
@@ -306,7 +298,6 @@ class AIExplainer:
                 half_width = (1 - proba) * 0.3
         except Exception as e:
             logger.debug("Could not calculate confidence interval: %s", e)
-
 
         lower = max(0, prediction - half_width)
         upper = min(1, prediction + half_width)
@@ -343,9 +334,7 @@ class AIExplainer:
         confidence: float,
     ) -> str:
         """Generate human-readable explanation."""
-        confidence_text = (
-            "high" if confidence > 0.7 else "moderate" if confidence > 0.5 else "low"
-        )
+        confidence_text = "high" if confidence > 0.7 else "moderate" if confidence > 0.5 else "low"
 
         # Get top supporting and opposing factors
         supporting = [c for c in contributions if c.contribution > 0][:2]

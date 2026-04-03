@@ -60,6 +60,7 @@ from whitelabel.config import TierConfig, TierName, get_tier_config
 
 logger = logging.getLogger(__name__)
 
+
 # ── Key-hashing secret ────────────────────────────────────────────────────────
 # API keys are stored as HMAC-SHA256(key, _KEY_HASH_SECRET) rather than bare
 # SHA-256.  This means a leaked key-store cannot be used to brute-force keys
@@ -69,11 +70,7 @@ logger = logging.getLogger(__name__)
 # Falls back to CONFIG_ENCRYPTION_KEY so existing deployments keep working
 # without a new env var.  Logs a warning if neither is set.
 def _load_key_hash_secret() -> bytes:
-    raw = (
-        os.getenv("WHITELABEL_KEY_HASH_SECRET")
-        or os.getenv("CONFIG_ENCRYPTION_KEY")
-        or ""
-    )
+    raw = os.getenv("WHITELABEL_KEY_HASH_SECRET") or os.getenv("CONFIG_ENCRYPTION_KEY") or ""
     if not raw:
         logger.warning(
             "WHITELABEL_KEY_HASH_SECRET is not set. "
@@ -84,6 +81,7 @@ def _load_key_hash_secret() -> bytes:
         # in dev without crashing.  This is NOT secure for production.
         raw = "hopefx-dev-key-hash-secret-change-me"
     return raw.encode()
+
 
 # ── Redis (optional) ──────────────────────────────────────────────────────────
 try:

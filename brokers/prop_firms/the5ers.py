@@ -50,15 +50,13 @@ class The5ersConnector(MT5Connector):
         """Initialize The5ers connector."""
         if "server" not in config:
             config["server"] = self.THE5ERS_SERVERS[0]
-            logger.info("Auto-selected The5ers server: %s", config['server'])
-
+            logger.info("Auto-selected The5ers server: %s", config["server"])
 
         super().__init__(config)
 
         self.program = config.get("program", "high_stakes")
 
         logger.info("The5ers Connector initialized for %s program", self.program)
-
 
     def get_the5ers_rules(self) -> dict[str, Any]:
         """Get The5ers rules and limits."""

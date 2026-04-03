@@ -133,12 +133,10 @@ class Affiliate:
         self.approved_at = datetime.now(UTC)
         logger.info("Affiliate %s approved", self.affiliate_id)
 
-
     def suspend(self) -> None:
         """Suspend affiliate account"""
         self.status = AffiliateStatus.SUSPENDED
         logger.info("Affiliate %s suspended", self.affiliate_id)
-
 
     def check_level_upgrade(self) -> AffiliateLevel | None:
         """Check if affiliate qualifies for level upgrade"""
@@ -216,7 +214,12 @@ class Referral:
         self.subscription_amount = subscription_amount
         self.commission_amount = subscription_amount * commission_rate
 
-        logger.info("Referral %s converted: $%s -> $%s commission", self.referral_id, subscription_amount, self.commission_amount)
+        logger.info(
+            "Referral %s converted: $%s -> $%s commission",
+            self.referral_id,
+            subscription_amount,
+            self.commission_amount,
+        )
         return self.commission_amount
 
     def mark_paid(self) -> None:
@@ -266,20 +269,17 @@ class Payout:
         self.transaction_id = transaction_id
         logger.info("Payout %s processing: %s", self.payout_id, transaction_id)
 
-
     def complete(self) -> None:
         """Mark payout as completed"""
         self.status = PayoutStatus.COMPLETED
         self.processed_at = datetime.now(UTC)
         logger.info("Payout %s completed", self.payout_id)
 
-
     def fail(self, reason: str) -> None:
         """Mark payout as failed"""
         self.status = PayoutStatus.FAILED
         self.notes = reason
         logger.error("Payout %s failed: %s", self.payout_id, reason)
-
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary"""
@@ -414,7 +414,6 @@ class AffiliateManager:
 
         self._referrals[referral_id] = referral
         logger.info("Created referral %s for affiliate %s", referral_id, affiliate.affiliate_id)
-
 
         return referral
 

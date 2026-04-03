@@ -377,11 +377,9 @@ class TestBrokerRiskIntegration:
     """PaperTradingBroker and RiskManager work together end-to-end."""
 
     def _make_broker(self, balance: float = 10_000.0):
-
         return PaperTradingBroker(initial_balance=balance)
 
     def _make_risk(self, balance: float = 10_000.0):
-
         cfg = RiskConfig(
             max_position_size_pct=0.02,
             max_drawdown_pct=0.10,
@@ -466,7 +464,6 @@ class TestMetricsRegistryIntegration:
     """MetricsRegistry records and exports values correctly."""
 
     def setup_method(self):
-
         self.registry = get_metrics_registry()
 
     def test_counter_increments(self):

@@ -399,6 +399,6 @@ class RandomForestTradingClassifier(BaseMLModel):
             },
         }
 
-        self.logger.info("Hyperparameter optimization complete. Best score: %s", results['best_score'])
+        self.logger.info("Hyperparameter optimization complete. Best score: %s", results["best_score"])
 
         return results

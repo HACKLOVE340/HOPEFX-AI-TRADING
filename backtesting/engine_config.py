@@ -460,7 +460,6 @@ class BacktestEngine:
         """
         logger.info("Starting backtest: %s to %s", self.config.start_date, self.config.end_date)
 
-
         # Load data for all symbols
         all_data: dict[str, pd.DataFrame] = {}
         for symbol in self.config.symbols:
@@ -468,7 +467,6 @@ class BacktestEngine:
             if df is not None:
                 all_data[symbol] = df
                 logger.info("Loaded %s bars for %s", len(df), symbol)
-
 
         if not all_data:
             raise ValueError("No data loaded for backtest")
@@ -511,7 +509,6 @@ class BacktestEngine:
                 except Exception as e:
                     logger.error("Strategy error at %s: %s", timestamp, e)
 
-
             # Progress callback
             if progress_callback and i % 100 == 0:
                 progress_callback(i, total_steps, timestamp)
@@ -520,7 +517,6 @@ class BacktestEngine:
         self.results = self._calculate_results()
 
         logger.info("Backtest complete: %s trades", self.results.total_trades)
-
 
         return self.results
 
@@ -1054,11 +1050,7 @@ class BacktestEngine:
         r = self.results
 
         se_str = f"±{r.sharpe_se:.2f}" if r.sharpe_se > 0 else "n/a"
-        robust_str = (
-            "✅ robust"
-            if r.total_trades >= 250
-            else f"⚠️  N={r.total_trades} (need ≥250)"
-        )
+        robust_str = "✅ robust" if r.total_trades >= 250 else f"⚠️  N={r.total_trades} (need ≥250)"
         report = f"""
 ╔════════════════════════════════════════════════════════════════╗
 ║                    HOPEFX BACKTEST REPORT                       ║
@@ -1127,7 +1119,6 @@ NOTE: Sharpe is trade-level (corrected). Bar-level Sharpe is inflated
             json.dump(data, f, indent=2, default=str)
 
         logger.info("Backtest results exported to %s", filepath)
-
 
 
 # Convenience functions

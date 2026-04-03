@@ -54,6 +54,7 @@ _pnl = st.floats(min_value=-10_000.0, max_value=10_000.0, allow_nan=False, allow
 # ATR properties
 # ---------------------------------------------------------------------------
 
+
 class TestComputeAtrProperties:
     """_compute_atr() must always return a non-negative float."""
 
@@ -105,6 +106,7 @@ class TestComputeAtrProperties:
 # ---------------------------------------------------------------------------
 # SL/TP resolution properties
 # ---------------------------------------------------------------------------
+
 
 class TestResolveSLTPProperties:
     """_resolve_sl_tp() must place SL/TP on the correct side of entry."""
@@ -178,6 +180,7 @@ class TestResolveSLTPProperties:
 # Annualised volatility properties
 # ---------------------------------------------------------------------------
 
+
 class TestEstimateAnnualisedVolatilityProperties:
     """_estimate_annualised_volatility() must always return a non-negative float."""
 
@@ -215,6 +218,7 @@ class TestEstimateAnnualisedVolatilityProperties:
 # ---------------------------------------------------------------------------
 # Drawdown series properties
 # ---------------------------------------------------------------------------
+
 
 class TestComputeDrawdownSeriesProperties:
     """_compute_drawdown_series() must return max_dd in [0,1] and a list."""
@@ -270,6 +274,7 @@ class TestComputeDrawdownSeriesProperties:
 # Sortino ratio properties
 # ---------------------------------------------------------------------------
 
+
 class TestCalculateSortinoProperties:
     """_calculate_sortino() must return a finite float for any finite input."""
 
@@ -299,6 +304,7 @@ class TestCalculateSortinoProperties:
 # Calmar ratio properties
 # ---------------------------------------------------------------------------
 
+
 class TestCalculateCalmarProperties:
     """_calculate_calmar() must return 0 when max_dd <= 0."""
 
@@ -326,12 +332,14 @@ class TestCalculateCalmarProperties:
 # Trade statistics properties
 # ---------------------------------------------------------------------------
 
+
 class TestBuildTradeStatisticsProperties:
     """_build_trade_statistics() must produce valid win_rate and profit_factor."""
 
     @staticmethod
     def _make_trade(pnl: float):
         """Minimal trade-like object with net_pnl and return_pct."""
+
         class _T:
             net_pnl = pnl
             return_pct = pnl / 1000.0
@@ -340,6 +348,7 @@ class TestBuildTradeStatisticsProperties:
             mae = abs(pnl) * 0.5
             mfe_pct = (abs(pnl) + 1.0) / 1000.0 * 100
             mae_pct = abs(pnl) * 0.5 / 1000.0 * 100
+
         return _T()
 
     @given(pnls=st.lists(_pnl, min_size=1, max_size=200))
@@ -386,6 +395,7 @@ class TestBuildTradeStatisticsProperties:
 # ---------------------------------------------------------------------------
 # RiskConfig / RiskManager properties
 # ---------------------------------------------------------------------------
+
 
 class TestRiskManagerProperties:
     """RiskManager must never approve a position larger than max_position_size_pct."""

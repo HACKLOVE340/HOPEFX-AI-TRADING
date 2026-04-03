@@ -35,6 +35,7 @@ os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-3
 # RiskManager thread-safety
 # ---------------------------------------------------------------------------
 
+
 class TestRiskManagerConcurrency:
     """
     RiskManager.assess_risk() and calculate_position_size() must be safe to
@@ -153,10 +154,9 @@ class TestRiskManagerConcurrency:
             except Exception as exc:
                 errors.append(exc)
 
-        threads = (
-            [threading.Thread(target=assess_worker) for _ in range(10)]
-            + [threading.Thread(target=size_worker) for _ in range(10)]
-        )
+        threads = [threading.Thread(target=assess_worker) for _ in range(10)] + [
+            threading.Thread(target=size_worker) for _ in range(10)
+        ]
         for t in threads:
             t.start()
         for t in threads:
@@ -168,6 +168,7 @@ class TestRiskManagerConcurrency:
 # ---------------------------------------------------------------------------
 # CircuitBreaker async concurrency
 # ---------------------------------------------------------------------------
+
 
 class TestCircuitBreakerConcurrency:
     """
@@ -240,6 +241,7 @@ class TestCircuitBreakerConcurrency:
         Interleaved failures and successes must not raise unexpected exceptions
         and must leave the breaker in a consistent boolean state.
         """
+
         async def fail_task():
             await circuit_breaker.record_failure()
 
@@ -256,6 +258,7 @@ class TestCircuitBreakerConcurrency:
 # ---------------------------------------------------------------------------
 # InferenceEngine singleton thread-safety
 # ---------------------------------------------------------------------------
+
 
 class TestInferenceEngineSingletonConcurrency:
     """
@@ -294,9 +297,7 @@ class TestInferenceEngineSingletonConcurrency:
 
         assert not errors, f"get_inference_engine() raised: {errors}"
         # All threads must get the same singleton instance
-        assert len(set(instances)) == 1, (
-            f"get_inference_engine() returned {len(set(instances))} different instances"
-        )
+        assert len(set(instances)) == 1, f"get_inference_engine() returned {len(set(instances))} different instances"
 
     def test_health_concurrent_no_exceptions(self) -> None:
         """engine.health() must be safe to call from multiple threads."""
@@ -328,6 +329,7 @@ class TestInferenceEngineSingletonConcurrency:
 # ---------------------------------------------------------------------------
 # Signal engine _build_ohlcv_proxy thread-safety
 # ---------------------------------------------------------------------------
+
 
 class TestSignalEngineHelpersConcurrency:
     """
@@ -374,6 +376,7 @@ class TestSignalEngineHelpersConcurrency:
         from core.signal_engine import _estimate_annualised_volatility
 
         import math
+
         errors: list[Exception] = []
         lock = threading.Lock()
 

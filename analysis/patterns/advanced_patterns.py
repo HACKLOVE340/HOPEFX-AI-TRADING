@@ -266,7 +266,6 @@ class AdvancedPatternDetector:
         except Exception as e:
             logger.error("Error detecting head & shoulders: %s", e)
 
-
         return patterns
 
     def _detect_double_patterns(
@@ -364,7 +363,6 @@ class AdvancedPatternDetector:
 
         except Exception as e:
             logger.error("Error detecting double patterns: %s", e)
-
 
         return patterns
 
@@ -464,7 +462,6 @@ class AdvancedPatternDetector:
         except Exception as e:
             logger.error("Error detecting triangles: %s", e)
 
-
         return patterns
 
     def _detect_wedges(
@@ -535,7 +532,6 @@ class AdvancedPatternDetector:
 
         except Exception as e:
             logger.error("Error detecting wedges: %s", e)
-
 
         return patterns
 
@@ -615,7 +611,6 @@ class AdvancedPatternDetector:
         except Exception as e:
             logger.error("Error detecting flags/pennants: %s", e)
 
-
         return patterns
 
     def _detect_rectangles(
@@ -676,7 +671,6 @@ class AdvancedPatternDetector:
 
         except Exception as e:
             logger.error("Error detecting rectangles: %s", e)
-
 
         return patterns
 
@@ -825,7 +819,6 @@ class AdvancedPatternDetector:
         except Exception as e:
             logger.error("Error detecting harmonic patterns: %s", e)
 
-
         return patterns
 
     def _detect_support_resistance(
@@ -871,7 +864,6 @@ class AdvancedPatternDetector:
 
         except Exception as e:
             logger.error("Error detecting support/resistance: %s", e)
-
 
         return patterns
 

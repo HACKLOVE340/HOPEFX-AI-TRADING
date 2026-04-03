@@ -215,7 +215,6 @@ class CircuitBreaker:
 
             logger.critical("🚨 CIRCUIT BREAKER TRIGGERED: %s - %s", reason, message)
 
-
             # Execute kill switch
             await self._execute_kill_switch(reason)
 
@@ -225,7 +224,6 @@ class CircuitBreaker:
                     self.on_breach(breach)
                 except Exception as e:
                     logger.error("Breach callback error: %s", e)
-
 
             # Schedule recovery attempt
             _t = asyncio.create_task(self._schedule_recovery())
@@ -259,7 +257,6 @@ class CircuitBreaker:
                     except Exception as e:
                         logger.error("Failed to close position %s: %s", position, e)
 
-
                 # Verify closure
                 await asyncio.sleep(1)
                 remaining = self.broker.get_positions()
@@ -286,7 +283,9 @@ class CircuitBreaker:
         """Schedule automatic recovery attempt after cooldown"""
         cooldown = self.limits.circuit_breaker_cooldown_minutes * 60
 
-        logger.info("⏱️ Circuit breaker active. Recovery attempt in %s minutes", self.limits.circuit_breaker_cooldown_minutes)
+        logger.info(
+            "⏱️ Circuit breaker active. Recovery attempt in %s minutes", self.limits.circuit_breaker_cooldown_minutes
+        )
 
         await asyncio.sleep(cooldown)
 
@@ -393,7 +392,6 @@ class CircuitBreaker:
             action = "ENABLED" if enable else "DISABLED"
             logger.critical("🔧 MANUAL OVERRIDE %s by %s: %s", action, authorized_by, reason)
 
-
             audit_record = {
                 "timestamp": datetime.now(UTC).isoformat(),
                 "action": f"MANUAL_OVERRIDE_{action}",
@@ -427,7 +425,6 @@ class CircuitBreaker:
             except Exception as e:
                 logger.error("Failed to persist state: %s", e)
 
-
     def _load_state(self):
         """Load previous state from Redis"""
         if not self.redis:
@@ -442,7 +439,6 @@ class CircuitBreaker:
                 logger.info("Loaded previous risk state from Redis")
         except Exception as e:
             logger.error("Failed to load state: %s", e)
-
 
     def _calculate_daily_pnl(self) -> float:
         """Calculate today's P&L"""

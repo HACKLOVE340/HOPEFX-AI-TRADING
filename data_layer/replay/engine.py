@@ -393,7 +393,6 @@ class MarketReplayEngine:
         import inspect
 
         try:
-
             ohlcv = await self.build_ohlcv_dataframe(
                 symbol=symbol,
                 start=start,

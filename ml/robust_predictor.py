@@ -157,7 +157,6 @@ class RobustPredictor:
         """
         logger.info("Starting robust training with %s samples", len(X))
 
-
         # 1. Feature engineering and selection
         X_features = self._engineer_features(X)
         self.selected_features = self._select_features(X_features, y)
@@ -165,11 +164,9 @@ class RobustPredictor:
 
         logger.info("Selected %s features", len(self.selected_features))
 
-
         # 2. Regime detection
         regimes = self.regime_detector.detect(X)
         logger.info("Detected regimes: %s", pd.Series(regimes).value_counts().to_dict())
-
 
         # 3. Walk-forward validation with purging
         cv_results = self._walk_forward_validation(
@@ -193,7 +190,6 @@ class RobustPredictor:
         # 6. Feature stability check
         stability = self._check_feature_stability()
         logger.info("Feature stability: %s", stability)
-
 
         self.last_retrain = datetime.now(UTC)
 
@@ -535,19 +531,11 @@ class RobustPredictor:
         bullish_med = self._bullish_med_threshold  # fallback
         bullish_high = self._bullish_high_threshold
         for b in bin_stats:
-            if (
-                b["n"] >= 5
-                and not np.isnan(b["precision"])
-                and b["precision"] >= min_precision
-            ):
+            if b["n"] >= 5 and not np.isnan(b["precision"]) and b["precision"] >= min_precision:
                 bullish_med = b["lo"]
                 break
         for b in bin_stats:
-            if (
-                b["n"] >= 5
-                and not np.isnan(b["precision"])
-                and b["precision"] >= min(min_precision + 0.10, 0.70)
-            ):
+            if b["n"] >= 5 and not np.isnan(b["precision"]) and b["precision"] >= min(min_precision + 0.10, 0.70):
                 bullish_high = b["lo"]
                 break
 
@@ -555,11 +543,7 @@ class RobustPredictor:
         bearish_med = self._bearish_med_threshold
         bearish_high = self._bearish_high_threshold
         for b in reversed(bin_stats):
-            if (
-                b["n"] >= 5
-                and not np.isnan(b["precision"])
-                and (1.0 - b["precision"]) >= min_precision
-            ):
+            if b["n"] >= 5 and not np.isnan(b["precision"]) and (1.0 - b["precision"]) >= min_precision:
                 bearish_med = b["hi"]
                 break
         for b in reversed(bin_stats):
@@ -901,9 +885,7 @@ class RobustPredictor:
         # Check for significant performance decay
         recent_mean = np.mean(recent_performance[-30:])
         historical_mean = (
-            np.mean(recent_performance[-90:])
-            if len(recent_performance) >= 90
-            else np.mean(recent_performance)
+            np.mean(recent_performance[-90:]) if len(recent_performance) >= 90 else np.mean(recent_performance)
         )
 
         if recent_mean < historical_mean * 0.7:  # 30% decay
@@ -911,9 +893,7 @@ class RobustPredictor:
             return True
 
         # Check time since last train
-        return bool(
-            self.last_retrain and (datetime.now(UTC) - self.last_retrain).days > 7
-        )
+        return bool(self.last_retrain and (datetime.now(UTC) - self.last_retrain).days > 7)
 
     def save(self, path: str) -> str:
         """

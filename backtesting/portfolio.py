@@ -49,7 +49,6 @@ class Portfolio:
 
         logger.info("Initialized portfolio with $%s", initial_capital)
 
-
     def update_fill(self, fill: FillEvent, current_prices: dict[str, float]):
         """
         Update portfolio based on fill event.
@@ -96,7 +95,6 @@ class Portfolio:
         self._update_equity(current_prices)
 
         logger.debug("Updated portfolio: %s %s %s @ %s", fill.direction, fill.quantity, fill.symbol, fill.fill_price)
-
 
     def _record_trade(self, fill: FillEvent, pnl: float):
         """Record completed trade."""

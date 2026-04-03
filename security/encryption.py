@@ -79,7 +79,6 @@ class SecureVault:
             self._salt = secrets.token_bytes(16)
             logger.warning("Generated new salt: %s... (set HOPEFX_SALT for persistence)", self._salt.hex()[:16])
 
-
         # Derive key using PBKDF2
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
@@ -107,7 +106,6 @@ class SecureVault:
                 )
             except Exception as e:
                 logger.error("Encryption failed: %s", e)
-
 
         # Fallback to base64
         return EncryptedCredential(ciphertext=base64.b64encode(plaintext.encode()).decode(), salt="", version=0)
@@ -262,7 +260,6 @@ class APICredentialManager:
         except Exception as e:
             logger.error("Failed to save credentials: %s", e)
 
-
     def _load_from_disk(self):
         """Load credentials from disk"""
         try:
@@ -285,10 +282,8 @@ class APICredentialManager:
 
             logger.info("Loaded credentials for %s services", len(self._credentials))
 
-
         except Exception as e:
             logger.error("Failed to load credentials: %s", e)
-
 
     def get_all_services(self) -> list[str]:
         """List all services with stored credentials"""

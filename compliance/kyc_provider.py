@@ -521,11 +521,7 @@ class RefinitivScreener:
             # Find highest-scoring match
             best = max(results, key=lambda r: r.get("matchStrength", 0))
             score = best.get("matchStrength", 0) / 100.0
-            lists_hit = [
-                r.get("category", "")
-                for r in results
-                if r.get("matchStrength", 0) > 50
-            ]
+            lists_hit = [r.get("category", "") for r in results if r.get("matchStrength", 0) > 50]
             is_match = score >= 0.7
 
             return SanctionsResult(

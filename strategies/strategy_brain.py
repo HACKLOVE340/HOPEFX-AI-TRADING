@@ -108,7 +108,6 @@ class StrategyBrain:
 
         logger.info("Strategy Brain: Registered %s", strategy_name)
 
-
     def unregister_strategy(self, strategy_name: str):
         """
         Unregister a strategy from the brain.
@@ -120,7 +119,6 @@ class StrategyBrain:
             del self.strategies[strategy_name]
             self._recalculate_weights()
             logger.info("Strategy Brain: Unregistered %s", strategy_name)
-
 
     def analyze_joint(self, data: dict[str, Any]) -> dict[str, Any]:
         """
@@ -149,7 +147,6 @@ class StrategyBrain:
                         strategy_signals[name] = signal
                 except Exception as e:
                     logger.error("Error getting signal from %s: %s", name, e)
-
 
             # If not enough strategies provided signals, return neutral
             if len(strategy_signals) < self.min_strategies_required:
@@ -399,7 +396,9 @@ class StrategyBrain:
         # Recalculate strategy weights
         self._recalculate_weights()
 
-        logger.info("Updated performance for %s: Win rate: %s, PnL: $%s", strategy_name, perf['win_rate'], perf['total_pnl'])
+        logger.info(
+            "Updated performance for %s: Win rate: %s, PnL: $%s", strategy_name, perf["win_rate"], perf["total_pnl"]
+        )
 
     def _recalculate_weights(self):
         """Recalculate strategy weights based on performance"""

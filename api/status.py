@@ -264,6 +264,7 @@ async def status_page():
             "unhealthy": "#f87171",
         }.get(status, "#94a3b8")
         import html as _html_mod
+
         message = _html_mod.escape(str(info.get("message", "")))
         safe_name = _html_mod.escape(name.replace("_", " ").title())
         safe_status = _html_mod.escape(str(status))

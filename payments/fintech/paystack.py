@@ -30,7 +30,9 @@ class PaystackClient:
         self.secret_key = secret_key
         self.payments = {}
 
-    def initialize_payment(self, user_id: str, amount: Decimal, currency: str = "USD", email: str | None = None) -> dict:
+    def initialize_payment(
+        self, user_id: str, amount: Decimal, currency: str = "USD", email: str | None = None
+    ) -> dict:
         """Initialize Paystack payment"""
         try:
             reference = f"PSK-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
@@ -54,7 +56,6 @@ class PaystackClient:
 
             self.payments[reference] = payment
             logger.info("Paystack payment initialized: %s", reference)
-
 
             return payment
         except Exception as e:

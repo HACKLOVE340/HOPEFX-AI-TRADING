@@ -110,8 +110,7 @@ class InteractiveBrokersConnector(BrokerConnector):
                     self.account = accounts[0]
                 logger.info("Connected to IB account: %s", self.account)
 
-                logger.info("Mode: %s", 'PAPER' if self.paper else 'LIVE')
-
+                logger.info("Mode: %s", "PAPER" if self.paper else "LIVE")
 
             return True
 

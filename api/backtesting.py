@@ -732,9 +732,7 @@ async def refresh_reconciled_investigation(
             from backtest.reconciled_backtest_investigation import run_investigation
 
             results = run_investigation(smoke=False)
-            _Path("data/backtest_investigation.json").write_text(
-                _json.dumps(results, indent=2), encoding="utf-8"
-            )
+            _Path("data/backtest_investigation.json").write_text(_json.dumps(results, indent=2), encoding="utf-8")
         except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("Investigation refresh failed: %s", exc)
 

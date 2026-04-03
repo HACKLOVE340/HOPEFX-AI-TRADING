@@ -1124,7 +1124,6 @@ class InstitutionalRiskManager:
 
         logger.info("RiskManager initialized: $%s capital", initial_capital)
 
-
     def register_emergency_callback(self, callback: Callable):
         """Register callback for kill switch activation"""
         self.emergency_callbacks.append(callback)
@@ -1382,7 +1381,6 @@ class InstitutionalRiskManager:
             except (RuntimeError, ValueError, AttributeError) as e:
                 logger.error("Emergency callback failed: %s", e)
 
-
         self._log_risk_event(f"Kill switch: {reason}", RiskEventSeverity.KILL_SWITCH)
 
     def _log_risk_event(self, message: str, severity: RiskEventSeverity):
@@ -1395,7 +1393,12 @@ class InstitutionalRiskManager:
             "daily_pnl": self.daily_pnl,
         }
         self.risk_events.append(event)
-        logger.log("Risk Event [%s]: %s", severity.name, message, logging.CRITICAL if severity >= RiskEventSeverity.CRITICAL else logging.WARNING)
+        logger.log(
+            "Risk Event [%s]: %s",
+            severity.name,
+            message,
+            logging.CRITICAL if severity >= RiskEventSeverity.CRITICAL else logging.WARNING,
+        )
 
     def _estimate_var_change(self, symbol: str, size: float, price: float) -> float:
         """Estimate how VaR changes with new position"""
@@ -1482,11 +1485,13 @@ def _compute_drawdown_series(
             if dd_start is not None:
                 ts_dt = ts.to_datetime() if hasattr(ts, "to_datetime") else datetime.now(UTC)
                 if (ts_dt - dd_start).total_seconds() > 0:
-                    dd_periods.append({
-                        "start": dd_start.isoformat(),
-                        "end": ts_dt.isoformat(),
-                        "max_dd": max_dd,
-                    })
+                    dd_periods.append(
+                        {
+                            "start": dd_start.isoformat(),
+                            "end": ts_dt.isoformat(),
+                            "max_dd": max_dd,
+                        }
+                    )
             peak = eq
             max_dd = 0.0
             dd_start = None
@@ -2140,9 +2145,7 @@ class EnhancedBacktestEngine:
         pnls = [t.net_pnl for t in trades]
         returns = [t.return_pct for t in trades]
         equity_values = [e[1] for e in self.equity_curve]
-        equity_returns = (
-            np.diff(equity_values) / equity_values[:-1] if len(equity_values) > 1 else np.array([])
-        )
+        equity_returns = np.diff(equity_values) / equity_values[:-1] if len(equity_values) > 1 else np.array([])
         max_dd, dd_periods = _compute_drawdown_series(self.equity_curve, self.initial_capital)
 
         return {
@@ -2159,17 +2162,12 @@ class EnhancedBacktestEngine:
             "mfe_mae_analysis": _build_mfe_mae_analysis(trades),
             "risk_manager_report": self.risk_manager.get_risk_report(),
             "monthly_returns": self._calculate_monthly_returns(),
-            "equity_curve_sample": [
-                {"timestamp": float(ts), "equity": eq}
-                for ts, eq in self.equity_curve[-100:]
-            ],
+            "equity_curve_sample": [{"timestamp": float(ts), "equity": eq} for ts, eq in self.equity_curve[-100:]],
         }
 
     def _analyze_regime_performance(self) -> dict[str, dict]:
         """Aggregate trade P&L and win-rate by entry market regime."""
-        regime_stats: dict[str, dict] = defaultdict(
-            lambda: {"trades": 0, "pnl": 0.0, "wins": 0, "losses": 0}
-        )
+        regime_stats: dict[str, dict] = defaultdict(lambda: {"trades": 0, "pnl": 0.0, "wins": 0, "losses": 0})
         for trade in self.closed_trades:
             regime = trade.entry_regime.name
             regime_stats[regime]["trades"] += 1
@@ -2240,8 +2238,7 @@ class EnhancedBacktestEngine:
             with Path(filepath).open("w", encoding="utf-8") as f:
                 json.dump(state, f, default=str, indent=2)
 
-        logger.info("State saved to %s (%s)", filepath, 'compressed' if compress else 'raw')
-
+        logger.info("State saved to %s (%s)", filepath, "compressed" if compress else "raw")
 
     def load_state(self, filepath: str):
         """Load engine state from disk"""

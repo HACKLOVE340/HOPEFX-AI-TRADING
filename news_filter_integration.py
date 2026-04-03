@@ -23,9 +23,7 @@ class NewsFilterIntegration:
 
     # ForexFactory calendar endpoint — returns JSON array of upcoming events.
     # Override via NEWS_FEED_URL env var to point at an alternative provider.
-    NEWS_FEED_URL: str = os.getenv(
-        "NEWS_FEED_URL", "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
-    )
+    NEWS_FEED_URL: str = os.getenv("NEWS_FEED_URL", "https://nfs.faireconomy.media/ff_calendar_thisweek.json")
 
     def fetch_forex_events(self):
         try:

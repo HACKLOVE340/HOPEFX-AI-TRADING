@@ -251,7 +251,6 @@ class MarketScanner:
                     self._symbols.append(symbol)
         logger.info("Added %s symbols to scanner", len(symbols))
 
-
     def remove_symbol(self, symbol: str):
         """Remove a symbol from scanning."""
         with self._lock:
@@ -418,7 +417,6 @@ class MarketScanner:
                 except Exception as e:
                     symbol = futures[future]
                     logger.error("Error scanning %s: %s", symbol, e)
-
 
         return results
 
@@ -796,7 +794,6 @@ class MarketScanner:
                     callback(opportunity)
                 except Exception as e:
                     logger.error("Opportunity callback error: %s", e)
-
 
     def get_opportunities(
         self,

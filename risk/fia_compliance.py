@@ -172,7 +172,6 @@ class FIAComplianceManager:
                 except Exception as e:
                     logger.error("Kill switch callback error: %s", e)
 
-
             return RiskCheckResult(
                 status=RiskControlStatus.KILL_SWITCH,
                 rule="FIA_1.5_KILL_SWITCH",

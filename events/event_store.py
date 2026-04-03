@@ -161,7 +161,6 @@ class EventStore:
 
         logger.debug("Event appended: %s [%s]", event.event_type.value, event.aggregate_id)
 
-
     async def _notify_subscribers(self, event: DomainEvent):
         """Notify all subscribers of event"""
         subscribers = self._subscribers.get(event.event_type, [])
@@ -175,12 +174,10 @@ class EventStore:
             except Exception as e:
                 logger.error("Event subscriber error: %s", e)
 
-
     def subscribe(self, event_type: EventType, callback: Callable):
         """Subscribe to events"""
         self._subscribers[event_type].append(callback)
         logger.info("Subscriber added for %s", event_type.value)
-
 
     def unsubscribe(self, event_type: EventType, callback: Callable):
         """Unsubscribe from events"""
@@ -251,7 +248,6 @@ class EventStore:
             except Exception as e:
                 logger.error("Event flush error: %s", e)
 
-
     async def _flush_events(self):
         """Flush buffered events to database"""
         async with self._buffer_lock:
@@ -277,7 +273,6 @@ class EventStore:
                     self._event_buffer = events_to_flush + self._event_buffer
         else:
             logger.debug("Would flush %s events (no database)", len(events_to_flush))
-
 
     def get_statistics(self) -> dict[str, Any]:
         """Get event store statistics"""

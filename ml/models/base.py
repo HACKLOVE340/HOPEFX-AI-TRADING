@@ -174,7 +174,6 @@ class BaseMLModel(ABC):
 
         self.logger.info("Model saved to %s", filepath)
 
-
     # Allowed base directory for model files — prevents path traversal
     _MODEL_BASE_DIR: Path = Path(os.environ.get("MODEL_BASE_DIR", "models")).resolve()
 
@@ -213,7 +212,6 @@ class BaseMLModel(ABC):
                 self.metadata = json.load(f)
 
         self.logger.info("Model loaded from %s", filepath)
-
 
     def get_feature_importance(self) -> dict[str, float] | None:
         """

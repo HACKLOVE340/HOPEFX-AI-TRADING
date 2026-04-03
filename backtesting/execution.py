@@ -59,7 +59,9 @@ class SimulatedExecutionHandler:
         self.commission_pct = commission_pct
         self.slippage_pct = slippage_pct
 
-        logger.info("Initialized execution handler (commission: %s%, slippage: %s%)", commission_pct * 100, slippage_pct * 100)
+        logger.info(
+            "Initialized execution handler (commission: %s%, slippage: %s%)", commission_pct * 100, slippage_pct * 100
+        )
 
     def execute_order(self, order: OrderEvent) -> FillEvent | None:
         """
@@ -130,6 +132,5 @@ class SimulatedExecutionHandler:
         )
 
         logger.debug("Filled %s %s %s @ %s", order.direction, order.quantity, order.symbol, fill_price)
-
 
         return fill

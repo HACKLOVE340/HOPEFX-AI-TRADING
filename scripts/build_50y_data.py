@@ -50,25 +50,35 @@ EXISTING_40Y = DATA_DIR / "XAUUSD_40Y.csv"
 TARGET_START = "1968-01-01"
 
 CRISIS_PERIODS = [
-    ("1980_gold_bubble",  "1979-10-01", "1980-09-30"),
+    ("1980_gold_bubble", "1979-10-01", "1980-09-30"),
     ("1987_black_monday", "1987-08-01", "1988-01-31"),
-    ("2001_dotcom",       "2001-01-01", "2002-12-31"),
-    ("2008_gfc",          "2007-10-01", "2009-03-31"),
-    ("2011_peak_crash",   "2011-08-01", "2012-06-30"),
-    ("2013_gold_crash",   "2013-04-01", "2013-12-31"),
-    ("2020_covid",        "2020-02-01", "2020-04-30"),
-    ("2022_rates_shock",  "2022-01-01", "2022-12-31"),
+    ("2001_dotcom", "2001-01-01", "2002-12-31"),
+    ("2008_gfc", "2007-10-01", "2009-03-31"),
+    ("2011_peak_crash", "2011-08-01", "2012-06-30"),
+    ("2013_gold_crash", "2013-04-01", "2013-12-31"),
+    ("2020_covid", "2020-02-01", "2020-04-30"),
+    ("2022_rates_shock", "2022-01-01", "2022-12-31"),
 ]
 
 # World Gold Council / Kitco annual averages (USD/oz) — public domain
 LONDON_FIX_ANNUAL: dict[int, float] = {
-    1968: 39.31, 1969: 41.28, 1970: 36.02, 1971: 40.62,
-    1972: 58.16, 1973: 97.39, 1974: 159.26, 1975: 161.02,
-    1976: 124.74, 1977: 147.84, 1978: 193.40, 1979: 306.00,
+    1968: 39.31,
+    1969: 41.28,
+    1970: 36.02,
+    1971: 40.62,
+    1972: 58.16,
+    1973: 97.39,
+    1974: 159.26,
+    1975: 161.02,
+    1976: 124.74,
+    1977: 147.84,
+    1978: 193.40,
+    1979: 306.00,
 }
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _std_cols(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
@@ -91,9 +101,7 @@ def _std_cols(df: pd.DataFrame) -> pd.DataFrame:
         if col not in df.columns:
             df[col] = np.nan
     for col in ["high", "low", "open"]:
-        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(
-            pd.to_numeric(df["close"], errors="coerce")
-        )
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(pd.to_numeric(df["close"], errors="coerce"))
     df["close"] = pd.to_numeric(df["close"], errors="coerce")
     df["volume"] = pd.to_numeric(df["volume"], errors="coerce").fillna(0)
     df = df[df["close"] > 0].copy()
@@ -106,20 +114,14 @@ def _merge(*frames: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
     combined = pd.concat(valid, ignore_index=True)
     combined["Date"] = pd.to_datetime(combined["Date"])
-    combined = (
-        combined.sort_values("Date")
-        .drop_duplicates(subset="Date", keep="last")
-        .reset_index(drop=True)
-    )
+    combined = combined.sort_values("Date").drop_duplicates(subset="Date", keep="last").reset_index(drop=True)
     combined["Date"] = combined["Date"].dt.strftime("%Y-%m-%d")
     return combined
 
 
 def _http_get(url: str, timeout: int = 25) -> bytes | None:
     try:
-        req = urllib.request.Request(
-            url, headers={"User-Agent": "Mozilla/5.0 (compatible; HOPEFX/1.0)"}
-        )
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; HOPEFX/1.0)"})
         with urllib.request.urlopen(req, timeout=timeout) as r:  # nosec B310
             return r.read()
     except Exception as exc:
@@ -129,9 +131,11 @@ def _http_get(url: str, timeout: int = 25) -> bytes | None:
 
 # ── Source 1: yfinance GC=F ───────────────────────────────────────────────────
 
+
 def fetch_yfinance_gcf(start: str, end: str) -> pd.DataFrame:
     try:
         import yfinance as yf
+
         logger.info("[1] yfinance GC=F %s → %s", start, end)
         df = yf.download("GC=F", start=start, end=end, progress=False, auto_adjust=True)
         if df.empty:
@@ -149,9 +153,11 @@ def fetch_yfinance_gcf(start: str, end: str) -> pd.DataFrame:
 
 # ── Source 2: yfinance ^XAU (Philadelphia Gold Index, back to 1983) ──────────
 
+
 def fetch_yfinance_xau(start: str, end: str) -> pd.DataFrame:
     try:
         import yfinance as yf
+
         logger.info("[2] yfinance ^XAU %s → %s", start, end)
         df = yf.download("^XAU", start=start, end=end, progress=False, auto_adjust=True)
         if df.empty:
@@ -168,6 +174,7 @@ def fetch_yfinance_xau(start: str, end: str) -> pd.DataFrame:
 
 
 # ── Source 3: Stooq XAUUSD ───────────────────────────────────────────────────
+
 
 def fetch_stooq(start: str, end: str) -> pd.DataFrame:
     try:
@@ -195,12 +202,10 @@ def fetch_stooq(start: str, end: str) -> pd.DataFrame:
 
 # ── Source 4: FRED GOLDAMGBD228NLBM ──────────────────────────────────────────
 
+
 def fetch_fred_gold(start: str, end: str) -> pd.DataFrame:
     try:
-        url = (
-            "https://fred.stlouisfed.org/graph/fredgraph.csv"
-            "?id=GOLDAMGBD228NLBM"
-        )
+        url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=GOLDAMGBD228NLBM"
         logger.info("[4] FRED GOLDAMGBD228NLBM (London AM fix)")
         raw = _http_get(url, timeout=30)
         if not raw:
@@ -226,12 +231,10 @@ def fetch_fred_gold(start: str, end: str) -> pd.DataFrame:
 
 # ── Source 5: Quandl/Nasdaq LBMA/GOLD ────────────────────────────────────────
 
+
 def fetch_quandl_gold(start: str, end: str) -> pd.DataFrame:
     try:
-        url = (
-            "https://data.nasdaq.com/api/v3/datasets/LBMA/GOLD.csv"
-            f"?start_date={start}&end_date={end}&order=asc"
-        )
+        url = f"https://data.nasdaq.com/api/v3/datasets/LBMA/GOLD.csv?start_date={start}&end_date={end}&order=asc"
         logger.info("[5] Quandl/Nasdaq LBMA/GOLD %s → %s", start, end)
         raw = _http_get(url, timeout=20)
         if not raw:
@@ -258,6 +261,7 @@ def fetch_quandl_gold(start: str, end: str) -> pd.DataFrame:
 
 
 # ── Source 6: Datahub.io monthly gold prices ─────────────────────────────────
+
 
 def fetch_datahub_gold() -> pd.DataFrame:
     try:
@@ -287,6 +291,7 @@ def fetch_datahub_gold() -> pd.DataFrame:
 
 # ── Source 7: Existing project 40Y CSV ───────────────────────────────────────
 
+
 def load_existing_40y() -> pd.DataFrame:
     if not EXISTING_40Y.exists():
         return pd.DataFrame()
@@ -298,24 +303,28 @@ def load_existing_40y() -> pd.DataFrame:
 
 # ── Source 8: Hardcoded London fix 1968-1979 ─────────────────────────────────
 
+
 def build_annual_series() -> pd.DataFrame:
     rows = []
     for year, price in sorted(LONDON_FIX_ANNUAL.items()):
         for d in pd.date_range(f"{year}-01-01", f"{year}-12-31", freq="B"):
-            rows.append({
-                "Date": d.strftime("%Y-%m-%d"),
-                "close": float(price),
-                "high": float(price) * 1.005,
-                "low": float(price) * 0.995,
-                "open": float(price),
-                "volume": 0.0,
-            })
+            rows.append(
+                {
+                    "Date": d.strftime("%Y-%m-%d"),
+                    "close": float(price),
+                    "high": float(price) * 1.005,
+                    "low": float(price) * 0.995,
+                    "open": float(price),
+                    "volume": 0.0,
+                }
+            )
     df = pd.DataFrame(rows)
     logger.info("[8] Hardcoded London fix 1968-1979 → %d rows", len(df))
     return df
 
 
 # ── Statistics ────────────────────────────────────────────────────────────────
+
 
 def _returns(df: pd.DataFrame) -> pd.Series:
     return df["close"].astype(float).pct_change().dropna()
@@ -343,7 +352,9 @@ def validate_crisis_periods(df: pd.DataFrame) -> dict:
         r = _returns(sub)
         total_ret = float(sub["close"].iloc[-1] / sub["close"].iloc[0] - 1)
         results[name] = {
-            "start": start, "end": end, "n_bars": len(sub),
+            "start": start,
+            "end": end,
+            "n_bars": len(sub),
             "sharpe": round(_sharpe(r), 4),
             "max_drawdown": round(_max_dd(r), 4),
             "total_return": round(total_ret, 4),
@@ -353,8 +364,11 @@ def validate_crisis_periods(df: pd.DataFrame) -> dict:
         }
         logger.info(
             "Crisis %-22s n=%4d  sharpe=%+.2f  dd=%+.1f%%  ret=%+.1f%%",
-            name, len(sub), results[name]["sharpe"],
-            results[name]["max_drawdown"] * 100, total_ret * 100,
+            name,
+            len(sub),
+            results[name]["sharpe"],
+            results[name]["max_drawdown"] * 100,
+            total_ret * 100,
         )
     return results
 
@@ -378,6 +392,7 @@ def full_stats(df: pd.DataFrame) -> dict:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+
 def main() -> int:
     today = datetime.now(UTC).strftime("%Y-%m-%d")
     logger.info("=" * 60)
@@ -385,12 +400,12 @@ def main() -> int:
     logger.info("=" * 60)
 
     # Fetch all sources
-    annual   = build_annual_series()
-    datahub  = fetch_datahub_gold()
-    quandl   = fetch_quandl_gold(TARGET_START, today)
-    fred     = fetch_fred_gold(TARGET_START, today)
-    xau_idx  = fetch_yfinance_xau("1983-01-01", "2001-01-01")
-    gcf      = fetch_yfinance_gcf("1999-01-01", today)
+    annual = build_annual_series()
+    datahub = fetch_datahub_gold()
+    quandl = fetch_quandl_gold(TARGET_START, today)
+    fred = fetch_fred_gold(TARGET_START, today)
+    xau_idx = fetch_yfinance_xau("1983-01-01", "2001-01-01")
+    gcf = fetch_yfinance_gcf("1999-01-01", today)
     existing = load_existing_40y()
 
     # Merge — later sources win on date overlap
@@ -413,7 +428,9 @@ def main() -> int:
 
     logger.info(
         "Final: %d rows  %s → %s",
-        len(merged), merged["Date"].iloc[0], merged["Date"].iloc[-1],
+        len(merged),
+        merged["Date"].iloc[0],
+        merged["Date"].iloc[-1],
     )
 
     # Save CSV
@@ -423,18 +440,18 @@ def main() -> int:
 
     # Crisis validation + full stats
     crisis = validate_crisis_periods(merged)
-    stats  = full_stats(merged)
+    stats = full_stats(merged)
 
     # Source coverage
     coverage: dict = {}
     for label, frame in [
         ("annual_london_fix_1968_1979", annual),
-        ("datahub_monthly_1950+",       datahub),
-        ("quandl_lbma_1968+",           quandl),
-        ("fred_london_am_fix_1968+",    fred),
-        ("yfinance_xau_index_1983+",    xau_idx),
-        ("yfinance_gcf_futures_1999+",  gcf),
-        ("existing_40y_csv_2000+",      existing),
+        ("datahub_monthly_1950+", datahub),
+        ("quandl_lbma_1968+", quandl),
+        ("fred_london_am_fix_1968+", fred),
+        ("yfinance_xau_index_1983+", xau_idx),
+        ("yfinance_gcf_futures_1999+", gcf),
+        ("existing_40y_csv_2000+", existing),
     ]:
         if frame is not None and not frame.empty:
             f2 = frame.copy()
@@ -442,7 +459,7 @@ def main() -> int:
             coverage[label] = {
                 "rows": len(f2),
                 "from": f2["Date"].min().strftime("%Y-%m-%d"),
-                "to":   f2["Date"].max().strftime("%Y-%m-%d"),
+                "to": f2["Date"].max().strftime("%Y-%m-%d"),
             }
         else:
             coverage[label] = {"rows": 0, "from": None, "to": None}
@@ -465,9 +482,9 @@ def main() -> int:
     print(f"  Date range:     {stats['date_range']}")
     print(f"  Years covered:  {stats['years_covered']}")
     print(f"  Full Sharpe:    {stats['sharpe_full']:.3f}")
-    print(f"  Max drawdown:   {stats['max_drawdown_full']*100:.1f}%")
-    print(f"  Ann. return:    {stats['annualised_return']*100:.1f}%")
-    print(f"  Ann. vol:       {stats['annualised_vol']*100:.1f}%")
+    print(f"  Max drawdown:   {stats['max_drawdown_full'] * 100:.1f}%")
+    print(f"  Ann. return:    {stats['annualised_return'] * 100:.1f}%")
+    print(f"  Ann. vol:       {stats['annualised_vol'] * 100:.1f}%")
     print()
     print("Source coverage:")
     for src, cov in coverage.items():
@@ -484,8 +501,8 @@ def main() -> int:
             print(
                 f"  {name:<24} n={r['n_bars']:>4}  "
                 f"sharpe={r['sharpe']:+.2f}  "
-                f"dd={r['max_drawdown']*100:+.1f}%  "
-                f"ret={r['total_return']*100:+.1f}%"
+                f"dd={r['max_drawdown'] * 100:+.1f}%  "
+                f"ret={r['total_return'] * 100:+.1f}%"
             )
     print("=" * 65)
     return 0

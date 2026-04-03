@@ -89,7 +89,6 @@ class NotificationManager:
             except Exception as e:
                 logger.error("Notification processing error: %s", e)
 
-
     async def _dispatch(self, notification: Notification):
         """Send to all configured channels"""
         tasks = []
@@ -108,6 +107,7 @@ class NotificationManager:
     def _validate_discord_url(url: str) -> bool:
         """Return True only if *url* is an HTTPS discord.com webhook."""
         from urllib.parse import urlparse
+
         try:
             p = urlparse(url)
             host = (p.hostname or "").lower()
@@ -119,6 +119,7 @@ class NotificationManager:
     def _validate_https_url(url: str) -> bool:
         """Return True only if *url* uses HTTPS."""
         from urllib.parse import urlparse
+
         try:
             return urlparse(url).scheme == "https"
         except Exception:
@@ -157,7 +158,6 @@ class NotificationManager:
         async with aiohttp.ClientSession() as session, session.post(webhook_url, json=payload) as resp:
             if resp.status != 204:
                 logger.error("Discord notification failed: %s", resp.status)
-
 
     @staticmethod
     def _escape_mdv2(text: str) -> str:
@@ -239,7 +239,6 @@ class NotificationManager:
         async with aiohttp.ClientSession() as session, session.post(webhook_url, json=payload) as resp:
             if resp.status >= 400:
                 logger.error("Webhook notification failed: %s", resp.status)
-
 
     def _format_timestamp(self, timestamp: float) -> str:
         """Format timestamp for Discord"""

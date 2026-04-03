@@ -208,7 +208,6 @@ class PerformanceAnalytics:
 
         logger.info("Performance Analytics initialized with equity: $%s", initial_equity)
 
-
     def record_trade(self, trade: TradeRecord):
         """Record a completed trade."""
         self.trades.append(trade)
@@ -228,7 +227,6 @@ class PerformanceAnalytics:
         )
 
         logger.debug("Trade recorded: %s - PnL: $%s", trade.id, trade.pnl)
-
 
     def _record_equity_point(self, equity: float, open_pnl: float, drawdown: float):
         """Record a point on the equity curve."""

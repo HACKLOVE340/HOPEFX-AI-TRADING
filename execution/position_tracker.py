@@ -118,7 +118,12 @@ class PositionTracker:
             if position_id in self._price_subscriptions[pos.symbol]:
                 self._price_subscriptions[pos.symbol].remove(position_id)
 
-            logger.info("Position closed: %s | Realized P&L: $%s | Commission: $%s", position_id, pos.realized_pnl, pos.commission)
+            logger.info(
+                "Position closed: %s | Realized P&L: $%s | Commission: $%s",
+                position_id,
+                pos.realized_pnl,
+                pos.commission,
+            )
 
             return pos
 

@@ -243,7 +243,6 @@ End-to-end trading workflow tests
 """
 
 
-
 class TestTradingWorkflow:
     """Full system integration test"""
 
