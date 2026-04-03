@@ -34,9 +34,17 @@ except Exception as _exc:
 
 config = context.config
 
-# Allow DATABASE_URL env var to override alembic.ini
+# Allow DATABASE_URL env var to override alembic.ini.
+# Strip async driver prefixes so Alembic uses the sync engine:
+#   sqlite+aiosqlite:///  → sqlite:///
+#   postgresql+asyncpg:// → postgresql://
 db_url = os.getenv("DATABASE_URL")
 if db_url:
+    db_url = (
+        db_url
+        .replace("sqlite+aiosqlite:///", "sqlite:///")
+        .replace("postgresql+asyncpg://", "postgresql://")
+    )
     config.set_main_option("sqlalchemy.url", db_url)
 
 if config.config_file_name is not None:
