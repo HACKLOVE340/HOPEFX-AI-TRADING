@@ -32,12 +32,43 @@ interface UserDetailDrawerProps {
   onRefresh: () => void;
 }
 
-const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user, onClose, onRefresh }) => {
-  const [role, setRole]   = useState(user.role);
-  const [plan, setPlan]   = useState(user.plan);
+interface ActivityEntry {
+  action: string;
+  timestamp: string;
+  ip: string;
+  details: string;
+}
+
+const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user: initialUser, onClose, onRefresh }) => {
+  const [user, setUser]     = useState<SuperAdminUser>(initialUser);
+  const [tab, setTab]       = useState<'overview' | 'edit' | 'activity'>('overview');
+  const [role, setRole]     = useState(initialUser.role);
+  const [plan, setPlan]     = useState(initialUser.plan);
+  const [editFields, setEditFields] = useState({ username: initialUser.username, email: initialUser.email });
+  const [activity, setActivity] = useState<ActivityEntry[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg]     = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [msg, setMsg]       = useState('');
   const [confirm, setConfirm] = useState<{ action: string; label: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+
+  // Load full user detail on mount
+  useEffect(() => {
+    superadminApi.getUser(initialUser.user_id)
+      .then(r => { setUser(r.data); setRole(r.data.role); setPlan(r.data.plan); setEditFields({ username: r.data.username, email: r.data.email }); })
+      .catch(() => {}); // fall back to initial data passed in
+  }, [initialUser.user_id]);
+
+  // Load activity when tab selected
+  useEffect(() => {
+    if (tab !== 'activity') return;
+    setActivityLoading(true);
+    superadminApi.userActivity(user.user_id)
+      .then(r => setActivity(r.data.activity ?? r.data ?? []))
+      .catch(() => setActivity([]))
+      .finally(() => setActivityLoading(false));
+  }, [tab, user.user_id]);
 
   const doAction = async (action: string) => {
     setSaving(true); setMsg('');
@@ -57,6 +88,30 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user, onClose, onRe
     }
   };
 
+  const saveEdit = async () => {
+    setSaving(true); setMsg('');
+    try {
+      const res = await superadminApi.updateUser(user.user_id, editFields);
+      setUser(prev => ({ ...prev, ...res.data }));
+      setMsg('Done');
+      onRefresh();
+    } catch (e: unknown) {
+      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Update failed');
+    } finally { setSaving(false); }
+  };
+
+  const deleteUser = async () => {
+    setDeleting(true); setMsg('');
+    try {
+      await superadminApi.deleteUser(user.user_id);
+      setMsg('Done');
+      onRefresh();
+      setTimeout(onClose, 800);
+    } catch (e: unknown) {
+      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Delete failed');
+    } finally { setDeleting(false); setDeleteConfirm(false); }
+  };
+
   const roleStyle = ROLE_BADGE_STYLES[user.role as UserRole] ?? ROLE_BADGE_STYLES.user;
 
   return (
@@ -71,94 +126,141 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user, onClose, onRe
           onCancel={() => setConfirm(null)}
         />
       )}
-      <div style={{
-        position: 'fixed', inset: 0, zIndex: 800,
-        background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(3px)',
-      }} onClick={onClose} />
-      <div style={{
-        position: 'fixed', right: 0, top: 0, bottom: 0, zIndex: 801,
-        width: 420, background: '#0a1628',
-        borderLeft: '1px solid #1e293b',
-        overflowY: 'auto', padding: 24,
-        animation: 'sa-fadein 0.2s ease',
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#f8fafc' }}>User Detail</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 20 }}>x</button>
-        </div>
+      {deleteConfirm && (
+        <ConfirmDialog
+          title="Delete User Account"
+          message={`Permanently delete account for "${user.username}" (${user.email})? All data will be anonymised. This cannot be undone.`}
+          confirmLabel="Delete Account"
+          variant="danger"
+          onConfirm={deleteUser}
+          onCancel={() => setDeleteConfirm(false)}
+        />
+      )}
+      <div style={{ position: 'fixed', inset: 0, zIndex: 800, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(3px)' }} onClick={onClose} />
+      <div style={{ position: 'fixed', right: 0, top: 0, bottom: 0, zIndex: 801, width: 460, background: '#0a1628', borderLeft: '1px solid #1e293b', overflowY: 'auto', padding: 24, animation: 'sa-fadein 0.2s ease' }}>
 
-        <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, padding: 16, marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-            <div style={{
-              width: 44, height: 44, borderRadius: '50%',
-              background: roleStyle.bg, border: `2px solid ${roleStyle.border}`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 18, fontWeight: 700, color: roleStyle.color,
-            }}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: roleStyle.bg, border: `2px solid ${roleStyle.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: roleStyle.color }}>
               {user.username[0].toUpperCase()}
             </div>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9' }}>{user.username}</div>
-              <div style={{ fontSize: 12, color: '#64748b' }}>{user.email}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>{user.username}</div>
+              <div style={{ fontSize: 11, color: '#64748b' }}>{user.email}</div>
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {[
-              { label: 'Status',     value: <StatusBadge status={user.status} size="sm" /> },
-              { label: 'Role',       value: <span style={{ fontSize: 11, fontWeight: 700, color: roleStyle.color }}>{ROLE_LABELS[user.role as UserRole] ?? user.role}</span> },
-              { label: 'Plan',       value: <span style={{ fontSize: 11, fontWeight: 700, color: PLAN_COLORS[user.plan as Plan] ?? '#94a3b8' }}>{PLAN_LABELS[user.plan as Plan] ?? user.plan}</span> },
-              { label: '2FA',        value: <span style={{ color: user.two_fa_enabled ? '#4ade80' : '#f87171', fontSize: 11 }}>{user.two_fa_enabled ? 'Enabled' : 'Disabled'}</span> },
-              { label: 'Joined',     value: fmtDate(user.created_at) },
-              { label: 'Last Login', value: timeAgo(user.last_login) },
-              { label: 'Trades',     value: user.total_trades.toLocaleString() },
-              { label: 'Revenue',    value: `$${user.revenue_generated.toFixed(2)}` },
-            ].map(r => (
-              <div key={r.label} style={{ background: '#1e293b', borderRadius: 6, padding: '8px 10px' }}>
-                <div style={{ fontSize: 10, color: '#475569', marginBottom: 3 }}>{r.label}</div>
-                <div style={{ fontSize: 12, color: '#e2e8f0' }}>{r.value}</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 20 }}>×</button>
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 18 }}>
+          {(['overview', 'edit', 'activity'] as const).map(t => (
+            <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? '#1e293b' : 'transparent', border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`, borderRadius: 7, color: tab === t ? '#f8fafc' : '#64748b', padding: '6px 14px', fontSize: 12, cursor: 'pointer' }}>
+              {{ overview: 'Overview', edit: 'Edit', activity: 'Activity' }[t]}
+            </button>
+          ))}
+        </div>
+
+        {/* ── TAB: Overview ── */}
+        {tab === 'overview' && (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+              {[
+                { label: 'Status',     value: <StatusBadge status={user.status} size="sm" /> },
+                { label: 'Role',       value: <span style={{ fontSize: 11, fontWeight: 700, color: roleStyle.color }}>{ROLE_LABELS[user.role as UserRole] ?? user.role}</span> },
+                { label: 'Plan',       value: <span style={{ fontSize: 11, fontWeight: 700, color: PLAN_COLORS[user.plan as Plan] ?? '#94a3b8' }}>{PLAN_LABELS[user.plan as Plan] ?? user.plan}</span> },
+                { label: '2FA',        value: <span style={{ color: user.two_fa_enabled ? '#4ade80' : '#f87171', fontSize: 11 }}>{user.two_fa_enabled ? 'Enabled' : 'Disabled'}</span> },
+                { label: 'Joined',     value: fmtDate(user.created_at) },
+                { label: 'Last Login', value: timeAgo(user.last_login) },
+                { label: 'Trades',     value: user.total_trades.toLocaleString() },
+                { label: 'Revenue',    value: `$${user.revenue_generated.toFixed(2)}` },
+              ].map(r => (
+                <div key={r.label} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 6, padding: '8px 10px' }}>
+                  <div style={{ fontSize: 10, color: '#475569', marginBottom: 3 }}>{r.label}</div>
+                  <div style={{ fontSize: 12, color: '#e2e8f0' }}>{r.value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Role + Plan pickers */}
+            <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, padding: 14, marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 8 }}>Change Role</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Select value={role} onChange={e => setRole(e.target.value)} options={[
+                  { value: 'user', label: 'User' }, { value: 'trader', label: 'Trader' },
+                  { value: 'admin', label: 'Admin' }, { value: 'superadmin', label: 'Super Admin' },
+                ]} style={{ flex: 1 }} />
+                <ActionBtn label="Apply" onClick={() => setConfirm({ action: 'set-role', label: 'Change Role' })} variant="primary" size="sm" loading={saving} />
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
 
-        <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, padding: 16, marginBottom: 16 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', marginBottom: 10 }}>Change Role</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Select value={role} onChange={e => setRole(e.target.value)} options={[
-              { value: 'user', label: 'User' }, { value: 'trader', label: 'Trader' },
-              { value: 'admin', label: 'Admin' }, { value: 'superadmin', label: 'Super Admin' },
-            ]} style={{ flex: 1 }} />
-            <ActionBtn label="Apply" onClick={() => setConfirm({ action: 'set-role', label: 'Change Role' })} variant="primary" size="sm" loading={saving} />
-          </div>
-        </div>
+            <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 8 }}>Change Plan</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Select value={plan} onChange={e => setPlan(e.target.value)} options={[
+                  { value: 'free', label: 'Free' }, { value: 'starter', label: 'Starter' },
+                  { value: 'pro', label: 'Pro' }, { value: 'elite', label: 'Elite' },
+                ]} style={{ flex: 1 }} />
+                <ActionBtn label="Apply" onClick={() => setConfirm({ action: 'set-plan', label: 'Change Plan' })} variant="primary" size="sm" loading={saving} />
+              </div>
+            </div>
 
-        <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, padding: 16, marginBottom: 16 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', marginBottom: 10 }}>Change Plan</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Select value={plan} onChange={e => setPlan(e.target.value)} options={[
-              { value: 'free', label: 'Free' }, { value: 'starter', label: 'Starter' },
-              { value: 'pro', label: 'Pro' }, { value: 'elite', label: 'Elite' },
-            ]} style={{ flex: 1 }} />
-            <ActionBtn label="Apply" onClick={() => setConfirm({ action: 'set-plan', label: 'Change Plan' })} variant="primary" size="sm" loading={saving} />
-          </div>
-        </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <ActionBtn label="Reset Password"   onClick={() => setConfirm({ action: 'reset-pw',    label: 'Reset Password'   })} variant="warning" icon="🔑" />
+              <ActionBtn label="Impersonate User" onClick={() => setConfirm({ action: 'impersonate', label: 'Impersonate User' })} variant="primary" icon="👤" />
+              {user.status === 'banned'
+                ? <ActionBtn label="Unban User" onClick={() => setConfirm({ action: 'unban', label: 'Unban User' })} variant="success" icon="✅" />
+                : <ActionBtn label="Ban User"   onClick={() => setConfirm({ action: 'ban',   label: 'Ban User'   })} variant="danger"  icon="🚫" />
+              }
+              <div style={{ borderTop: '1px solid #1e293b', paddingTop: 8 }}>
+                <ActionBtn label="Delete Account" onClick={() => setDeleteConfirm(true)} loading={deleting} icon="🗑️" variant="danger" />
+              </div>
+            </div>
+          </>
+        )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <ActionBtn label="Reset Password"   onClick={() => setConfirm({ action: 'reset-pw',    label: 'Reset Password'   })} variant="warning" icon="🔑" />
-          <ActionBtn label="Impersonate User" onClick={() => setConfirm({ action: 'impersonate', label: 'Impersonate User' })} variant="primary" icon="👤" />
-          {user.status === 'banned'
-            ? <ActionBtn label="Unban User" onClick={() => setConfirm({ action: 'unban', label: 'Unban User' })} variant="success" icon="✅" />
-            : <ActionBtn label="Ban User"   onClick={() => setConfirm({ action: 'ban',   label: 'Ban User'   })} variant="danger"  icon="🚫" />
-          }
-        </div>
+        {/* ── TAB: Edit ── */}
+        {tab === 'edit' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, padding: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', marginBottom: 12 }}>Edit Profile</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <Input label="Username" value={editFields.username} onChange={e => setEditFields(f => ({ ...f, username: e.target.value }))} />
+                <Input label="Email"    value={editFields.email}    onChange={e => setEditFields(f => ({ ...f, email:    e.target.value }))} />
+              </div>
+            </div>
+            <ActionBtn label={saving ? 'Saving…' : 'Save Changes'} onClick={saveEdit} variant="primary" loading={saving} />
+          </div>
+        )}
+
+        {/* ── TAB: Activity ── */}
+        {tab === 'activity' && (
+          <div>
+            {activityLoading ? (
+              <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 24 }}>Loading activity…</div>
+            ) : activity.length === 0 ? (
+              <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 24 }}>No activity recorded.</div>
+            ) : (
+              activity.map((a, i) => (
+                <div key={i} style={{ display: 'flex', gap: 10, padding: '10px 0', borderBottom: '1px solid #0f172a', alignItems: 'flex-start' }}>
+                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#3b82f6', marginTop: 5, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9' }}>{a.action}</div>
+                    {a.details && <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{a.details}</div>}
+                    <div style={{ fontSize: 10, color: '#334155', marginTop: 2 }}>IP: {a.ip}</div>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#475569', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    {new Date(a.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
 
         {msg && (
-          <div style={{
-            marginTop: 14, padding: '10px 14px', borderRadius: 8,
-            background: msg === 'Done' ? '#052e16' : '#450a0a',
-            color: msg === 'Done' ? '#4ade80' : '#f87171',
-            fontSize: 12, fontWeight: 600,
-          }}>
+          <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 8, background: msg === 'Done' ? '#052e16' : '#450a0a', color: msg === 'Done' ? '#4ade80' : '#f87171', fontSize: 12, fontWeight: 600 }}>
             {msg === 'Done' ? '✅ Action completed successfully' : `❌ ${msg}`}
           </div>
         )}
