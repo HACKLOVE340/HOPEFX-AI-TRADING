@@ -71,6 +71,27 @@ class _NullSpanCtx:
         pass
 
 
+# Module-level tracer cache.  Loaded once on first execute() call to avoid
+# repeated import+try/except overhead on the hot order path.
+# None  → not yet resolved.
+# False → api.tracing unavailable (permanent, stop retrying).
+# Any other value → the live tracer object.
+_module_tracer: Any = None
+
+
+def _get_module_tracer():
+    """Return the cached module-level OTel tracer (or _NullSpanCtx factory)."""
+    global _module_tracer
+    if _module_tracer is None:
+        try:
+            from api.tracing import get_tracer as _get_tracer  # type: ignore[import]
+
+            _module_tracer = _get_tracer("hopefx.execution")
+        except Exception:
+            _module_tracer = False  # permanent failure sentinel
+    return _module_tracer if _module_tracer else None
+
+
 class ExecutionStatus(Enum):
     PENDING = "pending"
     SUBMITTED = "submitted"
@@ -352,13 +373,8 @@ class ExecutionEngine:
 
         Returns ExecutionReport — never raises.
         """
-        # ── OTel instrumentation — lazy import avoids circular dependencies ──
-        try:
-            from api.tracing import get_tracer as _get_tracer  # type: ignore[import]
-
-            _tracer = _get_tracer("hopefx.execution")
-        except Exception:
-            _tracer = None
+        # ── OTel instrumentation — use module-level cached tracer ─────────────
+        _tracer = _get_module_tracer()
 
         _root_span_ctx = (
             _tracer.start_as_current_span("execution.execute")

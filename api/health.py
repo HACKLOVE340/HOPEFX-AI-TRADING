@@ -50,26 +50,42 @@ _SERVICE_NAME: str = os.getenv("OTEL_SERVICE_NAME", "hopefx-trading")
 # each use without full reconnect overhead.
 _db_engine = None
 _db_engine_url: str | None = None
+_db_engine_lock = None  # threading.Lock; created on first use (import is serialised)
 
 
 def _get_db_engine():
-    """Return the module-level DB engine, creating it if necessary."""
-    global _db_engine, _db_engine_url
+    """Return the module-level DB engine, creating it if necessary.
+
+    Thread-safe via double-checked locking with a threading.Lock so that
+    concurrent Kubernetes health probes do not race during initial creation.
+    """
+    global _db_engine, _db_engine_url, _db_engine_lock
     db_url = os.getenv("DATABASE_URL", "")
     if not db_url:
         return None, None
-    # Re-create if the URL changed (e.g. environment update in tests).
+    # Fast path — already initialised for the current URL.
     if _db_engine is not None and _db_engine_url == db_url:
         return _db_engine, db_url
-    try:
-        from sqlalchemy.ext.asyncio import create_async_engine  # type: ignore[import]
 
-        _db_engine = create_async_engine(db_url, pool_pre_ping=True, pool_size=1, max_overflow=0)
-        _db_engine_url = db_url
-        return _db_engine, db_url
-    except Exception as exc:
-        logger.warning("health.py: could not create DB engine: %s", exc)
-        return None, db_url
+    # Slow path — acquire lock.
+    import threading as _threading
+
+    if _db_engine_lock is None:
+        _db_engine_lock = _threading.Lock()
+
+    with _db_engine_lock:
+        # Re-check inside the lock (double-checked locking).
+        if _db_engine is not None and _db_engine_url == db_url:
+            return _db_engine, db_url
+        try:
+            from sqlalchemy.ext.asyncio import create_async_engine  # type: ignore[import]
+
+            _db_engine = create_async_engine(db_url, pool_pre_ping=True, pool_size=1, max_overflow=0)
+            _db_engine_url = db_url
+            return _db_engine, db_url
+        except Exception as exc:
+            logger.warning("health.py: could not create DB engine: %s", exc)
+            return None, db_url
 
 
 # ── Pydantic models ────────────────────────────────────────────────────────────

@@ -485,9 +485,14 @@ class OandaBroker:
                         data = await resp.json()
                         return {"success": False, "comment": data.get("errorMessage", "Cancel rejected")}
                     if resp.status in _RETRYABLE_STATUSES and attempt < _MAX_RETRIES:
-                        delay = _RETRY_BASE_DELAY * (2**attempt)
+                        default_delay = min(_RETRY_BASE_DELAY * (2**attempt), 30.0)
                         if resp.status == 429:
-                            delay = float(resp.headers.get("Retry-After", delay))
+                            try:
+                                delay = float(resp.headers.get("Retry-After", default_delay))
+                            except (ValueError, TypeError):
+                                delay = default_delay
+                        else:
+                            delay = default_delay
                         await asyncio.sleep(delay)
                         continue
                     if resp.status == 200:

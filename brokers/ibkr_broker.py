@@ -472,11 +472,13 @@ class IBKRBroker:
 
         Tries up to _MAX_RECONNECT_ATTEMPTS times.  Returns True when a
         connection is (re-)established, False after all attempts fail.
+        Delay is capped at 30 s to prevent excessive wait times if
+        _MAX_RECONNECT_ATTEMPTS is increased.
         """
         logger.warning("IBKRBroker: attempting reconnect (was connected=%s)", self.connected)
         await self.disconnect()
         for attempt in range(1, _MAX_RECONNECT_ATTEMPTS + 1):
-            delay = _RECONNECT_BASE_DELAY * (2 ** (attempt - 1))
+            delay = min(_RECONNECT_BASE_DELAY * (2 ** (attempt - 1)), 30.0)
             logger.info("IBKRBroker: reconnect attempt %d/%d in %.1fs...", attempt, _MAX_RECONNECT_ATTEMPTS, delay)
             await asyncio.sleep(delay)
             if await self.connect():
