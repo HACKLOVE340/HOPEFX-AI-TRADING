@@ -1,22 +1,20 @@
 /**
  * Settings.tsx
- * Full-featured settings hub covering every aspect of the application.
+ * Full settings hub — 14 tabs covering every aspect of the platform.
  *
- * Sections:
- *   Profile       — identity, avatar, bio, timezone, language
- *   Security      — password change, 2FA, active sessions
- *   Broker        — broker connection, API keys, live/paper toggle
- *   Trading       — defaults, risk limits, automation, kill switch
- *   Appearance    — theme, accent color, chart style, display prefs
- *   Notifications — Discord, Slack, Telegram, Email, alert triggers
- *   API Keys      — generate, list, revoke programmatic access keys
- *   Billing       — subscription plan, wallet, transaction history
- *   Danger Zone   — export data, emergency stop, delete account
+ * Tab visibility rules:
+ *   - All authenticated users: profile, security, broker, trading,
+ *     appearance, notifications, api-keys, billing, integrations,
+ *     privacy, accessibility, danger
+ *   - Admin/superadmin only: system, admin
  */
 
 import React, { useState, Suspense, lazy } from 'react';
+import { useStore, selectUser } from '../store';
+import { isAdmin } from '../lib/subscription';
 import type { SettingsTab } from './settings/types';
 
+// Lazy-load every section for code splitting
 const ProfileSection       = lazy(() => import('./settings/ProfileSection'));
 const SecuritySection      = lazy(() => import('./settings/SecuritySection'));
 const BrokerSection        = lazy(() => import('./settings/BrokerSection'));
@@ -25,26 +23,71 @@ const AppearanceSection    = lazy(() => import('./settings/AppearanceSection'));
 const NotificationsSection = lazy(() => import('./settings/NotificationsSection'));
 const ApiKeysSection       = lazy(() => import('./settings/ApiKeysSection'));
 const BillingSection       = lazy(() => import('./settings/BillingSection'));
+const IntegrationsSection  = lazy(() => import('./settings/IntegrationsSection'));
+const SystemSection        = lazy(() => import('./settings/SystemSection'));
+const PrivacySection       = lazy(() => import('./settings/PrivacySection'));
+const AccessibilitySection = lazy(() => import('./settings/AccessibilitySection'));
+const AdminSettingsSection = lazy(() => import('./settings/AdminSettingsSection'));
 const DangerSection        = lazy(() => import('./settings/DangerSection'));
+
+// ── Tab definitions ───────────────────────────────────────────────────────────
+
+interface TabGroup {
+  label: string;
+  tabs: TabDef[];
+}
 
 interface TabDef {
   id: SettingsTab;
   label: string;
   icon: string;
+  adminOnly?: boolean;
   danger?: boolean;
 }
 
-const TABS: TabDef[] = [
-  { id: 'profile',       label: 'Profile',       icon: '👤' },
-  { id: 'security',      label: 'Security',       icon: '🔒' },
-  { id: 'broker',        label: 'Broker',         icon: '🏦' },
-  { id: 'trading',       label: 'Trading',        icon: '📈' },
-  { id: 'appearance',    label: 'Appearance',     icon: '🎨' },
-  { id: 'notifications', label: 'Notifications',  icon: '🔔' },
-  { id: 'api-keys',      label: 'API Keys',       icon: '🔑' },
-  { id: 'billing',       label: 'Billing',        icon: '💳' },
-  { id: 'danger',        label: 'Danger Zone',    icon: '⚠️', danger: true },
+const TAB_GROUPS: TabGroup[] = [
+  {
+    label: 'Account',
+    tabs: [
+      { id: 'profile',       label: 'Profile',        icon: '👤' },
+      { id: 'security',      label: 'Security',        icon: '🔒' },
+      { id: 'billing',       label: 'Billing',         icon: '💳' },
+      { id: 'api-keys',      label: 'API Keys',        icon: '🔑' },
+    ],
+  },
+  {
+    label: 'Trading',
+    tabs: [
+      { id: 'broker',        label: 'Broker',          icon: '🏦' },
+      { id: 'trading',       label: 'Trading',         icon: '📈' },
+      { id: 'integrations',  label: 'Integrations',    icon: '🔌' },
+    ],
+  },
+  {
+    label: 'Preferences',
+    tabs: [
+      { id: 'appearance',    label: 'Appearance',      icon: '🎨' },
+      { id: 'notifications', label: 'Notifications',   icon: '🔔' },
+      { id: 'accessibility', label: 'Accessibility',   icon: '♿' },
+      { id: 'privacy',       label: 'Privacy & Data',  icon: '🔏' },
+    ],
+  },
+  {
+    label: 'Administration',
+    tabs: [
+      { id: 'system',        label: 'System',          icon: '⚙️',  adminOnly: true },
+      { id: 'admin',         label: 'Admin Settings',  icon: '🔧',  adminOnly: true },
+    ],
+  },
+  {
+    label: 'Danger Zone',
+    tabs: [
+      { id: 'danger',        label: 'Danger Zone',     icon: '⚠️',  danger: true },
+    ],
+  },
 ];
+
+// ── Section fallback ──────────────────────────────────────────────────────────
 
 const SectionFallback: React.FC = () => (
   <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#64748b', padding: '32px 0' }}>
@@ -57,7 +100,11 @@ const SectionFallback: React.FC = () => (
   </div>
 );
 
+// ── Settings page ─────────────────────────────────────────────────────────────
+
 const Settings: React.FC = () => {
+  const user = useStore(selectUser);
+  const admin = user ? isAdmin(user.role) : false;
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
 
   const renderSection = () => {
@@ -70,7 +117,13 @@ const Settings: React.FC = () => {
       case 'notifications': return <NotificationsSection />;
       case 'api-keys':      return <ApiKeysSection />;
       case 'billing':       return <BillingSection />;
+      case 'integrations':  return <IntegrationsSection />;
+      case 'system':        return admin ? <SystemSection /> : null;
+      case 'privacy':       return <PrivacySection />;
+      case 'accessibility': return <AccessibilitySection />;
+      case 'admin':         return admin ? <AdminSettingsSection /> : null;
       case 'danger':        return <DangerSection />;
+      default:              return null;
     }
   };
 
@@ -84,32 +137,53 @@ const Settings: React.FC = () => {
       <div style={styles.page}>
         <div style={styles.header}>
           <h1 style={styles.heading}>Settings</h1>
-          <p style={styles.subheading}>Manage your account, trading preferences, and integrations.</p>
+          <p style={styles.subheading}>
+            Manage your account, trading preferences, integrations, and platform configuration.
+          </p>
         </div>
 
         <div style={styles.layout}>
+          {/* Sidebar nav */}
           <nav style={styles.sidebar}>
-            {TABS.map((tab) => {
-              const active = activeTab === tab.id;
+            {TAB_GROUPS.map((group) => {
+              const visibleTabs = group.tabs.filter((t) => !t.adminOnly || admin);
+              if (visibleTabs.length === 0) return null;
+
               return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  style={{
-                    ...styles.tabBtn,
-                    background:  active ? '#1e293b' : 'transparent',
-                    color:       active ? (tab.danger ? '#fca5a5' : '#60a5fa') : (tab.danger ? '#f87171' : '#94a3b8'),
-                    borderLeft:  active ? `3px solid ${tab.danger ? '#ef4444' : '#3b82f6'}` : '3px solid transparent',
-                    fontWeight:  active ? 600 : 400,
-                  }}
-                >
-                  <span style={styles.tabIcon}>{tab.icon}</span>
-                  <span>{tab.label}</span>
-                </button>
+                <div key={group.label} style={{ marginBottom: 4 }}>
+                  <div style={styles.groupLabel}>{group.label}</div>
+                  {visibleTabs.map((tab) => {
+                    const active = activeTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        style={{
+                          ...styles.tabBtn,
+                          background:  active ? '#1e293b' : 'transparent',
+                          color:       active
+                            ? (tab.danger ? '#fca5a5' : '#60a5fa')
+                            : (tab.danger ? '#f87171' : '#94a3b8'),
+                          borderLeft:  active
+                            ? `3px solid ${tab.danger ? '#ef4444' : '#3b82f6'}`
+                            : '3px solid transparent',
+                          fontWeight:  active ? 600 : 400,
+                        }}
+                      >
+                        <span style={styles.tabIcon}>{tab.icon}</span>
+                        <span>{tab.label}</span>
+                        {tab.adminOnly && (
+                          <span style={styles.adminBadge}>ADMIN</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               );
             })}
           </nav>
 
+          {/* Content */}
           <main style={styles.content}>
             <Suspense fallback={<SectionFallback />}>
               <div key={activeTab} style={{ animation: 'fadeIn 0.2s ease' }}>
@@ -123,6 +197,8 @@ const Settings: React.FC = () => {
   );
 };
 
+// ── Styles ────────────────────────────────────────────────────────────────────
+
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: '100vh',
@@ -133,7 +209,7 @@ const styles: Record<string, React.CSSProperties> = {
     boxSizing: 'border-box',
   },
   header: {
-    maxWidth: 1100,
+    maxWidth: 1200,
     margin: '0 auto 28px',
   },
   heading: {
@@ -150,40 +226,61 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 0,
   },
   layout: {
-    maxWidth: 1100,
+    maxWidth: 1200,
     margin: '0 auto',
     display: 'flex',
     gap: 28,
     alignItems: 'flex-start',
   },
   sidebar: {
-    width: 200,
+    width: 210,
     flexShrink: 0,
     background: '#0f172a',
     borderRadius: 12,
     border: '1px solid #1e293b',
-    padding: '8px 0',
-    position: 'sticky',
+    padding: '10px 0',
+    position: 'sticky' as const,
     top: 24,
+  },
+  groupLabel: {
+    fontSize: 10,
+    fontWeight: 700,
+    color: '#334155',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.08em',
+    padding: '10px 16px 4px',
   },
   tabBtn: {
     display: 'flex',
     alignItems: 'center',
-    gap: 10,
+    gap: 9,
     width: '100%',
-    padding: '10px 16px',
+    padding: '9px 16px',
     border: 'none',
     borderLeft: '3px solid transparent',
     background: 'transparent',
     cursor: 'pointer',
-    fontSize: 14,
-    textAlign: 'left',
+    fontSize: 13,
+    textAlign: 'left' as const,
     transition: 'background 0.15s, color 0.15s',
     borderRadius: 0,
   },
   tabIcon: {
-    fontSize: 16,
+    fontSize: 15,
     flexShrink: 0,
+    width: 18,
+    textAlign: 'center' as const,
+  },
+  adminBadge: {
+    marginLeft: 'auto',
+    fontSize: 9,
+    fontWeight: 700,
+    padding: '2px 5px',
+    borderRadius: 4,
+    background: '#1e3a5f',
+    color: '#60a5fa',
+    border: '1px solid #1e3a5f',
+    letterSpacing: '0.05em',
   },
   content: {
     flex: 1,
