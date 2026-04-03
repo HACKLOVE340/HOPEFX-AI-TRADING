@@ -912,6 +912,164 @@ else:
         __table__ = type("T", (), {"columns": []})()
 
 
+# ── Chargeback table ──────────────────────────────────────────────────────────
+# Tracks payment disputes raised by cardholders via their bank.
+# Populated by the Stripe webhook handler on charge.dispute.created events.
+
+if SQLALCHEMY_AVAILABLE:
+
+    class Chargeback(Base):
+        """Payment chargeback / dispute record."""
+
+        __tablename__ = "chargebacks"
+
+        id = Column(Integer, primary_key=True, autoincrement=True)
+        chargeback_id = Column(String(100), unique=True, nullable=False, index=True)
+        payment_id = Column(String(100), nullable=False, index=True)
+        user_id = Column(String(128), nullable=False, index=True)
+        username = Column(String(255), nullable=True)
+        amount = Column(Float, nullable=False)
+        currency = Column(String(10), nullable=False, default="USD")
+        reason = Column(String(255), nullable=False)
+        # open | won | lost | pending_evidence
+        status = Column(String(30), nullable=False, default="open", index=True)
+        provider = Column(String(50), nullable=False, default="stripe")
+        evidence_due_by = Column(DateTime(timezone=True), nullable=True)
+        opened_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+        resolved_at = Column(DateTime(timezone=True), nullable=True)
+        raw_payload = Column(Text, nullable=True)  # raw JSON from payment provider
+
+        def to_dict(self) -> dict:
+            return {
+                "chargeback_id": self.chargeback_id,
+                "payment_id": self.payment_id,
+                "user_id": self.user_id,
+                "username": self.username or "",
+                "amount": self.amount,
+                "currency": self.currency,
+                "reason": self.reason,
+                "status": self.status,
+                "provider": self.provider,
+                "evidence_due_by": self.evidence_due_by.isoformat() if self.evidence_due_by else None,
+                "opened_at": self.opened_at.isoformat() if self.opened_at else None,
+                "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
+            }
+
+else:
+
+    class Chargeback:  # type: ignore[no-redef]
+        __tablename__ = "chargebacks"
+        __table__ = type("T", (), {"columns": []})()
+
+
+# ── Tax report table ──────────────────────────────────────────────────────────
+# One row per jurisdiction per period.  Populated by the tax-reporting job
+# that runs on the 1st of each month.
+
+if SQLALCHEMY_AVAILABLE:
+
+    class TaxReport(Base):
+        """Periodic tax report per jurisdiction."""
+
+        __tablename__ = "tax_reports"
+
+        id = Column(Integer, primary_key=True, autoincrement=True)
+        report_id = Column(String(100), unique=True, nullable=False, index=True)
+        period = Column(String(20), nullable=False)          # e.g. "2025-Q1" or "2025-01"
+        jurisdiction = Column(String(100), nullable=False)   # e.g. "US-CA", "GB", "NG"
+        total_revenue = Column(Float, nullable=False, default=0.0)
+        taxable_amount = Column(Float, nullable=False, default=0.0)
+        tax_rate_pct = Column(Float, nullable=False, default=0.0)
+        tax_owed = Column(Float, nullable=False, default=0.0)
+        currency = Column(String(10), nullable=False, default="USD")
+        # draft | filed | paid | overdue
+        status = Column(String(20), nullable=False, default="draft", index=True)
+        due_date = Column(DateTime(timezone=True), nullable=True)
+        filed_at = Column(DateTime(timezone=True), nullable=True)
+        created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+        updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+        __table_args__ = (
+            UniqueConstraint("period", "jurisdiction", name="uq_tax_report_period_jurisdiction"),
+        )
+
+        def to_dict(self) -> dict:
+            return {
+                "report_id": self.report_id,
+                "period": self.period,
+                "jurisdiction": self.jurisdiction,
+                "total_revenue": self.total_revenue,
+                "taxable_amount": self.taxable_amount,
+                "tax_rate_pct": self.tax_rate_pct,
+                "tax_owed": self.tax_owed,
+                "currency": self.currency,
+                "status": self.status,
+                "due_date": self.due_date.isoformat() if self.due_date else None,
+                "filed_at": self.filed_at.isoformat() if self.filed_at else None,
+                "created_at": self.created_at.isoformat() if self.created_at else None,
+            }
+
+else:
+
+    class TaxReport:  # type: ignore[no-redef]
+        __tablename__ = "tax_reports"
+        __table__ = type("T", (), {"columns": []})()
+
+
+# ── Reconciliation record table ───────────────────────────────────────────────
+# Tracks expected vs actual amounts per payment provider per period.
+# Discrepancies trigger an alert and require manual resolution.
+
+if SQLALCHEMY_AVAILABLE:
+
+    class ReconciliationRecord(Base):
+        """Payment reconciliation record — expected vs actual per provider."""
+
+        __tablename__ = "reconciliation_records"
+
+        id = Column(Integer, primary_key=True, autoincrement=True)
+        recon_id = Column(String(100), unique=True, nullable=False, index=True)
+        period = Column(String(20), nullable=False)          # e.g. "2025-01"
+        provider = Column(String(50), nullable=False)        # stripe | flutterwave | crypto
+        expected_amount = Column(Float, nullable=False, default=0.0)
+        actual_amount = Column(Float, nullable=False, default=0.0)
+        discrepancy = Column(Float, nullable=False, default=0.0)
+        currency = Column(String(10), nullable=False, default="USD")
+        transaction_count = Column(Integer, nullable=False, default=0)
+        # matched | discrepancy | pending | resolved
+        status = Column(String(20), nullable=False, default="pending", index=True)
+        notes = Column(Text, nullable=True)
+        created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+        resolved_at = Column(DateTime(timezone=True), nullable=True)
+        resolved_by = Column(String(128), nullable=True)
+
+        __table_args__ = (
+            UniqueConstraint("period", "provider", name="uq_recon_period_provider"),
+        )
+
+        def to_dict(self) -> dict:
+            return {
+                "recon_id": self.recon_id,
+                "period": self.period,
+                "provider": self.provider,
+                "expected_amount": self.expected_amount,
+                "actual_amount": self.actual_amount,
+                "discrepancy": self.discrepancy,
+                "currency": self.currency,
+                "transaction_count": self.transaction_count,
+                "status": self.status,
+                "notes": self.notes,
+                "created_at": self.created_at.isoformat() if self.created_at else None,
+                "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
+            }
+
+else:
+
+    class ReconciliationRecord:  # type: ignore[no-redef]
+        __tablename__ = "reconciliation_records"
+        __table__ = type("T", (), {"columns": []})()
+
+
 def _add_enum_value(enum_cls, name, value):
     """Add a new member to an existing Enum if it doesn't already exist."""
     if name in enum_cls._member_map_:
