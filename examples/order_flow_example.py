@@ -24,6 +24,7 @@ import argparse
 import asyncio
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
@@ -44,20 +45,14 @@ def print_metrics(analyzer, symbol: str) -> None:
     oscillator = analyzer.get_order_flow_oscillator(symbol)
     pressure = analyzer.get_pressure_gauges(symbol)
 
-    print(f"\n{'='*55}")
-    print(
-        f"  Order Flow Snapshot — {symbol}  "
-        f"{datetime.now(UTC).strftime('%H:%M:%S UTC')}"
-    )
-    print(f"{'='*55}")
+    print(f"\n{'=' * 55}")
+    print(f"  Order Flow Snapshot — {symbol}  {datetime.now(UTC).strftime('%H:%M:%S UTC')}")
+    print(f"{'=' * 55}")
 
     if aggression:
         print(f"  Buy aggression  : {aggression.buy_aggression:6.1f}%")
         print(f"  Sell aggression : {aggression.sell_aggression:6.1f}%")
-        print(
-            f"  Score           : {aggression.aggression_score:+.1f}"
-            f"  ({aggression.dominant_side})"
-        )
+        print(f"  Score           : {aggression.aggression_score:+.1f}  ({aggression.dominant_side})")
 
     if oscillator:
         print(f"  OFO value       : {oscillator.value:+.1f}  → {oscillator.signal}")
@@ -70,11 +65,7 @@ def print_metrics(analyzer, symbol: str) -> None:
     if clusters:
         print("  Volume clusters :")
         for cluster in clusters:
-            print(
-                f"    {cluster.price_level:10.4f}  "
-                f"{cluster.cluster_type:<12}  "
-                f"strength={cluster.strength:.2f}"
-            )
+            print(f"    {cluster.price_level:10.4f}  {cluster.cluster_type:<12}  strength={cluster.strength:.2f}")
 
 
 async def run_example(max_ticks: int = 100) -> None:
@@ -114,16 +105,14 @@ async def run_example(max_ticks: int = 100) -> None:
         orchestrator.subscribe_ticks("order_flow_example", _on_tick)
         # Wait for ticks to accumulate
         waited = 0
-        while count < min(max_ticks, 50) and waited < 30:
+        while count < min(max_ticks, 50) and waited < 30:  # noqa: PLR2004
             await asyncio.sleep(1.0)
             waited += 1
         orchestrator.unsubscribe_ticks("order_flow_example")
 
     else:
         # ── Fallback: Dukascopy replay for last 24 hours ──────────────────────
-        logger.info(
-            "No live tick — loading last 24h of Dukascopy M1 data for order flow"
-        )
+        logger.info("No live tick — loading last 24h of Dukascopy M1 data for order flow")
         from datetime import timedelta
 
         # Access replay engine via orchestrator — single entry point rule
@@ -132,16 +121,10 @@ async def run_example(max_ticks: int = 100) -> None:
         engine = orchestrator._replay
 
         tick_count = 0
-        async for replay_tick in engine.replay_ticks(
-            start=start, end=end, symbol="XAUUSD"
-        ):
+        async for replay_tick in engine.replay_ticks(start=start, end=end, symbol="XAUUSD"):
             if tick_count >= max_ticks:
                 break
-            side = (
-                "buy"
-                if replay_tick.mid >= (replay_tick.bid + replay_tick.ask) / 2
-                else "sell"
-            )
+            side = "buy" if replay_tick.mid >= (replay_tick.bid + replay_tick.ask) / 2 else "sell"
             analyzer.add_trade(
                 symbol=SYMBOL,
                 price=replay_tick.mid,
@@ -159,10 +142,7 @@ async def run_example(max_ticks: int = 100) -> None:
     # Detect delta divergence
     divergence = analyzer.detect_delta_divergence(SYMBOL)
     if divergence:
-        print(
-            f"\n  Delta divergence: {divergence.divergence_type} "
-            f"(confidence={divergence.confidence:.2f})"
-        )
+        print(f"\n  Delta divergence: {divergence.divergence_type} (confidence={divergence.confidence:.2f})")
     else:
         print("\n  No delta divergence detected.")
 
@@ -171,10 +151,7 @@ async def run_example(max_ticks: int = 100) -> None:
     if stacked:
         print(f"\n  Stacked imbalances: {len(stacked)} found")
         for si in stacked[:3]:
-            print(
-                f"    direction={si.direction}  levels={len(si.levels)}  "
-                f"strength={si.strength}"
-            )
+            print(f"    direction={si.direction}  levels={len(si.levels)}  strength={si.strength}")
     else:
         print("\n  No stacked imbalances found.")
 
@@ -182,9 +159,7 @@ async def run_example(max_ticks: int = 100) -> None:
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="HOPEFX Order Flow Example — Real Data"
-    )
+    parser = argparse.ArgumentParser(description="HOPEFX Order Flow Example — Real Data")
     parser.add_argument(
         "--ticks",
         type=int,

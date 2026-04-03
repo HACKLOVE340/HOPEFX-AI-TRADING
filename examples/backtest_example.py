@@ -41,7 +41,7 @@ class XAUUSDDataGenerator:
             date = self.start_date + timedelta(days=day)
 
             # Skip weekends
-            if date.weekday() >= 5:
+            if date.weekday() >= 5:  # noqa: PLR2004
                 continue
 
             # Generate hourly candles per day
@@ -226,9 +226,7 @@ class BacktestEngine:
         # Calculate Sharpe (simplified, assuming 252 trading days)
         if len(equity_values) > 1:
             daily_returns = np.diff(equity_values) / equity_values[:-1]
-            sharpe = (
-                np.mean(daily_returns) / (np.std(daily_returns) + 1e-10) * np.sqrt(252)
-            )
+            sharpe = np.mean(daily_returns) / (np.std(daily_returns) + 1e-10) * np.sqrt(252)
         else:
             sharpe = 0
 
@@ -241,9 +239,7 @@ class BacktestEngine:
             "total_trades": len(self.trades),
             "winning_trades": len(win_trades),
             "losing_trades": len(loss_trades),
-            "win_rate_pct": (len(win_trades) / len(self.trades) * 100)
-            if self.trades
-            else 0,
+            "win_rate_pct": (len(win_trades) / len(self.trades) * 100) if self.trades else 0,
             "avg_win": np.mean(win_trades) if win_trades else 0,
             "avg_loss": np.mean(loss_trades) if loss_trades else 0,
             "profit_factor": abs(sum(win_trades) / sum(loss_trades))
@@ -319,19 +315,13 @@ def main():
     try:
         import matplotlib.pyplot as plt
 
-        _, axes = plt.subplots(
-            2, 1, figsize=(12, 8), gridspec_kw={"height_ratios": [3, 1]}
-        )
+        _, axes = plt.subplots(2, 1, figsize=(12, 8), gridspec_kw={"height_ratios": [3, 1]})
 
         # Equity curve
         equities = [e["equity"] for e in engine.equity_curve[::24]]
 
-        axes[0].plot(
-            range(len(equities)), equities, label="Equity", color="#2E86AB", linewidth=2
-        )
-        axes[0].axhline(
-            y=metrics["initial_capital"], color="gray", linestyle="--", alpha=0.5
-        )
+        axes[0].plot(range(len(equities)), equities, label="Equity", color="#2E86AB", linewidth=2)
+        axes[0].axhline(y=metrics["initial_capital"], color="gray", linestyle="--", alpha=0.5)
         axes[0].set_title(
             "XAUUSD MA Crossover Backtest - Equity Curve",
             fontsize=14,
@@ -348,9 +338,7 @@ def main():
             peak = max(peak, equity)
             drawdowns.append((peak - equity) / peak * 100)
 
-        axes[1].fill_between(
-            range(len(drawdowns)), drawdowns, color="#E94F37", alpha=0.3
-        )
+        axes[1].fill_between(range(len(drawdowns)), drawdowns, color="#E94F37", alpha=0.3)
         axes[1].plot(range(len(drawdowns)), drawdowns, color="#E94F37", linewidth=1)
         axes[1].set_title("Drawdown %", fontsize=12)
         axes[1].set_ylabel("Drawdown (%)")
@@ -365,9 +353,7 @@ def main():
 
     except ImportError:
         logger.warning("matplotlib not installed, skipping plot generation")
-        print(
-            "Install matplotlib to generate equity curve plots: pip install matplotlib"
-        )
+        print("Install matplotlib to generate equity curve plots: pip install matplotlib")
 
     print("\\n✅ Backtest complete!")
     return metrics

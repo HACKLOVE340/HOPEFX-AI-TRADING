@@ -171,9 +171,7 @@ def _push_risk_settings_to_manager(persisted: dict) -> None:
                 for key, value in persisted.items():
                     if hasattr(rm, key):
                         setattr(rm, key, value)
-                        logger.debug(
-                            "apply_persisted_risk_settings: set risk_manager.%s = %s", key, value
-                        )
+                        logger.debug("apply_persisted_risk_settings: set risk_manager.%s = %s", key, value)
     except Exception as exc:
         logger.warning("apply_persisted_risk_settings: RiskManager update failed: %s", exc)
 
@@ -610,6 +608,7 @@ def _dashboard_trade_stats(trading_stats: dict) -> None:
 
     try:
         from research.pipeline.paper_trading_gate import get_gate
+
         trading_stats["paper_fill_count"] = get_gate().fill_count
     except Exception as exc:
         logger.debug("dashboard-data paper trading gate stats failed: %s", exc)
@@ -619,6 +618,7 @@ def _dashboard_signal_status(module_status: dict) -> None:
     """Populate signal_engine and strategies flags in-place."""
     try:
         from core.signal_engine import get_signal_engine_status
+
         se = get_signal_engine_status()
         module_status["signal_engine"] = se.get("ml_available", False)
         module_status["strategies"] = True

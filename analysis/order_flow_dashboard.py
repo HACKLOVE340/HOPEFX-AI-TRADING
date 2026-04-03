@@ -451,11 +451,6 @@ class OrderFlowDashboard:
             logger.warning("DOM get_bias error for %s: %s", symbol, exc)
         return None
 
-        Returns:
-            'bullish', 'bearish', or 'neutral'
-        """
-        votes: ClassVar[list[str]] = []
-
     def _bias_vote_advanced(self, symbol: str) -> str | None:
         """Return advanced-flow bias vote or None."""
         if self._adv is None:
@@ -486,15 +481,17 @@ class OrderFlowDashboard:
         """
         Get aggregated directional bias for a symbol via majority vote.
 
-        if self._inst is not None:
-            try:
-                direction = self._inst.get_smart_money_direction(symbol)
-                if direction is not None:
-                    dir_str = direction.direction if hasattr(direction, "direction") else direction
-                    if dir_str in ("bullish", "bearish"):
-                        votes.append(dir_str)
-            except Exception as exc:
-                logger.warning("Institutional get_bias error for %s: %s", symbol, exc)
+        Returns 'bullish', 'bearish', or 'neutral'.
+        """
+        votes: list[str] = []
+        for vote_fn in (
+            self._bias_vote_dom,
+            self._bias_vote_advanced,
+            self._bias_vote_institutional,
+        ):
+            v = vote_fn(symbol)
+            if v is not None:
+                votes.append(v)
 
         if not votes:
             return "neutral"

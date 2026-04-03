@@ -71,9 +71,7 @@ def upgrade() -> None:
         sa.Column("snapshot_at", sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_accounts_snapshot_at"), "accounts", ["snapshot_at"], unique=False
-    )
+    op.create_index(op.f("ix_accounts_snapshot_at"), "accounts", ["snapshot_at"], unique=False)
     op.create_index(op.f("ix_accounts_user_id"), "accounts", ["user_id"], unique=False)
     op.create_table(
         "ai_signals",
@@ -91,12 +89,8 @@ def upgrade() -> None:
         sa.Column("expires_at", sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_ai_signals_generated_at"), "ai_signals", ["generated_at"], unique=False
-    )
-    op.create_index(
-        op.f("ix_ai_signals_symbol"), "ai_signals", ["symbol"], unique=False
-    )
+    op.create_index(op.f("ix_ai_signals_generated_at"), "ai_signals", ["generated_at"], unique=False)
+    op.create_index(op.f("ix_ai_signals_symbol"), "ai_signals", ["symbol"], unique=False)
     op.create_table(
         "audit_log",
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
@@ -117,9 +111,7 @@ def upgrade() -> None:
         ["sequence_number"],
         unique=False,
     )
-    op.create_index(
-        op.f("ix_audit_log_timestamp"), "audit_log", ["timestamp"], unique=False
-    )
+    op.create_index(op.f("ix_audit_log_timestamp"), "audit_log", ["timestamp"], unique=False)
     op.create_table(
         "configurations",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -148,9 +140,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("idx_kyc_user", "kyc_records", ["user_id"], unique=False)
-    op.create_index(
-        op.f("ix_kyc_records_user_id"), "kyc_records", ["user_id"], unique=True
-    )
+    op.create_index(op.f("ix_kyc_records_user_id"), "kyc_records", ["user_id"], unique=True)
     op.create_table(
         "market_data",
         sa.Column("id", sa.BigInteger(), nullable=False),
@@ -172,15 +162,9 @@ def upgrade() -> None:
         ["symbol", "timeframe", "timestamp"],
         unique=False,
     )
-    op.create_index(
-        op.f("ix_market_data_symbol"), "market_data", ["symbol"], unique=False
-    )
-    op.create_index(
-        op.f("ix_market_data_timeframe"), "market_data", ["timeframe"], unique=False
-    )
-    op.create_index(
-        op.f("ix_market_data_timestamp"), "market_data", ["timestamp"], unique=False
-    )
+    op.create_index(op.f("ix_market_data_symbol"), "market_data", ["symbol"], unique=False)
+    op.create_index(op.f("ix_market_data_timeframe"), "market_data", ["timeframe"], unique=False)
+    op.create_index(op.f("ix_market_data_timestamp"), "market_data", ["timestamp"], unique=False)
     op.create_table(
         "news_data",
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
@@ -194,9 +178,7 @@ def upgrade() -> None:
         sa.Column("fetched_at", sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_news_data_published_at"), "news_data", ["published_at"], unique=False
-    )
+    op.create_index(op.f("ix_news_data_published_at"), "news_data", ["published_at"], unique=False)
     op.create_table(
         "order_book_snapshots",
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
@@ -307,9 +289,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_positions_symbol"), "positions", ["symbol"], unique=False)
-    op.create_index(
-        op.f("ix_positions_user_id"), "positions", ["user_id"], unique=False
-    )
+    op.create_index(op.f("ix_positions_user_id"), "positions", ["user_id"], unique=False)
     op.create_table(
         "predictions",
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
@@ -324,12 +304,8 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_predictions_created_at"), "predictions", ["created_at"], unique=False
-    )
-    op.create_index(
-        op.f("ix_predictions_symbol"), "predictions", ["symbol"], unique=False
-    )
+    op.create_index(op.f("ix_predictions_created_at"), "predictions", ["created_at"], unique=False)
+    op.create_index(op.f("ix_predictions_symbol"), "predictions", ["symbol"], unique=False)
     op.create_table(
         "system_events",
         sa.Column("id", sa.BigInteger(), nullable=False),
@@ -344,15 +320,9 @@ def upgrade() -> None:
         sa.Column("session_id", sa.String(length=50), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_system_events_component"), "system_events", ["component"], unique=False
-    )
-    op.create_index(
-        op.f("ix_system_events_timestamp"), "system_events", ["timestamp"], unique=False
-    )
-    op.create_index(
-        op.f("ix_system_events_trace_id"), "system_events", ["trace_id"], unique=False
-    )
+    op.create_index(op.f("ix_system_events_component"), "system_events", ["component"], unique=False)
+    op.create_index(op.f("ix_system_events_timestamp"), "system_events", ["timestamp"], unique=False)
+    op.create_index(op.f("ix_system_events_trace_id"), "system_events", ["trace_id"], unique=False)
     op.create_table(
         "tick_data",
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
@@ -366,9 +336,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_tick_data_symbol"), "tick_data", ["symbol"], unique=False)
-    op.create_index(
-        op.f("ix_tick_data_timestamp"), "tick_data", ["timestamp"], unique=False
-    )
+    op.create_index(op.f("ix_tick_data_timestamp"), "tick_data", ["timestamp"], unique=False)
     op.create_table(
         "trades",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -406,9 +374,7 @@ def upgrade() -> None:
         sa.Column("signal_strength", sa.Float(), nullable=True),
         sa.Column(
             "status",
-            sa.Enum(
-                "PENDING", "OPEN", "CLOSED", "CANCELLED", "ERROR", name="tradestatus"
-            ),
+            sa.Enum("PENDING", "OPEN", "CLOSED", "CANCELLED", "ERROR", name="tradestatus"),
             nullable=True,
         ),
         sa.Column("is_open", sa.Boolean(), nullable=True),
@@ -418,9 +384,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("idx_trades_entry_time", "trades", ["entry_time"], unique=False)
-    op.create_index(
-        "idx_trades_symbol_status", "trades", ["symbol", "status"], unique=False
-    )
+    op.create_index("idx_trades_symbol_status", "trades", ["symbol", "status"], unique=False)
     op.create_index(op.f("ix_trades_symbol"), "trades", ["symbol"], unique=False)
     op.create_index(op.f("ix_trades_trade_id"), "trades", ["trade_id"], unique=True)
     op.create_table(
@@ -518,9 +482,7 @@ def upgrade() -> None:
         ["attempted_at"],
         unique=False,
     )
-    op.create_index(
-        op.f("ix_login_attempts_email"), "login_attempts", ["email"], unique=False
-    )
+    op.create_index(op.f("ix_login_attempts_email"), "login_attempts", ["email"], unique=False)
     op.create_index(
         op.f("ix_login_attempts_ip_address"),
         "login_attempts",
@@ -561,9 +523,7 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        "idx_orders_symbol_created", "orders", ["symbol", "created_at"], unique=False
-    )
+    op.create_index("idx_orders_symbol_created", "orders", ["symbol", "created_at"], unique=False)
     op.create_index(op.f("ix_orders_order_id"), "orders", ["order_id"], unique=True)
     op.create_index(op.f("ix_orders_symbol"), "orders", ["symbol"], unique=False)
     op.create_table(
@@ -626,13 +586,9 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("refresh_token_hash"),
     )
-    op.create_index(
-        "idx_sessions_token_hash", "user_sessions", ["refresh_token_hash"], unique=False
-    )
+    op.create_index("idx_sessions_token_hash", "user_sessions", ["refresh_token_hash"], unique=False)
     op.create_index("idx_sessions_user", "user_sessions", ["user_id"], unique=False)
-    op.create_index(
-        op.f("ix_user_sessions_user_id"), "user_sessions", ["user_id"], unique=False
-    )
+    op.create_index(op.f("ix_user_sessions_user_id"), "user_sessions", ["user_id"], unique=False)
     # ### end Alembic commands ###
 
 
@@ -656,15 +612,9 @@ def downgrade() -> None:
     op.drop_index("idx_login_ip_time", table_name="login_attempts")
     op.drop_index("idx_login_email_time", table_name="login_attempts")
     op.drop_table("login_attempts")
-    op.drop_index(
-        op.f("ix_wallet_transactions_user_id"), table_name="wallet_transactions"
-    )
-    op.drop_index(
-        op.f("ix_wallet_transactions_transaction_id"), table_name="wallet_transactions"
-    )
-    op.drop_index(
-        op.f("ix_wallet_transactions_created_at"), table_name="wallet_transactions"
-    )
+    op.drop_index(op.f("ix_wallet_transactions_user_id"), table_name="wallet_transactions")
+    op.drop_index(op.f("ix_wallet_transactions_transaction_id"), table_name="wallet_transactions")
+    op.drop_index(op.f("ix_wallet_transactions_created_at"), table_name="wallet_transactions")
     op.drop_index("idx_wallet_user_created", table_name="wallet_transactions")
     op.drop_table("wallet_transactions")
     op.drop_index(op.f("ix_users_username"), table_name="users")
@@ -690,12 +640,8 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_positions_user_id"), table_name="positions")
     op.drop_index(op.f("ix_positions_symbol"), table_name="positions")
     op.drop_table("positions")
-    op.drop_index(
-        op.f("ix_performance_metrics_strategy_name"), table_name="performance_metrics"
-    )
-    op.drop_index(
-        op.f("ix_performance_metrics_recorded_at"), table_name="performance_metrics"
-    )
+    op.drop_index(op.f("ix_performance_metrics_strategy_name"), table_name="performance_metrics")
+    op.drop_index(op.f("ix_performance_metrics_recorded_at"), table_name="performance_metrics")
     op.drop_table("performance_metrics")
     op.drop_index(
         op.f("ix_performance_metric_samples_timestamp"),
@@ -714,12 +660,8 @@ def downgrade() -> None:
         table_name="performance_metric_samples",
     )
     op.drop_table("performance_metric_samples")
-    op.drop_index(
-        op.f("ix_order_book_snapshots_timestamp"), table_name="order_book_snapshots"
-    )
-    op.drop_index(
-        op.f("ix_order_book_snapshots_symbol"), table_name="order_book_snapshots"
-    )
+    op.drop_index(op.f("ix_order_book_snapshots_timestamp"), table_name="order_book_snapshots")
+    op.drop_index(op.f("ix_order_book_snapshots_symbol"), table_name="order_book_snapshots")
     op.drop_table("order_book_snapshots")
     op.drop_index(op.f("ix_news_data_published_at"), table_name="news_data")
     op.drop_table("news_data")
@@ -742,9 +684,7 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_accounts_user_id"), table_name="accounts")
     op.drop_index(op.f("ix_accounts_snapshot_at"), table_name="accounts")
     op.drop_table("accounts")
-    op.drop_index(
-        op.f("ix_account_snapshots_timestamp"), table_name="account_snapshots"
-    )
+    op.drop_index(op.f("ix_account_snapshots_timestamp"), table_name="account_snapshots")
     op.drop_index("idx_account_snapshots_timestamp", table_name="account_snapshots")
     op.drop_table("account_snapshots")
     # ### end Alembic commands ###

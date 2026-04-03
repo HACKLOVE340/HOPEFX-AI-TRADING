@@ -48,6 +48,7 @@ class ConfigUpdate(BaseModel):
 async def _start_nuclear_streamer() -> Any:
     """Start NuclearStreamer if streaming API keys are configured. Returns the task or None."""
     import os
+
     _has_key = any([os.getenv("FINNHUB_API_KEY"), os.getenv("TWELVE_API_KEY"), os.getenv("POLYGON_API_KEY")])
     if not _has_key:
         logger.info("No streaming API keys set — live tick stream disabled.")
@@ -66,7 +67,12 @@ async def _start_nuclear_streamer() -> Any:
         _streamer = NuclearStreamer()
         _streamer.subscribe(_EventBusSubscriber())
         task = asyncio.create_task(_streamer.run())
-        logger.info("NuclearStreamer started — finnhub=%s twelvedata=%s polygon=%s", bool(os.getenv("FINNHUB_API_KEY")), bool(os.getenv("TWELVE_API_KEY")), bool(os.getenv("POLYGON_API_KEY")))
+        logger.info(
+            "NuclearStreamer started — finnhub=%s twelvedata=%s polygon=%s",
+            bool(os.getenv("FINNHUB_API_KEY")),
+            bool(os.getenv("TWELVE_API_KEY")),
+            bool(os.getenv("POLYGON_API_KEY")),
+        )
         return task
     except Exception as _exc:
         logger.warning("NuclearStreamer init failed (non-fatal): %s", _exc)
@@ -86,6 +92,7 @@ def _start_scheduler() -> Any:
     try:
         from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore
         from reports.weekly_report import schedule_weekly_report
+
         scheduler = AsyncIOScheduler()
         schedule_weekly_report(scheduler)
         scheduler.start()
@@ -335,6 +342,7 @@ def _register_probe_routes(app, trading_app, health_checker):
 
 def _register_account_routes(app: Any, trading_app: Any, get_current_user: Any) -> None:
     """Register status, account, and position read routes."""
+
     @app.get("/api/v1/status")
     async def get_status(user=Depends(get_current_user)):
         if not trading_app:
@@ -363,8 +371,11 @@ def _register_account_routes(app: Any, trading_app: Any, get_current_user: Any) 
             raise HTTPException(status_code=500, detail="Failed to retrieve positions — check server logs") from None
 
 
-def _register_order_routes(app: Any, trading_app: Any, require_trader: Any, allowed_symbols: Any, max_qty: float) -> None:  # noqa: C901
+def _register_order_routes(
+    app: Any, trading_app: Any, require_trader: Any, allowed_symbols: Any, max_qty: float
+) -> None:
     """Register order placement and position close routes."""
+
     @app.post("/api/v1/orders", status_code=201)
     async def place_order(request: TradeRequest, background_tasks: BackgroundTasks, user=Depends(require_trader)):
         if not trading_app or not trading_app.broker:
@@ -420,7 +431,7 @@ def _register_order_routes(app: Any, trading_app: Any, require_trader: Any, allo
             raise HTTPException(status_code=500, detail="Failed to close position — check server logs") from None
 
 
-def _register_trading_routes(app, trading_app, get_current_user, require_trader, allowed_symbols, max_qty):  # noqa: PLR0913
+def _register_trading_routes(app, trading_app, get_current_user, require_trader, allowed_symbols, max_qty):
     """Register account, position, and order endpoints."""
     _register_account_routes(app, trading_app, get_current_user)
     _register_order_routes(app, trading_app, require_trader, allowed_symbols, max_qty)

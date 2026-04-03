@@ -39,6 +39,7 @@ sys.path.insert(0, str(ROOT))
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv(ROOT / ".env", override=False)
 except ImportError:
     pass
@@ -48,12 +49,24 @@ WARN = "⚠️ "
 FAIL = "❌"
 
 EXPECTED_TABLES = {
-    "users", "user_sessions", "login_attempts",
-    "orders", "trades", "positions", "accounts",
-    "signals", "predictions", "market_data",
-    "audit_log", "system_events", "outbox_events",
-    "tick_data", "order_book_snapshots", "account_snapshots",
-    "performance_metrics", "watchlists",
+    "users",
+    "user_sessions",
+    "login_attempts",
+    "orders",
+    "trades",
+    "positions",
+    "accounts",
+    "signals",
+    "predictions",
+    "market_data",
+    "audit_log",
+    "system_events",
+    "outbox_events",
+    "tick_data",
+    "order_book_snapshots",
+    "account_snapshots",
+    "performance_metrics",
+    "watchlists",
 }
 
 
@@ -66,11 +79,7 @@ def parse_args() -> argparse.Namespace:
 def get_sync_db_url() -> str:
     """Return sync DB URL (strip async driver prefix for Alembic/sqlite3)."""
     url = os.getenv("DATABASE_URL", "sqlite:///./hopefx.db")
-    return (
-        url
-        .replace("sqlite+aiosqlite:///", "sqlite:///")
-        .replace("postgresql+asyncpg://", "postgresql://")
-    )
+    return url.replace("sqlite+aiosqlite:///", "sqlite:///").replace("postgresql+asyncpg://", "postgresql://")
 
 
 def run_migrations() -> bool:
@@ -82,6 +91,7 @@ def run_migrations() -> bool:
         capture_output=True,
         text=True,
         env={**os.environ, "DATABASE_URL": get_sync_db_url()},
+        check=False,
     )
     if result.returncode != 0:
         print(f"{FAIL}  Migration failed:\n{result.stderr}")
@@ -99,23 +109,21 @@ def verify_tables(db_url: str) -> tuple[set[str], set[str]]:
 
     if db_url.startswith("sqlite"):
         import sqlite3
+
         db_path = db_url.replace("sqlite:///", "").replace("./", "")
         if not Path(db_path).exists():
             return set(), EXPECTED_TABLES
         conn = sqlite3.connect(db_path)
-        rows = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
+        rows = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         conn.close()
         found = {r[0] for r in rows}
     else:
         try:
             import psycopg2  # type: ignore
+
             conn = psycopg2.connect(db_url)
             cur = conn.cursor()
-            cur.execute(
-                "SELECT tablename FROM pg_tables WHERE schemaname='public'"
-            )
+            cur.execute("SELECT tablename FROM pg_tables WHERE schemaname='public'")
             found = {r[0] for r in cur.fetchall()}
             conn.close()
         except ImportError:
@@ -133,6 +141,7 @@ def check_redis() -> bool:
     """Ping Redis. Returns True if available."""
     try:
         import redis
+
         r = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
         r.ping()
         return True

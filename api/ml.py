@@ -516,11 +516,21 @@ def _check_subscription_gate(user: Any) -> None:
         return
     try:
         from monetization.subscription import subscription_manager, plan_gate
+
         sub = subscription_manager.get_user_subscription(user.sub)
         user_plan = sub.tier.value if (sub and sub.is_active() and hasattr(sub.tier, "value")) else "free"
         if not plan_gate("professional", user_plan):
             from fastapi import HTTPException as _HTTPException, status as _status
-            raise _HTTPException(status_code=_status.HTTP_403_FORBIDDEN, detail={"error": "PLAN_LIMIT_EXCEEDED", "required_plan": "professional", "current_plan": user_plan, "message": "ML predictions require a Professional subscription or above."})
+
+            raise _HTTPException(
+                status_code=_status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "PLAN_LIMIT_EXCEEDED",
+                    "required_plan": "professional",
+                    "current_plan": user_plan,
+                    "message": "ML predictions require a Professional subscription or above.",
+                },
+            )
     except ImportError:
         pass
 
@@ -535,7 +545,17 @@ def _predict_with_inference_engine(predictor: Any, ohlcv: Any, symbol_upper: str
     sl, tp = (None, None)
     if entry_price and direction != "HOLD":
         sl, tp = _compute_atr_sl_tp(ohlcv, entry_price, direction)
-    return PredictResponse(symbol=symbol_upper, direction=direction, confidence=confidence, entry_price=entry_price, stop_loss=sl, take_profit=tp, features_used=result.get("bars_used", 0), model_id=result.get("model_version", "inference_engine"), generated_at=now_iso)
+    return PredictResponse(
+        symbol=symbol_upper,
+        direction=direction,
+        confidence=confidence,
+        entry_price=entry_price,
+        stop_loss=sl,
+        take_profit=tp,
+        features_used=result.get("bars_used", 0),
+        model_id=result.get("model_version", "inference_engine"),
+        generated_at=now_iso,
+    )
 
 
 def _predict_with_advanced_predictor(predictor: Any, ohlcv: Any, symbol_upper: str, lookback: int, now_iso: str) -> Any:
@@ -549,12 +569,32 @@ def _predict_with_advanced_predictor(predictor: Any, ohlcv: Any, symbol_upper: s
     sl, tp = (None, None)
     if entry_price and direction != "HOLD":
         sl, tp = _compute_atr_sl_tp(ohlcv, entry_price, direction)
-    return PredictResponse(symbol=symbol_upper, direction=direction, confidence=confidence, entry_price=entry_price, stop_loss=sl, take_profit=tp, features_used=result.get("bars_used", 0), model_id=result.get("model_version", "advanced_oos"), generated_at=now_iso)
+    return PredictResponse(
+        symbol=symbol_upper,
+        direction=direction,
+        confidence=confidence,
+        entry_price=entry_price,
+        stop_loss=sl,
+        take_profit=tp,
+        features_used=result.get("bars_used", 0),
+        model_id=result.get("model_version", "advanced_oos"),
+        generated_at=now_iso,
+    )
 
 
 def _hold_response(symbol_upper: str, now_iso: str, model_id: str = "fallback") -> Any:
     """Return a safe HOLD PredictResponse."""
-    return PredictResponse(symbol=symbol_upper, direction="HOLD", confidence=0.0, entry_price=None, stop_loss=None, take_profit=None, features_used=0, model_id=model_id, generated_at=now_iso)
+    return PredictResponse(
+        symbol=symbol_upper,
+        direction="HOLD",
+        confidence=0.0,
+        entry_price=None,
+        stop_loss=None,
+        take_profit=None,
+        features_used=0,
+        model_id=model_id,
+        generated_at=now_iso,
+    )
 
 
 async def predict(
@@ -823,6 +863,7 @@ def _ml_health_meta(saved_dir: Any) -> tuple:
     """Read model metadata from disk. Returns (oos_accuracy, feature_count, model_file, last_trained_at)."""
     import json as _json
     import pathlib
+
     # Constrain saved_dir to the configured ML_MODELS_DIR to avoid path traversal.
     oos_accuracy: float | None = None
     feature_count: int = 0
@@ -857,6 +898,7 @@ def _ml_health_feature_count_from_predictor() -> int:
     """Derive feature count from the live predictor when meta file is missing."""
     try:
         from ml.live_inference import get_advanced_predictor
+
         pred = get_advanced_predictor()
         if pred.is_available and hasattr(pred, "_model"):
             n = getattr(pred._model, "n_features_in_", 0)
@@ -873,11 +915,13 @@ async def ml_health(user: TokenPayload = Depends(get_current_user)):
     HTTP 200: model loaded and ready. HTTP 503: unavailable.
     """
     import pathlib
+
     checked_at = datetime.now(UTC).isoformat()
     saved_dir = pathlib.Path(__file__).parent.parent / "ml" / "saved_models"
 
     try:
         from ml.inference_engine import get_inference_engine
+
         engine = get_inference_engine()
         engine_health = engine.health()
 
@@ -887,25 +931,38 @@ async def ml_health(user: TokenPayload = Depends(get_current_user)):
 
         # Prefer live engine values over meta file
         feature_count = engine_health.get("feature_count", 0) or feature_count
-        oos_accuracy = engine_health.get("oos_accuracy") if engine_health.get("oos_accuracy") is not None else oos_accuracy
+        oos_accuracy = (
+            engine_health.get("oos_accuracy") if engine_health.get("oos_accuracy") is not None else oos_accuracy
+        )
         last_trained_at = engine_health.get("last_trained_at") or last_trained_at
         model_available = engine_health.get("model_available", False)
 
         payload = MLHealthResponse(
             status=engine_health.get("status", "ok" if model_available else "degraded"),
-            model_loaded=model_available, model_id=engine_health.get("model_version", model_file),
-            feature_count=feature_count, oos_accuracy=oos_accuracy, last_trained_at=last_trained_at,
-            predict_count=engine_health.get("predict_count", 0), fallback_count=engine_health.get("fallback_count", 0),
-            fallback_rate=engine_health.get("fallback_rate", 0.0), non_neutral_rate=engine_health.get("non_neutral_rate", 0.0),
-            signal_window_size=engine_health.get("signal_window_size", 0), last_latency_ms=engine_health.get("last_latency_ms", 0.0),
-            uptime_seconds=engine_health.get("uptime_seconds"), calibrator_available=engine_health.get("calibrator_available", False),
-            online_learning_enabled=engine_health.get("online_learning_enabled", False), mtf_fusion_enabled=engine_health.get("mtf_fusion_enabled", True),
-            threshold_long=engine_health.get("threshold_long", 0.58), threshold_short=engine_health.get("threshold_short", 0.42),
-            signal_filter=engine_health.get("signal_filter", {}), pipeline=engine_health.get("pipeline", {}),
+            model_loaded=model_available,
+            model_id=engine_health.get("model_version", model_file),
+            feature_count=feature_count,
+            oos_accuracy=oos_accuracy,
+            last_trained_at=last_trained_at,
+            predict_count=engine_health.get("predict_count", 0),
+            fallback_count=engine_health.get("fallback_count", 0),
+            fallback_rate=engine_health.get("fallback_rate", 0.0),
+            non_neutral_rate=engine_health.get("non_neutral_rate", 0.0),
+            signal_window_size=engine_health.get("signal_window_size", 0),
+            last_latency_ms=engine_health.get("last_latency_ms", 0.0),
+            uptime_seconds=engine_health.get("uptime_seconds"),
+            calibrator_available=engine_health.get("calibrator_available", False),
+            online_learning_enabled=engine_health.get("online_learning_enabled", False),
+            mtf_fusion_enabled=engine_health.get("mtf_fusion_enabled", True),
+            threshold_long=engine_health.get("threshold_long", 0.58),
+            threshold_short=engine_health.get("threshold_short", 0.42),
+            signal_filter=engine_health.get("signal_filter", {}),
+            pipeline=engine_health.get("pipeline", {}),
             checked_at=engine_health.get("checked_at", checked_at),
         )
         if not model_available:
             from fastapi.responses import JSONResponse
+
             return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=payload.model_dump())
         return payload
 
@@ -915,15 +972,31 @@ async def ml_health(user: TokenPayload = Depends(get_current_user)):
     predictor = _get_predictor()
     model_loaded = predictor is not None
     payload = MLHealthResponse(
-        status="ok" if model_loaded else "unavailable", model_loaded=model_loaded, model_id=None,
-        feature_count=0, oos_accuracy=None, last_trained_at=None, predict_count=0, fallback_count=0,
-        fallback_rate=0.0, non_neutral_rate=0.0, signal_window_size=0, last_latency_ms=0.0,
-        uptime_seconds=None, calibrator_available=False, online_learning_enabled=False,
-        mtf_fusion_enabled=False, threshold_long=0.58, threshold_short=0.42,
-        signal_filter={}, pipeline={}, checked_at=checked_at,
+        status="ok" if model_loaded else "unavailable",
+        model_loaded=model_loaded,
+        model_id=None,
+        feature_count=0,
+        oos_accuracy=None,
+        last_trained_at=None,
+        predict_count=0,
+        fallback_count=0,
+        fallback_rate=0.0,
+        non_neutral_rate=0.0,
+        signal_window_size=0,
+        last_latency_ms=0.0,
+        uptime_seconds=None,
+        calibrator_available=False,
+        online_learning_enabled=False,
+        mtf_fusion_enabled=False,
+        threshold_long=0.58,
+        threshold_short=0.42,
+        signal_filter={},
+        pipeline={},
+        checked_at=checked_at,
     )
     if not model_loaded:
         from fastapi.responses import JSONResponse
+
         return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=payload.model_dump())
     return payload
 
@@ -941,6 +1014,7 @@ def _engine_macro_status() -> dict:
     """Return MacroStore availability dict."""
     try:
         from ml.macro_store import macro_store
+
         return {"available": len(macro_store) > 0, "series_count": len(macro_store)}
     except Exception as _exc:
         logger.debug("Suppressed exception: %s", _exc)
@@ -951,6 +1025,7 @@ def _engine_mtf_status() -> dict:
     """Return MTF store availability dict."""
     try:
         from research.pipeline.mtf_fusion import _MTF_STORE_SINGLETON
+
         if _MTF_STORE_SINGLETON is not None:
             return {"available": True, "ready": getattr(_MTF_STORE_SINGLETON, "is_ready", False)}
     except Exception as _exc:
@@ -961,6 +1036,7 @@ def _engine_mtf_status() -> dict:
 def _engine_model_files(saved_dir: Any) -> dict:
     """Return {filename: size_kb} for all pkl/json files in saved_dir."""
     import pathlib
+
     model_files: dict[str, float] = {}
     p = pathlib.Path(saved_dir)
     if p.exists():
@@ -980,11 +1056,13 @@ async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
     HTTP 200: engine healthy. HTTP 503: unavailable or model not loaded.
     """
     import pathlib
+
     checked_at = datetime.now(UTC).isoformat()
     saved_dir = pathlib.Path(__file__).parent.parent / "ml" / "saved_models"
 
     try:
         from ml.inference_engine import get_inference_engine
+
         engine = get_inference_engine()
         health = engine.health()
 
@@ -997,9 +1075,17 @@ async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
         if "macro_series_count" in health.get("pipeline", {}):
             macro_status["series_count"] = health["pipeline"]["macro_series_count"]
 
-        payload = MLEngineHealthResponse(status=engine_status, engine=health, macro_store=macro_status, mtf_store=mtf_status, saved_model_files_kb=model_files, checked_at=health.get("checked_at", checked_at))
+        payload = MLEngineHealthResponse(
+            status=engine_status,
+            engine=health,
+            macro_store=macro_status,
+            mtf_store=mtf_status,
+            saved_model_files_kb=model_files,
+            checked_at=health.get("checked_at", checked_at),
+        )
         if not model_available:
             from fastapi.responses import JSONResponse
+
             return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=payload.model_dump())
         return payload
 

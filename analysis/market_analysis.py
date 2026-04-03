@@ -432,32 +432,32 @@ class MarketRegimeDetector:
 # Each entry: (condition_fn, regime, confidence_fn)
 MarketRegimeDetector._REGIME_RULES = [
     (
-        lambda adx, vol, direction, rng: adx > 25 and direction == "up",  # noqa: PLR2004
+        lambda adx, vol, direction, rng: adx > 25 and direction == "up",
         MarketRegime.TRENDING_UP,
         lambda adx, vol: min(adx / 50, 1.0),
     ),
     (
-        lambda adx, vol, direction, rng: adx > 25 and direction == "down",  # noqa: PLR2004
+        lambda adx, vol, direction, rng: adx > 25 and direction == "down",
         MarketRegime.TRENDING_DOWN,
         lambda adx, vol: min(adx / 50, 1.0),
     ),
     (
-        lambda adx, vol, direction, rng: vol > 80,  # noqa: PLR2004
+        lambda adx, vol, direction, rng: vol > 80,
         MarketRegime.VOLATILE,
         lambda adx, vol: vol / 100,
     ),
     (
-        lambda adx, vol, direction, rng: adx < 20 and rng < 0.02,  # noqa: PLR2004
+        lambda adx, vol, direction, rng: adx < 20 and rng < 0.02,
         MarketRegime.CONSOLIDATION,
         lambda adx, vol: (20 - adx) / 20,
     ),
     (
-        lambda adx, vol, direction, rng: adx < 20 and rng > 0.03,  # noqa: PLR2004
+        lambda adx, vol, direction, rng: adx < 20 and rng > 0.03,
         MarketRegime.RANGING,
         lambda adx, vol: 0.6,
     ),
     (
-        lambda adx, vol, direction, rng: vol > 60 and adx < 25,  # noqa: PLR2004
+        lambda adx, vol, direction, rng: vol > 60 and adx < 25,
         MarketRegime.CHOPPY,
         lambda adx, vol: 0.5,
     ),

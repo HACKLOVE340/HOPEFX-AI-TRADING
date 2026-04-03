@@ -27,7 +27,8 @@ logger = logging.getLogger(__name__)
 
 try:
     # Import user models so their metadata is registered on Base for autogenerate
-    import database.user_models as _user_models  # noqa: F401
+    import database.user_models as _user_models
+
     _ = _user_models  # ensure the module is loaded
 except Exception as _exc:
     logger.debug("Suppressed exception: %s", _exc)
@@ -40,11 +41,7 @@ config = context.config
 #   postgresql+asyncpg:// → postgresql://
 db_url = os.getenv("DATABASE_URL")
 if db_url:
-    db_url = (
-        db_url
-        .replace("sqlite+aiosqlite:///", "sqlite:///")
-        .replace("postgresql+asyncpg://", "postgresql://")
-    )
+    db_url = db_url.replace("sqlite+aiosqlite:///", "sqlite:///").replace("postgresql+asyncpg://", "postgresql://")
     config.set_main_option("sqlalchemy.url", db_url)
 
 if config.config_file_name is not None:

@@ -41,6 +41,7 @@ sys.path.insert(0, str(ROOT))
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv(ROOT / ".env", override=False)
 except ImportError:
     pass
@@ -61,6 +62,7 @@ def record(status: str, name: str, detail: str) -> None:
 
 print("\n=== 1. Environment keys ===")
 
+
 def check_env(var: str, critical: bool = True) -> bool:
     val = os.getenv(var, "")
     if val and not val.startswith("YOUR_") and not val.startswith("CHANGE_ME"):
@@ -69,6 +71,7 @@ def check_env(var: str, critical: bool = True) -> bool:
     status = FAIL if critical else WARN
     record(status, var, "NOT SET — see .env")
     return False
+
 
 check_env("SECURITY_JWT_SECRET")
 check_env("CONFIG_ENCRYPTION_KEY")
@@ -90,8 +93,9 @@ gold_keys = {
     "METALPRICEAPI_KEY": "MetalpriceAPI",
     "COMMODITY_PRICE_API_KEY": "CommodityPriceAPI",
 }
-configured_gold = [name for var, name in gold_keys.items()
-                   if os.getenv(var, "").strip() and not os.getenv(var, "").startswith("YOUR_")]
+configured_gold = [
+    name for var, name in gold_keys.items() if os.getenv(var, "").strip() and not os.getenv(var, "").startswith("YOUR_")
+]
 if configured_gold:
     record(PASS, "GoldFeedManager", f"{len(configured_gold)} source(s): {', '.join(configured_gold)}")
 else:
@@ -106,8 +110,9 @@ ws_keys = {
     "TWELVE_API_KEY": "Twelve Data",
     "POLYGON_API_KEY": "Polygon.io",
 }
-configured_ws = [name for var, name in ws_keys.items()
-                 if os.getenv(var, "").strip() and not os.getenv(var, "").startswith("YOUR_")]
+configured_ws = [
+    name for var, name in ws_keys.items() if os.getenv(var, "").strip() and not os.getenv(var, "").startswith("YOUR_")
+]
 if configured_ws:
     record(PASS, "NuclearStreamer", f"{len(configured_ws)} WebSocket source(s): {', '.join(configured_ws)}")
 else:
@@ -117,6 +122,7 @@ else:
 
 print("\n=== 4. FRED macro feed ===")
 
+
 async def check_fred() -> None:
     fred_key = os.getenv("FRED_API_KEY", "")
     if not fred_key or fred_key.startswith("YOUR_"):
@@ -124,6 +130,7 @@ async def check_fred() -> None:
         return
     try:
         from data_layer.feeds.macro.fred import FREDFeed, FRED_SERIES
+
         feed = FREDFeed()
         series = await feed.fetch_series("DGS10", limit=5)
         await feed.close()
@@ -135,15 +142,19 @@ async def check_fred() -> None:
     except Exception as exc:
         record(FAIL, "FRED", f"Error: {exc}")
 
+
 # ── 5. CFTC COT ───────────────────────────────────────────────────────────────
 
 print("\n=== 5. CFTC COT feed ===")
 
+
 async def check_cot() -> None:
     try:
         from data_layer.feeds.macro.cftc_cot import CFTCCOTFeed
+
         feed = CFTCCOTFeed()
         import datetime
+
         df = await feed._download_year(datetime.datetime.now().year)
         await feed.close()
         if not df.empty:
@@ -153,36 +164,47 @@ async def check_cot() -> None:
     except Exception as exc:
         record(FAIL, "CFTC COT", f"Error: {exc}")
 
+
 # ── 6. IMF gold ───────────────────────────────────────────────────────────────
 
 print("\n=== 6. IMF central bank gold feed ===")
 
+
 async def check_imf() -> None:
     try:
         from data_layer.feeds.macro.imf_gold import IMFGoldFeed
+
         feed = IMFGoldFeed()
         import datetime
+
         series = await feed._fetch_raw(datetime.datetime.now().year - 2)
         await feed.close()
         if not series.empty:
-            record(PASS, "IMF gold", f"{len(series)} monthly obs, latest={series.iloc[-1]:.0f}t on {series.index[-1].date()}")
+            record(
+                PASS,
+                "IMF gold",
+                f"{len(series)} monthly obs, latest={series.iloc[-1]:.0f}t on {series.index[-1].date()}",
+            )
         else:
             record(WARN, "IMF gold", "No data returned — IMF API may be slow, CSV fallback will be used")
     except Exception as exc:
         record(FAIL, "IMF gold", f"Error: {exc}")
 
+
 # ── 7. Yahoo macro ────────────────────────────────────────────────────────────
 
 print("\n=== 7. Yahoo Finance macro feed ===")
 
+
 async def check_yahoo() -> None:
     try:
         import yfinance as yf
+
         loop = asyncio.get_event_loop()
         import functools
+
         df = await loop.run_in_executor(
-            None,
-            functools.partial(yf.download, "^GSPC", period="5d", progress=False, auto_adjust=True)
+            None, functools.partial(yf.download, "^GSPC", period="5d", progress=False, auto_adjust=True)
         )
         if not df.empty:
             close = float(df["Close"].iloc[-1])
@@ -194,13 +216,16 @@ async def check_yahoo() -> None:
     except Exception as exc:
         record(WARN, "Yahoo macro", f"Error: {exc}")
 
+
 # ── 8. FIX protocol backend ───────────────────────────────────────────────────
 
 print("\n=== 8. FIX protocol backend ===")
 
+
 def check_fix() -> None:
     try:
         from execution.fix_adapter import _FIX_BACKEND
+
         if _FIX_BACKEND == "quickfix":
             record(PASS, "FIX backend", "quickfix (C-extension) — production ready")
         elif _FIX_BACKEND == "pyfixmsg":
@@ -208,9 +233,14 @@ def check_fix() -> None:
         elif _FIX_BACKEND == "simplefix":
             record(WARN, "FIX backend", "simplefix (message encoding only) — install quickfix for full FIX sessions")
         else:
-            record(FAIL, "FIX backend", "no FIX library — install: sudo apt-get install libquickfix-dev && pip install quickfix==1.15.1")
+            record(
+                FAIL,
+                "FIX backend",
+                "no FIX library — install: sudo apt-get install libquickfix-dev && pip install quickfix==1.15.1",
+            )
     except Exception as exc:
         record(FAIL, "FIX backend", f"import error: {exc}")
+
 
 check_fix()
 
@@ -218,9 +248,11 @@ check_fix()
 
 print("\n=== 9. Redis ===")
 
+
 def check_redis() -> None:
     try:
         import redis
+
         r = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
         r.ping()
         record(PASS, "Redis", f"Connected — {os.getenv('REDIS_URL', 'redis://localhost:6379/0')}")
@@ -229,7 +261,9 @@ def check_redis() -> None:
     except Exception as exc:
         record(WARN, "Redis", f"Not running ({exc}) — start Redis for caching (task 11)")
 
+
 # ── Run all async checks ──────────────────────────────────────────────────────
+
 
 async def main() -> int:
     await check_fred()
