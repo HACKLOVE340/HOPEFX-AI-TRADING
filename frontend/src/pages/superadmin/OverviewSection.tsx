@@ -7,6 +7,51 @@ import {
 } from './ui';
 import type { PlatformOverview } from './types';
 
+// ── Infra detail types ────────────────────────────────────────────────────────
+interface InfraHealth {
+  cpu_pct: number;
+  mem_pct: number;
+  disk_pct: number;
+  network_in_mbps: number;
+  network_out_mbps: number;
+  load_avg_1m: number;
+  load_avg_5m: number;
+  load_avg_15m: number;
+}
+
+interface CacheStats {
+  hit_rate_pct: number;
+  total_keys: number;
+  memory_used_mb: number;
+  evictions: number;
+  connected_clients: number;
+  ops_per_sec: number;
+}
+
+interface DbStats {
+  active_connections: number;
+  max_connections: number;
+  query_time_avg_ms: number;
+  size_mb: number;
+  slow_queries: number;
+  deadlocks: number;
+}
+
+interface QueueEntry {
+  name: string;
+  pending: number;
+  processing: number;
+  failed: number;
+  workers: number;
+}
+
+interface InfraData {
+  health: InfraHealth | null;
+  cache: CacheStats | null;
+  db: DbStats | null;
+  queues: QueueEntry[];
+}
+
 const fmt = (n: number) => n >= 1_000_000
   ? `${(n / 1_000_000).toFixed(2)}M`
   : n >= 1_000 ? `${(n / 1_000).toFixed(1)}K` : String(n);
@@ -56,10 +101,14 @@ const AlertRow: React.FC<AlertRowProps> = ({ level, message }) => {
 };
 
 const OverviewSection: React.FC = () => {
-  const [data, setData] = useState<PlatformOverview | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [data, setData]         = useState<PlatformOverview | null>(null);
+  const [infra, setInfra]       = useState<InfraData>({ health: null, cache: null, db: null, queues: [] });
+  const [infraLoading, setInfraLoading] = useState(true);
+  const [flushing, setFlushing] = useState(false);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [infraMsg, setInfraMsg] = useState('');
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -78,13 +127,44 @@ const OverviewSection: React.FC = () => {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  const loadInfra = useCallback(async () => {
+    setInfraLoading(true);
+    try {
+      const [hRes, cRes, dRes, qRes] = await Promise.allSettled([
+        superadminApi.infraHealth(),
+        superadminApi.cacheStats(),
+        superadminApi.dbStats(),
+        superadminApi.queueStats(),
+      ]);
+      setInfra({
+        health: hRes.status === 'fulfilled' ? hRes.value.data : null,
+        cache:  cRes.status === 'fulfilled' ? cRes.value.data : null,
+        db:     dRes.status === 'fulfilled' ? dRes.value.data : null,
+        queues: qRes.status === 'fulfilled' ? (qRes.value.data.queues ?? qRes.value.data ?? []) : [],
+      });
+    } finally {
+      setInfraLoading(false);
+    }
+  }, []);
+
+  const flushCache = async () => {
+    setFlushing(true); setInfraMsg('');
+    try {
+      await superadminApi.flushCache();
+      setInfraMsg('Cache flushed successfully');
+      setTimeout(loadInfra, 800);
+    } catch (e: unknown) {
+      setInfraMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Cache flush failed');
+    } finally { setFlushing(false); }
+  };
+
+  useEffect(() => { load(); loadInfra(); }, [load, loadInfra]);
 
   // Auto-refresh every 30s
   useEffect(() => {
-    const id = setInterval(() => load(true), 30_000);
+    const id = setInterval(() => { load(true); loadInfra(); }, 30_000);
     return () => clearInterval(id);
-  }, [load]);
+  }, [load, loadInfra]);
 
   if (loading) return (
     <div>
@@ -197,6 +277,126 @@ const OverviewSection: React.FC = () => {
             : <ActionBtn label="Maintenance Mode"    onClick={() => {}} icon="🔧" variant="warning" />
           }
         </div>
+      </SectionCard>
+
+      {/* ── Infrastructure Details ── */}
+      <SectionCard title="Infrastructure Details" icon="🖥️" accent="#06b6d4"
+        subtitle="Live metrics from infraHealth, Redis cache, database, and task queues"
+        actions={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <ActionBtn label="Flush Cache" onClick={flushCache} loading={flushing} icon="🗑️" size="sm" variant="warning" />
+            <ActionBtn label="Refresh"     onClick={loadInfra}  loading={infraLoading} icon="🔄" size="sm" />
+          </div>
+        }>
+        {infraLoading ? <LoadingRows rows={3} /> : (
+          <>
+            {infraMsg && (
+              <div style={{ padding: '8px 14px', borderRadius: 8, marginBottom: 14, fontSize: 13, fontWeight: 600,
+                background: infraMsg.includes('failed') ? '#450a0a' : '#052e16',
+                color: infraMsg.includes('failed') ? '#f87171' : '#4ade80' }}>
+                {infraMsg}
+              </div>
+            )}
+
+            {/* Server Resources */}
+            {infra.health && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Server Resources</div>
+                  <GaugeBar label="CPU"          value={infra.health.cpu_pct}         color="#3b82f6" />
+                  <GaugeBar label="Memory"       value={infra.health.mem_pct}         color="#8b5cf6" />
+                  <GaugeBar label="Disk"         value={infra.health.disk_pct}        color="#f59e0b" />
+                  <GaugeBar label="Network In"   value={infra.health.network_in_mbps}  max={1000} color="#22c55e" unit=" Mbps" />
+                  <GaugeBar label="Network Out"  value={infra.health.network_out_mbps} max={1000} color="#06b6d4" unit=" Mbps" />
+                  <div style={{ marginTop: 8, display: 'flex', gap: 16 }}>
+                    {[
+                      { label: 'Load 1m',  v: infra.health.load_avg_1m.toFixed(2)  },
+                      { label: 'Load 5m',  v: infra.health.load_avg_5m.toFixed(2)  },
+                      { label: 'Load 15m', v: infra.health.load_avg_15m.toFixed(2) },
+                    ].map(l => (
+                      <div key={l.label} style={{ background: '#1e293b', borderRadius: 6, padding: '6px 10px', flex: 1 }}>
+                        <div style={{ fontSize: 10, color: '#475569' }}>{l.label}</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#94a3b8' }}>{l.v}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Cache + DB */}
+                <div>
+                  {infra.cache && (
+                    <>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Redis Cache</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 }}>
+                        {[
+                          { label: 'Hit Rate',     value: `${infra.cache.hit_rate_pct.toFixed(1)}%`, color: infra.cache.hit_rate_pct > 80 ? '#4ade80' : '#fbbf24' },
+                          { label: 'Total Keys',   value: infra.cache.total_keys.toLocaleString(),   color: '#94a3b8' },
+                          { label: 'Memory',       value: `${infra.cache.memory_used_mb} MB`,        color: '#60a5fa' },
+                          { label: 'Evictions',    value: infra.cache.evictions.toLocaleString(),    color: infra.cache.evictions > 100 ? '#f87171' : '#4ade80' },
+                          { label: 'Clients',      value: infra.cache.connected_clients,             color: '#94a3b8' },
+                          { label: 'Ops/sec',      value: infra.cache.ops_per_sec.toLocaleString(),  color: '#a78bfa' },
+                        ].map(m => (
+                          <div key={m.label} style={{ background: '#0f172a', borderRadius: 6, padding: '8px 10px' }}>
+                            <div style={{ fontSize: 10, color: '#475569' }}>{m.label}</div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: m.color }}>{m.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  {infra.db && (
+                    <>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Database</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                        {[
+                          { label: 'Connections',  value: `${infra.db.active_connections}/${infra.db.max_connections}`, color: infra.db.active_connections / infra.db.max_connections > 0.8 ? '#f87171' : '#4ade80' },
+                          { label: 'Avg Query',    value: `${infra.db.query_time_avg_ms.toFixed(1)}ms`,               color: infra.db.query_time_avg_ms > 100 ? '#fbbf24' : '#4ade80' },
+                          { label: 'DB Size',      value: `${infra.db.size_mb.toFixed(0)} MB`,                        color: '#60a5fa' },
+                          { label: 'Slow Queries', value: infra.db.slow_queries,                                      color: infra.db.slow_queries > 0 ? '#f87171' : '#4ade80' },
+                          { label: 'Deadlocks',    value: infra.db.deadlocks,                                         color: infra.db.deadlocks > 0 ? '#f87171' : '#4ade80' },
+                        ].map(m => (
+                          <div key={m.label} style={{ background: '#0f172a', borderRadius: 6, padding: '8px 10px' }}>
+                            <div style={{ fontSize: 10, color: '#475569' }}>{m.label}</div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: m.color }}>{m.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Task Queues */}
+            {infra.queues.length > 0 && (
+              <>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Task Queues</div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                        {['Queue', 'Pending', 'Processing', 'Failed', 'Workers'].map(h => (
+                          <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {infra.queues.map((q) => (
+                        <tr key={q.name} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
+                          <td style={{ padding: '8px 12px', fontWeight: 600, color: '#f1f5f9' }}>{q.name}</td>
+                          <td style={{ padding: '8px 12px', color: q.pending > 100 ? '#fbbf24' : '#94a3b8', fontWeight: q.pending > 100 ? 700 : 400 }}>{q.pending.toLocaleString()}</td>
+                          <td style={{ padding: '8px 12px', color: '#60a5fa' }}>{q.processing.toLocaleString()}</td>
+                          <td style={{ padding: '8px 12px', color: q.failed > 0 ? '#f87171' : '#4ade80', fontWeight: q.failed > 0 ? 700 : 400 }}>{q.failed.toLocaleString()}</td>
+                          <td style={{ padding: '8px 12px', color: '#94a3b8' }}>{q.workers}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </>
+        )}
       </SectionCard>
     </div>
   );
