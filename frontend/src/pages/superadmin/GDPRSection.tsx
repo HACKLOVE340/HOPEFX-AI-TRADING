@@ -1,0 +1,289 @@
+// superadmin/GDPRSection.tsx
+// Data subject requests, erasure, consent log, retention policies
+import React, { useEffect, useState, useCallback } from 'react';
+import { superadminApi } from '../../hooks/useApi';
+import {
+  SectionCard, StatusBadge, ActionBtn, Select, Input,
+  KpiTile, ErrorState, LoadingRows, ConfirmDialog, SAStyles,
+} from './ui';
+import type { DataSubjectRequest } from './types';
+
+const fmtDate = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+
+const REQUEST_TYPE_COLORS: Record<string, string> = {
+  export:        '#60a5fa',
+  erasure:       '#f87171',
+  rectification: '#fbbf24',
+  portability:   '#a78bfa',
+};
+
+const GDPRSection: React.FC = () => {
+  const [requests, setRequests]   = useState<DataSubjectRequest[]>([]);
+  const [policies, setPolicies]   = useState<{ data_type: string; retention_days: number; legal_basis?: string }[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState('');
+  const [statusFilter, setStatusFilter] = useState('pending');
+  const [typeFilter, setTypeFilter]     = useState('');
+  const [busy, setBusy]           = useState<string | null>(null);
+  const [msg, setMsg]             = useState('');
+  const [confirm, setConfirm]     = useState<{ id: string; action: 'approve' | 'reject'; label: string } | null>(null);
+  const [eraseUserId, setEraseUserId] = useState('');
+  const [eraseReason, setEraseReason] = useState('');
+  const [eraseConfirm, setEraseConfirm] = useState(false);
+  const [tab, setTab]             = useState<'requests' | 'policies'>('requests');
+
+  const load = useCallback(async () => {
+    setLoading(true); setError('');
+    try {
+      const params: Record<string, string> = {};
+      if (statusFilter) params.status = statusFilter;
+      if (typeFilter)   params.request_type = typeFilter;
+      const [rRes, pRes] = await Promise.all([
+        superadminApi.gdprRequests(params),
+        superadminApi.retentionPolicies(),
+      ]);
+      setRequests(rRes.data.requests ?? rRes.data);
+      setPolicies(pRes.data.policies ?? pRes.data);
+    } catch (e: unknown) {
+      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load GDPR data');
+    } finally { setLoading(false); }
+  }, [statusFilter, typeFilter]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const processRequest = async (id: string, action: 'approve' | 'reject') => {
+    setBusy(id); setMsg('');
+    try {
+      await superadminApi.processGdprRequest(id, action);
+      setMsg(`Request ${action === 'approve' ? 'approved' : 'rejected'}`);
+      await load();
+    } catch (e: unknown) {
+      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Action failed');
+    } finally { setBusy(null); setConfirm(null); }
+  };
+
+  const eraseUser = async () => {
+    if (!eraseUserId.trim()) return;
+    setBusy('erase'); setMsg('');
+    try {
+      await superadminApi.gdprEraseUser(eraseUserId.trim(), eraseReason || 'Superadmin GDPR erasure');
+      setMsg(`User ${eraseUserId} erased — PII anonymised`);
+      setEraseUserId(''); setEraseReason('');
+      await load();
+    } catch (e: unknown) {
+      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Erasure failed');
+    } finally { setBusy(null); setEraseConfirm(false); }
+  };
+
+  if (loading) return <LoadingRows rows={6} />;
+  if (error)   return <ErrorState message={error} onRetry={load} />;
+
+  const pending = requests.filter(r => r.status === 'pending').length;
+  const erasures = requests.filter(r => r.request_type === 'erasure').length;
+
+  return (
+    <>
+      <SAStyles />
+      {confirm && (
+        <ConfirmDialog
+          title={confirm.label}
+          message={confirm.action === 'approve' && requests.find(r => r.request_id === confirm.id)?.request_type === 'erasure'
+            ? 'This will permanently anonymise the user\'s PII. This action cannot be undone.'
+            : 'Confirm this GDPR action?'}
+          confirmLabel={confirm.label}
+          danger={confirm.action === 'approve' && requests.find(r => r.request_id === confirm.id)?.request_type === 'erasure'}
+          onConfirm={() => processRequest(confirm.id, confirm.action)}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
+      {eraseConfirm && (
+        <ConfirmDialog
+          title="Erase User Data"
+          message={`Permanently anonymise all PII for user "${eraseUserId}". This cannot be undone.`}
+          confirmLabel="Erase User"
+          danger
+          onConfirm={eraseUser}
+          onCancel={() => setEraseConfirm(false)}
+        />
+      )}
+
+      {msg && (
+        <div style={{
+          background: msg.includes('fail') || msg.includes('error') ? 'rgba(248,113,113,0.1)' : 'rgba(74,222,128,0.1)',
+          border: `1px solid ${msg.includes('fail') || msg.includes('error') ? '#f87171' : '#4ade80'}`,
+          borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13,
+          color: msg.includes('fail') || msg.includes('error') ? '#f87171' : '#4ade80',
+          display: 'flex', justifyContent: 'space-between',
+        }}>
+          {msg}
+          <button onClick={() => setMsg('')} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}>✕</button>
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
+        <KpiTile label="Pending Requests" value={pending} icon="⏳" accent={pending > 0 ? '#fbbf24' : '#22c55e'} />
+        <KpiTile label="Total Requests" value={requests.length} icon="📋" accent="#60a5fa" />
+        <KpiTile label="Erasure Requests" value={erasures} icon="🗑️" accent="#f87171" />
+        <KpiTile label="Retention Policies" value={policies.length} icon="📅" accent="#a78bfa" />
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
+        {(['requests', 'policies'] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)} style={{
+            background: tab === t ? '#1e293b' : 'transparent',
+            border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`,
+            borderRadius: 8, color: tab === t ? '#f8fafc' : '#64748b',
+            padding: '7px 16px', fontSize: 13, cursor: 'pointer',
+          }}>
+            {t === 'requests' ? 'Data Subject Requests' : 'Retention Policies'}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'requests' && (
+        <>
+          {/* Manual Erasure */}
+          <SectionCard title="Manual Erasure (Art. 17)" icon="🗑️" accent="#f87171"
+            subtitle="Directly erase a user's PII without a formal request">
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <Input label="User ID" placeholder="user_id or email" value={eraseUserId} onChange={e => setEraseUserId(e.target.value)} />
+              </div>
+              <div style={{ flex: 2, minWidth: 240 }}>
+                <Input label="Reason" placeholder="Regulatory order, user request…" value={eraseReason} onChange={e => setEraseReason(e.target.value)} />
+              </div>
+              <ActionBtn
+                label="Erase User"
+                onClick={() => setEraseConfirm(true)}
+                loading={busy === 'erase'}
+                accent="#f87171"
+                disabled={!eraseUserId.trim()}
+              />
+            </div>
+          </SectionCard>
+
+          {/* Filters */}
+          <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+            <Select
+              label=""
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              options={[
+                { value: '', label: 'All statuses' },
+                { value: 'pending', label: 'Pending' },
+                { value: 'processing', label: 'Processing' },
+                { value: 'completed', label: 'Completed' },
+                { value: 'rejected', label: 'Rejected' },
+              ]}
+              style={{ minWidth: 160 }}
+            />
+            <Select
+              label=""
+              value={typeFilter}
+              onChange={e => setTypeFilter(e.target.value)}
+              options={[
+                { value: '', label: 'All types' },
+                { value: 'export', label: 'Export (Art. 15)' },
+                { value: 'erasure', label: 'Erasure (Art. 17)' },
+                { value: 'rectification', label: 'Rectification (Art. 16)' },
+                { value: 'portability', label: 'Portability (Art. 20)' },
+              ]}
+              style={{ minWidth: 200 }}
+            />
+          </div>
+
+          <SectionCard title="Data Subject Requests" icon="📋" accent="#60a5fa" noPad>
+            {requests.length === 0 ? (
+              <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 32 }}>No requests match this filter</div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr>
+                    {['User', 'Type', 'Status', 'Submitted', 'Completed', 'Actions'].map(h => (
+                      <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {requests.map(r => (
+                    <tr key={r.request_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
+                      <td style={{ padding: '10px 16px' }}>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{r.username || r.user_id}</div>
+                        <div style={{ fontSize: 11, color: '#64748b' }}>{r.email}</div>
+                      </td>
+                      <td style={{ padding: '10px 16px' }}>
+                        <span style={{
+                          fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+                          background: `${REQUEST_TYPE_COLORS[r.request_type] ?? '#94a3b8'}22`,
+                          color: REQUEST_TYPE_COLORS[r.request_type] ?? '#94a3b8',
+                          border: `1px solid ${REQUEST_TYPE_COLORS[r.request_type] ?? '#94a3b8'}44`,
+                        }}>
+                          {r.request_type.toUpperCase()}
+                        </span>
+                      </td>
+                      <td style={{ padding: '10px 16px' }}><StatusBadge status={r.status} /></td>
+                      <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{fmtDate(r.submitted_at)}</td>
+                      <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{fmtDate(r.completed_at)}</td>
+                      <td style={{ padding: '10px 16px' }}>
+                        {r.status === 'pending' && (
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <ActionBtn
+                              label="Approve"
+                              onClick={() => setConfirm({ id: r.request_id, action: 'approve', label: 'Approve Request' })}
+                              loading={busy === r.request_id}
+                              accent="#22c55e"
+                              size="sm"
+                            />
+                            <ActionBtn
+                              label="Reject"
+                              onClick={() => setConfirm({ id: r.request_id, action: 'reject', label: 'Reject Request' })}
+                              loading={busy === r.request_id}
+                              accent="#f87171"
+                              size="sm"
+                            />
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </SectionCard>
+        </>
+      )}
+
+      {tab === 'policies' && (
+        <SectionCard title="Data Retention Policies" icon="📅" accent="#a78bfa"
+          subtitle="GDPR Art. 5(1)(e) — data minimisation and storage limitation">
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr>
+                {['Data Type', 'Retention Period', 'Legal Basis'].map(h => (
+                  <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #1e293b' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {policies.map((p, i) => (
+                <tr key={i} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
+                  <td style={{ padding: '10px 16px', fontWeight: 600 }}>{p.data_type.replace(/_/g, ' ')}</td>
+                  <td style={{ padding: '10px 16px', color: '#60a5fa' }}>
+                    {p.retention_days >= 365
+                      ? `${(p.retention_days / 365).toFixed(1)} years`
+                      : `${p.retention_days} days`}
+                  </td>
+                  <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{p.legal_basis ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </SectionCard>
+      )}
+    </>
+  );
+};
+
+export default GDPRSection;
