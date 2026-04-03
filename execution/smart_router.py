@@ -38,7 +38,8 @@ import os
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any
 
 from execution.algo_orders import AlgoOrderManager, get_algo_manager

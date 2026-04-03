@@ -58,7 +58,8 @@ import os
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from enum import Enum
 from typing import Any
 

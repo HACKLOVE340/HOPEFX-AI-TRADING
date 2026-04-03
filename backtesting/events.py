@@ -9,7 +9,8 @@ Event System for Backtesting
 Defines events used in event-driven backtesting architecture.
 """
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from enum import Enum
 
 

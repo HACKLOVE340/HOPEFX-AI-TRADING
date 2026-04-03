@@ -36,7 +36,8 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import UTC
+from datetime import timezone
+UTC = timezone.utc
 from enum import StrEnum
 from typing import Any
 

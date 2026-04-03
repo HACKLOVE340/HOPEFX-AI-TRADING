@@ -27,7 +27,8 @@ MacroFeed (FRED) → MacroStore (in-memory, forward-fill) → live_inference
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException, status

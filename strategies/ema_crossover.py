@@ -10,7 +10,8 @@ This strategy uses Exponential Moving Average crossovers for signals.
 Similar to MA Crossover but more responsive to recent price changes.
 """
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any
 
 import pandas as pd

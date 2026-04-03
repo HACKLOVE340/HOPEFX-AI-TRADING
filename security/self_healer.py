@@ -46,7 +46,8 @@ import logging
 import os
 import shutil
 import subprocess  # nosec B404 — used only for git rollback with a fixed command list
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from pathlib import Path
 from typing import Any
 

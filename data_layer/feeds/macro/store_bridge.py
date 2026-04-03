@@ -27,7 +27,8 @@ import asyncio
 import contextlib
 import logging
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 
 from data_layer.feeds.macro.fred import FRED_SERIES, FREDFeed, fred_feed
 from data_layer.feeds.macro.wgc import WGCFeed, wgc_feed

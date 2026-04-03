@@ -17,7 +17,8 @@ Author: HOPEFX Development Team
 
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from enum import Enum
 
 logger = logging.getLogger(__name__)

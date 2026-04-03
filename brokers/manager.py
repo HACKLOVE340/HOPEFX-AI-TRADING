@@ -34,7 +34,8 @@ from __future__ import annotations
 import logging
 import threading
 import traceback
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any
 
 from brokers.base import (

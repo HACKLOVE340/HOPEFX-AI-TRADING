@@ -17,7 +17,8 @@ This strategy implements Smart Money Concepts including:
 """
 
 import logging
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any
 
 from .base import BaseStrategy, Signal, SignalType, StrategyConfig

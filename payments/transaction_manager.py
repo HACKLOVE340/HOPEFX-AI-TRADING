@@ -13,7 +13,8 @@ status tracking, reversal, and reporting.
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from decimal import Decimal
 from enum import Enum
 from typing import Any

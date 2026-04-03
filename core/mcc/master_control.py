@@ -15,7 +15,8 @@ import sys
 import threading
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from decimal import Decimal
 from pathlib import Path
 from typing import Any

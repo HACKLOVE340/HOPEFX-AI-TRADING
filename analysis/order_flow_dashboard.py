@@ -17,7 +17,8 @@ Provides a single get_complete_analysis() method for a full snapshot.
 """
 
 import logging
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import ClassVar
 
 from analysis.advanced_order_flow import (

@@ -12,7 +12,8 @@ Tests for:
 - Opportunity Detection
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 
 
 class TestScanCriteriaType:

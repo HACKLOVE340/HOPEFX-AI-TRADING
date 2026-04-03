@@ -14,7 +14,8 @@ Trading capital is managed directly by brokers/prop firms.
 """
 
 import logging
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)

@@ -32,7 +32,8 @@ import logging
 import os
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 from data_layer.feeds.gold.base import CircuitState, GoldFeedBase
 from data_layer.feeds.gold.commodity_api import CommodityAPIFeed

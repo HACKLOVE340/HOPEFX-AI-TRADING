@@ -18,7 +18,8 @@ import os
 import secrets
 import threading
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 

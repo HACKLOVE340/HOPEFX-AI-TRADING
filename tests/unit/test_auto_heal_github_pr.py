@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 

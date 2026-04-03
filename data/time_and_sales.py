@@ -20,7 +20,8 @@ import logging
 import threading
 from collections import deque
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 

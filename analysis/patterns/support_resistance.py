@@ -18,7 +18,8 @@ significant buying or selling pressure:
 import logging
 import math
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 

@@ -20,7 +20,8 @@ import logging
 import threading
 from collections import deque
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from enum import Enum
 
 logger = logging.getLogger(__name__)

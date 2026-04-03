@@ -12,7 +12,8 @@ Allows users to publish, list, purchase, and subscribe to trading strategies.
 import ast
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from decimal import Decimal
 from typing import Any
 

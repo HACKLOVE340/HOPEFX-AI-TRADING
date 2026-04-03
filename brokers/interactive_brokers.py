@@ -11,7 +11,8 @@ Supports stocks, options, futures, forex, and more.
 """
 
 import logging
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any
 
 logger = logging.getLogger(__name__)

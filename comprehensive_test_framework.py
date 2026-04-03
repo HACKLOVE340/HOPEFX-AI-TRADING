@@ -14,7 +14,8 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from enum import Enum
 from pathlib import Path
 from typing import Any

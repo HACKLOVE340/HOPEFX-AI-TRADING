@@ -51,7 +51,8 @@ import json
 import logging
 import sys
 import warnings
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from pathlib import Path
 from typing import ClassVar
 

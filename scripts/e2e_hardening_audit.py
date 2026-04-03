@@ -32,7 +32,8 @@ import ast
 import pathlib
 import re
 import sys
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 # Ensure repo root is on sys.path so data_layer imports work when the
 # script is run from scripts/ or from the repo root.

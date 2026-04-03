@@ -26,7 +26,8 @@ import ast
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from enum import StrEnum
 
 logger = logging.getLogger(__name__)

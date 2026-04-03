@@ -13,7 +13,8 @@ Multi-User Team Management
 import logging
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from enum import Enum
 
 logger = logging.getLogger(__name__)

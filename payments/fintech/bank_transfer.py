@@ -10,7 +10,8 @@ Direct bank transfer handling for Nigerian banks.
 """
 
 import logging
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)

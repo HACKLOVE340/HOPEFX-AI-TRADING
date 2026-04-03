@@ -7,7 +7,8 @@
 Mobile Authentication
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 
 
 class MobileAuth:

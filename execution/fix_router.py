@@ -31,7 +31,8 @@ import asyncio
 import logging
 import os
 import time
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 from core.event_bus import CH_BREACH, CH_ORDER, bus
 from execution.fix_adapter import (

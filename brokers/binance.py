@@ -13,7 +13,8 @@ import hashlib
 import hmac
 import logging
 import time
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any
 
 import requests

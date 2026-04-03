@@ -37,7 +37,8 @@ import logging
 import os
 import time
 from collections import deque
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from pathlib import Path
 from typing import Any, ClassVar
 

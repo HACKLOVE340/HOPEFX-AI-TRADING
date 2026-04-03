@@ -16,7 +16,8 @@ Integration tests for the payments layer:
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 
 import pytest
 from sqlalchemy import create_engine

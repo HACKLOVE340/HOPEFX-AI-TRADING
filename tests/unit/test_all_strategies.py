@@ -8,7 +8,8 @@ Comprehensive strategy tests for all trading strategies.
 This file aims to increase test coverage to 80%+.
 """
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 import numpy as np
 import pandas as pd

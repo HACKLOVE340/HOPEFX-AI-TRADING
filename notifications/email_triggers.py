@@ -58,7 +58,8 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 
