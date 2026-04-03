@@ -567,6 +567,101 @@ async def get_user_activity(user_id: str, user: TokenPayload = Depends(_require_
         return {"activity": []}
 
 
+# ── Bulk user operations ──────────────────────────────────────────────────────
+
+class BulkUserBody(BaseModel):
+    user_ids: list[str]
+    reason: str | None = None
+
+
+@router.post("/users/bulk/ban")
+async def bulk_ban_users(body: BulkUserBody, user: TokenPayload = Depends(_require_superadmin)) -> dict:
+    """Ban multiple users in a single request. Skips superadmins."""
+    from database.connection import SessionLocal
+    from database.user_models import User
+    succeeded: list[str] = []
+    failed: list[dict] = []
+    db = SessionLocal()
+    try:
+        for uid in body.user_ids:
+            try:
+                u = db.query(User).filter_by(id=uid).first()
+                if not u:
+                    failed.append({"user_id": uid, "reason": "not found"})
+                    continue
+                if u.role == "superadmin":
+                    failed.append({"user_id": uid, "reason": "cannot ban superadmin"})
+                    continue
+                u.status = "banned"
+                succeeded.append(uid)
+            except Exception as exc:
+                failed.append({"user_id": uid, "reason": str(exc)})
+        db.commit()
+        _log_superadmin_action(user, "bulk_ban", f"count={len(succeeded)} reason={body.reason}")
+        return {"succeeded": succeeded, "failed": failed, "total": len(body.user_ids)}
+    finally:
+        db.close()
+
+
+@router.post("/users/bulk/unban")
+async def bulk_unban_users(body: BulkUserBody, user: TokenPayload = Depends(_require_superadmin)) -> dict:
+    """Unban multiple users in a single request."""
+    from database.connection import SessionLocal
+    from database.user_models import User
+    succeeded: list[str] = []
+    failed: list[dict] = []
+    db = SessionLocal()
+    try:
+        for uid in body.user_ids:
+            try:
+                u = db.query(User).filter_by(id=uid).first()
+                if not u:
+                    failed.append({"user_id": uid, "reason": "not found"})
+                    continue
+                u.status = "active"
+                succeeded.append(uid)
+            except Exception as exc:
+                failed.append({"user_id": uid, "reason": str(exc)})
+        db.commit()
+        _log_superadmin_action(user, "bulk_unban", f"count={len(succeeded)}")
+        return {"succeeded": succeeded, "failed": failed, "total": len(body.user_ids)}
+    finally:
+        db.close()
+
+
+@router.post("/users/bulk/export")
+async def bulk_export_users(body: BulkUserBody, user: TokenPayload = Depends(_require_superadmin)):
+    """Export selected users as CSV. Pass empty user_ids to export all."""
+    import csv, io
+    from database.connection import SessionLocal
+    from database.user_models import User
+    from fastapi.responses import StreamingResponse
+    db = SessionLocal()
+    try:
+        q = db.query(User)
+        if body.user_ids:
+            q = q.filter(User.id.in_(body.user_ids))
+        rows = q.order_by(User.created_at.desc()).all()
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(["user_id", "username", "email", "role", "status", "totp_enabled", "created_at", "last_login"])
+        for u in rows:
+            writer.writerow([
+                u.id, u.username, u.email, u.role,
+                u.status, bool(u.totp_enabled),
+                _iso(u.created_at), _iso(u.last_login_at),
+            ])
+        _log_superadmin_action(user, "bulk_export_users", f"count={len(rows)}")
+        buf.seek(0)
+        return StreamingResponse(
+            iter([buf.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=users_export.csv"},
+        )
+    finally:
+        db.close()
+
+
 # ── Platform config ───────────────────────────────────────────────────────────
 
 _PLATFORM_CONFIG_KEY = "superadmin_platform_config"
