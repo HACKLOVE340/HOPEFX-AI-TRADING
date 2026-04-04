@@ -295,9 +295,10 @@ def train_xgboost(X_train, y_train, X_test, y_test):
         eval_set=[(X_test, y_test)],
         verbose=False,
     )
-    # sklearn >= 1.5 removed cv='prefit'; train calibrator with cross-validation on
-    # the calibration set so no data leakage beyond what the base model already saw.
-    cal = CalibratedClassifierCV(model, method="isotonic", cv=3)
+    # Use cv='prefit': model is already trained; calibrator is fitted on X_test/y_test
+    # without re-training the base model.  cv=3 caused the XGBoost to be re-fitted
+    # on sub-splits of the test fold, producing spuriously high CV accuracy (data leakage).
+    cal = CalibratedClassifierCV(model, method="isotonic", cv="prefit")
     cal.fit(X_test, y_test)
     return cal
 
@@ -315,9 +316,13 @@ def train_random_forest(X_train, y_train):
         random_state=42,
         n_jobs=-1,
     )
-    model.fit(X_train, y_train)
-    cal = CalibratedClassifierCV(model, method="isotonic", cv=3)
-    cal.fit(X_train, y_train)
+    # Reserve last 20% of training data for calibration to avoid fitting
+    # the calibrator on the same data used to train the base model.
+    cal_split = max(1, int(len(X_train) * 0.80))
+    model.fit(X_train.iloc[:cal_split], y_train.iloc[:cal_split])
+    # cv='prefit': model is already fitted; no re-training during calibration.
+    cal = CalibratedClassifierCV(model, method="isotonic", cv="prefit")
+    cal.fit(X_train.iloc[cal_split:], y_train.iloc[cal_split:])
     return cal
 
 
@@ -347,7 +352,8 @@ def train_lightgbm(X_train, y_train, X_test, y_test):
             eval_set=[(X_test, y_test)],
             callbacks=[lgb.early_stopping(50, verbose=False), lgb.log_evaluation(-1)],
         )
-        cal = CalibratedClassifierCV(model, method="isotonic", cv=3)
+        # cv='prefit': model is already fitted; prevents data leakage via re-training.
+        cal = CalibratedClassifierCV(model, method="isotonic", cv="prefit")
         cal.fit(X_test, y_test)
         return cal
     except ImportError:
@@ -377,7 +383,10 @@ def train_stacking_ensemble(X_train, y_train, X_test, y_test):
     meta = LogisticRegression(C=1.0, random_state=42)
     meta.fit(meta_X, y_test)
 
-    cal_meta = CalibratedClassifierCV(meta, method="isotonic", cv=3)
+    # cv='prefit': meta is already fitted; calibrates probability outputs without
+    # re-training the logistic regression.  Previously cv=3 caused the meta-learner
+    # to be re-fitted on sub-splits of meta_X, inflating walk-forward CV to ~99%.
+    cal_meta = CalibratedClassifierCV(meta, method="isotonic", cv="prefit")
     cal_meta.fit(meta_X, y_test)
 
     return base_learners, cal_meta
@@ -557,8 +566,10 @@ def main() -> int:
             eval_metric="logloss",
         )
         fold_xgb.fit(Xtr_fit, ytr_fit, verbose=False)
-        # Calibrate on the held-out 20% of training data (no leakage from test fold)
-        fold_cal = CalibratedClassifierCV(fold_xgb, method="isotonic", cv=3)
+        # Calibrate on the held-out 20% of training data (no leakage from test fold).
+        # cv='prefit': fold_xgb is already fitted; calibrator runs on Xtr_cal/ytr_cal
+        # without re-training the base model (cv=3 caused spurious ~99% walk-forward CV).
+        fold_cal = CalibratedClassifierCV(fold_xgb, method="isotonic", cv="prefit")
         fold_cal.fit(Xtr_cal, ytr_cal)
 
         proba = fold_cal.predict_proba(Xte)[:, 1]

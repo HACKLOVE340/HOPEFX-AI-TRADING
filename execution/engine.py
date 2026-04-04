@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 import traceback
 import uuid
@@ -34,6 +35,18 @@ from datetime import datetime, timezone
 UTC = timezone.utc
 from enum import Enum
 from typing import Any
+
+# ── Live-mode safety constants ─────────────────────────────────────────────────
+# Set LIVE_MODE_CONFIRMED=true in the environment to enable live order execution.
+# Without this flag, any broker that is NOT paper trading will refuse to execute.
+_LIVE_MODE_CONFIRMED: bool = os.getenv("LIVE_MODE_CONFIRMED", "false").lower() == "true"
+
+# ── Maximum leverage ratio (notional / account equity) ─────────────────────────
+_MAX_LEVERAGE_RATIO: float = float(os.getenv("MAX_LEVERAGE_RATIO", "10.0"))
+
+# ── Minimum margin buffer before any order is submitted ─────────────────────────
+# Require at least this ratio of free margin to used margin (200% = 2.0).
+_MIN_MARGIN_BUFFER: float = float(os.getenv("MIN_MARGIN_BUFFER", "2.0"))
 
 logger = logging.getLogger(__name__)
 
@@ -277,6 +290,7 @@ class ExecutionEngine:
         redis_client=None,
         tca_recorder=None,
         max_latency_ms: float = 50.0,
+        position_manager=None,
     ) -> None:
         self._broker = broker_manager
         self._risk = risk_manager
@@ -284,6 +298,7 @@ class ExecutionEngine:
         self._redis = redis_client
         self._tca = tca_recorder
         self._max_latency_ms = max_latency_ms
+        self._position_manager = position_manager
 
         self._circuit_breaker = EngineCircuitBreaker(
             max_failures=3,
@@ -308,23 +323,62 @@ class ExecutionEngine:
         # Updated by TickFeedManager bridge via update_last_tick()
         self._last_ticks: dict[str, Any] = {}
 
+        # SL/TP monitor — started in start(), stopped in stop()
+        self._sltp_monitor = None
+
+        # Self-trade prevention singleton — lazy-initialised on first order
+        self._stp = None
+
         logger.info(
             "ExecutionEngine initialised | max_latency=%.0fms",
             max_latency_ms,
         )
+
+        # Warn loudly if live trading is enabled without LIVE_MODE_CONFIRMED
+        self._live_mode_confirmed = _LIVE_MODE_CONFIRMED
+        if not self._live_mode_confirmed:
+            logger.info(
+                "ExecutionEngine: LIVE_MODE_CONFIRMED not set — "
+                "live broker orders will be BLOCKED. "
+                "Set LIVE_MODE_CONFIRMED=true to enable live trading."
+            )
 
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
     async def start(self) -> None:
-        """Start the execution engine."""
+        """Start the execution engine and background safety monitors."""
         self._running = True
+
+        # Start SL/TP monitor (prevents unlimited loss on open positions)
+        if self._position_manager is not None:
+            try:
+                from execution.sl_tp_monitor import SLTPMonitor
+
+                self._sltp_monitor = SLTPMonitor(
+                    position_manager=self._position_manager,
+                    broker=self._broker,
+                    tick_cache=self._last_ticks,
+                )
+                await self._sltp_monitor.start()
+                logger.info("ExecutionEngine: SL/TP monitor started.")
+            except Exception as exc:  # noqa: BLE001
+                logger.error("ExecutionEngine: could not start SL/TP monitor: %s", exc)
+
         logger.info("ExecutionEngine started.")
 
     async def stop(self) -> None:
-        """Stop the execution engine gracefully."""
+        """Stop the execution engine and all background tasks gracefully."""
         self._running = False
+
+        if self._sltp_monitor is not None:
+            try:
+                await self._sltp_monitor.stop()
+            except Exception as exc:  # noqa: BLE001
+                logger.error("ExecutionEngine: error stopping SL/TP monitor: %s", exc)
+            self._sltp_monitor = None
+
         logger.info("ExecutionEngine stopped.")
 
     def add_fill_callback(self, callback: Callable[[ExecutionReport], None]) -> None:
@@ -339,8 +393,16 @@ class ExecutionEngine:
         execution engine always has the freshest bid/ask for MARKET order pricing.
         This eliminates the need to call the broker REST API for the current price
         on every order — reducing execution latency by 20–80ms.
+
+        Also feeds the spread monitor to maintain a rolling reference baseline.
         """
         self._last_ticks[symbol] = tick
+        # Feed spread monitor for real-time spike detection
+        try:
+            from execution.spread_monitor import get_spread_monitor
+            get_spread_monitor().on_tick_obj(symbol, tick)
+        except Exception:  # nosec B110 — spread monitor is non-fatal
+            pass
 
     def get_last_tick(self, symbol: str) -> Any | None:
         """Return the most recent validated tick for a symbol, or None."""
@@ -604,7 +666,7 @@ class ExecutionEngine:
 
     def _check_pre_submission_guards(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
         """
-        Check kill-switch and engine-stopped state synchronously.
+        Check kill-switch, engine-stopped, and LIVE_MODE_CONFIRMED state synchronously.
 
         The circuit-breaker check (async) is handled in _check_pre_trade_gate().
         Returns a blocked ExecutionReport on the first failed guard, or None.
@@ -618,11 +680,70 @@ class ExecutionEngine:
             self._total_blocks += 1
             return self._blocked_report(request, "[ENGINE_STOPPED]", t0)
 
+        # ── LIVE_MODE_CONFIRMED safety gate ───────────────────────────────────
+        if not self._live_mode_confirmed and self._is_live_broker():
+            self._total_blocks += 1
+            msg = (
+                "[LIVE_MODE_NOT_CONFIRMED] Live broker detected but LIVE_MODE_CONFIRMED "
+                "is not set. Set LIVE_MODE_CONFIRMED=true in the environment to allow "
+                "live order execution. Orders are blocked to prevent accidental live trading."
+            )
+            logger.critical(msg)
+            return self._blocked_report(request, msg, t0)
+
+        # ── Spread spike guard ────────────────────────────────────────────────
+        spread_block = self._check_spread_spike(request, t0)
+        if spread_block is not None:
+            return spread_block
+
+        return None
+
+    def _is_live_broker(self) -> bool:
+        """Return True when the current broker is NOT paper trading."""
+        if self._broker is None:
+            return False
+        # BrokerManager exposes current_broker; fall back to checking broker directly
+        broker = getattr(self._broker, "current_broker", self._broker)
+        # Paper trading detection: class name contains 'Paper', or .paper_trading attr
+        if hasattr(broker, "paper_trading") and broker.paper_trading:
+            return False
+        broker_name = type(broker).__name__.lower()
+        if "paper" in broker_name or "mock" in broker_name or "fake" in broker_name:
+            return False
+        return True
+
+    def _check_spread_spike(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
+        """
+        Block the order if the current spread for the symbol is abnormally wide.
+
+        Uses the spread monitor singleton which is updated on every tick via
+        :meth:`update_last_tick`. Returns a blocked report when spiking, or
+        ``None`` to allow the order through.
+
+        Non-fatal on spread monitor unavailability — execution proceeds.
+        """
+        try:
+            from execution.spread_monitor import get_spread_monitor
+
+            monitor = get_spread_monitor()
+            if monitor.is_spread_spiking(request.symbol):
+                snap = monitor.get_snapshot(request.symbol)
+                msg = (
+                    f"[SPREAD_SPIKE] {request.symbol} spread {snap.current_spread:.5f} "
+                    f"is {snap.ratio:.1f}× baseline {snap.baseline_spread:.5f} — "
+                    f"order blocked to prevent adverse execution"
+                )
+                logger.warning(msg)
+                self._total_blocks += 1
+                return self._blocked_report(request, msg, t0)
+        except (ImportError, AttributeError, RuntimeError) as exc:
+            logger.debug("Spread spike check failed (non-fatal): %s", exc)
         return None
 
     async def _check_pre_trade_gate(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
         """
-        Run circuit-breaker check then pre-trade risk gate.
+        Run circuit-breaker check then pre-trade risk gate, self-trade prevention,
+        margin check, and leverage cap.
 
         Returns a blocked report on failure, None when all checks pass.
         """
@@ -644,6 +765,145 @@ class ExecutionEngine:
             self._total_blocks += 1
             return self._blocked_report(request, gate_reason, t0)
 
+        # ── Self-trade prevention ─────────────────────────────────────────────
+        stp_reason = self._check_self_trade(request)
+        if stp_reason is not None:
+            self._total_blocks += 1
+            return self._blocked_report(request, stp_reason, t0)
+
+        # ── Margin check ──────────────────────────────────────────────────────
+        margin_reason = await self._check_margin(request, t0)
+        if margin_reason is not None:
+            return margin_reason
+
+        # ── Leverage hard cap ─────────────────────────────────────────────────
+        leverage_reason = await self._check_leverage(request, t0)
+        if leverage_reason is not None:
+            return leverage_reason
+
+        return None
+
+    def _check_self_trade(self, request: ExecutionRequest) -> str | None:
+        """
+        Check the request against resting orders for self-trade prevention.
+
+        Returns a block reason string if a self-trade would occur, else None.
+        Non-fatal on STP unavailability — execution proceeds without check.
+        """
+        try:
+            from risk.self_trade_prevention import Order as STPOrder, SelfTradePrevention
+
+            # Lazy-init singleton (account-level, cancel resting by default)
+            if self._stp is None:
+                self._stp = SelfTradePrevention(prevention_level="account")
+
+            stp_order = STPOrder(
+                id=request.request_id,
+                symbol=request.symbol,
+                side=request.side.lower(),  # STP uses 'buy'/'sell'
+                size=request.quantity,
+                price=float(request.price or 0.0),
+                timestamp=datetime.now(UTC),
+                account_id=request.metadata.get("account_id", "default"),
+                strategy_id=request.strategy_id,
+            )
+            result = self._stp.check_self_trade(stp_order)
+            if result is not None:
+                action = result.get("action", "unknown")
+                if action in ("reject", "cancel_both"):
+                    return (
+                        f"[SELF_TRADE_PREVENTION] Order would self-match with resting order "
+                        f"(action={action})"
+                    )
+                # For cancel_resting: allow the new order, log the resting cancel
+                logger.info(
+                    "STP: cancelling resting order %s to allow new order %s",
+                    result.get("order_to_cancel"),
+                    request.request_id,
+                )
+            # Register the new order as a resting order after the check
+            # (it becomes resting until filled or cancelled)
+            self._stp.add_resting_order(stp_order)
+        except (ImportError, AttributeError, TypeError, RuntimeError) as exc:
+            logger.debug("Self-trade prevention check failed (non-fatal): %s", exc)
+        return None
+
+    async def _check_margin(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
+        """
+        Query broker account info and verify adequate margin before submission.
+
+        Blocks the order if free margin would be insufficient (margin_available /
+        margin_used < MIN_MARGIN_BUFFER after the notional of this order).
+        Non-fatal on broker API failure — logs warning and proceeds.
+        """
+        if self._broker is None:
+            return None
+        try:
+            loop = asyncio.get_event_loop()
+            account = await loop.run_in_executor(None, self._broker.get_account_info)
+            if account is None:
+                return None
+
+            margin_available = float(getattr(account, "margin_available", 0) or 0)
+            margin_used = float(getattr(account, "margin_used", 0) or 0)
+            equity = float(getattr(account, "equity", getattr(account, "balance", 0)) or 0)
+
+            # Estimate notional of this order (price × qty)
+            price = float(request.price or 0)
+            notional = price * float(request.quantity) if price > 0 else 0.0
+
+            # After this order, projected margin used increases by notional
+            projected_used = margin_used + notional
+            # We require margin_available / projected_used >= MIN_MARGIN_BUFFER
+            if projected_used > 0 and equity > 0:
+                buffer = margin_available / projected_used
+                if buffer < _MIN_MARGIN_BUFFER:
+                    msg = (
+                        f"[MARGIN_INSUFFICIENT] Free margin buffer {buffer:.2f}x < "
+                        f"required {_MIN_MARGIN_BUFFER:.1f}x "
+                        f"(available={margin_available:.2f} used={margin_used:.2f} "
+                        f"order_notional={notional:.2f})"
+                    )
+                    logger.warning(msg)
+                    self._total_blocks += 1
+                    return self._blocked_report(request, msg, t0)
+        except (AttributeError, TypeError, RuntimeError, OSError) as exc:
+            logger.warning("ExecutionEngine: margin check failed (non-fatal): %s", exc)
+        return None
+
+    async def _check_leverage(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
+        """
+        Verify that the order does not breach the maximum leverage ratio.
+
+        Leverage = order_notional / account_equity.
+        Blocks if leverage > MAX_LEVERAGE_RATIO.
+        Non-fatal on broker API failure — logs warning and proceeds.
+        """
+        if self._broker is None:
+            return None
+        price = float(request.price or 0)
+        if price <= 0:
+            return None
+        notional = price * float(request.quantity)
+        try:
+            loop = asyncio.get_event_loop()
+            account = await loop.run_in_executor(None, self._broker.get_account_info)
+            if account is None:
+                return None
+            equity = float(getattr(account, "equity", getattr(account, "balance", 0)) or 0)
+            if equity <= 0:
+                return None
+            leverage = notional / equity
+            if leverage > _MAX_LEVERAGE_RATIO:
+                msg = (
+                    f"[LEVERAGE_EXCEEDED] Order leverage {leverage:.1f}x > cap {_MAX_LEVERAGE_RATIO:.1f}x "
+                    f"(notional={notional:.2f} equity={equity:.2f})"
+                )
+                logger.warning(msg)
+                self._total_blocks += 1
+                return self._blocked_report(request, msg, t0)
+        except (AttributeError, TypeError, RuntimeError, OSError) as exc:
+            logger.warning("ExecutionEngine: leverage check failed (non-fatal): %s", exc)
         return None
 
     async def _try_algo_routing(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
