@@ -16,20 +16,15 @@ from decimal import Decimal
 if sys.version_info >= (3, 11):
     from enum import StrEnum
 else:
+    from enum import Enum
 
-    class StrEnum(StrEnum):
+    class StrEnum(str, Enum):  # Python 3.10 compat
         """Backport of StrEnum for Python < 3.11."""
 
 
 from typing import Literal, NewType
 
 from pydantic import BaseModel, Field, field_validator
-try:
-    from enum import StrEnum
-except ImportError:
-    from enum import Enum
-    class StrEnum(str, Enum):  # Python 3.10 compat
-        pass
 
 # Domain types
 Symbol = NewType("Symbol", str)

@@ -20,7 +20,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-class ChartType(_enum.StrEnum):
+class ChartType(StrEnum):
     """Chart type enum. Inherits from str so values compare equal to strings."""
 
     CANDLESTICK = "candlestick"

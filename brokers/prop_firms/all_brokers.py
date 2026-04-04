@@ -39,6 +39,12 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
+
+def _parse_dt(ts: str) -> datetime:
+    """Parse ISO-8601 timestamp, handling 'Z' suffix on Python 3.10."""
+    return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+
+
 # ============ ENUMS & DATA CLASSES ============
 
 
@@ -416,7 +422,7 @@ class FTMOBroker(BasePropFirmBroker):
                         side=t["side"],
                         entry_price=float(t["entryPrice"]),
                         quantity=float(t["quantity"]),
-                        entry_time=datetime.fromisoformat(t["entryTime"]),
+                        entry_time=_parse_dt(t["entryTime"]),
                         status="open",
                     )
                     trades.append(trade)
@@ -481,8 +487,8 @@ class FTMOBroker(BasePropFirmBroker):
                         quantity=float(t["quantity"]),
                         pnl=float(t.get("pnl", 0)),
                         pnl_percentage=float(t.get("pnlPercentage", 0)),
-                        entry_time=datetime.fromisoformat(t["entryTime"]),
-                        exit_time=datetime.fromisoformat(t["exitTime"]) if t.get("exitTime") else None,
+                        entry_time=_parse_dt(t["entryTime"]),
+                        exit_time=_parse_dt(t["exitTime"]) if t.get("exitTime") else None,
                         status="closed",
                     )
                     trades.append(trade)
@@ -649,7 +655,7 @@ class The5ersBroker(BasePropFirmBroker):
                         side=pos["direction"],
                         entry_price=float(pos["openPrice"]),
                         quantity=float(pos["volume"]),
-                        entry_time=datetime.fromisoformat(pos["openTime"]),
+                        entry_time=_parse_dt(pos["openTime"]),
                         status="open",
                     )
                     trades.append(trade)
@@ -719,8 +725,8 @@ class The5ersBroker(BasePropFirmBroker):
                         exit_price=float(t.get("closePrice", 0)),
                         quantity=float(t["volume"]),
                         pnl=float(t.get("pnl", 0)),
-                        entry_time=datetime.fromisoformat(t["openTime"]),
-                        exit_time=datetime.fromisoformat(t["closeTime"]) if t.get("closeTime") else None,
+                        entry_time=_parse_dt(t["openTime"]),
+                        exit_time=_parse_dt(t["closeTime"]) if t.get("closeTime") else None,
                         status="closed",
                     )
                     trades.append(trade)
@@ -889,7 +895,7 @@ class MyForexFundsBroker(BasePropFirmBroker):
                         side=t["action"],
                         entry_price=float(t["openPrice"]),
                         quantity=float(t["lots"]),
-                        entry_time=datetime.fromisoformat(t["openTime"]),
+                        entry_time=_parse_dt(t["openTime"]),
                         status="open",
                     )
                     trades.append(trade)
@@ -954,8 +960,8 @@ class MyForexFundsBroker(BasePropFirmBroker):
                         quantity=float(t["lots"]),
                         pnl=float(t.get("profit", 0)),
                         pnl_percentage=float(t.get("profitPercent", 0)),
-                        entry_time=datetime.fromisoformat(t["openTime"]),
-                        exit_time=datetime.fromisoformat(t["closeTime"]) if t.get("closeTime") else None,
+                        entry_time=_parse_dt(t["openTime"]),
+                        exit_time=_parse_dt(t["closeTime"]) if t.get("closeTime") else None,
                         status="closed",
                     )
                     trades.append(trade)
@@ -1127,7 +1133,7 @@ class TopStepBroker(BasePropFirmBroker):
                         side=pos["action"],
                         entry_price=float(pos["averagePrice"]),
                         quantity=float(pos["quantity"]),
-                        entry_time=datetime.fromisoformat(pos["openTime"]),
+                        entry_time=_parse_dt(pos["openTime"]),
                         status="open",
                     )
                     trades.append(trade)
@@ -1192,8 +1198,8 @@ class TopStepBroker(BasePropFirmBroker):
                         quantity=float(t["quantity"]),
                         pnl=float(t.get("profit", 0)),
                         pnl_percentage=float(t.get("profitPercent", 0)),
-                        entry_time=datetime.fromisoformat(t["openTime"]),
-                        exit_time=datetime.fromisoformat(t["closeTime"]) if t.get("closeTime") else None,
+                        entry_time=_parse_dt(t["openTime"]),
+                        exit_time=_parse_dt(t["closeTime"]) if t.get("closeTime") else None,
                         status="closed",
                     )
                     trades.append(trade)
