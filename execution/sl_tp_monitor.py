@@ -34,6 +34,7 @@ SLTP_RETRY_DELAY_S      Seconds between retries (default: 1.0)
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 from datetime import datetime, timezone
@@ -149,22 +150,18 @@ class SLTPMonitor:
         self._running = False
         if self._task is not None:
             self._task.cancel()
-            try:
+            async with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
             self._task = None
         logger.info("SLTPMonitor stopped.")
 
-    def _on_task_done(self, fut: asyncio.Future) -> None:  # noqa: ARG002
+    def _on_task_done(self, fut: asyncio.Future) -> None:
         if not fut.cancelled() and fut.exception() is not None:
             exc = fut.exception()
             logger.critical("SLTPMonitor task crashed: %s", exc, exc_info=exc)
             if _SENTRY:
-                try:
+                with contextlib.suppress(Exception):
                     _sentry_sdk.capture_exception(exc)
-                except Exception:  # nosec B110
-                    pass
             # Auto-restart on crash to preserve safety guarantee
             if self._running:
                 logger.warning("SLTPMonitor: restarting after crash")
@@ -178,7 +175,7 @@ class SLTPMonitor:
         while self._running:
             try:
                 await self._check_all_positions()
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.error("SLTPMonitor._loop error: %s", exc)
             await asyncio.sleep(poll_seconds)
 
@@ -189,7 +186,7 @@ class SLTPMonitor:
 
         try:
             positions = self._pm.get_all_positions()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.debug("SLTPMonitor: could not get positions: %s", exc)
             return
 
@@ -305,7 +302,7 @@ class SLTPMonitor:
                                 close_price=trigger_price,
                                 close_time=datetime.now(UTC),
                             )
-                        except Exception as pm_exc:  # noqa: BLE001
+                        except Exception as pm_exc:
                             logger.warning("SLTPMonitor: pm.close_position error: %s", pm_exc)
 
                         if _PROM_OK:
@@ -318,7 +315,7 @@ class SLTPMonitor:
                         )
                         success = True
                         break
-                except Exception as broker_exc:  # noqa: BLE001
+                except Exception as broker_exc:
                     logger.error(
                         "SLTPMonitor: close attempt %d/%d failed for pos=%s: %s",
                         attempt,
@@ -336,10 +333,8 @@ class SLTPMonitor:
                 )
                 logger.critical(msg)
                 if _SENTRY:
-                    try:
+                    with contextlib.suppress(Exception):
                         _sentry_sdk.capture_message(msg, level="fatal")
-                    except Exception:  # nosec B110
-                        pass
                 if _PROM_OK:
                     _sltp_errors.inc()
                 _send_alert("CLOSE FAILURE — MANUAL INTERVENTION REQUIRED", msg)

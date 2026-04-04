@@ -363,7 +363,7 @@ class ExecutionEngine:
                 )
                 await self._sltp_monitor.start()
                 logger.info("ExecutionEngine: SL/TP monitor started.")
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.error("ExecutionEngine: could not start SL/TP monitor: %s", exc)
 
         logger.info("ExecutionEngine started.")
@@ -375,7 +375,7 @@ class ExecutionEngine:
         if self._sltp_monitor is not None:
             try:
                 await self._sltp_monitor.stop()
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.error("ExecutionEngine: error stopping SL/TP monitor: %s", exc)
             self._sltp_monitor = None
 
@@ -708,9 +708,7 @@ class ExecutionEngine:
         if hasattr(broker, "paper_trading") and broker.paper_trading:
             return False
         broker_name = type(broker).__name__.lower()
-        if "paper" in broker_name or "mock" in broker_name or "fake" in broker_name:
-            return False
-        return True
+        return not ("paper" in broker_name or "mock" in broker_name or "fake" in broker_name)
 
     def _check_spread_spike(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
         """
@@ -1019,7 +1017,7 @@ class ExecutionEngine:
         """
         try:
             report = await self._submit_to_broker(request, t0)
-        except Exception as exc:  # noqa: BLE001 — execute() must never raise to caller
+        except Exception as exc:
             logger.error(
                 "ExecutionEngine: broker submission error for %s: %s\n%s",
                 request.request_id,
