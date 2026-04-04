@@ -431,7 +431,7 @@ class RiskManager:
         # Limit to 500 observations — enough for stable 95th-percentile CVaR.
         self._returns_history: deque = deque(maxlen=500)
         # Daily CVaR limit as a fraction of equity (0 = disabled).
-        self._cvar_daily_limit: float = float(os.getenv("RISK_CVAR_DAILY_LIMIT", "0.0"))
+        self._cvar_daily_limit: float = float(os.getenv("RISK_CVAR_DAILY_LIMIT", "0.02"))
         # Expose _trading_halted as an alias so tests can set it directly.
         self._trading_halted: bool = False
 
@@ -1227,14 +1227,47 @@ class RiskManager:
             self._halt_trading(f"auto_halt:drawdown={dd * 100:.2f}%>={limit * 100:.1f}%")
         elif dd >= amber_threshold and not self._amber_warned:
             self._amber_warned = True
+            msg = (
+                f"AMBER drawdown warning: {dd * 100:.2f}%% >= {amber_threshold * 100:.2f}%% "
+                f"(60%% of {limit * 100:.1f}%% limit)"
+            )
             logger.warning(
                 "AMBER drawdown warning: %.2f%% >= %.2f%% (60%% of %.1f%% limit)",
                 dd * 100,
                 amber_threshold * 100,
                 limit * 100,
             )
+            self._send_telegram_alert("⚠️ AMBER WARNING", msg)
 
     # ── Kelly / sizing helpers (used by property-based tests) ─────────────────
+
+    def _send_telegram_alert(self, title: str, body: str) -> None:
+        """Fire-and-forget Telegram notification via the notifications singleton.
+
+        Failures are swallowed so risk logic is never blocked by a notification
+        outage.
+        """
+        try:
+            import asyncio
+
+            from notifications import get_alert_engine
+
+            engine = get_alert_engine()
+            if engine is None:
+                return
+            message = f"{title}: {body}"
+
+            async def _send() -> None:
+                await engine.send_alert("warning", message)
+
+            # Post onto a running loop if one exists; otherwise fire sync.
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(_send())
+            except RuntimeError:
+                asyncio.run(_send())
+        except Exception as exc:  # nosec B110 — notification must never crash risk
+            logger.debug("Telegram alert suppressed: %s", exc)
 
     def _compute_kelly_fraction(self, p: float, b: float) -> float:
         """
