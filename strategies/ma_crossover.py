@@ -11,6 +11,7 @@ A simple trend-following strategy based on moving average crossovers.
 
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 

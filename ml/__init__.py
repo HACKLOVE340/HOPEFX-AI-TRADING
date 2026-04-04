@@ -174,7 +174,6 @@ def _try_load(path: _Path) -> _Any | None:
             return None
 
 
-
 def _load_from_registry() -> "tuple[_Any | None, str]":
     """
     Try to load the active model from registry.json.
@@ -410,14 +409,12 @@ def _load_models() -> None:
                     )
             except Exception as _exc:
                 _ml_logger.info(
-                    "Active ML model: advanced_oos.pkl — "
-                    "OOS accuracy (metadata sidecar unreadable: %s)",
+                    "Active ML model: advanced_oos.pkl — OOS accuracy (metadata sidecar unreadable: %s)",
                     _exc,
                 )
         else:
             _ml_logger.info(
-                "Active ML model: advanced_oos.pkl — "
-                "59.9%% OOS accuracy (horizon-5, no metadata sidecar)",
+                "Active ML model: advanced_oos.pkl — 59.9%% OOS accuracy (horizon-5, no metadata sidecar)",
             )
         return
 

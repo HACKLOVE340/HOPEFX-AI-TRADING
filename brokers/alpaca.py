@@ -11,6 +11,7 @@ Implements real stock trading with Alpaca REST API (commission-free US stocks).
 
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -32,7 +33,6 @@ logger = logging.getLogger(__name__)
 def _parse_dt(ts: str) -> datetime:
     """Parse ISO-8601 timestamp from Alpaca API, handling 'Z' suffix on Python 3.10."""
     return datetime.fromisoformat(ts.replace("Z", "+00:00"))
-
 
 
 class AlpacaConnector(BrokerConnector):

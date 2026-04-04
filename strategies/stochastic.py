@@ -10,6 +10,7 @@ This strategy uses the Stochastic Oscillator to identify overbought/oversold con
 """
 
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 

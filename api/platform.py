@@ -51,6 +51,7 @@ import os
 import secrets
 import uuid
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status

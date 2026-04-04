@@ -10,6 +10,7 @@ This strategy identifies and trades breakouts from consolidation periods.
 """
 
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 

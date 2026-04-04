@@ -106,9 +106,7 @@ class SpreadMonitor:
         self._abs_limit = abs_limit_usd
 
         # Per-symbol state
-        self._spreads: dict[str, deque[float]] = defaultdict(
-            lambda: deque(maxlen=self._baseline_window)
-        )
+        self._spreads: dict[str, deque[float]] = defaultdict(lambda: deque(maxlen=self._baseline_window))
         self._tick_counts: dict[str, int] = defaultdict(int)
         self._ema: dict[str, float] = {}  # EMA of spread per symbol
 

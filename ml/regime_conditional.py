@@ -146,10 +146,10 @@ MIN_REGIME_SAMPLES = 200
 #   2011 bubble peak: price/MA200 ≈ 1.42×, rv14/rv90 ≈ 2.1× at peak
 # Thresholds are set conservatively to catch both episodes with ~0% false negatives
 # in normal trending markets (< 2% of non-bubble bars are flagged in full 58Y backtest).
-_PARABOLIC_MA_RATIO = 1.30       # price > 1.30× its 200-bar MA → parabolic territory
-_PARABOLIC_RV_RATIO = 2.50       # rv14 > 2.5× rv90 → extreme vol expansion
-_PARABOLIC_DRAWDOWN_PCT = 0.25   # price ≥ 25% below recent 200-bar peak → post-bubble crash
-_PARABOLIC_LOOKBACK = 200        # bars for MA and peak detection
+_PARABOLIC_MA_RATIO = 1.30  # price > 1.30× its 200-bar MA → parabolic territory
+_PARABOLIC_RV_RATIO = 2.50  # rv14 > 2.5× rv90 → extreme vol expansion
+_PARABOLIC_DRAWDOWN_PCT = 0.25  # price ≥ 25% below recent 200-bar peak → post-bubble crash
+_PARABOLIC_LOOKBACK = 200  # bars for MA and peak detection
 
 
 def is_parabolic_bubble_regime(
@@ -838,9 +838,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
         # When the last bar is in a HIGH_VOL_PARABOLIC regime the model has
         # historically underperformed (Fold-2: 44.4% accuracy). Abstain to
         # avoid taking directional bets in parabolic blow-offs / post-bubble crashes.
-        if regime_id == REGIME_HIGH_VOL_PARABOLIC or is_parabolic_bubble_regime(
-            ohlcv if extra_features is None else X
-        ):
+        if regime_id == REGIME_HIGH_VOL_PARABOLIC or is_parabolic_bubble_regime(ohlcv if extra_features is None else X):
             latency_ms = round((time.perf_counter() - t0) * 1000, 2)
             _PROM.predict_total.labels(symbol=symbol, regime="high_vol_parabolic").inc()
             logger.warning(
@@ -1016,9 +1014,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
 
         # ── Parabolic-bubble abstain gate ─────────────────────────────────────
         if is_parabolic_bubble_regime(X):
-            logger.warning(
-                "predict_with_orchestrator: HIGH_VOL_PARABOLIC regime — abstain (Fold-2 filter)"
-            )
+            logger.warning("predict_with_orchestrator: HIGH_VOL_PARABOLIC regime — abstain (Fold-2 filter)")
             neutral_proba = np.full((len(X), 2), 0.5)
             return {
                 "predictions": np.zeros(len(X), dtype=int),

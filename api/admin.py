@@ -684,9 +684,9 @@ def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
             if isinstance(strategies, dict):
                 trading_stats["total_strategies"] = len(strategies)
                 trading_stats["active_strategies"] = sum(
-                    1 for s in strategies.values()
-                    if getattr(s, "status", "").upper() == "RUNNING"
-                    or getattr(s, "is_running", False)
+                    1
+                    for s in strategies.values()
+                    if getattr(s, "status", "").upper() == "RUNNING" or getattr(s, "is_running", False)
                 )
     except Exception as exc:
         logger.debug("dashboard-data strategy count failed: %s", exc)
@@ -709,9 +709,7 @@ def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
                 risk_status["current_balance"] = rm_status.get("balance", 0.0)
                 max_dd = current_settings.get("max_drawdown", 10.0)
                 if max_dd > 0:
-                    risk_status["risk_utilization"] = round(
-                        risk_status["current_drawdown"] / max_dd * 100, 1
-                    )
+                    risk_status["risk_utilization"] = round(risk_status["current_drawdown"] / max_dd * 100, 1)
     except Exception as exc:
         logger.debug("dashboard-data risk_status enrichment failed: %s", exc)
 
@@ -726,9 +724,7 @@ def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
         if app_state is not None:
             cache = getattr(app_state, "cache", None)
             if cache is not None:
-                market_data["cached_symbols"] = getattr(cache, "symbol_count", 0) or len(
-                    getattr(cache, "_cache", {})
-                )
+                market_data["cached_symbols"] = getattr(cache, "symbol_count", 0) or len(getattr(cache, "_cache", {}))
                 market_data["last_update"] = str(getattr(cache, "last_update", "—"))
             nuclear = getattr(app_state, "nuclear_streamer", None)
             if nuclear is not None:
@@ -825,7 +821,9 @@ def _serve_admin_template(name: str, title: str) -> HTMLResponse:
             # Replace Jinja extends/block tags with plain HTML
             base = re.sub(r"\{%[-\s]*extends[^%]*%\}", "", base)
             base = re.sub(r"\{%[-\s]*block title[-\s]*%\}.*?\{%[-\s]*endblock[-\s]*%\}", title, base, flags=re.DOTALL)
-            block_match = re.search(r"\{%[-\s]*block content[-\s]*%\}.*?\{%[-\s]*endblock[-\s]*%\}", content, flags=re.DOTALL)
+            block_match = re.search(
+                r"\{%[-\s]*block content[-\s]*%\}.*?\{%[-\s]*endblock[-\s]*%\}", content, flags=re.DOTALL
+            )
             block_body = ""
             if block_match:
                 block_body = re.sub(r"\{%[-\s]*block content[-\s]*%\}", "", block_match.group())
@@ -836,7 +834,8 @@ def _serve_admin_template(name: str, title: str) -> HTMLResponse:
             full = re.sub(r"\{%[^%]*%\}", "", full)  # strip any remaining Jinja tags
             return HTMLResponse(content=full)
     # Fallback: minimal page
-    return HTMLResponse(content=f"""<!DOCTYPE html>
+    return HTMLResponse(
+        content=f"""<!DOCTYPE html>
 <html><head><title>HOPEFX Admin — {title}</title>
 <meta charset="UTF-8">
 <style>body{{font-family:sans-serif;padding:40px;background:#f5f7fa;color:#2c3e50}}</style>
@@ -844,7 +843,8 @@ def _serve_admin_template(name: str, title: str) -> HTMLResponse:
 <body><h1>HOPEFX Admin — {title}</h1>
 <p style="color:#e74c3c;">Template not found: templates/admin/{name}</p>
 <a href="/api/admin/">← Back to Dashboard</a>
-</body></html>""")
+</body></html>"""
+    )
 
 
 @router.get("/", response_class=HTMLResponse)

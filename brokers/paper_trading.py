@@ -462,21 +462,23 @@ class PaperTradingBroker(BrokerConnector):
         # Persist order to Redis for crash recovery.
         if self._redis_state is not None:
             try:
-                self._redis_state.save_order({
-                    "id": order_id,
-                    "symbol": symbol,
-                    "side": str(side.value),
-                    "type": str(order_type.value),
-                    "quantity": order.quantity,
-                    "price": order.price,
-                    "status": str(order.status.value),
-                    "filled_price": order.filled_price,
-                    "timestamp": (
-                        order.timestamp.isoformat()
-                        if hasattr(order.timestamp, "isoformat")
-                        else str(order.timestamp)
-                    ),
-                })
+                self._redis_state.save_order(
+                    {
+                        "id": order_id,
+                        "symbol": symbol,
+                        "side": str(side.value),
+                        "type": str(order_type.value),
+                        "quantity": order.quantity,
+                        "price": order.price,
+                        "status": str(order.status.value),
+                        "filled_price": order.filled_price,
+                        "timestamp": (
+                            order.timestamp.isoformat()
+                            if hasattr(order.timestamp, "isoformat")
+                            else str(order.timestamp)
+                        ),
+                    }
+                )
             except Exception as _rse:
                 logger.debug("PaperTradingBroker: Redis save_order failed: %s", _rse)
         return order
@@ -819,15 +821,17 @@ class PaperTradingBroker(BrokerConnector):
         if self._redis_state is not None:
             try:
                 pos = self.positions[symbol]
-                self._redis_state.save_position({
-                    "symbol": symbol,
-                    "side": str(pos.side),
-                    "quantity": pos.quantity,
-                    "entry_price": pos.entry_price,
-                    "current_price": pos.current_price,
-                    "unrealized_pnl": pos.unrealized_pnl,
-                    "realized_pnl": getattr(pos, "realized_pnl", 0.0),
-                    "id": getattr(pos, "id", str(uuid.uuid4())),
-                })
+                self._redis_state.save_position(
+                    {
+                        "symbol": symbol,
+                        "side": str(pos.side),
+                        "quantity": pos.quantity,
+                        "entry_price": pos.entry_price,
+                        "current_price": pos.current_price,
+                        "unrealized_pnl": pos.unrealized_pnl,
+                        "realized_pnl": getattr(pos, "realized_pnl", 0.0),
+                        "id": getattr(pos, "id", str(uuid.uuid4())),
+                    }
+                )
             except Exception as _rse:
                 logger.debug("PaperTradingBroker: Redis save_position failed: %s", _rse)

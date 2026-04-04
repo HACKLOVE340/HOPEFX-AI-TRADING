@@ -12,6 +12,7 @@ and adds MCC integration.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from decimal import Decimal
 from typing import Any
@@ -172,11 +173,7 @@ class StrategyAdapter:
         # tests and callers that set strategy.config = StrategyConfig(name=...)
         # get the right name even when .name is a Mock.
         cfg = getattr(legacy_strategy, "config", None)
-        name = (
-            getattr(cfg, "name", None)
-            or getattr(legacy_strategy, "name", None)
-            or "unknown"
-        )
+        name = getattr(cfg, "name", None) or getattr(legacy_strategy, "name", None) or "unknown"
         # Only use a plain-string name; discard MagicMock / non-string values.
         if not isinstance(name, str):
             name = "unknown"

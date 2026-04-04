@@ -409,12 +409,7 @@ class _RollingCorrelation:
             h1 = self._prices.get(s1)
             h2 = self._prices.get(s2)
 
-        if (
-            h1 is not None
-            and h2 is not None
-            and len(h1) >= self._min_bars
-            and len(h2) >= self._min_bars
-        ):
+        if h1 is not None and h2 is not None and len(h1) >= self._min_bars and len(h2) >= self._min_bars:
             try:
                 n = min(len(h1), len(h2))
                 a1 = np.array(list(h1)[-n:], dtype=float)
