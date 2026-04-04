@@ -220,7 +220,7 @@ class OrderLifecycleManager:
                 self._transition(order, OrderStatus.NEW)
                 self.active_orders.add(order.id)
         except Exception as exc:
-            logger.error("OMS broker submit failed for %s: %s", order.id, exc)
+            logger.error("OMS broker submit failed for %s: %s", order.id, exc, exc_info=True)
             self._transition(order, OrderStatus.REJECTED, reason=str(exc))
 
     def fill_order(self, order_id: str, fill_qty: Decimal, fill_price: Decimal) -> bool:

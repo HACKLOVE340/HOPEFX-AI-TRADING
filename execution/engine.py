@@ -400,8 +400,8 @@ class ExecutionEngine:
                 _root_span.set_attribute("strategy_id", request.strategy_id)
                 _root_span.set_attribute("request_id", request.request_id)
                 _root_span.set_attribute("order_type", request.order_type)
-            except Exception:
-                logger.debug("Suppressed exception (no detail) in %s", __name__)
+            except Exception as _span_exc:
+                logger.debug("OTel span error in %s: %s", __name__, _span_exc)
 
             t0 = time.monotonic()
             self._total_orders += 1
@@ -410,8 +410,8 @@ class ExecutionEngine:
             if isinstance(request, ExecutionReport):
                 try:
                     _root_span.add_event("data_layer.blocked", {"reason": request.message})
-                except Exception:
-                    logger.debug("Suppressed exception (no detail) in %s", __name__)
+                except Exception as _span_exc:
+                    logger.debug("OTel span error in %s: %s", __name__, _span_exc)
                 return request  # data-layer block
 
             request = self._enrich_price_from_tick_feed(request)
@@ -424,8 +424,8 @@ class ExecutionEngine:
                         "kill_switch.active" if is_ks else "engine.stopped",
                         {"reason": block.message},
                     )
-                except Exception:
-                    logger.debug("Suppressed exception (no detail) in %s", __name__)
+                except Exception as _span_exc:
+                    logger.debug("OTel span error in %s: %s", __name__, _span_exc)
                 return block
 
             # ── pre_trade_gate child span ─────────────────────────────────
@@ -437,8 +437,8 @@ class ExecutionEngine:
             with _gate_ctx as _gate_span:
                 try:
                     _gate_span.set_attribute("symbol", request.symbol)
-                except Exception:
-                    logger.debug("Suppressed exception (no detail) in %s", __name__)
+                except Exception as _span_exc:
+                    logger.debug("OTel span error in %s: %s", __name__, _span_exc)
                 block = await self._check_pre_trade_gate(request, t0)
                 if block is not None:
                     try:
@@ -451,28 +451,28 @@ class ExecutionEngine:
                             "circuit_breaker.open" if is_cb else "gate.blocked",
                             {"reason": block.message},
                         )
-                    except Exception:
-                        logger.debug("Suppressed exception (no detail) in %s", __name__)
+                    except Exception as _span_exc:
+                        logger.debug("OTel span error in %s: %s", __name__, _span_exc)
                     return block
                 try:
                     _gate_span.add_event("gate.passed")
-                except Exception:
-                    logger.debug("Suppressed exception (no detail) in %s", __name__)
+                except Exception as _span_exc:
+                    logger.debug("OTel span error in %s: %s", __name__, _span_exc)
 
             algo_report = await self._try_algo_routing(request, t0)
             if algo_report is not None:
                 try:
                     _root_span.add_event("algo.routed", {"algo_id": str(algo_report.metadata.get("algo_id", ""))})
-                except Exception:
-                    logger.debug("Suppressed exception (no detail) in %s", __name__)
+                except Exception as _span_exc:
+                    logger.debug("OTel span error in %s: %s", __name__, _span_exc)
                 return algo_report
 
             block = self._check_sharpe_circuit_breaker(request, t0)
             if block is not None:
                 try:
                     _root_span.add_event("sharpe_circuit_breaker.open", {"reason": block.message})
-                except Exception:
-                    logger.debug("Suppressed exception (no detail) in %s", __name__)
+                except Exception as _span_exc:
+                    logger.debug("OTel span error in %s: %s", __name__, _span_exc)
                 return block
 
             self._record_tca_signal_price(request)
@@ -488,8 +488,8 @@ class ExecutionEngine:
                     _broker_span.set_attribute("symbol", request.symbol)
                     _broker_span.set_attribute("side", request.side)
                     _broker_span.set_attribute("quantity", request.quantity)
-                except Exception:
-                    logger.debug("Suppressed exception (no detail) in %s", __name__)
+                except Exception as _span_exc:
+                    logger.debug("OTel span error in %s: %s", __name__, _span_exc)
 
                 report = await self._submit_and_process(request, t0)
 
@@ -518,8 +518,8 @@ class ExecutionEngine:
                         _fill_span.set_attribute("status", report.status.value)
                         _root_span.set_attribute("execution.status", report.status.value)
                         _root_span.set_attribute("execution.latency_ms", report.latency_ms)
-                    except Exception:
-                        logger.debug("Suppressed exception (no detail) in %s", __name__)
+                    except Exception as _span_exc:
+                        logger.debug("OTel span error in %s: %s", __name__, _span_exc)
 
                 return report
 
@@ -556,7 +556,7 @@ class ExecutionEngine:
                         },
                     )
         except Exception as exc:
-            logger.debug("Data-layer enrichment skipped: %s", exc)
+            logger.warning("Data-layer enrichment skipped: %s", exc)
         return request
 
     def _enrich_price_from_tick_feed(self, request: ExecutionRequest) -> ExecutionRequest:
@@ -1098,8 +1098,8 @@ class ExecutionEngine:
         try:
             from execution._prom_metrics import EXECUTION_LATENCY_HISTOGRAM  # type: ignore[import]
             EXECUTION_LATENCY_HISTOGRAM.observe(latency_ms / 1000.0)
-        except Exception:
-            pass
+        except Exception as _prom_exc:
+            logger.debug("Prometheus histogram observe failed: %s", _prom_exc)
 
     def get_metrics(self) -> dict[str, Any]:
         """Return execution metrics snapshot."""

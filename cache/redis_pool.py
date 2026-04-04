@@ -39,6 +39,7 @@ REDIS_HEALTH_CHECK_INTERVAL — Seconds between health pings (default: 30)
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import threading
@@ -74,13 +75,31 @@ _KEEPALIVE: bool = os.getenv("REDIS_SOCKET_KEEPALIVE", "true").lower() in ("true
 _HEALTH_CHECK_INTERVAL: int = int(os.getenv("REDIS_HEALTH_CHECK_INTERVAL", "30"))
 
 # ---------------------------------------------------------------------------
-# Singleton state — protected by a threading.Lock for thread safety
+# Singleton state
+# _lock guards sync-path singletons (_sync_pool, _sync_client) — only ever
+# acquired from synchronous code, so threading.Lock is correct.
+# _async_lock guards _async_client — acquired only from async coroutines, so
+# asyncio.Lock must be used to avoid blocking the event loop.
 # ---------------------------------------------------------------------------
 
 _lock: threading.Lock = threading.Lock()
+_async_lock: asyncio.Lock | None = None  # created lazily inside an event-loop
 _sync_pool: ConnectionPool | None = None
 _sync_client: Redis | None = None
 _async_client: aioredis.Redis | None = None  # type: ignore[name-defined]
+
+
+def _get_async_lock() -> asyncio.Lock:
+    """Return (or lazily create) the module-level asyncio.Lock.
+
+    The lock is created on first call from within a running event loop, which
+    guarantees it is bound to the correct loop.  Subsequent calls return the
+    same instance.
+    """
+    global _async_lock
+    if _async_lock is None:
+        _async_lock = asyncio.Lock()
+    return _async_lock
 
 
 # ---------------------------------------------------------------------------
@@ -162,7 +181,7 @@ async def get_async_client() -> aioredis.Redis:  # type: ignore[name-defined]
         )
     if _async_client is not None:
         return _async_client
-    with _lock:
+    async with _get_async_lock():
         if _async_client is None:
             _async_client = aioredis.from_url(
                 _REDIS_URL,
@@ -182,7 +201,7 @@ def reset_pool() -> None:
     Tear down and reset the connection pool (used in tests and graceful
     shutdown paths).  All existing connections are closed.
     """
-    global _sync_pool, _sync_client, _async_client
+    global _sync_pool, _sync_client, _async_client, _async_lock
     with _lock:
         if _sync_pool is not None:
             try:
@@ -192,6 +211,7 @@ def reset_pool() -> None:
         _sync_pool = None
         _sync_client = None
         _async_client = None
+        _async_lock = None
         logger.info("Redis connection pool reset")
 
 

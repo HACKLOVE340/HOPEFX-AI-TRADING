@@ -50,14 +50,15 @@ _SERVICE_NAME: str = os.getenv("OTEL_SERVICE_NAME", "hopefx-trading")
 # each use without full reconnect overhead.
 _db_engine = None
 _db_engine_url: str | None = None
-_db_engine_lock = None  # threading.Lock; created on first use (import is serialised)
+_db_engine_lock: asyncio.Lock | None = None  # asyncio.Lock; safe to use from async coroutines
 
 
-def _get_db_engine():
+async def _get_db_engine():
     """Return the module-level DB engine, creating it if necessary.
 
-    Thread-safe via double-checked locking with a threading.Lock so that
-    concurrent Kubernetes health probes do not race during initial creation.
+    Async-safe via double-checked locking with an asyncio.Lock so that
+    concurrent Kubernetes health probes do not race during initial creation
+    without blocking the event loop.
     """
     global _db_engine, _db_engine_url, _db_engine_lock
     db_url = os.getenv("DATABASE_URL", "")
@@ -67,13 +68,11 @@ def _get_db_engine():
     if _db_engine is not None and _db_engine_url == db_url:
         return _db_engine, db_url
 
-    # Slow path — acquire lock.
-    import threading as _threading
-
+    # Slow path — acquire async lock.
     if _db_engine_lock is None:
-        _db_engine_lock = _threading.Lock()
+        _db_engine_lock = asyncio.Lock()
 
-    with _db_engine_lock:
+    async with _db_engine_lock:
         # Re-check inside the lock (double-checked locking).
         if _db_engine is not None and _db_engine_url == db_url:
             return _db_engine, db_url
@@ -157,7 +156,7 @@ async def _check_redis() -> ComponentStatus:
 async def _check_database() -> ComponentStatus:
     """Ping the relational database via the module-level cached SQLAlchemy engine."""
     t0 = time.perf_counter()
-    engine, db_url = _get_db_engine()
+    engine, db_url = await _get_db_engine()
     if engine is None:
         return ComponentStatus(
             name="database",
