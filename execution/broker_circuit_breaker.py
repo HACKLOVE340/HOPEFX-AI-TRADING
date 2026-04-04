@@ -112,7 +112,7 @@ class BrokerCircuitBreaker:
                 result = await cb.call(broker.submit_order, order)
             except CircuitOpenError:
                 # shed the load
-            except Exception:
+            except (RuntimeError, AttributeError):
                 # real broker error (already recorded by cb)
     """
 
@@ -185,7 +185,7 @@ class BrokerCircuitBreaker:
             return result
         except CircuitOpenError:
             raise
-        except Exception as exc:
+        except (ConnectionError, TimeoutError, ValueError, RuntimeError, OSError) as exc:
             error_type = _classify_error(exc)
             await self.record_failure(error_type)
             raise

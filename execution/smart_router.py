@@ -568,7 +568,7 @@ class SmartRouter:
                     broker_id,
                     _ORDER_TIMEOUT_S,
                 )
-            except Exception as exc:
+            except (RuntimeError, ConnectionError, ValueError) as exc:
                 self._states[broker_id].record_error()
                 last_error = str(exc)
                 logger.error("Router: broker=%s error: %s", broker_id, exc)
@@ -595,7 +595,7 @@ class SmartRouter:
                 lineage_id=decision.decision_id,
                 symbol=order.get("symbol", "XAU_USD"),
             )
-        except Exception as exc:
+        except (RuntimeError, AttributeError, OSError, TypeError) as exc:
             logger.debug("Router lineage write failed: %s", exc)
 
     # ── Diagnostics ───────────────────────────────────────────────────────────

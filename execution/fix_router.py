@@ -172,7 +172,7 @@ class FIXRouter:
         if self._adapter:
             try:
                 self._adapter.stop()
-            except Exception as exc:
+            except (RuntimeError, ConnectionError, AttributeError) as exc:
                 logger.warning("FIXRouter: adapter stop error: %s", exc)
         logger.info(
             "FIXRouter stopped. orders=%d fills=%d rejects=%d",
@@ -196,7 +196,7 @@ class FIXRouter:
             self._adapter.start()
             logger.info("FIXRouter: FIX session started.")
             return True
-        except Exception as exc:
+        except (ImportError, OSError, ConnectionError, ValueError, RuntimeError) as exc:
             logger.warning(
                 "FIXRouter: FIX session unavailable (%s) — will use OANDA REST fallback.",
                 exc,
@@ -216,7 +216,7 @@ class FIXRouter:
                 await self._route(msg)
             except asyncio.CancelledError:
                 break
-            except Exception as exc:
+            except (TimeoutError, RuntimeError, ValueError, KeyError) as exc:
                 logger.error("FIXRouter order error: %s", exc)
 
     # ── breach listener ───────────────────────────────────────────────────────
@@ -267,7 +267,7 @@ class FIXRouter:
                     fill = await self._send_fix(symbol, direction, units, order_request)
                     await self._on_fill(fill)
                     return
-                except Exception as exc:
+                except (TimeoutError, RuntimeError, ConnectionError) as exc:
                     logger.warning(
                         "FIXRouter: FIX send failed (%s) — falling back to OANDA REST.",
                         exc,
@@ -279,7 +279,7 @@ class FIXRouter:
         try:
             fill = await self._fallback.send(symbol, direction, units)
             await self._on_fill(fill)
-        except Exception as exc:
+        except (TimeoutError, RuntimeError, ConnectionError, ValueError) as exc:
             self._reject_count += 1
             logger.error("FIXRouter: all routes failed for order #%d: %s", self._order_count, exc, exc_info=True)
             await bus.publish_breach(
