@@ -292,6 +292,14 @@ class OandaBroker:
             }
 
         # Always attach the idempotency key so OANDA deduplicates on retry.
+        # Truncate to 128 chars for OANDA API limits (UUIDs are 36 chars so this is safe).
+        # Log a warning if a custom ID is unusually long to alert operators.
+        if len(client_id) > 128:
+            logger.warning(
+                "OANDA client_id length %d exceeds 128-char limit — truncating. "
+                "Provide shorter IDs to avoid potential collision risk.",
+                len(client_id),
+            )
         order_body["clientExtensions"] = {"id": client_id[:128]}
 
         payload = {"order": order_body}

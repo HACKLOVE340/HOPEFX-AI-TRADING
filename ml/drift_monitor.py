@@ -295,7 +295,16 @@ class DriftMonitor:
             if percentile_bins and len(percentile_bins) >= 10:
                 reference = np.array(percentile_bins, dtype=float)
             else:
-                # Reconstruct approximate training distribution from mean/std
+                # Fallback: reconstruct approximate training distribution from mean/std.
+                # NOTE: This assumes a Gaussian distribution — it may under/over-estimate
+                # PSI for skewed or heavy-tailed features (e.g. volume, spread).
+                # Run ml/train_advanced.py to generate feature_stats.json with actual
+                # percentiles and eliminate this approximation.
+                logger.debug(
+                    "DriftMonitor: no percentiles for feature '%s' — using Gaussian fallback "
+                    "(assumption may not hold for non-normal features).",
+                    feat_name,
+                )
                 rng = np.random.default_rng(seed=42)
                 reference = rng.normal(loc=train_mean, scale=max(train_std, 1e-9), size=max(n_samples, 100))
 
