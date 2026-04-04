@@ -27,13 +27,15 @@ jobs:
         run: pip install bandit[toml]
 
       - name: Run bandit
-        # Reports HIGH-severity findings but does not block CI - the codebase
-        # has pre-existing HIGH findings tracked in the security dashboard.
+        # Reports HIGH-severity findings but does not block CI — pre-existing
+        # HIGH findings are tracked in the security dashboard.
         # Change || true to a hard exit once all HIGH findings are resolved.
         run: |
           bandit -r api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/ \
             --severity-level high \
             -f json -o bandit-report.json || true
+          # Ensure report file always exists so the upload step never errors
+          test -f bandit-report.json || echo '{"results":[],"errors":[]}' > bandit-report.json
           bandit -r api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/ \
             --severity-level high -q || true
 
@@ -43,7 +45,7 @@ jobs:
         with:
           name: bandit-report
           path: bandit-report.json
-          # Short retention - vulnerability details should not persist publicly
+          # Short retention — vulnerability details should not persist publicly
           retention-days: 14
 
   safety:
@@ -60,23 +62,25 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install safety
-        run: pip install safety
+      - name: Install safety and pip-audit
+        run: pip install safety pip-audit
 
       - name: Run safety check
         # safety scan requires authentication since Safety CLI 3.x.
         # Falls back to pip-audit (no auth required) when SAFETY_API_KEY is absent.
-        # Both paths use || true - CVE reports go to the security dashboard,
+        # Both paths use || true — CVE reports go to the security dashboard,
         # not as CI blockers, until all transitive CVEs have fixes available.
         run: |
           if [ -n "$SAFETY_API_KEY" ]; then
             safety scan -r requirements.txt --output json > safety-report.json || true
             safety scan -r requirements.txt --severity high || true
           else
-            echo "SAFETY_API_KEY not set - using pip-audit as fallback"
-            pip install pip-audit
-            pip-audit -r requirements.txt --desc --no-deps || true
+            echo "SAFETY_API_KEY not set — using pip-audit as fallback"
+            pip-audit -r requirements.txt --desc --no-deps \
+              --format json -o safety-report.json || true
           fi
+          # Ensure report file always exists so the upload step never errors
+          test -f safety-report.json || echo '[]' > safety-report.json
         env:
           SAFETY_API_KEY: ${{ secrets.SAFETY_API_KEY }}
 
@@ -86,13 +90,17 @@ jobs:
         with:
           name: safety-report
           path: safety-report.json
-          # Short retention - vulnerability details should not persist publicly
+          # Short retention — vulnerability details should not persist publicly
           retention-days: 14
 
   trivy:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # security-events: write is required to upload SARIF to the Security tab.
+      # On repos without GitHub Advanced Security (GHAS) this permission is
+      # downgraded; continue-on-error on the upload step prevents that from
+      # failing the whole job.
       security-events: write
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
@@ -100,7 +108,7 @@ jobs:
           persist-credentials: false
 
       - name: Run Trivy vulnerability scanner
-        # Download pinned release asset directly - avoids executing a remote
+        # Download pinned release asset directly — avoids executing a remote
         # shell script from main and makes failures easier to diagnose.
         run: |
           set -euo pipefail
@@ -116,15 +124,17 @@ jobs:
             --ignore-unfixed \
             --format sarif \
             --output trivy-results.sarif || true
-          # Ensure file exists so the upload step never errors on missing path
+          # Ensure file always exists so the upload step never errors
           test -f trivy-results.sarif || echo '{"version":"2.1.0","runs":[]}' > trivy-results.sarif
 
       - name: Upload Trivy scan results to GitHub Security tab
+        # continue-on-error: SARIF upload requires GHAS; fails gracefully
+        # on repos without it rather than blocking CI.
         uses: github/codeql-action/upload-sarif@5c8a8a642e79153f5d047b10ec1cba1d1cc65699  # v3
-        if: always() && hashFiles('trivy-results.sarif') != ''
+        if: always()
+        continue-on-error: true
         with:
           sarif_file: 'trivy-results.sarif'
-        continue-on-error: true
 
   secrets:
     runs-on: ubuntu-latest
@@ -138,10 +148,14 @@ jobs:
 
       - name: Secret Detection
         # Pinned to SHA for supply-chain safety (tag: v3.88.1)
+        # continue-on-error: TruffleHog exits non-zero when verified secrets
+        # are found; we report but do not block CI until the finding backlog
+        # is cleared.  Also handles the zero-SHA edge case on first push to
+        # a new branch where github.event.before is all zeros.
         uses: trufflesecurity/trufflehog@d73edfb85d79432e3c767c407afdee59c9a34fde
+        continue-on-error: true
         with:
           path: ./
           base: ${{ github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000' && github.event.before || 'HEAD~1' }}
           head: HEAD
           extra_args: --only-verified
-        continue-on-error: true
