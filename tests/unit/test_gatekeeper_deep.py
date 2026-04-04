@@ -30,7 +30,9 @@ from __future__ import annotations
 
 import asyncio
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+UTC = timezone.utc
 from unittest.mock import MagicMock, patch
 
 import pytest
