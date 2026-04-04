@@ -1,7 +1,7 @@
 # Mobile Guide
 
 > HOPEFX mobile access: PWA, React Native app, and mobile API.
-> Last updated: 2026-04-01
+> Last updated: 2026-07-14
 
 ---
 
@@ -328,7 +328,7 @@ export function SubscriptionGate({ requiredPlan, currentPlan, children }) {
       <Text style={styles.body}>
         Upgrade your plan to access this feature.
       </Text>
-      <TouchableOpacity style={styles.button} onPress={() => {/* navigate to billing */}}>
+      <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('Billing', { highlight: requiredPlan })}>
         <Text style={styles.buttonText}>Upgrade Plan</Text>
       </TouchableOpacity>
     </View>
@@ -418,18 +418,59 @@ Ensure your server has:
 
 ---
 
+## Subscription Renewal on Mobile
+
+When a subscription expires, all trading endpoints return `403 Subscription Required`.
+Handle this in your API client and direct the user to the billing screen:
+
+```javascript
+// In your API client error handler
+if (res.status === 403) {
+  const body = await res.json();
+  if (body.error_code === 'SUBSCRIPTION_REQUIRED') {
+    // Subscription expired — navigate to renewal
+    navigation.navigate('Billing', { reason: 'expired' });
+    throw new Error('SUBSCRIPTION_REQUIRED');
+  }
+  if (body.error_code === 'PLAN_LIMIT_EXCEEDED') {
+    // Feature requires a higher plan
+    navigation.navigate('Billing', {
+      reason: 'upgrade',
+      required_plan: body.required_plan
+    });
+    throw new Error('PLAN_LIMIT_EXCEEDED');
+  }
+}
+```
+
+To renew programmatically:
+```bash
+POST /api/monetization/subscribe
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{ "plan": "professional", "billing_cycle": "monthly" }
+```
+
+After successful payment, a new `HOPEFX_LICENSE_KEY` is issued. Update `.env` and restart
+the server. The mobile client does not need to be updated — the new key takes effect
+server-side immediately.
+
+---
+
 ## Troubleshooting
 
 | Issue | Fix |
 |-------|-----|
 | Push notifications not arriving | Check `GET /api/mobile/push-status` — device may not be registered |
-| `403 Subscription Required` | Subscription has expired — renew at `/api/monetization/pricing` |
+| `403 Subscription Required` | Subscription has expired — renew at `POST /api/monetization/subscribe` |
 | `403 Plan Limit Exceeded` | Feature requires a higher plan — see feature table above |
 | PWA not installable | Must be served over HTTPS with a valid `manifest.json` |
 | WebSocket disconnects | Implement reconnect with exponential backoff (see `usePrices` hook above) |
 | Biometrics not working | Check `LocalAuthentication.hasHardwareAsync()` — not all devices support it |
 | Token expired on mobile | Clear `hopefx_token` from SecureStore and re-login |
+| Navigation to Billing fails | Ensure `Billing` screen is registered in your React Navigation stack |
 
 ---
 
-*Last updated: 2026-04-01*
+*Last updated: 2026-07-14*
