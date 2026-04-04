@@ -56,7 +56,7 @@ try:
     _prom_fill_rate = Gauge("hopefx_exec_fill_rate", "Rolling fill rate (0-1)")
     _prom_avg_slip = Gauge("hopefx_exec_avg_slippage_bps", "Rolling avg slippage bps")
     _PROM_OK = True
-except Exception:  # nosec B110 — Prometheus metrics optional
+except ImportError:  # nosec B110 — Prometheus metrics optional
     _PROM_OK = False
 
 # ── XAUUSD hourly volume profile (normalised, 0-23 UTC) ──────────────────────
@@ -204,7 +204,7 @@ class PartialFillAggregator:
             for cb in self._callbacks:
                 try:
                     cb(state)
-                except Exception as exc:
+                except (RuntimeError, TypeError) as exc:
                     logger.debug("PartialFillAggregator callback error: %s", exc)
             del self._states[parent_id]
 
@@ -217,7 +217,7 @@ class PartialFillAggregator:
             for cb in self._callbacks:
                 try:
                     cb(state)
-                except Exception as exc:
+                except (RuntimeError, TypeError) as exc:
                     logger.debug("PartialFillAggregator callback error: %s", exc)
             del self._states[parent_id]
 
@@ -322,7 +322,7 @@ class TWAPExecutor:
                     else:
                         failed_slices += 1
                         logger.warning("TWAP slice %d/%d failed: %s", i + 1, slices, result)
-                except Exception as exc:
+                except (TimeoutError, RuntimeError, ConnectionError, ValueError) as exc:
                     failed_slices += 1
                     child.status = "failed"
                     logger.error("TWAP slice %d/%d error: %s", i + 1, slices, exc)
@@ -442,7 +442,7 @@ class VWAPExecutor:
                         total_cost += fp * slice_lots
                     else:
                         failed += 1
-                except Exception as exc:
+                except (TimeoutError, RuntimeError, ConnectionError, ValueError) as exc:
                     failed += 1
                     logger.error("VWAP slice %d error: %s", i, exc)
 
