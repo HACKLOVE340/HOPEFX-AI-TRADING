@@ -43,11 +43,12 @@ import uuid
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-UTC = timezone.utc
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 
@@ -597,6 +598,16 @@ class RiskManager:
         if direction == "long":
             return mid_price - atr_proxy, mid_price + tp_dist
         return mid_price + atr_proxy, mid_price - tp_dist
+
+    def notify_position_opened(self, symbol: str) -> None:
+        """Called when a new position is opened."""
+        self._state.open_positions += 1
+        logger.info("Position opened for %s — open_positions=%d", symbol, self._state.open_positions)
+
+    def notify_position_closed(self, symbol: str) -> None:
+        """Called when a position is closed."""
+        self._state.open_positions = max(0, self._state.open_positions - 1)
+        logger.info("Position closed for %s — open_positions=%d", symbol, self._state.open_positions)
 
     def size_order(self, signal) -> PositionSizingResult:
         """

@@ -62,8 +62,9 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-UTC = timezone.utc
 from typing import Any
+
+UTC = timezone.utc
 
 try:
     from enum import StrEnum
@@ -482,6 +483,10 @@ class HOPEFXBrain:
         Get signal from the named strategy.
 
         Returns (direction, confidence) where direction is "long"|"short"|"neutral".
+
+        Handles two strategy calling conventions:
+        1. analyze(ohlcv) → analysis_dict, then generate_signal(analysis_dict)
+        2. generate_signal(ohlcv) → dict directly
         """
         if self._strategy_manager is None:
             return "neutral", 0.0
@@ -491,20 +496,41 @@ class HOPEFXBrain:
             if strategy is None:
                 return "neutral", 0.0
 
-            # Most strategies expose generate_signal(ohlcv) → dict
-            sig = strategy.generate_signal(ohlcv)
+            # Detect whether strategy needs analyze() first
+            if hasattr(strategy, "analyze"):
+                analysis = strategy.analyze(ohlcv)
+                sig = strategy.generate_signal(analysis)
+            else:
+                sig = strategy.generate_signal(ohlcv)
+
             if sig is None:
                 return "neutral", 0.0
 
-            direction = str(sig.get("direction", sig.get("signal", "neutral"))).lower()
-            if direction in ("buy", "1", "long"):
+            # Normalize result — may be Signal object or dict
+            if hasattr(sig, "direction"):
+                raw_dir = str(sig.direction).lower()
+                confidence = float(getattr(sig, "confidence", 0.5))
+            elif hasattr(sig, "signal_type"):
+                raw_dir = str(sig.signal_type).lower()
+                confidence = float(getattr(sig, "confidence", 0.5))
+            elif isinstance(sig, dict):
+                raw_dir = str(
+                    sig.get("direction", sig.get("signal", sig.get("type", "neutral")))
+                ).lower()
+                confidence = float(sig.get("confidence", sig.get("strength", 0.5)))
+            else:
+                return "neutral", 0.0
+
+            # Map all known direction strings to canonical "long"/"short"/"neutral".
+            # The 'signaltype.buy/sell' patterns match str(SignalType.BUY/SELL) enum
+            # representations, which Python serialises as 'SignalType.BUY' (lowercased).
+            if raw_dir in ("buy", "1", "long", "signaltype.buy"):
                 direction = "long"
-            elif direction in ("sell", "-1", "short"):
+            elif raw_dir in ("sell", "-1", "short", "signaltype.sell"):
                 direction = "short"
             else:
                 direction = "neutral"
 
-            confidence = float(sig.get("confidence", sig.get("strength", 0.5)))
             return direction, confidence
 
         except Exception as exc:
