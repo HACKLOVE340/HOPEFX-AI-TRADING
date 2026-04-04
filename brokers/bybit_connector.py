@@ -64,7 +64,6 @@ from brokers.base import (
     BrokerConnector,
     Order,
     OrderSide,
-    OrderStatus,
     OrderType,
     Position,
 )
@@ -72,9 +71,11 @@ from brokers.base import (
 logger = logging.getLogger(__name__)
 
 # ── Default symbol mapping  HOPEFX → ByBit ──────────────────────────────────
+# "XAU/USD" is listed before "XAUUSD" so that "XAUUSD" wins the reverse map
+# (XAUUSDT → XAUUSD) when the reverse dict is built from the final iteration.
 _DEFAULT_SYMBOL_MAP: dict[str, str] = {
-    "XAUUSD": "XAUUSDT",
     "XAU/USD": "XAUUSDT",
+    "XAUUSD": "XAUUSDT",
     "BTCUSD": "BTCUSDT",
     "ETHUSD": "ETHUSDT",
     "SOLUSD": "SOLUSDT",
@@ -147,7 +148,7 @@ class ByBitConnector(BrokerConnector):
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     def connect(self) -> bool:
-        result = self._ccxt.connect()
+        self._ccxt.connect()
         self.connected = self._ccxt.connected
         if self.connected:
             logger.info("ByBitConnector: connected to ByBit exchange.")
@@ -221,6 +222,10 @@ class ByBitConnector(BrokerConnector):
     def cancel_order(self, order_id: str) -> bool:
         return self._ccxt.cancel_order(order_id)
 
+    def get_order(self, order_id: str) -> Order | None:
+        """Return order details by ID."""
+        return self._ccxt.get_order(order_id)
+
     def cancel_all_orders(self) -> bool:
         return self._ccxt.cancel_all_orders()
 
@@ -233,13 +238,14 @@ class ByBitConnector(BrokerConnector):
                 object.__setattr__(pos, "symbol", self._from_bybit(pos.symbol))
         return positions
 
-    def close_position(
-        self,
-        symbol: str,
-        order_type: str = "MARKET",
-    ) -> Order | None:
+    def close_position(self, symbol: str) -> bool:
+        """Close the open position for *symbol* on ByBit."""
         bybit_sym = self._to_bybit(symbol)
-        return self._ccxt.close_position(bybit_sym, order_type)
+        try:
+            return bool(self._ccxt.close_position(bybit_sym))
+        except Exception as exc:
+            logger.error("ByBitConnector.close_position(%s) failed: %s", symbol, exc)
+            return False
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
 
