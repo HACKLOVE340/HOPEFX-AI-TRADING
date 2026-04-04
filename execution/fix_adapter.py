@@ -213,7 +213,7 @@ def _get_fix_field(message: Any, field_obj: Any, context: str = "") -> str:
     try:
         message.getField(field_obj)
         return field_obj.getString()
-    except Exception as exc:
+    except (AttributeError, TypeError, ValueError) as exc:
         if context:
             logger.debug("%s field absent: %s", context, exc)
         return ""
@@ -269,7 +269,7 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
                     message.setField(fix.Username(self._username))
                 if self._password:
                     message.setField(fix.Password(self._password))
-        except Exception as exc:
+        except (AttributeError, TypeError, ValueError) as exc:
             logger.warning("fix.toAdmin: could not inject credentials: %s", exc)
 
     def _log_logout(self, message: Any, session_id: Any) -> None:
@@ -307,7 +307,7 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
                 self._log_logout(message, session_id)
             elif mt == fix.MsgType_Reject:
                 self._log_session_reject(message)
-        except Exception as exc:
+        except (AttributeError, ValueError, TypeError) as exc:
             logger.warning("fix.fromAdmin: error processing admin message: %s", exc)
 
     def toApp(self, message, session_id):
@@ -316,7 +316,7 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
         try:
             cl_ord_id = message.getField(fix.ClOrdID()).getString()
             self._send_times[cl_ord_id] = time.monotonic()
-        except Exception as _e:
+        except (AttributeError, TypeError) as _e:
             logger.debug("fix.toApp: ClOrdID not present in outbound message: %s", _e)
 
     def fromApp(self, message, session_id):
@@ -392,7 +392,7 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
             )
             self._on_exec_report(report)
 
-        except Exception as exc:
+        except (AttributeError, ValueError, TypeError, KeyError) as exc:
             logger.exception(
                 "fix_adapter._handle_exec_report error cl_ord_id=%s: %s",
                 cl_ord_id,
@@ -423,7 +423,7 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
                     f"Order cancel/replace rejected by broker: cl_ord_id={cl_ord_id} reason={reason_code} text={text!r}"
                 ),
             )
-        except Exception as exc:
+        except (AttributeError, ValueError, TypeError, KeyError) as exc:
             logger.exception(
                 "fix_adapter._handle_order_cancel_reject error cl_ord_id=%s: %s",
                 cl_ord_id,
@@ -460,7 +460,7 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
                 text=str(exc),
             )
             self._on_exec_report(report)
-        except Exception as inner:
+        except (RuntimeError, AttributeError, TypeError) as inner:
             logger.warning(
                 "fix_adapter._reject_pending: could not dispatch rejection for cl_ord_id=%s: %s",
                 cl_ord_id,
@@ -649,7 +649,7 @@ class FIXAdapter:
         if self._initiator:
             try:
                 self._initiator.stop()
-            except Exception as exc:
+            except (RuntimeError, AttributeError, ConnectionError) as exc:
                 # Log but do not re-raise — stop() must always complete so
                 # the heartbeat thread and pending futures are cleaned up.
                 logger.error("fix_adapter.stop: initiator.stop() raised: %s", exc)
@@ -866,7 +866,7 @@ class FIXAdapter:
                     fields.get("45", ""),
                     fields.get("58", ""),
                 )
-        except Exception as exc:
+        except (ValueError, AttributeError, TypeError, KeyError) as exc:
             logger.exception(
                 "fix_adapter._handle_pyfixmsg_message: parse error: %s",
                 exc,
@@ -1079,7 +1079,7 @@ class FIXAdapter:
                     loop.call_soon_threadsafe(future.set_exception, exc)
                 else:
                     loop.call_soon_threadsafe(future.set_result, report)
-            except Exception as exc:
+            except (RuntimeError, AttributeError, ValueError) as exc:
                 logger.warning("fix_adapter._dispatch_exec_report: %s", exc)
 
     # ------------------------------------------------------------------

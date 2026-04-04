@@ -273,7 +273,7 @@ class AlgoOrder(ABC):
             else:
                 child.status = "rejected"
                 logger.warning("AlgoOrder %s: child order rejected: %s", self.algo_id, result)
-        except Exception as exc:
+        except (TimeoutError, RuntimeError, ConnectionError, ValueError) as exc:
             child.status = "error"
             logger.error("AlgoOrder %s: child submit error: %s", self.algo_id, exc)
 
@@ -342,7 +342,7 @@ class TWAPOrder(AlgoOrder):
             self.status = AlgoStatus.COMPLETED
         except asyncio.CancelledError:
             self.status = AlgoStatus.CANCELLED
-        except Exception as exc:
+        except (TimeoutError, RuntimeError, ConnectionError, ValueError) as exc:
             self.status = AlgoStatus.ERROR
             logger.error("TWAP %s error: %s", self.algo_id, exc)
         finally:
@@ -492,7 +492,7 @@ class VWAPOrder(AlgoOrder):
             self.status = AlgoStatus.COMPLETED
         except asyncio.CancelledError:
             self.status = AlgoStatus.CANCELLED
-        except Exception as exc:
+        except (TimeoutError, RuntimeError, ConnectionError, ValueError) as exc:
             self.status = AlgoStatus.ERROR
             logger.error("VWAP %s error: %s", self.algo_id, exc)
         finally:
@@ -566,7 +566,7 @@ class IcebergOrder(AlgoOrder):
             self.status = AlgoStatus.COMPLETED
         except asyncio.CancelledError:
             self.status = AlgoStatus.CANCELLED
-        except Exception as exc:
+        except (TimeoutError, RuntimeError, ConnectionError, ValueError) as exc:
             self.status = AlgoStatus.ERROR
             logger.error("Iceberg %s error: %s", self.algo_id, exc)
         finally:
@@ -783,7 +783,7 @@ class AlgoOrderManager:
         try:
             report = await order.run()
             self._completed[order.algo_id] = report
-        except Exception as exc:
+        except (TimeoutError, RuntimeError, ValueError) as exc:
             logger.error("AlgoOrderManager: order %s failed: %s", order.algo_id, exc)
         finally:
             self._active.pop(order.algo_id, None)
