@@ -165,7 +165,7 @@ class OrderLifecycleManager:
                     _ks.reason,
                 )
                 return False
-        except Exception as _ks_exc:
+        except (ImportError, RuntimeError, AttributeError) as _ks_exc:
             # Kill switch check itself failed — fail closed: block the order.
             logger.critical(
                 "OMS.submit_order: kill switch check raised %s — blocking order %s",
@@ -219,7 +219,7 @@ class OrderLifecycleManager:
             else:
                 self._transition(order, OrderStatus.NEW)
                 self.active_orders.add(order.id)
-        except Exception as exc:
+        except (TimeoutError, RuntimeError, ConnectionError) as exc:
             logger.error("OMS broker submit failed for %s: %s", order.id, exc, exc_info=True)
             self._transition(order, OrderStatus.REJECTED, reason=str(exc))
 
@@ -309,7 +309,7 @@ class OrderLifecycleManager:
         for callback in self._callbacks.get(new_status, []):
             try:
                 callback(order, context)
-            except Exception as e:
+            except (RuntimeError, TypeError) as e:
                 logger.error(
                     "OMS callback error for order %s status %s: %s",
                     order.id[:8],
