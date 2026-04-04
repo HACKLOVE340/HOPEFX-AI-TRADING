@@ -1,23 +1,24 @@
 # FAQ
 
 > Frequently asked questions about HOPEFX AI Trading.
-> Last updated: 2026-04-01
+> Last updated: 2026-07-14
 
 ---
 
 ## Contents
 
 1. [Pricing & Subscriptions](#pricing--subscriptions)
-2. [Getting Started](#getting-started)
-3. [Trading & Signals](#trading--signals)
-4. [ML & AI](#ml--ai)
-5. [Brokers](#brokers)
-6. [Risk Management](#risk-management)
-7. [Prop Firms](#prop-firms)
-8. [Performance & Backtesting](#performance--backtesting)
-9. [Technical](#technical)
-10. [Security](#security)
-11. [Licensing](#licensing)
+2. [Plan Features & Limits](#plan-features--limits)
+3. [Getting Started](#getting-started)
+4. [Trading & Signals](#trading--signals)
+5. [ML & AI](#ml--ai)
+6. [Brokers](#brokers)
+7. [Risk Management](#risk-management)
+8. [Prop Firms](#prop-firms)
+9. [Performance & Backtesting](#performance--backtesting)
+10. [Technical](#technical)
+11. [Security](#security)
+12. [Licensing](#licensing)
 
 ---
 
@@ -38,7 +39,7 @@ See [MONETIZATION.md](MONETIZATION.md) for the full feature comparison and add-o
 
 No. HOPEFX is a professional paid platform. There is no free tier.
 
-A 14-day trial is available for evaluation. The trial is limited to paper trading (50 trades maximum) and does not include ML models, live trading, or API access. After 14 days, a paid subscription is required.
+A 14-day evaluation trial is available on request. The trial is limited to paper trading (50 trades maximum) and does not include ML models, live broker connections, or API access. After 14 days, a paid subscription is required to continue.
 
 To request trial access, open a GitHub Issue with the label `trial-request`. Trial codes grant 14 days of Starter-equivalent access.
 
@@ -90,6 +91,93 @@ Sign up: `POST /api/monetization/affiliate/signup`. See [MONETIZATION.md](MONETI
 | Elite | 0.1% |
 
 Commission is charged on trade volume and billed monthly.
+
+---
+
+## Plan Features & Limits
+
+### What does each paid tier include?
+
+| Feature | Starter | Professional | Enterprise | Elite |
+|---------|---------|-------------|------------|-------|
+| **Monthly price** | $1,800 | $4,500 | $7,500 | $10,000 |
+| **Symbols** | XAUUSD | All 7 | All 7 | All 7 + custom |
+| **Broker connections** | 1 | 3 | Unlimited | Unlimited |
+| **Strategies** | 4 built-in | 10 built-in | All + SMC/ICT | All + Strategy Brain |
+| **Custom strategies** | No | Yes | Yes | Yes |
+| **Backtesting data** | 1 year | 10 years | 50 years | 50 years + upload |
+| **ML model access** | Read-only | Read-only | Read-only | Full (retrain) |
+| **Online learning** | No | No | No | Yes |
+| **Social trading** | No | Yes | Yes | Yes |
+| **Copy trading** | No | Yes | Yes | Yes |
+| **Push notifications** | No | Yes | Yes | Yes |
+| **Prop firm mode** | No | Yes | Yes | Yes |
+| **Multi-broker** | No | Yes (3) | Yes | Yes |
+| **API rate limit** | 60 req/min | 300 req/min | 1,000 req/min | Unlimited |
+| **WebSocket connections** | 2 | 10 | 50 | Unlimited |
+| **Support** | Email | Email + chat | Priority | Dedicated manager |
+| **Commercial License** | No | No | No | Yes |
+| **Commission rate** | 0.5% | 0.3% | 0.2% | 0.1% |
+
+See [MONETIZATION.md](MONETIZATION.md) for the complete feature matrix including add-ons.
+
+### What happens when I hit a plan limit?
+
+All plan-gated endpoints return a structured error:
+
+```json
+{
+  "detail": "Plan limit exceeded",
+  "error_code": "PLAN_LIMIT_EXCEEDED",
+  "required_plan": "professional",
+  "current_plan": "starter"
+}
+```
+
+The application never silently degrades — you always know exactly which plan is required. Upgrade via `POST /api/monetization/subscribe` or at [hopefx.com/pricing](https://hopefx.com/pricing).
+
+### What is the difference between Starter and Professional?
+
+Starter covers single-symbol (XAUUSD) automated trading with 4 built-in strategies, 1 broker connection, and 1 year of backtesting data. It is suited for traders running a single gold strategy on one account.
+
+Professional adds multi-symbol trading (7 symbols), 10 strategies including MACD/Bollinger/Breakout/Mean Reversion, 3 broker connections, 10 years of backtesting data, social/copy trading, push notifications, and prop firm mode. It is suited for traders running diversified strategies across multiple accounts.
+
+### What does Elite add over Enterprise?
+
+Elite adds:
+- **Strategy Brain** (ML consensus engine) — the highest-accuracy signal source
+- **Online learning** — model updates incrementally every hour via SGD + EWC
+- **Model retraining** — run `python ml/train_advanced.py` on your own data
+- **Commercial License** — build proprietary products on top of HOPEFX without AGPL-3.0 disclosure
+- **Unlimited API rate** and WebSocket connections
+- **Dedicated account manager** with 4-hour SLA, 24/7
+
+### How do I activate my license key after subscribing?
+
+After payment, a `HOPEFX_LICENSE_KEY` is emailed to you. Add it to `.env`:
+
+```bash
+HOPEFX_LICENSE_KEY=HOPEFX-PRO-A7B9C2D4-X8Y2
+```
+
+Restart the application. Validate the key:
+
+```bash
+python scripts/manage_secrets.py validate
+# Expected: ✓ HOPEFX_LICENSE_KEY: valid (plan=professional, expires=2026-08-14)
+```
+
+Without a valid key, all `/api/trading/`, `/api/signals/`, and `/api/ml/` endpoints return `403 Subscription Required`. The `/health` and `/docs` endpoints remain accessible.
+
+### What happens when my subscription expires?
+
+Trading endpoints return `403 Subscription Required` immediately on expiry. Open positions are not automatically closed — the broker holds them. You retain read-only access to your trade history and journal for 90 days.
+
+Renew at [hopefx.com/billing](https://hopefx.com/billing) or via `POST /api/monetization/subscribe`. A new license key is issued on successful payment.
+
+### Can I run multiple instances on one subscription?
+
+One subscription covers one installation (one machine fingerprint). To run multiple instances (e.g., staging + production), purchase additional seats or contact sales@hopefx.io for a multi-seat arrangement.
 
 ---
 
@@ -597,4 +685,4 @@ Self-hosting without a subscription key disables all trading endpoints. The appl
 
 ---
 
-*Last updated: 2026-04-01*
+*Last updated: 2026-07-14*
