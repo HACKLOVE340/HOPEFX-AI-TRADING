@@ -186,6 +186,9 @@ class HOPEFXBrain:
         # Regime state per symbol
         self._regimes: dict[str, Regime] = {}
         self._regime_history: deque = deque(maxlen=200)
+        # Thresholds calibrated for XAU/USD H1 (ATR typically 0.3-0.8% of price).
+        self._regime_volatile_threshold: float = float(os.getenv("REGIME_VOLATILE_THRESHOLD", "0.8"))
+        self._regime_ranging_threshold: float = float(os.getenv("REGIME_RANGING_THRESHOLD", "0.2"))
 
         # Decision history
         self._decisions: deque = deque(maxlen=500)
@@ -364,8 +367,13 @@ class HOPEFXBrain:
             range_atr_ratio = price_range / atr if atr > 0 else 0
 
             # ── Classification ────────────────────────────────────────────────
-            if volatility_pct > 2.0:
+            # Thresholds calibrated for XAU/USD H1: typical ATR is 0.3-0.8% of price.
+            # REGIME_VOLATILE_THRESHOLD default 0.8 (was 2.0 — too coarse for gold).
+            # REGIME_RANGING_THRESHOLD  default 0.2 (explicit low-volatility ranging).
+            if volatility_pct > self._regime_volatile_threshold:
                 regime = Regime.VOLATILE
+            elif volatility_pct < self._regime_ranging_threshold:
+                regime = Regime.RANGING
             elif abs(norm_slope) > 0.0008 and range_atr_ratio > 3.0:
                 regime = Regime.TRENDING_UP if norm_slope > 0 else Regime.TRENDING_DOWN
             else:

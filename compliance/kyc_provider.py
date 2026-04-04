@@ -59,9 +59,10 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-UTC = timezone.utc
 from enum import Enum
 from typing import Any
+
+UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 
@@ -390,6 +391,15 @@ class MockKYCProvider(KYCProvider):
     """Auto-approves after KYC_MOCK_DELAY_S seconds. For testing only."""
 
     DELAY = float(os.getenv("KYC_MOCK_DELAY_S", "2"))
+
+    def __init__(self) -> None:
+        _app_env = os.getenv("APP_ENV", "development").lower()
+        if _app_env in ("production", "staging"):
+            raise RuntimeError(
+                f"MockKYCProvider must not be used in {_app_env} "
+                f"(APP_ENV={_app_env}). Configure a real KYC provider via "
+                "the KYC_PROVIDER environment variable."
+            )
 
     async def create_applicant(self, user_id: str, metadata: dict[str, Any]) -> KYCApplicant:
         import uuid
