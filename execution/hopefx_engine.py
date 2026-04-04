@@ -281,8 +281,8 @@ class HopeFXEngine:
                 await self._process_tick()
             except asyncio.CancelledError:
                 break
-            except Exception:
-                logger.exception("Tick loop error: %s")
+            except (RuntimeError, ValueError, AttributeError) as exc:
+                logger.exception("Tick loop error: %s", exc)
 
             elapsed = time.monotonic() - t0
             sleep_s = max(0.0, interval - elapsed)
@@ -315,13 +315,13 @@ class HopeFXEngine:
         # compare against the shadow feed and detect divergences.
         try:
             self._shadow_validator.on_production_tick(tick)
-        except Exception as exc:
+        except (RuntimeError, AttributeError, TypeError) as exc:
             logger.debug("ShadowDataValidator.on_production_tick error: %s", exc)
 
         # Update shadow engine open positions on every tick
         try:
             self._shadow.on_tick(mid=tick.mid)
-        except Exception as exc:
+        except (RuntimeError, AttributeError, TypeError) as exc:
             logger.debug("ShadowTradingEngine.on_tick error: %s", exc)
 
         # ── Step 2b: Intra-trade risk monitor (tick-frequency CVaR/ES) ────
@@ -462,7 +462,7 @@ class HopeFXEngine:
         if self._infer is not None:
             try:
                 return self._infer(features)
-            except Exception as exc:
+            except (RuntimeError, ValueError, AttributeError, TypeError) as exc:
                 logger.error("ML inference error: %s", exc)
                 return "neutral", 0.0, 0.5
 
@@ -506,7 +506,7 @@ class HopeFXEngine:
                     )
                 ),
             )
-        except Exception as exc:
+        except (RuntimeError, AttributeError, TypeError) as exc:
             logger.debug("ShadowTradingEngine.on_signal error: %s", exc)
 
         order_request = {
@@ -530,7 +530,7 @@ class HopeFXEngine:
 
         try:
             fill = await self._router.route_and_execute(order_request)
-        except Exception as exc:
+        except (TimeoutError, RuntimeError, ConnectionError, ValueError) as exc:
             logger.error("Order routing failed signal_id=%s: %s", signal.signal_id, exc)
             self._record_rejection(signal, f"routing_error:{exc}")
             return
@@ -591,7 +591,7 @@ class HopeFXEngine:
                     lineage_id=signal.lineage_id,
                     symbol=signal.symbol,
                 )
-            except Exception as _exc:
+            except (RuntimeError, AttributeError, OSError, TypeError) as _exc:
                 logger.debug("lineage record_signal (pending) error: %s", _exc)
 
         else:
@@ -747,7 +747,7 @@ class HopeFXEngine:
                     live_fill_price=fill_price,
                     live_slippage_bps=abs(live_slip),
                 )
-            except Exception as exc:
+            except (RuntimeError, AttributeError, TypeError) as exc:
                 logger.debug("ShadowTradingEngine.on_live_close (flip) error: %s", exc)
             self._current_equity += prev_pnl
             self._dd_tracker.record_fill(pnl=prev_pnl)
@@ -776,7 +776,7 @@ class HopeFXEngine:
                     broker=broker,
                     latency_ms=latency_ms,
                 )
-            except Exception as exc:
+            except (RuntimeError, AttributeError, ConnectionError) as exc:
                 logger.error("orchestrator.notify_fill failed: %s", exc)
 
         logger.info(
@@ -831,7 +831,7 @@ class HopeFXEngine:
 
         try:
             fill = await self._router.route_and_execute(close_request)
-        except Exception as exc:
+        except (TimeoutError, RuntimeError, ConnectionError, ValueError) as exc:
             logger.critical(
                 "UNWIND ROUTING FAILED symbol=%s reason=%s: %s",
                 unwind.symbol,
@@ -884,7 +884,7 @@ class HopeFXEngine:
                 live_fill_price=close_price,
                 live_slippage_bps=abs(live_slip),
             )
-        except Exception as exc:
+        except (RuntimeError, AttributeError, TypeError) as exc:
             logger.debug("ShadowTradingEngine.on_live_close error: %s", exc)
 
         # Remove from open positions
@@ -915,7 +915,7 @@ class HopeFXEngine:
                 lineage_id=signal.signal_id,
                 symbol=signal.symbol,
             )
-        except Exception as exc:
+        except (RuntimeError, AttributeError, OSError, TypeError) as exc:
             logger.debug("Lineage rejection record failed: %s", exc)
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
