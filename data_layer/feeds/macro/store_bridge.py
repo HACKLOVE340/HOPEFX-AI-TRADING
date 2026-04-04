@@ -29,6 +29,7 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pandas as pd
 
@@ -43,8 +44,12 @@ logger = logging.getLogger(__name__)
 _STARTUP_MAX_RETRIES = int(os.getenv("MACRO_BRIDGE_STARTUP_RETRIES", "3"))
 _STARTUP_RETRY_DELAY = float(os.getenv("MACRO_BRIDGE_STARTUP_RETRY_S", "5.0"))
 
-# Local cache file for last-known-good FRED data
-_FRED_CACHE_PATH = os.getenv("FRED_CACHE_PATH", "data/macro/fred_cache.json")
+# Local cache file for last-known-good FRED data.
+# Default is relative to the repository root; override via env var with an absolute path.
+_FRED_CACHE_PATH = os.getenv(
+    "FRED_CACHE_PATH",
+    str(Path(__file__).resolve().parents[4] / "data" / "macro" / "fred_cache.json"),
+)
 
 
 class MacroStoreBridge:
