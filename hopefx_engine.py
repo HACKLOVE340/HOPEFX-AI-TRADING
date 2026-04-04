@@ -599,6 +599,11 @@ class HopeFXEngine:
         """
         sym_key = symbol.replace("/", "_")
 
+        # Feed mid-price into rolling correlation calculator for risk checks.
+        if self._risk_manager is not None:
+            with contextlib.suppress(Exception):
+                self._risk_manager.update_correlation_prices(sym_key, mid)
+
         if sym_key not in self._ohlcv_window:
             self._ohlcv_window[sym_key] = deque(maxlen=500)
 
@@ -756,6 +761,9 @@ class HopeFXEngine:
 
         min_conf = float(_optional("MIN_SIGNAL_CONFIDENCE", "0.35"))
         if not trading_blocked and decision.action in ("long", "short") and decision.confidence >= min_conf:
+            # Stamp the live mid-price onto the decision so RiskManager.size_order()
+            # can use the real current price instead of the hardcoded 1900.0 fallback.
+            decision.tick_mid = mid
             await self._execute_decision(decision, mid, sym_key)
 
         # ── Drift monitor check (every N completed bars) ──────────────────────

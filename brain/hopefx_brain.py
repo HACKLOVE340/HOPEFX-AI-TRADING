@@ -62,9 +62,12 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 UTC = timezone.utc
+
+ROOT = Path(__file__).parent.parent
 
 try:
     from enum import StrEnum
@@ -142,6 +145,7 @@ class BrainDecision:
     symbol: str
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     latency_ms: float = 0.0
+    tick_mid: float = 0.0  # live mid-price at signal time (used by RiskManager.size_order)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -158,6 +162,7 @@ class BrainDecision:
             "symbol": self.symbol,
             "timestamp": self.timestamp,
             "latency_ms": round(self.latency_ms, 2),
+            "tick_mid": round(self.tick_mid, 5),
         }
 
 
@@ -207,6 +212,25 @@ class HOPEFXBrain:
         self._bar_count: int = 0
         self._signal_count: int = 0
         self._hold_count: int = 0
+
+        # ── Horizon hold tracking ──────────────────────────────────────────────
+        # When the ML model predicts direction for horizon H bars ahead, hold the
+        # position for H bars before accepting a new opposing signal.
+        # Read from model metadata; default is 1 (no enforced hold).
+        _horizon_default = 1
+        try:
+            _meta_path = ROOT / "ml" / "saved_models" / "advanced_oos_meta.json"
+            if _meta_path.exists():
+                import json as _json
+
+                _meta = _json.loads(_meta_path.read_text())
+                _horizon_default = int(_meta.get("horizon", 1))
+        except Exception:
+            pass
+        self._signal_horizon: int = int(os.getenv("SIGNAL_HORIZON", str(_horizon_default)))
+        # Per-symbol hold countdown: {symbol: bars_remaining}
+        self._hold_bars_remaining: dict[str, int] = {}
+        self._hold_direction: dict[str, str] = {}  # "long" | "short"
 
         logger.info(
             "HOPEFXBrain initialised — ml_weight=%.2f strategy_weight=%.2f min_confidence=%.2f",
@@ -723,6 +747,49 @@ class HOPEFXBrain:
             except Exception as exc:
                 logger.debug("LSTM blend failed for %s: %s", symbol, exc)
 
+        # ── HybridEnsemblePredictor blend (XGBoost + LSTM + RL meta-blend) ────
+        # When the HybridEnsemblePredictor is available and not abstaining, blend
+        # its probability with the current ml_prob at a configurable weight.
+        # Default weight is 0.20 (controllable via HYBRID_SIGNAL_WEIGHT env var).
+        _hybrid_weight = float(os.getenv("HYBRID_SIGNAL_WEIGHT", "0.20"))
+        if _hybrid_weight > 0.0 and not ml_abstain:
+            try:
+                from ml.advanced_predictor import get_hybrid_predictor
+                from ml.features_extended import build_features_extended
+
+                _hybrid = get_hybrid_predictor()
+                # Build tabular feature row for XGBoost component
+                _feat_df = build_features_extended(ohlcv)
+                if _feat_df is not None and not _feat_df.empty:
+                    import numpy as _np
+
+                    _X = _feat_df.fillna(0.0).values[-1:].astype(_np.float32)
+                    _hybrid_prob = _hybrid.predict_proba(_X)
+                    _hybrid_conf = abs(_hybrid_prob - 0.5) * 2.0
+                    # Only blend when hybrid is confident
+                    if _hybrid_conf >= 0.10:
+                        _blended = (1.0 - _hybrid_weight) * ml_prob + _hybrid_weight * _hybrid_prob
+                        ml_prob = float(_np.clip(_blended, 0.0, 1.0))
+                        ml_conf = abs(ml_prob - 0.5) * 2.0
+                        _ABSTAIN_LOW = float(os.getenv("ML_ABSTAIN_LOW", "0.45"))
+                        _ABSTAIN_HIGH = float(os.getenv("ML_ABSTAIN_HIGH", "0.55"))
+                        if _ABSTAIN_LOW <= ml_prob <= _ABSTAIN_HIGH:
+                            ml_direction = "neutral"
+                            ml_abstain = True
+                        else:
+                            ml_direction = "long" if ml_prob > _ABSTAIN_HIGH else "short"
+                            ml_abstain = False
+                        logger.debug(
+                            "HybridEnsemble blend [%s]: base=%.3f hybrid=%.3f blended=%.3f dir=%s",
+                            symbol,
+                            ml_prob,
+                            _hybrid_prob,
+                            _blended,
+                            ml_direction,
+                        )
+            except Exception as exc:
+                logger.debug("HybridEnsemble blend failed for %s: %s", symbol, exc)
+
         # ── Strategy routing ──────────────────────────────────────────────────
         strategy_name = self._route_strategy(regime)
         str_direction, str_confidence = self._get_strategy_signal(strategy_name, ohlcv, symbol)
@@ -765,6 +832,36 @@ class HOPEFXBrain:
 
         # ── Map to action ─────────────────────────────────────────────────────
         action = final_direction if final_direction in ("long", "short") else "hold"
+
+        # ── Horizon hold logic ────────────────────────────────────────────────
+        # If SIGNAL_HORIZON > 1 (e.g. 5 for a 5-bar-ahead model) enforce a
+        # minimum hold period before accepting a reversal.
+        # • On a new directional signal: start a countdown of _signal_horizon bars.
+        # • While the countdown is active, suppress opposite-direction signals
+        #   (they become "hold").  Same-direction signals extend the countdown.
+        # • A "hold" action from the ML/strategy logic does NOT reset the counter.
+        if self._signal_horizon > 1:
+            remaining = self._hold_bars_remaining.get(symbol, 0)
+            current_dir = self._hold_direction.get(symbol, "")
+
+            if action in ("long", "short"):
+                if remaining > 0 and action != current_dir:
+                    # Opposite signal while still in hold window — suppress it
+                    logger.debug(
+                        "Brain[%s]: horizon hold active (%d bars left) — suppressing %s reversal",
+                        symbol,
+                        remaining,
+                        action,
+                    )
+                    action = "hold"
+                    reason += "+horizon_hold"
+                else:
+                    # New signal (or extending same direction) — reset counter
+                    self._hold_bars_remaining[symbol] = self._signal_horizon
+                    self._hold_direction[symbol] = action
+            elif remaining > 0:
+                # Neutral bar — tick down the counter
+                self._hold_bars_remaining[symbol] = remaining - 1
 
         # ── Record decision ───────────────────────────────────────────────────
         latency_ms = (time.perf_counter() - t0) * 1000

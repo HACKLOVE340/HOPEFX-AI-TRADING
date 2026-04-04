@@ -554,6 +554,83 @@ class OandaBroker:
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
+    async def get_ohlcv_candles(
+        self,
+        instrument: str = "XAU_USD",
+        granularity: str = "H1",
+        count: int = 500,
+        from_time: str | None = None,
+        to_time: str | None = None,
+    ) -> list[dict]:
+        """Fetch OHLCV candles from OANDA v3 instruments endpoint.
+
+        Parameters
+        ----------
+        instrument  : OANDA instrument name (e.g. ``"XAU_USD"``).
+        granularity : Candle granularity.  Common values: ``"M1"``, ``"H1"``,
+                      ``"H4"``, ``"D"``.
+        count       : Number of candles to fetch (max 5000 per request).
+                      Ignored when both ``from_time`` and ``to_time`` are set.
+        from_time   : RFC-3339 / ISO-8601 start time (inclusive).
+        to_time     : RFC-3339 / ISO-8601 end time (exclusive).
+
+        Returns
+        -------
+        list of dicts with keys ``time``, ``open``, ``high``, ``low``,
+        ``close``, ``volume``.  Returns an empty list on any error.
+        """
+        if not self._assert_connected("get_ohlcv_candles"):
+            return []
+
+        params: dict = {
+            "granularity": granularity,
+            "price": "M",  # midpoint candles
+        }
+        if from_time and to_time:
+            params["from"] = from_time
+            params["to"] = to_time
+        elif from_time:
+            params["from"] = from_time
+            params["count"] = str(count)
+        else:
+            params["count"] = str(count)
+
+        url = f"{self._base_url}/v3/instruments/{instrument}/candles"
+        try:
+            async with self._session.get(url, params=params) as resp:
+                if resp.status != 200:
+                    body = await resp.text()
+                    logger.error(
+                        "OandaBroker.get_ohlcv_candles: status=%s body=%s",
+                        resp.status,
+                        body[:200],
+                    )
+                    return []
+                data = await resp.json()
+        except aiohttp.ClientError as exc:
+            logger.error("OandaBroker.get_ohlcv_candles network error: %s", exc)
+            return []
+
+        candles = []
+        for c in data.get("candles", []):
+            if not c.get("complete", True):
+                continue  # skip the still-forming candle
+            mid = c.get("mid", {})
+            try:
+                candles.append(
+                    {
+                        "time": c["time"],
+                        "open": float(mid["o"]),
+                        "high": float(mid["h"]),
+                        "low": float(mid["l"]),
+                        "close": float(mid["c"]),
+                        "volume": int(c.get("volume", 0)),
+                    }
+                )
+            except (KeyError, ValueError, TypeError) as exc:
+                logger.debug("OandaBroker.get_ohlcv_candles: skipping malformed candle: %s", exc)
+        return candles
+
     def _assert_connected(self, method: str) -> bool:
         if not self.connected or self._session is None or self._session.closed:
             logger.error("OandaBroker.%s called before connect()", method)
