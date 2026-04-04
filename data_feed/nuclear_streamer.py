@@ -18,7 +18,7 @@ Each stream feeds into a shared ``process_tick`` coroutine that:
   * Measures end-to-end latency (event timestamp → now).
   * Detects anomalous price jumps (configurable threshold).
   * Publishes validated ticks to a Redis list (``price_queue``).
-  * Exposes a Prometheus latency gauge on port 8000.
+  * Exposes a Prometheus latency gauge on port 9090.
   * Notifies all registered subscribers via ``on_new_price(price)``.
 
 Failure handling
@@ -103,7 +103,7 @@ _BACKOFF_INITIAL: float = 1.0
 _BACKOFF_MAX: float = 60.0
 
 # Prometheus metrics server port.
-_METRICS_PORT: int = 8000
+_METRICS_PORT: int = 9090
 
 # Redis queue key.
 _REDIS_QUEUE: str = "price_queue"

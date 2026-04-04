@@ -25,19 +25,26 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import os
 from datetime import datetime, timedelta, timezone
-UTC = timezone.utc
+
+import pandas as pd
 
 from data_layer.feeds.macro.fred import FRED_SERIES, FREDFeed, fred_feed
 from data_layer.feeds.macro.wgc import WGCFeed, wgc_feed
+
+UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 
 # Startup retry config
 _STARTUP_MAX_RETRIES = int(os.getenv("MACRO_BRIDGE_STARTUP_RETRIES", "3"))
 _STARTUP_RETRY_DELAY = float(os.getenv("MACRO_BRIDGE_STARTUP_RETRY_S", "5.0"))
+
+# Local cache file for last-known-good FRED data
+_FRED_CACHE_PATH = os.getenv("FRED_CACHE_PATH", "data/macro/fred_cache.json")
 
 
 class MacroStoreBridge:
@@ -201,7 +208,57 @@ class MacroStoreBridge:
             from ml.macro_store import macro_store
 
             logger.info("MacroStoreBridge: fetching %d FRED series...", len(FRED_SERIES))
-            all_series = await self._fred.fetch_all()
+            all_series: dict = {}
+            fetch_ok = False
+            try:
+                all_series = await self._fred.fetch_all()
+                fetch_ok = True
+            except Exception as fred_exc:
+                logger.warning("MacroStoreBridge: FRED fetch failed (%s) — trying local cache", fred_exc)
+
+            if fetch_ok and all_series:
+                # Persist a "last known good" snapshot for future fallbacks
+                try:
+                    cache_data = {
+                        name: {
+                            str(idx): float(val)
+                            for idx, val in series.items()
+                            if val is not None
+                        }
+                        for name, series in all_series.items()
+                        if not series.empty
+                    }
+                    os.makedirs(os.path.dirname(_FRED_CACHE_PATH) or ".", exist_ok=True)
+                    with open(_FRED_CACHE_PATH, "w") as _cf:
+                        json.dump(cache_data, _cf)
+                    logger.debug("MacroStoreBridge: FRED cache written to %s", _FRED_CACHE_PATH)
+                except Exception as cache_write_exc:
+                    logger.debug("MacroStoreBridge: could not write FRED cache: %s", cache_write_exc)
+            else:
+                # FRED unavailable — try loading last known good cache
+                try:
+                    with open(_FRED_CACHE_PATH) as _cf:
+                        cache_data = json.load(_cf)
+                    all_series = {
+                        name: pd.Series(
+                            {pd.Timestamp(k): v for k, v in vals.items()}, dtype=float
+                        )
+                        for name, vals in cache_data.items()
+                    }
+                    logger.info("MacroStoreBridge: loaded %d FRED series from local cache", len(all_series))
+                except FileNotFoundError:
+                    logger.warning(
+                        "MacroStoreBridge: FRED fetch failed and no local cache at %s"
+                        " — macro features will be zero",
+                        _FRED_CACHE_PATH,
+                    )
+                    return
+                except Exception as cache_exc:
+                    logger.warning(
+                        "MacroStoreBridge: FRED cache read failed (%s) — macro features will be zero",
+                        cache_exc,
+                    )
+                    return
 
             loaded = 0
             for name, series in all_series.items():
