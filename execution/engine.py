@@ -87,7 +87,7 @@ def _get_module_tracer():
             from api.tracing import get_tracer as _get_tracer  # type: ignore[import]
 
             _module_tracer = _get_tracer("hopefx.execution")
-        except Exception:
+        except (ImportError, RuntimeError):
             _module_tracer = False  # permanent failure sentinel
     return _module_tracer if _module_tracer else None
 
@@ -207,7 +207,7 @@ class EngineCircuitBreaker:
                             f"{len(self._failures)} failures in {self._window_sec}s",
                             level="critical",
                         )
-                    except Exception as _exc:
+                    except (RuntimeError, AttributeError) as _exc:
                         logger.debug("Suppressed exception: %s", _exc)
 
     async def record_success(self) -> None:
@@ -400,7 +400,7 @@ class ExecutionEngine:
                 _root_span.set_attribute("strategy_id", request.strategy_id)
                 _root_span.set_attribute("request_id", request.request_id)
                 _root_span.set_attribute("order_type", request.order_type)
-            except Exception as _span_exc:
+            except (TypeError, ValueError, AttributeError) as _span_exc:
                 logger.debug("OTel span error in %s: %s", __name__, _span_exc)
 
             t0 = time.monotonic()
@@ -410,7 +410,7 @@ class ExecutionEngine:
             if isinstance(request, ExecutionReport):
                 try:
                     _root_span.add_event("data_layer.blocked", {"reason": request.message})
-                except Exception as _span_exc:
+                except (TypeError, ValueError, AttributeError) as _span_exc:
                     logger.debug("OTel span error in %s: %s", __name__, _span_exc)
                 return request  # data-layer block
 
@@ -424,7 +424,7 @@ class ExecutionEngine:
                         "kill_switch.active" if is_ks else "engine.stopped",
                         {"reason": block.message},
                     )
-                except Exception as _span_exc:
+                except (TypeError, ValueError, AttributeError) as _span_exc:
                     logger.debug("OTel span error in %s: %s", __name__, _span_exc)
                 return block
 
@@ -437,7 +437,7 @@ class ExecutionEngine:
             with _gate_ctx as _gate_span:
                 try:
                     _gate_span.set_attribute("symbol", request.symbol)
-                except Exception as _span_exc:
+                except (TypeError, ValueError, AttributeError) as _span_exc:
                     logger.debug("OTel span error in %s: %s", __name__, _span_exc)
                 block = await self._check_pre_trade_gate(request, t0)
                 if block is not None:
@@ -451,19 +451,19 @@ class ExecutionEngine:
                             "circuit_breaker.open" if is_cb else "gate.blocked",
                             {"reason": block.message},
                         )
-                    except Exception as _span_exc:
+                    except (TypeError, ValueError, AttributeError) as _span_exc:
                         logger.debug("OTel span error in %s: %s", __name__, _span_exc)
                     return block
                 try:
                     _gate_span.add_event("gate.passed")
-                except Exception as _span_exc:
+                except (TypeError, ValueError, AttributeError) as _span_exc:
                     logger.debug("OTel span error in %s: %s", __name__, _span_exc)
 
             algo_report = await self._try_algo_routing(request, t0)
             if algo_report is not None:
                 try:
                     _root_span.add_event("algo.routed", {"algo_id": str(algo_report.metadata.get("algo_id", ""))})
-                except Exception as _span_exc:
+                except (TypeError, ValueError, AttributeError) as _span_exc:
                     logger.debug("OTel span error in %s: %s", __name__, _span_exc)
                 return algo_report
 
@@ -471,7 +471,7 @@ class ExecutionEngine:
             if block is not None:
                 try:
                     _root_span.add_event("sharpe_circuit_breaker.open", {"reason": block.message})
-                except Exception as _span_exc:
+                except (TypeError, ValueError, AttributeError) as _span_exc:
                     logger.debug("OTel span error in %s: %s", __name__, _span_exc)
                 return block
 
@@ -488,7 +488,7 @@ class ExecutionEngine:
                     _broker_span.set_attribute("symbol", request.symbol)
                     _broker_span.set_attribute("side", request.side)
                     _broker_span.set_attribute("quantity", request.quantity)
-                except Exception as _span_exc:
+                except (TypeError, ValueError, AttributeError) as _span_exc:
                     logger.debug("OTel span error in %s: %s", __name__, _span_exc)
 
                 report = await self._submit_and_process(request, t0)
@@ -518,7 +518,7 @@ class ExecutionEngine:
                         _fill_span.set_attribute("status", report.status.value)
                         _root_span.set_attribute("execution.status", report.status.value)
                         _root_span.set_attribute("execution.latency_ms", report.latency_ms)
-                    except Exception as _span_exc:
+                    except (TypeError, ValueError, AttributeError) as _span_exc:
                         logger.debug("OTel span error in %s: %s", __name__, _span_exc)
 
                 return report
@@ -555,7 +555,7 @@ class ExecutionEngine:
                             "dl_confidence": tick.confidence,
                         },
                     )
-        except Exception as exc:
+        except (AttributeError, TypeError, ValueError) as exc:
             logger.warning("Data-layer enrichment skipped: %s", exc)
         return request
 
@@ -634,7 +634,7 @@ class ExecutionEngine:
 
         try:
             gate_reason = await self._run_pre_trade_gate(request)
-        except Exception as exc:
+        except (TimeoutError, RuntimeError) as exc:
             self._total_blocks += 1
             logger.error("ExecutionEngine: pre-trade gate error for %s: %s", request.request_id, exc)
             self._capture_sentry(exc)
@@ -675,7 +675,7 @@ class ExecutionEngine:
                     message=f"[ALGO] Order routed to algo layer (id={algo_id})",
                     metadata={"algo_id": algo_id},
                 )
-        except Exception as exc:
+        except (TimeoutError, ImportError, RuntimeError) as exc:
             logger.debug("Algo order routing check failed: %s", exc)
         return None
 
@@ -720,7 +720,7 @@ class ExecutionEngine:
                     f"[SHARPE_CIRCUIT_OPEN] Model '{model_version}' gated — rolling Sharpe below threshold",
                     t0,
                 )
-        except Exception as exc:
+        except (ImportError, RuntimeError, AttributeError) as exc:
             logger.debug("SharpeCircuitBreaker check failed: %s", exc)
         return None
 
@@ -745,7 +745,7 @@ class ExecutionEngine:
                 quantity=request.quantity,
                 model_version=request.metadata.get("model_version", "unknown"),
             )
-        except Exception as exc:
+        except (ImportError, RuntimeError, AttributeError) as exc:
             logger.debug("TCA record_signal failed: %s", exc)
 
     async def _submit_and_process(self, request: ExecutionRequest, t0: float) -> ExecutionReport:
@@ -759,7 +759,7 @@ class ExecutionEngine:
         """
         try:
             report = await self._submit_to_broker(request, t0)
-        except Exception as exc:
+        except (TimeoutError, RuntimeError, ConnectionError) as exc:
             logger.error(
                 "ExecutionEngine: broker submission error for %s: %s\n%s",
                 request.request_id,
@@ -803,7 +803,7 @@ class ExecutionEngine:
         ]:
             try:
                 await coro
-            except Exception as exc:
+            except (TimeoutError, RuntimeError, ConnectionError) as exc:
                 logger.warning("Post-fill %s failed (non-fatal): %s", label, exc)
 
         self._update_sharpe_circuit_breaker(request, report)
@@ -819,7 +819,7 @@ class ExecutionEngine:
             from ml.sharpe_circuit_breaker import get_sharpe_cb
 
             get_sharpe_cb().record_trade(pnl=pnl, model_version=model_version)
-        except Exception as exc:
+        except (ImportError, RuntimeError, AttributeError) as exc:
             logger.debug("SharpeCircuitBreaker record failed: %s", exc)
 
     def _warn_on_latency_breach(self, request: ExecutionRequest, report: ExecutionReport) -> None:
@@ -1004,7 +1004,7 @@ class ExecutionEngine:
                 None,
                 lambda: self._redis.setex(key, 604800, payload),
             )
-        except Exception as exc:
+        except (ConnectionError, OSError, RuntimeError) as exc:
             # Redis failure must not block execution
             logger.error("ExecutionEngine: Redis persist failed: %s", exc)
             self._capture_sentry(exc)
@@ -1032,7 +1032,7 @@ class ExecutionEngine:
                 broker=broker,
                 latency_ms=report.latency_ms,
             )
-        except Exception as exc:
+        except (ImportError, RuntimeError, AttributeError) as exc:
             logger.debug("TCARecorder record_fill failed: %s", exc)
 
         # ── Legacy tca_recorder (backward compat) ─────────────────────────────
@@ -1048,7 +1048,7 @@ class ExecutionEngine:
                     latency_ms=report.latency_ms,
                     strategy_id=request.strategy_id,
                 )
-        except Exception as exc:
+        except (RuntimeError, AttributeError, TypeError) as exc:
             logger.error("ExecutionEngine: legacy TCA record failed: %s", exc)
 
     async def _notify_callbacks(self, report: ExecutionReport) -> None:
@@ -1059,7 +1059,7 @@ class ExecutionEngine:
                     await cb(report)
                 else:
                     cb(report)
-            except Exception as exc:
+            except (RuntimeError, TypeError) as exc:
                 logger.error("ExecutionEngine: fill callback error: %s", exc)
                 self._capture_sentry(exc)
 
@@ -1098,7 +1098,7 @@ class ExecutionEngine:
         try:
             from execution._prom_metrics import EXECUTION_LATENCY_HISTOGRAM  # type: ignore[import]
             EXECUTION_LATENCY_HISTOGRAM.observe(latency_ms / 1000.0)
-        except Exception as _prom_exc:
+        except (ImportError, AttributeError) as _prom_exc:
             logger.debug("Prometheus histogram observe failed: %s", _prom_exc)
 
     def get_metrics(self) -> dict[str, Any]:
@@ -1123,5 +1123,5 @@ class ExecutionEngine:
         if _SENTRY:
             try:
                 sentry_sdk.capture_exception(exc)
-            except Exception as _exc:
+            except (RuntimeError, AttributeError) as _exc:
                 logger.debug("Suppressed exception: %s", _exc)
