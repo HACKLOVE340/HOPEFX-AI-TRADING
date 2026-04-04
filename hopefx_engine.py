@@ -39,6 +39,7 @@ import os
 import signal
 import sys
 from collections import deque
+from datetime import datetime, timezone
 from typing import ClassVar
 
 import pandas as pd
@@ -210,10 +211,21 @@ class HopeFXEngine:
         self._min_bars = int(_optional("PREDICTOR_MIN_BARS", "100"))
 
         self._running = False
-        self._bar_count = 0
+        self._bar_count = 0  # completed H1 bars processed
 
-        # Cached env config (read once at init, not per-tick)
-        self._bars_per_signal = int(_optional("BARS_PER_SIGNAL", "60"))
+        # Per-symbol H1 bar aggregation state
+        self._current_bar: dict = {}       # sym_key -> {open, high, low, close, volume}
+        self._current_bar_time: dict = {}  # sym_key -> datetime (hour boundary)
+
+        # Symbols actively streamed via NuclearStreamer (skip in poll loop)
+        self._streamer_active_symbols: set = set()
+
+        # Smart router (lazy-initialised on first live order)
+        self._smart_router = None
+
+        # Drift monitor interval
+        self._bars_since_drift_check: int = 0
+        self._drift_check_interval: int = int(os.getenv("DRIFT_CHECK_EVERY_N_BARS", "100"))
 
         # ── Nuclear supervisor integration ────────────────────────────────────
         # News events are pushed here by _on_news_event() and drained by the
@@ -518,6 +530,12 @@ class HopeFXEngine:
 
         self._streamer = NuclearStreamer(symbol="XAUUSD")
         self._streamer.subscribe(_NuclearTickBridge())
+        # Mark the primary symbol in both formats (XAU_USD and XAU/USD) so the
+        # poll loop can skip it regardless of which format instruments[] uses.
+        _sym = self.primary_symbol
+        self._streamer_active_symbols.add(_sym)
+        self._streamer_active_symbols.add(_sym.replace("_", "/"))
+        self._streamer_active_symbols.add(_sym.replace("/", "_"))
         logger.info(
             "NuclearStreamer starting — sources: finnhub=%s twelvedata=%s polygon=%s",
             bool(_optional("FINNHUB_API_KEY")),
@@ -538,6 +556,10 @@ class HopeFXEngine:
         while self._running:
             try:
                 for symbol in self.instruments:
+                    # Skip symbols already covered by the NuclearStreamer WebSocket
+                    sym_norm = symbol.replace("/", "_")
+                    if sym_norm in self._streamer_active_symbols or symbol in self._streamer_active_symbols:
+                        continue
                     await self._poll_symbol(symbol)
             except Exception as exc:
                 logger.error("Poll loop error: %s", exc)
@@ -599,19 +621,47 @@ class HopeFXEngine:
         # Build OHLCV bar: use spread to give high/low realistic range.
         # Without spread, every bar is a doji — the ML model gets zero ATR signal.
         half_spread = spread / 2.0 if spread > 0 else mid * 0.0001
-        self._ohlcv_window[sym_key].append(
-            {
-                "open": mid,
+
+        # ── H1 bar aggregation ────────────────────────────────────────────────
+        now = datetime.now(timezone.utc)
+        bar_time = now.replace(minute=0, second=0, microsecond=0)
+
+        if sym_key not in self._current_bar_time:
+            # First tick for this symbol — start a new bar
+            self._current_bar_time[sym_key] = bar_time
+            self._current_bar[sym_key] = {
+                "open": mid - half_spread,
                 "high": mid + half_spread,
                 "low": mid - half_spread,
                 "close": mid,
                 "volume": 1.0,
             }
-        )
+            return  # wait for the bar to close before firing
 
-        self._bar_count += 1
-        if self._bar_count % self._bars_per_signal != 0:
-            return
+        if bar_time > self._current_bar_time[sym_key]:
+            # New hour — previous bar is complete; append it
+            completed = self._current_bar[sym_key]
+            self._ohlcv_window[sym_key].append(completed)
+            self._bar_count += 1
+
+            # Start fresh bar for this tick
+            self._current_bar_time[sym_key] = bar_time
+            self._current_bar[sym_key] = {
+                "open": mid - half_spread,
+                "high": mid + half_spread,
+                "low": mid - half_spread,
+                "close": mid,
+                "volume": 1.0,
+            }
+            # Fall through: process the completed bar
+        else:
+            # Same bar — update OHLC in place
+            bar = self._current_bar[sym_key]
+            bar["high"] = max(bar["high"], mid + half_spread)
+            bar["low"] = min(bar["low"], mid - half_spread)
+            bar["close"] = mid
+            bar["volume"] += 1.0
+            return  # don't fire brain mid-bar
 
         window = list(self._ohlcv_window[sym_key])
         if len(window) < self._min_bars:
@@ -706,9 +756,23 @@ class HopeFXEngine:
         if not trading_blocked and decision.action in ("long", "short") and decision.confidence >= min_conf:
             await self._execute_decision(decision, mid, sym_key)
 
+        # ── Drift monitor check (every N completed bars) ──────────────────────
+        self._bars_since_drift_check += 1
+        if self._bars_since_drift_check >= self._drift_check_interval:
+            self._bars_since_drift_check = 0
+            try:
+                from ml.drift_monitor import get_drift_monitor
+
+                dm = get_drift_monitor()
+                report = dm.get_report()
+                if report.get("any_drift_detected"):
+                    logger.warning("Feature drift detected — consider retraining: %s", report)
+            except Exception as _drift_exc:
+                logger.debug("Drift check failed: %s", _drift_exc)
+
         # ── Dispatch news/sentiment event to nuclear supervisor ───────────────
         # Extract sentiment from brain decision metadata if available
-        if self._news_callbacks or not self._news_queue.empty() or self._bar_count % 60 == 0:
+        if self._news_callbacks or not self._news_queue.empty():
             await self._maybe_dispatch_news_event(ohlcv_df, decision, mid)
 
         # ── Equity snapshot ───────────────────────────────────────────────────
@@ -868,12 +932,57 @@ class HopeFXEngine:
                     "lots": quantity,
                 }
 
-            _order_coro = self._broker.place_order(**order_kwargs)
-            result = await _order_coro if _inspect.isawaitable(_order_coro) else _order_coro
+            # Try SmartRouter first; fall back to direct broker call on any error.
+            result = None
+            _used_smart_router = False
+            try:
+                from execution.smart_router import SmartRouter as _SmartRouter
+
+                if self._smart_router is None:
+                    self._smart_router = _SmartRouter()
+                    self._smart_router.add_broker("primary", self._broker)
+                sr_request = {
+                    "symbol": symbol,
+                    "direction": "long" if side == "BUY" else "short",
+                    "quantity": quantity,
+                    "order_type": "market",
+                    "mid_price": price,
+                    "bid": price,
+                    "ask": price,
+                    "spread": 0.0,
+                    "confidence": getattr(decision, "confidence", 0.5),
+                    "sentiment": 0.0,
+                    "impact": 0.0,
+                    "features": {},
+                }
+                sr_result = await self._smart_router.route_and_execute(sr_request)
+                if sr_result.get("status") not in ("rejected", "error"):
+                    result = sr_result
+                    _used_smart_router = True
+                    logger.info(
+                        "SmartRouter fill: broker=%s fill=%.5f",
+                        sr_result.get("broker"),
+                        sr_result.get("fill_price", price),
+                    )
+                else:
+                    logger.warning(
+                        "SmartRouter rejected order (%s) — falling back to direct order",
+                        sr_result.get("reason"),
+                    )
+            except Exception as _sr_exc:
+                logger.warning("SmartRouter failed (%s) — falling back to direct order", _sr_exc)
+                self._smart_router = None  # reset for retry next time
+
+            if not _used_smart_router:
+                _order_coro = self._broker.place_order(**order_kwargs)
+                result = await _order_coro if _inspect.isawaitable(_order_coro) else _order_coro
 
             fill_price = price
             if result is not None:
-                fill_price = float(getattr(result, "average_price", price))
+                if isinstance(result, dict):
+                    fill_price = float(result.get("fill_price", price))
+                else:
+                    fill_price = float(getattr(result, "average_price", price))
 
             self._trade_logger.log_fill(
                 symbol=symbol,
