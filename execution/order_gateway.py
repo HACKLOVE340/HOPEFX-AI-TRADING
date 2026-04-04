@@ -159,7 +159,7 @@ class OrderGateway:
                 result: ExecutionResult = future.result(timeout=30)
             else:
                 result = asyncio.run(self.executor.execute_signal(signal))
-        except Exception as exc:
+        except (TimeoutError, RuntimeError, ConnectionError, AttributeError) as exc:
             logger.exception(
                 "OrderGateway.send_order: TradeExecutor raised for order %s: %s",
                 order.order_id,
@@ -225,7 +225,7 @@ class OrderGateway:
 
         try:
             result = await self.executor.execute_signal(signal)
-        except Exception as exc:
+        except (TimeoutError, RuntimeError, ConnectionError, AttributeError) as exc:
             logger.exception(
                 "OrderGateway.send_order_async: TradeExecutor raised for order %s: %s",
                 order.order_id,
