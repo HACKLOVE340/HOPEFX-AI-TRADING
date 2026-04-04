@@ -273,40 +273,126 @@ class SMCICTStrategy(BaseStrategy):
             return None
 
     def _analyze_market_structure(self, prices: list[dict]) -> dict[str, Any]:
-        """Analyze market structure for BOS/CHoCh"""
+        """Analyze market structure using swing pivots to detect BOS and CHoCH.
+
+        Algorithm
+        ---------
+        1. Identify swing highs (SH) and swing lows (SL) using a left/right
+           neighbour comparison (``pivot_n`` bars on each side).
+        2. Walk the confirmed pivots in order to track the current sequence of
+           Higher-Highs / Higher-Lows (bullish) or Lower-Highs / Lower-Lows
+           (bearish).
+        3. Detect Break of Structure (BOS): price closes beyond the most recent
+           SH/SL in the direction of the prevailing trend — trend continuation.
+        4. Detect Change of Character (CHoCH): price closes beyond the most
+           recent SH/SL *against* the prevailing trend — potential reversal.
+        """
         try:
-            # Simple structure analysis - identify higher highs/lows or lower highs/lows
-            recent_highs = [p["high"] for p in prices[-self.structure_lookback :]]
-            recent_lows = [p["low"] for p in prices[-self.structure_lookback :]]
+            window = prices[-self.structure_lookback :]
+            n = len(window)
+            pivot_n: int = max(2, self.structure_lookback // 10)  # adaptive neighbour
 
-            # Check for higher highs and higher lows (bullish)
-            hh_count = sum(1 for i in range(1, len(recent_highs)) if recent_highs[i] > recent_highs[i - 1])
-            hl_count = sum(1 for i in range(1, len(recent_lows)) if recent_lows[i] > recent_lows[i - 1])
+            # ── Step 1: find swing highs and swing lows ───────────────────────
+            swing_highs: list[tuple[int, float]] = []  # (index, price)
+            swing_lows: list[tuple[int, float]] = []
 
-            # Check for lower highs and lower lows (bearish)
-            lh_count = sum(1 for i in range(1, len(recent_highs)) if recent_highs[i] < recent_highs[i - 1])
-            ll_count = sum(1 for i in range(1, len(recent_lows)) if recent_lows[i] < recent_lows[i - 1])
+            for i in range(pivot_n, n - pivot_n):
+                h = window[i]["high"]
+                lo = window[i]["low"]
+                left_h = [window[j]["high"] for j in range(i - pivot_n, i)]
+                right_h = [window[j]["high"] for j in range(i + 1, i + pivot_n + 1)]
+                left_l = [window[j]["low"] for j in range(i - pivot_n, i)]
+                right_l = [window[j]["low"] for j in range(i + 1, i + pivot_n + 1)]
 
-            if hh_count > lh_count and hl_count > ll_count:
+                if h >= max(left_h) and h >= max(right_h):
+                    swing_highs.append((i, h))
+                if lo <= min(left_l) and lo <= min(right_l):
+                    swing_lows.append((i, lo))
+
+            if len(swing_highs) < 2 or len(swing_lows) < 2:
+                # Not enough structure yet — neutral
+                return {"trend": "neutral", "type": "insufficient_pivots", "strength": 0.0,
+                        "bos": False, "choch": False, "event": "none",
+                        "last_sh": None, "last_sl": None}
+
+            # ── Step 2: classify structure from last two SH and last two SL ───
+            sh_prev, sh_prev_val = swing_highs[-2]
+            sh_last, sh_last_val = swing_highs[-1]
+            sl_prev, sl_prev_val = swing_lows[-2]
+            sl_last, sl_last_val = swing_lows[-1]
+
+            higher_high = sh_last_val > sh_prev_val
+            higher_low = sl_last_val > sl_prev_val
+            lower_high = sh_last_val < sh_prev_val
+            lower_low = sl_last_val < sl_prev_val
+
+            if higher_high and higher_low:
                 trend = "bullish"
                 structure_type = "higher_highs_higher_lows"
-            elif lh_count > hh_count and ll_count > hl_count:
+            elif lower_high and lower_low:
                 trend = "bearish"
                 structure_type = "lower_highs_lower_lows"
+            elif higher_high and lower_low:
+                trend = "neutral"
+                structure_type = "expanding_range"
             else:
                 trend = "neutral"
                 structure_type = "consolidation"
 
+            # ── Step 3/4: detect BOS / CHoCH from the last closed candle ──────
+            current_close = window[-1]["close"]
+            bos = False
+            choch = False
+            event_type = "none"
+
+            if trend == "bullish":
+                # BOS: bullish close above last SH (structure continuation)
+                if current_close > sh_last_val:
+                    bos = True
+                    event_type = "BOS_bullish"
+                # CHoCH: bearish close below last SL (character change)
+                elif current_close < sl_last_val:
+                    choch = True
+                    event_type = "CHoCH_bearish"
+            elif trend == "bearish":
+                # BOS: bearish close below last SL (structure continuation)
+                if current_close < sl_last_val:
+                    bos = True
+                    event_type = "BOS_bearish"
+                # CHoCH: bullish close above last SH (character change)
+                elif current_close > sh_last_val:
+                    choch = True
+                    event_type = "CHoCH_bullish"
+            else:  # noqa: PLR5501
+                # Neutral — watch for any pivot break
+                if current_close > sh_last_val:
+                    choch = True
+                    event_type = "CHoCH_bullish"
+                elif current_close < sl_last_val:
+                    choch = True
+                    event_type = "CHoCH_bearish"
+
+            # Strength: relative distance of HH/HL or LH/LL moves
+            sh_range = abs(sh_last_val - sh_prev_val)
+            sl_range = abs(sl_last_val - sl_prev_val)
+            price_range = max(window[-1]["high"] - window[0]["low"], 1e-9)
+            strength = min(1.0, (sh_range + sl_range) / (2.0 * price_range))
+
             return {
                 "trend": trend,
                 "type": structure_type,
-                "strength": abs(hh_count - lh_count) / len(recent_highs),
+                "strength": round(strength, 4),
+                "bos": bos,
+                "choch": choch,
+                "event": event_type,
+                "last_sh": sh_last_val,
+                "last_sl": sl_last_val,
             }
 
         except Exception as e:
             logger.error("Error analyzing market structure: %s", e)
-
-            return {"trend": "neutral", "type": "unknown", "strength": 0}
+            return {"trend": "neutral", "type": "unknown", "strength": 0.0,
+                    "bos": False, "choch": False, "event": "none", "last_sh": None, "last_sl": None}
 
     def _identify_order_blocks(self, prices: list[dict]) -> dict[str, list[float]]:
         """Identify bullish and bearish order blocks"""

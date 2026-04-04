@@ -39,6 +39,7 @@ import logging
 import os
 import signal as _signal
 import sys
+import threading
 import uuid
 from collections import deque
 from dataclasses import dataclass, field
@@ -364,17 +365,89 @@ class _MinimalSignal:
         self.tick_spread = tick_spread
 
 
-# Static pairwise correlation table for major FX pairs (approximate values).
-# Used by RiskManager.check_correlation_risk() — defined at module level so it
-# is not re-allocated on every call.
-_FX_PAIR_CORRELATIONS: dict[tuple, float] = {
-    ("EURUSD", "GBPUSD"): 0.87,
-    ("EURUSD", "AUDUSD"): 0.72,
-    ("EURUSD", "NZDUSD"): 0.68,
-    ("USDJPY", "USDCHF"): 0.75,
-    ("GBPUSD", "AUDUSD"): 0.65,
-    ("XAUUSD", "AUDUSD"): 0.55,
-}
+# ── Rolling correlation calculator ────────────────────────────────────────────
+
+
+class _RollingCorrelation:
+    """Thread-safe rolling pairwise correlation tracker for FX/commodity pairs.
+
+    Stores the last ``window`` mid-prices per symbol and computes the Pearson
+    correlation on demand.  Falls back to the static table when fewer than
+    ``min_bars`` prices have been recorded for either symbol.
+    """
+
+    # Approximate static fallback used when rolling history is insufficient.
+    _STATIC: dict[tuple, float] = {
+        ("EURUSD", "GBPUSD"): 0.87,
+        ("EURUSD", "AUDUSD"): 0.72,
+        ("EURUSD", "NZDUSD"): 0.68,
+        ("USDJPY", "USDCHF"): 0.75,
+        ("GBPUSD", "AUDUSD"): 0.65,
+        ("XAUUSD", "AUDUSD"): 0.55,
+    }
+
+    def __init__(self, window: int = 100, min_bars: int = 30) -> None:
+        self._window = window
+        self._min_bars = min_bars
+        self._prices: dict[str, deque] = {}
+        self._lock = threading.Lock()
+
+    def update(self, symbol: str, price: float) -> None:
+        """Record a new mid-price for *symbol*."""
+        with self._lock:
+            if symbol not in self._prices:
+                self._prices[symbol] = deque(maxlen=self._window)
+            self._prices[symbol].append(price)
+
+    def get(self, s1: str, s2: str) -> float:
+        """Return the rolling Pearson correlation between *s1* and *s2*.
+
+        Falls back to the static table when history is insufficient or the
+        pair is unknown.
+        """
+        with self._lock:
+            h1 = self._prices.get(s1)
+            h2 = self._prices.get(s2)
+
+        if (
+            h1 is not None
+            and h2 is not None
+            and len(h1) >= self._min_bars
+            and len(h2) >= self._min_bars
+        ):
+            try:
+                n = min(len(h1), len(h2))
+                a1 = np.array(list(h1)[-n:], dtype=float)
+                a2 = np.array(list(h2)[-n:], dtype=float)
+                # Pearson correlation of log-returns for stationarity
+                r1 = np.diff(np.log(np.clip(a1, 1e-9, None)))
+                r2 = np.diff(np.log(np.clip(a2, 1e-9, None)))
+                if r1.std() == 0 or r2.std() == 0:
+                    return 0.0
+                return float(np.corrcoef(r1, r2)[0, 1])
+            except Exception:
+                pass  # fall through to static table
+
+        # Static fallback
+        return self._STATIC.get((s1, s2), self._STATIC.get((s2, s1), 0.0))
+
+
+# Module-level singleton — updated by RiskManager.update_correlation_prices()
+_rolling_corr = _RollingCorrelation()
+
+
+# Preserve backwards-compatible module-level dict lookup used in tests.
+# Delegates to the rolling calculator.
+class _CorrelationDict:
+    """Backward-compatible mapping that proxies to _rolling_corr."""
+
+    def get(self, key: tuple, default: float = 0.0) -> float:
+        if not isinstance(key, tuple) or len(key) != 2:
+            return default
+        return _rolling_corr.get(key[0], key[1])
+
+
+_FX_PAIR_CORRELATIONS: _CorrelationDict = _CorrelationDict()
 
 
 # ── RiskManager ───────────────────────────────────────────────────────────────
@@ -1679,8 +1752,9 @@ class RiskManager:
         """
         Estimate portfolio correlation risk from position symbols.
 
-        Uses a static correlation table for major FX pairs. Returns HIGH
-        risk level when any pair exceeds max_correlation.
+        Uses the rolling Pearson correlation calculator when sufficient price
+        history is available; falls back to the static table otherwise.  Returns
+        HIGH risk level when any pair exceeds max_correlation.
 
         Parameters
         ----------
@@ -1695,7 +1769,7 @@ class RiskManager:
             for j, s2 in enumerate(symbols):
                 if i >= j:
                     continue
-                corr = _FX_PAIR_CORRELATIONS.get((s1, s2), _FX_PAIR_CORRELATIONS.get((s2, s1), 0.0))
+                corr = abs(_rolling_corr.get(s1, s2))
                 if corr > max_found:
                     max_found = corr
                     worst_pair = (s1, s2)
@@ -1719,6 +1793,15 @@ class RiskManager:
             value=max_found,
             threshold=max_correlation,
         )
+
+    def update_correlation_prices(self, symbol: str, price: float) -> None:
+        """Feed live mid-prices into the rolling correlation calculator.
+
+        Call this each time a new tick arrives for *symbol*.  The rolling
+        Pearson correlation is recomputed lazily on the next
+        ``check_correlation_risk()`` call.
+        """
+        _rolling_corr.update(symbol, price)
 
     def check_concentration(
         self,

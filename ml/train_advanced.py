@@ -90,43 +90,153 @@ _CV = 2 if _CI else 3
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def _fetch_oanda_h1(years: int) -> pd.DataFrame | None:
+    """Fetch XAU_USD H1 candles from OANDA v3 API.
+
+    Paginates the OANDA ``/v3/instruments/XAU_USD/candles`` endpoint in
+    5 000-candle chunks to build the requested history.  Returns a DataFrame
+    with DatetimeIndex (UTC, tz-naive) and columns ``open/high/low/close/volume``
+    or *None* when credentials are missing or the fetch fails.
+
+    Environment variables consumed
+    --------------------------------
+    OANDA_API_KEY      — Personal Access Token (required)
+    OANDA_ACCOUNT_ID   — Account number (required)
+    OANDA_ENV          — ``"practice"`` (default) | ``"live"``
+    """
+    import asyncio
+    from datetime import timezone
+
+    api_key = _os.environ.get("OANDA_API_KEY", "")
+    account_id = _os.environ.get("OANDA_ACCOUNT_ID", "")
+    if not api_key or not account_id:
+        logger.info(
+            "OANDA credentials not set (OANDA_API_KEY / OANDA_ACCOUNT_ID) "
+            "— skipping OANDA H1 fetch"
+        )
+        return None
+
+    oanda_env = _os.environ.get("OANDA_ENV", "practice")
+
+    async def _do_fetch() -> pd.DataFrame | None:
+        from brokers.oanda_broker import OandaBroker
+
+        broker = OandaBroker(
+            {"login": account_id, "password": api_key, "server": oanda_env}
+        )
+        if not await broker.connect():
+            logger.warning("OANDA broker connect() failed — skipping H1 fetch")
+            return None
+
+        try:
+            end_dt = datetime.now(timezone.utc)
+            start_dt = end_dt - timedelta(days=years * 365)
+            all_candles: list[dict] = []
+            chunk_size = 5000
+            current_from = start_dt
+
+            while current_from < end_dt:
+                chunk_to = min(current_from + timedelta(hours=chunk_size), end_dt)
+                candles = await broker.get_ohlcv_candles(
+                    instrument="XAU_USD",
+                    granularity="H1",
+                    from_time=current_from.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    to_time=chunk_to.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                )
+                if not candles:
+                    break
+                all_candles.extend(candles)
+                # Advance past the last candle we received
+                last_ts = candles[-1]["time"]
+                try:
+                    last_dt = datetime.fromisoformat(last_ts.replace("Z", "+00:00"))
+                except ValueError:
+                    last_dt = chunk_to
+                current_from = last_dt + timedelta(hours=1)
+
+            return all_candles
+        finally:
+            await broker.disconnect()
+
+    try:
+        candles = asyncio.run(_do_fetch())
+    except Exception as exc:
+        logger.warning("OANDA H1 fetch failed: %s", exc)
+        return None
+
+    if not candles:
+        logger.warning("OANDA H1 fetch returned no candles")
+        return None
+
+    df = pd.DataFrame(candles)
+    df["time"] = pd.to_datetime(df["time"], utc=True).dt.tz_localize(None)
+    df = df.set_index("time").sort_index()
+    df.index.name = None
+    logger.info(
+        "OANDA H1: fetched %d bars (%s → %s)",
+        len(df),
+        df.index[0].date(),
+        df.index[-1].date(),
+    )
+    return df
+
+
 def fetch_gold_ohlcv(
     symbol: str,
     years: int,
     use_cached: bool = False,
     cached_csv: str | None = None,
 ) -> pd.DataFrame:
-    """
-    Download XAUUSD/GC=F daily OHLCV from Yahoo Finance.
+    """Download XAUUSD OHLCV — OANDA H1 preferred, Yahoo Finance daily fallback.
+
+    Priority order
+    --------------
+    1. OANDA v3 H1 candles (``XAU_USD``) — real institutional data at the
+       same granularity the live engine trades.
+    2. Cached CSV on disk (when ``use_cached=True``).
+    3. Yahoo Finance daily (``GC=F``) — kept as a long-history fallback.
 
     Parameters
     ----------
-    symbol      : Yahoo Finance ticker (e.g. 'GC=F')
-    years       : Years of history to fetch
-    use_cached  : If True, try to load from cached_csv before downloading
-    cached_csv  : Path to cached CSV (default: data/XAUUSD_40Y.csv)
+    symbol      : Yahoo Finance ticker used only for the fallback path (e.g. ``"GC=F"``).
+    years       : Years of history to fetch.
+    use_cached  : If True, try to load from ``cached_csv`` before any download.
+    cached_csv  : Path to cached CSV (default: ``data/XAUUSD_H1.csv`` then ``data/XAUUSD_40Y.csv``).
     """
-    # ── Try cached CSV first ──────────────────────────────────────────────────
-    if use_cached:
-        csv_path = Path(cached_csv or (ROOT / "data" / "XAUUSD_40Y.csv"))
-        if csv_path.exists():
-            logger.info("Loading cached OHLCV from %s", csv_path)
-            df = pd.read_csv(csv_path, index_col=0, parse_dates=True)
-            df.columns = [c.lower() for c in df.columns]
-            # Trim to requested years
-            cutoff = datetime.now(UTC) - timedelta(days=years * 365)
-            cutoff = cutoff if df.index.tz is not None else cutoff.replace(tzinfo=None)
-            df = df[df.index >= cutoff]
-            if not df.empty:
-                logger.info(
-                    "Loaded %d bars from cache (%s → %s)",
-                    len(df),
-                    df.index[0].date(),
-                    df.index[-1].date(),
-                )
-                return df
-            logger.warning("Cached CSV empty after date filter — falling back to download")
+    # ── 1. Try OANDA H1 ───────────────────────────────────────────────────────
+    oanda_df = _fetch_oanda_h1(years)
+    if oanda_df is not None and not oanda_df.empty:
+        return oanda_df
 
+    # ── 2. Try cached CSV ─────────────────────────────────────────────────────
+    if use_cached:
+        for csv_candidate in [
+            cached_csv,
+            str(ROOT / "data" / "XAUUSD_H1.csv"),
+            str(ROOT / "data" / "XAUUSD_40Y.csv"),
+        ]:
+            if not csv_candidate:
+                continue
+            csv_path = Path(csv_candidate)
+            if csv_path.exists():
+                logger.info("Loading cached OHLCV from %s", csv_path)
+                df = pd.read_csv(csv_path, index_col=0, parse_dates=True)
+                df.columns = [c.lower() for c in df.columns]
+                cutoff = datetime.now(UTC) - timedelta(days=years * 365)
+                cutoff = cutoff if df.index.tz is not None else cutoff.replace(tzinfo=None)
+                df = df[df.index >= cutoff]
+                if not df.empty:
+                    logger.info(
+                        "Loaded %d bars from cache (%s → %s)",
+                        len(df),
+                        df.index[0].date(),
+                        df.index[-1].date(),
+                    )
+                    return df
+                logger.warning("Cached CSV empty after date filter — trying next source")
+
+    # ── 3. Yahoo Finance daily fallback ───────────────────────────────────────
+    logger.info("Falling back to Yahoo Finance daily data for %s", symbol)
     import yfinance as yf
 
     end = datetime.now(UTC)
@@ -151,7 +261,7 @@ def fetch_gold_ohlcv(
         raw.columns = [c.lower() for c in raw.columns]
 
     raw.index = pd.to_datetime(raw.index).tz_localize(None)
-    logger.info("Downloaded %d bars for %s", len(raw), symbol)
+    logger.info("Downloaded %d bars for %s (Yahoo Finance daily)", len(raw), symbol)
     return raw
 
 

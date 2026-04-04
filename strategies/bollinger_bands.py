@@ -71,14 +71,18 @@ class BollingerBandsStrategy(BaseStrategy):
             "prev_lower": float(lower.iloc[-2]) if len(lower) > 1 else None,
         }
 
-    def generate_signal(self, analysis) -> Any:
+    def generate_signal(self, analysis) -> Signal | None:
         """
-        Dual-dispatch: accepts either a dict (from analyze()) or a DataFrame.
-        - dict  → returns Optional[Signal]  (BaseStrategy contract)
-        - DataFrame → returns dict signal   (legacy backtesting / test contract)
+        Generate trading signal.
+
+        Accepts either:
+        - dict (from ``analyze()``) — returns ``Signal | None`` (BaseStrategy contract).
+        - DataFrame — computes analysis internally then returns ``Signal | None``.
+          Use ``_generate_dict_signal(df)`` directly when a dict result is needed
+          (e.g. in backtesting hyperopt code).
         """
         if isinstance(analysis, pd.DataFrame):
-            return self._generate_dict_signal(analysis)
+            analysis = self.analyze(analysis)
         # dict path — BaseStrategy abstract method contract
         upper = analysis.get("upper")
         lower = analysis.get("lower")

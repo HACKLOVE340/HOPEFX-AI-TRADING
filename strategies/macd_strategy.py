@@ -67,10 +67,17 @@ class MACDStrategy(BaseStrategy):
             "price": float(series.iloc[-1]),
         }
 
-    def generate_signal(self, analysis) -> Any:
-        """Dual-dispatch: DataFrame → dict signal, dict → Optional[Signal]."""
+    def generate_signal(self, analysis) -> Signal | None:
+        """Generate trading signal.
+
+        Accepts either:
+        - dict (from ``analyze()``) — returns ``Signal | None`` (BaseStrategy contract).
+        - DataFrame — computes analysis internally then returns ``Signal | None``.
+          Use ``_generate_dict_signal(df)`` directly when a dict result is needed
+          (e.g. in backtesting hyperopt code).
+        """
         if isinstance(analysis, pd.DataFrame):
-            return self._generate_dict_signal(analysis)
+            analysis = self.analyze(analysis)
         # dict path — BaseStrategy abstract method contract
         macd = analysis.get("macd")
         sig = analysis.get("signal_line")
