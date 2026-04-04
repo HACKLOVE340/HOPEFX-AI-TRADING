@@ -1,7 +1,7 @@
 # Debugging Guide
 
 > How to diagnose and resolve issues in a running HOPEFX instance.
-> Last updated: 2026-04-01
+> Last updated: 2026-07-14
 
 ---
 
@@ -16,11 +16,14 @@
 7. [Risk Engine Issues](#risk-engine-issues)
 8. [Database Issues](#database-issues)
 9. [Redis Issues](#redis-issues)
-10. [API Issues](#api-issues)
-11. [WebSocket Issues](#websocket-issues)
-12. [Subscription & License Issues](#subscription--license-issues)
-13. [Debug Mode](#debug-mode)
-14. [Useful One-Liners](#useful-one-liners)
+10. [Data Feed Issues](#data-feed-issues)
+11. [Notification Issues](#notification-issues)
+12. [API Issues](#api-issues)
+13. [WebSocket Issues](#websocket-issues)
+14. [Subscription & License Issues](#subscription--license-issues)
+15. [Performance Profiling](#performance-profiling)
+16. [Debug Mode](#debug-mode)
+17. [Useful One-Liners](#useful-one-liners)
 
 ---
 
@@ -481,6 +484,223 @@ WARNING: Redis unavailable, falling back to in-memory cache
 
 ---
 
+## Data Feed Issues
+
+The `MarketDataOrchestrator` is the single source of truth for all price data.
+Brokers never return price data — if you see `MarketDataForbidden`, a broker method
+that returns prices was called directly. Fix it by routing through the orchestrator.
+
+### No tick from orchestrator
+
+```bash
+# Check orchestrator health
+curl http://localhost:8000/api/broker/status \
+  -H "Authorization: Bearer $TOKEN"
+
+# Check which gold feeds are active
+python3 -c "
+import asyncio
+from data_layer.orchestrator import orchestrator
+
+async def check():
+    await orchestrator.start()
+    await asyncio.sleep(3)
+    h = orchestrator.health()
+    print('Gold feeds:', h.get('gold_feeds', {}))
+    print('Safe to trade:', orchestrator.is_safe_to_trade())
+    tick = orchestrator.get_latest_tick()
+    print('Latest tick:', tick)
+    await orchestrator.stop()
+
+asyncio.run(check())
+"
+```
+
+Common causes:
+
+| Cause | How to confirm | Fix |
+|-------|---------------|-----|
+| No gold API keys set | No feeds in `health['gold_feeds']` | Set at least one of `GOLDAPI_IO_KEY`, `METALS_DEV_KEY`, `METALS_API_KEY` in `.env` |
+| All API keys exhausted | `status: rate_limited` in feed health | Add more API keys or reduce polling frequency |
+| Redis unavailable | `redis: unhealthy` in `/health` | Start Redis: `docker compose up redis -d` |
+| Network timeout | `status: timeout` in feed health | Check outbound HTTPS connectivity |
+
+### Data quality below threshold
+
+```bash
+# Check data quality engine output
+python3 -c "
+from data_layer.orchestrator import orchestrator
+import asyncio
+
+async def check():
+    await orchestrator.start()
+    await asyncio.sleep(5)
+    tick = orchestrator.get_latest_tick()
+    if tick:
+        print(f'Quality: {tick.quality.value}')
+        print(f'Confidence: {tick.confidence:.3f}')
+        print(f'Sources: {tick.source_count}')
+    await orchestrator.stop()
+
+asyncio.run(check())
+"
+```
+
+If confidence is below `ENGINE_MIN_DATA_QUALITY` (default: 0.40), the engine will not
+generate signals. Add more gold API keys to improve consensus confidence.
+
+Temporarily lower the threshold to diagnose:
+```bash
+# .env
+ENGINE_MIN_DATA_QUALITY=0.20
+DQE_MIN_CONFIDENCE=0.20
+```
+
+Restore to defaults before returning to production.
+
+### MarketDataForbidden raised
+
+```
+MarketDataForbidden: OANDABroker.get_market_data() is not permitted.
+Use orchestrator.get_latest_tick() instead.
+```
+
+This is an architectural violation — a broker method that returns price data was called.
+Find the call site:
+
+```bash
+grep -rn "get_market_data\|stream_prices\|get_price" brokers/ api/ core/ --include="*.py"
+```
+
+Replace every such call with:
+```python
+from data_layer.orchestrator import orchestrator
+tick = orchestrator.get_latest_tick()
+```
+
+Do not suppress this exception — it indicates a data architecture violation.
+
+### Lineage audit trail gaps
+
+```bash
+# Check lineage store
+python3 -c "
+from data_layer.lineage import DataLineageStore
+store = DataLineageStore('data/lineage/lineage.db')
+recent = store.get_recent(limit=10)
+for r in recent:
+    print(r.record_type, r.timestamp, r.symbol)
+"
+
+# Check lineage DB size
+ls -lh data/lineage/lineage.db
+```
+
+If the lineage DB is missing, it is created automatically on first write. If it is
+growing unexpectedly large, check for a tight tick loop writing duplicate records.
+
+---
+
+## Notification Issues
+
+### Telegram alerts not arriving
+
+```bash
+# Test Telegram directly
+curl http://localhost:8000/api/settings/notifications \
+  -H "Authorization: Bearer $TOKEN"
+
+curl -X POST http://localhost:8000/notifications/test \
+  -H "Authorization: Bearer $TOKEN"
+
+# Check Telegram bot token and chat ID
+grep -E "TELEGRAM_BOT_TOKEN|TELEGRAM_CHAT_ID" .env
+
+# Test Telegram API directly
+curl "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMe"
+```
+
+Common causes:
+
+| Cause | Fix |
+|-------|-----|
+| `TELEGRAM_BOT_TOKEN` not set | Add to `.env` and restart |
+| `TELEGRAM_CHAT_ID` wrong | Get correct ID: message your bot, then `GET /bot{token}/getUpdates` |
+| Bot not started | Send `/start` to your bot in Telegram |
+| Chat ID is a group (negative number) | Use the group's negative ID, e.g., `-1001234567890` |
+
+### Discord alerts not arriving
+
+```bash
+# Check Discord webhook URL
+grep DISCORD_WEBHOOK_URL .env
+
+# Test webhook directly
+curl -X POST "$DISCORD_WEBHOOK_URL" \
+  -H "Content-Type: application/json" \
+  -d '{"content": "HOPEFX test alert"}'
+```
+
+If the webhook returns `404`, it has been deleted. Regenerate it in Discord:
+Server Settings → Integrations → Webhooks → New Webhook.
+
+The Discord bot rate-limits per symbol (default 5-minute cooldown). If signals are
+generating faster than the cooldown, some alerts will be suppressed. Check:
+
+```bash
+docker compose logs app | grep "discord.*rate_limit\|discord.*cooldown"
+```
+
+### Email alerts not arriving
+
+```bash
+# Check email config
+grep -E "SMTP_|EMAIL_" .env
+
+# Test email send
+python3 -c "
+from notifications.email_notifier import EmailNotifier
+import asyncio
+
+async def test():
+    n = EmailNotifier()
+    await n.send('test@example.com', 'HOPEFX Test', 'Test message')
+
+asyncio.run(test())
+"
+```
+
+Common causes:
+
+| Cause | Fix |
+|-------|-----|
+| `SMTP_HOST` not set | Configure SMTP in `.env` (SendGrid, SES, or self-hosted) |
+| Port 25 blocked | Use port 587 (STARTTLS) or 465 (SSL): `SMTP_PORT=587` |
+| Authentication failed | Check `SMTP_USER` and `SMTP_PASSWORD` |
+| Emails in spam | Add SPF/DKIM records for your sending domain |
+
+### Sentry not receiving events
+
+```bash
+# Check Sentry DSN is set
+grep SENTRY_DSN .env
+
+# Trigger a test event
+python3 -c "
+import sentry_sdk
+sentry_sdk.init(dsn='your-dsn-here')
+sentry_sdk.capture_message('HOPEFX Sentry test', level='info')
+print('Event sent — check Sentry dashboard')
+"
+```
+
+If `SENTRY_DSN` is set but events are not appearing, check that the DSN format is
+correct (`https://key@sentry.io/project-id`) and that outbound HTTPS to `sentry.io`
+is not blocked by a firewall.
+
+---
+
 ## API Issues
 
 ### Slow API responses
@@ -617,6 +837,101 @@ machine fingerprint. Contact support@hopefx.io to transfer the key to the new ma
 
 ---
 
+## Performance Profiling
+
+### CPU profiling with py-spy
+
+`py-spy` attaches to a running process without restarting it — safe for production
+diagnosis:
+
+```bash
+pip install py-spy
+
+# Find the app PID
+pgrep -f "uvicorn app:app"
+
+# Sample for 30 seconds and generate a flamegraph
+py-spy record -o flamegraph.svg --pid <PID> --duration 30
+
+# Live top-like view
+py-spy top --pid <PID>
+```
+
+Open `flamegraph.svg` in a browser. Wide bars indicate hot code paths.
+
+### Request-level profiling with cProfile
+
+To profile a specific endpoint, add a temporary profiling middleware:
+
+```python
+# Temporary — remove after profiling
+import cProfile, pstats, io
+from fastapi import Request
+
+@app.middleware("http")
+async def profile_middleware(request: Request, call_next):
+    if request.url.path == "/api/ml/predict/XAUUSD":
+        pr = cProfile.Profile()
+        pr.enable()
+        response = await call_next(request)
+        pr.disable()
+        s = io.StringIO()
+        pstats.Stats(pr, stream=s).sort_stats("cumulative").print_stats(20)
+        print(s.getvalue())
+        return response
+    return await call_next(request)
+```
+
+### Memory profiling
+
+```bash
+pip install memray
+
+# Run with memory tracing
+memray run -o output.bin -m uvicorn app:app --host 0.0.0.0 --port 8000
+
+# Generate flamegraph
+memray flamegraph output.bin
+
+# Check for memory leaks (objects that grow over time)
+memray stats output.bin
+```
+
+### Prometheus-based profiling
+
+The `/metrics` endpoint exposes request duration histograms. Query p99 latency
+per endpoint:
+
+```bash
+# p99 latency for all endpoints (last 5 minutes)
+curl -s http://localhost:9090/api/v1/query \
+  --data-urlencode 'query=sort_desc(histogram_quantile(0.99, rate(hopefx_request_duration_seconds_bucket[5m])))' \
+  | python3 -m json.tool | grep -A2 '"metric"'
+```
+
+Target latencies:
+- `/health`: < 10ms
+- `/api/signals/latest`: < 50ms
+- `/api/ml/predict/{symbol}`: < 200ms (cached), < 500ms (cache miss)
+- `/api/backtest/run`: < 30s (async, returns job ID immediately)
+
+### Identifying N+1 query patterns
+
+```bash
+# Enable query logging temporarily
+# .env
+SQLALCHEMY_ECHO=true
+
+# Restart and watch for repeated identical queries
+docker compose restart app
+docker compose logs -f app | grep "SELECT" | sort | uniq -c | sort -rn | head -20
+```
+
+Any query appearing more than once per request is a candidate N+1. Fix with
+`selectinload()` or `joinedload()` in the SQLAlchemy query.
+
+---
+
 ## Debug Mode
 
 For deep debugging, enable structured debug logging:
@@ -682,4 +997,4 @@ alembic current && alembic heads
 
 ---
 
-*Last updated: 2026-04-01*
+*Last updated: 2026-07-14*
