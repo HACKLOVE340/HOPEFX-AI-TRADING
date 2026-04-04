@@ -1,6 +1,6 @@
 # HOPEFX — Roadmap
 
-> Last updated: 2026-04-01 (v1.17)
+> Last updated: 2026-07-14 (v1.17)
 
 ---
 
@@ -21,7 +21,7 @@ The platform is live in paper trading mode on OANDA practice.
 | Observability (Prometheus, Sentry, Discord) | ✅ Production |
 | REST + WebSocket API (108 endpoints) | ✅ Stable |
 | Test suite (2,560+ tests) | ✅ CI green |
-| Documentation (30 main docs + 103 archive) | ✅ Complete |
+| Documentation (38 main docs + 98 archive) | ✅ Complete |
 | Stripe payment processing (real SDK) | ✅ Production |
 | Subscription plan gating (require_plan) | ✅ Production |
 | Dunning / failed payment recovery | ✅ Production |
@@ -56,8 +56,8 @@ trading and ML endpoints, dunning active, Prometheus metrics wired.
 - [x] Real Stripe PaymentIntent creation (not simulated) with idempotency keys
 - [x] Stripe Refund API with partial-refund support
 - [x] Dunning: 3x retry at 24h / 72h / 168h, then subscription suspended
-- [x] `require_plan` FastAPI dependency — raises `403 PLAN_LIMIT_EXCEEDED`
-- [x] `plan_gate()` boolean helper for non-FastAPI contexts
+- [x] `plan_gate()` inline enforcement in endpoints — raises `403 PLAN_LIMIT_EXCEEDED`
+- [x] `plan_gate()` boolean helper for non-FastAPI contexts (strategies/manager.py)
 - [x] ML `/predict` endpoint gated at Professional plan
 - [x] Trading `/order` endpoint gated at Starter plan
 - [x] Strategy subscription gating in `strategies/manager.py`
@@ -99,7 +99,10 @@ python scripts/enable_live_trading.py --check-only
 
 **Target:** Export signals to MetaTrader 5 via ZeroMQ bridge.
 
-- [ ] Implement `brokers/mt5_zmq_bridge.py` signal publisher
+- [x] `brokers/mt5_broker.py` — MT5 broker connector (MetaTrader5 Python API)
+- [x] `market_data/mt5_live_feed.py` — MT5 live price feed
+- [x] `market_data/mt5_backup.py` — MT5 backup feed
+- [ ] `brokers/mt5_zmq_bridge.py` — ZeroMQ signal publisher for MT5 EA
 - [ ] MT5 EA subscriber (MQL5) that receives signals and places orders
 - [ ] Round-trip latency test: target < 50ms signal-to-order
 - [ ] Paper test on MT5 demo for 2 weeks before live
@@ -147,27 +150,35 @@ python scripts/enable_live_trading.py --check-only
 
 **Target:** React dashboard connected to the REST + WebSocket API.
 
-- [ ] React project scaffold in `frontend/`
+- [x] React + Vite scaffold in `dashboard/` (TypeScript, Tailwind CSS)
+- [x] `dashboard/src/` — component structure in place
+- [x] `web_dashboard.py` — FastAPI static file mount for the built dashboard
 - [ ] Real-time WebSocket chart (price + signals)
 - [ ] Live P&L dashboard with subscription tier badge
 - [ ] Strategy control panel (start/stop/configure)
 - [ ] Risk monitor (drawdown, CVaR, kill switch status)
 - [ ] Subscription management UI (upgrade/downgrade/cancel)
 - [ ] Social trading feed (copy trading, leaderboards)
+- [ ] Production build: `npm run build` → `dashboard/dist/`
 
 ---
 
 ## Milestone 9 — Mobile App
 
-**Target:** iOS and Android apps via React Native.
+**Target:** iOS and Android apps via React Native (Expo).
 
-- [ ] React Native project scaffold
-- [ ] Core screens: Dashboard, Chart, Positions, Alerts
-- [ ] Push notifications via FCM/APNs
-- [ ] Biometric authentication
+- [x] Expo React Native scaffold in `mobile-app/` (TypeScript, EAS build config)
+- [x] `mobile/api.py` + `mobile/api_v2.py` — mobile-specific REST endpoints
+- [x] `mobile/push_notifications.py` — FCM/APNs push notification service
+- [x] `mobile/auth.py` — mobile JWT auth flow
+- [x] `mobile/trading.py` — mobile trading endpoints
+- [x] PWA manifest + service worker in `mobile/pwa/`
+- [x] `POST /api/mobile/register-push` — device registration endpoint
+- [ ] Core screens: Dashboard, Chart, Positions, Alerts (mobile-app/src/)
+- [ ] Biometric authentication (LocalAuthentication)
 - [ ] Subscription gate on all premium screens
 - [ ] Offline mode with cached signals
-- [ ] App Store + Google Play submission
+- [ ] App Store + Google Play submission via EAS Submit
 
 ---
 
@@ -175,10 +186,14 @@ python scripts/enable_live_trading.py --check-only
 
 **Target:** Expose HOPEFX as a signal API for third-party consumers.
 
-- [ ] `/api/v1/signals` endpoint with API key auth
-- [ ] Rate limiting per tier (Starter: 10 req/min, Professional: 100 req/min)
-- [ ] White-label branding config in `whitelabel/`
-- [ ] SLA: 99.9% uptime, < 200ms p99 latency
+- [x] `whitelabel/` module — branding config, API auth, rate limiting
+- [x] `whitelabel/branding.py` — per-tenant branding overrides
+- [x] `whitelabel/api_auth.py` — API key authentication for white-label clients
+- [x] `whitelabel/rate_limiting.py` — per-tenant rate limit config
+- [ ] `/api/v1/signals` public signal endpoint with API key auth
+- [ ] Per-tier rate limits enforced at NGINX level
+- [ ] Tenant onboarding flow (create tenant, issue API key, configure branding)
+- [ ] SLA monitoring: 99.9% uptime target, < 200ms p99 latency gate
 
 ---
 
@@ -200,9 +215,12 @@ See `research/README.md` for gate conditions and enable instructions.
 
 ## Type Safety (Ongoing)
 
+- [x] `py.typed` marker present in: `api/`, `auth/`, `audit/`, `brokers/`, `config/`,
+  `core/`, `execution/`, `ml/`, `mobile/`, `monetization/`, `payments/`, `risk/`,
+  `strategies/`, `teams/`, `whitelabel/`
 - [ ] Add `mypy` to CI with `--strict` on `api/`, `risk/`, `ml/`
 - [ ] Replace remaining `Any` type hints in `brokers/`
-- [ ] Add `py.typed` marker to all public packages
+- [ ] Add `py.typed` to remaining packages: `social/`, `notifications/`, `compliance/`, `data_layer/`
 
 ---
 
