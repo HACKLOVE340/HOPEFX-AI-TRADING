@@ -202,7 +202,7 @@ class MarketContextProvider:
                 r = get_sync_redis()
                 if r is not None:
                     self._redis_cache = MarketDataCache(r)
-            except Exception as exc:
+            except (ImportError, ConnectionError, RuntimeError) as exc:
                 logger.debug("TCA: Redis cache unavailable: %s", exc)
         return self._redis_cache
 
@@ -238,7 +238,7 @@ class MarketContextProvider:
                     if volumes and sum(volumes) > 0:
                         adv = sum(volumes) / len(volumes)
                         return adv, "redis_ohlcv"
-            except Exception as exc:
+            except (ConnectionError, RuntimeError, ValueError, TypeError) as exc:
                 logger.debug("TCA: Redis OHLCV ADV lookup failed for %s: %s", symbol, exc)
 
         # 3. In-memory tick accumulator
@@ -286,7 +286,7 @@ class MarketContextProvider:
                         if log_returns:
                             vol = float(np.std(log_returns))
                             return vol, "redis_ohlcv"
-            except Exception as exc:
+            except (ConnectionError, RuntimeError, ValueError, TypeError) as exc:
                 logger.debug("TCA: Redis OHLCV vol lookup failed for %s: %s", symbol, exc)
 
         # 3. Global fallback
