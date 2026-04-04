@@ -254,7 +254,7 @@ class ExecutionSystem:
                 if hasattr(broker, "disconnect"):
                     await broker.disconnect()
                 logger.info("ExecutionSystem: broker %s disconnected", broker_id)
-            except Exception as exc:
+            except (TimeoutError, RuntimeError, ConnectionError, AttributeError) as exc:
                 logger.error("ExecutionSystem: broker %s disconnect error: %s", broker_id, exc)
 
         # 4. Stop orchestrator last
@@ -271,7 +271,7 @@ class ExecutionSystem:
             await asyncio.sleep(_HEALTH_INTERVAL)
             try:
                 self._log_health()
-            except Exception as exc:
+            except (RuntimeError, AttributeError, ValueError, TypeError) as exc:
                 logger.debug("Health loop error: %s", exc)
 
     def _log_health(self) -> None:
@@ -359,7 +359,7 @@ async def _connect_oanda() -> Any | None:
             return broker
         logger.warning("OANDA broker connection failed")
         return None
-    except Exception as exc:
+    except (ImportError, ConnectionError, RuntimeError, ValueError) as exc:
         logger.error("OANDA broker init error: %s", exc)
         return None
 
@@ -383,7 +383,7 @@ async def _connect_ibkr() -> Any | None:
             return broker
         logger.warning("IBKR broker connection failed (TWS/Gateway not running?)")
         return None
-    except Exception as exc:
+    except (ImportError, ConnectionError, RuntimeError, ValueError) as exc:
         logger.error("IBKR broker init error: %s", exc)
         return None
 
@@ -396,7 +396,7 @@ def _build_paper_broker() -> Any:
         broker = PaperTradingBroker(config={})
         logger.warning("Using PaperTradingBroker — no live execution")
         return broker
-    except Exception as exc:
+    except (ImportError, RuntimeError, ValueError) as exc:
         logger.error("PaperTradingBroker init failed: %s", exc)
         raise RuntimeError("Cannot start paper broker") from exc
 
@@ -455,7 +455,7 @@ def _wire_notify_fill(orchestrator) -> None:
                 orchestrator._redis.lpush(key, json.dumps(fill_record))
                 orchestrator._redis.ltrim(key, 0, 999)  # keep last 1000 fills
                 orchestrator._redis.expire(key, 86400)  # 24h TTL
-        except Exception as exc:
+        except (ConnectionError, RuntimeError, TypeError) as exc:
             logger.debug("notify_fill Redis update failed: %s", exc)
 
         # Notify replay engine
@@ -467,7 +467,7 @@ def _wire_notify_fill(orchestrator) -> None:
                 direction=direction,
                 fill_id=fill_id,
             )
-        except Exception as exc:
+        except (RuntimeError, AttributeError, ValueError, TypeError) as exc:
             logger.debug("notify_fill replay engine update failed: %s", exc)
 
         logger.debug(
