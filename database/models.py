@@ -10,7 +10,6 @@ Complete SQLAlchemy models for all entities
 
 import enum
 import logging
-import os
 import uuid
 from datetime import datetime, timezone
 UTC = timezone.utc
@@ -22,17 +21,6 @@ def _utcnow() -> datetime:
 
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Strict-deps guard
-# ---------------------------------------------------------------------------
-# When ``HOPEFX_STRICT_DEPS=true`` (the recommended production setting),
-# a missing SQLAlchemy causes an immediate hard failure so the problem is
-# surfaced at startup rather than silently degrading persistence.
-# Set ``HOPEFX_STRICT_DEPS=false`` (or unset it) to allow the application to
-# start in a degraded state — operators MUST resolve the dependency before
-# going live.
-_STRICT_DEPS: bool = os.getenv("HOPEFX_STRICT_DEPS", "false").lower() in ("true", "1", "yes")
 
 try:
     from sqlalchemy import (
@@ -55,7 +43,7 @@ try:
         from sqlalchemy.orm import declarative_base
     except ImportError:
         from sqlalchemy.ext.declarative import declarative_base  # SQLAlchemy < 2.0
-    from sqlalchemy.orm import relationship, sessionmaker  # pylint: disable=unused-import
+    from sqlalchemy.orm import relationship, sessionmaker  # pylint: disable=unused-import  # noqa: F401
 
     SQLALCHEMY_AVAILABLE = True
 except ImportError:
@@ -66,36 +54,7 @@ except ImportError:
         "is DISABLED. Fix with: pip install 'sqlalchemy>=2.0' "
         "or: pip install -r requirements.txt"
     )
-    if _STRICT_DEPS:
-        raise RuntimeError(_MISSING_MSG) from None
-
-    # Log at ERROR level so operators see this in logs even in non-strict mode.
-    logger.error(_MISSING_MSG)
-
-    # Stub everything so class bodies that reference Column etc. don't NameError.
-    # These stubs allow the application to start in a degraded state so operators
-    # can see the error and install the dependency without a crash loop.
-    # WARNING: ALL DATABASE OPERATIONS WILL SILENTLY NO-OP IN THIS STATE.
-    class _Stub:
-        def __init__(self, *a, **kw):
-            pass
-
-        def __call__(self, *a, **kw):
-            return self
-
-        def __getattr__(self, name):
-            return self
-
-    Column = BigInteger = Integer = String = Float = Boolean = _Stub()
-    DateTime = ForeignKey = Enum = Text = Index = UniqueConstraint = _Stub()
-    relationship = sessionmaker = _Stub()
-    func = _Stub()
-
-    class _DummyBase:
-        pass
-
-    def declarative_base():
-        return _DummyBase
+    raise RuntimeError(_MISSING_MSG) from None
 
 
 Base = declarative_base()
@@ -751,13 +710,12 @@ class MarketDataType(enum.Enum):
 # `from database.models import User` keeps working, and so SQLAlchemy resolves
 # the "User" string reference in Account.user without a second class definition.
 try:
-    from database.user_models import User  # pylint: disable=unused-import
-except Exception:
-    # Fallback stub so imports never fail when user_models has a dep issue
-    class User:  # type: ignore[no-redef]
-        __tablename__ = "users"
-        __table__ = type("T", (), {"columns": []})()
-
+    from database.user_models import User  # pylint: disable=unused-import  # noqa: F401
+except ImportError as _user_models_err:
+    raise ImportError(
+        "CRITICAL: database/user_models.py could not be imported. "
+        "Ensure all dependencies are installed: pip install -r requirements.txt"
+    ) from _user_models_err
 # ── Session model (used by master_control and other internal modules) ─────────
 
 if SQLALCHEMY_AVAILABLE:

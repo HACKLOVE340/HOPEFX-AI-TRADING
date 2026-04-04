@@ -281,7 +281,7 @@ class FIXRouter:
             await self._on_fill(fill)
         except Exception as exc:
             self._reject_count += 1
-            logger.error("FIXRouter: all routes failed for order #%d: %s", self._order_count, exc)
+            logger.error("FIXRouter: all routes failed for order #%d: %s", self._order_count, exc, exc_info=True)
             await bus.publish_breach(
                 {
                     "reason": "order_route_failure",
