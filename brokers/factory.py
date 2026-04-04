@@ -88,6 +88,13 @@ class BrokerFactory:
             except Exception as exc2:
                 logger.debug("interactive_brokers legacy connector unavailable: %s", exc2)
         try:
+            from brokers.bybit_connector import ByBitConnector
+
+            cls._brokers["bybit"] = ByBitConnector
+            cls._brokers["bybit_futures"] = ByBitConnector
+        except Exception as exc:
+            logger.debug("bybit broker unavailable: %s", exc)
+        try:
             from brokers.prop_firms.ftmo import FTMOConnector
 
             cls._brokers["ftmo"] = FTMOConnector
