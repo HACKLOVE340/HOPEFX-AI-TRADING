@@ -1,6 +1,8 @@
-# HOPEFX Data Layer & Execution System — Setup Guide
+# HOPEFX — Setup Guide
 
-This guide covers setting up the full data layer and execution pipeline from scratch, including all API keys, environment variables, Redis, and the startup sequence.
+> Last updated: 2026-07-14
+
+This guide covers setting up the full data layer and execution pipeline from scratch, including subscription activation, API keys, environment variables, Redis, and the startup sequence.
 
 ---
 
@@ -39,11 +41,39 @@ Brokers (order execution ONLY — no market data)
 
 ## Prerequisites
 
-- Python 3.10+
-- Redis 6+ (local or remote)
-- PostgreSQL 14+ (production) or SQLite (development)
-- At least one gold price API key
+- Python 3.10, 3.11, or 3.12
+- Redis 7+ (local or remote)
+- PostgreSQL 16+ (production) or SQLite (development)
+- At least one gold price API key (Finnhub, Twelve Data, or Polygon for live streaming)
 - OANDA practice account (for paper trading) or live broker credentials
+- HOPEFX license key (from [hopefx.com/pricing](https://hopefx.com/pricing) — Free tier available at no cost)
+
+---
+
+## Step 0 — Subscription Activation
+
+Every installation requires a license key. The Free tier is $0/month and activates automatically on first signup.
+
+**New installation:**
+```bash
+# After starting the app for the first time, activate the Free tier:
+curl -X POST http://localhost:8000/api/billing/auth/activate-free-tier \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "your-user-id"}'
+```
+
+**Paid plan:** After subscribing at [hopefx.com/pricing](https://hopefx.com/pricing), add your license key to `.env`:
+```bash
+HOPEFX_LICENSE_KEY=HOPEFX-PRO-XXXXXXXX-XXXX
+```
+
+Validate the key before proceeding:
+```bash
+python scripts/manage_secrets.py validate
+# Expected: ✓ HOPEFX_LICENSE_KEY: valid (plan=professional, expires=2026-08-14)
+```
+
+Without a valid key, all `/api/trading/`, `/api/signals/`, and `/api/ml/` endpoints return `403 Subscription Required`. The `/health` and `/docs` endpoints remain accessible regardless.
 
 ---
 
@@ -88,43 +118,28 @@ sudo apt install redis-server && sudo systemctl start redis
 docker run -d -p 6379:6379 redis:7-alpine
 ```
 
-### Required: At Least One Gold Price API
+### Required: Live Price Streaming
 
-| API | Free Tier | Sign Up |
-|-----|-----------|---------|
-| GoldAPI.io | 100 req/month | https://www.goldapi.io/ |
-| Metals.dev | 100 req/month | https://metals.dev/ |
-| Metals-API | 100 req/month | https://metals-api.com/ |
-| MetalpriceAPI | 100 req/month | https://metalpriceapi.com/ |
-| CommodityPriceAPI | 100 req/month | https://commoditypriceapi.com/ |
+The `NuclearStreamer` in `market_data/nuclear_streamer.py` provides live XAUUSD WebSocket ticks.
+Set at least one key. All configured sources run concurrently — anomalous ticks are discarded.
 
-```env
-GOLDAPI_IO_KEY=your_key_here
-METALS_DEV_KEY=your_key_here
-METALS_API_KEY=your_key_here
-METALPRICEAPI_KEY=your_key_here
-COMMODITY_PRICE_API_KEY=your_key_here
-```
-
-### Recommended: News & Sentiment APIs
-
-| API | Free Tier | Sign Up |
-|-----|-----------|---------|
-| Finnhub | 60 req/min | https://finnhub.io/ |
-| FMP | 250 req/day | https://financialmodelingprep.com/ |
-| NewsData.io | 200 credits/day | https://newsdata.io/ |
-| Alpha Vantage | 25 req/day | https://www.alphavantage.co/ |
-| NewsAPI | 100 req/day | https://newsapi.org/ |
+| API | Free Tier | Sign Up | Symbol |
+|-----|-----------|---------|--------|
+| Finnhub | 60 req/min | https://finnhub.io/ | `OANDA:XAU_USD` |
+| Twelve Data | Free tier | https://twelvedata.com/ | `XAU/USD` |
+| Polygon.io | Currencies plan | https://polygon.io/ | `C.XAU/USD` |
 
 ```env
 FINNHUB_API_KEY=your_key_here
-FMP_API_KEY=your_key_here
-NEWSDATA_IO_KEY=your_key_here
-ALPHA_VANTAGE_KEY=your_key_here
-NEWSAPI_KEY=your_key_here
+TWELVE_API_KEY=your_key_here
+POLYGON_API_KEY=your_key_here
 ```
 
+Finnhub is also used by the news sentiment engine. Set it first.
+
 ### Optional: FRED Macro Data
+
+Macro features (DXY, VIX, US10Y, US2Y, SPX, GLD) are fetched via `yfinance` — no API key required. FRED provides additional macro series:
 
 ```env
 FRED_API_KEY=your_key_here   # https://fred.stlouisfed.org/docs/api/api_key.html
@@ -138,10 +153,14 @@ FRED_API_KEY=your_key_here   # https://fred.stlouisfed.org/docs/api/api_key.html
 2. Go to Manage Funds → API Access → Generate token
 
 ```env
-OANDA_ACCOUNT_ID=101-123-4567890-001
-OANDA_API_TOKEN=your_token_here
-OANDA_ENVIRONMENT=practice
+BROKER_TYPE=oanda
+OANDA_ACCOUNT_ID=001-001-XXXXXXX-001
+OANDA_API_KEY=your_practice_token_here
+OANDA_PRACTICE=true
+OANDA_INSTRUMENTS=XAU_USD,EUR_USD
 ```
+
+Note: OANDA is used for **order execution only**. Live price ticks come from `NuclearStreamer` (Finnhub/Twelve Data/Polygon), not from OANDA. See `SETUP_GUIDE.md` — Required: Live Price Streaming.
 
 **IBKR (optional):**
 
@@ -150,9 +169,18 @@ OANDA_ENVIRONMENT=practice
 
 ```env
 IBKR_HOST=127.0.0.1
-IBKR_PORT=7497          # 7497=paper TWS, 7496=live TWS, 4002=paper gateway
+IBKR_PORT=7497          # 7497=paper TWS, 7496=live TWS, 4002=paper gateway, 4001=live gateway
 IBKR_ENV=paper
 IBKR_CLIENT_ID=1
+```
+
+**Bybit (XAUUSDT perpetuals — optional):**
+
+```env
+BYBIT_API_KEY=your_key_here
+BYBIT_API_SECRET=your_secret_here
+BYBIT_SANDBOX=true
+BYBIT_DEFAULT_TYPE=linear
 ```
 
 ### Execution Tuning
@@ -189,6 +217,31 @@ ROUTER_MAX_SPREAD_BPS=50.0
 # Lineage
 LINEAGE_DB_PATH=data/lineage/lineage.db
 ```
+
+---
+
+### Live Trading Safety Gates
+
+These must be set correctly before enabling live trading. They are enforced in code — not optional:
+
+```env
+# REQUIRED for live broker orders — must be explicitly set to "true"
+# Without this, all non-paper broker connections block order execution
+LIVE_MODE_CONFIRMED=false
+
+# Leverage and margin protection
+MAX_LEVERAGE_RATIO=10.0        # Block orders exceeding 10:1 leverage
+MIN_MARGIN_BUFFER=2.0          # Require 200% free margin buffer
+
+# Spread spike protection
+SPREAD_SPIKE_MULTIPLIER=3.0    # Block when spread > 3× EMA baseline
+SPREAD_ABS_LIMIT_USD=5.0       # Absolute spread limit (always blocks)
+
+# SL/TP monitor
+SLTP_POLL_INTERVAL_MS=200      # Check SL/TP every 200ms
+```
+
+Set `LIVE_MODE_CONFIRMED=true` only after completing the 30-day paper trading run. See [live_trading_gate.md](live_trading_gate.md).
 
 ---
 
