@@ -64,14 +64,21 @@ def test_fetch_gold_ohlcv_uses_cache(tmp_path):
 
     # Create a minimal fake CSV with recent dates so the date-range filter
     # does not strip all rows when years=1 is requested.
-    dates = pd.date_range(end=pd.Timestamp.now(), periods=300, freq="B")
+    # Use a fixed anchor (last Friday relative to now) so the range is always
+    # exactly N calendar days, regardless of whether today is a weekend.
+    n = 300
+    anchor = pd.Timestamp.now().normalize()
+    # Roll back to the most recent weekday so freq="B" always yields exactly n rows
+    while anchor.weekday() >= 5:  # 5=Sat, 6=Sun
+        anchor -= pd.Timedelta(days=1)
+    dates = pd.date_range(end=anchor, periods=n, freq="B")
     df = pd.DataFrame(
         {
-            "open": np.random.uniform(1800, 2000, 300),
-            "high": np.random.uniform(1800, 2000, 300),
-            "low": np.random.uniform(1800, 2000, 300),
-            "close": np.random.uniform(1800, 2000, 300),
-            "volume": np.random.randint(1000, 5000, 300),
+            "open": np.random.uniform(1800, 2000, n),
+            "high": np.random.uniform(1800, 2000, n),
+            "low": np.random.uniform(1800, 2000, n),
+            "close": np.random.uniform(1800, 2000, n),
+            "volume": np.random.randint(1000, 5000, n),
         },
         index=dates,
     )
