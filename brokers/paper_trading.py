@@ -98,6 +98,9 @@ class SlippageModel:
         self._fixed_pct = float(os.getenv("PAPER_FIXED_SLIPPAGE_PCT", "0.0005"))
         self._impact_factor = float(os.getenv("PAPER_IMPACT_FACTOR", "0.1"))
         self._noise_sigma_pct = float(os.getenv("PAPER_NOISE_SIGMA_PCT", "0.0001"))
+        # Instance-level spread overrides (symbol → half-spread).
+        # Populated via set_spread() to avoid mutating the module-level table.
+        self._spread_overrides: dict[str, float] = {}
         self._rng = random.Random()  # not seeded  # nosec B311 - paper trading noise, intentionally non-deterministic
 
     def fill_price(
@@ -147,8 +150,8 @@ class SlippageModel:
             return max(fill, 1e-8)
 
         # ── Gaussian model ────────────────────────────────────────────────────
-        # 1. Half-spread (always paid)
-        half_spread = _DEFAULT_SPREADS.get(symbol, mid_price * _FALLBACK_SPREAD_PCT)
+        # 1. Half-spread (always paid): instance overrides take priority.
+        half_spread = self._spread_overrides.get(symbol, _DEFAULT_SPREADS.get(symbol, mid_price * _FALLBACK_SPREAD_PCT))
         spread_cost = half_spread * direction
 
         # 2. Market impact: sqrt-law approximation
@@ -369,7 +372,8 @@ class PaperTradingBroker(BrokerConnector):
                  used when the symbol has no entry in the spread table.
         """
         if symbol is not None:
-            _DEFAULT_SPREADS[symbol] = spread / 2.0  # table stores half-spread
+            # Store in instance-level dict to avoid mutating module-level state
+            self._slippage._spread_overrides[symbol] = spread / 2.0  # table stores half-spread
             logger.debug("PaperTrading: spread updated for %s → %.5f", symbol, spread)
         else:
             self._current_spread = spread
