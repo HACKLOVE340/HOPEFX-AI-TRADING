@@ -363,14 +363,14 @@ class SMCICTStrategy(BaseStrategy):
                 elif current_close > sh_last_val:
                     choch = True
                     event_type = "CHoCH_bullish"
-            else:  # noqa: PLR5501
-                # Neutral — watch for any pivot break
-                if current_close > sh_last_val:
-                    choch = True
-                    event_type = "CHoCH_bullish"
-                elif current_close < sl_last_val:
-                    choch = True
-                    event_type = "CHoCH_bearish"
+            elif current_close > sh_last_val:
+                # Neutral + close above last SH → bullish character change
+                choch = True
+                event_type = "CHoCH_bullish"
+            elif current_close < sl_last_val:
+                # Neutral + close below last SL → bearish character change
+                choch = True
+                event_type = "CHoCH_bearish"
 
             # Strength: relative distance of HH/HL or LH/LL moves
             sh_range = abs(sh_last_val - sh_prev_val)

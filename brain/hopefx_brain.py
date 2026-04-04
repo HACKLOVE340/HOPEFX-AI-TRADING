@@ -221,9 +221,9 @@ class HOPEFXBrain:
         try:
             _meta_path = ROOT / "ml" / "saved_models" / "advanced_oos_meta.json"
             if _meta_path.exists():
-                import json as _json
+                import json
 
-                _meta = _json.loads(_meta_path.read_text())
+                _meta = json.loads(_meta_path.read_text())
                 _horizon_default = int(_meta.get("horizon", 1))
         except Exception:
             pass
@@ -761,15 +761,15 @@ class HOPEFXBrain:
                 # Build tabular feature row for XGBoost component
                 _feat_df = build_features_extended(ohlcv)
                 if _feat_df is not None and not _feat_df.empty:
-                    import numpy as _np
+                    import numpy as np
 
-                    _X = _feat_df.fillna(0.0).values[-1:].astype(_np.float32)
+                    _X = _feat_df.fillna(0.0).values[-1:].astype(np.float32)
                     _hybrid_prob = _hybrid.predict_proba(_X)
                     _hybrid_conf = abs(_hybrid_prob - 0.5) * 2.0
                     # Only blend when hybrid is confident
                     if _hybrid_conf >= 0.10:
                         _blended = (1.0 - _hybrid_weight) * ml_prob + _hybrid_weight * _hybrid_prob
-                        ml_prob = float(_np.clip(_blended, 0.0, 1.0))
+                        ml_prob = float(np.clip(_blended, 0.0, 1.0))
                         ml_conf = abs(ml_prob - 0.5) * 2.0
                         _ABSTAIN_LOW = float(os.getenv("ML_ABSTAIN_LOW", "0.45"))
                         _ABSTAIN_HIGH = float(os.getenv("ML_ABSTAIN_HIGH", "0.55"))
