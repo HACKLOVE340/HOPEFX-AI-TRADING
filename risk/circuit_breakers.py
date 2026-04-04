@@ -84,6 +84,11 @@ class RiskLimits:
     max_volatility_threshold: float = 0.50  # VIX-like threshold
     halt_on_volatility_spike: bool = True
 
+    # Leverage hard cap — enforced in ExecutionEngine._check_leverage()
+    # and in CircuitBreaker.pre_trade_check().  10:1 is the safe default
+    # (retail FX brokers allow up to 500:1 which can cause instant account blow-up).
+    max_leverage_ratio: float = 10.0
+
     # Cooldown periods
     circuit_breaker_cooldown_minutes: int = 15
     daily_loss_cooldown_hours: int = 2
@@ -267,7 +272,11 @@ class CircuitBreaker:
     async def _execute_kill_switch(self, reason: str):
         """
         Emergency position flattening with retry logic.
-        This is the kill switch - closes all positions immediately.
+
+        Phase 1: Python-level — cancel orders + close positions via broker API.
+        Phase 2: Broker-level escalation — if any positions remain after all
+                 retries, trigger a broker-native global cancel (e.g. IBKR
+                 reqGlobalCancel), capture to Sentry, and page ops via Telegram.
         """
         logger.critical("🔴 EXECUTING KILL SWITCH - CLOSING ALL POSITIONS")
 
@@ -305,14 +314,72 @@ class CircuitBreaker:
 
                 await asyncio.sleep(1)
 
-        # Final verification
+        # ── Final verification + broker-level escalation ──────────────────────
         final_positions = self.broker.get_positions()
         if final_positions:
-            logger.critical("🚨 FAILED TO CLOSE %s POSITIONS - MANUAL INTERVENTION REQUIRED", len(final_positions))
-            # Send emergency notification
-            self._send_emergency_alert(
-                f"Kill switch partial failure: {len(final_positions)} positions remain",
+            n_remaining = len(final_positions)
+            critical_msg = (
+                f"🚨 KILL SWITCH PARTIAL FAILURE: {n_remaining} position(s) remain "
+                f"after {max_retries} retries — escalating to broker-level cancel"
             )
+            logger.critical(critical_msg)
+
+            # Phase 2a: Broker-native global cancel (IBKR reqGlobalCancel)
+            self._broker_level_cancel_all(reason)
+
+            # Phase 2b: Capture to Sentry with full context
+            try:
+                import sentry_sdk  # type: ignore[import]
+
+                sentry_sdk.capture_message(
+                    critical_msg,
+                    level="fatal",
+                    extras={
+                        "reason": reason,
+                        "remaining_positions": n_remaining,
+                        "broker": type(self.broker).__name__,
+                    },
+                )
+            except Exception:  # nosec B110
+                pass
+
+            # Phase 2c: Send emergency Telegram/notification alert
+            self._send_emergency_alert(
+                f"Kill switch partial failure: {n_remaining} position(s) remain after "
+                f"{max_retries} retries. Broker-level cancel triggered. "
+                f"MANUAL INTERVENTION REQUIRED.",
+            )
+
+    def _broker_level_cancel_all(self, reason: str) -> None:
+        """
+        Trigger broker-native emergency cancel-all.
+
+        Supports:
+        - IBKR: reqGlobalCancel() cancels ALL orders across all accounts.
+        - Generic: Calls broker.cancel_all_orders() as a last resort.
+
+        Failures are logged but never propagated (must not block kill-switch path).
+        """
+        broker = self.broker
+        logger.critical("BROKER-LEVEL CANCEL-ALL triggered. reason=%s broker=%s", reason, type(broker).__name__)
+
+        # IBKR: ib_insync IB.reqGlobalCancel()
+        try:
+            ib_obj = getattr(broker, "_ib", None)
+            if ib_obj is not None and hasattr(ib_obj, "reqGlobalCancel"):
+                ib_obj.reqGlobalCancel()
+                logger.critical("IBKR reqGlobalCancel() executed.")
+                return
+        except Exception as exc:  # nosec B110
+            logger.error("IBKR reqGlobalCancel failed: %s", exc)
+
+        # Generic fallback: cancel_all_orders()
+        try:
+            if hasattr(broker, "cancel_all_orders"):
+                broker.cancel_all_orders()
+                logger.critical("broker.cancel_all_orders() executed as broker-level escalation.")
+        except Exception as exc:  # nosec B110
+            logger.error("broker.cancel_all_orders() escalation failed: %s", exc)
 
     async def _schedule_recovery(self):
         """Schedule automatic recovery attempt after cooldown"""

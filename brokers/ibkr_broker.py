@@ -263,12 +263,21 @@ class IBKRBroker:
         order_type: str = order_params.get("order_type", "MKT").upper()
         limit_price: float = float(order_params.get("limit_price", 0.0))
         aux_price: float = float(order_params.get("aux_price", 0.0))
-        sec_type: str = order_params.get("sec_type", "CASH")
         currency: str = order_params.get("currency", "USD")
         account: str = order_params.get("account", self._account or "")
 
-        # Default exchange by security type.
-        default_exchange = "IDEALPRO" if sec_type == "CASH" else "SMART"
+        # ── Auto-detect COMEX gold futures (GC/NYMEX) ─────────────────────────
+        # When symbol is "GC" or "GC=F" (Yahoo Finance format), default to
+        # COMEX front-month futures on NYMEX — the manipulation-resistant CLOB.
+        _sym_upper = symbol.upper().replace("=F", "")
+        if _sym_upper == "GC":
+            symbol = "GC"
+            sec_type: str = order_params.get("sec_type", "CONTFUT")
+            default_exchange = "NYMEX"
+        else:
+            sec_type = order_params.get("sec_type", "CASH")
+            default_exchange = "IDEALPRO" if sec_type == "CASH" else "SMART"
+
         exchange: str = order_params.get("exchange", default_exchange)
 
         # Build contract.
@@ -506,15 +515,71 @@ class IBKRBroker:
 
 
 def _build_contract(symbol: str, sec_type: str, exchange: str, currency: str) -> object:
-    """Build an ib_insync Contract from basic parameters."""
+    """Build an ib_insync Contract from basic parameters.
+
+    Special handling:
+    - ``symbol="GC"`` with ``sec_type="FUT"`` builds a COMEX front-month gold
+      futures contract (NYMEX exchange, USD settlement) — this is the
+      manipulation-resistant, central-limit-order-book gold market.
+    - ``symbol="XAUUSD"`` is automatically routed to IBKR IDEALPRO (nearest DMA
+      to interbank gold spot) unless ``sec_type`` or ``exchange`` are overridden.
+    """
     if not _IB_AVAILABLE:
         raise RuntimeError("ib_insync not installed")
+
+    # ── COMEX Gold Futures: GC (NYMEX) ───────────────────────────────────────
+    # GC is the CME Group/COMEX gold futures contract.  100 troy oz per contract.
+    # It trades on the NYMEX exchange (part of CME Group) — a fully regulated
+    # central limit order book with no broker internalization.
+    if symbol.upper() == "GC" and sec_type in ("FUT", "CONTFUT"):
+        contract = Contract()
+        contract.symbol = "GC"
+        contract.secType = sec_type  # "FUT" or "CONTFUT" (continuous front-month)
+        contract.exchange = exchange if exchange not in ("IDEALPRO", "SMART", "CASH") else "NYMEX"
+        contract.currency = currency or "USD"
+        # lastTradeDateOrContractMonth: leave empty for front-month (IB resolves automatically)
+        return contract
+
     contract = Contract()
     contract.symbol = symbol
     contract.secType = sec_type
     contract.exchange = exchange
     contract.currency = currency
     return contract
+
+
+def get_comex_gold_contract(
+    sec_type: str = "CONTFUT",
+    exchange: str = "NYMEX",
+    currency: str = "USD",
+) -> object:
+    """
+    Return a ready-to-use ib_insync Contract for COMEX gold futures (GC).
+
+    Parameters
+    ----------
+    sec_type:
+        ``"CONTFUT"`` — continuous front-month (default; IB rolls automatically).
+        ``"FUT"``     — specific expiry (set lastTradeDateOrContractMonth on the result).
+    exchange:
+        ``"NYMEX"`` (default) — CME Group's COMEX via NYMEX gateway.
+    currency:
+        ``"USD"`` (default).
+
+    Why use GC instead of XAUUSD
+    ----------------------------
+    XAUUSD on IDEALPRO routes to the IBKR internal FX pool (near-DMA, low
+    manipulation risk).  GC on NYMEX routes to the CME Group COMEX exchange —
+    a fully centralised, regulated CLOB.  This is the "real machine" gold market
+    where institutional players (central banks, hedge funds) transact.  Bid/ask
+    spreads are typically 0.10–0.30 USD/oz vs 0.50–2.00 USD/oz with retail brokers.
+
+    Usage
+    -----
+        contract = get_comex_gold_contract()
+        trade = ib.placeOrder(contract, MarketOrder("BUY", 1))
+    """
+    return _build_contract("GC", sec_type, exchange, currency)
 
 
 def _safe_float(value: object) -> float | None:
