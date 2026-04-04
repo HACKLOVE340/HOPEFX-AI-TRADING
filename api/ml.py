@@ -1358,6 +1358,18 @@ async def get_model_card(
                 "drift_window": int(os.getenv("DRIFT_WINDOW", "50")),
                 "block_on_drift": os.getenv("DRIFT_BLOCK", "false").lower() == "true",
             }
+        # Enhance with PSI + KS-test from DriftMonitor
+        try:
+            from ml.drift_monitor import get_drift_monitor
+            monitor = get_drift_monitor()
+            # Expose monitor configuration in the card
+            drift_status["psi_monitor_loaded"] = monitor._stats != {}
+            drift_status["psi_red_threshold"] = 0.25
+            drift_status["psi_yellow_threshold"] = 0.10
+            drift_status["ks_p_threshold"] = 0.05
+            drift_status["framework"] = "z-score + PSI + KS-test (production)"
+        except Exception:
+            drift_status["framework"] = "z-score (lightweight)"
     except Exception as exc:
         logger.debug("model_card: could not get drift status: %s", exc)
 
@@ -1483,3 +1495,71 @@ async def get_model_card(
     }
 
     return card
+
+
+
+@router.get(
+    "/drift-report",
+    summary="Real-time feature drift report (PSI + KS-test)",
+    tags=["ML Models"],
+)
+async def get_drift_report() -> dict:
+    """
+    Compute and return a statistical drift report for the live feature distribution.
+
+    Uses PSI (Population Stability Index) and the two-sample Kolmogorov-Smirnov
+    test to identify features whose distribution has shifted significantly from
+    the training distribution.
+
+    Thresholds:
+    - PSI < 0.10 → green (no significant drift)
+    - PSI 0.10–0.25 → yellow (investigate)
+    - PSI > 0.25 → red (retrain recommended)
+    - KS p-value < 0.05 → distributions significantly different
+
+    Returns:
+        Full ``DriftReport`` in JSON — overall_status, requires_retrain flag,
+        per-feature PSI/KS/z-score breakdown (top 20 by PSI).
+    """
+    try:
+        from ml.drift_monitor import get_drift_monitor
+
+        monitor = get_drift_monitor()
+
+        # Pull live feature buffer from InferenceEngine if available
+        live_features = None
+        try:
+            eng = _get_predictor()
+            if eng is not None and hasattr(eng, "_drift_buffer") and len(eng._drift_buffer) >= 50:
+                import numpy as np
+                import pandas as pd
+                arr = np.array(list(eng._drift_buffer))
+                # Column names from cached feature list
+                col_names = getattr(eng, "_last_feature_names", None)
+                if col_names and len(col_names) == arr.shape[1]:
+                    live_features = pd.DataFrame(arr, columns=col_names)
+                else:
+                    live_features = pd.DataFrame(arr)
+        except Exception:
+            pass
+
+        if live_features is None:
+            return {
+                "overall_status": "unknown",
+                "message": "Insufficient live feature data (need ≥50 ticks). "
+                           "Start live inference to populate the drift buffer.",
+                "requires_retrain": False,
+                "live_samples": 0,
+            }
+
+        report = monitor.compute(live_features)
+        return report.to_dict()
+
+    except Exception as exc:
+        logger.error("drift_report: unexpected error: %s", exc)
+        return {
+            "overall_status": "error",
+            "error": str(exc),
+            "requires_retrain": False,
+            "live_samples": 0,
+        }

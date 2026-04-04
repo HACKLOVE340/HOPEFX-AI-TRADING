@@ -181,7 +181,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
 
             {/* Status + Plan */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
-              <Select label="Status" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
+              <Select label="Status" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as 'active' | 'suspended' | 'trial' }))}
                 options={[{ value: 'active', label: 'Active' }, { value: 'trial', label: 'Trial' }, { value: 'suspended', label: 'Suspended' }]} />
               <Select label="Plan" value={form.plan} onChange={e => setForm(f => ({ ...f, plan: e.target.value }))}
                 options={[{ value: 'starter', label: 'Starter' }, { value: 'pro', label: 'Pro' }, { value: 'enterprise', label: 'Enterprise' }]} />

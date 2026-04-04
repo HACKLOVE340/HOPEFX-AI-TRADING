@@ -183,6 +183,8 @@ interface ActionBtnProps {
   loading?: boolean;
   icon?: string;
   size?: 'sm' | 'md';
+  style?: React.CSSProperties;
+  accent?: string;
 }
 
 const BTN_VARIANTS = {
@@ -194,7 +196,7 @@ const BTN_VARIANTS = {
 };
 
 export const ActionBtn: React.FC<ActionBtnProps> = ({
-  label, onClick, variant = 'ghost', disabled, loading, icon, size = 'md',
+  label, onClick, variant = 'ghost', disabled, loading, icon, size = 'md', style,
 }) => {
   const v = BTN_VARIANTS[variant];
   return (
@@ -211,6 +213,7 @@ export const ActionBtn: React.FC<ActionBtnProps> = ({
         opacity: disabled ? 0.5 : 1,
         transition: 'opacity 0.15s',
         whiteSpace: 'nowrap',
+        ...style,
       }}
     >
       {loading ? <Spinner size={12} /> : icon ? <span>{icon}</span> : null}
@@ -281,10 +284,10 @@ export const Select: React.FC<SelectProps> = ({ label, options, style, ...rest }
 // ── Toggle ────────────────────────────────────────────────────────────────────
 
 interface ToggleProps {
-  label: string;
+  label?: string;
   description?: string;
   checked: boolean;
-  onChange: (v: boolean) => void;
+  onChange: (v: boolean) => void | Promise<void>;
   disabled?: boolean;
   accent?: string;
 }
@@ -376,31 +379,36 @@ interface ConfirmDialogProps {
   message: string;
   confirmLabel?: string;
   variant?: 'danger' | 'warning';
+  /** @deprecated Use variant="danger" instead. Kept for backwards compat. */
+  danger?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
 
 export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
-  title, message, confirmLabel = 'Confirm', variant = 'danger', onConfirm, onCancel,
-}) => (
+  title, message, confirmLabel = 'Confirm', variant, danger, onConfirm, onCancel,
+}) => {
+  const resolvedVariant: 'danger' | 'warning' = variant ?? (danger ? 'danger' : 'danger');
+  return (
   <div style={{
     position: 'fixed', inset: 0, zIndex: 9999,
     background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
   }}>
     <div style={{
-      background: '#0f172a', border: `1px solid ${variant === 'danger' ? '#7f1d1d' : '#92400e'}`,
+      background: '#0f172a', border: `1px solid ${resolvedVariant === 'danger' ? '#7f1d1d' : '#92400e'}`,
       borderRadius: 14, padding: '28px 32px', maxWidth: 420, width: '90%',
     }}>
       <div style={{ fontSize: 16, fontWeight: 700, color: '#f8fafc', marginBottom: 10 }}>{title}</div>
       <div style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.6, marginBottom: 24 }}>{message}</div>
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
         <ActionBtn label="Cancel" onClick={onCancel} variant="ghost" />
-        <ActionBtn label={confirmLabel} onClick={onConfirm} variant={variant === 'danger' ? 'danger' : 'warning'} />
+        <ActionBtn label={confirmLabel} onClick={onConfirm} variant={resolvedVariant === 'danger' ? 'danger' : 'warning'} />
       </div>
     </div>
   </div>
-);
+  );
+};
 
 // ── Global keyframes (injected once) ─────────────────────────────────────────
 
