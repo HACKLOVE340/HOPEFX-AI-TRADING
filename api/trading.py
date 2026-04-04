@@ -170,62 +170,21 @@ _ORDER_RATE_LIMIT = int(os.getenv("ORDER_RATE_LIMIT", "10"))
 _ORDER_RATE_WINDOW = int(os.getenv("ORDER_RATE_WINDOW", "60"))  # seconds
 _order_rl_cache: dict = {}  # in-memory fallback: {user_id: [timestamps]}
 
-# ---------------------------------------------------------------------------
-# Module-level Redis connection pool for order rate limiting.
-# Created once on first use and reused for all subsequent calls.
-# This avoids the cost of creating a new TCP connection on every order request
-# (previous implementation created a fresh Redis connection per call, which
-# adds ~5-30ms of latency and exhausts file descriptors under load).
-# ---------------------------------------------------------------------------
-_redis_pool = None
-_redis_pool_lock = None
 
+def _get_redis_client():
+    """Return the process-wide synchronous Redis client from the central pool.
 
-def _get_redis_pool():
-    """Return (or lazily create) the module-level Redis connection pool.
-
-    Uses a threading.Lock for double-checked locking so that exactly one pool
-    is created even under concurrent requests.  The _redis_pool_lock itself is
-    created once at module load time — it never races because module import is
-    serialized by Python's import system.
+    Uses cache.redis_pool which manages a properly-sized ConnectionPool
+    singleton with asyncio-safe locking.  Returns None when Redis is
+    unavailable so callers can fall back to in-memory rate limiting.
     """
-    global _redis_pool, _redis_pool_lock
-    # Fast path — already initialised (no lock needed, assignment is atomic).
-    if _redis_pool is not None:
-        return _redis_pool
+    try:
+        from cache.redis_pool import get_sync_client  # type: ignore[import]
 
-    # Slow path — first call, possibly concurrent.  Use the module-level lock
-    # so only one thread creates the pool.
-    import threading as _threading
-
-    if _redis_pool_lock is None:
-        # This line itself is safe: module-level import is serialized.
-        _redis_pool_lock = _threading.Lock()
-
-    with _redis_pool_lock:
-        # Re-check inside the lock (double-checked locking pattern).
-        if _redis_pool is not None:
-            return _redis_pool
-        try:
-            import redis as _redis
-
-            _redis_pool = _redis.ConnectionPool(
-                host=os.getenv("REDIS_HOST", "localhost"),
-                port=int(os.getenv("REDIS_PORT", "6379")),
-                max_connections=int(os.getenv("REDIS_POOL_MAX_CONN", "10")),
-                socket_connect_timeout=0.5,
-                decode_responses=True,
-            )
-            logger.info(
-                "Trading API: Redis connection pool created (host=%s port=%s max_conn=%s)",
-                os.getenv("REDIS_HOST", "localhost"),
-                os.getenv("REDIS_PORT", "6379"),
-                os.getenv("REDIS_POOL_MAX_CONN", "10"),
-            )
-            return _redis_pool
-        except Exception as exc:  # pylint: disable=broad-exception-caught
-            logger.warning("Trading API: could not create Redis pool: %s — rate limiting will use in-memory fallback", exc)
-            return None
+        return get_sync_client()
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.warning("Trading API: Redis unavailable: %s — rate limiting will use in-memory fallback", exc)
+        return None
 
 
 def _reset_order_rl_cache() -> None:
@@ -236,15 +195,12 @@ def _reset_order_rl_cache() -> None:
 def _check_order_rate_limit(user_id: str) -> None:
     """Raise HTTP 429 if the user has exceeded the order rate limit.
 
-    Uses the module-level Redis connection pool when available, falling back
+    Uses the central Redis connection pool when available, falling back
     to an in-memory sliding-window when Redis is unreachable.
     """
-    pool = _get_redis_pool()
-    if pool is not None:
+    r = _get_redis_client()
+    if r is not None:
         try:
-            import redis as _redis
-
-            r = _redis.Redis(connection_pool=pool)
             key = f"order_rl:{user_id}"
             now = time.time()
             pipe = r.pipeline()
