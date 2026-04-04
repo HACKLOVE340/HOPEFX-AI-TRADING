@@ -57,6 +57,7 @@ tqdm>=4.67.0  # CVE-2024-34062 fixed in 4.66.4+
 rich>=13.0.0
 httpx>=0.26.0
 yfinance>=0.2.36
+curl-cffi>=0.15.0  # CVE-2026-33752: SSRF via redirect — transitive dep of yfinance; pin to patched version
 
 # ── Machine learning ──────────────────────────────────────────────────────────
 scikit-learn>=1.6.0  # CVE-2024-5206 fixed in 1.5.1+
