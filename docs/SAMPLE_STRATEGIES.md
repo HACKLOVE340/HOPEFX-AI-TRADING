@@ -1,7 +1,7 @@
 # HOPEFX Sample Trading Strategies
 
 > Ready-to-use trading strategies with explanations and example code.
-> Last updated: 2026-04-01
+> Last updated: 2026-07-14
 
 ---
 
@@ -29,24 +29,28 @@ plan returns `403 Plan Limit Exceeded` with `{"required_plan": "professional"}`.
 
 ### How Gating Works
 
-The `require_plan` decorator on each strategy endpoint enforces the tier check:
+Strategy tier enforcement uses `plan_gate()` from `monetization/subscription.py`.
+It is called inline in each endpoint before any strategy logic executes:
 
 ```python
-from monetization.subscription import require_plan
+from monetization.subscription import plan_gate, subscription_manager
 
-@router.post("/api/strategies/smc_ict/signal")
-@require_plan("enterprise")   # Enterprise and above
-async def smc_ict_signal(request: SignalRequest, user=Depends(get_current_user)):
-    ...
+@router.post("/api/trading/order")
+async def place_order(request: OrderRequest, user=Depends(get_current_user)):
+    sub = subscription_manager.get_subscription(user.user_id)
+    user_plan = sub.tier.value if (sub and sub.is_active()) else "free"
 
-@router.post("/api/strategies/ma_crossover/signal")
-@require_plan("starter")      # All paid plans
-async def ma_crossover_signal(request: SignalRequest, user=Depends(get_current_user)):
+    if not plan_gate("starter", user_plan):
+        raise HTTPException(
+            status_code=403,
+            detail={"error_code": "PLAN_LIMIT_EXCEEDED", "required_plan": "starter"}
+        )
     ...
 ```
 
-The `require_plan` check runs before any strategy logic. Blocked requests never
-reach the strategy code.
+Strategy-level gating is also enforced in `strategies/manager.py` via
+`STRATEGY_PLAN_REQUIREMENTS` — `generate_signals()` checks the user plan before
+running any strategy logic. Blocked requests never reach the strategy code.
 
 ### Checking Your Available Strategies
 
@@ -1008,3 +1012,7 @@ See [live_trading_gate.md](live_trading_gate.md) for the full live trading check
 ---
 
 *These sample strategies are for educational purposes. Always backtest and paper trade before using real money. Past performance does not guarantee future results.*
+
+---
+
+*Last updated: 2026-07-14*
