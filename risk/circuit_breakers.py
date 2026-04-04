@@ -25,6 +25,32 @@ import redis
 logger = logging.getLogger(__name__)
 
 
+def _send_circuit_breaker_telegram(reason: str, message: str) -> None:
+    """Fire-and-forget Telegram notification for circuit-breaker events.
+
+    Failures are swallowed so circuit-breaker logic is never blocked by a
+    notification outage.  Works both inside and outside a running event loop.
+    """
+    try:
+        from notifications import get_alert_engine
+
+        engine = get_alert_engine()
+        if engine is None:
+            return
+        alert_text = f"🚨 CIRCUIT BREAKER [{reason}]: {message}"
+
+        async def _send() -> None:
+            await engine.send_alert("critical", alert_text)
+
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(_send())
+        except RuntimeError:
+            asyncio.run(_send())
+    except Exception as exc:  # nosec B110 — notification must never crash risk
+        logger.debug("Circuit-breaker Telegram alert suppressed: %s", exc)
+
+
 class CircuitState(Enum):
     CLOSED = "closed"  # Normal operation
     OPEN = "open"  # Trading halted
@@ -220,6 +246,9 @@ class CircuitBreaker:
             self._persist_state()
 
             logger.critical("🚨 CIRCUIT BREAKER TRIGGERED: %s - %s", reason, message)
+
+            # Telegram / notification alert for consecutive-loss and other critical events
+            _send_circuit_breaker_telegram(reason, message)
 
             # Execute kill switch
             await self._execute_kill_switch(reason)
