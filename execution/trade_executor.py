@@ -166,7 +166,7 @@ class TradeExecutor:
             await self._notify_callbacks(result, signal)
             return result
 
-        except Exception as exc:
+        except (TimeoutError, RuntimeError, ConnectionError, ValueError) as exc:
             latency_ms = (asyncio.get_event_loop().time() - start_time) * 1000
             logger.exception("Execution error for %s", symbol)
             self.metrics.record_error("trade_executor", type(exc).__name__)
@@ -300,7 +300,7 @@ class TradeExecutor:
                 import sentry_sdk
 
                 sentry_sdk.capture_exception(exc)
-            except Exception as _exc:
+            except (RuntimeError, AttributeError) as _exc:
                 logger.debug("Suppressed exception: %s", _exc)
             return ExecutionResult(
                 success=False,
@@ -407,7 +407,7 @@ class TradeExecutor:
                             realized_pnl=realized_pnl,
                             symbol=getattr(closed_position, "symbol", position_id),
                         )
-                except Exception as _rm_exc:
+                except (RuntimeError, AttributeError, TypeError) as _rm_exc:
                     logger.debug(
                         "RiskManager.record_trade_outcome failed (non-fatal): %s",
                         _rm_exc,
@@ -440,7 +440,7 @@ class TradeExecutor:
                         _direction,
                         _conf,
                     )
-                except Exception as _sf_exc:
+                except (ImportError, RuntimeError, AttributeError) as _sf_exc:
                     logger.debug("SignalFilter close record failed (non-fatal): %s", _sf_exc)
 
         return ExecutionResult(
@@ -489,7 +489,7 @@ class TradeExecutor:
             try:
                 self.risk_manager._trading_halted = True
                 self.risk_manager._halt_reason = reason
-            except Exception as _exc:
+            except (TimeoutError, RuntimeError, ConnectionError, ValueError) as _exc:
                 logger.debug("Suppressed exception: %s", _exc)
 
     def _check_streak_circuit_breaker(self) -> tuple:
@@ -599,7 +599,7 @@ class TradeExecutor:
                         max_size_notional,
                     )
                     return round(max_size_notional, 8)
-        except Exception as exc:
+        except (RuntimeError, ValueError, TypeError, AttributeError) as exc:
             logger.debug("Risk cap calculation failed (non-fatal): %s", exc)
 
         return size
@@ -618,7 +618,7 @@ class TradeExecutor:
                     await callback(result, signal)
                 else:
                     callback(result, signal)
-            except Exception as exc:
+            except (RuntimeError, TypeError) as exc:
                 logger.error("Callback error: %s", exc)
 
         if result.success and result.status in (
@@ -697,10 +697,10 @@ class TradeExecutor:
                     _direction,
                     _confidence,
                 )
-            except Exception as _sf_exc:
+            except (ImportError, RuntimeError, AttributeError) as _sf_exc:
                 logger.debug("SignalFilter record_outcome failed (non-fatal): %s", _sf_exc)
 
-        except Exception as exc:
+        except (ImportError, RuntimeError, AttributeError, TypeError) as exc:
             logger.debug("InferenceEngine fill notify failed (non-fatal): %s", exc)
 
     # ── Utilities ─────────────────────────────────────────────────────────────
@@ -715,7 +715,7 @@ class TradeExecutor:
                     if success:
                         cancelled.append(order_id)
                         del self._pending_orders[order_id]
-                except Exception as exc:
+                except (TimeoutError, RuntimeError, ConnectionError) as exc:
                     logger.error("Error cancelling order %s: %s", order_id, exc)
         return cancelled
 
