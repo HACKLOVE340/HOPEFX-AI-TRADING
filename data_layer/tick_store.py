@@ -217,7 +217,7 @@ class _TimescaleBackend:
             conditions.append("ts_ns <= %s")
             params.append(until_ns)
         where = " AND ".join(conditions)
-        sql = f"SELECT ts_ns, bid, ask, mid, spread, volume, source FROM ticks WHERE {where} ORDER BY ts_ns DESC LIMIT %s"
+        sql = f"SELECT ts_ns, bid, ask, mid, spread, volume, source FROM ticks WHERE {where} ORDER BY ts_ns DESC LIMIT %s"  # nosec B608 — clause built from hardcoded literals only; values are parameterized
         params.append(limit)
         with self._cur() as cur:
             cur.execute(sql, params)
@@ -239,21 +239,23 @@ class _TimescaleBackend:
             conditions.append("ts_ns >= %s")
             params.append(since_ns)
         where = " AND ".join(conditions)
-        sql = f"""
-            SELECT
-                (ts_ns / %s) * %s          AS bar_ts_ns,
-                FIRST(mid, ts_ns)          AS open,
-                MAX(mid)                   AS high,
-                MIN(mid)                   AS low,
-                LAST(mid, ts_ns)           AS close,
-                SUM(volume)                AS volume,
-                COUNT(*)                   AS tick_count
-            FROM ticks
-            WHERE {where}
-            GROUP BY bar_ts_ns
-            ORDER BY bar_ts_ns DESC
-            LIMIT %s
-        """
+        # where is built exclusively from hardcoded literal strings above —
+        # no user input enters the clause text. Values use %s placeholders.
+        sql = (
+            "SELECT"
+            " (ts_ns / %s) * %s AS bar_ts_ns,"
+            " FIRST(mid, ts_ns) AS open,"
+            " MAX(mid) AS high,"
+            " MIN(mid) AS low,"
+            " LAST(mid, ts_ns) AS close,"
+            " SUM(volume) AS volume,"
+            " COUNT(*) AS tick_count"
+            " FROM ticks"
+            " WHERE " + where +  # nosec B608
+            " GROUP BY bar_ts_ns"
+            " ORDER BY bar_ts_ns DESC"
+            " LIMIT %s"
+        )
         params = [bucket_ns, bucket_ns] + params + [limit]
         with self._cur() as cur:
             cur.execute(sql, params)
