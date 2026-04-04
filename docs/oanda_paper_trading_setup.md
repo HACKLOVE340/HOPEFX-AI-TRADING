@@ -1,7 +1,11 @@
 # OANDA Paper Trading Setup
 
+> Last updated: 2026-07-14
+
 Get HOPEFX running against a real broker API in paper (practice) mode.
 No real money involved — OANDA practice accounts are free and instant.
+
+**Important:** OANDA is used for **order execution only** (placing, cancelling, and querying positions). Live price ticks come from `NuclearStreamer` (Finnhub/Twelve Data/Polygon WebSocket feeds), not from OANDA. Set at least one streaming API key in `.env` before starting.
 
 ---
 
@@ -22,8 +26,6 @@ the app falls back to the internal paper broker. All OANDA API endpoints return
 
 To subscribe: [hopefx.com/pricing](https://hopefx.com/pricing)
 To request a trial: open a GitHub Issue with label `trial-request`
-
----
 
 ---
 
@@ -79,20 +81,26 @@ cp .env.example .env
 Set these values in `.env`:
 
 ```env
-# Broker
+# Broker (execution only)
 BROKER_TYPE=oanda
-OANDA_PRACTICE=true
-
-# OANDA credentials (practice)
+OANDA_ENVIRONMENT=practice
 OANDA_API_KEY=your_practice_api_token_here
 OANDA_ACCOUNT_ID=001-001-XXXXXXX-001
 
-# Optional: instruments to trade (comma-separated OANDA codes)
+# Optional: instruments to trade (comma-separated OANDA instrument codes)
 OANDA_INSTRUMENTS=XAU_USD,EUR_USD
+
+# Live price streaming (required — OANDA does NOT provide price ticks)
+FINNHUB_API_KEY=your_finnhub_key_here   # https://finnhub.io — free tier
+# TWELVE_API_KEY=                        # optional second source
+# POLYGON_API_KEY=                       # optional third source
+
+# Live trading safety gate — keep false for paper trading
+LIVE_MODE_CONFIRMED=false
 ```
 
-Leave `OANDA_PRACTICE=true` — this ensures all orders go to the practice
-environment, not live markets.
+`OANDA_ENVIRONMENT=practice` routes all orders to the OANDA fxTrade Practice endpoint.
+The `LIVE_MODE_CONFIRMED=false` gate blocks any accidental live order submission.
 
 ---
 
@@ -156,12 +164,13 @@ you can enable live trading (Task 22).
 | Error | Cause | Fix |
 |-------|-------|-----|
 | `403 Subscription Required` | No valid license key | Set `HOPEFX_LICENSE_KEY` in `.env` and restart |
-| `403 Plan Limit Exceeded` | Trial plan cannot use OANDA | Upgrade to Starter or above |
-| `401 Unauthorized` (OANDA) | API token wrong or expired | Regenerate token in OANDA portal |
+| `403 Plan Limit Exceeded` | Plan does not include OANDA | Upgrade to Starter or above |
+| `401 Unauthorized` (OANDA) | API key wrong or expired | Regenerate token in OANDA portal → Manage API Access |
 | `Account not found` | Wrong account ID format | Must be `001-001-XXXXXXX-001` — copy exactly from OANDA dashboard |
-| `Instrument not tradeable` | Wrong instrument code | Use `XAU_USD` not `XAUUSD` — see [OANDA instrument list](https://developer.oanda.com/rest-live-v20/instrument-ep/) |
-| No prices updating | Wrong env var name | Check both `OANDA_API_KEY` and `BROKER_OANDA_TOKEN` — both aliases work |
+| `Instrument not tradeable` | Wrong instrument code | Use `XAU_USD` not `XAUUSD` — OANDA uses underscore format |
+| No price ticks | Streaming API key missing | Set `FINNHUB_API_KEY` (or `TWELVE_API_KEY`/`POLYGON_API_KEY`) — OANDA does not stream prices |
 | App uses paper broker despite OANDA config | Subscription not active | Run `python scripts/manage_secrets.py validate` |
+| `LIVE_MODE_CONFIRMED` error | Safety gate blocking orders | Expected for paper trading — set `LIVE_MODE_CONFIRMED=false` |
 
 ---
 
