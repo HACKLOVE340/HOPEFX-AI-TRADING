@@ -17,7 +17,6 @@ import time
 import uuid
 from collections import deque
 from datetime import datetime, timezone
-UTC = timezone.utc
 from typing import Any
 
 from .base import (
@@ -29,6 +28,8 @@ from .base import (
     OrderType,
     Position,
 )
+
+UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +98,7 @@ class SlippageModel:
         self._fixed_pct = float(os.getenv("PAPER_FIXED_SLIPPAGE_PCT", "0.0005"))
         self._impact_factor = float(os.getenv("PAPER_IMPACT_FACTOR", "0.1"))
         self._noise_sigma_pct = float(os.getenv("PAPER_NOISE_SIGMA_PCT", "0.0001"))
-        self._rng = random.Random()  # not seeded  # nosec B311 - paper trading noise, intentionally non-deterministic — intentionally non-deterministic
+        self._rng = random.Random()  # not seeded  # nosec B311 - paper trading noise, intentionally non-deterministic
 
     def fill_price(
         self,
@@ -356,6 +357,24 @@ class PaperTradingBroker(BrokerConnector):
         logger.info("Disconnected from %s", self.name)
         return True
 
+    def set_spread(self, spread: float, symbol: str | None = None) -> None:
+        """
+        Update the current spread used by the slippage model.
+
+        Parameters
+        ----------
+        spread : Full bid-ask spread in price units.
+        symbol : If provided, update the spread for this symbol only.
+                 If None, update the fallback ``_current_spread`` attribute
+                 used when the symbol has no entry in the spread table.
+        """
+        if symbol is not None:
+            _DEFAULT_SPREADS[symbol] = spread / 2.0  # table stores half-spread
+            logger.debug("PaperTrading: spread updated for %s → %.5f", symbol, spread)
+        else:
+            self._current_spread = spread
+            logger.debug("PaperTrading: default spread updated → %.5f", spread)
+
     def place_order(
         self,
         symbol: str,
@@ -448,7 +467,11 @@ class PaperTradingBroker(BrokerConnector):
                     "price": order.price,
                     "status": str(order.status.value),
                     "filled_price": order.filled_price,
-                    "timestamp": order.timestamp.isoformat() if hasattr(order.timestamp, "isoformat") else str(order.timestamp),
+                    "timestamp": (
+                        order.timestamp.isoformat()
+                        if hasattr(order.timestamp, "isoformat")
+                        else str(order.timestamp)
+                    ),
                 })
             except Exception as _rse:
                 logger.debug("PaperTradingBroker: Redis save_order failed: %s", _rse)
