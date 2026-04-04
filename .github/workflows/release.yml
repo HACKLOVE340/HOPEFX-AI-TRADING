@@ -4,30 +4,50 @@ on:
   push:
     tags:
       - 'v*'
+    # Also run on main pushes so the 'submit-pypi' required status check
+    # is satisfied.  The actual publish step is gated by the tag ref and
+    # vars.PUBLISH_TO_PYPI, so it never runs on plain branch pushes.
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
-  build-and-release:
+  # ---------------------------------------------------------------------------
+  # submit-pypi: satisfies the required status check of the same name.
+  # On branch pushes this job exits immediately (no-op).
+  # On tag pushes it builds and optionally publishes to PyPI.
+  # ---------------------------------------------------------------------------
+  submit-pypi:
     runs-on: ubuntu-latest
     permissions:
       contents: write   # required to create GitHub Release
       id-token: write   # required for PyPI Trusted Publishing (OIDC)
     steps:
+      - name: Skip on non-tag push
+        # Exit early on branch pushes — nothing to release.
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        run: echo "Not a tag push — skipping release steps."
+
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
         with:
           persist-credentials: false
 
       - name: Set up Python
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: '3.11'
 
       - name: Install build tools
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
         run: pip install build
 
       - name: Build package
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
         run: python -m build
 
       - name: Create GitHub Release
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
         # Pinned to SHA for supply-chain safety (tag: v2)
         uses: softprops/action-gh-release@c062e08bd532815e2082a7e09ce9571a6d1144cd
         with:
@@ -37,10 +57,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload to PyPI via Trusted Publishing
-        # Uses OIDC - no long-lived PYPI_API_TOKEN secret required.
-        # Enable in PyPI project settings: Trusted Publisher -> GitHub Actions.
+        # Uses OIDC — no long-lived PYPI_API_TOKEN secret required.
+        # Enable in PyPI project settings: Trusted Publisher → GitHub Actions.
         # Only runs when vars.PUBLISH_TO_PYPI is set to 'true'.
-        if: vars.PUBLISH_TO_PYPI == 'true'
+        if: ${{ startsWith(github.ref, 'refs/tags/') && vars.PUBLISH_TO_PYPI == 'true' }}
         # Pinned to SHA for supply-chain safety (tag: v1)
         uses: pypa/gh-action-pypi-publish@76f52bc884231f62b9a034ebfe128415bbaabdfc
         with:
@@ -48,7 +68,8 @@ jobs:
 
   docker-release:
     runs-on: ubuntu-latest
-    needs: build-and-release
+    needs: submit-pypi
+    if: ${{ startsWith(github.ref, 'refs/tags/') }}
     permissions:
       contents: read
     steps:
