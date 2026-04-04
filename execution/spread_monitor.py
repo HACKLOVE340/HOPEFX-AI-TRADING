@@ -132,6 +132,13 @@ class SpreadMonitor:
         :class:`SpreadSnapshot` with current spread, baseline, ratio, and spike flag.
         """
         if bid <= 0 or ask <= 0 or ask < bid:
+            if ask < bid and bid > 0 and ask > 0:
+                logger.debug(
+                    "SpreadMonitor: crossed market for %s (bid=%.5f > ask=%.5f) — skipping tick",
+                    symbol,
+                    bid,
+                    ask,
+                )
             return SpreadSnapshot(
                 symbol=symbol,
                 current_spread=0.0,
