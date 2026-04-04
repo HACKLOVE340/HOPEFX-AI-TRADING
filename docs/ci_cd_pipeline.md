@@ -1,106 +1,86 @@
 # CI/CD Pipeline
 
 > GitHub Actions CI/CD for HOPEFX AI Trading.
-> Last updated: 2026-04-01
+> Last updated: 2026-07-14
 
 ---
 
 ## Overview
 
-The pipeline runs on every push and pull request to `main` and `develop`:
-
-| Job | Trigger | What it does |
-|-----|---------|-------------|
-| `pre-commit` | Push/PR | ruff lint + format, bandit, pre-commit hooks |
-| `dependency-scan` | Push/PR | pip-audit CVE scan, Trivy supply-chain scan |
-| `test` | Push/PR | pytest on Python 3.10/3.11/3.12, coverage upload |
-| `docker-release` | Tag `v*` | Build + push Docker image to Docker Hub |
-| `build-and-release` | Tag `v*` | Build Python package, create GitHub Release |
-
+The pipeline runs on every push and pull request to `main` and `develop`.
 All workflow files are in `.github/workflows/`.
+
+| Workflow file | Trigger | Jobs |
+|---------------|---------|------|
+| `ci.yml` | Push/PR to `main`/`develop` | `pre-commit`, `dependency-scan`, `test` (matrix 3.11/3.12), `frontend`, `e2e` |
+| `release.yml` | Tag `v*` | `build-and-release` (PyPI), `docker-release` (Docker Hub) |
+| `retrain.yml` | Weekly Sunday 02:00 UTC + manual dispatch | `smoke-validate`, `full-retrain` (50Y walk-forward) |
+| `security-scan.yml` | Push/PR | Additional security scanning |
+| `codeql.yml` | Push/PR | GitHub CodeQL security analysis |
+| `codacy.yml` | Push/PR | Codacy static analysis |
+| `docs.yml` | Push to `main` | MkDocs build and deploy to GitHub Pages |
+| `update_docs.yml` | Merge to `main` | Auto-update docs |
+| `tests.yml` | Push/PR | Extended test suite (slow tests, integration) |
+| `fortify.yml` | Push/PR | Fortify security scan |
+| `summary.yml` | Push/PR | CI summary report |
 
 ---
 
-## Workflow Files
+## Workflow Details
 
-### CI (`ci.yml`)
+### `ci.yml` — Main CI
 
 Runs on every push to `main`/`develop` and every PR targeting `main`.
+Uses `concurrency` to cancel in-progress runs on the same branch.
 
-**Jobs:**
+**`pre-commit`** — Runs all pre-commit hooks (ruff check, ruff format, bandit).
+All action SHAs are pinned for supply-chain safety.
 
-**`pre-commit`** — Runs all pre-commit hooks (ruff check, ruff format, bandit):
-```yaml
-- uses: pre-commit/action@v3.0.1
+**`dependency-scan`** — CVE scan + supply-chain scan:
+```bash
+pip-audit --requirement=requirements.txt --desc || true
+trivy fs --severity CRITICAL,HIGH .
 ```
+CVEs are reported but do not block merges — tracked in the security dashboard.
 
-**`dependency-scan`** — Scans for known CVEs and supply-chain issues:
-```yaml
-- run: pip-audit --requirement=requirements.txt --desc || true
-- uses: aquasecurity/trivy-action@v0.29.0
-  with:
-    scan-type: fs
-    severity: CRITICAL,HIGH
-```
+**`test`** — Matrix across Python 3.11 and 3.12 with PostgreSQL 16 + Redis 7 services.
 
-**`test`** — Matrix test across Python 3.10, 3.11, 3.12 with PostgreSQL 16 + Redis 7:
-```yaml
-strategy:
-  matrix:
-    python-version: ["3.10", "3.11", "3.12"]
-services:
-  postgres:
-    image: postgres:16
-  redis:
-    image: redis:7
-```
+Coverage gates enforced in CI:
+| Module | Minimum coverage |
+|--------|-----------------|
+| Overall (`auth`, `risk`, `brokers`, `execution`, `ml`, `config`, `kill_switch`, `compliance`, `analytics`, `backtesting`) | 70% |
+| `risk/` | 90% |
+| `execution/` | 90% |
+| `kill_switch.py` | 90% |
+| `brokers/` | 90% |
+| `compliance/` | 90% |
 
-Test command:
-```yaml
-- run: |
-    pytest tests/ \
-      -m "not slow" \
-      --cov=. \
-      --cov-report=xml \
-      --cov-fail-under=70 \
-      -v \
-      --asyncio-mode=auto
-```
+Coverage is uploaded to Qlty on every run (Python 3.11 matrix leg only).
 
-Coverage is uploaded to Codecov on every run.
+**`frontend`** — TypeScript type check + unit tests in `frontend/` via `npm ci && npm run typecheck && npm run test`.
 
-### Release (`release.yml`)
+**`e2e`** — End-to-end tests (see `ci.yml` for full configuration).
+
+### `release.yml` — Release
 
 Triggers on any tag matching `v*` (e.g., `v1.17.0`).
 
-**`build-and-release`** — Builds the Python package and creates a GitHub Release:
-```yaml
-- run: python -m build
-- uses: actions/create-release@v1
-  env:
-    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-```
+**`build-and-release`** — Builds the Python package and creates a GitHub Release with auto-generated release notes. Publishes to PyPI via OIDC Trusted Publishing when `vars.PUBLISH_TO_PYPI == 'true'` (no long-lived `PYPI_API_TOKEN` secret required).
 
-**`docker-release`** — Builds and pushes the Docker image to Docker Hub:
-```yaml
-- uses: docker/build-push-action@v5
-  with:
-    push: true
-    tags: |
-      hopefx/ai-trading:${{ steps.get_version.outputs.VERSION }}
-      hopefx/ai-trading:latest
-```
+**`docker-release`** — Builds and pushes the Docker image to Docker Hub. Runs after `build-and-release` succeeds.
 
-### Other Workflows
+### `retrain.yml` — ML Walk-Forward Retrain
 
-| File | Purpose |
-|------|---------|
-| `codacy.yml` | Codacy static analysis on every PR |
-| `codeql.yml` | GitHub CodeQL security analysis |
-| `security-scan.yml` | Additional security scanning |
-| `docs.yml` | MkDocs build and deploy to GitHub Pages |
-| `tests.yml` | Extended test suite (slow tests, integration) |
-| `update_docs.yml` | Auto-update docs on merge to main |
+Runs weekly (Sunday 02:00 UTC) and on manual dispatch.
+
+| Job | When | What |
+|-----|------|------|
+| `smoke-validate` | Every trigger | Runs `scripts/retrain_horizon5.py --smoke` — validates pipeline without downloading data (~5 min) |
+| `full-retrain` | Schedule or `mode=full` dispatch | Runs `scripts/retrain_model.py --advanced --years 50 --oos-years 8` — full 50-year walk-forward retrain (~2 hours) |
+
+On full retrain success, updated model artefacts (`registry.json`, `advanced_training_report.json`, `feature_stats.json`, `feature_importances.json`) are committed back to the branch automatically.
+
+On failure, a GitHub Issue is created automatically with labels `ml`, `automated`, `retrain-failure`.
 
 ---
 
@@ -110,12 +90,14 @@ Set these in: **Repository → Settings → Secrets and variables → Actions**
 
 ### CI Secrets (required for tests to pass)
 
-| Secret | Description | How to generate |
-|--------|-------------|----------------|
-| `CI_JWT_SECRET` | JWT signing key for test runs | `python -c "import secrets; print(secrets.token_hex(32))"` |
-| `CI_ENCRYPTION_KEY` | Config encryption key for test runs | `python -c "import secrets; print(secrets.token_hex(32))"` |
-| `CI_KILL_SWITCH_TOKEN` | Kill switch token for test runs | `python -c "import secrets; print(secrets.token_hex(32))"` |
-| `CODECOV_TOKEN` | Codecov upload token | From [codecov.io](https://codecov.io) after linking the repo |
+The CI workflow uses these env vars directly — they are not named `CI_*` in the workflow:
+
+| Secret name | Maps to env var | How to generate |
+|-------------|----------------|----------------|
+| `SECURITY_JWT_SECRET` | `SECURITY_JWT_SECRET` | `python -c "import secrets; print(secrets.token_hex(32))"` |
+| `CONFIG_ENCRYPTION_KEY` | `CONFIG_ENCRYPTION_KEY` | `python -c "import secrets; print(secrets.token_hex(32))"` |
+| `CONFIG_SALT` | `CONFIG_SALT` | `python -c "import secrets; print(secrets.token_hex(16))"` |
+| `QLTY_COVERAGE_TOKEN` | Coverage upload to Qlty | From [qlty.sh](https://qlty.sh) after linking the repo |
 
 ### Release Secrets (required for releases)
 
@@ -123,7 +105,8 @@ Set these in: **Repository → Settings → Secrets and variables → Actions**
 |--------|-------------|----------------|
 | `DOCKER_USERNAME` | Docker Hub username | Your Docker Hub account |
 | `DOCKER_PASSWORD` | Docker Hub access token | Docker Hub → Account Settings → Security → New Access Token |
-| `PYPI_API_TOKEN` | PyPI upload token | pypi.org → Account Settings → API tokens |
+
+PyPI publishing uses OIDC Trusted Publishing — no `PYPI_API_TOKEN` secret required. Enable in PyPI project settings: Trusted Publisher → GitHub Actions. Set `vars.PUBLISH_TO_PYPI = true` in repository variables to activate.
 
 ### Deployment Secrets (required for Kubernetes deploy)
 
@@ -363,4 +346,74 @@ Key differences between staging and production:
 
 ---
 
-*Last updated: 2026-04-01*
+---
+
+## Pre-commit Hooks
+
+Pre-commit hooks run locally on every `git commit`. They mirror the CI checks so
+failures are caught before pushing.
+
+Install once after cloning:
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+Hooks configured in `.pre-commit-config.yaml`:
+
+| Hook | What it checks |
+|------|---------------|
+| `ruff` | Lint — PEP 8, unused imports, undefined names |
+| `ruff-format` | Format — consistent style (replaces black) |
+| `bandit` | Security — common Python security issues |
+| `check-yaml` | YAML syntax validity |
+| `end-of-file-fixer` | Trailing newlines |
+| `trailing-whitespace` | Trailing spaces |
+
+Run all hooks manually (without committing):
+```bash
+pre-commit run --all-files
+```
+
+If a hook fails on commit, fix the reported issues and `git add` the changes before
+committing again. Do not use `--no-verify` to bypass hooks.
+
+---
+
+## Branch Strategy
+
+| Branch | Purpose | CI runs | Auto-deploy |
+|--------|---------|---------|-------------|
+| `main` | Production-ready code | Full CI | Staging (if `STAGING_KUBECONFIG` set) |
+| `develop` | Integration branch | Full CI | No |
+| `feat/*` | Feature branches | Full CI | No |
+| `fix/*` | Bug fix branches | Full CI | No |
+| `docs/*` | Documentation only | Full CI | No |
+
+All merges to `main` require a passing CI run and at least one approving review.
+Direct pushes to `main` are blocked.
+
+---
+
+## Dependency Updates
+
+Keep dependencies current to avoid CVE accumulation:
+
+```bash
+# Check for outdated packages
+pip list --outdated
+
+# Check for known CVEs
+pip-audit --requirement requirements.txt --desc
+
+# Update a specific package
+pip install --upgrade package-name
+pip freeze > requirements.txt
+```
+
+Open a separate PR per dependency update. Do not bundle multiple dependency updates
+in a single PR — it makes rollback harder.
+
+---
+
+*Last updated: 2026-07-14*
