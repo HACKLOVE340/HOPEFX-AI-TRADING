@@ -398,7 +398,11 @@ class IBKRBroker:
             return {"success": False, "comment": f"TWS connection lost: {exc}", "error_type": "connection"}
         except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.exception("IBKRBroker.cancel_order: unexpected error | order_id=%s | error=%s", order_id, exc)
-            return {"success": False, "comment": f"Cancel failed ({type(exc).__name__}): {exc}", "error_type": "unexpected"}
+            return {
+                "success": False,
+                "comment": f"Cancel failed ({type(exc).__name__}): {exc}",
+                "error_type": "unexpected",
+            }
 
     async def close_position(
         self,

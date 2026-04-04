@@ -25,6 +25,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any, Optional
 
@@ -1329,11 +1330,15 @@ def _resolve_sl_tp(
     # predictable for callers that intentionally pass an empty data dict.
     has_bar_data = bool(data.get("prices") or data.get("highs") or data.get("lows"))
     if not has_bar_data:
-        sl = sl_raw if sl_raw is not None else (
-            entry_price * (1 - _SL_FALLBACK_FRAC) if is_long else entry_price * (1 + _SL_FALLBACK_FRAC)
+        sl = (
+            sl_raw
+            if sl_raw is not None
+            else (entry_price * (1 - _SL_FALLBACK_FRAC) if is_long else entry_price * (1 + _SL_FALLBACK_FRAC))
         )
-        tp = tp_raw if tp_raw is not None else (
-            entry_price * (1 + _TP_FALLBACK_FRAC) if is_long else entry_price * (1 - _TP_FALLBACK_FRAC)
+        tp = (
+            tp_raw
+            if tp_raw is not None
+            else (entry_price * (1 + _TP_FALLBACK_FRAC) if is_long else entry_price * (1 - _TP_FALLBACK_FRAC))
         )
         return sl, tp
 

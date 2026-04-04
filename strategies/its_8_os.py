@@ -20,6 +20,7 @@ Inner Circle Trader methodology:
 
 import logging
 from datetime import datetime, time, timezone
+
 UTC = timezone.utc
 from typing import Any
 

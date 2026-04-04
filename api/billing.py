@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import timezone
+
 UTC = timezone.utc
 from decimal import Decimal
 
@@ -474,10 +475,10 @@ async def list_payments(
                         "status": c.get("status", "unknown"),
                         "provider": "stripe",
                         "created_at": (
-                            __import__("datetime").datetime.fromtimestamp(
-                                c["created"], tz=__import__("datetime").timezone.utc
-                            ).isoformat()
-                            if isinstance(c.get("created"), (int, float))
+                            __import__("datetime")
+                            .datetime.fromtimestamp(c["created"], tz=__import__("datetime").timezone.utc)
+                            .isoformat()
+                            if isinstance(c.get("created"), int | float)
                             else str(c.get("created", ""))
                         ),
                     }
@@ -621,7 +622,9 @@ async def process_refund(
             _stripe_sdk.api_key = stripe_key
             refund = _stripe_sdk.Refund.create(
                 charge=payment_id,
-                reason=reason if reason in ("duplicate", "fraudulent", "requested_by_customer") else "requested_by_customer",
+                reason=reason
+                if reason in ("duplicate", "fraudulent", "requested_by_customer")
+                else "requested_by_customer",
             )
             return {
                 "ok": True,

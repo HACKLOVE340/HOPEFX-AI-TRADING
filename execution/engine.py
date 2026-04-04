@@ -32,6 +32,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum
 from typing import Any
@@ -400,6 +401,7 @@ class ExecutionEngine:
         # Feed spread monitor for real-time spike detection
         try:
             from execution.spread_monitor import get_spread_monitor
+
             get_spread_monitor().on_tick_obj(symbol, tick)
         except Exception:  # nosec B110 — spread monitor is non-fatal
             pass
@@ -447,11 +449,7 @@ class ExecutionEngine:
         # ── OTel instrumentation — use module-level cached tracer ─────────────
         _tracer = _get_module_tracer()
 
-        _root_span_ctx = (
-            _tracer.start_as_current_span("execution.execute")
-            if _tracer is not None
-            else _NullSpanCtx()
-        )
+        _root_span_ctx = _tracer.start_as_current_span("execution.execute") if _tracer is not None else _NullSpanCtx()
 
         with _root_span_ctx as _root_span:
             # Attach request attributes to the root span
@@ -492,9 +490,7 @@ class ExecutionEngine:
 
             # ── pre_trade_gate child span ─────────────────────────────────
             _gate_ctx = (
-                _tracer.start_as_current_span("execution.pre_trade_gate")
-                if _tracer is not None
-                else _NullSpanCtx()
+                _tracer.start_as_current_span("execution.pre_trade_gate") if _tracer is not None else _NullSpanCtx()
             )
             with _gate_ctx as _gate_span:
                 try:
@@ -541,9 +537,7 @@ class ExecutionEngine:
 
             # ── broker_submit child span ──────────────────────────────────
             _broker_ctx = (
-                _tracer.start_as_current_span("execution.broker_submit")
-                if _tracer is not None
-                else _NullSpanCtx()
+                _tracer.start_as_current_span("execution.broker_submit") if _tracer is not None else _NullSpanCtx()
             )
             with _broker_ctx as _broker_span:
                 try:
@@ -557,9 +551,7 @@ class ExecutionEngine:
 
                 # ── post_fill child span ──────────────────────────────────
                 _fill_ctx = (
-                    _tracer.start_as_current_span("execution.post_fill")
-                    if _tracer is not None
-                    else _NullSpanCtx()
+                    _tracer.start_as_current_span("execution.post_fill") if _tracer is not None else _NullSpanCtx()
                 )
                 with _fill_ctx as _fill_span:
                     try:
@@ -809,10 +801,7 @@ class ExecutionEngine:
             if result is not None:
                 action = result.get("action", "unknown")
                 if action in ("reject", "cancel_both"):
-                    return (
-                        f"[SELF_TRADE_PREVENTION] Order would self-match with resting order "
-                        f"(action={action})"
-                    )
+                    return f"[SELF_TRADE_PREVENTION] Order would self-match with resting order (action={action})"
                 # For cancel_resting: allow the new order, log the resting cancel
                 logger.info(
                     "STP: cancelling resting order %s to allow new order %s",
@@ -849,6 +838,13 @@ class ExecutionEngine:
             # Estimate notional of this order (price × qty)
             price = float(request.price or 0)
             notional = price * float(request.quantity) if price > 0 else 0.0
+
+            # Skip margin check when notional is unknown (e.g. market orders
+            # submitted without an explicit price).  We cannot compute the
+            # margin impact of an order we cannot price, so blocking would be a
+            # false positive.
+            if notional <= 0:
+                return None
 
             # After this order, projected margin used increases by notional
             projected_used = margin_used + notional
@@ -1355,6 +1351,7 @@ class ExecutionEngine:
         # Lazy-import so prometheus_client is optional (degrades gracefully).
         try:
             from execution._prom_metrics import EXECUTION_LATENCY_HISTOGRAM  # type: ignore[import]
+
             EXECUTION_LATENCY_HISTOGRAM.observe(latency_ms / 1000.0)
         except (ImportError, AttributeError) as _prom_exc:
             logger.debug("Prometheus histogram observe failed: %s", _prom_exc)

@@ -168,9 +168,7 @@ def _initialize_provider() -> None:
     # automatically honoured when this service acts as a downstream consumer.
     if _PROPAGATOR_AVAILABLE:
         try:
-            propagate.set_global_textmap(
-                CompositePropagator([TraceContextTextMapPropagator(), W3CBaggagePropagator()])
-            )
+            propagate.set_global_textmap(CompositePropagator([TraceContextTextMapPropagator(), W3CBaggagePropagator()]))
             logger.info("OTel W3C TraceContext + Baggage propagators installed")
         except Exception as _prop_exc:
             logger.debug("Could not install OTel propagators: %s", _prop_exc)
@@ -501,5 +499,7 @@ async def emit_test_span(
         span_id=span_id,
         name="hopefx.test.signal_to_broker",
         timestamp=ts,
-        message="Test span emitted successfully" if _OTEL_AVAILABLE else "OTel unavailable — span recorded in buffer only",
+        message="Test span emitted successfully"
+        if _OTEL_AVAILABLE
+        else "OTel unavailable — span recorded in buffer only",
     )

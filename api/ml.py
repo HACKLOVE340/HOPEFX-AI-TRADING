@@ -24,6 +24,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 from typing import Any
@@ -1257,12 +1258,12 @@ async def rl_status(user: TokenPayload = Depends(get_current_user)) -> dict:
 
 # ── Model Card ─────────────────────────────────────────────────────────────────
 
+
 @router.get(
     "/model-card",
     summary="Formal Model Card — metadata, performance, drift status, limitations",
     response_description=(
-        "Structured Model Card for the currently active production model, "
-        "following the Google Model Card 1.0 schema."
+        "Structured Model Card for the currently active production model, following the Google Model Card 1.0 schema."
     ),
 )
 async def get_model_card(
@@ -1338,10 +1339,7 @@ async def get_model_card(
                 feature_importances = raw[:10]
         elif active_meta.get("top_features"):
             # Fall back to registry top_features list
-            feature_importances = [
-                {"feature": f, "importance": None}
-                for f in active_meta["top_features"][:10]
-            ]
+            feature_importances = [{"feature": f, "importance": None} for f in active_meta["top_features"][:10]]
     except Exception as exc:
         logger.warning("model_card: could not load feature importances: %s", exc)
 
@@ -1361,6 +1359,7 @@ async def get_model_card(
         # Enhance with PSI + KS-test from DriftMonitor
         try:
             from ml.drift_monitor import get_drift_monitor
+
             monitor = get_drift_monitor()
             # Expose monitor configuration in the card
             drift_status["psi_monitor_loaded"] = monitor._stats != {}
@@ -1383,7 +1382,6 @@ async def get_model_card(
     card: dict[str, Any] = {
         "schema_version": "1.0",
         "generated_at": datetime.now(UTC).isoformat(),
-
         "model_details": {
             "name": "HOPEFX XAU/USD Signal Classifier",
             "version": version,
@@ -1398,7 +1396,6 @@ async def get_model_card(
             "authors": ["HOPEFX AI Team"],
             "license": "AGPL-3.0",
         },
-
         "intended_use": {
             "primary_use": (
                 "Generate directional trading signals for XAU/USD (Gold) on daily bars. "
@@ -1412,7 +1409,6 @@ async def get_model_card(
             ],
             "intended_users": ["Automated trading system only — not for direct human trading decisions"],
         },
-
         "training_data": {
             "source": "Yahoo Finance (yfinance GC=F) — daily OHLCV bars",
             "symbol": active_meta.get("symbol", "GC=F"),
@@ -1424,7 +1420,6 @@ async def get_model_card(
             "macro_features": active_meta.get("macro_features", True),
             "n_trades_oos": active_meta.get("n_trades", 0),
         },
-
         "evaluation_results": {
             "oos_accuracy": active_meta.get("oos_accuracy"),
             "oos_auc": active_meta.get("oos_auc"),
@@ -1450,7 +1445,6 @@ async def get_model_card(
                 ),
             },
         },
-
         "quantitative_analysis": {
             "feature_importances_top10": feature_importances,
             "abstain_threshold": active_meta.get("abstain_threshold"),
@@ -1458,16 +1452,11 @@ async def get_model_card(
             "regime_filter": {
                 "enabled": True,
                 "type": "HIGH_VOL_PARABOLIC",
-                "rule": (
-                    "Abstain when close > 1.30 × MA200 "
-                    "OR (RV14 > 2.5 × RV90 AND close ≤ 75% of 200-bar peak)"
-                ),
+                "rule": ("Abstain when close > 1.30 × MA200 OR (RV14 > 2.5 × RV90 AND close ≤ 75% of 200-bar peak)"),
                 "reference": "docs/FOLD2_REGIME_ANALYSIS.md",
             },
         },
-
         "drift_monitoring": drift_status,
-
         "caveats_and_recommendations": {
             "known_limitations": [
                 "Walk-forward Fold-2 (gold parabolic bubble ~2011-2012) showed 44.4% accuracy. "
@@ -1490,12 +1479,10 @@ async def get_model_card(
                 "Review walk-forward Fold-2 regime filter activation rate weekly",
             ],
         },
-
         "notes": active_meta.get("notes", ""),
     }
 
     return card
-
 
 
 @router.get(
@@ -1533,6 +1520,7 @@ async def get_drift_report() -> dict:
             if eng is not None and hasattr(eng, "_drift_buffer") and len(eng._drift_buffer) >= 50:
                 import numpy as np
                 import pandas as pd
+
                 arr = np.array(list(eng._drift_buffer))
                 # Column names from cached feature list
                 col_names = getattr(eng, "_last_feature_names", None)
@@ -1547,7 +1535,7 @@ async def get_drift_report() -> dict:
             return {
                 "overall_status": "unknown",
                 "message": "Insufficient live feature data (need ≥50 ticks). "
-                           "Start live inference to populate the drift buffer.",
+                "Start live inference to populate the drift buffer.",
                 "requires_retrain": False,
                 "live_samples": 0,
             }

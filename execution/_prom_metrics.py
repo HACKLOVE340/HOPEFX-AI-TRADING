@@ -14,6 +14,7 @@ Usage in Alertmanager / Grafana:
 Prometheus scrape:
     GET /api/health/metrics  → text/plain exposition format
 """
+
 from __future__ import annotations
 
 try:
@@ -29,17 +30,17 @@ try:
             "Target p99 < 0.05 s (50 ms) for Python-layer execution."
         ),
         buckets=(
-            0.001,   # 1 ms  — co-located HFT ceiling
-            0.002,   # 2 ms
-            0.005,   # 5 ms  — prop-firm target
-            0.010,   # 10 ms
-            0.020,   # 20 ms
-            0.050,   # 50 ms — our SLA target
-            0.100,   # 100 ms
-            0.200,   # 200 ms
-            0.500,   # 500 ms
-            1.000,   # 1 s   — clearly degraded
-            5.000,   # 5 s   — circuit breaker territory
+            0.001,  # 1 ms  — co-located HFT ceiling
+            0.002,  # 2 ms
+            0.005,  # 5 ms  — prop-firm target
+            0.010,  # 10 ms
+            0.020,  # 20 ms
+            0.050,  # 50 ms — our SLA target
+            0.100,  # 100 ms
+            0.200,  # 200 ms
+            0.500,  # 500 ms
+            1.000,  # 1 s   — clearly degraded
+            5.000,  # 5 s   — circuit breaker territory
         ),
         labelnames=[],
     )

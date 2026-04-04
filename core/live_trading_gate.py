@@ -52,6 +52,7 @@ import os
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 from typing import Any
@@ -113,6 +114,7 @@ class LiveTradingGate:
     def _check_kill_switch(self) -> tuple[bool, str]:
         """Check 1: Kill-switch must be inactive."""
         import sys
+
         try:
             # When sys.modules["kill_switch"] is explicitly set to None (e.g.
             # in tests simulating a missing dependency), treat as unavailable.

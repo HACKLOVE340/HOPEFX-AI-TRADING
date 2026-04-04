@@ -18,6 +18,7 @@ This strategy implements Smart Money Concepts including:
 
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -311,9 +312,16 @@ class SMCICTStrategy(BaseStrategy):
 
             if len(swing_highs) < 2 or len(swing_lows) < 2:
                 # Not enough structure yet — neutral
-                return {"trend": "neutral", "type": "insufficient_pivots", "strength": 0.0,
-                        "bos": False, "choch": False, "event": "none",
-                        "last_sh": None, "last_sl": None}
+                return {
+                    "trend": "neutral",
+                    "type": "insufficient_pivots",
+                    "strength": 0.0,
+                    "bos": False,
+                    "choch": False,
+                    "event": "none",
+                    "last_sh": None,
+                    "last_sl": None,
+                }
 
             # ── Step 2: classify structure from last two SH and last two SL ───
             sh_prev, sh_prev_val = swing_highs[-2]
@@ -391,8 +399,16 @@ class SMCICTStrategy(BaseStrategy):
 
         except Exception as e:
             logger.error("Error analyzing market structure: %s", e)
-            return {"trend": "neutral", "type": "unknown", "strength": 0.0,
-                    "bos": False, "choch": False, "event": "none", "last_sh": None, "last_sl": None}
+            return {
+                "trend": "neutral",
+                "type": "unknown",
+                "strength": 0.0,
+                "bos": False,
+                "choch": False,
+                "event": "none",
+                "last_sh": None,
+                "last_sl": None,
+            }
 
     def _identify_order_blocks(self, prices: list[dict]) -> dict[str, list[float]]:
         """Identify bullish and bearish order blocks"""

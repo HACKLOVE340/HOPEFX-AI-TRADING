@@ -21,6 +21,7 @@ from __future__ import annotations
 import logging
 import time
 from datetime import timezone
+
 UTC = timezone.utc
 from http import HTTPStatus
 

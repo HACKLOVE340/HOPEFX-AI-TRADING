@@ -11,6 +11,7 @@ This strategy uses MACD indicator for trend-following signals.
 
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
