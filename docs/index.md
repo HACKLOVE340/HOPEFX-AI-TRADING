@@ -73,7 +73,9 @@ HOPEFX is a self-hosted algorithmic trading framework that combines:
 ### Monetization & Community
 | I want to… | Go to |
 |---|---|
+| Activate my subscription / license key | [Monetization — Activation](MONETIZATION.md#subscription-activation) |
 | Set up subscriptions/payments | [Monetization](MONETIZATION.md) |
+| Understand pricing tiers | [FAQ — Pricing](FAQ.md#pricing--subscriptions) |
 | Join the community | [Community](COMMUNITY.md) |
 | Contribute code | [Contributing](CONTRIBUTING.md) |
 | Read the roadmap | [Roadmap](roadmap.md) |
