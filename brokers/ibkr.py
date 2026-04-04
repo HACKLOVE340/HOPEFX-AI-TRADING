@@ -49,6 +49,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 

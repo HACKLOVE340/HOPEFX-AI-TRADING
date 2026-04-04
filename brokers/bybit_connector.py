@@ -255,8 +255,4 @@ class ByBitConnector(BrokerConnector):
 
     def __repr__(self) -> str:
         sandbox = self.config.get("sandbox", True)
-        return (
-            f"ByBitConnector("
-            f"mode={'SANDBOX' if sandbox else 'LIVE'}, "
-            f"connected={self.connected})"
-        )
+        return f"ByBitConnector(mode={'SANDBOX' if sandbox else 'LIVE'}, connected={self.connected})"

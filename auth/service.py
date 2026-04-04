@@ -27,6 +27,7 @@ import os
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 
 import jwt

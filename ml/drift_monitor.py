@@ -30,6 +30,7 @@ Usage:
 
 API endpoint: GET /api/ml/drift-report
 """
+
 from __future__ import annotations
 
 import json
@@ -54,6 +55,7 @@ _PSI_BINS = 10
 
 
 # ── PSI computation ───────────────────────────────────────────────────────────
+
 
 def _psi(
     expected: np.ndarray,
@@ -81,10 +83,10 @@ def _psi(
     # Bin counts + proportions (add epsilon to avoid log(0))
     eps = 1e-9
     expected_hist, _ = np.histogram(expected, bins=bin_edges)
-    actual_hist, _   = np.histogram(actual,   bins=bin_edges)
+    actual_hist, _ = np.histogram(actual, bins=bin_edges)
 
     expected_pct = (expected_hist / len(expected)).clip(min=eps)
-    actual_pct   = (actual_hist   / len(actual)).clip(min=eps)
+    actual_pct = (actual_hist / len(actual)).clip(min=eps)
 
     psi_value = float(np.sum((actual_pct - expected_pct) * np.log(actual_pct / expected_pct)))
     return round(psi_value, 6)
@@ -99,6 +101,7 @@ def _ks_pvalue(reference: np.ndarray, live: np.ndarray) -> float:
     """
     try:
         from scipy.stats import ks_2samp  # type: ignore[import]
+
         _, p = ks_2samp(reference, live)
         return float(p)
     except Exception:
@@ -106,6 +109,7 @@ def _ks_pvalue(reference: np.ndarray, live: np.ndarray) -> float:
 
 
 # ── Data classes ─────────────────────────────────────────────────────────────
+
 
 @dataclass
 class FeatureDrift:
@@ -190,6 +194,7 @@ class DriftReport:
 
 # ── Monitor class ─────────────────────────────────────────────────────────────
 
+
 class DriftMonitor:
     """
     Statistical feature drift monitor.
@@ -259,6 +264,7 @@ class DriftMonitor:
         """
         try:
             import pandas as pd
+
             live_df = live_features if isinstance(live_features, pd.DataFrame) else pd.DataFrame(live_features)
         except ImportError:
             return _empty_report(0)
@@ -278,14 +284,14 @@ class DriftMonitor:
                 continue
             feat_stats = self._stats[feat_name]
             train_mean = float(feat_stats.get("mean", 0.0))
-            train_std  = float(feat_stats.get("std",  1.0))
+            train_std = float(feat_stats.get("std", 1.0))
 
             live_vals = live_df[feat_name].dropna().values.astype(float)
             if len(live_vals) < 2:
                 continue
 
             live_mean = float(live_vals.mean())
-            live_std  = float(live_vals.std())
+            live_std = float(live_vals.std())
 
             # z-score on the window mean
             z = abs(live_mean - train_mean) / max(train_std, 1e-9)
@@ -309,7 +315,7 @@ class DriftMonitor:
                 reference = rng.normal(loc=train_mean, scale=max(train_std, 1e-9), size=max(n_samples, 100))
 
             psi_val = _psi(reference, live_vals)
-            ks_p    = _ks_pvalue(reference, live_vals)
+            ks_p = _ks_pvalue(reference, live_vals)
 
             feature_drifts.append(
                 FeatureDrift(
@@ -324,10 +330,10 @@ class DriftMonitor:
                 )
             )
 
-        n_green  = sum(1 for f in feature_drifts if f.psi_level == "green")
+        n_green = sum(1 for f in feature_drifts if f.psi_level == "green")
         n_yellow = sum(1 for f in feature_drifts if f.psi_level == "yellow")
-        n_red    = sum(1 for f in feature_drifts if f.psi_level == "red")
-        n_ks     = sum(1 for f in feature_drifts if f.ks_alarm)
+        n_red = sum(1 for f in feature_drifts if f.psi_level == "red")
+        n_ks = sum(1 for f in feature_drifts if f.ks_alarm)
 
         requires_retrain = n_red > 0 or n_ks > len(feature_drifts) * 0.10
 
@@ -350,12 +356,18 @@ class DriftMonitor:
             logger.warning(
                 "DriftMonitor: RETRAIN RECOMMENDED — %d red features (PSI>%.2f), "
                 "%d KS alarms.  max_psi=%.3f on feature '%s'",
-                n_red, _PSI_RED, n_ks, report.max_psi, report.max_psi_feature,
+                n_red,
+                _PSI_RED,
+                n_ks,
+                report.max_psi,
+                report.max_psi_feature,
             )
         elif n_yellow > 0:
             logger.info(
                 "DriftMonitor: %d yellow features (PSI %.2f–%.2f).  Monitor closely.",
-                n_yellow, _PSI_YELLOW, _PSI_RED,
+                n_yellow,
+                _PSI_YELLOW,
+                _PSI_RED,
             )
 
         return report

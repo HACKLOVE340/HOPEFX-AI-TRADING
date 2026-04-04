@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 
 import numpy as np

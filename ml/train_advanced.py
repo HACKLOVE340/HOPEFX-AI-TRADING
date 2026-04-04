@@ -55,6 +55,7 @@ import logging
 import sys
 import warnings
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 
@@ -110,10 +111,7 @@ def _fetch_oanda_h1(years: int) -> pd.DataFrame | None:
     api_key = _os.environ.get("OANDA_API_KEY", "")
     account_id = _os.environ.get("OANDA_ACCOUNT_ID", "")
     if not api_key or not account_id:
-        logger.info(
-            "OANDA credentials not set (OANDA_API_KEY / OANDA_ACCOUNT_ID) "
-            "— skipping OANDA H1 fetch"
-        )
+        logger.info("OANDA credentials not set (OANDA_API_KEY / OANDA_ACCOUNT_ID) — skipping OANDA H1 fetch")
         return None
 
     oanda_env = _os.environ.get("OANDA_ENV", "practice")
@@ -121,9 +119,7 @@ def _fetch_oanda_h1(years: int) -> pd.DataFrame | None:
     async def _do_fetch() -> pd.DataFrame | None:
         from brokers.oanda_broker import OandaBroker
 
-        broker = OandaBroker(
-            {"login": account_id, "password": api_key, "server": oanda_env}
-        )
+        broker = OandaBroker({"login": account_id, "password": api_key, "server": oanda_env})
         if not await broker.connect():
             logger.warning("OANDA broker connect() failed — skipping H1 fetch")
             return None

@@ -11,6 +11,7 @@ Similar to MA Crossover but more responsive to recent price changes.
 """
 
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 

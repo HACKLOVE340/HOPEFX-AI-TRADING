@@ -35,6 +35,7 @@ import logging
 import threading
 import traceback
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -199,11 +200,7 @@ class BrokerManager:
         # Activated when OANDA_API_KEY (or BROKER_OANDA_TOKEN) is present in the
         # environment.  In practice-mode (OANDA_PRACTICE=true, default) this acts
         # as a safe live-secondary that does NOT risk real capital.
-        _oanda_key = (
-            os.getenv("OANDA_API_KEY")
-            or os.getenv("BROKER_OANDA_TOKEN")
-            or os.getenv("OANDA_ACCESS_TOKEN")
-        )
+        _oanda_key = os.getenv("OANDA_API_KEY") or os.getenv("BROKER_OANDA_TOKEN") or os.getenv("OANDA_ACCESS_TOKEN")
         if _oanda_key:
             try:
                 from brokers.oanda_broker import OandaBroker
@@ -638,7 +635,7 @@ class BrokerManager:
                 # Find the next broker in the chain after the current one
                 try:
                     current_idx = chain.index(current)
-                    next_brokers = chain[current_idx + 1:]
+                    next_brokers = chain[current_idx + 1 :]
                 except ValueError:
                     next_brokers = [b for b in chain if b != current]
 
@@ -648,8 +645,7 @@ class BrokerManager:
                 )
                 if target is not None:
                     logger.critical(
-                        "BrokerManager: %d consecutive failures on '%s'. "
-                        "Auto-failing over to '%s'.",
+                        "BrokerManager: %d consecutive failures on '%s'. Auto-failing over to '%s'.",
                         failures,
                         name,
                         target,

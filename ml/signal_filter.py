@@ -94,6 +94,7 @@ _CB_MIN_ACCURACY = float(os.getenv("CB_MIN_ACCURACY", "0.45"))
 # Circuit-breaker: minimum outcomes before the breaker can trip
 _CB_MIN_OUTCOMES = int(os.getenv("CB_MIN_OUTCOMES", "30"))
 
+
 # Lazy import — avoids circular dependency; called only inside _gate_regime
 def _is_parabolic(ohlcv: Any) -> bool:
     """

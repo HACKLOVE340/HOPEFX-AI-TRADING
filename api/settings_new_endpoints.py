@@ -58,11 +58,13 @@ _system_settings_store: dict[str, Any] = {}
 
 # ── Auth helper ───────────────────────────────────────────────────────────────
 
+
 def _get_user_id(request: Request) -> str:
     try:
         auth = request.headers.get("Authorization", "")
         if auth.startswith("Bearer "):
             import jwt as pyjwt
+
             secret = os.getenv("SECURITY_JWT_SECRET", "")
             if secret:
                 payload = pyjwt.decode(auth[7:], secret, algorithms=["HS256"])
@@ -77,6 +79,7 @@ def _get_user_role(request: Request) -> str:
         auth = request.headers.get("Authorization", "")
         if auth.startswith("Bearer "):
             import jwt as pyjwt
+
             secret = os.getenv("SECURITY_JWT_SECRET", "")
             if secret:
                 payload = pyjwt.decode(auth[7:], secret, algorithms=["HS256"])
@@ -95,6 +98,7 @@ def _require_admin(request: Request) -> None:
 def _load_from_db(key: str, fallback: dict) -> dict:
     try:
         from core.config_store import config_store
+
         stored = config_store.get(key)
         if stored:
             return {**fallback, **json.loads(stored)}
@@ -106,12 +110,14 @@ def _load_from_db(key: str, fallback: dict) -> dict:
 def _save_to_db(key: str, data: dict) -> None:
     try:
         from core.config_store import config_store
+
         config_store.set(key, json.dumps(data))
     except Exception:
         logger.debug("Suppressed exception (no detail) in %s", __name__)
 
 
 # ── Integrations ──────────────────────────────────────────────────────────────
+
 
 class IntegrationsPayload(BaseModel):
     tradingview_enabled: bool = False
@@ -141,8 +147,13 @@ async def get_integrations(request: Request):
     uid = _get_user_id(request)
     data = _load_from_db(f"integrations:{uid}", {})
     # Never return raw passwords/secrets — mask them
-    for field in ("mt4_password", "mt5_password", "ctrader_client_secret",
-                  "tradingview_webhook_secret", "webhook_secret"):
+    for field in (
+        "mt4_password",
+        "mt5_password",
+        "ctrader_client_secret",
+        "tradingview_webhook_secret",
+        "webhook_secret",
+    ):
         if data.get(field):
             data[field] = "••••••••"
     return data
@@ -154,8 +165,13 @@ async def save_integrations(payload: IntegrationsPayload, request: Request):
     existing = _load_from_db(f"integrations:{uid}", {})
     data = {**existing, **payload.model_dump()}
     # Preserve existing secrets if client sent masked value
-    for field in ("mt4_password", "mt5_password", "ctrader_client_secret",
-                  "tradingview_webhook_secret", "webhook_secret"):
+    for field in (
+        "mt4_password",
+        "mt5_password",
+        "ctrader_client_secret",
+        "tradingview_webhook_secret",
+        "webhook_secret",
+    ):
         if data.get(field) == "••••••••":
             data[field] = existing.get(field, "")
     _save_to_db(f"integrations:{uid}", data)
@@ -188,6 +204,7 @@ async def test_webhook(payload: WebhookTestPayload, request: Request):
 
 
 # ── Privacy ───────────────────────────────────────────────────────────────────
+
 
 class PrivacyPayload(BaseModel):
     share_performance: bool = False
@@ -224,8 +241,13 @@ async def export_user_data(request: Request):
         "accessibility": _load_from_db(f"accessibility:{uid}", {}),
     }
     # Scrub secrets from export
-    for field in ("mt4_password", "mt5_password", "ctrader_client_secret",
-                  "tradingview_webhook_secret", "webhook_secret"):
+    for field in (
+        "mt4_password",
+        "mt5_password",
+        "ctrader_client_secret",
+        "tradingview_webhook_secret",
+        "webhook_secret",
+    ):
         export.get("integrations", {}).pop(field, None)
 
     content = json.dumps(export, indent=2)
@@ -237,6 +259,7 @@ async def export_user_data(request: Request):
 
 
 # ── Accessibility ─────────────────────────────────────────────────────────────
+
 
 class AccessibilityPayload(BaseModel):
     reduce_motion: bool = False
@@ -263,6 +286,7 @@ async def save_accessibility(payload: AccessibilityPayload, request: Request):
 
 # ── API Keys ──────────────────────────────────────────────────────────────────
 
+
 class CreateApiKeyPayload(BaseModel):
     name: str
     scopes: list[str] = ["read"]
@@ -275,15 +299,17 @@ async def list_api_keys(request: Request):
     # Never return full key — only prefix
     safe = []
     for k in keys:
-        safe.append({
-            "key_id": k["key_id"],
-            "name": k["name"],
-            "scopes": k["scopes"],
-            "key_prefix": k.get("key_prefix", ""),
-            "created_at": k["created_at"],
-            "last_used": k.get("last_used"),
-            "revoked": k.get("revoked", False),
-        })
+        safe.append(
+            {
+                "key_id": k["key_id"],
+                "name": k["name"],
+                "scopes": k["scopes"],
+                "key_prefix": k.get("key_prefix", ""),
+                "created_at": k["created_at"],
+                "last_used": k.get("last_used"),
+                "revoked": k.get("revoked", False),
+            }
+        )
     return {"api_keys": safe}
 
 
@@ -368,11 +394,13 @@ async def save_system_settings(request: Request):
 
 # ── Backup trigger (admin only) ───────────────────────────────────────────────
 
+
 @router.post("/api/admin/backup/trigger")
 async def trigger_backup(request: Request):
     _require_admin(request)
     try:
         from database.backup import run_backup
+
         run_backup()
         logger.info("Manual backup triggered by admin")
         return {"status": "started"}
@@ -386,16 +414,19 @@ async def trigger_backup(request: Request):
 
 # ── Global kill switch (admin only) ──────────────────────────────────────────
 
+
 @router.post("/api/admin/kill-switch/global")
 async def global_kill_switch(request: Request):
     _require_admin(request)
     try:
         from api.admin import log_activity
+
         log_activity("GLOBAL KILL SWITCH activated by admin")
     except Exception:
         logger.debug("Suppressed exception (no detail) in %s", __name__)
     try:
         from core.config_store import config_store
+
         config_store.set("global_kill_switch", "true")
     except Exception:
         logger.debug("Suppressed exception (no detail) in %s", __name__)
@@ -404,6 +435,7 @@ async def global_kill_switch(request: Request):
 
 
 # ── SMTP test (admin only) ────────────────────────────────────────────────────
+
 
 class SmtpTestPayload(BaseModel):
     host: str
