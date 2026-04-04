@@ -243,7 +243,7 @@ class ByBitConnector(BrokerConnector):
         bybit_sym = self._to_bybit(symbol)
         try:
             return bool(self._ccxt.close_position(bybit_sym))
-        except Exception as exc:
+        except (RuntimeError, OSError, ValueError) as exc:
             logger.error("ByBitConnector.close_position(%s) failed: %s", symbol, exc)
             return False
 
