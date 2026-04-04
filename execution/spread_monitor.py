@@ -247,12 +247,12 @@ class SpreadMonitor:
 
     def _is_spiking(self, symbol: str, spread: float, baseline: float, ratio: float) -> bool:
         """Return True if *spread* qualifies as a spike."""
-        if self._tick_counts[symbol] < self._min_ticks:
-            return False
-        # Absolute hard limit (always blocks regardless of baseline)
+        # Absolute hard limit (always blocks regardless of baseline or tick count)
         if spread > self._abs_limit:
             return True
-        # Relative limit (spike multiplier × baseline)
+        # Relative limit requires sufficient history
+        if self._tick_counts[symbol] < self._min_ticks:
+            return False
         return ratio > self._spike_mult
 
 
@@ -263,7 +263,7 @@ _SINGLETON: SpreadMonitor | None = None
 
 def get_spread_monitor() -> SpreadMonitor:
     """Return the global :class:`SpreadMonitor` singleton."""
-    global _SINGLETON  # noqa: PLW0603
+    global _SINGLETON
     if _SINGLETON is None:
         _SINGLETON = SpreadMonitor()
     return _SINGLETON
