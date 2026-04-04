@@ -83,7 +83,7 @@ def validate_startup_environment() -> list[str]:
 
     warnings: ClassVar[list[str]] = []
     errors: ClassVar[list[str]] = []
-    is_production = os.environ.get("APP_ENV", "production") == "production"
+    is_production = os.environ.get("APP_ENV", "development") == "production"
     is_test = os.environ.get("APP_ENV", "") == "test"
 
     # Python version
@@ -156,7 +156,7 @@ def validate_startup_environment() -> list[str]:
         # Non-production: log errors but continue (allows CI/dev to run)
         logger.warning(
             "Startup validation errors present but APP_ENV=%s — continuing anyway",
-            os.environ.get("APP_ENV", "production"),
+            os.environ.get("APP_ENV", "development"),
         )
 
     return warnings + [f"ERROR: {e}" for e in errors]
@@ -173,6 +173,10 @@ class HopeFXEngine:
     Broker is selected via BROKER env var; defaults to OANDA when
     OANDA_API_KEY is set, otherwise paper trading.
     """
+
+    # Safety caps on position size to prevent runaway sizing
+    MAX_LIVE_POSITION_SIZE: float = 1.0   # max oz for live trading
+    MAX_PAPER_POSITION_SIZE: float = 10.0  # max oz for paper/test trading
 
     def __init__(self) -> None:
         # ── broker config ─────────────────────────────────────────────────────
@@ -207,6 +211,9 @@ class HopeFXEngine:
 
         self._running = False
         self._bar_count = 0
+
+        # Cached env config (read once at init, not per-tick)
+        self._bars_per_signal = int(_optional("BARS_PER_SIGNAL", "60"))
 
         # ── Nuclear supervisor integration ────────────────────────────────────
         # News events are pushed here by _on_news_event() and drained by the
@@ -306,6 +313,15 @@ class HopeFXEngine:
         self._brain = get_brain()
         self._brain.inject(risk_manager=self._risk_manager)
         logger.info("HOPEFXBrain initialised")
+
+        # Inject strategy manager into brain
+        try:
+            from strategies import StrategyManager
+            sm = StrategyManager()
+            self._brain.inject(strategy_manager=sm)
+            logger.info("StrategyManager injected into brain (%d strategies)", len(sm.list_strategies()))
+        except Exception as exc:
+            logger.warning("StrategyManager injection failed: %s", exc)
 
         # 3. ML predictor (warm up — loads model into memory)
         try:
@@ -594,8 +610,7 @@ class HopeFXEngine:
         )
 
         self._bar_count += 1
-        bars_per_signal = int(_optional("BARS_PER_SIGNAL", "60"))
-        if self._bar_count % bars_per_signal != 0:
+        if self._bar_count % self._bars_per_signal != 0:
             return
 
         window = list(self._ohlcv_window[sym_key])
@@ -756,15 +771,38 @@ class HopeFXEngine:
 
     async def _execute_decision(self, decision, price: float, symbol: str) -> None:
         """Execute a brain decision through the broker."""
+        import inspect as _inspect
+
         side = "BUY" if decision.action == "long" else "SELL"
-        lots = float(_optional("DEFAULT_LOT_SIZE", "0.01"))
+
+        # ── Risk-manager position sizing ──────────────────────────────────────
+        sized = self._risk_manager.size_order(decision)
+        if sized.quantity == 0:
+            logger.info(
+                "Order rejected by risk manager for %s — reason=%s",
+                symbol,
+                getattr(sized, "reject_reason", "quantity=0"),
+            )
+            return
+
+        quantity = sized.quantity
+        is_live = self.trading_mode == "live"
+        max_qty = self.MAX_LIVE_POSITION_SIZE if is_live else self.MAX_PAPER_POSITION_SIZE
+        if quantity > max_qty:
+            logger.warning(
+                "Position size %.4f exceeds safety cap %.1f (%s mode) — capping",
+                quantity,
+                max_qty,
+                self.trading_mode,
+            )
+            quantity = max_qty
 
         if self.trading_mode != "live":
             logger.info(
-                "[PAPER] %s %s %.2f lots @ %.5f  conf=%.3f  reason=%s",
+                "[PAPER] %s %s %.4f lots @ %.5f  conf=%.3f  reason=%s",
                 side,
                 symbol,
-                lots,
+                quantity,
                 price,
                 decision.confidence,
                 decision.reason,
@@ -772,67 +810,111 @@ class HopeFXEngine:
             self._trade_logger.log_fill(
                 symbol=symbol,
                 side=side,
-                lots=lots,
+                lots=quantity,
                 requested_price=price,
                 fill_price=price,
                 pnl=0.0,
                 broker=self.broker_name,
                 notes=f"paper|{decision.reason}",
             )
+            self._risk_manager.notify_position_opened(symbol)
             return
 
-        # Live execution
+        # ── Live execution ────────────────────────────────────────────────────
         try:
-            if hasattr(self._broker, "place_order"):
-                _order_coro = self._broker.place_order(
-                    symbol=symbol,
-                    side=side,
-                    lots=lots,
-                )
-                # Brokers may be sync or async — handle both
-                import inspect as _inspect
+            # Check for existing position — close opposite first
+            if hasattr(self._broker, "get_positions"):
+                _pos_coro = self._broker.get_positions()
+                positions = await _pos_coro if _inspect.isawaitable(_pos_coro) else _pos_coro
+                for pos in positions or []:
+                    pos_symbol = getattr(pos, "symbol", "")
+                    pos_side = str(getattr(pos, "side", "")).upper()
+                    if pos_symbol == symbol:
+                        opposite = (pos_side in ("SELL", "SHORT") and side == "BUY") or (
+                            pos_side in ("BUY", "LONG") and side == "SELL"
+                        )
+                        if opposite:
+                            logger.info(
+                                "Closing existing %s %s before opening %s",
+                                pos_side,
+                                symbol,
+                                side,
+                            )
+                            if hasattr(self._broker, "close_position"):
+                                _close = self._broker.close_position(symbol)
+                                await _close if _inspect.isawaitable(_close) else _close
+                            self._risk_manager.notify_position_closed(symbol)
 
-                result = await _order_coro if _inspect.isawaitable(_order_coro) else _order_coro
-                fill_price = float(result.get("fill_price", price)) if result else price
-                self._trade_logger.log_fill(
-                    symbol=symbol,
-                    side=side,
-                    lots=lots,
-                    requested_price=price,
-                    fill_price=fill_price,
-                    broker=self.broker_name,
-                    notes=decision.reason,
-                )
-                logger.info(
-                    "Order placed: %s %s %.2f lots @ %.5f",
-                    side,
-                    symbol,
-                    lots,
-                    fill_price,
-                )
+            if not hasattr(self._broker, "place_order"):
+                logger.warning("Broker has no place_order — skipping live order")
+                return
 
-                # Online learner feedback — notify Phase-3 store of the fill.
-                try:
-                    from core.signal_engine import notify_fill as _notify_fill
+            # Build kwargs — OANDAStream uses `units`, generic brokers use `lots`
+            from brokers.oanda_stream import OANDAStream
+            from brokers import OrderSide as _OrderSide
 
-                    _features = pd.DataFrame(
-                        [
-                            {
-                                "symbol": symbol,
-                                "direction": side,
-                                "fill_price": fill_price,
-                                "confidence": getattr(decision, "confidence", 0.0),
-                                "source": "hopefx_engine",
-                            }
-                        ]
-                    )
-                    _notify_fill(
-                        _features,
-                        label=1,
-                        primary_prob=getattr(decision, "confidence", None),
-                    )
-                except Exception as _ol_exc:
-                    logger.debug("notify_fill skipped in hopefx_engine: %s", _ol_exc)
+            if isinstance(self._broker, OANDAStream):
+                order_kwargs: dict = {
+                    "symbol": symbol,
+                    "side": _OrderSide.BUY if side == "BUY" else _OrderSide.SELL,
+                    "units": quantity,
+                    "stop_loss": sized.stop_loss_usd,
+                    "take_profit": sized.take_profit_usd,
+                }
+            else:
+                order_kwargs = {
+                    "symbol": symbol,
+                    "side": side,
+                    "lots": quantity,
+                }
+
+            _order_coro = self._broker.place_order(**order_kwargs)
+            result = await _order_coro if _inspect.isawaitable(_order_coro) else _order_coro
+
+            fill_price = price
+            if result is not None:
+                fill_price = float(getattr(result, "average_price", price))
+
+            self._trade_logger.log_fill(
+                symbol=symbol,
+                side=side,
+                lots=quantity,
+                requested_price=price,
+                fill_price=fill_price,
+                broker=self.broker_name,
+                notes=decision.reason,
+            )
+            logger.info(
+                "Order placed: %s %s %.4f lots @ %.5f",
+                side,
+                symbol,
+                quantity,
+                fill_price,
+            )
+            self._risk_manager.notify_position_opened(symbol)
+
+            # Online learner feedback — notify Phase-3 store of the fill.
+            try:
+                from core.signal_engine import notify_fill as _notify_fill
+
+                _features = pd.DataFrame(
+                    [
+                        {
+                            "symbol": symbol,
+                            "direction": side,
+                            "fill_price": fill_price,
+                            "confidence": getattr(decision, "confidence", 0.0),
+                            "source": "hopefx_engine",
+                        }
+                    ]
+                )
+                _notify_fill(
+                    _features,
+                    label=1,
+                    primary_prob=getattr(decision, "confidence", None),
+                )
+            except Exception as _ol_exc:
+                logger.debug("notify_fill skipped in hopefx_engine: %s", _ol_exc)
 
         except Exception as exc:
             logger.error("Order execution failed: %s", exc)
