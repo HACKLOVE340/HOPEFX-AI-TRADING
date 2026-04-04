@@ -29,6 +29,12 @@ from .base import (
 logger = logging.getLogger(__name__)
 
 
+def _parse_dt(ts: str) -> datetime:
+    """Parse ISO-8601 timestamp from Alpaca API, handling 'Z' suffix on Python 3.10."""
+    return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+
+
+
 class AlpacaConnector(BrokerConnector):
     """
     Alpaca broker connector for US stock trading.
@@ -199,9 +205,7 @@ class AlpacaConnector(BrokerConnector):
                 status=self._parse_order_status(result["status"]),
                 filled_quantity=float(result.get("filled_qty", 0)),
                 average_price=float(result.get("filled_avg_price", 0)) if result.get("filled_avg_price") else None,
-                timestamp=datetime.fromisoformat(
-                    result["created_at"],
-                ),
+                timestamp=_parse_dt(result["created_at"]),
                 metadata=result,
             )
 
@@ -273,9 +277,7 @@ class AlpacaConnector(BrokerConnector):
                 status=self._parse_order_status(result["status"]),
                 filled_quantity=float(result.get("filled_qty", 0)),
                 average_price=float(result.get("filled_avg_price", 0)) if result.get("filled_avg_price") else None,
-                timestamp=datetime.fromisoformat(
-                    result["created_at"],
-                ),
+                timestamp=_parse_dt(result["created_at"]),
                 metadata=result,
             )
 
@@ -441,9 +443,7 @@ class AlpacaConnector(BrokerConnector):
                 for bar in bars_data["bars"]:
                     candles.append(
                         {
-                            "timestamp": datetime.fromisoformat(
-                                bar["t"],
-                            ),
+                            "timestamp": _parse_dt(bar["t"]),
                             "open": float(bar["o"]),
                             "high": float(bar["h"]),
                             "low": float(bar["l"]),
@@ -488,9 +488,7 @@ class AlpacaConnector(BrokerConnector):
                     "ask": float(quote.get("ap", 0)),
                     "bid_size": int(quote.get("bs", 0)),
                     "ask_size": int(quote.get("as", 0)),
-                    "timestamp": datetime.fromisoformat(
-                        quote["t"],
-                    ),
+                    "timestamp": _parse_dt(quote["t"]),
                 }
 
             return None

@@ -759,7 +759,7 @@ class ExecutionEngine:
         """
         try:
             report = await self._submit_to_broker(request, t0)
-        except (TimeoutError, RuntimeError, ConnectionError) as exc:
+        except Exception as exc:  # noqa: BLE001 — execute() must never raise to caller
             logger.error(
                 "ExecutionEngine: broker submission error for %s: %s\n%s",
                 request.request_id,
