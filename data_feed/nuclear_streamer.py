@@ -98,6 +98,13 @@ except ImportError:
 _PRICE_MIN: float = 1_000.0
 _PRICE_MAX: float = 10_000.0
 
+# Maximum age (seconds) a tick may have before it is considered stale and
+# discarded.  Ticks older than this (event_ts too far in the past) indicate
+# a lagging feed and should not update last_price or trigger signals.
+_MAX_STALE_SECONDS: float = float(
+    os.environ.get("NUCLEAR_MAX_STALE_SECONDS", "30")
+)
+
 # Reconnect back-off: initial 1 s, doubles each attempt, capped at 60 s.
 _BACKOFF_INITIAL: float = 1.0
 _BACKOFF_MAX: float = 60.0
@@ -356,7 +363,21 @@ class NuclearStreamer:
             return
 
         now = time.time()
-        latency_ms = (now - event_ts) * 1000.0
+
+        # Stale-tick rejection — discard ticks whose event timestamp is older
+        # than _MAX_STALE_SECONDS.  A stale tick means the feed is lagging and
+        # its price should not drive trading decisions.
+        age_seconds = now - event_ts
+        if age_seconds > _MAX_STALE_SECONDS:
+            logger.warning(
+                "STALE TICK [%s]: age=%.1f s exceeds limit=%.0f s — tick discarded",
+                source,
+                age_seconds,
+                _MAX_STALE_SECONDS,
+            )
+            return
+
+        latency_ms = age_seconds * 1000.0
         _LATENCY_GAUGE.labels(source=source).set(latency_ms)
 
         # Anomaly detection — compare against last validated price.
