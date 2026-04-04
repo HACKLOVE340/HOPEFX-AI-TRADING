@@ -2,10 +2,49 @@
 
 > Base URL: `http://localhost:8000` (development) | `https://yourdomain.com` (production)
 > Interactive docs: `/docs` (Swagger UI) | `/redoc` (ReDoc)
-> Last updated: 2026-04-01
+> Last updated: 2026-07-14
 
 All endpoints except `/health`, `/docs`, `/openapi.json`, and `/redoc`
 require a valid JWT in the `Authorization: Bearer <token>` header.
+
+All trading, signal, and ML endpoints additionally require an active HOPEFX subscription.
+Requests without a valid subscription return `403 Subscription Required`.
+
+---
+
+## Endpoint Groups
+
+| Group | Prefix | Description |
+|-------|--------|-------------|
+| [Authentication](#authentication) | `/api/auth/` | Login, token refresh, logout, user profile |
+| [Two-Factor Auth](#two-factor-authentication) | `/api/2fa/` | TOTP setup, verify, backup codes |
+| [Signals](#signals) | `/api/signals/` | Latest signal, history, performance |
+| [ML Models](#ml-models) | `/api/ml/` | Accuracy, predict, health, regime, retrain |
+| [Online Learner](#online-learner) | `/api/online-learner/` | Status, partial-fit, reset |
+| [Trading](#trading) | `/api/trading/` | Orders, positions, account, brain state, kill switch |
+| [Advanced Trading](#advanced-trading) | `/api/ab-test/`, `/api/indicators/`, `/api/correlation/`, `/api/cot/`, `/api/backtest/` | A/B tests, custom indicators, correlation, Monte Carlo |
+| [Broker](#broker) | `/api/broker/` | Connection test, status, accounts, switch |
+| [Backtesting](#backtesting) | `/api/backtest/` | Run, walk-forward, results, multi-symbol |
+| [Risk / Prop Firm](#risk--prop-firm) | `/api/risk/` | Risk status, drawdown, CVaR |
+| [Alerts](#alerts) | `/api/alerts/` | Create, list, pause, resume, trigger history |
+| [Economic Calendar](#economic-calendar) | `/api/calendar/` | Events, auto-pause, FOMC regime |
+| [Macro Data](#macro-data) | `/api/macro/` | Snapshot, history, features, gold signal |
+| [Watchlist](#watchlist) | `/api/watchlist/` | Add, remove, prices |
+| [Social Feed](#social-feed) | `/api/feed/`, `/api/social/` | Signal feed, reactions, leaderboard |
+| [Profiles](#profiles) | `/api/profiles/` | Trader profiles, follow, signal history |
+| [Performance](#performance) | `/api/performance/` | Summary, equity curve |
+| [Trade Journal](#trade-journal) | `/api/journal/` | Entries, stats, mistakes |
+| [Payments](#payments) | `/api/payments/` | Crypto address, status, rates |
+| [Monetization](#monetization) | `/api/monetization/` | Pricing, subscribe, subscription, activate code |
+| [Billing](#billing) | `/api/billing/` | Subscription, Stripe webhook, Flutterwave, affiliate |
+| [Mobile](#mobile) | `/api/mobile/` | Push registration, test push, status |
+| [AI Brain](#ai-brain) | `/api/brain/` | Generate strategy, deploy strategy |
+| [AI Chat](#ai-chat) | `/api/chat/` | Message, history, status |
+| [Explainability](#explainability) | `/api/explain/` | SHAP signal explanation, global feature importance |
+| [Settings](#settings) | `/api/settings/` | Notification settings |
+| [Admin](#admin) | `/api/admin/` | Dashboard, logs, KYC, activity |
+| [Status](#status) | `/health`, `/api/status/` | Health check, paper trading clock, Sharpe progress |
+| [WebSocket](#websocket) | `/ws/` | Signals, prices, positions, alerts |
 
 ---
 
