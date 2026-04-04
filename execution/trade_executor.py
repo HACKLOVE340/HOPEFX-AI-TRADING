@@ -168,7 +168,7 @@ class TradeExecutor:
 
         except Exception as exc:
             latency_ms = (asyncio.get_event_loop().time() - start_time) * 1000
-            logger.exception("Execution error for %s: %s", symbol, exc)
+            logger.exception("Execution error for %s", symbol)
             self.metrics.record_error("trade_executor", type(exc).__name__)
             return ExecutionResult(
                 success=False,

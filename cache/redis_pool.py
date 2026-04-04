@@ -83,23 +83,13 @@ _HEALTH_CHECK_INTERVAL: int = int(os.getenv("REDIS_HEALTH_CHECK_INTERVAL", "30")
 # ---------------------------------------------------------------------------
 
 _lock: threading.Lock = threading.Lock()
-_async_lock: asyncio.Lock | None = None  # created lazily inside an event-loop
+# _async_lock guards _async_client — only ever acquired from async coroutines.
+# Initialized eagerly at module level; asyncio.Lock() is safe to create before
+# a running event loop in Python ≥ 3.10, and works correctly at 3.8/3.9 too.
+_async_lock: asyncio.Lock = asyncio.Lock()
 _sync_pool: ConnectionPool | None = None
 _sync_client: Redis | None = None
 _async_client: aioredis.Redis | None = None  # type: ignore[name-defined]
-
-
-def _get_async_lock() -> asyncio.Lock:
-    """Return (or lazily create) the module-level asyncio.Lock.
-
-    The lock is created on first call from within a running event loop, which
-    guarantees it is bound to the correct loop.  Subsequent calls return the
-    same instance.
-    """
-    global _async_lock
-    if _async_lock is None:
-        _async_lock = asyncio.Lock()
-    return _async_lock
 
 
 # ---------------------------------------------------------------------------
@@ -181,7 +171,7 @@ async def get_async_client() -> aioredis.Redis:  # type: ignore[name-defined]
         )
     if _async_client is not None:
         return _async_client
-    async with _get_async_lock():
+    async with _async_lock:
         if _async_client is None:
             _async_client = aioredis.from_url(
                 _REDIS_URL,
@@ -201,7 +191,7 @@ def reset_pool() -> None:
     Tear down and reset the connection pool (used in tests and graceful
     shutdown paths).  All existing connections are closed.
     """
-    global _sync_pool, _sync_client, _async_client, _async_lock
+    global _sync_pool, _sync_client, _async_client
     with _lock:
         if _sync_pool is not None:
             try:
@@ -211,7 +201,6 @@ def reset_pool() -> None:
         _sync_pool = None
         _sync_client = None
         _async_client = None
-        _async_lock = None
         logger.info("Redis connection pool reset")
 
 
