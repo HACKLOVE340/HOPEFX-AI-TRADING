@@ -1093,6 +1093,13 @@ class ExecutionEngine:
         self._latencies_ms.append(latency_ms)
         if len(self._latencies_ms) > 100:
             self._latencies_ms.pop(0)
+        # Emit to Prometheus histogram for real-time SLA alerting.
+        # Lazy-import so prometheus_client is optional (degrades gracefully).
+        try:
+            from execution._prom_metrics import EXECUTION_LATENCY_HISTOGRAM  # type: ignore[import]
+            EXECUTION_LATENCY_HISTOGRAM.observe(latency_ms / 1000.0)
+        except Exception:
+            pass
 
     def get_metrics(self) -> dict[str, Any]:
         """Return execution metrics snapshot."""
