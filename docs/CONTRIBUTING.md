@@ -2,7 +2,7 @@
 
 > HOPEFX AI Trading is a paid subscription platform licensed under AGPL-3.0.
 > Read this document fully before opening a pull request.
-> Last updated: 2026-04-01
+> Last updated: 2026-07-14
 
 ---
 
@@ -246,33 +246,63 @@ and position reconciliation without a real broker account.
 ## Project Structure
 
 ```
-api/            REST endpoints (FastAPI routers)
-auth/           Authentication, JWT, 2FA
-backtest/       Backtesting engine and multi-symbol runner
-brain/          Strategy Brain (ML consensus engine)
-brokers/        Broker connectors (OANDA, IBKR, Alpaca, Binance, paper, FIX)
-cache/          Redis cache layer and in-memory fallback
-charting/       Technical indicators and chart data
-compliance/     Regulatory compliance checks
-config/         Configuration loading and validation
-core/           Startup factories, ComponentRegistry, app state
-data/           Data feeds, schedulers, historical data
-database/       SQLAlchemy models and migrations
-execution/      OMS, TradeExecutor, OrderGateway, position tracker
-features/       Feature engineering pipeline
-ml/             Model training, online learner, macro features
-monetization/   Subscription management, billing, license keys
-monitoring/     Prometheus metrics, health checks
-news/           News feed integration and RAG pipeline
-notifications/  Telegram, email, Discord alerts
-payments/       Payment gateway integrations (Stripe, Flutterwave, crypto)
-portfolio/      Portfolio analytics and reporting
-risk/           RiskManager, CVaR gate, pre-trade gate, kill switch
-security/       Security middleware, rate limiting, audit logging
-social/         Social trading, copy trading, leaderboard
-strategies/     Strategy implementations (BaseStrategy + built-ins)
-tests/          pytest test suite
-docs/           MkDocs documentation source
+app.py                  FastAPI application entry point, lifespan, router registration
+kill_switch.py          Hardware kill switch — system-wide halt, persists to disk
+validation.py           Order and input validation
+
+── Core ──────────────────────────────────────────────────────────────────────
+api/                    FastAPI routers (50+ files, registered via core/router_registry.py)
+auth/                   JWT authentication, bcrypt, 2FA (TOTP)
+core/                   ComponentRegistry, startup factories, signal engine, event bus
+config/                 Pydantic settings, feature flags (57 flags), vault, startup validator
+
+── Trading Engine ────────────────────────────────────────────────────────────
+brain/                  HOPEFXBrain — regime detection, strategy orchestration
+strategies/             BaseStrategy + 10 built-ins + StrategyBrain (ML consensus)
+execution/              OMS, TradeExecutor, OrderGateway, SmartRouter, FIX adapter
+risk/                   RiskManager, CVaR gate, pre-trade gate, kill switch, VaR/EWMA
+brokers/                BrokerConnector (ABC) + OANDA, IBKR, Alpaca, Binance, MT5, paper
+
+── Data Layer ────────────────────────────────────────────────────────────────
+data_layer/             MarketDataOrchestrator — single source of truth for all price data
+data/                   Historical data, OHLCV scheduler, macro CSVs
+market_data/            Nuclear streamer, IBKR/MT5 live feeds, order book
+data_feed/              Feed handler, Redis cache, validation
+
+── ML Pipeline ───────────────────────────────────────────────────────────────
+ml/                     Model training, live inference, online learner, macro features
+                        advanced_oos.pkl — 176-feature XGBoost ensemble (66.4% OOS)
+backtest/               Walk-forward engine, multi-symbol backtest, transaction costs
+backtesting/            Full backtesting framework (engine, metrics, walk-forward, plots)
+research/               LSTM/Transformer/TCN, RL agent, drift detection (feature-flagged)
+
+── Platform Services ─────────────────────────────────────────────────────────
+monetization/           Subscription tiers, require_plan, plan_gate, Stripe, license keys
+payments/               Stripe, Flutterwave, crypto, wallet
+social/                 Copy trading, leaderboards, profiles
+notifications/          Telegram, Discord, email alerts
+monitoring/             Prometheus metrics, health checks, Sentry config
+compliance/             AML, KYC, regulatory reporting, FIA compliance
+security/               Encryption, vault, rate limiting, audit logging, LLM security wrapper
+whitelabel/             White-label branding, API auth, rate limiting config
+
+── Infrastructure ────────────────────────────────────────────────────────────
+database/               SQLAlchemy models, Alembic migrations
+cache/                  Redis cache layer, in-memory fallback
+dashboard/              React + Vite web dashboard (dashboard/src/)
+frontend/               TypeScript frontend (npm ci && npm run test)
+mobile/                 PWA, push notifications, React Native API client
+mobile-app/             Expo React Native app scaffold
+k8s/                    Kubernetes manifests (deployment, service, ingress, RBAC)
+helm/                   Helm chart (helm/hopefx/)
+grafana/                4 dashboards, 27 panels, provisioning config
+nginx/                  Reverse proxy config
+redis/                  Redis master/replica/sentinel config
+k6/                     Load tests (6 scenarios)
+locust/                 Load tests (3 user classes)
+scripts/                Operational scripts (retrain, validate, manage secrets, backfill)
+tests/                  pytest test suite (2,560+ tests)
+docs/                   MkDocs documentation source
 ```
 
 ---
@@ -281,9 +311,9 @@ docs/           MkDocs documentation source
 
 **Without prior discussion:**
 - Bug fixes with regression tests
-- New broker connectors (add to `brokers/`, follow `BaseBroker` interface)
-- New trading strategies (add to `strategies/`, follow `BaseStrategy` interface)
-- ML feature engineering improvements (add to `ml/feature_engineering.py`)
+- New broker connectors (add to `brokers/`, implement `BrokerConnector` ABC from `brokers/base.py`)
+- New trading strategies (add to `strategies/`, implement `BaseStrategy` ABC from `strategies/base.py`)
+- ML feature engineering improvements (add to `ml/advanced_features.py` or `ml/features_extended.py`)
 - Documentation improvements and corrections
 - Performance improvements with benchmarks
 - Test coverage improvements
@@ -342,4 +372,4 @@ for critical issues. See [SECURITY.md](SECURITY.md) for the full disclosure poli
 
 ---
 
-*Last updated: 2026-04-01*
+*Last updated: 2026-07-14*
