@@ -1,600 +1,600 @@
 # HOPEFX AI Trading — System Architecture
 
-> Last updated: 2026-04-01 (v1.17)
-
-This document describes the production architecture of HOPEFX AI Trading.
-For a history of fixes and before/after ratings, see `docs/COMPREHENSIVE_FIXES.md`.
+> Last updated: 2026-07-14 (v1.17)
 
 ---
 
-## Architecture Diagram
+## Contents
 
-```mermaid
-flowchart TD
-    subgraph INGRESS["Market Data Ingress"]
-        IBKR_FEED["IBKRMarketDataFeed\n(ib_insync ticks)"]
-        MT5_FEED["MT5LiveFeed\n(WebSocket fallback)"]
-        TICK_VAL["TickValidator\n(price/spread/jump/stale)"]
-        OHLCV["OHLCVAggregator\n(1m/5m/1h bars)"]
-        REDIS_PUB["RedisTickPublisher\n(pub/sub fanout)"]
-    end
-
-    subgraph CACHE["State Layer"]
-        REDIS[("Redis\ntick_cache / ohlcv / health")]
-        REDIS_CACHE["MarketDataCache\n(O(1) lookups)"]
-    end
-
-    subgraph ML["ML Pipeline"]
-        FEAT["FeatureEngineer\n(15 features, shift+1 no-lookahead)"]
-        STAT["StationarityTester\n(ADF + KPSS)"]
-        WFV["WalkForwardValidator\n(expanding window, 5 folds)"]
-        XGB["XGBoostPredictor\n(lr=0.05, depth=4, n=300)"]
-        GATE_ML["OOS Gate\n(acc≥65%, p<0.001)"]
-    end
-
-    subgraph RISK["Risk Engine"]
-        PRE_GATE["PreTradeGate\n(8 checks, no fallback)"]
-        ANALYTICS["risk/analytics.py\nVaR/ES/CVaR/Slippage/Drift/Sharpe"]
-        KILL["KillSwitch\n(system-wide halt)"]
-        RISK_MGR["RiskManager\n(drawdown/daily-loss/CVaR)"]
-    end
-
-    subgraph EXECUTION["Execution Layer"]
-        ENG["ExecutionEngine\n(async, <50ms target)"]
-        CB["EngineCircuitBreaker\n(3 failures/60s → open)"]
-        OMS["OMS\n(order lifecycle)"]
-        TCA["TCA Recorder\n(fill cost analysis)"]
-    end
-
-    subgraph BROKER["Broker Layer"]
-        MGR["BrokerManager\n(abstraction, auto-failover)"]
-        IBKR_CONN["IBKRConnector\n(ib_insync, paper/live)"]
-        FIX_BRIDGE["IBKRFIXBridge\n(FIX 4.4, <50μs)"]
-        PAPER["PaperTradingBroker\n(fallback)"]
-    end
-
-    subgraph IBKR_GW["IBKR Infrastructure"]
-        TWS["TWS / IB Gateway\n(port 7496/7497/4001/4002)"]
-        FIX_GW["IBKR FIX Gateway\n(port 4001/4002)"]
-    end
-
-    subgraph API["API Layer"]
-        FASTAPI["FastAPI\n(REST + WebSocket)"]
-        MOBILE["Mobile API v1/v2\n(CORS restricted)"]
-        AUTH["auth/router.py\n(bcrypt + PyJWT)"]
-        STARTUP["StartupValidator\n(fail-loud on boot)"]
-    end
-
-    subgraph OBS["Observability"]
-        SENTRY["Sentry\n(exceptions + alerts)"]
-        HEALTH["Feed Health Monitor\n(stale detection >5s)"]
-    end
-
-    %% Data flow
-    IBKR_FEED --> TICK_VAL
-    MT5_FEED --> TICK_VAL
-    TICK_VAL --> OHLCV
-    TICK_VAL --> REDIS_PUB
-    OHLCV --> REDIS_PUB
-    REDIS_PUB --> REDIS
-    REDIS --> REDIS_CACHE
-
-    %% ML
-    REDIS_CACHE --> FEAT
-    FEAT --> STAT
-    STAT --> WFV
-    WFV --> XGB
-    XGB --> GATE_ML
-    GATE_ML --> ENG
-
-    %% Risk
-    ENG --> KILL
-    ENG --> CB
-    ENG --> PRE_GATE
-    PRE_GATE --> RISK_MGR
-    PRE_GATE --> ANALYTICS
-    KILL --> PRE_GATE
-
-    %% Execution
-    PRE_GATE --> OMS
-    OMS --> MGR
-    OMS --> TCA
-    OMS --> REDIS
-
-    %% Broker
-    MGR --> IBKR_CONN
-    MGR --> FIX_BRIDGE
-    MGR --> PAPER
-    IBKR_CONN --> TWS
-    FIX_BRIDGE --> FIX_GW
-
-    %% API
-    FASTAPI --> AUTH
-    FASTAPI --> ENG
-    MOBILE --> FASTAPI
-    STARTUP --> FASTAPI
-
-    %% Observability
-    IBKR_FEED --> HEALTH
-    HEALTH --> SENTRY
-    ENG --> SENTRY
-    PRE_GATE --> SENTRY
-    MGR --> SENTRY
-```
+1. [Overview](#overview)
+2. [Entry Point & Startup](#entry-point--startup)
+3. [Data Layer](#data-layer)
+4. [Signal Engine](#signal-engine)
+5. [ML Pipeline](#ml-pipeline)
+6. [Risk Engine](#risk-engine)
+7. [Execution Engine](#execution-engine)
+8. [Broker Connectors](#broker-connectors)
+9. [API Layer](#api-layer)
+10. [Subscription & Access Control](#subscription--access-control)
+11. [Notifications & Alerts](#notifications--alerts)
+12. [Observability](#observability)
+13. [Infrastructure](#infrastructure)
+14. [Data Flow — End to End](#data-flow--end-to-end)
+15. [Module Dependency Map](#module-dependency-map)
 
 ---
 
-## Risk Assessment
+## Overview
 
-### VaR / ES Parameters (XAUUSD, 1-lot position)
+HOPEFX is a self-hosted, institutional-grade automated trading platform for XAUUSD
+and six additional forex/commodity symbols. It is built on FastAPI, SQLAlchemy,
+Redis, and a 176-feature XGBoost stacking ensemble (66.4% OOS accuracy, p=0.0000).
 
-| Metric | Method | Typical Value | Limit |
-|--------|--------|---------------|-------|
-| VaR 95% (1-day) | Cornish-Fisher | ~0.8–1.2% | 2% notional |
-| ES 99% (1-day) | Historical | ~1.5–2.0% | 3% notional |
-| Slippage p99 | Monte Carlo (10k) | ~8–15 bps | 20 bps |
-| Max Drawdown | Peak-to-trough | Target <8% | 8% hard stop |
-| Sharpe (annualised) | Lo 2002 SE | Target >1.5 | SE <0.3 |
+**Key architectural decisions:**
 
-### Regime Drift Score
-
-- **Score < 1.0**: Stable regime — normal operation
-- **Score 1.0–2.0**: Elevated drift — reduce position size
-- **Score > 2.0**: Regime change detected — halt new entries, Sentry alert
-
-Computed as: `KS_statistic × 2 + |vol_ratio − 1|`
-
-### OOS Validation Claims
-
-The existing "68% OOS accuracy" claim is **not independently verified** in this codebase. The `MLPipeline` in `ml/pipeline.py` enforces:
-- Walk-forward cross-validation (no shuffling, no look-ahead)
-- Binomial test vs 0.5 baseline (p < 0.001 required)
-- Model saved **only** if both gates pass
-
-To independently verify: run `python -m ml.pipeline --data path/to/xauusd_1h.csv` and inspect `ml/saved_models/validation_report.json`.
+| Decision | Rationale |
+|----------|-----------|
+| Single `MarketDataOrchestrator` for all price data | Prevents broker-specific price drift; all modules read from one consensus tick |
+| `ComponentRegistry` for startup | Declarative dependency-aware startup replaces 40+ sequential try/except blocks |
+| `plan_gate()` inline in endpoints | Subscription enforcement at the API boundary, not in business logic |
+| `KillSwitch` persists to disk | Survives process restarts; nuclear halt cannot be undone by a crash/restart |
+| `LIVE_MODE_CONFIRMED=false` default | Live order submission is opt-in; paper trading is the default state |
+| Model registry with OOS gate | Models are only promoted to production when OOS accuracy >= 0.60 and p-value <= 0.05 |
 
 ---
 
-## Deployment Notes
-
-### IBKR Gateway Setup
-
-```bash
-# 1. Download IB Gateway (not TWS — lower resource footprint)
-#    https://www.interactivebrokers.com/en/trading/ibgateway-stable.php
-
-# 2. Configure API settings in Gateway:
-#    Configure → API → Settings
-#    ✓ Enable ActiveX and Socket Clients
-#    ✓ Allow connections from localhost only (or VPN subnet)
-#    Socket port: 4001 (live) or 4002 (paper)
-#    Master API client ID: 0
-
-# 3. Environment variables
-export IBKR_HOST=127.0.0.1
-export IBKR_PORT=4002          # paper; use 4001 for live
-export IBKR_CLIENT_ID=1
-export IBKR_ACCOUNT=DU123456   # your paper account ID
-
-# 4. FIX 4.4 (optional low-latency path)
-export BROKER_ENABLE_FIX=true
-export IBKR_FIX_SENDER_COMP_ID=HOPEFX
-export IBKR_FIX_TARGET_COMP_ID=IBFX
-export IBKR_FIX_PORT=4002
-```
-
-### TWS Configuration (if using TWS instead of Gateway)
+## Entry Point & Startup
 
 ```
-File → Global Configuration → API → Settings
-  Socket port: 7497 (paper) / 7496 (live)
-  ✓ Enable ActiveX and Socket Clients
-  ✓ Read-Only API: OFF (required for order placement)
-  Trusted IPs: 127.0.0.1 (or VPN subnet)
+app.py  ->  uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
-### Required Environment Variables
+`app.py` defines the FastAPI application and its lifespan. On startup:
 
-```bash
-# Mandatory — startup fails without these
-SECRET_KEY=<32+ char random hex>    # python -c "import secrets; print(secrets.token_hex(32))"
-DB_PASSWORD=<12+ char password>
-DB_HOST=postgres
-REDIS_URL=redis://redis:6379/0
+1. `core/startup_factories.py` builds a `ComponentRegistry` with all components
+   declared in dependency order:
 
-# IBKR
-IBKR_HOST=127.0.0.1
-IBKR_PORT=4002
+   ```
+   config  ->  database  ->  cache  ->  risk_manager
+                                     ->  broker
+                                     ->  trade_executor  (deps: broker, risk_manager)
+                                     ->  signal_engine   (deps: trade_executor)
+   ```
 
-# Optional
-SENTRY_DSN=https://...@sentry.io/...
-MOBILE_CORS_ORIGINS=https://app.hopefx.io,https://staging.hopefx.io
-BROKER_PRIMARY=ibkr
-BROKER_ENABLE_FIX=false
+2. `ComponentRegistry.start()` initialises each component in topological order.
+   Required components abort startup on failure. Optional components log a warning
+   and continue. A startup summary table is printed to the log.
+
+3. `core/router_registry.py` registers all 50+ FastAPI routers. Each router is
+   imported and mounted with its prefix. The registry is the single place where
+   all API routes are wired — no routes are registered in `app.py` directly.
+
+4. `data_layer/orchestrator.py` (`MarketDataOrchestrator`) starts all configured
+   gold price feeds concurrently. The orchestrator is the only source of price
+   data for the entire application.
+
+5. `core/background_tasks.py` starts background loops: signal engine, SL/TP
+   monitor, heartbeat, economic calendar poller, and online learner (if enabled).
+
+---
+
+## Data Layer
+
+```
+data_layer/
+├── orchestrator.py        MarketDataOrchestrator — single source of truth
+├── feeds/                 Feed adapters (Finnhub, Twelve Data, Polygon, etc.)
+├── quality/               DataQualityEngine — anomaly detection, consensus scoring
+├── lineage/               DataLineageStore — immutable audit trail (SQLite)
+├── cache/                 Redis-backed tick cache with in-memory fallback
+├── microstructure/        Order flow, bid/ask spread, volume profile
+├── normalization/         Tick normalisation and unit conversion
+├── sentiment/             News sentiment feed integration
+├── calendar/              Economic calendar feed
+├── replay/                Historical tick replay for backtesting
+└── tick_store.py          Persistent tick storage
+```
+
+### MarketDataOrchestrator
+
+`MarketDataOrchestrator` is the **only** permitted source of price data.
+Direct broker price calls (`broker.get_market_data()`) raise `MarketDataForbidden`.
+
+Flow:
+```
+NuclearStreamer (WebSocket)
+  ├── Finnhub  (OANDA:XAU_USD)
+  ├── Twelve Data  (XAU/USD)
+  └── Polygon  (C.XAU/USD)
+        |
+        v
+DataQualityEngine
+  ├── Anomaly detection (z-score, IQR, Hampel filter)
+  ├── Cross-source consensus scoring
+  └── Confidence weighting
+        |
+        v
+GoldTick  (price, bid, ask, spread, volume, quality, confidence, source_count)
+        |
+        ├──> Redis tick cache (1-min TTL)
+        ├──> DataLineageStore (immutable audit trail)
+        └──> orchestrator.get_latest_tick()  <- all consumers read here
+```
+
+`orchestrator.is_safe_to_trade()` returns `False` when:
+- No tick received in the last 30 seconds
+- Data quality below `ENGINE_MIN_DATA_QUALITY` (default: 0.40)
+- All feeds are down
+
+---
+
+## Signal Engine
+
+```
+core/signal_engine.py      run_signal_engine() — main async loop
+brain/                     HOPEFXBrain — regime detection + strategy orchestration
+strategies/
+├── base.py                BaseStrategy (ABC)
+├── manager.py             StrategyManager — plan-gated strategy dispatch
+├── regime_router.py       RegimeRouter — routes to strategy by market regime
+├── strategy_brain.py      StrategyBrain — ML consensus (Elite only)
+├── ma_crossover.py        MovingAverageCrossover (Starter)
+├── ema_crossover.py       EMAcrossover (Starter)
+├── rsi_strategy.py        RSIReversal (Starter)
+├── its_8_os.py            Ichimoku (Starter)
+├── macd_strategy.py       MACD (Professional)
+├── bollinger_bands.py     BollingerBands (Professional)
+├── breakout.py            Breakout (Professional)
+├── mean_reversion.py      MeanReversion (Professional)
+├── stochastic.py          Stochastic (Professional)
+└── smc_ict.py             SMCICTStrategy (Enterprise)
+```
+
+Signal generation loop (runs every tick):
+
+```
+orchestrator.get_latest_tick()
+        |
+        v
+HOPEFXBrain.detect_regime()
+  ├── Trend / Range / Volatile / Crisis
+  └── Macro overlay (DXY, VIX, US10Y, SPX, GLD)
+        |
+        v
+RegimeRouter -> selects active strategy for current regime
+        |
+        v
+BaseStrategy.generate_signals(tick, features)
+        |
+        v
+Signal  (direction, confidence, entry, sl, tp, symbol, strategy, regime)
+        |
+        v
+Gatekeeper.check(signal)   <- news blackout, sentiment, equity drawdown
+        |
+        v
+RiskManager.pre_trade_gate(signal)   <- VaR, CVaR, leverage, spread, margin
+        |
+        v
+TradeExecutor.execute_signal(signal)
 ```
 
 ---
 
-## Helm Values (Kubernetes Deployment)
+## ML Pipeline
 
-```yaml
-# helm/values.yaml
-replicaCount: 2
-
-image:
-  repository: ghcr.io/hopefx/trading-api
-  tag: "latest"
-  pullPolicy: IfNotPresent
-
-service:
-  type: ClusterIP
-  port: 8000
-
-resources:
-  requests:
-    cpu: "500m"
-    memory: "512Mi"
-  limits:
-    cpu: "2000m"
-    memory: "2Gi"
-
-autoscaling:
-  enabled: true
-  minReplicas: 2
-  maxReplicas: 6
-  targetCPUUtilizationPercentage: 70
-  targetMemoryUtilizationPercentage: 80
-
-env:
-  # Injected from Kubernetes Secrets — never hardcoded here
-  - name: SECRET_KEY
-    valueFrom:
-      secretKeyRef:
-        name: hopefx-secrets
-        key: secret-key
-  - name: DB_PASSWORD
-    valueFrom:
-      secretKeyRef:
-        name: hopefx-secrets
-        key: db-password
-  - name: REDIS_URL
-    valueFrom:
-      secretKeyRef:
-        name: hopefx-secrets
-        key: redis-url
-  - name: IBKR_HOST
-    value: "ibkr-gateway-svc"   # internal K8s service name
-  - name: IBKR_PORT
-    value: "4001"               # live gateway
-  - name: BROKER_PRIMARY
-    value: "ibkr"
-  - name: SENTRY_DSN
-    valueFrom:
-      secretKeyRef:
-        name: hopefx-secrets
-        key: sentry-dsn
-
-livenessProbe:
-  httpGet:
-    path: /health
-    port: 8000
-  initialDelaySeconds: 30
-  periodSeconds: 10
-  failureThreshold: 3
-
-readinessProbe:
-  httpGet:
-    path: /health
-    port: 8000
-  initialDelaySeconds: 10
-  periodSeconds: 5
-
-# IBKR Gateway sidecar (runs in same pod for <1ms IPC latency)
-sidecars:
-  - name: ibkr-gateway
-    image: ghcr.io/hopefx/ibkr-gateway:10.19
-    ports:
-      - containerPort: 4001
-        name: fix-live
-      - containerPort: 4002
-        name: fix-paper
-    env:
-      - name: IBKR_USERNAME
-        valueFrom:
-          secretKeyRef:
-            name: hopefx-secrets
-            key: ibkr-username
-      - name: IBKR_PASSWORD
-        valueFrom:
-          secretKeyRef:
-            name: hopefx-secrets
-            key: ibkr-password
-    resources:
-      requests:
-        cpu: "200m"
-        memory: "256Mi"
-      limits:
-        cpu: "500m"
-        memory: "512Mi"
-
-redis:
-  enabled: true
-  architecture: standalone
-  auth:
-    enabled: true
-    existingSecret: hopefx-secrets
-    existingSecretPasswordKey: redis-password
-
-postgresql:
-  enabled: true
-  auth:
-    existingSecret: hopefx-secrets
-    secretKeys:
-      adminPasswordKey: db-password
-      userPasswordKey: db-password
+```
+ml/
+├── model.py               PPORLAgent, VectorRAGNewsSentiment, OnlineRetrainer
+├── advanced_ai.py         AdvancedAIEnsemble — XGBoost stacking ensemble
+├── model_registry.py      ModelRegistry — OOS gate, SHA-256 digest, promotion
+├── sharpe_circuit_breaker.py  Blocks model promotion if Sharpe < threshold
+├── advanced_features.py   176-feature engineering pipeline
+├── features_extended.py   Extended feature set
+├── macro_features.py      Macro features (DXY, VIX, US10Y, US2Y, SPX, GLD)
+├── online_learner.py      SklearnOnlineLearner — SGD + EWC, hourly updates
+└── train_advanced.py      Walk-forward training script (50-year dataset)
 ```
 
-### Kubernetes Secrets Setup
+### Production Model
 
-```bash
-kubectl create secret generic hopefx-secrets \
-  --from-literal=secret-key="$(python -c 'import secrets; print(secrets.token_hex(32))')" \
-  --from-literal=db-password="$(openssl rand -base64 24)" \
-  --from-literal=redis-url="redis://:$(openssl rand -base64 16)@redis:6379/0" \
-  --from-literal=redis-password="$(openssl rand -base64 16)" \
-  --from-literal=ibkr-username="YOUR_IBKR_USERNAME" \
-  --from-literal=ibkr-password="YOUR_IBKR_PASSWORD" \
-  --from-literal=sentry-dsn="YOUR_SENTRY_DSN"
+| Property | Value |
+|----------|-------|
+| File | `advanced_oos.pkl` |
+| Algorithm | XGBoost stacking ensemble |
+| Features | 176 (stationary, regime-aware, macro-augmented) |
+| OOS accuracy | 66.4% (p=0.0000, N=1,260 bars, 7-year held-out) |
+| OOS promotion gate | accuracy >= 0.60 AND p-value <= 0.05 |
+| Feature cache | Redis, 1-min TTL |
+| Fallback | SignalEngine falls back to rule-based strategies if model unavailable |
+
+### Model Registry
+
+`ml/model_registry.py` tracks every model version: file path, SHA-256 digest,
+OOS metrics, and promotion state. A model is only promoted to production when
+both gates pass:
+
+```python
+REGISTRY_MIN_OOS_ACC  = 0.60   # env: REGISTRY_MIN_OOS_ACC
+REGISTRY_MAX_OOS_PVAL = 0.05   # env: REGISTRY_MAX_OOS_PVAL
 ```
 
-### Circuit Breaker Thresholds (production tuning)
+### Online Learning (Elite only)
 
-| Component | Threshold | Window | Reset |
-|-----------|-----------|--------|-------|
-| `EngineCircuitBreaker` | 3 failures | 60s | 120s |
-| `BrokerManager` auto-failover | 5 consecutive failures | — | On success |
-| `IBKRConnector` reconnect | 10 attempts | — | 2s→120s backoff |
-| `MT5LiveFeed` reconnect | 20 attempts | — | 1s→60s backoff |
+`SklearnOnlineLearner` runs hourly via `FEATURE_ONLINE_LEARNING=true`.
+Uses SGD with Elastic Weight Consolidation (EWC) to prevent catastrophic
+forgetting. Updates are applied to a shadow model and promoted only if the
+OOS gate passes.
 
-### Latency Budget (XAUUSD signal → broker ACK)
+### Retraining
 
-| Stage | Budget | Actual (paper) |
+Weekly automated retraining via `.github/workflows/retrain.yml`:
+- Smoke run: `scripts/retrain_horizon5.py --smoke` (~5 min)
+- Full run: `scripts/retrain_model.py --advanced --years 50 --oos-years 8` (~2 hours)
+
+---
+
+## Risk Engine
+
+```
+risk/
+├── manager.py             RiskManager — pre-trade gate coordinator
+├── pre_trade_gate.py      PreTradeGate — VaR, CVaR, leverage, spread, margin checks
+├── gatekeeper.py          Gatekeeper — news blackout, sentiment, equity drawdown
+├── circuit_breakers.py    CircuitBreaker — consecutive loss, daily drawdown halt
+├── drawdown_tracker.py    DrawdownTracker — real-time equity curve tracking
+├── intra_trade_monitor.py IntraTradeMonitor — SL/TP polling (200ms interval)
+├── analytics.py           VaR, ES, EWMA VaR, GARCH VaR, Sharpe, slippage sim
+├── advanced_analytics.py  AdvancedRiskAnalytics — Monte Carlo, stress tests
+├── position_sizing.py     Kelly criterion, fixed fractional, volatility-scaled
+├── fia_compliance.py      FIAComplianceManager — FIA Article 17 pre-trade checks
+├── self_trade_prevention.py  Self-trade prevention
+├── stress_test.py         Scenario stress testing
+└── compliance/            Regulatory compliance sub-module
+```
+
+Pre-trade gate checks (in order, any failure blocks the order):
+
+| Check | Source | Block condition |
 |-------|--------|----------------|
-| Tick → Redis publish | <1ms | ~0.3ms |
-| Feature computation | <5ms | ~2ms |
-| XGBoost inference | <10ms | ~3ms |
-| Pre-trade gate | <5ms | ~1ms |
-| Broker submission (ib_insync) | <30ms | ~15–25ms |
-| **Total** | **<50ms** | **~22–32ms** |
-| FIX 4.4 path (VPN cross-connect) | **<50μs** | ~30–45μs |
+| Kill switch | `kill_switch.py` | `KillSwitch.is_active()` |
+| Live mode gate | `core/live_trading_gate.py` | `LIVE_MODE_CONFIRMED != true` |
+| Spread spike | `risk/pre_trade_gate.py` | spread > `SPREAD_SPIKE_MULTIPLIER` x EMA baseline |
+| Absolute spread | `risk/pre_trade_gate.py` | spread > `SPREAD_ABS_LIMIT_USD` |
+| Leverage | `risk/pre_trade_gate.py` | leverage > `MAX_LEVERAGE_RATIO` |
+| Margin buffer | `risk/pre_trade_gate.py` | free margin < `MIN_MARGIN_BUFFER` x required |
+| CVaR | `risk/analytics.py` | CVaR exceeds daily risk budget |
+| News blackout | `risk/gatekeeper.py` | High-impact event within `GATEKEEPER_PAUSE_S` seconds |
+| Sentiment | `risk/gatekeeper.py` | Sentiment score < `GATEKEEPER_SENT_BLACKOUT` |
+| Equity drawdown | `risk/gatekeeper.py` | Equity drawdown > `GATEKEEPER_IMPACT_BLACKOUT` |
+| FIA compliance | `risk/fia_compliance.py` | FIA Article 17 pre-trade check fails |
+| Circuit breaker | `risk/circuit_breakers.py` | Consecutive losses or daily drawdown limit hit |
+
+### Kill Switch
+
+`kill_switch.py` (`KillSwitch`) is a hardware-level halt. When triggered:
+- All open positions are closed immediately
+- All pending orders are cancelled
+- The halt state is persisted to `kill_switch_state.json`
+- The state survives process restarts — manual reset required
+
+Trigger via API: `POST /api/trading/kill-switch`
+Reset via API: `POST /api/trading/kill-switch/reset` (requires admin role)
 
 ---
 
-**Deployment readiness: BLOCKED** — IBKR live credentials, `SECRET_KEY`, and `DB_PASSWORD` must be provisioned in Kubernetes Secrets before any live capital deployment; paper trading is ready immediately.
-
----
-
-## Full Module Map
-
-### Entry Points
-
-| File | Purpose |
-|------|---------|
-| `app.py` | FastAPI application, lifespan, ComponentRegistry startup |
-| `main.py` | CLI entry point (`python main.py`) |
-| `cli.py` | Command-line interface (`hopefx` commands) |
-| `run.py` | Alternative runner |
-| `connect_to_life.py` | Supervisor over HopeFXEngine (production process manager) |
-
-### API Layer (`api/`)
-
-| Module | Prefix | Description |
-|--------|--------|-------------|
-| `admin.py` | `/api/admin` | Admin dashboard, KYC, logs, activity |
-| `alerts.py` | `/api/alerts` | Alert CRUD, pause/resume |
-| `auth.py` | `/api/auth` | Login, refresh, logout, me |
-| `backtesting.py` | `/api/backtest` | Run backtests, walk-forward, results |
-| `advanced_trading.py` | `/api` | A/B tests, indicators, correlation, COT, Monte Carlo |
-| `billing.py` | `/api/billing` | Stripe, Flutterwave, affiliate |
-| `brain.py` | `/api/brain` | AI strategy generation and deployment |
-| `broker.py` | `/api/broker` | Broker status, test-connection, switch |
-| `calendar.py` | `/api/calendar` | Economic calendar, FOMC, auto-pause |
-| `chat.py` | `/api/chat` | AI trading assistant |
-| `explain.py` | `/api/explain` | SHAP explainability |
-| `journal.py` | `/api/journal` | Trade journal CRUD |
-| `macro.py` | `/api/macro` | Macro data snapshot, history, features |
-| `ml.py` | `/api/ml` | ML accuracy, predict, health, retrain |
-| `mobile.py` | `/api/mobile` | Push notification registration |
-| `monetization.py` | `/api/monetization` | Pricing, subscriptions, access codes |
-| `online_learner.py` | `/api/online-learner` | SGD online learner status and partial-fit |
-| `payments.py` | `/api/payments` | Crypto payment addresses and status |
-| `performance.py` | `/api/performance` | Equity curve, summary metrics |
-| `platform.py` | `/api/platform` | Platform-level endpoints |
-| `profiles.py` | `/api/profiles` | Trader profiles, follow/unfollow |
-| `prop_firm.py` | `/api/risk` | Risk/prop firm status |
-| `settings.py` | `/api/settings` | Notification settings |
-| `signals.py` | `/api/signals` | Signal latest, history, performance |
-| `social_feed.py` | `/api/feed`, `/api/social` | Social feed, leaderboard |
-| `status.py` | `/api/status` | Paper trading clock, Sharpe progress |
-| `trading.py` | `/api/trading` | Orders, positions, account, trades |
-| `two_factor.py` | `/api/2fa` | TOTP setup, verify, disable |
-| `watchlist.py` | `/api/watchlist` | Watchlist CRUD (DB-backed) |
-| `websocket_server.py` | `/ws` | WebSocket manager, channels |
-| `whitelabel_admin.py` | `/api/whitelabel` | White-label admin |
-
-### Brain (`brain/`)
-
-| Module | Purpose |
-|--------|---------|
-| `hopefx_brain.py` | `HOPEFXBrain` — orchestrates all subsystems |
-| `brain.py` | Core brain logic |
-| `cognitive_engine.py` | Cognitive decision engine |
-| `llm_agent.py` | LLM-powered strategy agent |
-
-### Core (`core/`)
-
-| Module | Purpose |
-|--------|---------|
-| `component_registry.py` | Dependency-ordered startup of all components |
-| `startup_factories.py` | Component factories (MacroStore, signal engine, etc.) |
-| `signal_engine.py` | Strategy → ML → risk → order pipeline (6 sub-functions) |
-| `position_reconciler.py` | Reconciles positions between OMS and broker |
-| `event_bus.py` | Internal pub/sub event bus |
-| `main_loop.py` | Main trading loop |
-| `strategy_orchestra.py` | Multi-strategy orchestration |
-| `circuit_breaker.py` | Engine circuit breaker (3 failures/60s → open) |
-| `metrics.py` | Prometheus metrics definitions |
-| `email_service.py` | SendGrid email service |
-| `env_validator.py` | Startup environment validation |
-| `live_trading_gate.py` | 30-day paper trading gate enforcement |
-
-### ML (`ml/`)
-
-| Module | Purpose |
-|--------|---------|
-| `train_advanced.py` | Advanced model training (176 features, 50-year data, OOS eval) |
-| `train_with_macro.py` | Basic model training with macro walk-forward |
-| `advanced_features.py` | 122-feature pipeline (COT, regime, macro) |
-| `live_inference.py` | `AdvancedModelPredictor` + Redis feature cache |
-| `macro_store.py` | Daily macro series → hourly alignment |
-| `macro_bootstrap.py` | yfinance fetch + daily 18:00 UTC refresh scheduler |
-| `macro_features.py` | Macro feature engineering (DXY, VIX, yields, SPX) |
-| `regime_conditional.py` | Regime-conditional XGBoost (trending vs mean-reverting) |
-| `online_learner.py` | `SklearnOnlineLearner` (SGD + EWC, hourly updates) |
-| `training.py` | `FeatureEngineer`, `WalkForwardValidator`, `XGBoostPredictor` |
-
-### Execution (`execution/`)
-
-| Module | Purpose |
-|--------|---------|
-| `engine.py` | `ExecutionEngine` (async, <50ms target) |
-| `async_engine.py` | Async execution engine |
-| `fix_adapter.py` | FIX 4.4 adapter with circuit breaker and heartbeat |
-| `fix_router.py` | FIX message routing |
-| `oms.py` | Order Management System (full order lifecycle) |
-| `order_gateway.py` | `OrderGateway` → delegates to `TradeExecutor` |
-| `position_tracker.py` | Real-time position tracking |
-| `trade_executor.py` | `TradeExecutor` — routes to broker |
-| `tca.py` | Transaction Cost Analysis (fill cost per trade) |
-| `throttler.py` | Order rate throttler |
-| `redis_state.py` | Redis-backed execution state |
-
-### Risk (`risk/`)
-
-| Module | Purpose |
-|--------|---------|
-| `manager.py` | `RiskManager` — Kelly criterion, drawdown, daily loss |
-| `pre_trade_gate.py` | 8-check pre-trade gate (no fallback) |
-| `advanced_analytics.py` | VaR, ES, CVaR, Sharpe, slippage Monte Carlo |
-
-### Brokers (`brokers/`)
-
-| Module | Broker | Notes |
-|--------|--------|-------|
-| `oanda.py` | OANDA | Region routing (us/eu/sg), practice + live |
-| `interactive_brokers.py` | IBKR | ib_insync + FIX 4.4 bridge |
-| `alpaca.py` | Alpaca | Stocks + crypto |
-| `binance.py` | Binance | Crypto |
-| `mt5.py` | MetaTrader 5 | Windows only |
-| `paper_trading.py` | Paper | Default broker, no credentials needed |
-| `universal.py` | Universal | Factory pattern for multi-broker |
-| `base.py` | Base | Abstract broker interface |
-
-### Strategies (`strategies/`)
-
-| Module | Strategy | Type |
-|--------|----------|------|
-| `ma_crossover.py` | Moving Average Crossover | Trend following |
-| `ema_crossover.py` | EMA Crossover | Trend following |
-| `rsi_strategy.py` | RSI | Momentum |
-| `macd_strategy.py` | MACD | Momentum |
-| `bollinger_bands.py` | Bollinger Bands | Mean reversion |
-| `breakout.py` | Breakout | Trend following |
-| `mean_reversion.py` | Mean Reversion | Statistical |
-| `stochastic.py` | Stochastic | Momentum |
-| `smc_ict.py` | SMC/ICT | Institutional |
-| `strategy_brain.py` | Strategy Brain | AI consensus |
-| `manager.py` | StrategyManager | Orchestration |
-| `base.py` | BaseStrategy | Abstract base |
-
-### Monitoring (`monitoring/`)
-
-| Module | Purpose |
-|--------|---------|
-| `sentry_config.py` | Sentry: FastAPI/SQLAlchemy/Redis integrations, PII scrubbing, ML fallback alerts |
-
-### Notifications (`notifications/`)
-
-| Module | Purpose |
-|--------|---------|
-| `discord_bot.py` | Rich signal embeds, rate-limited, fallback warnings |
-| `telegram_bot.py` | Telegram alerts |
-| `alert_engine.py` | Multi-channel alert routing |
-| `manager.py` | Notification manager |
-
-### Data (`data/`)
-
-| Module | Purpose |
-|--------|---------|
-| `scheduler.py` | `DataScheduler` — all 9 timeframes (M1→M) |
-| `depth_of_market.py` | DOM service |
-
-### Database (`database/`)
-
-| Module | Purpose |
-|--------|---------|
-| `models.py` | All SQLAlchemy models (User, Trade, Position, WatchlistEntry, etc.) |
-
----
-
-## Startup Sequence
-
-The `ComponentRegistry` in `core/component_registry.py` starts components
-in dependency order. The sequence on `uvicorn app:app` startup:
+## Execution Engine
 
 ```
-1. config/startup_validator.py    — validate required env vars (sys.exit on failure)
-2. database/                      — SQLAlchemy engine + session factory
-3. alembic                        — verify migrations are current
-4. redis                          — connect (optional, degrades gracefully)
-5. ml/macro_bootstrap.py          — fetch macro CSVs from yfinance (non-blocking)
-6. ml/macro_store.py              — load macro series into memory
-7. ml/__init__.py                 — load advanced_oos.pkl (fallback to xgb_macro.pkl)
-8. core/signal_engine.py          — wire MacroStore + AdvancedPredictor
-9. strategies/manager.py          — register all enabled strategies
-10. brain/hopefx_brain.py         — start HOPEFXBrain
-11. execution/engine.py           — start ExecutionEngine
-12. brokers/                      — connect to configured broker
-13. data/scheduler.py             — start DataScheduler (all timeframes)
-14. notifications/                — start alert engine + Discord bot
-15. monitoring/sentry_config.py   — init Sentry with all integrations
-16. api/                          — register all 30+ routers
-17. websocket_server.py           — start WebSocket manager
+execution/
+├── trade_executor.py      TradeExecutor — signal -> order lifecycle
+├── smart_router.py        SmartRouter — multi-broker routing and failover
+├── order_management.py    OMS — order state machine
+├── position_tracker.py    Real-time position reconciliation
+├── fix_adapter.py         FIX 4.4 protocol adapter
+└── slippage_model.py      Slippage estimation
 ```
 
-If any step 1–8 fails, the application exits with a clear error message.
-Steps 9–17 log warnings and continue (degraded mode).
+Order lifecycle:
+
+```
+Signal (validated by RiskManager)
+        |
+        v
+SmartRouter.route(signal)
+  ├── Selects broker by: latency, spread, fill rate, account balance
+  ├── Failover: if primary broker unhealthy -> secondary broker
+  └── Returns RoutingDecision (broker_id, account_id, reason)
+        |
+        v
+BrokerConnector.place_order(order)
+        |
+        v
+ExecutionResult (order_id, fill_price, slippage, latency_ms, status)
+        |
+        v
+PositionTracker.update(result)
+IntraTradeMonitor.register(position)   <- polls SL/TP every 200ms
+PostTradeAnalyzer.record(result)
+```
 
 ---
 
-## Feature Flags
+## Broker Connectors
 
-All features are controlled by environment variables in `config/feature_flags.py`.
-Set any flag to `true` or `false` in `.env` to enable/disable at runtime.
+All connectors implement `BrokerConnector` (ABC) from `brokers/base.py`.
+Price data methods raise `MarketDataForbidden` — use `orchestrator.get_latest_tick()`.
 
-Key flags:
+| Connector | File | Mode | Notes |
+|-----------|------|------|-------|
+| OANDA | `brokers/oanda_broker.py` | Live + Practice | Primary execution broker |
+| IBKR | `brokers/ibkr_broker.py` | Live + Paper | TWS/IB Gateway via ib_insync |
+| Alpaca | `brokers/alpaca_broker.py` | Live + Paper | REST + WebSocket |
+| Binance | `brokers/binance_broker.py` | Live + Testnet | Spot + Futures |
+| Bybit | `brokers/bybit_broker.py` | Live + Sandbox | XAUUSDT perpetuals |
+| MT5 | `brokers/mt5_broker.py` | Live | MetaTrader 5 via MetaTrader5 |
+| Paper | `brokers/paper_broker.py` | Simulation | Default when no broker configured |
+| FIX | `execution/fix_adapter.py` | Live | FIX 4.4 for institutional connectivity |
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `FEATURE_LIVE_TRADING` | `false` | Enable real order execution |
-| `ML_HOURLY_ENABLED` | `false` | Enable SGD online learning (hourly updates) |
-| `FEATURE_MTF_FUSION` | `true` | Multi-timeframe fusion (Phase 1 research) |
-| `FEATURE_ANOMALY_WEIGHTING` | `false` | Anomaly-weighted signals (Phase 2, after 30-day paper) |
-| `FEATURE_ONLINE_LEARNING` | `false` | Online learner store (Phase 3, after 90-day paper) |
-| `FEATURE_DEEP_ENSEMBLE` | `false` | LSTM/Transformer ensemble (Phase 4, after OOS ≥ 70%) |
-| `LSTM_SIGNAL_ENABLED` | `false` | LSTM as optional signal layer in HOPEFXBrain |
-| `FEATURE_SOCIAL_TRADING` | `true` | Social feed and copy trading |
-| `FEATURE_PAPER_TRADING` | `true` | Paper trading simulator |
-| `FEATURE_RISK_MANAGER` | `true` | Risk manager (always keep true) |
+`SmartRouter` manages multi-broker routing and failover. Broker health is checked
+every 30 seconds. Unhealthy brokers are removed from the routing pool automatically.
 
-See `docs/archive/FEATURES.md` for the complete flag registry (57 flags).
+---
+
+## API Layer
+
+```
+app.py
+└── core/router_registry.py   registers all 50+ routers
+
+api/
+├── auth.py              POST /api/auth/login, /refresh, /logout, /me
+├── signals.py           GET /api/signals/latest, /history, /performance
+├── trading.py           POST /api/trading/order, GET /positions, /account
+├── ml.py                GET /api/ml/accuracy, POST /predict, /retrain
+├── risk.py              GET /api/risk/status, /drawdown, /cvar
+├── broker.py            GET /api/broker/status, POST /switch
+├── backtesting.py       POST /api/backtest/run, GET /results
+├── monetization.py      GET /api/monetization/pricing, POST /subscribe
+├── billing.py           POST /api/billing/auth/activate-free-tier, /stripe/webhook
+├── brain.py             POST /api/brain/generate-strategy, /deploy-strategy
+├── chat.py              POST /api/chat/message, GET /history
+├── explain.py           GET /api/explain/signal, /global-importance
+├── social.py            GET /api/feed, POST /react
+├── profiles.py          GET /api/profiles/{username}
+├── mobile.py            POST /api/mobile/register-push, GET /push-status
+├── admin.py             GET /api/admin/dashboard, /logs, /kyc
+└── ...                  (50+ total routers)
+```
+
+All endpoints except `/health`, `/docs`, `/openapi.json`, `/redoc` require:
+1. Valid JWT (`Authorization: Bearer <token>`)
+2. Active subscription (enforced via `plan_gate()` per endpoint)
+
+Interactive docs: `GET /docs` (Swagger UI), `GET /redoc` (ReDoc)
+
+### WebSocket Endpoints
+
+| Path | Data |
+|------|------|
+| `/ws/signals` | Live signal stream |
+| `/ws/prices` | Live price ticks (from orchestrator) |
+| `/ws/positions` | Position updates |
+| `/ws/alerts` | Alert notifications |
+
+---
+
+## Subscription & Access Control
+
+```
+monetization/
+├── subscription.py      SubscriptionManager, require_plan(), plan_gate()
+├── pricing.py           SubscriptionTier, PricingTier, TierFeatures
+├── license.py           License key validation
+├── stripe_integration.py  Stripe webhook handling
+├── stripe_live.py       Stripe live payment processing
+└── access_codes.py      Activation code management
+```
+
+### Tier Hierarchy
+
+```
+FREE  ->  STARTER  ->  PROFESSIONAL  ->  ENTERPRISE  ->  ELITE
+```
+
+Plan enforcement uses `plan_gate(minimum_plan, user_plan)` from
+`monetization/subscription.py`. It is called inline in each endpoint:
+
+```python
+sub = subscription_manager.get_subscription(user.user_id)
+user_plan = sub.tier.value if (sub and sub.is_active()) else "free"
+if not plan_gate("professional", user_plan):
+    raise HTTPException(403, {"error_code": "PLAN_LIMIT_EXCEEDED", "required_plan": "professional"})
+```
+
+Strategy-level gating is also enforced in `strategies/manager.py` via
+`STRATEGY_PLAN_REQUIREMENTS` before any strategy logic executes.
+
+Free tier is activated automatically on signup:
+`POST /api/billing/auth/activate-free-tier`
+
+---
+
+## Notifications & Alerts
+
+```
+notifications/
+├── manager.py           NotificationManager — routes to all channels
+├── telegram_bot.py      Telegram bot (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID)
+├── discord_bot.py       Discord webhook (DISCORD_WEBHOOK_URL)
+├── email_renderer.py    HTML email templates
+├── email_triggers.py    Event-driven email dispatch
+├── alert_engine.py      Alert rule engine (price, signal, drawdown triggers)
+└── heartbeat.py         Periodic system health heartbeat
+```
+
+Notification channels are configured in `.env`. All channels are optional —
+the system runs without any notification config. Channels are tried independently;
+failure of one channel does not block others.
+
+---
+
+## Observability
+
+```
+monitoring/
+├── metrics.py           Prometheus metrics (hopefx_* namespace)
+├── health.py            /health endpoint — component-level status
+└── logging.py           Structured JSON logging config
+
+grafana/
+├── dashboards/          4 dashboards, 27 panels
+└── provisioning/        Auto-provisioning config
+```
+
+### Prometheus Metrics
+
+Scraped at `GET /metrics`. Key metrics:
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `hopefx_signals_total` | Counter | Signals generated, by direction and strategy |
+| `hopefx_orders_total` | Counter | Orders placed, by broker and status |
+| `hopefx_request_duration_seconds` | Histogram | API request latency, by endpoint |
+| `hopefx_active_positions` | Gauge | Open positions count |
+| `hopefx_daily_pnl` | Gauge | Realised P&L for the current trading day |
+| `hopefx_drawdown_pct` | Gauge | Current drawdown from equity peak |
+| `hopefx_ml_prediction_confidence` | Gauge | Last ML prediction confidence score |
+| `hopefx_data_quality_score` | Gauge | Current orchestrator data quality score |
+
+### Health Check
+
+`GET /health` returns per-component status:
+
+```json
+{
+  "status": "healthy",
+  "components": {
+    "database": "healthy",
+    "redis": "healthy",
+    "broker": "healthy",
+    "ml_model": "healthy",
+    "orchestrator": "healthy",
+    "kill_switch": "inactive"
+  },
+  "version": "1.17.0"
+}
+```
+
+---
+
+## Infrastructure
+
+### Docker Compose (development / single-node production)
+
+```
+docker/
+├── Dockerfile           Multi-stage build (builder -> runtime)
+└── docker-compose.yml   app, postgres, redis, grafana, prometheus, nginx
+```
+
+Start the full stack:
+```bash
+docker compose up -d
+```
+
+### Kubernetes (production)
+
+```
+k8s/
+├── namespace.yaml
+├── k8s-deployment.yaml      app Deployment (2 replicas, rolling update)
+├── k8s-service.yaml         ClusterIP service
+├── ingress.yaml             NGINX ingress with TLS
+├── k8s-configmap.yaml       Non-secret config
+├── k8s-secrets.yaml         Secret references
+├── redis-cluster.yaml       Redis StatefulSet
+├── network-policy.yaml      Deny-all default, allow-list ingress/egress
+├── pdb.yaml                 PodDisruptionBudget (minAvailable: 1)
+├── kill-switch-configmap.yaml  Kill switch state persistence
+└── kill-switch-rbac.yaml    RBAC for kill switch ConfigMap access
+```
+
+### Redis
+
+```
+redis/
+├── redis-master.conf    Master config (AOF + RDB persistence)
+├── redis-replica.conf   Replica config
+└── sentinel.conf        Sentinel config (3-node HA)
+```
+
+---
+
+## Data Flow — End to End
+
+```
+External Price Sources
+  Finnhub WS  .  Twelve Data WS  .  Polygon WS
+        |
+        v
+MarketDataOrchestrator  (data_layer/orchestrator.py)
+  DataQualityEngine -> consensus GoldTick -> Redis cache
+  DataLineageStore (immutable audit trail)
+        |
+        v
+Signal Engine  (core/signal_engine.py)
+  HOPEFXBrain -> RegimeRouter -> BaseStrategy.generate_signals()
+  AdvancedAIEnsemble (176 features, XGBoost) -> ML signal
+  StrategyBrain (Elite) -> consensus signal
+        |
+        v
+Risk Engine  (risk/)
+  Gatekeeper -> PreTradeGate -> CircuitBreaker -> FIACompliance
+  KillSwitch check -> LiveTradingGate check
+        |
+        v
+Execution Engine  (execution/)
+  SmartRouter -> BrokerConnector.place_order()
+  PositionTracker -> IntraTradeMonitor (SL/TP, 200ms poll)
+  PostTradeAnalyzer -> TradeJournal
+        |
+        v
+Observability
+  Prometheus metrics -> Grafana dashboards
+  Sentry error tracking
+  Notifications (Telegram / Discord / Email)
+  WebSocket push -> dashboard / mobile
+```
+
+---
+
+## Module Dependency Map
+
+```
+app.py
+├── core/router_registry.py      <- mounts all 50+ API routers
+├── core/startup_factories.py    <- builds ComponentRegistry
+│   ├── config/settings.py
+│   ├── database/                <- SQLAlchemy + Alembic
+│   ├── cache/                   <- Redis + in-memory fallback
+│   ├── risk/manager.py
+│   ├── brokers/                 <- BrokerConnector implementations
+│   └── execution/trade_executor.py
+│       └── execution/smart_router.py
+├── data_layer/orchestrator.py   <- started independently in lifespan
+│   ├── data_layer/feeds/        <- NuclearStreamer, Finnhub, Twelve Data, Polygon
+│   ├── data_layer/quality/      <- DataQualityEngine
+│   └── data_layer/lineage/      <- DataLineageStore
+├── core/signal_engine.py        <- background loop
+│   ├── brain/                   <- HOPEFXBrain, RegimeRouter
+│   ├── strategies/              <- BaseStrategy implementations
+│   └── ml/                      <- AdvancedAIEnsemble, ModelRegistry
+├── kill_switch.py               <- checked at every order submission
+├── monetization/subscription.py <- plan_gate() called in every gated endpoint
+└── notifications/manager.py    <- called on signal, fill, alert, heartbeat
+```
+
+---
+
+*Last updated: 2026-07-14*
