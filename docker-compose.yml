@@ -133,8 +133,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-hopefx}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # Port intentionally not exposed to host — DB is internal-only.
+    # Access via: docker compose exec postgres psql -U hopefx
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U hopefx -d hopefx"]
       interval: 10s
