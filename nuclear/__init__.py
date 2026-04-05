@@ -20,7 +20,6 @@ signal_composer     Entry/exit rules, risk params, confidence scoring
 nuclear_agent       Top-level NuclearStrategyAgent orchestrator
 """
 
-__all__: list[str] = []
+from nuclear.nuclear_agent import NuclearStrategyAgent, get_nuclear_agent
 
-# Full exports available after all modules are built:
-#   from nuclear.nuclear_agent import NuclearStrategyAgent, get_nuclear_agent
+__all__ = ["NuclearStrategyAgent", "get_nuclear_agent"]
