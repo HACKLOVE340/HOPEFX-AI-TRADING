@@ -60,6 +60,14 @@ _ANTHROPIC_MODEL: str = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5")
 _OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "o4-mini")
 _LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "8192"))
 
+# OpenAI reasoning models (o-series) use max_completion_tokens instead of max_tokens
+# and do not support a temperature parameter.
+_OPENAI_REASONING_MODELS: frozenset[str] = frozenset({"o1", "o1-mini", "o3", "o3-mini", "o4-mini"})
+
+# Retry configuration for transient upstream errors (429, 529, 503)
+_LLM_MAX_RETRIES: int = int(os.getenv("LLM_MAX_RETRIES", "3"))
+_LLM_RETRY_BASE_DELAY: float = float(os.getenv("LLM_RETRY_BASE_DELAY", "1.0"))  # seconds
+
 
 def _load_recent_candles_from_csv(
     symbol: str = "XAU_USD",
@@ -742,7 +750,9 @@ class LLMAgent:
         *,
         update_history: bool,
     ) -> tuple[str, str | None]:
-        """Call Anthropic Messages API (async via httpx)."""
+        """Call Anthropic Messages API with exponential backoff retry."""
+        import asyncio
+
         import httpx
 
         # Anthropic requires the system prompt to be a top-level field, not a message.
@@ -750,7 +760,6 @@ class LLMAgent:
         user_messages: list[dict[str, str]] = []
         for msg in messages:
             if msg["role"] == "system":
-                # Concatenate multiple system messages (e.g. ephemeral context injections).
                 system_content = (system_content + "\n\n" + msg["content"]).strip()
             else:
                 user_messages.append({"role": msg["role"], "content": msg["content"]})
@@ -770,30 +779,42 @@ class LLMAgent:
             "content-type": "application/json",
         }
 
-        try:
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                resp = await client.post(
-                    "https://api.anthropic.com/v1/messages",
-                    headers=headers,
-                    json=payload,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                content = self._strip_fences(data["content"][0]["text"].strip())
-                if update_history:
-                    self._history.append({"role": "assistant", "content": content})
-                return content, None
-        except httpx.HTTPStatusError as exc:
-            status = exc.response.status_code
-            if status == 401:
-                return "", "Invalid Anthropic API key"
-            if status == 429:
-                return "", "Anthropic rate limit exceeded"
-            return "", f"Anthropic API error {status}: {exc.response.text[:200]}"
-        except httpx.ConnectError as exc:
-            return "", f"Anthropic connection error: {exc}"
-        except (OSError, ValueError, RuntimeError, KeyError) as exc:
-            return "", f"LLM call failed: {exc}"
+        last_error: str = ""
+        for attempt in range(1, _LLM_MAX_RETRIES + 1):
+            try:
+                async with httpx.AsyncClient(timeout=120.0) as client:
+                    resp = await client.post(
+                        "https://api.anthropic.com/v1/messages",
+                        headers=headers,
+                        json=payload,
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                    content = self._strip_fences(data["content"][0]["text"].strip())
+                    if update_history:
+                        self._history.append({"role": "assistant", "content": content})
+                    return content, None
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code
+                if status == 401:
+                    return "", "Invalid Anthropic API key"
+                # Retry on transient overload / rate-limit responses
+                if status in (429, 503, 529):
+                    last_error = f"Anthropic transient error {status}"
+                    delay = _LLM_RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                    logger.warning("%s — retry %d/%d in %.1fs", last_error, attempt, _LLM_MAX_RETRIES, delay)
+                    await asyncio.sleep(delay)
+                    continue
+                return "", f"Anthropic API error {status}: {exc.response.text[:200]}"
+            except httpx.ConnectError as exc:
+                last_error = f"Anthropic connection error: {exc}"
+                delay = _LLM_RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                logger.warning("%s — retry %d/%d in %.1fs", last_error, attempt, _LLM_MAX_RETRIES, delay)
+                await asyncio.sleep(delay)
+            except (OSError, ValueError, RuntimeError, KeyError) as exc:
+                return "", f"LLM call failed: {exc}"
+
+        return "", f"Anthropic call failed after {_LLM_MAX_RETRIES} retries: {last_error}"
 
     async def _call_openai(
         self,
@@ -801,28 +822,53 @@ class LLMAgent:
         *,
         update_history: bool,
     ) -> tuple[str, str | None]:
-        """Call OpenAI Chat Completions API."""
+        """Call OpenAI Chat Completions API with exponential backoff retry.
+
+        Reasoning models (o-series) require ``max_completion_tokens`` instead of
+        ``max_tokens`` and do not accept a ``temperature`` parameter.
+        """
+        import asyncio
+
         import openai as _openai
 
-        try:
-            response = await self._openai_client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=0.3,
-                max_tokens=_LLM_MAX_TOKENS,
-            )
-            content = self._strip_fences(response.choices[0].message.content.strip())
-            if update_history:
-                self._history.append({"role": "assistant", "content": content})
-            return content, None
-        except _openai.AuthenticationError:
-            return "", "Invalid OpenAI API key"
-        except _openai.RateLimitError:
-            return "", "OpenAI rate limit exceeded"
-        except _openai.APIConnectionError as exc:
-            return "", f"OpenAI connection error: {exc}"
-        except (OSError, ValueError, RuntimeError) as exc:
-            return "", f"LLM call failed: {exc}"
+        is_reasoning = self.model in _OPENAI_REASONING_MODELS
+        create_kwargs: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "max_completion_tokens" if is_reasoning else "max_tokens": _LLM_MAX_TOKENS,
+        }
+        if not is_reasoning:
+            create_kwargs["temperature"] = 0.3
+
+        last_error: str = ""
+        for attempt in range(1, _LLM_MAX_RETRIES + 1):
+            try:
+                response = await self._openai_client.chat.completions.create(**create_kwargs)
+                content = self._strip_fences(response.choices[0].message.content.strip())
+                if update_history:
+                    self._history.append({"role": "assistant", "content": content})
+                return content, None
+            except _openai.AuthenticationError:
+                return "", "Invalid OpenAI API key"
+            except _openai.RateLimitError as exc:
+                last_error = f"OpenAI rate limit: {exc}"
+                delay = _LLM_RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                logger.warning("%s — retry %d/%d in %.1fs", last_error, attempt, _LLM_MAX_RETRIES, delay)
+                await asyncio.sleep(delay)
+            except _openai.InternalServerError as exc:
+                last_error = f"OpenAI server error: {exc}"
+                delay = _LLM_RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                logger.warning("%s — retry %d/%d in %.1fs", last_error, attempt, _LLM_MAX_RETRIES, delay)
+                await asyncio.sleep(delay)
+            except _openai.APIConnectionError as exc:
+                last_error = f"OpenAI connection error: {exc}"
+                delay = _LLM_RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                logger.warning("%s — retry %d/%d in %.1fs", last_error, attempt, _LLM_MAX_RETRIES, delay)
+                await asyncio.sleep(delay)
+            except (OSError, ValueError, RuntimeError) as exc:
+                return "", f"LLM call failed: {exc}"
+
+        return "", f"OpenAI call failed after {_LLM_MAX_RETRIES} retries: {last_error}"
 
 
 # ── convenience factory ───────────────────────────────────────────────────────
