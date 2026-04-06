@@ -53,6 +53,7 @@ matplotlib>=3.8.0
 seaborn>=0.13.0
 plotly>=5.18.0
 yfinance>=0.2.36
+curl-cffi>=0.15.0  # CVE-2026-33752: SSRF via redirect — transitive dep of yfinance/ccxt; pin to patched version
 aiosmtpd>=1.4.4
 # Error tracking — required by monitoring/sentry_config.py and its tests
 sentry-sdk[fastapi]>=2.8.0
