@@ -51,14 +51,35 @@ class TestMarketData(unittest.TestCase):
     def setUp(self):
         from cache.market_data_cache import MarketDataCache
 
-        # Use real constructor so all internal state is properly initialised.
-        # Pass host/port that won't connect; the cache falls back to in-memory.
+        # Fresh instance with an isolated in-memory store so prior tests that
+        # seed the cache (e.g. integration/test_redis.py) cannot pollute this
+        # assertion.  Use a unique symbol that no other test writes to.
         self.cache = MarketDataCache(host="localhost", port=6379, db=0)
+        # Wipe any in-memory state left by earlier tests in the same process.
+        self.cache._local_cache.clear()
+        self.cache._local_ttl.clear()
 
     def test_get_returns_none_for_missing_key(self):
-        result = self.cache.get_ohlcv("XAUUSD", "1h", limit=1)
+        # Use a symbol that no other test writes to guarantee a clean miss.
+        result = self.cache.get_ohlcv("__TEST_MISSING_SYMBOL__", "1h", limit=1)
         # Returns None or empty list when no data has been cached.
         assert result is None or result == []
+
+    def test_cache_write_then_read_roundtrip(self):
+        """Data written to the in-memory cache is retrievable."""
+        candle = {"open": 1.0, "high": 1.1, "low": 0.9, "close": 1.05, "volume": 100}
+        self.cache.cache_ohlcv("__TEST_ROUNDTRIP__", "1h", [candle])
+        result = self.cache.get_ohlcv("__TEST_ROUNDTRIP__", "1h", limit=1)
+        assert result is not None and len(result) == 1
+
+    def test_stats_hit_count_increments_on_read(self):
+        """Cache hit counter increments after a successful read."""
+        candle = {"open": 1.0, "high": 1.1, "low": 0.9, "close": 1.05, "volume": 100}
+        self.cache.cache_ohlcv("__TEST_STATS__", "1h", [candle])
+        before = self.cache.get_stats().get("total_hits", 0)
+        self.cache.get_ohlcv("__TEST_STATS__", "1h", limit=1)
+        after = self.cache.get_stats().get("total_hits", 0)
+        assert after > before
 
     def test_data_format_via_stats(self):
         stats = self.cache.get_stats()

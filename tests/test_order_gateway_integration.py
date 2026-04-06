@@ -210,6 +210,31 @@ class TestBrokerException:
         result = gateway.send_order(order)
         assert result.success is False
 
+    @pytest.mark.asyncio
+    async def test_send_order_async_never_raises(self, gateway, mock_executor):
+        """send_order_async() must never propagate bare Exception to the caller."""
+        order = _make_order()
+        mock_executor.execute_signal.side_effect = Exception("async catastrophic failure")
+
+        result = await gateway.send_order_async(order)
+
+        assert result.success is False
+        assert result.status == OrderStatus.ERROR
+        assert order.is_rejected is True
+        assert "async catastrophic failure" in result.message
+
+    @pytest.mark.asyncio
+    async def test_send_order_async_no_executor_returns_rejected(self):
+        """send_order_async() without executor returns REJECTED, never raises."""
+        gw = OrderGateway(executor=None)
+        order = _make_order()
+
+        result = await gw.send_order_async(order)
+
+        assert result.success is False
+        assert result.status == OrderStatus.REJECTED
+        assert order.is_rejected is True
+
     def test_no_executor_returns_rejected(self):
         """OrderGateway without executor returns REJECTED, never raises."""
         gw = OrderGateway(executor=None)
