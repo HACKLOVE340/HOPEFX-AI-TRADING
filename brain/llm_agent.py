@@ -4,12 +4,12 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 """
-HOPEFX LLM Agent — real GPT-4 strategy generation and execution loop.
+HOPEFX LLM Agent — strategy generation and execution loop.
 
 Flow
 ----
 1. User submits a natural-language prompt ("Create ICT + LSTM ensemble Sharpe > 2.5").
-2. Agent calls GPT-4 to generate a complete Python strategy class.
+2. Agent calls the configured LLM to generate a complete Python strategy class.
 3. Generated code is sandboxed, compiled, and instantiated.
 4. Strategy is back-tested against real OANDA candle data.
 5. If Sharpe < target the agent reflects on the result and iterates (up to
@@ -17,13 +17,22 @@ Flow
 6. Accepted strategies are registered with StrategyManager and optionally
    deployed live.
 
-All GPT-4 calls are async.  The agent maintains a conversation history so
+All LLM calls are async.  The agent maintains a conversation history so
 follow-up refinements have full context.
+
+Backends (selected via LLM_BACKEND env var)
+-------------------------------------------
+    "anthropic" (default) — Claude 3.5 Sonnet via Anthropic Messages API
+    "openai"              — GPT-4o via OpenAI Chat Completions API
 
 Environment variables
 ---------------------
-    OPENAI_API_KEY   — required
-    OPENAI_MODEL     — default "gpt-4o"
+    LLM_BACKEND        — "anthropic" (default) or "openai"
+    ANTHROPIC_API_KEY  — required when LLM_BACKEND=anthropic
+    ANTHROPIC_MODEL    — default "claude-3-5-sonnet-20241022"
+    OPENAI_API_KEY     — required when LLM_BACKEND=openai
+    OPENAI_MODEL       — default "gpt-4o"
+    LLM_MAX_TOKENS     — max tokens for code generation (default 8192)
 """
 
 from __future__ import annotations
@@ -41,9 +50,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import openai
-
 logger = logging.getLogger(__name__)
+
+# ── Backend configuration ─────────────────────────────────────────────────────
+_LLM_BACKEND: str = os.getenv("LLM_BACKEND", "anthropic").lower()
+_ANTHROPIC_API_KEY: str | None = os.getenv("ANTHROPIC_API_KEY")
+_OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
+_ANTHROPIC_MODEL: str = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022")
+_OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o")
+_LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "8192"))
 
 
 def _load_recent_candles_from_csv(
@@ -386,12 +401,16 @@ def _run_backtest(
 
 class LLMAgent:
     """
-    Agentic GPT-4 strategy generator with iterative refinement.
+    Agentic strategy generator with iterative refinement.
+
+    Supports Anthropic (Claude 3.5 Sonnet, default) and OpenAI (GPT-4o) backends.
+    Backend is selected via LLM_BACKEND env var or the ``backend`` constructor arg.
 
     Parameters
     ----------
-    api_key        : OpenAI API key (falls back to OPENAI_API_KEY env var)
-    model          : OpenAI model name (default: gpt-4o)
+    api_key        : API key for the selected backend (falls back to env var)
+    model          : Model name override (defaults to backend-specific env var)
+    backend        : "anthropic" or "openai" (defaults to LLM_BACKEND env var)
     max_iterations : How many refinement loops before giving up
     target_sharpe  : Minimum acceptable Sharpe ratio
     candle_fetcher : Async callable(symbol, timeframe, count) → List[dict]
@@ -401,17 +420,38 @@ class LLMAgent:
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = "gpt-4o",
+        model: str | None = None,
+        backend: str | None = None,
         max_iterations: int = 3,
         target_sharpe: float = 1.5,
         candle_fetcher: Any | None = None,
         enable_rag: bool = True,
     ):
-        key = api_key or os.environ.get("OPENAI_API_KEY", "")
-        if not key:
-            raise ValueError("OpenAI API key required — set OPENAI_API_KEY env var or pass api_key= to LLMAgent()")
-        self._client = openai.AsyncOpenAI(api_key=key)
-        self.model = model
+        self._backend: str = (backend or _LLM_BACKEND).lower()
+
+        if self._backend == "anthropic":
+            key = api_key or _ANTHROPIC_API_KEY or ""
+            if not key:
+                raise ValueError(
+                    "Anthropic API key required — set ANTHROPIC_API_KEY env var or pass api_key= to LLMAgent()"
+                )
+            self._anthropic_key = key
+            self._openai_client = None
+            self.model = model or _ANTHROPIC_MODEL
+        elif self._backend == "openai":
+            import openai as _openai
+
+            key = api_key or _OPENAI_API_KEY or ""
+            if not key:
+                raise ValueError(
+                    "OpenAI API key required — set OPENAI_API_KEY env var or pass api_key= to LLMAgent()"
+                )
+            self._anthropic_key = None
+            self._openai_client = _openai.AsyncOpenAI(api_key=key)
+            self.model = model or _OPENAI_MODEL
+        else:
+            raise ValueError(f"Unknown LLM backend '{self._backend}' — use 'anthropic' or 'openai'")
+
         self.max_iterations = max_iterations
         self.target_sharpe = target_sharpe
         self.candle_fetcher = candle_fetcher
@@ -458,7 +498,7 @@ class LLMAgent:
         for iteration in range(1, self.max_iterations + 1):
             logger.info("Iteration %d/%d", iteration, self.max_iterations)
 
-            # ── call GPT-4 ────────────────────────────────────────────────────
+            # ── call LLM ─────────────────────────────────────────────────────
             code, llm_error = await self._call_llm()
             if llm_error:
                 return AgentResult(
@@ -676,50 +716,110 @@ class LLMAgent:
 
     # ── internals ─────────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _strip_fences(content: str) -> str:
+        """Remove accidental markdown code fences from LLM output."""
+        if content.startswith("```"):
+            lines = content.splitlines()
+            content = "\n".join(ln for ln in lines if not ln.startswith("```")).strip()
+        return content
+
     async def _call_llm_with_messages(self, messages: list[dict[str, str]]) -> tuple[str, str | None]:
-        """Call GPT-4 with an explicit message list (used for RAG injection)."""
+        """Call the configured LLM backend with an explicit message list (used for RAG injection)."""
+        if self._backend == "anthropic":
+            return await self._call_anthropic(messages, update_history=False)
+        return await self._call_openai(messages, update_history=False)
+
+    async def _call_llm(self) -> tuple[str, str | None]:
+        """Call the configured LLM backend using the current conversation history."""
+        if self._backend == "anthropic":
+            return await self._call_anthropic(self._history, update_history=True)
+        return await self._call_openai(self._history, update_history=True)
+
+    async def _call_anthropic(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        update_history: bool,
+    ) -> tuple[str, str | None]:
+        """Call Anthropic Messages API (async via httpx)."""
+        import httpx
+
+        # Anthropic requires the system prompt to be a top-level field, not a message.
+        system_content: str = ""
+        user_messages: list[dict[str, str]] = []
+        for msg in messages:
+            if msg["role"] == "system":
+                # Concatenate multiple system messages (e.g. ephemeral context injections).
+                system_content = (system_content + "\n\n" + msg["content"]).strip()
+            else:
+                user_messages.append({"role": msg["role"], "content": msg["content"]})
+
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "max_tokens": _LLM_MAX_TOKENS,
+            "temperature": 0.3,
+            "messages": user_messages,
+        }
+        if system_content:
+            payload["system"] = system_content
+
+        headers = {
+            "x-api-key": self._anthropic_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        }
+
         try:
-            response = await self._client.chat.completions.create(
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                resp = await client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers=headers,
+                    json=payload,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                content = self._strip_fences(data["content"][0]["text"].strip())
+                if update_history:
+                    self._history.append({"role": "assistant", "content": content})
+                return content, None
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code
+            if status == 401:
+                return "", "Invalid Anthropic API key"
+            if status == 429:
+                return "", "Anthropic rate limit exceeded"
+            return "", f"Anthropic API error {status}: {exc.response.text[:200]}"
+        except httpx.ConnectError as exc:
+            return "", f"Anthropic connection error: {exc}"
+        except (OSError, ValueError, RuntimeError, KeyError) as exc:
+            return "", f"LLM call failed: {exc}"
+
+    async def _call_openai(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        update_history: bool,
+    ) -> tuple[str, str | None]:
+        """Call OpenAI Chat Completions API."""
+        import openai as _openai
+
+        try:
+            response = await self._openai_client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 temperature=0.3,
-                max_tokens=2048,
+                max_tokens=_LLM_MAX_TOKENS,
             )
-            content = response.choices[0].message.content.strip()
-            if content.startswith("```"):
-                lines = content.splitlines()
-                content = "\n".join(l for l in lines if not l.startswith("```")).strip()
+            content = self._strip_fences(response.choices[0].message.content.strip())
+            if update_history:
+                self._history.append({"role": "assistant", "content": content})
             return content, None
-        except openai.AuthenticationError:
+        except _openai.AuthenticationError:
             return "", "Invalid OpenAI API key"
-        except openai.RateLimitError:
+        except _openai.RateLimitError:
             return "", "OpenAI rate limit exceeded"
-        except openai.APIConnectionError as exc:
-            return "", f"OpenAI connection error: {exc}"
-        except (OSError, ValueError, RuntimeError) as exc:
-            return "", f"LLM call failed: {exc}"
-
-    async def _call_llm(self) -> tuple[str, str | None]:
-        """Call GPT-4 and return (content, error)."""
-        try:
-            response = await self._client.chat.completions.create(
-                model=self.model,
-                messages=self._history,
-                temperature=0.3,
-                max_tokens=2048,
-            )
-            content = response.choices[0].message.content.strip()
-            # strip accidental markdown fences
-            if content.startswith("```"):
-                lines = content.splitlines()
-                content = "\n".join(l for l in lines if not l.startswith("```")).strip()
-            self._history.append({"role": "assistant", "content": content})
-            return content, None
-        except openai.AuthenticationError:
-            return "", "Invalid OpenAI API key"
-        except openai.RateLimitError:
-            return "", "OpenAI rate limit exceeded"
-        except openai.APIConnectionError as exc:
+        except _openai.APIConnectionError as exc:
             return "", f"OpenAI connection error: {exc}"
         except (OSError, ValueError, RuntimeError) as exc:
             return "", f"LLM call failed: {exc}"
@@ -731,7 +831,8 @@ class LLMAgent:
 def create_agent(
     candle_source=None,
     api_key: str | None = None,
-    model: str = "gpt-4o",
+    model: str | None = None,
+    backend: str | None = None,
     # Backwards-compat alias — remove after all call sites are updated.
     oanda_stream=None,
     **kwargs,
@@ -745,8 +846,9 @@ def create_agent(
                     coroutine.  Typically an ``OANDAStream`` execution broker
                     used for historical warm-up data only.
                     Live price ticks come from ``data_feed.NuclearStreamer``.
-    api_key       : OpenAI API key (falls back to OPENAI_API_KEY env var).
-    model         : OpenAI model name (default: gpt-4o).
+    api_key       : API key for the selected backend (falls back to env var).
+    model         : Model name override (defaults to backend-specific env var).
+    backend       : "anthropic" (default) or "openai" — overrides LLM_BACKEND env var.
     oanda_stream  : Deprecated alias for ``candle_source``.
 
     Example
@@ -779,6 +881,7 @@ def create_agent(
     return LLMAgent(
         api_key=api_key,
         model=model,
+        backend=backend,
         candle_fetcher=candle_fetcher,
         **kwargs,
     )
