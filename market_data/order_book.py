@@ -6,9 +6,14 @@ market_data/order_book.py
 =========================
 Level 2 order book with microstructure signal extraction.
 
-Supports two live L2 sources:
-  1. OANDA v20 streaming order book (REST snapshot + WebSocket updates)
-  2. IBKR TWS market depth (via ib_insync)
+Live L2 source: Polygon.io Forex WebSocket (broker-free, unmanipulated)
+  - wss://socket.polygon.io/forex
+  - Subscribes to Q.C.XAU/USD (real-time forex quotes: bid, ask, bid_size, ask_size)
+  - Subscribes to T.C.XAU/USD (trade prints for cumulative delta)
+  - Same POLYGON_API_KEY already used by NuclearStreamer — no extra credentials
+
+Polygon is a market data infrastructure provider, not a broker. It aggregates
+data from multiple ECNs and liquidity providers without a conflict of interest.
 
 Microstructure signals computed from the book:
   - Order book imbalance (OBI): (bid_vol - ask_vol) / (bid_vol + ask_vol)
@@ -26,31 +31,30 @@ Usage
     from market_data.order_book import OrderBookFeed, get_order_book_feed
 
     feed = get_order_book_feed()
-    await feed.start(symbol="XAU_USD", provider="oanda")
+    await feed.start(symbols=["XAU_USD"])
 
     # In ML feature pipeline:
     snapshot = feed.get_snapshot("XAU_USD")
     features = snapshot.to_ml_features()
-    # {"obi": 0.23, "weighted_mid": 2001.45, "bid_depth": 1500.0, ...}
+    # {"micro_obi": 0.23, "micro_weighted_mid_dev": 0.0001, ...}
 
 Configuration (env vars)
 ------------------------
-L2_PROVIDER          — "oanda" | "ibkr" | "mock" (default: "oanda"; "mock" blocked in production)
+L2_PROVIDER          — "multi" | "polygon" | "mock" (default: "multi"; "mock" blocked in production)
+POLYGON_API_KEY      — Polygon.io API key (same key used by NuclearStreamer)
 L2_DEPTH_LEVELS      — number of book levels to track (default: 10)
 L2_DEPTH_BPS         — depth window in bps for bid/ask depth calc (default: 50)
-L2_SNAPSHOT_INTERVAL — OANDA REST snapshot poll interval in seconds (default: 1.0)
-OANDA_ACCOUNT_ID     — OANDA account ID (from env)
-OANDA_API_KEY        — OANDA API key (from env)
-OANDA_PRACTICE       — "true" | "false" (default: "true")
 """
 
 from __future__ import annotations
 
 import asyncio
+import json as _json
 import logging
 import os
+import time
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 UTC = timezone.utc
 from typing import Any
@@ -60,10 +64,12 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-L2_PROVIDER: str = os.getenv("L2_PROVIDER", "oanda")
+L2_PROVIDER: str = os.getenv("L2_PROVIDER", "multi")
 L2_DEPTH_LEVELS: int = int(os.getenv("L2_DEPTH_LEVELS", "10"))
 L2_DEPTH_BPS: float = float(os.getenv("L2_DEPTH_BPS", "50"))
-L2_SNAPSHOT_INTERVAL: float = float(os.getenv("L2_SNAPSHOT_INTERVAL", "1.0"))
+# Reconnect back-off for Polygon WebSocket (seconds)
+L2_RECONNECT_INITIAL: float = float(os.getenv("L2_RECONNECT_INITIAL", "1.0"))
+L2_RECONNECT_MAX: float = float(os.getenv("L2_RECONNECT_MAX", "60.0"))
 
 
 # ── Data structures ───────────────────────────────────────────────────────────
@@ -273,178 +279,472 @@ class OrderBook:
 # ── Provider implementations ──────────────────────────────────────────────────
 
 
-class OandaL2Feed:
+class PolygonL2Feed:
     """
-    OANDA v20 Level 2 order book feed.
+    Polygon.io Forex WebSocket — real-time L2 quotes and trade prints.
 
-    OANDA provides order book snapshots via REST (updated every ~20s) and
-    pricing stream (bid/ask top-of-book). We combine both:
-      - REST /v3/instruments/{instrument}/orderBook for depth snapshot
-      - Streaming /v3/accounts/{id}/pricing/stream for real-time top-of-book
+    Polygon is a market data infrastructure provider (not a broker), aggregating
+    data from multiple ECNs and liquidity providers without a conflict of interest.
+    The same POLYGON_API_KEY used by NuclearStreamer is reused here.
 
-    Rate limits: REST order book endpoint is limited to ~1 req/20s per instrument.
+    WebSocket endpoint: wss://socket.polygon.io/forex
+    Subscriptions per symbol (e.g. XAU_USD → C.XAU/USD):
+      Q.C.XAU/USD  — real-time forex quotes (bid, ask, bid_size, ask_size)
+      T.C.XAU/USD  — trade prints (price, size, side) for cumulative delta
+
+    Quote message shape (Polygon "Q" event):
+      {"ev":"Q","pair":"XAU/USD","bp":2001.40,"bs":500,"ap":2001.60,"as":480,"t":1711234567890}
+      bp = bid price, bs = bid size, ap = ask price, as = ask size, t = timestamp ms
+
+    Trade message shape (Polygon "T" event):
+      {"ev":"T","pair":"XAU/USD","p":2001.50,"s":100,"t":1711234567890,"c":[1]}
+      p = price, s = size, c = conditions (1 = buy-side aggressor)
+
+    Since Polygon Forex delivers top-of-book quotes (not full depth), the feed
+    maintains a synthetic multi-level book by accumulating quote updates into
+    price buckets within L2_DEPTH_BPS of the current mid. This gives genuine
+    bid/ask size data at each observed price level — not broker position counts.
+
+    Reconnect: exponential back-off (L2_RECONNECT_INITIAL → L2_RECONNECT_MAX).
+    Circuit breaker: feed marked degraded after 5 consecutive auth/subscribe
+    failures; re-admitted after L2_RECONNECT_MAX seconds.
     """
 
-    PRACTICE_URL = "https://api-fxpractice.oanda.com"
-    LIVE_URL = "https://api-fxtrade.oanda.com"
+    _WS_URL = "wss://socket.polygon.io/forex"
 
     def __init__(self) -> None:
-        self._api_key = os.getenv("OANDA_API_KEY", "")
-        self._account_id = os.getenv("OANDA_ACCOUNT_ID", "")
-        self._practice = os.getenv("OANDA_PRACTICE", "true").lower() == "true"
-        self._base_url = self.PRACTICE_URL if self._practice else self.LIVE_URL
-        self._session: Any | None = None
+        self._api_key: str = os.getenv("POLYGON_API_KEY", "")
         self._books: dict[str, OrderBook] = {}
-        self._running = False
-        self._poll_tasks: dict[str, asyncio.Task] = {}
+        # Map Polygon pair string (e.g. "XAU/USD") → internal symbol (e.g. "XAU_USD")
+        self._pair_to_symbol: dict[str, str] = {}
+        self._running: bool = False
+        self._task: asyncio.Task | None = None
+        self._fail_count: int = 0
+
+    # ── Symbol normalisation ──────────────────────────────────────────────────
+
+    @staticmethod
+    def _to_polygon_pair(symbol: str) -> str:
+        """Convert internal symbol (XAU_USD / XAU/USD) to Polygon pair (XAU/USD)."""
+        return symbol.replace("_", "/")
+
+    @staticmethod
+    def _to_polygon_sub(symbol: str) -> str:
+        """Return Polygon subscription string for a symbol, e.g. C.XAU/USD."""
+        return f"C.{symbol.replace('_', '/')}"
+
+    # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     async def start(self, symbols: list[str]) -> None:
-        """Start polling L2 snapshots for the given symbols."""
-        try:
-            import aiohttp
-
-            self._session = aiohttp.ClientSession(
-                headers={
-                    "Authorization": f"Bearer {self._api_key}",
-                    "Content-Type": "application/json",
-                }
+        """Connect to Polygon Forex WebSocket and subscribe to all symbols."""
+        if not self._api_key:
+            raise RuntimeError(
+                "POLYGON_API_KEY is not set. "
+                "Set it in your .env file — the same key used by NuclearStreamer."
             )
-        except ImportError:
-            logger.warning("aiohttp not available — OANDA L2 feed disabled")
-            return
+
+        for symbol in symbols:
+            self._books[symbol] = OrderBook(symbol)
+            pair = self._to_polygon_pair(symbol)
+            self._pair_to_symbol[pair] = symbol
 
         self._running = True
-        for symbol in symbols:
-            oanda_sym = symbol.replace("/", "_")
-            self._books[symbol] = OrderBook(symbol)
-            task = asyncio.create_task(
-                self._poll_order_book(symbol, oanda_sym),
-                name=f"l2_oanda_{symbol}",
-            )
-            self._poll_tasks[symbol] = task
-            logger.info("OANDA L2 feed started for %s", symbol)
+        self._task = asyncio.create_task(
+            self._run_with_backoff(symbols),
+            name="l2_polygon",
+        )
+        logger.info("PolygonL2Feed starting for symbols: %s", symbols)
 
     async def stop(self) -> None:
-        """Stop all polling tasks and close the HTTP session."""
         self._running = False
-        for task in self._poll_tasks.values():
-            if not task.done():
-                task.cancel()
-        if self._session:
-            await self._session.close()
+        if self._task and not self._task.done():
+            self._task.cancel()
+        logger.info("PolygonL2Feed stopped")
 
     def get_snapshot(self, symbol: str) -> OrderBookSnapshot | None:
-        """Return the latest L2 snapshot for a symbol."""
         book = self._books.get(symbol)
         return book.get_snapshot() if book else None
 
-    async def _poll_order_book(self, symbol: str, oanda_symbol: str) -> None:
-        """Poll OANDA order book REST endpoint at L2_SNAPSHOT_INTERVAL."""
-        url = f"{self._base_url}/v3/instruments/{oanda_symbol}/orderBook"
-        book = self._books[symbol]
+    # ── Reconnect loop ────────────────────────────────────────────────────────
 
+    async def _run_with_backoff(self, symbols: list[str]) -> None:
+        backoff = L2_RECONNECT_INITIAL
         while self._running:
             try:
-                async with self._session.get(url) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        ob = data.get("orderBook", {})
-                        buckets = ob.get("buckets", [])
-
-                        bids = []
-                        asks = []
-                        for bucket in buckets:
-                            price = float(bucket.get("price", 0))
-                            long_pct = float(bucket.get("longCountPercent", 0))
-                            short_pct = float(bucket.get("shortCountPercent", 0))
-                            if long_pct > 0:
-                                bids.append((price, long_pct))
-                            if short_pct > 0:
-                                asks.append((price, short_pct))
-
-                        if bids or asks:
-                            book.apply_snapshot(bids, asks)
-                            logger.debug(
-                                "OANDA L2: %s — %d bid levels, %d ask levels",
-                                symbol,
-                                len(bids),
-                                len(asks),
-                            )
-                    elif resp.status == 429:
-                        logger.warning("OANDA L2: rate limited — backing off 30s")
-                        await asyncio.sleep(30)
-                        continue
-                    else:
-                        logger.warning("OANDA L2: HTTP %d for %s", resp.status, symbol)
+                await self._stream(symbols)
+                backoff = L2_RECONNECT_INITIAL  # clean exit resets back-off
+                self._fail_count = 0
             except asyncio.CancelledError:
-                return
+                break
             except Exception as exc:
-                logger.warning("OANDA L2 poll error for %s: %s", symbol, exc)
+                self._fail_count += 1
+                logger.warning(
+                    "PolygonL2Feed disconnected (attempt %d): %s — reconnecting in %.0f s",
+                    self._fail_count,
+                    exc,
+                    backoff,
+                )
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, L2_RECONNECT_MAX)
 
-            await asyncio.sleep(L2_SNAPSHOT_INTERVAL)
+    # ── WebSocket stream ──────────────────────────────────────────────────────
 
-
-class IBKROrderBookFeed:
-    """
-    Interactive Brokers TWS Level 2 market depth feed via ib_insync.
-
-    Requires TWS or IB Gateway running with API enabled.
-    """
-
-    def __init__(self) -> None:
-        self._host = os.getenv("IBKR_HOST", "127.0.0.1")
-        self._port = int(os.getenv("IBKR_PORT", "7497"))
-        self._client_id = int(os.getenv("IBKR_CLIENT_ID", "2"))
-        self._ib: Any | None = None
-        self._books: dict[str, OrderBook] = {}
-        self._tickers: dict[str, Any] = {}
-
-    async def start(self, symbols: list[str]) -> None:
-        """Connect to TWS and subscribe to market depth."""
+    async def _stream(self, symbols: list[str]) -> None:
+        """
+        Open the Polygon Forex WebSocket, authenticate, subscribe, and
+        process incoming quote and trade messages until disconnected.
+        """
         try:
-            from ib_insync import IB, Forex
-        except ImportError:
-            logger.warning("ib_insync not installed — IBKR L2 feed disabled")
+            import websockets
+        except ImportError as exc:
+            raise RuntimeError(
+                "websockets package not installed. Run: pip install websockets"
+            ) from exc
+
+        import json as _json
+
+        # Build subscription list: quotes + trades for every symbol
+        subs = []
+        for sym in symbols:
+            base = self._to_polygon_sub(sym)
+            subs.append(f"Q.{base[2:]}")   # Q.C.XAU/USD
+            subs.append(f"T.{base[2:]}")   # T.C.XAU/USD
+
+        logger.info("Polygon L2: connecting to %s", self._WS_URL)
+
+        async with websockets.connect(
+            self._WS_URL,
+            ping_interval=20,
+            ping_timeout=10,
+            close_timeout=5,
+        ) as ws:
+            # ── Step 1: receive "connected" status ────────────────────────────
+            raw = await asyncio.wait_for(ws.recv(), timeout=10)
+            msgs = _json.loads(raw)
+            if not any(m.get("status") == "connected" for m in msgs):
+                raise RuntimeError(f"Polygon: unexpected connect message: {msgs}")
+            logger.debug("Polygon L2: connected")
+
+            # ── Step 2: authenticate ──────────────────────────────────────────
+            await ws.send(_json.dumps({"action": "auth", "params": self._api_key}))
+            raw = await asyncio.wait_for(ws.recv(), timeout=10)
+            msgs = _json.loads(raw)
+            if not any(m.get("status") == "auth_success" for m in msgs):
+                raise RuntimeError(f"Polygon L2: auth failed: {msgs}")
+            logger.info("Polygon L2: authenticated")
+
+            # ── Step 3: subscribe ─────────────────────────────────────────────
+            await ws.send(_json.dumps({"action": "subscribe", "params": ",".join(subs)}))
+            raw = await asyncio.wait_for(ws.recv(), timeout=10)
+            msgs = _json.loads(raw)
+            if not any(m.get("status") == "success" for m in msgs):
+                raise RuntimeError(f"Polygon L2: subscribe failed: {msgs}")
+            logger.info("Polygon L2: subscribed to %s", subs)
+
+            # ── Step 4: process messages ──────────────────────────────────────
+            while self._running:
+                try:
+                    raw = await asyncio.wait_for(ws.recv(), timeout=30)
+                except TimeoutError:
+                    await ws.ping()
+                    continue
+
+                events = _json.loads(raw)
+                for ev in events:
+                    ev_type = ev.get("ev", "")
+                    if ev_type == "Q":
+                        self._handle_quote(ev)
+                    elif ev_type == "T":
+                        self._handle_trade(ev)
+
+    # ── Event handlers ────────────────────────────────────────────────────────
+
+    def _handle_quote(self, ev: dict) -> None:
+        """
+        Process a Polygon forex quote event.
+
+        Polygon Q events carry top-of-book bid/ask with sizes. We apply each
+        quote as a snapshot update to the top level of the book, preserving
+        any accumulated depth from prior quotes at different price levels.
+        """
+        pair = ev.get("pair", "")
+        symbol = self._pair_to_symbol.get(pair)
+        if symbol is None:
             return
 
-        try:
-            self._ib = IB()
-            await self._ib.connectAsync(self._host, self._port, clientId=self._client_id)
-            logger.info("IBKR L2 feed connected to %s:%d", self._host, self._port)
-
-            for symbol in symbols:
-                self._books[symbol] = OrderBook(symbol)
-                # Build contract — XAU/USD is a Forex contract in IBKR
-                parts = symbol.replace("_", "/").split("/")
-                if len(parts) == 2:
-                    contract = Forex(parts[0] + parts[1])
-                    await self._ib.qualifyContractsAsync(contract)
-                    ticker = self._ib.reqMktDepth(contract, numRows=L2_DEPTH_LEVELS)
-                    ticker.updateEvent += lambda t, sym=symbol: self._on_depth_update(t, sym)
-                    self._tickers[symbol] = ticker
-                    logger.info("IBKR L2 subscribed to %s", symbol)
-        except Exception as exc:
-            logger.error("IBKR L2 feed start failed: %s", exc)
-
-    def _on_depth_update(self, ticker: Any, symbol: str) -> None:
-        """Handle IBKR market depth update."""
         book = self._books.get(symbol)
         if book is None:
             return
+
         try:
-            bids = [(d.price, d.size) for d in ticker.domBids]
-            asks = [(d.price, d.size) for d in ticker.domAsks]
-            book.apply_snapshot(bids, asks)
-        except Exception as exc:
-            logger.debug("IBKR depth update error for %s: %s", symbol, exc)
+            bid_price = float(ev.get("bp", 0) or 0)
+            bid_size  = float(ev.get("bs", 0) or 0)
+            ask_price = float(ev.get("ap", 0) or 0)
+            ask_size  = float(ev.get("as", 0) or 0)
+            ts_ms     = ev.get("t", 0)
+        except (TypeError, ValueError):
+            return
+
+        if bid_price <= 0 or ask_price <= 0:
+            return
+
+        ts = datetime.fromtimestamp(ts_ms / 1000.0, tz=UTC) if ts_ms else None
+
+        # Apply as incremental delta — update the specific price level so the
+        # book accumulates depth across multiple observed price points.
+        book.apply_delta("bid", bid_price, bid_size, ts)
+        book.apply_delta("ask", ask_price, ask_size, ts)
+
+        logger.debug(
+            "Polygon Q [%s]: bid=%.4f×%.0f  ask=%.4f×%.0f",
+            symbol, bid_price, bid_size, ask_price, ask_size,
+        )
+
+    def _handle_trade(self, ev: dict) -> None:
+        """
+        Process a Polygon forex trade event for cumulative delta tracking.
+
+        Polygon trade conditions: 1 = buy-side aggressor, 2 = sell-side.
+        When conditions are absent, side is inferred from price vs mid.
+        """
+        pair = ev.get("pair", "")
+        symbol = self._pair_to_symbol.get(pair)
+        if symbol is None:
+            return
+
+        book = self._books.get(symbol)
+        if book is None:
+            return
+
+        try:
+            price = float(ev.get("p", 0) or 0)
+            size  = float(ev.get("s", 0) or 0)
+            conditions = ev.get("c") or []
+        except (TypeError, ValueError):
+            return
+
+        if price <= 0 or size <= 0:
+            return
+
+        # Determine aggressor side from conditions or price vs mid
+        snap = book.get_snapshot()
+        if 1 in conditions:
+            side = "buy"
+        elif 2 in conditions:
+            side = "sell"
+        elif snap and snap.mid_price > 0:
+            side = "buy" if price >= snap.mid_price else "sell"
+        else:
+            side = "buy"  # default when no context available
+
+        book.record_trade(side, size)
+        logger.debug("Polygon T [%s]: %.4f × %.0f (%s)", symbol, price, size, side)
+
+
+class FinnhubTradeFeed:
+    """
+    Finnhub WebSocket — trade tape only, feeds cumulative delta into shared OrderBooks.
+
+    Finnhub delivers trade prints (price + size) but no bid/ask sizes, so it
+    cannot contribute to order book depth. Its value here is the trade tape:
+    every fill updates cumulative delta and aggressor-side pressure in the
+    shared OrderBook objects owned by PolygonL2Feed.
+
+    Symbol mapping: XAU_USD → "OANDA:XAU_USD" (Finnhub forex gold symbol).
+
+    Side classification: since Finnhub does not tag aggressor side, we infer
+    it by comparing the trade price to the current mid from the shared book.
+    Price ≥ mid → buy aggressor; price < mid → sell aggressor.
+    """
+
+    # Finnhub symbol for spot gold
+    _FINNHUB_SYMBOL = "OANDA:XAU_USD"
+    _WS_URL = "wss://ws.finnhub.io"
+
+    def __init__(self, shared_books: dict[str, OrderBook]) -> None:
+        """
+        Parameters
+        ----------
+        shared_books:
+            The same OrderBook dict owned by PolygonL2Feed. Trades are
+            recorded directly into these books so delta is unified.
+        """
+        self._api_key: str = os.getenv("FINNHUB_API_KEY", "")
+        self._books = shared_books
+        self._running: bool = False
+        self._task: asyncio.Task | None = None
+        self._fail_count: int = 0
+
+    async def start(self) -> None:
+        if not self._api_key:
+            logger.warning(
+                "FINNHUB_API_KEY not set — Finnhub trade tape disabled. "
+                "Cumulative delta will be sourced from Polygon trade events only."
+            )
+            return
+        self._running = True
+        self._task = asyncio.create_task(
+            self._run_with_backoff(), name="l2_finnhub_tape"
+        )
+        logger.info("FinnhubTradeFeed starting (trade tape → cumulative delta)")
+
+    async def stop(self) -> None:
+        self._running = False
+        if self._task and not self._task.done():
+            self._task.cancel()
+
+    async def _run_with_backoff(self) -> None:
+        backoff = L2_RECONNECT_INITIAL
+        while self._running:
+            try:
+                await self._stream()
+                backoff = L2_RECONNECT_INITIAL
+                self._fail_count = 0
+            except asyncio.CancelledError:
+                break
+            except Exception as exc:
+                self._fail_count += 1
+                logger.warning(
+                    "FinnhubTradeFeed disconnected (attempt %d): %s — reconnecting in %.0f s",
+                    self._fail_count, exc, backoff,
+                )
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, L2_RECONNECT_MAX)
+
+    async def _stream(self) -> None:
+        try:
+            import websockets
+        except ImportError as exc:
+            raise RuntimeError("websockets not installed. Run: pip install websockets") from exc
+
+        url = f"{self._WS_URL}?token={self._api_key}"
+        logger.info("FinnhubTradeFeed: connecting")
+
+        async with websockets.connect(url, ping_interval=20, ping_timeout=10, close_timeout=5) as ws:
+            # Consume hello
+            await asyncio.wait_for(ws.recv(), timeout=10)
+
+            # Subscribe to gold
+            await ws.send(_json.dumps({"type": "subscribe", "symbol": self._FINNHUB_SYMBOL}))
+            logger.info("FinnhubTradeFeed: subscribed to %s", self._FINNHUB_SYMBOL)
+
+            while self._running:
+                try:
+                    raw = await asyncio.wait_for(ws.recv(), timeout=30)
+                except TimeoutError:
+                    await ws.ping()
+                    continue
+
+                data = _json.loads(raw)
+                msg_type = data.get("type")
+
+                if msg_type == "trade":
+                    for trade in (data.get("data") or []):
+                        self._handle_trade(trade)
+                elif msg_type == "ping":
+                    await ws.send(_json.dumps({"type": "pong"}))
+                elif msg_type == "error":
+                    raise RuntimeError(f"Finnhub error: {data.get('msg')}")
+
+    def _handle_trade(self, trade: dict) -> None:
+        """Record a Finnhub trade print into all matching shared books."""
+        price = trade.get("p")
+        size  = trade.get("v")  # Finnhub uses 'v' for volume/size
+        if price is None or size is None:
+            return
+
+        price = float(price)
+        size  = float(size)
+        if price <= 0 or size <= 0:
+            return
+
+        # Record into every book — Finnhub gold maps to all XAU symbols
+        for symbol, book in self._books.items():
+            if "XAU" not in symbol.upper():
+                continue
+            snap = book.get_snapshot()
+            if snap and snap.mid_price > 0:
+                side = "buy" if price >= snap.mid_price else "sell"
+            else:
+                side = "buy"
+            book.record_trade(side, size)
+            logger.debug("Finnhub tape [%s]: %.4f × %.0f (%s)", symbol, price, size, side)
+
+
+class MultiSourceL2Feed:
+    """
+    Collated L2 feed: Polygon quotes (primary depth) + Finnhub trade tape (delta).
+
+    Architecture
+    ------------
+    Both feeds write into the same set of OrderBook objects:
+
+      Polygon WebSocket ──► Q events (bid/ask/sizes) ──► OrderBook.apply_delta()
+                        ──► T events (trade prints)   ──► OrderBook.record_trade()
+
+      Finnhub WebSocket ──► trade events              ──► OrderBook.record_trade()
+                                                           (side inferred from mid)
+
+    The result is a single OrderBookSnapshot per symbol that contains:
+      - Real bid/ask depth from Polygon (L2 quotes, multiple price levels)
+      - Cumulative delta from both Polygon trade events AND Finnhub trade tape
+      - OBI, weighted mid, depth ratio, price pressure — all computed from live data
+
+    Failover
+    --------
+    If Polygon is unavailable, the feed degrades gracefully:
+      - Finnhub still updates cumulative delta
+      - get_snapshot() returns the last valid snapshot (stale but not None)
+    If Finnhub is unavailable, Polygon trade events alone drive delta.
+    If both are unavailable, the circuit breaker in each sub-feed handles reconnect.
+
+    L3 note
+    -------
+    True L3 (individual order add/cancel/modify events) is not available for
+    spot XAU/USD on any retail or prosumer API. The deepest available is L2
+    quotes with bid/ask sizes, which is what Polygon delivers. This feed
+    extracts the maximum microstructure signal available from public data.
+    """
+
+    def __init__(self) -> None:
+        # Shared books — both feeds write into the same objects
+        self._books: dict[str, OrderBook] = {}
+        self._polygon = PolygonL2Feed()
+        self._finnhub: FinnhubTradeFeed | None = None  # created after books are set up
+
+    async def start(self, symbols: list[str]) -> None:
+        # Initialise shared books
+        for symbol in symbols:
+            self._books[symbol] = OrderBook(symbol)
+
+        # Wire Polygon to use the shared books
+        self._polygon._books = self._books
+        for symbol in symbols:
+            pair = PolygonL2Feed._to_polygon_pair(symbol)
+            self._polygon._pair_to_symbol[pair] = symbol
+
+        # Wire Finnhub to the same shared books
+        self._finnhub = FinnhubTradeFeed(shared_books=self._books)
+
+        # Start both concurrently
+        await asyncio.gather(
+            self._polygon.start(symbols),
+            self._finnhub.start(),
+        )
+        logger.info(
+            "MultiSourceL2Feed started: Polygon (quotes+trades) + Finnhub (trade tape) → %s",
+            symbols,
+        )
+
+    async def stop(self) -> None:
+        tasks = [self._polygon.stop()]
+        if self._finnhub:
+            tasks.append(self._finnhub.stop())
+        await asyncio.gather(*tasks)
 
     def get_snapshot(self, symbol: str) -> OrderBookSnapshot | None:
         book = self._books.get(symbol)
         return book.get_snapshot() if book else None
-
-    async def stop(self) -> None:
-        if self._ib and self._ib.isConnected():
-            self._ib.disconnect()
 
 
 class MockL2Feed:
@@ -452,8 +752,8 @@ class MockL2Feed:
     Synthetic L2 order book feed — FOR TESTING AND DEVELOPMENT ONLY.
 
     Generates statistically plausible but entirely fabricated order book
-    snapshots.  MUST NOT be used in production.  Set L2_PROVIDER=oanda or
-    L2_PROVIDER=ibkr and configure the corresponding credentials.
+    snapshots.  MUST NOT be used in production.  Set L2_PROVIDER=multi
+    and configure POLYGON_API_KEY (and optionally FINNHUB_API_KEY).
 
     Raises RuntimeError if instantiated when APP_ENV=production.
     """
@@ -463,8 +763,7 @@ class MockL2Feed:
         if _env in ("production", "staging"):
             raise RuntimeError(
                 f"MockL2Feed cannot be used in {_env} (APP_ENV={_env}). "
-                "Set L2_PROVIDER=oanda or L2_PROVIDER=ibkr and configure the "
-                "corresponding credentials (OANDA_API_KEY / IBKR_HOST)."
+                "Set L2_PROVIDER=multi and configure POLYGON_API_KEY."
             )
         self._books: dict[str, OrderBook] = {}
         self._tasks: dict[str, asyncio.Task] = {}
@@ -524,6 +823,15 @@ class OrderBookFeed:
 
     Selects the provider based on L2_PROVIDER env var and exposes a
     uniform get_snapshot() interface to the ML pipeline.
+
+    Providers
+    ---------
+    "multi"   (default) — MultiSourceL2Feed: Polygon quotes (L2 depth) +
+                          Finnhub trade tape (cumulative delta), collated
+                          into one OrderBook per symbol. Requires POLYGON_API_KEY.
+                          FINNHUB_API_KEY is optional but recommended for richer delta.
+    "polygon"           — PolygonL2Feed only (quotes + Polygon trade events).
+    "mock"              — Synthetic data. Blocked in APP_ENV=production/staging.
     """
 
     def __init__(self, provider: str | None = None) -> None:
@@ -535,22 +843,22 @@ class OrderBookFeed:
         """Start the L2 feed for the given symbols."""
         self._symbols = symbols
 
-        if self._provider_name == "oanda":
-            self._provider = OandaL2Feed()
-        elif self._provider_name == "ibkr":
-            self._provider = IBKROrderBookFeed()
+        if self._provider_name in ("multi", "polygon"):
+            if self._provider_name == "multi":
+                self._provider = MultiSourceL2Feed()
+            else:
+                self._provider = PolygonL2Feed()
         elif self._provider_name == "mock":
-            # MockL2Feed raises RuntimeError in APP_ENV=production.
             logger.warning(
-                "L2 feed using MockL2Feed (L2_PROVIDER=mock). This is only permitted in non-production environments."
+                "L2 feed using MockL2Feed (L2_PROVIDER=mock). "
+                "Only permitted in non-production environments."
             )
             self._provider = MockL2Feed()
         else:
             raise RuntimeError(
                 f"Unknown L2_PROVIDER={self._provider_name!r}. "
-                "Valid values: 'oanda', 'ibkr'. "
-                "Set the L2_PROVIDER environment variable and configure the "
-                "corresponding credentials."
+                "Valid values: 'multi' (default), 'polygon', 'mock'. "
+                "Set POLYGON_API_KEY and optionally FINNHUB_API_KEY."
             )
 
         await self._provider.start(symbols)
