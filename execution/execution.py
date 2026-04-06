@@ -76,9 +76,11 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # ── env config ────────────────────────────────────────────────────────────────
-_BROKER_PRIMARY = os.getenv("BROKER_PRIMARY", "oanda")  # "oanda" | "ibkr"
-_BROKER_SECONDARY = os.getenv("BROKER_SECONDARY", "ibkr")  # fallback broker
-_HEALTH_INTERVAL = float(os.getenv("HEALTH_INTERVAL_S", "30"))
+_BROKER_PRIMARY   = os.getenv("BROKER_PRIMARY",   "oanda")   # "oanda" | "ibkr" | "cme" | "cpp_shim"
+_BROKER_SECONDARY = os.getenv("BROKER_SECONDARY", "ibkr")    # fallback broker
+_CME_ENABLED      = os.getenv("CME_ENABLED",      "false").lower() == "true"
+_CPP_SHIM_ENABLED = os.getenv("CPP_SHIM_ENABLED", "false").lower() == "true"
+_HEALTH_INTERVAL  = float(os.getenv("HEALTH_INTERVAL_S", "30"))
 _LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 
@@ -225,6 +227,20 @@ class ExecutionSystem:
             ibkr = await _connect_ibkr()
             if ibkr:
                 self._brokers["ibkr"] = ibkr
+                connected_count += 1
+
+        # ── CME COMEX GC futures (enabled via CME_ENABLED=true) ───────────
+        if _CME_ENABLED or _BROKER_PRIMARY in ("cme", "cme_comex", "comex", "gc"):
+            cme = await _connect_cme()
+            if cme:
+                self._brokers["cme"] = cme
+                connected_count += 1
+
+        # ── C++ execution shim (enabled via CPP_SHIM_ENABLED=true) ────────
+        if _CPP_SHIM_ENABLED or _BROKER_PRIMARY in ("cpp_shim", "shim"):
+            shim = await _connect_cpp_shim()
+            if shim:
+                self._brokers["cpp_shim"] = shim
                 connected_count += 1
 
         if connected_count == 0:
@@ -386,6 +402,48 @@ async def _connect_ibkr() -> Any | None:
         return None
     except (ImportError, ConnectionError, RuntimeError, ValueError) as exc:
         logger.error("IBKR broker init error: %s", exc)
+        return None
+
+
+async def _connect_cme() -> Any | None:
+    """Connect CME COMEX GC futures broker (FIX → IBKR fallback → paper)."""
+    try:
+        from brokers.cme_comex import CMEComexConnector
+
+        broker = CMEComexConnector.from_env()
+        ok = broker.connect()
+        if ok:
+            logger.info(
+                "CME COMEX broker connected — fix=%s ibkr=%s paper=%s",
+                broker._fix_available,
+                broker._ibkr_available,
+                broker._paper_fallback,
+            )
+            return broker
+        logger.warning("CME COMEX broker connection failed")
+        return None
+    except (ImportError, ConnectionError, RuntimeError, ValueError) as exc:
+        logger.error("CME COMEX broker init error: %s", exc)
+        return None
+
+
+async def _connect_cpp_shim() -> Any | None:
+    """Connect C++ execution shim via ZMQ."""
+    try:
+        from brokers.cpp_shim_connector import CPPShimConnector
+
+        broker = CPPShimConnector.from_env()
+        ok = broker.connect()
+        if ok:
+            logger.info("C++ execution shim connected — %s", broker._cmd_addr)
+            return broker
+        logger.warning(
+            "C++ execution shim not available — is hopefx_shim running? "
+            "Build: cd execution/cpp_shim && cmake -B build && cmake --build build"
+        )
+        return None
+    except (ImportError, ConnectionError, RuntimeError, ValueError) as exc:
+        logger.error("C++ shim init error: %s", exc)
         return None
 
 

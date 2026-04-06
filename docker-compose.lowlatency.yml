@@ -1,0 +1,98 @@
+# docker-compose.lowlatency.yml
+# ================================
+# Low-latency overlay for HOPEFX trading engine.
+#
+# Usage (merge with base compose):
+#   docker compose -f docker-compose.yml -f docker-compose.lowlatency.yml up -d
+#
+# What this overlay does:
+#   - Switches trading engine and C++ shim to host networking (bypasses Docker
+#     NAT — eliminates ~0.2ms per packet on loopback ZMQ connections)
+#   - Pins trading engine and C++ shim to dedicated CPU cores (TRADING_CORE,
+#     CPP_SHIM_CORE env vars — set in .env)
+#   - Raises ulimits for file descriptors and real-time scheduling
+#   - Disables memory swap for trading containers
+#   - Mounts /dev/cpu_dma_latency to request low-latency DMA from kernel
+#   - Adds cpp-shim service (C++ execution shim — see execution/cpp_shim/)
+
+version: "3.9"
+
+services:
+
+  # ── Trading engine — host network, pinned CPU ─────────────────────────────
+  trading:
+    network_mode: host          # bypass Docker NAT — direct kernel TCP stack
+    cpuset: "${TRADING_CORE:-2}"
+    mem_swappiness: 0           # never swap trading engine memory
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
+      rtprio:
+        soft: 99
+        hard: 99
+      memlock:
+        soft: -1
+        hard: -1
+    devices:
+      - /dev/cpu_dma_latency:/dev/cpu_dma_latency  # request low-latency DMA
+    environment:
+      # ZMQ shim address — loopback on host network (no Docker bridge overhead)
+      CPP_SHIM_ZMQ_CMD_ADDR: "tcp://127.0.0.1:${CPP_SHIM_CMD_PORT:-6555}"
+      CPP_SHIM_ZMQ_RESP_ADDR: "tcp://127.0.0.1:${CPP_SHIM_RESP_PORT:-6556}"
+      # CME FIX session — direct host network connection
+      FIX_HOST: "${CME_FIX_HOST:-127.0.0.1}"
+      FIX_PORT: "${CME_FIX_PORT:-9876}"
+    deploy:
+      resources:
+        limits:
+          cpus: "${TRADING_CPUS:-2.0}"
+          memory: "${TRADING_MEM:-4G}"
+        reservations:
+          cpus: "1.0"
+          memory: 1G
+
+  # ── C++ execution shim ────────────────────────────────────────────────────
+  cpp-shim:
+    build:
+      context: .
+      dockerfile: execution/cpp_shim/Dockerfile
+    restart: unless-stopped
+    network_mode: host
+    cpuset: "${CPP_SHIM_CORE:-3}"
+    mem_swappiness: 0
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+      rtprio:
+        soft: 99
+        hard: 99
+      memlock:
+        soft: -1
+        hard: -1
+    devices:
+      - /dev/cpu_dma_latency:/dev/cpu_dma_latency
+    environment:
+      ZMQ_CMD_PORT: "${CPP_SHIM_CMD_PORT:-6555}"
+      ZMQ_RESP_PORT: "${CPP_SHIM_RESP_PORT:-6556}"
+      FIX_HOST: "${CME_FIX_HOST:-127.0.0.1}"
+      FIX_PORT: "${CME_FIX_PORT:-9876}"
+      FIX_SENDER_COMP_ID: "${CME_FIX_SENDER_ID:-HOPEFX}"
+      FIX_TARGET_COMP_ID: "${CME_FIX_TARGET_ID:-CME}"
+      LATENCY_WARN_US: "${CPP_SHIM_LATENCY_WARN_US:-500}"
+    volumes:
+      - ./execution/cpp_shim:/app/shim:ro
+    healthcheck:
+      test: ["CMD", "/app/shim/hopefx_shim", "--health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # ── API — keep bridge networking (no latency requirement) ─────────────────
+  app:
+    deploy:
+      resources:
+        limits:
+          cpus: "${API_CPUS:-1.0}"
+          memory: "${API_MEM:-2G}"
