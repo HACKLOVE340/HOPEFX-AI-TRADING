@@ -187,6 +187,7 @@ class HOPEFXBrain:
         self._strategy_manager = None
         self._ml_predictor = None  # lazy-loaded (XGBoost, primary signal)
         self._lstm_layer = None  # lazy-loaded (LSTM, optional secondary signal)
+        self._edge_selector = None  # AdaptiveEdgeSelector (optional, overrides _route_strategy)
 
         # Regime state per symbol
         self._regimes: dict[str, Regime] = {}
@@ -248,6 +249,7 @@ class HOPEFXBrain:
         strategy_manager=None,
         ml_predictor=None,
         lstm_layer=None,
+        edge_selector=None,
     ) -> None:
         """
         Inject live components. Call once after construction.
@@ -259,6 +261,11 @@ class HOPEFXBrain:
             LSTM_SIGNAL_WEIGHT > 0), its probability is blended with the
             XGBoost probability before direction is determined.
             Pass None to keep the layer disabled (default).
+        edge_selector : AdaptiveEdgeSelector | None
+            Optional edge selector. When provided, its decision overrides
+            the default _route_strategy() lookup after regime detection.
+            The selected strategy_name is used for signal generation and
+            the edge confidence boosts the final aggregated confidence.
         """
         with self._lock:
             if risk_manager is not None:
@@ -271,13 +278,16 @@ class HOPEFXBrain:
                 self._ml_predictor = ml_predictor
             if lstm_layer is not None:
                 self._lstm_layer = lstm_layer
+            if edge_selector is not None:
+                self._edge_selector = edge_selector
         logger.info(
-            "HOPEFXBrain.inject: risk=%s broker=%s strategies=%s ml=%s lstm=%s",
+            "HOPEFXBrain.inject: risk=%s broker=%s strategies=%s ml=%s lstm=%s edge_selector=%s",
             risk_manager is not None,
             broker is not None,
             strategy_manager is not None,
             ml_predictor is not None,
             lstm_layer is not None,
+            edge_selector is not None,
         )
 
     def _get_predictor(self):
@@ -790,8 +800,75 @@ class HOPEFXBrain:
             except Exception as exc:
                 logger.debug("HybridEnsemble blend failed for %s: %s", symbol, exc)
 
+        # ── Adaptive edge selection (optional override) ───────────────────────
+        # When an AdaptiveEdgeSelector is injected it analyses the live
+        # indicators derived from the current bar and picks the single best
+        # edge.  Its strategy_name overrides the default regime routing table
+        # and its confidence is blended into the final aggregated score.
+        _edge_decision = None
+        _edge_conf_boost = 0.0
+        if self._edge_selector is not None:
+            try:
+                from strategies.adaptive_edge_selector import (
+                    EDGE_SKIP,
+                    MarketSnapshot,
+                )
+
+                # Build a lightweight snapshot from the current bar
+                _last = ohlcv.iloc[-1] if hasattr(ohlcv, "iloc") else {}
+                _price = float(_last.get("close", 0) if isinstance(_last, dict) else getattr(_last, "close", 0))
+                _atr_val = 0.0
+                try:
+                    import numpy as _np  # noqa: F401 — used for to_numpy()
+                    _closes = ohlcv["close"].astype(float).to_numpy()
+                    _highs  = ohlcv["high"].astype(float).to_numpy()
+                    _lows   = ohlcv["low"].astype(float).to_numpy()
+                    _trs = [
+                        max(_highs[i] - _lows[i],
+                            abs(_highs[i] - _closes[i - 1]),
+                            abs(_lows[i]  - _closes[i - 1]))
+                        for i in range(max(1, len(_closes) - 14), len(_closes))
+                    ]
+                    _atr_val = float(sum(_trs) / len(_trs)) if _trs else 0.0
+                except Exception:
+                    pass
+
+                _snap = MarketSnapshot(
+                    symbol=symbol,
+                    price=_price,
+                    atr=_atr_val,
+                    adx=0.0,   # not computed here; edge selector falls back gracefully
+                    rsi=50.0,
+                    volume_delta=0.0,
+                    cone_strength=0.0,
+                )
+                _edge_decision = self._edge_selector.select(_snap)
+
+                if _edge_decision.edge != EDGE_SKIP and _edge_decision.strategy_name not in ("", "none"):
+                    # Override strategy routing with the edge selector's choice
+                    logger.debug(
+                        "Brain[%s]: edge_selector chose edge=%s strategy=%s conf=%d",
+                        symbol,
+                        _edge_decision.edge,
+                        _edge_decision.strategy_name,
+                        _edge_decision.confidence,
+                    )
+                    # Confidence boost: edge confidence above 80 adds up to 0.10
+                    _edge_conf_boost = max(0.0, (_edge_decision.confidence - 80) / 200.0)
+            except Exception as exc:
+                logger.debug("AdaptiveEdgeSelector failed for %s: %s", symbol, exc)
+                _edge_decision = None
+
         # ── Strategy routing ──────────────────────────────────────────────────
-        strategy_name = self._route_strategy(regime)
+        # Use edge selector's strategy if available and not skip, else default routing.
+        if (
+            _edge_decision is not None
+            and _edge_decision.edge != "skip"
+            and _edge_decision.strategy_name not in ("", "none")
+        ):
+            strategy_name = _edge_decision.strategy_name
+        else:
+            strategy_name = self._route_strategy(regime)
         str_direction, str_confidence = self._get_strategy_signal(strategy_name, ohlcv, symbol)
 
         # ── Signal aggregation ────────────────────────────────────────────────
@@ -801,6 +878,11 @@ class HOPEFXBrain:
             strategy_direction=str_direction,
             strategy_confidence=str_confidence,
         )
+
+        # ── Edge selector confidence boost ────────────────────────────────────
+        if _edge_conf_boost > 0.0 and final_direction != "hold":
+            final_confidence = min(1.0, final_confidence + _edge_conf_boost)
+            reason += f"+edge_boost={_edge_conf_boost:.3f}"
 
         # ── MTF alignment boost/veto ──────────────────────────────────────────
         alignment = mtf.get("mtf_alignment", "unknown")
