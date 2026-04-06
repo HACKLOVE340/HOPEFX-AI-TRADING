@@ -120,6 +120,22 @@ class BrokerFactory:
             cls._brokers["mff"] = MyForexFundsConnector
         except Exception as exc:
             logger.debug("myforexfunds broker unavailable: %s", exc)
+        try:
+            from brokers.cme_comex import CMEComexConnector
+
+            cls._brokers["cme"] = CMEComexConnector
+            cls._brokers["cme_comex"] = CMEComexConnector
+            cls._brokers["comex"] = CMEComexConnector
+            cls._brokers["gc"] = CMEComexConnector   # GC futures shorthand
+        except Exception as exc:
+            logger.debug("cme_comex broker unavailable: %s", exc)
+        try:
+            from brokers.cpp_shim_connector import CPPShimConnector
+
+            cls._brokers["cpp_shim"] = CPPShimConnector
+            cls._brokers["shim"] = CPPShimConnector
+        except Exception as exc:
+            logger.debug("cpp_shim broker unavailable: %s", exc)
 
     @classmethod
     def register_broker(cls, name: str, broker_class: type) -> None:
