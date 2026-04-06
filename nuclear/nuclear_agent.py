@@ -425,6 +425,17 @@ class NuclearStrategyAgent:
         """Return recent raw strategy signals (pre-composition)."""
         return self._strategy_engine.signal_history(n)
 
+    def clear_history(self) -> int:
+        """
+        Clear the in-memory approved signal history.
+
+        Returns the number of signals that were cleared.
+        """
+        count = len(self._signal_history)
+        self._signal_history.clear()
+        logger.info("Signal history cleared (%d signals removed)", count)
+        return count
+
     # ── Repr ──────────────────────────────────────────────────────────────────
 
     def __repr__(self) -> str:

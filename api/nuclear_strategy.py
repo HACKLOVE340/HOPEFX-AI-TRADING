@@ -404,5 +404,5 @@ async def clear_history(
 ) -> dict[str, Any]:
     """Clear the in-memory approved signal history."""
     agent = _get_agent()
-    agent._signal_history.clear()
-    return {"status": "cleared", "signal_history_count": 0}
+    cleared = agent.clear_history()
+    return {"status": "cleared", "signals_cleared": cleared, "signal_history_count": 0}
