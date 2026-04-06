@@ -56,7 +56,7 @@ logger = logging.getLogger(__name__)
 _LLM_BACKEND: str = os.getenv("LLM_BACKEND", "anthropic").lower()
 _ANTHROPIC_API_KEY: str | None = os.getenv("ANTHROPIC_API_KEY")
 _OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
-_ANTHROPIC_MODEL: str = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022")
+_ANTHROPIC_MODEL: str = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5")
 _OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o")
 _LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "8192"))
 
