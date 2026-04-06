@@ -229,6 +229,11 @@ class HopeFXEngine:
         self._bars_since_drift_check: int = 0
         self._drift_check_interval: int = int(os.getenv("DRIFT_CHECK_EVERY_N_BARS", "100"))
 
+        # ── SniperEntryEngine (lazy-initialised on first qualifying signal) ───
+        # Refines SMC brain decisions into precision limit-order setups using
+        # HTF OB detection + LTF (M5) BOS/CHoCH + displacement CE placement.
+        self._sniper = None
+
         # ── Nuclear supervisor integration ────────────────────────────────────
         # News events are pushed here by _on_news_event() and drained by the
         # nuclear supervisor via register_news_callback() or poll mode.
@@ -336,6 +341,21 @@ class HopeFXEngine:
             logger.info("StrategyManager injected into brain (%d strategies)", len(sm.list_strategies()))
         except Exception as exc:
             logger.warning("StrategyManager injection failed: %s", exc)
+
+        # 2a. SniperEntryEngine — precision limit-order refinement
+        try:
+            from strategies.sniper_entry_engine import SniperEntryEngine
+
+            self._sniper = SniperEntryEngine()
+            logger.info(
+                "SniperEntryEngine initialised — enabled=%s htf=%s ltf=%s",
+                self._sniper.enabled,
+                self._sniper.htf_timeframe,
+                self._sniper.ltf_timeframe,
+            )
+        except Exception as exc:
+            logger.warning("SniperEntryEngine init failed (will use market orders): %s", exc)
+            self._sniper = None
 
         # 3. ML predictor (warm up — loads model into memory)
         try:
@@ -764,7 +784,47 @@ class HopeFXEngine:
             # Stamp the live mid-price onto the decision so RiskManager.size_order()
             # can use the real current price instead of the hardcoded 1900.0 fallback.
             decision.tick_mid = mid
-            await self._execute_decision(decision, mid, sym_key)
+
+            # ── SniperEntryEngine refinement ──────────────────────────────────
+            # Attempt to refine the brain signal into a precision limit-order
+            # setup (HTF OB + LTF M5 BOS/CHoCH + displacement CE).
+            # Falls back to market order when sniper conditions are not met.
+            sniper_setup = None
+            if self._sniper is not None:
+                try:
+                    ohlcv_df_for_sniper = pd.DataFrame(list(self._ohlcv_window.get(sym_key, [])))
+                    # Estimate current spread from the OHLCV window (high - low of last bar)
+                    _spread = 0.0
+                    if not ohlcv_df_for_sniper.empty:
+                        _last = ohlcv_df_for_sniper.iloc[-1]
+                        _spread = float(_last.get("high", mid) - _last.get("low", mid))
+                    sniper_setup = self._sniper.refine(
+                        decision=decision,
+                        htf_df=ohlcv_df_for_sniper,
+                        orchestrator=self._dl_orchestrator,
+                        spread=_spread,
+                    )
+                    if sniper_setup:
+                        logger.info(
+                            "Sniper setup confirmed for %s: entry=%.5f sl=%.5f tp=%.5f conf=%.3f",
+                            sym_key,
+                            sniper_setup.entry_price,
+                            sniper_setup.stop_loss,
+                            sniper_setup.take_profit,
+                            sniper_setup.confidence,
+                        )
+                        # Promote sniper confidence back onto the decision for logging
+                        decision.confidence = sniper_setup.confidence
+                        decision.reason = sniper_setup.reason
+                except Exception as _sniper_exc:
+                    logger.warning(
+                        "SniperEntryEngine.refine raised %s for %s — falling back to market order",
+                        _sniper_exc,
+                        sym_key,
+                    )
+                    sniper_setup = None
+
+            await self._execute_decision(decision, mid, sym_key, sniper_setup=sniper_setup)
 
         # ── Drift monitor check (every N completed bars) ──────────────────────
         self._bars_since_drift_check += 1
@@ -843,11 +903,37 @@ class HopeFXEngine:
         except Exception as exc:
             logger.debug("_maybe_dispatch_news_event error: %s", exc)
 
-    async def _execute_decision(self, decision, price: float, symbol: str) -> None:
-        """Execute a brain decision through the broker."""
+    async def _execute_decision(
+        self,
+        decision,
+        price: float,
+        symbol: str,
+        sniper_setup=None,
+    ) -> None:
+        """
+        Execute a brain decision through the broker.
+
+        When ``sniper_setup`` is provided (a SniperSetup from SniperEntryEngine),
+        the order is placed as a LIMIT order at the CE level with sniper-derived
+        SL/TP.  Otherwise a MARKET order is placed at ``price``.
+        """
         import inspect as _inspect
 
         side = "BUY" if decision.action == "long" else "SELL"
+
+        # ── Resolve order parameters (sniper limit vs market fallback) ────────
+        # When a SniperSetup is available, use its precision entry/SL/TP.
+        # Otherwise fall back to the risk manager's ATR-based sizing.
+        if sniper_setup is not None:
+            order_type = "LIMIT"
+            exec_price = sniper_setup.entry_price
+            stop_loss_price = sniper_setup.stop_loss
+            take_profit_price = sniper_setup.take_profit
+        else:
+            order_type = "MARKET"
+            exec_price = price
+            stop_loss_price = None
+            take_profit_price = None
 
         # ── Risk-manager position sizing ──────────────────────────────────────
         sized = self._risk_manager.size_order(decision)
@@ -858,6 +944,12 @@ class HopeFXEngine:
                 getattr(sized, "reject_reason", "quantity=0"),
             )
             return
+
+        # Use sniper SL/TP when available; fall back to risk-manager values
+        if stop_loss_price is None:
+            stop_loss_price = sized.stop_loss_usd
+        if take_profit_price is None:
+            take_profit_price = sized.take_profit_usd
 
         quantity = sized.quantity
         is_live = self.trading_mode == "live"
@@ -873,11 +965,14 @@ class HopeFXEngine:
 
         if self.trading_mode != "live":
             logger.info(
-                "[PAPER] %s %s %.4f lots @ %.5f  conf=%.3f  reason=%s",
+                "[PAPER] %s %s %s %.4f lots @ %.5f  sl=%.5f tp=%.5f  conf=%.3f  reason=%s",
+                order_type,
                 side,
                 symbol,
                 quantity,
-                price,
+                exec_price,
+                stop_loss_price,
+                take_profit_price,
                 decision.confidence,
                 decision.reason,
             )
@@ -885,7 +980,7 @@ class HopeFXEngine:
                 symbol=symbol,
                 side=side,
                 lots=quantity,
-                requested_price=price,
+                requested_price=exec_price,
                 fill_price=price,
                 pnl=0.0,
                 broker=self.broker_name,
@@ -932,8 +1027,8 @@ class HopeFXEngine:
                     "symbol": symbol,
                     "side": _OrderSide.BUY if side == "BUY" else _OrderSide.SELL,
                     "units": quantity,
-                    "stop_loss": sized.stop_loss_usd,
-                    "take_profit": sized.take_profit_usd,
+                    "stop_loss": stop_loss_price,
+                    "take_profit": take_profit_price,
                 }
             else:
                 order_kwargs = {
@@ -955,10 +1050,10 @@ class HopeFXEngine:
                     "symbol": symbol,
                     "direction": "long" if side == "BUY" else "short",
                     "quantity": quantity,
-                    "order_type": "market",
-                    "mid_price": price,
-                    "bid": price,
-                    "ask": price,
+                    "order_type": order_type.lower(),
+                    "mid_price": exec_price,
+                    "bid": exec_price,
+                    "ask": exec_price,
                     "spread": 0.0,
                     "confidence": getattr(decision, "confidence", 0.5),
                     "sentiment": 0.0,
@@ -987,28 +1082,31 @@ class HopeFXEngine:
                 _order_coro = self._broker.place_order(**order_kwargs)
                 result = await _order_coro if _inspect.isawaitable(_order_coro) else _order_coro
 
-            fill_price = price
+            fill_price = exec_price
             if result is not None:
                 if isinstance(result, dict):
-                    fill_price = float(result.get("fill_price", price))
+                    fill_price = float(result.get("fill_price", exec_price))
                 else:
-                    fill_price = float(getattr(result, "average_price", price))
+                    fill_price = float(getattr(result, "average_price", exec_price))
 
             self._trade_logger.log_fill(
                 symbol=symbol,
                 side=side,
                 lots=quantity,
-                requested_price=price,
+                requested_price=exec_price,
                 fill_price=fill_price,
                 broker=self.broker_name,
                 notes=decision.reason,
             )
             logger.info(
-                "Order placed: %s %s %.4f lots @ %.5f",
+                "Order placed: %s %s %s %.4f lots @ %.5f  sl=%.5f tp=%.5f",
+                order_type,
                 side,
                 symbol,
                 quantity,
                 fill_price,
+                stop_loss_price or 0.0,
+                take_profit_price or 0.0,
             )
             self._risk_manager.notify_position_opened(symbol)
 
