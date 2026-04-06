@@ -197,6 +197,19 @@ try:
 except Exception as _nuclear_err:
     logger.warning("Nuclear router failed to register: %s", _nuclear_err)
 
+# Nuclear strategy pipeline (ICT/SMC signal engine, ITOS cones, regime, backtest)
+try:
+    from api.nuclear_strategy import router as _nuclear_strategy_router
+
+    app.include_router(
+        _nuclear_strategy_router,
+        prefix="/nuclear-strategy",
+        tags=["nuclear-strategy"],
+    )
+    logger.info("Nuclear strategy router registered at /nuclear-strategy")
+except Exception as _nuclear_strategy_err:
+    logger.warning("Nuclear strategy router failed to register: %s", _nuclear_strategy_err)
+
 # Data layer REST endpoints
 try:
     from api.data_layer import router as _dl_router
