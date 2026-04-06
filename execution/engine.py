@@ -609,7 +609,7 @@ class ExecutionEngine:
                             "dl_confidence": tick.confidence,
                         },
                     )
-        except (AttributeError, TypeError, ValueError) as exc:
+        except (AttributeError, TypeError, ValueError, ImportError) as exc:
             logger.warning("Data-layer enrichment skipped: %s", exc)
         return request
 

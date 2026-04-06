@@ -287,6 +287,45 @@ class TestEnrichPriceFromDataLayer:
         mock_orch.is_safe_to_trade.assert_not_called()
         assert isinstance(result, ExecutionRequest)
 
+    def test_skips_when_data_layer_raises_import_error(self):
+        """ModuleNotFoundError (subclass of ImportError) is non-fatal."""
+        eng = _make_engine()
+        req = _buy_request()
+        # Simulate a broken sub-import inside data_layer.orchestrator by
+        # patching the module to None (triggers ModuleNotFoundError on import).
+        with patch.dict("sys.modules", {"data_layer": None, "data_layer.orchestrator": None}):
+            result = eng._enrich_price_from_data_layer(req, time.monotonic())
+        assert isinstance(result, ExecutionRequest)
+
+    def test_skips_when_orchestrator_raises_attribute_error(self):
+        """AttributeError from a malformed orchestrator object is non-fatal."""
+        eng = _make_engine()
+        req = _buy_request()
+
+        mock_module = MagicMock()
+        # Accessing .orchestrator raises AttributeError
+        type(mock_module).orchestrator = property(lambda self: (_ for _ in ()).throw(AttributeError("no attr")))
+
+        with patch.dict("sys.modules", {"data_layer.orchestrator": mock_module}):
+            result = eng._enrich_price_from_data_layer(req, time.monotonic())
+        assert isinstance(result, ExecutionRequest)
+
+    def test_skips_when_is_safe_to_trade_raises_value_error(self):
+        """ValueError from is_safe_to_trade is non-fatal."""
+        eng = _make_engine()
+        req = _buy_request()
+
+        mock_orch = MagicMock()
+        mock_orch._started = True
+        mock_orch.is_safe_to_trade.side_effect = ValueError("bad state")
+
+        mock_module = MagicMock()
+        mock_module.orchestrator = mock_orch
+
+        with patch.dict("sys.modules", {"data_layer.orchestrator": mock_module}):
+            result = eng._enrich_price_from_data_layer(req, time.monotonic())
+        assert isinstance(result, ExecutionRequest)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # _clone_request_with_price — static method

@@ -137,7 +137,7 @@ def mock_brain():
 
 
 @pytest.fixture()
-def app(mock_broker, mock_brain, tmp_path):
+def app(mock_broker, mock_brain, tmp_path, monkeypatch):
     # Re-pin the secret at fixture time (not just module level) so it stays
     # correct even when other test modules change SECURITY_JWT_SECRET between
     # collection and execution.
@@ -160,6 +160,10 @@ def app(mock_broker, mock_brain, tmp_path):
 
     fresh_ks = KillSwitch(flag_file=tmp_path / "ks_auth_test.flag")
     trading_module._set_kill_switch(fresh_ks)
+
+    # Prevent _get_redis_client() from attempting a real TCP connection, which
+    # blocks indefinitely when Redis is not running in the test environment.
+    monkeypatch.setattr(trading_module, "_get_redis_client", lambda: None)
 
     # Reset in-memory rate-limit cache so prior test requests don't cause 429s.
     trading_module._reset_order_rl_cache()
