@@ -8,7 +8,7 @@ Async LLM API wrapper used by HOPEFXBrain for intent analysis and
 auto-generated code fixes.
 
 Supports two backends (selected via LLM_BACKEND env var):
-  - "anthropic"  → Claude 3 Haiku (fast, cheap, good for security analysis)
+  - "anthropic"  → Claude 3.5 Sonnet (default; strong reasoning for security analysis and code generation)
   - "openai"     → GPT-4o-mini
 
 Raises RuntimeError when called without a configured API key.
@@ -28,11 +28,11 @@ ANTHROPIC_API_KEY: str | None = os.getenv("ANTHROPIC_API_KEY")
 OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
 
 # Model identifiers
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-haiku-20240307")
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
-# Max tokens for security analysis responses (keep short → fast + cheap)
-MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "512"))
+# Max tokens — increased to support full code-generation responses
+MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "8192"))
 
 
 async def call_llm(prompt: str) -> str:
