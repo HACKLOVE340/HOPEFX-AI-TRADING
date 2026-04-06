@@ -29,7 +29,7 @@ OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
 
 # Model identifiers
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "o4-mini")
 
 # Max tokens — increased to support full code-generation responses
 MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "8192"))
