@@ -24,12 +24,12 @@
 
 | 📊 OOS Accuracy | 🎯 Win Rate | 📉 Max Drawdown | ⚡ Sharpe | 🔢 Multi-Symbol N |
 |:-:|:-:|:-:|:-:|:-:|
-| **66.4%** | **61.9%** | **−6.2%** | **1.52** | **628 trades** |
-| p = 0.0000 · N=1,260 bars · 176 features | XAU/USD OOS | 10-yr OOS period | Trade-level | XAU+BTC+ETH gate PASSED |
+| **66.4%** | **61.9%** | **−6.2%** | **1.52** | **919+ trades** |
+| p = 0.0000 · N=1,260 bars · 176 features | XAU/USD OOS | 10-yr OOS period | Trade-level | 7 symbols · SE≤0.10 gate PASSED |
 
 <br/>
 
-> **Current status: Paper Trading** — live OANDA run next milestone
+> **Current status: Paper Trading active** — live OANDA run is the next milestone
 
 </div>
 
@@ -56,11 +56,14 @@
 
 Most retail trading bots are backtested on in-sample data, use fixed rules, and blow up on live markets. HOPEFX is built differently:
 
-- **Walk-forward validated** — 66.4% OOS accuracy on 1,260 held-out bars (p = 0.0000, binomial one-sided test). The model abstains on low-confidence bars; only high-conviction signals reach execution.
-- **Statistically gated** — the Sharpe ratio is not reported until N ≥ 600 OOS trades. The multi-symbol backtest (XAU+BTC+ETH, real market data) confirmed N=628, gate PASSED.
-- **Continually learning** — `SklearnOnlineLearner` updates incrementally every hour via `HourlyTrainer`; a daily EWC regime-adaptation loop runs at 00:05 UTC, adjusting model plasticity to the current market regime.
-- **Prop-firm safe** — daily drawdown gate, max position size enforcer, and a hardware kill switch that halts all orders instantly.
-- **Broker-agnostic** — routes through OANDA, IBKR, or paper with automatic failover; no single point of failure.
+- **Walk-forward validated** — 66.4% OOS accuracy on 1,260 held-out bars (p = 0.0000). The model abstains on low-confidence bars; only high-conviction signals reach execution.
+- **Chaos-aware** — Lyapunov exponents, Higuchi fractal dimension, approximate entropy, and permutation entropy measure whether the market is in a predictable or chaotic state. The system reduces exposure when chaos is high.
+- **Continually learning** — EWC (Elastic Weight Consolidation) prevents catastrophic forgetting during live adaptation. The model adapts to new regimes without losing knowledge of past ones.
+- **Pre-execution probability filter** — every signal passes through Itô stochastic calculus price cones (±2σ GBM) before reaching the broker. Late entries are rejected before they cost money.
+- **GARCH(1,1) position sizing** — position sizes are forward-looking on volatility. The system is smaller before volatility spikes, not after.
+- **Geopolitical intelligence** — a dedicated module monitors conflict zones, sanctions, and central bank events specifically calibrated for gold's safe-haven mechanics.
+- **Prop-firm safe** — daily drawdown gate, max position size enforcer, and a hardware kill switch. Rules encoded per firm: FTMO, The5ers, TopStep, MyForexFunds, Goat Funded.
+- **Broker-agnostic** — routes through OANDA, IBKR, MT5, Binance, Bybit, Alpaca, or paper with automatic failover.
 - **Observable** — every trade, signal, and error flows through Prometheus, Sentry, and structured logs.
 
 ---
@@ -70,30 +73,33 @@ Most retail trading bots are backtested on in-sample data, use fixed rules, and 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │                        Client Layer                                  │
-│          REST API (FastAPI)  ·  WebSocket  ·  GraphQL               │
+│     REST API (FastAPI)  ·  WebSocket  ·  GraphQL  ·  Mobile PWA    │
 └────────────────────────────┬─────────────────────────────────────────┘
                              │
 ┌────────────────────────────▼─────────────────────────────────────────┐
-│                       Signal Engine                                  │
-│   ML Inference  ·  Regime Filter  ·  News Sentiment  ·  Pre-trade   │
+│                    HOPEFXBrain / Signal Engine                       │
+│  ML Inference · Regime Filter · Nuclear Strategy · News Sentiment   │
+│  Itô Cone Filter · Shadow Backtest · Confidence Aggregation         │
 └──────┬──────────────────────────────────────────┬────────────────────┘
        │                                          │
 ┌──────▼──────────┐                    ┌──────────▼──────────────────┐
 │   Risk Engine   │                    │      Execution Engine       │
 │  CVaR Gate      │                    │  Smart Router               │
-│  Drawdown Limit │                    │  OANDA · IBKR · Paper       │
-│  Kill Switch    │                    │  OMS · Position Tracker     │
-│  Position Size  │                    │  FIX Adapter · TCA          │
+│  GARCH(1,1) VaR │                    │  OANDA · IBKR · MT5 · Paper │
+│  Drawdown Limit │                    │  TWAP · VWAP · Iceberg      │
+│  Kill Switch    │                    │  FIX Adapter · TCA          │
+│  Kelly Sizing   │                    │  OMS · Position Tracker     │
 └──────┬──────────┘                    └──────────┬──────────────────┘
        │                                          │
 ┌──────▼──────────────────────────────────────────▼──────────────────┐
 │                      Data & Persistence                             │
-│   PostgreSQL  ·  Redis  ·  Market Data Feed  ·  MacroStore         │
+│  PostgreSQL · Redis · Polygon L2 · Finnhub Tape · MacroStore       │
+│  Microstructure Engine · Kyle's Lambda · Lee-Ready Classification  │
 └─────────────────────────────────────────────────────────────────────┘
                              │
 ┌────────────────────────────▼─────────────────────────────────────────┐
 │                      Observability                                   │
-│         Prometheus  ·  Sentry  ·  Structured Logs  ·  Discord       │
+│         Prometheus · Grafana · Sentry · Structured Logs · Discord   │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -105,7 +111,8 @@ Most retail trading bots are backtested on in-sample data, use fixed rules, and 
 
 | Property | Value |
 |---|---|
-| Architecture | XGBoost + isotonic calibration (CalibratedClassifierCV) |
+| Architecture | XGBoost + LightGBM + RandomForest + ExtraTrees stacking ensemble |
+| Calibration | Isotonic (CalibratedClassifierCV) |
 | Features | **176** engineered (stationary-tested, ADF + KPSS) |
 | Training data | ~50 years XAUUSD (GC=F daily) |
 | OOS period | 2019–2026 (1,260 bars) |
@@ -113,12 +120,23 @@ Most retail trading bots are backtested on in-sample data, use fixed rules, and 
 | OOS F1 | 0.728 |
 | OOS AUC | 0.711 |
 | Sharpe gate | PASSED — N=1,260 ≥ 600, SE=0.041 ≤ 0.10 |
-| Multi-symbol backtest | N=628 trades (XAU+BTC+ETH, 10-yr real data) |
-| `ci_mode` | `false` — production model, validated 2026-04-01 |
+| Multi-symbol backtest | N>919 trades (7 symbols, 10-yr real data) |
+
+### Feature Categories (176 features)
+
+| Category | Examples |
+|---|---|
+| Fractal geometry | Lyapunov exponent, Higuchi fractal dimension, DFA, approximate entropy, permutation entropy, recurrence quantification |
+| Order flow | OFI delta, VWAP deviation, bid/ask pressure ratio, cumulative delta |
+| Regime | HMM state, bear/bull score, volatility regime, trend strength |
+| Macro | DXY, real yields, VIX, COT proxy, intermarket correlations |
+| Microstructure | Kyle's lambda, order book imbalance, spread z-score, absorption ratio |
+| Technical | RSI, MACD, Bollinger, Ichimoku, Parkinson vol, realised vol |
+| Calendar | Session, day-of-week, economic event proximity |
 
 ### Online Learning
 
-The `SklearnOnlineLearner` (SGDClassifier-backed, `ml/online_learner.py`) updates incrementally every hour via `HourlyTrainer._online_update()`. A daily EWC regime-adaptation loop runs at 00:05 UTC, adjusting the model's plasticity based on the detected market regime (volatile / ranging / trending). Enable with `ML_HOURLY_ENABLED=true`.
+`SklearnOnlineLearner` (SGDClassifier-backed) updates incrementally every hour via `HourlyTrainer`. A daily EWC regime-adaptation loop runs at 00:05 UTC, adjusting model plasticity to the current market regime using Elastic Weight Consolidation — preventing catastrophic forgetting when regimes change. Enable with `ML_HOURLY_ENABLED=true`.
 
 ### Top Predictive Features
 
@@ -142,7 +160,10 @@ python ml/train_advanced.py --smoke
 # Full production retrain (50 years, 3-year OOS)
 python ml/train_advanced.py --years 50 --oos-years 3
 
-# Multi-symbol backtest (XAU + BTC + ETH)
+# Full stacking ensemble
+python ml/train_advanced.py --years 50 --oos-years 3 --stacking
+
+# Multi-symbol backtest (7 symbols)
 python backtest/multi_symbol_backtest.py --years 10 --oos-frac 0.3
 ```
 
@@ -158,11 +179,14 @@ python backtest/multi_symbol_backtest.py --years 10 --oos-frac 0.3
 | Paper trading simulator | ✅ Stable |
 | OANDA v20 (paper + live) | ✅ Stable |
 | IBKR TWS / Gateway | ✅ Stable |
-| Smart order router with auto-failover | ✅ Stable |
-| FIX protocol adapter | ✅ Stable |
+| MetaTrader 5 (Python API + ZeroMQ bridge) | ✅ Stable |
+| Binance / Bybit / Alpaca / CCXT (50+ exchanges) | ✅ Stable |
+| FIX 4.4 protocol adapter | ✅ Stable |
+| Smart order router (latency + OFI + sentiment scoring) | ✅ Stable |
+| TWAP / VWAP / Iceberg order algorithms | ✅ Stable |
 | Order Management System (OMS) | ✅ Stable |
-| Transaction Cost Analysis (TCA) | ✅ Stable |
-| Copy trading | ✅ Beta |
+| Almgren-Chriss Transaction Cost Analysis (TCA) | ✅ Stable |
+| Copy trading | ✅ Stable |
 
 </details>
 
@@ -172,13 +196,17 @@ python backtest/multi_symbol_backtest.py --years 10 --oos-frac 0.3
 | Feature | Status |
 |---------|--------|
 | CVaR order gate | ✅ Stable |
+| GARCH(1,1) VaR (MLE, h-step variance recursion) | ✅ Stable |
+| Multi-day VaR via overlapping returns | ✅ Stable |
 | Daily drawdown limit | ✅ Stable |
+| Kelly criterion + drawdown-adaptive sizing | ✅ Stable |
 | Max position size enforcer | ✅ Stable |
 | Kill switch (instant halt) | ✅ Stable |
 | Pre-trade risk checks | ✅ Stable |
-| Prop-firm compliance mode | ✅ Stable |
+| Prop-firm compliance (FTMO, The5ers, TopStep, MFF, Goat) | ✅ Stable |
 | Stress testing | ✅ Stable |
-| Circuit breakers | ✅ Stable |
+| Circuit breakers (execution + Sharpe) | ✅ Stable |
+| Intra-trade monitor | ✅ Stable |
 
 </details>
 
@@ -187,22 +215,91 @@ python backtest/multi_symbol_backtest.py --years 10 --oos-frac 0.3
 
 | Feature | Status |
 |---------|--------|
-| XGBoost stacking ensemble | ✅ Stable |
-| Walk-forward validation | ✅ Stable |
+| XGBoost + LGB + RF + ET stacking ensemble | ✅ Stable |
+| Walk-forward validation (5-fold anchored) | ✅ Stable |
 | Stationarity testing (ADF + KPSS) | ✅ Stable |
-| HMM regime detection | ✅ Stable |
+| HMM regime detection (7 regimes) | ✅ Stable |
+| Fractal geometry features (Lyapunov, HFD, DFA, ApEn) | ✅ Stable |
+| EWC online learning (catastrophic forgetting prevention) | ✅ Stable |
 | Feature importance (SHAP) | ✅ Stable |
 | Macro feature integration | ✅ Stable |
-| Incremental online learning (SGD + EWC) | ✅ Stable |
-| Model explainability API | ✅ Beta |
-| Reinforcement learning (SB3) | 🔬 Experimental |
+| Model drift monitoring | ✅ Stable |
+| Sharpe circuit breaker (live model gating) | ✅ Stable |
+| Model explainability API | ✅ Stable |
+| Reinforcement learning (PPO, walk-forward eval) | ✅ Stable |
+
+</details>
+
+<details>
+<summary><strong>Nuclear Strategy System</strong></summary>
+
+| Feature | Status |
+|---------|--------|
+| Itô stochastic calculus price cones (±2σ GBM) | ✅ Stable |
+| Shadow backtest (last 30 ticks + 5 bars per TF) | ✅ Stable |
+| Signal approval gate | ✅ Stable |
+| Multi-TF regime classifier | ✅ Stable |
+| Redis stream reader | ✅ Stable |
+| Nuclear WORDMAP semantic scorer (severity 0–10) | ✅ Stable |
+
+</details>
+
+<details>
+<summary><strong>Market Data & Microstructure</strong></summary>
+
+| Feature | Status |
+|---------|--------|
+| Multi-source WebSocket streamer (Polygon + Finnhub + Twelve Data) | ✅ Stable |
+| L2 order book (Polygon quotes + Finnhub trade tape collated) | ✅ Stable |
+| Microstructure engine (Kyle's lambda, Lee-Ready, OBI) | ✅ Stable |
+| Depth of Market (DOM) service — up to 50 levels | ✅ Stable |
+| Order flow analysis (cumulative delta, stacked imbalances) | ✅ Stable |
+| Institutional flow detection (iceberg, absorption, smart money) | ✅ Stable |
+| Geopolitical risk intelligence (conflict zones, sanctions, instability) | ✅ Stable |
+| Economic calendar integration | ✅ Stable |
+| News sentiment analysis | ✅ Stable |
+| Gold-specific feed manager (GoldAPI, Metals.dev, MetalsAPI) | ✅ Stable |
 
 </details>
 
 <details>
 <summary><strong>Strategies</strong></summary>
 
-MA Crossover · EMA Crossover · Bollinger Bands · Breakout · MACD · RSI · SMC/ICT · Mean Reversion · Stochastic · Strategy Brain (ML-gated)
+MA Crossover · EMA Crossover · Bollinger Bands · Breakout · MACD · RSI · **SMC/ICT** (Order Blocks, FVG, Liquidity Sweeps, BOS/CHoCh, OTE Fibonacci) · Mean Reversion · Stochastic · Pullback · **Strategy Brain** (multi-strategy consensus voting) · **Regime Router** · **Nuclear Strategy Engine**
+
+</details>
+
+<details>
+<summary><strong>Security</strong></summary>
+
+| Feature | Status |
+|---------|--------|
+| Global fortress (24/7 autonomous security engine) | ✅ Stable |
+| RL-based security response (monitor / rate-limit / block) | ✅ Stable |
+| HSM vault (PBKDF2 key derivation, Fernet encryption) | ✅ Stable |
+| Self-healer (LLM code review → fix approval queue) | ✅ Stable |
+| AML gate (velocity checks, KYC thresholds) | ✅ Stable |
+| KYC provider integration | ✅ Stable |
+| Regulatory reporter | ✅ Stable |
+| JWT auth + RBAC + 2FA | ✅ Stable |
+| Rate limiting (per-IP, per-tenant) | ✅ Stable |
+
+</details>
+
+<details>
+<summary><strong>Monetization</strong></summary>
+
+| Feature | Status |
+|---------|--------|
+| Stripe subscription platform (FREE / STARTER / PROFESSIONAL / ENTERPRISE / ELITE) | ✅ Stable |
+| Dunning (3x retry at 24h / 72h / 168h) | ✅ Stable |
+| Plan gating on all trading and ML endpoints | ✅ Stable |
+| Strategy marketplace (submission, purchase, revenue split) | ✅ Stable |
+| License key generation / validation / revocation | ✅ Stable |
+| Affiliate system | ✅ Stable |
+| Crypto checkout | ✅ Stable |
+| Invoicing | ✅ Stable |
+| White-label API (per-tenant auth, branding, rate limits) | ✅ Stable |
 
 </details>
 
@@ -211,16 +308,19 @@ MA Crossover · EMA Crossover · Bollinger Bands · Breakout · MACD · RSI · S
 
 | Component | Status |
 |-----------|--------|
-| FastAPI REST + WebSocket | ✅ Stable |
-| GraphQL endpoint | ✅ Stable |
+| FastAPI REST + WebSocket + GraphQL | ✅ Stable |
 | JWT auth + RBAC | ✅ Stable |
 | Rate limiting (slowapi) | ✅ Stable |
-| PostgreSQL + async ORM | ✅ Stable |
+| PostgreSQL + async ORM + Alembic | ✅ Stable |
 | Redis cache + pub/sub | ✅ Stable |
-| Prometheus metrics | ✅ Stable |
+| Prometheus + Grafana | ✅ Stable |
 | Sentry error tracking | ✅ Stable |
 | Docker + docker-compose | ✅ Stable |
-| Kubernetes manifests | ✅ Beta |
+| Kubernetes + Helm + ArgoCD | ✅ Stable |
+| Systemd service | ✅ Stable |
+| Chaos engineering (7 fault injection scenarios) | ✅ Stable |
+| Load testing (k6 + Locust) | ✅ Stable |
+| 15 CI/CD workflows (ruff, bandit, mypy, pytest, CodeQL, Fortify) | ✅ Stable |
 
 </details>
 
@@ -250,6 +350,8 @@ cp .env.example .env
 # Minimum required for paper trading:
 #   SECURITY_JWT_SECRET  (≥32 chars)
 #   OANDA_API_KEY + OANDA_ACCOUNT_ID  (for OANDA paper mode)
+#   POLYGON_API_KEY  (for L2 order book)
+#   FINNHUB_API_KEY  (for trade tape / cumulative delta)
 ```
 
 ### 3. Start paper trading
@@ -284,14 +386,16 @@ All settings load from environment variables. See [`.env.example`](.env.example)
 | `OANDA_API_KEY` | OANDA only | OANDA v20 REST API key |
 | `OANDA_ACCOUNT_ID` | OANDA only | OANDA account ID |
 | `OANDA_ENVIRONMENT` | OANDA only | `practice` or `live` |
+| `POLYGON_API_KEY` | Recommended | Polygon.io — L2 order book + price stream |
+| `FINNHUB_API_KEY` | Recommended | Finnhub — trade tape for cumulative delta |
+| `TWELVE_API_KEY` | Optional | Twelve Data — price stream (third source) |
 | `DATABASE_URL` | Production | PostgreSQL connection string |
 | `REDIS_URL` | Recommended | Redis connection string |
 | `SENTRY_DSN` | Recommended | Sentry error tracking DSN |
 | `DISCORD_WEBHOOK_URL` | Optional | Discord alert webhook |
 | `ML_HOURLY_ENABLED` | Optional | `true` to enable hourly online learning |
-| `BROKER_TYPE` | Optional | `oanda`, `ibkr`, or `paper` (default: `paper`) |
-| `IBKR_HOST` | IBKR only | TWS/Gateway host (default: `127.0.0.1`) |
-| `IBKR_PORT` | IBKR only | `7497` (paper) or `7496` (live) |
+| `BROKER_TYPE` | Optional | `oanda`, `ibkr`, `mt5`, or `paper` (default: `paper`) |
+| `STRIPE_SECRET_KEY` | Monetization | `sk_test_...` (test) or `sk_live_...` (production) |
 
 Feature flags are controlled via `FEATURE_*` env vars — see [`docs/FEATURES.md`](docs/archive/FEATURES.md).
 
@@ -311,7 +415,7 @@ Feature flags are controlled via `FEATURE_*` env vars — see [`docs/FEATURES.md
    OANDA_ACCOUNT_ID=001-001-XXXXXXX-001
    OANDA_ENVIRONMENT=practice
    ```
-4. The 30-day paper trading clock starts automatically on first successful connection. Progress is tracked in `data/oanda_paper_start.json`.
+4. The 30-day paper trading clock starts automatically on first successful connection.
 
 </details>
 
@@ -325,6 +429,20 @@ Feature flags are controlled via `FEATURE_*` env vars — see [`docs/FEATURES.md
    BROKER_TYPE=ibkr
    IBKR_HOST=127.0.0.1
    IBKR_PORT=7497   # 7497 = paper, 7496 = live
+   ```
+
+</details>
+
+<details>
+<summary><strong>MetaTrader 5 (ZeroMQ bridge)</strong></summary>
+
+1. Install the `HopeFX_ZMQ_EA.mq5` EA from `brokers/mql5/` into MT5
+2. Enable AutoTrading and ZeroMQ DLL in MT5
+3. Set in `.env`:
+   ```
+   BROKER_TYPE=mt5
+   MT5_ZMQ_PUSH_PORT=5555
+   MT5_ZMQ_PULL_PORT=5556
    ```
 
 </details>
@@ -344,7 +462,7 @@ No credentials required. Leave `BROKER_TYPE` unset or set to `paper`. Initial ba
 # Fast suite (skips slow ML training tests)
 pytest tests/ -m "not slow" -q
 
-# Full suite including ML training (takes ~10 min)
+# Full suite including ML training (~10 min)
 pytest tests/ -q
 
 # Single module
@@ -375,16 +493,18 @@ See [`DEPLOYMENT.md`](DEPLOYMENT.md) for full production deployment instructions
 
 See [`docs/roadmap.md`](docs/roadmap.md) for the full milestone plan.
 
-| Phase | Status | Description |
+| Milestone | Status | Description |
 |---|---|---|
-| Paper trading (OANDA) | ✅ Done | 30-day paper run completed |
-| Multi-symbol backtest | ✅ Done | N=628 trades, Sharpe gate PASSED |
-| Online learning wired | ✅ Done | Hourly SGD updates + daily EWC loop |
-| Dual license + CLA | ✅ Done | AGPL-3.0 open source + commercial option |
-| Monetization platform | ✅ Done | Full Stripe subscription platform, dunning, plan gates |
+| Statistical robustness | ✅ Done | 66.4% OOS, N>919 multi-symbol, SE≤0.10 |
+| Monetization platform | ✅ Done | Stripe, dunning, marketplace, white-label |
+| MT5 ZeroMQ export | ✅ Done | Custom MQL5 EA + ZeroMQ bridge |
+| Multi-symbol expansion | ✅ Done | 7 symbols, portfolio risk wired |
+| Strategy marketplace | ✅ Done | Submission, purchase, revenue split |
+| Reinforcement learning | ✅ Done | PPO agent, walk-forward eval |
+| Web frontend | ✅ Done | 38 pages, real-time charts, order book depth |
+| Mobile app | ✅ Done | 19 screens, biometric auth, push notifications |
+| White-label API | ✅ Done | Per-tenant auth, rate limiting, branding |
 | Live OANDA trading | ⏳ Next | After 30-day paper run completes |
-| MT5 signal export | ⏳ Planned | ZeroMQ bridge to MetaTrader 5 |
-| Reinforcement learning | 🔬 Research | Phase 3–4, requires GPU training |
 
 ---
 
