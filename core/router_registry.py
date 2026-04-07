@@ -280,3 +280,67 @@ def register_routers(
         logger.info("Live WebSocket router registered (/ws/live)")
     except Exception as _ws_live_err:
         logger.warning("Live WebSocket router not registered: %s", _ws_live_err)
+
+    # ── Chaos Engineering + Mutation Testing ─────────────────────────────────
+    try:
+        from api.chaos import router as chaos_router
+
+        app.include_router(chaos_router)
+        logger.info("Chaos router registered (/api/chaos)")
+    except Exception as _chaos_err:
+        logger.warning("Chaos router not registered: %s", _chaos_err)
+
+    # ── Nuclear Supervisor ────────────────────────────────────────────────────
+    try:
+        from api.nuclear import router as nuclear_router
+
+        app.include_router(nuclear_router, prefix="/nuclear", tags=["nuclear"])
+        logger.info("Nuclear supervisor router registered (/nuclear)")
+    except Exception as _nuclear_err:
+        logger.warning("Nuclear router not registered: %s", _nuclear_err)
+
+    # ── Nuclear Strategy Agent ────────────────────────────────────────────────
+    try:
+        from api.nuclear_strategy import router as nuclear_strategy_router
+
+        app.include_router(nuclear_strategy_router, prefix="/nuclear-strategy", tags=["nuclear-strategy"])
+        logger.info("Nuclear strategy router registered (/nuclear-strategy)")
+    except Exception as _nstrat_err:
+        logger.warning("Nuclear strategy router not registered: %s", _nstrat_err)
+
+    # ── P&L Dashboard ─────────────────────────────────────────────────────────
+    try:
+        from api.pnl_dashboard import router as pnl_router
+
+        app.include_router(pnl_router)
+        logger.info("P&L dashboard router registered (/api/pnl)")
+    except Exception as _pnl_err:
+        logger.warning("P&L dashboard router not registered: %s", _pnl_err)
+
+    # ── Data Layer ────────────────────────────────────────────────────────────
+    try:
+        from api.data_layer import router as data_layer_router
+
+        app.include_router(data_layer_router)
+        logger.info("Data layer router registered (/api/data-layer)")
+    except Exception as _dl_err:
+        logger.warning("Data layer router not registered: %s", _dl_err)
+
+    # ── KYC / AML ─────────────────────────────────────────────────────────────
+    try:
+        from api.kyc import router as kyc_router
+
+        app.include_router(kyc_router)
+        logger.info("KYC router registered (/kyc)")
+    except Exception as _kyc_err:
+        logger.warning("KYC router not registered: %s", _kyc_err)
+
+    # ── WebSocket server (legacy /ws endpoint) ────────────────────────────────
+    try:
+        from api.websocket_server import create_websocket_router, get_websocket_manager
+
+        _ws_router = create_websocket_router(get_websocket_manager())
+        app.include_router(_ws_router)
+        logger.info("WebSocket server router registered (/ws)")
+    except Exception as _ws_err:
+        logger.warning("WebSocket server router not registered: %s", _ws_err)
