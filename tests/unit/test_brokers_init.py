@@ -182,7 +182,7 @@ class TestBaseBrokerAbstract:
             async def get_pending_orders(self): return []
 
         broker = MockBroker()
-        closed = asyncio.get_event_loop().run_until_complete(broker.close_all_positions())
+        closed = asyncio.run(broker.close_all_positions())
         assert set(closed) == {"p1", "p2"}
 
     def test_cancel_all_orders_calls_cancel_order(self):
@@ -204,7 +204,7 @@ class TestBaseBrokerAbstract:
                 ]
 
         broker = MockBroker()
-        cancelled = asyncio.get_event_loop().run_until_complete(broker.cancel_all_orders())
+        cancelled = asyncio.run(broker.cancel_all_orders())
         assert set(cancelled) == {"o1", "o2"}
 
 
@@ -218,7 +218,7 @@ class TestPaperTradingBrokerSync:
     def broker(self):
         from brokers.paper_trading import PaperTradingBroker
         b = PaperTradingBroker(initial_balance=100_000.0, commission_per_lot=3.5)
-        asyncio.get_event_loop().run_until_complete(b.connect())
+        asyncio.run(b.connect())
         return b
 
     def test_initial_balance(self, broker):

@@ -391,9 +391,7 @@ class TestSmartOrderRouter:
         # Patch the strategy execute to avoid real async sleep
         with patch("enhanced_smart_router.TWAPStrategy.execute", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = []
-            result = asyncio.get_event_loop().run_until_complete(
-                router.execute_order(order)
-            )
+            result = asyncio.run(router.execute_order(order))
         assert isinstance(result, dict)
 
     def test_execute_order_result_keys(self):
@@ -402,9 +400,7 @@ class TestSmartOrderRouter:
         order = _make_order(size=1.0, order_type=OrderType.TWAP)
         with patch("enhanced_smart_router.TWAPStrategy.execute", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = []
-            result = asyncio.get_event_loop().run_until_complete(
-                router.execute_order(order)
-            )
+            result = asyncio.run(router.execute_order(order))
         for key in ("order_id", "status", "fills", "filled_size", "avg_price"):
             assert key in result, f"Missing key: {key}"
 

@@ -155,21 +155,21 @@ class TestInitEnvDev:
         from core.startup_factories import init_env
 
         s = _make_state()
-        result = asyncio.get_event_loop().run_until_complete(init_env(s))
+        result = asyncio.run(init_env(s))
         assert result is True
 
     def test_generates_jwt_secret_when_missing(self, monkeypatch):
         from core.startup_factories import init_env
 
         s = _make_state()
-        asyncio.get_event_loop().run_until_complete(init_env(s))
+        asyncio.run(init_env(s))
         assert len(os.environ.get("SECURITY_JWT_SECRET", "")) > 0
 
     def test_generates_encryption_key_when_missing(self, monkeypatch):
         from core.startup_factories import init_env
 
         s = _make_state()
-        asyncio.get_event_loop().run_until_complete(init_env(s))
+        asyncio.run(init_env(s))
         assert len(os.environ.get("CONFIG_ENCRYPTION_KEY", "")) > 0
 
     def test_does_not_overwrite_existing_jwt_secret(self, monkeypatch):
@@ -177,7 +177,7 @@ class TestInitEnvDev:
 
         monkeypatch.setenv("SECURITY_JWT_SECRET", "existing-secret-value")
         s = _make_state()
-        asyncio.get_event_loop().run_until_complete(init_env(s))
+        asyncio.run(init_env(s))
         assert os.environ["SECURITY_JWT_SECRET"] == "existing-secret-value"
 
     def test_ephemeral_secrets_are_random(self, monkeypatch):
@@ -186,11 +186,11 @@ class TestInitEnvDev:
 
         s = _make_state()
         monkeypatch.delenv("SECURITY_JWT_SECRET", raising=False)
-        asyncio.get_event_loop().run_until_complete(init_env(s))
+        asyncio.run(init_env(s))
         secret1 = os.environ.get("SECURITY_JWT_SECRET", "")
 
         monkeypatch.delenv("SECURITY_JWT_SECRET", raising=False)
-        asyncio.get_event_loop().run_until_complete(init_env(s))
+        asyncio.run(init_env(s))
         secret2 = os.environ.get("SECURITY_JWT_SECRET", "")
 
         assert secret1 != secret2
@@ -211,7 +211,7 @@ class TestInitEnvProd:
 
         s = _make_state()
         with pytest.raises(SystemExit):
-            asyncio.get_event_loop().run_until_complete(init_env(s))
+            asyncio.run(init_env(s))
 
     def test_exits_when_encryption_key_missing_in_production(self, monkeypatch):
         monkeypatch.setenv("APP_ENV", "production")
@@ -222,7 +222,7 @@ class TestInitEnvProd:
 
         s = _make_state()
         with pytest.raises(SystemExit):
-            asyncio.get_event_loop().run_until_complete(init_env(s))
+            asyncio.run(init_env(s))
 
     def test_no_exit_when_both_secrets_present_in_production(self, monkeypatch):
         monkeypatch.setenv("APP_ENV", "production")
@@ -235,7 +235,7 @@ class TestInitEnvProd:
         # Patch the env_validator import so it doesn't fail in test env
         with patch("core.env_validator.validate_and_report", create=True):
             try:
-                result = asyncio.get_event_loop().run_until_complete(init_env(s))
+                result = asyncio.run(init_env(s))
                 assert result is True
             except SystemExit:
                 pytest.fail("init_env called sys.exit() even though secrets were present")
@@ -253,7 +253,7 @@ class TestInitCache:
         s = _make_state()
         with patch("cache.MarketDataCache") as MockCache:
             MockCache.return_value = MagicMock()
-            result = asyncio.get_event_loop().run_until_complete(init_cache(s))
+            result = asyncio.run(init_cache(s))
         assert result is not None
 
     def test_uses_redis_env_vars(self, monkeypatch):
@@ -264,7 +264,7 @@ class TestInitCache:
         s = _make_state()
         with patch("cache.MarketDataCache") as MockCache:
             MockCache.return_value = MagicMock()
-            asyncio.get_event_loop().run_until_complete(init_cache(s))
+            asyncio.run(init_cache(s))
             call_kwargs = MockCache.call_args
         assert call_kwargs is not None
         # host and port should be passed
@@ -283,7 +283,7 @@ class TestInitRiskManager:
 
         s = _make_state()
         with patch("api.admin.log_activity"):
-            result = asyncio.get_event_loop().run_until_complete(init_risk_manager(s))
+            result = asyncio.run(init_risk_manager(s))
         assert result is not None
 
     def test_uses_env_vars_for_config(self, monkeypatch):
@@ -293,7 +293,7 @@ class TestInitRiskManager:
         monkeypatch.setenv("RISK_MAX_DRAWDOWN_PCT", "0.15")
         s = _make_state()
         with patch("api.admin.log_activity"):
-            rm = asyncio.get_event_loop().run_until_complete(init_risk_manager(s))
+            rm = asyncio.run(init_risk_manager(s))
         # RiskManager should have been created with the env-var values
         assert rm is not None
 
@@ -373,7 +373,7 @@ class TestInitConfig:
 
         s = _make_state()
         with patch("config.initialize_config", return_value={"environment": "test", "debug": True}):
-            result = asyncio.get_event_loop().run_until_complete(init_config(s))
+            result = asyncio.run(init_config(s))
         assert result is not None
         assert hasattr(result, "environment")
 
@@ -382,7 +382,7 @@ class TestInitConfig:
 
         s = _make_state()
         with patch("config.initialize_config", return_value={"foo": "bar"}):
-            result = asyncio.get_event_loop().run_until_complete(init_config(s))
+            result = asyncio.run(init_config(s))
         assert isinstance(result, _ConfigNamespace)
         assert result.foo == "bar"
 
@@ -393,5 +393,5 @@ class TestInitConfig:
         fake_cfg = MagicMock()
         fake_cfg.environment = "test"
         with patch("config.initialize_config", return_value=fake_cfg):
-            result = asyncio.get_event_loop().run_until_complete(init_config(s))
+            result = asyncio.run(init_config(s))
         assert result is fake_cfg
