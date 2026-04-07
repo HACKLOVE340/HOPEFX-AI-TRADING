@@ -11,12 +11,8 @@ Covers: InferenceEngine init, predict (neutral fallback, insufficient bars),
         singleton, and signal thresholding env vars.
 """
 
-import json
 import os
-import tempfile
 import time
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
@@ -300,8 +296,8 @@ class TestSignalThresholds:
         import importlib
         import ml.inference_engine as ie
         importlib.reload(ie)
-        assert ie._THRESHOLD_LONG == pytest.approx(0.70)
-        assert ie._THRESHOLD_SHORT == pytest.approx(0.30)
+        assert pytest.approx(0.70) == ie._THRESHOLD_LONG
+        assert pytest.approx(0.30) == ie._THRESHOLD_SHORT
 
     def test_default_thresholds(self, monkeypatch):
         monkeypatch.delenv("SIGNAL_THRESHOLD_LONG", raising=False)
@@ -309,5 +305,5 @@ class TestSignalThresholds:
         import importlib
         import ml.inference_engine as ie
         importlib.reload(ie)
-        assert ie._THRESHOLD_LONG == pytest.approx(0.58)
-        assert ie._THRESHOLD_SHORT == pytest.approx(0.42)
+        assert pytest.approx(0.58) == ie._THRESHOLD_LONG
+        assert pytest.approx(0.42) == ie._THRESHOLD_SHORT

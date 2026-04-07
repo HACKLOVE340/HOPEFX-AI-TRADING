@@ -2423,6 +2423,7 @@ async def get_kyc_queue(
     """KYC queue — all users with their verification status."""
     records: list[dict] = []
     total = 0
+    db = None
     try:
         db = next(_get_db())
         if db:
@@ -2449,10 +2450,12 @@ async def get_kyc_queue(
                         "document_type": getattr(u, "kyc_document_type", None),
                     }
                 )
-            db.close()
     except Exception as exc:
         logger.warning("KYC queue DB error: %s", exc)
     # No records in DB — log diagnostic so operators know to seed the KYC queue.
+    finally:
+        if db:
+            db.close()
     if not records:
         logger.debug("KYC queue: no records found in DB for page=%d limit=%d", page, limit)
     return {"records": records, "total": total, "page": page, "limit": limit}
@@ -2464,6 +2467,7 @@ async def approve_kyc(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     _log_superadmin_action(user, "kyc_approve", f"user={target_user_id}")
+    db = None
     try:
         db = next(_get_db())
         if db:
@@ -2476,13 +2480,15 @@ async def approve_kyc(
             u.kyc_reviewed_at = _utcnow()
             u.kyc_reviewer_id = user.sub
             db.commit()
-            db.close()
             return {"status": "approved", "user_id": target_user_id}
     except HTTPException:
         raise
     except Exception as exc:
         logger.warning("KYC approve error: %s", exc)
     # DB update failed — emit a structured audit event so the action remains traceable.
+    finally:
+        if db:
+            db.close()
     logger.info(
         "kyc_approve audit-fallback: action recorded for user=%s by reviewer=%s (DB error above)",
         target_user_id,
@@ -2498,6 +2504,7 @@ async def reject_kyc(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     _log_superadmin_action(user, "kyc_reject", f"user={target_user_id} reason={body.reason}")
+    db = None
     try:
         db = next(_get_db())
         if db:
@@ -2511,11 +2518,13 @@ async def reject_kyc(
             u.kyc_reviewer_id = user.sub
             u.kyc_rejection_reason = body.reason
             db.commit()
-            db.close()
     except HTTPException:
         raise
     except Exception as exc:
         logger.warning("KYC reject error: %s", exc)
+    finally:
+        if db:
+            db.close()
     return {"status": "rejected", "user_id": target_user_id, "reason": body.reason}
 
 
@@ -2551,6 +2560,7 @@ async def get_aml_alerts(
         logger.warning("AML alerts Redis error: %s", exc)
     # Fallback: query DB
     if not alerts:
+        db = None
         try:
             db = next(_get_db())
             if db:
@@ -2577,9 +2587,11 @@ async def get_aml_alerts(
                             "created_at": _iso(r.created_at),
                         }
                     )
-                db.close()
         except Exception as exc2:
             logger.warning("AML alerts DB error: %s", exc2)
+        finally:
+            if db:
+                db.close()
     offset = (page - 1) * limit
     page_alerts = alerts[offset : offset + limit]
     return {"alerts": page_alerts, "total": len(alerts), "page": page, "limit": limit}
@@ -2592,6 +2604,7 @@ async def update_aml_alert(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     _log_superadmin_action(user, "aml_alert_update", f"alert={alert_id} status={body.status}")
+    db = None
     try:
         db = next(_get_db())
         if db:
@@ -2605,9 +2618,11 @@ async def update_aml_alert(
                 a.reviewed_by = user.sub
                 a.reviewed_at = _utcnow()
                 db.commit()
-            db.close()
     except Exception as exc:
         logger.warning("AML alert update error: %s", exc)
+    finally:
+        if db:
+            db.close()
     return {"alert_id": alert_id, "status": body.status}
 
 
@@ -3160,6 +3175,7 @@ async def get_broker_health(user: TokenPayload = Depends(_require_superadmin)) -
         except Exception as exc:
             logger.warning("Broker health manager error: %s", exc)
     if not brokers:
+        db = None
         try:
             db = next(_get_db())
             if db:
@@ -3181,9 +3197,11 @@ async def get_broker_health(user: TokenPayload = Depends(_require_superadmin)) -
                             "last_heartbeat": _iso(getattr(r, "last_heartbeat", None)),
                         }
                     )
-                db.close()
         except Exception as exc:
             logger.warning("Broker health DB error: %s", exc)
+        finally:
+            if db:
+                db.close()
     return {"brokers": brokers}
 
 
@@ -3618,6 +3636,7 @@ async def process_gdpr_request(
 
 async def _execute_gdpr_erasure(target_user_id: str, admin_id: str) -> None:
     """Anonymise user PII in the database per GDPR Art. 17."""
+    db = None
     try:
         db = next(_get_db())
         if db:
@@ -3635,10 +3654,12 @@ async def _execute_gdpr_erasure(target_user_id: str, admin_id: str) -> None:
                     if hasattr(u, field):
                         setattr(u, field, None)
                 db.commit()
-            db.close()
     except Exception as exc:
         logger.warning("GDPR erasure DB error: %s", exc)
     # Log to immutable audit trail
+    finally:
+        if db:
+            db.close()
     try:
         from compliance.auditor import ImmutableAuditLog, AuditLevel
 
@@ -4845,11 +4866,11 @@ async def get_service_statuses(user: TokenPayload = Depends(_require_superadmin)
 
 async def _check_db_service() -> dict:
     start = time.time()
+    db = None
     try:
         db = next(_get_db())
         if db:
             db.execute("SELECT 1")
-            db.close()
             return {
                 "status": "healthy",
                 "latency_ms": round((time.time() - start) * 1000),
@@ -4857,6 +4878,9 @@ async def _check_db_service() -> dict:
             }
     except Exception as exc:
         return {"status": "down", "latency_ms": 0, "last_check": _utcnow().isoformat(), "error": str(exc)}
+    finally:
+        if db:
+            db.close()
     return {"status": "unknown", "latency_ms": 0, "last_check": _utcnow().isoformat()}
 
 
@@ -5214,6 +5238,7 @@ async def get_api_key_audit(
 ) -> dict:
     """Cross-user API key audit — all active keys with last-used timestamps."""
     keys: list[dict] = []
+    db = None
     try:
         db = next(_get_db())
         if db:
@@ -5238,10 +5263,12 @@ async def get_api_key_audit(
                         "active": getattr(r, "is_active", True),
                     }
                 )
-            db.close()
             return {"keys": keys, "total": total, "page": page, "limit": limit}
     except Exception as exc:
         logger.warning("API key audit error: %s", exc)
+    finally:
+        if db:
+            db.close()
     return {"keys": keys, "total": 0, "page": page, "limit": limit}
 
 
@@ -5251,6 +5278,7 @@ async def revoke_api_key(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     _log_superadmin_action(user, "api_key_revoke", f"key={key_id}")
+    db = None
     try:
         db = next(_get_db())
         if db:
@@ -5260,7 +5288,9 @@ async def revoke_api_key(
             if k:
                 k.is_active = False
                 db.commit()
-            db.close()
     except Exception as exc:
         logger.warning("API key revoke error: %s", exc)
+    finally:
+        if db:
+            db.close()
     return {"key_id": key_id, "revoked": True}

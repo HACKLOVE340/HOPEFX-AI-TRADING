@@ -26,6 +26,9 @@ import os
 import sys
 import time
 from pathlib import Path
+import logging
+logger = logging.getLogger(__name__)
+
 
 # ── Bootstrap ─────────────────────────────────────────────────────────────────
 ROOT = Path(__file__).parent.parent
@@ -380,10 +383,10 @@ CHECKS: list[tuple[str, str, callable]] = [
 def run_checks(strict: bool = False) -> int:
     results: dict[str, CheckResult] = {}
 
-    print()
-    print("=" * 70)
-    print("  HOPEFX AI TRADING — CONNECTION & PRODUCTION READINESS VALIDATOR")
-    print("=" * 70)
+    logger.info()
+    logger.info("=" * 70)
+    logger.info("  HOPEFX AI TRADING — CONNECTION & PRODUCTION READINESS VALIDATOR")
+    logger.info("=" * 70)
 
     for name, category, fn in CHECKS:
         t0 = time.monotonic()
@@ -393,10 +396,10 @@ def run_checks(strict: bool = False) -> int:
 
         icon = "✅" if status == GREEN else ("⚠️ " if status == YELLOW else "❌")
         tag = "[CRITICAL]    " if cat == CRITICAL else "[non-critical]"
-        print(f"  {icon} {tag} {name:<30} {msg[:60]}")
+        logger.info(f"  {icon} {tag} {name:<30} {msg[:60]}")
 
-    print()
-    print("─" * 70)
+    logger.info()
+    logger.info("─" * 70)
 
     greens = [(n, r) for n, r in results.items() if r[0] == GREEN]
     yellows = [(n, r) for n, r in results.items() if r[0] == YELLOW]
@@ -405,29 +408,29 @@ def run_checks(strict: bool = False) -> int:
     crit_reds = [(n, r) for n, r in reds if r[2] == CRITICAL]
     crit_yellows = [(n, r) for n, r in yellows if r[2] == CRITICAL]
 
-    print(f"  TOTAL  ✅ {len(greens)} GREEN   ⚠️  {len(yellows)} YELLOW   ❌ {len(reds)} RED")
-    print()
+    logger.error(f"  TOTAL  ✅ {len(greens)} GREEN   ⚠️  {len(yellows)} YELLOW   ❌ {len(reds)} RED")
+    logger.info()
 
     if crit_reds:
-        print("  ❌ CRITICAL FAILURES:")
+        logger.error("  ❌ CRITICAL FAILURES:")
         for name, (_status, msg, _) in crit_reds:
-            print(f"     • {name}: {msg}")
-        print()
+            logger.info(f"     • {name}: {msg}")
+        logger.info()
 
     if crit_yellows:
-        print("  ⚠️  CRITICAL WARNINGS:")
+        logger.warning("  ⚠️  CRITICAL WARNINGS:")
         for name, (_status, msg, _) in crit_yellows:
-            print(f"     • {name}: {msg}")
-        print()
+            logger.info(f"     • {name}: {msg}")
+        logger.info()
 
     overall_ok = len(crit_reds) == 0 and (not strict or len(crit_yellows) == 0)
     if overall_ok:
-        print("  ✅ ALL CRITICAL CHECKS PASSED — system is production-ready")
+        logger.info("  ✅ ALL CRITICAL CHECKS PASSED — system is production-ready")
     else:
-        print("  ❌ CRITICAL CHECKS FAILED — fix the above before deploying")
+        logger.error("  ❌ CRITICAL CHECKS FAILED — fix the above before deploying")
 
-    print("=" * 70)
-    print()
+    logger.info("=" * 70)
+    logger.info()
 
     return 0 if overall_ok else 1
 

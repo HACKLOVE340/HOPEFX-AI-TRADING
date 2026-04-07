@@ -585,7 +585,7 @@ def main() -> None:
     out_txt.write_text(summary)
     logger.info("Summary written to %s", out_txt)
 
-    print("\n" + summary)
+    logger.info("\n" + summary)
 
 
 if __name__ == "__main__":

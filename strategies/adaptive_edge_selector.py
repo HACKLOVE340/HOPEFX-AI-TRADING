@@ -407,7 +407,7 @@ class AdaptiveEdgeSelector:
     ------------------
     snaps = [MarketSnapshot(...), MarketSnapshot(...), ...]
     decisions = selector.select_all(snaps)   # list[EdgeDecision]
-    print([d.to_dict() for d in decisions])
+    logger.info([d.to_dict() for d in decisions])
 
     Memory + news
     -------------

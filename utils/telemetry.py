@@ -19,6 +19,9 @@ UTC = timezone.utc
 import numpy as np
 
 
+import logging
+logger = logging.getLogger(__name__)
+
 @dataclass
 class Metric:
     name: str
@@ -223,9 +226,9 @@ class AlertManager:
                         await self._trigger_emergency_stop(alert)
 
             except Exception as e:
-                print(f"Alert evaluation error: {e}")
+                logger.error(f"Alert evaluation error: {e}")
 
     async def _trigger_emergency_stop(self, alert: dict):
         """Trigger system emergency stop"""
-        print(f"🚨 EMERGENCY ALERT TRIGGERING KILL SWITCH: {alert['message']}")
+        logger.info(f"🚨 EMERGENCY ALERT TRIGGERING KILL SWITCH: {alert['message']}")
         # Emit kill switch event

@@ -389,15 +389,13 @@ class MacroStoreBridge:
         code — does nothing if no event loop is running.
         """
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                asyncio.ensure_future(
-                    self._load_fred_into_store(),
-                    loop=loop,
-                )
-            else:
-                loop.run_until_complete(self._load_fred_into_store())
+            loop = asyncio.get_running_loop()
+            asyncio.ensure_future(
+                self._load_fred_into_store(),
+                loop=loop,
+            )
         except RuntimeError:
+            asyncio.run(self._load_fred_into_store())
             logger.warning("MacroStoreBridge.force_refresh: no event loop available")
 
     @property

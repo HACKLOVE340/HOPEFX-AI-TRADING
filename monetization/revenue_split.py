@@ -34,7 +34,7 @@ Usage
         gross_amount=49.99,
         currency="USD",
     )
-    print(txn.creator_amount)  # 39.99
+    logger.info(txn.creator_amount)  # 39.99
 
     payouts = engine.process_weekly_payouts()
 """

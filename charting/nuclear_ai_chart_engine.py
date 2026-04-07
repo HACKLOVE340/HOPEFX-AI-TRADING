@@ -283,7 +283,7 @@ class NuclearAIChartEngine:
     async def _tick_loop(self) -> None:
         while self._running:
             try:
-                state = await asyncio.get_event_loop().run_in_executor(None, self._build_state)
+                state = await asyncio.get_running_loop().run_in_executor(None, self._build_state)
                 self._broadcast(state)
                 self._tick_count += 1
             except Exception as exc:

@@ -1971,18 +1971,18 @@ def run_ml_test():
             "run_ml_test() uses synthetic data and cannot run in production. "
             "Set APP_ENV=development or APP_ENV=test to use this function."
         )
-    print("=" * 80)
-    print("HOPEFX ML PREDICTOR v4.0 - DEVELOPMENT SMOKE TEST")
-    print("=" * 80)
+    logger.info("=" * 80)
+    logger.info("HOPEFX ML PREDICTOR v4.0 - DEVELOPMENT SMOKE TEST")
+    logger.info("=" * 80)
 
     # Generate synthetic data for smoke-testing only
-    print("\n[1] Generating synthetic GBM data (smoke-test only)...")
+    logger.info("\n[1] Generating synthetic GBM data (smoke-test only)...")
     df = generate_synthetic_data(n_samples=3000)
-    print(f"    Generated {len(df)} samples")
-    print(f"    Date range: {df.index[0]} to {df.index[-1]}")
+    logger.info(f"    Generated {len(df)} samples")
+    logger.info(f"    Date range: {df.index[0]} to {df.index[-1]}")
 
     # Initialize predictor
-    print("\n[2] Initializing ML predictor...")
+    logger.info("\n[2] Initializing ML predictor...")
     predictor = EnhancedMLPredictor(
         sequence_length=60,
         prediction_horizon=5,
@@ -1991,15 +1991,15 @@ def run_ml_test():
     )
 
     # Build ensemble
-    print("[3] Building model ensemble...")
+    logger.info("[3] Building model ensemble...")
     predictor.build_ensemble(model_types=["lstm", "random_forest"], use_stacking=False)
 
     # Fit models
-    print("\n[4] Training models...")
+    logger.info("\n[4] Training models...")
     predictor.fit(df, target_col="close", validation_split=0.2)
 
     # Generate predictions
-    print("\n[5] Generating predictions...")
+    logger.info("\n[5] Generating predictions...")
     predictions = []
     for i in range(50):
         pred_df = df.iloc[max(0, i - 100) : i + 100] if i > 100 else df.iloc[:200]
@@ -2008,36 +2008,36 @@ def run_ml_test():
         if pred:
             predictions.append(pred)
             if i < 5:
-                print(
+                logger.info(
                     f"    Prediction {i + 1}: {pred.prediction} "
                     f"(conf: {pred.confidence:.1%}, "
                     f"unc: {pred.total_uncertainty:.2f})"
                 )
 
     # Generate report
-    print("\n[6] Generating model report...")
+    logger.info("\n[6] Generating model report...")
     report = predictor.get_model_report()
 
-    print("\n" + "=" * 80)
-    print("ML PREDICTOR REPORT")
-    print("=" * 80)
+    logger.info("\n" + "=" * 80)
+    logger.info("ML PREDICTOR REPORT")
+    logger.info("=" * 80)
 
-    print(f"\nModels in ensemble: {report['models']}")
-    print(f"Weights: {report['weights']}")
-    print(f"Predictions generated: {report['predictions_generated']}")
+    logger.info(f"\nModels in ensemble: {report['models']}")
+    logger.info(f"Weights: {report['weights']}")
+    logger.info(f"Predictions generated: {report['predictions_generated']}")
 
     if report["recent_performance"]["accuracy"] is not None:
-        print(f"\nRecent accuracy: {report['recent_performance']['accuracy']:.1%}")
-        print(f"Average confidence: {report['recent_performance']['avg_confidence']:.1%}")
+        logger.info(f"\nRecent accuracy: {report['recent_performance']['accuracy']:.1%}")
+        logger.info(f"Average confidence: {report['recent_performance']['avg_confidence']:.1%}")
 
-    print(f"\nFeatures used: {report['feature_count']}")
-    print("Top 5 features:")
+    logger.info(f"\nFeatures used: {report['feature_count']}")
+    logger.info("Top 5 features:")
     for feat, imp in list(report["top_features"].items())[:5]:
-        print(f"  {feat}: {imp:.4f}")
+        logger.info(f"  {feat}: {imp:.4f}")
 
-    print("\n" + "=" * 80)
-    print("✅ ML PREDICTOR TEST COMPLETED")
-    print("=" * 80)
+    logger.info("\n" + "=" * 80)
+    logger.info("✅ ML PREDICTOR TEST COMPLETED")
+    logger.info("=" * 80)
 
 
 if __name__ == "__main__":

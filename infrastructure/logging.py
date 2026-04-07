@@ -180,7 +180,7 @@ class AsyncLogHandler(logging.Handler):
             except queue.Empty:
                 continue
             except Exception as e:
-                print(f"Error processing log: {e}", file=sys.stderr)
+                logger.error(f"Error processing log: {e}", file=sys.stderr)
 
     def get_stats(self) -> dict:
         """Get handler statistics"""

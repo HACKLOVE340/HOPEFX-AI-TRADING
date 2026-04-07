@@ -647,9 +647,9 @@ class ComprehensiveTestFramework:
 
     async def run_all_tests(self) -> dict[str, Any]:
         """Execute complete test suite"""
-        print("=" * 70)
-        print("COMPREHENSIVE TEST FRAMEWORK v3.0")
-        print("=" * 70)
+        logger.info("=" * 70)
+        logger.info("COMPREHENSIVE TEST FRAMEWORK v3.0")
+        logger.info("=" * 70)
 
         start_time = time.time()
 
@@ -712,39 +712,39 @@ class ComprehensiveTestFramework:
 
     def _print_summary(self, report: dict):
         """Print formatted test summary"""
-        print("\n" + "=" * 70)
-        print("TEST EXECUTION SUMMARY")
-        print("=" * 70)
+        logger.info("\n" + "=" * 70)
+        logger.info("TEST EXECUTION SUMMARY")
+        logger.info("=" * 70)
 
         summary = report["summary"]
-        print(f"Total Tests:    {summary['total_tests']}")
-        print(f"Passed:         {summary['passed']} ✅")
-        print(f"Failed:         {summary['failed']} ❌")
-        print(f"Pass Rate:      {summary['pass_rate']:.1%}")
-        print(f"Duration:       {summary['total_duration_sec']:.2f}s")
+        logger.info(f"Total Tests:    {summary['total_tests']}")
+        logger.info(f"Passed:         {summary['passed']} ✅")
+        logger.error(f"Failed:         {summary['failed']} ❌")
+        logger.info(f"Pass Rate:      {summary['pass_rate']:.1%}")
+        logger.info(f"Duration:       {summary['total_duration_sec']:.2f}s")
 
-        print("\n" + "-" * 70)
-        print("BY CATEGORY")
-        print("-" * 70)
+        logger.info("\n" + "-" * 70)
+        logger.info("BY CATEGORY")
+        logger.info("-" * 70)
 
         for cat, stats in report["by_category"].items():
             status = "✅" if stats["failed"] == 0 else "⚠️"
-            print(f"{cat:15} | {stats['passed']:3d}/{stats['total']:<3d} | {status}")
+            logger.info(f"{cat:15} | {stats['passed']:3d}/{stats['total']:<3d} | {status}")
 
         if report["failed_tests"]:
-            print("\n" + "-" * 70)
-            print("FAILED TESTS")
-            print("-" * 70)
+            logger.info("\n" + "-" * 70)
+            logger.error("FAILED TESTS")
+            logger.info("-" * 70)
             for ft in report["failed_tests"]:
-                print(f"❌ {ft['category']:12} | {ft['name']}")
-                print(f"   Error: {ft['error'][:100]}")
+                logger.error(f"❌ {ft['category']:12} | {ft['name']}")
+                logger.error(f"   Error: {ft['error'][:100]}")
 
-        print("\n" + "=" * 70)
+        logger.info("\n" + "=" * 70)
         if summary["failed"] == 0:
-            print("🎉 ALL TESTS PASSED!")
+            logger.info("🎉 ALL TESTS PASSED!")
         else:
-            print(f"⚠️  {summary['failed']} TEST(S) FAILED - REVIEW REQUIRED")
-        print("=" * 70)
+            logger.error(f"⚠️  {summary['failed']} TEST(S) FAILED - REVIEW REQUIRED")
+        logger.info("=" * 70)
 
     def export_report(self, filepath: str):
         """Export test report to JSON"""
@@ -790,9 +790,9 @@ async def test_performance():
 # =============================================================================
 
 if __name__ == "__main__":
-    print("=" * 70)
-    print("COMPREHENSIVE TEST FRAMEWORK v3.0 - EXECUTION")
-    print("=" * 70)
+    logger.info("=" * 70)
+    logger.info("COMPREHENSIVE TEST FRAMEWORK v3.0 - EXECUTION")
+    logger.info("=" * 70)
 
     # Run all tests
     framework = ComprehensiveTestFramework()
@@ -805,7 +805,7 @@ if __name__ == "__main__":
 
         # Exit with appropriate code
         exit_code = 0 if report["summary"]["failed"] == 0 else 1
-        print(f"\nExit code: {exit_code}")
+        logger.info(f"\nExit code: {exit_code}")
 
     except Exception as e:
         logger.error("Test framework error: %s", e)

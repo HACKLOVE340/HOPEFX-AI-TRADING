@@ -117,4 +117,4 @@ class HealthCheckService:
 if __name__ == "__main__":
     service = HealthCheckService()
     health_status = service.aggregate_health_status()
-    print(json.dumps(health_status, indent=4))
+    logger.info(json.dumps(health_status, indent=4))

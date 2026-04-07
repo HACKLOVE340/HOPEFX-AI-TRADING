@@ -31,6 +31,9 @@ import subprocess  # nosec B404 - list-form calls with fixed tool names; no shel
 import sys
 import urllib.parse
 from pathlib import Path
+import logging
+logger = logging.getLogger(__name__)
+
 
 # ── result collectors ─────────────────────────────────────────────────────────
 _errors: list[str] = []
@@ -40,24 +43,24 @@ _ok: list[str] = []
 
 def _err(msg: str) -> None:
     _errors.append(msg)
-    print(f"  [ERROR]   {msg}")
+    logger.error(f"  [ERROR]   {msg}")
 
 
 def _warn(msg: str) -> None:
     _warnings.append(msg)
-    print(f"  [WARN]    {msg}")
+    logger.warning(f"  [WARN]    {msg}")
 
 
 def _good(msg: str) -> None:
     _ok.append(msg)
-    print(f"  [OK]      {msg}")
+    logger.info(f"  [OK]      {msg}")
 
 
 # ── checks ────────────────────────────────────────────────────────────────────
 
 
 def check_python_version() -> None:
-    print("\n── Python version ───────────────────────────────────────────")
+    logger.info("\n── Python version ───────────────────────────────────────────")
     major, minor = sys.version_info[:2]
     if (major, minor) < (3, 10):
         _err(f"Python {major}.{minor} detected — 3.10+ required")
@@ -70,7 +73,7 @@ def check_python_version() -> None:
 
 
 def check_required_env_vars() -> None:
-    print("\n── Required environment variables ───────────────────────────")
+    logger.info("\n── Required environment variables ───────────────────────────")
     required = [
         ("SECURITY_JWT_SECRET", "JWT signing secret (min 64 chars)"),
         ("CONFIG_ENCRYPTION_KEY", "Config encryption key (min 48 chars)"),
@@ -90,7 +93,7 @@ def check_required_env_vars() -> None:
 
 
 def check_optional_env_vars() -> None:
-    print("\n── Optional environment variables ───────────────────────────")
+    logger.info("\n── Optional environment variables ───────────────────────────")
     optional = [
         ("TELEGRAM_BOT_TOKEN", "Telegram alerts"),
         ("TELEGRAM_CHAT_ID", "Telegram chat ID"),
@@ -107,7 +110,7 @@ def check_optional_env_vars() -> None:
 
 
 def check_kill_switch() -> None:
-    print("\n── Kill switch ───────────────────────────────────────────────")
+    logger.info("\n── Kill switch ───────────────────────────────────────────────")
     flag = pathlib.Path("kill_switch.flag")
     if flag.exists():
         content = flag.read_text(encoding="utf-8").strip()
@@ -121,7 +124,7 @@ def check_kill_switch() -> None:
 
 
 def check_ml_model() -> None:
-    print("\n── ML model ──────────────────────────────────────────────────")
+    logger.info("\n── ML model ──────────────────────────────────────────────────")
     model_path = pathlib.Path("ml/saved_models/advanced_oos.pkl")
     meta_path = pathlib.Path("ml/saved_models/advanced_oos_meta.json")
 
@@ -162,7 +165,7 @@ def check_ml_model() -> None:
 
 
 def check_dependencies() -> None:
-    print("\n── Python dependencies ───────────────────────────────────────")
+    logger.info("\n── Python dependencies ───────────────────────────────────────")
     critical = [
         "fastapi",
         "uvicorn",
@@ -188,7 +191,7 @@ def check_dependencies() -> None:
 
 
 def check_alembic() -> None:
-    print("\n── Database migrations ───────────────────────────────────────")
+    logger.info("\n── Database migrations ───────────────────────────────────────")
     if not pathlib.Path("alembic.ini").exists():
         _warn("alembic.ini not found — migrations cannot run")
         return
@@ -209,7 +212,7 @@ def check_alembic() -> None:
 
 
 def check_docker() -> None:
-    print("\n── Docker ────────────────────────────────────────────────────")
+    logger.info("\n── Docker ────────────────────────────────────────────────────")
     for cmd in (["docker", "--version"], ["docker", "compose", "version"]):
         try:
             out = subprocess.check_output(  # nosec B603 B607 - list-form calls with fixed tool names; no shell=True, no user input
@@ -222,7 +225,7 @@ def check_docker() -> None:
 
 def check_database_connectivity() -> None:
     """Attempt a real TCP connection to the database host:port from DATABASE_URL."""
-    print("\n── Database connectivity ─────────────────────────────────────")
+    logger.info("\n── Database connectivity ─────────────────────────────────────")
     db_url = os.environ.get("DATABASE_URL", "")
     if not db_url:
         _warn("DATABASE_URL not set — skipping connectivity check")
@@ -245,7 +248,7 @@ def check_database_connectivity() -> None:
 
 def check_redis_connectivity() -> None:
     """Attempt a Redis PING via the redis-py client or raw TCP fallback."""
-    print("\n── Redis connectivity ────────────────────────────────────────")
+    logger.info("\n── Redis connectivity ────────────────────────────────────────")
     redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
     # Try redis-py first (already a required dependency)
@@ -282,7 +285,7 @@ def check_redis_connectivity() -> None:
 
 def check_port_availability() -> None:
     """Verify that the API port (default 8000) is not already in use."""
-    print("\n── Port availability ─────────────────────────────────────────")
+    logger.info("\n── Port availability ─────────────────────────────────────────")
     api_port = int(os.environ.get("API_PORT", "8000"))
     metrics_port = int(os.environ.get("METRICS_PORT", "9090"))
 
@@ -307,7 +310,7 @@ def check_port_availability() -> None:
 
 def check_disk_space() -> None:
     """Warn if free disk space is below the recommended minimum (20 GB)."""
-    print("\n── Disk space ────────────────────────────────────────────────")
+    logger.info("\n── Disk space ────────────────────────────────────────────────")
     try:
         _stat = pathlib.Path().stat()
         usage = pathlib.Path().resolve()
@@ -328,7 +331,7 @@ def check_disk_space() -> None:
 
 def check_env_file() -> None:
     """Verify .env file exists and contains no unresolved placeholder values."""
-    print("\n── Environment file ──────────────────────────────────────────")
+    logger.info("\n── Environment file ──────────────────────────────────────────")
     env_path = pathlib.Path(".env")
     if not env_path.exists():
         _warn(
@@ -373,9 +376,9 @@ def main() -> int:
     except ImportError:
         ...  # nosec B110
 
-    print("=" * 60)
-    print("  HOPEFX AI Trading — Pre-flight Deployment Check")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("  HOPEFX AI Trading — Pre-flight Deployment Check")
+    logger.info("=" * 60)
 
     check_python_version()
     check_env_file()
@@ -391,20 +394,20 @@ def main() -> int:
     check_alembic()
     check_docker()
 
-    print("\n" + "=" * 60)
-    print(f"  Results: {len(_ok)} OK  |  {len(_warnings)} warnings  |  {len(_errors)} errors")
-    print("=" * 60)
+    logger.info("\n" + "=" * 60)
+    logger.error(f"  Results: {len(_ok)} OK  |  {len(_warnings)} warnings  |  {len(_errors)} errors")
+    logger.info("=" * 60)
 
     if _errors:
-        print("\nFix all errors before deploying to production.")
+        logger.error("\nFix all errors before deploying to production.")
         return 1
     if args.strict and _warnings:
-        print("\n--strict mode: warnings treated as errors.")
+        logger.error("\n--strict mode: warnings treated as errors.")
         return 1
     if _warnings:
-        print("\nWarnings present — review before going live.")
+        logger.warning("\nWarnings present — review before going live.")
     else:
-        print("\nAll checks passed. Safe to deploy.")
+        logger.info("\nAll checks passed. Safe to deploy.")
     return 0
 
 

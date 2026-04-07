@@ -701,28 +701,28 @@ def run_backtest(
     logger.info("Report saved → %s", report_path)
 
     # Print summary
-    print("\n" + "=" * 65)
-    print("MULTI-SYMBOL BACKTEST SUMMARY")
-    print("=" * 65)
+    logger.info("\n" + "=" * 65)
+    logger.info("MULTI-SYMBOL BACKTEST SUMMARY")
+    logger.info("=" * 65)
     for r in symbol_results:
         if "error" in r:
-            print(f"  {r['symbol']:12s}: ERROR — {r['error']}")
+            logger.error(f"  {r['symbol']:12s}: ERROR — {r['error']}")
         else:
-            print(
+            logger.info(
                 f"  {r['symbol']:12s}: N={r['n_trades']:4d} trades | "
                 f"Sharpe={r.get('sharpe', 0):.2f} | "
                 f"WinRate={r.get('win_rate', 0) * 100:.1f}% | "
                 f"Acc={r.get('accuracy', 0):.3f}"
             )
-    print()
+    logger.info()
     p = pooled
     gate = "PASSED ✓" if p["sharpe_gate_passed"] else "BLOCKED ✗"
-    print(f"  Pooled N trades : {p['n_total_trades']}")
-    print(f"  Pooled Sharpe   : {p['pooled_sharpe']:.3f}")
-    print(f"  Sharpe SE       : {p['pooled_sharpe_se']:.3f}")
-    print(f"  Sharpe gate     : {gate}")
-    print(f"  {p['message']}")
-    print("=" * 65)
+    logger.info(f"  Pooled N trades : {p['n_total_trades']}")
+    logger.info(f"  Pooled Sharpe   : {p['pooled_sharpe']:.3f}")
+    logger.info(f"  Sharpe SE       : {p['pooled_sharpe_se']:.3f}")
+    logger.info(f"  Sharpe gate     : {gate}")
+    logger.info(f"  {p['message']}")
+    logger.info("=" * 65)
 
     return report
 

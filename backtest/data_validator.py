@@ -204,7 +204,7 @@ async def _fetch_yfinance(
     try:
         since_dt = datetime.fromtimestamp(since_ms / 1000, tz=UTC)
         # yfinance is synchronous — run in executor
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(
             None,
             lambda: yf.download(

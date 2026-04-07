@@ -262,7 +262,7 @@ async def get_health() -> dict[str, Any]:
         if _connection_mode == "sentinel" and _sentinel_instance is not None:
             try:
                 master_name = os.getenv("REDIS_SENTINEL_MASTER", "hopefx-master")
-                master_info = await asyncio.get_event_loop().run_in_executor(
+                master_info = await asyncio.get_running_loop().run_in_executor(
                     None,
                     lambda: _sentinel_instance.discover_master(master_name),
                 )

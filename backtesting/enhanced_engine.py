@@ -2407,20 +2407,20 @@ def run_comprehensive_backtest(use_real_data: bool = True):
     _app_env = _os.getenv("APP_ENV", "production").lower()
     _is_production = _app_env == "production"
 
-    print("=" * 80)
-    print("HOPEFX ENHANCED BACKTEST ENGINE v4.0 - COMPREHENSIVE TEST")
-    print("=" * 80)
+    logger.info("=" * 80)
+    logger.info("HOPEFX ENHANCED BACKTEST ENGINE v4.0 - COMPREHENSIVE TEST")
+    logger.info("=" * 80)
 
     # ── Data loading ──────────────────────────────────────────────────────────
     ticks: list[TickData] | None = None
     data_source = "real/binance"
 
     if use_real_data:
-        print("\n[1] Attempting to load real XAUUSD data via real_data_backtest.py ...")
+        logger.info("\n[1] Attempting to load real XAUUSD data via real_data_backtest.py ...")
         ticks = _load_real_ticks(max_bars=5000)
         if ticks:
-            print(f"    Loaded {len(ticks)} real ticks")
-            print(f"    Time range: {ticks[0].timestamp.to_datetime()} to {ticks[-1].timestamp.to_datetime()}")
+            logger.info(f"    Loaded {len(ticks)} real ticks")
+            logger.info(f"    Time range: {ticks[0].timestamp.to_datetime()} to {ticks[-1].timestamp.to_datetime()}")
         else:
             if _is_production:
                 raise RuntimeError(
@@ -2428,8 +2428,8 @@ def run_comprehensive_backtest(use_real_data: bool = True):
                     "Install ccxt and ensure network access to Binance. "
                     "Do not use synthetic data for production backtests."
                 )
-            print("    Real data unavailable — falling back to SYNTHETIC data (non-production only).")
-            print("    *** WARNING: Results are NOT valid for strategy evaluation. ***")
+            logger.info("    Real data unavailable — falling back to SYNTHETIC data (non-production only).")
+            logger.warning("    *** WARNING: Results are NOT valid for strategy evaluation. ***")
 
     if ticks is None:
         if _is_production:
@@ -2437,7 +2437,7 @@ def run_comprehensive_backtest(use_real_data: bool = True):
                 "run_comprehensive_backtest(): cannot use synthetic data in production "
                 "(APP_ENV=production). Provide real XAUUSD tick data."
             )
-        print("\n[1] Generating SYNTHETIC tick data (smoke-test only)...")
+        logger.info("\n[1] Generating SYNTHETIC tick data (smoke-test only)...")
         warnings.warn(
             "run_comprehensive_backtest() is using SYNTHETIC GBM data. "
             "Results are not valid for strategy evaluation. "
@@ -2448,13 +2448,13 @@ def run_comprehensive_backtest(use_real_data: bool = True):
         )
         data_source = "synthetic"
         ticks = generate_test_data(n_ticks=5000)
-        print(f"    Generated {len(ticks)} synthetic ticks")
-        print(f"    Time range: {ticks[0].timestamp.to_datetime()} to {ticks[-1].timestamp.to_datetime()}")
+        logger.info(f"    Generated {len(ticks)} synthetic ticks")
+        logger.info(f"    Time range: {ticks[0].timestamp.to_datetime()} to {ticks[-1].timestamp.to_datetime()}")
 
-    print(f"    Data source: {data_source}")
+    logger.info(f"    Data source: {data_source}")
 
     # Initialize engine with institutional settings
-    print("\n[2] Initializing backtest engine...")
+    logger.info("\n[2] Initializing backtest engine...")
     cost_model = TransactionCostModel(
         commission_per_lot=7.0,
         spread_markup_bps=0.8,
@@ -2513,7 +2513,7 @@ def run_comprehensive_backtest(use_real_data: bool = True):
     strategy = AdaptiveMACrossover(fast=20, slow=50)
 
     # Run backtest
-    print("\n[3] Running backtest...")
+    logger.info("\n[3] Running backtest...")
     position = 0.0
     position_size = 10.0  # Standard lots
 
@@ -2556,73 +2556,73 @@ def run_comprehensive_backtest(use_real_data: bool = True):
 
         # Progress update
         if i % 1000 == 0:
-            print(f"    Processed {i}/{len(ticks)} ticks | Equity: ${engine.capital:,.2f}")
+            logger.info(f"    Processed {i}/{len(ticks)} ticks | Equity: ${engine.capital:,.2f}")
 
     # Generate report
-    print("\n[4] Generating performance report...")
+    logger.info("\n[4] Generating performance report...")
     report = engine.get_performance_report()
 
     # Display results
-    print("\n" + "=" * 80)
-    print("BACKTEST RESULTS")
-    print("=" * 80)
+    logger.info("\n" + "=" * 80)
+    logger.info("BACKTEST RESULTS")
+    logger.info("=" * 80)
 
     meta = report["metadata"]
-    print(f"\nPeriod: {meta['backtest_periods']} ticks")
-    print(f"Initial Capital: ${meta['initial_capital']:,.2f}")
-    print(f"Final Capital: ${meta['final_capital']:,.2f}")
-    print(f"Total Return: {meta['total_return_pct']:+.2f}%")
+    logger.info(f"\nPeriod: {meta['backtest_periods']} ticks")
+    logger.info(f"Initial Capital: ${meta['initial_capital']:,.2f}")
+    logger.info(f"Final Capital: ${meta['final_capital']:,.2f}")
+    logger.info(f"Total Return: {meta['total_return_pct']:+.2f}%")
 
     stats = report["trade_statistics"]
-    print("\n--- Trade Statistics ---")
-    print(f"Total Trades: {stats['total_trades']}")
-    print(f"Win Rate: {stats['win_rate']:.1%}")
-    print(f"Profit Factor: {stats['profit_factor']:.2f}")
-    print(f"Payoff Ratio: {stats['payoff_ratio']:.2f}")
-    print(f"Total P&L: ${stats['total_pnl']:,.2f}")
-    print(f"Avg Trade: ${stats['avg_trade_pnl']:,.2f}")
-    print(f"Largest Win: ${stats['largest_win']:,.2f}")
-    print(f"Largest Loss: ${stats['largest_loss']:,.2f}")
+    logger.info("\n--- Trade Statistics ---")
+    logger.info(f"Total Trades: {stats['total_trades']}")
+    logger.info(f"Win Rate: {stats['win_rate']:.1%}")
+    logger.info(f"Profit Factor: {stats['profit_factor']:.2f}")
+    logger.info(f"Payoff Ratio: {stats['payoff_ratio']:.2f}")
+    logger.info(f"Total P&L: ${stats['total_pnl']:,.2f}")
+    logger.info(f"Avg Trade: ${stats['avg_trade_pnl']:,.2f}")
+    logger.info(f"Largest Win: ${stats['largest_win']:,.2f}")
+    logger.info(f"Largest Loss: ${stats['largest_loss']:,.2f}")
 
     risk = report["risk_metrics"]
-    print("\n--- Risk Metrics ---")
-    print(f"Max Drawdown: {risk['max_drawdown_pct']:.2f}%")
-    print(f"Sharpe Ratio: {risk['sharpe_ratio']:.2f}")
-    print(f"Sortino Ratio: {risk['sortino_ratio']:.2f}")
-    print(f"Calmar Ratio: {risk['calmar_ratio']:.2f}")
-    print(f"VaR (95%): {risk['var_95']:.4f}")
-    print(f"CVaR (95%): {risk['cvar_95']:.4f}")
+    logger.info("\n--- Risk Metrics ---")
+    logger.info(f"Max Drawdown: {risk['max_drawdown_pct']:.2f}%")
+    logger.info(f"Sharpe Ratio: {risk['sharpe_ratio']:.2f}")
+    logger.info(f"Sortino Ratio: {risk['sortino_ratio']:.2f}")
+    logger.info(f"Calmar Ratio: {risk['calmar_ratio']:.2f}")
+    logger.info(f"VaR (95%): {risk['var_95']:.4f}")
+    logger.info(f"CVaR (95%): {risk['cvar_95']:.4f}")
 
     exec_quality = report["execution_quality"]
-    print("\n--- Execution Quality ---")
-    print(f"Avg Slippage: {exec_quality['avg_slippage_bps']:.2f} bps")
-    print(f"Avg Latency: {exec_quality['avg_latency_ms']:.2f} ms")
-    print(f"Total Commission: ${exec_quality['total_commission']:,.2f}")
-    print(f"Cost Drag: {exec_quality['cost_drag_pct']:.3f}%")
+    logger.info("\n--- Execution Quality ---")
+    logger.info(f"Avg Slippage: {exec_quality['avg_slippage_bps']:.2f} bps")
+    logger.info(f"Avg Latency: {exec_quality['avg_latency_ms']:.2f} ms")
+    logger.info(f"Total Commission: ${exec_quality['total_commission']:,.2f}")
+    logger.info(f"Cost Drag: {exec_quality['cost_drag_pct']:.3f}%")
 
     # Regime performance
-    print("\n--- Performance by Regime ---")
+    logger.info("\n--- Performance by Regime ---")
     for regime, perf in report["regime_performance"].items():
-        print(
+        logger.info(
             f"{regime:25}: {perf['total_trades']:3d} trades | "
             f"P&L: ${perf['total_pnl']:>10,.2f} | "
             f"Win Rate: {perf['win_rate']:.1%}"
         )
 
     # Save state
-    print("\n[5] Saving state...")
+    logger.info("\n[5] Saving state...")
     engine.save_state("backtest_state.json.gz")
 
     # Risk manager report
-    print("\n--- Risk Manager Status ---")
+    logger.info("\n--- Risk Manager Status ---")
     risk_report = report["risk_manager_report"]
-    print(f"Kill Switch Active: {risk_report['risk_metrics']['kill_switch']}")
-    print(f"Circuit Breaker Level: {risk_report['risk_metrics']['circuit_breaker']}")
-    print(f"Current VaR: ${risk_report['risk_metrics']['var_95']:,.2f}")
+    logger.info(f"Kill Switch Active: {risk_report['risk_metrics']['kill_switch']}")
+    logger.info(f"Circuit Breaker Level: {risk_report['risk_metrics']['circuit_breaker']}")
+    logger.info(f"Current VaR: ${risk_report['risk_metrics']['var_95']:,.2f}")
 
-    print("\n" + "=" * 80)
-    print("✅ BACKTEST COMPLETED SUCCESSFULLY")
-    print("=" * 80)
+    logger.info("\n" + "=" * 80)
+    logger.info("✅ BACKTEST COMPLETED SUCCESSFULLY")
+    logger.info("=" * 80)
 
     return engine, report
 

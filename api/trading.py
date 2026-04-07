@@ -1591,7 +1591,7 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
             if ohlcv and len(ohlcv) >= 2:
                 highs = [c[2] for c in ohlcv]
                 lows  = [c[3] for c in ohlcv]
-                atr_estimate = sum(h - l for h, l in zip(highs, lows)) / len(highs)
+                atr_estimate = sum(h - l for h, l in zip(highs, lows, strict=False)) / len(highs)
     except Exception as exc:
         logger.debug("ai-analysis: ATR estimation failed: %s", exc)
 
@@ -1764,7 +1764,7 @@ async def place_order_alias(
     response_model=None,
     summary="Active trading signals (alias for /api/signals/active)",
 )
-async def get_trading_signals(
+async def get_trading_signals_alias(
     user: TokenPayload = Depends(get_current_user),
 ):
     """
@@ -1773,26 +1773,7 @@ async def get_trading_signals(
     Delegates to /api/signals/active so there is a single source of truth.
     The frontend (useApi.ts `signals()`) calls POST /api/trading/signals.
     """
-    try:
-        from api.signals import get_active_signals as _get_active
-
-        return await _get_active(user=user)
-    except Exception as _exc:
-        logger.debug("api.signals unavailable for trading/signals, using fallback: %s", _exc)
-    # Fallback: query signal_engine directly
-    try:
-        from app import app_state
-
-        engine = getattr(app_state, "signal_engine", None)
-        if engine is not None:
-            raw = getattr(engine, "active_signals", None)
-            if callable(raw):
-                return raw()
-            if raw is not None:
-                return list(raw)
-    except Exception as _exc2:
-        logger.debug("signal_engine direct query also failed: %s", _exc2)
-    return []
+    return await get_trading_signals(user=user)
 
 
 # ── POST /api/trading/paper/start  (Onboarding.tsx calls this) ───────────────
@@ -1803,7 +1784,7 @@ async def get_trading_signals(
     response_model=None,
     summary="Switch to paper-trading mode for the current session",
 )
-async def start_paper_trading(
+async def start_paper_trading_alias(
     user: TokenPayload = Depends(get_current_user),
 ):
     """
@@ -1813,24 +1794,7 @@ async def start_paper_trading(
     balance to the configured default.  Idempotent — safe to call when
     already in paper mode.
     """
-    import os as _os
-
-    _os.environ["BROKER_TYPE"] = "paper"
-    balance = float(_os.getenv("PAPER_TRADING_BALANCE", "100000.0"))
-    try:
-        from app import app_state
-
-        broker = getattr(app_state, "broker", None)
-        if broker is not None and hasattr(broker, "reset"):
-            broker.reset(balance)
-        logger.info("Paper trading activated: user=%s balance=%.2f", user.sub, balance)
-    except Exception as exc:
-        logger.warning("Paper trading broker reset failed: %s", exc)
-    return {
-        "status": "paper_trading_active",
-        "balance": balance,
-        "message": "Paper trading mode activated. No real money at risk.",
-    }
+    return await start_paper_trading(user=user)
 
 
 # ── GET /api/trading/risk  (chart-bot/services/chart-api.ts) ─────────────────
@@ -1929,7 +1893,7 @@ async def ai_chart_analysis(
         logger.debug("AI analysis context extraction failed: %s", exc)
 
     price = context.price
-    spread = price * 0.001  # 0.1% default spread
+    _ = price * 0.001  # 0.1% default spread (reserved for future use)
     return {
         "id": str(_uuid.uuid4()),
         "timestamp": context.timestamp or int(time.time() * 1000),

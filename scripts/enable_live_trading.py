@@ -57,15 +57,15 @@ def _check(label: str, ok: bool, detail: str = "") -> bool:
     msg = f"  {status} {label}"
     if detail:
         msg += f"\n      {detail}"
-    print(msg)
+    logger.info(msg)
     return ok
 
 
 def run_checks(force: bool = False) -> dict:
     """Run all prerequisite checks. Returns dict of {check_name: passed}."""
     results = {}
-    print("\nLive Trading Prerequisites")
-    print("=" * 50)
+    logger.info("\nLive Trading Prerequisites")
+    logger.info("=" * 50)
 
     # ── 1. OANDA credentials ──────────────────────────────────────────────────
     api_key = os.getenv("OANDA_API_KEY") or os.getenv("BROKER_OANDA_TOKEN") or ""
@@ -205,14 +205,14 @@ def _test_oanda_connection(api_key: str, account_id: str, practice: bool) -> boo
 def enable_live_trading() -> None:
     """Write FEATURE_LIVE_TRADING=true to .env."""
     if not _ENV_PATH.exists():
-        print(f"\n✗ .env not found at {_ENV_PATH}")
-        print("  Copy .env.example to .env first: cp .env.example .env")
+        logger.info(f"\n✗ .env not found at {_ENV_PATH}")
+        logger.info("  Copy .env.example to .env first: cp .env.example .env")
         sys.exit(1)
 
     content = _ENV_PATH.read_text()
 
     if "FEATURE_LIVE_TRADING=true" in content:
-        print("\n  FEATURE_LIVE_TRADING is already true in .env")
+        logger.info("\n  FEATURE_LIVE_TRADING is already true in .env")
         return
 
     if "FEATURE_LIVE_TRADING=false" in content:
@@ -223,12 +223,12 @@ def enable_live_trading() -> None:
         content += "\nFEATURE_LIVE_TRADING=true\n"
 
     _ENV_PATH.write_text(content)
-    print("\n✓ FEATURE_LIVE_TRADING=true written to .env")
-    print("\nNext steps:")
-    print("  1. Restart the app: python app.py")
-    print("  2. Start with minimum position size ($100 max)")
-    print("  3. Monitor every order at /api/trading/positions")
-    print("  4. Set RISK_MAX_POSITION_SIZE_PCT=0.001 for the first week")
+    logger.info("\n✓ FEATURE_LIVE_TRADING=true written to .env")
+    logger.info("\nNext steps:")
+    logger.info("  1. Restart the app: python app.py")
+    logger.info("  2. Start with minimum position size ($100 max)")
+    logger.info("  3. Monitor every order at /api/trading/positions")
+    logger.info("  4. Set RISK_MAX_POSITION_SIZE_PCT=0.001 for the first week")
 
 
 def main() -> None:
@@ -248,35 +248,35 @@ def main() -> None:
     results = run_checks(force=args.force)
     all_passed = all(results.values())
 
-    print()
+    logger.info()
     if not all_passed:
         failed = [k for k, v in results.items() if not v]
-        print(f"✗ {len(failed)} check(s) failed. Fix them before enabling live trading.")
-        print("\nSee docs/oanda_paper_trading_setup.md for setup instructions.")
+        logger.error(f"✗ {len(failed)} check(s) failed. Fix them before enabling live trading.")
+        logger.info("\nSee docs/oanda_paper_trading_setup.md for setup instructions.")
         sys.exit(1)
 
-    print("✓ All checks passed.")
+    logger.info("✓ All checks passed.")
 
     if args.check_only:
-        print("\n(--check-only: .env not modified)")
+        logger.info("\n(--check-only: .env not modified)")
         return
 
     # Require explicit confirmation
-    print("\n" + "!" * 60)
-    print("WARNING: Live trading uses REAL MONEY.")
-    print("Start with the minimum position size ($100 max).")
-    print("!" * 60)
-    print(f'\nType exactly: "{_CONFIRM_PHRASE}"')
-    print("(or Ctrl+C to cancel)\n")
+    logger.info("\n" + "!" * 60)
+    logger.warning("WARNING: Live trading uses REAL MONEY.")
+    logger.info("Start with the minimum position size ($100 max).")
+    logger.info("!" * 60)
+    logger.info(f'\nType exactly: "{_CONFIRM_PHRASE}"')
+    logger.info("(or Ctrl+C to cancel)\n")
 
     try:
         user_input = input("> ").strip()
     except (KeyboardInterrupt, EOFError):
-        print("\nCancelled.")
+        logger.info("\nCancelled.")
         sys.exit(0)
 
     if user_input != _CONFIRM_PHRASE:
-        print(f'\n✗ Confirmation phrase did not match. Expected: "{_CONFIRM_PHRASE}"')
+        logger.info(f'\n✗ Confirmation phrase did not match. Expected: "{_CONFIRM_PHRASE}"')
         sys.exit(1)
 
     enable_live_trading()

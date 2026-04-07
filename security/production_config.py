@@ -48,7 +48,7 @@ class ProductionConfigManager:
         if not key:
             raise SecureConfigError(
                 "CRITICAL: HOPEFX_ENCRYPTION_KEY not set. "
-                'Generate with: python -c "import secrets; print(secrets.token_hex(32))" '
+                'Generate with: python -c "import secrets; logger.info(secrets.token_hex(32))" '
                 "Then export HOPEFX_ENCRYPTION_KEY=<generated_key>"
             )
 
@@ -66,7 +66,7 @@ class ProductionConfigManager:
         salt = os.getenv("HOPEFX_SALT")
         if not salt:
             raise SecureConfigError(
-                'CRITICAL: HOPEFX_SALT not set. Generate with: python -c "import secrets; print(secrets.token_hex(16))"'
+                'CRITICAL: HOPEFX_SALT not set. Generate with: python -c "import secrets; logger.error(secrets.token_hex(16))"'
             )
 
         try:
@@ -104,7 +104,7 @@ class ProductionConfigManager:
         if not jwt_secret:
             raise SecureConfigError(
                 "SECURITY_JWT_SECRET is not set. "
-                'Generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"'
+                'Generate with: python -c "import secrets; logger.info(secrets.token_urlsafe(48))"'
             )
         if len(jwt_secret) < 32:
             raise SecureConfigError(f"SECURITY_JWT_SECRET is too short ({len(jwt_secret)} chars). Must be >=32.")
@@ -120,12 +120,12 @@ class ProductionConfigManager:
         self._encryption_key = secrets.token_bytes(32)
         self._salt = secrets.token_bytes(16)
 
-        print("=" * 70)
-        print("DEVELOPMENT KEYS GENERATED (DO NOT USE IN PRODUCTION)")
-        print(f"Encryption Key: {self._encryption_key.hex()}")
-        print(f"Salt: {self._salt.hex()}")
-        print("Set these in environment for persistence")
-        print("=" * 70)
+        logger.info("=" * 70)
+        logger.info("DEVELOPMENT KEYS GENERATED (DO NOT USE IN PRODUCTION)")
+        logger.info(f"Encryption Key: {self._encryption_key.hex()}")
+        logger.info(f"Salt: {self._salt.hex()}")
+        logger.info("Set these in environment for persistence")
+        logger.info("=" * 70)
 
     @property
     def encryption_key(self) -> bytes:

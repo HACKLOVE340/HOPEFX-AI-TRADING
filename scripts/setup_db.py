@@ -33,6 +33,9 @@ import os
 import subprocess  # nosec B404
 import sys
 from pathlib import Path
+import logging
+logger = logging.getLogger(__name__)
+
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
@@ -84,7 +87,7 @@ def get_sync_db_url() -> str:
 
 def run_migrations() -> bool:
     """Run alembic upgrade head. Returns True on success."""
-    print(f"\n{OK}  Running Alembic migrations...")
+    logger.info(f"\n{OK}  Running Alembic migrations...")
     result = subprocess.run(  # nosec B603 — fixed args, no shell, no user input
         [sys.executable, "-m", "alembic", "upgrade", "head"],
         cwd=str(ROOT),
@@ -94,12 +97,12 @@ def run_migrations() -> bool:
         check=False,
     )
     if result.returncode != 0:
-        print(f"{FAIL}  Migration failed:\n{result.stderr}")
+        logger.error(f"{FAIL}  Migration failed:\n{result.stderr}")
         return False
     for line in result.stdout.splitlines() + result.stderr.splitlines():
         if "Running upgrade" in line or "Context impl" in line:
-            print(f"       {line.strip()}")
-    print(f"{OK}  Migrations complete")
+            logger.info(f"       {line.strip()}")
+    logger.info(f"{OK}  Migrations complete")
     return True
 
 
@@ -127,10 +130,10 @@ def verify_tables(db_url: str) -> tuple[set[str], set[str]]:
             found = {r[0] for r in cur.fetchall()}
             conn.close()
         except ImportError:
-            print(f"{WARN}  psycopg2 not installed — cannot verify PostgreSQL tables")
+            logger.warning(f"{WARN}  psycopg2 not installed — cannot verify PostgreSQL tables")
             return set(), set()
         except Exception as exc:
-            print(f"{FAIL}  PostgreSQL connection failed: {exc}")
+            logger.error(f"{FAIL}  PostgreSQL connection failed: {exc}")
             return set(), EXPECTED_TABLES
 
     missing = EXPECTED_TABLES - found
@@ -154,9 +157,9 @@ def main() -> int:
     db_url = get_sync_db_url()
     is_sqlite = db_url.startswith("sqlite")
 
-    print("\n=== HOPEFX Database Setup ===")
-    print(f"  Database : {'SQLite (dev)' if is_sqlite else 'PostgreSQL (production)'}")
-    print(f"  URL      : {db_url[:60]}{'...' if len(db_url) > 60 else ''}")
+    logger.info("\n=== HOPEFX Database Setup ===")
+    logger.info(f"  Database : {'SQLite (dev)' if is_sqlite else 'PostgreSQL (production)'}")
+    logger.info(f"  URL      : {db_url[:60]}{'...' if len(db_url) > 60 else ''}")
 
     # ── Migrations ────────────────────────────────────────────────────────────
     if not args.check:
@@ -164,38 +167,38 @@ def main() -> int:
         if not ok:
             return 1
     else:
-        print(f"\n{WARN}  --check mode: skipping migrations")
+        logger.warning(f"\n{WARN}  --check mode: skipping migrations")
 
     # ── Verify tables ─────────────────────────────────────────────────────────
-    print("\n=== Table verification ===")
+    logger.info("\n=== Table verification ===")
     found, missing = verify_tables(db_url)
 
     if found:
-        print(f"  {OK}  {len(found)} tables present")
+        logger.info(f"  {OK}  {len(found)} tables present")
     if missing:
-        print(f"  {FAIL}  {len(missing)} expected tables missing: {', '.join(sorted(missing))}")
+        logger.error(f"  {FAIL}  {len(missing)} expected tables missing: {', '.join(sorted(missing))}")
         if not args.check:
-            print("       Re-run without --check to apply migrations")
+            logger.info("       Re-run without --check to apply migrations")
     else:
-        print(f"  {OK}  All {len(EXPECTED_TABLES)} expected tables verified")
+        logger.info(f"  {OK}  All {len(EXPECTED_TABLES)} expected tables verified")
 
     # ── Redis ─────────────────────────────────────────────────────────────────
-    print("\n=== Redis ===")
+    logger.info("\n=== Redis ===")
     if check_redis():
-        print(f"  {OK}  Redis connected — {os.getenv('REDIS_URL', 'redis://localhost:6379/0')}")
+        logger.info(f"  {OK}  Redis connected — {os.getenv('REDIS_URL', 'redis://localhost:6379/0')}")
     else:
-        print(f"  {WARN}  Redis not reachable — start with: redis-server")
-        print("       Paper trading will work without Redis but caching is disabled")
+        logger.warning(f"  {WARN}  Redis not reachable — start with: redis-server")
+        logger.info("       Paper trading will work without Redis but caching is disabled")
 
     # ── Summary ───────────────────────────────────────────────────────────────
-    print("\n=== Summary ===")
+    logger.info("\n=== Summary ===")
     if not missing:
-        print(f"  {OK}  Database ready for paper trading")
+        logger.info(f"  {OK}  Database ready for paper trading")
         if is_sqlite:
-            print(f"  {WARN}  Using SQLite — switch to PostgreSQL for production")
-            print("       Set DATABASE_URL=postgresql+asyncpg://... in .env")
+            logger.warning(f"  {WARN}  Using SQLite — switch to PostgreSQL for production")
+            logger.info("       Set DATABASE_URL=postgresql+asyncpg://... in .env")
     else:
-        print(f"  {FAIL}  Database setup incomplete — {len(missing)} tables missing")
+        logger.error(f"  {FAIL}  Database setup incomplete — {len(missing)} tables missing")
         return 1
 
     return 0

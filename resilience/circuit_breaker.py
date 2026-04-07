@@ -17,6 +17,9 @@ UTC = timezone.utc
 from enum import Enum, auto
 
 
+import logging
+logger = logging.getLogger(__name__)
+
 class CircuitState(Enum):
     CLOSED = auto()  # Normal operation
     OPEN = auto()  # Failing, reject requests
@@ -56,7 +59,7 @@ class CircuitBreaker:
             if elapsed > self.config.timeout_seconds:
                 self.state = CircuitState.HALF_OPEN
                 self.half_open_calls = 0
-                print(f"🔌 Circuit {self.name}: HALF_OPEN (testing recovery)")
+                logger.info(f"🔌 Circuit {self.name}: HALF_OPEN (testing recovery)")
             else:
                 raise CircuitBreakerOpenError(f"Circuit {self.name} is OPEN")
 
@@ -82,7 +85,7 @@ class CircuitBreaker:
         if self.state == CircuitState.HALF_OPEN:
             self.successes += 1
             if self.successes >= self.config.success_threshold:
-                print(f"✅ Circuit {self.name}: CLOSED (recovered)")
+                logger.info(f"✅ Circuit {self.name}: CLOSED (recovered)")
                 self.state = CircuitState.CLOSED
                 self.failures = 0
                 self.successes = 0
@@ -98,12 +101,12 @@ class CircuitBreaker:
         self.last_failure_time = datetime.now(UTC)
 
         if self.state == CircuitState.HALF_OPEN:
-            print(f"❌ Circuit {self.name}: OPEN (recovery failed)")
+            logger.error(f"❌ Circuit {self.name}: OPEN (recovery failed)")
             self.state = CircuitState.OPEN
 
         elif self.state == CircuitState.CLOSED:
             if self.failures >= self.config.failure_threshold:
-                print(f"🚫 Circuit {self.name}: OPEN ({self.failures} failures)")
+                logger.error(f"🚫 Circuit {self.name}: OPEN ({self.failures} failures)")
                 self.state = CircuitState.OPEN
 
     def get_stats(self) -> dict:

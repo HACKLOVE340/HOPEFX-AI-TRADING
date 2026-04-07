@@ -33,6 +33,8 @@ To accumulate ≥600 trades:
 
 from __future__ import annotations
 
+import logging
+logger = logging.getLogger(__name__)
 import math
 import os
 import time
@@ -487,7 +489,7 @@ def run_multi_symbol_backtest(
     symbol_results: dict[str, dict] = {}
 
     for sym in symbols:
-        print(f"\nFetching {sym} {TIMEFRAME} bars (multi-source validated) …")
+        logger.info(f"\nFetching {sym} {TIMEFRAME} bars (multi-source validated) …")
         try:
             # ── Multi-source validation: require ≥2 sources in agreement ─────
             # Prevents silent corruption from gaps, spikes, or wrong prices
@@ -508,23 +510,23 @@ def run_multi_symbol_backtest(
                 )
                 report = df.attrs.get("validation_report")
                 if report:
-                    print(
+                    logger.info(
                         f"  {sym}: {report.accepted_bars}/{report.total_bars} bars accepted "
                         f"({report.coverage_pct:.1f}%) | sources={report.sources_used}"
                     )
                     if report.rejection_reasons:
-                        print(f"  {sym}: rejections={report.rejection_reasons}")
+                        logger.info(f"  {sym}: rejections={report.rejection_reasons}")
             except Exception as _mv_exc:
                 # Multi-source validation unavailable — fall back to single source
-                print(f"  {sym}: multi-source validation failed ({_mv_exc}) — using Binance only")
+                logger.error(f"  {sym}: multi-source validation failed ({_mv_exc}) — using Binance only")
                 df = fetch_ohlcv_paginated(exchange, sym, TIMEFRAME, since_ms=since_ms, max_bars=max_bars)
 
             if df is None or df.empty:
-                print(f"  {sym}: SKIP — no data returned")
+                logger.info(f"  {sym}: SKIP — no data returned")
                 continue
-            print(f"  {sym}: {len(df)} bars  ({df.index[0]} → {df.index[-1]})")
+            logger.info(f"  {sym}: {len(df)} bars  ({df.index[0]} → {df.index[-1]})")
         except Exception as exc:
-            print(f"  {sym}: SKIP — {exc}")
+            logger.info(f"  {sym}: SKIP — {exc}")
             continue
 
         res = walk_forward_backtest(df)
@@ -532,7 +534,7 @@ def run_multi_symbol_backtest(
         all_train_pnls.extend(res["train_pnls"])
         all_test_pnls.extend(res["test_pnls"])
 
-        print(
+        logger.info(
             f"  {sym}: train={res['train_trade_count']} trades, "
             f"test={res['test_trade_count']} trades, "
             f"test Sharpe={res['test_sharpe']:.3f} ±{res['test_sharpe_se']:.3f}"
@@ -547,18 +549,18 @@ def run_multi_symbol_backtest(
     se_target = 1.0 / math.sqrt(2.0 * (TARGET_TRADE_COUNT - 1))
     robust = total_test_trades >= TARGET_TRADE_COUNT
 
-    print(f"\n{'=' * 60}")
-    print(f"POOLED RESULTS ({len(symbol_results)} symbols)")
-    print(f"{'=' * 60}")
-    print(f"  Train trades total : {total_train_trades}")
-    print(f"  Test  trades total : {total_test_trades}  (target: {TARGET_TRADE_COUNT})")
-    print(
+    logger.info(f"\n{'=' * 60}")
+    logger.info(f"POOLED RESULTS ({len(symbol_results)} symbols)")
+    logger.info(f"{'=' * 60}")
+    logger.info(f"  Train trades total : {total_train_trades}")
+    logger.info(f"  Test  trades total : {total_test_trades}  (target: {TARGET_TRADE_COUNT})")
+    logger.info(
         f"  Pooled test Sharpe : {pooled_sharpe:.3f}  "
         f"SE ±{pooled_se:.3f}  "
         f"({'✅ robust' if robust else f'⚠️  need {TARGET_TRADE_COUNT - total_test_trades} more'})"
     )
-    print(f"  SE at N={TARGET_TRADE_COUNT}          : ±{se_target:.3f}")
-    print("\nNOTE: Sharpe is trade-level (corrected). Bar-level Sharpe is NOT reported here.")
+    logger.info(f"  SE at N={TARGET_TRADE_COUNT}          : ±{se_target:.3f}")
+    logger.info("\nNOTE: Sharpe is trade-level (corrected). Bar-level Sharpe is NOT reported here.")
 
     return {
         "symbol_results": symbol_results,
