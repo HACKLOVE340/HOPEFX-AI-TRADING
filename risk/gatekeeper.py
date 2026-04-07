@@ -690,6 +690,8 @@ class Gatekeeper:
         except Exception:
             logger.debug("_get_impact_score_from_orch: orchestrator call failed", exc_info=True)
             return 0.0
+
+    def _get_sentiment(self, signal) -> float:
         score = self._get_sentiment_from_orch()
         if score != 0.0:
             return score

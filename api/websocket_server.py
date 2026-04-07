@@ -718,11 +718,29 @@ def create_websocket_router(manager: WebSocketManager):
 
     @router.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):
-        """Main WebSocket endpoint."""
+        """Main WebSocket endpoint.
+
+        .. deprecated::
+            The ``/ws`` endpoint is the legacy unauthenticated WebSocket channel.
+            New clients should connect to ``/ws/live`` (api/ws_live.py) which
+            provides JWT authentication, rate-limiting, and heartbeat support.
+
+            Migration path: replace ``ws://<host>/ws`` with ``wss://<host>/ws/live``
+            and include the ``Authorization: Bearer <token>`` header or send an
+            ``{"type":"auth","token":"..."}`` message within 10 seconds of connecting.
+
+            The ``/ws`` endpoint will be removed in a future release.
+        """
         from rate_limiting.websocket_limiter import get_client_ip, get_ws_limiter
 
         limiter = get_ws_limiter()
         client_ip = get_client_ip(websocket)
+
+        logger.warning(
+            "DEPRECATED: client %s connected to legacy /ws endpoint. "
+            "Migrate to /ws/live which provides JWT auth and heartbeat support.",
+            client_ip,
+        )
 
         allowed, reason = await limiter.check_and_register(websocket, client_ip)
         if not allowed:
