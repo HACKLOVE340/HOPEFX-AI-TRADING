@@ -203,7 +203,7 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
   const handleFlutterwavePay = async () => {
     setFlwLoading(true);
     try {
-      const res = await api.post<{ payment_link: string; tx_ref: string }>('/payments/flutterwave/init',
+      const res = await api.post<{ payment_link: string; tx_ref: string }>('/billing/payments/flutterwave/init',
         { amount: selectedPlan.price_usd, currency: 'USD', plan: selectedPlan.id }
       );
       // Redirect to Flutterwave hosted checkout
