@@ -7,9 +7,26 @@
 Unit tests for Broker connectors.
 """
 
+import asyncio
+
 import pytest
 
 from brokers.base import OrderSide, OrderStatus, OrderType
+from brokers.paper_trading import PaperTradingBroker
+
+
+# ---------------------------------------------------------------------------
+# Local sync fixture — overrides the async paper_broker from tests/conftest.py.
+# PaperTradingBroker.connect() is async; all trading methods are sync.
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def paper_broker():
+    """Synchronous paper broker fixture for sync test methods."""
+    broker = PaperTradingBroker(initial_balance=100000.0, commission_per_lot=3.5)
+    asyncio.run(broker.connect())
+    yield broker
+    asyncio.run(broker.disconnect())
 
 
 @pytest.mark.unit
