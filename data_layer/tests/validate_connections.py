@@ -55,6 +55,9 @@ import traceback
 from datetime import datetime, timezone
 UTC = timezone.utc
 from typing import ClassVar
+import logging
+logger = logging.getLogger(__name__)
+
 
 # ── Colour helpers ────────────────────────────────────────────────────────────
 _GREEN = "\033[92m"
@@ -1226,10 +1229,10 @@ def check_macro_csv_startup_population() -> ValidationResult:
 
 
 async def run_all(verbose: bool = False) -> tuple[int, int]:
-    print(_head("HOPEFX Data Layer — Connection Validation"))
-    print(f"  Timestamp: {datetime.now(UTC).isoformat()}")
-    print(f"  Python:    {sys.version.split()[0]}")
-    print()
+    logger.info(_head("HOPEFX Data Layer — Connection Validation"))
+    logger.info(f"  Timestamp: {datetime.now(UTC).isoformat()}")
+    logger.info(f"  Python:    {sys.version.split()[0]}")
+    logger.info()
 
     results: ClassVar[list[ValidationResult]] = []
 
@@ -1279,17 +1282,17 @@ async def run_all(verbose: bool = False) -> tuple[int, int]:
         check_macro_csv_startup_population,
     ]
 
-    print(_head("Synchronous checks"))
+    logger.info(_head("Synchronous checks"))
     for fn in sync_checks:
         try:
             r = fn()
         except Exception:
             r = ValidationResult(fn.__name__, False, traceback.format_exc()[:200])
         results.append(r)
-        print(f"  {r}")
+        logger.info(f"  {r}")
 
     # Async checks
-    print(_head("Async / network checks"))
+    logger.info(_head("Async / network checks"))
     async_checks = [check_fred_reachable]
     for fn in async_checks:
         try:
@@ -1297,7 +1300,7 @@ async def run_all(verbose: bool = False) -> tuple[int, int]:
         except Exception as exc:
             r = ValidationResult(fn.__name__, False, str(exc), critical=False)
         results.append(r)
-        print(f"  {r}")
+        logger.info(f"  {r}")
 
     # Summary
     passed = sum(1 for r in results if r.passed)
@@ -1305,13 +1308,13 @@ async def run_all(verbose: bool = False) -> tuple[int, int]:
     critical = sum(1 for r in results if not r.passed and r.critical)
     warnings = sum(1 for r in results if not r.passed and not r.critical)
 
-    print(_head("Summary"))
-    print(f"  Total:    {len(results)}")
-    print(f"  {_GREEN}Passed:   {passed}{_RESET}")
+    logger.info(_head("Summary"))
+    logger.info(f"  Total:    {len(results)}")
+    logger.info(f"  {_GREEN}Passed:   {passed}{_RESET}")
     if critical:
-        print(f"  {_RED}Failed (critical): {critical}{_RESET}")
+        logger.error(f"  {_RED}Failed (critical): {critical}{_RESET}")
     if warnings:
-        print(f"  {_YELLOW}Warnings:  {warnings}{_RESET}")
+        logger.warning(f"  {_YELLOW}Warnings:  {warnings}{_RESET}")
 
     if critical == 0:
         print(f"\n  {_GREEN}{_BOLD}All critical checks passed. Data layer is ready.{_RESET}")
