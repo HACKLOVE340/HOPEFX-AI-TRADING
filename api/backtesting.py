@@ -1348,3 +1348,80 @@ def _build_pdf(result: dict) -> bytes:
 
     doc.build(story)
     return buf.getvalue()
+
+
+# =============================================================================
+# FRONTEND COMPATIBILITY ALIASES
+# =============================================================================
+# The frontend (hooks/useApi.ts) calls /api/backtesting/* but the canonical
+# backend prefix is /api/backtest/*.  The aliases below bridge that gap so
+# both URL patterns work without changing either the frontend or the primary
+# backend routes.
+
+_compat_router = APIRouter(prefix="/api/backtesting", tags=["Backtesting"])
+
+
+@_compat_router.post("/run", status_code=status.HTTP_201_CREATED, include_in_schema=False)
+async def _compat_run_backtest(
+    body: BacktestRequest,
+    background_tasks: BackgroundTasks,
+    user: TokenPayload = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Alias: POST /api/backtesting/run → run_backtest."""
+    return await run_backtest(body, background_tasks, user)
+
+
+@_compat_router.get("/results", include_in_schema=False)
+async def _compat_list_results(
+    limit: int = 20,
+    user: TokenPayload = Depends(get_current_user),
+) -> list[BacktestResult]:
+    """Alias: GET /api/backtesting/list or /results → list_results."""
+    return await list_results(limit, user)
+
+
+# /api/backtesting/list  (same data as /results)
+@_compat_router.get("/list", include_in_schema=False)
+async def _compat_list2(
+    limit: int = 20,
+    user: TokenPayload = Depends(get_current_user),
+) -> list[BacktestResult]:
+    """Alias: GET /api/backtesting/list → list_results."""
+    return await list_results(limit, user)
+
+
+@_compat_router.get("/results/{run_id}", include_in_schema=False)
+async def _compat_get_result(
+    run_id: str,
+    user: TokenPayload = Depends(get_current_user),
+) -> BacktestResult:
+    """Alias: GET /api/backtesting/results/{id} → get_result."""
+    return await get_result(run_id, user)
+
+
+@_compat_router.get("/walk-forward", include_in_schema=False)
+async def _compat_wf_list(
+    user: TokenPayload = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Alias: GET /api/backtesting/walk-forward → get_latest_walk_forward."""
+    return await get_latest_walk_forward(user)
+
+
+@_compat_router.get("/walk-forward/{run_id}", include_in_schema=False)
+async def _compat_wf_get(
+    run_id: str,
+    user: TokenPayload = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Alias: GET /api/backtesting/walk-forward/{id} → get_walk_forward."""
+    return await get_walk_forward(run_id, user)
+
+
+@_compat_router.post("/walk-forward/run", include_in_schema=False)
+async def _compat_wf_run(
+    body: BacktestRequest,
+    background_tasks: BackgroundTasks,
+    user: TokenPayload = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Alias: POST /api/backtesting/walk-forward/run → run_backtest (walk-forward mode)."""
+    # Delegate to the primary run endpoint; callers may set body.walk_forward = True
+    return await run_backtest(body, background_tasks, user)

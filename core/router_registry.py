@@ -38,6 +38,7 @@ def register_routers(
     # ── Core routers (always on) ──────────────────────────────────────────────
     from api.accounts import router as accounts_router
     from api.admin import router as admin_router
+    from api.backtesting import _compat_router as backtesting_compat_router
     from api.backtesting import router as backtesting_router
     from api.brain import router as brain_router
     from api.broker import router as broker_router
@@ -61,6 +62,7 @@ def register_routers(
     from api.settings_extended import router as settings_extended_router
     from api.settings_new_endpoints import router as settings_new_router
     from api.social_feed import _copy_router as social_copy_router
+    from api.social_feed import _lb_compat_router as social_lb_compat_router
     from api.social_feed import leaderboard_router as social_leaderboard_router
     from api.social_feed import router as social_feed_router
     from api.status import router as status_router
@@ -75,6 +77,7 @@ def register_routers(
         admin_router,
         monetization_router,
         backtesting_router,
+        backtesting_compat_router,
         online_learner_router,
         chat_router,
         prop_firm_router,
@@ -94,6 +97,7 @@ def register_routers(
         social_feed_router,
         social_leaderboard_router,
         social_copy_router,
+        social_lb_compat_router,
         mobile_router,
         whitelabel_router,
         platform_router,
@@ -142,9 +146,11 @@ def register_routers(
         logger.debug("BILLING_SUBSCRIPTION disabled — set FEATURE_BILLING_SUBSCRIPTION=true to enable")
 
     if feature_flags.ADVANCED_TRADING:
+        from api.advanced_trading import _adv_router as advanced_compat_router
         from api.advanced_trading import router as advanced_router
 
         app.include_router(advanced_router)
+        app.include_router(advanced_compat_router)
         logger.info("Advanced trading router registered (/api/advanced)")
     else:
         logger.debug("ADVANCED_TRADING disabled — set FEATURE_ADVANCED_TRADING=true to enable")

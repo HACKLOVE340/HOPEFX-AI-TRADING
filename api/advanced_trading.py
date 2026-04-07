@@ -915,3 +915,52 @@ async def get_monte_carlo(run_id: str, user: TokenPayload = Depends(get_current_
         status_code=404,
         detail=f"No Monte Carlo results for run '{run_id}'. POST to compute first.",
     )
+
+
+# =============================================================================
+# FRONTEND COMPATIBILITY ALIASES  — /api/advanced/*
+# =============================================================================
+# The frontend (hooks/useApi.ts) calls /api/advanced/correlation,
+# /api/advanced/cot-sentiment and /api/advanced/ab-tests/*.
+# These aliases forward to the canonical handlers without duplicating logic.
+
+_adv_router = APIRouter(prefix="/api/advanced", tags=["Advanced Trading"])
+
+
+@_adv_router.get("/correlation", include_in_schema=False)
+async def _adv_correlation(
+    symbols: str = "XAUUSD,DXY,SPX500,OIL",
+    window: int = 60,
+    user: TokenPayload = Depends(get_current_user),  # noqa: ARG001
+) -> dict[str, Any]:
+    """Alias: GET /api/advanced/correlation → correlation matrix."""
+    sym_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+    pe = getattr(app_state, "price_engine", None) if app_state else None
+    return await _collect_series_from_engine(pe, sym_list, window)
+
+
+@_adv_router.get("/cot-sentiment", include_in_schema=False)
+async def _adv_cot_sentiment() -> dict[str, Any]:
+    """Alias: GET /api/advanced/cot-sentiment → COT gold data."""
+    return await get_cot_gold()
+
+
+@_adv_router.get("/ab-tests", include_in_schema=False)
+async def _adv_list_ab(user: TokenPayload = Depends(get_current_user)):
+    """Alias: GET /api/advanced/ab-tests → list_ab_tests."""
+    return await list_ab_tests(user=user)
+
+
+@_adv_router.get("/ab-tests/{test_id}", include_in_schema=False)
+async def _adv_get_ab(test_id: str, user: TokenPayload = Depends(get_current_user)):
+    """Alias: GET /api/advanced/ab-tests/{id} → get_ab_test."""
+    return await get_ab_test(test_id=test_id, user=user)
+
+
+@_adv_router.post("/ab-tests/run", include_in_schema=False, status_code=201)
+async def _adv_run_ab(
+    req: ABTestRequest,
+    user: TokenPayload = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Alias: POST /api/advanced/ab-tests/run → start_ab_test."""
+    return await start_ab_test(req=req, user=user)
