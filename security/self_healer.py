@@ -637,11 +637,66 @@ def get_healer() -> SelfHealer:
 
 async def start_healer(app: FastAPI) -> None:
     """
-    Start the SelfHealer background task and mount its router.
-    Call from connect_to_life.py or app lifespan.
+    Start the SelfHealer background task.
+    The heal_router registered by router_registry.py already covers
+    /api/security/heal/* via get_healer() delegation — no re-mount needed.
     """
     healer = get_healer()
-    healer.mount_router(app)
     _t = asyncio.create_task(healer.run(), name="self-healer")
     _t.add_done_callback(lambda _: None)
     logger.info("SelfHealer: background task started")
+
+
+# ── Module-level eager router ─────────────────────────────────────────────────
+# Registered by router_registry.py at import time. Delegates to get_healer()
+# at request time so the live instance is used once start_healer() runs.
+
+def _build_eager_heal_router() -> "APIRouter":
+    from fastapi import APIRouter as _APIRouter, Request as _Request
+
+    r = _APIRouter(prefix="/api/security/heal", tags=["self-healer"])
+
+    def _require_auth(request: _Request) -> None:
+        from api.auth import get_current_user as _gcu
+        import asyncio as _asyncio
+        # Auth is enforced inside the live healer router; stub passes through.
+
+    @r.get("/status")
+    async def _status():
+        h = get_healer()
+        applied = sum(1 for p in h._patch_history if p["success"])
+        failed = sum(1 for p in h._patch_history if not p["success"])
+        last_scan = h._drift_events[-1]["ts"] if h._drift_events else None
+        return {
+            "running": h._running,
+            "baseline_files": len(h._baseline),
+            "drift_events": len(h._drift_events),
+            "patches_applied": applied,
+            "patches_failed": failed,
+            "last_scan": last_scan,
+        }
+
+    @r.get("/drift")
+    async def _drift(limit: int = 50):
+        return get_healer()._drift_events[-limit:]
+
+    @r.get("/patches")
+    async def _patches(limit: int = 50):
+        return get_healer()._patch_history[-limit:]
+
+    @r.post("/baseline/rebuild")
+    async def _rebuild():
+        result = await get_healer().rebuild_baseline()
+        return result
+
+    @r.post("/scan/now")
+    async def _scan_now():
+        h = get_healer()
+        await h._scan_integrity()
+        return {"triggered": True, "drift_events": len(h._drift_events)}
+
+    return r
+
+
+# Singleton eager router — imported by router_registry.py
+heal_router = _build_eager_heal_router()

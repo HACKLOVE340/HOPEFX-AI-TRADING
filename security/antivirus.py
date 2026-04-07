@@ -241,7 +241,8 @@ class AntivirusScanner:
     async def start(self, app: FastAPI) -> None:
         self._load_yara_rules()
         self._connect_clamd()
-        self.mount_router(app)
+        # av_router registered by router_registry.py already covers
+        # /api/security/av/* via get_scanner() delegation — no re-mount needed.
         self._running = True
         _t = asyncio.create_task(self._scan_loop(), name="av-scanner")
         _t.add_done_callback(lambda _: None)
@@ -731,3 +732,54 @@ async def start_av_scanner(app: FastAPI) -> None:
     scanner = get_scanner()
     await scanner.start(app)
     logger.info("AntivirusScanner: background scan task started")
+
+
+# ── Module-level eager router ─────────────────────────────────────────────────
+# Registered by router_registry.py at import time. Delegates to get_scanner()
+# at request time so the live instance is used once start_av_scanner() runs.
+
+def _build_eager_av_router() -> "APIRouter":
+    from fastapi import APIRouter as _APIRouter, HTTPException as _HTTPException
+    import re as _re
+
+    r = _APIRouter(prefix="/api/security/av", tags=["antivirus"])
+
+    @r.get("/status")
+    async def _av_status():
+        s = get_scanner()
+        return {
+            "running": s._running,
+            "yara_enabled": YARA_AVAILABLE and s._yara_rules is not None,
+            "clamd_enabled": s._clamd is not None,
+            "total_threats": len(s._threats),
+            "last_scan": s._last_scan,
+        }
+
+    @r.get("/threats")
+    async def _threats(severity: str | None = None):
+        threats = get_scanner()._threats
+        if severity:
+            threats = [t for t in threats if t["severity"] == severity]
+        return threats[-200:]
+
+    @r.post("/scan")
+    async def _scan():
+        return await get_scanner().scan_project()
+
+    @r.post("/quarantine")
+    async def _quarantine(body: dict):
+        threat_id = body.get("threat_id", "")
+        if not threat_id:
+            raise _HTTPException(status_code=400, detail="threat_id required")
+        try:
+            return get_scanner().quarantine_threat(threat_id)
+        except ValueError as exc:
+            raise _HTTPException(status_code=404, detail="Threat not found") from exc
+        except RuntimeError as exc:
+            raise _HTTPException(status_code=500, detail="Quarantine failed — check server logs") from exc
+
+    return r
+
+
+# Singleton eager router — imported by router_registry.py
+av_router = _build_eager_av_router()
