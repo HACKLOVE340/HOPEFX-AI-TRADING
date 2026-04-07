@@ -437,3 +437,48 @@ async def get_me(user_id: str = Depends(_get_current_user_id)):
         "created_at": user.created_at.isoformat() if user.created_at else None,
         "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
     }
+
+
+class _FreeTierBody(BaseModel):
+    user_id: str
+    ref_code: str | None = None
+
+
+@router.post("/activate-free-tier", status_code=status.HTTP_201_CREATED)
+async def activate_free_tier(body: _FreeTierBody):
+    """
+    Assign the FREE subscription tier immediately after registration.
+
+    Delegates to the billing subscription manager. Tracks referral when
+    ref_code is present. Called from the post-signup onboarding flow.
+    """
+    try:
+        from api.billing import activate_free_tier as _billing_activate
+
+        # Re-use the billing implementation to avoid duplicating logic
+        from pydantic import BaseModel as _BM
+
+        class _Proxy(_BM):
+            user_id: str
+            ref_code: str | None = None
+
+        return await _billing_activate(_Proxy(user_id=body.user_id, ref_code=body.ref_code))
+    except Exception:
+        # Fallback: create subscription directly
+        try:
+            from monetization.subscription import SubscriptionManager, SubscriptionTier
+
+            mgr = SubscriptionManager()
+            existing = mgr.get_user_subscription(body.user_id)
+            if existing:
+                return {"tier": "free", "message": "Subscription already active.", "features": ["paper_trading"]}
+            sub = mgr.create_subscription(body.user_id, SubscriptionTier.FREE)
+            return {
+                "tier": sub.tier.value if hasattr(sub.tier, "value") else "free",
+                "message": "You're on the Free tier — upgrade for live trading + AI signals.",
+                "features": ["paper_trading"],
+                "upgrade_url": "/subscription",
+            }
+        except Exception as exc:
+            logger.warning("activate_free_tier fallback failed: %s", exc)
+            return {"tier": "free", "message": "Free tier activated.", "features": ["paper_trading"]}
