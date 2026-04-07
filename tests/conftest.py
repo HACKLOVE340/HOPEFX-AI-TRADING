@@ -21,7 +21,6 @@ os.environ.setdefault(
     "test-only-jwt-secret-key-minimum-32-chars!!",
 )
 
-import asyncio
 from datetime import datetime, timezone
 UTC = timezone.utc
 

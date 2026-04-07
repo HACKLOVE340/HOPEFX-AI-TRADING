@@ -143,6 +143,7 @@ ignore = [
 "shadow/**"            = ["PLR2004"]
 "strategies/**"        = ["PLR2004"]
 "market_data/**"       = ["PLR2004"]
+"nuclear/**"           = ["PLR2004"]
 # PLR2004: HTTP status codes, config thresholds, and infrastructure constants
 # are self-documenting in context for these files.
 "api/**"               = ["PLR2004"]

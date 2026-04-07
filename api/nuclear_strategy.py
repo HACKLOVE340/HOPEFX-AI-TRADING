@@ -354,7 +354,7 @@ async def start_agent(
     Optionally bootstraps bar history from Redis list keys.
     """
     try:
-        from nuclear.nuclear_agent import NuclearStrategyAgent, get_nuclear_agent
+        from nuclear.nuclear_agent import get_nuclear_agent
         agent = get_nuclear_agent(symbol=req.symbol)
         await agent.start()
         return {

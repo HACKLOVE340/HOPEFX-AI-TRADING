@@ -15,8 +15,7 @@ from __future__ import annotations
 import json
 import sys
 import types
-import uuid
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import patch
 
 import pytest
 
@@ -74,8 +73,8 @@ def _make_zmq_stub():
 _zmq_stub = _make_zmq_stub()
 sys.modules["zmq"] = _zmq_stub
 
-from brokers.cpp_shim_connector import CPPShimConnector  # noqa: E402
-from brokers.base import AccountInfo, OrderSide, OrderStatus, OrderType  # noqa: E402
+from brokers.cpp_shim_connector import CPPShimConnector
+from brokers.base import AccountInfo, OrderSide, OrderStatus, OrderType
 
 
 # ---------------------------------------------------------------------------
@@ -96,7 +95,6 @@ def _make_connector(**kwargs) -> CPPShimConnector:
 def _connected_connector(pong_extra: dict | None = None) -> CPPShimConnector:
     """Return a connector whose connect() succeeds via a mocked PING/PONG."""
     conn = _make_connector()
-    pong = {"type": "PONG", **(pong_extra or {})}
 
     def fake_ping(self_inner):
         return True
@@ -137,10 +135,9 @@ class TestConnect:
 
     def test_connect_returns_false_when_zmq_import_fails(self):
         conn = _make_connector()
-        with patch.dict(sys.modules, {"zmq": None}):
+        with patch.dict(sys.modules, {"zmq": None}), patch("builtins.__import__", side_effect=ImportError("no zmq")):
             # Simulate ImportError by patching the import inside connect
-            with patch("builtins.__import__", side_effect=ImportError("no zmq")):
-                result = conn.connect()
+            result = conn.connect()
         # connect() catches ImportError and returns False
         assert result is False
 
@@ -271,15 +268,13 @@ class TestPlaceOrderReject:
 
     def test_timeout_raises(self):
         conn = _connected_connector()
-        with patch.object(conn, "_recv", return_value=None):
-            with pytest.raises(RuntimeError, match="timeout"):
-                conn.place_order("GC", OrderSide.BUY, OrderType.MARKET, 1.0)
+        with patch.object(conn, "_recv", return_value=None), pytest.raises(RuntimeError, match="timeout"):
+            conn.place_order("GC", OrderSide.BUY, OrderType.MARKET, 1.0)
 
     def test_timeout_increments_reject_count(self):
         conn = _connected_connector()
-        with patch.object(conn, "_recv", return_value=None):
-            with pytest.raises(RuntimeError):
-                conn.place_order("GC", OrderSide.BUY, OrderType.MARKET, 1.0)
+        with patch.object(conn, "_recv", return_value=None), pytest.raises(RuntimeError):
+            conn.place_order("GC", OrderSide.BUY, OrderType.MARKET, 1.0)
         # 2 retry attempts × 1 timeout each = 2 rejects
         assert conn._reject_count == 2
 

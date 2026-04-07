@@ -53,7 +53,7 @@ from nuclear.itos_cone_engine import ItosCone, ItosConeEngine
 from nuclear.redis_stream_reader import OHLCVBar, TickSnapshot
 from nuclear.regime_classifier import RegimeClassifier, RegimeResult
 from nuclear.strategy_engine import (
-    FLAT, LONG, SHORT, NuclearStrategyEngine, StrategySignal,
+    FLAT, LONG, NuclearStrategyEngine,
 )
 
 UTC = timezone.utc
@@ -335,7 +335,6 @@ class ShadowBacktestEngine:
 
         for i in range(1, len(window)):
             tick = window[i]
-            prev_tick = window[i - 1]
 
             # Build a minimal feature snapshot from available bars
             try:
@@ -583,10 +582,7 @@ class ShadowBacktestEngine:
         direction: str,
     ) -> tuple[float, float]:
         """Return (pnl_pips, pnl_pct)."""
-        if direction == LONG:
-            pnl_pips = exit_price - entry
-        else:
-            pnl_pips = entry - exit_price
+        pnl_pips = exit_price - entry if direction == LONG else entry - exit_price
         pnl_pct = pnl_pips / (entry + 1e-9)
         return pnl_pips, pnl_pct
 
@@ -634,10 +630,7 @@ class ShadowBacktestEngine:
         profit_factor = gross_profit / (gross_loss + 1e-9)
 
         # Sharpe (annualised, assuming daily bars)
-        if len(pnls) > 1:
-            sharpe = float(np.mean(pnls) / (np.std(pnls, ddof=1) + 1e-9)) * math.sqrt(252)
-        else:
-            sharpe = 0.0
+        sharpe = float(np.mean(pnls) / (np.std(pnls, ddof=1) + 1e-9)) * math.sqrt(252) if len(pnls) > 1 else 0.0
 
         # Equity curve and max drawdown
         equity = np.cumprod(1 + pnls)

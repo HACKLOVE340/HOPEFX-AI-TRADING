@@ -255,10 +255,10 @@ class RedisStreamReader:
         self._running = False
         if self._task and not self._task.done():
             self._task.cancel()
-            try:
+            import contextlib
+
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
         await self._disconnect()
         logger.info("RedisStreamReader stopped")
 
@@ -335,10 +335,10 @@ class RedisStreamReader:
         """Establish Redis connection and subscribe to all channels."""
         try:
             import redis.asyncio as aioredis
-        except ImportError:
+        except ImportError as exc:
             raise RuntimeError(
                 "redis package required: pip install redis>=5.0.0"
-            )
+            ) from exc
 
         self._redis_client = aioredis.Redis(
             host=self._host,

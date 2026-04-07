@@ -82,7 +82,7 @@ def analyze_query_performance(query_name: str) -> None:
         raise RuntimeError("DATABASE_URL environment variable is not set.")
 
     # Import here — this module must never be imported at app startup
-    from sqlalchemy import create_engine, text  # noqa: PLC0415
+    from sqlalchemy import create_engine, text
 
     engine = create_engine(database_uri)
     start = time.time()

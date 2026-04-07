@@ -131,7 +131,7 @@ class CPPShimConnector(BrokerConnector):
         self._total_latency_us: float = 0.0
 
     @classmethod
-    def from_env(cls) -> "CPPShimConnector":
+    def from_env(cls) -> CPPShimConnector:
         return cls()
 
     # ── BrokerConnector interface ─────────────────────────────────────────────
@@ -312,17 +312,15 @@ class CPPShimConnector(BrokerConnector):
         return resp is not None and resp.get("type") == "PONG"
 
     def _cleanup(self) -> None:
+        import contextlib
+
         for sock in (self._cmd_sock, self._resp_sock):
             if sock:
-                try:
+                with contextlib.suppress(Exception):
                     sock.close()
-                except Exception:
-                    pass
         if self._ctx:
-            try:
+            with contextlib.suppress(Exception):
                 self._ctx.term()
-            except Exception:
-                pass
         self._cmd_sock = self._resp_sock = self._ctx = None
 
     @staticmethod

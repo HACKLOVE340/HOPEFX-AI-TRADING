@@ -36,19 +36,15 @@ Usage
 from __future__ import annotations
 
 import logging
-import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-import numpy as np
 
-from nuclear.feature_builder import MultiTimeframeFeatures, TechnicalFeatures
+from nuclear.feature_builder import MultiTimeframeFeatures
 from nuclear.itos_cone_engine import ItosCone
 from nuclear.regime_classifier import (
-    REGIME_BREAKOUT, REGIME_CRISIS, REGIME_HIGH_VOL, REGIME_LOW_VOL,
-    REGIME_MEAN_REVERTING, REGIME_RANGE_BOUND, REGIME_TRENDING_DOWN,
-    REGIME_TRENDING_UP, RegimeResult,
+    REGIME_BREAKOUT, REGIME_HIGH_VOL, RegimeResult,
 )
 from nuclear.redis_stream_reader import TickSnapshot
 
@@ -538,18 +534,13 @@ class ConeValidator:
             vol_regime = cone.vol_regime
             upper_2s_1m = cone.upper_2sigma_1m
             lower_2s_1m = cone.lower_2sigma_1m
-            upper_3s_1w = cone.dots.get("1w", None)
-            lower_3s_1w = cone.dots.get("1w", None)
         else:
             bias = cone_merged.get("bias", "neutral")
             vol_regime = cone_merged.get("vol_regime", "normal_vol")
             dots = cone_merged.get("dots", {})
             dot_1m = dots.get("1m", {})
-            dot_1w = dots.get("1w", {})
             upper_2s_1m = dot_1m.get("upper_2sigma", signal.entry_price * 1.05)
             lower_2s_1m = dot_1m.get("lower_2sigma", signal.entry_price * 0.95)
-            upper_3s_1w = type("D", (), {"upper_3sigma": dot_1w.get("upper_3sigma", signal.entry_price * 1.03)})()
-            lower_3s_1w = type("D", (), {"lower_3sigma": dot_1w.get("lower_3sigma", signal.entry_price * 0.97)})()
 
         signal.cone_bias = bias
 

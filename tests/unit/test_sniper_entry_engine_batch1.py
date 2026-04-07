@@ -17,7 +17,6 @@ Covers:
 
 from __future__ import annotations
 
-import os
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
@@ -476,7 +475,6 @@ class TestSniperSetup:
         assert setup.take_profit < setup.entry_price
 
     def test_default_order_type_is_limit(self):
-        ob = OrderBlock(direction="bullish", top=1895.0, bottom=1890.0, origin_index=0)
         setup = SniperSetup(
             symbol="EUR_USD",
             direction="long",

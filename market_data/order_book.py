@@ -52,9 +52,8 @@ import asyncio
 import json as _json
 import logging
 import os
-import time
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 UTC = timezone.utc
 from typing import Any
@@ -70,6 +69,7 @@ L2_DEPTH_BPS: float = float(os.getenv("L2_DEPTH_BPS", "50"))
 # Reconnect back-off for Polygon WebSocket (seconds)
 L2_RECONNECT_INITIAL: float = float(os.getenv("L2_RECONNECT_INITIAL", "1.0"))
 L2_RECONNECT_MAX: float = float(os.getenv("L2_RECONNECT_MAX", "60.0"))
+L2_SNAPSHOT_INTERVAL: float = float(os.getenv("L2_SNAPSHOT_INTERVAL", "0.1"))  # seconds between mock snapshots
 
 
 # ── Data structures ───────────────────────────────────────────────────────────
@@ -663,10 +663,7 @@ class FinnhubTradeFeed:
             if "XAU" not in symbol.upper():
                 continue
             snap = book.get_snapshot()
-            if snap and snap.mid_price > 0:
-                side = "buy" if price >= snap.mid_price else "sell"
-            else:
-                side = "buy"
+            side = ("buy" if price >= snap.mid_price else "sell") if snap and snap.mid_price > 0 else "buy"
             book.record_trade(side, size)
             logger.debug("Finnhub tape [%s]: %.4f × %.0f (%s)", symbol, price, size, side)
 
