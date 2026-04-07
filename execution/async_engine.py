@@ -94,6 +94,7 @@ class AsyncExecutionEngine:
         paper_mode: bool = True,
         paper_rng_seed: int | None = 42,
     ):
+        self.broker_configs = broker_configs
         self.paper_mode = paper_mode
         # Per-instance RNG for paper-mode fill simulation; seeded for
         # reproducibility.  Pass paper_rng_seed=None for non-deterministic runs.
