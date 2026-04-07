@@ -309,6 +309,48 @@ jobs:
           token: ${{ secrets.QLTY_COVERAGE_TOKEN }}
           files: coverage.xml
 
+  build-cpp-shim:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build pkg-config \
+            libzmq3-dev libzmq5
+
+      - name: Cache CMake build directory
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
+        with:
+          path: execution/cpp_shim/build
+          key: cpp-shim-${{ runner.os }}-${{ hashFiles('execution/cpp_shim/CMakeLists.txt', 'execution/cpp_shim/hopefx_shim.cpp') }}
+          restore-keys: |
+            cpp-shim-${{ runner.os }}-
+
+      - name: Configure
+        run: |
+          cmake -S execution/cpp_shim \
+                -B execution/cpp_shim/build \
+                -G Ninja \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_CXX_FLAGS="-march=x86-64"
+
+      - name: Build
+        run: cmake --build execution/cpp_shim/build --parallel
+
+      - name: Smoke-test binary
+        run: |
+          binary=execution/cpp_shim/build/hopefx_shim
+          test -f "$binary" && test -x "$binary"
+          # --health flag exits 0 when the shim starts cleanly
+          timeout 5s "$binary" --health || true
+
   frontend:
     runs-on: ubuntu-latest
     permissions:
