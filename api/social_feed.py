@@ -508,3 +508,20 @@ def refresh_leaderboard_cache() -> None:
         )
     else:
         logger.debug("leaderboard cache refresh skipped — no profile data")
+# =============================================================================
+# FRONTEND COMPATIBILITY ALIAS — /api/leaderboard
+# =============================================================================
+# The frontend (hooks/useApi.ts leaderboardApi.list) calls GET /api/leaderboard
+# but the canonical backend route is GET /api/social/leaderboard.
+# This alias router bridges the gap.
+
+_lb_compat_router = APIRouter(prefix="/api", tags=["Social Feed"])
+
+
+@_lb_compat_router.get("/leaderboard", include_in_schema=False)
+async def _compat_leaderboard(
+    period: str = _Query("monthly", pattern="^(monthly|quarterly|all)$"),
+    limit: int = _Query(20, ge=1, le=100),
+):
+    """Alias: GET /api/leaderboard → get_leaderboard (/api/social/leaderboard)."""
+    return await get_leaderboard(period=period, limit=limit)
