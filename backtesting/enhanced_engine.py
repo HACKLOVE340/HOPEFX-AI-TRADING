@@ -1395,10 +1395,10 @@ class InstitutionalRiskManager:
         }
         self.risk_events.append(event)
         logger.log(
+            logging.CRITICAL if severity >= RiskEventSeverity.CRITICAL else logging.WARNING,
             "Risk Event [%s]: %s",
             severity.name,
             message,
-            logging.CRITICAL if severity >= RiskEventSeverity.CRITICAL else logging.WARNING,
         )
 
     def _estimate_var_change(self, symbol: str, size: float, price: float) -> float:
