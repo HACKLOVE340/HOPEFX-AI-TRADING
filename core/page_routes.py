@@ -131,25 +131,54 @@ def register_page_routes(app: FastAPI) -> None:
             </body></html>""",
         )
 
-    # React dashboard — mounted LAST so all /api/* routes take precedence.
-    # Falls back gracefully when dist/ doesn't exist yet.
-    _dashboard_dist = Path(__file__).parent.parent / "dashboard" / "dist"
-    if _dashboard_dist.exists():
+    # ── React SPA mounts — loaded LAST so all /api/* routes take precedence ──
+    #
+    # Priority order (first match wins):
+    #   1. frontend/static/  — main React app (Vite outDir: ../static)
+    #   2. dashboard/dist/   — legacy GodMode dashboard (fallback)
+    #
+    # Build commands:
+    #   Main app:   cd frontend && npm run build   → outputs to ../static/
+    #   GodMode:    cd dashboard && npm run build  → outputs to dashboard/dist/
+    _root = Path(__file__).parent.parent
+    _frontend_dist = _root / "static"          # frontend Vite build output
+    _dashboard_dist = _root / "dashboard" / "dist"  # legacy dashboard build
 
-        @app.get("/", include_in_schema=False)
-        async def _root_redirect():
-            return RedirectResponse(url="/app/", status_code=302)
-
-        app.mount(
-            "/app",
-            StaticFiles(directory=str(_dashboard_dist), html=True),
-            name="dashboard",
-        )
+    if _frontend_dist.exists() and (_frontend_dist / "index.html").exists():
+        # Primary: serve the main React app at /
         app.mount(
             "/",
-            StaticFiles(directory=str(_dashboard_dist), html=True),
-            name="dashboard_root",
+            StaticFiles(directory=str(_frontend_dist), html=True),
+            name="frontend_spa",
         )
-        logger.info("React dashboard mounted at /app and / (dashboard/dist/)")
+        logger.info("Main React app mounted at / (static/)")
+
+        # Also expose legacy GodMode at /godmode/ if it exists
+        if _dashboard_dist.exists() and (_dashboard_dist / "index.html").exists():
+            app.mount(
+                "/godmode",
+                StaticFiles(directory=str(_dashboard_dist), html=True),
+                name="godmode_dashboard",
+            )
+            logger.info("GodMode dashboard mounted at /godmode/ (dashboard/dist/)")
+
+    elif _dashboard_dist.exists() and (_dashboard_dist / "index.html").exists():
+        # Fallback: only legacy dashboard is built
+        @app.get("/", include_in_schema=False)
+        async def _root_redirect_godmode():
+            return RedirectResponse(url="/godmode/", status_code=302)
+
+        app.mount(
+            "/godmode",
+            StaticFiles(directory=str(_dashboard_dist), html=True),
+            name="godmode_dashboard",
+        )
+        logger.info("GodMode dashboard mounted at /godmode/ (dashboard/dist/) — main app not built yet")
+        logger.warning("Run 'cd frontend && npm run build' to build the main React app")
+
     else:
-        logger.warning("dashboard/dist/ not found — run 'cd dashboard && npm run build' to build the UI")
+        logger.warning(
+            "No React build found. Run:\n"
+            "  cd frontend && npm run build   # main app → static/\n"
+            "  cd dashboard && npm run build  # GodMode  → dashboard/dist/"
+        )
