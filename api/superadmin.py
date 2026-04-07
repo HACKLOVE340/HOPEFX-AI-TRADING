@@ -2422,12 +2422,6 @@ async def get_kyc_queue(
             db.close()
     except Exception as exc:
         logger.warning("KYC queue DB error: %s", exc)
-    # Also pull from legacy admin KYC endpoint
-    if not records:
-        try:
-            pass
-        except Exception:
-            logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {"records": records, "total": total, "page": page, "limit": limit}
 
 
@@ -2455,12 +2449,7 @@ async def approve_kyc(
         raise
     except Exception as exc:
         logger.warning("KYC approve error: %s", exc)
-    # Fallback: try legacy admin endpoint
-    try:
-        pass
-    except Exception:
-        logger.debug("Suppressed exception (no detail) in %s", __name__)
-    return {"status": "approved", "user_id": target_user_id, "note": "persisted via fallback"}
+    return {"status": "approved", "user_id": target_user_id}
 
 
 @router.post("/compliance/kyc/{target_user_id}/reject")
@@ -4999,12 +4988,6 @@ async def trigger_backup(
             )
     except Exception as exc:
         logger.warning("Backup trigger error: %s", exc)
-    # Try legacy admin backup endpoint
-    try:
-        # Trigger via admin backup endpoint if available
-        pass
-    except Exception:
-        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {"backup_id": backup_id, "type": body.type, "status": "running", "triggered_at": _utcnow().isoformat()}
 
 
