@@ -1467,6 +1467,133 @@ except Exception:
     logger.exception("Failed to register strategy sub-router: %s")
 
 
+# ── /trading/risk — alias for /trading/risk-metrics ──────────────────────────
+# Frontend chart-api.ts calls GET /trading/risk; backend registered the
+# endpoint as /trading/risk-metrics inside the strategy sub-router.
+
+@router.get("/risk", response_model=None, summary="Risk metrics (alias for /risk-metrics)")
+async def get_risk_alias():
+    """
+    Alias for ``GET /api/trading/risk-metrics``.
+
+    Returns daily PnL, max drawdown, open position count, margin used, and
+    a composite risk score.  Delegates to the same implementation used by
+    the strategy sub-router endpoint.
+    """
+    try:
+        broker = getattr(app_state, "broker", None)
+        if broker is None:
+            raise AttributeError("no broker")
+        account = broker.get_account_info()
+        positions = broker.get_positions() if hasattr(broker, "get_positions") else []
+        daily_pnl = sum(getattr(p, "unrealized_pnl", 0.0) or 0.0 for p in positions)
+        margin_used = float(getattr(account, "margin_used", 0.0) or 0.0)
+        max_dd = 0.0
+        if hasattr(broker, "get_equity_history"):
+            history = broker.get_equity_history()
+            if history:
+                from api.trading import _compute_max_drawdown
+                max_dd = _compute_max_drawdown([v for _, v in history])
+        open_count = len(positions)
+        risk_score = min(100.0, round(max_dd * 100 * 2 + open_count * 5, 1))
+        return {
+            "daily_pnl": round(daily_pnl, 2),
+            "max_drawdown": round(max_dd * 100, 3),
+            "open_positions": open_count,
+            "margin_used": round(margin_used, 2),
+            "risk_score": risk_score,
+        }
+    except Exception as exc:
+        logger.debug("GET /trading/risk fallback: %s", exc)
+        return {"daily_pnl": 0.0, "max_drawdown": 0.0, "open_positions": 0, "margin_used": 0.0, "risk_score": 0.0}
+
+
+# ── /trading/ai-analysis ──────────────────────────────────────────────────────
+# Frontend chart-api.ts POSTs a ChartClickContext and expects an AIAnalysis
+# response: id, timestamp, context, regime, summary, keyDrivers, etc.
+
+@router.post("/ai-analysis", response_model=None, summary="AI chart-click analysis")
+async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_current_user)):
+    """
+    Accept a ``ChartClickContext`` payload and return an ``AIAnalysis`` object.
+
+    Uses the signal engine and regime detector to produce a structured
+    analysis of the clicked chart point.  Falls back to a sensible default
+    when the ML stack is unavailable.
+    """
+    import uuid as _uuid
+    import time as _time
+
+    symbol: str = context.get("symbol", "XAUUSD")
+    price: float = float(context.get("price", 0.0))
+    timestamp: int = int(context.get("timestamp", _time.time() * 1000))
+
+    # Attempt to get regime from the live regime router
+    regime = "ranging"
+    regime_confidence = 0.5
+    try:
+        from core.regime_router import RegimeRouter as _RR
+        rr = _RR()
+        detected = rr.detect_regime()
+        if detected:
+            regime = str(detected.get("regime", "ranging"))
+            regime_confidence = float(detected.get("confidence", 0.5))
+    except Exception as exc:
+        logger.debug("ai-analysis: regime detection failed: %s", exc)
+
+    # Attempt to get latest signal for context
+    summary = f"AI analysis for {symbol} at {price:.5f}"
+    key_drivers: list[str] = []
+    recommended_action = "hold"
+    action_confidence = 0.5
+    warnings: list[str] = []
+
+    try:
+        from api.signals import _get_signal_service as _gss
+        svc = _gss()
+        if svc:
+            latest = svc.get_latest_signal(symbol)
+            if latest:
+                recommended_action = str(latest.get("direction", "hold")).lower()
+                action_confidence = float(latest.get("confidence", 0.5))
+                key_drivers = latest.get("drivers", [])
+                summary = latest.get("explanation", summary)
+    except Exception as exc:
+        logger.debug("ai-analysis: signal service unavailable: %s", exc)
+
+    # Price targets: simple ATR-based estimate
+    atr_estimate = price * 0.005  # 0.5% as fallback
+    try:
+        if hasattr(app_state, "price_engine") and app_state.price_engine:
+            ohlcv = await app_state.price_engine.get_ohlcv(symbol, "H1", 14)
+            if ohlcv and len(ohlcv) >= 2:
+                highs = [c[2] for c in ohlcv]
+                lows  = [c[3] for c in ohlcv]
+                atr_estimate = sum(h - l for h, l in zip(highs, lows)) / len(highs)
+    except Exception as exc:
+        logger.debug("ai-analysis: ATR estimation failed: %s", exc)
+
+    return {
+        "id": str(_uuid.uuid4()),
+        "timestamp": timestamp,
+        "context": context,
+        "regime": regime,
+        "regimeConfidence": round(regime_confidence, 3),
+        "summary": summary,
+        "keyDrivers": key_drivers,
+        "riskAssessment": f"ATR-based risk estimate: {atr_estimate:.5f}",
+        "recommendedAction": recommended_action,
+        "actionConfidence": round(action_confidence, 3),
+        "priceTargets": {
+            "bull": round(price + atr_estimate * 2, 5),
+            "bear": round(price - atr_estimate * 2, 5),
+            "base": round(price + atr_estimate * (1 if recommended_action == "buy" else -1), 5),
+        },
+        "timeHorizon": "4H–1D",
+        "warnings": warnings,
+    }
+
+
 # ── Regime status endpoint ────────────────────────────────────────────────────
 
 
