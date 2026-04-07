@@ -60,6 +60,7 @@ def register_routers(
     from api.settings import router as settings_router
     from api.settings_extended import router as settings_extended_router
     from api.settings_new_endpoints import router as settings_new_router
+    from api.social_feed import _copy_router as social_copy_router
     from api.social_feed import leaderboard_router as social_leaderboard_router
     from api.social_feed import router as social_feed_router
     from api.status import router as status_router
@@ -92,6 +93,7 @@ def register_routers(
         profiles_router,
         social_feed_router,
         social_leaderboard_router,
+        social_copy_router,
         mobile_router,
         whitelabel_router,
         platform_router,
