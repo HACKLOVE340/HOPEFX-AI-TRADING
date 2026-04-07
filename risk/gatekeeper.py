@@ -24,6 +24,10 @@ Check order (fail-fast, most critical first)
 9.  Max daily trades cap              — block when daily count >= cap
 10. Confidence floor                  — block when signal confidence < floor
 11. Spread gate                       — block when spread > max_spread_usd
+12. FIA 2024 compliance               — FIAComplianceManager mandatory pre-trade
+                                        controls (order size, intraday position,
+                                        price tolerance, kill switch, market data
+                                        validation, message throttle)
 
 On any breach
 -------------
@@ -47,6 +51,7 @@ from datetime import datetime, timedelta, timezone
 UTC = timezone.utc
 
 from core.event_bus import CH_BREACH, CH_SIGNAL, bus
+from risk.fia_compliance import FIAComplianceManager, RiskControlStatus
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +152,23 @@ class _EquityTracker:
         return max(0.0, (self._peak - self._current) / self._peak)
 
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+
+def _safe_float(obj, names: tuple[str, ...], default: float = 0.0) -> float:
+    """Return the first explicitly-set numeric attribute from *names*.
+
+    Only accepts ``int`` or ``float`` values — skips auto-generated mock
+    attributes and other non-numeric types.  Falls back to *default* when no
+    name yields a real number.
+    """
+    for name in names:
+        raw = getattr(obj, name, None)
+        if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+            return float(raw)
+    return default
+
+
 # ── Gatekeeper ────────────────────────────────────────────────────────────────
 
 
@@ -163,7 +185,12 @@ class Gatekeeper:
     Both modes consume orchestrator data for all market-data checks.
     """
 
-    def __init__(self, orchestrator=None, lineage_store=None) -> None:
+    def __init__(
+        self,
+        orchestrator=None,
+        lineage_store=None,
+        fia_compliance: FIAComplianceManager | None = None,
+    ) -> None:
         initial_balance = float(os.getenv("INITIAL_BALANCE", "100000"))
         self._orch = orchestrator
         self._lineage = lineage_store
@@ -176,11 +203,26 @@ class Gatekeeper:
         self._running: bool = False
         self._pass_count: int = 0
         self._block_count: int = 0
+        self._fia_block_count: int = 0
         # Lock protects all mutable counters (_daily_trades, _pass_count,
         # _block_count, _trade_day, _paused_until) from concurrent asyncio tasks.
         # Without this lock, concurrent signals can race and undercount trades,
         # potentially bypassing MAX_DAILY_TRADES limits.
         self._lock = asyncio.Lock()
+
+        # FIA 2024 compliance manager — runs mandatory pre-trade controls
+        # (order size, intraday position, price tolerance, kill switch, market
+        # data validation, message throttle) after the 11 internal gate checks.
+        # Injected for tests; defaults to a new instance with env-driven config.
+        self._fia: FIAComplianceManager = fia_compliance or FIAComplianceManager(
+            config={
+                "max_order_size": float(os.getenv("FIA_MAX_ORDER_SIZE", "100")),
+                "max_intraday_position": float(os.getenv("FIA_MAX_INTRADAY_POSITION", "500")),
+                "price_tolerance": float(os.getenv("FIA_PRICE_TOLERANCE", "0.02")),
+                "daily_loss_limit": float(os.getenv("FIA_DAILY_LOSS_LIMIT", "0.03")),
+                "max_messages_per_second": int(os.getenv("FIA_MAX_MSG_PER_SEC", "50")),
+            }
+        )
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -211,6 +253,9 @@ class Gatekeeper:
         """
         Evaluate a signal against all pre-trade checks.
 
+        Runs the 11 internal gate checks first (fail-fast), then delegates to
+        FIAComplianceManager for mandatory FIA 2024 pre-trade controls.
+
         Consumes orchestrator data for quality, sentiment, and blackout checks.
         Returns GateResult(passed=True) if all checks pass.
 
@@ -225,24 +270,133 @@ class Gatekeeper:
             if not failures:
                 self._pass_count += 1
                 self._daily_trades += 1
-                return GateResult(passed=True)
 
-            self._block_count += 1
+        if failures:
+            async with self._lock:
+                self._block_count += 1
             primary = failures[0]["reason"]
+            logger.warning(
+                "GATE BLOCK signal_id=%s reason=%s all_failures=%s",
+                getattr(signal, "signal_id", "?"),
+                primary,
+                [f["reason"] for f in failures],
+            )
+            self._write_rejection_lineage(signal, primary, failures)
+            async with self._lock:
+                if primary != "kill_switch_active":
+                    self._paused_until = time.monotonic() + _PAUSE_AFTER_BREACH_S
+            return GateResult(passed=False, reason=primary, failures=failures)
 
-        logger.warning(
-            "GATE BLOCK signal_id=%s reason=%s all_failures=%s",
-            getattr(signal, "signal_id", "?"),
-            primary,
-            [f["reason"] for f in failures],
-        )
-        self._write_rejection_lineage(signal, primary, failures)
+        # ── FIA 2024 compliance checks ─────────────────────────────────────
+        # Only reached when all 11 internal gates pass.  Build minimal order
+        # and market-data dicts from the signal so FIAComplianceManager can
+        # run its mandatory pre-trade controls.
+        fia_result = await self._run_fia_checks(signal)
+        if fia_result is not None:
+            return fia_result
 
-        async with self._lock:
-            if primary != "kill_switch_active":
-                self._paused_until = time.monotonic() + _PAUSE_AFTER_BREACH_S
+        return GateResult(passed=True)
 
-        return GateResult(passed=False, reason=primary, failures=failures)
+    async def _run_fia_checks(self, signal) -> GateResult | None:
+        """
+        Run FIA 2024 mandatory pre-trade controls via FIAComplianceManager.
+
+        Returns a blocking GateResult if any FIA rule fires, None if all pass.
+        Errors in FIA checks are logged and treated as non-blocking so that a
+        misconfigured compliance manager cannot halt all trading.
+        """
+        try:
+            # ExecutionSignal uses tick_bid/tick_ask/tick_mid; dict signals use
+            # bid/ask/mid.  Read both name variants so both paths work correctly.
+            bid = _safe_float(signal, ("tick_bid", "bid"))
+            ask = _safe_float(signal, ("tick_ask", "ask"))
+            mid = _safe_float(signal, ("tick_mid", "mid_price", "mid"))
+
+            order = {
+                "symbol": getattr(signal, "symbol", "XAU_USD"),
+                "size": float(getattr(signal, "quantity", getattr(signal, "size", 1.0))),
+                "side": getattr(signal, "direction", "long"),
+                "price": float(getattr(signal, "entry_price", mid)),
+            }
+            # FIA 3.1 market-data validation is only meaningful when the signal
+            # carries live tick prices (bid > 0 and ask > bid).  Pure ML signals
+            # without embedded prices rely on the orchestrator data-quality gate
+            # (check 5) for staleness protection — skip FIA 3.1 for those.
+            has_prices = bid > 0.0 and ask > bid
+            market_data = {
+                "mid": mid if mid > 0.0 else (bid + ask) / 2.0 if has_prices else 0.0,
+                "bid": bid if has_prices else 0.0,
+                "ask": ask if has_prices else 0.0,
+                "timestamp": datetime.now(UTC),
+            }
+            portfolio_state = {
+                "daily_pnl": float(getattr(signal, "daily_pnl", 0.0)),
+                "capital": float(os.getenv("INITIAL_BALANCE", "100000")),
+            }
+
+            fia_results = await self._fia.validate_order(order, market_data, portfolio_state)
+
+            # FIA 1.3 (price tolerance) and FIA 3.1 (market data validation)
+            # require live tick prices.  When the signal carries no embedded
+            # prices (pure ML signal — prices live in the orchestrator), these
+            # checks are not applicable and must not block the signal.  The
+            # orchestrator data-quality gate (check 5) is the authoritative
+            # staleness guard for price-less signals.
+            price_dependent_rules = frozenset({
+                "FIA_1.3_PRICE_TOLERANCE",
+                "FIA_3.1_MARKET_DATA_VALIDATION",
+            })
+            if not has_prices:
+                fia_results = [
+                    r for r in fia_results
+                    if r.rule not in price_dependent_rules
+                    or r.status not in (RiskControlStatus.BLOCK, RiskControlStatus.KILL_SWITCH)
+                ]
+
+            for result in fia_results:
+                if result.status in (RiskControlStatus.BLOCK, RiskControlStatus.KILL_SWITCH):
+                    async with self._lock:
+                        self._fia_block_count += 1
+                        self._block_count += 1
+                        # FIA kill switch mirrors the internal kill switch
+                        if result.status == RiskControlStatus.KILL_SWITCH:
+                            self._kill_active = True
+
+                    reason = f"fia:{result.rule}"
+                    logger.warning(
+                        "FIA BLOCK signal_id=%s rule=%s message=%s",
+                        getattr(signal, "signal_id", "?"),
+                        result.rule,
+                        result.message,
+                    )
+                    self._write_rejection_lineage(
+                        signal,
+                        reason,
+                        [{"reason": reason, "detail": result.message}],
+                    )
+                    return GateResult(
+                        passed=False,
+                        reason=reason,
+                        failures=[{"reason": reason, "detail": result.message, "rule": result.rule}],
+                    )
+        except Exception as exc:
+            # FIA check errors must not silently pass orders — log at ERROR
+            # and block the signal so the failure is visible in monitoring.
+            logger.error(
+                "FIA compliance check raised unexpectedly for signal_id=%s: %s — blocking signal",
+                getattr(signal, "signal_id", "?"),
+                exc,
+            )
+            async with self._lock:
+                self._fia_block_count += 1
+                self._block_count += 1
+            return GateResult(
+                passed=False,
+                reason="fia_check_error",
+                failures=[{"reason": "fia_check_error", "detail": str(exc)}],
+            )
+
+        return None
 
     # ── Event-bus signal consumer ─────────────────────────────────────────────
 
@@ -596,11 +750,13 @@ class Gatekeeper:
         return {
             "pass_count": self._pass_count,
             "block_count": self._block_count,
+            "fia_block_count": self._fia_block_count,
             "daily_trades": self._daily_trades,
             "daily_dd_pct": round(self._equity.daily_dd * 100, 4),
             "max_dd_pct": round(self._equity.max_dd * 100, 4),
             "kill_active": self._kill_active,
             "paused": time.monotonic() < self._paused_until,
+            "fia_kill_switch": self._fia.kill_switch_active,
         }
 
 
