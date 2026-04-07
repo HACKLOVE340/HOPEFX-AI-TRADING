@@ -936,3 +936,158 @@ async def push_alert(alert: dict, user_id: str) -> None:
             "data": alert,
         },
     )
+
+
+# ─── /ws/nuclear ─────────────────────────────────────────────────────────────
+# Nuclear dashboard WebSocket endpoint.
+# Frontend useNuclearWS hook connects here and expects:
+#   nuclear_chart_update  — periodic NuclearState snapshot
+#   nuclear_alert         — severity >= 7 event
+#   nuclear_resume        — trading resumed after halt
+#   heartbeat             — 30s keepalive
+
+_NUCLEAR_HEARTBEAT_INTERVAL = 30  # seconds
+_NUCLEAR_POLL_INTERVAL = 2        # seconds between state snapshots
+
+
+@router.websocket("/ws/nuclear")
+async def ws_nuclear(websocket: WebSocket) -> None:
+    """
+    Nuclear dashboard real-time feed.
+
+    Auth: JWT bearer token sent as { type: 'auth', token: 'Bearer <jwt>' }
+    immediately after connect, matching the same handshake as /ws/live.
+
+    Outbound message types:
+      connected            — initial handshake
+      auth_ok              — auth accepted
+      nuclear_chart_update — NuclearState snapshot every 2s
+      nuclear_alert        — severity >= 7 event
+      nuclear_resume       — trading resumed
+      heartbeat            — 30s keepalive
+      error                — auth failure or server error
+    """
+    await websocket.accept()
+    await websocket.send_text(json.dumps({"type": "connected", "auth_required": True}))
+
+    # ── Auth gate ─────────────────────────────────────────────────────────────
+    try:
+        raw = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
+        msg = json.loads(raw)
+    except (asyncio.TimeoutError, json.JSONDecodeError):
+        await websocket.send_text(json.dumps({"type": "error", "code": "AUTH_TIMEOUT"}))
+        await websocket.close()
+        return
+
+    if msg.get("type") != "auth":
+        await websocket.send_text(json.dumps({"type": "error", "code": "AUTH_REQUIRED"}))
+        await websocket.close()
+        return
+
+    payload = _validate_ws_token(msg.get("token", ""))
+    if not payload:
+        await websocket.send_text(json.dumps({"type": "error", "code": "AUTH_FAILED", "message": "Invalid or expired token"}))
+        await websocket.close()
+        return
+
+    user_id = str(payload.get("sub", "unknown"))
+    await websocket.send_text(json.dumps({"type": "auth_ok", "user_id": user_id}))
+
+    # ── Stream loop ───────────────────────────────────────────────────────────
+    last_heartbeat = asyncio.get_event_loop().time()
+    last_severity = -1
+
+    async def _send(data: dict) -> bool:
+        try:
+            await websocket.send_text(json.dumps(data))
+            return True
+        except Exception:
+            return False
+
+    def _get_nuclear_state() -> dict | None:
+        try:
+            from api.nuclear import _get_supervisor as _sup, _get_orchestrator as _orch
+            sup = _sup()
+            orch = _orch()
+            sup_status = sup.get_status() if sup else {}
+            orch_status = orch.get_status() if orch else {}
+            return {
+                "severity": sup_status.get("nuclear_level", 0),
+                "action": sup_status.get("action", "normal"),
+                "nuclear_level": sup_status.get("nuclear_level", 0),
+                "trading_paused": sup_status.get("trading_paused", False),
+                "rl_action": sup_status.get("rl_action", 0),
+                "rl_action_label": sup_status.get("rl_action_label", "NORMAL"),
+                "rl_agent_loaded": sup_status.get("rl_agent_loaded", False),
+                "confidence": sup_status.get("confidence", 0.0),
+                "raw_score": sup_status.get("raw_score", 0.0),
+                "matched_terms": sup_status.get("matched_terms", []),
+                "category_scores": sup_status.get("category_scores", {}),
+                "vol_factor": sup_status.get("vol_factor", 1.0),
+                "sentiment_factor": sup_status.get("sentiment_factor", 0.0),
+                "explanation": sup_status.get("explanation", ""),
+                "alert_active": sup_status.get("alert_active", False),
+                "historical_analog": sup_status.get("historical_analog"),
+                "cooldown_remaining": sup_status.get("cooldown_remaining", 0),
+                "event_count": sup_status.get("event_count", 0),
+                "hedge_active": orch_status.get("hedge_active", False),
+                "max_risk_fraction": orch_status.get("max_risk_fraction", 1.0),
+            }
+        except Exception as exc:
+            logger.debug("ws_nuclear: state fetch failed: %s", exc)
+            return None
+
+    try:
+        while True:
+            now = asyncio.get_event_loop().time()
+
+            # Heartbeat
+            if now - last_heartbeat >= _NUCLEAR_HEARTBEAT_INTERVAL:
+                if not await _send({"type": "heartbeat", "ts": datetime.now(UTC).isoformat()}):
+                    break
+                last_heartbeat = now
+
+            # State snapshot
+            state = _get_nuclear_state()
+            if state is not None:
+                if not await _send({"type": "nuclear_chart_update", "data": state}):
+                    break
+
+                # Alert if severity crossed threshold
+                severity = state.get("severity", 0)
+                if severity >= 7 and last_severity < 7:
+                    if not await _send({
+                        "type": "nuclear_alert",
+                        "data": {
+                            "severity": severity,
+                            "action": state.get("action"),
+                            "explanation": state.get("explanation", ""),
+                            "ts": datetime.now(UTC).isoformat(),
+                        },
+                    }):
+                        break
+
+                # Resume notification
+                if last_severity >= 7 and severity < 7:
+                    if not await _send({"type": "nuclear_resume", "data": {"ts": datetime.now(UTC).isoformat()}}):
+                        break
+
+                last_severity = severity
+
+            # Drain any inbound messages (subscribe/ping) without blocking
+            try:
+                raw = await asyncio.wait_for(websocket.receive_text(), timeout=_NUCLEAR_POLL_INTERVAL)
+                inbound = json.loads(raw)
+                if inbound.get("type") == "ping":
+                    await _send({"type": "pong"})
+            except asyncio.TimeoutError:
+                pass
+            except (WebSocketDisconnect, json.JSONDecodeError):
+                break
+
+    except WebSocketDisconnect:
+        pass
+    except Exception as exc:
+        logger.error("ws_nuclear error for user %s: %s", user_id, exc)
+    finally:
+        logger.debug("ws_nuclear: disconnected user=%s", user_id)
