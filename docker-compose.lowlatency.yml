@@ -20,6 +20,8 @@ version: "3.9"
 services:
 
   # ── Trading engine — host network, pinned CPU ─────────────────────────────
+  # Targets the "trading" service in docker-compose.yml (not "app").
+  # "app" is the FastAPI server; "trading" runs hopefx_engine.py / core.main_loop.
   trading:
     network_mode: host          # bypass Docker NAT — direct kernel TCP stack
     cpuset: "${TRADING_CORE:-2}"
@@ -89,10 +91,4 @@ services:
       timeout: 3s
       retries: 3
 
-  # ── API — keep bridge networking (no latency requirement) ─────────────────
-  app:
-    deploy:
-      resources:
-        limits:
-          cpus: "${API_CPUS:-1.0}"
-          memory: "${API_MEM:-2G}"
+
