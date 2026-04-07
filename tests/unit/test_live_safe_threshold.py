@@ -178,7 +178,7 @@ class TestSLTPMonitorClose:
         async def run():
             await monitor._close_position(pos, "stop_loss", 2299.5)
 
-        asyncio.get_event_loop().run_until_complete(run())
+        asyncio.run(run())
         assert broker.place_order.called
 
     def test_empty_positions_no_close(self):
@@ -192,7 +192,7 @@ class TestSLTPMonitorClose:
         async def run():
             await monitor._check_all_positions()
 
-        asyncio.get_event_loop().run_until_complete(run())
+        asyncio.run(run())
         broker.place_order.assert_not_called()
 
     def test_zero_quantity_skips_close(self):
@@ -212,7 +212,7 @@ class TestSLTPMonitorClose:
         async def run():
             await monitor._close_position(pos, "stop_loss", 2299.0)
 
-        asyncio.get_event_loop().run_until_complete(run())
+        asyncio.run(run())
         broker.place_order.assert_not_called()
 
 
@@ -385,7 +385,7 @@ class TestMarginCheck:
         async def run():
             return await engine._check_margin(req, 0.0)
 
-        report = asyncio.get_event_loop().run_until_complete(run())
+        report = asyncio.run(run())
         assert report is not None
         assert "MARGIN_INSUFFICIENT" in report.message
 
@@ -403,7 +403,7 @@ class TestMarginCheck:
         async def run():
             return await engine._check_margin(req, 0.0)
 
-        report = asyncio.get_event_loop().run_until_complete(run())
+        report = asyncio.run(run())
         assert report is None
 
     def test_skips_check_when_no_broker(self):
@@ -415,7 +415,7 @@ class TestMarginCheck:
         async def run():
             return await engine._check_margin(_make_request(), 0.0)
 
-        result = asyncio.get_event_loop().run_until_complete(run())
+        result = asyncio.run(run())
         assert result is None
 
 
@@ -440,7 +440,7 @@ class TestLeverageHardCap:
         async def run():
             return await engine._check_leverage(req, 0.0)
 
-        report = asyncio.get_event_loop().run_until_complete(run())
+        report = asyncio.run(run())
         assert report is not None
         assert "LEVERAGE_EXCEEDED" in report.message
 
@@ -459,7 +459,7 @@ class TestLeverageHardCap:
         async def run():
             return await engine._check_leverage(req, 0.0)
 
-        report = asyncio.get_event_loop().run_until_complete(run())
+        report = asyncio.run(run())
         assert report is None
 
     def test_risk_limits_has_max_leverage_field(self):
@@ -503,7 +503,7 @@ class TestKillSwitchEscalation:
             async def run():
                 await cb._execute_kill_switch("test_reason")
 
-            asyncio.get_event_loop().run_until_complete(run())
+            asyncio.run(run())
             mock_escalate.assert_called_once()
 
     def test_broker_level_cancel_calls_ibkr_global_cancel(self):
