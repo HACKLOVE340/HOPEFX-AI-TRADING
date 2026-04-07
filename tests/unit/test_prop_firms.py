@@ -205,9 +205,7 @@ class TestBasePropFirmBrokerAbstract:
             async def get_trade_history(self, limit=100): return []
 
         broker = MockBroker("key", "secret", "acc", PropFirmType.FTMO)
-        violated, reason = asyncio.get_event_loop().run_until_complete(
-            broker.check_risk_violations()
-        )
+        violated, reason = asyncio.run(broker.check_risk_violations())
         assert violated is True
         assert "daily" in reason.lower()
 
@@ -240,9 +238,7 @@ class TestBasePropFirmBrokerAbstract:
             async def get_trade_history(self, limit=100): return []
 
         broker = MockBroker("key", "secret", "acc", PropFirmType.FTMO)
-        violated, reason = asyncio.get_event_loop().run_until_complete(
-            broker.check_risk_violations()
-        )
+        violated, reason = asyncio.run(broker.check_risk_violations())
         assert violated is False
         assert reason is None
 
