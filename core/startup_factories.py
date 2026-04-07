@@ -1002,7 +1002,7 @@ async def init_macro_store(s: Any) -> Any:
         try:
             from ml.macro_bootstrap import bootstrap, load_into_store
 
-            n_written = await asyncio.get_event_loop().run_in_executor(None, bootstrap, False)
+            n_written = await asyncio.get_running_loop().run_in_executor(None, bootstrap, False)
             n_loaded = load_into_store(macro_store)
             logger.info(
                 "MacroStore CSV fallback: %d series written, %d loaded",

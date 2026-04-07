@@ -543,7 +543,7 @@ class LiveInferenceLoop:
 
             replay = orchestrator._replay
             if replay is not None and hasattr(replay, "get_ohlcv"):
-                ohlcv = await asyncio.get_event_loop().run_in_executor(
+                ohlcv = await asyncio.get_running_loop().run_in_executor(
                     None, replay.get_ohlcv, self.symbol, self.min_bars + 20
                 )
                 if ohlcv is not None and len(ohlcv) >= self.min_bars:

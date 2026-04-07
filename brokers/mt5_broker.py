@@ -97,13 +97,13 @@ class MT5Broker:
         if not _MT5_AVAILABLE:
             logger.error("MT5Broker.connect: MetaTrader5 SDK not installed")
             return False
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_connect)
 
     async def disconnect(self) -> None:
         """Shut down the MT5 terminal connection."""
         if self.connected and _MT5_AVAILABLE:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, _mt5.shutdown)
             self.connected = False
             logger.info("MT5Broker disconnected (login=%s)", self._login)
@@ -114,21 +114,21 @@ class MT5Broker:
         """Return account details as a plain dict, or None if not connected."""
         if not self._assert_connected("get_account_info"):
             return None
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_account_info)
 
     async def get_positions(self) -> list[dict]:
         """Return all open positions as a list of dicts."""
         if not self._assert_connected("get_positions"):
             return []
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_positions)
 
     async def get_orders(self) -> list[dict]:
         """Return all pending orders as a list of dicts."""
         if not self._assert_connected("get_orders"):
             return []
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_orders)
 
     # ── Order execution ───────────────────────────────────────────────────────
@@ -158,7 +158,7 @@ class MT5Broker:
         """
         if not self._assert_connected("place_order"):
             return {"success": False, "order": 0, "comment": "Not connected"}
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_place_order, order_params)
 
     async def close_position(self, ticket: int, volume: float | None = None) -> dict:
@@ -172,21 +172,21 @@ class MT5Broker:
         """
         if not self._assert_connected("close_position"):
             return {"success": False, "comment": "Not connected"}
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_close_position, ticket, volume)
 
     async def modify_position(self, ticket: int, sl: float = 0.0, tp: float = 0.0) -> dict:
         """Modify the SL/TP of an open position."""
         if not self._assert_connected("modify_position"):
             return {"success": False, "comment": "Not connected"}
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_modify_position, ticket, sl, tp)
 
     async def cancel_order(self, ticket: int) -> dict:
         """Delete a pending order by ticket number."""
         if not self._assert_connected("cancel_order"):
             return {"success": False, "comment": "Not connected"}
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_cancel_order, ticket)
 
     # ── Market data ───────────────────────────────────────────────────────────
@@ -195,7 +195,7 @@ class MT5Broker:
         """Return the latest bid/ask tick for *symbol*."""
         if not self._assert_connected("get_tick"):
             return None
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_get_tick, symbol)
 
     # ── Synchronous helpers (run in executor) ─────────────────────────────────

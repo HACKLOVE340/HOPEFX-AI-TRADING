@@ -279,7 +279,7 @@ async def _fetch_yfinance(
         return []
 
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         if from_dt is not None:
             end_dt = datetime.now(UTC)

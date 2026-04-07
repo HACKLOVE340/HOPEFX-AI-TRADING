@@ -403,7 +403,7 @@ class CMEComexConnector(BrokerConnector):
 
         # Run async send_order in a new event loop if called from sync context
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             if loop.is_running():
                 import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:

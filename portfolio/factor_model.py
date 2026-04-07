@@ -145,7 +145,7 @@ class FactorLibrary:
 
     async def get_factor_matrix_async(self, force_refresh: bool = False) -> pd.DataFrame:
         """Async wrapper — runs the blocking refresh in a thread pool."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self.get_factor_matrix, force_refresh)
 
     # ── internals ─────────────────────────────────────────────────────────────
@@ -333,7 +333,7 @@ class FactorModel:
 
     async def fit_async(self, asset_returns: dict[str, pd.Series]) -> dict[str, FactorExposure]:
         """Async wrapper for fit()."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self.fit, asset_returns)
 
     def get_exposure(self, symbol: str) -> FactorExposure | None:
@@ -611,7 +611,7 @@ class LiveFactorEngine:
         for sym in self.symbols:
             ticker = symbol_map.get(sym, sym)
             try:
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 data = await loop.run_in_executor(
                     None,
                     lambda t=ticker: yf.download(

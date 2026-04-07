@@ -275,7 +275,7 @@ class SLTPMonitor:
             success = False
             for attempt in range(1, _MAX_RETRIES + 1):
                 try:
-                    loop = asyncio.get_event_loop()
+                    loop = asyncio.get_running_loop()
                     order = await loop.run_in_executor(
                         None,
                         lambda: self._broker.place_order(

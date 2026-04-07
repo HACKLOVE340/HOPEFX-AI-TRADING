@@ -821,7 +821,7 @@ async def _chartbot_broadcaster() -> None:
 
 def start_broadcasters() -> None:
     """Start background tasks (call once from app lifespan)."""
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     _t = loop.create_task(_price_broadcaster())
     _t.add_done_callback(lambda _: None)
     _t = loop.create_task(_heartbeat_broadcaster())

@@ -362,7 +362,7 @@ class MTFFusionStore:
         """
         import asyncio
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, self._load_data)
         # Register as module singleton so signal_engine can find it
         global _MTF_STORE_SINGLETON

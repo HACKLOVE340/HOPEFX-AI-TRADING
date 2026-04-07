@@ -327,7 +327,7 @@ def start_reconciler(
         interval_seconds=interval_seconds,
     )
     # Schedule start — must be called from within a running event loop
-    asyncio.get_event_loop().create_task(_start(rec))
+    asyncio.get_running_loop().create_task(_start(rec))
     return rec
 
 
