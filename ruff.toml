@@ -101,6 +101,17 @@ ignore = [
     "C416",
 ]
 
+# ── data_layer/ isolation ────────────────────────────────────────────────────
+# Enforce that modules outside data_layer/ do not import directly from the
+# internal sub-packages (feeds/, tick_store, orchestrator internals).
+# Allowed public surface: data_layer.orchestrator (orchestrator singleton),
+#                         data_layer.tick_store    (TickStore),
+#                         data_layer.feeds.*       (FeedRegistry public API).
+# Add TID rules here when ruff TID support for custom bans lands; for now
+# the violations are tracked via the "forbidden-import" comments below.
+# TODO(#enforcement): enable TID251 or a custom pre-commit hook once ruff
+#   supports per-package import bans without pyproject.toml fragmentation.
+
 [lint.per-file-ignores]
 # PLR2004: HTTP status codes and small numeric literals are acceptable in tests
 "tests/**"             = ["S105", "S106", "S107", "S108", "S110", "S112", "S301", "S311", "PLR2004"]

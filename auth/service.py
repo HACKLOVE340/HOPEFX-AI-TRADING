@@ -71,6 +71,7 @@ class _TokenBlacklist:
         except Exception:
             logger.warning(
                 "Token blacklist: Redis unavailable — using in-memory fallback (not suitable for multi-process)",
+                exc_info=True,
             )
             self._redis = None
 
@@ -151,6 +152,7 @@ def _get_fernet():
         fernet_key = base64.urlsafe_b64encode(key_bytes)
         return Fernet(fernet_key)
     except Exception:
+        logger.debug("_get_fernet: key derivation failed", exc_info=True)
         return None
 
 
@@ -169,6 +171,7 @@ def decrypt_totp_secret(stored: str) -> str:
         try:
             return f.decrypt(stored.encode()).decode()
         except Exception:
+            logger.debug("decrypt_totp_secret: decryption failed (may be plain)", exc_info=True)
             # May already be plain (migration case)
             return stored
     return stored

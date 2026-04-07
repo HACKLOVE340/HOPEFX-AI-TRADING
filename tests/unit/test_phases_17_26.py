@@ -10,6 +10,9 @@ Unit tests for Phases 17-26 modules.
 from datetime import datetime
 
 import pytest
+import logging
+logger = logging.getLogger(__name__)
+
 
 # ==================== Phase 17: Dashboard Tests ====================
 
@@ -271,7 +274,7 @@ class TestResearchNotebookEngine:
 
         notebook = notebook_engine.create_notebook(title="Test", description="Test", author="test")
 
-        cell = notebook_engine.add_cell(notebook.notebook_id, CellType.CODE, "print('Hello World')")
+        cell = notebook_engine.add_cell(notebook.notebook_id, CellType.CODE, "logger.info('Hello World')")
 
         assert cell is not None
         assert cell.cell_type == CellType.CODE

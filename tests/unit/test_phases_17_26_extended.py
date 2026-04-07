@@ -19,6 +19,9 @@ from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
+import logging
+logger = logging.getLogger(__name__)
+
 
 # ===========================================================================
 # Phase 18: Chart Replay Engine - extended tests
@@ -497,7 +500,7 @@ class TestResearchNotebooksExtended:
 
         nb = engine.create_notebook("CodeTest", "Test notebook", "tester")
         assert nb is not None
-        cell = engine.add_cell(nb.notebook_id, CellType.CODE, 'print("hello")')
+        cell = engine.add_cell(nb.notebook_id, CellType.CODE, 'logger.info("hello")')
         assert cell is not None
         assert cell.content == 'print("hello")'
 
@@ -509,7 +512,7 @@ class TestResearchNotebooksExtended:
         assert cell is not None
 
     def test_add_cell_invalid_notebook(self, engine):
-        cell = engine.add_cell("bad_id", "code", 'print("x")')
+        cell = engine.add_cell("bad_id", "code", 'logger.info("x")')
         assert cell is None
 
     # --- execute_cell ---

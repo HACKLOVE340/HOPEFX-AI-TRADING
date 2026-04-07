@@ -33,3 +33,10 @@ __all__ = [
     "SimulatedBroker",
     "run_backtest",
 ]
+
+# Re-export modules that have been migrated to backtesting/
+# These lazy imports keep the shim lightweight while providing backward compatibility.
+from backtesting import data_validator  # noqa: F401
+from backtesting import multi_symbol_backtest  # noqa: F401
+from backtesting import reconciled_backtest_investigation  # noqa: F401
+from backtesting import transaction_costs  # noqa: F401

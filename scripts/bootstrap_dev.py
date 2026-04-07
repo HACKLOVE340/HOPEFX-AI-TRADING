@@ -134,7 +134,7 @@ def _seed_admin() -> str:
     from database.models import Base
     from database.user_models import User, UserRole, UserStatus
 
-    db_url = os.environ["DATABASE_URL"]
+    db_url = os.environ.get("DATABASE_URL") or os.getenv("DATABASE_URL", "sqlite:///./hopefx.db")
     connect_args = {"check_same_thread": False} if db_url.startswith("sqlite") else {}
     engine = create_engine(db_url, connect_args=connect_args)
     Base.metadata.create_all(engine)

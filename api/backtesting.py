@@ -737,7 +737,7 @@ async def run_multi_symbol_backtest(
     import functools
 
     try:
-        from backtest.multi_symbol_backtest import run_backtest as _run_backtest
+        from backtesting.multi_symbol_backtest import run_backtest as _run_backtest
     except ImportError as exc:
         logger.error("multi_symbol_backtest module unavailable: %s", exc)
         raise HTTPException(
@@ -855,7 +855,7 @@ async def get_reconciled_investigation(
         import sys
 
         sys.path.insert(0, str(Path(__file__).parent.parent))
-        from backtest.reconciled_backtest_investigation import run_investigation
+        from backtesting.reconciled_backtest_investigation import run_investigation
 
         results = run_investigation(smoke=False)
         cache_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
@@ -890,7 +890,7 @@ async def refresh_reconciled_investigation(
             from pathlib import Path as _Path
 
             sys.path.insert(0, str(_Path(__file__).parent.parent))
-            from backtest.reconciled_backtest_investigation import run_investigation
+            from backtesting.reconciled_backtest_investigation import run_investigation
 
             results = run_investigation(smoke=False)
             _Path("data/backtest_investigation.json").write_text(_json.dumps(results, indent=2), encoding="utf-8")
