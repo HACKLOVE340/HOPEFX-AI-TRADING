@@ -33,7 +33,7 @@ Usage (programmatic)
 
     runner = MutationTestRunner(modules=["risk", "execution"])
     report = await runner.run()
-    print(f"Mutation score: {report.score:.1%}")
+    logger.info(f"Mutation score: {report.score:.1%}")
 
 Configuration (env vars)
 ------------------------
@@ -551,7 +551,7 @@ if __name__ == "__main__":
             min_score=args.min_score,
         )
         report = await runner.run()
-        print(report.summary())
+        logger.info(report.summary())
         sys.exit(0 if report.passed else 1)
 
     asyncio.run(_main())

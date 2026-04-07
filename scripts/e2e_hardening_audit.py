@@ -33,6 +33,9 @@ import pathlib
 import re
 import sys
 from datetime import datetime, timezone
+import logging
+logger = logging.getLogger(__name__)
+
 UTC = timezone.utc
 
 # Ensure repo root is on sys.path so data_layer imports work when the
@@ -55,21 +58,21 @@ warned: list[str] = []
 
 def ok(msg: str) -> None:
     passed.append(msg)
-    print(f"  {GREEN}✓{RESET} {msg}")
+    logger.info(f"  {GREEN}✓{RESET} {msg}")
 
 
 def fail(msg: str) -> None:
     failed.append(msg)
-    print(f"  {RED}✗ FAIL{RESET} {msg}")
+    logger.error(f"  {RED}✗ FAIL{RESET} {msg}")
 
 
 def warn(msg: str) -> None:
     warned.append(msg)
-    print(f"  {YELLOW}⚠ WARN{RESET} {msg}")
+    logger.warning(f"  {YELLOW}⚠ WARN{RESET} {msg}")
 
 
 def section(title: str) -> None:
-    print(f"\n{BOLD}{title}{RESET}")
+    logger.info(f"\n{BOLD}{title}{RESET}")
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -773,18 +776,18 @@ except Exception as e:
 # =============================================================================
 # SUMMARY
 # =============================================================================
-print(f"\n{BOLD}{'=' * 60}{RESET}")
-print(f"{BOLD}HARDENING AUDIT SUMMARY{RESET}")
-print(f"  {GREEN}Passed:   {len(passed)}{RESET}")
-print(f"  {YELLOW}Warnings: {len(warned)}{RESET}")
-print(f"  {RED}Failed:   {len(failed)}{RESET}")
-print(f"{BOLD}{'=' * 60}{RESET}")
+logger.info(f"\n{BOLD}{'=' * 60}{RESET}")
+logger.info(f"{BOLD}HARDENING AUDIT SUMMARY{RESET}")
+logger.info(f"  {GREEN}Passed:   {len(passed)}{RESET}")
+logger.warning(f"  {YELLOW}Warnings: {len(warned)}{RESET}")
+logger.error(f"  {RED}Failed:   {len(failed)}{RESET}")
+logger.info(f"{BOLD}{'=' * 60}{RESET}")
 
 if failed:
-    print(f"\n{RED}FAILED CHECKS:{RESET}")
+    logger.error(f"\n{RED}FAILED CHECKS:{RESET}")
     for f in failed:
-        print(f"  ✗ {f}")
+        logger.info(f"  ✗ {f}")
     sys.exit(1)
 else:
-    print(f"\n{GREEN}All hardening checks passed.{RESET}")
+    logger.info(f"\n{GREEN}All hardening checks passed.{RESET}")
     sys.exit(0)

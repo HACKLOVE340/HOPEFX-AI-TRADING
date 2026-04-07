@@ -48,6 +48,9 @@ from sqlalchemy import create_engine
 from auth.service import hash_password
 from database.models import Base
 from database.user_models import User, UserRole, UserStatus
+import logging
+logger = logging.getLogger(__name__)
+
 
 
 def _get_engine():
@@ -69,8 +72,8 @@ def create_or_update_admin(email: str, username: str, password: str, reset: bool
         existing = session.query(User).filter((User.email == email.lower()) | (User.username == username)).first()
 
         if existing and not reset:
-            print(f"\n[INFO] User '{existing.username}' already exists.")
-            print("       Use --reset to update the password.\n")
+            logger.info(f"\n[INFO] User '{existing.username}' already exists.")
+            logger.info("       Use --reset to update the password.\n")
             return
 
         hashed = hash_password(password)
@@ -83,7 +86,7 @@ def create_or_update_admin(email: str, username: str, password: str, reset: bool
             existing.email_verify_token = None
             existing.email_verify_expires = None
             session.commit()
-            print(f"\n✅  Password reset for user '{existing.username}'")
+            logger.info(f"\n✅  Password reset for user '{existing.username}'")
         else:
             user = User(
                 id=str(uuid.uuid4()),
@@ -98,21 +101,21 @@ def create_or_update_admin(email: str, username: str, password: str, reset: bool
             )
             session.add(user)
             session.commit()
-            print(f"\n✅  Admin user created: '{username}'")
+            logger.info(f"\n✅  Admin user created: '{username}'")
 
-        print("─" * 50)
-        print(f"  Email    : {email}")
-        print(f"  Username : {username}")
+        logger.info("─" * 50)
+        logger.info(f"  Email    : {email}")
+        logger.info(f"  Username : {username}")
         # Do not echo the password here — it was either supplied by the caller
         # (who already knows it) or printed once by main() before this call.
-        print("  Password : (set — use the value shown above or your supplied value)")
-        print("  Role     : admin")
-        print("  Status   : active (email pre-verified)")
-        print("─" * 50)
-        print("\n  Login endpoint: POST /api/auth/login")
-        print('  Body: {"username": "<email or username>", "password": "<password>"}')
-        print("\n  Swagger UI: /docs")
-        print("  Dashboard : /app\n")
+        logger.info("  Password : (set — use the value shown above or your supplied value)")
+        logger.info("  Role     : admin")
+        logger.info("  Status   : active (email pre-verified)")
+        logger.info("─" * 50)
+        logger.info("\n  Login endpoint: POST /api/auth/login")
+        logger.info('  Body: {"username": "<email or username>", "password": "<password>"}')
+        logger.info("\n  Swagger UI: /docs")
+        logger.info("  Dashboard : /app\n")
 
     finally:
         session.close()
@@ -151,8 +154,8 @@ def main():
             os.write(fd, pw_content)
         finally:
             os.close(fd)
-        print(f"[INFO] Auto-generated password written to: {pw_file}")
-        print("[INFO] Delete that file after saving the password to a password manager.")
+        logger.info(f"[INFO] Auto-generated password written to: {pw_file}")
+        logger.info("[INFO] Delete that file after saving the password to a password manager.")
 
     create_or_update_admin(args.email, args.username, args.password, args.reset)
 

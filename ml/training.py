@@ -1607,14 +1607,14 @@ def walk_forward_validate(
 
 
 if __name__ == "__main__":
-    print("HOPEFX Machine Learning Pipeline")
-    print("Models: LSTM, XGBoost, Random Forest")
-    print("Features: Feature engineering, hyperparameter tuning, evaluation reports")
-    print("\nUsage:")
-    print("  from ml.training import train_ml_pipeline, walk_forward_validate")
-    print(
+    logger.info("HOPEFX Machine Learning Pipeline")
+    logger.info("Models: LSTM, XGBoost, Random Forest")
+    logger.info("Features: Feature engineering, hyperparameter tuning, evaluation reports")
+    logger.info("\nUsage:")
+    logger.info("  from ml.training import train_ml_pipeline, walk_forward_validate")
+    logger.info(
         "  results = train_ml_pipeline(df, model_types=['lstm', 'xgboost', 'random_forest'])",
     )
-    print(
+    logger.info(
         "  wf = walk_forward_validate(df, model_type='random_forest', n_splits=5, gap=20)",
     )

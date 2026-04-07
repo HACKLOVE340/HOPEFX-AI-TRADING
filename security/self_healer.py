@@ -651,14 +651,13 @@ async def start_healer(app: FastAPI) -> None:
 # Registered by router_registry.py at import time. Delegates to get_healer()
 # at request time so the live instance is used once start_healer() runs.
 
-def _build_eager_heal_router() -> "APIRouter":
+def _build_eager_heal_router() -> APIRouter:
     from fastapi import APIRouter as _APIRouter, Request as _Request
 
     r = _APIRouter(prefix="/api/security/heal", tags=["self-healer"])
 
     def _require_auth(request: _Request) -> None:
-        from api.auth import get_current_user as _gcu
-        import asyncio as _asyncio
+        pass
         # Auth is enforced inside the live healer router; stub passes through.
 
     @r.get("/status")

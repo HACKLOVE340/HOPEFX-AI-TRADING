@@ -538,7 +538,7 @@ class ChartPatternDetector:
         detector = ChartPatternDetector()
         patterns = detector.detect_patterns(df)
         for p in patterns:
-            print(p.pattern_type, p.direction, p.confidence)
+            logger.info(p.pattern_type, p.direction, p.confidence)
     """
 
     def __init__(self, config: dict | None = None):

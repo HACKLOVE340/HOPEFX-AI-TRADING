@@ -19,7 +19,7 @@ Usage
     tester = StressTester(position_value=50_000, leverage=1.0)
     results = tester.run_all()
     worst = tester.worst_case(results)
-    print(f"Worst scenario: {worst.name} → loss ${worst.pnl_usd:,.0f}")
+    logger.info(f"Worst scenario: {worst.name} → loss ${worst.pnl_usd:,.0f}")
 
     # Gate: block trade if any scenario exceeds max_loss_pct of equity
     gate_ok = tester.gate_check(results, equity=100_000, max_loss_pct=0.20)

@@ -49,6 +49,9 @@ import traceback
 from datetime import datetime, timezone
 UTC = timezone.utc
 from pathlib import Path
+import logging
+logger = logging.getLogger(__name__)
+
 
 # Ensure project root is on sys.path regardless of where the script is invoked.
 # This script lives in scripts/ — add the parent directory (project root).
@@ -76,7 +79,7 @@ def record(name: str, passed: bool, detail: str = "", critical: bool = True) -> 
     msg = f"  {icon} {name}{label}"
     if detail:
         msg += f" — {detail}"
-    print(msg)
+    logger.info(msg)
 
 
 def check(name: str, critical: bool = True):
@@ -659,11 +662,11 @@ async def check_orchestrator_start_stop() -> None:
 
 
 async def run_all(verbose: bool = False) -> tuple[int, int]:
-    print(f"\n{BOLD}HOPEFX End-to-End Production Validation{RESET}")
-    print(f"  Timestamp: {datetime.now(UTC).isoformat()}")
-    print(f"  Python:    {sys.version.split()[0]}\n")
+    logger.info(f"\n{BOLD}HOPEFX End-to-End Production Validation{RESET}")
+    logger.info(f"  Timestamp: {datetime.now(UTC).isoformat()}")
+    logger.info(f"  Python:    {sys.version.split()[0]}\n")
 
-    print(f"{BOLD}Synchronous checks{RESET}")
+    logger.info(f"{BOLD}Synchronous checks{RESET}")
     check_architecture()
     check_imports()
     check_orchestrator()
@@ -687,7 +690,7 @@ async def run_all(verbose: bool = False) -> tuple[int, int]:
     check_forward_test_no_mocks()
     check_order_flow_no_mocks()
 
-    print(f"\n{BOLD}Async / lifecycle checks{RESET}")
+    logger.info(f"\n{BOLD}Async / lifecycle checks{RESET}")
     await check_orchestrator_start_stop()
 
     # Summary
@@ -696,23 +699,23 @@ async def run_all(verbose: bool = False) -> tuple[int, int]:
     failed_c = sum(1 for _, p, c, _ in results if not p and c)
     warnings = sum(1 for _, p, c, _ in results if not p and not c)
 
-    print(f"\n{BOLD}Summary{RESET}")
-    print(f"  Total:    {total}")
-    print(f"  {PASS}Passed:   {passed}")
+    logger.info(f"\n{BOLD}Summary{RESET}")
+    logger.info(f"  Total:    {total}")
+    logger.info(f"  {PASS}Passed:   {passed}")
     if failed_c:
-        print(f"  {FAIL}Failed (critical): {failed_c}")
+        logger.error(f"  {FAIL}Failed (critical): {failed_c}")
     if warnings:
-        print(f"  {WARN}Warnings:  {warnings}")
+        logger.warning(f"  {WARN}Warnings:  {warnings}")
 
     if failed_c == 0:
-        print(f"\n  {PASS}{BOLD}All critical checks passed. System is production-ready.{RESET}\n")
+        logger.info(f"\n  {PASS}{BOLD}All critical checks passed. System is production-ready.{RESET}\n")
     else:
-        print(f"\n  {FAIL}{BOLD}{failed_c} critical check(s) failed. Fix before deploying.{RESET}\n")
+        logger.error(f"\n  {FAIL}{BOLD}{failed_c} critical check(s) failed. Fix before deploying.{RESET}\n")
         if verbose:
-            print(f"{BOLD}Failed checks:{RESET}")
+            logger.error(f"{BOLD}Failed checks:{RESET}")
             for name, passed, critical, detail in results:
                 if not passed and critical:
-                    print(f"  {FAIL} {name}: {detail}")
+                    logger.error(f"  {FAIL} {name}: {detail}")
 
     return passed, failed_c
 

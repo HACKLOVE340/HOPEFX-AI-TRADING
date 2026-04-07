@@ -25,7 +25,7 @@ def _load_secret() -> str:
     if not val:
         raise RuntimeError(
             "SECURITY_JWT_SECRET is not set. "
-            'Generate one with: python -c "import secrets; print(secrets.token_urlsafe(48))"',
+            'Generate one with: python -c "import secrets; logger.info(secrets.token_urlsafe(48))"',
         )
     if len(val) < 32:
         raise RuntimeError(

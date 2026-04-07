@@ -30,8 +30,8 @@ Usage:
         direction="maximize",
     )
     result = engine.run()
-    print(result.best_params)
-    print(result.best_value)
+    logger.info(result.best_params)
+    logger.info(result.best_value)
 """
 
 import logging

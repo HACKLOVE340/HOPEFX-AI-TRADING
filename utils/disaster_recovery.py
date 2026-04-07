@@ -20,6 +20,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import aiofiles
+import logging
+logger = logging.getLogger(__name__)
+
 
 if TYPE_CHECKING:
     import aiohttp
@@ -65,7 +68,7 @@ class ContinuousBackup:
         async with session.create_client("s3", region_name=region) as client:
             await client.head_bucket(Bucket=bucket)
 
-        print(f"☁️ S3 backup enabled: {bucket}")
+        logger.info(f"☁️ S3 backup enabled: {bucket}")
 
     async def create_snapshot(self, event_store, orchestra, risk_engine) -> SystemState:
         """Create consistent point-in-time snapshot"""
@@ -107,7 +110,7 @@ class ContinuousBackup:
         # Cleanup old snapshots (keep last 100)
         await self._cleanup_old_snapshots()
 
-        print(f"💾 Snapshot created: {filename}")
+        logger.info(f"💾 Snapshot created: {filename}")
         return state
 
     async def _upload_to_cloud(self, local_path: Path, filename: str):
@@ -149,7 +152,7 @@ class ContinuousBackup:
             raise ValueError("Snapshot checksum verification failed!")
 
         state = SystemState(**state_dict)
-        print(f"✅ Restored from snapshot: {snapshot_file}")
+        logger.info(f"✅ Restored from snapshot: {snapshot_file}")
         return state
 
 
@@ -175,7 +178,7 @@ class FailoverManager:
         """
         Raft/Paxos-style leader election.
         """
-        print(f"🗳️ Starting leader election (node: {self.node_id})")
+        logger.info(f"🗳️ Starting leader election (node: {self.node_id})")
 
         # Simple bully algorithm for now
         # In production, use proper consensus (etcd, Consul)
@@ -185,9 +188,9 @@ class FailoverManager:
         self.is_primary = all_nodes[-1] == self.node_id
 
         if self.is_primary:
-            print("✅ Elected as PRIMARY node")
+            logger.info("✅ Elected as PRIMARY node")
         else:
-            print("⏸️ Running as SECONDARY node")
+            logger.info("⏸️ Running as SECONDARY node")
 
     async def heartbeat_loop(self):
         """Send heartbeats to peers and monitor their health"""
@@ -202,7 +205,7 @@ class FailoverManager:
                 if primary != self.node_id:
                     last_seen = self.last_peer_heartbeat.get(primary)
                     if last_seen and (datetime.now(UTC) - last_seen).seconds > self.failover_timeout:
-                        print(f"⚠️ Primary {primary} appears down! Triggering failover...")
+                        logger.error(f"⚠️ Primary {primary} appears down! Triggering failover...")
                         await self._trigger_failover()
 
             await asyncio.sleep(self.heartbeat_interval)
@@ -239,14 +242,14 @@ class FailoverManager:
                 if resp.status < 300:
                     self.last_peer_heartbeat[peer] = datetime.now(UTC)
                 else:
-                    print(f"⚠️ Heartbeat to {peer} returned HTTP {resp.status}")
+                    logger.warning(f"⚠️ Heartbeat to {peer} returned HTTP {resp.status}")
         except aiohttp.ClientError as exc:
             # Network errors are expected when a peer is down — log and continue
-            print(f"⚠️ Heartbeat to {peer} failed: {exc}")
+            logger.error(f"⚠️ Heartbeat to {peer} failed: {exc}")
 
     async def _trigger_failover(self):
         """Promote self to primary"""
-        print("🚨 FAILOVER: Promoting to primary")
+        logger.error("🚨 FAILOVER: Promoting to primary")
         self.is_primary = True
         # Take over processing
         # Load latest state from backup
@@ -255,7 +258,7 @@ class FailoverManager:
     async def graceful_handover(self, new_primary: str):
         """Gracefully hand over primary role"""
         if self.is_primary:
-            print(f"🤝 Handing over primary to {new_primary}")
+            logger.info(f"🤝 Handing over primary to {new_primary}")
             self.is_primary = False
             # Sync state to new primary
             # Pause new orders

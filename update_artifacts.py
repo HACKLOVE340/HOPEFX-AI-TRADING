@@ -26,6 +26,9 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+import logging
+logger = logging.getLogger(__name__)
+
 
 # ---------------------------------------------------------------------------
 # Pillow is the only dependency — it is installed in the CI job.
@@ -33,7 +36,7 @@ from pathlib import Path
 try:
     from PIL import Image, ImageDraw, ImageFont
 except ImportError:
-    print("ERROR: Pillow is required. Install with: pip install Pillow", file=sys.stderr)
+    logger.error("ERROR: Pillow is required. Install with: pip install Pillow", file=sys.stderr)
     sys.exit(1)
 
 # ---------------------------------------------------------------------------
@@ -278,7 +281,7 @@ def generate_cover(output_path: Path) -> None:
     # ------------------------------------------------------------------
     output_path.parent.mkdir(parents=True, exist_ok=True)
     img.save(str(output_path), "PNG", optimize=True)
-    print(f"Cover written to {output_path}  ({output_path.stat().st_size // 1024} KB)")
+    logger.info(f"Cover written to {output_path}  ({output_path.stat().st_size // 1024} KB)")
 
 
 def main() -> None:

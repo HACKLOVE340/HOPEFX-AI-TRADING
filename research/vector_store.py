@@ -26,7 +26,7 @@ Usage
     # retrieve 5 most similar past windows to the current market state
     results = store.query_similar_regimes(current_candles, top_k=5)
     for r in results:
-        print(r["regime"], r["next_return"], r["distance"])
+        logger.info(r["regime"], r["next_return"], r["distance"])
 """
 
 from __future__ import annotations

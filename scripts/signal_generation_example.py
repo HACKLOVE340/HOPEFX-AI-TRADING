@@ -15,13 +15,16 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 
 
+import logging
+logger = logging.getLogger(__name__)
+
 # Load historical data
 def load_data(file_path):
     try:
         data = pd.read_csv(file_path)
         return data
     except Exception as e:
-        print(f"Error loading data: {e}")
+        logger.error(f"Error loading data: {e}")
         return None
 
 
@@ -47,7 +50,7 @@ def train_model(data):
         labels = data["Signal"]
         model.fit(features, labels)
     except Exception as e:
-        print(f"Error training model: {e}")
+        logger.error(f"Error training model: {e}")
         return None
     return model
 
@@ -55,10 +58,10 @@ def train_model(data):
 # Test edge cases
 def test_edge_cases(data):
     if data is None or data.empty:
-        print("Insufficient data for predictions.")
+        logger.info("Insufficient data for predictions.")
         return
     if data.isnull().values.any():
-        print("NaN values found in data. Handling NaN...")
+        logger.info("NaN values found in data. Handling NaN...")
         data.fillna(method="ffill", inplace=True)
     # Simulating stale ticks is more context-dependent.
 
@@ -70,7 +73,7 @@ def main(file_path):
         data = generate_signals(data)
         train_model(data)
         test_edge_cases(data)
-        print(data["Signal"].value_counts())
+        logger.info(data["Signal"].value_counts())
         # More validation can be added here
 
 

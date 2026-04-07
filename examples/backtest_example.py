@@ -265,10 +265,10 @@ class BacktestEngine:
 
 def main():
     """Run backtest example."""
-    print("=" * 60)
-    print("HOPEFX Backtest Example")
-    print("Strategy: Moving Average Crossover on XAUUSD")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("HOPEFX Backtest Example")
+    logger.info("Strategy: Moving Average Crossover on XAUUSD")
+    logger.info("=" * 60)
 
     # Generate data
     logger.info("Generating synthetic XAUUSD data...")
@@ -284,19 +284,19 @@ def main():
     metrics = engine.run()
 
     # Print results
-    print("\\n" + "=" * 60)
-    print("BACKTEST RESULTS")
-    print("=" * 60)
-    print(f"Initial Capital: ${metrics['initial_capital']:.2f}")
-    print(f"Final Capital:   ${metrics['final_capital']:.2f}")
-    print(f"Total Return:    {metrics['total_return_pct']:.2f}%")
-    print(f"Total Trades:    {metrics['total_trades']}")
-    print(f"Win Rate:        {metrics['win_rate_pct']:.1f}%")
-    print(f"Profit Factor:   {metrics['profit_factor']:.2f}")
-    print(f"Max Drawdown:    {metrics['max_drawdown_pct']:.2f}%")
-    print(f"Sharpe Ratio:    {metrics['sharpe_ratio']:.2f}")
-    print(f"Total Commission: ${metrics['total_commission']:.2f}")
-    print("=" * 60)
+    logger.info("\\n" + "=" * 60)
+    logger.info("BACKTEST RESULTS")
+    logger.info("=" * 60)
+    logger.info(f"Initial Capital: ${metrics['initial_capital']:.2f}")
+    logger.info(f"Final Capital:   ${metrics['final_capital']:.2f}")
+    logger.info(f"Total Return:    {metrics['total_return_pct']:.2f}%")
+    logger.info(f"Total Trades:    {metrics['total_trades']}")
+    logger.info(f"Win Rate:        {metrics['win_rate_pct']:.1f}%")
+    logger.info(f"Profit Factor:   {metrics['profit_factor']:.2f}")
+    logger.info(f"Max Drawdown:    {metrics['max_drawdown_pct']:.2f}%")
+    logger.info(f"Sharpe Ratio:    {metrics['sharpe_ratio']:.2f}")
+    logger.info(f"Total Commission: ${metrics['total_commission']:.2f}")
+    logger.info("=" * 60)
 
     # Save results
     results_dir = Path("results")
@@ -306,7 +306,7 @@ def main():
     metrics_file = results_dir / "backtest_metrics.json"
     with open(metrics_file, "w") as f:
         json.dump(metrics, f, indent=2)
-    print(f"\\nMetrics saved to: {metrics_file}")
+    logger.info(f"\\nMetrics saved to: {metrics_file}")
 
     # Save equity curve
     engine.save_equity_curve(results_dir / "equity_curve.json")
@@ -348,14 +348,14 @@ def main():
         plt.tight_layout()
         plot_file = results_dir / "equity_curve.png"
         plt.savefig(plot_file, dpi=150, bbox_inches="tight")
-        print(f"Plot saved to: {plot_file}")
+        logger.info(f"Plot saved to: {plot_file}")
         plt.close()
 
     except ImportError:
         logger.warning("matplotlib not installed, skipping plot generation")
-        print("Install matplotlib to generate equity curve plots: pip install matplotlib")
+        logger.info("Install matplotlib to generate equity curve plots: pip install matplotlib")
 
-    print("\\n✅ Backtest complete!")
+    logger.info("\\n✅ Backtest complete!")
     return metrics
 
 

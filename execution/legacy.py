@@ -626,26 +626,26 @@ class SmartOrderRouter:
 
 if __name__ == "__main__":
     # Demo
-    print("=" * 60)
-    print("Execution Module Demo")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("Execution Module Demo")
+    logger.info("=" * 60)
 
     executor = PaperExecutor(initial_balance=10000.0)
 
     # Buy order
     buy_order = Order(symbol="XAUUSD", side="buy", qty=0.01, stop_loss=1950.0)
     result = executor.submit_order(buy_order, current_price=2000.0)
-    print(f"\\nBuy order: {result.status.value} @ {result.avg_price:.2f}")
-    print(f"  Slippage: ${result.slippage:.2f}, Commission: ${result.commission:.2f}")
-    print(f"  Balance: ${executor.balance:.2f}, Equity: ${executor.equity:.2f}")
+    logger.info(f"\\nBuy order: {result.status.value} @ {result.avg_price:.2f}")
+    logger.info(f"  Slippage: ${result.slippage:.2f}, Commission: ${result.commission:.2f}")
+    logger.info(f"  Balance: ${executor.balance:.2f}, Equity: ${executor.equity:.2f}")
 
     # Sell order
     sell_order = Order(symbol="XAUUSD", side="sell", qty=0.01)
     result = executor.submit_order(sell_order, current_price=2010.0)
-    print(f"\\nSell order: {result.status.value} @ {result.avg_price:.2f}")
-    print(f"  Balance: ${executor.balance:.2f}, Equity: ${executor.equity:.2f}")
+    logger.info(f"\\nSell order: {result.status.value} @ {result.avg_price:.2f}")
+    logger.info(f"  Balance: ${executor.balance:.2f}, Equity: ${executor.equity:.2f}")
 
     # Invalid order (should reject)
     bad_order = Order(symbol="INVALID", side="buy", qty=0.01)
     result = executor.submit_order(bad_order, current_price=100.0)
-    print(f"\\nInvalid order: {result.status.value} - {result.message}")
+    logger.info(f"\\nInvalid order: {result.status.value} - {result.message}")

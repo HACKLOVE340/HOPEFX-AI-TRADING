@@ -236,7 +236,7 @@ class PipelineOrchestrator:
         cfg = PipelineConfig(ticker="GC=F", interval="1d", start_date="2000-01-01")
         orch = PipelineOrchestrator(cfg)
         report = orch.run()
-        print(report)
+        logger.info(report)
     """
 
     def __init__(self, config: PipelineConfig):

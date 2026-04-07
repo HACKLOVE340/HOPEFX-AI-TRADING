@@ -13,9 +13,8 @@ Covers: Venue, Order, Fill, MarketImpactModel, TWAPStrategy,
 
 import asyncio
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
-import numpy as np
 import pytest
 
 UTC = timezone.utc

@@ -55,7 +55,7 @@ Usage
         quantity=1.0,
         price=2350.0,
     )
-    print(order.order_id, order.filled_price)
+    logger.info(order.order_id, order.filled_price)
     broker.disconnect()
 """
 

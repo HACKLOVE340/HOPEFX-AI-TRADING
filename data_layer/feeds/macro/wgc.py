@@ -317,7 +317,7 @@ class WGCFeed:
         try:
             import requests
 
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
 
             def _sync_get() -> str | None:
                 r = requests.get(

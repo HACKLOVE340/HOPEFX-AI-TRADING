@@ -45,6 +45,9 @@ import secrets
 import sys
 from pathlib import Path
 
+import logging
+logger = logging.getLogger(__name__)
+
 # ── constants ─────────────────────────────────────────────────────────────────
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -164,9 +167,9 @@ def _safe_print(msg: str) -> None:
 
     Callers must pass only env-var *names* or counts — never secret values.
     """
-    # Use print() rather than sys.stdout.write so CodeQL does not trace
+    # Use logger.info() rather than sys.stdout.write so CodeQL does not trace
     # taint from secret-adjacent variables into a logging sink.
-    print(msg)  # nosec B106 - msg contains only env-var names/counts, not secret values
+    logger.info(msg)  # nosec B106 - msg contains only env-var names/counts, not secret values
 
 
 def _is_placeholder(val: str) -> bool:
@@ -275,7 +278,7 @@ def cmd_rotate(args: argparse.Namespace) -> int:
     """Rotate a specific secret."""
     key = args.key
     if not key:
-        print("Error: --key is required for rotate command")
+        logger.error("Error: --key is required for rotate command")
         return 1
 
     env = _load_env(ENV_FILE)
@@ -284,12 +287,12 @@ def cmd_rotate(args: argparse.Namespace) -> int:
     env[key] = new_val
     _write_env(ENV_FILE, env)
 
-    print(f"Rotated {key}")
-    print(f"  Old: {'(not set)' if not old_val else '(redacted)'}")
-    print(f"  New: (redacted — see {ENV_FILE})")
-    print("\nRestart the application to pick up the new value.")
+    logger.info(f"Rotated {key}")
+    logger.info(f"  Old: {'(not set)' if not old_val else '(redacted)'}")
+    logger.info(f"  New: (redacted — see {ENV_FILE})")
+    logger.info("\nRestart the application to pick up the new value.")
     if key in ("SECURITY_JWT_SECRET",):
-        print("WARNING: Rotating JWT_SECRET invalidates all active user sessions.")
+        logger.warning("WARNING: Rotating JWT_SECRET invalidates all active user sessions.")
     return 0
 
 
@@ -322,13 +325,13 @@ def cmd_audit(_args: argparse.Namespace) -> int:
                     break  # one finding per line
 
     if not findings:
-        print("No hardcoded secrets found.")
+        logger.info("No hardcoded secrets found.")
         return 0
 
-    print(f"Found {len(findings)} potential hardcoded secret(s):\n")
+    logger.info(f"Found {len(findings)} potential hardcoded secret(s):\n")
     for path, lineno, label, snippet in findings:
-        print(f"  {path}:{lineno}  [{label}]")
-        print(f"    {snippet}")
+        logger.info(f"  {path}:{lineno}  [{label}]")
+        logger.info(f"    {snippet}")
     return 1
 
 
@@ -341,16 +344,16 @@ def cmd_check_env(_args: argparse.Namespace) -> int:
     extra = [k for k in current if k not in example]
 
     if missing:
-        print(f"Keys in .env.example but missing from .env ({len(missing)}):")
+        logger.info(f"Keys in .env.example but missing from .env ({len(missing)}):")
         for k in missing:
-            print(f"  - {k}")
+            logger.info(f"  - {k}")
     else:
-        print("No missing keys.")
+        logger.info("No missing keys.")
 
     if extra:
-        print(f"\nKeys in .env but not in .env.example ({len(extra)}) — consider documenting:")
+        logger.info(f"\nKeys in .env but not in .env.example ({len(extra)}) — consider documenting:")
         for k in extra:
-            print(f"  + {k}")
+            logger.info(f"  + {k}")
 
     return 1 if missing else 0
 

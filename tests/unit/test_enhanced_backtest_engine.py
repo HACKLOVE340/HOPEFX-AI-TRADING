@@ -313,7 +313,7 @@ class TestAnalyticsFunctions:
         assert periods == []
 
     def test_compute_drawdown_simple(self, eng):
-        ts_base = eng.NanosecondTimestamp(seconds=1_700_000_000, nanoseconds=0)
+        _ts_base = eng.NanosecondTimestamp(seconds=1_700_000_000, nanoseconds=0)
         curve = [
             (eng.NanosecondTimestamp(seconds=1_700_000_000 + i, nanoseconds=0), eq)
             for i, eq in enumerate([100_000, 110_000, 90_000, 95_000, 105_000])

@@ -41,7 +41,7 @@ Usage
 
     engine = ItosConeEngine()
     cone = engine.compute(closes, current_price, symbol="XAU_USD")
-    print(cone.upper_2sigma_1m, cone.lower_2sigma_1m)
+    logger.info(cone.upper_2sigma_1m, cone.lower_2sigma_1m)
 """
 
 from __future__ import annotations

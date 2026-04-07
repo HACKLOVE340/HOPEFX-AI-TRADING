@@ -593,7 +593,7 @@ class CandlestickPatternDetector:
         detector = CandlestickPatternDetector()
         patterns = detector.detect_patterns(df)
         for p in patterns:
-            print(p.pattern_name, p.direction, p.confidence)
+            logger.info(p.pattern_name, p.direction, p.confidence)
     """
 
     def __init__(self, config: dict | None = None):

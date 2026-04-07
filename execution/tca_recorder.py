@@ -62,8 +62,8 @@ Usage
 
     # Reporting:
     report = recorder.get_report(broker="oanda", last_n=500)
-    print(report.mean_slippage_bps)   # e.g. 1.8 bps
-    print(report.p95_slippage_bps)    # e.g. 4.2 bps
+    logger.info(report.mean_slippage_bps)   # e.g. 1.8 bps
+    logger.info(report.p95_slippage_bps)    # e.g. 4.2 bps
 
 Configuration (env vars)
 ------------------------

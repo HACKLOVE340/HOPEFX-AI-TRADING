@@ -40,7 +40,7 @@ Usage
 
     clf = RegimeClassifier()
     result = clf.classify(mtf_features, cone_merged)
-    print(result.regime, result.confidence)
+    logger.info(result.regime, result.confidence)
 """
 
 from __future__ import annotations

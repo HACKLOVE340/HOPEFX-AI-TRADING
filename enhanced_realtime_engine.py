@@ -976,17 +976,17 @@ async def run_realtime_test():
             "Set APP_ENV=development or APP_ENV=test to use this function."
         )
 
-    print("=" * 80)
-    print("HOPEFX REAL-TIME ENGINE v4.0 - DEVELOPMENT SMOKE TEST")
-    print("=" * 80)
+    logger.info("=" * 80)
+    logger.info("HOPEFX REAL-TIME ENGINE v4.0 - DEVELOPMENT SMOKE TEST")
+    logger.info("=" * 80)
 
     # Create aggregator
-    print("\n[1] Initializing consensus aggregator...")
+    logger.info("\n[1] Initializing consensus aggregator...")
     aggregator = ConsensusAggregator(consensus_threshold=0.5, max_sources=5, outlier_threshold=0.001)
 
     # Add synthetic providers for smoke-testing only.
     # In production, replace with PolygonProvider, OandaProvider, or BinanceProvider.
-    print("[2] Adding synthetic test providers (MockProvider)...")
+    logger.info("[2] Adding synthetic test providers (MockProvider)...")
     aggregator.add_provider(MockProvider(volatility=0.0002, drift=0.00001, tick_interval_ms=100))  # pylint: disable=abstract-class-instantiated
 
     aggregator.add_provider(MockProvider(volatility=0.0003, drift=-0.00001, tick_interval_ms=150))  # pylint: disable=abstract-class-instantiated
@@ -996,7 +996,7 @@ async def run_realtime_test():
     # aggregator.add_provider(OandaProvider(os.getenv("OANDA_ACCOUNT_ID"), os.getenv("OANDA_API_KEY")))
     # aggregator.add_provider(BinanceProvider(os.getenv("BINANCE_API_KEY"), os.getenv("BINANCE_SECRET")))
 
-    print(f"    Added {len(aggregator.providers)} providers")
+    logger.info(f"    Added {len(aggregator.providers)} providers")
 
     # Set up tick collection
     consensus_ticks = []
@@ -1007,14 +1007,14 @@ async def run_realtime_test():
         latencies.append(tick.latency_ns / 1_000_000)  # Convert to ms
 
         if len(consensus_ticks) % 100 == 0:
-            print(
+            logger.info(
                 f"    Received {len(consensus_ticks)} consensus ticks (avg latency: {np.mean(latencies[-100:]):.2f} ms)"
             )
 
     aggregator.on_consensus(on_consensus)
 
     # Start aggregation
-    print("\n[3] Starting realtime aggregation (5 seconds)...")
+    logger.info("\n[3] Starting realtime aggregation (5 seconds)...")
     start_time = time.time()
 
     task = asyncio.create_task(aggregator.start())
@@ -1023,54 +1023,54 @@ async def run_realtime_test():
     await asyncio.sleep(5)
 
     # Stop
-    print("\n[4] Stopping aggregation...")
+    logger.info("\n[4] Stopping aggregation...")
     aggregator.stop()
     task.cancel()
 
     elapsed = time.time() - start_time
 
     # Generate report
-    print("\n" + "=" * 80)
-    print("REAL-TIME ENGINE REPORT")
-    print("=" * 80)
+    logger.info("\n" + "=" * 80)
+    logger.info("REAL-TIME ENGINE REPORT")
+    logger.info("=" * 80)
 
-    print(f"\nDuration: {elapsed:.2f} seconds")
-    print(f"Consensus ticks received: {len(consensus_ticks)}")
-    print(f"Rate: {len(consensus_ticks) / elapsed:.1f} ticks/second")
+    logger.info(f"\nDuration: {elapsed:.2f} seconds")
+    logger.info(f"Consensus ticks received: {len(consensus_ticks)}")
+    logger.info(f"Rate: {len(consensus_ticks) / elapsed:.1f} ticks/second")
 
     if latencies:
-        print("\n--- Latency Statistics ---")
-        print(f"Min: {min(latencies):.3f} ms")
-        print(f"Max: {max(latencies):.3f} ms")
-        print(f"Mean: {np.mean(latencies):.3f} ms")
-        print(f"P50: {np.percentile(latencies, 50):.3f} ms")
-        print(f"P99: {np.percentile(latencies, 99):.3f} ms")
+        logger.info("\n--- Latency Statistics ---")
+        logger.info(f"Min: {min(latencies):.3f} ms")
+        logger.info(f"Max: {max(latencies):.3f} ms")
+        logger.info(f"Mean: {np.mean(latencies):.3f} ms")
+        logger.info(f"P50: {np.percentile(latencies, 50):.3f} ms")
+        logger.info(f"P99: {np.percentile(latencies, 99):.3f} ms")
 
     # Health report
-    print("\n--- Provider Health ---")
+    logger.info("\n--- Provider Health ---")
     health = aggregator.get_health_report()
     for name, status in health["providers"].items():
-        print(
+        logger.info(
             f"{name:15}: {status['state']:12} | "
             f"Health: {status['health_score']:5.1f} | "
             f"Latency: {status['latency_p50_ms']:6.2f} ms"
         )
 
-    print("\n--- Consensus Stats ---")
-    print(f"Ticks processed: {aggregator.stats['ticks_processed']}")
-    print(f"Consensus formed: {aggregator.stats['consensus_formed']}")
-    print(f"Disagreements: {aggregator.stats['disagreements']}")
-    print(f"Outliers rejected: {aggregator.stats['outliers_rejected']}")
+    logger.info("\n--- Consensus Stats ---")
+    logger.info(f"Ticks processed: {aggregator.stats['ticks_processed']}")
+    logger.info(f"Consensus formed: {aggregator.stats['consensus_formed']}")
+    logger.info(f"Disagreements: {aggregator.stats['disagreements']}")
+    logger.info(f"Outliers rejected: {aggregator.stats['outliers_rejected']}")
 
     # Sample consensus prices
     if consensus_ticks:
-        print("\n--- Sample Prices (last 5) ---")
+        logger.info("\n--- Sample Prices (last 5) ---")
         for tick in consensus_ticks[-5:]:
-            print(f"{tick.symbol}: Bid={tick.bid:.5f} Ask={tick.ask:.5f} Spread={tick.spread_bps:.2f} bps")
+            logger.info(f"{tick.symbol}: Bid={tick.bid:.5f} Ask={tick.ask:.5f} Spread={tick.spread_bps:.2f} bps")
 
-    print("\n" + "=" * 80)
-    print("✅ REAL-TIME ENGINE TEST COMPLETED")
-    print("=" * 80)
+    logger.info("\n" + "=" * 80)
+    logger.info("✅ REAL-TIME ENGINE TEST COMPLETED")
+    logger.info("=" * 80)
 
 
 if __name__ == "__main__":
@@ -1078,7 +1078,7 @@ if __name__ == "__main__":
     try:
         asyncio.run(run_realtime_test())
     except KeyboardInterrupt:
-        print("\n\nTest interrupted by user")
+        logger.info("\n\nTest interrupted by user")
 
 
 # Backward-compat alias used by comprehensive_test_framework.py

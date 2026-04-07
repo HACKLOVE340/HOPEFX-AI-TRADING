@@ -74,7 +74,7 @@ Usage
         quantity=1,          # 1 contract = 100 troy oz
         price=2350.00,
     )
-    print(order.order_id, order.filled_price)
+    logger.info(order.order_id, order.filled_price)
     broker.disconnect()
 """
 
