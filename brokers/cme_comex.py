@@ -288,12 +288,11 @@ class CMEComexConnector(BrokerConnector):
             except Exception as exc:
                 logger.warning("CME: IBKR account info failed: %s", exc)
         return AccountInfo(
-            account_id=self._cme_account or "CME_PAPER",
             balance=0.0,
             equity=0.0,
             margin_used=0.0,
             margin_available=0.0,
-            currency="USD",
+            positions_count=0,
         )
 
     def get_market_data(
@@ -317,6 +316,39 @@ class CMEComexConnector(BrokerConnector):
             except Exception as exc:
                 logger.warning("CME: IBKR positions failed: %s", exc)
         return []
+
+    def cancel_order(self, order_id: str) -> bool:
+        """Cancel a pending order. Not supported on paper path; IBKR delegates."""
+        if self._ibkr_available and self._ibkr_connector:
+            try:
+                return self._ibkr_connector.cancel_order(order_id)
+            except Exception as exc:
+                logger.warning("CME: cancel_order failed: %s", exc)
+        logger.warning("CME: cancel_order not supported on current execution path")
+        return False
+
+    def close_position(self, symbol: str) -> bool:
+        """Close an open position. Delegates to IBKR when available."""
+        if self._ibkr_available and self._ibkr_connector:
+            try:
+                return self._ibkr_connector.close_position(symbol)
+            except Exception as exc:
+                logger.warning("CME: close_position failed: %s", exc)
+        logger.warning("CME: close_position not supported on current execution path")
+        return False
+
+    def get_order(self, order_id: str) -> Order | None:
+        """Look up a previously placed order by ID from local fill history."""
+        for fill in self._fills:
+            if fill.order_id == order_id:
+                return self._fill_to_order(
+                    fill,
+                    fill.symbol,
+                    OrderSide(fill.side),
+                    OrderType.MARKET,
+                    fill.contracts,
+                )
+        return None
 
     # ── FIX execution path ────────────────────────────────────────────────────
 
@@ -492,16 +524,16 @@ class CMEComexConnector(BrokerConnector):
     @staticmethod
     def _fill_to_order(fill: CMEFill, symbol: str, side: OrderSide, order_type: OrderType, quantity: float) -> Order:
         return Order(
-            order_id=fill.order_id,
+            id=fill.order_id,
             symbol=symbol,
             side=side,
-            order_type=order_type,
+            type=order_type,
             quantity=quantity,
             filled_quantity=fill.contracts,
-            filled_price=fill.avg_price,
+            average_price=fill.avg_price,
             status=OrderStatus.FILLED,
-            commission=fill.commission,
             timestamp=fill.timestamp,
+            metadata={"commission": fill.commission, "source": fill.source},
         )
 
     # ── Metrics ───────────────────────────────────────────────────────────────

@@ -245,26 +245,24 @@ class CPPShimConnector(BrokerConnector):
         )
 
         return Order(
-            order_id=order_id,
+            id=order_id,
             symbol=symbol,
             side=side,
-            order_type=order_type,
+            type=order_type,
             quantity=quantity,
             filled_quantity=fill_qty,
-            filled_price=fill_price,
+            average_price=fill_price,
             status=OrderStatus.FILLED,
-            commission=0.0,
             timestamp=datetime.now(UTC),
         )
 
     def get_account_info(self) -> AccountInfo:
         return AccountInfo(
-            account_id=os.getenv("CME_ACCOUNT", "CPP_SHIM"),
             balance=0.0,
             equity=0.0,
             margin_used=0.0,
             margin_available=0.0,
-            currency="USD",
+            positions_count=0,
         )
 
     def get_market_data(self, symbol: str, timeframe: str = "1h", limit: int = 100) -> list[dict]:
@@ -273,6 +271,20 @@ class CPPShimConnector(BrokerConnector):
 
     def get_positions(self) -> list[Position]:
         return []
+
+    def cancel_order(self, order_id: str) -> bool:
+        """Cancel is not supported via the C++ shim (fire-and-forget FIX path)."""
+        logger.warning("CPPShimConnector: cancel_order not supported")
+        return False
+
+    def close_position(self, symbol: str) -> bool:
+        """Close position by sending a market order in the opposite direction."""
+        logger.warning("CPPShimConnector: close_position not supported directly — use place_order")
+        return False
+
+    def get_order(self, order_id: str) -> None:
+        """Order lookup not supported; fills are tracked via metrics() only."""
+        return None
 
     # ── ZMQ helpers ───────────────────────────────────────────────────────────
 
