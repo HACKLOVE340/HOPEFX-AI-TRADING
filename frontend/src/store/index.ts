@@ -97,6 +97,23 @@ interface OrchestratorSlice {
   setPerformanceSummary: (s: PerformanceSummary) => void;
 }
 
+// ─── Alerts slice ─────────────────────────────────────────────────────────────
+
+export interface TriggeredAlert {
+  id:           string;
+  symbol:       string;
+  condition:    string;
+  target_price: number;
+  triggered_at: string;
+  message?:     string;
+}
+
+interface AlertsSlice {
+  triggeredAlerts:  TriggeredAlert[];
+  addTriggeredAlert: (alert: TriggeredAlert) => void;
+  clearTriggeredAlerts: () => void;
+}
+
 // ─── WebSocket slice ──────────────────────────────────────────────────────────
 
 interface WsSlice {
@@ -115,6 +132,7 @@ export type AppStore =
   SignalSlice &
   AccountSlice &
   OrchestratorSlice &
+  AlertsSlice &
   WsSlice;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -239,6 +257,21 @@ export const useStore = create<AppStore>()(
         setPerformanceSummary: (performanceSummary) =>
           set({ performanceSummary }, false, 'performance/summary'),
 
+        // ── Alerts ────────────────────────────────────────────────────────────
+        triggeredAlerts: [],
+
+        addTriggeredAlert: (alert) =>
+          set(
+            (state) => ({
+              triggeredAlerts: [alert, ...state.triggeredAlerts].slice(0, 100),
+            }),
+            false,
+            'alerts/add',
+          ),
+
+        clearTriggeredAlerts: () =>
+          set({ triggeredAlerts: [] }, false, 'alerts/clear'),
+
         // ── WebSocket ─────────────────────────────────────────────────────────
         wsStatus:      'disconnected',
         lastHeartbeat: null,
@@ -280,6 +313,7 @@ export const selectSentiment          = (s: AppStore) => s.sentiment;
 export const selectMacro              = (s: AppStore) => s.macro;
 export const selectEquityCurve        = (s: AppStore) => s.equityCurve;
 export const selectPerformanceSummary = (s: AppStore) => s.performanceSummary;
+export const selectTriggeredAlerts    = (s: AppStore) => s.triggeredAlerts;
 export const selectKillSwitch         = (s: AppStore) => s.account?.kill_switch ?? false;
 export const selectDataQualityScore   = (s: AppStore) =>
   s.orchestratorHealth?.quality_score ?? null;

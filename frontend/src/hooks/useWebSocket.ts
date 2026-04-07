@@ -82,7 +82,7 @@ export function useWebSocket(enabled = true) {
         setWsStatus('connected');
         wsRef.current?.send(JSON.stringify({
           type: 'subscribe',
-          channels: ['prices', 'positions', 'signals', 'account'],
+          channels: ['prices', 'positions', 'signals', 'account', 'alerts'],
         }));
         break;
 
@@ -100,6 +100,10 @@ export function useWebSocket(enabled = true) {
 
       case 'signal':
         addSignal(msg.data as Signal);
+        break;
+
+      case 'alert_triggered':
+        store.getState().addTriggeredAlert(msg.data as import('../store').TriggeredAlert);
         break;
 
       case 'account_update':
