@@ -226,7 +226,7 @@ def main():
         f"{'=' * 60}\n"
         f"DELETE THIS FILE after saving credentials to a password manager.\n"
     )
-    fd = os.open(str(pw_file), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    fd = os.open(str(pw_file), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)  # nosec B106 - intentional credential file, mode 0o600 restricts to owner only
     try:
         os.write(fd, file_content.encode())
     finally:
@@ -241,7 +241,7 @@ def main():
     print(f"  Email    : {args.email}")
     print(f"  Username : {args.username}")
     if auto_generated:
-        print(f"  Password : {password}   ← SAVE THIS NOW")
+        print(f"  Password : {password}   ← SAVE THIS NOW")  # nosec B106 - intentional one-time display of auto-generated credential
     else:
         print("  Password : (your supplied value)")
     print("  Role     : superadmin")

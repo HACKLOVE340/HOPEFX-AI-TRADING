@@ -661,11 +661,11 @@ rule SuspiciousImport {
             # Resolve and confine the path to PROJECT_ROOT to prevent traversal.
             resolved_root = PROJECT_ROOT.resolve()
             try:
-                path = (resolved_root / sanitized).resolve()
+                path = (resolved_root / sanitized).resolve()  # codeql[py/path-injection] - sanitized contains only [A-Za-z0-9_./ -]; relative_to guard below
                 path.relative_to(resolved_root)  # raises ValueError if outside root
             except (ValueError, OSError):
                 raise HTTPException(status_code=400, detail="Invalid file path") from None
-            if not path.exists():
+            if not path.exists():  # codeql[py/path-injection] - path confined to PROJECT_ROOT above
                 raise HTTPException(status_code=404, detail="File not found")
             threats = await asyncio.get_event_loop().run_in_executor(None, scanner._scan_file_sync, path)
             return {"file": sanitized, "threats": threats}

@@ -1,0 +1,18 @@
+{
+  "esversion": 9,
+  "browser": true,
+  "worker": true,
+  "asi": false,
+  "undef": false,
+  "unused": false,
+  "globals": {
+    "self": false,
+    "caches": false,
+    "clients": false,
+    "fetch": false,
+    "Promise": false,
+    "openDB": false,
+    "indexedDB": false,
+    "IDBKeyRange": false
+  }
+}

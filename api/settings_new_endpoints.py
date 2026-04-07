@@ -30,12 +30,15 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import ipaddress
 import json
 import logging
 import os
 import secrets
 import smtplib
+import socket
 import time
+import urllib.parse
 from email.mime.text import MIMEText
 from typing import Any
 
@@ -183,11 +186,43 @@ class WebhookTestPayload(BaseModel):
     secret: str = ""
 
 
+def _validate_webhook_url(url: str) -> None:
+    """Raise HTTPException 400 if the URL targets an internal/private host.
+
+    Prevents SSRF by resolving the hostname and rejecting any IP address
+    that is private, loopback, link-local, reserved, or multicast.
+    """
+    parsed = urllib.parse.urlparse(url)
+    hostname = parsed.hostname
+    if not hostname:
+        raise HTTPException(status_code=400, detail="Invalid webhook URL: missing hostname")
+    try:
+        infos = socket.getaddrinfo(hostname, None)
+    except OSError:
+        raise HTTPException(  # noqa: B904
+            status_code=400,
+            detail="Webhook URL hostname could not be resolved",
+        )
+    for info in infos:
+        addr = info[4][0]
+        try:
+            ip = ipaddress.ip_address(addr)
+        except ValueError:
+            continue
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            raise HTTPException(
+                status_code=400,
+                detail="Webhook URL must not target internal or reserved addresses",
+            )
+
+
 @router.post("/api/settings/integrations/test-webhook")
 async def test_webhook(payload: WebhookTestPayload, request: Request):
     _get_user_id(request)  # must be authenticated
     if not payload.url.startswith("https://"):
         raise HTTPException(status_code=400, detail="Webhook URL must use HTTPS")
+    # Guard against SSRF: reject URLs that resolve to internal/private IPs.
+    _validate_webhook_url(payload.url)
     body = json.dumps({"event": "test", "source": "hopefx", "timestamp": int(time.time())})
     headers = {"Content-Type": "application/json", "X-HopeFX-Event": "test"}
     if payload.secret:
@@ -200,7 +235,7 @@ async def test_webhook(payload: WebhookTestPayload, request: Request):
             raise HTTPException(status_code=502, detail=f"Webhook returned {resp.status_code}")
         return {"status": "delivered", "response_code": resp.status_code}
     except httpx.RequestError as exc:
-        raise HTTPException(status_code=502, detail=f"Webhook delivery failed: {exc}") from exc
+        raise HTTPException(status_code=502, detail=f"Webhook delivery failed: {type(exc).__name__}") from exc
 
 
 # ── Privacy ───────────────────────────────────────────────────────────────────

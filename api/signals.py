@@ -829,7 +829,7 @@ def _register_signal_read_routes(router: Any) -> None:
             logger.exception("Failed to get signal engine status")
             engine_status = {
                 "status": "unavailable",
-                "error": str(exc),
+                "error": type(exc).__name__,
             }
         svc = _get_signal_service()
         recent = svc.get_signal_history(hours=1)
