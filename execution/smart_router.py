@@ -44,6 +44,7 @@ UTC = timezone.utc
 from typing import Any
 
 from execution.algo_orders import AlgoOrderManager, get_algo_manager
+from execution.throttler import MessageThrottler
 
 logger = logging.getLogger(__name__)
 
@@ -194,6 +195,7 @@ class SmartRouter:
         self,
         lineage_store=None,
         algo_manager: AlgoOrderManager | None = None,
+        throttler: MessageThrottler | None = None,
     ) -> None:
         self._lineage: Any = lineage_store
         self._brokers: dict[str, Any] = {}  # broker_id → broker instance
@@ -201,6 +203,11 @@ class SmartRouter:
         self._decisions: list[RoutingDecision] = []
         self._total_routed: int = 0
         self._total_filled: int = 0
+        self._total_throttled: int = 0
+
+        # FIA 3.4 message rate limiter.  Cancellations are never throttled
+        # (enforced inside MessageThrottler.can_send).
+        self._throttler: MessageThrottler = throttler or MessageThrottler()
 
         # AlgoOrderManager handles large orders (TWAP/VWAP/Iceberg).
         # If not injected, use the module-level singleton.
@@ -257,6 +264,25 @@ class SmartRouter:
             gate_result = self._pre_route_gate(spread_bps, sentiment_score, impact_score, direction, ofi)
             if gate_result is not None:
                 return {"status": "rejected", "reason": gate_result, "broker": "none"}
+
+        # ── FIA 3.4 message throttle ───────────────────────────────────────
+        # Cancellations are never throttled (MessageThrottler enforces this).
+        # Unwind orders are treated as regular orders for throttle purposes —
+        # they are time-sensitive but still subject to FIA rate limits.
+        order_type = order_request.get("order_type", "order")
+        if not self._throttler.can_send(order_type):
+            self._total_throttled += 1
+            throttle_status = self._throttler.get_status()
+            logger.warning(
+                "Router: FIA 3.4 throttle active — rejecting order symbol=%s level=%s",
+                order_request.get("symbol", "?"),
+                throttle_status.get("level"),
+            )
+            return {
+                "status": "rejected",
+                "reason": f"fia_throttle:{throttle_status.get('level')}",
+                "broker": "none",
+            }
 
         # ── Large-order delegation to AlgoOrderManager ────────────────────
         quantity = float(order_request.get("quantity", 0.0))
@@ -538,6 +564,8 @@ class SmartRouter:
                     )
                     slippage_bps = abs(fill_price - expected) / max(expected, 1) * 10000
                     self._states[broker_id].record_fill(latency_ms, slippage_bps)
+                    # Record the sent message for FIA 3.4 sliding-window accounting.
+                    self._throttler.record_message(order_request.get("order_type", "order"))
                     logger.info(
                         "Router: FILL broker=%s score=%.3f latency=%.1fms slip=%.2fbps",
                         broker_id,
@@ -623,9 +651,11 @@ class SmartRouter:
         return {
             "total_routed": self._total_routed,
             "total_filled": self._total_filled,
+            "total_throttled": self._total_throttled,
             "fill_rate": self._total_filled / max(self._total_routed, 1),
             "algo_active_orders": len(active_algos),
             "algo_orders": active_algos,
+            "throttle": self._throttler.get_status(),
             "brokers": {
                 bid: {
                     "ema_latency_ms": round(s.ema_latency_ms, 2),
