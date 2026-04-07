@@ -36,9 +36,12 @@ const LandingPage  = React.lazy(() => import('./pages/LandingPage'));
 const Login        = React.lazy(() => import('./pages/Login'));
 const Register     = React.lazy(() => import('./pages/Register'));
 const Onboarding   = React.lazy(() => import('./pages/Onboarding'));
+const NotFound     = React.lazy(() => import('./pages/NotFound'));
 
 // ── Core ──────────────────────────────────────────────────────────────────────
 const TradingDashboard = React.lazy(() => import('./pages/TradingDashboard'));
+const Trade            = React.lazy(() => import('./pages/Trade'));
+const Portfolio        = React.lazy(() => import('./pages/Portfolio'));
 const WatchlistPage    = React.lazy(() => import('./pages/Watchlist'));
 const EconomicCalendar = React.lazy(() => import('./pages/EconomicCalendar'));
 const PriceAlerts      = React.lazy(() => import('./pages/PriceAlerts'));
@@ -244,6 +247,8 @@ const AppShell: React.FC = () => {
           <Routes>
             {/* Core */}
             <Route path="/dashboard"    element={wrap(gated('dashboard',    <TradingDashboard />))} />
+            <Route path="/trade"        element={wrap(gated('trade',        <Trade />))} />
+            <Route path="/portfolio"    element={wrap(gated('portfolio',    <Portfolio />))} />
             <Route path="/watchlist"    element={wrap(gated('watchlist',    <WatchlistPage />))} />
             <Route path="/calendar"     element={wrap(gated('calendar',     <EconomicCalendar />))} />
             <Route path="/alerts"       element={wrap(gated('alerts',       <PriceAlerts />))} />
@@ -291,8 +296,8 @@ const AppShell: React.FC = () => {
             {/* Superadmin-only */}
             <Route path="/superadmin"   element={wrap(superAdminOnly(<SuperAdminDashboard />))} />
 
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            {/* Fallback — 404 for any unmatched authenticated route */}
+            <Route path="*" element={wrap(<NotFound />)} />
           </Routes>
         </Suspense>
       </main>
