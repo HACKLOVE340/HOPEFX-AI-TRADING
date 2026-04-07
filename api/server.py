@@ -88,14 +88,40 @@ async def _stop_nuclear_streamer(task: Any) -> None:
 
 
 def _start_scheduler() -> Any:
-    """Start APScheduler for weekly reports. Returns scheduler or None."""
+    """Start APScheduler for weekly reports and leaderboard cache refresh."""
     try:
         from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore
         from reports.weekly_report import schedule_weekly_report
 
         scheduler = AsyncIOScheduler()
         schedule_weekly_report(scheduler)
+
+        # Refresh leaderboard cache every 15 minutes so GET /leaderboard
+        # serves pre-built data without hitting the profile store per request.
+        try:
+            from api.social_feed import refresh_leaderboard_cache
+
+            scheduler.add_job(
+                refresh_leaderboard_cache,
+                trigger="interval",
+                minutes=15,
+                id="leaderboard_refresh",
+                replace_existing=True,
+                misfire_grace_time=60,
+            )
+            logger.info("Leaderboard cache refresh scheduled (every 15 min)")
+        except Exception as _lb_err:
+            logger.warning("Leaderboard refresh job not scheduled: %s", _lb_err)
+
         scheduler.start()
+
+        # Run an immediate refresh so the cache is warm on startup
+        try:
+            from api.social_feed import refresh_leaderboard_cache as _rlc
+            _rlc()
+        except Exception as _warm_err:
+            logger.debug("Leaderboard warm-up skipped: %s", _warm_err)
+
         return scheduler
     except ImportError:
         logger.info("APScheduler not installed — weekly report scheduling disabled.")
@@ -213,7 +239,30 @@ def create_api_app(trading_app=None) -> Any | None:
 
             _scheduler = AsyncIOScheduler()
             schedule_weekly_report(_scheduler)
+
+            # Leaderboard cache refresh every 15 minutes
+            try:
+                from api.social_feed import refresh_leaderboard_cache as _rlc_job
+                _scheduler.add_job(
+                    _rlc_job,
+                    trigger="interval",
+                    minutes=15,
+                    id="leaderboard_refresh",
+                    replace_existing=True,
+                    misfire_grace_time=60,
+                )
+            except Exception as _lb_err:
+                logger.debug("Leaderboard refresh job skipped: %s", _lb_err)
+
             _scheduler.start()
+
+            # Warm up leaderboard cache immediately
+            try:
+                from api.social_feed import refresh_leaderboard_cache as _rlc_warm
+                _rlc_warm()
+            except Exception as _warm_err:
+                logger.debug("Leaderboard warm-up skipped: %s", _warm_err)
+
         except ImportError:
             logger.info(
                 "APScheduler not installed — weekly report scheduling disabled. Install: pip install apscheduler"

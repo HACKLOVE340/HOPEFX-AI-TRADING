@@ -441,3 +441,70 @@ async def stop_copy_trading(
 
     logger.info("copy_trading: user %s stopped copy %s (trader=%s)", user.sub, copy_id, record["trader_id"])
     return {"status": "stopped", "copy_id": copy_id}
+
+
+# ── Leaderboard background writer ─────────────────────────────────────────────
+# Builds a leaderboard snapshot from live TraderProfile data and persists it
+# to db_store so GET /leaderboard can serve it without hitting the profile
+# store on every request.  Called by the scheduler every 15 minutes.
+
+_LEADERBOARD_PERIODS = ("monthly", "quarterly", "all")
+_LEADERBOARD_LIMIT = 100
+
+
+def _build_leaderboard_snapshot() -> dict[str, list[dict]]:
+    """
+    Build a leaderboard snapshot keyed by period.
+
+    Returns a dict mapping period → ranked list of trader dicts.
+    Falls back to an empty dict if the profile store is unavailable.
+    """
+    snapshot: dict[str, list[dict]] = {}
+    try:
+        from social.profiles import TraderProfileManager as _TPM
+
+        mgr = _TPM()
+        profiles = mgr.list_profiles(public_only=True)
+        if not profiles:
+            return snapshot
+
+        def _rank(profiles_list: list, limit: int) -> list[dict]:
+            ranked = sorted(profiles_list, key=lambda p: p.sharpe_ratio, reverse=True)
+            return [
+                {
+                    "id": p.trader_id,
+                    "rank": i,
+                    "name": p.username,
+                    "return_3m": round(p.total_pnl / max(p.total_trades, 1), 2),
+                    "sharpe": round(p.sharpe_ratio, 2),
+                    "followers": p.total_followers,
+                    "win_rate": round(p.win_rate, 1),
+                    "trades": p.total_trades,
+                }
+                for i, p in enumerate(ranked[:limit], 1)
+            ]
+
+        for period in _LEADERBOARD_PERIODS:
+            snapshot[period] = _rank(profiles, _LEADERBOARD_LIMIT)
+
+    except Exception as exc:
+        logger.debug("leaderboard snapshot build failed: %s", exc)
+
+    return snapshot
+
+
+def refresh_leaderboard_cache() -> None:
+    """
+    Rebuild and persist the leaderboard snapshot to db_store.
+
+    Called by the scheduler (every 15 minutes) and on demand.
+    """
+    snapshot = _build_leaderboard_snapshot()
+    if snapshot:
+        db_set("leaderboard", snapshot, changed_by="leaderboard_refresh")
+        logger.info(
+            "leaderboard cache refreshed: %s",
+            {p: len(v) for p, v in snapshot.items()},
+        )
+    else:
+        logger.debug("leaderboard cache refresh skipped — no profile data")
