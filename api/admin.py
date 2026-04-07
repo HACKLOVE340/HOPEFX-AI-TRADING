@@ -518,54 +518,6 @@ def get_settings(user: TokenPayload = Depends(require_role("admin"))):
     return _get_risk_settings()
 
 
-@router.get("/settings/system")
-def get_system_settings(user: TokenPayload = Depends(require_role("admin"))):
-    """
-    Read system-level settings (maintenance mode, registration, session timeout).
-    Requires: role >= 'admin'.
-    """
-    defaults: dict[str, Any] = {
-        "maintenance_mode": False,
-        "maintenance_message": "",
-        "allow_registrations": True,
-        "require_email_verification": True,
-        "session_timeout_minutes": 60,
-        "max_api_keys_per_user": 5,
-        "rate_limit_per_minute": 60,
-        "announcement_enabled": False,
-        "announcement_text": "",
-        "announcement_type": "info",
-    }
-    try:
-        from core.config_store import config_store
-        stored = config_store.get("system_settings")
-        if stored and isinstance(stored, dict):
-            defaults.update(stored)
-    except Exception as exc:
-        logger.debug("get_system_settings: config store unavailable: %s", exc)
-    return defaults
-
-
-@router.post("/settings/system")
-def save_system_settings(
-    payload: dict[str, Any],
-    user: TokenPayload = Depends(require_role("admin")),
-):
-    """
-    Update system-level settings. Requires: role >= 'admin'.
-    """
-    try:
-        from core.config_store import config_store
-        existing = config_store.get("system_settings") or {}
-        existing.update(payload)
-        config_store.set("system_settings", existing, changed_by=user.sub)
-        log_activity(f"System settings updated by {user.sub}: {list(payload.keys())}")
-        return {"status": "ok", "saved": list(payload.keys())}
-    except Exception as exc:
-        logger.error("save_system_settings: %s", exc)
-        return {"status": "error", "detail": "System settings save failed"}
-
-
 @router.post("/settings")
 @router.post("/settings-data")
 def save_settings(
@@ -893,74 +845,6 @@ def _serve_admin_template(name: str, title: str) -> HTMLResponse:
 <a href="/api/admin/">← Back to Dashboard</a>
 </body></html>"""
     )
-
-
-@router.post(
-    "/kill-switch/global",
-    summary="Activate global kill switch — halts all trading immediately",
-)
-async def global_kill_switch(user: TokenPayload = Depends(require_role("admin"))):
-    """
-    Activate the global kill switch. Closes all open positions and halts
-    all automated trading across every connected broker. Requires: role >= 'admin'.
-    """
-    try:
-        from kill_switch import KillSwitch
-
-        ks = KillSwitch.get_instance()
-        await ks.activate(reason=f"Admin kill switch triggered by {user.sub}")
-        log_activity(f"Global kill switch activated by {user.sub}")
-        return {"status": "activated", "message": "Kill switch activated — all trading halted"}
-    except Exception as exc:
-        logger.error("global_kill_switch: %s", exc)
-        # Fallback: set flag in config store so trading engine picks it up
-        try:
-            from core.config_store import config_store
-            config_store.set("kill_switch_active", True, changed_by=user.sub)
-            log_activity(f"Global kill switch activated (config store) by {user.sub}")
-            return {"status": "activated", "message": "Kill switch flag set in config store"}
-        except Exception as cs_exc:
-            logger.error("global_kill_switch config store fallback: %s", cs_exc)
-        raise HTTPException(status_code=500, detail="Kill switch activation failed") from None
-
-
-@router.post(
-    "/backup/trigger",
-    summary="Trigger a manual database backup",
-)
-async def trigger_backup(user: TokenPayload = Depends(require_role("admin"))):
-    """
-    Trigger an immediate database backup. The backup runs asynchronously;
-    check /api/superadmin/system/backups for status. Requires: role >= 'admin'.
-    """
-    import uuid as _uuid
-    from datetime import datetime, timezone
-
-    backup_id = _uuid.uuid4().hex[:12]
-    triggered_at = datetime.now(timezone.utc).isoformat()
-    log_activity(f"Manual backup triggered by {user.sub} (id={backup_id})")
-
-    # Publish backup request to Redis so the backup worker picks it up
-    try:
-        from cache.redis_client import get_redis_client
-        import json as _json
-
-        rc = get_redis_client()
-        if rc:
-            rc.publish(
-                "hopefx:admin:backup",
-                _json.dumps({"backup_id": backup_id, "type": "full", "triggered_by": user.sub, "triggered_at": triggered_at}),
-            )
-    except Exception as exc:
-        logger.warning("backup/trigger: Redis publish failed: %s", exc)
-
-    return {
-        "backup_id": backup_id,
-        "type": "full",
-        "status": "running",
-        "triggered_at": triggered_at,
-        "message": "Backup started. Check /api/superadmin/system/backups for status.",
-    }
 
 
 @router.get("/", response_class=HTMLResponse)
