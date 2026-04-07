@@ -257,11 +257,11 @@ async def feed_status(user: TokenPayload = Depends(get_current_user)):
 
 # ── Leaderboard router ────────────────────────────────────────────────────────
 # Mounted at /api/social so CopyTrading.tsx and Leaderboard.tsx can call
-# GET /api/social/leaderboard without a prefix conflict with /api/feed.
+# GET /api/leaderboard — separate router to avoid prefix conflict with /api/feed.
 
 from fastapi import Query as _Query
 
-leaderboard_router = APIRouter(prefix="/api/social", tags=["Social Feed"])
+leaderboard_router = APIRouter(prefix="/api", tags=["Social Feed"])
 
 
 @leaderboard_router.get("/leaderboard", summary="Trader performance leaderboard")
