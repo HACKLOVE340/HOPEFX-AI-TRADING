@@ -2,7 +2,7 @@
 # Copyright (c) 2025-2026
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 """
-Coverage tests for ml/features.py and ml/signal_validator.py.
+Coverage tests for ml/signal_features.py and ml/signal_validator.py.
 """
 
 from datetime import datetime, timezone
@@ -15,23 +15,10 @@ UTC = timezone.utc
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ml/features.py  (loaded directly — ml/features/ package shadows the module)
+# ml/signal_features.py  (renamed from ml/features.py to resolve package shadow)
 # ─────────────────────────────────────────────────────────────────────────────
 
-import importlib.util as _ilu
-import os as _os
-
-_FEATURES_FILE = _os.path.join(
-    _os.path.dirname(_os.path.dirname(_os.path.dirname(__file__))),
-    "ml", "features.py",
-)
-_spec = _ilu.spec_from_file_location("ml_features_file", _FEATURES_FILE)
-_ml_features = _ilu.module_from_spec(_spec)
-_spec.loader.exec_module(_ml_features)
-
-FeatureVector = _ml_features.FeatureVector
-TechnicalIndicators = _ml_features.TechnicalIndicators
-SignalEnsemble = _ml_features.SignalEnsemble
+from ml.signal_features import FeatureVector, SignalEnsemble, TechnicalIndicators
 
 
 @pytest.mark.unit
