@@ -233,13 +233,13 @@ class TestPaymentsWebhook:
         assert result is False
 
     def test_verify_webhook_hmac_no_secret_dev_mode(self):
-        """No secret in dev mode returns True (verification skipped)."""
+        """No secret + CRYPTO_WEBHOOK_VERIFY=false in dev returns True (bypass)."""
         import api.payments as pm
 
         pm._WEBHOOK_SECRET = ""  # nosec B105 - test file
         body = b'{"payment_id":"PAY_1"}'
 
-        with patch.dict(os.environ, {"APP_ENV": "development"}):
+        with patch.dict(os.environ, {"APP_ENV": "development", "CRYPTO_WEBHOOK_VERIFY": "false"}):
             result = pm._verify_webhook_hmac(body, "any-sig")
 
         assert result is True

@@ -17,7 +17,7 @@ Coverage:
   5.  Auth router: prefix is /api/auth/*
   6.  ML router: prefix is /api/ml/*
   7.  Admin router: prefix is /api/admin/*
-  8.  Social leaderboard: GET /api/social/leaderboard returns ranked list
+  8.  Social leaderboard: GET /api/leaderboard returns ranked list
   9.  MacroStore → live inference: update() flows through align_to_hourly()
   10. MacroStore → /api/macro/store endpoint returns store state
   11. MacroStore → /api/macro/store/update upserts a value
@@ -156,7 +156,7 @@ class TestRouterPrefixes:
         from api.social_feed import leaderboard_router
 
         paths = [r.path for r in leaderboard_router.routes if hasattr(r, "path")]
-        assert "/api/social/leaderboard" in paths, f"Leaderboard route missing. Found: {paths}"
+        assert "/api/leaderboard" in paths, f"Leaderboard route missing. Found: {paths}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -527,8 +527,8 @@ class TestSocialLeaderboard:
         return TestClient(app)
 
     def test_leaderboard_returns_ranked_list(self, leaderboard_client):
-        """GET /api/social/leaderboard returns a list (may be empty in test env)."""
-        resp = leaderboard_client.get("/api/social/leaderboard")
+        """GET /api/leaderboard returns a list (may be empty in test env)."""
+        resp = leaderboard_client.get("/api/leaderboard")
         assert resp.status_code == 200
         data = resp.json()
         assert isinstance(data, list)
@@ -536,7 +536,7 @@ class TestSocialLeaderboard:
 
     def test_leaderboard_entry_shape(self, leaderboard_client):
         """Each leaderboard entry has required fields (skipped when list is empty)."""
-        resp = leaderboard_client.get("/api/social/leaderboard")
+        resp = leaderboard_client.get("/api/leaderboard")
         data = resp.json()
         if not data:
             pytest.skip("No leaderboard entries in test environment — shape check skipped")
@@ -547,12 +547,12 @@ class TestSocialLeaderboard:
     def test_leaderboard_period_param(self, leaderboard_client):
         """period= query param is accepted without error."""
         for period in ("monthly", "quarterly", "all"):
-            resp = leaderboard_client.get(f"/api/social/leaderboard?period={period}")
+            resp = leaderboard_client.get(f"/api/leaderboard?period={period}")
             assert resp.status_code == 200, f"period={period} returned {resp.status_code}"
 
     def test_leaderboard_ranks_are_sequential(self, leaderboard_client):
         """Ranks start at 1 and are sequential."""
-        resp = leaderboard_client.get("/api/social/leaderboard?limit=5")
+        resp = leaderboard_client.get("/api/leaderboard?limit=5")
         data = resp.json()
         ranks = [e["rank"] for e in data]
         assert ranks == list(range(1, len(ranks) + 1)), f"Non-sequential ranks: {ranks}"
