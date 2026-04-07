@@ -214,7 +214,7 @@ def _print_plan(args: argparse.Namespace, prop_cfg: dict) -> None:
     logger.info(f"  Mode    : {args.mode}")
     logger.info(f"  Config  : {args.config}")
     logger.info(f"  Practice: {os.environ.get('OANDA_PRACTICE', 'true')}")
-    logger.info()
+    logger.info("")
 
     # Prop firm rules
     logger.info("  Prop Firm Rules:")
@@ -225,7 +225,7 @@ def _print_plan(args: argparse.Namespace, prop_cfg: dict) -> None:
     logger.info(f"    breach_action   : {prop_cfg.get('breach_action', 'pause')}")
     logger.info(f"    max_daily_trades: {prop_cfg.get('max_daily_trades', 20)}")
     logger.info(f"    enabled         : {prop_cfg.get('enabled', True)}")
-    logger.info()
+    logger.info("")
 
     # Env validation
     result = validate_environment(strict=False)
@@ -236,7 +236,7 @@ def _print_plan(args: argparse.Namespace, prop_cfg: dict) -> None:
         logger.warning(f"    ⚠️  {msg}")
     if not result.errors and not result.warnings:
         logger.info("    ✅ All variables present")
-    logger.info()
+    logger.info("")
 
     # Pipeline that will start
     pipeline = _get_pipeline(args.mode)
@@ -244,7 +244,7 @@ def _print_plan(args: argparse.Namespace, prop_cfg: dict) -> None:
     for step in pipeline:
         logger.info(f"    → {step}")
     logger.info("=" * 60)
-    logger.info()
+    logger.info("")
 
     if result.errors:
         logger.error("❌ Cannot start — fix errors above.")

@@ -714,7 +714,7 @@ def run_backtest(
                 f"WinRate={r.get('win_rate', 0) * 100:.1f}% | "
                 f"Acc={r.get('accuracy', 0):.3f}"
             )
-    logger.info()
+    logger.info("")
     p = pooled
     gate = "PASSED ✓" if p["sharpe_gate_passed"] else "BLOCKED ✗"
     logger.info(f"  Pooled N trades : {p['n_total_trades']}")

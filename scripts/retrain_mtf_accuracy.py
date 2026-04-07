@@ -681,10 +681,10 @@ def main() -> int:
     logger.info(f"  Features:          {len(selected_features)} (selected from {len(feature_cols)})")
     logger.info(f"  Horizon:           {HORIZON} bars")
     logger.info("  Ensemble:          XGB + RF + LGB + meta-LR")
-    logger.info()
+    logger.info("")
     logger.info(f"  Walk-forward acc:  {cv_acc_mean:.3f} ± {cv_acc_std:.3f}")
     logger.info(f"  Walk-forward AUC:  {np.mean(cv_aucs):.3f}")
-    logger.info()
+    logger.info("")
     logger.info(f"  OOS accuracy:      {oos_metrics['accuracy']:.3f}  (all predictions)")
     logger.info(f"  OOS acc confident: {oos_metrics['accuracy_confident']:.3f}  (conf > {ABSTAIN_THRESHOLD})")
     logger.info(f"  OOS AUC:           {oos_metrics['auc']:.3f}")
@@ -693,13 +693,13 @@ def main() -> int:
         f"  OOS p-value:       {oos_metrics['p_value']:.4f}  {'✓ significant' if oos_metrics['significant'] else '✗ not significant'}"
     )
     logger.info(f"  Abstain rate:      {oos_metrics['abstain_rate'] * 100:.1f}%")
-    logger.info()
+    logger.info("")
 
     target_met = oos_metrics["accuracy_confident"] >= 0.68
     logger.info(
         f"  Target (68%+):     {'✓ MET' if target_met else '✗ NOT MET'} — {oos_metrics['accuracy_confident'] * 100:.1f}%"
     )
-    logger.info()
+    logger.info("")
     logger.info(f"  Saved: {ensemble_path}")
     logger.info(f"  Meta:  {meta_path}")
     logger.info("=" * 65)

@@ -189,8 +189,17 @@ class TestNuclearHopeFXSupervisor:
         """_normalize_obs returns raw obs when no VecNormalize is loaded."""
         import numpy as np
 
+        from brain.nuclear_supervisor import NuclearHopeFXSupervisor
+
+        # Create a supervisor with no vecnorm loaded
+        sup_no_vecnorm = NuclearHopeFXSupervisor(
+            model_path="nonexistent_model.zip",
+            vecnorm_path="nonexistent_vecnorm.pkl",
+            cooldown_seconds=0,
+            auto_resume_seconds=0,
+        )
         obs = np.array([0.5, 1.0, 0.0, 0.5, 0.5, 0.0, 0.0], dtype=np.float32)
-        result = supervisor._normalize_obs(obs)
+        result = sup_no_vecnorm._normalize_obs(obs)
         assert (result == obs).all()
 
     @pytest.mark.asyncio

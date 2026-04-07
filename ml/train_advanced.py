@@ -1263,7 +1263,7 @@ def main():
     logger.info(f"  OOS samples     : {oos_n}  ({args.oos_years:.1f} years held out)")
     logger.info(f"  Features        : {X.shape[1]}")
     logger.info(f"  Macro features  : {macro_df is not None}")
-    logger.info()
+    logger.info("")
     logger.info(
         f"  Walk-forward accuracy : {wf.get('mean_accuracy', 0):.3f} ± {wf.get('std_accuracy', 0):.3f}",
     )
@@ -1273,13 +1273,13 @@ def main():
         f"  p-value (vs random)   : {wf.get('p_value', 1):.4f}  "
         f"{'✓ significant' if wf.get('significant') else '✗ not significant'}",
     )
-    logger.info()
+    logger.info("")
     logger.info(f"  Final holdout accuracy: {final_metrics['accuracy']:.3f}")
     logger.info(f"  Final holdout F1      : {final_metrics['f1']:.3f}")
     logger.info(f"  Final holdout AUC     : {final_metrics['auc']:.3f}")
 
     if oos_metrics:
-        logger.info()
+        logger.info("")
         sig = "✓ significant" if oos_metrics.get("significant") else "✗ not significant"
         oos_period = oos_metrics.get("oos_period", "n/a")
         acc_se = oos_metrics.get("accuracy_se", 0)
@@ -1290,7 +1290,7 @@ def main():
         logger.info(f"  OOS F1                : {oos_metrics['f1']:.3f}")
         logger.info(f"  OOS AUC               : {oos_metrics['auc']:.3f}")
         logger.info(f"  OOS p-value (binomial): {oos_metrics['p_value_binomial']:.4f}  {sig}")
-        logger.info()
+        logger.info("")
         # Sharpe SE gate — always shown when OOS is run
         sg = oos_metrics.get("sharpe_gate", {})
         gate_status = "PASSED ✓" if sg.get("gate_passed") else "BLOCKED ✗"
@@ -1303,7 +1303,7 @@ def main():
         logger.info("  Do NOT commit live capital until 30+ days paper trading done.")
         logger.info("  ────────────────────────────────────────────────────────────")
 
-    logger.info()
+    logger.info("")
     # Evaluate against OOS target (68% validated) rather than in-sample target
     oos_acc = oos_metrics.get("accuracy", 0) if oos_metrics else 0
     final_acc = final_metrics["accuracy"]

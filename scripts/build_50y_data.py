@@ -486,14 +486,14 @@ def main() -> int:
     logger.info(f"  Max drawdown:   {stats['max_drawdown_full'] * 100:.1f}%")
     logger.info(f"  Ann. return:    {stats['annualised_return'] * 100:.1f}%")
     logger.info(f"  Ann. vol:       {stats['annualised_vol'] * 100:.1f}%")
-    logger.info()
+    logger.info("")
     logger.info("Source coverage:")
     for src, cov in coverage.items():
         if cov["rows"]:
             logger.info(f"  {src:<38} {cov['rows']:>6} rows  {cov['from']} → {cov['to']}")
         else:
             logger.info(f"  {src:<38}   unavailable")
-    logger.info()
+    logger.info("")
     logger.info("Crisis Period Validation:")
     for name, r in crisis.items():
         if "error" in r:
