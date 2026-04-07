@@ -314,6 +314,13 @@ async def get_leaderboard(
                     }
                 )
             if result:
+                # ── Write-through cache: persist for next request ─────────────────
+                try:
+                    stored_write = db_get("leaderboard") or {}
+                    stored_write[period] = result
+                    db_set("leaderboard", stored_write, changed_by="leaderboard_builder")
+                except Exception as exc:
+                    logger.debug("Leaderboard cache write failed: %s", exc)
                 return result
     except Exception as exc:
         logger.debug("Profile store leaderboard failed: %s", exc)
@@ -525,3 +532,102 @@ async def _compat_leaderboard(
 ):
     """Alias: GET /api/leaderboard → get_leaderboard (/api/social/leaderboard)."""
     return await get_leaderboard(period=period, limit=limit)
+
+
+# =============================================================================
+# COPY-TRADING  —  POST /api/social/copy/:trader_id
+# Called by CopyTrading.tsx and SocialFeed.tsx
+# =============================================================================
+
+
+class CopyTradeRequest(BaseModel):
+    allocation_amount: float = Field(..., gt=0, description="USD amount to allocate to this trader")
+    signal_id: str = Field("", description="Optional: copy a specific signal ID")
+    risk_per_trade_pct: float = Field(1.0, ge=0.1, le=10.0, description="Risk % per copied trade")
+    max_drawdown_pct: float = Field(10.0, ge=1.0, le=50.0, description="Stop copying if DD exceeds this %")
+    stop_loss_override: float | None = Field(None, description="Override the signal's stop-loss distance")
+
+
+@leaderboard_router.post(
+    "/copy/{trader_id}",
+    response_model=None,
+    status_code=201,
+    summary="Subscribe to copy a trader's signals",
+)
+async def copy_trader(
+    trader_id: str,
+    req: CopyTradeRequest,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Start copy-trading a specific trader.
+
+    - Validates the target trader exists and has opted in to copy-trading.
+    - Records the copy relationship in the social profile store.
+    - Any future signals from `trader_id` will be mirrored to the subscriber
+      subject to their `allocation_amount` and risk settings.
+
+    Returns the copy subscription ID so the frontend can cancel later.
+    """
+    if trader_id == user.sub:
+        raise HTTPException(status_code=400, detail="You cannot copy yourself.")
+
+    # Validate that the target trader has opted in
+    try:
+        from social.profiles import TraderProfileManager as _TPM
+
+        mgr = _TPM()
+        profile = mgr.get_profile(trader_id)
+        if profile is None:
+            raise HTTPException(status_code=404, detail=f"Trader '{trader_id}' not found.")
+        if not getattr(profile, "copy_trading_enabled", False):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Trader '{trader_id}' has not enabled copy-trading.",
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        # Profile store unavailable — proceed optimistically (paper mode)
+        logger.warning("Copy trade profile lookup failed for %s: %s", trader_id, exc)
+
+    subscription_id = f"copy-{user.sub[:8]}-{trader_id[:8]}-{uuid.uuid4().hex[:8]}"
+
+    # Persist the copy subscription
+    try:
+        existing = db_get("copy_subscriptions") or {}
+        user_subs = existing.get(user.sub, [])
+        # Remove any existing subscription to this trader
+        user_subs = [s for s in user_subs if s.get("trader_id") != trader_id]
+        user_subs.append(
+            {
+                "subscription_id": subscription_id,
+                "trader_id": trader_id,
+                "allocation_amount": req.allocation_amount,
+                "signal_id": req.signal_id or None,
+                "risk_per_trade_pct": req.risk_per_trade_pct,
+                "max_drawdown_pct": req.max_drawdown_pct,
+                "stop_loss_override": req.stop_loss_override,
+                "status": "active",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        existing[user.sub] = user_subs
+        db_set("copy_subscriptions", existing, changed_by="copy_trader")
+    except Exception as exc:
+        logger.warning("Copy subscription persist failed: %s", exc)
+
+    logger.info(
+        "Copy trade subscribed: user=%s → trader=%s alloc=%.2f sub_id=%s",
+        user.sub,
+        trader_id,
+        req.allocation_amount,
+        subscription_id,
+    )
+    return {
+        "status": "subscribed",
+        "subscription_id": subscription_id,
+        "trader_id": trader_id,
+        "allocation_amount": req.allocation_amount,
+        "message": f"Now copying trader {trader_id}. Signals will be mirrored automatically.",
+    }

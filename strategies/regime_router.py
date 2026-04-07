@@ -325,6 +325,29 @@ class RegimeRouter:
             if len(self._regime_history) > 500:
                 self._regime_history = self._regime_history[-500:]
 
+            # Publish REGIME_CHANGE to the legacy in-process event bus so that
+            # StrategyOrchestra._on_regime_change() can rebalance allocations.
+            try:
+                from core.event_bus_legacy import DomainEvent as _DE
+                from core.strategy_orchestra import _get_shared_orchestra as _get_orch
+
+                orch = _get_orch()
+                if orch is not None:
+                    import asyncio as _asyncio
+
+                    _event = _DE.create(
+                        "REGIME_CHANGE",
+                        "regime_router",
+                        {"regime": regime, "confidence": confidence, "timestamp": ts},
+                    )
+                    try:
+                        _loop = _asyncio.get_running_loop()
+                        _loop.create_task(orch.event_bus.publish(_event))
+                    except RuntimeError:
+                        pass  # no event loop in sync context
+            except Exception as _re:
+                logger.debug("REGIME_CHANGE event publish skipped: %s", _re)
+
         strategy_name = self._select_strategy(regime)
         return regime, strategy_name
 
