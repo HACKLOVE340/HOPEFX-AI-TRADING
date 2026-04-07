@@ -533,7 +533,7 @@ def _check_subscription_gate(user: Any) -> None:
                 },
             )
     except ImportError:
-        pass
+        logger.debug("monetization.subscription not available — subscription gate skipped")
 
 
 def _predict_with_inference_engine(predictor: Any, ohlcv: Any, symbol_upper: str, now_iso: str) -> Any:
