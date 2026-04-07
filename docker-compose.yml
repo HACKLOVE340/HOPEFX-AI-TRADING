@@ -172,12 +172,13 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     # Port intentionally not exposed to host — DB is internal-only.
-    # Access via: docker compose exec postgres psql -U hopefx
+    # Access via: docker compose exec postgres psql -U ${POSTGRES_USER:-hopefx}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hopefx -d hopefx"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hopefx} -d ${POSTGRES_DB:-hopefx}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
@@ -185,6 +186,7 @@ services:
     # maxmemory: 512 MB cap prevents OOM on VPS. allkeys-lru evicts least-recently-used
     # keys when full — safe for our TTL-based caching pattern.
     # tcp-keepalive: detect dead connections within 60s.
+    # bind 127.0.0.1: only accept connections from within the Docker network.
     command: >
       redis-server
       --save 60 1
@@ -193,21 +195,25 @@ services:
       --maxmemory-policy allkeys-lru
       --tcp-keepalive 60
       --timeout 300
+      --requirepass ${REDIS_PASSWORD:-}
     volumes:
       - redis_data:/data
-    ports:
-      - "6379:6379"
+    # Redis port is NOT exposed to the host in production.
+    # Uncomment the line below only for local development debugging.
+    # ports:
+    #   - "127.0.0.1:6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli ${REDIS_PASSWORD:+-a $REDIS_PASSWORD} ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 5s
 
   prometheus:
     image: prom/prometheus:v2.51.0
     restart: unless-stopped
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
@@ -217,22 +223,61 @@ services:
       - "--storage.tsdb.retention.time=30d"
       - "--web.enable-lifecycle"
     depends_on:
-      - app
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/healthy | grep -q 'Prometheus Server is Healthy'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   grafana:
     image: grafana/grafana:10.4.0
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set in .env}
       GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s/grafana/"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/etc/grafana/dashboards:ro
     depends_on:
-      - prometheus
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health | grep -q '\"database\": \"ok\"'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      HOPEFX_DOMAIN: ${HOPEFX_DOMAIN:?HOPEFX_DOMAIN must be set in .env}
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/health | grep -q 'healthy' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 volumes:
   postgres_data:
