@@ -641,7 +641,7 @@ class DynamicRebalancer:
 
     async def rebalance_async(self, force: bool = False) -> RebalanceResult | None:
         """Async wrapper — runs the blocking optimiser in a thread pool."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self.rebalance, force)
 
     # ── status ────────────────────────────────────────────────────────────────

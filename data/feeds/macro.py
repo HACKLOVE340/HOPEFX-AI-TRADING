@@ -101,7 +101,7 @@ async def _fetch_fred_async(series_id: str, limit: int = 30) -> pd.DataFrame:
     # Fallback: run blocking requests in thread pool
     import requests
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     def _sync():
         r = requests.get(url, timeout=15)

@@ -909,7 +909,7 @@ class FIXAdapter:
         """
         self.circuit_breaker.check()
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         future: asyncio.Future = loop.create_future()
 
         with self._pending_lock:

@@ -61,7 +61,7 @@ class MobileTradingEngine:
     def _run(self, coro: Any) -> Any:
         """Run a coroutine from a sync context."""
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             if loop.is_running():
                 # Already inside an event loop — caller must await directly
                 raise RuntimeError("Cannot call _run() inside a running event loop. Use the async variant instead.")

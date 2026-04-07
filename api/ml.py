@@ -1158,7 +1158,7 @@ async def rl_train(
         test_env = ForexTradingEnv(test_c)
 
         # Run in thread pool to avoid blocking the event loop
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(
             None,
             lambda: agent.train(train_env, timesteps=req.timesteps, verbose=0),
@@ -1205,7 +1205,7 @@ async def rl_walk_forward(
         df = _load_ohlcv_for_symbol(req.symbol, req.candles)
         candles_list = df.to_dict("records")
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(
             None,
             lambda: walk_forward_eval(

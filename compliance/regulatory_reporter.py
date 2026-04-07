@@ -602,7 +602,7 @@ class RegulatoryReporter:
                 except Exception as e:
                     return False, None, str(e)
 
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             return await loop.run_in_executor(None, _sync_post)
 
         except Exception as exc:

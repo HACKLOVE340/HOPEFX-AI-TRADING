@@ -278,7 +278,8 @@ async def verify_email(token: str):
 
 
 @router.post("/resend-verification")
-async def resend_verification(body: ForgotPasswordRequest):
+async def resend_verification(body: ForgotPasswordRequest, request: Request):
+    _check_ip_rate_limit(_get_client_ip(request))
     ok, msg, verify_token = _svc().resend_verification(body.email)
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
@@ -326,6 +327,7 @@ async def login(body: LoginRequest, request: Request):
 @router.post("/refresh")
 async def refresh(body: RefreshRequest, request: Request):
     """Rotate refresh token. Returns new access + refresh token pair."""
+    _check_ip_rate_limit(_get_client_ip(request))
     ok, msg, tokens = _svc().refresh(body.refresh_token, ip_address=_client_ip(request))
     if not ok:
         raise HTTPException(status_code=401, detail=msg)
@@ -433,8 +435,9 @@ async def forgot_password(body: ForgotPasswordRequest, request: Request):
 
 
 @router.post("/reset-password")
-async def reset_password(body: ResetPasswordRequest):
+async def reset_password(body: ResetPasswordRequest, request: Request):
     """Set a new password using the reset token."""
+    _check_ip_rate_limit(_get_client_ip(request))
     ok, msg = _svc().reset_password(body.token, body.new_password)
     if not ok:
         raise HTTPException(status_code=400, detail=msg)

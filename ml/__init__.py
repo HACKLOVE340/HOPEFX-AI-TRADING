@@ -452,7 +452,7 @@ def _load_models() -> None:
             )
 
         try:
-            loop = _asyncio.get_event_loop()
+            loop = _asyncio.get_running_loop()
             if loop.is_running():
                 _t = loop.create_task(_post_discord_fallback())
                 _t.add_done_callback(lambda _: None)

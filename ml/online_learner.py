@@ -891,7 +891,7 @@ class XGBoostOnlineModel:
         """
         import asyncio
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         meta = await loop.run_in_executor(None, self._fit_sync, X, y)
         return meta
 

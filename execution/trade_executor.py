@@ -116,7 +116,7 @@ class TradeExecutor:
 
     async def execute_signal(self, signal: dict) -> ExecutionResult:
         """Execute a trading signal with full validation and risk controls."""
-        start_time = asyncio.get_event_loop().time()
+        start_time = asyncio.get_running_loop().time()
 
         required_fields = ["symbol", "action", "size"]
         missing = [f for f in required_fields if f not in signal]
@@ -153,7 +153,7 @@ class TradeExecutor:
             else:
                 result = await self._execute_open(signal)
 
-            latency_ms = (asyncio.get_event_loop().time() - start_time) * 1000
+            latency_ms = (asyncio.get_running_loop().time() - start_time) * 1000
             result.latency_ms = latency_ms
             self.metrics.record_order_latency(latency_ms)
 
@@ -168,7 +168,7 @@ class TradeExecutor:
             return result
 
         except (TimeoutError, RuntimeError, ConnectionError, ValueError) as exc:
-            latency_ms = (asyncio.get_event_loop().time() - start_time) * 1000
+            latency_ms = (asyncio.get_running_loop().time() - start_time) * 1000
             logger.exception("Execution error for %s", symbol)
             self.metrics.record_error("trade_executor", type(exc).__name__)
             return ExecutionResult(

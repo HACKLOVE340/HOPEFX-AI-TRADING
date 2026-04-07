@@ -134,9 +134,9 @@ class GPUInferenceEngine:
             ids = []
 
             # Collect batch with timeout
-            deadline = asyncio.get_event_loop().time() + 0.001  # 1ms max wait
+            deadline = asyncio.get_running_loop().time() + 0.001  # 1ms max wait
             while len(batch) < self.config.batch_size:
-                timeout = deadline - asyncio.get_event_loop().time()
+                timeout = deadline - asyncio.get_running_loop().time()
                 if timeout <= 0:
                     break
                 try:
