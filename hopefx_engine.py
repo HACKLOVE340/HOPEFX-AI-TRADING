@@ -1053,6 +1053,7 @@ class HopeFXEngine:
                     # them (CME, IBKR, CPP shim, paper, etc.).
                     try:
                         from brokers.factory import BrokerFactory as _BF
+                        _seen_classes: set[type] = {type(self._broker)}
                         for _broker_name in _BF.list_brokers():
                             if _broker_name in ("primary",):
                                 continue
@@ -1060,6 +1061,11 @@ class HopeFXEngine:
                                 _candidate = _BF.create_broker(_broker_name)
                                 if _candidate is None:
                                     continue
+                                # Skip aliases that resolve to the same class
+                                # already registered (e.g. cme/cme_comex/gc).
+                                if type(_candidate) in _seen_classes:
+                                    continue
+                                _seen_classes.add(type(_candidate))
                                 if hasattr(_candidate, "connect") and _candidate.connect():
                                     self._smart_router.add_broker(_broker_name, _candidate)
                                     logger.info(
