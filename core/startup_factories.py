@@ -1766,9 +1766,73 @@ def build_component_registry(app, feature_flags):
             required=False,
             deps=["config"],
         )
+        # ── Security subsystems ───────────────────────────────────────────────
+        # global_fortress mounts /api/security/* (attacks, lockdown, blocked-ips,
+        # alerts, fixes) and starts the 24/7 HOPEFXBrain monitor loop.
+        .register(
+            "security_brain",
+            _app(F.init_security_brain),
+            required=False,
+            deps=["config"],
+        )
+        # self_healer mounts /api/security/heal/* and starts the file-integrity
+        # drift-detection + auto-patch background task.
+        .register(
+            "self_healer",
+            _app(F.init_self_healer),
+            required=False,
+            deps=["config"],
+        )
+        # antivirus mounts /api/security/av/* and starts the YARA/ClamAV scan loop.
+        .register(
+            "antivirus",
+            _app(F.init_antivirus),
+            required=False,
+            deps=["config"],
+        )
     )
 
     return registry
+
+
+async def init_security_brain(s: Any, app: Any) -> Any | None:
+    """Mount HOPEFXBrain router (/api/security/*) and start the 24/7 monitor loop."""
+    try:
+        from security.global_fortress import start_brain as _start_brain
+
+        brain = await _start_brain(app)
+        s.security_brain = brain
+        logger.info("HOPEFXBrain started — /api/security/* routes mounted")
+        return brain
+    except Exception as exc:
+        logger.warning("HOPEFXBrain failed to start (non-fatal): %s", exc)
+        return None
+
+
+async def init_self_healer(s: Any, app: Any) -> Any | None:
+    """Mount SelfHealer router (/api/security/heal/*) and start the integrity scan loop."""
+    try:
+        from security.self_healer import start_healer as _start_healer
+
+        await _start_healer(app)
+        logger.info("SelfHealer started — /api/security/heal/* routes mounted")
+        return getattr(s, "self_healer", None)
+    except Exception as exc:
+        logger.warning("SelfHealer failed to start (non-fatal): %s", exc)
+        return None
+
+
+async def init_antivirus(s: Any, app: Any) -> Any | None:
+    """Mount AntivirusScanner router (/api/security/av/*) and start the scan loop."""
+    try:
+        from security.antivirus import start_av_scanner as _start_av
+
+        await _start_av(app)
+        logger.info("AntivirusScanner started — /api/security/av/* routes mounted")
+        return getattr(s, "antivirus", None)
+    except Exception as exc:
+        logger.warning("AntivirusScanner failed to start (non-fatal): %s", exc)
+        return None
 
 
 async def init_chaos_controller(s: Any) -> Any | None:
