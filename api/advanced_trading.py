@@ -105,7 +105,7 @@ def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, init
         engine = BacktestEngine(config=config)
         import asyncio
 
-        result = asyncio.get_event_loop().run_until_complete(engine.run())
+        result = asyncio.run(engine.run())
         return {
             "strategy": strategy_name,
             "final_equity": round(float(initial_capital * (1 + result.total_return)), 2),

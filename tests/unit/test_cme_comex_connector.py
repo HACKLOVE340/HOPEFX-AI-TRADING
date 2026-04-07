@@ -8,14 +8,17 @@ Unit tests for brokers/cme_comex.py — CMEComexConnector.
 
 All external dependencies (FIX adapter, IBKR connector) are patched so
 tests run without any live credentials or network access.
+
+The execution.fix_adapter stub is injected via the session-scoped
+_cme_fix_adapter_stub fixture defined in tests/unit/conftest.py, which
+installs the stub before this module is imported and restores the real
+module at session teardown — preventing leakage into other test files.
 """
 
 from __future__ import annotations
 
 import sys
-import types
 import uuid
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
@@ -23,79 +26,12 @@ import pytest
 
 UTC = timezone.utc
 
-# ---------------------------------------------------------------------------
-# Stub out heavy optional imports before the module is loaded
-# ---------------------------------------------------------------------------
-
-def _make_fix_stubs():
-    """Return a minimal execution.fix_adapter stub module."""
-    mod = types.ModuleType("execution.fix_adapter")
-
-    class FIXSide:
-        BUY = "BUY"
-        SELL = "SELL"
-
-    class FIXOrdType:
-        MARKET = "MARKET"
-        LIMIT = "LIMIT"
-        STOP = "STOP"
-
-    @dataclass
-    class FIXOrder:
-        symbol: str
-        side: str
-        quantity: float
-        ord_type: str
-        price: float | None = None
-        stop_price: float | None = None
-        account: str = ""
-
-    @dataclass
-    class FIXReport:
-        order_id: str
-        cl_ord_id: str
-        cum_qty: float
-        avg_px: float
-        latency_ms: float = 1.0
-
-    class FIXAdapter:
-        def __init__(self, **kwargs):
-            pass
-
-        def start(self):
-            pass
-
-        async def send_order(self, order):
-            return FIXReport(
-                order_id=str(uuid.uuid4()),
-                cl_ord_id=str(uuid.uuid4()),
-                cum_qty=order.quantity,
-                avg_px=2350.0,
-                latency_ms=1.5,
-            )
-
-    mod.FIXSide = FIXSide
-    mod.FIXOrdType = FIXOrdType
-    mod.FIXOrder = FIXOrder
-    mod.FIXReport = FIXReport
-    mod.FIXAdapter = FIXAdapter
-    return mod
-
-
-# Inject stubs before importing the module under test.
-# Import the real execution package first so sys.modules["execution"] is the
-# package (with __path__), then overlay only the fix_adapter sub-module stub.
-# Using a bare types.ModuleType here would shadow the package and break any
-# later import of execution.engine / execution.tca / etc.
-#
-# The stub is scoped to this import only: we restore the original entry (or
-# remove it) immediately after importing brokers.cme_comex so the stub does
-# not leak into test_connector_hub.py or any other file that imports the real
-# execution.fix_adapter.
-_fix_stub = _make_fix_stubs()
-import execution as _execution_pkg  # noqa: E402 — must run before cme_comex import
-_orig_fix_adapter = sys.modules.get("execution.fix_adapter")
-sys.modules["execution.fix_adapter"] = _fix_stub
+# The _cme_fix_adapter_stub fixture (conftest.py) must be active before
+# brokers.cme_comex is imported so the stub is in sys.modules when the
+# module-level `from execution.fix_adapter import ...` runs.
+# Requesting it here at module scope via pytestmark ensures it is set up
+# for the entire module before collection begins.
+pytestmark = pytest.mark.usefixtures("_cme_fix_adapter_stub")
 
 
 # ---------------------------------------------------------------------------
@@ -109,13 +45,6 @@ from brokers.cme_comex import (  # noqa: E402
     _CME_TICK_VALUE,
 )
 from brokers.base import AccountInfo, OrderSide, OrderStatus, OrderType  # noqa: E402
-
-# Restore the real execution.fix_adapter (or remove the stub) so it does not
-# leak into other test modules collected after this one.
-if _orig_fix_adapter is None:
-    sys.modules.pop("execution.fix_adapter", None)
-else:
-    sys.modules["execution.fix_adapter"] = _orig_fix_adapter
 
 
 # ---------------------------------------------------------------------------

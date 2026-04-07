@@ -3,9 +3,13 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
-"""Unit test fixtures shared across test_all_strategies and test_strategies."""
+"""Unit test fixtures shared across tests/unit/."""
 
 import os
+import sys
+import types
+import uuid
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
@@ -88,3 +92,84 @@ def clean_strategy_manager():
     mgr = StrategyManager()
     mgr.strategies.clear()
     return mgr
+
+
+# ---------------------------------------------------------------------------
+# CME/FIX stub fixture
+# ---------------------------------------------------------------------------
+
+def _build_fix_adapter_stub() -> types.ModuleType:
+    """Return a minimal execution.fix_adapter stub for CME connector tests."""
+    mod = types.ModuleType("execution.fix_adapter")
+
+    class FIXSide:
+        BUY = "BUY"
+        SELL = "SELL"
+
+    class FIXOrdType:
+        MARKET = "MARKET"
+        LIMIT = "LIMIT"
+        STOP = "STOP"
+
+    @dataclass
+    class FIXOrder:
+        symbol: str
+        side: str
+        quantity: float
+        ord_type: str
+        price: float | None = None
+        stop_price: float | None = None
+        account: str = ""
+
+    @dataclass
+    class FIXReport:
+        order_id: str
+        cl_ord_id: str
+        cum_qty: float
+        avg_px: float
+        latency_ms: float = 1.0
+
+    class FIXAdapter:
+        def __init__(self, **kwargs):
+            pass
+
+        def start(self):
+            pass
+
+        async def send_order(self, order):
+            return FIXReport(
+                order_id=str(uuid.uuid4()),
+                cl_ord_id=str(uuid.uuid4()),
+                cum_qty=order.quantity,
+                avg_px=2350.0,
+                latency_ms=1.5,
+            )
+
+    mod.FIXSide = FIXSide
+    mod.FIXOrdType = FIXOrdType
+    mod.FIXOrder = FIXOrder
+    mod.FIXReport = FIXReport
+    mod.FIXAdapter = FIXAdapter
+    return mod
+
+
+@pytest.fixture(autouse=False, scope="module")
+def _cme_fix_adapter_stub():
+    """
+    Module-scoped fixture that injects a minimal execution.fix_adapter stub
+    for the duration of the requesting test module, then restores the original.
+
+    Used by test_cme_comex_connector.py via pytestmark. Scoped to module so
+    the stub is active only while that module's tests run and is removed before
+    any other module (e.g. test_connector_hub.py) that needs the real adapter.
+    """
+    import execution  # ensure the real package is loaded first  # noqa: F401
+
+    stub = _build_fix_adapter_stub()
+    original = sys.modules.get("execution.fix_adapter")
+    sys.modules["execution.fix_adapter"] = stub
+    yield stub
+    if original is None:
+        sys.modules.pop("execution.fix_adapter", None)
+    else:
+        sys.modules["execution.fix_adapter"] = original
