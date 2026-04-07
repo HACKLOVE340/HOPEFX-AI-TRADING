@@ -12,8 +12,8 @@ Task 42 — Strategy A/B Testing
   GET  /api/ab-test                — list all tests
 
 Task 43 — Backtesting Result Sharing
-  POST /api/backtest/{run_id}/share — generate public share URL
-  GET  /api/backtest/shared/{slug}  — public view (no auth)
+  POST /api/backtesting/{run_id}/share — generate public share URL
+  GET  /api/backtesting/shared/{slug}  — public view (no auth)
 
 Task 44 — Custom Indicator Builder
   POST /api/indicators/preview      — evaluate formula on OHLCV data
@@ -28,8 +28,8 @@ Task 46 — Options Flow / CFTC COT Sentiment
   GET  /api/cot/gold                — latest CFTC COT gold positions
 
 Task 47 — Monte Carlo Simulation
-  POST /api/backtest/{run_id}/monte-carlo — run Monte Carlo on a backtest
-  GET  /api/backtest/{run_id}/monte-carlo — get cached results
+  POST /api/backtesting/{run_id}/monte-carlo — run Monte Carlo on a backtest
+  GET  /api/backtesting/{run_id}/monte-carlo — get cached results
 """
 
 from __future__ import annotations
@@ -185,7 +185,7 @@ async def get_ab_test(test_id: str, user: TokenPayload = Depends(get_current_use
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@router.post("/api/backtest/{run_id}/share")
+@router.post("/api/backtesting/{run_id}/share")
 async def share_backtest(run_id: str, user: TokenPayload = Depends(get_current_user)):
     """
     Generate a public share URL for a completed backtest result.
@@ -214,7 +214,7 @@ async def share_backtest(run_id: str, user: TokenPayload = Depends(get_current_u
     }
 
 
-@router.get("/api/backtest/shared/{slug}")
+@router.get("/api/backtesting/shared/{slug}")
 async def get_shared_backtest(slug: str):
     """Public endpoint — no auth required."""
     result = _shared_results.get(slug)
@@ -850,7 +850,7 @@ def _run_monte_carlo(params: _MonteCarloParams) -> dict:
     }
 
 
-@router.post("/api/backtest/{run_id}/monte-carlo")
+@router.post("/api/backtesting/{run_id}/monte-carlo")
 async def run_monte_carlo(
     run_id: str,
     req: MonteCarloRequest,
@@ -891,7 +891,7 @@ async def run_monte_carlo(
     return mc
 
 
-@router.get("/api/backtest/{run_id}/monte-carlo")
+@router.get("/api/backtesting/{run_id}/monte-carlo")
 async def get_monte_carlo(run_id: str, user: TokenPayload = Depends(get_current_user)):
     """Return cached Monte Carlo results. Returns 404 when not yet computed."""
     if run_id in _mc_cache:

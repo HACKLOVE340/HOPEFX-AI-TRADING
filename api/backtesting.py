@@ -7,11 +7,15 @@
 Backtesting REST API
 
 Endpoints:
-  POST /api/backtest/run            — run a single-symbol backtest
-  GET  /api/backtest/results        — list saved backtest results
-  GET  /api/backtest/strategies     — list available strategies
-  POST /api/backtest/multi-symbol   — run multi-symbol backtest via multi_symbol_backtest.py
-  GET  /api/backtest/multi-symbol/latest — return the most recent multi-symbol report
+  POST /api/backtesting/run                  — run a single-symbol backtest
+  GET  /api/backtesting/results              — list saved backtest results
+  GET  /api/backtesting/list                 — alias for /results (frontend compat)
+  GET  /api/backtesting/strategies           — list available strategies
+  POST /api/backtesting/walk-forward/run     — trigger walk-forward backtest
+  GET  /api/backtesting/walk-forward/latest  — most recent walk-forward result
+  GET  /api/backtesting/walk-forward/{id}    — specific walk-forward result
+  POST /api/backtesting/multi-symbol         — run multi-symbol backtest
+  GET  /api/backtesting/multi-symbol/latest  — most recent multi-symbol report
 """
 
 from __future__ import annotations
@@ -34,7 +38,7 @@ from api.auth import TokenPayload, get_current_user
 from api.db_store import db_get, db_keys_prefix, db_set
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/backtest", tags=["Backtesting"])
+router = APIRouter(prefix="/api/backtesting", tags=["Backtesting"])
 
 # ── Persistent results store ──────────────────────────────────────────────────
 # Results are written to the `configurations` table via db_store so they
@@ -458,6 +462,121 @@ async def get_walk_forward(run_id: str, _user: TokenPayload = Depends(get_curren
     raise HTTPException(status_code=404, detail="Walk-forward result not found")
 
 
+class WalkForwardRequest(BaseModel):
+    strategy: str = Field(..., description="Strategy name to walk-forward test")
+    symbol: str = Field(..., min_length=1, max_length=20)
+    initial_capital: float = Field(10000.0, gt=0)
+    n_splits: int = Field(5, ge=2, le=20, description="Number of train/test folds")
+    train_ratio: float = Field(0.7, gt=0.0, lt=1.0, description="Fraction of each fold used for training")
+    strategy_params: dict[str, Any] | None = None
+
+
+@router.post("/walk-forward/run", status_code=status.HTTP_202_ACCEPTED)
+async def run_walk_forward(
+    req: WalkForwardRequest,
+    background_tasks: BackgroundTasks,
+    _user: TokenPayload = Depends(get_current_user),
+):
+    """Trigger a walk-forward backtest. Returns run_id immediately; poll GET /walk-forward/{run_id}."""
+    run_id = str(uuid.uuid4())
+    created_at = datetime.now(UTC).isoformat()
+
+    # Seed a pending record so the frontend can poll immediately
+    pending: dict[str, Any] = {
+        "run_id": run_id,
+        "strategy": req.strategy,
+        "symbol": req.symbol,
+        "n_splits": req.n_splits,
+        "train_ratio": req.train_ratio,
+        "status": "running",
+        "created_at": created_at,
+        "folds": [],
+    }
+    _persist_wf_result(run_id, pending)
+
+    def _execute() -> None:
+        try:
+            strategy = _load_strategy(req.strategy, req.strategy_params)
+        except ValueError as exc:
+            _persist_wf_result(run_id, {**pending, "status": "error", "error": str(exc)})
+            return
+
+        import math
+
+        # Build a synthetic date range spanning 3 years for the walk-forward splits
+        from datetime import timedelta
+
+        total_days = 365 * 3
+        end_dt = datetime.now(UTC)
+        start_dt = end_dt - timedelta(days=total_days)
+        fold_days = total_days // req.n_splits
+        folds: list[dict] = []
+
+        for i in range(req.n_splits):
+            fold_start = start_dt + timedelta(days=i * fold_days)
+            fold_end = fold_start + timedelta(days=fold_days)
+            train_end = fold_start + timedelta(days=int(fold_days * req.train_ratio))
+
+            try:
+                train_result = _run_real_backtest(
+                    req.strategy,
+                    req.symbol,
+                    int((train_end - fold_start).days),
+                    req.initial_capital,
+                )
+                test_result = _run_real_backtest(
+                    req.strategy,
+                    req.symbol,
+                    int((fold_end - train_end).days),
+                    req.initial_capital,
+                )
+                folds.append(
+                    {
+                        "fold": i + 1,
+                        "train_start": fold_start.date().isoformat(),
+                        "train_end": train_end.date().isoformat(),
+                        "test_start": train_end.date().isoformat(),
+                        "test_end": fold_end.date().isoformat(),
+                        "train_sharpe": train_result.get("sharpe_ratio", 0.0),
+                        "test_sharpe": test_result.get("sharpe_ratio", 0.0),
+                        "train_return_pct": train_result.get("total_return_pct", 0.0),
+                        "test_return_pct": test_result.get("total_return_pct", 0.0),
+                        "train_max_dd": train_result.get("max_drawdown_pct", 0.0),
+                        "test_max_dd": test_result.get("max_drawdown_pct", 0.0),
+                    }
+                )
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                logger.warning("Walk-forward fold %d failed: %s", i + 1, exc)
+                folds.append({"fold": i + 1, "error": str(exc)})
+
+        valid = [f for f in folds if "error" not in f]
+        avg_test_sharpe = (
+            sum(f["test_sharpe"] for f in valid) / len(valid) if valid else 0.0
+        )
+        avg_test_return = (
+            sum(f["test_return_pct"] for f in valid) / len(valid) if valid else 0.0
+        )
+
+        _persist_wf_result(
+            run_id,
+            {
+                **pending,
+                "status": "completed",
+                "folds": folds,
+                "summary": {
+                    "avg_test_sharpe": round(avg_test_sharpe, 3),
+                    "avg_test_return_pct": round(avg_test_return, 2),
+                    "folds_completed": len(valid),
+                    "folds_failed": req.n_splits - len(valid),
+                },
+                "completed_at": datetime.now(UTC).isoformat(),
+            },
+        )
+
+    background_tasks.add_task(_execute)
+    return {"run_id": run_id, "status": "running"}
+
+
 @router.get("/results", response_model=list[BacktestResult])
 async def list_results(
     _user: TokenPayload = Depends(get_current_user),
@@ -467,6 +586,15 @@ async def list_results(
     _load_results_from_db()
     items = sorted(_results.values(), key=lambda r: r["created_at"], reverse=True)
     return [BacktestResult(**r) for r in items[:limit]]
+
+
+@router.get("/list", response_model=list[BacktestResult])
+async def list_results_alias(
+    _user: TokenPayload = Depends(get_current_user),
+    limit: int = 20,
+):
+    """Alias for GET /results — used by the frontend backtesting list view."""
+    return await list_results(_user=_user, limit=limit)
 
 
 @router.get("/results/{run_id}", response_model=BacktestResult)
