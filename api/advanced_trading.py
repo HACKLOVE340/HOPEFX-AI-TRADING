@@ -7,9 +7,9 @@
 Advanced Trading Features API — Tasks 42–47
 
 Task 42 — Strategy A/B Testing
-  POST /api/ab-test/start          — start A/B test between two strategies
-  GET  /api/ab-test/{test_id}      — get test results
-  GET  /api/ab-test                — list all tests
+  POST /api/advanced/ab-tests/run  — start A/B test between two strategies
+  GET  /api/advanced/ab-tests/{id} — get test results
+  GET  /api/advanced/ab-tests      — list all tests
 
 Task 43 — Backtesting Result Sharing
   POST /api/backtesting/{run_id}/share — generate public share URL
@@ -22,10 +22,10 @@ Task 44 — Custom Indicator Builder
   DELETE /api/indicators/{id}       — delete indicator
 
 Task 45 — Multi-Symbol Correlation Dashboard
-  GET  /api/correlation             — rolling correlation matrix
+  GET  /api/advanced/correlation    — rolling correlation matrix
 
 Task 46 — Options Flow / CFTC COT Sentiment
-  GET  /api/cot/gold                — latest CFTC COT gold positions
+  GET  /api/advanced/cot-sentiment  — latest CFTC COT gold positions
 
 Task 47 — Monte Carlo Simulation
   POST /api/backtesting/{run_id}/monte-carlo — run Monte Carlo on a backtest
@@ -125,7 +125,7 @@ def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, init
         raise ValueError(f"Backtest failed for strategy '{strategy_name}' — check server logs") from None
 
 
-@router.post("/api/ab-test/start", status_code=201)
+@router.post("/api/advanced/ab-tests/run", status_code=201)
 async def start_ab_test(
     req: ABTestRequest,
     user: TokenPayload = Depends(get_current_user),
@@ -166,13 +166,13 @@ async def start_ab_test(
     return _ab_tests[test_id]
 
 
-@router.get("/api/ab-test")
+@router.get("/api/advanced/ab-tests")
 async def list_ab_tests(user: TokenPayload = Depends(get_current_user)):
     tests = [t for t in _ab_tests.values() if t["user_id"] == user.sub]
     return {"tests": tests, "total": len(tests)}
 
 
-@router.get("/api/ab-test/{test_id}")
+@router.get("/api/advanced/ab-tests/{test_id}")
 async def get_ab_test(test_id: str, user: TokenPayload = Depends(get_current_user)):
     t = _ab_tests.get(test_id)
     if not t or t["user_id"] != user.sub:
@@ -720,12 +720,27 @@ async def _collect_series_from_engine(pe: Any, sym_list: list[str], window: int)
     }
 
 
+@router.get("/api/advanced/correlation")
+async def get_correlation_matrix(
+    window: int = 60,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Return a rolling Pearson correlation matrix for the default symbol set.
+
+    Reads OHLCV history from the price engine or CSV files in data/.
+    Returns HTTP 503 when fewer than 2 symbols have sufficient history.
+    """
+    sym_list = ["XAU_USD", "EUR_USD", "GBP_USD", "USD_JPY", "BTC_USD"]
+    return await _collect_series_from_engine(None, sym_list, window)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Task 46 — CFTC COT Gold Sentiment
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@router.get("/api/cot/gold")
+@router.get("/api/advanced/cot-sentiment")
 async def get_cot_gold():
     """
     Return CFTC Commitment of Traders data for gold (COMEX).
