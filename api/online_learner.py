@@ -306,7 +306,7 @@ async def partial_fit(
     learner = _get_learner(symbol)
     bars = _fetch_bars(symbol, lookback=req.lookback)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     try:
         success = await loop.run_in_executor(
             None,

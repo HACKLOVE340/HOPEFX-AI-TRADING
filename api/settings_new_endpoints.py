@@ -507,3 +507,23 @@ async def test_smtp(payload: SmtpTestPayload, request: Request):
         raise HTTPException(status_code=502, detail=f"SMTP error: {exc}") from exc
     except OSError as exc:
         raise HTTPException(status_code=502, detail=f"Connection failed: {exc}") from exc
+
+
+
+# =============================================================================
+# COMPAT ALIASES — AdminSettingsSection.tsx uses /api/admin/settings (bare)
+# while the canonical route is /api/admin/settings/system.
+# These thin aliases keep both paths working.
+# =============================================================================
+
+
+@router.get("/api/admin/settings", include_in_schema=False)
+async def get_admin_settings_alias(request: Request):
+    """Alias: GET /api/admin/settings → get_system_settings."""
+    return await get_system_settings(request)
+
+
+@router.post("/api/admin/settings", include_in_schema=False)
+async def save_admin_settings_alias(request: Request):
+    """Alias: POST /api/admin/settings → save_system_settings."""
+    return await save_system_settings(request)

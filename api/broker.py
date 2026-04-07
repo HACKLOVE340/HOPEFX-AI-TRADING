@@ -134,7 +134,7 @@ async def _test_oanda(req: BrokerTestRequest, start: float) -> BrokerTestRespons
 
         import requests as _req
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         try:
             resp_sync = await loop.run_in_executor(
                 None,

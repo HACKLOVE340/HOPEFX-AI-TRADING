@@ -421,7 +421,7 @@ class AlertManager:
         logger.log(getattr(logging, level, logging.INFO), "ALERT: %s", message)
         if self._bot and self._chat_id:
             try:
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 if loop.is_running():
                     _t = asyncio.create_task(self._bot.send_message(self._chat_id, message))
                     _t.add_done_callback(lambda _: None)

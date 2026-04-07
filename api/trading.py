@@ -338,7 +338,7 @@ async def _broker_call(method_name: str, *args, **kwargs):
     if asyncio.iscoroutinefunction(method):
         return await method(*args, **kwargs)
     # Sync method — run in executor to avoid blocking the event loop
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, lambda: method(*args, **kwargs))
 
 
@@ -1777,8 +1777,8 @@ async def get_trading_signals(
         from api.signals import get_active_signals as _get_active
 
         return await _get_active(user=user)
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.debug("api.signals unavailable for trading/signals, using fallback: %s", _exc)
     # Fallback: query signal_engine directly
     try:
         from app import app_state
@@ -1790,8 +1790,8 @@ async def get_trading_signals(
                 return raw()
             if raw is not None:
                 return list(raw)
-    except Exception:
-        pass
+    except Exception as _exc2:
+        logger.debug("signal_engine direct query also failed: %s", _exc2)
     return []
 
 

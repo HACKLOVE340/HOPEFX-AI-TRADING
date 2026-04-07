@@ -835,7 +835,7 @@ class MT5Bridge:
     # ── async wrappers ────────────────────────────────────────────────────────
 
     async def async_send_order(self, order: MT5Order) -> MT5FillResult:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self.send_order, order)
 
     async def async_close_position(
@@ -843,7 +843,7 @@ class MT5Bridge:
         symbol: str,
         volume: float | None = None,
     ) -> list[MT5FillResult]:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self.close_position, symbol, volume)
 
     async def async_modify_order(
@@ -853,11 +853,11 @@ class MT5Bridge:
         stop_loss: float | None = None,
         take_profit: float | None = None,
     ) -> bool:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self.modify_order, ticket, symbol, stop_loss, take_profit)
 
     async def async_cancel_order(self, ticket: int, symbol: str = "") -> bool:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self.cancel_order, ticket, symbol)
 
     # ── context manager ───────────────────────────────────────────────────────

@@ -43,8 +43,24 @@ def _make_superadmin_app() -> FastAPI:
     return app
 
 
+def _ensure_db_tables() -> None:
+    """Create all SQLAlchemy tables in the test SQLite DB (idempotent)."""
+    try:
+        from database.connection import engine
+        from database.models import Base  # user_models also uses this Base
+
+        # Import user_models to register User/Session/LoginAttempt with Base
+        import database.user_models  # noqa: F401
+
+        if Base is not None and engine is not None:
+            Base.metadata.create_all(engine)
+    except Exception:
+        pass  # non-fatal; DB tables may already exist or DB may be unavailable
+
+
 @pytest.fixture(scope="module")
 def sa_client():
+    _ensure_db_tables()
     app = _make_superadmin_app()
     return TestClient(app, raise_server_exceptions=True)
 

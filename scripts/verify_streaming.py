@@ -200,7 +200,7 @@ async def check_yahoo() -> None:
     try:
         import yfinance as yf
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         import functools
 
         df = await loop.run_in_executor(

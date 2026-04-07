@@ -41,9 +41,8 @@ import time
 from datetime import datetime, timezone
 
 UTC = timezone.utc
-from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user, require_role
@@ -133,8 +132,8 @@ async def get_security_alerts(
 
         monitor = get_security_monitor()
         alerts.extend(monitor.active_alerts())
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.debug("Security monitor alerts unavailable: %s", _exc)
 
     # 2. Kill-switch alert
     try:
@@ -150,8 +149,8 @@ async def get_security_alerts(
                     "timestamp": datetime.now(UTC).isoformat(),
                 }
             )
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.debug("Kill switch status unavailable: %s", _exc)
 
     # 3. Circuit breakers
     try:
@@ -168,8 +167,8 @@ async def get_security_alerts(
                         "timestamp": datetime.now(UTC).isoformat(),
                     }
                 )
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.debug("Circuit breaker status unavailable: %s", _exc)
 
     # 4. In-process store
     alerts.extend(_alert_store)
@@ -192,8 +191,8 @@ async def get_lockdown_status(
 
         mgr = get_lockdown_manager()
         return mgr.status()
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.debug("Lockdown manager unavailable: %s", _exc)
     return _lockdown_state
 
 
@@ -219,8 +218,8 @@ async def clear_lockdown(
         mgr.clear(cleared_by=user.sub)
         logger.warning("Lockdown cleared by admin: user=%s", user.sub)
         return {"status": "cleared", "cleared_by": user.sub}
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.debug("Lockdown clear failed: %s", _exc)
 
     _lockdown_state = {"active": False, "reason": None, "activated_at": None}
     logger.warning("Lockdown cleared (in-memory): user=%s", user.sub)

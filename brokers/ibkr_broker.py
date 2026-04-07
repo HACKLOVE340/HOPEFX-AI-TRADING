@@ -452,8 +452,8 @@ class IBKRBroker:
             # Wait up to 2s for the snapshot to populate, checking every 50ms.
             # This is far better than an unconditional sleep(0.5) because we
             # exit as soon as real data arrives, saving up to 450ms per call.
-            deadline = asyncio.get_event_loop().time() + 2.0
-            while asyncio.get_event_loop().time() < deadline:
+            deadline = asyncio.get_running_loop().time() + 2.0
+            while asyncio.get_running_loop().time() < deadline:
                 if ticker.bid and ticker.bid > 0 and ticker.ask and ticker.ask > 0:
                     break
                 await asyncio.sleep(0.05)

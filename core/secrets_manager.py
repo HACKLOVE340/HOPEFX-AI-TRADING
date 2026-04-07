@@ -311,7 +311,7 @@ class SecretsManager:
                 return self._fetch_env()
 
             # Run blocking Vault call in thread pool
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             data = await loop.run_in_executor(
                 None,
                 lambda: client.secrets.kv.v2.read_secret_version(path=secret_path, mount_point=mount_point),
@@ -338,7 +338,7 @@ class SecretsManager:
         secret_name = os.getenv("AWS_SECRET_NAME", "hopefx/api")
 
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
 
             def _get_secret():
                 client = boto3.client("secretsmanager", region_name=region)

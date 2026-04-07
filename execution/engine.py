@@ -826,7 +826,7 @@ class ExecutionEngine:
         if self._broker is None:
             return None
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             account = await loop.run_in_executor(None, self._broker.get_account_info)
             if account is None:
                 return None
@@ -880,7 +880,7 @@ class ExecutionEngine:
             return None
         notional = price * float(request.quantity)
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             account = await loop.run_in_executor(None, self._broker.get_account_info)
             if account is None:
                 return None
@@ -1192,7 +1192,7 @@ class ExecutionEngine:
         )
 
         # Run synchronous broker call in thread pool to avoid blocking event loop
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         order = await loop.run_in_executor(
             None,
             lambda: self._broker.place_order(
@@ -1279,7 +1279,7 @@ class ExecutionEngine:
                 }
             )
             # TTL: 7 days
-            await asyncio.get_event_loop().run_in_executor(
+            await asyncio.get_running_loop().run_in_executor(
                 None,
                 lambda: self._redis.setex(key, 604800, payload),
             )

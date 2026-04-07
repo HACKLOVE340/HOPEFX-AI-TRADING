@@ -323,7 +323,7 @@ class ExecutionSystem:
     # ── Signal handlers ───────────────────────────────────────────────────────
 
     def _install_signal_handlers(self) -> None:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def _handle_shutdown(sig_name: str) -> None:
             logger.warning("ExecutionSystem: received %s — initiating shutdown", sig_name)
