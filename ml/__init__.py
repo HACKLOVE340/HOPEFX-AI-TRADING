@@ -56,6 +56,20 @@ _ml_logger = _logging.getLogger(__name__)
 _SAVED = _Path(__file__).parent / "saved_models"
 _CHECKSUM_FILE = _SAVED / "model_checksums.json"
 
+# ── PyTorch availability check ────────────────────────────────────────────────
+try:
+    import torch as _torch  # noqa: F401
+
+    _TORCH_AVAILABLE = True
+except ImportError:
+    _TORCH_AVAILABLE = False
+    _ml_logger.warning(
+        "PyTorch is not installed. The following ML components will be disabled: "
+        "LSTM signal layer, RL/PPO agent (PPORLAgent), EWC online learner. "
+        "Install with: pip install torch>=2.1.1  "
+        "These components will fall back to stubs — predictions may be degraded."
+    )
+
 # Loaded model instances (None until first call to get_active_model())
 _macro_xgb: _Any | None = None
 _macro_rf: _Any | None = None

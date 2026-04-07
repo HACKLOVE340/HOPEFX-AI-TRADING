@@ -137,7 +137,7 @@ class YahooMacroFeed:
     async def fetch_and_inject(self, years: int | None = None) -> dict[str, int]:
         """Fetch all Yahoo macro series and inject into MacroStore."""
         n_years = years or _HISTORY_YEARS
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         series_dict = await loop.run_in_executor(None, self._fetch_sync, n_years)
 
         if not series_dict:

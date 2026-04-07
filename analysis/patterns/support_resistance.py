@@ -379,7 +379,7 @@ class SupportResistanceDetector:
         detector = SupportResistanceDetector()
         result = detector.detect_levels(df)
         for lvl in result["support"]:
-            print(lvl.price, lvl.strength)
+            logger.info(lvl.price, lvl.strength)
     """
 
     def __init__(self, config: dict | None = None):

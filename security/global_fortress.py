@@ -751,10 +751,10 @@ async def start_brain(app: FastAPI) -> HOPEFXBrain:
     logger.info("HOPEFXBrain: live instance ready — /api/security/* served via security_router")
 
     # Pre-load RL agent in background so first prediction is not delayed
-    asyncio.get_event_loop().run_in_executor(None, _get_rl_agent)
+    asyncio.get_running_loop().run_in_executor(None, _get_rl_agent)
     # Encoder is opt-in (BRAIN_SEMANTIC_ENCODER=true) — only pre-load when enabled
     if _ENCODER_ENABLED:
-        asyncio.get_event_loop().run_in_executor(None, _get_encoder)
+        asyncio.get_running_loop().run_in_executor(None, _get_encoder)
 
     # Start the eternal loop
     _t = asyncio.create_task(brain.monitor_24_7(), name="hopefx-brain-24-7")
@@ -774,7 +774,7 @@ def get_brain() -> HOPEFXBrain | None:
 # exist before the async startup tasks complete.  Each handler delegates to
 # get_brain() so it always uses the live instance once start_brain() runs.
 
-def _build_eager_router() -> "APIRouter":
+def _build_eager_router() -> APIRouter:
     """
     Build a /api/security/* router whose handlers delegate to get_brain().
 

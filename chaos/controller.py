@@ -31,7 +31,7 @@ Usage
 -----
     controller = ChaosController(orchestrator=orchestrator)
     results = await controller.run_all_scenarios()
-    print(controller.report())
+    logger.info(controller.report())
 """
 
 from __future__ import annotations

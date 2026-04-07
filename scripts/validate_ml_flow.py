@@ -48,6 +48,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import ClassVar
+import logging
+logger = logging.getLogger(__name__)
+
 
 # ── Environment bootstrap ─────────────────────────────────────────────────────
 # Must happen before any app module is imported so startup validators see
@@ -170,30 +173,30 @@ def _print_result(r: StageResult) -> None:
         status = f"{_RED}FAIL{_RESET}"
 
     sla_str = f"  SLA {r.sla_s:.1f}s" if r.sla_s > 0 else ""
-    print(f"  {icon} [{status}] {_BOLD}{r.name}{_RESET}  ({r.elapsed_s:.3f}s{sla_str})")
+    logger.info(f"  {icon} [{status}] {_BOLD}{r.name}{_RESET}  ({r.elapsed_s:.3f}s{sla_str})")
     if r.detail and (not r.passed or not r.sla_ok):
         for line in r.detail.strip().splitlines()[:8]:
-            print(f"       {_YELLOW}{line}{_RESET}")
+            logger.info(f"       {_YELLOW}{line}{_RESET}")
 
 
 def _print_header(title: str) -> None:
-    print(f"\n{_CYAN}{_BOLD}{'─' * 60}{_RESET}")
-    print(f"{_CYAN}{_BOLD}  {title}{_RESET}")
-    print(f"{_CYAN}{_BOLD}{'─' * 60}{_RESET}")
+    logger.info(f"\n{_CYAN}{_BOLD}{'─' * 60}{_RESET}")
+    logger.info(f"{_CYAN}{_BOLD}  {title}{_RESET}")
+    logger.info(f"{_CYAN}{_BOLD}{'─' * 60}{_RESET}")
 
 
 def _print_summary(report: ValidationReport) -> None:
-    print(f"\n{_BOLD}{'═' * 60}{_RESET}")
+    logger.info(f"\n{_BOLD}{'═' * 60}{_RESET}")
     colour = _GREEN if report.passed else _RED
     label = "ALL STAGES PASSED" if report.passed else "VALIDATION FAILED"
-    print(f"{colour}{_BOLD}  {label}  ({report.n_passed}/{len(report.results)} stages){_RESET}")
+    logger.info(f"{colour}{_BOLD}  {label}  ({report.n_passed}/{len(report.results)} stages){_RESET}")
     if not report.passed:
-        print(f"\n  {_RED}Failed stages:{_RESET}")
+        logger.error(f"\n  {_RED}Failed stages:{_RESET}")
         for r in report.results:
             if not r.passed or not r.sla_ok:
                 tag = "SLOW" if r.passed else "FAIL"
-                print(f"    {_RED}[{tag}]{_RESET} {r.name}")
-    print(f"{_BOLD}{'═' * 60}{_RESET}\n")
+                logger.info(f"    {_RED}[{tag}]{_RESET} {r.name}")
+    logger.info(f"{_BOLD}{'═' * 60}{_RESET}\n")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -689,14 +692,14 @@ def main() -> int:
 
     if not args.quiet:
         _print_header("HOPEFX-AI-TRADING  —  End-to-End ML Flow Validation")
-        print(f"  Data:  {_H1_CSV}")
-        print(f"  Env:   APP_ENV={os.environ['APP_ENV']}")
+        logger.info(f"  Data:  {_H1_CSV}")
+        logger.info(f"  Env:   APP_ENV={os.environ['APP_ENV']}")
 
     stages_to_run = STAGES
     if args.stage is not None:
         idx = args.stage - 1
         if not (0 <= idx < len(STAGES)):
-            print(f"Invalid stage {args.stage}. Valid range: 1–{len(STAGES)}")
+            logger.info(f"Invalid stage {args.stage}. Valid range: 1–{len(STAGES)}")
             return 1
         stages_to_run = [STAGES[idx]]
 
@@ -708,7 +711,7 @@ def main() -> int:
         _print_summary(_report)
     else:
         status = "PASS" if _report.passed else "FAIL"
-        print(f"{status} ({_report.n_passed}/{len(_report.results)} stages)")
+        logger.info(f"{status} ({_report.n_passed}/{len(_report.results)} stages)")
 
     return 0 if _report.passed else 1
 

@@ -37,6 +37,9 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+import logging
+logger = logging.getLogger(__name__)
+
 
 # ---------------------------------------------------------------------------
 # Load .env if present
@@ -57,9 +60,9 @@ def run(verbose: bool = False) -> int:
     """Run migration smoke test. Returns 0 on success, 1 on failure."""
     failures = 0
 
-    print("\n" + "=" * 60)
-    print("  Alembic Migration Smoke Test")
-    print("=" * 60)
+    logger.info("\n" + "=" * 60)
+    logger.info("  Alembic Migration Smoke Test")
+    logger.info("=" * 60)
 
     # ── Check alembic is installed ────────────────────────────────────────────
     try:
@@ -70,10 +73,10 @@ def run(verbose: bool = False) -> int:
 
         from alembic import command as alembic_command
 
-        print(f"{_PASS}  alembic + sqlalchemy importable")
+        logger.info(f"{_PASS}  alembic + sqlalchemy importable")
     except ImportError as exc:
-        print(f"{_FAIL}  alembic/sqlalchemy not installed: {exc}")
-        print("  Install: pip install alembic sqlalchemy")
+        logger.error(f"{_FAIL}  alembic/sqlalchemy not installed: {exc}")
+        logger.info("  Install: pip install alembic sqlalchemy")
         return 1
 
     # ── Resolve database URL ──────────────────────────────────────────────────
@@ -85,14 +88,14 @@ def run(verbose: bool = False) -> int:
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as _tmp:
             _tmp_file = _tmp.name
         db_url = f"sqlite:///{_tmp_file}"
-        print(f"  Using temporary SQLite DB: {_tmp_file}")
+        logger.info(f"  Using temporary SQLite DB: {_tmp_file}")
     else:
-        print(f"  Using DATABASE_URL: {db_url[:40]}...")
+        logger.info(f"  Using DATABASE_URL: {db_url[:40]}...")
 
     # ── Build Alembic config ──────────────────────────────────────────────────
     alembic_ini = PROJECT_ROOT / "alembic.ini"
     if not alembic_ini.exists():
-        print(f"{_FAIL}  alembic.ini not found at {alembic_ini}")
+        logger.error(f"{_FAIL}  alembic.ini not found at {alembic_ini}")
         return 1
 
     cfg = AlembicConfig(str(alembic_ini))
@@ -103,22 +106,22 @@ def run(verbose: bool = False) -> int:
     script = ScriptDirectory.from_config(cfg)
     revisions = list(script.walk_revisions())
     revisions.reverse()  # oldest first
-    print(f"  Found {len(revisions)} revision(s)")
+    logger.info(f"  Found {len(revisions)} revision(s)")
     if verbose:
         for rev in revisions:
-            print(f"    {rev.revision[:8]}  {rev.doc or '(no description)'}")
+            logger.info(f"    {rev.revision[:8]}  {rev.doc or '(no description)'}")
 
     if not revisions:
-        print(f"{_FAIL}  No revisions found — check alembic/versions/")
+        logger.error(f"{_FAIL}  No revisions found — check alembic/versions/")
         return 1
 
     # ── Apply all migrations (upgrade head) ───────────────────────────────────
-    print("\n  Running: alembic upgrade head ...")
+    logger.info("\n  Running: alembic upgrade head ...")
     try:
         alembic_command.upgrade(cfg, "head")
-        print(f"{_PASS}  upgrade head completed")
+        logger.info(f"{_PASS}  upgrade head completed")
     except Exception as exc:
-        print(f"{_FAIL}  upgrade head failed: {exc}")
+        logger.error(f"{_FAIL}  upgrade head failed: {exc}")
         failures += 1
 
     if failures == 0:
@@ -127,11 +130,11 @@ def run(verbose: bool = False) -> int:
             engine = create_engine(db_url)
             inspector = inspect(engine)
             tables = inspector.get_table_names()
-            print(f"{_PASS}  Tables created: {sorted(tables)}")
+            logger.info(f"{_PASS}  Tables created: {sorted(tables)}")
 
             # alembic_version table must exist
             if "alembic_version" not in tables:
-                print(f"{_FAIL}  alembic_version table missing")
+                logger.error(f"{_FAIL}  alembic_version table missing")
                 failures += 1
             else:
                 with engine.connect() as conn:
@@ -139,31 +142,31 @@ def run(verbose: bool = False) -> int:
                     current = row[0] if row else None
                 head_rev = script.get_current_head()
                 if current == head_rev:
-                    print(f"{_PASS}  DB at head revision: {current}")
+                    logger.info(f"{_PASS}  DB at head revision: {current}")
                 else:
-                    print(f"{_FAIL}  DB at {current!r}, expected head {head_rev!r}")
+                    logger.error(f"{_FAIL}  DB at {current!r}, expected head {head_rev!r}")
                     failures += 1
             engine.dispose()
         except Exception as exc:
-            print(f"{_FAIL}  Post-migration inspection failed: {exc}")
+            logger.error(f"{_FAIL}  Post-migration inspection failed: {exc}")
             failures += 1
 
         # ── Downgrade back to base ────────────────────────────────────────────
-        print("\n  Running: alembic downgrade base ...")
+        logger.info("\n  Running: alembic downgrade base ...")
         try:
             alembic_command.downgrade(cfg, "base")
-            print(f"{_PASS}  downgrade base completed")
+            logger.info(f"{_PASS}  downgrade base completed")
         except Exception as exc:
-            print(f"{_FAIL}  downgrade base failed: {exc}")
+            logger.error(f"{_FAIL}  downgrade base failed: {exc}")
             failures += 1
 
         # ── Re-upgrade to confirm round-trip ─────────────────────────────────
-        print("\n  Running: alembic upgrade head (round-trip) ...")
+        logger.info("\n  Running: alembic upgrade head (round-trip) ...")
         try:
             alembic_command.upgrade(cfg, "head")
-            print(f"{_PASS}  round-trip upgrade head completed")
+            logger.info(f"{_PASS}  round-trip upgrade head completed")
         except Exception as exc:
-            print(f"{_FAIL}  round-trip upgrade failed: {exc}")
+            logger.error(f"{_FAIL}  round-trip upgrade failed: {exc}")
             failures += 1
 
     # ── Cleanup ───────────────────────────────────────────────────────────────
@@ -171,12 +174,12 @@ def run(verbose: bool = False) -> int:
         with contextlib.suppress(OSError):
             os.unlink(_tmp_file)
 
-    print("\n" + "=" * 60)
+    logger.info("\n" + "=" * 60)
     if failures == 0:
-        print("  ALL MIGRATION CHECKS PASSED")
+        logger.info("  ALL MIGRATION CHECKS PASSED")
     else:
-        print(f"  {failures} CHECK(S) FAILED — review output above")
-    print("=" * 60 + "\n")
+        logger.error(f"  {failures} CHECK(S) FAILED — review output above")
+    logger.info("=" * 60 + "\n")
 
     return 0 if failures == 0 else 1
 

@@ -32,7 +32,6 @@ UTC = timezone.utc
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from api.auth import TokenPayload, get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -472,7 +471,6 @@ async def fiat_deposit(
     Real-money processing requires an external payment provider (Stripe / bank)
     configured via STRIPE_SECRET_KEY or FIAT_PROVIDER env vars.
     """
-    from api.auth import get_current_user
 
     # Re-import here to avoid circular at module load time
     return await _fiat_deposit_impl(req)

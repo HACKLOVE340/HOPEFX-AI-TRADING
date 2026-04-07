@@ -72,7 +72,7 @@ async def init_env(s: Any) -> bool:
         if is_production:
             logger.critical(
                 "STARTUP ABORTED: SECURITY_JWT_SECRET is missing in production. "
-                'Generate a secret: python3 -c "import secrets; print(secrets.token_hex(32))"'
+                'Generate a secret: python3 -c "import secrets; logger.info(secrets.token_hex(32))"'
             )
             sys.exit(1)
         # Generate a cryptographically-random ephemeral secret for dev.
@@ -91,7 +91,7 @@ async def init_env(s: Any) -> bool:
         if is_production:
             logger.critical(
                 "STARTUP ABORTED: CONFIG_ENCRYPTION_KEY is missing in production. "
-                'Generate a key: python3 -c "import secrets; print(secrets.token_urlsafe(48))"'
+                'Generate a key: python3 -c "import secrets; logger.info(secrets.token_urlsafe(48))"'
             )
             sys.exit(1)
         # Generate a cryptographically-random ephemeral key for dev.

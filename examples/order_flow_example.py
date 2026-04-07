@@ -45,27 +45,27 @@ def print_metrics(analyzer, symbol: str) -> None:
     oscillator = analyzer.get_order_flow_oscillator(symbol)
     pressure = analyzer.get_pressure_gauges(symbol)
 
-    print(f"\n{'=' * 55}")
-    print(f"  Order Flow Snapshot — {symbol}  {datetime.now(UTC).strftime('%H:%M:%S UTC')}")
-    print(f"{'=' * 55}")
+    logger.info(f"\n{'=' * 55}")
+    logger.info(f"  Order Flow Snapshot — {symbol}  {datetime.now(UTC).strftime('%H:%M:%S UTC')}")
+    logger.info(f"{'=' * 55}")
 
     if aggression:
-        print(f"  Buy aggression  : {aggression.buy_aggression:6.1f}%")
-        print(f"  Sell aggression : {aggression.sell_aggression:6.1f}%")
-        print(f"  Score           : {aggression.aggression_score:+.1f}  ({aggression.dominant_side})")
+        logger.info(f"  Buy aggression  : {aggression.buy_aggression:6.1f}%")
+        logger.info(f"  Sell aggression : {aggression.sell_aggression:6.1f}%")
+        logger.info(f"  Score           : {aggression.aggression_score:+.1f}  ({aggression.dominant_side})")
 
     if oscillator:
-        print(f"  OFO value       : {oscillator.value:+.1f}  → {oscillator.signal}")
+        logger.info(f"  OFO value       : {oscillator.value:+.1f}  → {oscillator.signal}")
 
     if pressure:
-        print(f"  Buy pressure    : {pressure.get('buy_pressure', 0.0):6.1f}%")
-        print(f"  Sell pressure   : {pressure.get('sell_pressure', 0.0):6.1f}%")
+        logger.info(f"  Buy pressure    : {pressure.get('buy_pressure', 0.0):6.1f}%")
+        logger.info(f"  Sell pressure   : {pressure.get('sell_pressure', 0.0):6.1f}%")
 
     clusters = analyzer.get_volume_clusters(symbol, top_n=3)
     if clusters:
-        print("  Volume clusters :")
+        logger.info("  Volume clusters :")
         for cluster in clusters:
-            print(f"    {cluster.price_level:10.4f}  {cluster.cluster_type:<12}  strength={cluster.strength:.2f}")
+            logger.info(f"    {cluster.price_level:10.4f}  {cluster.cluster_type:<12}  strength={cluster.strength:.2f}")
 
 
 async def run_example(max_ticks: int = 100) -> None:
@@ -142,18 +142,18 @@ async def run_example(max_ticks: int = 100) -> None:
     # Detect delta divergence
     divergence = analyzer.detect_delta_divergence(SYMBOL)
     if divergence:
-        print(f"\n  Delta divergence: {divergence.divergence_type} (confidence={divergence.confidence:.2f})")
+        logger.info(f"\n  Delta divergence: {divergence.divergence_type} (confidence={divergence.confidence:.2f})")
     else:
-        print("\n  No delta divergence detected.")
+        logger.info("\n  No delta divergence detected.")
 
     # Stacked imbalances
     stacked = analyzer.get_stacked_imbalances(SYMBOL)
     if stacked:
-        print(f"\n  Stacked imbalances: {len(stacked)} found")
+        logger.info(f"\n  Stacked imbalances: {len(stacked)} found")
         for si in stacked[:3]:
-            print(f"    direction={si.direction}  levels={len(si.levels)}  strength={si.strength}")
+            logger.info(f"    direction={si.direction}  levels={len(si.levels)}  strength={si.strength}")
     else:
-        print("\n  No stacked imbalances found.")
+        logger.info("\n  No stacked imbalances found.")
 
     logger.info("Order flow example complete.")
 

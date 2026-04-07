@@ -40,7 +40,7 @@ Usage
     validator.set_oos_reference(oos_signals)   # call once after backtest
     result = validator.validate(live_signals)
     if not result.passed:
-        print(result.summary)
+        logger.info(result.summary)
         # trigger retraining or alert
 """
 

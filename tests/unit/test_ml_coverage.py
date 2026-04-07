@@ -276,7 +276,7 @@ class TestSignalDistributionValidator:
         assert len(v._live_signals) == 0
 
     def test_validate_uses_internal_buffer(self):
-        from ml.signal_validator import SignalDistributionValidator, ValidationStatus
+        from ml.signal_validator import SignalDistributionValidator
         v = SignalDistributionValidator(min_samples=30)
         oos = _make_signals(50)
         live = _make_signals(50)

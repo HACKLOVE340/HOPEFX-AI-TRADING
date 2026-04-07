@@ -207,50 +207,50 @@ def _print_plan(args: argparse.Namespace, prop_cfg: dict) -> None:
     """Print the startup plan and env validation result, then exit."""
     from core.env_validator import validate_environment
 
-    print("\n" + "=" * 60)
-    print("  HOPEFX-AI-TRADING — Startup Plan (dry-run)")
-    print("=" * 60)
-    print(f"  Broker  : {args.broker}")
-    print(f"  Mode    : {args.mode}")
-    print(f"  Config  : {args.config}")
-    print(f"  Practice: {os.environ.get('OANDA_PRACTICE', 'true')}")
-    print()
+    logger.info("\n" + "=" * 60)
+    logger.info("  HOPEFX-AI-TRADING — Startup Plan (dry-run)")
+    logger.info("=" * 60)
+    logger.info(f"  Broker  : {args.broker}")
+    logger.info(f"  Mode    : {args.mode}")
+    logger.info(f"  Config  : {args.config}")
+    logger.info(f"  Practice: {os.environ.get('OANDA_PRACTICE', 'true')}")
+    logger.info()
 
     # Prop firm rules
-    print("  Prop Firm Rules:")
-    print(f"    daily_dd        : {prop_cfg.get('daily_dd', 0.05) * 100:.1f}%")
-    print(f"    max_dd          : {prop_cfg.get('max_dd', 0.10) * 100:.1f}%")
-    print(f"    news_blackout   : ±{prop_cfg.get('news_blackout', 5)} min")
-    print(f"    weekend_close   : {prop_cfg.get('weekend_close', True)}")
-    print(f"    breach_action   : {prop_cfg.get('breach_action', 'pause')}")
-    print(f"    max_daily_trades: {prop_cfg.get('max_daily_trades', 20)}")
-    print(f"    enabled         : {prop_cfg.get('enabled', True)}")
-    print()
+    logger.info("  Prop Firm Rules:")
+    logger.info(f"    daily_dd        : {prop_cfg.get('daily_dd', 0.05) * 100:.1f}%")
+    logger.info(f"    max_dd          : {prop_cfg.get('max_dd', 0.10) * 100:.1f}%")
+    logger.info(f"    news_blackout   : ±{prop_cfg.get('news_blackout', 5)} min")
+    logger.info(f"    weekend_close   : {prop_cfg.get('weekend_close', True)}")
+    logger.info(f"    breach_action   : {prop_cfg.get('breach_action', 'pause')}")
+    logger.info(f"    max_daily_trades: {prop_cfg.get('max_daily_trades', 20)}")
+    logger.info(f"    enabled         : {prop_cfg.get('enabled', True)}")
+    logger.info()
 
     # Env validation
     result = validate_environment(strict=False)
-    print("  Environment:")
+    logger.info("  Environment:")
     for msg in result.errors:
-        print(f"    ❌ {msg}")
+        logger.error(f"    ❌ {msg}")
     for msg in result.warnings:
-        print(f"    ⚠️  {msg}")
+        logger.warning(f"    ⚠️  {msg}")
     if not result.errors and not result.warnings:
-        print("    ✅ All variables present")
-    print()
+        logger.info("    ✅ All variables present")
+    logger.info()
 
     # Pipeline that will start
     pipeline = _get_pipeline(args.mode)
-    print("  Pipeline:")
+    logger.info("  Pipeline:")
     for step in pipeline:
-        print(f"    → {step}")
-    print("=" * 60)
-    print()
+        logger.info(f"    → {step}")
+    logger.info("=" * 60)
+    logger.info()
 
     if result.errors:
-        print("❌ Cannot start — fix errors above.")
+        logger.error("❌ Cannot start — fix errors above.")
         sys.exit(1)
     else:
-        print("✅ Dry-run complete — ready to start.")
+        logger.info("✅ Dry-run complete — ready to start.")
         sys.exit(0)
 
 
@@ -404,7 +404,7 @@ def main() -> None:
             sys.exit(1)
         confirm = input("\n⚠️  LIVE MODE — real money will be traded.\n   Type 'CONFIRM LIVE' to proceed: ").strip()
         if confirm != "CONFIRM LIVE":
-            print("Aborted.")
+            logger.info("Aborted.")
             sys.exit(0)
 
     logger.info(

@@ -374,7 +374,7 @@ rule SuspiciousImport {
     async def scan_project(self) -> dict[str, Any]:
         """Scan the entire project tree. Returns scan summary."""
         async with self._scan_lock:
-            return await asyncio.get_event_loop().run_in_executor(None, self._scan_project_sync)
+            return await asyncio.get_running_loop().run_in_executor(None, self._scan_project_sync)
 
     def _scan_project_sync(self) -> dict[str, Any]:
         started = time.monotonic()
@@ -667,7 +667,7 @@ rule SuspiciousImport {
                 raise HTTPException(status_code=400, detail="Invalid file path") from None
             if not path.exists():  # codeql[py/path-injection] - path confined to PROJECT_ROOT above
                 raise HTTPException(status_code=404, detail="File not found")
-            threats = await asyncio.get_event_loop().run_in_executor(None, scanner._scan_file_sync, path)
+            threats = await asyncio.get_running_loop().run_in_executor(None, scanner._scan_file_sync, path)
             return {"file": sanitized, "threats": threats}
 
         @router.post("/quarantine")
@@ -738,9 +738,8 @@ async def start_av_scanner(app: FastAPI) -> None:
 # Registered by router_registry.py at import time. Delegates to get_scanner()
 # at request time so the live instance is used once start_av_scanner() runs.
 
-def _build_eager_av_router() -> "APIRouter":
+def _build_eager_av_router() -> APIRouter:
     from fastapi import APIRouter as _APIRouter, HTTPException as _HTTPException
-    import re as _re
 
     r = _APIRouter(prefix="/api/security/av", tags=["antivirus"])
 

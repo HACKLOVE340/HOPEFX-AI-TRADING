@@ -143,10 +143,9 @@ def _sync_broadcast_callback(state: dict) -> None:
     Schedules the async broadcast on the running event loop.
     """
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            _t = loop.create_task(_async_broadcast(state))
-            _t.add_done_callback(lambda _: None)
+        loop = asyncio.get_running_loop()
+        _t = loop.create_task(_async_broadcast(state))
+        _t.add_done_callback(lambda _: None)
     except RuntimeError:
         ...  # nosec B110
 

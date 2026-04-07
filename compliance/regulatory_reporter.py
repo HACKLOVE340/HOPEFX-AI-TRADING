@@ -7,7 +7,7 @@ compliance/regulatory_reporter.py
 RegulatoryReporter — real trade reporting to CFTC SDR, SEC CAT, and
 MiFID II transaction reporting endpoints.
 
-Replaces the print() stub in compliance/auditor.py:TradeReporting._submit_to_regulator().
+Replaces the logger.info() stub in compliance/auditor.py:TradeReporting._submit_to_regulator().
 
 Design
 ------

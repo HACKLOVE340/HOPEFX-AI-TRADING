@@ -132,7 +132,7 @@ from datetime import datetime, timedelta
 
 # Load market data
 # data = load_market_data('XAUUSD', '1H', days=365)
-print("Strategy development environment ready")
+logger.info("Strategy development environment ready")
 """,
         )
 
@@ -159,7 +159,7 @@ LOOKBACK_DAYS = 365
 from cache.market_data_cache import MarketDataCache
 cache = MarketDataCache()
 df = cache.get_ohlcv(SYMBOL, TIMEFRAME, limit=LOOKBACK_DAYS * 24)
-print(f"Loaded {len(df)} bars for {SYMBOL} {TIMEFRAME}")
+logger.info(f"Loaded {len(df)} bars for {SYMBOL} {TIMEFRAME}")
 df.head()
 """,
         )
@@ -210,7 +210,7 @@ def calculate_max_drawdown(equity_curve):
     drawdown = (equity_curve - peak) / peak
     return drawdown.min()
 
-print("Analysis functions loaded")
+logger.info("Analysis functions loaded")
 """,
         )
 
@@ -254,7 +254,7 @@ import pandas as pd
 # from sklearn.model_selection import train_test_split
 # from sklearn.metrics import accuracy_score, classification_report
 
-print("ML development environment ready")
+logger.info("ML development environment ready")
 
 # Feature engineering helper
 def create_features(df):
@@ -276,7 +276,7 @@ def create_features(df):
 
     return features.dropna()
 
-print("Feature engineering functions ready")
+logger.info("Feature engineering functions ready")
 """,
         )
 

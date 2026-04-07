@@ -774,7 +774,5 @@ def _make_gatekeeper() -> Gatekeeper:
             lineage_store=orchestrator._lineage,
         )
     except Exception:
+        logger.warning("_make_gatekeeper: orchestrator import failed — using bare Gatekeeper", exc_info=True)
         return Gatekeeper()
-
-
-gatekeeper = _make_gatekeeper()

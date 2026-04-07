@@ -17,7 +17,6 @@ test class via the ``db_session`` fixture.
 
 from __future__ import annotations
 
-import json
 from typing import Generator
 
 import pytest

@@ -30,6 +30,9 @@ import os
 import secrets
 import sys
 from pathlib import Path
+import logging
+logger = logging.getLogger(__name__)
+
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
@@ -163,26 +166,26 @@ def bootstrap(verbose: bool = True) -> None:
     created = _generate_env()
 
     if created and verbose:
-        print("\n" + "─" * 58)
-        print("  HOPEFX Dev Bootstrap")
-        print("─" * 58)
-        print(f"  ✅  Generated .env  →  {ENV_PATH}")
+        logger.info("\n" + "─" * 58)
+        logger.info("  HOPEFX Dev Bootstrap")
+        logger.info("─" * 58)
+        logger.info(f"  ✅  Generated .env  →  {ENV_PATH}")
 
     try:
         _seed_admin()
         if verbose and created:
-            print("  ✅  Admin user seeded")
-            print(f"      Email    : {DEFAULT_ADMIN_EMAIL}")
-            print(f"      Username : {DEFAULT_ADMIN_USERNAME}")
+            logger.info("  ✅  Admin user seeded")
+            logger.info(f"      Email    : {DEFAULT_ADMIN_EMAIL}")
+            logger.info(f"      Username : {DEFAULT_ADMIN_USERNAME}")
             # Direct users to the .env file — never echo the password value.
             sys.stdout.write(f"      Password : see {ENV_PATH} (BOOTSTRAP_ADMIN_PASSWORD)\n")
-            print("─" * 58)
-            print("  Start the server:  python app.py")
-            print("  Login at:          http://localhost:8000/login")
-            print("─" * 58 + "\n")
+            logger.info("─" * 58)
+            logger.info("  Start the server:  python app.py")
+            logger.info("  Login at:          http://localhost:8000/login")
+            logger.info("─" * 58 + "\n")
     except Exception as exc:  # pylint: disable=broad-exception-caught
         if verbose:
-            print(f"  ⚠️  Admin seed skipped: {exc}")
+            logger.warning(f"  ⚠️  Admin seed skipped: {exc}")
 
 
 if __name__ == "__main__":

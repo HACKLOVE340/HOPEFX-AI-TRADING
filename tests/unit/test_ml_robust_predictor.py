@@ -229,7 +229,7 @@ class TestDriftDetector:
         ref = rng.standard_normal(100)
         dd.set_reference(ref)
         # Fill window and trigger check
-        for i in range(60):
+        for _ in range(60):
             result = dd.update(rng.standard_normal())
         # At least one result should have been returned
         assert result is not None

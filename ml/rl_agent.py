@@ -37,7 +37,7 @@ Usage
     metrics = await trainer.train(
         symbol="XAU_USD", timeframe="H1", timesteps=50_000
     )
-    print(metrics)
+    logger.info(metrics)
 
     # live inference
     action, confidence = trainer.agent.predict(current_candles)

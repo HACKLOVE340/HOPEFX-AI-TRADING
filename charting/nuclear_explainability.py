@@ -31,13 +31,16 @@ Usage
         risk_data={...},     # from RiskOrchestrator
         price=2650.0,
     )
-    print(result.summary)
-    print(result.decision_trace)
+    logger.info(result.summary)
+    logger.info(result.decision_trace)
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+import logging
+logger = logging.getLogger(__name__)
 
 # ─── Data classes ─────────────────────────────────────────────────────────────
 

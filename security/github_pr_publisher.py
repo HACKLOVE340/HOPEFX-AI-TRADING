@@ -325,7 +325,7 @@ class GitHubPRPublisher:
             fix_code="...",
             approved_by="admin@hopefx.io",
         )
-        print(result["pr_url"])
+        logger.info(result["pr_url"])
     """
 
     async def publish(

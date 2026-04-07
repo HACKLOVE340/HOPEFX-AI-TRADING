@@ -14,6 +14,9 @@ import re
 import sys
 from pathlib import Path
 
+import logging
+logger = logging.getLogger(__name__)
+
 # Patterns that indicate hardcoded secrets
 DANGEROUS_PATTERNS = [
     (r'password\s*=\s*["\'][^"\']+["\']', "Hardcoded password"),
@@ -90,14 +93,14 @@ def check_env_file() -> list[str]:
 
 def main() -> int:
     """Run security audit."""
-    print("=" * 80)
-    print("HOPEFX SECURITY AUDIT")
-    print("=" * 80)
+    logger.info("=" * 80)
+    logger.info("HOPEFX SECURITY AUDIT")
+    logger.info("=" * 80)
 
     all_issues = []
 
     # Scan Python files
-    print("\n[1/3] Scanning Python files for hardcoded secrets...")
+    logger.info("\n[1/3] Scanning Python files for hardcoded secrets...")
     for py_file in Path("src").rglob("*.py"):
         if any(skip in str(py_file) for skip in SKIP_FILES):
             continue
@@ -105,19 +108,19 @@ def main() -> int:
         issues = scan_file(py_file)
         for line_num, desc, line in issues:
             all_issues.append(f"{py_file}:{line_num}: {desc}")
-            print(f"  ❌ {py_file}:{line_num}: {desc}")
-            print(f"     {line[:80]}...")
+            logger.error(f"  ❌ {py_file}:{line_num}: {desc}")
+            logger.info(f"     {line[:80]}...")
 
     # Check environment files
-    print("\n[2/3] Checking environment files...")
+    logger.info("\n[2/3] Checking environment files...")
     env_issues = check_env_file()
     for issue in env_issues:
         all_issues.append(issue)
         prefix = "❌" if "CRITICAL" in issue else "⚠️"
-        print(f"  {prefix} {issue}")
+        logger.info(f"  {prefix} {issue}")
 
     # Check for common mistakes
-    print("\n[3/3] Checking for security anti-patterns...")
+    logger.info("\n[3/3] Checking for security anti-patterns...")
 
     # Check CORS
     api_main = Path("src/hopefx/api/main.py")
@@ -125,10 +128,10 @@ def main() -> int:
         content = api_main.read_text(encoding="utf-8")
         if 'allow_methods=["*"]' in content:
             all_issues.append("CORS allows all methods (security risk)")
-            print("  ❌ CORS allow_methods=[*] detected")
+            logger.error("  ❌ CORS allow_methods=[*] detected")
         if 'allow_origins=["*"]' in content:
             all_issues.append("CORS allows all origins (security risk)")
-            print("  ❌ CORS allow_origins=[*] detected")
+            logger.error("  ❌ CORS allow_origins=[*] detected")
 
     # Check for debug mode
     settings_file = Path("src/hopefx/config/settings.py")
@@ -136,26 +139,26 @@ def main() -> int:
         content = settings_file.read_text(encoding="utf-8")
         if "debug: bool = True" in content:
             all_issues.append("Debug mode default is True")
-            print("  ❌ Debug mode defaults to True")
+            logger.error("  ❌ Debug mode defaults to True")
 
     # Summary
-    print("\n" + "=" * 80)
-    print("AUDIT SUMMARY")
-    print("=" * 80)
+    logger.info("\n" + "=" * 80)
+    logger.info("AUDIT SUMMARY")
+    logger.info("=" * 80)
 
     critical = [i for i in all_issues if "CRITICAL" in i or "dev-key" in i]
     warnings = [i for i in all_issues if i not in critical]
 
-    print(f"\nCritical issues: {len(critical)}")
-    print(f"Warnings: {len(warnings)}")
+    logger.error(f"\nCritical issues: {len(critical)}")
+    logger.warning(f"Warnings: {len(warnings)}")
 
     if critical:
-        print("\n❌ AUDIT FAILED - Fix critical issues before deployment")
+        logger.error("\n❌ AUDIT FAILED - Fix critical issues before deployment")
         return 1
     if warnings:
-        print("\n⚠️  AUDIT PASSED WITH WARNINGS")
+        logger.warning("\n⚠️  AUDIT PASSED WITH WARNINGS")
         return 0
-    print("\n✅ AUDIT PASSED - No security issues found")
+    logger.info("\n✅ AUDIT PASSED - No security issues found")
     return 0
 
 

@@ -476,36 +476,36 @@ def main() -> int:
     logger.info("Saved crisis report → %s", OUTPUT_CRISIS)
 
     # Print summary
-    print("\n" + "=" * 65)
-    print("50Y XAUUSD Dataset Summary")
-    print("=" * 65)
-    print(f"  Rows:           {stats['n_bars']:,}")
-    print(f"  Date range:     {stats['date_range']}")
-    print(f"  Years covered:  {stats['years_covered']}")
-    print(f"  Full Sharpe:    {stats['sharpe_full']:.3f}")
-    print(f"  Max drawdown:   {stats['max_drawdown_full'] * 100:.1f}%")
-    print(f"  Ann. return:    {stats['annualised_return'] * 100:.1f}%")
-    print(f"  Ann. vol:       {stats['annualised_vol'] * 100:.1f}%")
-    print()
-    print("Source coverage:")
+    logger.info("\n" + "=" * 65)
+    logger.info("50Y XAUUSD Dataset Summary")
+    logger.info("=" * 65)
+    logger.info(f"  Rows:           {stats['n_bars']:,}")
+    logger.info(f"  Date range:     {stats['date_range']}")
+    logger.info(f"  Years covered:  {stats['years_covered']}")
+    logger.info(f"  Full Sharpe:    {stats['sharpe_full']:.3f}")
+    logger.info(f"  Max drawdown:   {stats['max_drawdown_full'] * 100:.1f}%")
+    logger.info(f"  Ann. return:    {stats['annualised_return'] * 100:.1f}%")
+    logger.info(f"  Ann. vol:       {stats['annualised_vol'] * 100:.1f}%")
+    logger.info()
+    logger.info("Source coverage:")
     for src, cov in coverage.items():
         if cov["rows"]:
-            print(f"  {src:<38} {cov['rows']:>6} rows  {cov['from']} → {cov['to']}")
+            logger.info(f"  {src:<38} {cov['rows']:>6} rows  {cov['from']} → {cov['to']}")
         else:
-            print(f"  {src:<38}   unavailable")
-    print()
-    print("Crisis Period Validation:")
+            logger.info(f"  {src:<38}   unavailable")
+    logger.info()
+    logger.info("Crisis Period Validation:")
     for name, r in crisis.items():
         if "error" in r:
-            print(f"  {name:<24} INSUFFICIENT DATA ({r['n_bars']} bars)")
+            logger.info(f"  {name:<24} INSUFFICIENT DATA ({r['n_bars']} bars)")
         else:
-            print(
+            logger.info(
                 f"  {name:<24} n={r['n_bars']:>4}  "
                 f"sharpe={r['sharpe']:+.2f}  "
                 f"dd={r['max_drawdown'] * 100:+.1f}%  "
                 f"ret={r['total_return'] * 100:+.1f}%"
             )
-    print("=" * 65)
+    logger.info("=" * 65)
     return 0
 
 

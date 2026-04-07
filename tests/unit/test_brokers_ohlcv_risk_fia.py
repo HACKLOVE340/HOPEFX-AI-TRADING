@@ -6,7 +6,6 @@ Coverage tests for brokers/ohlcv_store.py and risk/fia_compliance.py.
 """
 
 import asyncio
-import time
 from datetime import datetime, timezone
 
 import pytest
@@ -40,7 +39,6 @@ class TestBarsToDF:
 
     def test_multiple_bars_sorted(self):
         from brokers.ohlcv_store import _bars_to_df
-        import pandas as pd
         bars = [
             _make_bar(ts="2024-01-02T00:00:00+00:00", c=1960.0),
             _make_bar(ts="2024-01-01T00:00:00+00:00", c=1950.0),
@@ -92,7 +90,7 @@ class TestOHLCVStore:
 
     def test_push_multiple(self):
         store = self._make_store()
-        for i in range(5):
+        for _ in range(5):
             store.push("XAUUSD", _make_bar())
         assert store.buffer_size("XAUUSD") == 5
 
@@ -148,7 +146,7 @@ class TestOHLCVStore:
     def test_max_bars_ring_buffer(self):
         from brokers.ohlcv_store import OHLCVStore
         store = OHLCVStore(max_bars=5)
-        for i in range(10):
+        for _ in range(10):
             store.push("XAUUSD", _make_bar())
         assert store.buffer_size("XAUUSD") == 5  # capped at max_bars
 

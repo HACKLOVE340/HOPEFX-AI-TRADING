@@ -35,7 +35,7 @@ Usage
         cone=cone,
         cone_merged=cone_merged,
     )
-    print(result.sharpe, result.win_rate, result.max_drawdown_pct)
+    logger.info(result.sharpe, result.win_rate, result.max_drawdown_pct)
 """
 
 from __future__ import annotations

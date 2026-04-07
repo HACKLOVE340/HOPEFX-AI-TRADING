@@ -635,8 +635,8 @@ if __name__ == "__main__":
         report = gen.generate(trades, equity_curve, starting_equity, data_source=data_source)
         json_path = gen.save_json(report)
         html_path = gen.save_html(report)
-        print(_render_text(report))
-        print(f"\nSaved: {json_path}")
-        print(f"Saved: {html_path}")
+        logger.info(_render_text(report))
+        logger.info(f"\nSaved: {json_path}")
+        logger.info(f"Saved: {html_path}")
 
     asyncio.run(_main())

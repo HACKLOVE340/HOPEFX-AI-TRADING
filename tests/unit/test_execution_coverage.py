@@ -7,7 +7,6 @@ execution/order_algorithms.py, and execution/broker_circuit_breaker.py.
 """
 
 import asyncio
-import time
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -463,7 +462,6 @@ class TestBrokerCircuitBreaker:
             assert key in s
 
     def test_call_records_failure_on_exception(self):
-        from execution.broker_circuit_breaker import CircuitState
         cb = self._make(max_failures=5)
         def _bad():
             raise ConnectionError("refused")

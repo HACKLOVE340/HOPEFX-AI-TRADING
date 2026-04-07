@@ -15,6 +15,9 @@ from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import logging
+logger = logging.getLogger(__name__)
+
 UTC = timezone.utc
 
 try:
@@ -92,7 +95,7 @@ class FeedHandler:
             try:
                 callback(tick)
             except Exception as e:
-                print(f"Tick callback error: {e}")
+                logger.error(f"Tick callback error: {e}")
 
         self.stats["ticks_processed"] += 1
 
@@ -232,7 +235,7 @@ class ExchangeFeed:
                     break
 
             except Exception as e:
-                print(f"Feed error: {e}")
+                logger.error(f"Feed error: {e}")
                 await asyncio.sleep(1)
 
         # Reconnect

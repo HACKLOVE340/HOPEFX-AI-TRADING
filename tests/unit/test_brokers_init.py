@@ -12,8 +12,6 @@ Covers: Order dataclass, Position dataclass, BaseBroker abstract interface,
 """
 
 import asyncio
-import time
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -187,7 +185,7 @@ class TestBaseBrokerAbstract:
 
     def test_cancel_all_orders_calls_cancel_order(self):
         """cancel_all_orders iterates get_pending_orders and calls cancel_order."""
-        from brokers import BaseBroker, Order, OrderSide, OrderStatus, OrderType
+        from brokers import BaseBroker, Order, OrderSide, OrderType
 
         class MockBroker(BaseBroker):
             async def connect(self): pass
@@ -261,7 +259,7 @@ class TestPaperTradingBrokerSync:
         assert order.status == OrderStatus.OPEN
 
     def test_cancel_limit_order(self, broker):
-        from brokers.base import OrderSide, OrderStatus, OrderType
+        from brokers.base import OrderSide, OrderType
         order = broker.place_order(
             symbol="EUR_USD",
             order_type=OrderType.LIMIT,

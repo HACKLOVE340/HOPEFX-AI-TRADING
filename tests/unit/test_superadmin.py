@@ -12,7 +12,6 @@ Covers: Pydantic models, _load_platform_config, _save_platform_config,
 """
 
 import json
-import time
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
@@ -212,10 +211,9 @@ class TestHelperFunctions:
             _save_platform_config({"platform_name": "Test"})
 
     def test_load_engine_config_returns_defaults_when_no_store(self):
-        from api.superadmin import _ENGINE_CONFIG_DEFAULTS, _load_engine_config
-        with patch("api.superadmin._get_config_store", return_value=None):
-            with patch("api.admin._get_risk_settings", side_effect=ImportError):
-                cfg = _load_engine_config()
+        from api.superadmin import _load_engine_config
+        with patch("api.superadmin._get_config_store", return_value=None), patch("api.admin._get_risk_settings", side_effect=ImportError):
+            cfg = _load_engine_config()
         assert "paper_trading_mode" in cfg
         assert "kill_switch_active" in cfg
 
@@ -278,35 +276,32 @@ class TestPlatformConfigEndpoints:
     def test_patch_platform_config_200(self, sa_client):
         mock_store = MagicMock()
         mock_store.get.return_value = None
-        with patch("api.superadmin._get_config_store", return_value=mock_store):
-            with patch("api.admin.log_activity"):
-                resp = sa_client.patch(
-                    "/api/superadmin/platform/config",
-                    json={"platform_name": "Updated Platform", "max_users": 5000},
-                )
+        with patch("api.superadmin._get_config_store", return_value=mock_store), patch("api.admin.log_activity"):
+            resp = sa_client.patch(
+                "/api/superadmin/platform/config",
+                json={"platform_name": "Updated Platform", "max_users": 5000},
+            )
         assert resp.status_code == 200
         assert resp.json()["ok"] is True
 
     def test_patch_platform_config_saves_to_store(self, sa_client):
         mock_store = MagicMock()
         mock_store.get.return_value = None
-        with patch("api.superadmin._get_config_store", return_value=mock_store):
-            with patch("api.admin.log_activity"):
-                sa_client.patch(
-                    "/api/superadmin/platform/config",
-                    json={"platform_name": "NewName"},
-                )
+        with patch("api.superadmin._get_config_store", return_value=mock_store), patch("api.admin.log_activity"):
+            sa_client.patch(
+                "/api/superadmin/platform/config",
+                json={"platform_name": "NewName"},
+            )
         mock_store.set.assert_called()
 
     def test_post_maintenance_mode_enable(self, sa_client):
         mock_store = MagicMock()
         mock_store.get.return_value = None
-        with patch("api.superadmin._get_config_store", return_value=mock_store):
-            with patch("api.admin.log_activity"):
-                resp = sa_client.post(
-                    "/api/superadmin/platform/maintenance",
-                    json={"enabled": True, "message": "Scheduled maintenance"},
-                )
+        with patch("api.superadmin._get_config_store", return_value=mock_store), patch("api.admin.log_activity"):
+            resp = sa_client.post(
+                "/api/superadmin/platform/maintenance",
+                json={"enabled": True, "message": "Scheduled maintenance"},
+            )
         assert resp.status_code == 200
         body = resp.json()
         assert body["ok"] is True
@@ -315,12 +310,11 @@ class TestPlatformConfigEndpoints:
     def test_post_maintenance_mode_disable(self, sa_client):
         mock_store = MagicMock()
         mock_store.get.return_value = None
-        with patch("api.superadmin._get_config_store", return_value=mock_store):
-            with patch("api.admin.log_activity"):
-                resp = sa_client.post(
-                    "/api/superadmin/platform/maintenance",
-                    json={"enabled": False},
-                )
+        with patch("api.superadmin._get_config_store", return_value=mock_store), patch("api.admin.log_activity"):
+            resp = sa_client.post(
+                "/api/superadmin/platform/maintenance",
+                json={"enabled": False},
+            )
         assert resp.status_code == 200
         assert resp.json()["maintenance_mode"] is False
 
@@ -341,18 +335,16 @@ class TestPlatformConfigEndpoints:
 @pytest.mark.unit
 class TestEngineEndpoints:
     def test_get_engine_status_200(self, sa_client):
-        with patch("api.superadmin._get_config_store", return_value=None):
-            with patch("api.admin._get_risk_settings", return_value={}):
-                resp = sa_client.get("/api/superadmin/engine/status")
+        with patch("api.superadmin._get_config_store", return_value=None), patch("api.admin._get_risk_settings", return_value={}):
+            resp = sa_client.get("/api/superadmin/engine/status")
         assert resp.status_code == 200
         body = resp.json()
         assert "status" in body
         assert "kill_switch_active" in body
 
     def test_get_engine_config_200(self, sa_client):
-        with patch("api.superadmin._get_config_store", return_value=None):
-            with patch("api.admin._get_risk_settings", return_value={}):
-                resp = sa_client.get("/api/superadmin/engine/config")
+        with patch("api.superadmin._get_config_store", return_value=None), patch("api.admin._get_risk_settings", return_value={}):
+            resp = sa_client.get("/api/superadmin/engine/config")
         assert resp.status_code == 200
         body = resp.json()
         assert "paper_trading_mode" in body
@@ -360,27 +352,22 @@ class TestEngineEndpoints:
     def test_patch_engine_config_200(self, sa_client):
         mock_store = MagicMock()
         mock_store.get.return_value = None
-        with patch("api.superadmin._get_config_store", return_value=mock_store):
-            with patch("api.admin._get_risk_settings", return_value={}):
-                with patch("api.admin.log_activity"):
-                    with patch("api.admin.apply_persisted_risk_settings", side_effect=ImportError):
-                        resp = sa_client.patch(
-                            "/api/superadmin/engine/config",
-                            json={"paper_trading_mode": False, "max_open_positions": 10},
-                        )
+        with patch("api.superadmin._get_config_store", return_value=mock_store), patch("api.admin._get_risk_settings", return_value={}), patch("api.admin.log_activity"), patch("api.admin.apply_persisted_risk_settings", side_effect=ImportError):
+            resp = sa_client.patch(
+                "/api/superadmin/engine/config",
+                json={"paper_trading_mode": False, "max_open_positions": 10},
+            )
         assert resp.status_code == 200
         assert resp.json()["ok"] is True
 
     def test_post_kill_switch_enable(self, sa_client):
         mock_store = MagicMock()
         mock_store.get.return_value = None
-        with patch("api.superadmin._get_config_store", return_value=mock_store):
-            with patch("api.admin._get_risk_settings", return_value={}):
-                with patch("api.admin.log_activity"):
-                    resp = sa_client.post(
-                        "/api/superadmin/engine/kill-switch",
-                        json={"enabled": True, "reason": "Test"},
-                    )
+        with patch("api.superadmin._get_config_store", return_value=mock_store), patch("api.admin._get_risk_settings", return_value={}), patch("api.admin.log_activity"):
+            resp = sa_client.post(
+                "/api/superadmin/engine/kill-switch",
+                json={"enabled": True, "reason": "Test"},
+            )
         assert resp.status_code == 200
         body = resp.json()
         assert body["ok"] is True
@@ -389,35 +376,29 @@ class TestEngineEndpoints:
     def test_post_kill_switch_disable(self, sa_client):
         mock_store = MagicMock()
         mock_store.get.return_value = None
-        with patch("api.superadmin._get_config_store", return_value=mock_store):
-            with patch("api.admin._get_risk_settings", return_value={}):
-                with patch("api.admin.log_activity"):
-                    resp = sa_client.post(
-                        "/api/superadmin/engine/kill-switch",
-                        json={"enabled": False},
-                    )
+        with patch("api.superadmin._get_config_store", return_value=mock_store), patch("api.admin._get_risk_settings", return_value={}), patch("api.admin.log_activity"):
+            resp = sa_client.post(
+                "/api/superadmin/engine/kill-switch",
+                json={"enabled": False},
+            )
         assert resp.status_code == 200
         assert resp.json()["kill_switch_active"] is False
 
     def test_post_engine_pause(self, sa_client):
         mock_store = MagicMock()
         mock_store.get.return_value = None
-        with patch("api.superadmin._get_config_store", return_value=mock_store):
-            with patch("api.admin._get_risk_settings", return_value={}):
-                with patch("api.admin.log_activity"):
-                    resp = sa_client.post(
-                        "/api/superadmin/engine/pause",
-                        json={"reason": "Manual pause"},
-                    )
+        with patch("api.superadmin._get_config_store", return_value=mock_store), patch("api.admin._get_risk_settings", return_value={}), patch("api.admin.log_activity"):
+            resp = sa_client.post(
+                "/api/superadmin/engine/pause",
+                json={"reason": "Manual pause"},
+            )
         assert resp.status_code == 200
 
     def test_post_engine_resume(self, sa_client):
         mock_store = MagicMock()
         mock_store.get.return_value = None
-        with patch("api.superadmin._get_config_store", return_value=mock_store):
-            with patch("api.admin._get_risk_settings", return_value={}):
-                with patch("api.admin.log_activity"):
-                    resp = sa_client.post("/api/superadmin/engine/resume")
+        with patch("api.superadmin._get_config_store", return_value=mock_store), patch("api.admin._get_risk_settings", return_value={}), patch("api.admin.log_activity"):
+            resp = sa_client.post("/api/superadmin/engine/resume")
         assert resp.status_code == 200
 
 

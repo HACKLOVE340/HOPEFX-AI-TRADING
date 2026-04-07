@@ -746,18 +746,18 @@ def create_portfolio_report(
 
 
 if __name__ == "__main__":
-    print("HOPEFX Portfolio Analytics Module")
-    print("Features:")
-    print("  - Multi-asset portfolio optimization")
-    print("  - Efficient frontier generation")
-    print("  - Correlation analysis")
-    print("  - Risk metrics (Sharpe, Sortino, Calmar, Max DD, VaR, CVaR)")
-    print("  - Multi-asset backtesting with rebalancing")
-    print("  - Stress testing")
-    print("  - Rolling performance metrics")
-    print("\nUsage:")
-    print("  from analytics.portfolio import PortfolioAnalytics, create_portfolio_report")
-    print("  report = create_portfolio_report(returns_df)")
+    logger.info("HOPEFX Portfolio Analytics Module")
+    logger.info("Features:")
+    logger.info("  - Multi-asset portfolio optimization")
+    logger.info("  - Efficient frontier generation")
+    logger.info("  - Correlation analysis")
+    logger.info("  - Risk metrics (Sharpe, Sortino, Calmar, Max DD, VaR, CVaR)")
+    logger.info("  - Multi-asset backtesting with rebalancing")
+    logger.info("  - Stress testing")
+    logger.info("  - Rolling performance metrics")
+    logger.info("\nUsage:")
+    logger.info("  from analytics.portfolio import PortfolioAnalytics, create_portfolio_report")
+    logger.info("  report = create_portfolio_report(returns_df)")
 
 
 class PortfolioOptimizer:

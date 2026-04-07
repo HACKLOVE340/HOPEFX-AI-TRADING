@@ -171,12 +171,12 @@ class TestAnalyticsPerformance:
         from analytics.performance import StrategyPerformance
         import dataclasses
         # Build with all required fields (it's a dataclass with no defaults)
-        fields = {f.name: f.default for f in dataclasses.fields(StrategyPerformance)
+        _fields = {f.name: f.default for f in dataclasses.fields(StrategyPerformance)
                   if f.default is not dataclasses.MISSING}
         required = {f.name for f in dataclasses.fields(StrategyPerformance)
                     if f.default is dataclasses.MISSING and
                     f.default_factory is dataclasses.MISSING}
-        kwargs = {k: 0.0 for k in required}
+        kwargs = dict.fromkeys(required, 0.0)
         kwargs["strategy_name"] = "test"
         kwargs["total_trades"] = 10
         sp = StrategyPerformance(**kwargs)

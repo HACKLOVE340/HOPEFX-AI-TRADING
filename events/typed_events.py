@@ -208,7 +208,7 @@ def subscribe(event_type: type[BaseModel], callback: Callable) -> None:
     Example
     -------
         async def handle_tick(env: EventEnvelope[PriceTickEvent]):
-            print(env.payload.bid)
+            logger.info(env.payload.bid)
 
         subscribe(PriceTickEvent, handle_tick)
     """
