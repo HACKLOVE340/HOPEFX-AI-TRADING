@@ -222,6 +222,21 @@ def _validate_llm_backend(errors: list[str]) -> None:
         errors.append(f"INSECURE {env_name}: placeholder value detected — replace with a real key from {url}")
 
 
+def _validate_crypto_webhook_secret(errors: list[str]) -> None:
+    """Require CRYPTO_WEBHOOK_SECRET in production to prevent unsigned webhook acceptance."""
+    secret = _env("CRYPTO_WEBHOOK_SECRET")
+    if not secret:
+        errors.append(
+            "MISSING  CRYPTO_WEBHOOK_SECRET — crypto payment webhooks will be rejected in production. "
+            "Generate with: python3 -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+    elif len(secret) < 32:
+        errors.append(
+            f"WEAK     CRYPTO_WEBHOOK_SECRET is only {len(secret)} chars — minimum 32 required. "
+            "Regenerate with: python3 -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+
+
 def _validate_argocd_webhook(errors: list[str]) -> None:
     argocd_webhook = _env("ARGOCD_ROLLBACK_WEBHOOK")
     if not argocd_webhook:
@@ -313,6 +328,7 @@ def validate_environment(*, strict: bool = True) -> None:
         _validate_kill_switch_token(errors)
         _validate_argocd_webhook(errors)
         _validate_cors_wildcard(errors)
+        _validate_crypto_webhook_secret(errors)
 
     _validate_broker(errors, dev_mode)
     _validate_llm_backend(errors)
