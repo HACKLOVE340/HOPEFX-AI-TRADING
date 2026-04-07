@@ -33,9 +33,11 @@ class WebSocketManager:
             await asyncio.wait([user.send(message) for user in self.connections])
 
     def start_server(self, host="localhost", port=8765):
-        server = websockets.serve(self.connection_handler, host, port)
-        asyncio.get_event_loop().run_until_complete(server)
-        asyncio.get_event_loop().run_forever()
+        async def _serve():
+            async with websockets.serve(self.connection_handler, host, port):
+                await asyncio.Future()  # run forever
+
+        asyncio.run(_serve())
 
 
 # Example usage:

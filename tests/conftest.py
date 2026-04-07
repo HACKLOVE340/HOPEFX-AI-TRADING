@@ -35,12 +35,10 @@ from risk.manager import RiskConfig, RiskManager
 from strategies.manager import StrategyManager
 
 
-@pytest.fixture
-def event_loop():
-    """Create event loop for async tests"""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+# event_loop fixture removed: pytest-asyncio >= 0.23 manages the loop
+# automatically when asyncio_mode = "auto" is set in pytest.ini.
+# Defining a custom event_loop fixture here caused DeprecationWarnings and
+# could interfere with loop teardown between async tests.
 
 
 _CANONICAL_JWT_SECRET = os.environ.get(
