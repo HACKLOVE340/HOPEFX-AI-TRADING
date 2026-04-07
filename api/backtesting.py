@@ -432,6 +432,17 @@ async def run_backtest(
     return BacktestResult(**result)
 
 
+@router.get("/walk-forward", summary="List all walk-forward results")
+async def list_walk_forward_results(
+    _user: TokenPayload = Depends(get_current_user),
+    limit: int = 20,
+):
+    """Return all walk-forward results, newest first. Used by the WalkForward list view."""
+    _load_wf_results_from_db()
+    items = sorted(_wf_results.values(), key=lambda r: r.get("created_at", ""), reverse=True)
+    return {"results": items[:limit], "total": len(items)}
+
+
 @router.get("/walk-forward/latest")
 async def get_latest_walk_forward(_user: TokenPayload = Depends(get_current_user)):
     """Return the most recent walk-forward result.
