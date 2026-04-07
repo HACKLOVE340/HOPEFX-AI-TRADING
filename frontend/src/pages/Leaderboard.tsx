@@ -1,7 +1,7 @@
 /**
  * Global Leaderboard — top traders ranked by return, Sharpe, followers.
  *
- * Wires to: GET /api/social/leaderboard?period={monthly|quarterly|all}
+ * Wires to: GET /api/leaderboard?period={monthly|quarterly|all}
  */
 
 import React, { useState, useEffect } from 'react';

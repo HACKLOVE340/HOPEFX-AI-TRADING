@@ -1,7 +1,7 @@
 /**
  * Copy Trading Marketplace — browse top traders, allocate capital, start copying.
  *
- * Wires to: GET  /api/social/leaderboard
+ * Wires to: GET  /api/leaderboard
  *           POST /api/social/copy/{trader_id}
  *           GET  /api/social/copy/active
  *           DELETE /api/social/copy/{trader_id}
