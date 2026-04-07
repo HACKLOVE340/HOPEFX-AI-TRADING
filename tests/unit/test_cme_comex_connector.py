@@ -87,8 +87,14 @@ def _make_fix_stubs():
 # package (with __path__), then overlay only the fix_adapter sub-module stub.
 # Using a bare types.ModuleType here would shadow the package and break any
 # later import of execution.engine / execution.tca / etc.
+#
+# The stub is scoped to this import only: we restore the original entry (or
+# remove it) immediately after importing brokers.cme_comex so the stub does
+# not leak into test_connector_hub.py or any other file that imports the real
+# execution.fix_adapter.
 _fix_stub = _make_fix_stubs()
 import execution as _execution_pkg  # noqa: E402 — must run before cme_comex import
+_orig_fix_adapter = sys.modules.get("execution.fix_adapter")
 sys.modules["execution.fix_adapter"] = _fix_stub
 
 
@@ -103,6 +109,13 @@ from brokers.cme_comex import (  # noqa: E402
     _CME_TICK_VALUE,
 )
 from brokers.base import AccountInfo, OrderSide, OrderStatus, OrderType  # noqa: E402
+
+# Restore the real execution.fix_adapter (or remove the stub) so it does not
+# leak into other test modules collected after this one.
+if _orig_fix_adapter is None:
+    sys.modules.pop("execution.fix_adapter", None)
+else:
+    sys.modules["execution.fix_adapter"] = _orig_fix_adapter
 
 
 # ---------------------------------------------------------------------------
