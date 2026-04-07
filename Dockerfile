@@ -47,7 +47,8 @@ COPY --from=frontend-builder /build/static ./static
 # Create runtime directories and a non-root user
 RUN mkdir -p logs data credentials state fix_store fix_logs \
     && useradd -m -u 1001 hopefx \
-    && chown -R hopefx:hopefx /app
+    && chown -R hopefx:hopefx /app \
+    && chmod +x scripts/preflight.sh
 
 # Drop root before the process starts
 USER hopefx
@@ -61,4 +62,6 @@ ENV API_PORT=8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:${API_PORT}/health || exit 1
 
-CMD ["python", "app.py"]
+# Run pre-flight checks then start the API server.
+# Set SKIP_TESTS=true or SKIP_MIGRATIONS=true in .env to speed up restarts.
+CMD ["bash", "-c", "scripts/preflight.sh && python app.py"]
