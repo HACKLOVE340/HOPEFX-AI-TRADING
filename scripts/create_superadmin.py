@@ -206,10 +206,10 @@ def main():
     # ── Generate a verification token ─────────────────────────────────────────
     try:
         token = _generate_token(result["user_id"])
-        token_line = f"  Bearer Token : {token}"
+        token_line = f"  Bearer Token : {token}"  # nosec B105 — display string, not a credential
         token_note = "  (valid 15 min — use in Authorization: Bearer <token> header or Swagger UI)"
     except Exception:
-        token_line = "  Bearer Token : (JWT secret not set — run app.py to generate)"
+        token_line = "  Bearer Token : (JWT secret not set — run app.py to generate)"  # nosec B105
         token_note = ""
 
     # ── Save credentials to restricted file ───────────────────────────────────

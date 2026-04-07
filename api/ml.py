@@ -1528,8 +1528,8 @@ async def get_drift_report() -> dict:
                     live_features = pd.DataFrame(arr, columns=col_names)
                 else:
                     live_features = pd.DataFrame(arr)
-        except Exception:
-            pass
+        except Exception as _exc:  # non-fatal: drift buffer may be partially populated
+            logger.debug("Could not build live feature DataFrame for drift check: %s", _exc)
 
         if live_features is None:
             return {

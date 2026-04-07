@@ -226,8 +226,8 @@ class HOPEFXBrain:
 
                 _meta = json.loads(_meta_path.read_text())
                 _horizon_default = int(_meta.get("horizon", 1))
-        except Exception:
-            pass
+        except Exception as _exc:  # non-fatal: fall back to default horizon
+            logger.debug("Could not read signal horizon from model metadata: %s", _exc)
         self._signal_horizon: int = int(os.getenv("SIGNAL_HORIZON", str(_horizon_default)))
         # Per-symbol hold countdown: {symbol: bars_remaining}
         self._hold_bars_remaining: dict[str, int] = {}
@@ -830,8 +830,8 @@ class HOPEFXBrain:
                         for i in range(max(1, len(_closes) - 14), len(_closes))
                     ]
                     _atr_val = float(sum(_trs) / len(_trs)) if _trs else 0.0
-                except Exception:
-                    pass
+                except Exception as _exc:  # non-fatal: ATR defaults to 0.0
+                    logger.debug("ATR computation failed for %s: %s", symbol, _exc)
 
                 _snap = MarketSnapshot(
                     symbol=symbol,

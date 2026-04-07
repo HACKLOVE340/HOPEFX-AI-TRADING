@@ -420,8 +420,8 @@ class _RollingCorrelation:
                 if r1.std() == 0 or r2.std() == 0:
                     return 0.0
                 return float(np.corrcoef(r1, r2)[0, 1])
-            except Exception:
-                pass  # fall through to static table
+            except Exception as _exc:  # non-fatal: fall through to static table
+                logger.debug("Live correlation computation failed for %s/%s: %s", s1, s2, _exc)
 
         # Static fallback
         return self._STATIC.get((s1, s2), self._STATIC.get((s2, s1), 0.0))
