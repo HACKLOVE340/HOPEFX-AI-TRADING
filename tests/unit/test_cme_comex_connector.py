@@ -82,9 +82,13 @@ def _make_fix_stubs():
     return mod
 
 
-# Inject stubs before importing the module under test
+# Inject stubs before importing the module under test.
+# Import the real execution package first so sys.modules["execution"] is the
+# package (with __path__), then overlay only the fix_adapter sub-module stub.
+# Using a bare types.ModuleType here would shadow the package and break any
+# later import of execution.engine / execution.tca / etc.
 _fix_stub = _make_fix_stubs()
-sys.modules.setdefault("execution", types.ModuleType("execution"))
+import execution as _execution_pkg  # noqa: E402 — must run before cme_comex import
 sys.modules["execution.fix_adapter"] = _fix_stub
 
 
