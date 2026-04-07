@@ -383,7 +383,7 @@ CHECKS: list[tuple[str, str, callable]] = [
 def run_checks(strict: bool = False) -> int:
     results: dict[str, CheckResult] = {}
 
-    logger.info()
+    logger.info("")
     logger.info("=" * 70)
     logger.info("  HOPEFX AI TRADING — CONNECTION & PRODUCTION READINESS VALIDATOR")
     logger.info("=" * 70)
@@ -398,7 +398,7 @@ def run_checks(strict: bool = False) -> int:
         tag = "[CRITICAL]    " if cat == CRITICAL else "[non-critical]"
         logger.info(f"  {icon} {tag} {name:<30} {msg[:60]}")
 
-    logger.info()
+    logger.info("")
     logger.info("─" * 70)
 
     greens = [(n, r) for n, r in results.items() if r[0] == GREEN]
@@ -409,19 +409,19 @@ def run_checks(strict: bool = False) -> int:
     crit_yellows = [(n, r) for n, r in yellows if r[2] == CRITICAL]
 
     logger.error(f"  TOTAL  ✅ {len(greens)} GREEN   ⚠️  {len(yellows)} YELLOW   ❌ {len(reds)} RED")
-    logger.info()
+    logger.info("")
 
     if crit_reds:
         logger.error("  ❌ CRITICAL FAILURES:")
         for name, (_status, msg, _) in crit_reds:
             logger.info(f"     • {name}: {msg}")
-        logger.info()
+        logger.info("")
 
     if crit_yellows:
         logger.warning("  ⚠️  CRITICAL WARNINGS:")
         for name, (_status, msg, _) in crit_yellows:
             logger.info(f"     • {name}: {msg}")
-        logger.info()
+        logger.info("")
 
     overall_ok = len(crit_reds) == 0 and (not strict or len(crit_yellows) == 0)
     if overall_ok:
@@ -430,7 +430,7 @@ def run_checks(strict: bool = False) -> int:
         logger.error("  ❌ CRITICAL CHECKS FAILED — fix the above before deploying")
 
     logger.info("=" * 70)
-    logger.info()
+    logger.info("")
 
     return 0 if overall_ok else 1
 

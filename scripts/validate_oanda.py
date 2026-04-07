@@ -185,7 +185,7 @@ def validate(practice: bool = True) -> bool:
     else:
         logger.info("  (Order placement test skipped for live endpoint)")
 
-    logger.info()
+    logger.info("")
     logger.info("All checks passed. HOPEFX is ready for paper trading.")
     logger.info("Start with: python app.py")
     logger.info("Monitor at: http://localhost:8000/app")
