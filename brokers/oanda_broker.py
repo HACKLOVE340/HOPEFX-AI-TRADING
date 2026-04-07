@@ -62,6 +62,13 @@ def _resolve_env(value: object) -> str:
     return value
 
 
+def _mask_account(account_id: str | None) -> str:
+    """Return a masked account ID showing only the last 4 characters."""
+    if not account_id:
+        return "****"
+    return ("..." + account_id[-4:]) if len(account_id) > 4 else "****"
+
+
 class OandaBroker:
     """
     Async OANDA v20 REST broker.
@@ -99,7 +106,7 @@ class OandaBroker:
             logger.warning(
                 "OandaBroker: account_id appears to be a placeholder ('%s'). "
                 "Set OANDA_ACCOUNT_ID env var or update config/brokers.yaml.",
-                self._account_id,
+                _mask_account(self._account_id),
             )
 
         self._base_url = _PRACTICE_BASE if "practice" in server.lower() else _LIVE_BASE
@@ -121,7 +128,7 @@ class OandaBroker:
                     self.connected = True
                     logger.info(
                         "OandaBroker connected | account=%s | server=%s | balance=%s %s",
-                        self._account_id,
+                        _mask_account(self._account_id),
                         server,
                         balance,
                         currency,
@@ -145,7 +152,7 @@ class OandaBroker:
         if self._session and not self._session.closed:
             await self._session.close()
         self.connected = False
-        logger.info("OandaBroker disconnected (account=%s)", self._account_id)
+        logger.info("OandaBroker disconnected (account=%s)", _mask_account(self._account_id))
 
     # ── Account ───────────────────────────────────────────────────────────────
 

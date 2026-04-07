@@ -32,6 +32,7 @@ class FeatureVector:
         return np.array(list(self.features.values()))
 
     def to_dict(self) -> dict:
+        """Convert to plain dictionary."""
         return {
             "symbol": self.symbol,
             "timestamp": self.timestamp,
@@ -117,8 +118,8 @@ class TechnicalIndicators:
         tr2 = np.abs(high[1:] - close[:-1])
         tr3 = np.abs(low[1:] - close[:-1])
 
-        tr = np.maximum(np.maximum(tr1, tr2), tr3)
-        atr = np.convolve(tr, np.ones(period) / period, mode="valid")
+        true_range = np.maximum(np.maximum(tr1, tr2), tr3)
+        atr = np.convolve(true_range, np.ones(period) / period, mode="valid")
         return atr
 
     @staticmethod
@@ -161,9 +162,9 @@ class FeatureEngineer:
         order_book: dict | None = None,
     ) -> FeatureVector | None:
         """
-        Extract ML features from market data
+        Extract ML features from market data.
 
-        Returns FeatureVector or None if insufficient data
+        Returns FeatureVector or None if insufficient data.
         """
         if len(ohlcv_data) < max(self.lookback_periods) + 10:
             return None
@@ -176,53 +177,11 @@ class FeatureEngineer:
             closes = np.array([c.close for c in ohlcv_data])
             volumes = np.array([c.volume for c in ohlcv_data])
 
-            features = {}
-
-            # 1. Price-based features
+            features: dict[str, float] = {}
             current_price = closes[-1]
 
-            for period in self.lookback_periods:
-                # Returns
-                features[f"return_{period}"] = (closes[-1] / closes[-period]) - 1
-
-                # Volatility
-                features[f"volatility_{period}"] = np.std(
-                    np.diff(closes[-period:]) / closes[-period:-1],
-                )
-
-                # Price position in range
-                period_high = np.max(highs[-period:])
-                period_low = np.min(lows[-period:])
-                features[f"price_position_{period}"] = (current_price - period_low) / (period_high - period_low + 1e-10)
-
-                # Volume trend
-                features[f"volume_trend_{period}"] = (
-                    np.mean(volumes[-period:]) / np.mean(volumes[-period * 2 : -period]) - 1
-                )
-
-            # 2. Technical indicators
-            # RSI
-            rsi = TechnicalIndicators.rsi(closes, 14)
-            features["rsi"] = rsi[-1] if len(rsi) > 0 else 50
-
-            # MACD
-            macd_line, signal_line, histogram = TechnicalIndicators.macd(closes)
-            features["macd"] = macd_line[-1] if len(macd_line) > 0 else 0
-            features["macd_signal"] = signal_line[-1] if len(signal_line) > 0 else 0
-            features["macd_hist"] = histogram[-1] if len(histogram) > 0 else 0
-
-            # Bollinger Bands
-            upper, middle, lower = TechnicalIndicators.bollinger_bands(closes)
-            if len(upper) > 0:
-                features["bb_upper"] = upper[-1]
-                features["bb_middle"] = middle[-1]
-                features["bb_lower"] = lower[-1]
-                features["bb_position"] = (current_price - lower[-1]) / (upper[-1] - lower[-1] + 1e-10)
-
-            # ATR
-            atr = TechnicalIndicators.atr(highs, lows, closes)
-            features["atr"] = atr[-1] if len(atr) > 0 else 0
-            features["atr_pct"] = features["atr"] / current_price if current_price > 0 else 0
+            self._add_price_features(features, closes, highs, lows, volumes, current_price)
+            self._add_indicator_features(features, closes, highs, lows, current_price)
 
             # 3. Market microstructure features (if order book provided)
             if order_book:
@@ -241,39 +200,101 @@ class FeatureEngineer:
                     # Order book imbalance
                     bid_volume = sum(b[1] for b in bids[:5])
                     ask_volume = sum(a[1] for a in asks[:5])
-                    features["ob_imbalance"] = (bid_volume - ask_volume) / (bid_volume + ask_volume + 1e-10)
+                    features["ob_imbalance"] = (
+                        (bid_volume - ask_volume) / (bid_volume + ask_volume + 1e-10)
+                    )
 
-            # 4. Pattern features
-            # Candlestick patterns
+            # 4. Pattern features — candlestick patterns
             features["body_size"] = abs(closes[-1] - opens[-1]) / (highs[-1] - lows[-1] + 1e-10)
-            features["upper_shadow"] = (highs[-1] - max(opens[-1], closes[-1])) / (highs[-1] - lows[-1] + 1e-10)
-            features["lower_shadow"] = (min(opens[-1], closes[-1]) - lows[-1]) / (highs[-1] - lows[-1] + 1e-10)
+            features["upper_shadow"] = (
+                (highs[-1] - max(opens[-1], closes[-1])) / (highs[-1] - lows[-1] + 1e-10)
+            )
+            features["lower_shadow"] = (
+                (min(opens[-1], closes[-1]) - lows[-1]) / (highs[-1] - lows[-1] + 1e-10)
+            )
 
             # Trend strength
             if len(closes) >= 20:
                 slope = np.polyfit(range(20), closes[-20:], 1)[0]
                 features["trend_slope"] = slope / current_price if current_price > 0 else 0
 
-            # Create feature vector
+            # Create and cache feature vector
             feature_vector = FeatureVector(
                 symbol=symbol,
                 timestamp=ohlcv_data[-1].timestamp if hasattr(ohlcv_data[-1], "timestamp") else 0,
                 features=features,
             )
 
-            # Cache
             if symbol not in self._feature_cache:
                 self._feature_cache[symbol] = deque(maxlen=self._cache_size)
             self._feature_cache[symbol].append(feature_vector)
 
             return feature_vector
 
-        except Exception as e:
-            logger.error("Feature extraction error for %s: %s", symbol, e)
-
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            logger.error("Feature extraction error for %s: %s", symbol, exc)
             return None
 
-    def get_feature_importance(self, model: Any) -> dict[str, float]:
+    def _add_price_features(
+        self,
+        features: dict[str, float],
+        closes: "np.ndarray",
+        highs: "np.ndarray",
+        lows: "np.ndarray",
+        volumes: "np.ndarray",
+        current_price: float,
+    ) -> None:
+        """Populate price-based and volume features for each lookback period."""
+        for period in self.lookback_periods:
+            features[f"return_{period}"] = (closes[-1] / closes[-period]) - 1
+            features[f"volatility_{period}"] = np.std(
+                np.diff(closes[-period:]) / closes[-period:-1],
+            )
+            period_high = np.max(highs[-period:])
+            period_low = np.min(lows[-period:])
+            features[f"price_position_{period}"] = (
+                (current_price - period_low) / (period_high - period_low + 1e-10)
+            )
+            features[f"volume_trend_{period}"] = (
+                np.mean(volumes[-period:]) / np.mean(volumes[-period * 2 : -period]) - 1
+            )
+
+    def _add_indicator_features(
+        self,
+        features: dict[str, float],
+        closes: "np.ndarray",
+        highs: "np.ndarray",
+        lows: "np.ndarray",
+        current_price: float,
+    ) -> None:
+        """Populate RSI, MACD, Bollinger Bands, and ATR features."""
+        # RSI
+        rsi = TechnicalIndicators.rsi(closes, 14)
+        features["rsi"] = rsi[-1] if rsi.size > 0 else 50
+
+        # MACD
+        macd_line, signal_line, histogram = TechnicalIndicators.macd(closes)
+        features["macd"] = macd_line[-1] if macd_line.size > 0 else 0
+        features["macd_signal"] = signal_line[-1] if signal_line.size > 0 else 0
+        features["macd_hist"] = histogram[-1] if histogram.size > 0 else 0
+
+        # Bollinger Bands
+        upper, middle, lower = TechnicalIndicators.bollinger_bands(closes)
+        if upper.size > 0:
+            features["bb_upper"] = upper[-1]
+            features["bb_middle"] = middle[-1]
+            features["bb_lower"] = lower[-1]
+            features["bb_position"] = (
+                (current_price - lower[-1]) / (upper[-1] - lower[-1] + 1e-10)
+            )
+
+        # ATR
+        atr = TechnicalIndicators.atr(highs, lows, closes)
+        features["atr"] = atr[-1] if atr.size > 0 else 0
+        features["atr_pct"] = features["atr"] / current_price if current_price > 0 else 0
+
+    @staticmethod
+    def get_feature_importance(model: Any) -> dict[str, float]:
         """
         Return feature importances from a trained model.
 
@@ -296,15 +317,12 @@ class FeatureEngineer:
         # sklearn / XGBoost / LightGBM native attribute
         if hasattr(model, "feature_importances_"):
             importances = model.feature_importances_
-            names = (
-                self.feature_names
-                if hasattr(self, "feature_names") and len(self.feature_names) == len(importances)
-                else [str(i) for i in range(len(importances))]
-            )
+            names = [str(i) for i in range(len(importances))]
             return dict(zip(names, importances.tolist(), strict=False))
 
         raise ValueError(
-            f"Model of type {type(model).__name__!r} does not expose feature_importances_ or get_feature_importances()."
+            f"Model of type {type(model).__name__!r} does not expose"
+            " feature_importances_ or get_feature_importances()."
         )
 
     def detect_anomalies(self, symbol: str, threshold: float = 3.0) -> list[dict]:
@@ -372,8 +390,8 @@ class SignalEnsemble:
                 weighted_sum += pred["probability"] * weight
                 total_weight += weight
 
-            except Exception as e:
-                logger.error("Model %s prediction error: %s", name, e)
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                logger.error("Model %s prediction error: %s", name, exc)
 
         if total_weight == 0:
             return {"action": "hold", "confidence": 0, "probability": 0.5}

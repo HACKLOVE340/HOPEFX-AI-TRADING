@@ -12,6 +12,7 @@ Covers: overview, users, platform config, trading engine, ML/AI,
 """
 
 import logging
+import re as _re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -25,6 +26,35 @@ from pydantic import BaseModel
 from api.auth import TokenPayload, require_role
 
 logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/superadmin", tags=["SuperAdmin"])
+
+# ── Report path helpers ───────────────────────────────────────────────────────
+
+# Report IDs must be UUID-format with an optional .json/.html/.csv extension.
+_REPORT_ID_RE = _re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\.(json|html|csv))?$",
+    _re.IGNORECASE,
+)
+_REPORT_DIR = (Path(__file__).parent.parent / "reports" / "output").resolve()
+
+
+def _validate_report_id(report_id: str) -> str:
+    """Raise HTTPException 400 if report_id is not a safe UUID-based name."""
+    if not _REPORT_ID_RE.match(report_id):
+        raise HTTPException(status_code=400, detail="Invalid report ID format")
+    return report_id
+
+
+def _safe_report_path(report_id: str) -> Path:
+    """Return the absolute, confinement-checked path for *report_id*."""
+    _validate_report_id(report_id)
+    candidate = (_REPORT_DIR / report_id).resolve()  # codeql[py/path-injection] - report_id validated above
+    try:
+        candidate.relative_to(_REPORT_DIR)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid report path") from None
+    return candidate
 
 router = APIRouter(prefix="/api/superadmin", tags=["SuperAdmin"])
 
@@ -2182,7 +2212,7 @@ async def get_cache_stats(user: TokenPayload = Depends(_require_superadmin)) -> 
             "uptime_seconds": info.get("uptime_in_seconds", 0),
         }
     except Exception as exc:
-        return {"available": False, "error": str(exc)}
+        return {"available": False, "error": type(exc).__name__}
 
 
 @router.post("/infra/cache/flush")
@@ -2225,7 +2255,7 @@ async def get_db_stats(user: TokenPayload = Depends(_require_superadmin)) -> dic
         finally:
             db.close()
     except Exception as exc:
-        return {"available": False, "error": str(exc)}
+        return {"available": False, "error": type(exc).__name__}
 
 
 @router.get("/infra/queues")
@@ -4540,17 +4570,19 @@ async def download_report(
     report_id: str,
     user: TokenPayload = Depends(_require_superadmin),
 ) -> Any:
-    import os
     from fastapi.responses import FileResponse
 
-    report_dir = "reports/output"
-    fpath = os.path.join(report_dir, report_id)
-    if not os.path.isfile(fpath):
+    fpath = _safe_report_path(report_id)
+    if not fpath.is_file():
         raise HTTPException(status_code=404, detail="Report not found")
     media_type = (
-        "application/json" if fpath.endswith(".json") else "text/html" if fpath.endswith(".html") else "text/csv"
+        "application/json"
+        if str(fpath).endswith(".json")
+        else "text/html"
+        if str(fpath).endswith(".html")
+        else "text/csv"
     )
-    return FileResponse(fpath, media_type=media_type, filename=report_id)
+    return FileResponse(str(fpath), media_type=media_type, filename=report_id)
 
 
 @router.delete("/reports/{report_id}")
@@ -4559,11 +4591,9 @@ async def delete_report(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     _log_superadmin_action(user, "report_delete", f"report={report_id}")
-    import os
-
-    fpath = os.path.join("reports/output", report_id)
-    if os.path.isfile(fpath):
-        os.remove(fpath)
+    fpath = _safe_report_path(report_id)
+    if fpath.is_file():
+        fpath.unlink()
     return {"report_id": report_id, "deleted": True}
 
 

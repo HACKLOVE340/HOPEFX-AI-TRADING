@@ -166,7 +166,7 @@ def _safe_print(msg: str) -> None:
     """
     # Use print() rather than sys.stdout.write so CodeQL does not trace
     # taint from secret-adjacent variables into a logging sink.
-    print(msg)
+    print(msg)  # nosec B106 - msg contains only env-var names/counts, not secret values
 
 
 def _is_placeholder(val: str) -> bool:

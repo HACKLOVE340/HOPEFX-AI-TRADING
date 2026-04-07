@@ -424,7 +424,7 @@ def generate_chart(output_dir: str = "helm/hopefx") -> list[str]:
 
     # Log template names only — no content or secret values are logged.
     for _written_path in written:
-        logger.debug("helm_chart: wrote template %s", _written_path)
+        logger.debug("helm_chart: wrote template %s", _written_path)  # nosec B106 - path only, no secret data
 
     return written
 

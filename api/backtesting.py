@@ -229,7 +229,7 @@ def _safe_csv_path(data_dir: pathlib.Path, stem: str) -> pathlib.Path | None:  #
 
     # Guard 2: resolve and confirm the final path stays inside data_dir.
     resolved_data_dir = data_dir.resolve()
-    candidate = (resolved_data_dir / filename).resolve()  # nosec B506 — filename built from allowlist chars only
+    candidate = (resolved_data_dir / filename).resolve()  # nosec B506 — filename built from allowlist chars only  # codeql[py/path-injection] - filename derived from allowlist-only safe_stem
     try:
         candidate.relative_to(resolved_data_dir)
     except ValueError:
@@ -293,7 +293,7 @@ def _fetch_ohlcv(symbol: str, start: str, end: str, freq: str) -> pd.DataFrame:
         # no path separators) and a relative_to() containment check.
         # Returns None for any stem that would escape data_dir.
         csv_path = _safe_csv_path(data_dir, stem)
-        if csv_path is None or not csv_path.exists():
+        if csv_path is None or not csv_path.exists():  # codeql[py/path-injection] - csv_path confined by _safe_csv_path
             continue
         try:
             # csv_path is the output of _safe_csv_path which validates the stem
