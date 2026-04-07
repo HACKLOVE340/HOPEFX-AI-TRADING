@@ -119,6 +119,8 @@ numpy==2.3.2
 nvidia-nccl-cu12==2.29.7
 oandapyV20==0.7.2
 packaging==25.0
+pip==26.0.1
+wheel==0.46.3
 pandas==2.3.2
 pandocfilters==1.5.1
 parso==0.8.5
