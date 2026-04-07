@@ -29,8 +29,10 @@ from datetime import datetime, timedelta, timezone
 
 UTC = timezone.utc
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
+
+from api.auth import TokenPayload, get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -435,3 +437,76 @@ def _generate_address(currency: str, user_id: str, network: str) -> str:
         return result["address"]
 
     raise ValueError(f"Unsupported currency: {currency}")
+
+
+# ── Fiat deposit / withdrawal (Wallet page) ───────────────────────────────────
+
+
+class FiatTransferRequest(BaseModel):
+    amount: float = Field(..., gt=0, description="Transfer amount in USD")
+
+
+@router.post("/deposit", status_code=202)
+async def initiate_deposit(
+    req: FiatTransferRequest,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Initiate a fiat deposit for the authenticated user.
+
+    Records the pending deposit in the wallet ledger and returns a
+    confirmation. Actual settlement is handled by the payment processor
+    webhook (Stripe / Flutterwave).
+    """
+    from api.db_store import db_get, db_set
+
+    ledger_key = f"wallet:ledger:{user.sub}"
+    ledger: list[dict] = db_get(ledger_key) or []
+    entry = {
+        "id": __import__("uuid").uuid4().hex,
+        "type": "deposit",
+        "amount": req.amount,
+        "status": "pending",
+        "created_at": datetime.now(UTC).isoformat(),
+    }
+    ledger.append(entry)
+    db_set(ledger_key, ledger, changed_by="payments_api")
+    logger.info("Deposit initiated: user=%s amount=%.2f", user.sub, req.amount)
+    return {"status": "pending", "transaction_id": entry["id"], "amount": req.amount}
+
+
+@router.post("/withdraw", status_code=202)
+async def initiate_withdrawal(
+    req: FiatTransferRequest,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Initiate a fiat withdrawal for the authenticated user.
+
+    Validates that the requested amount does not exceed the available
+    balance before recording the pending withdrawal.
+    """
+    from api.db_store import db_get, db_set
+
+    # Check available balance from billing ledger
+    balance_key = f"wallet:balance:{user.sub}"
+    available: float = float(db_get(balance_key) or 0.0)
+    if req.amount > available:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Insufficient balance: available={available:.2f}, requested={req.amount:.2f}",
+        )
+
+    ledger_key = f"wallet:ledger:{user.sub}"
+    ledger: list[dict] = db_get(ledger_key) or []
+    entry = {
+        "id": __import__("uuid").uuid4().hex,
+        "type": "withdrawal",
+        "amount": -req.amount,
+        "status": "pending",
+        "created_at": datetime.now(UTC).isoformat(),
+    }
+    ledger.append(entry)
+    db_set(ledger_key, ledger, changed_by="payments_api")
+    logger.info("Withdrawal initiated: user=%s amount=%.2f", user.sub, req.amount)
+    return {"status": "pending", "transaction_id": entry["id"], "amount": req.amount}
