@@ -18,8 +18,6 @@ Covers:
 
 from __future__ import annotations
 
-import os
-from typing import Any
 from unittest.mock import MagicMock
 
 import pandas as pd
@@ -44,7 +42,7 @@ def _trending_up_bars(n: int = 40, base: float = 1900.0, step: float = 1.0) -> l
     """Steadily rising OHLCV bars — creates HH/HL structure."""
     bars = []
     price = base
-    for i in range(n):
+    for _ in range(n):
         o = price
         c = price + step
         h = c + 0.5
@@ -58,7 +56,7 @@ def _trending_down_bars(n: int = 40, base: float = 2000.0, step: float = 1.0) ->
     """Steadily falling OHLCV bars — creates LH/LL structure."""
     bars = []
     price = base
-    for i in range(n):
+    for _ in range(n):
         o = price
         c = price - step
         h = o + 0.3
@@ -71,7 +69,7 @@ def _trending_down_bars(n: int = 40, base: float = 2000.0, step: float = 1.0) ->
 def _flat_bars(n: int = 30, price: float = 1900.0) -> list[dict]:
     """Sideways bars with no clear trend."""
     bars = []
-    for i in range(n):
+    for _ in range(n):
         bars.append(_bar(price, price + 0.5, price - 0.5, price))
     return bars
 

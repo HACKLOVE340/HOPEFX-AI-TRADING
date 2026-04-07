@@ -17,7 +17,6 @@ module at session teardown — preventing leakage into other test files.
 
 from __future__ import annotations
 
-import sys
 import uuid
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
@@ -38,13 +37,13 @@ pytestmark = pytest.mark.usefixtures("_cme_fix_adapter_stub")
 # Import the module under test (after stubs are in place)
 # ---------------------------------------------------------------------------
 
-from brokers.cme_comex import (  # noqa: E402
+from brokers.cme_comex import (
     CMEComexConnector,
     CMEFill,
     _CME_MULTIPLIER,
     _CME_TICK_VALUE,
 )
-from brokers.base import AccountInfo, OrderSide, OrderStatus, OrderType  # noqa: E402
+from brokers.base import AccountInfo, OrderSide, OrderStatus, OrderType
 
 
 # ---------------------------------------------------------------------------

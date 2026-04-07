@@ -201,7 +201,7 @@ class RegimeClassifier:
         RegimeResult
         """
         reasoning: list[str] = []
-        votes: dict[str, float] = {r: 0.0 for r in ALL_REGIMES}
+        votes: dict[str, float] = dict.fromkeys(ALL_REGIMES, 0.0)
         tf_regimes: dict[str, str] = {}
 
         # ── Layer 1: Macro override ───────────────────────────────────────────
@@ -331,8 +331,6 @@ class RegimeClassifier:
         Uses ADX-proxy (trend_slope + EMA alignment), BB squeeze, RSI,
         and volume to determine the local regime.
         """
-        price = feat.current_price
-
         # ── Trend detection via EMA alignment + slope ─────────────────────────
         ema_bullish = feat.ema_9_above_21 and feat.ema_21_above_50 and feat.price_above_ema_50
         ema_bearish = (

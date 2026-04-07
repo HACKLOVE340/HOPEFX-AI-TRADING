@@ -21,8 +21,7 @@ Covers:
 
 from __future__ import annotations
 
-import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
@@ -370,7 +369,7 @@ class TestRefineFullPipeline:
             assert isinstance(d["confidence"], float)
 
     def test_setup_timestamp_is_utc_iso(self):
-        from datetime import datetime, timezone
+        from datetime import datetime
         orch = self._make_orchestrator()
         htf_df = _zigzag_up_df()
         result = self.engine.refine(_decision(), htf_df, orchestrator=orch)
@@ -391,7 +390,6 @@ class TestRefineEdgeCases:
         self.engine = SniperEntryEngine()
 
     def test_htf_df_with_nan_values_does_not_raise(self):
-        import numpy as np
         bars = [_bar(1900, 1905, 1895, 1902) for _ in range(30)]
         df = pd.DataFrame(bars)
         df.loc[5, "close"] = float("nan")

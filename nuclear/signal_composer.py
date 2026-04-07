@@ -376,19 +376,14 @@ class SignalComposer:
         bt_comp = bt.confidence_score * 0.30
 
         # Cone alignment
-        if raw.cone_aligned:
-            cone_comp = 0.15
-        else:
-            cone_comp = -0.05  # penalty for misalignment
+        cone_comp = 0.15 if raw.cone_aligned else -0.05  # penalty for misalignment
 
         # Regime confidence
         regime_comp = regime.confidence * 0.20
 
         # Macro component
         macro = mtf.macro
-        if macro.gold_bullish_macro and raw.direction == LONG:
-            macro_comp = 0.10
-        elif macro.gold_bearish_macro and raw.direction == SHORT:
+        if macro.gold_bullish_macro and raw.direction == LONG or macro.gold_bearish_macro and raw.direction == SHORT:
             macro_comp = 0.10
         elif macro.risk_off and raw.direction == LONG:
             macro_comp = 0.05  # partial alignment
@@ -426,10 +421,7 @@ class SignalComposer:
         avg_loss = abs(bt.avg_loss_pct) if bt.avg_loss_pct != 0 else 0.005
         loss_rate = 1.0 - wr
 
-        if avg_win > 0:
-            kelly = (wr * avg_win - loss_rate * avg_loss) / avg_win
-        else:
-            kelly = 0.0
+        kelly = (wr * avg_win - loss_rate * avg_loss) / avg_win if avg_win > 0 else 0.0
         kelly = max(0.0, min(kelly, _KELLY_CAP))
 
         # Scale risk by confidence
@@ -508,9 +500,6 @@ class SignalComposer:
         regime: RegimeResult,
     ) -> ExitRules:
         """Build exit rules with trailing stop for trending regimes."""
-        daily = mtf.get("daily")
-        atr = daily.atr if daily and daily.atr > 0 else raw.entry_price * 0.005
-
         # Trailing stop for trending regimes
         if regime.is_trending:
             stop_type = "trailing"

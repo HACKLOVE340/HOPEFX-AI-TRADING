@@ -364,8 +364,6 @@ class SniperEntryEngine:
             c_low = float(c.get("low", 0))
             n_open = float(nxt.get("open", 0))
             n_close = float(nxt.get("close", 0))
-            n_high = float(nxt.get("high", 0))
-            n_low = float(nxt.get("low", 0))
 
             if direction == "long":
                 # Bearish candle followed by bullish impulse breaking prior high
@@ -376,15 +374,14 @@ class SniperEntryEngine:
                         bottom=c_low,
                         origin_index=i,
                     ))
-            else:
-                # Bullish candle followed by bearish impulse breaking prior low
-                if c_close > c_open and n_close < n_open and n_close < c_low:
-                    candidates.append(OrderBlock(
-                        direction="bearish",
-                        top=c_high,
-                        bottom=c_low,
-                        origin_index=i,
-                    ))
+            # Bullish candle followed by bearish impulse breaking prior low
+            elif c_close > c_open and n_close < n_open and n_close < c_low:
+                candidates.append(OrderBlock(
+                    direction="bearish",
+                    top=c_high,
+                    bottom=c_low,
+                    origin_index=i,
+                ))
 
         if not candidates:
             return None
@@ -392,9 +389,7 @@ class SniperEntryEngine:
         # Mark mitigated OBs (price has traded through them)
         current_price = float(prices[-1].get("close", 0))
         for ob in candidates:
-            if direction == "long" and current_price < ob.bottom:
-                ob.mitigated = True
-            elif direction == "short" and current_price > ob.top:
+            if direction == "long" and current_price < ob.bottom or direction == "short" and current_price > ob.top:
                 ob.mitigated = True
 
         # Return the most recent unmitigated OB

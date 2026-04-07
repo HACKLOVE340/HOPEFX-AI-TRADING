@@ -23,8 +23,7 @@ from strategies.adaptive_edge_selector import (
     AdaptiveEdgeSelector, MarketSnapshot, EdgeDecision,
     DecisionMemory, DecisionRecord, NewsFilter, NewsEvent,
     EDGE_SNIPER, EDGE_SCALPER, EDGE_GRID, EDGE_SKIP,
-    REGIME_TRENDING_UP, REGIME_TRENDING_DOWN, REGIME_RANGING,
-    REGIME_VOLATILE, REGIME_CHOPPY, REGIME_UNKNOWN,
+    REGIME_TRENDING_UP,
 )
 
 

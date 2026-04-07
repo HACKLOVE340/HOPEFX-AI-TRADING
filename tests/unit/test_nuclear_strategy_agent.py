@@ -27,11 +27,9 @@ except where the component explicitly requires a live Redis connection
 
 from __future__ import annotations
 
-import asyncio
 import os
 from collections import deque
 from datetime import datetime, timezone
-from typing import Any
 
 import numpy as np
 import pytest
@@ -60,7 +58,7 @@ def _make_bars(
     rng = np.random.default_rng(seed)
     bars = []
     price = start_price
-    for i in range(n):
+    for _ in range(n):
         noise = rng.normal(0, volatility)
         close = max(price + trend + noise, 1.0)
         high = close + abs(rng.normal(0, volatility * 0.5))
@@ -136,7 +134,7 @@ class _InMemoryReader:
         bars_by_tf=None,
         macro=None,
     ):
-        from nuclear.redis_stream_reader import MacroSnapshot, OHLCVBar, TickSnapshot
+        from nuclear.redis_stream_reader import MacroSnapshot
 
         self._ticks: deque = deque(ticks or [], maxlen=200)
         self._bars: dict[str, deque] = {}

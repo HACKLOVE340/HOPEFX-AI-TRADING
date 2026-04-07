@@ -5,14 +5,12 @@
 AdaptiveEdgeSelector — Batch 1: init, config, dataclasses, regime detection.
 """
 from __future__ import annotations
-import os
 import pytest
 from strategies.adaptive_edge_selector import (
     AdaptiveEdgeSelector, MarketSnapshot, EdgeDecision,
-    EDGE_SNIPER, EDGE_SCALPER, EDGE_GRID, EDGE_SKIP,
+    EDGE_SNIPER, EDGE_SKIP,
     REGIME_TRENDING_UP, REGIME_TRENDING_DOWN, REGIME_RANGING,
-    REGIME_VOLATILE, REGIME_CHOPPY, REGIME_LOW_VOL, REGIME_UNKNOWN,
-    get_edge_selector,
+    REGIME_VOLATILE, REGIME_CHOPPY, REGIME_LOW_VOL, get_edge_selector,
 )
 
 

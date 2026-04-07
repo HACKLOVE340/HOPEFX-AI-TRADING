@@ -208,7 +208,7 @@ class CMEComexConnector(BrokerConnector):
         self._order_seq: int = 0
 
     @classmethod
-    def from_env(cls) -> "CMEComexConnector":
+    def from_env(cls) -> CMEComexConnector:
         """Construct from environment variables."""
         return cls()
 

@@ -5,7 +5,6 @@
 # No commercial use without explicit permission.
 """Chart engine — Chart and ChartEngine classes."""
 
-import enum as _enum
 import json
 import logging
 from pathlib import Path

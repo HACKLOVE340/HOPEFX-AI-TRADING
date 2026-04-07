@@ -594,10 +594,9 @@ class AdaptiveEdgeSelector:
 
         # Soft news proximity (medium events 30–60 min away)
         for ev in self.news_filter._events:
-            if ev.affects(snap.symbol) and 30 <= abs(ev.minutes_away) <= 60:
-                if ev.severity in ("high", "medium"):
-                    flip_risk += 2
-                    break
+            if ev.affects(snap.symbol) and 30 <= abs(ev.minutes_away) <= 60 and ev.severity in ("high", "medium"):
+                flip_risk += 2
+                break
 
         if flip_risk >= 4:
             # High flip risk — convert to skip
@@ -840,7 +839,7 @@ class AdaptiveEdgeSelector:
 
         # Beast reason voice
         voice_parts = [
-            f"Volatile chaos—grid absorbs it",
+            "Volatile chaos—grid absorbs it",
             f"cone={snap.cone_strength:.2f} holds the structure",
             f"ADX={snap.adx:.1f} wild—layers catch every bounce",
             f"max {self.grid_max_layers} layers, basket closes at +{self.grid_be_pips:.0f}pips",
@@ -919,9 +918,7 @@ class AdaptiveEdgeSelector:
             score += 3
 
         # RSI alignment with direction (up to +5)
-        if regime == REGIME_TRENDING_UP and snap.rsi > 55:
-            score += 5
-        elif regime == REGIME_TRENDING_DOWN and snap.rsi < 45:
+        if regime == REGIME_TRENDING_UP and snap.rsi > 55 or regime == REGIME_TRENDING_DOWN and snap.rsi < 45:
             score += 5
 
         # Liquidity bonus (+2)

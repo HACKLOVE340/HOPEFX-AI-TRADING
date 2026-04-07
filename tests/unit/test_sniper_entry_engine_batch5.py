@@ -436,11 +436,10 @@ class TestRefineLTFAndBuildPaths:
             _bar(1900.0, 1900.05, 1899.95, 1900.02) for _ in range(25)
         ])
         htf_df = self._zigzag_up_df()
-        import logging
         with patch.object(
             __import__("strategies.sniper_entry_engine", fromlist=["logger"]).logger,
             "debug"
-        ) as mock_log:
+        ):
             result = self.engine.refine(
                 _make_decision("long", 1902.0), htf_df, orchestrator=mock_orch
             )
@@ -563,7 +562,6 @@ class TestBuildSetupRRGuard:
         floating-point rounding. We verify the guard path exists by patching
         the computed actual_rr to be below threshold.
         """
-        import strategies.sniper_entry_engine as _mod
         ob = _make_ob("bullish", top=1895.0, bottom=1890.0)
         dc = _make_dc("bullish", ce=1901.5)
         ltf = _make_ltf(confirmed=True, dc=dc)
