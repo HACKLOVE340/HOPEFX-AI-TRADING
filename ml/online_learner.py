@@ -734,7 +734,7 @@ class SklearnOnlineLearner:
 
         p = _pl.Path(path)
         _assert_safe_model_path(p)
-        return _jl.load(p)  # nosec B301 - path is confined to ml/saved_models
+        return _jl.load(p)  # nosec B301  # codeql[py/unsafe-deserialization] - path confined to ml/saved_models by _assert_safe_model_path
 
 
 # ── Path-confinement helper ───────────────────────────────────────────────────
@@ -748,7 +748,7 @@ def _assert_safe_model_path(path: pathlib.Path) -> None:
     """Raise ValueError if *path* escapes the allowed model directory."""
     import pathlib as _pl
 
-    resolved = _pl.Path(path).resolve()
+    resolved = _pl.Path(path).resolve()  # codeql[py/path-injection] - resolved path confined to _MODEL_ROOT by relative_to check below
     try:
         resolved.relative_to(_MODEL_ROOT)
     except ValueError as exc:
@@ -807,7 +807,7 @@ def get_online_learner(
             p = _pl.Path(persist_path)
             _assert_safe_model_path(p)
 
-        if p.exists():
+        if p.exists():  # codeql[py/path-injection] - p is either _MODEL_ROOT/validated-name or a path checked by _assert_safe_model_path
             try:
                 learner = SklearnOnlineLearner.load(str(p))
                 logger.info("Loaded persisted OnlineLearner for %s from %s", symbol, p)

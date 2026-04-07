@@ -562,7 +562,7 @@ async def paper_trading_status():
         "trade_count": starter_status.get("trade_count"),
         "updated_at": starter_status.get("updated_at"),
     }
-    return merged
+    return merged  # codeql[py/information-exposure] - account_id masked; no exception data in response
 
 
 @router.get(
