@@ -298,18 +298,32 @@ async def get_rates_endpoint():
 
 
 def _verify_webhook_hmac(body: bytes, signature: str) -> bool:
-    """
-    Verify HMAC-SHA256 webhook signature.
+    """Verify HMAC-SHA256 webhook signature.
 
     The payment processor signs the raw request body with the shared secret
     (CRYPTO_WEBHOOK_SECRET) and sends the hex digest in X-Webhook-Signature.
+
+    In development, set CRYPTO_WEBHOOK_VERIFY=false to bypass verification.
+    In production, CRYPTO_WEBHOOK_SECRET must be set (enforced by startup_validator).
     """
+    _is_prod = os.getenv("APP_ENV", "development").lower() == "production"
+
     if not _WEBHOOK_SECRET:
-        # In production, require the secret to be set
-        if os.getenv("APP_ENV", "development") == "production":
-            logger.error("CRYPTO_WEBHOOK_SECRET not set in production — rejecting webhook")
+        if _is_prod:
+            # startup_validator should have caught this — belt-and-suspenders
+            logger.critical(
+                "CRYPTO_WEBHOOK_SECRET not set in production — rejecting webhook. "
+                "Set CRYPTO_WEBHOOK_SECRET to a 32+ char random hex string."
+            )
             return False
-        logger.warning("CRYPTO_WEBHOOK_SECRET not set — skipping HMAC check (dev only)")
+        # Dev/staging: allow bypass only when explicitly opted in
+        if os.getenv("CRYPTO_WEBHOOK_VERIFY", "true").lower() != "false":
+            logger.error(
+                "CRYPTO_WEBHOOK_SECRET not set and CRYPTO_WEBHOOK_VERIFY!=false — "
+                "rejecting webhook. Set CRYPTO_WEBHOOK_VERIFY=false to bypass in dev."
+            )
+            return False
+        logger.warning("CRYPTO_WEBHOOK_SECRET not set — HMAC check bypassed (CRYPTO_WEBHOOK_VERIFY=false)")
         return True
 
     expected = hmac.new(_WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
