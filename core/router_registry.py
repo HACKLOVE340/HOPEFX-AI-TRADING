@@ -176,6 +176,62 @@ def register_routers(
     except Exception as _tca_err:
         logger.warning("TCA router not registered: %s", _tca_err)
 
+    # ── P&L Dashboard ─────────────────────────────────────────────────────────
+    try:
+        from api.pnl_dashboard import router as pnl_router
+
+        app.include_router(pnl_router)
+        logger.info("P&L dashboard router registered (/api/pnl)")
+    except Exception as _pnl_err:
+        logger.warning("P&L dashboard router not registered: %s", _pnl_err)
+
+    # ── SuperAdmin ────────────────────────────────────────────────────────────
+    try:
+        from api.superadmin import router as superadmin_router
+
+        app.include_router(superadmin_router)
+        logger.info("SuperAdmin router registered (/api/superadmin)")
+    except Exception as _sa_err:
+        logger.warning("SuperAdmin router not registered: %s", _sa_err)
+
+    # ── Nuclear strategy ──────────────────────────────────────────────────────
+    try:
+        from api.nuclear import router as nuclear_router
+        from api.nuclear_strategy import router as nuclear_strategy_router
+
+        app.include_router(nuclear_router)
+        app.include_router(nuclear_strategy_router)
+        logger.info("Nuclear routers registered")
+    except Exception as _nuc_err:
+        logger.warning("Nuclear routers not registered: %s", _nuc_err)
+
+    # ── KYC ───────────────────────────────────────────────────────────────────
+    try:
+        from api.kyc import router as kyc_router
+
+        app.include_router(kyc_router)
+        logger.info("KYC router registered (/kyc)")
+    except Exception as _kyc_err:
+        logger.warning("KYC router not registered: %s", _kyc_err)
+
+    # ── Chaos / mutation testing ──────────────────────────────────────────────
+    try:
+        from api.chaos import router as chaos_router
+
+        app.include_router(chaos_router)
+        logger.info("Chaos router registered (/api/chaos)")
+    except Exception as _chaos_err:
+        logger.warning("Chaos router not registered: %s", _chaos_err)
+
+    # ── Data layer (orchestrator) ─────────────────────────────────────────────
+    try:
+        from api.data_layer import router as data_layer_router
+
+        app.include_router(data_layer_router)
+        logger.info("Data layer router registered (/api/data-layer)")
+    except Exception as _dl_err:
+        logger.warning("Data layer router not registered: %s", _dl_err)
+
     # ── Security fixes (LLM auto-heal queue + GitHub PR pipeline) ─────────────
     try:
         from api.security.fixes import router as fixes_router
