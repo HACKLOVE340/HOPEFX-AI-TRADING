@@ -329,9 +329,20 @@ class APIGateway:
         required_role: str = "user",
         raise_exception: bool = True,
     ) -> bool:
-        """Verify JWT token"""
+        """Verify JWT token.
+
+        Accepts both ``sub`` (main auth service) and legacy ``user_id`` claims
+        so gateway tokens issued by either code path are accepted.
+        """
         try:
             payload = jwt.decode(token, self.auth_secret, algorithms=["HS256"])
+
+            # Accept both "sub" (main auth) and legacy "user_id" (gateway-issued)
+            user_id = payload.get("sub") or payload.get("user_id")
+            if not user_id:
+                if raise_exception:
+                    raise HTTPException(status_code=401, detail="Invalid token: missing subject")
+                return False
 
             # Check role
             user_role = payload.get("role", "user")
@@ -357,11 +368,15 @@ class APIGateway:
             return False
 
     def generate_token(self, user_id: str, role: str, expires_hours: int = 24) -> str:
-        """Generate JWT token for client"""
+        """Generate JWT token for client.
+
+        Uses ``sub`` claim to match the main auth service so tokens are
+        interchangeable between the gateway and the primary API.
+        """
         from datetime import timedelta
 
         payload = {
-            "user_id": user_id,
+            "sub": user_id,   # standard claim — matches main auth/service.py
             "role": role,
             "iat": datetime.now(UTC),
             "exp": datetime.now(UTC) + timedelta(hours=expires_hours),
