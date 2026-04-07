@@ -362,8 +362,8 @@ class RedisStreamReader:
                 await self._pubsub.close()
             if self._redis_client:
                 await self._redis_client.aclose()
-        except Exception:
-            pass
+        except Exception as _exc:  # non-fatal: best-effort cleanup on disconnect
+            logger.debug("Error during Redis disconnect cleanup: %s", _exc)
         self._connected = False
 
     async def _consume(self) -> None:
@@ -513,7 +513,8 @@ class RedisStreamReader:
                         open=o, high=h, low=lo, close=c, volume=v,
                         open_time=ts,
                     ))
-                except Exception:
+                except Exception as _exc:  # skip malformed bar entries
+                    logger.debug("Skipping malformed bar entry in %s: %s", key, _exc)
                     continue
             logger.info("Loaded %d historical bars from %s", len(bars), key)
             return bars

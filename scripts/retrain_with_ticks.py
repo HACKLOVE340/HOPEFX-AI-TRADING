@@ -210,8 +210,8 @@ def load_existing_accuracy() -> float:
         try:
             report = json.loads(report_path.read_text())
             return float(report.get("oos_accuracy", 0.0))
-        except Exception:
-            pass
+        except Exception as _exc:  # non-fatal: return 0.0 so retraining always proceeds
+            logger.debug("Could not read existing model accuracy: %s", _exc)
     return 0.0
 
 
@@ -282,8 +282,9 @@ async def main() -> None:
         h1_save.to_csv(h1_enriched_path)
         logger.info("Saved tick-enriched H1 data → %s (%d bars)", h1_enriched_path, len(h1_save))
 
-    # Run train_advanced.py as subprocess so it uses its own validated pipeline
-    import subprocess
+    # Run train_advanced.py as subprocess so it uses its own validated pipeline.
+    # cmd is constructed from sys.executable and a hardcoded relative path — no user input.
+    import subprocess  # nosec B404
 
     cmd = [
         sys.executable,
@@ -298,7 +299,7 @@ async def main() -> None:
         cmd += ["--smoke"]
 
     logger.info("Running: %s", " ".join(cmd))
-    proc = subprocess.run(cmd, cwd=str(ROOT), capture_output=False, check=False)
+    proc = subprocess.run(cmd, cwd=str(ROOT), capture_output=False, check=False)  # nosec B603
     if proc.returncode != 0:
         logger.error("train_advanced.py exited with code %d", proc.returncode)
         sys.exit(proc.returncode)

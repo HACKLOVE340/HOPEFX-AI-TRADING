@@ -46,7 +46,7 @@ try:
 except ImportError:
     pass
 
-PASS = "✅"
+OK = "✅"
 WARN = "⚠️ "
 FAIL = "❌"
 
@@ -66,7 +66,7 @@ print("\n=== 1. Environment keys ===")
 def check_env(var: str, critical: bool = True) -> bool:
     val = os.getenv(var, "")
     if val and not val.startswith("YOUR_") and not val.startswith("CHANGE_ME"):
-        record(PASS, var, f"set ({val[:6]}...)")
+        record(OK, var, f"set ({val[:6]}...)")
         return True
     status = FAIL if critical else WARN
     record(status, var, "NOT SET — see .env")
@@ -97,7 +97,7 @@ configured_gold = [
     name for var, name in gold_keys.items() if os.getenv(var, "").strip() and not os.getenv(var, "").startswith("YOUR_")
 ]
 if configured_gold:
-    record(PASS, "GoldFeedManager", f"{len(configured_gold)} source(s): {', '.join(configured_gold)}")
+    record(OK, "GoldFeedManager", f"{len(configured_gold)} source(s): {', '.join(configured_gold)}")
 else:
     record(FAIL, "GoldFeedManager", "NO gold API keys set — live price data will not flow")
 
@@ -114,7 +114,7 @@ configured_ws = [
     name for var, name in ws_keys.items() if os.getenv(var, "").strip() and not os.getenv(var, "").startswith("YOUR_")
 ]
 if configured_ws:
-    record(PASS, "NuclearStreamer", f"{len(configured_ws)} WebSocket source(s): {', '.join(configured_ws)}")
+    record(OK, "NuclearStreamer", f"{len(configured_ws)} WebSocket source(s): {', '.join(configured_ws)}")
 else:
     record(WARN, "NuclearStreamer", "No WebSocket keys set — tick streaming disabled until keys added")
 
@@ -135,8 +135,8 @@ async def check_fred() -> None:
         series = await feed.fetch_series("DGS10", limit=5)
         await feed.close()
         if not series.empty:
-            record(PASS, "FRED", f"Connected — DGS10 latest={series.iloc[-1]:.3f} on {series.index[-1].date()}")
-            record(PASS, "FRED series count", f"{len(FRED_SERIES)} series configured: {', '.join(FRED_SERIES.keys())}")
+            record(OK, "FRED", f"Connected — DGS10 latest={series.iloc[-1]:.3f} on {series.index[-1].date()}")
+            record(OK, "FRED series count", f"{len(FRED_SERIES)} series configured: {', '.join(FRED_SERIES.keys())}")
         else:
             record(WARN, "FRED", "Connected but returned empty series — check FRED_API_KEY")
     except Exception as exc:
@@ -158,7 +158,7 @@ async def check_cot() -> None:
         df = await feed._download_year(datetime.datetime.now().year)
         await feed.close()
         if not df.empty:
-            record(PASS, "CFTC COT", f"Downloaded {len(df)} gold rows for current year")
+            record(OK, "CFTC COT", f"Downloaded {len(df)} gold rows for current year")
         else:
             record(WARN, "CFTC COT", "No rows parsed — CFTC site may be slow, will retry on startup")
     except Exception as exc:
@@ -181,7 +181,7 @@ async def check_imf() -> None:
         await feed.close()
         if not series.empty:
             record(
-                PASS,
+                OK,
                 "IMF gold",
                 f"{len(series)} monthly obs, latest={series.iloc[-1]:.0f}t on {series.index[-1].date()}",
             )
@@ -208,7 +208,7 @@ async def check_yahoo() -> None:
         )
         if not df.empty:
             close = float(df["Close"].iloc[-1])
-            record(PASS, "Yahoo macro (yfinance)", f"SPX latest close={close:.2f}")
+            record(OK, "Yahoo macro (yfinance)", f"SPX latest close={close:.2f}")
         else:
             record(WARN, "Yahoo macro", "yfinance returned empty — check network")
     except ImportError:
@@ -227,7 +227,7 @@ def check_fix() -> None:
         from execution.fix_adapter import _FIX_BACKEND
 
         if _FIX_BACKEND == "quickfix":
-            record(PASS, "FIX backend", "quickfix (C-extension) — production ready")
+            record(OK, "FIX backend", "quickfix (C-extension) — production ready")
         elif _FIX_BACKEND == "pyfixmsg":
             record(WARN, "FIX backend", "pyfixmsg (pure Python) — functional but higher latency than quickfix")
         elif _FIX_BACKEND == "simplefix":
@@ -255,7 +255,7 @@ def check_redis() -> None:
 
         r = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
         r.ping()
-        record(PASS, "Redis", f"Connected — {os.getenv('REDIS_URL', 'redis://localhost:6379/0')}")
+        record(OK, "Redis", f"Connected — {os.getenv('REDIS_URL', 'redis://localhost:6379/0')}")
     except ImportError:
         record(WARN, "Redis", "redis package not installed")
     except Exception as exc:
@@ -274,10 +274,10 @@ async def main() -> int:
 
     # Summary
     print("\n=== Summary ===")
-    passed = sum(1 for s, _, _ in results if s == PASS)
+    passed = sum(1 for s, _, _ in results if s == OK)
     warned = sum(1 for s, _, _ in results if s == WARN)
     failed = sum(1 for s, _, _ in results if s == FAIL)
-    print(f"  {PASS} {passed} passed   {WARN} {warned} warnings   {FAIL} {failed} failed")
+    print(f"  {OK} {passed} passed   {WARN} {warned} warnings   {FAIL} {failed} failed")
 
     if failed > 0:
         print("\nCritical failures detected. Fix the ❌ items before starting paper trading.")

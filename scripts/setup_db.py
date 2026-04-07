@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import argparse
 import os
-import subprocess
+import subprocess  # nosec B404
 import sys
 from pathlib import Path
 
@@ -44,7 +44,7 @@ try:
 except ImportError:
     pass
 
-PASS = "✅"
+OK = "✅"
 WARN = "⚠️ "
 FAIL = "❌"
 
@@ -84,8 +84,8 @@ def get_sync_db_url() -> str:
 
 def run_migrations() -> bool:
     """Run alembic upgrade head. Returns True on success."""
-    print(f"\n{PASS}  Running Alembic migrations...")
-    result = subprocess.run(
+    print(f"\n{OK}  Running Alembic migrations...")
+    result = subprocess.run(  # nosec B603 — fixed args, no shell, no user input
         [sys.executable, "-m", "alembic", "upgrade", "head"],
         cwd=str(ROOT),
         capture_output=True,
@@ -99,7 +99,7 @@ def run_migrations() -> bool:
     for line in result.stdout.splitlines() + result.stderr.splitlines():
         if "Running upgrade" in line or "Context impl" in line:
             print(f"       {line.strip()}")
-    print(f"{PASS}  Migrations complete")
+    print(f"{OK}  Migrations complete")
     return True
 
 
@@ -171,18 +171,18 @@ def main() -> int:
     found, missing = verify_tables(db_url)
 
     if found:
-        print(f"  {PASS}  {len(found)} tables present")
+        print(f"  {OK}  {len(found)} tables present")
     if missing:
         print(f"  {FAIL}  {len(missing)} expected tables missing: {', '.join(sorted(missing))}")
         if not args.check:
             print("       Re-run without --check to apply migrations")
     else:
-        print(f"  {PASS}  All {len(EXPECTED_TABLES)} expected tables verified")
+        print(f"  {OK}  All {len(EXPECTED_TABLES)} expected tables verified")
 
     # ── Redis ─────────────────────────────────────────────────────────────────
     print("\n=== Redis ===")
     if check_redis():
-        print(f"  {PASS}  Redis connected — {os.getenv('REDIS_URL', 'redis://localhost:6379/0')}")
+        print(f"  {OK}  Redis connected — {os.getenv('REDIS_URL', 'redis://localhost:6379/0')}")
     else:
         print(f"  {WARN}  Redis not reachable — start with: redis-server")
         print("       Paper trading will work without Redis but caching is disabled")
@@ -190,7 +190,7 @@ def main() -> int:
     # ── Summary ───────────────────────────────────────────────────────────────
     print("\n=== Summary ===")
     if not missing:
-        print(f"  {PASS}  Database ready for paper trading")
+        print(f"  {OK}  Database ready for paper trading")
         if is_sqlite:
             print(f"  {WARN}  Using SQLite — switch to PostgreSQL for production")
             print("       Set DATABASE_URL=postgresql+asyncpg://... in .env")

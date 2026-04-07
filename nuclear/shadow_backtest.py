@@ -339,13 +339,15 @@ class ShadowBacktestEngine:
             # Build a minimal feature snapshot from available bars
             try:
                 mtf = build_features_from_bars(bars_by_tf, symbol=symbol)
-            except Exception:
+            except Exception as _exc:  # skip tick if feature build fails
+                logger.debug("Feature build failed at tick %d for %s: %s", i, symbol, _exc)
                 continue
 
             # Classify regime
             try:
                 regime = self._clf.classify(mtf, cone_merged)
-            except Exception:
+            except Exception as _exc:  # skip tick if regime classification fails
+                logger.debug("Regime classification failed at tick %d for %s: %s", i, symbol, _exc)
                 continue
 
             # Generate signal
@@ -357,7 +359,8 @@ class ShadowBacktestEngine:
                     cone_merged=cone_merged,
                     ticks=window[:i],
                 )
-            except Exception:
+            except Exception as _exc:  # skip tick if signal generation fails
+                logger.debug("Signal generation failed at tick %d for %s: %s", i, symbol, _exc)
                 continue
 
             if signal is None or signal.direction == FLAT:
@@ -442,7 +445,8 @@ class ShadowBacktestEngine:
                         {tf: history},
                         symbol=symbol,
                     )
-                except Exception:
+                except Exception as _exc:  # skip bar if feature build fails
+                    logger.debug("Feature build failed at bar %d/%s for %s: %s", i, tf, symbol, _exc)
                     continue
 
                 # Compute cone from this TF's history
@@ -452,14 +456,16 @@ class ShadowBacktestEngine:
                         closes, symbol=symbol, timeframe=tf
                     ) if len(closes) >= 10 else cone
                     tf_cone_merged = cone_merged
-                except Exception:
+                except Exception as _exc:  # non-fatal: fall back to parent cone
+                    logger.debug("Cone computation failed at bar %d/%s for %s: %s", i, tf, symbol, _exc)
                     tf_cone = cone
                     tf_cone_merged = cone_merged
 
                 # Classify regime
                 try:
                     regime = self._clf.classify(mtf, tf_cone_merged)
-                except Exception:
+                except Exception as _exc:  # skip bar if regime classification fails
+                    logger.debug("Regime classification failed at bar %d/%s for %s: %s", i, tf, symbol, _exc)
                     continue
 
                 # Generate signal on bar close
@@ -470,7 +476,8 @@ class ShadowBacktestEngine:
                         cone=tf_cone,
                         cone_merged=tf_cone_merged,
                     )
-                except Exception:
+                except Exception as _exc:  # skip bar if signal generation fails
+                    logger.debug("Signal generation failed at bar %d/%s for %s: %s", i, tf, symbol, _exc)
                     continue
 
                 if signal is None or signal.direction == FLAT:
