@@ -214,6 +214,20 @@ class AuthService:
     """
     Stateless auth service. Requires a SQLAlchemy session_factory.
     All methods open their own short-lived sessions.
+
+    Threading model
+    ---------------
+    All public methods are synchronous (blocking SQLAlchemy calls).
+    Callers in async contexts **must** wrap calls with ``asyncio.to_thread()``:
+
+        result = await asyncio.to_thread(service.register, email, username, password)
+
+    ``auth/router.py`` already applies this pattern for all 16 call-sites.
+
+    Migration path
+    --------------
+    Future work: migrate to async SQLAlchemy (``AsyncSession``) so the DB calls
+    are native coroutines. Track in issue #async-auth-service.
     """
 
     def __init__(self, session_factory):

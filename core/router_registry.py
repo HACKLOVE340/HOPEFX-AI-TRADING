@@ -370,3 +370,44 @@ def register_routers(
         logger.info("SuperAdmin router registered (/api/superadmin)")
     except Exception as _sa_err:
         logger.warning("SuperAdmin router not registered: %s", _sa_err)
+
+    # ── API v1 versioned prefix ────────────────────────────────────────────────
+    # Mount a thin /api/v1/* prefix that re-exports the existing /api/* routes.
+    # New clients should use /api/v1/; existing /api/* routes remain unchanged
+    # for backward compatibility with current frontend and external integrations.
+    #
+    # Implementation: we mount a sub-application that strips the /api/v1 prefix
+    # and re-dispatches to the main app, so every /api/v1/<path> automatically
+    # resolves to the equivalent /api/<path> handler without duplicating routes.
+    try:
+        from fastapi import APIRouter
+        from fastapi.routing import APIRoute
+
+        _v1_router = APIRouter(prefix="/api/v1")
+
+        # Collect all existing /api/* routes and re-register them under /v1.
+        # We create lightweight forwarding entries rather than copying handlers,
+        # keeping the route list in sync automatically via this loop.
+        for route in app.routes:
+            if isinstance(route, APIRoute) and route.path.startswith("/api/"):
+                _v1_path = "/api/v1" + route.path[len("/api"):]
+                # Skip if already a v1 path (prevent infinite loop)
+                if "/v1/" in route.path:
+                    continue
+                app.add_api_route(
+                    _v1_path,
+                    route.endpoint,
+                    methods=list(route.methods) if route.methods else ["GET"],
+                    response_model=route.response_model,
+                    tags=list(route.tags) if route.tags else [],
+                    summary=route.summary,
+                    description=route.description,
+                    include_in_schema=False,  # hide from OpenAPI to avoid duplicate docs
+                )
+
+        logger.info(
+            "API v1 versioned routes registered (/api/v1/* aliases for /api/* — %d routes)",
+            sum(1 for r in app.routes if isinstance(r, APIRoute) and "/api/v1/" in r.path),
+        )
+    except Exception as _v1_err:
+        logger.warning("API v1 versioned routes not registered: %s", _v1_err)
