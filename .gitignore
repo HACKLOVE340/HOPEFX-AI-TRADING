@@ -1,6 +1,9 @@
 # Kill switch flag — runtime state, never commit
 kill_switch.flag
 
+# Runtime state directory — persisted state files, never commit
+state/
+
 # FIX session config with live credentials — never commit
 fix.cfg.local
 
