@@ -330,3 +330,32 @@ async def explain_latest(
     """
     _enforce_rate_limit(request, _EXPLAIN_LATEST_LIMIT)
     return _build_explanation("latest")
+
+
+@router.get(
+    "/{signal_id}",
+    response_model=SignalExplanation,
+    summary="Explain a signal by ID or symbol (short-form alias)",
+)
+async def explain_by_id(
+    request: Request,
+    signal_id: str,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Short-form alias for ``GET /api/explain/signal/{signal_id}``.
+
+    Accepts either a signal UUID or a symbol string (e.g. ``XAUUSD``).
+    The frontend's ``useApi.explain(symbol)`` call routes here.
+    Registered after ``/latest`` so that literal path takes priority.
+    Rate-limited identically to the full ``/signal/{id}`` endpoint.
+    """
+    _enforce_rate_limit(request, _EXPLAIN_LIMIT)
+    try:
+        return _build_explanation(signal_id)
+    except (RuntimeError, ValueError, KeyError, AttributeError) as exc:
+        logger.warning("Explanation unavailable for %s: %s", signal_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Explanation unavailable — check server logs",
+        ) from None
