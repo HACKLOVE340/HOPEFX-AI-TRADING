@@ -1071,7 +1071,7 @@ class FIXAdapter:
 
         if not future.done():
             try:
-                loop = future.get_loop() if hasattr(future, "get_loop") else future.get_event_loop()
+                loop = future.get_loop() if hasattr(future, "get_loop") else asyncio.get_running_loop()
                 if report.exec_type == FIXExecType.REJECTED:
                     exc = RuntimeError(
                         f"FIX order rejected by broker: cl_ord_id={report.cl_ord_id} text={report.text!r}",

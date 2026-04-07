@@ -519,6 +519,7 @@ class RiskManager:
                 max_daily_dd_pct=self._config.max_daily_loss_pct,
             )
         except Exception:
+            logger.warning("RiskManager: DrawdownTracker init failed — drawdown tracking disabled", exc_info=True)
             self._dd_tracker = None
 
         # Restore persisted halt state so a restart after a halt does not
@@ -2179,6 +2180,7 @@ def _make_risk_manager() -> RiskManager:
 
         return RiskManager(orchestrator=orchestrator)
     except Exception:
+        logger.warning("_make_risk_manager: orchestrator import failed — using bare RiskManager", exc_info=True)
         return RiskManager()  # no orchestrator in test/minimal environments
 
 

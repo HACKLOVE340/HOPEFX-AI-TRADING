@@ -693,7 +693,7 @@ def main() -> int:
     if not args.quiet:
         _print_header("HOPEFX-AI-TRADING  —  End-to-End ML Flow Validation")
         logger.info(f"  Data:  {_H1_CSV}")
-        logger.info(f"  Env:   APP_ENV={os.environ['APP_ENV']}")
+        logger.info("  Env:   APP_ENV=%s", os.getenv("APP_ENV", "development"))
 
     stages_to_run = STAGES
     if args.stage is not None:

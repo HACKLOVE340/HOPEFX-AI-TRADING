@@ -498,7 +498,7 @@ def run_multi_symbol_backtest(
             try:
                 import asyncio as _asyncio
 
-                from backtest.data_validator import fetch_validated_ohlcv
+                from backtesting.data_validator import fetch_validated_ohlcv
 
                 df = _asyncio.run(
                     fetch_validated_ohlcv(
