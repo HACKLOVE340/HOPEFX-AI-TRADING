@@ -316,6 +316,9 @@ from core.background_tasks import nuclear_price_bridge as _nuclear_price_bridge
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """FastAPI lifespan handler — replaces deprecated @app.on_event."""
+    # Re-validate environment on every startup/restart (catches config drift on
+    # hot-reload or container restart without a full process exit).
+    validate_environment(strict=True)
     # Task 40: Sentry error tracking
     init_sentry()
     # Task 38: Redis-backed rate limiting
