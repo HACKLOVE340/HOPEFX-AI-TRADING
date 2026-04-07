@@ -29,6 +29,28 @@ export default defineConfig({
         ws: true,
         changeOrigin: true,
       },
+      // Backend routers mounted outside /api — must be proxied explicitly so
+      // Vite dev server forwards them instead of returning 404.
+      '/nuclear': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/nuclear-strategy': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/tca': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/kyc': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/graphql': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
       // NOTE: do NOT proxy '/status' — that path is handled by the React
       // StatusPage component. Only /api/status/* goes to the backend.
     },
