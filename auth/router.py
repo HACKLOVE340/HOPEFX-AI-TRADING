@@ -351,6 +351,146 @@ async def logout_all(user_id: str = Depends(_get_current_user_id)):
     return {"message": "All sessions revoked"}
 
 
+# ── Session management ────────────────────────────────────────────────────────
+
+
+@router.get("/sessions")
+async def list_sessions(user_id: str = Depends(_get_current_user_id)):
+    """Return all active sessions for the current user."""
+    sessions: list[dict] = []
+    try:
+        from database.connection import SessionLocal
+        from database.user_models import UserSession
+
+        db = SessionLocal()
+        try:
+            rows = db.query(UserSession).filter_by(user_id=user_id, is_active=True).all()
+            sessions = [
+                {
+                    "session_id": s.id,
+                    "ip_address": getattr(s, "ip_address", None),
+                    "user_agent": getattr(s, "user_agent", None),
+                    "created_at": s.created_at.isoformat() if s.created_at else None,
+                    "last_used_at": s.last_used_at.isoformat() if getattr(s, "last_used_at", None) else None,
+                    "is_current": False,
+                }
+                for s in rows
+            ]
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.debug("list_sessions: %s", exc)
+    return {"sessions": sessions}
+
+
+@router.delete("/sessions/{session_id}")
+async def revoke_session(session_id: str, user_id: str = Depends(_get_current_user_id)):
+    """Revoke a specific session by ID. Only the owning user can revoke their own sessions."""
+    try:
+        from database.connection import SessionLocal
+        from database.user_models import UserSession
+
+        db = SessionLocal()
+        try:
+            s = db.query(UserSession).filter_by(id=session_id, user_id=user_id).first()
+            if s:
+                s.is_active = False
+                db.commit()
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.debug("revoke_session: %s", exc)
+    return {"message": "Session revoked"}
+
+
+@router.delete("/sessions")
+async def revoke_all_sessions(user_id: str = Depends(_get_current_user_id)):
+    """Revoke all sessions for the current user (alias for logout-all)."""
+    _svc().logout_all(user_id)
+    return {"message": "All sessions revoked"}
+
+
+# ── Account management ────────────────────────────────────────────────────────
+
+
+class _ChangePasswordBody(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8)
+
+
+@router.post("/change-password")
+async def change_password(
+    body: _ChangePasswordBody,
+    user_id: str = Depends(_get_current_user_id),
+):
+    """Change the current user's password. Requires the existing password for verification."""
+    try:
+        from database.connection import SessionLocal
+        from database.user_models import User
+        from passlib.context import CryptContext
+
+        ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        db = SessionLocal()
+        try:
+            u = db.query(User).filter_by(id=user_id).first()
+            if not u:
+                raise HTTPException(status_code=404, detail="User not found")
+            if not ctx.verify(body.current_password, u.hashed_password):
+                raise HTTPException(status_code=400, detail="Current password is incorrect")
+            u.hashed_password = ctx.hash(body.new_password)
+            db.commit()
+        finally:
+            db.close()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("change_password: %s", exc)
+        raise HTTPException(status_code=500, detail="Password change failed") from None
+    # Revoke all existing sessions so stolen tokens are invalidated
+    try:
+        _svc().logout_all(user_id)
+    except Exception:
+        pass
+    return {"message": "Password changed successfully. All other sessions have been revoked."}
+
+
+@router.delete("/account")
+async def delete_account(user_id: str = Depends(_get_current_user_id)):
+    """
+    Permanently delete the current user's account and all associated data.
+    This action is irreversible.
+    """
+    try:
+        from database.connection import SessionLocal
+        from database.user_models import User
+
+        db = SessionLocal()
+        try:
+            u = db.query(User).filter_by(id=user_id).first()
+            if not u:
+                raise HTTPException(status_code=404, detail="User not found")
+            if u.role in ("admin", "superadmin"):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Admin accounts cannot be self-deleted. Contact another superadmin.",
+                )
+            db.delete(u)
+            db.commit()
+        finally:
+            db.close()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("delete_account: %s", exc)
+        raise HTTPException(status_code=500, detail="Account deletion failed") from None
+    # Revoke all sessions
+    try:
+        _svc().logout_all(user_id)
+    except Exception:
+        pass
+    return {"message": "Account deleted successfully"}
+
+
 @router.post("/forgot-password")
 async def forgot_password(body: ForgotPasswordRequest, request: Request):
     """Request a password reset link. Always returns 200 to avoid email enumeration."""
