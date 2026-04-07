@@ -278,6 +278,15 @@ def register_routers(
     except Exception as _fixes_err:
         logger.warning("Security fixes router not registered: %s", _fixes_err)
 
+    # ── Security dashboard (attacks, lockdown, heal, AV) ──────────────────────
+    try:
+        from api.security_dashboard import router as sec_dashboard_router
+
+        app.include_router(sec_dashboard_router)
+        logger.info("Security dashboard router registered (/api/security/*)")
+    except Exception as _sec_err:
+        logger.warning("Security dashboard router not registered: %s", _sec_err)
+
     # ── Live WebSocket ────────────────────────────────────────────────────────
     try:
         from api.ws_live import router as ws_live_router
@@ -350,3 +359,14 @@ def register_routers(
         logger.info("WebSocket server router registered (/ws)")
     except Exception as _ws_err:
         logger.warning("WebSocket server router not registered: %s", _ws_err)
+
+    # ── SuperAdmin ─────────────────────────────────────────────────────────────
+    # Registered here for consistency — also registered directly in app.py for
+    # historical reasons; FastAPI de-duplicates identical routes automatically.
+    try:
+        from api.superadmin import router as superadmin_router
+
+        app.include_router(superadmin_router)
+        logger.info("SuperAdmin router registered (/api/superadmin)")
+    except Exception as _sa_err:
+        logger.warning("SuperAdmin router not registered: %s", _sa_err)

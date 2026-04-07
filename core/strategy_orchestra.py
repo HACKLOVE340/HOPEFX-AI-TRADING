@@ -8,6 +8,7 @@ HOPEFX Strategy Orchestra
 Coordinates multiple strategies to prevent conflicts and maximize returns
 """
 
+import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -17,6 +18,8 @@ from typing import Any
 
 from core.event_bus import DomainEvent, EventBus
 from strategies.base import BaseStrategy, Signal
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -76,10 +79,10 @@ class StrategyOrchestra:
             # Seed current weights
             for sid, alloc in self.allocations.items():
                 self._rebalancer.update_current_weight(sid, alloc)
-            print(f"🎼 DynamicRebalancer attached (method={method})")
+            logger.info("DynamicRebalancer attached: method=%s", method)
             return self._rebalancer
         except Exception as exc:
-            print(f"⚠️  DynamicRebalancer attach failed: {exc}")
+            logger.warning("DynamicRebalancer attach failed: %s", exc)
             return None
 
     def run_rebalance(self, force: bool = False) -> dict | None:
@@ -115,11 +118,7 @@ class StrategyOrchestra:
                 },
             )
         )
-        print(
-            f"🎼 Rebalanced: method={result.method} "
-            f"sharpe={result.expected_sharpe:.2f} "
-            f"strategies={list(result.weights.keys())}"
-        )
+        logger.info("Rebalanced: method=%s sharpe=%.2f strategies=%s", result.method, result.expected_sharpe, list(result.weights.keys()))
         return result.to_dict()
 
     def get_rebalancer_status(self) -> dict:
@@ -136,7 +135,7 @@ class StrategyOrchestra:
             strategy_id=sid,
             regime_suitability=self._detect_regime_suitability(strategy),
         )
-        print(f"🎼 Strategy registered: {sid} (max alloc: {max_allocation:.0%})")
+        logger.info("Strategy registered: %s (max alloc: %.0f%%)", sid, max_allocation * 100)
 
     def _detect_regime_suitability(self, strategy: BaseStrategy) -> dict[str, float]:
         name = strategy.config.name.lower()
@@ -173,14 +172,14 @@ class StrategyOrchestra:
             self.strategies[strategy_id].start()
             if strategy_id not in self.active_strategies:
                 self.active_strategies.append(strategy_id)
-            print(f"▶️  Activated: {strategy_id}")
+            logger.info("Strategy activated: %s", strategy_id)
 
     def deactivate_strategy(self, strategy_id: str, reason: str = ""):
         if strategy_id in self.strategies:
             self.strategies[strategy_id].stop()
             if strategy_id in self.active_strategies:
                 self.active_strategies.remove(strategy_id)
-            print(f"⏸️  Deactivated: {strategy_id} {f'({reason})' if reason else ''}")
+            logger.info("Strategy deactivated: %s %s", strategy_id, f"({reason})" if reason else "")
 
     def distribute_price(self, price: float):
         """Distribute price to all active strategies"""
@@ -203,7 +202,7 @@ class StrategyOrchestra:
                         ),
                     )
             except Exception as e:
-                print(f"Error in {sid}: {e}")
+                logger.warning("Strategy error in %s: %s", sid, e)
 
         # Calculate and emit composite signal
         composite = self._calculate_composite_signal()
@@ -275,7 +274,7 @@ class StrategyOrchestra:
         data = event.decode()
         new_regime = data.get("regime")
         self.current_regime = new_regime
-        print(f"🌊 Regime change: {new_regime}")
+        logger.info("Regime change → %s", new_regime)
 
         for sid, perf in self.performance.items():
             suit = perf.regime_suitability.get(new_regime, 0.5)
@@ -300,3 +299,30 @@ class StrategyOrchestra:
             "current_regime": self.current_regime,
             "active_count": len(self.active_strategies),
         }
+
+
+# =============================================================================
+# Shared orchestra singleton — used by regime_router and execution engine
+# to publish POSITION_CLOSED and REGIME_CHANGE events to subscribers.
+# =============================================================================
+
+_shared_orchestra: "StrategyOrchestra | None" = None
+
+
+def set_shared_orchestra(orchestra: "StrategyOrchestra") -> None:
+    """Register the application-level orchestra instance."""
+    global _shared_orchestra
+    _shared_orchestra = orchestra
+
+
+def _get_shared_orchestra() -> "StrategyOrchestra | None":
+    """Return the shared orchestra, or None if not yet initialised."""
+    if _shared_orchestra is not None:
+        return _shared_orchestra
+    # Fallback: try to get it from app_state
+    try:
+        from app import app_state  # type: ignore[import]
+
+        return getattr(app_state, "orchestra", None)
+    except Exception:
+        return None

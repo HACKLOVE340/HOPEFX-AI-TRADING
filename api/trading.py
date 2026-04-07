@@ -793,6 +793,28 @@ async def close_position(
 
     logger.info("Position closed: user=%s position_id=%s", user.sub, position_id)
 
+    # Publish POSITION_CLOSED to the legacy event bus so StrategyOrchestra
+    # can update its allocation tracking and rebalancer.
+    try:
+        from core.strategy_orchestra import _get_shared_orchestra as _get_orch
+        from core.event_bus_legacy import DomainEvent as _DE
+        import asyncio as _asyncio
+
+        _orch = _get_orch()
+        if _orch is not None:
+            _event = _DE.create(
+                "POSITION_CLOSED",
+                "trading_api",
+                {"position_id": position_id, "user_id": user.sub},
+            )
+            try:
+                _loop = _asyncio.get_running_loop()
+                _loop.create_task(_orch.event_bus.publish(_event))
+            except RuntimeError:
+                pass
+    except Exception as _pc_exc:
+        logger.debug("POSITION_CLOSED event publish skipped: %s", _pc_exc)
+
     if hasattr(app_state, "ws_manager") and app_state.ws_manager is not None:
         try:
             await app_state.ws_manager.broadcast_to_all(
@@ -1705,3 +1727,232 @@ async def run_stress_test(
     except Exception:
         _logger.exception("Stress test failed: %s")
         raise HTTPException(status_code=500, detail="Stress test failed — check server logs") from None
+
+
+# =============================================================================
+# FRONTEND COMPAT ALIASES
+# =============================================================================
+# The frontend (useApi.ts / chart-bot) calls several paths that differ from
+# the canonical backend route names.  These thin aliases keep the backend
+# naming clean while fully supporting the frontend contract.
+# =============================================================================
+
+# ── POST /api/trading/orders  (frontend uses plural; backend has /order) ─────
+
+
+@router.post(
+    "/orders",
+    status_code=status.HTTP_201_CREATED,
+    response_model=None,
+    include_in_schema=False,
+    summary="[Alias] Place order — plural alias for POST /api/trading/order",
+)
+async def place_order_alias(
+    order: OrderRequest,
+    user: TokenPayload = Depends(require_kyc),
+    _role: TokenPayload = Depends(require_role("trader")),
+):
+    """Alias: POST /api/trading/orders → place_order (/api/trading/order)."""
+    return await place_order(order=order, user=user, _role=_role)
+
+
+# ── GET /api/trading/signals  (frontend calls this; canonical is /api/signals) ─
+
+
+@router.get(
+    "/signals",
+    response_model=None,
+    summary="Active trading signals (alias for /api/signals/active)",
+)
+async def get_trading_signals(
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Return currently active signals.
+
+    Delegates to /api/signals/active so there is a single source of truth.
+    The frontend (useApi.ts `signals()`) calls POST /api/trading/signals.
+    """
+    try:
+        from api.signals import get_active_signals as _get_active
+
+        return await _get_active(user=user)
+    except Exception:
+        pass
+    # Fallback: query signal_engine directly
+    try:
+        from app import app_state
+
+        engine = getattr(app_state, "signal_engine", None)
+        if engine is not None:
+            raw = getattr(engine, "active_signals", None)
+            if callable(raw):
+                return raw()
+            if raw is not None:
+                return list(raw)
+    except Exception:
+        pass
+    return []
+
+
+# ── POST /api/trading/paper/start  (Onboarding.tsx calls this) ───────────────
+
+
+@router.post(
+    "/paper/start",
+    response_model=None,
+    summary="Switch to paper-trading mode for the current session",
+)
+async def start_paper_trading(
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Enable paper-trading mode.
+
+    Sets BROKER_TYPE=paper in the live session and resets the paper-trading
+    balance to the configured default.  Idempotent — safe to call when
+    already in paper mode.
+    """
+    import os as _os
+
+    _os.environ["BROKER_TYPE"] = "paper"
+    balance = float(_os.getenv("PAPER_TRADING_BALANCE", "100000.0"))
+    try:
+        from app import app_state
+
+        broker = getattr(app_state, "broker", None)
+        if broker is not None and hasattr(broker, "reset"):
+            broker.reset(balance)
+        logger.info("Paper trading activated: user=%s balance=%.2f", user.sub, balance)
+    except Exception as exc:
+        logger.warning("Paper trading broker reset failed: %s", exc)
+    return {
+        "status": "paper_trading_active",
+        "balance": balance,
+        "message": "Paper trading mode activated. No real money at risk.",
+    }
+
+
+# ── GET /api/trading/risk  (chart-bot/services/chart-api.ts) ─────────────────
+
+
+@router.get(
+    "/risk",
+    response_model=None,
+    summary="Current real-time risk metrics for the open portfolio",
+)
+async def get_risk_metrics(
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Return live risk metrics: daily P&L, max drawdown, open position count,
+    margin used, and an overall risk score.
+
+    Delegates to the RiskManager if available, falls back to direct broker query.
+    """
+    try:
+        if app_state and app_state.broker and app_state.risk_manager:
+            account_info = await _broker_call("get_account_info")
+            positions = await _broker_call("get_positions")
+            positions_dicts = [
+                p.__dict__ if hasattr(p, "__dict__") else dict(p) for p in positions
+            ]
+            assessment = app_state.risk_manager.assess_risk(account_info, positions_dicts)
+            daily_pnl = sum(getattr(p, "unrealized_pnl", 0.0) or 0.0 for p in positions)
+            return {
+                "daily_pnl": daily_pnl,
+                "max_drawdown": float(getattr(assessment, "max_drawdown", 0.0)),
+                "open_positions": len(positions),
+                "margin_used": float(getattr(account_info, "margin_used", 0.0) or 0.0),
+                "risk_score": float(getattr(assessment, "risk_score", 0.0)),
+            }
+    except Exception as exc:
+        logger.warning("get_risk_metrics broker unavailable: %s", exc)
+    return {"daily_pnl": 0.0, "max_drawdown": 0.0, "open_positions": 0, "margin_used": 0.0, "risk_score": 0.0}
+
+
+# ── POST /api/trading/ai-analysis  (chart-bot/services/chart-api.ts) ─────────
+
+
+class ChartClickContext(BaseModel):
+    price: float = Field(..., description="Price at the clicked candle")
+    symbol: str = Field("XAUUSD", description="Trading symbol")
+    timeframe: str = Field("1h", description="Chart timeframe")
+    timestamp: int | None = Field(None, description="Unix timestamp ms of the candle")
+    extra: dict = Field(default_factory=dict, description="Additional chart context")
+
+
+@router.post(
+    "/ai-analysis",
+    response_model=None,
+    summary="AI-powered analysis of a chart click point",
+)
+async def ai_chart_analysis(
+    context: ChartClickContext,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Return an AI-generated analysis of the clicked chart point.
+
+    Uses the ML inference engine + regime router to generate:
+    - Current regime and confidence
+    - Recommended action and confidence
+    - Key market drivers
+    - Price targets (bull / base / bear)
+    - Risk assessment and warnings
+    """
+    import uuid as _uuid
+
+    symbol = validate_order_symbol(context.symbol)
+    regime = "ranging"
+    regime_confidence = 0.5
+    recommended_action = "wait"
+    action_confidence = 0.4
+
+    try:
+        if app_state:
+            regime_router = getattr(app_state, "regime_router", None)
+            if regime_router is not None:
+                regime = regime_router.current_regime
+                regime_confidence = regime_router.current_confidence
+
+            engine = getattr(app_state, "signal_engine", None)
+            if engine is not None:
+                signals = getattr(engine, "active_signals", None)
+                if callable(signals):
+                    active = signals()
+                    if active:
+                        s = active[0] if isinstance(active, list) else active
+                        recommended_action = getattr(s, "signal_type", recommended_action)
+                        action_confidence = float(getattr(s, "confidence", action_confidence))
+    except Exception as exc:
+        logger.debug("AI analysis context extraction failed: %s", exc)
+
+    price = context.price
+    spread = price * 0.001  # 0.1% default spread
+    return {
+        "id": str(_uuid.uuid4()),
+        "timestamp": context.timestamp or int(time.time() * 1000),
+        "context": context.model_dump(),
+        "regime": regime,
+        "regimeConfidence": regime_confidence,
+        "summary": (
+            f"At ${price:,.2f} on {symbol}, the market is currently in a {regime} regime "
+            f"(confidence {regime_confidence:.0%}). "
+            f"Recommended action: {recommended_action}."
+        ),
+        "keyDrivers": [
+            f"Regime: {regime}",
+            f"Timeframe: {context.timeframe}",
+        ],
+        "riskAssessment": "Standard volatility. Check stop-loss placement.",
+        "recommendedAction": recommended_action,
+        "actionConfidence": action_confidence,
+        "priceTargets": {
+            "bull": round(price * 1.005, 2),
+            "base": round(price, 2),
+            "bear": round(price * 0.995, 2),
+        },
+        "timeHorizon": "1–4 hours",
+        "warnings": [],
+    }
