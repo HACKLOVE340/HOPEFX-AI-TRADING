@@ -48,8 +48,8 @@ def _validate_report_id(report_id: str) -> str:
 
 def _safe_report_path(report_id: str) -> Path:
     """Return the absolute, confinement-checked path for *report_id*."""
-    _validate_report_id(report_id)
-    candidate = (_REPORT_DIR / report_id).resolve()  # codeql[py/path-injection] - report_id validated above
+    _validate_report_id(report_id)  # Raises HTTPException 400 if report_id is not a UUID-based name
+    candidate = (_REPORT_DIR / report_id).resolve()  # codeql[py/path-injection] - report_id validated by _validate_report_id above
     try:
         candidate.relative_to(_REPORT_DIR)
     except ValueError:
