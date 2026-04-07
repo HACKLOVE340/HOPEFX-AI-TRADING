@@ -959,6 +959,36 @@ async def get_brain_state(
     return app_state.brain.state.to_dict()
 
 
+@router.post("/paper/start", status_code=202)
+async def start_paper_trading(
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Activate paper trading mode for the authenticated user.
+
+    Sets BROKER_TYPE=paper in the session context and initialises a
+    paper account with the default starting balance if one does not
+    already exist. Called from the onboarding flow.
+    """
+    from api.db_store import db_get, db_set
+
+    paper_key = f"paper:account:{user.sub}"
+    existing = db_get(paper_key)
+    if existing:
+        return {"status": "already_active", "account": existing}
+
+    account = {
+        "user_id": user.sub,
+        "balance": float(os.getenv("PAPER_STARTING_BALANCE", "10000")),
+        "currency": "USD",
+        "mode": "paper",
+        "activated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    db_set(paper_key, account, changed_by="trading_api")
+    logger.info("Paper trading activated for user=%s", user.sub)
+    return {"status": "activated", "account": account}
+
+
 @router.post("/emergency-stop")
 async def emergency_stop(
     user: TokenPayload = Depends(require_role("admin")),
