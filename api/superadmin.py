@@ -1075,7 +1075,13 @@ async def get_ml_metrics(user: TokenPayload = Depends(_require_superadmin)) -> d
     try:
         from api.ml import get_accuracy
 
-        return await get_accuracy(user=user)
+        result = await get_accuracy(user=user)
+        # get_accuracy returns an AccuracyResponse Pydantic model; convert to dict
+        if hasattr(result, "model_dump"):
+            return result.model_dump()
+        if hasattr(result, "dict"):
+            return result.dict()
+        return result if isinstance(result, dict) else {}
     except Exception:
         return {}
 
