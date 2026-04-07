@@ -338,6 +338,20 @@ class RealTimeSignalService:
             self.active_signals[signal.id] = signal
             self.signal_history.append(signal)
             self.analytics.record_signal(signal)
+            # Persist active signal list so /trading/signals fallback can read it
+            try:
+                from api.db_store import db_set as _db_set
+                _db_set(
+                    "signals:active",
+                    [
+                        s.to_dict() if hasattr(s, "to_dict") else vars(s)
+                        for s in self.active_signals.values()
+                        if s.is_valid
+                    ],
+                    changed_by="signal_engine",
+                )
+            except Exception as _dbe:
+                logger.debug("signals:active db_set failed: %s", _dbe)
 
         # Publish event
         self._publish_event("signal_generated", signal)
