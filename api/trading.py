@@ -689,10 +689,17 @@ def _check_subscription_gate(user_id: str) -> None:
 
 
 @router.post(
-    "/order",
+    "/orders",
     status_code=status.HTTP_201_CREATED,
     response_model=OrderResponse,
     summary="Place a market/limit/stop order",
+)
+@router.post(
+    "/order",
+    status_code=status.HTTP_201_CREATED,
+    response_model=OrderResponse,
+    summary="Place a market/limit/stop order (legacy singular alias)",
+    include_in_schema=False,
 )
 async def place_order(
     order: OrderRequest,
@@ -943,6 +950,34 @@ async def get_ohlcv(
         }
         for d in data
     ]
+
+
+@router.get("/signals", summary="Active trading signals from the signal engine")
+async def get_trading_signals(
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Return the current active signals from the signal engine.
+
+    Delegates to the /api/signals/active endpoint internally so the
+    Dashboard polling loop gets a consistent signal shape without
+    needing a separate API call.
+    """
+    try:
+        signal_engine = getattr(app_state, "signal_engine", None) if app_state else None
+        if signal_engine is not None:
+            raw = getattr(signal_engine, "get_active_signals", None)
+            if callable(raw):
+                signals = raw()
+                return {"signals": [s.to_dict() if hasattr(s, "to_dict") else s for s in (signals or [])]}
+        # Fallback: read from the signals ring buffer via db_store
+        from api.db_store import db_get
+
+        cached = db_get("signals:active") or []
+        return {"signals": cached}
+    except Exception as exc:
+        logger.warning("get_trading_signals fallback: %s", exc)
+        return {"signals": []}
 
 
 @router.get("/brain-state")
