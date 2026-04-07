@@ -320,3 +320,124 @@ async def get_leaderboard(
 
     # No real data yet — return empty list with a status hint
     return []
+
+
+# ── Copy-trading router ───────────────────────────────────────────────────────
+# Mounted at /api/social so the frontend can call:
+#   POST   /api/social/copy/{trader_id}  — start copying a trader
+#   GET    /api/social/copy/active       — list active copy relationships
+#   DELETE /api/social/copy/{copy_id}    — stop copying
+
+_copy_router = APIRouter(prefix="/api/social", tags=["Copy Trading"])
+
+# In-memory store: user_id → list of copy relationship dicts
+# Each entry: { id, trader_id, trader_name, allocation_amount, signal_id, started_at }
+_copy_relationships: dict[str, list[dict]] = {}
+
+
+def _user_copies(user_id: str) -> list[dict]:
+    """Return the mutable copy list for *user_id*, loading from DB on first access."""
+    if user_id not in _copy_relationships:
+        stored = db_get(f"copy_trading:{user_id}") or []
+        _copy_relationships[user_id] = stored if isinstance(stored, list) else []
+    return _copy_relationships[user_id]
+
+
+def _save_copies(user_id: str) -> None:
+    db_set(f"copy_trading:{user_id}", _copy_relationships[user_id], changed_by="copy_trading")
+
+
+class StartCopyBody(BaseModel):
+    allocation_amount: float = Field(..., gt=0, description="Capital to allocate in account currency")
+    signal_id: str | None = Field(None, description="Optional signal that triggered the copy")
+
+
+@_copy_router.post(
+    "/copy/{trader_id}",
+    status_code=201,
+    summary="Start copying a trader",
+)
+async def start_copy_trading(
+    trader_id: str,
+    body: StartCopyBody,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Begin copying all trades from *trader_id* with the given allocation.
+
+    Returns the new copy relationship record. Idempotent per trader — if the
+    user is already copying this trader the existing record is returned (200).
+    """
+    copies = _user_copies(user.sub)
+
+    # Idempotency: return existing record if already copying this trader
+    existing = next((c for c in copies if c["trader_id"] == trader_id), None)
+    if existing:
+        return existing
+
+    # Resolve trader name from leaderboard / profile store
+    trader_name = trader_id
+    try:
+        from social.profiles import TraderProfileManager as _TPM
+
+        profile = _TPM().get_profile(trader_id)
+        if profile:
+            trader_name = profile.username
+    except Exception as exc:
+        logger.debug("copy_trading: could not resolve trader name for %s: %s", trader_id, exc)
+
+    record = {
+        "id": str(uuid.uuid4()),
+        "trader_id": trader_id,
+        "trader_name": trader_name,
+        "allocation_amount": body.allocation_amount,
+        "signal_id": body.signal_id,
+        "started_at": datetime.now(UTC).isoformat(),
+        "status": "active",
+    }
+    copies.append(record)
+    _save_copies(user.sub)
+
+    # Increment copy count on the feed item if a signal_id was provided
+    if body.signal_id and body.signal_id in _feed_items:
+        _feed_items[body.signal_id]["copies"] = _feed_items[body.signal_id].get("copies", 0) + 1
+
+    logger.info("copy_trading: user %s started copying trader %s (alloc=%.2f)", user.sub, trader_id, body.allocation_amount)
+    return record
+
+
+@_copy_router.get(
+    "/copy/active",
+    summary="List active copy relationships",
+)
+async def list_active_copies(user: TokenPayload = Depends(get_current_user)):
+    """Return all active copy-trading relationships for the authenticated user."""
+    copies = _user_copies(user.sub)
+    return [c for c in copies if c.get("status") == "active"]
+
+
+@_copy_router.delete(
+    "/copy/{copy_id}",
+    summary="Stop copying a trader",
+)
+async def stop_copy_trading(
+    copy_id: str,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Stop an active copy-trading relationship by its *copy_id*.
+
+    The record is marked inactive rather than deleted so the history is
+    preserved. Returns 404 if the copy_id does not belong to the user.
+    """
+    copies = _user_copies(user.sub)
+    record = next((c for c in copies if c["id"] == copy_id), None)
+    if not record:
+        raise HTTPException(status_code=404, detail="Copy relationship not found")
+
+    record["status"] = "stopped"
+    record["stopped_at"] = datetime.now(UTC).isoformat()
+    _save_copies(user.sub)
+
+    logger.info("copy_trading: user %s stopped copy %s (trader=%s)", user.sub, copy_id, record["trader_id"])
+    return {"status": "stopped", "copy_id": copy_id}
