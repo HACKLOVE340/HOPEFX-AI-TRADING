@@ -118,32 +118,110 @@ const PageFallback: React.FC = () => (
   </div>
 );
 
-// ── Error boundary ────────────────────────────────────────────────────────────
-interface EBState { hasError: boolean; message: string }
-class ErrorBoundary extends Component<{ children: React.ReactNode }, EBState> {
-  state: EBState = { hasError: false, message: '' };
-  static getDerivedStateFromError(err: Error): EBState {
-    return { hasError: true, message: err.message };
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{ padding: 40, textAlign: 'center', color: '#f87171' }}>
-          <h2 style={{ marginBottom: 12 }}>Something went wrong</h2>
-          <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}>{this.state.message}</p>
-          <button
-            onClick={() => { this.setState({ hasError: false, message: '' }); window.location.reload(); }}
-            style={{
-              background: '#3b82f6', border: 'none', borderRadius: 8,
-              color: '#fff', cursor: 'pointer', fontSize: 14, padding: '10px 20px',
-            }}
-          >
-            Reload page
-          </button>
-        </div>
-      );
+// ── Global unhandled error handlers ──────────────────────────────────────────
+// Installed once at module load — catches errors that escape React's tree.
+if (typeof window !== 'undefined') {
+  window.addEventListener('unhandledrejection', (event) => {
+    // Suppress noisy network errors (offline, CORS, 401 auto-logout)
+    const reason = event.reason;
+    const isNetworkError =
+      reason instanceof TypeError ||
+      (reason as { response?: unknown })?.response !== undefined;
+    if (!isNetworkError) {
+      console.error('[App] Unhandled promise rejection:', reason);
     }
-    return this.props.children;
+  });
+
+  window.addEventListener('error', (event) => {
+    // Ignore ResizeObserver loop errors (benign browser quirk)
+    if (event.message?.includes('ResizeObserver loop')) return;
+    console.error('[App] Uncaught error:', event.error ?? event.message);
+  });
+}
+
+// ── Error boundary ────────────────────────────────────────────────────────────
+const _IS_DEV = import.meta.env.DEV;
+
+interface EBState { hasError: boolean; message: string; stack?: string }
+class ErrorBoundary extends Component<{ children: React.ReactNode }, EBState> {
+  state: EBState = { hasError: false, message: '', stack: undefined };
+
+  static getDerivedStateFromError(err: Error): EBState {
+    return { hasError: true, message: err.message, stack: err.stack };
+  }
+
+  componentDidCatch(err: Error, info: React.ErrorInfo) {
+    console.error('[ErrorBoundary] Uncaught render error:', err, info.componentStack);
+    // Forward to Sentry / monitoring if available
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Sentry = (window as any).Sentry;
+    if (Sentry?.captureException) {
+      Sentry.captureException(err, { extra: { componentStack: info.componentStack } });
+    }
+  }
+
+  handleReset = () => {
+    this.setState({ hasError: false, message: '', stack: undefined });
+    window.location.reload();
+  };
+
+  render() {
+    if (!this.state.hasError) return this.props.children;
+
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        background: '#080c14', color: '#e2e8f0', padding: 40, textAlign: 'center',
+        fontFamily: "'Inter', system-ui, sans-serif",
+      }}>
+        {/* Logo */}
+        <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.5px', marginBottom: 8 }}>
+          HOPE<span style={{ color: '#3b82f6' }}>FX</span>
+        </div>
+
+        <div style={{
+          width: 48, height: 48, borderRadius: '50%',
+          background: '#ff3b5c22', border: '1px solid #ff3b5c44',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 22, marginBottom: 16,
+        }}>
+          ⚠
+        </div>
+
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#f1f5f9', marginBottom: 8 }}>
+          Something went wrong
+        </h2>
+        <p style={{ color: '#64748b', fontSize: 14, marginBottom: 24, maxWidth: 420, lineHeight: 1.6 }}>
+          {this.state.message || 'An unexpected error occurred. The page will reload when you click Retry.'}
+        </p>
+
+        {/* Stack trace — dev only */}
+        {_IS_DEV && this.state.stack && (
+          <pre style={{
+            background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 8,
+            color: '#94a3b8', fontSize: 11, lineHeight: 1.5, maxWidth: 640,
+            maxHeight: 200, overflow: 'auto', padding: '12px 16px',
+            textAlign: 'left', marginBottom: 24, whiteSpace: 'pre-wrap',
+          }}>
+            {this.state.stack}
+          </pre>
+        )}
+
+        <button
+          onClick={this.handleReset}
+          style={{
+            background: '#3b82f6', border: 'none', borderRadius: 8,
+            color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600,
+            padding: '10px 24px', transition: 'background 0.2s',
+          }}
+          onMouseOver={(e) => { (e.target as HTMLButtonElement).style.background = '#2563eb'; }}
+          onMouseOut={(e) => { (e.target as HTMLButtonElement).style.background = '#3b82f6'; }}
+        >
+          Retry
+        </button>
+      </div>
+    );
   }
 }
 
