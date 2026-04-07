@@ -8,6 +8,8 @@ HOPEFX Marketplace Backend
 Strategy listings, pricing engine, subscription management, license validation
 """
 
+import logging
+logger = logging.getLogger(__name__)
 import json
 import secrets
 import sqlite3
@@ -581,7 +583,7 @@ class SubscriptionManager:
         """Create new subscription"""
         strategy = self.db.get_strategy(strategy_id)
         if not strategy:
-            print(f"❌ Strategy {strategy_id} not found")
+            logger.warning("%s", f"❌ Strategy {strategy_id} not found")
             return None
 
         # Calculate price
@@ -641,8 +643,8 @@ class SubscriptionManager:
         strategy.subscriber_count += 1
         self.db.save_strategy(strategy)
 
-        print(f"✅ Subscription created: {subscription_id}")
-        print(f"   License key: {license_key.key}")
+        logger.info("%s", f"✅ Subscription created: {subscription_id}")
+        logger.info("%s", f"   License key: {license_key.key}")
 
         return subscription
 
@@ -673,7 +675,7 @@ class SubscriptionManager:
         conn.commit()
         conn.close()
 
-        print(f"✅ Subscription {subscription_id} cancelled")
+        logger.info("%s", f"✅ Subscription {subscription_id} cancelled")
         return True
 
     def check_access(self, user_id: str, strategy_id: str) -> bool:
@@ -733,7 +735,7 @@ class MarketplaceAPI:
         )
 
         self.db.save_strategy(strategy)
-        print(f"✅ Strategy listed: {name} (ID: {strategy_id})")
+        logger.info("%s", f"✅ Strategy listed: {name} (ID: {strategy_id})")
 
         return strategy
 
@@ -744,7 +746,7 @@ class MarketplaceAPI:
             strategy.status = StrategyStatus.ACTIVE
             strategy.updated_at = datetime.now(UTC)
             self.db.save_strategy(strategy)
-            print(f"✅ Strategy {strategy_id} approved")
+            logger.info("%s", f"✅ Strategy {strategy_id} approved")
             return True
         return False
 

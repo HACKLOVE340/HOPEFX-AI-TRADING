@@ -1063,6 +1063,31 @@ class ExecutionEngine:
         self._update_sharpe_circuit_breaker(request, report)
         self._warn_on_latency_breach(request, report)
 
+        # ── Publish to Redis CH_ORDER event bus ───────────────────────────────
+        # Subscribers: strategy orchestra, WebSocket feed, analytics consumers
+        try:
+            from core.event_bus import bus as _event_bus
+
+            _order_payload = {
+                "order_id": report.order_id,
+                "symbol": request.symbol,
+                "side": request.side,
+                "quantity": float(report.filled_quantity),
+                "price": float(report.average_price),
+                "status": report.status.value,
+                "strategy_id": request.strategy_id,
+                "latency_ms": report.latency_ms,
+            }
+            try:
+                import asyncio as _asyncio
+
+                _loop = _asyncio.get_running_loop()
+                _loop.create_task(_event_bus.publish_order(_order_payload))
+            except RuntimeError:
+                pass  # no running loop — skip non-critical publish
+        except Exception as _bus_exc:
+            logger.debug("CH_ORDER publish skipped: %s", _bus_exc)
+
     def _update_sharpe_circuit_breaker(self, request: ExecutionRequest, report: ExecutionReport) -> None:
         """Record trade P&L in the Sharpe circuit breaker for live model gating."""
         model_version = request.metadata.get("model_version") or request.strategy_id
