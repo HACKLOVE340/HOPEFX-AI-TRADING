@@ -1045,7 +1045,37 @@ class HopeFXEngine:
 
                 if self._smart_router is None:
                     self._smart_router = _SmartRouter()
+                    # Register the primary (active) broker first so it is
+                    # always available as the baseline execution path.
                     self._smart_router.add_broker("primary", self._broker)
+                    # Register all additional connected brokers from the
+                    # factory so the router can score and fall back across
+                    # them (CME, IBKR, CPP shim, paper, etc.).
+                    try:
+                        from brokers.factory import BrokerFactory as _BF
+                        for _broker_name in _BF.list_brokers():
+                            if _broker_name in ("primary",):
+                                continue
+                            try:
+                                _candidate = _BF.create_broker(_broker_name)
+                                if _candidate is None:
+                                    continue
+                                if hasattr(_candidate, "connect") and _candidate.connect():
+                                    self._smart_router.add_broker(_broker_name, _candidate)
+                                    logger.info(
+                                        "SmartRouter: registered broker=%s", _broker_name
+                                    )
+                            except Exception as _reg_exc:
+                                logger.debug(
+                                    "SmartRouter: skipping broker=%s (%s)",
+                                    _broker_name, _reg_exc,
+                                )
+                    except Exception as _factory_exc:
+                        logger.warning(
+                            "SmartRouter: broker registration failed (%s) — "
+                            "routing with primary only",
+                            _factory_exc,
+                        )
                 sr_request = {
                     "symbol": symbol,
                     "direction": "long" if side == "BUY" else "short",
