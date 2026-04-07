@@ -717,7 +717,7 @@ def main():
             logger.info(f"  OOS AUC               : {oos.get('auc', 0.0):.3f}")
             logger.info(f"  OOS p-value (binomial): {oos['p_value_binomial']:.4f}  {sig}")
 
-    logger.info()
+    logger.info("")
     logger.info("  ─── Sharpe significance ─────────────────────────────────────")
     logger.info("  N=45 trades: Sharpe SE ≈ ±0.54 (need ~250 for SE ≤ ±0.3).")
     logger.info("  Credible performance number: OOS accuracy (p-value above).")

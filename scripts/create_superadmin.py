@@ -237,7 +237,7 @@ def main():
 
     # ── Print summary ─────────────────────────────────────────────────────────
     action_label = "CREATED" if result["action"] == "created" else "RESET"
-    logger.info()
+    logger.info("")
     logger.info("=" * 60)
     logger.info(f"  SUPERADMIN {action_label} SUCCESSFULLY")
     logger.info("=" * 60)
@@ -249,20 +249,20 @@ def main():
         logger.info("  Password : (your supplied value)")
     logger.info("  Role     : superadmin")
     logger.info(f"  User ID  : {result['user_id']}")
-    logger.info()
+    logger.info("")
     logger.info(token_line)
     if token_note:
         logger.info(token_note)
-    logger.info()
+    logger.info("")
     logger.info("  Login endpoint : POST /api/auth/login")
     logger.info('  Body           : {"username": "' + args.username + '", "password": "<password>"}')
     logger.info("  Swagger UI     : /docs")
     logger.info("  Superadmin UI  : /api/superadmin/")
-    logger.info()
+    logger.info("")
     logger.info(f"  Credentials saved to: {pw_file}")
     logger.warning("  ⚠  Delete that file after saving to a password manager.")
     logger.info("=" * 60)
-    logger.info()
+    logger.info("")
 
 
 if __name__ == "__main__":

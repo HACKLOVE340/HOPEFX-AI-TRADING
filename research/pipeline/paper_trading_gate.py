@@ -294,7 +294,7 @@ class PaperTradingGate:
             logger.info(f"  Sharpe before   : {s['sharpe_before']:.3f}")
             logger.info(f"  Sharpe after    : {s['sharpe_after']:.3f}")
             logger.info(f"  Sharpe drop     : {drop:.3f}")
-        logger.info()
+        logger.info("")
         p2 = "✅ READY" if s["phase2_ready"] else "❌ NOT READY"
         p3 = "✅ READY" if s["phase3_ready"] else "❌ NOT READY"
         logger.info(f"  Phase 2 (Anomaly)  : {p2}")

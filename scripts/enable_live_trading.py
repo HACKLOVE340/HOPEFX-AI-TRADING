@@ -248,7 +248,7 @@ def main() -> None:
     results = run_checks(force=args.force)
     all_passed = all(results.values())
 
-    logger.info()
+    logger.info("")
     if not all_passed:
         failed = [k for k, v in results.items() if not v]
         logger.error(f"✗ {len(failed)} check(s) failed. Fix them before enabling live trading.")

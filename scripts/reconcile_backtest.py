@@ -570,7 +570,7 @@ def main() -> int:
     logger.info("Updated %s", MONTE_CARLO_OUT)
 
     # Print summary
-    logger.info()
+    logger.info("")
     logger.info("=" * 60)
     logger.info("  Reconciled Backtest Summary")
     logger.info("=" * 60)
@@ -586,7 +586,7 @@ def main() -> int:
     logger.info(f"  p99 MC DD  : {metrics['monte_carlo']['p99_dd_pct']:.2f}%")
     logger.info(f"  Avg hold   : {metrics['avg_hold_bars']:.1f} bars")
     logger.info("=" * 60)
-    logger.info()
+    logger.info("")
 
     return 0
 

@@ -281,7 +281,7 @@ def print_report(ledger: dict[str, Any]) -> None:
     remaining = max(0, FILL_GATE_TARGET - fill_count)
     pct = min(100.0, fill_count / FILL_GATE_TARGET * 100)
 
-    logger.info()
+    logger.info("")
     logger.info("=" * 60)
     logger.info("  HOPEFX Paper Trading Fill Gate")
     logger.info("=" * 60)
@@ -298,17 +298,17 @@ def print_report(ledger: dict[str, Any]) -> None:
     logger.info("=" * 60)
 
     if gate_passed:
-        logger.info()
+        logger.info("")
         logger.info("  Gate PASSED. Phase 3 (live capital) deployment is unblocked")
         logger.info("  by the fill count requirement. Verify remaining checklist:")
         logger.error("  - 30+ days continuous paper trading without system errors")
         logger.info("  - Monte Carlo backtest reconciled with OOS evaluation")
         logger.info("  - Risk committee sign-off")
     else:
-        logger.info()
+        logger.info("")
         logger.info(f"  Gate NOT PASSED. Need {remaining:,} more fills before Phase 3.")
         logger.info("  Run paper_trading_starter.py to accumulate fills.")
-    logger.info()
+    logger.info("")
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────

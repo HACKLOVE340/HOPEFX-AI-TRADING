@@ -139,7 +139,7 @@ async def _run(args: argparse.Namespace) -> None:
     logger.info(f"  Est. bars   : ~{total_bars_estimate:,}")
     logger.info(f"  Output      : {output_path}")
     logger.info(f"  OANDA key   : {'SET' if os.getenv('OANDA_API_KEY') else 'NOT SET (yfinance fallback)'}")
-    logger.info()
+    logger.info("")
 
     if args.dry_run:
         logger.info("Dry run — no data written.")
@@ -161,7 +161,7 @@ async def _run(args: argparse.Namespace) -> None:
         to_date=to_dt,
     )
 
-    logger.info()
+    logger.info("")
     logger.info("=" * 50)
     logger.info(f"Backfill complete: {count:,} bars appended to {output_path}")
 
