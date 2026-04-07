@@ -105,7 +105,7 @@ const CopyTrading: React.FC = () => {
   const [copyMsg, setCopyMsg]       = useState('');
 
   useEffect(() => {
-    api.get<Leader[]>('/social/leaderboard')
+    api.get<Leader[]>('/leaderboard')
       .then((r) => { setLeaders(r.data ?? []); setLoadErr(''); })
       .catch((err: unknown) => {
         console.warn('[CopyTrading] Failed to load leaders:', err);

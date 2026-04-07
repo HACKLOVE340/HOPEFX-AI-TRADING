@@ -33,7 +33,7 @@ const Leaderboard: React.FC = () => {
   useEffect(() => {
     setLoading(true);
     setLoadErr('');
-    api.get<Trader[]>(`/social/leaderboard?period=${period}`)
+    api.get<Trader[]>(`/leaderboard?period=${period}`)
       .then((r) => { setTraders(Array.isArray(r.data) ? r.data : []); })
       .catch((err: unknown) => {
         console.warn('[Leaderboard] Failed to load leaderboard:', err);
