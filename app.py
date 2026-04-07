@@ -356,6 +356,25 @@ async def lifespan(_app: FastAPI):
     except Exception as _nuclear_err:
         logger.warning("Nuclear dashboard routes not mounted: %s", _nuclear_err)
 
+    # Warm up leaderboard cache so GET /api/leaderboard serves data immediately
+    # rather than returning an empty list until the first 15-minute scheduler tick.
+    try:
+        from api.social_feed import refresh_leaderboard_cache as _refresh_lb
+        _refresh_lb()
+        logger.info("✓ Leaderboard cache warmed up")
+    except Exception as _lb_err:
+        logger.debug("Leaderboard warm-up skipped (non-fatal): %s", _lb_err)
+
+    # Seed signals:active key so db_get("signals:active") never returns None
+    # on a fresh start before the signal engine has emitted its first signal.
+    try:
+        from api.db_store import db_get as _db_get, db_set as _db_set
+        if _db_get("signals:active") is None:
+            _db_set("signals:active", [], changed_by="startup")
+            logger.info("✓ signals:active key seeded in db_store")
+    except Exception as _sig_err:
+        logger.debug("signals:active seed skipped (non-fatal): %s", _sig_err)
+
     yield
     await shutdown_event()
     await kill_switch.stop()
