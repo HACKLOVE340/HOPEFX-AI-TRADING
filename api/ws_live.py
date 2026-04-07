@@ -16,6 +16,12 @@ Message format (server → client):
   { "type": "account_update",  "data": AccountMetrics }
   { "type": "heartbeat" }
   { "type": "error",           "code": str, "message": str }
+  { "type": "microstructure",  "data": MicrostructureSnapshot }  — chart-bot channel
+  { "type": "volume_delta",    "data": VolumeDeltaBar }          — chart-bot channel
+  { "type": "sentiment_update","data": SentimentSnapshot }       — chart-bot channel
+  { "type": "risk_update",     "data": RiskSnapshot }            — chart-bot channel
+  { "type": "equity_update",   "data": EquitySnapshot }          — chart-bot channel
+  { "type": "news_item",       "data": NewsItem }                — chart-bot channel
 
 Message format (client → server):
   { "type": "auth",        "token": "Bearer <jwt>" }
@@ -690,6 +696,129 @@ async def _heartbeat_broadcaster() -> None:
             _manager.disconnect(cid)
 
 
+_CHARTBOT_POLL_INTERVAL: float = float(os.getenv("WS_CHARTBOT_POLL_INTERVAL", "5"))
+
+
+async def _chartbot_broadcaster() -> None:
+    """
+    Poll data-layer endpoints every WS_CHARTBOT_POLL_INTERVAL seconds and
+    broadcast chart-bot specific message types to subscribed clients.
+
+    Channels served:
+      microstructure  → { type: "microstructure",   data: MicrostructureSnapshot }
+      volume_delta    → { type: "volume_delta",      data: VolumeDeltaBar }
+      sentiment       → { type: "sentiment_update",  data: SentimentSnapshot }
+      risk            → { type: "risk_update",       data: RiskSnapshot }
+      equity          → { type: "equity_update",     data: EquitySnapshot }
+      news            → { type: "news_item",         data: NewsItem[] }
+    """
+    while True:
+        await asyncio.sleep(_CHARTBOT_POLL_INTERVAL)
+        try:
+            from data_layer.orchestrator import orchestrator as _orch
+
+            # ── microstructure + volume_delta ─────────────────────────────────
+            try:
+                snap = _orch._micro.get_snapshot() if hasattr(_orch, "_micro") else None
+                if snap is not None:
+                    micro_data = {
+                        "timestamp": snap.timestamp.isoformat(),
+                        "bid": snap.bid,
+                        "ask": snap.ask,
+                        "spread": snap.spread,
+                        "spread_pct": snap.spread_pct,
+                        "volume_delta": snap.volume_delta,
+                        "cumulative_delta": snap.cumulative_delta,
+                        "buy_pressure": snap.buy_pressure,
+                        "sell_pressure": snap.sell_pressure,
+                        "order_flow_imbalance": snap.order_flow_imbalance,
+                        "trade_pressure": snap.trade_pressure,
+                        "vwap": snap.vwap,
+                        "tick_count": snap.tick_count,
+                    }
+                    await _manager.broadcast("microstructure", {"type": "microstructure", "data": micro_data})
+                    await _manager.broadcast(
+                        "volume_delta",
+                        {"type": "volume_delta", "data": {"volume_delta": snap.volume_delta, "cumulative_delta": snap.cumulative_delta, "timestamp": snap.timestamp.isoformat()}},
+                    )
+            except Exception as _exc:
+                logger.debug("chartbot_broadcaster: microstructure error: %s", _exc)
+
+            # ── sentiment ─────────────────────────────────────────────────────
+            try:
+                if hasattr(_orch, "_sentiment") and _orch._sentiment is not None:
+                    features = _orch.get_ml_features()
+                    sentiment_features = {k: v for k, v in features.items() if k.startswith("news_")}
+                    articles: list[dict] = []
+                    try:
+                        raw_articles = _orch._sentiment.get_recent_articles(hours=1.0, min_relevance=0.1)
+                        articles = [
+                            {
+                                "title": a.title,
+                                "source": a.source,
+                                "sentiment_score": a.sentiment_score,
+                                "sentiment_label": a.sentiment_label,
+                                "published_at": a.published_at.isoformat() if a.published_at else None,
+                                "url": getattr(a, "url", None),
+                            }
+                            for a in (raw_articles or [])[:5]
+                        ]
+                    except Exception:
+                        pass
+                    await _manager.broadcast(
+                        "sentiment",
+                        {"type": "sentiment_update", "data": {"signal": sentiment_features, "articles": articles}},
+                    )
+                    if articles:
+                        for article in articles[:3]:
+                            await _manager.broadcast("news", {"type": "news_item", "data": article})
+            except Exception as _exc:
+                logger.debug("chartbot_broadcaster: sentiment error: %s", _exc)
+
+            # ── risk snapshot ─────────────────────────────────────────────────
+            try:
+                from core.app_state import app_state as _app_state
+
+                rm = getattr(_app_state, "risk_manager", None) if _app_state else None
+                if rm is not None:
+                    risk_data: dict = {}
+                    for attr in ("daily_loss_pct", "max_drawdown_pct", "open_risk_pct", "kill_switch_active"):
+                        val = getattr(rm, attr, None)
+                        if val is not None:
+                            risk_data[attr] = val
+                    if risk_data:
+                        await _manager.broadcast("risk", {"type": "risk_update", "data": risk_data})
+            except Exception as _exc:
+                logger.debug("chartbot_broadcaster: risk error: %s", _exc)
+
+            # ── equity snapshot ───────────────────────────────────────────────
+            try:
+                from core.app_state import app_state as _app_state
+
+                broker = getattr(_app_state, "broker", None) if _app_state else None
+                if broker is not None:
+                    acct = broker.get_account_info()
+                    if acct:
+                        await _manager.broadcast(
+                            "equity",
+                            {
+                                "type": "equity_update",
+                                "data": {
+                                    "balance": acct.get("balance", 0.0),
+                                    "equity": acct.get("equity", 0.0),
+                                    "unrealized_pnl": acct.get("unrealized_pnl", 0.0),
+                                    "margin_used": acct.get("margin_used", 0.0),
+                                    "timestamp": datetime.now(UTC).isoformat(),
+                                },
+                            },
+                        )
+            except Exception as _exc:
+                logger.debug("chartbot_broadcaster: equity error: %s", _exc)
+
+        except Exception as exc:
+            logger.debug("chartbot_broadcaster: outer error: %s", exc)
+
+
 def start_broadcasters() -> None:
     """Start background tasks (call once from app lifespan)."""
     loop = asyncio.get_event_loop()
@@ -699,7 +828,9 @@ def start_broadcasters() -> None:
     _t.add_done_callback(lambda _: None)
     _t = loop.create_task(_eventbus_signal_broadcaster())
     _t.add_done_callback(lambda _: None)
-    logger.info("WS live broadcasters started (EventBus → broker poll → no_live_feed)")
+    _t = loop.create_task(_chartbot_broadcaster())
+    _t.add_done_callback(lambda _: None)
+    logger.info("WS live broadcasters started (EventBus → broker poll → no_live_feed → chart-bot)")
 
 
 # ─── Endpoint ─────────────────────────────────────────────────────────────────

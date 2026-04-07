@@ -358,12 +358,18 @@ class GoldFeedManager:
             }
             serialised = json.dumps(payload)
             loop = asyncio.get_running_loop()
-            # Publish to pub/sub channel for WebSocket consumers
+            # Publish to symbol-specific channel (hopefx:tick:XAU_USD)
             await loop.run_in_executor(
                 None,
                 lambda: self._redis.publish("hopefx:tick:XAU_USD", serialised),
             )
-            # Also cache as latest tick (TTL 30s) for synchronous consumers
+            # Also publish to the main CH_TICK channel (hopefx:tick) so that
+            # ws_live.py broadcasters and strategy/engine.py receive gold ticks.
+            await loop.run_in_executor(
+                None,
+                lambda: self._redis.publish("hopefx:tick", serialised),
+            )
+            # Cache as latest tick (TTL 30s) for synchronous consumers
             await loop.run_in_executor(
                 None,
                 lambda: self._redis.setex("hopefx:dl:tick:XAU_USD", 30, serialised),
