@@ -169,6 +169,35 @@ def register_routers(
     elif graphql_available and not feature_flags.GRAPHQL_API:
         logger.debug("GRAPHQL_API disabled — set FEATURE_GRAPHQL_API=true to enable")
 
+    # ── Security: HOPEFXBrain (/api/security/*) ───────────────────────────────
+    # Eager module-level router — delegates to get_brain() at request time so
+    # the live instance created by start_brain() is used once startup completes.
+    try:
+        from security.global_fortress import security_router as _security_router
+
+        app.include_router(_security_router)
+        logger.info("Security brain router registered (/api/security/*)")
+    except Exception as _brain_err:
+        logger.warning("Security brain router not registered: %s", _brain_err)
+
+    # ── Security: SelfHealer (/api/security/heal/*) ───────────────────────────
+    try:
+        from security.self_healer import heal_router as _heal_router
+
+        app.include_router(_heal_router)
+        logger.info("SelfHealer router registered (/api/security/heal/*)")
+    except Exception as _heal_err:
+        logger.warning("SelfHealer router not registered: %s", _heal_err)
+
+    # ── Security: AntivirusScanner (/api/security/av/*) ───────────────────────
+    try:
+        from security.antivirus import av_router as _av_router
+
+        app.include_router(_av_router)
+        logger.info("Antivirus router registered (/api/security/av/*)")
+    except Exception as _av_err:
+        logger.warning("Antivirus router not registered: %s", _av_err)
+
     # ── TCA (Transaction Cost Analysis) ──────────────────────────────────────
     try:
         from api.tca import router as tca_router

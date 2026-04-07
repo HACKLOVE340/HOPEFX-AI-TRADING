@@ -745,10 +745,10 @@ async def start_brain(app: FastAPI) -> HOPEFXBrain:
     brain = HOPEFXBrain(app)
     _brain_instance = brain
 
-    # Mount dashboard API routes
-    router = _build_router(brain)
-    app.include_router(router)
-    logger.info("HOPEFXBrain: /api/security/* routes mounted")
+    # The eager security_router registered by router_registry.py already
+    # covers /api/security/* and delegates to get_brain() at request time.
+    # No need to mount a second router here.
+    logger.info("HOPEFXBrain: live instance ready — /api/security/* served via security_router")
 
     # Pre-load RL agent in background so first prediction is not delayed
     asyncio.get_event_loop().run_in_executor(None, _get_rl_agent)
@@ -767,3 +767,127 @@ async def start_brain(app: FastAPI) -> HOPEFXBrain:
 def get_brain() -> HOPEFXBrain | None:
     """Return the running brain instance (or None if not started)."""
     return _brain_instance
+
+
+# ── Module-level eager router ─────────────────────────────────────────────────
+# Registered by router_registry.py at import time so /api/security/* routes
+# exist before the async startup tasks complete.  Each handler delegates to
+# get_brain() so it always uses the live instance once start_brain() runs.
+
+def _build_eager_router() -> "APIRouter":
+    """
+    Build a /api/security/* router whose handlers delegate to get_brain().
+
+    Unlike _build_router() (which closes over a specific HOPEFXBrain instance),
+    every handler here calls get_brain() at request time, so the live instance
+    created by start_brain() is used automatically once startup completes.
+    """
+    from fastapi import APIRouter as _APIRouter
+
+    r = _APIRouter(prefix="/api/security", tags=["Security"])
+
+    @r.get("/attacks")
+    async def _attacks():
+        brain = get_brain()
+        if brain is None:
+            return {}
+        redis = await _get_redis()
+        if redis:
+            raw = await redis.hgetall("brain:attack_log")
+            return {ip: json.loads(v) for ip, v in raw.items()}
+        return brain.attack_log
+
+    @r.get("/fixes")
+    async def _fixes():
+        redis = await _get_redis()
+        if not redis:
+            return []
+        raw = await redis.lrange("fixes:queue", 0, 49)
+        return [json.loads(r) for r in raw]
+
+    @r.post("/fixes/approve")
+    async def _fixes_approve(payload: dict):
+        brain = get_brain()
+        if brain is None:
+            from fastapi import HTTPException as _HTTPException
+            raise _HTTPException(status_code=503, detail="Security brain not started")
+        # Delegate to the live router handler by re-using the same logic
+        router = _build_router(brain)
+        # Find the approve handler and call it
+        for route in router.routes:
+            if hasattr(route, "path") and route.path == "/api/security/fixes/approve":
+                return await route.endpoint(payload)
+        from fastapi import HTTPException as _HTTPException
+        raise _HTTPException(status_code=503, detail="Fix approval handler unavailable")
+
+    @r.post("/fixes/decline")
+    async def _fixes_decline(payload: dict):
+        endpoint = payload.get("endpoint", "")
+        declined_by = payload.get("declined_by", "dashboard")
+        redis = await _get_redis()
+        if redis:
+            raw_list = await redis.lrange("fixes:queue", 0, 99)
+            for raw in raw_list:
+                try:
+                    rec = json.loads(raw)
+                    if rec.get("endpoint") == endpoint and rec.get("status") == "pending":
+                        await redis.lrem("fixes:queue", 1, raw)
+                        declined_record = {
+                            **rec,
+                            "status": "declined",
+                            "declined_by": declined_by,
+                            "declined_at": datetime.now(UTC).isoformat(),
+                        }
+                        await redis.rpush("fixes:declined", json.dumps(declined_record))
+                        await redis.ltrim("fixes:declined", -500, -1)
+                        break
+                except json.JSONDecodeError:
+                    continue
+        return {"status": "declined", "endpoint": endpoint}
+
+    @r.get("/alerts")
+    async def _alerts():
+        redis = await _get_redis()
+        if not redis:
+            return []
+        raw = await redis.lrange("alerts:critical", -50, -1)
+        try:
+            return [json.loads(x) for x in raw]
+        except (ValueError, TypeError):
+            return []
+
+    @r.get("/lockdown")
+    async def _lockdown():
+        redis = await _get_redis()
+        active = False
+        if redis:
+            val = await redis.get("lockdown:active")
+            active = val == "true"
+        else:
+            brain = get_brain()
+            active = brain._lockdown_active if brain else False
+        return {"lockdown_active": active}
+
+    @r.post("/lockdown/clear")
+    async def _lockdown_clear():
+        redis = await _get_redis()
+        if redis:
+            await redis.delete("lockdown:active")
+        brain = get_brain()
+        if brain:
+            brain._lockdown_active = False
+        return {"status": "cleared"}
+
+    @r.get("/blocked-ips")
+    async def _blocked_ips():
+        redis = await _get_redis()
+        if not redis:
+            return []
+        ips = await redis.lrange("security:blocked_ips", 0, -1)
+        return list(set(ips))
+
+    return r
+
+
+# Singleton eager router — imported by router_registry.py
+security_router = _build_eager_router()
