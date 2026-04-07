@@ -18,7 +18,7 @@ Verifies that:
   7.  Startup validator: short secret (<32 chars) rejected
   8.  Startup validator: production mode requires REDIS_URL not REDIS_HOST
   9.  MacroStore singleton is importable and functional
-  10. leaderboard_router is wired into app.py (route present in app.routes)
+  10. leaderboard_router is wired into app.py at /api/leaderboard
 """
 
 from __future__ import annotations
@@ -195,7 +195,7 @@ def test_macro_store_singleton_importable():
 
 
 def test_leaderboard_route_in_app(monkeypatch):
-    """GET /api/social/leaderboard must be registered in the main app."""
+    """GET /api/leaderboard must be registered in the main app."""
     _jwt(monkeypatch)
     import importlib
 
@@ -208,7 +208,7 @@ def test_leaderboard_route_in_app(monkeypatch):
         if hasattr(route, "path"):
             all_paths.append(route.path)
 
-    assert "/api/social/leaderboard" in all_paths, (
-        f"/api/social/leaderboard not found in app routes. "
+    assert "/api/leaderboard" in all_paths, (
+        f"/api/leaderboard not found in app routes. "
         f"Social routes: {[p for p in all_paths if 'social' in p or 'leader' in p]}"
     )
