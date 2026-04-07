@@ -931,7 +931,7 @@ _adv_router = APIRouter(prefix="/api/advanced", tags=["Advanced Trading"])
 async def _adv_correlation(
     symbols: str = "XAUUSD,DXY,SPX500,OIL",
     window: int = 60,
-    user: TokenPayload = Depends(get_current_user),  # noqa: ARG001
+    user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Alias: GET /api/advanced/correlation → correlation matrix."""
     sym_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
