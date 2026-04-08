@@ -45,6 +45,7 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -52,8 +53,10 @@ try:
     from enum import StrEnum
 except ImportError:
     from enum import Enum
+
     class StrEnum(str, Enum):  # Python 3.10 compat
         pass
+
 
 logger = logging.getLogger(__name__)
 

@@ -21,22 +21,26 @@ UTC = timezone.utc
 # auth shims — importing them is enough to cover the re-export lines
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.unit
 class TestAuthShims:
     def test_dependencies_exports(self):
         import auth.dependencies as dep
+
         assert hasattr(dep, "get_current_user")
         assert hasattr(dep, "require_role")
         assert hasattr(dep, "TokenPayload")
 
     def test_jwt_handler_exports(self):
         import auth.jwt_handler as jh
+
         assert hasattr(jh, "create_access_token")
         assert hasattr(jh, "verify_token")
         assert hasattr(jh, "ALGORITHM")
 
     def test_schemas_token_payload(self):
         from auth.schemas import TokenPayload
+
         tp = TokenPayload(sub="user123", exp=9999999999, role="admin")
         assert tp.sub == "user123"
         assert tp.role == "admin"
@@ -44,6 +48,7 @@ class TestAuthShims:
 
     def test_schemas_token_payload_defaults(self):
         from auth.schemas import TokenPayload
+
         tp = TokenPayload(sub="u1")
         assert tp.exp is None
         assert tp.type == "access"
@@ -54,10 +59,12 @@ class TestAuthShims:
 # backtesting/events.py
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.unit
 class TestBacktestEvents:
     def test_event_type_values(self):
         from backtesting.events import EventType
+
         assert EventType.MARKET.value == "MARKET"
         assert EventType.SIGNAL.value == "SIGNAL"
         assert EventType.ORDER.value == "ORDER"
@@ -65,12 +72,14 @@ class TestBacktestEvents:
 
     def test_market_event(self):
         from backtesting.events import EventType, MarketEvent
+
         e = MarketEvent()
         assert e.type == EventType.MARKET
         assert isinstance(e.timestamp, datetime)
 
     def test_signal_event(self):
         from backtesting.events import EventType, SignalEvent
+
         e = SignalEvent(symbol="XAUUSD", signal_type="BUY", strength=0.8)
         assert e.type == EventType.SIGNAL
         assert e.symbol == "XAUUSD"
@@ -79,6 +88,7 @@ class TestBacktestEvents:
 
     def test_signal_event_defaults(self):
         from backtesting.events import SignalEvent
+
         e = SignalEvent(symbol="EURUSD", signal_type="SELL")
         assert e.strength == pytest.approx(1.0)
         # metadata defaults to None or {} depending on implementation
@@ -86,11 +96,13 @@ class TestBacktestEvents:
 
     def test_signal_event_with_metadata(self):
         from backtesting.events import SignalEvent
+
         e = SignalEvent("XAUUSD", "BUY", metadata={"confidence": 0.9})
         assert e.metadata["confidence"] == pytest.approx(0.9)
 
     def test_base_event_timestamp_is_recent(self):
         from backtesting.events import MarketEvent
+
         before = datetime.now(UTC)
         e = MarketEvent()
         after = datetime.now(UTC)
@@ -101,11 +113,13 @@ class TestBacktestEvents:
 # backtesting/optimizer.py
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.unit
 class TestParameterOptimizer:
     def test_instantiates(self):
         from backtesting.optimizer import ParameterOptimizer
         from unittest.mock import MagicMock
+
         opt = ParameterOptimizer(
             strategy_class=MagicMock,
             data_handler=MagicMock(),
@@ -135,34 +149,51 @@ class TestParameterOptimizer:
 # analytics/performance.py
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.unit
 class TestAnalyticsPerformance:
     def test_metric_period_values(self):
         from analytics.performance import MetricPeriod
+
         assert MetricPeriod.DAY.value == "day"
         assert MetricPeriod.YEAR.value == "year"
         assert MetricPeriod.ALL_TIME.value == "all_time"
 
     def test_trade_record_instantiates(self):
         from analytics.performance import TradeRecord
+
         now = datetime.now(UTC)
         tr = TradeRecord(
-            id="t1", symbol="XAUUSD", strategy="momentum",
-            side="BUY", entry_time=now, exit_time=now,
-            entry_price=1950.0, exit_price=1960.0,
-            quantity=1.0, pnl=10.0, pnl_percent=0.5,
-            commission=2.0, duration_minutes=30,
-            max_favorable_excursion=15.0, max_adverse_excursion=-5.0,
+            id="t1",
+            symbol="XAUUSD",
+            strategy="momentum",
+            side="BUY",
+            entry_time=now,
+            exit_time=now,
+            entry_price=1950.0,
+            exit_price=1960.0,
+            quantity=1.0,
+            pnl=10.0,
+            pnl_percent=0.5,
+            commission=2.0,
+            duration_minutes=30,
+            max_favorable_excursion=15.0,
+            max_adverse_excursion=-5.0,
         )
         assert tr.pnl == pytest.approx(10.0)
         assert tr.metadata == {}
 
     def test_equity_point_instantiates(self):
         from analytics.performance import EquityPoint
+
         now = datetime.now(UTC)
         ep = EquityPoint(
-            timestamp=now, equity=100_000.0, cash=50_000.0,
-            open_pnl=500.0, drawdown=-200.0, drawdown_pct=-0.002,
+            timestamp=now,
+            equity=100_000.0,
+            cash=50_000.0,
+            open_pnl=500.0,
+            drawdown=-200.0,
+            drawdown_pct=-0.002,
             high_water_mark=100_500.0,
         )
         assert ep.equity == pytest.approx(100_000.0)
@@ -170,12 +201,16 @@ class TestAnalyticsPerformance:
     def test_strategy_performance_instantiates(self):
         from analytics.performance import StrategyPerformance
         import dataclasses
+
         # Build with all required fields (it's a dataclass with no defaults)
-        _fields = {f.name: f.default for f in dataclasses.fields(StrategyPerformance)
-                  if f.default is not dataclasses.MISSING}
-        required = {f.name for f in dataclasses.fields(StrategyPerformance)
-                    if f.default is dataclasses.MISSING and
-                    f.default_factory is dataclasses.MISSING}
+        _fields = {
+            f.name: f.default for f in dataclasses.fields(StrategyPerformance) if f.default is not dataclasses.MISSING
+        }
+        required = {
+            f.name
+            for f in dataclasses.fields(StrategyPerformance)
+            if f.default is dataclasses.MISSING and f.default_factory is dataclasses.MISSING
+        }
         kwargs = dict.fromkeys(required, 0.0)
         kwargs["strategy_name"] = "test"
         kwargs["total_trades"] = 10
@@ -186,6 +221,7 @@ class TestAnalyticsPerformance:
     def test_performance_analyzer_instantiates(self):
         try:
             from analytics.performance import PerformanceAnalyzer
+
             pa = PerformanceAnalyzer()
             assert pa is not None
         except (ImportError, AttributeError):
@@ -194,6 +230,7 @@ class TestAnalyticsPerformance:
     def test_calculate_sharpe_ratio(self):
         try:
             from analytics.performance import PerformanceAnalyzer
+
             pa = PerformanceAnalyzer()
             returns = np.array([0.01, -0.005, 0.02, 0.003, -0.01])
             sharpe = pa.calculate_sharpe_ratio(returns)
@@ -204,6 +241,7 @@ class TestAnalyticsPerformance:
     def test_calculate_max_drawdown(self):
         try:
             from analytics.performance import PerformanceAnalyzer
+
             pa = PerformanceAnalyzer()
             equity = np.array([100.0, 110.0, 105.0, 95.0, 100.0])
             dd = pa.calculate_max_drawdown(equity)
@@ -216,6 +254,7 @@ class TestAnalyticsPerformance:
 # analytics/portfolio.py
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.unit
 class TestPortfolioAnalytics:
     def _make_returns(self, n=100, assets=("XAUUSD", "EURUSD")):
@@ -225,12 +264,14 @@ class TestPortfolioAnalytics:
 
     def test_instantiates(self):
         from analytics.portfolio import PortfolioAnalytics
+
         pa = PortfolioAnalytics(risk_free_rate=0.02)
         assert pa.risk_free_rate == pytest.approx(0.02)
         assert pa.returns_data is None
 
     def test_load_returns_data(self):
         from analytics.portfolio import PortfolioAnalytics
+
         pa = PortfolioAnalytics()
         df = self._make_returns()
         pa.load_returns_data(df)
@@ -240,6 +281,7 @@ class TestPortfolioAnalytics:
     def test_calculate_correlation_matrix(self):
         try:
             from analytics.portfolio import PortfolioAnalytics
+
             pa = PortfolioAnalytics()
             pa.load_returns_data(self._make_returns())
             corr = pa.calculate_correlation_matrix()
@@ -253,6 +295,7 @@ class TestPortfolioAnalytics:
     def test_calculate_portfolio_metrics(self):
         try:
             from analytics.portfolio import PortfolioAnalytics
+
             pa = PortfolioAnalytics()
             pa.load_returns_data(self._make_returns())
             weights = np.array([0.5, 0.5])
@@ -264,6 +307,7 @@ class TestPortfolioAnalytics:
     def test_optimize_portfolio_equal_weight(self):
         try:
             from analytics.portfolio import PortfolioAnalytics
+
             pa = PortfolioAnalytics()
             pa.load_returns_data(self._make_returns())
             result = pa.optimize_portfolio(method="equal_weight")
@@ -274,6 +318,7 @@ class TestPortfolioAnalytics:
     def test_calculate_var(self):
         try:
             from analytics.portfolio import PortfolioAnalytics
+
             pa = PortfolioAnalytics()
             pa.load_returns_data(self._make_returns())
             weights = np.array([0.5, 0.5])
@@ -288,15 +333,18 @@ class TestPortfolioAnalytics:
 # analytics/simulations.py
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.unit
 class TestAnalyticsSimulations:
     def test_import(self):
         import analytics.simulations as sim
+
         assert sim is not None
 
     def test_monte_carlo_simulation(self):
         try:
             from analytics.simulations import MonteCarloSimulation
+
             sim = MonteCarloSimulation(n_simulations=10, n_periods=20)
             assert sim is not None
         except (ImportError, AttributeError):
@@ -305,6 +353,7 @@ class TestAnalyticsSimulations:
     def test_run_simulation(self):
         try:
             from analytics.simulations import MonteCarloSimulation
+
             sim = MonteCarloSimulation(n_simulations=10, n_periods=20)
             returns = np.random.default_rng(42).normal(0.001, 0.01, 50)
             result = sim.run(returns)
@@ -317,15 +366,18 @@ class TestAnalyticsSimulations:
 # backtesting/execution.py
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.unit
 class TestBacktestExecution:
     def test_import(self):
         import backtesting.execution as be
+
         assert be is not None
 
     def test_simulated_execution_handler(self):
         try:
             from backtesting.execution import SimulatedExecutionHandler
+
             handler = SimulatedExecutionHandler(initial_capital=100_000.0)
             assert handler is not None
         except (ImportError, AttributeError, TypeError):
@@ -335,6 +387,7 @@ class TestBacktestExecution:
         try:
             from backtesting.events import SignalEvent
             from backtesting.execution import SimulatedExecutionHandler
+
             handler = SimulatedExecutionHandler(initial_capital=100_000.0)
             signal = SignalEvent("XAUUSD", "BUY", strength=1.0)
             result = handler.execute_order(signal, price=1950.0, quantity=1.0)
@@ -347,15 +400,18 @@ class TestBacktestExecution:
 # backtesting/plots.py
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.unit
 class TestBacktestPlots:
     def test_import(self):
         import backtesting.plots as bp
+
         assert bp is not None
 
     def test_plot_equity_curve_callable(self):
         try:
             from backtesting.plots import plot_equity_curve
+
             assert callable(plot_equity_curve)
         except ImportError:
             pytest.skip("plot_equity_curve not available")
@@ -363,6 +419,7 @@ class TestBacktestPlots:
     def test_plot_drawdown_callable(self):
         try:
             from backtesting.plots import plot_drawdown
+
             assert callable(plot_drawdown)
         except ImportError:
             pytest.skip("plot_drawdown not available")
@@ -372,15 +429,18 @@ class TestBacktestPlots:
 # backtesting/reports.py
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.unit
 class TestBacktestReports:
     def test_import(self):
         import backtesting.reports as br
+
         assert br is not None
 
     def test_generate_report_callable(self):
         try:
             from backtesting.reports import generate_report
+
             assert callable(generate_report)
         except ImportError:
             pytest.skip("generate_report not available")
@@ -388,6 +448,7 @@ class TestBacktestReports:
     def test_performance_report_instantiates(self):
         try:
             from backtesting.reports import PerformanceReport
+
             rpt = PerformanceReport()
             assert rpt is not None
         except (ImportError, AttributeError, TypeError):

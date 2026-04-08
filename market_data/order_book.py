@@ -55,6 +55,7 @@ import os
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -339,8 +340,7 @@ class PolygonL2Feed:
         """Connect to Polygon Forex WebSocket and subscribe to all symbols."""
         if not self._api_key:
             raise RuntimeError(
-                "POLYGON_API_KEY is not set. "
-                "Set it in your .env file — the same key used by NuclearStreamer."
+                "POLYGON_API_KEY is not set. Set it in your .env file — the same key used by NuclearStreamer."
             )
 
         for symbol in symbols:
@@ -397,9 +397,7 @@ class PolygonL2Feed:
         try:
             import websockets
         except ImportError as exc:
-            raise RuntimeError(
-                "websockets package not installed. Run: pip install websockets"
-            ) from exc
+            raise RuntimeError("websockets package not installed. Run: pip install websockets") from exc
 
         import json as _json
 
@@ -407,8 +405,8 @@ class PolygonL2Feed:
         subs = []
         for sym in symbols:
             base = self._to_polygon_sub(sym)
-            subs.append(f"Q.{base[2:]}")   # Q.C.XAU/USD
-            subs.append(f"T.{base[2:]}")   # T.C.XAU/USD
+            subs.append(f"Q.{base[2:]}")  # Q.C.XAU/USD
+            subs.append(f"T.{base[2:]}")  # T.C.XAU/USD
 
         logger.info("Polygon L2: connecting to %s", self._WS_URL)
 
@@ -478,10 +476,10 @@ class PolygonL2Feed:
 
         try:
             bid_price = float(ev.get("bp", 0) or 0)
-            bid_size  = float(ev.get("bs", 0) or 0)
+            bid_size = float(ev.get("bs", 0) or 0)
             ask_price = float(ev.get("ap", 0) or 0)
-            ask_size  = float(ev.get("as", 0) or 0)
-            ts_ms     = ev.get("t", 0)
+            ask_size = float(ev.get("as", 0) or 0)
+            ts_ms = ev.get("t", 0)
         except (TypeError, ValueError):
             return
 
@@ -497,7 +495,11 @@ class PolygonL2Feed:
 
         logger.debug(
             "Polygon Q [%s]: bid=%.4f×%.0f  ask=%.4f×%.0f",
-            symbol, bid_price, bid_size, ask_price, ask_size,
+            symbol,
+            bid_price,
+            bid_size,
+            ask_price,
+            ask_size,
         )
 
     def _handle_trade(self, ev: dict) -> None:
@@ -518,7 +520,7 @@ class PolygonL2Feed:
 
         try:
             price = float(ev.get("p", 0) or 0)
-            size  = float(ev.get("s", 0) or 0)
+            size = float(ev.get("s", 0) or 0)
             conditions = ev.get("c") or []
         except (TypeError, ValueError):
             return
@@ -583,9 +585,7 @@ class FinnhubTradeFeed:
             )
             return
         self._running = True
-        self._task = asyncio.create_task(
-            self._run_with_backoff(), name="l2_finnhub_tape"
-        )
+        self._task = asyncio.create_task(self._run_with_backoff(), name="l2_finnhub_tape")
         logger.info("FinnhubTradeFeed starting (trade tape → cumulative delta)")
 
     async def stop(self) -> None:
@@ -606,7 +606,9 @@ class FinnhubTradeFeed:
                 self._fail_count += 1
                 logger.warning(
                     "FinnhubTradeFeed disconnected (attempt %d): %s — reconnecting in %.0f s",
-                    self._fail_count, exc, backoff,
+                    self._fail_count,
+                    exc,
+                    backoff,
                 )
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, L2_RECONNECT_MAX)
@@ -639,7 +641,7 @@ class FinnhubTradeFeed:
                 msg_type = data.get("type")
 
                 if msg_type == "trade":
-                    for trade in (data.get("data") or []):
+                    for trade in data.get("data") or []:
                         self._handle_trade(trade)
                 elif msg_type == "ping":
                     await ws.send(_json.dumps({"type": "pong"}))
@@ -649,12 +651,12 @@ class FinnhubTradeFeed:
     def _handle_trade(self, trade: dict) -> None:
         """Record a Finnhub trade print into all matching shared books."""
         price = trade.get("p")
-        size  = trade.get("v")  # Finnhub uses 'v' for volume/size
+        size = trade.get("v")  # Finnhub uses 'v' for volume/size
         if price is None or size is None:
             return
 
         price = float(price)
-        size  = float(size)
+        size = float(size)
         if price <= 0 or size <= 0:
             return
 
@@ -847,8 +849,7 @@ class OrderBookFeed:
                 self._provider = PolygonL2Feed()
         elif self._provider_name == "mock":
             logger.warning(
-                "L2 feed using MockL2Feed (L2_PROVIDER=mock). "
-                "Only permitted in non-production environments."
+                "L2 feed using MockL2Feed (L2_PROVIDER=mock). Only permitted in non-production environments."
             )
             self._provider = MockL2Feed()
         else:

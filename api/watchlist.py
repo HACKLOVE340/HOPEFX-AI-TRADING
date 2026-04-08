@@ -131,7 +131,7 @@ def _db_add(user_id: str, symbol: str) -> bool:
 
 
 def _db_remove(user_id: str, symbol: str) -> bool:
-    """Delete from watchlists table. Raises 404 when not found. Returns False when DB unavailable."""
+    """Delete from watchlists table. Returns False when DB unavailable or row not found."""
     session = _get_session()
     if session is None:
         return False
@@ -147,7 +147,8 @@ def _db_remove(user_id: str, symbol: str) -> bool:
             .first()
         )
         if row is None:
-            raise HTTPException(status_code=404, detail=f"{symbol} not in watchlist")
+            # Row not in DB — caller will fall back to memory store.
+            return False
         session.delete(row)
         session.commit()
         return True
@@ -169,7 +170,9 @@ def _db_remove(user_id: str, symbol: str) -> bool:
 
 def _load_watchlist(user_id: str) -> list[str]:
     db_val = _db_load(user_id)
-    if db_val is not None:
+    # Only use DB value when it contains symbols — an empty DB row means the
+    # user has never customised their watchlist, so fall through to defaults.
+    if db_val:
         _watchlists[user_id] = db_val
         return db_val
     if user_id not in _watchlists:
@@ -296,6 +299,12 @@ async def add_symbol(
     persisted = _db_add(user.sub, sym)
     if not persisted:
         _mem_add(user.sub, sym)
+    else:
+        # Keep in-memory cache in sync with DB so subsequent operations
+        # within the same request cycle see the updated state.
+        wl = _watchlists.setdefault(user.sub, list(DEFAULT_SYMBOLS))
+        if sym not in wl:
+            wl.append(sym)
 
     return {"symbol": sym, "added": True, "persisted": persisted}
 
@@ -311,6 +320,11 @@ async def remove_symbol(
     removed = _db_remove(user.sub, sym)
     if not removed:
         _mem_remove(user.sub, sym)
+    else:
+        # Keep in-memory cache in sync with DB.
+        wl = _watchlists.get(user.sub, [])
+        if sym in wl:
+            wl.remove(sym)
 
     return {"symbol": sym, "removed": True}
 

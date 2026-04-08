@@ -22,6 +22,7 @@ import pytest
 # Shared OHLCV fixture
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def ohlcv_df():
     """300-bar OHLCV DataFrame with DatetimeIndex."""
@@ -47,10 +48,12 @@ def ohlcv_df():
 # FeatureEngineer
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestFeatureEngineer:
     def test_init_defaults(self):
         from ml.training import FeatureEngineer
+
         fe = FeatureEngineer()
         assert fe.include_indicators is True
         assert fe.include_lags is True
@@ -58,6 +61,7 @@ class TestFeatureEngineer:
 
     def test_create_features_returns_tuple(self, ohlcv_df):
         from ml.training import FeatureEngineer
+
         fe = FeatureEngineer(include_macro=False, include_regime=False)
         result = fe.create_features(ohlcv_df)
         assert isinstance(result, tuple)
@@ -65,6 +69,7 @@ class TestFeatureEngineer:
 
     def test_create_features_X_is_dataframe(self, ohlcv_df):
         from ml.training import FeatureEngineer
+
         fe = FeatureEngineer(include_macro=False, include_regime=False)
         X, y_class, y_reg, data = fe.create_features(ohlcv_df)
         assert isinstance(X, pd.DataFrame)
@@ -72,30 +77,35 @@ class TestFeatureEngineer:
 
     def test_create_features_no_nan(self, ohlcv_df):
         from ml.training import FeatureEngineer
+
         fe = FeatureEngineer(include_macro=False, include_regime=False)
         X, y_class, y_reg, data = fe.create_features(ohlcv_df)
         assert not X.isnull().any().any(), "Feature matrix contains NaN"
 
     def test_create_features_y_class_binary(self, ohlcv_df):
         from ml.training import FeatureEngineer
+
         fe = FeatureEngineer(include_macro=False, include_regime=False)
         X, y_class, y_reg, data = fe.create_features(ohlcv_df)
         assert set(y_class.unique()).issubset({0, 1})
 
     def test_create_features_aligned_lengths(self, ohlcv_df):
         from ml.training import FeatureEngineer
+
         fe = FeatureEngineer(include_macro=False, include_regime=False)
         X, y_class, y_reg, data = fe.create_features(ohlcv_df)
         assert len(X) == len(y_class) == len(y_reg)
 
     def test_create_features_populates_feature_names(self, ohlcv_df):
         from ml.training import FeatureEngineer
+
         fe = FeatureEngineer(include_macro=False, include_regime=False)
         fe.create_features(ohlcv_df)
         assert len(fe.feature_names) > 0
 
     def test_scale_features_returns_tuple(self, ohlcv_df):
         from ml.training import FeatureEngineer
+
         fe = FeatureEngineer(include_macro=False, include_regime=False)
         X, _, _, _ = fe.create_features(ohlcv_df)
         X_scaled, X_test_scaled = fe.scale_features(X)
@@ -104,6 +114,7 @@ class TestFeatureEngineer:
 
     def test_scale_features_with_test_set(self, ohlcv_df):
         from ml.training import FeatureEngineer
+
         fe = FeatureEngineer(include_macro=False, include_regime=False)
         X, _, _, _ = fe.create_features(ohlcv_df)
         split = int(len(X) * 0.8)
@@ -114,23 +125,27 @@ class TestFeatureEngineer:
 
     def test_calculate_rsi_range(self, ohlcv_df):
         from ml.training import FeatureEngineer
+
         rsi = FeatureEngineer._calculate_rsi(ohlcv_df["close"], period=14)
         valid = rsi.dropna()
         assert (valid >= 0).all() and (valid <= 100).all()
 
     def test_calculate_atr_positive(self, ohlcv_df):
         from ml.training import FeatureEngineer
+
         atr = FeatureEngineer._calculate_atr(ohlcv_df, period=14)
         assert (atr.dropna() > 0).all()
 
     def test_calculate_obv_returns_series(self, ohlcv_df):
         from ml.training import FeatureEngineer
+
         obv = FeatureEngineer._calculate_obv(ohlcv_df)
         assert isinstance(obv, pd.Series)
         assert len(obv) == len(ohlcv_df)
 
     def test_save_and_load_scaler(self, ohlcv_df):
         from ml.training import FeatureEngineer
+
         fe = FeatureEngineer(include_macro=False, include_regime=False)
         X, _, _, _ = fe.create_features(ohlcv_df)
         fe.scale_features(X)
@@ -150,11 +165,13 @@ class TestFeatureEngineer:
 # XGBoostModel
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestXGBoostModel:
     @pytest.fixture
     def xy(self, ohlcv_df):
         from ml.training import FeatureEngineer
+
         fe = FeatureEngineer(include_macro=False, include_regime=False)
         X, y_class, _, _ = fe.create_features(ohlcv_df)
         X_scaled, _ = fe.scale_features(X)
@@ -162,17 +179,20 @@ class TestXGBoostModel:
 
     def test_init_classifier(self):
         from ml.training import XGBoostModel
+
         m = XGBoostModel(model_type="classifier")
         assert m.model_type == "classifier"
 
     def test_build_model(self):
         from ml.training import XGBoostModel
+
         m = XGBoostModel(model_type="classifier")
         m.build_model()
         assert m.model is not None
 
     def test_fit_returns_metrics(self, xy):
         from ml.training import XGBoostModel
+
         X, y = xy
         split = int(len(X) * 0.8)
         m = XGBoostModel(model_type="classifier")
@@ -182,6 +202,7 @@ class TestXGBoostModel:
 
     def test_predict_shape(self, xy):
         from ml.training import XGBoostModel
+
         X, y = xy
         split = int(len(X) * 0.8)
         m = XGBoostModel(model_type="classifier")
@@ -192,6 +213,7 @@ class TestXGBoostModel:
 
     def test_predict_proba_shape(self, xy):
         from ml.training import XGBoostModel
+
         X, y = xy
         split = int(len(X) * 0.8)
         m = XGBoostModel(model_type="classifier")
@@ -202,6 +224,7 @@ class TestXGBoostModel:
 
     def test_predict_proba_raises_for_regressor(self):
         from ml.training import XGBoostModel
+
         m = XGBoostModel(model_type="regressor")
         m.build_model()
         with pytest.raises(ValueError, match="classifier"):
@@ -209,6 +232,7 @@ class TestXGBoostModel:
 
     def test_evaluate_returns_dict(self, xy):
         from ml.training import XGBoostModel
+
         X, y = xy
         split = int(len(X) * 0.8)
         m = XGBoostModel(model_type="classifier")
@@ -219,6 +243,7 @@ class TestXGBoostModel:
 
     def test_save_and_load(self, xy, tmp_path):
         from ml.training import XGBoostModel
+
         X, y = xy
         split = int(len(X) * 0.8)
         m = XGBoostModel(model_type="classifier")
@@ -236,11 +261,13 @@ class TestXGBoostModel:
 # RandomForestModel
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestRandomForestModel:
     @pytest.fixture
     def xy(self, ohlcv_df):
         from ml.training import FeatureEngineer
+
         fe = FeatureEngineer(include_macro=False, include_regime=False)
         X, y_class, _, _ = fe.create_features(ohlcv_df)
         X_scaled, _ = fe.scale_features(X)
@@ -248,17 +275,20 @@ class TestRandomForestModel:
 
     def test_init(self):
         from ml.training import RandomForestModel
+
         m = RandomForestModel(model_type="classifier", n_estimators=10)
         assert m.model_type == "classifier"
 
     def test_build_model(self):
         from ml.training import RandomForestModel
+
         m = RandomForestModel(model_type="classifier", n_estimators=10)
         m.build_model()
         assert m.model is not None
 
     def test_fit_returns_metrics(self, xy):
         from ml.training import RandomForestModel
+
         X, y = xy
         split = int(len(X) * 0.8)
         m = RandomForestModel(model_type="classifier", n_estimators=10)
@@ -268,6 +298,7 @@ class TestRandomForestModel:
 
     def test_predict_shape(self, xy):
         from ml.training import RandomForestModel
+
         X, y = xy
         split = int(len(X) * 0.8)
         m = RandomForestModel(model_type="classifier", n_estimators=10)
@@ -278,6 +309,7 @@ class TestRandomForestModel:
 
     def test_evaluate_accuracy_in_range(self, xy):
         from ml.training import RandomForestModel
+
         X, y = xy
         split = int(len(X) * 0.8)
         m = RandomForestModel(model_type="classifier", n_estimators=10)
@@ -288,6 +320,7 @@ class TestRandomForestModel:
 
     def test_save_and_load(self, xy, tmp_path):
         from ml.training import RandomForestModel
+
         X, y = xy
         split = int(len(X) * 0.8)
         m = RandomForestModel(model_type="classifier", n_estimators=10)
@@ -305,10 +338,12 @@ class TestRandomForestModel:
 # EnsembleModel
 # ---------------------------------------------------------------------------
 
+
 def _import_training_module():
     """Load ml/training.py directly (bypasses the package __init__ re-export)."""
     import importlib.util
     from pathlib import Path
+
     spec = importlib.util.spec_from_file_location(
         "_ml_training_direct",
         Path(__file__).parent.parent.parent / "ml" / "training.py",

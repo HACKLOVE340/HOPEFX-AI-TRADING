@@ -12,6 +12,7 @@ continuation patterns in OHLCV price data.
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 try:

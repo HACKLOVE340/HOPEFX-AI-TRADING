@@ -206,10 +206,7 @@ class TestAggregateOHLCV:
         from data_layer.tick_store import _aggregate_ohlcv
 
         base_ns = 1_700_000_000_000_000_000
-        ticks = [
-            {"ts_ns": base_ns + i * 1_000_000, "mid": float(2300 + i), "volume": 1.0}
-            for i in range(5)
-        ]
+        ticks = [{"ts_ns": base_ns + i * 1_000_000, "mid": float(2300 + i), "volume": 1.0} for i in range(5)]
         bars = _aggregate_ohlcv(ticks, timeframe_s=60, limit=5)
         assert len(bars) == 1
         assert bars[0]["high"] == max(t["mid"] for t in ticks)
@@ -220,10 +217,7 @@ class TestAggregateOHLCV:
 
         base_ns = 1_700_000_000_000_000_000
         bar_ns = 60 * 1_000_000_000
-        ticks = [
-            {"ts_ns": base_ns + i * bar_ns, "mid": 2300.0, "volume": 1.0}
-            for i in range(20)
-        ]
+        ticks = [{"ts_ns": base_ns + i * bar_ns, "mid": 2300.0, "volume": 1.0} for i in range(20)]
         bars = _aggregate_ohlcv(ticks, timeframe_s=60, limit=5)
         assert len(bars) == 5
 

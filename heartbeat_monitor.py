@@ -39,6 +39,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
@@ -231,7 +232,9 @@ class HeartbeatMonitor:
                         elapsed,
                         status.missed_beats,
                     )
-                    logger.error(f"\n🚨 HEARTBEAT TIMEOUT: critical component '{status.name}' silent for {elapsed:.0f}s")
+                    logger.error(
+                        f"\n🚨 HEARTBEAT TIMEOUT: critical component '{status.name}' silent for {elapsed:.0f}s"
+                    )
                 else:
                     logger.warning(
                         "⚠️  Component '%s' missed heartbeat (%.0fs since last beat, missed: %d)",

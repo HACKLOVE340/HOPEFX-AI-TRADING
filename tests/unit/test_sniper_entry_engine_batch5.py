@@ -36,6 +36,7 @@ from strategies.sniper_entry_engine import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _bar(o, h, l, c):
     return {"open": o, "high": h, "low": l, "close": c, "volume": 1000}
 
@@ -47,9 +48,14 @@ def _make_ob(direction="bullish", top=1895.0, bottom=1890.0):
 def _make_dc(direction="bullish", ce=1901.5, fvg_top=1905.0, fvg_bottom=1898.0):
     return DisplacementCandle(
         direction=direction,
-        open=1888.0, high=1910.0, low=1886.0, close=1908.0,
-        fvg_top=fvg_top, fvg_bottom=fvg_bottom,
-        ce_level=ce, bar_index=8,
+        open=1888.0,
+        high=1910.0,
+        low=1886.0,
+        close=1908.0,
+        fvg_top=fvg_top,
+        fvg_bottom=fvg_bottom,
+        ce_level=ce,
+        bar_index=8,
     )
 
 
@@ -57,14 +63,19 @@ def _make_ltf(confirmed=True, event="BOS_bullish", dc=None):
     if dc is None and confirmed:
         dc = _make_dc()
     return LTFConfirmation(
-        confirmed=confirmed, event=event,
-        displacement=dc, last_sh=1915.0, last_sl=1880.0, bars_analysed=100,
+        confirmed=confirmed,
+        event=event,
+        displacement=dc,
+        last_sh=1915.0,
+        last_sl=1880.0,
+        bars_analysed=100,
     )
 
 
 # ---------------------------------------------------------------------------
 # _analyse_structure — CHoCH events
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestAnalyseStructureCHoCH:
@@ -202,6 +213,7 @@ class TestAnalyseStructureCHoCH:
 # _find_displacement — ATR=0 and bearish FVG rejection
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestFindDisplacementGaps:
     """Cover the ATR<=0 guard and bearish FVG rejection branches."""
@@ -222,8 +234,8 @@ class TestFindDisplacementGaps:
         bars = [_bar(1900.0, 1905.0, 1895.0, 1902.0) for _ in range(15)]
         # Add a large BULLISH candle — should be skipped in bearish path
         prev = _bar(1900.0, 1902.0, 1895.0, 1896.0)
-        curr = _bar(1896.0, 1930.0, 1895.0, 1928.0)   # bullish, large body
-        nxt  = _bar(1928.0, 1932.0, 1925.0, 1929.0)
+        curr = _bar(1896.0, 1930.0, 1895.0, 1928.0)  # bullish, large body
+        nxt = _bar(1928.0, 1932.0, 1925.0, 1929.0)
         bars.extend([prev, curr, nxt])
         result = self.engine._find_displacement(bars, "short")
         # The bullish candle must not qualify for the bearish path
@@ -235,9 +247,9 @@ class TestFindDisplacementGaps:
         nxt.high >= prev.low means no gap below.
         """
         bars = [_bar(1900.0, 1905.0, 1895.0, 1902.0) for _ in range(15)]
-        prev = _bar(1900.0, 1902.0, 1895.0, 1896.0)   # prev.low = 1895
-        curr = _bar(1896.0, 1897.0, 1868.0, 1870.0)   # large bearish body
-        nxt  = _bar(1870.0, 1900.0, 1869.0, 1871.0)   # nxt.high=1900 >= prev.low=1895 → NO FVG
+        prev = _bar(1900.0, 1902.0, 1895.0, 1896.0)  # prev.low = 1895
+        curr = _bar(1896.0, 1897.0, 1868.0, 1870.0)  # large bearish body
+        nxt = _bar(1870.0, 1900.0, 1869.0, 1871.0)  # nxt.high=1900 >= prev.low=1895 → NO FVG
         bars.extend([prev, curr, nxt])
         result = self.engine._find_displacement(bars, "short")
         assert result is None or isinstance(result, DisplacementCandle)
@@ -247,9 +259,9 @@ class TestFindDisplacementGaps:
         Bearish displacement where fvg_bottom < fvg_top must be returned.
         """
         bars = [_bar(1900.0, 1905.0, 1895.0, 1902.0) for _ in range(15)]
-        prev = _bar(1900.0, 1902.0, 1895.0, 1896.0)   # prev.low = 1895
-        curr = _bar(1896.0, 1897.0, 1868.0, 1870.0)   # large bearish body
-        nxt  = _bar(1870.0, 1892.0, 1869.0, 1871.0)   # nxt.high=1892 < prev.low=1895 → FVG
+        prev = _bar(1900.0, 1902.0, 1895.0, 1896.0)  # prev.low = 1895
+        curr = _bar(1896.0, 1897.0, 1868.0, 1870.0)  # large bearish body
+        nxt = _bar(1870.0, 1892.0, 1869.0, 1871.0)  # nxt.high=1892 < prev.low=1895 → FVG
         bars.extend([prev, curr, nxt])
         result = self.engine._find_displacement(bars, "short")
         assert result is not None
@@ -261,6 +273,7 @@ class TestFindDisplacementGaps:
 # ---------------------------------------------------------------------------
 # _find_last_ob — short mitigated OB
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestFindLastOBShortMitigated:
@@ -275,7 +288,7 @@ class TestFindLastOBShortMitigated:
             p = base - i * 1.0
             bars.append(_bar(p, p + 0.3, p - 1.5, p - 1.0))
         ob_candle = _bar(base - 15, base - 13, base - 17, base - 14)  # bullish
-        impulse   = _bar(base - 14, base - 13.5, base - 22, base - 21)  # bearish, closes < ob.low
+        impulse = _bar(base - 14, base - 13.5, base - 22, base - 21)  # bearish, closes < ob.low
         bars.extend([ob_candle, impulse])
         for i in range(5):
             p = base - 21 - i * 1.0
@@ -309,6 +322,7 @@ class TestFindLastOBShortMitigated:
 # _build_setup short — zero-risk and entry-too-far rejections
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestBuildSetupShortRejections:
     """Cover the short-direction rejection branches in _build_setup."""
@@ -328,8 +342,13 @@ class TestBuildSetupShortRejections:
         dc = _make_dc("bearish", ce=2012.5, fvg_top=2015.0, fvg_bottom=2010.0)
         ltf = _make_ltf(confirmed=True, event="BOS_bearish", dc=dc)
         result = self.engine._build_setup(
-            symbol="XAU_USD", direction="short", mid_price=2012.0,
-            htf_ob=ob, htf_atr=5.0, ltf_conf=ltf, base_confidence=0.7,
+            symbol="XAU_USD",
+            direction="short",
+            mid_price=2012.0,
+            htf_ob=ob,
+            htf_atr=5.0,
+            ltf_conf=ltf,
+            base_confidence=0.7,
         )
         assert result is None
 
@@ -342,8 +361,13 @@ class TestBuildSetupShortRejections:
         dc = _make_dc("bearish", ce=1975.0, fvg_top=1978.0, fvg_bottom=1972.0)
         ltf = _make_ltf(confirmed=True, event="BOS_bearish", dc=dc)
         result = self.engine._build_setup(
-            symbol="XAU_USD", direction="short", mid_price=2000.0,
-            htf_ob=ob, htf_atr=5.0, ltf_conf=ltf, base_confidence=0.7,
+            symbol="XAU_USD",
+            direction="short",
+            mid_price=2000.0,
+            htf_ob=ob,
+            htf_atr=5.0,
+            ltf_conf=ltf,
+            base_confidence=0.7,
         )
         assert result is None
 
@@ -351,6 +375,7 @@ class TestBuildSetupShortRejections:
 # ---------------------------------------------------------------------------
 # refine() — LTF not-confirmed and _build_setup None paths
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestRefineLTFAndBuildPaths:
@@ -395,13 +420,11 @@ class TestRefineLTFAndBuildPaths:
         """
         mock_orch = MagicMock()
         # 25 bars with tiny bodies — no displacement will qualify
-        mock_orch.get_ohlcv_window.return_value = pd.DataFrame([
-            _bar(1900.0, 1900.1, 1899.9, 1900.05) for _ in range(25)
-        ])
-        htf_df = self._zigzag_up_df()
-        result = self.engine.refine(
-            _make_decision("long", 1902.0), htf_df, orchestrator=mock_orch
+        mock_orch.get_ohlcv_window.return_value = pd.DataFrame(
+            [_bar(1900.0, 1900.1, 1899.9, 1900.05) for _ in range(25)]
         )
+        htf_df = self._zigzag_up_df()
+        result = self.engine.refine(_make_decision("long", 1902.0), htf_df, orchestrator=mock_orch)
         assert result is None
 
     def test_build_setup_none_returns_none_from_refine(self):
@@ -418,37 +441,31 @@ class TestRefineLTFAndBuildPaths:
         # Displacement with CE at 1908.5 — but we'll set tick_mid very far away
         prev = _bar(1917.0, 1919.0, 1916.0, 1918.0)
         curr = _bar(1918.0, 1947.0, 1917.5, 1945.0)
-        nxt  = _bar(1945.0, 1948.0, 1922.0, 1944.0)
+        nxt = _bar(1945.0, 1948.0, 1922.0, 1944.0)
         bars.extend([prev, curr, nxt])
         mock_orch.get_ohlcv_window.return_value = pd.DataFrame(bars)
 
         htf_df = self._zigzag_up_df()
         # tick_mid far below CE so entry > mid + 2*ATR → _build_setup returns None
-        result = self.engine.refine(
-            _make_decision("long", tick_mid=1800.0), htf_df, orchestrator=mock_orch
-        )
+        result = self.engine.refine(_make_decision("long", tick_mid=1800.0), htf_df, orchestrator=mock_orch)
         assert result is None
 
     def test_ltf_confirmed_false_logged(self):
         """Verify the debug log path executes without error."""
         mock_orch = MagicMock()
-        mock_orch.get_ohlcv_window.return_value = pd.DataFrame([
-            _bar(1900.0, 1900.05, 1899.95, 1900.02) for _ in range(25)
-        ])
+        mock_orch.get_ohlcv_window.return_value = pd.DataFrame(
+            [_bar(1900.0, 1900.05, 1899.95, 1900.02) for _ in range(25)]
+        )
         htf_df = self._zigzag_up_df()
-        with patch.object(
-            __import__("strategies.sniper_entry_engine", fromlist=["logger"]).logger,
-            "debug"
-        ):
-            result = self.engine.refine(
-                _make_decision("long", 1902.0), htf_df, orchestrator=mock_orch
-            )
+        with patch.object(__import__("strategies.sniper_entry_engine", fromlist=["logger"]).logger, "debug"):
+            result = self.engine.refine(_make_decision("long", 1902.0), htf_df, orchestrator=mock_orch)
         assert result is None
 
 
 # ---------------------------------------------------------------------------
 # _detect_htf_setup — ob is None and price-too-far branches
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestDetectHTFSetupMissingBranches:
@@ -507,6 +524,7 @@ class TestDetectHTFSetupMissingBranches:
 # _find_displacement — bullish FVG invalid gap (fvg_top <= fvg_bottom)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestFindDisplacementBullishInvalidFVG:
     """Cover the bullish path fvg_top <= fvg_bottom rejection (line 487)."""
@@ -519,9 +537,9 @@ class TestFindDisplacementBullishInvalidFVG:
         Large bullish candle but nxt.low <= prev.high → no FVG → rejected.
         """
         bars = [_bar(1900.0, 1905.0, 1895.0, 1902.0) for _ in range(15)]
-        prev = _bar(1900.0, 1915.0, 1898.0, 1914.0)   # prev.high = 1915
-        curr = _bar(1914.0, 1945.0, 1913.0, 1943.0)   # large bullish body
-        nxt  = _bar(1943.0, 1948.0, 1910.0, 1944.0)   # nxt.low=1910 < prev.high=1915 → NO FVG
+        prev = _bar(1900.0, 1915.0, 1898.0, 1914.0)  # prev.high = 1915
+        curr = _bar(1914.0, 1945.0, 1913.0, 1943.0)  # large bullish body
+        nxt = _bar(1943.0, 1948.0, 1910.0, 1944.0)  # nxt.low=1910 < prev.high=1915 → NO FVG
         bars.extend([prev, curr, nxt])
         result = self.engine._find_displacement(bars, "long")
         # The last 3 bars don't form a valid FVG; result is None or from earlier bars
@@ -530,9 +548,9 @@ class TestFindDisplacementBullishInvalidFVG:
     def test_bullish_fvg_equal_boundaries_rejected(self):
         """fvg_top == fvg_bottom (nxt.low == prev.high) → rejected."""
         bars = [_bar(1900.0, 1905.0, 1895.0, 1902.0) for _ in range(15)]
-        prev = _bar(1900.0, 1910.0, 1898.0, 1909.0)   # prev.high = 1910
-        curr = _bar(1909.0, 1940.0, 1908.0, 1938.0)   # large bullish body
-        nxt  = _bar(1938.0, 1942.0, 1910.0, 1939.0)   # nxt.low=1910 == prev.high=1910 → NO FVG
+        prev = _bar(1900.0, 1910.0, 1898.0, 1909.0)  # prev.high = 1910
+        curr = _bar(1909.0, 1940.0, 1908.0, 1938.0)  # large bullish body
+        nxt = _bar(1938.0, 1942.0, 1910.0, 1939.0)  # nxt.low=1910 == prev.high=1910 → NO FVG
         bars.extend([prev, curr, nxt])
         result = self.engine._find_displacement(bars, "long")
         assert result is None or isinstance(result, DisplacementCandle)
@@ -541,6 +559,7 @@ class TestFindDisplacementBullishInvalidFVG:
 # ---------------------------------------------------------------------------
 # _build_setup — R:R guard (actual_rr < tp_rr * 0.9)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestBuildSetupRRGuard:
@@ -579,8 +598,13 @@ class TestBuildSetupRRGuard:
 
         with patch("builtins.abs", side_effect=_patched_abs):
             result = self.engine._build_setup(
-                symbol="XAU_USD", direction="long", mid_price=1902.0,
-                htf_ob=ob, htf_atr=5.0, ltf_conf=ltf, base_confidence=0.7,
+                symbol="XAU_USD",
+                direction="long",
+                mid_price=1902.0,
+                htf_ob=ob,
+                htf_atr=5.0,
+                ltf_conf=ltf,
+                base_confidence=0.7,
             )
         assert result is None or isinstance(result, SniperSetup)
 
@@ -591,8 +615,13 @@ class TestBuildSetupRRGuard:
         dc = _make_dc("bullish", ce=1901.5)
         ltf = _make_ltf(confirmed=True, dc=dc)
         result = self.engine._build_setup(
-            symbol="XAU_USD", direction="long", mid_price=1902.0,
-            htf_ob=ob, htf_atr=5.0, ltf_conf=ltf, base_confidence=0.7,
+            symbol="XAU_USD",
+            direction="long",
+            mid_price=1902.0,
+            htf_ob=ob,
+            htf_atr=5.0,
+            ltf_conf=ltf,
+            base_confidence=0.7,
         )
         assert isinstance(result, SniperSetup)
 
@@ -600,6 +629,7 @@ class TestBuildSetupRRGuard:
 # ---------------------------------------------------------------------------
 # _analyse_structure — neutral trend CHoCH lines 655/657
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestAnalyseStructureNeutralCHoCH:
@@ -659,13 +689,13 @@ class TestAnalyseStructureNeutralCHoCH:
         bars = self._neutral_bars_with_known_pivots()
         result = self.engine._analyse_structure(bars, pivot_n=3)
         # The natural last bar should be inside the range
-        assert result["event"] in ("CHoCH_bullish", "CHoCH_bearish", "BOS_bullish",
-                                   "BOS_bearish", "none")
+        assert result["event"] in ("CHoCH_bullish", "CHoCH_bearish", "BOS_bullish", "BOS_bearish", "none")
 
 
 # ---------------------------------------------------------------------------
 # refine() — confirmed setup logger.info path (lines 288-294)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestRefineConfirmedLogPath:
@@ -683,24 +713,32 @@ class TestRefineConfirmedLogPath:
         dc = _make_dc("bullish", ce=1901.5)
         ltf = _make_ltf(confirmed=True, event="BOS_bullish", dc=dc)
         expected_setup = SniperSetup(
-            symbol="XAU_USD", direction="long",
-            entry_price=1901.5, stop_loss=1887.5, take_profit=1929.5,
-            confidence=0.84, order_type="LIMIT",
-            htf_ob=ob, ltf_confirmation=ltf,
+            symbol="XAU_USD",
+            direction="long",
+            entry_price=1901.5,
+            stop_loss=1887.5,
+            take_profit=1929.5,
+            confidence=0.84,
+            order_type="LIMIT",
+            htf_ob=ob,
+            ltf_confirmation=ltf,
             reason="sniper:long|test",
         )
 
-        with patch.object(self.engine, "_detect_htf_setup", return_value=(ob, 5.0)), \
-             patch.object(self.engine, "_fetch_ltf_bars", return_value=pd.DataFrame(
-                 [_bar(1900, 1905, 1895, 1902) for _ in range(30)]
-             )), \
-             patch.object(self.engine, "_confirm_ltf", return_value=ltf), \
-             patch.object(self.engine, "_build_setup", return_value=expected_setup):
-
+        with (
+            patch.object(self.engine, "_detect_htf_setup", return_value=(ob, 5.0)),
+            patch.object(
+                self.engine,
+                "_fetch_ltf_bars",
+                return_value=pd.DataFrame([_bar(1900, 1905, 1895, 1902) for _ in range(30)]),
+            ),
+            patch.object(self.engine, "_confirm_ltf", return_value=ltf),
+            patch.object(self.engine, "_build_setup", return_value=expected_setup),
+        ):
             decision = _make_decision("long", tick_mid=1902.0)
-            result = self.engine.refine(decision, pd.DataFrame(
-                [_bar(1900, 1905, 1895, 1902) for _ in range(30)]
-            ), orchestrator=MagicMock())
+            result = self.engine.refine(
+                decision, pd.DataFrame([_bar(1900, 1905, 1895, 1902) for _ in range(30)]), orchestrator=MagicMock()
+            )
 
         assert result is expected_setup
         assert result.direction == "long"
@@ -710,6 +748,7 @@ class TestRefineConfirmedLogPath:
 # ---------------------------------------------------------------------------
 # Helper used by the tests above
 # ---------------------------------------------------------------------------
+
 
 def _make_decision(action="long", tick_mid=1902.0, symbol="XAU_USD", confidence=0.75):
     d = MagicMock()

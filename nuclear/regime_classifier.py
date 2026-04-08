@@ -67,37 +67,44 @@ REGIME_CRISIS = "crisis"
 REGIME_UNKNOWN = "unknown"
 
 ALL_REGIMES = [
-    REGIME_TRENDING_UP, REGIME_TRENDING_DOWN, REGIME_BREAKOUT,
-    REGIME_MEAN_REVERTING, REGIME_RANGE_BOUND, REGIME_HIGH_VOL,
-    REGIME_LOW_VOL, REGIME_CRISIS, REGIME_UNKNOWN,
+    REGIME_TRENDING_UP,
+    REGIME_TRENDING_DOWN,
+    REGIME_BREAKOUT,
+    REGIME_MEAN_REVERTING,
+    REGIME_RANGE_BOUND,
+    REGIME_HIGH_VOL,
+    REGIME_LOW_VOL,
+    REGIME_CRISIS,
+    REGIME_UNKNOWN,
 ]
 
 # Timeframe weights for regime voting (higher = more influence)
 _TF_WEIGHTS: dict[str, float] = {
-    "yearly":  5.0,
+    "yearly": 5.0,
     "monthly": 4.0,
-    "weekly":  3.0,
-    "daily":   2.5,
-    "1h":      2.0,
-    "30m":     1.5,
-    "5m":      1.0,
-    "1m":      0.5,
+    "weekly": 3.0,
+    "daily": 2.5,
+    "1h": 2.0,
+    "30m": 1.5,
+    "5m": 1.0,
+    "1m": 0.5,
 }
 
 
 # ── Result container ──────────────────────────────────────────────────────────
+
 
 @dataclass
 class RegimeResult:
     """Output of the regime classifier."""
 
     regime: str
-    confidence: float                    # 0–1
-    sub_regime: str = ""                 # e.g. "trending_up:strong"
-    macro_regime: str = ""               # macro-layer regime
-    cone_bias: str = "neutral"           # from ITOS cone
+    confidence: float  # 0–1
+    sub_regime: str = ""  # e.g. "trending_up:strong"
+    macro_regime: str = ""  # macro-layer regime
+    cone_bias: str = "neutral"  # from ITOS cone
     cone_vol_regime: str = "normal_vol"  # from ITOS cone
-    votes: dict[str, float] = field(default_factory=dict)   # regime → weighted votes
+    votes: dict[str, float] = field(default_factory=dict)  # regime → weighted votes
     tf_regimes: dict[str, str] = field(default_factory=dict)  # tf → local regime
     reasoning: list[str] = field(default_factory=list)
     computed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -118,15 +125,15 @@ class RegimeResult:
     def preferred_strategy(self) -> str:
         """Default strategy type for this regime."""
         _MAP = {
-            REGIME_TRENDING_UP:    "smc_ict",
-            REGIME_TRENDING_DOWN:  "smc_ict",
-            REGIME_BREAKOUT:       "breakout",
+            REGIME_TRENDING_UP: "smc_ict",
+            REGIME_TRENDING_DOWN: "smc_ict",
+            REGIME_BREAKOUT: "breakout",
             REGIME_MEAN_REVERTING: "mean_reversion",
-            REGIME_RANGE_BOUND:    "mean_reversion",
-            REGIME_HIGH_VOL:       "breakout",
-            REGIME_LOW_VOL:        "mean_reversion",
-            REGIME_CRISIS:         "smc_ict",   # ICT handles crisis via liquidity sweeps
-            REGIME_UNKNOWN:        "smc_ict",
+            REGIME_RANGE_BOUND: "mean_reversion",
+            REGIME_HIGH_VOL: "breakout",
+            REGIME_LOW_VOL: "mean_reversion",
+            REGIME_CRISIS: "smc_ict",  # ICT handles crisis via liquidity sweeps
+            REGIME_UNKNOWN: "smc_ict",
         }
         return _MAP.get(self.regime, "smc_ict")
 
@@ -150,6 +157,7 @@ class RegimeResult:
 
 
 # ── RegimeClassifier ──────────────────────────────────────────────────────────
+
 
 class RegimeClassifier:
     """
@@ -284,7 +292,11 @@ class RegimeClassifier:
         self._record(result)
         logger.debug(
             "RegimeClassifier: %s (conf=%.2f) sub=%s macro=%s cone=%s",
-            regime, confidence, sub_regime, macro_regime, cone_bias,
+            regime,
+            confidence,
+            sub_regime,
+            macro_regime,
+            cone_bias,
         )
         return result
 
@@ -333,16 +345,12 @@ class RegimeClassifier:
         """
         # ── Trend detection via EMA alignment + slope ─────────────────────────
         ema_bullish = feat.ema_9_above_21 and feat.ema_21_above_50 and feat.price_above_ema_50
-        ema_bearish = (
-            not feat.ema_9_above_21
-            and not feat.ema_21_above_50
-            and not feat.price_above_ema_50
-        )
+        ema_bearish = not feat.ema_9_above_21 and not feat.ema_21_above_50 and not feat.price_above_ema_50
         strong_slope = abs(feat.trend_slope) > 0.0005  # 0.05% per bar
 
         # ── Volatility state ──────────────────────────────────────────────────
-        high_atr = feat.atr_pct > 0.015   # ATR > 1.5% of price
-        low_atr = feat.atr_pct < 0.004    # ATR < 0.4% of price
+        high_atr = feat.atr_pct > 0.015  # ATR > 1.5% of price
+        low_atr = feat.atr_pct < 0.004  # ATR < 0.4% of price
 
         # ── Breakout: squeeze → expansion ────────────────────────────────────
         if feat.bb_squeeze and feat.volume_surge:
@@ -372,9 +380,7 @@ class RegimeClassifier:
 
         # ── Mean reverting: RSI extremes + moderate vol ───────────────────────
         if (feat.rsi_overbought or feat.rsi_oversold) and not high_atr:
-            reasoning.append(
-                f"{tf}: RSI={'OB' if feat.rsi_overbought else 'OS'} → MEAN_REVERTING"
-            )
+            reasoning.append(f"{tf}: RSI={'OB' if feat.rsi_overbought else 'OS'} → MEAN_REVERTING")
             return REGIME_MEAN_REVERTING
 
         # ── Range bound: low vol, no trend ───────────────────────────────────
@@ -431,6 +437,7 @@ class RegimeClassifier:
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _cone_bias(cone: dict[str, Any] | None) -> str:
     if not cone:

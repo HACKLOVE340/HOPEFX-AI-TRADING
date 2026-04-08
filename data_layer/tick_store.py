@@ -140,8 +140,7 @@ class _TimescaleBackend:
             self._extras = psycopg2.extras
         except ImportError as exc:
             raise ImportError(
-                "psycopg2 is required for TimescaleDB backend. "
-                "Install with: pip install 'psycopg2-binary>=2.9'"
+                "psycopg2 is required for TimescaleDB backend. Install with: pip install 'psycopg2-binary>=2.9'"
             ) from exc
 
         self._url = url
@@ -177,9 +176,7 @@ class _TimescaleBackend:
                 cur.execute(_TIMESCALE_HYPERTABLE)
             except Exception as exc:
                 # May fail if TimescaleDB extension is not installed
-                logger.warning(
-                    "TickStore: could not create hypertable (is timescaledb installed?): %s", exc
-                )
+                logger.warning("TickStore: could not create hypertable (is timescaledb installed?): %s", exc)
             cur.execute(_TIMESCALE_IDX)
 
     # ------------------------------------------------------------------
@@ -193,10 +190,7 @@ class _TimescaleBackend:
         volume: float = 0.0,
         source: str = "",
     ) -> None:
-        sql = (
-            "INSERT INTO ticks (ts_ns, symbol, bid, ask, volume, source) "
-            "VALUES (%s, %s, %s, %s, %s, %s)"
-        )
+        sql = "INSERT INTO ticks (ts_ns, symbol, bid, ask, volume, source) VALUES (%s, %s, %s, %s, %s, %s)"
         with self._cur() as cur:
             cur.execute(sql, (ts_ns, symbol, bid, ask, volume, source))
 
@@ -217,7 +211,9 @@ class _TimescaleBackend:
             conditions.append("ts_ns <= %s")
             params.append(until_ns)
         where = " AND ".join(conditions)
-        sql = f"SELECT ts_ns, bid, ask, mid, spread, volume, source FROM ticks WHERE {where} ORDER BY ts_ns DESC LIMIT %s"  # nosec B608 — clause built from hardcoded literals only; values are parameterized
+        sql = (
+            f"SELECT ts_ns, bid, ask, mid, spread, volume, source FROM ticks WHERE {where} ORDER BY ts_ns DESC LIMIT %s"  # nosec B608 — clause built from hardcoded literals only; values are parameterized
+        )
         params.append(limit)
         with self._cur() as cur:
             cur.execute(sql, params)
@@ -251,8 +247,9 @@ class _TimescaleBackend:
             " SUM(volume) AS volume,"
             " COUNT(*) AS tick_count"
             " FROM ticks"
-            " WHERE " + where +  # nosec B608
-            " GROUP BY bar_ts_ns"
+            " WHERE "
+            + where  # nosec B608
+            + " GROUP BY bar_ts_ns"
             " ORDER BY bar_ts_ns DESC"
             " LIMIT %s"
         )
@@ -304,8 +301,7 @@ class _RedisTimeSeriesBackend:
             self._redis = redis
         except ImportError as exc:
             raise ImportError(
-                "redis is required for Redis TimeSeries backend. "
-                "Install with: pip install 'redis[hiredis]>=4.2'"
+                "redis is required for Redis TimeSeries backend. Install with: pip install 'redis[hiredis]>=4.2'"
             ) from exc
 
         self._retention_ms = retention_ms
@@ -325,9 +321,7 @@ class _RedisTimeSeriesBackend:
             return True
         except Exception as exc:
             if "Unknown command" in str(exc) or "ERR" in str(exc):
-                logger.info(
-                    "TickStore: RedisTimeSeries module not available — using sorted set fallback"
-                )
+                logger.info("TickStore: RedisTimeSeries module not available — using sorted set fallback")
                 return False
             # Key does not exist but command is known
             return True
@@ -339,10 +333,14 @@ class _RedisTimeSeriesBackend:
         """Create a TimeSeries key with retention if it does not exist."""
         try:
             self._client.execute_command(
-                "TS.CREATE", key,
-                "RETENTION", self._retention_ms,
-                "ON_DUPLICATE", "LAST",
-                "DUPLICATE_POLICY", "LAST",
+                "TS.CREATE",
+                key,
+                "RETENTION",
+                self._retention_ms,
+                "ON_DUPLICATE",
+                "LAST",
+                "DUPLICATE_POLICY",
+                "LAST",
             )
         except Exception as exc:
             if "already exists" not in str(exc).lower():
@@ -391,12 +389,8 @@ class _RedisTimeSeriesBackend:
             try:
                 bid_key = self._ts_key(symbol, "bid")
                 ask_key = self._ts_key(symbol, "ask")
-                bids = self._client.execute_command(
-                    "TS.RANGE", bid_key, since_ms, until_ms, "COUNT", limit
-                )
-                asks_raw = self._client.execute_command(
-                    "TS.RANGE", ask_key, since_ms, until_ms, "COUNT", limit
-                )
+                bids = self._client.execute_command("TS.RANGE", bid_key, since_ms, until_ms, "COUNT", limit)
+                asks_raw = self._client.execute_command("TS.RANGE", ask_key, since_ms, until_ms, "COUNT", limit)
                 asks = {int(r[0]): float(r[1]) for r in asks_raw}
                 for ts_ms_raw, bid_val in reversed(bids[-limit:]):
                     ts_ms = int(ts_ms_raw)
@@ -420,8 +414,12 @@ class _RedisTimeSeriesBackend:
             since_score = (since_ns // 1_000_000) if since_ns else "-inf"
             until_score = (until_ns // 1_000_000) if until_ns else "+inf"
             raw = self._client.zrangebyscore(
-                key, since_score, until_score,
-                start=0, num=limit, withscores=True,
+                key,
+                since_score,
+                until_score,
+                start=0,
+                num=limit,
+                withscores=True,
             )
             for member, score in reversed(raw):
                 parts = str(member).split("|", 3)
@@ -484,9 +482,7 @@ class _MemoryBackend:
 
     def __init__(self, max_per_symbol: int = _MEMORY_MAX) -> None:
         self._max = max_per_symbol
-        self._store: dict[str, deque[dict]] = defaultdict(
-            lambda: deque(maxlen=self._max)
-        )
+        self._store: dict[str, deque[dict]] = defaultdict(lambda: deque(maxlen=self._max))
         logger.info("TickStore: in-memory backend ready (max_per_symbol=%d)", max_per_symbol)
 
     def insert(
@@ -702,9 +698,7 @@ class TickStore:
         Sorted by ts_ns descending (newest first).
         """
         try:
-            rows = self._backend.query(
-                symbol, since_ns=since_ns, until_ns=until_ns, limit=limit
-            )
+            rows = self._backend.query(symbol, since_ns=since_ns, until_ns=until_ns, limit=limit)
         except Exception as exc:
             logger.error("TickStore.query: %s", exc)
             rows = []
@@ -743,9 +737,7 @@ class TickStore:
             logger.error("TickStore.ohlcv: %s", exc)
             bars = []
         if not bars:
-            return pd.DataFrame(
-                columns=["bar_ts_ns", "open", "high", "low", "close", "volume", "tick_count"]
-            )
+            return pd.DataFrame(columns=["bar_ts_ns", "open", "high", "low", "close", "volume", "tick_count"])
         df = pd.DataFrame(bars)
         df["bar_ts"] = pd.to_datetime(df["bar_ts_ns"], unit="ns", utc=True)
         return df.sort_values("bar_ts_ns", ascending=False).reset_index(drop=True)

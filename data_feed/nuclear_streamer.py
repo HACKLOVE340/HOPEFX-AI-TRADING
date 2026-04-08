@@ -101,9 +101,7 @@ _PRICE_MAX: float = 10_000.0
 # Maximum age (seconds) a tick may have before it is considered stale and
 # discarded.  Ticks older than this (event_ts too far in the past) indicate
 # a lagging feed and should not update last_price or trigger signals.
-_MAX_STALE_SECONDS: float = float(
-    os.environ.get("NUCLEAR_MAX_STALE_SECONDS", "30")
-)
+_MAX_STALE_SECONDS: float = float(os.environ.get("NUCLEAR_MAX_STALE_SECONDS", "30"))
 
 # Reconnect back-off: initial 1 s, doubles each attempt, capped at 60 s.
 _BACKOFF_INITIAL: float = 1.0

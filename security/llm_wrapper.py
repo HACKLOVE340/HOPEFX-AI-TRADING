@@ -97,7 +97,9 @@ async def _call_anthropic(prompt: str) -> str:
             if status in (429, 503, 529):
                 last_exc = exc
                 delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
-                logger.warning("Anthropic transient error %d — retry %d/%d in %.1fs", status, attempt, _MAX_RETRIES, delay)
+                logger.warning(
+                    "Anthropic transient error %d — retry %d/%d in %.1fs", status, attempt, _MAX_RETRIES, delay
+                )
                 await asyncio.sleep(delay)
                 continue
             raise

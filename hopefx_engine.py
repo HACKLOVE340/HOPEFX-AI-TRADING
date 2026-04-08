@@ -178,7 +178,7 @@ class HopeFXEngine:
     # Safety caps on position size to prevent runaway sizing.
     # Units are troy ounces (oz) for XAU/USD gold spot.
     # 1 standard lot = 100 oz; mini lot = 10 oz.
-    MAX_LIVE_POSITION_SIZE: float = 1.0   # max 1 oz (0.01 standard lot) for live trading
+    MAX_LIVE_POSITION_SIZE: float = 1.0  # max 1 oz (0.01 standard lot) for live trading
     MAX_PAPER_POSITION_SIZE: float = 10.0  # max 10 oz (0.1 standard lot) for paper/test trading
 
     def __init__(self) -> None:
@@ -216,7 +216,7 @@ class HopeFXEngine:
         self._bar_count = 0  # completed H1 bars processed
 
         # Per-symbol H1 bar aggregation state
-        self._current_bar: dict = {}       # sym_key -> {open, high, low, close, volume}
+        self._current_bar: dict = {}  # sym_key -> {open, high, low, close, volume}
         self._current_bar_time: dict = {}  # sym_key -> datetime (hour boundary)
 
         # Symbols actively streamed via NuclearStreamer (skip in poll loop)
@@ -336,6 +336,7 @@ class HopeFXEngine:
         # Inject strategy manager into brain
         try:
             from strategies import StrategyManager
+
             sm = StrategyManager()
             self._brain.inject(strategy_manager=sm)
             logger.info("StrategyManager injected into brain (%d strategies)", len(sm.list_strategies()))
@@ -1053,6 +1054,7 @@ class HopeFXEngine:
                     # them (CME, IBKR, CPP shim, paper, etc.).
                     try:
                         from brokers.factory import BrokerFactory as _BF
+
                         _seen_classes: set[type] = {type(self._broker)}
                         for _broker_name in _BF.list_brokers():
                             if _broker_name in ("primary",):
@@ -1068,18 +1070,16 @@ class HopeFXEngine:
                                 _seen_classes.add(type(_candidate))
                                 if hasattr(_candidate, "connect") and _candidate.connect():
                                     self._smart_router.add_broker(_broker_name, _candidate)
-                                    logger.info(
-                                        "SmartRouter: registered broker=%s", _broker_name
-                                    )
+                                    logger.info("SmartRouter: registered broker=%s", _broker_name)
                             except Exception as _reg_exc:
                                 logger.debug(
                                     "SmartRouter: skipping broker=%s (%s)",
-                                    _broker_name, _reg_exc,
+                                    _broker_name,
+                                    _reg_exc,
                                 )
                     except Exception as _factory_exc:
                         logger.warning(
-                            "SmartRouter: broker registration failed (%s) — "
-                            "routing with primary only",
+                            "SmartRouter: broker registration failed (%s) — routing with primary only",
                             _factory_exc,
                         )
                 sr_request = {

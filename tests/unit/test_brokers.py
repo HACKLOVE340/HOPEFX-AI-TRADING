@@ -20,6 +20,7 @@ from brokers.paper_trading import PaperTradingBroker
 # PaperTradingBroker.connect() is async; all trading methods are sync.
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def paper_broker():
     """Synchronous paper broker fixture for sync test methods."""

@@ -12,12 +12,16 @@ Invoices include access codes and are sent to users upon payment confirmation.
 
 import logging
 from datetime import datetime, timezone
+
 try:
     from enum import StrEnum
 except ImportError:
     from enum import Enum
+
     class StrEnum(str, Enum):  # Python 3.10 compat
         pass
+
+
 UTC = timezone.utc
 from decimal import Decimal
 

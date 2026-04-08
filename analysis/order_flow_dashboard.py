@@ -18,6 +18,7 @@ Provides a single get_complete_analysis() method for a full snapshot.
 
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import ClassVar
 

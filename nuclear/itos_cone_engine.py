@@ -64,8 +64,8 @@ _MINUTES_PER_YEAR = _TRADING_DAYS_PER_YEAR * _TRADING_HOURS_PER_DAY * 60
 
 # Horizon fractions of a year (annualised)
 _HORIZONS: dict[str, float] = {
-    "1d":  1.0 / _TRADING_DAYS_PER_YEAR,
-    "1w":  5.0 / _TRADING_DAYS_PER_YEAR,
+    "1d": 1.0 / _TRADING_DAYS_PER_YEAR,
+    "1w": 5.0 / _TRADING_DAYS_PER_YEAR,
     "2w": 10.0 / _TRADING_DAYS_PER_YEAR,
     "1m": 21.0 / _TRADING_DAYS_PER_YEAR,
     "3m": 63.0 / _TRADING_DAYS_PER_YEAR,
@@ -85,9 +85,9 @@ _MIN_BARS_MINIMUM = 10
 class ConeDot:
     """Single projected price point at a given horizon."""
 
-    horizon: str          # "1w", "1m", etc.
+    horizon: str  # "1w", "1m", etc.
     horizon_years: float  # fractional year
-    centre: float         # drift-only projection
+    centre: float  # drift-only projection
     upper_1sigma: float
     lower_1sigma: float
     upper_2sigma: float
@@ -121,12 +121,12 @@ class ItosCone:
 
     symbol: str
     current_price: float
-    drift_annual: float          # μ annualised log-return
-    volatility_annual: float     # σ annualised volatility
-    sample_size: int             # number of returns used
-    timeframe: str               # bar timeframe of input data
-    confidence: float            # 0–1 quality score
-    dots: dict[str, ConeDot]     # horizon → ConeDot
+    drift_annual: float  # μ annualised log-return
+    volatility_annual: float  # σ annualised volatility
+    sample_size: int  # number of returns used
+    timeframe: str  # bar timeframe of input data
+    confidence: float  # 0–1 quality score
+    dots: dict[str, ConeDot]  # horizon → ConeDot
     computed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     # Convenience accessors for the most-used horizons
@@ -276,7 +276,9 @@ class ItosConeEngine:
         if len(closes_arr) < self._min_bars:
             logger.warning(
                 "ItosConeEngine: only %d bars for %s/%s — cone confidence will be low",
-                len(closes_arr), symbol, timeframe,
+                len(closes_arr),
+                symbol,
+                timeframe,
             )
 
         S0 = float(current_price) if current_price and current_price > 0 else float(closes_arr[-1])
@@ -302,7 +304,13 @@ class ItosConeEngine:
 
         logger.debug(
             "ItosCone %s/%s: μ=%.4f σ=%.4f bias=%s vol=%s conf=%.2f",
-            symbol, timeframe, mu, sigma, cone.bias, cone.vol_regime, confidence,
+            symbol,
+            timeframe,
+            mu,
+            sigma,
+            cone.bias,
+            cone.vol_regime,
+            confidence,
         )
         return cone
 
@@ -388,18 +396,9 @@ class ItosConeEngine:
             total_w = 1.0
 
         # Weighted drift and vol
-        mu_merged = sum(
-            c.drift_annual * weights.get(tf, 1.0) / total_w
-            for tf, c in cones.items()
-        )
-        sigma_merged = sum(
-            c.volatility_annual * weights.get(tf, 1.0) / total_w
-            for tf, c in cones.items()
-        )
-        conf_merged = sum(
-            c.confidence * weights.get(tf, 1.0) / total_w
-            for tf, c in cones.items()
-        )
+        mu_merged = sum(c.drift_annual * weights.get(tf, 1.0) / total_w for tf, c in cones.items())
+        sigma_merged = sum(c.volatility_annual * weights.get(tf, 1.0) / total_w for tf, c in cones.items())
+        conf_merged = sum(c.confidence * weights.get(tf, 1.0) / total_w for tf, c in cones.items())
 
         # Use the highest-confidence cone's current price
         best_cone = max(cones.values(), key=lambda c: c.confidence)
@@ -481,7 +480,7 @@ class ItosConeEngine:
         upper_n = S0 · exp[(μ - σ²/2) · T + n·σ·√T]
         lower_n = S0 · exp[(μ - σ²/2) · T - n·σ·√T]
         """
-        drift_term = (mu - 0.5 * sigma ** 2) * T
+        drift_term = (mu - 0.5 * sigma**2) * T
         diffusion = sigma * math.sqrt(max(T, 1e-10))
 
         centre = S0 * math.exp(drift_term)
@@ -514,20 +513,20 @@ class ItosConeEngine:
         Used to convert per-bar variance to annualised variance.
         """
         _MAP: dict[str, float] = {
-            "1m":      _TRADING_DAYS_PER_YEAR * 24 * 60,
-            "5m":      _TRADING_DAYS_PER_YEAR * 24 * 12,
-            "15m":     _TRADING_DAYS_PER_YEAR * 24 * 4,
-            "30m":     _TRADING_DAYS_PER_YEAR * 24 * 2,
-            "1h":      _TRADING_DAYS_PER_YEAR * 24,
-            "4h":      _TRADING_DAYS_PER_YEAR * 6,
-            "daily":   _TRADING_DAYS_PER_YEAR,
-            "1d":      _TRADING_DAYS_PER_YEAR,
-            "weekly":  52.0,
-            "1w":      52.0,
+            "1m": _TRADING_DAYS_PER_YEAR * 24 * 60,
+            "5m": _TRADING_DAYS_PER_YEAR * 24 * 12,
+            "15m": _TRADING_DAYS_PER_YEAR * 24 * 4,
+            "30m": _TRADING_DAYS_PER_YEAR * 24 * 2,
+            "1h": _TRADING_DAYS_PER_YEAR * 24,
+            "4h": _TRADING_DAYS_PER_YEAR * 6,
+            "daily": _TRADING_DAYS_PER_YEAR,
+            "1d": _TRADING_DAYS_PER_YEAR,
+            "weekly": 52.0,
+            "1w": 52.0,
             "monthly": 12.0,
-            "1mo":     12.0,
-            "yearly":  1.0,
-            "1y":      1.0,
+            "1mo": 12.0,
+            "yearly": 1.0,
+            "1y": 1.0,
         }
         factor = _MAP.get(timeframe.lower())
         if factor is None:

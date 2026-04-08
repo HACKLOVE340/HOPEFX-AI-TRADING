@@ -58,6 +58,7 @@ import os
 
 
 import logging
+
 logger = logging.getLogger(__name__)
 _DATA_PATH = os.environ.get("DATA_PATH", "data/XAU_USD_H1.csv")
 data = pd.read_csv(_DATA_PATH)

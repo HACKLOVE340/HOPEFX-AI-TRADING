@@ -17,6 +17,7 @@ tests/unit/test_kill_switch_integration.py
 
 import json
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 

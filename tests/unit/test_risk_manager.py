@@ -10,6 +10,7 @@ Unit tests for Risk Manager - FIA 2024 Compliant
 """
 
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 import pytest

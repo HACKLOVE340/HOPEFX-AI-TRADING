@@ -98,6 +98,7 @@ def clean_strategy_manager():
 # CME/FIX stub fixture
 # ---------------------------------------------------------------------------
 
+
 def _build_fix_adapter_stub() -> types.ModuleType:
     """Return a minimal execution.fix_adapter stub for CME connector tests."""
     mod = types.ModuleType("execution.fix_adapter")

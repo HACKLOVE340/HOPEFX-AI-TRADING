@@ -66,18 +66,19 @@ _VOLUME_MA_PERIOD = 20
 
 # Minimum bars needed per timeframe for reliable features
 _MIN_BARS: dict[str, int] = {
-    "1m":      30,
-    "5m":      30,
-    "30m":     30,
-    "1h":      30,
-    "daily":   50,
-    "weekly":  20,
+    "1m": 30,
+    "5m": 30,
+    "30m": 30,
+    "1h": 30,
+    "daily": 50,
+    "weekly": 20,
     "monthly": 12,
-    "yearly":  3,
+    "yearly": 3,
 }
 
 
 # ── Feature containers ────────────────────────────────────────────────────────
+
 
 @dataclass
 class TechnicalFeatures:
@@ -90,20 +91,20 @@ class TechnicalFeatures:
 
     # ATR
     atr: float = 0.0
-    atr_pct: float = 0.0          # ATR / price
+    atr_pct: float = 0.0  # ATR / price
 
     # Bollinger Bands
     bb_upper: float = 0.0
     bb_lower: float = 0.0
     bb_mid: float = 0.0
-    bb_width: float = 0.0         # (upper - lower) / mid
-    bb_pct_b: float = 0.5         # (price - lower) / (upper - lower)
-    bb_squeeze: bool = False      # width < historical 20th percentile
+    bb_width: float = 0.0  # (upper - lower) / mid
+    bb_pct_b: float = 0.5  # (price - lower) / (upper - lower)
+    bb_squeeze: bool = False  # width < historical 20th percentile
 
     # RSI
     rsi: float = 50.0
     rsi_overbought: bool = False  # rsi > 70
-    rsi_oversold: bool = False    # rsi < 30
+    rsi_oversold: bool = False  # rsi < 30
 
     # EMAs
     ema_9: float = 0.0
@@ -114,22 +115,22 @@ class TechnicalFeatures:
     price_above_ema_200: bool = False
     ema_9_above_21: bool = False
     ema_21_above_50: bool = False
-    golden_cross: bool = False    # ema_50 crossed above ema_200 recently
-    death_cross: bool = False     # ema_50 crossed below ema_200 recently
+    golden_cross: bool = False  # ema_50 crossed above ema_200 recently
+    death_cross: bool = False  # ema_50 crossed below ema_200 recently
 
     # MACD
     macd_line: float = 0.0
     macd_signal: float = 0.0
     macd_histogram: float = 0.0
-    macd_bullish: bool = False    # histogram > 0 and rising
+    macd_bullish: bool = False  # histogram > 0 and rising
 
     # Volume
     volume_ma: float = 0.0
-    volume_ratio: float = 1.0     # current_vol / volume_ma
-    volume_surge: bool = False    # ratio > 1.5
+    volume_ratio: float = 1.0  # current_vol / volume_ma
+    volume_surge: bool = False  # ratio > 1.5
 
     # Trend
-    trend_slope: float = 0.0      # linear regression slope of closes (normalised)
+    trend_slope: float = 0.0  # linear regression slope of closes (normalised)
     higher_highs: bool = False
     lower_lows: bool = False
 
@@ -189,9 +190,9 @@ class MacroFeatures:
     # Derived
     risk_off: bool = False
     dollar_strong: bool = False
-    gold_bullish_macro: bool = False   # risk_off + weak dollar
-    gold_bearish_macro: bool = False   # risk_on + strong dollar
-    vix_regime: str = "normal"         # "low" / "normal" / "elevated" / "crisis"
+    gold_bullish_macro: bool = False  # risk_off + weak dollar
+    gold_bearish_macro: bool = False  # risk_on + strong dollar
+    vix_regime: str = "normal"  # "low" / "normal" / "elevated" / "crisis"
     yield_curve_pressure: str = "neutral"  # "rising" / "falling" / "neutral"
 
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -218,7 +219,7 @@ class MultiTimeframeFeatures:
     """Complete feature set across all timeframes + macro."""
 
     symbol: str
-    timeframes: dict[str, TechnicalFeatures]   # tf → features
+    timeframes: dict[str, TechnicalFeatures]  # tf → features
     macro: MacroFeatures
     computed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -235,6 +236,7 @@ class MultiTimeframeFeatures:
 
 
 # ── FeatureBuilder ────────────────────────────────────────────────────────────
+
 
 class FeatureBuilder:
     """
@@ -365,8 +367,8 @@ class FeatureBuilder:
             if n >= bb_period + 10:
                 widths = []
                 for i in range(bb_period, n + 1):
-                    w_mid = float(np.mean(closes[i - bb_period:i]))
-                    w_std = float(np.std(closes[i - bb_period:i], ddof=1))
+                    w_mid = float(np.mean(closes[i - bb_period : i]))
+                    w_std = float(np.std(closes[i - bb_period : i], ddof=1))
                     widths.append((w_std * 2 * _BB_STD) / (w_mid + 1e-9))
                 feat.bb_squeeze = bb_width < float(np.percentile(widths, 20))
 
@@ -414,9 +416,7 @@ class FeatureBuilder:
             feat.macd_signal = float(signal_line[-1])
             feat.macd_histogram = float(histogram[-1])
             feat.macd_bullish = (
-                feat.macd_histogram > 0
-                and len(histogram) >= 2
-                and float(histogram[-1]) > float(histogram[-2])
+                feat.macd_histogram > 0 and len(histogram) >= 2 and float(histogram[-1]) > float(histogram[-2])
             )
 
         # ── Volume ────────────────────────────────────────────────────────────
@@ -491,6 +491,7 @@ class FeatureBuilder:
 
 # ── Pure numpy indicator implementations ──────────────────────────────────────
 
+
 def _ema(values: np.ndarray, period: int) -> np.ndarray:
     """Exponential moving average — Wilder smoothing (alpha = 2/(n+1))."""
     alpha = 2.0 / (period + 1)
@@ -547,6 +548,7 @@ def _compute_rsi(closes: np.ndarray, period: int) -> float:
 
 # ── Convenience function ──────────────────────────────────────────────────────
 
+
 def build_features_from_bars(
     bars_by_tf: dict[str, list[OHLCVBar]],
     macro: MacroSnapshot | None = None,
@@ -557,10 +559,12 @@ def build_features_from_bars(
 
     Useful for backtesting and unit tests where a live reader is not available.
     """
+
     # Create a minimal reader-like object
     class _StaticReader:
         def get_all_bars(self):
             return bars_by_tf
+
         def get_macro(self):
             return macro or MacroSnapshot()
 

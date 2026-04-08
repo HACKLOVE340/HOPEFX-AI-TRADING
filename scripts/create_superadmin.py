@@ -46,13 +46,14 @@ from auth.jwt import create_access_token, hash_password
 from database.models import Base
 from database.user_models import User, UserRole, UserStatus
 import logging
-logger = logging.getLogger(__name__)
 
+logger = logging.getLogger(__name__)
 
 
 # ── Password policy ───────────────────────────────────────────────────────────
 
 _SPECIAL = "!@#$%^&*()-_=+[]{}|;:,.<>?"
+
 
 def _generate_password() -> str:
     """
@@ -98,6 +99,7 @@ def _validate_password(pw: str) -> str | None:
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
+
 def _get_engine():
     db_url = os.environ.get("DATABASE_URL", "sqlite:///hopefx.db")
     connect_args = {"check_same_thread": False} if db_url.startswith("sqlite") else {}
@@ -111,11 +113,7 @@ def _create_or_update(email: str, username: str, password: str, reset: bool) -> 
     session = Session()
 
     try:
-        existing = (
-            session.query(User)
-            .filter((User.email == email.lower()) | (User.username == username))
-            .first()
-        )
+        existing = session.query(User).filter((User.email == email.lower()) | (User.username == username)).first()
 
         hashed = hash_password(password)
 
@@ -170,6 +168,7 @@ def _create_or_update(email: str, username: str, password: str, reset: bool) -> 
 def _generate_token(user_id: str) -> str:
     """Generate a short-lived (15 min) JWT for immediate login verification."""
     from datetime import timedelta
+
     return create_access_token(
         data={"sub": user_id, "role": "superadmin", "type": "access"},
         expires_delta=timedelta(minutes=15),
@@ -178,12 +177,13 @@ def _generate_token(user_id: str) -> str:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+
 def main():
     parser = argparse.ArgumentParser(description="Create or reset HOPEFX superadmin account")
-    parser.add_argument("--email",    default="superadmin@hopefx.io", help="Superadmin email")
-    parser.add_argument("--username", default="superadmin",           help="Superadmin username")
-    parser.add_argument("--password", default=None,                   help="Password (auto-generated if omitted)")
-    parser.add_argument("--reset",    action="store_true",            help="Reset password if user already exists")
+    parser.add_argument("--email", default="superadmin@hopefx.io", help="Superadmin email")
+    parser.add_argument("--username", default="superadmin", help="Superadmin username")
+    parser.add_argument("--password", default=None, help="Password (auto-generated if omitted)")
+    parser.add_argument("--reset", action="store_true", help="Reset password if user already exists")
     args = parser.parse_args()
 
     # ── Validate or generate password ─────────────────────────────────────────

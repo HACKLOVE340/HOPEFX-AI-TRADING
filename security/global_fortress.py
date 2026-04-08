@@ -36,6 +36,7 @@ import logging
 import os
 import time
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 from typing import Any, ClassVar
@@ -774,6 +775,7 @@ def get_brain() -> HOPEFXBrain | None:
 # exist before the async startup tasks complete.  Each handler delegates to
 # get_brain() so it always uses the live instance once start_brain() runs.
 
+
 def _build_eager_router() -> APIRouter:
     """
     Build a /api/security/* router whose handlers delegate to get_brain().
@@ -810,6 +812,7 @@ def _build_eager_router() -> APIRouter:
         brain = get_brain()
         if brain is None:
             from fastapi import HTTPException as _HTTPException
+
             raise _HTTPException(status_code=503, detail="Security brain not started")
         # Delegate to the live router handler by re-using the same logic
         router = _build_router(brain)
@@ -818,6 +821,7 @@ def _build_eager_router() -> APIRouter:
             if hasattr(route, "path") and route.path == "/api/security/fixes/approve":
                 return await route.endpoint(payload)
         from fastapi import HTTPException as _HTTPException
+
         raise _HTTPException(status_code=503, detail="Fix approval handler unavailable")
 
     @r.post("/fixes/decline")

@@ -34,6 +34,7 @@ from strategies.sniper_entry_engine import (
 # Shared bar-building helpers
 # ---------------------------------------------------------------------------
 
+
 def _bar(open_: float, high: float, low: float, close: float, volume: int = 1000) -> dict:
     return {"open": open_, "high": high, "low": low, "close": close, "volume": volume}
 
@@ -81,6 +82,7 @@ def _bars_to_df(bars: list[dict]) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # _calc_atr
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestCalcATR:
@@ -141,6 +143,7 @@ class TestCalcATR:
 # ---------------------------------------------------------------------------
 # _analyse_structure
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestAnalyseStructure:
@@ -267,6 +270,7 @@ class TestAnalyseStructure:
 # _find_last_ob
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestFindLastOB:
     """Unit tests for Order Block detection."""
@@ -282,8 +286,8 @@ class TestFindLastOB:
         """
         bars = _trending_up_bars(15)
         # Insert a bearish candle followed by a strong bullish impulse
-        ob_candle = _bar(1920.0, 1922.0, 1910.0, 1912.0)   # bearish
-        impulse   = _bar(1912.0, 1940.0, 1911.0, 1938.0)   # bullish, closes > ob_candle.high
+        ob_candle = _bar(1920.0, 1922.0, 1910.0, 1912.0)  # bearish
+        impulse = _bar(1912.0, 1940.0, 1911.0, 1938.0)  # bullish, closes > ob_candle.high
         bars.extend([ob_candle, impulse])
         bars.extend(_trending_up_bars(5, base=1938.0))
         return bars
@@ -295,8 +299,8 @@ class TestFindLastOB:
         below the bullish candle's low.
         """
         bars = _trending_down_bars(15)
-        ob_candle = _bar(1880.0, 1890.0, 1878.0, 1888.0)   # bullish
-        impulse   = _bar(1888.0, 1889.0, 1860.0, 1862.0)   # bearish, closes < ob_candle.low
+        ob_candle = _bar(1880.0, 1890.0, 1878.0, 1888.0)  # bullish
+        impulse = _bar(1888.0, 1889.0, 1860.0, 1862.0)  # bearish, closes < ob_candle.low
         bars.extend([ob_candle, impulse])
         bars.extend(_trending_down_bars(5, base=1862.0))
         return bars
@@ -355,6 +359,7 @@ class TestFindLastOB:
 # _find_displacement
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestFindDisplacement:
     """Unit tests for displacement candle + FVG detection."""
@@ -371,7 +376,7 @@ class TestFindDisplacement:
         prev = _bar(1900.0, 1905.0, 1898.0, 1904.0)
         # Large bullish body: open 1904, close 1930 → body=26, ATR ~1.8 → qualifies
         curr = _bar(1904.0, 1932.0, 1903.0, 1930.0)
-        nxt  = _bar(1930.0, 1935.0, 1910.0, 1928.0)  # low=1910 > prev.high=1905 → FVG
+        nxt = _bar(1930.0, 1935.0, 1910.0, 1928.0)  # low=1910 > prev.high=1905 → FVG
         bars.extend([prev, curr, nxt])
         return bars
 
@@ -384,7 +389,7 @@ class TestFindDisplacement:
         prev = _bar(1900.0, 1902.0, 1895.0, 1896.0)
         # Large bearish body: open 1896, close 1870 → body=26
         curr = _bar(1896.0, 1897.0, 1868.0, 1870.0)
-        nxt  = _bar(1870.0, 1892.0, 1869.0, 1871.0)  # high=1892 < prev.low=1895 → FVG
+        nxt = _bar(1870.0, 1892.0, 1869.0, 1871.0)  # high=1892 < prev.low=1895 → FVG
         bars.extend([prev, curr, nxt])
         return bars
 
@@ -436,7 +441,7 @@ class TestFindDisplacement:
         bars = _trending_up_bars(10)
         prev = _bar(1900.0, 1910.0, 1898.0, 1908.0)
         curr = _bar(1908.0, 1935.0, 1907.0, 1933.0)  # large bullish body
-        nxt  = _bar(1933.0, 1936.0, 1905.0, 1930.0)  # low=1905 < prev.high=1910 → NO FVG
+        nxt = _bar(1933.0, 1936.0, 1905.0, 1930.0)  # low=1905 < prev.high=1910 → NO FVG
         bars.extend([prev, curr, nxt])
         dc = self.engine._find_displacement(bars, "long")
         # The last 3 bars don't form a valid FVG; earlier bars may or may not
@@ -453,6 +458,7 @@ class TestFindDisplacement:
 # ---------------------------------------------------------------------------
 # Spread guard
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestSpreadGuard:
@@ -507,6 +513,7 @@ class TestSpreadGuard:
 # HTF setup detection — _detect_htf_setup
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestDetectHTFSetup:
     """Unit tests for the HTF Order Block + structure detection step."""
@@ -541,8 +548,8 @@ class TestDetectHTFSetup:
         """
         bars = _trending_up_bars(30)
         # Add a qualifying OB pattern
-        ob_candle = _bar(1960.0, 1962.0, 1950.0, 1952.0)   # bearish
-        impulse   = _bar(1952.0, 1980.0, 1951.0, 1978.0)   # bullish impulse > ob.high
+        ob_candle = _bar(1960.0, 1962.0, 1950.0, 1952.0)  # bearish
+        impulse = _bar(1952.0, 1980.0, 1951.0, 1978.0)  # bullish impulse > ob.high
         bars.extend([ob_candle, impulse])
         bars.extend(_trending_up_bars(5, base=1978.0, step=0.5))
         df = _bars_to_df(bars)
@@ -556,7 +563,7 @@ class TestDetectHTFSetup:
     def test_atr_returned_is_positive(self):
         bars = _trending_up_bars(30)
         ob_candle = _bar(1960.0, 1962.0, 1950.0, 1952.0)
-        impulse   = _bar(1952.0, 1980.0, 1951.0, 1978.0)
+        impulse = _bar(1952.0, 1980.0, 1951.0, 1978.0)
         bars.extend([ob_candle, impulse])
         bars.extend(_trending_up_bars(5, base=1978.0, step=0.5))
         df = _bars_to_df(bars)
@@ -572,7 +579,7 @@ class TestDetectHTFSetup:
         """
         bars = _trending_up_bars(30)
         ob_candle = _bar(1960.0, 1962.0, 1950.0, 1952.0)
-        impulse   = _bar(1952.0, 1980.0, 1951.0, 1978.0)
+        impulse = _bar(1952.0, 1980.0, 1951.0, 1978.0)
         bars.extend([ob_candle, impulse])
         # Drive price far away from the OB
         bars.extend(_trending_up_bars(20, base=2100.0, step=5.0))

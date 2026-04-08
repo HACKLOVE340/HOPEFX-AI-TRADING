@@ -225,11 +225,7 @@ class MacroStoreBridge:
                 # Persist a "last known good" snapshot for future fallbacks
                 try:
                     cache_data = {
-                        name: {
-                            str(idx): float(val)
-                            for idx, val in series.items()
-                            if val is not None
-                        }
+                        name: {str(idx): float(val) for idx, val in series.items() if val is not None}
                         for name, series in all_series.items()
                         if not series.empty
                     }
@@ -245,16 +241,13 @@ class MacroStoreBridge:
                     with open(_FRED_CACHE_PATH) as _cf:
                         cache_data = json.load(_cf)
                     all_series = {
-                        name: pd.Series(
-                            {pd.Timestamp(k): v for k, v in vals.items()}, dtype=float
-                        )
+                        name: pd.Series({pd.Timestamp(k): v for k, v in vals.items()}, dtype=float)
                         for name, vals in cache_data.items()
                     }
                     logger.info("MacroStoreBridge: loaded %d FRED series from local cache", len(all_series))
                 except FileNotFoundError:
                     logger.warning(
-                        "MacroStoreBridge: FRED fetch failed and no local cache at %s"
-                        " — macro features will be zero",
+                        "MacroStoreBridge: FRED fetch failed and no local cache at %s — macro features will be zero",
                         _FRED_CACHE_PATH,
                     )
                     return

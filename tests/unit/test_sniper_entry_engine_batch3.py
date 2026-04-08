@@ -40,6 +40,7 @@ from strategies.sniper_entry_engine import (
 # Shared helpers
 # ---------------------------------------------------------------------------
 
+
 def _bar(open_: float, high: float, low: float, close: float) -> dict:
     return {"open": open_, "high": high, "low": low, "close": close, "volume": 1000}
 
@@ -56,9 +57,14 @@ def _make_displacement(
 ) -> DisplacementCandle:
     return DisplacementCandle(
         direction=direction,
-        open=1888.0, high=1910.0, low=1886.0, close=1908.0,
-        fvg_top=fvg_top, fvg_bottom=fvg_bottom,
-        ce_level=ce, bar_index=8,
+        open=1888.0,
+        high=1910.0,
+        low=1886.0,
+        close=1908.0,
+        fvg_top=fvg_top,
+        fvg_bottom=fvg_bottom,
+        ce_level=ce,
+        bar_index=8,
     )
 
 
@@ -83,6 +89,7 @@ def _make_ltf_conf(
 # _build_setup — long direction
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestBuildSetupLong:
     """_build_setup for long entries."""
@@ -93,8 +100,7 @@ class TestBuildSetupLong:
         self.engine.tp_rr = 2.0
         self.engine.confidence_boost = 1.20
 
-    def _call(self, entry_ce=1901.5, ob_bottom=1890.0, ob_top=1895.0,
-              atr=5.0, mid_price=1902.0, base_conf=0.7):
+    def _call(self, entry_ce=1901.5, ob_bottom=1890.0, ob_top=1895.0, atr=5.0, mid_price=1902.0, base_conf=0.7):
         ob = _make_ob("bullish", top=ob_top, bottom=ob_bottom)
         dc = _make_displacement("bullish", ce=entry_ce)
         ltf = _make_ltf_conf(confirmed=True, event="BOS_bullish", displacement=dc)
@@ -189,6 +195,7 @@ class TestBuildSetupLong:
 # _build_setup — short direction
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestBuildSetupShort:
     """_build_setup for short entries."""
@@ -199,11 +206,9 @@ class TestBuildSetupShort:
         self.engine.tp_rr = 2.0
         self.engine.confidence_boost = 1.20
 
-    def _call(self, entry_ce=1998.5, ob_top=2010.0, ob_bottom=2005.0,
-              atr=5.0, mid_price=1998.0, base_conf=0.7):
+    def _call(self, entry_ce=1998.5, ob_top=2010.0, ob_bottom=2005.0, atr=5.0, mid_price=1998.0, base_conf=0.7):
         ob = _make_ob("bearish", top=ob_top, bottom=ob_bottom)
-        dc = _make_displacement("bearish", ce=entry_ce,
-                                fvg_top=1995.0, fvg_bottom=1988.0)
+        dc = _make_displacement("bearish", ce=entry_ce, fvg_top=1995.0, fvg_bottom=1988.0)
         ltf = _make_ltf_conf(confirmed=True, event="BOS_bearish", displacement=dc)
         return self.engine._build_setup(
             symbol="XAU_USD",
@@ -254,6 +259,7 @@ class TestBuildSetupShort:
 # _build_setup — rejection cases
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestBuildSetupRejections:
     """_build_setup returns None for invalid setups."""
@@ -268,20 +274,34 @@ class TestBuildSetupRejections:
         dc = _make_displacement("bullish", ce=0.0)
         ltf = _make_ltf_conf(confirmed=True, displacement=dc)
         result = self.engine._build_setup(
-            symbol="XAU_USD", direction="long", mid_price=1900.0,
-            htf_ob=ob, htf_atr=5.0, ltf_conf=ltf, base_confidence=0.7,
+            symbol="XAU_USD",
+            direction="long",
+            mid_price=1900.0,
+            htf_ob=ob,
+            htf_atr=5.0,
+            ltf_conf=ltf,
+            base_confidence=0.7,
         )
         assert result is None
 
     def test_returns_none_when_displacement_is_none(self):
         ob = _make_ob("bullish", top=1895.0, bottom=1890.0)
         ltf = LTFConfirmation(
-            confirmed=True, event="BOS_bullish",
-            displacement=None, last_sh=1915.0, last_sl=1880.0, bars_analysed=100,
+            confirmed=True,
+            event="BOS_bullish",
+            displacement=None,
+            last_sh=1915.0,
+            last_sl=1880.0,
+            bars_analysed=100,
         )
         result = self.engine._build_setup(
-            symbol="XAU_USD", direction="long", mid_price=1900.0,
-            htf_ob=ob, htf_atr=5.0, ltf_conf=ltf, base_confidence=0.7,
+            symbol="XAU_USD",
+            direction="long",
+            mid_price=1900.0,
+            htf_ob=ob,
+            htf_atr=5.0,
+            ltf_conf=ltf,
+            base_confidence=0.7,
         )
         assert result is None
 
@@ -292,8 +312,13 @@ class TestBuildSetupRejections:
         dc = _make_displacement("bullish", ce=1887.5)
         ltf = _make_ltf_conf(confirmed=True, displacement=dc)
         result = self.engine._build_setup(
-            symbol="XAU_USD", direction="long", mid_price=1888.0,
-            htf_ob=ob, htf_atr=5.0, ltf_conf=ltf, base_confidence=0.7,
+            symbol="XAU_USD",
+            direction="long",
+            mid_price=1888.0,
+            htf_ob=ob,
+            htf_atr=5.0,
+            ltf_conf=ltf,
+            base_confidence=0.7,
         )
         assert result is None
 
@@ -304,8 +329,13 @@ class TestBuildSetupRejections:
         dc = _make_displacement("bullish", ce=1920.0)
         ltf = _make_ltf_conf(confirmed=True, displacement=dc)
         result = self.engine._build_setup(
-            symbol="XAU_USD", direction="long", mid_price=1900.0,
-            htf_ob=ob, htf_atr=5.0, ltf_conf=ltf, base_confidence=0.7,
+            symbol="XAU_USD",
+            direction="long",
+            mid_price=1900.0,
+            htf_ob=ob,
+            htf_atr=5.0,
+            ltf_conf=ltf,
+            base_confidence=0.7,
         )
         assert result is None
 
@@ -313,12 +343,16 @@ class TestBuildSetupRejections:
         """Entry < mid_price - 2×ATR → rejected for short."""
         ob = _make_ob("bearish", top=2010.0, bottom=2005.0)
         # mid=2000, atr=5 → min entry = 2000 - 10 = 1990; set CE=1975
-        dc = _make_displacement("bearish", ce=1975.0,
-                                fvg_top=1978.0, fvg_bottom=1972.0)
+        dc = _make_displacement("bearish", ce=1975.0, fvg_top=1978.0, fvg_bottom=1972.0)
         ltf = _make_ltf_conf(confirmed=True, event="BOS_bearish", displacement=dc)
         result = self.engine._build_setup(
-            symbol="XAU_USD", direction="short", mid_price=2000.0,
-            htf_ob=ob, htf_atr=5.0, ltf_conf=ltf, base_confidence=0.7,
+            symbol="XAU_USD",
+            direction="short",
+            mid_price=2000.0,
+            htf_ob=ob,
+            htf_atr=5.0,
+            ltf_conf=ltf,
+            base_confidence=0.7,
         )
         assert result is None
 
@@ -335,8 +369,13 @@ class TestBuildSetupRejections:
         dc = _make_displacement("bullish", ce=1901.5)
         ltf = _make_ltf_conf(confirmed=True, displacement=dc)
         result = self.engine._build_setup(
-            symbol="XAU_USD", direction="long", mid_price=1902.0,
-            htf_ob=ob, htf_atr=5.0, ltf_conf=ltf, base_confidence=0.7,
+            symbol="XAU_USD",
+            direction="long",
+            mid_price=1902.0,
+            htf_ob=ob,
+            htf_atr=5.0,
+            ltf_conf=ltf,
+            base_confidence=0.7,
         )
         # actual rr = (entry + risk*10 - entry) / risk = 10.0 ≥ 9.0 → passes
         # The guard is actual_rr < tp_rr * 0.9; since actual_rr == tp_rr it passes
@@ -349,6 +388,7 @@ class TestBuildSetupRejections:
 # ---------------------------------------------------------------------------
 # _build_setup — R:R and confidence precision
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestBuildSetupMath:
@@ -365,8 +405,13 @@ class TestBuildSetupMath:
         dc = _make_displacement("bullish", ce=1901.5)
         ltf = _make_ltf_conf(confirmed=True, displacement=dc)
         setup = self.engine._build_setup(
-            symbol="XAU_USD", direction="long", mid_price=1902.0,
-            htf_ob=ob, htf_atr=5.0, ltf_conf=ltf, base_confidence=0.7,
+            symbol="XAU_USD",
+            direction="long",
+            mid_price=1902.0,
+            htf_ob=ob,
+            htf_atr=5.0,
+            ltf_conf=ltf,
+            base_confidence=0.7,
         )
         if setup is not None:
             risk = abs(setup.entry_price - setup.stop_loss)
@@ -382,20 +427,28 @@ class TestBuildSetupMath:
         dc = _make_displacement("bullish", ce=1901.5)
         ltf = _make_ltf_conf(confirmed=True, displacement=dc)
         setup = self.engine._build_setup(
-            symbol="XAU_USD", direction="long", mid_price=1902.0,
-            htf_ob=ob, htf_atr=5.0, ltf_conf=ltf, base_confidence=0.7,
+            symbol="XAU_USD",
+            direction="long",
+            mid_price=1902.0,
+            htf_ob=ob,
+            htf_atr=5.0,
+            ltf_conf=ltf,
+            base_confidence=0.7,
         )
         if setup is not None:
             expected_sl = round(1890.0 - 5.0 * sl_buffer, 5)
             assert setup.stop_loss == pytest.approx(expected_sl)
 
-    @pytest.mark.parametrize("base_conf,boost,expected", [
-        (0.5, 1.20, 0.6),
-        (0.7, 1.20, 0.84),
-        (0.9, 1.20, 1.0),   # capped
-        (1.0, 1.20, 1.0),   # capped
-        (0.8, 1.0,  0.8),   # no boost
-    ])
+    @pytest.mark.parametrize(
+        "base_conf,boost,expected",
+        [
+            (0.5, 1.20, 0.6),
+            (0.7, 1.20, 0.84),
+            (0.9, 1.20, 1.0),  # capped
+            (1.0, 1.20, 1.0),  # capped
+            (0.8, 1.0, 0.8),  # no boost
+        ],
+    )
     def test_confidence_boost_and_cap(self, base_conf, boost, expected):
         self.engine.confidence_boost = boost
         self.engine.sl_atr_buffer = 0.5
@@ -404,8 +457,13 @@ class TestBuildSetupMath:
         dc = _make_displacement("bullish", ce=1901.5)
         ltf = _make_ltf_conf(confirmed=True, displacement=dc)
         setup = self.engine._build_setup(
-            symbol="XAU_USD", direction="long", mid_price=1902.0,
-            htf_ob=ob, htf_atr=5.0, ltf_conf=ltf, base_confidence=base_conf,
+            symbol="XAU_USD",
+            direction="long",
+            mid_price=1902.0,
+            htf_ob=ob,
+            htf_atr=5.0,
+            ltf_conf=ltf,
+            base_confidence=base_conf,
         )
         if setup is not None:
             assert setup.confidence == pytest.approx(round(expected, 4), abs=0.001)
@@ -415,6 +473,7 @@ class TestBuildSetupMath:
 # ---------------------------------------------------------------------------
 # _confirm_ltf
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestConfirmLTF:
@@ -438,13 +497,13 @@ class TestConfirmLTF:
             prev = {"open": 1917.0, "high": 1919.0, "low": 1916.0, "close": 1918.0}
             # Large bullish body: 1918 → 1945 (body=27, ATR ~1 → qualifies at mult=1.5)
             curr = {"open": 1918.0, "high": 1947.0, "low": 1917.5, "close": 1945.0}
-            nxt  = {"open": 1945.0, "high": 1948.0, "low": 1922.0, "close": 1944.0}
+            nxt = {"open": 1945.0, "high": 1948.0, "low": 1922.0, "close": 1944.0}
             # nxt.low=1922 > prev.high=1919 → FVG exists
         else:
             prev = {"open": 1900.0, "high": 1902.0, "low": 1898.0, "close": 1899.0}
             # Large bearish body: 1899 → 1872 (body=27)
             curr = {"open": 1899.0, "high": 1899.5, "low": 1870.0, "close": 1872.0}
-            nxt  = {"open": 1872.0, "high": 1895.0, "low": 1871.0, "close": 1873.0}
+            nxt = {"open": 1872.0, "high": 1895.0, "low": 1871.0, "close": 1873.0}
             # nxt.high=1895 < prev.low=1898 → FVG exists
 
         bars.extend([prev, curr, nxt])
@@ -504,10 +563,7 @@ class TestConfirmLTF:
         assert result.confirmed is False
 
     def test_not_confirmed_for_too_few_bars(self):
-        df = pd.DataFrame([
-            {"open": 1900, "high": 1905, "low": 1895, "close": 1902}
-            for _ in range(5)
-        ])
+        df = pd.DataFrame([{"open": 1900, "high": 1905, "low": 1895, "close": 1902} for _ in range(5)])
         result = self.engine._confirm_ltf(df, "long")
         assert result.confirmed is False
 
@@ -515,6 +571,7 @@ class TestConfirmLTF:
 # ---------------------------------------------------------------------------
 # _fetch_ltf_bars
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestFetchLTFBars:

@@ -56,6 +56,7 @@ from locust.exception import StopUser  # pylint: disable=no-name-in-module
 from locust import HttpUser, between, events, task  # pylint: disable=no-name-in-module
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 _AUTH_TOKEN = os.getenv("AUTH_TOKEN", "")

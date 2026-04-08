@@ -24,8 +24,10 @@ UTC = timezone.utc
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_venue(name="Exchange_A", taker_fee=0.0005, latency_ms=15.0, max_size=1_000_000):
     from enhanced_smart_router import Venue, VenueType
+
     return Venue(
         name=name,
         venue_type=VenueType.EXCHANGE,
@@ -37,6 +39,7 @@ def _make_venue(name="Exchange_A", taker_fee=0.0005, latency_ms=15.0, max_size=1
 
 def _make_order(size=100.0, order_type=None, arrival_price=None):
     from enhanced_smart_router import Order, OrderSide, OrderType
+
     return Order(
         id="ord-001",
         symbol="XAUUSD",
@@ -52,6 +55,7 @@ def _make_order(size=100.0, order_type=None, arrival_price=None):
 # Venue
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestVenue:
     def test_total_cost_taker(self):
@@ -61,12 +65,14 @@ class TestVenue:
 
     def test_total_cost_maker(self):
         from enhanced_smart_router import Venue, VenueType
+
         venue = Venue("V", VenueType.EXCHANGE, maker_fee=0.0002, taker_fee=0.0005)
         cost = venue.total_cost(100_000.0, is_maker=True)
         assert cost == pytest.approx(20.0)
 
     def test_total_cost_zero_fee(self):
         from enhanced_smart_router import Venue, VenueType
+
         venue = Venue("Internal", VenueType.MAKER, maker_fee=0.0, taker_fee=0.0)
         assert venue.total_cost(100_000.0) == pytest.approx(0.0)
 
@@ -83,6 +89,7 @@ class TestVenue:
 # Order
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestOrder:
     def test_notional_property(self):
@@ -96,6 +103,7 @@ class TestOrder:
 
     def test_is_filled_true_when_fully_filled(self):
         from enhanced_smart_router import OrderStatus
+
         order = _make_order(size=10.0)
         order.filled_size = 10.0
         order.status = OrderStatus.FILLED
@@ -116,10 +124,12 @@ class TestOrder:
 # MarketImpactModel
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestMarketImpactModel:
     def test_init_defaults(self):
         from enhanced_smart_router import MarketImpactModel
+
         m = MarketImpactModel()
         assert m.eta > 0
         assert m.gamma > 0
@@ -128,6 +138,7 @@ class TestMarketImpactModel:
 
     def test_temporary_impact_positive(self):
         from enhanced_smart_router import MarketImpactModel
+
         m = MarketImpactModel()
         # temporary_impact(X, T, V): order_size=100, time=0.1 day, ADV=10_000
         impact = m.temporary_impact(X=100.0, T=0.1, V=10_000.0)
@@ -135,21 +146,23 @@ class TestMarketImpactModel:
 
     def test_permanent_impact_positive(self):
         from enhanced_smart_router import MarketImpactModel
+
         m = MarketImpactModel()
         impact = m.permanent_impact(X=100.0, V=10_000.0)
         assert impact >= 0.0
 
     def test_total_cost_returns_dict(self):
         from enhanced_smart_router import MarketImpactModel
+
         m = MarketImpactModel()
         result = m.total_cost(X=100.0, T=0.1, V=10_000.0, price=1950.0)
         assert isinstance(result, dict)
-        for key in ("temporary_impact_bps", "permanent_impact_bps",
-                    "total_impact_bps", "total_cost"):
+        for key in ("temporary_impact_bps", "permanent_impact_bps", "total_impact_bps", "total_cost"):
             assert key in result
 
     def test_total_impact_bps_is_sum_of_components(self):
         from enhanced_smart_router import MarketImpactModel
+
         m = MarketImpactModel()
         result = m.total_cost(X=100.0, T=0.1, V=10_000.0, price=1950.0)
         assert result["total_impact_bps"] == pytest.approx(
@@ -158,6 +171,7 @@ class TestMarketImpactModel:
 
     def test_larger_order_has_more_impact(self):
         from enhanced_smart_router import MarketImpactModel
+
         m = MarketImpactModel()
         small = m.temporary_impact(X=10.0, T=0.1, V=10_000.0)
         large = m.temporary_impact(X=1000.0, T=0.1, V=10_000.0)
@@ -165,11 +179,13 @@ class TestMarketImpactModel:
 
     def test_zero_time_returns_zero(self):
         from enhanced_smart_router import MarketImpactModel
+
         m = MarketImpactModel()
         assert m.temporary_impact(X=100.0, T=0.0, V=10_000.0) == 0.0
 
     def test_zero_volume_returns_zero(self):
         from enhanced_smart_router import MarketImpactModel
+
         m = MarketImpactModel()
         assert m.permanent_impact(X=100.0, V=0.0) == 0.0
 
@@ -178,10 +194,12 @@ class TestMarketImpactModel:
 # TWAPStrategy
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestTWAPStrategy:
     def test_init(self):
         from enhanced_smart_router import TWAPStrategy
+
         order = _make_order(size=100.0)
         venues = [_make_venue()]
         strategy = TWAPStrategy(order, venues, num_slices=5, duration_minutes=10)
@@ -190,6 +208,7 @@ class TestTWAPStrategy:
 
     def test_slice_size_equals_order_size_divided_by_slices(self):
         from enhanced_smart_router import TWAPStrategy
+
         order = _make_order(size=100.0)
         venues = [_make_venue()]
         strategy = TWAPStrategy(order, venues, num_slices=5)
@@ -197,6 +216,7 @@ class TestTWAPStrategy:
 
     def test_slice_size_times_slices_equals_order_size(self):
         from enhanced_smart_router import TWAPStrategy
+
         order = _make_order(size=100.0)
         venues = [_make_venue()]
         strategy = TWAPStrategy(order, venues, num_slices=4)
@@ -204,12 +224,14 @@ class TestTWAPStrategy:
 
     def test_is_complete_false_initially(self):
         from enhanced_smart_router import TWAPStrategy
+
         order = _make_order(size=100.0)
         strategy = TWAPStrategy(order, [_make_venue()], num_slices=5)
         assert strategy.is_complete is False
 
     def test_update_order_tracks_fills(self):
         from enhanced_smart_router import Fill, TWAPStrategy
+
         order = _make_order(size=100.0)
         strategy = TWAPStrategy(order, [_make_venue()], num_slices=5)
         fill = Fill(
@@ -231,10 +253,12 @@ class TestTWAPStrategy:
 # VWAPStrategy
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestVWAPStrategy:
     def test_init(self):
         from enhanced_smart_router import VWAPStrategy
+
         order = _make_order(size=100.0)
         profile = [0.1] * 10
         strategy = VWAPStrategy(order, [_make_venue()], volume_profile=profile)
@@ -242,6 +266,7 @@ class TestVWAPStrategy:
 
     def test_total_volume_computed(self):
         from enhanced_smart_router import VWAPStrategy
+
         order = _make_order(size=100.0)
         profile = [0.1] * 10
         strategy = VWAPStrategy(order, [_make_venue()], volume_profile=profile)
@@ -250,6 +275,7 @@ class TestVWAPStrategy:
     def test_proportional_slice_sizes(self):
         """Verify proportional distribution by computing manually."""
         from enhanced_smart_router import VWAPStrategy
+
         order = _make_order(size=100.0)
         profile = [0.2, 0.3, 0.5]
         strategy = VWAPStrategy(order, [_make_venue()], volume_profile=profile)
@@ -262,6 +288,7 @@ class TestVWAPStrategy:
 
     def test_duration_stored(self):
         from enhanced_smart_router import VWAPStrategy
+
         order = _make_order(size=100.0)
         strategy = VWAPStrategy(order, [_make_venue()], volume_profile=[1.0], duration_minutes=45)
         assert strategy.duration == 45
@@ -271,22 +298,26 @@ class TestVWAPStrategy:
 # ImplementationShortfallStrategy
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestImplementationShortfallStrategy:
     def test_init_requires_arrival_price(self):
         from enhanced_smart_router import ImplementationShortfallStrategy
+
         order = _make_order(size=100.0, arrival_price=None)
         with pytest.raises(ValueError, match="arrival_price"):
             ImplementationShortfallStrategy(order, [_make_venue()])
 
     def test_init_with_arrival_price(self):
         from enhanced_smart_router import ImplementationShortfallStrategy
+
         order = _make_order(size=100.0, arrival_price=1950.0)
         strategy = ImplementationShortfallStrategy(order, [_make_venue()])
         assert strategy.arrival_price == pytest.approx(1950.0)
 
     def test_optimal_trajectory_sums_to_order_size(self):
         from enhanced_smart_router import ImplementationShortfallStrategy
+
         order = _make_order(size=100.0, arrival_price=1950.0)
         strategy = ImplementationShortfallStrategy(order, [_make_venue()])
         trajectory = strategy.optimal_trajectory()
@@ -294,19 +325,17 @@ class TestImplementationShortfallStrategy:
 
     def test_optimal_trajectory_has_10_periods(self):
         from enhanced_smart_router import ImplementationShortfallStrategy
+
         order = _make_order(size=100.0, arrival_price=1950.0)
         strategy = ImplementationShortfallStrategy(order, [_make_venue()])
         assert len(strategy.optimal_trajectory()) == 10
 
     def test_higher_urgency_front_loads_execution(self):
         from enhanced_smart_router import ImplementationShortfallStrategy
+
         order = _make_order(size=100.0, arrival_price=1950.0)
-        low_urgency = ImplementationShortfallStrategy(
-            order, [_make_venue()], risk_aversion=0.1
-        )
-        high_urgency = ImplementationShortfallStrategy(
-            order, [_make_venue()], risk_aversion=5.0
-        )
+        low_urgency = ImplementationShortfallStrategy(order, [_make_venue()], risk_aversion=0.1)
+        high_urgency = ImplementationShortfallStrategy(order, [_make_venue()], risk_aversion=5.0)
         low_traj = low_urgency.optimal_trajectory()
         high_traj = high_urgency.optimal_trajectory()
         # High urgency should trade more in first period
@@ -317,21 +346,25 @@ class TestImplementationShortfallStrategy:
 # SmartOrderRouter
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestSmartOrderRouter:
     def test_init_default_venues(self):
         from enhanced_smart_router import SmartOrderRouter
+
         router = SmartOrderRouter()
         assert len(router.venues) > 0
 
     def test_init_custom_venues(self):
         from enhanced_smart_router import SmartOrderRouter
+
         venues = [_make_venue("V1"), _make_venue("V2")]
         router = SmartOrderRouter(venues=venues)
         assert len(router.venues) == 2
 
     def test_route_order_market_returns_strategy(self):
         from enhanced_smart_router import OrderType, SmartOrderRouter
+
         router = SmartOrderRouter()
         order = _make_order(size=100.0, order_type=OrderType.MARKET)
         strategy = router.route_order(order)
@@ -339,6 +372,7 @@ class TestSmartOrderRouter:
 
     def test_route_order_twap_returns_twap_strategy(self):
         from enhanced_smart_router import OrderType, SmartOrderRouter, TWAPStrategy
+
         router = SmartOrderRouter()
         order = _make_order(size=100.0, order_type=OrderType.TWAP)
         strategy = router.route_order(order)
@@ -346,6 +380,7 @@ class TestSmartOrderRouter:
 
     def test_route_order_vwap_returns_vwap_strategy(self):
         from enhanced_smart_router import OrderType, SmartOrderRouter, VWAPStrategy
+
         # Use MARKET as default so TWAP short-circuit doesn't fire
         router = SmartOrderRouter(default_strategy=OrderType.MARKET)
         order = _make_order(size=100.0, order_type=OrderType.VWAP)
@@ -354,6 +389,7 @@ class TestSmartOrderRouter:
 
     def test_route_order_is_adds_to_active_orders(self):
         from enhanced_smart_router import OrderType, SmartOrderRouter
+
         router = SmartOrderRouter()
         order = _make_order(size=100.0, order_type=OrderType.TWAP)
         router.route_order(order)
@@ -361,6 +397,7 @@ class TestSmartOrderRouter:
 
     def test_score_venue_returns_float(self):
         from enhanced_smart_router import SmartOrderRouter
+
         router = SmartOrderRouter()
         order = _make_order(size=100.0)
         venue = _make_venue()
@@ -369,6 +406,7 @@ class TestSmartOrderRouter:
 
     def test_score_venue_lower_fee_scores_higher(self):
         from enhanced_smart_router import SmartOrderRouter
+
         router = SmartOrderRouter()
         order = _make_order(size=100.0)
         cheap = _make_venue("Cheap", taker_fee=0.0001)
@@ -377,6 +415,7 @@ class TestSmartOrderRouter:
 
     def test_score_venue_lower_latency_scores_higher(self):
         from enhanced_smart_router import SmartOrderRouter
+
         router = SmartOrderRouter()
         order = _make_order(size=100.0)
         fast = _make_venue("Fast", latency_ms=1.0)
@@ -385,6 +424,7 @@ class TestSmartOrderRouter:
 
     def test_execute_order_returns_dict(self):
         from enhanced_smart_router import OrderType, SmartOrderRouter
+
         router = SmartOrderRouter()
         order = _make_order(size=1.0, order_type=OrderType.TWAP)
         # Patch the strategy execute to avoid real async sleep
@@ -395,6 +435,7 @@ class TestSmartOrderRouter:
 
     def test_execute_order_result_keys(self):
         from enhanced_smart_router import OrderType, SmartOrderRouter
+
         router = SmartOrderRouter()
         order = _make_order(size=1.0, order_type=OrderType.TWAP)
         with patch("enhanced_smart_router.TWAPStrategy.execute", new_callable=AsyncMock) as mock_exec:
@@ -405,6 +446,7 @@ class TestSmartOrderRouter:
 
     def test_routing_weights_sum_to_one(self):
         from enhanced_smart_router import SmartOrderRouter
+
         router = SmartOrderRouter()
         total = sum(router.routing_weights.values())
         assert total == pytest.approx(1.0)

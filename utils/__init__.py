@@ -19,6 +19,7 @@ import time
 from collections import deque
 from collections.abc import Callable
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, TypeVar

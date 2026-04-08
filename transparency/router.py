@@ -6,6 +6,7 @@
 """transparency/router.py — FastAPI router for execution transparency."""
 
 from datetime import timezone
+
 UTC = timezone.utc
 
 from transparency.engine import ExecutionTransparencyEngine

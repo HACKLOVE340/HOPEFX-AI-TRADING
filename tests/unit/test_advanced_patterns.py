@@ -47,8 +47,9 @@ def _make_head_shoulders_df() -> pd.DataFrame:
     high = close + 0.001
     low = close - 0.001
     idx = pd.date_range("2024-01-01", periods=n, freq="1h")
-    return pd.DataFrame({"open": close, "high": high, "low": low, "close": close,
-                         "volume": np.ones(n) * 1000}, index=idx)
+    return pd.DataFrame(
+        {"open": close, "high": high, "low": low, "close": close, "volume": np.ones(n) * 1000}, index=idx
+    )
 
 
 def _make_double_top_df() -> pd.DataFrame:
@@ -62,8 +63,9 @@ def _make_double_top_df() -> pd.DataFrame:
     high = close + 0.001
     low = close - 0.001
     idx = pd.date_range("2024-01-01", periods=n, freq="1h")
-    return pd.DataFrame({"open": close, "high": high, "low": low, "close": close,
-                         "volume": np.ones(n) * 1000}, index=idx)
+    return pd.DataFrame(
+        {"open": close, "high": high, "low": low, "close": close, "volume": np.ones(n) * 1000}, index=idx
+    )
 
 
 # ── PatternSignal ─────────────────────────────────────────────────────────────
@@ -228,8 +230,9 @@ class TestTriangles:
         high = close + amplitude
         low = close - amplitude
         idx = pd.date_range("2024-01-01", periods=n, freq="1h")
-        df = pd.DataFrame({"open": close, "high": high, "low": low, "close": close,
-                           "volume": np.ones(n) * 1000}, index=idx)
+        df = pd.DataFrame(
+            {"open": close, "high": high, "low": low, "close": close, "volume": np.ones(n) * 1000}, index=idx
+        )
         result = det._detect_triangles(*_arrays(df))
         assert isinstance(result, list)
 

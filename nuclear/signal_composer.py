@@ -71,21 +71,21 @@ _CONF_APPROVED = 0.60
 _CONF_PENDING = 0.45
 _RR_MIN = 1.5
 _MIN_BACKTEST_TRADES = 3
-_MAX_RISK_PCT = 0.02        # 2% max per trade
-_BASE_RISK_PCT = 0.01       # 1% base risk
-_KELLY_CAP = 0.25           # cap Kelly fraction at 25%
+_MAX_RISK_PCT = 0.02  # 2% max per trade
+_BASE_RISK_PCT = 0.01  # 1% base risk
+_KELLY_CAP = 0.25  # cap Kelly fraction at 25%
 
 
 @dataclass
 class RiskParameters:
     """Position sizing and risk management parameters."""
 
-    risk_pct: float           # fraction of account to risk (e.g. 0.01 = 1%)
-    kelly_fraction: float     # Kelly criterion fraction
+    risk_pct: float  # fraction of account to risk (e.g. 0.01 = 1%)
+    kelly_fraction: float  # Kelly criterion fraction
     position_size_pct: float  # final position size as % of account
     atr_stop_distance: float  # ATR-based stop distance in price units
-    max_loss_pct: float       # max loss if SL hit (= risk_pct)
-    rr_ratio: float           # risk/reward ratio
+    max_loss_pct: float  # max loss if SL hit (= risk_pct)
+    rr_ratio: float  # risk/reward ratio
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -102,11 +102,11 @@ class RiskParameters:
 class EntryRules:
     """Precise entry execution rules."""
 
-    order_type: str           # "market" / "limit" / "stop_limit"
-    entry_price: float        # target entry price
-    limit_offset_pct: float   # for limit orders: offset from current price
-    entry_window_bars: int    # bars to wait for limit fill before cancelling
-    scale_in: bool            # whether to scale in (3 tranches)
+    order_type: str  # "market" / "limit" / "stop_limit"
+    entry_price: float  # target entry price
+    limit_offset_pct: float  # for limit orders: offset from current price
+    entry_window_bars: int  # bars to wait for limit fill before cancelling
+    scale_in: bool  # whether to scale in (3 tranches)
     scale_in_levels: list[float] = field(default_factory=list)  # price levels
 
     def to_dict(self) -> dict[str, Any]:
@@ -125,15 +125,15 @@ class ExitRules:
     """Precise exit execution rules."""
 
     stop_loss: float
-    stop_type: str            # "hard" / "trailing"
+    stop_type: str  # "hard" / "trailing"
     trailing_atr_mult: float  # for trailing stops: ATR multiplier
-    take_profit_1: float      # 50% of position
-    take_profit_2: float      # 30% of position
-    take_profit_3: float      # 20% of position (runner)
+    take_profit_1: float  # 50% of position
+    take_profit_2: float  # 30% of position
+    take_profit_3: float  # 20% of position (runner)
     tp1_size_pct: float = 0.50
     tp2_size_pct: float = 0.30
     tp3_size_pct: float = 0.20
-    max_hold_bars: int = 48   # force-close after N bars
+    max_hold_bars: int = 48  # force-close after N bars
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -171,7 +171,7 @@ class NuclearSignal:
     confidence_breakdown: dict[str, float]
 
     # Approval
-    approval_status: str      # "APPROVED" / "PENDING" / "REJECTED"
+    approval_status: str  # "APPROVED" / "PENDING" / "REJECTED"
     approval_reason: str
 
     # Levels
@@ -234,6 +234,7 @@ class NuclearSignal:
 
 # ── SignalComposer ────────────────────────────────────────────────────────────
 
+
 class SignalComposer:
     """
     Assembles a NuclearSignal from raw strategy output + backtest + context.
@@ -290,9 +291,7 @@ class SignalComposer:
         signal_id = f"NSA-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{self._signal_counter:04d}"
 
         # ── Confidence scoring ────────────────────────────────────────────────
-        conf_breakdown, final_conf = self._score_confidence(
-            raw_signal, backtest, regime, cone_merged, mtf
-        )
+        conf_breakdown, final_conf = self._score_confidence(raw_signal, backtest, regime, cone_merged, mtf)
 
         # ── Risk parameters ───────────────────────────────────────────────────
         risk_params = self._compute_risk(raw_signal, backtest, final_conf, mtf)
@@ -309,9 +308,7 @@ class SignalComposer:
         )
 
         # ── Explanation ───────────────────────────────────────────────────────
-        explanation = self._build_explanation(
-            raw_signal, regime, cone_merged, backtest, final_conf, approval_status
-        )
+        explanation = self._build_explanation(raw_signal, regime, cone_merged, backtest, final_conf, approval_status)
 
         cone_bias = cone_merged.get("bias", "neutral") if cone_merged else "neutral"
         cone_vol = cone_merged.get("vol_regime", "normal_vol") if cone_merged else "normal_vol"
@@ -344,8 +341,12 @@ class SignalComposer:
 
         logger.info(
             "SignalComposer: %s %s %s conf=%.2f status=%s RR=%.2f",
-            signal_id, raw_signal.direction, raw_signal.strategy,
-            final_conf, approval_status, raw_signal.risk_reward,
+            signal_id,
+            raw_signal.direction,
+            raw_signal.strategy,
+            final_conf,
+            approval_status,
+            raw_signal.risk_reward,
         )
         return signal
 
@@ -510,9 +511,9 @@ class SignalComposer:
 
         # Max hold: shorter for mean-reversion, longer for trend
         if regime.is_ranging:
-            max_hold = 12   # 12 bars
+            max_hold = 12  # 12 bars
         elif regime.is_trending:
-            max_hold = 96   # 96 bars
+            max_hold = 96  # 96 bars
         else:
             max_hold = 48
 

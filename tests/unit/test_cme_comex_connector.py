@@ -50,6 +50,7 @@ from brokers.base import AccountInfo, OrderSide, OrderStatus, OrderType
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_connector(**kwargs) -> CMEComexConnector:
     """Return a connector with paper fallback enabled and FIX/IBKR disabled."""
     defaults = dict(
@@ -71,6 +72,7 @@ def _make_connector(**kwargs) -> CMEComexConnector:
 # ---------------------------------------------------------------------------
 # CMEFill dataclass
 # ---------------------------------------------------------------------------
+
 
 class TestCMEFill:
     def test_notional_usd(self):
@@ -120,16 +122,20 @@ class TestCMEFill:
 # Symbol normalisation
 # ---------------------------------------------------------------------------
 
+
 class TestNormaliseSymbol:
-    @pytest.mark.parametrize("symbol,expected", [
-        ("XAU_USD", "GC"),
-        ("XAUUSD",  "GC"),
-        ("XAU/USD", "GC"),
-        ("GOLD",    "GC"),
-        ("GC",      "GC"),
-        ("gc",      "GC"),
-        ("UNKNOWN", "GC"),  # unmapped → default "GC"
-    ])
+    @pytest.mark.parametrize(
+        "symbol,expected",
+        [
+            ("XAU_USD", "GC"),
+            ("XAUUSD", "GC"),
+            ("XAU/USD", "GC"),
+            ("GOLD", "GC"),
+            ("GC", "GC"),
+            ("gc", "GC"),
+            ("UNKNOWN", "GC"),  # unmapped → default "GC"
+        ],
+    )
     def test_known_symbols(self, symbol, expected):
         assert CMEComexConnector._normalise_symbol(symbol) == expected
 
@@ -137,6 +143,7 @@ class TestNormaliseSymbol:
 # ---------------------------------------------------------------------------
 # Commission estimation
 # ---------------------------------------------------------------------------
+
 
 class TestEstimateCommission:
     def test_single_contract(self):
@@ -154,12 +161,12 @@ class TestEstimateCommission:
 # connect()
 # ---------------------------------------------------------------------------
 
+
 class TestConnect:
     def test_connect_paper_fallback(self):
         conn = _make_connector()
         # Force FIX and IBKR init to fail so paper path is exercised
-        with patch.object(conn, "_init_fix", return_value=False), \
-             patch.object(conn, "_init_ibkr", return_value=False):
+        with patch.object(conn, "_init_fix", return_value=False), patch.object(conn, "_init_ibkr", return_value=False):
             assert conn.connect() is True
         assert conn._connected is True
         assert conn._fix_available is False
@@ -180,8 +187,7 @@ class TestConnect:
 
     def test_connect_ibkr_fallback_when_fix_fails(self):
         conn = _make_connector(ibkr_fallback=True, paper_fallback=False)
-        with patch.object(conn, "_init_fix", return_value=False), \
-             patch.object(conn, "_init_ibkr", return_value=True):
+        with patch.object(conn, "_init_fix", return_value=False), patch.object(conn, "_init_ibkr", return_value=True):
             result = conn.connect()
         assert result is True
         assert conn._ibkr_available is True
@@ -189,8 +195,7 @@ class TestConnect:
     def test_connect_skips_ibkr_when_fix_succeeds(self):
         conn = _make_connector(ibkr_fallback=True, paper_fallback=False)
         mock_ibkr = MagicMock(return_value=True)
-        with patch.object(conn, "_init_fix", return_value=True), \
-             patch.object(conn, "_init_ibkr", mock_ibkr):
+        with patch.object(conn, "_init_fix", return_value=True), patch.object(conn, "_init_ibkr", mock_ibkr):
             conn.connect()
         mock_ibkr.assert_not_called()
 
@@ -198,6 +203,7 @@ class TestConnect:
 # ---------------------------------------------------------------------------
 # disconnect()
 # ---------------------------------------------------------------------------
+
 
 class TestDisconnect:
     def test_disconnect_returns_true(self):
@@ -212,11 +218,14 @@ class TestDisconnect:
 # place_order() — paper path
 # ---------------------------------------------------------------------------
 
+
 class TestPlaceOrderPaper:
     def setup_method(self):
         self.conn = _make_connector()
-        with patch.object(self.conn, "_init_fix", return_value=False), \
-             patch.object(self.conn, "_init_ibkr", return_value=False):
+        with (
+            patch.object(self.conn, "_init_fix", return_value=False),
+            patch.object(self.conn, "_init_ibkr", return_value=False),
+        ):
             self.conn.connect()
 
     def test_market_buy_returns_filled_order(self):
@@ -295,6 +304,7 @@ class TestPlaceOrderPaper:
 # place_order() — IBKR path
 # ---------------------------------------------------------------------------
 
+
 class TestPlaceOrderIBKR:
     def _make_ibkr_order(self, price=2350.0, qty=1.0):
         mock_order = MagicMock()
@@ -332,6 +342,7 @@ class TestPlaceOrderIBKR:
 # ---------------------------------------------------------------------------
 # cancel_order() / close_position() / get_order()
 # ---------------------------------------------------------------------------
+
 
 class TestOrderManagement:
     def test_cancel_order_returns_false_on_paper(self):
@@ -375,6 +386,7 @@ class TestOrderManagement:
 # get_account_info()
 # ---------------------------------------------------------------------------
 
+
 class TestGetAccountInfo:
     def test_returns_zero_balance_on_paper(self):
         conn = _make_connector()
@@ -413,6 +425,7 @@ class TestGetAccountInfo:
 # get_market_data()
 # ---------------------------------------------------------------------------
 
+
 class TestGetMarketData:
     def test_returns_empty_without_ibkr(self):
         conn = _make_connector()
@@ -442,6 +455,7 @@ class TestGetMarketData:
 # get_positions()
 # ---------------------------------------------------------------------------
 
+
 class TestGetPositions:
     def test_returns_empty_without_ibkr(self):
         conn = _make_connector()
@@ -462,6 +476,7 @@ class TestGetPositions:
 # metrics()
 # ---------------------------------------------------------------------------
 
+
 class TestMetrics:
     def test_empty_metrics_before_any_fills(self):
         conn = _make_connector()
@@ -472,8 +487,7 @@ class TestMetrics:
 
     def test_metrics_after_paper_fills(self):
         conn = _make_connector()
-        with patch.object(conn, "_init_fix", return_value=False), \
-             patch.object(conn, "_init_ibkr", return_value=False):
+        with patch.object(conn, "_init_fix", return_value=False), patch.object(conn, "_init_ibkr", return_value=False):
             conn.connect()
         conn.place_order("GC", OrderSide.BUY, OrderType.MARKET, 1.0, price=2000.0)
         conn.place_order("GC", OrderSide.SELL, OrderType.LIMIT, 2.0, price=2100.0)
@@ -511,6 +525,7 @@ class TestMetrics:
 # ---------------------------------------------------------------------------
 # from_env() constructor
 # ---------------------------------------------------------------------------
+
 
 class TestFromEnv:
     def test_from_env_returns_instance(self):

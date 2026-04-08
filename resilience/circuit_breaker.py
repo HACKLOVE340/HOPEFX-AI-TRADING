@@ -13,12 +13,15 @@ import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum, auto
 
 
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 class CircuitState(Enum):
     CLOSED = auto()  # Normal operation

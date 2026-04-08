@@ -205,9 +205,7 @@ class TestSignalsActiveKey:
         from api.db_store import db_get
         from api.signals import RealTimeSignalService, SignalDirection
 
-        svc = RealTimeSignalService(
-            config={"min_confidence": 0.5, "min_strategies": 1, "signal_expiry_minutes": 30}
-        )
+        svc = RealTimeSignalService(config={"min_confidence": 0.5, "min_strategies": 1, "signal_expiry_minutes": 30})
         svc.generate_signal(
             symbol="GBPUSD",
             direction=SignalDirection.BUY,

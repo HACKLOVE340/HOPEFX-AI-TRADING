@@ -24,16 +24,19 @@ UTC = timezone.utc
 # Enums
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestEnums:
     def test_geopolitical_event_type_values(self):
         from news.geopolitical_risk import GeopoliticalEventType
+
         assert GeopoliticalEventType.CONFLICT.value == "conflict"
         assert GeopoliticalEventType.SANCTIONS.value == "sanctions"
         assert GeopoliticalEventType.NATURAL_DISASTER.value == "natural_disaster"
 
     def test_risk_severity_values(self):
         from news.geopolitical_risk import RiskSeverity
+
         assert RiskSeverity.CRITICAL.value == "critical"
         assert RiskSeverity.HIGH.value == "high"
         assert RiskSeverity.MEDIUM.value == "medium"
@@ -42,6 +45,7 @@ class TestEnums:
 
     def test_gold_impact_values(self):
         from news.geopolitical_risk import GoldImpact
+
         assert GoldImpact.STRONGLY_BULLISH.value == "strongly_bullish"
         assert GoldImpact.BULLISH.value == "bullish"
         assert GoldImpact.NEUTRAL.value == "neutral"
@@ -53,12 +57,17 @@ class TestEnums:
 # GeopoliticalEvent
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestGeopoliticalEvent:
     def _make_event(self, **kwargs):
         from news.geopolitical_risk import (
-            GeopoliticalEvent, GeopoliticalEventType, GoldImpact, RiskSeverity,
+            GeopoliticalEvent,
+            GeopoliticalEventType,
+            GoldImpact,
+            RiskSeverity,
         )
+
         defaults = dict(
             event_type=GeopoliticalEventType.CONFLICT,
             severity=RiskSeverity.HIGH,
@@ -75,9 +84,20 @@ class TestGeopoliticalEvent:
     def test_to_dict_keys(self):
         event = self._make_event()
         d = event.to_dict()
-        for key in ("event_type", "severity", "title", "description", "region",
-                    "countries", "timestamp", "source", "confidence",
-                    "gold_impact", "affected_currencies", "risk_score"):
+        for key in (
+            "event_type",
+            "severity",
+            "title",
+            "description",
+            "region",
+            "countries",
+            "timestamp",
+            "source",
+            "confidence",
+            "gold_impact",
+            "affected_currencies",
+            "risk_score",
+        ):
             assert key in d, f"Missing key: {key}"
 
     def test_to_dict_event_type_is_string(self):
@@ -108,8 +128,11 @@ class TestGeopoliticalEvent:
 
     def test_no_gold_impact_serializes_none(self):
         from news.geopolitical_risk import (
-            GeopoliticalEvent, GeopoliticalEventType, RiskSeverity,
+            GeopoliticalEvent,
+            GeopoliticalEventType,
+            RiskSeverity,
         )
+
         event = GeopoliticalEvent(
             event_type=GeopoliticalEventType.SANCTIONS,
             severity=RiskSeverity.LOW,
@@ -126,10 +149,12 @@ class TestGeopoliticalEvent:
 # CountryRisk
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestCountryRisk:
     def _make_country_risk(self):
         from news.geopolitical_risk import CountryRisk
+
         return CountryRisk(
             country_code="RU",
             country_name="Russia",
@@ -141,8 +166,7 @@ class TestCountryRisk:
     def test_to_dict_keys(self):
         cr = self._make_country_risk()
         d = cr.to_dict()
-        for key in ("country_code", "country_name", "instability_index",
-                    "trend", "risk_factors", "last_updated"):
+        for key in ("country_code", "country_name", "instability_index", "trend", "risk_factors", "last_updated"):
             assert key in d
 
     def test_to_dict_last_updated_is_iso(self):
@@ -159,12 +183,15 @@ class TestCountryRisk:
 # GeopoliticalRiskAssessment
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestGeopoliticalRiskAssessment:
     def _make_assessment(self):
         from news.geopolitical_risk import (
-            GeopoliticalRiskAssessment, GoldImpact,
+            GeopoliticalRiskAssessment,
+            GoldImpact,
         )
+
         return GeopoliticalRiskAssessment(
             global_risk_score=55.0,
             gold_outlook=GoldImpact.BULLISH,
@@ -180,9 +207,18 @@ class TestGeopoliticalRiskAssessment:
     def test_to_dict_keys(self):
         a = self._make_assessment()
         d = a.to_dict()
-        for key in ("global_risk_score", "gold_outlook", "active_conflicts",
-                    "sanctions_count", "hotspots", "high_risk_regions",
-                    "key_events", "country_risks", "trading_recommendations", "timestamp"):
+        for key in (
+            "global_risk_score",
+            "gold_outlook",
+            "active_conflicts",
+            "sanctions_count",
+            "hotspots",
+            "high_risk_regions",
+            "key_events",
+            "country_risks",
+            "trading_recommendations",
+            "timestamp",
+        ):
             assert key in d
 
     def test_to_dict_gold_outlook_is_string(self):
@@ -202,10 +238,12 @@ class TestGeopoliticalRiskAssessment:
 # GeopoliticalRiskProvider — init and cache
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestGeopoliticalRiskProviderInit:
     def test_init_defaults(self):
         from news.geopolitical_risk import GeopoliticalRiskProvider
+
         p = GeopoliticalRiskProvider()
         assert p._cache == {}
         assert p._cache_timestamp is None
@@ -213,16 +251,19 @@ class TestGeopoliticalRiskProviderInit:
 
     def test_init_custom_cache_ttl(self):
         from news.geopolitical_risk import GeopoliticalRiskProvider
+
         p = GeopoliticalRiskProvider(config={"cache_ttl": 3600})
         assert p.cache_ttl == 3600
 
     def test_is_cache_valid_false_when_empty(self):
         from news.geopolitical_risk import GeopoliticalRiskProvider
+
         p = GeopoliticalRiskProvider()
         assert p._is_cache_valid() is False
 
     def test_is_cache_valid_true_after_population(self):
         from news.geopolitical_risk import GeopoliticalRiskProvider
+
         p = GeopoliticalRiskProvider()
         p._cache["events"] = []
         p._cache_timestamp = datetime.now(UTC)
@@ -232,6 +273,7 @@ class TestGeopoliticalRiskProviderInit:
         """In CI environment, no live network calls are made."""
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import GeopoliticalRiskProvider
+
         p = GeopoliticalRiskProvider()
         events = p.get_current_events(force_refresh=True)
         assert isinstance(events, list)
@@ -239,9 +281,13 @@ class TestGeopoliticalRiskProviderInit:
     def test_get_current_events_uses_cache(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import (
-            GeopoliticalEvent, GeopoliticalEventType, GoldImpact,
-            GeopoliticalRiskProvider, RiskSeverity,
+            GeopoliticalEvent,
+            GeopoliticalEventType,
+            GoldImpact,
+            GeopoliticalRiskProvider,
+            RiskSeverity,
         )
+
         p = GeopoliticalRiskProvider()
         cached_event = GeopoliticalEvent(
             event_type=GeopoliticalEventType.CONFLICT,
@@ -263,10 +309,12 @@ class TestGeopoliticalRiskProviderInit:
 # GeopoliticalRiskProvider — _assess_gold_impact
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestAssessGoldImpact:
     def _make_event(self, event_type, severity, countries=None, title="", description=""):
         from news.geopolitical_risk import GeopoliticalEvent
+
         return GeopoliticalEvent(
             event_type=event_type,
             severity=severity,
@@ -278,40 +326,46 @@ class TestAssessGoldImpact:
 
     def test_conflict_critical_is_strongly_bullish(self):
         from news.geopolitical_risk import (
-            GeopoliticalEventType, GeopoliticalRiskProvider, GoldImpact, RiskSeverity,
+            GeopoliticalEventType,
+            GeopoliticalRiskProvider,
+            GoldImpact,
+            RiskSeverity,
         )
+
         p = GeopoliticalRiskProvider()
         event = self._make_event(
-            GeopoliticalEventType.CONFLICT, RiskSeverity.CRITICAL,
-            countries=["IR"], title="war nuclear"
+            GeopoliticalEventType.CONFLICT, RiskSeverity.CRITICAL, countries=["IR"], title="war nuclear"
         )
         impact = p._assess_gold_impact(event)
         assert impact == GoldImpact.STRONGLY_BULLISH
 
     def test_info_event_is_neutral(self):
         from news.geopolitical_risk import (
-            GeopoliticalEventType, GeopoliticalRiskProvider, GoldImpact, RiskSeverity,
+            GeopoliticalEventType,
+            GeopoliticalRiskProvider,
+            GoldImpact,
+            RiskSeverity,
         )
+
         p = GeopoliticalRiskProvider()
         event = self._make_event(
-            GeopoliticalEventType.POLITICAL_UNREST, RiskSeverity.INFO,
-            countries=["XX"], title="minor protest"
+            GeopoliticalEventType.POLITICAL_UNREST, RiskSeverity.INFO, countries=["XX"], title="minor protest"
         )
         impact = p._assess_gold_impact(event)
         assert impact in (GoldImpact.NEUTRAL, GoldImpact.BEARISH)
 
     def test_gold_sensitive_region_increases_impact(self):
         from news.geopolitical_risk import (
-            GeopoliticalEventType, GeopoliticalRiskProvider, GoldImpact, RiskSeverity,
+            GeopoliticalEventType,
+            GeopoliticalRiskProvider,
+            GoldImpact,
+            RiskSeverity,
         )
+
         p = GeopoliticalRiskProvider()
         # Middle East is gold-sensitive
-        event_me = self._make_event(
-            GeopoliticalEventType.HOTSPOT, RiskSeverity.MEDIUM, countries=["SA"]
-        )
-        event_other = self._make_event(
-            GeopoliticalEventType.HOTSPOT, RiskSeverity.MEDIUM, countries=["NZ"]
-        )
+        event_me = self._make_event(GeopoliticalEventType.HOTSPOT, RiskSeverity.MEDIUM, countries=["SA"])
+        event_other = self._make_event(GeopoliticalEventType.HOTSPOT, RiskSeverity.MEDIUM, countries=["NZ"])
         impact_me = p._assess_gold_impact(event_me)
         impact_other = p._assess_gold_impact(event_other)
         # Middle East should have >= impact than non-sensitive region
@@ -329,12 +383,17 @@ class TestAssessGoldImpact:
 # GeopoliticalRiskProvider — _calculate_risk_score
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestCalculateRiskScore:
     def test_critical_event_high_score(self):
         from news.geopolitical_risk import (
-            GeopoliticalEvent, GeopoliticalEventType, GeopoliticalRiskProvider, RiskSeverity,
+            GeopoliticalEvent,
+            GeopoliticalEventType,
+            GeopoliticalRiskProvider,
+            RiskSeverity,
         )
+
         p = GeopoliticalRiskProvider()
         event = GeopoliticalEvent(
             event_type=GeopoliticalEventType.CONFLICT,
@@ -349,8 +408,12 @@ class TestCalculateRiskScore:
 
     def test_info_event_low_score(self):
         from news.geopolitical_risk import (
-            GeopoliticalEvent, GeopoliticalEventType, GeopoliticalRiskProvider, RiskSeverity,
+            GeopoliticalEvent,
+            GeopoliticalEventType,
+            GeopoliticalRiskProvider,
+            RiskSeverity,
         )
+
         p = GeopoliticalRiskProvider()
         event = GeopoliticalEvent(
             event_type=GeopoliticalEventType.POLITICAL_UNREST,
@@ -365,8 +428,12 @@ class TestCalculateRiskScore:
 
     def test_score_in_valid_range(self):
         from news.geopolitical_risk import (
-            GeopoliticalEvent, GeopoliticalEventType, GeopoliticalRiskProvider, RiskSeverity,
+            GeopoliticalEvent,
+            GeopoliticalEventType,
+            GeopoliticalRiskProvider,
+            RiskSeverity,
         )
+
         p = GeopoliticalRiskProvider()
         for severity in RiskSeverity:
             event = GeopoliticalEvent(
@@ -385,11 +452,13 @@ class TestCalculateRiskScore:
 # GeopoliticalRiskProvider — get_risk_assessment
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestGetRiskAssessment:
     def test_returns_assessment_object(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import GeopoliticalRiskAssessment, GeopoliticalRiskProvider
+
         p = GeopoliticalRiskProvider()
         assessment = p.get_risk_assessment()
         assert isinstance(assessment, GeopoliticalRiskAssessment)
@@ -397,6 +466,7 @@ class TestGetRiskAssessment:
     def test_global_risk_score_in_range(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import GeopoliticalRiskProvider
+
         p = GeopoliticalRiskProvider()
         assessment = p.get_risk_assessment()
         assert 0.0 <= assessment.global_risk_score <= 100.0
@@ -404,6 +474,7 @@ class TestGetRiskAssessment:
     def test_gold_outlook_is_gold_impact(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import GeopoliticalRiskProvider, GoldImpact
+
         p = GeopoliticalRiskProvider()
         assessment = p.get_risk_assessment()
         assert isinstance(assessment.gold_outlook, GoldImpact)
@@ -411,6 +482,7 @@ class TestGetRiskAssessment:
     def test_trading_recommendations_is_list(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import GeopoliticalRiskProvider
+
         p = GeopoliticalRiskProvider()
         assessment = p.get_risk_assessment()
         assert isinstance(assessment.trading_recommendations, list)
@@ -420,11 +492,13 @@ class TestGetRiskAssessment:
 # GeopoliticalRiskProvider — get_gold_trading_signal
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestGetGoldTradingSignal:
     def test_returns_dict(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import GeopoliticalRiskProvider
+
         p = GeopoliticalRiskProvider()
         signal = p.get_gold_trading_signal()
         assert isinstance(signal, dict)
@@ -432,21 +506,23 @@ class TestGetGoldTradingSignal:
     def test_required_keys(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import GeopoliticalRiskProvider
+
         p = GeopoliticalRiskProvider()
         signal = p.get_gold_trading_signal()
-        for key in ("symbol", "direction", "strength", "confidence",
-                    "risk_score", "gold_outlook", "timestamp"):
+        for key in ("symbol", "direction", "strength", "confidence", "risk_score", "gold_outlook", "timestamp"):
             assert key in signal, f"Missing key: {key}"
 
     def test_symbol_is_xauusd(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import GeopoliticalRiskProvider
+
         p = GeopoliticalRiskProvider()
         assert p.get_gold_trading_signal()["symbol"] == "XAUUSD"
 
     def test_direction_valid_value(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import GeopoliticalRiskProvider
+
         p = GeopoliticalRiskProvider()
         direction = p.get_gold_trading_signal()["direction"]
         assert direction in ("BUY", "SELL", "HOLD")
@@ -454,6 +530,7 @@ class TestGetGoldTradingSignal:
     def test_strength_in_range(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import GeopoliticalRiskProvider
+
         p = GeopoliticalRiskProvider()
         strength = p.get_gold_trading_signal()["strength"]
         assert 0.0 <= strength <= 1.0
@@ -461,6 +538,7 @@ class TestGetGoldTradingSignal:
     def test_confidence_in_range(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import GeopoliticalRiskProvider
+
         p = GeopoliticalRiskProvider()
         confidence = p.get_gold_trading_signal()["confidence"]
         assert 0.0 <= confidence <= 1.0
@@ -468,16 +546,22 @@ class TestGetGoldTradingSignal:
     def test_strongly_bullish_maps_to_buy(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import (
-            GeopoliticalRiskAssessment, GeopoliticalRiskProvider, GoldImpact,
+            GeopoliticalRiskAssessment,
+            GeopoliticalRiskProvider,
+            GoldImpact,
         )
+
         p = GeopoliticalRiskProvider()
         # Inject a strongly bullish assessment
         assessment = GeopoliticalRiskAssessment(
             global_risk_score=90.0,
             gold_outlook=GoldImpact.STRONGLY_BULLISH,
-            active_conflicts=5, sanctions_count=20, hotspots=8,
+            active_conflicts=5,
+            sanctions_count=20,
+            hotspots=8,
             high_risk_regions=["Middle East"],
-            key_events=[], country_risks={},
+            key_events=[],
+            country_risks={},
             trading_recommendations=["Buy gold"],
         )
         with patch.object(p, "get_risk_assessment", return_value=assessment):
@@ -488,15 +572,21 @@ class TestGetGoldTradingSignal:
     def test_strongly_bearish_maps_to_sell(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import (
-            GeopoliticalRiskAssessment, GeopoliticalRiskProvider, GoldImpact,
+            GeopoliticalRiskAssessment,
+            GeopoliticalRiskProvider,
+            GoldImpact,
         )
+
         p = GeopoliticalRiskProvider()
         assessment = GeopoliticalRiskAssessment(
             global_risk_score=10.0,
             gold_outlook=GoldImpact.STRONGLY_BEARISH,
-            active_conflicts=0, sanctions_count=0, hotspots=0,
+            active_conflicts=0,
+            sanctions_count=0,
+            hotspots=0,
             high_risk_regions=[],
-            key_events=[], country_risks={},
+            key_events=[],
+            country_risks={},
             trading_recommendations=["Sell gold"],
         )
         with patch.object(p, "get_risk_assessment", return_value=assessment):

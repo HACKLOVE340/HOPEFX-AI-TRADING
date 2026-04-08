@@ -55,6 +55,7 @@ import os
 import re
 import time
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 from typing import Any
@@ -661,7 +662,9 @@ rule SuspiciousImport {
             # Resolve and confine the path to PROJECT_ROOT to prevent traversal.
             resolved_root = PROJECT_ROOT.resolve()
             try:
-                path = (resolved_root / sanitized).resolve()  # codeql[py/path-injection] - sanitized contains only [A-Za-z0-9_./ -]; relative_to guard below
+                path = (
+                    resolved_root / sanitized
+                ).resolve()  # codeql[py/path-injection] - sanitized contains only [A-Za-z0-9_./ -]; relative_to guard below
                 path.relative_to(resolved_root)  # raises ValueError if outside root
             except (ValueError, OSError):
                 raise HTTPException(status_code=400, detail="Invalid file path") from None
@@ -737,6 +740,7 @@ async def start_av_scanner(app: FastAPI) -> None:
 # ── Module-level eager router ─────────────────────────────────────────────────
 # Registered by router_registry.py at import time. Delegates to get_scanner()
 # at request time so the live instance is used once start_av_scanner() runs.
+
 
 def _build_eager_av_router() -> APIRouter:
     from fastapi import APIRouter as _APIRouter, HTTPException as _HTTPException

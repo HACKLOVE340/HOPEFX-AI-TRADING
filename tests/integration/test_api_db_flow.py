@@ -84,7 +84,8 @@ def watchlist_client() -> TestClient:
     client = TestClient(app, raise_server_exceptions=False)
     yield client
 
-    # Teardown: clear injected state
+    # Teardown: clear injected state and reset watchlist dict
+    _reset_watchlists()
     _wl.set_state(None)
 
 

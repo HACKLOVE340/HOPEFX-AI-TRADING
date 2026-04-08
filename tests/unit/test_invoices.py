@@ -8,6 +8,7 @@ Tests for Invoice Generation System
 """
 
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from decimal import Decimal
 

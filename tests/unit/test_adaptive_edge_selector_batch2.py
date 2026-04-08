@@ -16,13 +16,22 @@ Covers:
 - record_outcome() convenience method
 - Beast reason voice: sniper/scalper/grid contain expected phrases
 """
+
 from __future__ import annotations
 
 import pytest
 from strategies.adaptive_edge_selector import (
-    AdaptiveEdgeSelector, MarketSnapshot, EdgeDecision,
-    DecisionMemory, DecisionRecord, NewsFilter, NewsEvent,
-    EDGE_SNIPER, EDGE_SCALPER, EDGE_GRID, EDGE_SKIP,
+    AdaptiveEdgeSelector,
+    MarketSnapshot,
+    EdgeDecision,
+    DecisionMemory,
+    DecisionRecord,
+    NewsFilter,
+    NewsEvent,
+    EDGE_SNIPER,
+    EDGE_SCALPER,
+    EDGE_GRID,
+    EDGE_SKIP,
     REGIME_TRENDING_UP,
 )
 
@@ -31,12 +40,20 @@ from strategies.adaptive_edge_selector import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _snap(**kw):
     defaults = dict(
-        symbol="XAUUSD", price=2345.67, atr=1.25, adx=32.1,
-        rsi=68.0, volume_delta=15.0, cone_strength=0.87,
-        last_candles="bullish engulfing", news_spike=False,
-        liquidity="high", drawdown_pct=0.0,
+        symbol="XAUUSD",
+        price=2345.67,
+        atr=1.25,
+        adx=32.1,
+        rsi=68.0,
+        volume_delta=15.0,
+        cone_strength=0.87,
+        last_candles="bullish engulfing",
+        news_spike=False,
+        liquidity="high",
+        drawdown_pct=0.0,
     )
     defaults.update(kw)
     return MarketSnapshot(**defaults)
@@ -126,16 +143,16 @@ class TestNewsFilter:
         assert "imminent" in reason
 
     def test_event_not_affecting_symbol_passes(self):
-        nf = NewsFilter([NewsEvent(minutes_away=5, description="CPI", severity="high",
-                                   symbols_affected=["EURUSD"])])
+        nf = NewsFilter([NewsEvent(minutes_away=5, description="CPI", severity="high", symbols_affected=["EURUSD"])])
         safe, _ = nf.is_safe("XAUUSD")
         assert safe is True
 
     def test_crypto_hack_blocks_btc(self):
         # Use 45 min — outside medium-severity 30-min window, inside crypto 120-min window
         # so only the crypto keyword path fires (not the generic medium-severity rule)
-        nf = NewsFilter([NewsEvent(minutes_away=45, description="crypto hack rumor",
-                                   severity="medium", symbols_affected=[])])
+        nf = NewsFilter(
+            [NewsEvent(minutes_away=45, description="crypto hack rumor", severity="medium", symbols_affected=[])]
+        )
         safe, reason = nf.is_safe("BTCUSD")
         assert safe is False
         assert "crypto_risk" in reason
@@ -143,8 +160,9 @@ class TestNewsFilter:
     def test_crypto_hack_does_not_block_xauusd(self):
         # Same 45-min event — XAUUSD is not a crypto symbol, crypto path skips it,
         # and 45 min is outside the medium-severity 30-min window → safe
-        nf = NewsFilter([NewsEvent(minutes_away=45, description="crypto hack rumor",
-                                   severity="medium", symbols_affected=[])])
+        nf = NewsFilter(
+            [NewsEvent(minutes_away=45, description="crypto hack rumor", severity="medium", symbols_affected=[])]
+        )
         safe, _ = nf.is_safe("XAUUSD")
         assert safe is True
 
@@ -162,8 +180,9 @@ class TestNewsFilter:
 
     @pytest.mark.parametrize("keyword", ["hack", "exploit", "sec", "ban"])
     def test_crypto_keywords_block_btc(self, keyword):
-        nf = NewsFilter([NewsEvent(minutes_away=30, description=f"{keyword} event",
-                                   severity="low", symbols_affected=[])])
+        nf = NewsFilter(
+            [NewsEvent(minutes_away=30, description=f"{keyword} event", severity="low", symbols_affected=[])]
+        )
         safe, _ = nf.is_safe("BTCUSD")
         assert safe is False
 
@@ -174,8 +193,7 @@ class TestNewsFilter:
 @pytest.mark.unit
 class TestDecisionMemory:
     def _rec(self, symbol="XAUUSD", edge=EDGE_SNIPER, outcome="won", conf=88):
-        return DecisionRecord(symbol=symbol, edge=edge, outcome=outcome,
-                              confidence=conf, regime=REGIME_TRENDING_UP)
+        return DecisionRecord(symbol=symbol, edge=edge, outcome=outcome, confidence=conf, regime=REGIME_TRENDING_UP)
 
     def test_record_and_recent(self):
         mem = DecisionMemory()
@@ -276,8 +294,9 @@ class TestDecisionMemory:
 class TestSelectWithMemory:
     def test_memory_boost_on_prior_win(self):
         mem = DecisionMemory()
-        mem.record(DecisionRecord(symbol="XAUUSD", edge=EDGE_SNIPER,
-                                  outcome="won", confidence=88, regime=REGIME_TRENDING_UP))
+        mem.record(
+            DecisionRecord(symbol="XAUUSD", edge=EDGE_SNIPER, outcome="won", confidence=88, regime=REGIME_TRENDING_UP)
+        )
         sel = _sel(memory=mem)
         d = sel.select(_snap())
         if d.edge == EDGE_SNIPER:
@@ -285,8 +304,9 @@ class TestSelectWithMemory:
 
     def test_memory_penalty_on_prior_loss(self):
         mem = DecisionMemory()
-        mem.record(DecisionRecord(symbol="XAUUSD", edge=EDGE_SNIPER,
-                                  outcome="lost", confidence=88, regime=REGIME_TRENDING_UP))
+        mem.record(
+            DecisionRecord(symbol="XAUUSD", edge=EDGE_SNIPER, outcome="lost", confidence=88, regime=REGIME_TRENDING_UP)
+        )
         sel = _sel(memory=mem)
         d = sel.select(_snap())
         if d.edge == EDGE_SNIPER:
@@ -299,19 +319,20 @@ class TestSelectWithMemory:
         mem = DecisionMemory()
         # Record 5 losses to drive win_rate to 0 → adjustment = -8
         for _ in range(5):
-            mem.record(DecisionRecord(symbol="XAUUSD", edge=EDGE_SNIPER,
-                                      outcome="lost", confidence=80, regime=REGIME_TRENDING_UP))
+            mem.record(
+                DecisionRecord(
+                    symbol="XAUUSD", edge=EDGE_SNIPER, outcome="lost", confidence=80, regime=REGIME_TRENDING_UP
+                )
+            )
         sel = _sel(memory=mem)
         # Use a snap that produces sniper confidence just above 80 so -15 drops it below
-        d = sel.select(_snap(cone_strength=0.71, adx=26.0, volume_delta=5.0,
-                             last_candles="", liquidity="normal"))
+        d = sel.select(_snap(cone_strength=0.71, adx=26.0, volume_delta=5.0, last_candles="", liquidity="normal"))
         # Either skip (confidence dropped) or sniper (if base conf was high enough)
         assert d.edge in (EDGE_SNIPER, EDGE_SKIP)
 
     def test_record_outcome_stores_in_memory(self):
         sel = _sel()
-        sel.record_outcome("XAUUSD", EDGE_SNIPER, "won", confidence=90,
-                           regime=REGIME_TRENDING_UP)
+        sel.record_outcome("XAUUSD", EDGE_SNIPER, "won", confidence=90, regime=REGIME_TRENDING_UP)
         assert sel.memory.last_outcome("XAUUSD", EDGE_SNIPER) == "won"
 
 
@@ -334,8 +355,7 @@ class TestSelectWithNewsFilter:
         assert d.edge != EDGE_SKIP or "FOMC" not in d.reason
 
     def test_crypto_news_skips_btc_not_xau(self):
-        nf = NewsFilter([NewsEvent(minutes_away=10, description="crypto hack",
-                                   severity="medium", symbols_affected=[])])
+        nf = NewsFilter([NewsEvent(minutes_away=10, description="crypto hack", severity="medium", symbols_affected=[])])
         sel = _sel(news_filter=nf)
         btc = _snap(symbol="BTCUSD", price=67890, atr=450, adx=32.1)
         xau = _snap(symbol="XAUUSD")
@@ -363,25 +383,30 @@ class TestLookahead:
 
     def _make_decision(self, edge=EDGE_SNIPER, conf=90):
         return EdgeDecision(
-            regime=REGIME_TRENDING_UP, edge=edge, confidence=conf,
-            reason="test", action="buy 0.01",
-            symbol="XAUUSD", entry_price=2345.67,
-            sl_price=2343.17, tp_price=2350.67,
-            lot_size=0.01, strategy_name="smc_ict",
+            regime=REGIME_TRENDING_UP,
+            edge=edge,
+            confidence=conf,
+            reason="test",
+            action="buy 0.01",
+            symbol="XAUUSD",
+            entry_price=2345.67,
+            sl_price=2343.17,
+            tp_price=2350.67,
+            lot_size=0.01,
+            strategy_name="smc_ict",
         )
 
     def test_skip_decision_unchanged(self):
         snap = _snap()
-        skip_d = EdgeDecision(regime=REGIME_TRENDING_UP, edge=EDGE_SKIP,
-                              confidence=0, reason="test", action="no_trade",
-                              symbol="XAUUSD")
+        skip_d = EdgeDecision(
+            regime=REGIME_TRENDING_UP, edge=EDGE_SKIP, confidence=0, reason="test", action="no_trade", symbol="XAUUSD"
+        )
         result = self.sel._apply_lookahead(snap, skip_d)
         assert result.edge == EDGE_SKIP
 
     def test_high_flip_risk_converts_to_skip(self):
         # RSI near 50 (+2), low volume (+1), cone near threshold (+1), high ATR (+2) = 6
-        snap = _snap(rsi=51.0, volume_delta=2.0, cone_strength=0.71,
-                     atr=10.0, price=1000.0)  # rel_atr=0.01 > 0.002*2
+        snap = _snap(rsi=51.0, volume_delta=2.0, cone_strength=0.71, atr=10.0, price=1000.0)  # rel_atr=0.01 > 0.002*2
         d = self._make_decision(conf=90)
         result = self.sel._apply_lookahead(snap, d)
         assert result.edge == EDGE_SKIP
@@ -389,8 +414,7 @@ class TestLookahead:
 
     def test_medium_flip_risk_reduces_confidence(self):
         # RSI near 50 (+2), low volume (+1) = 3 → medium risk, penalty = 3*4 = 12
-        snap = _snap(rsi=51.0, volume_delta=2.0, cone_strength=0.87,
-                     atr=1.25, price=2345.67)
+        snap = _snap(rsi=51.0, volume_delta=2.0, cone_strength=0.87, atr=1.25, price=2345.67)
         d = self._make_decision(conf=95)
         result = self.sel._apply_lookahead(snap, d)
         if result.edge != EDGE_SKIP:
@@ -399,8 +423,7 @@ class TestLookahead:
 
     def test_low_flip_risk_no_change(self):
         # Strong RSI (68), high volume (15%), good cone (0.87), normal ATR
-        snap = _snap(rsi=68.0, volume_delta=15.0, cone_strength=0.87,
-                     atr=1.25, price=2345.67)
+        snap = _snap(rsi=68.0, volume_delta=15.0, cone_strength=0.87, atr=1.25, price=2345.67)
         d = self._make_decision(conf=90)
         result = self.sel._apply_lookahead(snap, d)
         # Flip risk = 0 → no change
@@ -408,11 +431,9 @@ class TestLookahead:
         assert "lookahead" not in result.reason
 
     def test_soft_news_proximity_adds_flip_risk(self):
-        nf = NewsFilter([NewsEvent(minutes_away=45, description="FOMC",
-                                   severity="high", symbols_affected=[])])
+        nf = NewsFilter([NewsEvent(minutes_away=45, description="FOMC", severity="high", symbols_affected=[])])
         sel = AdaptiveEdgeSelector(news_filter=nf)
-        snap = _snap(rsi=68.0, volume_delta=15.0, cone_strength=0.87,
-                     atr=1.25, price=2345.67)
+        snap = _snap(rsi=68.0, volume_delta=15.0, cone_strength=0.87, atr=1.25, price=2345.67)
         d = self._make_decision(conf=90)
         result = sel._apply_lookahead(snap, d)
         # 45 min away high severity → +2 flip risk → medium → confidence reduced
@@ -429,19 +450,43 @@ class TestSelectAll:
         self.sel = _sel()
 
     def _xau(self):
-        return _snap(symbol="XAUUSD", price=2345.67, atr=1.25, adx=32.1,
-                     rsi=68.0, volume_delta=15.0, cone_strength=0.87,
-                     last_candles="bullish engulfing", liquidity="high")
+        return _snap(
+            symbol="XAUUSD",
+            price=2345.67,
+            atr=1.25,
+            adx=32.1,
+            rsi=68.0,
+            volume_delta=15.0,
+            cone_strength=0.87,
+            last_candles="bullish engulfing",
+            liquidity="high",
+        )
 
     def _btc(self):
-        return _snap(symbol="BTCUSD", price=67890, atr=450, adx=18.0,
-                     rsi=55.0, volume_delta=-8.0, cone_strength=0.62,
-                     last_candles="doji", liquidity="normal")
+        return _snap(
+            symbol="BTCUSD",
+            price=67890,
+            atr=450,
+            adx=18.0,
+            rsi=55.0,
+            volume_delta=-8.0,
+            cone_strength=0.62,
+            last_candles="doji",
+            liquidity="normal",
+        )
 
     def _eur(self):
-        return _snap(symbol="EURUSD", price=1.085, atr=0.008, adx=25.0,
-                     rsi=72.0, volume_delta=5.0, cone_strength=0.91,
-                     last_candles="hammer", liquidity="normal")
+        return _snap(
+            symbol="EURUSD",
+            price=1.085,
+            atr=0.008,
+            adx=25.0,
+            rsi=72.0,
+            volume_delta=5.0,
+            cone_strength=0.91,
+            last_candles="hammer",
+            liquidity="normal",
+        )
 
     def test_returns_one_decision_per_symbol(self):
         decisions = self.sel.select_all([self._xau(), self._btc(), self._eur()])
@@ -476,8 +521,7 @@ class TestSelectAll:
         assert decisions[0].symbol != decisions[1].symbol
 
     def test_news_filter_applied_per_symbol(self):
-        nf = NewsFilter([NewsEvent(minutes_away=30, description="FOMC",
-                                   severity="high", symbols_affected=["XAUUSD"])])
+        nf = NewsFilter([NewsEvent(minutes_away=30, description="FOMC", severity="high", symbols_affected=["XAUUSD"])])
         sel = AdaptiveEdgeSelector(news_filter=nf)
         decisions = sel.select_all([self._xau(), self._btc()])
         xau_d = next(d for d in decisions if d.symbol == "XAUUSD")
@@ -488,6 +532,7 @@ class TestSelectAll:
 
     def test_to_dict_list_json_serialisable(self):
         import json
+
         decisions = self.sel.select_all([self._xau(), self._btc(), self._eur()])
         json.dumps([d.to_dict() for d in decisions])  # must not raise
 
@@ -521,27 +566,25 @@ class TestBeastReasonVoice:
             assert "rr" in d.reason.lower() or "pips" in d.reason.lower()
 
     def test_scalper_reason_contains_rsi(self):
-        d = self.sel.select(_snap(adx=22.0, rsi=72.0, cone_strength=0.85,
-                                  atr=0.5, price=2000.0, volume_delta=8.0))
+        d = self.sel.select(_snap(adx=22.0, rsi=72.0, cone_strength=0.85, atr=0.5, price=2000.0, volume_delta=8.0))
         if d.edge == EDGE_SCALPER:
             assert "rsi" in d.reason.lower()
 
     def test_scalper_reason_contains_reversion_phrase(self):
-        d = self.sel.select(_snap(adx=22.0, rsi=72.0, cone_strength=0.85,
-                                  atr=0.5, price=2000.0, volume_delta=8.0))
+        d = self.sel.select(_snap(adx=22.0, rsi=72.0, cone_strength=0.85, atr=0.5, price=2000.0, volume_delta=8.0))
         if d.edge == EDGE_SCALPER:
             assert any(w in d.reason.lower() for w in ("reversion", "fade", "snap", "overbought", "oversold"))
 
     def test_grid_reason_contains_volatile_phrase(self):
-        d = self.sel.select(_snap(adx=30.0, volume_delta=50.0, cone_strength=0.85,
-                                  atr=1.25, price=2000.0))
+        d = self.sel.select(_snap(adx=30.0, volume_delta=50.0, cone_strength=0.85, atr=1.25, price=2000.0))
         if d.edge == EDGE_GRID:
             assert any(w in d.reason.lower() for w in ("volatile", "chaos", "layers", "grid"))
 
     def test_memory_won_phrase_in_sniper_reason(self):
         mem = DecisionMemory()
-        mem.record(DecisionRecord(symbol="XAUUSD", edge=EDGE_SNIPER,
-                                  outcome="won", confidence=90, regime=REGIME_TRENDING_UP))
+        mem.record(
+            DecisionRecord(symbol="XAUUSD", edge=EDGE_SNIPER, outcome="won", confidence=90, regime=REGIME_TRENDING_UP)
+        )
         sel = AdaptiveEdgeSelector(memory=mem)
         d = sel.select(_snap())
         if d.edge == EDGE_SNIPER:
@@ -549,8 +592,9 @@ class TestBeastReasonVoice:
 
     def test_memory_lost_phrase_in_sniper_reason(self):
         mem = DecisionMemory()
-        mem.record(DecisionRecord(symbol="XAUUSD", edge=EDGE_SNIPER,
-                                  outcome="lost", confidence=90, regime=REGIME_TRENDING_UP))
+        mem.record(
+            DecisionRecord(symbol="XAUUSD", edge=EDGE_SNIPER, outcome="lost", confidence=90, regime=REGIME_TRENDING_UP)
+        )
         sel = AdaptiveEdgeSelector(memory=mem)
         d = sel.select(_snap())
         if d.edge == EDGE_SNIPER:

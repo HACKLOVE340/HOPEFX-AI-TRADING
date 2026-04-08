@@ -68,6 +68,7 @@ from __future__ import annotations
 import logging
 from collections import deque
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 import numpy as np

@@ -47,6 +47,7 @@ import os
 import shutil
 import subprocess  # nosec B404 — used only for git rollback with a fixed command list
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 from typing import Any
@@ -650,6 +651,7 @@ async def start_healer(app: FastAPI) -> None:
 # ── Module-level eager router ─────────────────────────────────────────────────
 # Registered by router_registry.py at import time. Delegates to get_healer()
 # at request time so the live instance is used once start_healer() runs.
+
 
 def _build_eager_heal_router() -> APIRouter:
     from fastapi import APIRouter as _APIRouter, Request as _Request

@@ -65,6 +65,7 @@ logger = logging.getLogger(__name__)
 
 # ── Analysis result container ─────────────────────────────────────────────────
 
+
 @dataclass
 class AnalysisResult:
     """
@@ -82,7 +83,7 @@ class AnalysisResult:
     mtf_features: MultiTimeframeFeatures | None
     ticks_available: int
     bars_available: dict[str, int]
-    pipeline_ms: float          # wall-clock time for full pipeline
+    pipeline_ms: float  # wall-clock time for full pipeline
     error: str | None = None
     computed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -112,6 +113,7 @@ class AnalysisResult:
 
 
 # ── NuclearStrategyAgent ──────────────────────────────────────────────────────
+
 
 class NuclearStrategyAgent:
     """
@@ -252,7 +254,9 @@ class NuclearStrategyAgent:
 
         logger.debug(
             "Pipeline: %d ticks, bars=%s, price=%s",
-            len(ticks), bars_available, current_price,
+            len(ticks),
+            bars_available,
+            current_price,
         )
 
         # ── Step 2: Multi-timeframe features ──────────────────────────────────
@@ -265,6 +269,7 @@ class NuclearStrategyAgent:
                 continue
             try:
                 import numpy as np
+
                 closes = np.array([b.close for b in bars if b.close > 0])
                 if len(closes) >= 10:
                     cones[tf] = self._cone_engine.compute(
@@ -280,11 +285,7 @@ class NuclearStrategyAgent:
         cone_merged = self._cone_engine.merge_cones(cones) if cones else {}
 
         # Primary cone for validator (prefer daily, fallback to first available)
-        primary_cone = (
-            cones.get("daily")
-            or cones.get("1h")
-            or (next(iter(cones.values())) if cones else None)
-        )
+        primary_cone = cones.get("daily") or cones.get("1h") or (next(iter(cones.values())) if cones else None)
 
         # ── Step 4: Regime classification ─────────────────────────────────────
         regime = self._regime_clf.classify(mtf, cone_merged)
@@ -362,7 +363,8 @@ class NuclearStrategyAgent:
         """
         logger.info(
             "NuclearStrategyAgent loop started: symbol=%s interval=%.1fs",
-            self._symbol, interval_s,
+            self._symbol,
+            interval_s,
         )
         while self._running:
             try:
@@ -390,20 +392,13 @@ class NuclearStrategyAgent:
             "approved_count": self._approved_count,
             "error_count": self._error_count,
             "approval_rate": (
-                round(self._approved_count / self._analysis_count, 3)
-                if self._analysis_count > 0 else 0.0
+                round(self._approved_count / self._analysis_count, 3) if self._analysis_count > 0 else 0.0
             ),
             "reader": reader_stats,
             "last_regime": last.regime.regime if last and last.regime else None,
-            "last_regime_confidence": (
-                round(last.regime.confidence, 3) if last and last.regime else None
-            ),
-            "last_signal_direction": (
-                last.signal.direction if last and last.signal else None
-            ),
-            "last_signal_status": (
-                last.signal.approval_status if last and last.signal else None
-            ),
+            "last_regime_confidence": (round(last.regime.confidence, 3) if last and last.regime else None),
+            "last_signal_direction": (last.signal.direction if last and last.signal else None),
+            "last_signal_status": (last.signal.approval_status if last and last.signal else None),
             "last_pipeline_ms": round(last.pipeline_ms, 2) if last else None,
             "last_computed_at": last.computed_at.isoformat() if last else None,
             "signal_history_count": len(self._signal_history),

@@ -9,6 +9,7 @@ and Phase 26: White-Label Module (whitelabel/).
 """
 
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 
 import pytest
