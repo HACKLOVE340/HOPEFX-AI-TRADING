@@ -169,7 +169,11 @@ class TestTickAggregator:
     async def test_sync_bar_callback(self):
         agg = TickAggregator(symbol="XAU_USD", timeframe_s=1)
         bar_received = []
-        agg.add_bar_callback(lambda bar: bar_received.append(bar))
+
+        def _on_bar(bar):
+            bar_received.append(bar)
+
+        agg.add_bar_callback(_on_bar)
         t1 = _tick()
         await agg.on_tick(t1)
         agg._bar_start = time.time() - 2.0
