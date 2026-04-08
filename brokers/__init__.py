@@ -284,6 +284,7 @@ class PaperTradingBroker(BaseBroker):
         slippage_model: str = "gaussian",
         session_factory=None,
         user_id: str = "paper",
+        seed: int | None = None,
     ):
         super().__init__()
 
@@ -295,6 +296,12 @@ class PaperTradingBroker(BaseBroker):
         self.slippage_model = slippage_model
         self._session_factory = session_factory
         self._user_id = user_id
+
+        # Seeded RNG for reproducible paper-trading simulation.
+        # seed=None (default) uses a random seed — appropriate for live paper
+        # trading where you want realistic variance.  Pass an integer seed in
+        # tests or replay scenarios to get deterministic fills.
+        self._rng = random.Random(seed)  # nosec B311 - paper trading simulation
 
         # THREAD SAFETY: Separate locks for orders and positions
         self._orders_lock = asyncio.Lock()
@@ -432,7 +439,7 @@ class PaperTradingBroker(BaseBroker):
         """
         self._validate_order_params(quantity, side)
 
-        latency_ms = max(0.0, random.gauss(self.latency_ms_mean, self.latency_ms_std))
+        latency_ms = max(0.0, self._rng.gauss(self.latency_ms_mean, self.latency_ms_std))
         await asyncio.sleep(latency_ms / 1000)
 
         slippage_pips = self._calculate_slippage(symbol, quantity, side)
@@ -473,9 +480,9 @@ class PaperTradingBroker(BaseBroker):
         scaled_base = _PAPER_BASE_SLIPPAGE_PIPS * size_factor
 
         if self.slippage_model == "gaussian":
-            slippage = random.gauss(scaled_base, _PAPER_SLIPPAGE_GAUSS_STD)
+            slippage = self._rng.gauss(scaled_base, _PAPER_SLIPPAGE_GAUSS_STD)
         else:
-            slippage = random.uniform(0, scaled_base * 2)  # nosec B311 - paper trading slippage simulation
+            slippage = self._rng.uniform(0, scaled_base * 2)  # nosec B311 - paper trading slippage simulation
 
         return max(0.0, slippage)
 
@@ -485,8 +492,8 @@ class PaperTradingBroker(BaseBroker):
             return quantity
 
         fill_prob = min(_PAPER_FILL_PROB_CAP, 0.5 + (self.partial_fill_threshold / quantity))
-        if random.random() > fill_prob:  # nosec B311 - paper trading fill simulation
-            return quantity * random.uniform(  # nosec B311 - paper trading partial fill simulation
+        if self._rng.random() > fill_prob:  # nosec B311 - paper trading fill simulation
+            return quantity * self._rng.uniform(  # nosec B311 - paper trading partial fill simulation
                 _PAPER_PARTIAL_FILL_MIN, _PAPER_PARTIAL_FILL_MAX
             )
         return quantity

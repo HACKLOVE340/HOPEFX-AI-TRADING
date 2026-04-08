@@ -93,7 +93,7 @@ class SlippageModel:
     PAPER_NOISE_SIGMA_PCT       — Gaussian noise std as fraction of price (default 0.0001)
     """
 
-    def __init__(self, model: str = "gaussian") -> None:
+    def __init__(self, model: str = "gaussian", seed: int | None = None) -> None:
         self._model = os.getenv("PAPER_SLIPPAGE_MODEL", model).lower()
         self._fixed_pct = float(os.getenv("PAPER_FIXED_SLIPPAGE_PCT", "0.0005"))
         self._impact_factor = float(os.getenv("PAPER_IMPACT_FACTOR", "0.1"))
@@ -101,7 +101,9 @@ class SlippageModel:
         # Instance-level spread overrides (symbol → half-spread).
         # Populated via set_spread() to avoid mutating the module-level table.
         self._spread_overrides: dict[str, float] = {}
-        self._rng = random.Random()  # not seeded  # nosec B311 - paper trading noise, intentionally non-deterministic
+        # seed=None → random (appropriate for live paper trading).
+        # Pass an integer seed for deterministic replay or test scenarios.
+        self._rng = random.Random(seed)  # nosec B311 - paper trading simulation
 
     def fill_price(
         self,
@@ -194,11 +196,19 @@ class PaperTradingBroker(BrokerConnector):
         initial_balance: float | None = None,
         commission_per_lot: float | None = None,
         slippage_model: str = "gaussian",
+        seed: int | None = None,
     ):
         """
         Initialize paper trading broker.
 
         Accepts either a config dict or keyword arguments directly.
+
+        Parameters
+        ----------
+        seed : int | None
+            RNG seed for the slippage model.  None (default) uses a random
+            seed — appropriate for live paper trading where realistic variance
+            is desired.  Pass an integer for deterministic replay or tests.
         """
         if config is None:
             config = {}
@@ -216,7 +226,7 @@ class PaperTradingBroker(BrokerConnector):
         self.equity = self.initial_balance
         self._session_factory = session_factory
         self._user_id = user_id
-        self._slippage = SlippageModel(model=config.get("slippage_model", slippage_model))
+        self._slippage = SlippageModel(model=config.get("slippage_model", slippage_model), seed=seed)
         # Commission per standard lot (100 000 units).  Charged on open AND close.
         # Default 0.0 so existing callers that don't pass commission_per_lot are unaffected.
         self._commission_per_lot: float = float(config.get("commission_per_lot", 0.0))
