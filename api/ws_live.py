@@ -763,8 +763,8 @@ async def _chartbot_broadcaster() -> None:
                             }
                             for a in (raw_articles or [])[:5]
                         ]
-                    except Exception:
-                        pass
+                    except Exception as _fmt_exc:  # nosec B110 — article formatting is non-fatal
+                        logger.debug("ws_live: article serialisation skipped: %s", _fmt_exc)
                     await _manager.broadcast(
                         "sentiment",
                         {"type": "sentiment_update", "data": {"signal": sentiment_features, "articles": articles}},

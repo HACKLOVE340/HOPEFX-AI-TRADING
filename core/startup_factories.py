@@ -629,10 +629,9 @@ def _resolve_clock_start_time() -> datetime | None:
 
     try:
         existing = json.loads(_OANDA_PAPER_STAMP_PATH.read_text(encoding="utf-8"))
-    except Exception:
+    except Exception as _exc:
+        logger.debug("_get_existing_stamp: cannot parse stamp file: %s", _exc)
         return datetime.now(UTC)
-
-    if not existing.get("requires_real_account", False):
         # Real account already stamped — preserve the running clock.
         logger.info(
             "OANDA paper trading clock already running since %s (account=%s…)",
@@ -1117,7 +1116,8 @@ def _is_feature_enabled(flag_name: str, default: bool = False) -> bool:
         from config.feature_flags import flags
 
         return bool(getattr(flags, flag_name, default))
-    except Exception:
+    except Exception as _exc:
+        logger.debug("_get_feature_flag(%s): flags unavailable, using default=%s: %s", flag_name, default, _exc)
         return default
 
 
@@ -1127,7 +1127,8 @@ def _get_log_activity():
         from api.admin import log_activity
 
         return log_activity
-    except Exception:
+    except Exception as _exc:
+        logger.debug("_get_log_activity: api.admin unavailable, using logger.info: %s", _exc)
         return logger.info
 
 
@@ -1567,10 +1568,9 @@ async def init_daily_online_learner(s: Any) -> Any:
             if range_pct < 0.005:
                 return "ranging"
             return "trending"
-        except Exception:
+        except Exception as _exc:
+            logger.debug("_detect_regime(%s): CSV read/calc failed: %s", symbol, _exc)
             return None
-
-    t = asyncio.create_task(_daily_ewc_loop())
     s.background_tasks.append(t)
 
     log_activity(

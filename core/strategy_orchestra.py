@@ -324,5 +324,6 @@ def _get_shared_orchestra() -> "StrategyOrchestra | None":
         from app import app_state  # type: ignore[import]
 
         return getattr(app_state, "orchestra", None)
-    except Exception:
+    except Exception as _exc:
+        logger.debug("get_shared_orchestra: app_state unavailable: %s", _exc)
         return None

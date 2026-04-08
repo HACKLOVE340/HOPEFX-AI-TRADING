@@ -3,7 +3,7 @@
  * Define indicator formulas, preview on chart, save for use in strategies.
  */
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { createChart, LineSeries, type IChartApi } from 'lightweight-charts';
+import { createChart, LineSeries, type IChartApi, type UTCTimestamp } from 'lightweight-charts';
 import { api } from '../hooks/useApi';
 
 interface Indicator { id: string; name: string; formula: string; symbol: string; color: string; created_at: string; }
@@ -28,7 +28,7 @@ const PreviewChart: React.FC<{ data: PreviewPoint[]; color: string }> = ({ data,
       rightPriceScale: { borderColor: '#334155' },
     });
     const series = chart.addSeries(LineSeries, { color, lineWidth: 2 });
-    series.setData(data.map((d, i) => ({ time: (1700000000 + i * 86400) as any, value: d.value })));
+    series.setData(data.map((d, i) => ({ time: (1700000000 + i * 86400) as UTCTimestamp, value: d.value })));
     chart.timeScale().fitContent();
     return () => chart.remove();
   }, [data, color]);
@@ -75,8 +75,8 @@ const CustomIndicators: React.FC = () => {
     try {
       const res = await api.post('/indicators/preview', { formula, symbol, periods: 100 });
       setPreview(res.data.data || []);
-    } catch (e: any) {
-      setError(e?.response?.data?.detail || 'Formula error');
+    } catch (e: unknown) {
+      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Formula error');
       setPreview([]);
     }
     setLoading(false);

@@ -142,8 +142,7 @@ class OrchestratorWSClient {
     this._status = 'connecting';
 
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const envUrl = (import.meta as any).env?.VITE_WS_URL as string | undefined;
+    const envUrl = import.meta.env.VITE_WS_URL as string | undefined;
     const url = envUrl ?? `${proto}//${window.location.host}/ws/live`;
 
     const ws = new WebSocket(url);
