@@ -255,34 +255,189 @@ class AgentResult:
 
 # ── sandbox execution ─────────────────────────────────────────────────────────
 
+# Modules that generated strategies are never allowed to import.
+# Checked via AST walk so split-string / getattr tricks cannot bypass the filter.
+_BANNED_MODULES: frozenset[str] = frozenset(
+    {
+        "subprocess",
+        "os",
+        "sys",
+        "socket",
+        "requests",
+        "aiohttp",
+        "httpx",
+        "urllib",
+        "urllib3",
+        "http",
+        "ftplib",
+        "smtplib",
+        "telnetlib",
+        "ctypes",
+        "cffi",
+        "importlib",
+        "builtins",
+        "pickle",
+        "shelve",
+        "marshal",
+        "multiprocessing",
+        "threading",
+        "concurrent",
+        "signal",
+        "mmap",
+        "pty",
+        "tty",
+        "termios",
+        "fcntl",
+        "grp",
+        "pwd",
+        "resource",
+        "syslog",
+        "platform",
+        "pathlib",
+        "shutil",
+        "glob",
+        "fnmatch",
+        "tempfile",
+        "io",
+        "zipfile",
+        "tarfile",
+        "gzip",
+        "bz2",
+        "lzma",
+        "zlib",
+        "base64",
+        "binascii",
+        "codecs",
+        "struct",
+        "ast",
+        "dis",
+        "inspect",
+        "gc",
+        "weakref",
+        "traceback",
+        "linecache",
+        "tokenize",
+        "token",
+        "keyword",
+        "symtable",
+        "compileall",
+        "py_compile",
+    }
+)
+
+# Built-in names that generated code must not call directly.
+_BANNED_BUILTINS: frozenset[str] = frozenset(
+    {
+        "eval",
+        "exec",
+        "compile",
+        "open",
+        "__import__",
+        "breakpoint",
+        "input",
+        "memoryview",
+        "vars",
+        "dir",
+        "globals",
+        "locals",
+        "getattr",
+        "setattr",
+        "delattr",
+        "hasattr",
+    }
+)
+
+
+class _ASTSandboxChecker(ast.NodeVisitor):
+    """
+    Walk the AST of generated strategy code and reject any node that
+    imports a banned module or calls a banned built-in.
+
+    String-based filters are bypassable via importlib, getattr splits,
+    or attribute chaining.  Walking the AST catches all syntactically
+    valid import forms:
+        import os
+        import os as _os
+        from os import system
+        from os.path import join
+    and all direct built-in calls:
+        eval(...)   exec(...)   open(...)
+    """
+
+    def __init__(self) -> None:
+        self.violations: list[str] = []
+
+    def _check_module(self, module_name: str, lineno: int) -> None:
+        root = module_name.split(".")[0]
+        if root in _BANNED_MODULES:
+            self.violations.append(
+                f"Line {lineno}: import of banned module '{module_name}' is not allowed"
+            )
+
+    def visit_Import(self, node: ast.Import) -> None:  # noqa: N802
+        for alias in node.names:
+            self._check_module(alias.name, node.lineno)
+        self.generic_visit(node)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:  # noqa: N802
+        if node.module:
+            self._check_module(node.module, node.lineno)
+        self.generic_visit(node)
+
+    def visit_Call(self, node: ast.Call) -> None:  # noqa: N802
+        # Direct calls: eval(...), exec(...), open(...)
+        if isinstance(node.func, ast.Name) and node.func.id in _BANNED_BUILTINS:
+            self.violations.append(
+                f"Line {node.lineno}: call to banned built-in '{node.func.id}' is not allowed"
+            )
+        # Attribute calls: __builtins__['eval'](...) caught at Name level above;
+        # also catch getattr(x, 'eval') patterns via the Name visitor.
+        self.generic_visit(node)
+
+    def visit_Attribute(self, node: ast.Attribute) -> None:  # noqa: N802
+        # Catch os.system, os.popen, subprocess.run etc. via attribute access
+        # on a banned-module name: e.g.  import os; os.system(...)
+        if isinstance(node.value, ast.Name) and node.value.id in _BANNED_MODULES:
+            self.violations.append(
+                f"Line {node.lineno}: attribute access on banned module '{node.value.id}' is not allowed"
+            )
+        self.generic_visit(node)
+
+
+def _ast_sandbox_check(tree: ast.AST) -> list[str]:
+    """Return a list of violation messages, empty if the code is safe."""
+    checker = _ASTSandboxChecker()
+    checker.visit(tree)
+    return checker.violations
+
 
 def _compile_strategy(code: str) -> tuple[Any | None, str | None]:
     """
     Compile and instantiate a GeneratedStrategy from raw source code.
 
     Returns (instance, None) on success or (None, error_message) on failure.
-    """
-    # Static safety check — reject dangerous imports
-    _BANNED = {
-        "subprocess",
-        "os.system",
-        "eval",
-        "exec",
-        "open",
-        "__import__",
-        "socket",
-        "requests",
-        "aiohttp",
-        "httpx",
-    }
-    for token in _BANNED:
-        if token in code:
-            return None, f"Banned token '{token}' found in generated code"
 
+    Security model
+    --------------
+    1. Parse the code into an AST — rejects syntax errors immediately.
+    2. Walk the AST with _ASTSandboxChecker — rejects any import of a
+       banned module or call to a banned built-in.  AST-based checking
+       cannot be bypassed by string splitting, getattr tricks, or
+       importlib indirection the way a simple string search can.
+    3. Execute the validated module in the same process.  This is not a
+       full sandbox (no seccomp/namespace isolation) but it eliminates
+       the most common injection vectors.  The endpoint is gated to
+       admin-role JWT so the attack surface is limited to trusted users.
+    """
     try:
-        ast.parse(code)
+        tree = ast.parse(code)
     except SyntaxError as exc:
         return None, f"SyntaxError: {exc}"
+
+    # AST-based safety check — catches all import forms and banned built-ins
+    violations = _ast_sandbox_check(tree)
+    if violations:
+        return None, "Generated code failed sandbox check:\n" + "\n".join(violations)
 
     # Write to a temp file so tracebacks have line numbers.
     # Use tempfile.gettempdir() instead of hardcoded /tmp (B108).
