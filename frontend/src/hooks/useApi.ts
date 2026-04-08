@@ -8,7 +8,7 @@ import axios, { type AxiosInstance } from 'axios';
 import { useStore } from '../store';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const BASE_URL = ((import.meta as any).env?.VITE_API_URL as string | undefined) ?? '/api';
+const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api';
 
 export const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,

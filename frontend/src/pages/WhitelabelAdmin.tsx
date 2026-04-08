@@ -76,8 +76,8 @@ const CreateModal: React.FC<{
         features, primary_color: color, logo_url: logoUrl,
       });
       onCreated(res.data);
-    } catch (e: any) {
-      setError(e?.response?.data?.detail || 'Failed to create tenant.');
+    } catch (e: unknown) {
+      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Failed to create tenant.');
     } finally {
       setSaving(false);
     }
