@@ -24,6 +24,9 @@ jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
     runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
+    # Repos without GitHub Advanced Security (GHAS) cannot upload SARIF results.
+    # continue-on-error prevents this from blocking required status checks.
+    continue-on-error: true
     permissions:
       security-events: write
       packages: read
