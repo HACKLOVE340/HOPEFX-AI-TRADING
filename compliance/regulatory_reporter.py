@@ -74,6 +74,28 @@ _DLQ_PATH = Path(os.getenv("REGULATORY_DLQ_PATH", "data/regulatory_dlq"))
 _RETRY_MAX = int(os.getenv("REGULATORY_RETRY_MAX", "5"))
 _TIMEOUT_S = float(os.getenv("REGULATORY_TIMEOUT_S", "10.0"))
 
+# ── Startup compliance check ───────────────────────────────────────────────────
+# Warn operators when live trading is enabled but regulatory reporting is not.
+# Prop-firm mode intentionally suppresses reporting (no exchange obligation);
+# all other live configurations require explicit opt-in.
+_LIVE_TRADING_ENABLED = os.getenv("FEATURE_LIVE_TRADING", "false").lower() == "true"
+if _LIVE_TRADING_ENABLED and not _REPORTING_ENABLED and not _PROP_FIRM_MODE:
+    logger.warning(
+        "COMPLIANCE WARNING: FEATURE_LIVE_TRADING=true but "
+        "REGULATORY_REPORTING_ENABLED=false. "
+        "Live trades will NOT be reported to %s regulatory endpoints "
+        "(DTCC GTR / SEC CAT / ESMA). "
+        "Set REGULATORY_REPORTING_ENABLED=true and configure the required "
+        "API keys (DTCC_GTR_API_KEY, CAT_API_KEY, ESMA_API_KEY) before "
+        "going live if you have a reporting obligation.",
+        _JURISDICTION,
+    )
+elif _PROP_FIRM_MODE and _LIVE_TRADING_ENABLED:
+    logger.info(
+        "Regulatory reporting suppressed: PROP_FIRM_MODE=true. "
+        "Trades are logged to the dead-letter queue but not transmitted."
+    )
+
 # CFTC SDR (DTCC GTR)
 _DTCC_GTR_ENDPOINT = os.getenv("DTCC_GTR_ENDPOINT", "https://gtr.dtcc.com/gtr/api/trade/report")
 _DTCC_GTR_API_KEY = os.getenv("DTCC_GTR_API_KEY", "")
