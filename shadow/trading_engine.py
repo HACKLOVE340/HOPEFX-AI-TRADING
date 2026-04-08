@@ -110,7 +110,18 @@ class PaperFillSimulator:
     Realistic paper fill simulator using Almgren-Chriss inspired impact model.
 
     fill = mid ± half_spread ± market_impact ± noise
+
+    Parameters
+    ----------
+    seed : int | None
+        RNG seed.  None (default) → random, appropriate for live shadow
+        trading.  Pass an integer for deterministic replay or tests.
     """
+
+    def __init__(self, seed: int | None = None) -> None:
+        # Instance-level RNG so shadow fills are isolated from other random
+        # state and can be made deterministic for replay/testing.
+        self._rng = random.Random(seed)  # nosec B311 - shadow simulation
 
     def simulate(
         self,
@@ -125,7 +136,7 @@ class PaperFillSimulator:
         """
         half_spread = mid * _HALF_SPREAD_BPS / 10_000
         market_impact = mid * _IMPACT_BPS / 10_000 * math.sqrt(lots / max(_ADV_LOTS, 0.01))
-        noise = mid * _NOISE_BPS / 10_000 * random.gauss(0, 1)
+        noise = mid * _NOISE_BPS / 10_000 * self._rng.gauss(0, 1)
 
         total_cost = half_spread + market_impact + abs(noise)
         fill = mid + total_cost if side == "long" else mid - total_cost
@@ -155,14 +166,15 @@ class ShadowTradingEngine:
         engine.on_live_close(signal_id="abc", live_pnl=12.50)
     """
 
-    def __init__(self, initial_balance: float = 10_000.0) -> None:
+    def __init__(self, initial_balance: float = 10_000.0, seed: int | None = None) -> None:
         self._balance: float = initial_balance
         self._equity: float = initial_balance
         self._peak: float = initial_balance
         self._pnl: float = 0.0
         self._fills: list[ShadowFill] = []
         self._positions: list[ShadowPosition] = []
-        self._simulator = PaperFillSimulator()
+        # seed=None → random (live shadow trading); seed=int → deterministic replay/tests
+        self._simulator = PaperFillSimulator(seed=seed)
         self._started: bool = False
         self._start_ts: float = time.time()
 
