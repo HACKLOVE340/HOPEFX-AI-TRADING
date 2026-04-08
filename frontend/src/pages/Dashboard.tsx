@@ -25,6 +25,7 @@ import {
   selectWsStatus,
 } from '../store';
 import { tradingApi, mlApi, performanceApi } from '../hooks/useApi';
+import type { Position, Signal, AccountMetrics } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -355,16 +356,15 @@ const Dashboard: React.FC = () => {
       ]);
       const store = useStore.getState();
       if (posRes.status === 'fulfilled') {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        store.setPositions((posRes.value.data as any)?.positions ?? []);
+        type PosData = { positions?: Position[] };
+        store.setPositions(((posRes.value.data as PosData)?.positions) ?? []);
       }
       if (sigRes.status === 'fulfilled') {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        store.setSignals((sigRes.value.data as any)?.signals ?? []);
+        type SigData = { signals?: Signal[] };
+        store.setSignals(((sigRes.value.data as SigData)?.signals) ?? []);
       }
       if (accRes.status === 'fulfilled') {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        store.setAccount(accRes.value.data as any);
+        store.setAccount(accRes.value.data as AccountMetrics);
       }
     } catch (err: unknown) {
       // Promise.allSettled should not throw; log if it does
@@ -382,8 +382,9 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     performanceApi.equityCurve()
       .then((r) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const points = (r.data as any)?.equity_curve ?? (r.data as any)?.points ?? [];
+        type EquityResp = { equity_curve?: EquityPoint[]; points?: EquityPoint[] };
+        const data = r.data as EquityResp;
+        const points = data?.equity_curve ?? data?.points ?? [];
         if (Array.isArray(points) && points.length > 0) {
           setEquityHistory(points);
         }

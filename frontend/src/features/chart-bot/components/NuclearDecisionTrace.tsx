@@ -103,11 +103,11 @@ const NuclearDecisionTrace = memo(() => {
   const nuclear = useNuclearStore((s) => s.nuclear);
 
   // These fields are populated by the explainability engine
-  const featureScores    = (nuclear as any)?.feature_scores    as FeatureScore[] | undefined;
-  const decisionTrace    = (nuclear as any)?.decision_trace    as string[]       | undefined;
-  const riskNarrative    = (nuclear as any)?.risk_narrative    as string         | undefined;
-  const actionAdvice     = (nuclear as any)?.action_advice     as string         | undefined;
-  const confBreakdown    = (nuclear as any)?.confidence_breakdown as Record<string, number> | undefined;
+  const featureScores    = nuclear?.feature_scores    as FeatureScore[] | undefined;
+  const decisionTrace    = nuclear?.decision_trace;
+  const riskNarrative    = nuclear?.risk_narrative;
+  const actionAdvice     = nuclear?.action_advice;
+  const confBreakdown    = nuclear?.confidence_breakdown;
 
   if (!nuclear || (!featureScores?.length && !decisionTrace?.length)) return null;
 

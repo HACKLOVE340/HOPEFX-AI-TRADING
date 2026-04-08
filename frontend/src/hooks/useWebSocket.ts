@@ -11,8 +11,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useStore } from '../store';
 import type { PriceTick, Position, Signal, AccountMetrics } from '../types';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _envWsUrl = (import.meta as any).env?.VITE_WS_URL as string | undefined;
+const _envWsUrl = import.meta.env.VITE_WS_URL as string | undefined;
 const WS_URL: string = _envWsUrl ?? (() => {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${proto}//${window.location.host}/ws/live`;
@@ -30,6 +29,7 @@ interface WsMessage {
     | 'position_update'
     | 'position_close'
     | 'signal'
+    | 'alert_triggered'
     | 'account_update'
     | 'heartbeat'
     | 'no_live_feed'
@@ -48,7 +48,7 @@ export function useWebSocket(enabled = true) {
   const unmounted      = useRef(false);
   const authedRef      = useRef(false);
 
-  const store = useStore.getState;
+  const storeState = () => useStore.getState();
 
   const handleMessage = useCallback((raw: string) => {
     let msg: WsMessage;
@@ -58,12 +58,12 @@ export function useWebSocket(enabled = true) {
     const {
       setWsStatus, setHeartbeat, setPrice,
       upsertPosition, removePosition, addSignal, setAccount,
-    } = store();
+    } = storeState();
 
     switch (msg.type) {
       case 'connected':
         if (msg.auth_required) {
-          const token = store().token;
+          const token = storeState().token;
           if (token && wsRef.current?.readyState === WebSocket.OPEN) {
             wsRef.current.send(JSON.stringify({ type: 'auth', token: `Bearer ${token}` }));
           }
@@ -103,7 +103,7 @@ export function useWebSocket(enabled = true) {
         break;
 
       case 'alert_triggered':
-        store.getState().addTriggeredAlert(msg.data as import('../store').TriggeredAlert);
+        storeState().addTriggeredAlert(msg.data as import('../store').TriggeredAlert);
         break;
 
       case 'account_update':
@@ -131,7 +131,7 @@ export function useWebSocket(enabled = true) {
       default:
         break;
     }
-  }, [store]);
+  }, [storeState]);
 
   const startHeartbeat = useCallback((ws: WebSocket) => {
     if (heartbeatTimer.current) clearInterval(heartbeatTimer.current);
@@ -146,7 +146,7 @@ export function useWebSocket(enabled = true) {
     if (unmounted.current) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
-    store().setWsStatus('connecting');
+    storeState().setWsStatus('connecting');
     authedRef.current = false;
 
     const ws = new WebSocket(WS_URL);
@@ -159,18 +159,18 @@ export function useWebSocket(enabled = true) {
     };
 
     ws.onmessage = (event) => handleMessage(event.data as string);
-    ws.onerror = () => { store().setWsStatus('error'); };
+    ws.onerror = () => { storeState().setWsStatus('error'); };
 
     ws.onclose = () => {
       if (heartbeatTimer.current) clearInterval(heartbeatTimer.current);
       if (unmounted.current) return;
-      store().setWsStatus('disconnected');
+      storeState().setWsStatus('disconnected');
       authedRef.current = false;
       const delay = reconnectDelay.current;
       reconnectDelay.current = Math.min(delay * 2, MAX_RECONNECT_MS);
       reconnectTimer.current = setTimeout(connect, delay);
     };
-  }, [handleMessage, store, startHeartbeat]);
+  }, [handleMessage, storeState, startHeartbeat]);
 
   useEffect(() => {
     if (!enabled) return;

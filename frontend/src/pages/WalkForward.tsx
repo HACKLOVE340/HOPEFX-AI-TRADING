@@ -9,7 +9,7 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { createChart, LineSeries, type IChartApi } from 'lightweight-charts';
+import { createChart, LineSeries, type IChartApi, type UTCTimestamp } from 'lightweight-charts';
 import { api } from '../hooks/useApi';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -83,7 +83,7 @@ const EquityChart: React.FC<{ folds: FoldResult[]; visibleFolds: Set<number> }> 
         lineWidth: 2,
         title: `Fold ${fold.fold}`,
       });
-      series.setData(fold.equity_curve as any);
+      series.setData(fold.equity_curve.map(p => ({ time: (p.time as unknown) as UTCTimestamp, value: p.value })));
     });
 
     chart.timeScale().fitContent();

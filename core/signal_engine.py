@@ -42,7 +42,8 @@ def _get_macro_store() -> Any | None:
         from ml.macro_store import macro_store
 
         return macro_store
-    except Exception:
+    except Exception as _exc:
+        logger.debug("_get_macro_store: ml.macro_store unavailable: %s", _exc)
         return None
 
 
@@ -63,7 +64,8 @@ def _get_macro_store_bridge() -> Any | None:
 
         bridge = orchestrator._macro_bridge
         return bridge if bridge.is_loaded else None
-    except Exception:
+    except Exception as _exc:
+        logger.debug("_get_macro_store_bridge: orchestrator bridge unavailable: %s", _exc)
         return None
 
 
@@ -74,6 +76,7 @@ try:
     _ML_AVAILABLE: bool = True
 except Exception:
     _ML_AVAILABLE = False
+    logger.debug("ml package unavailable — signal engine will use fallback logic")
 
 # ── Anomaly weight store (Phase 2 — down-weight signals on anomalous bars) ────
 _anomaly_store: Any | None = None
@@ -93,9 +96,9 @@ def _get_deep_ensemble_store() -> Any | None:
 
         if not flags.DEEP_ENSEMBLE:
             return None
-    except Exception:
+    except Exception as _exc:
+        logger.debug("_get_deep_ensemble_store: feature-flags unavailable: %s", _exc)
         return None
-    if _deep_ensemble_store is None:
         try:
             from research.pipeline.models_ensemble import DeepEnsembleStore
 
@@ -125,9 +128,9 @@ def _get_online_learner_store() -> Any | None:
 
         if not flags.ONLINE_LEARNING:
             return None
-    except Exception:
+    except Exception as _exc:
+        logger.debug("_get_online_learner_store: feature-flags unavailable: %s", _exc)
         return None
-    if _online_learner_store is None:
         try:
             from research.pipeline.online_learning import OnlineLearnerStore
 
@@ -146,9 +149,9 @@ def _get_anomaly_store() -> Any | None:
 
         if not flags.ANOMALY_WEIGHTING:
             return None
-    except Exception:
+    except Exception as _exc:
+        logger.debug("_get_anomaly_store: feature-flags unavailable: %s", _exc)
         return None
-    if _anomaly_store is None:
         try:
             from research.pipeline.anomaly import AnomalyWeightStore
 
@@ -695,7 +698,8 @@ def _get_factor_engine(app_state: Any = None) -> Any | None:
         from portfolio.factor_model import get_live_factor_engine
 
         return get_live_factor_engine()
-    except Exception:
+    except Exception as _exc:
+        logger.debug("_get_factor_engine: portfolio factor engine unavailable: %s", _exc)
         return None
 
 
@@ -750,7 +754,8 @@ def get_signal_engine_status() -> dict[str, Any]:
         from config.feature_flags import flags
 
         status["phase1_mtf_enabled"] = getattr(flags, "MTF_FUSION", True)
-    except Exception:
+    except Exception as _exc:
+        logger.debug("get_signal_engine_status: flags unavailable: %s", _exc)
         status["phase1_mtf_enabled"] = None
 
     try:
@@ -760,10 +765,9 @@ def get_signal_engine_status() -> dict[str, Any]:
             status["phase1_mtf"] = _MTF_STORE_SINGLETON.status()
         else:
             status["phase1_mtf"] = {"is_ready": False}
-    except Exception:
+    except Exception as _exc:
+        logger.debug("get_signal_engine_status: mtf_fusion unavailable: %s", _exc)
         status["phase1_mtf"] = {"is_ready": False}
-
-    # Phase 2: Anomaly
     anomaly = _get_anomaly_store()
     if anomaly is not None and hasattr(anomaly, "status"):
         status["phase2_anomaly"] = anomaly.status()
@@ -1025,7 +1029,8 @@ def _estimate_annualised_volatility(data: dict[str, Any] | None, entry: float) -
             return _GOLD_VOL_BASELINE
         log_returns = np.diff(np.log(np.array(prices[-21:], dtype=float)))
         return float(np.std(log_returns)) * (252**0.5)
-    except Exception:
+    except Exception as _exc:
+        logger.debug("_estimate_current_vol: numpy calculation failed: %s", _exc)
         return _GOLD_VOL_BASELINE
 
 
