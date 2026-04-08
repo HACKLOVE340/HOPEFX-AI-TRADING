@@ -632,6 +632,8 @@ def _resolve_clock_start_time() -> datetime | None:
     except Exception as _exc:
         logger.debug("_get_existing_stamp: cannot parse stamp file: %s", _exc)
         return datetime.now(UTC)
+
+    if not existing.get("requires_real_account", False):
         # Real account already stamped — preserve the running clock.
         logger.info(
             "OANDA paper trading clock already running since %s (account=%s…)",
@@ -1571,6 +1573,8 @@ async def init_daily_online_learner(s: Any) -> Any:
         except Exception as _exc:
             logger.debug("_detect_regime(%s): CSV read/calc failed: %s", symbol, _exc)
             return None
+
+    t = asyncio.create_task(_daily_ewc_loop())
     s.background_tasks.append(t)
 
     log_activity(
