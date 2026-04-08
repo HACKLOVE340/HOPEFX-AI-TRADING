@@ -394,10 +394,26 @@ from pathlib import Path as _Path
 
 
 def _default_db_url() -> str:
-    return _os.getenv(
-        "DATABASE_URL",
-        f"sqlite:///{_os.path.join(_Path(__file__).parent, '..', 'hopefx.db')}",
-    )
+    url = _os.getenv("DATABASE_URL", "")
+    if not url:
+        fallback = f"sqlite:///{_os.path.join(_Path(__file__).parent, '..', 'hopefx.db')}"
+        import warnings as _warnings
+
+        _warnings.warn(
+            "DATABASE_URL is not set — falling back to SQLite "
+            f"({fallback}). SQLite does not support concurrent writes; "
+            "set DATABASE_URL=postgresql://... for production use.",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+        logger.warning(
+            "DATABASE_URL not set — using SQLite fallback (%s). "
+            "SQLite does not support concurrent writes. "
+            "Set DATABASE_URL=postgresql://user:pass@host:5432/hopefx for production.",
+            fallback,
+        )
+        return fallback
+    return url
 
 
 def _get_or_init_manager() -> "DatabaseManager":

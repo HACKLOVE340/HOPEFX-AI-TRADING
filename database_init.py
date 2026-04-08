@@ -38,7 +38,16 @@ def initialize_database(db_url: str | None = None) -> None:
                 environment variable, then ``sqlite:///trading.db``.
     """
     if db_url is None:
-        db_url = os.getenv("DATABASE_URL", "sqlite:///trading.db")
+        db_url = os.getenv("DATABASE_URL", "")
+        if not db_url:
+            db_url = "sqlite:///trading.db"
+            logger.warning(
+                "DATABASE_URL is not set — using SQLite fallback (%s). "
+                "SQLite does not support concurrent writes and will corrupt "
+                "under multi-worker load. "
+                "Set DATABASE_URL=postgresql://user:pass@host:5432/hopefx for production.",
+                db_url,
+            )
 
     from sqlalchemy import create_engine
 
