@@ -841,55 +841,60 @@ class MarketDataCache:
             return False
 
     def get_statistics(self) -> CacheStatistics:
-        """Get cache statistics"""
+        """Get cache statistics.
+
+        Redis I/O (INFO, SCAN) is performed *outside* the stats lock so that
+        holding the lock never blocks on network I/O.  This prevents the event
+        loop from freezing when this method is called from an async context.
+        """
         try:
             redis_client = self._get_redis()
 
+            # ── Collect Redis metrics outside the lock ────────────────────────
+            memory_bytes = 0
+            key_count = 0
+            if redis_client:
+                try:
+                    info = redis_client.info("memory")
+                    memory_bytes = int(info.get("used_memory", 0))
+                    for pattern in ("market_data:*", "tick_data:*"):
+                        cursor = 0
+                        while True:
+                            cursor, keys = redis_client.scan(cursor=cursor, match=pattern, count=100)
+                            key_count += len(keys)
+                            if cursor == 0:
+                                break
+                except Exception as e:
+                    logger.error("Error getting Redis stats: %s", e)
+            else:
+                with self._local_cache_lock:
+                    key_count = len(self._local_cache)
+                    memory_bytes = len(str(self._local_cache).encode("utf-8"))
+
+            # ── Snapshot counters under the lock (no I/O here) ───────────────
             with self._stats_lock:
                 stats = CacheStatistics(
                     total_hits=self._stats.total_hits,
                     total_misses=self._stats.total_misses,
                     total_evictions=self._stats.total_evictions,
+                    total_keys=key_count,
+                    memory_usage_bytes=memory_bytes,
                     last_update=time.time(),
                 )
-
-                if redis_client:
-                    try:
-                        info = redis_client.info("memory")
-                        stats.memory_usage_bytes = int(info.get("used_memory", 0))
-
-                        # Count keys
-                        cursor = 0
-                        key_count = 0
-                        while True:
-                            cursor, keys = redis_client.scan(cursor=cursor, match="market_data:*", count=100)
-                            key_count += len(keys)
-                            if cursor == 0:
-                                break
-
-                        cursor = 0
-                        while True:
-                            cursor, keys = redis_client.scan(cursor=cursor, match="tick_data:*", count=100)
-                            key_count += len(keys)
-                            if cursor == 0:
-                                break
-
-                        stats.total_keys = key_count
-                    except Exception as e:
-                        logger.error("Error getting Redis stats: %s", e)
-
-                else:
-                    with self._local_cache_lock:
-                        stats.total_keys = len(self._local_cache)
-                        # Estimate memory
-                        stats.memory_usage_bytes = len(str(self._local_cache).encode("utf-8"))
-
-                return stats
+            return stats
 
         except Exception as e:
             logger.error("Error getting statistics: %s", e)
-
             return CacheStatistics()
+
+    async def get_statistics_async(self) -> CacheStatistics:
+        """Async-safe version of get_statistics.
+
+        Runs the sync method in the thread-pool executor so Redis I/O never
+        blocks the event loop.
+        """
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self.get_statistics)
 
     def print_statistics(self) -> None:
         """Print cache statistics"""
