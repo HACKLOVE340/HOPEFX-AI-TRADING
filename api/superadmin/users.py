@@ -439,9 +439,7 @@ async def bulk_export_users(body: BulkUserBody, user: TokenPayload = Depends(_re
         rows = q.order_by(User.created_at.desc()).all()
         buf = io.StringIO()
         writer = csv.writer(buf)
-        writer.writerow(
-            ["user_id", "username", "email", "role", "status", "totp_enabled", "created_at", "last_login"]
-        )
+        writer.writerow(["user_id", "username", "email", "role", "status", "totp_enabled", "created_at", "last_login"])
         for u in rows:
             writer.writerow(
                 [

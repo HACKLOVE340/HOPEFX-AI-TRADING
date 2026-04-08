@@ -118,6 +118,7 @@ def _start_scheduler() -> Any:
         # Run an immediate refresh so the cache is warm on startup
         try:
             from api.social_feed import refresh_leaderboard_cache as _rlc
+
             _rlc()
         except Exception as _warm_err:
             logger.debug("Leaderboard warm-up skipped: %s", _warm_err)
@@ -243,6 +244,7 @@ def create_api_app(trading_app=None) -> Any | None:
             # Leaderboard cache refresh every 15 minutes
             try:
                 from api.social_feed import refresh_leaderboard_cache as _rlc_job
+
                 _scheduler.add_job(
                     _rlc_job,
                     trigger="interval",
@@ -259,6 +261,7 @@ def create_api_app(trading_app=None) -> Any | None:
             # Warm up leaderboard cache immediately
             try:
                 from api.social_feed import refresh_leaderboard_cache as _rlc_warm
+
                 _rlc_warm()
             except Exception as _warm_err:
                 logger.debug("Leaderboard warm-up skipped: %s", _warm_err)

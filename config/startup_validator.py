@@ -228,12 +228,12 @@ def _validate_crypto_webhook_secret(errors: list[str]) -> None:
     if not secret:
         errors.append(
             "MISSING  CRYPTO_WEBHOOK_SECRET — crypto payment webhooks will be rejected in production. "
-            "Generate with: python3 -c \"import secrets; logger.info(secrets.token_hex(32))\""
+            'Generate with: python3 -c "import secrets; logger.info(secrets.token_hex(32))"'
         )
     elif len(secret) < 32:
         errors.append(
             f"WEAK     CRYPTO_WEBHOOK_SECRET is only {len(secret)} chars — minimum 32 required. "
-            "Regenerate with: python3 -c \"import secrets; logger.info(secrets.token_hex(32))\""
+            'Regenerate with: python3 -c "import secrets; logger.info(secrets.token_hex(32))"'
         )
 
 

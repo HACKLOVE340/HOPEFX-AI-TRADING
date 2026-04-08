@@ -84,18 +84,18 @@ UTC = timezone.utc
 logger = logging.getLogger(__name__)
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-_CMD_ADDR        = os.getenv("CPP_SHIM_ZMQ_CMD_ADDR",  "tcp://127.0.0.1:6555")
-_RESP_ADDR       = os.getenv("CPP_SHIM_ZMQ_RESP_ADDR", "tcp://127.0.0.1:6556")
-_TIMEOUT_MS      = int(os.getenv("CPP_SHIM_TIMEOUT_MS", "5000"))
+_CMD_ADDR = os.getenv("CPP_SHIM_ZMQ_CMD_ADDR", "tcp://127.0.0.1:6555")
+_RESP_ADDR = os.getenv("CPP_SHIM_ZMQ_RESP_ADDR", "tcp://127.0.0.1:6556")
+_TIMEOUT_MS = int(os.getenv("CPP_SHIM_TIMEOUT_MS", "5000"))
 _LATENCY_WARN_US = int(os.getenv("CPP_SHIM_LATENCY_WARN_US", "1000"))
-_ENABLED         = os.getenv("CPP_SHIM_ENABLED", "true").lower() == "true"
+_ENABLED = os.getenv("CPP_SHIM_ENABLED", "true").lower() == "true"
 
 # Symbol normalisation — same as CME connector
 _SYMBOL_MAP: dict[str, str] = {
     "XAU_USD": "XAUUSD",
     "XAU/USD": "XAUUSD",
-    "GOLD":    "XAUUSD",
-    "GC":      "XAUUSD",
+    "GOLD": "XAUUSD",
+    "GC": "XAUUSD",
 }
 
 
@@ -143,6 +143,7 @@ class CPPShimConnector(BrokerConnector):
             return False
         try:
             import zmq
+
             self._ctx = zmq.Context()
 
             self._cmd_sock = self._ctx.socket(zmq.PUSH)
@@ -177,7 +178,9 @@ class CPPShimConnector(BrokerConnector):
         self._connected = False
         logger.info(
             "CPPShimConnector disconnected. orders=%d fills=%d rejects=%d avg_latency=%.0fμs",
-            self._order_count, self._fill_count, self._reject_count,
+            self._order_count,
+            self._fill_count,
+            self._reject_count,
             self._total_latency_us / max(self._fill_count, 1),
         )
         return True
@@ -200,13 +203,13 @@ class CPPShimConnector(BrokerConnector):
         self._order_count += 1
 
         cmd: dict[str, Any] = {
-            "cmd":     "ORDER",
-            "id":      cl_ord_id,
-            "symbol":  self._normalise_symbol(symbol),
-            "side":    side.value.upper(),
-            "type":    order_type.value.upper(),
-            "qty":     quantity,
-            "price":   price or 0.0,
+            "cmd": "ORDER",
+            "id": cl_ord_id,
+            "symbol": self._normalise_symbol(symbol),
+            "side": side.value.upper(),
+            "type": order_type.value.upper(),
+            "qty": quantity,
+            "price": price or 0.0,
             "account": os.getenv("CME_ACCOUNT", ""),
         }
 
@@ -236,12 +239,16 @@ class CPPShimConnector(BrokerConnector):
 
         self._fill_count += 1
         fill_price = float(response.get("price", price or 0.0))
-        fill_qty   = float(response.get("qty", quantity))
-        order_id   = response.get("order_id", cl_ord_id)
+        fill_qty = float(response.get("qty", quantity))
+        order_id = response.get("order_id", cl_ord_id)
 
         logger.info(
             "CPPShim FILL  %s %s %.2f @ %.5f  latency=%dμs",
-            side.value, symbol, fill_qty, fill_price, latency_us,
+            side.value,
+            symbol,
+            fill_qty,
+            fill_price,
+            latency_us,
         )
 
         return Order(
@@ -305,6 +312,7 @@ class CPPShimConnector(BrokerConnector):
     def _ping(self) -> bool:
         """Send PING and wait for PONG — verifies shim is alive."""
         import time as _time
+
         # Give shim 500ms to start up
         _time.sleep(0.1)
         self._send({"cmd": "PING"})

@@ -739,7 +739,14 @@ async def _chartbot_broadcaster() -> None:
                     await _manager.broadcast("microstructure", {"type": "microstructure", "data": micro_data})
                     await _manager.broadcast(
                         "volume_delta",
-                        {"type": "volume_delta", "data": {"volume_delta": snap.volume_delta, "cumulative_delta": snap.cumulative_delta, "timestamp": snap.timestamp.isoformat()}},
+                        {
+                            "type": "volume_delta",
+                            "data": {
+                                "volume_delta": snap.volume_delta,
+                                "cumulative_delta": snap.cumulative_delta,
+                                "timestamp": snap.timestamp.isoformat(),
+                            },
+                        },
                     )
             except Exception as _exc:
                 logger.debug("chartbot_broadcaster: microstructure error: %s", _exc)
@@ -1078,7 +1085,7 @@ async def push_alert(alert: dict, user_id: str) -> None:
 #   heartbeat             — 30s keepalive
 
 _NUCLEAR_HEARTBEAT_INTERVAL = 30  # seconds
-_NUCLEAR_POLL_INTERVAL = 2        # seconds between state snapshots
+_NUCLEAR_POLL_INTERVAL = 2  # seconds between state snapshots
 
 
 @router.websocket("/ws/nuclear")
@@ -1117,7 +1124,9 @@ async def ws_nuclear(websocket: WebSocket) -> None:
 
     payload = _validate_ws_token(msg.get("token", ""))
     if not payload:
-        await websocket.send_text(json.dumps({"type": "error", "code": "AUTH_FAILED", "message": "Invalid or expired token"}))
+        await websocket.send_text(
+            json.dumps({"type": "error", "code": "AUTH_FAILED", "message": "Invalid or expired token"})
+        )
         await websocket.close()
         return
 
@@ -1138,6 +1147,7 @@ async def ws_nuclear(websocket: WebSocket) -> None:
     def _get_nuclear_state() -> dict | None:
         try:
             from api.nuclear import _get_supervisor as _sup, _get_orchestrator as _orch
+
             sup = _sup()
             orch = _orch()
             sup_status = sup.get_status() if sup else {}
@@ -1186,19 +1196,29 @@ async def ws_nuclear(websocket: WebSocket) -> None:
 
                 # Alert if severity crossed threshold
                 severity = state.get("severity", 0)
-                if severity >= 7 and last_severity < 7 and not await _send({
-                    "type": "nuclear_alert",
-                    "data": {
-                        "severity": severity,
-                        "action": state.get("action"),
-                        "explanation": state.get("explanation", ""),
-                        "ts": datetime.now(UTC).isoformat(),
-                    },
-                }):
+                if (
+                    severity >= 7
+                    and last_severity < 7
+                    and not await _send(
+                        {
+                            "type": "nuclear_alert",
+                            "data": {
+                                "severity": severity,
+                                "action": state.get("action"),
+                                "explanation": state.get("explanation", ""),
+                                "ts": datetime.now(UTC).isoformat(),
+                            },
+                        }
+                    )
+                ):
                     break
 
                 # Resume notification
-                if last_severity >= 7 and severity < 7 and not await _send({"type": "nuclear_resume", "data": {"ts": datetime.now(UTC).isoformat()}}):
+                if (
+                    last_severity >= 7
+                    and severity < 7
+                    and not await _send({"type": "nuclear_resume", "data": {"ts": datetime.now(UTC).isoformat()}})
+                ):
                     break
 
                 last_severity = severity

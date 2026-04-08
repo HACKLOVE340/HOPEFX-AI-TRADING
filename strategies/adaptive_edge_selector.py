@@ -85,6 +85,7 @@ _NEWS_SKIP_WINDOW_MINUTES = 60
 # Config helpers
 # ---------------------------------------------------------------------------
 
+
 def _env_float(key: str, default: float) -> float:
     try:
         return float(os.environ.get(key, default))
@@ -112,6 +113,7 @@ def _env_bool(key: str, default: bool) -> bool:
 # Data structures
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class MarketSnapshot:
     """
@@ -119,17 +121,18 @@ class MarketSnapshot:
 
     All fields have safe defaults so callers can supply only what they have.
     """
+
     symbol: str = "XAUUSD"
     price: float = 0.0
-    atr: float = 0.0            # ATR(14) in price units
-    adx: float = 0.0            # ADX(14)
-    rsi: float = 50.0           # RSI(14)
-    volume_delta: float = 0.0   # % change vs average, e.g. +15.0 = +15 %
+    atr: float = 0.0  # ATR(14) in price units
+    adx: float = 0.0  # ADX(14)
+    rsi: float = 50.0  # RSI(14)
+    volume_delta: float = 0.0  # % change vs average, e.g. +15.0 = +15 %
     cone_strength: float = 0.0  # ITOS cone score 0.0–1.0
-    last_candles: str = ""      # free-text description, e.g. "bullish engulfing"
-    news_spike: bool = False    # True if a news event is active
-    liquidity: str = "normal"   # "high" | "normal" | "low"
-    drawdown_pct: float = 0.0   # current open drawdown %
+    last_candles: str = ""  # free-text description, e.g. "bullish engulfing"
+    news_spike: bool = False  # True if a news event is active
+    liquidity: str = "normal"  # "high" | "normal" | "low"
+    drawdown_pct: float = 0.0  # current open drawdown %
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -155,17 +158,18 @@ class EdgeDecision:
     JSON-serialisable via to_dict().  Consumed by HOPEFXBrain._route_strategy()
     when an edge selector is injected.
     """
+
     regime: str
     edge: str
-    confidence: int             # 0–100
+    confidence: int  # 0–100
     reason: str
-    action: str                 # human-readable trade instruction
+    action: str  # human-readable trade instruction
     symbol: str = "XAUUSD"
     entry_price: float = 0.0
     sl_price: float = 0.0
     tp_price: float = 0.0
     lot_size: float = 0.01
-    strategy_name: str = ""     # maps to brain strategy routing table
+    strategy_name: str = ""  # maps to brain strategy routing table
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def to_dict(self) -> dict[str, Any]:
@@ -189,6 +193,7 @@ class EdgeDecision:
 # News event
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class NewsEvent:
     """
@@ -204,6 +209,7 @@ class NewsEvent:
     severity : str
         "high" | "medium" | "low"
     """
+
     minutes_away: float
     description: str = ""
     symbols_affected: list[str] = field(default_factory=list)
@@ -224,12 +230,14 @@ class NewsEvent:
 # Decision memory
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class DecisionRecord:
     """One historical edge decision and its outcome."""
+
     symbol: str
-    edge: str           # EDGE_SNIPER | EDGE_SCALPER | EDGE_GRID | EDGE_SKIP
-    outcome: str        # "won" | "lost" | "skipped" | "pending"
+    edge: str  # EDGE_SNIPER | EDGE_SCALPER | EDGE_GRID | EDGE_SKIP
+    outcome: str  # "won" | "lost" | "skipped" | "pending"
     confidence: int
     regime: str
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
@@ -314,6 +322,7 @@ class DecisionMemory:
 # News filter
 # ---------------------------------------------------------------------------
 
+
 class NewsFilter:
     """
     Evaluates a list of NewsEvent objects and decides whether trading is safe.
@@ -328,7 +337,7 @@ class NewsFilter:
 
     # Keywords that flag crypto-specific risk
     _CRYPTO_KEYWORDS = ("hack", "exploit", "sec", "cftc", "ban", "crash", "rug")
-    _CRYPTO_SYMBOLS  = ("BTC", "ETH", "XRP", "SOL", "BNB", "DOGE")
+    _CRYPTO_SYMBOLS = ("BTC", "ETH", "XRP", "SOL", "BNB", "DOGE")
 
     def __init__(self, events: list[NewsEvent] | None = None) -> None:
         self._events: list[NewsEvent] = events or []
@@ -368,7 +377,7 @@ class NewsFilter:
                 continue
 
             mins = abs(ev.minutes_away)
-            sev  = ev.severity.lower()
+            sev = ev.severity.lower()
 
             # 2. Any event within 15 min — imminent, skip regardless of severity
             if mins <= 15:
@@ -388,6 +397,7 @@ class NewsFilter:
 # ---------------------------------------------------------------------------
 # AdaptiveEdgeSelector
 # ---------------------------------------------------------------------------
+
 
 class AdaptiveEdgeSelector:
     """
@@ -443,7 +453,10 @@ class AdaptiveEdgeSelector:
 
         logger.info(
             "AdaptiveEdgeSelector initialised — enabled=%s min_conf=%d cone_thr=%.2f adx_trend=%.1f",
-            self.enabled, self.min_confidence, self.cone_threshold, self.adx_trend,
+            self.enabled,
+            self.min_confidence,
+            self.cone_threshold,
+            self.adx_trend,
         )
 
     # ------------------------------------------------------------------
@@ -540,13 +553,15 @@ class AdaptiveEdgeSelector:
 
         outcome : "won" | "lost" | "skipped" | "pending"
         """
-        self.memory.record(DecisionRecord(
-            symbol=symbol,
-            edge=edge,
-            outcome=outcome,
-            confidence=confidence,
-            regime=regime,
-        ))
+        self.memory.record(
+            DecisionRecord(
+                symbol=symbol,
+                edge=edge,
+                outcome=outcome,
+                confidence=confidence,
+                regime=regime,
+            )
+        )
 
     # ------------------------------------------------------------------
     # Lookahead
@@ -799,10 +814,7 @@ class AdaptiveEdgeSelector:
         voice_parts.append(f"quick in/out, regime={regime}")
         reason = ". ".join(voice_parts)
 
-        action = (
-            f"{direction} {self.max_lot:.2f} lot at market {snap.price:.2f}, "
-            f"SL {sl:.2f}, TP {tp:.2f} (scalp)"
-        )
+        action = f"{direction} {self.max_lot:.2f} lot at market {snap.price:.2f}, SL {sl:.2f}, TP {tp:.2f} (scalp)"
 
         return EdgeDecision(
             regime=regime,
@@ -857,7 +869,7 @@ class AdaptiveEdgeSelector:
             action=action,
             symbol=snap.symbol,
             entry_price=snap.price,
-            sl_price=0.0,   # grid manages its own SL via basket breakeven
+            sl_price=0.0,  # grid manages its own SL via basket breakeven
             tp_price=0.0,
             lot_size=self.max_lot,
             strategy_name="breakout",
@@ -992,9 +1004,7 @@ class AdaptiveEdgeSelector:
     # SL / TP calculation
     # ------------------------------------------------------------------
 
-    def _calc_sl_tp(
-        self, snap: MarketSnapshot, direction: str
-    ) -> tuple[float, float]:
+    def _calc_sl_tp(self, snap: MarketSnapshot, direction: str) -> tuple[float, float]:
         """
         Compute absolute SL and TP prices from ATR multipliers.
 

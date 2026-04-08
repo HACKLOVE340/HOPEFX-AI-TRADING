@@ -1493,6 +1493,7 @@ except Exception:
 # Frontend chart-api.ts calls GET /trading/risk; backend registered the
 # endpoint as /trading/risk-metrics inside the strategy sub-router.
 
+
 @router.get("/risk", response_model=None, summary="Risk metrics (alias for /risk-metrics)")
 async def get_risk_alias():
     """
@@ -1515,6 +1516,7 @@ async def get_risk_alias():
             history = broker.get_equity_history()
             if history:
                 from api.trading import _compute_max_drawdown
+
                 max_dd = _compute_max_drawdown([v for _, v in history])
         open_count = len(positions)
         risk_score = min(100.0, round(max_dd * 100 * 2 + open_count * 5, 1))
@@ -1533,6 +1535,7 @@ async def get_risk_alias():
 # ── /trading/ai-analysis ──────────────────────────────────────────────────────
 # Frontend chart-api.ts POSTs a ChartClickContext and expects an AIAnalysis
 # response: id, timestamp, context, regime, summary, keyDrivers, etc.
+
 
 @router.post("/ai-analysis", response_model=None, summary="AI chart-click analysis")
 async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_current_user)):
@@ -1555,6 +1558,7 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
     regime_confidence = 0.5
     try:
         from core.regime_router import RegimeRouter as _RR
+
         rr = _RR()
         detected = rr.detect_regime()
         if detected:
@@ -1572,6 +1576,7 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
 
     try:
         from api.signals import _get_signal_service as _gss
+
         svc = _gss()
         if svc:
             latest = svc.get_latest_signal(symbol)
@@ -1590,7 +1595,7 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
             ohlcv = await app_state.price_engine.get_ohlcv(symbol, "H1", 14)
             if ohlcv and len(ohlcv) >= 2:
                 highs = [c[2] for c in ohlcv]
-                lows  = [c[3] for c in ohlcv]
+                lows = [c[3] for c in ohlcv]
                 atr_estimate = sum(h - l for h, l in zip(highs, lows, strict=False)) / len(highs)
     except Exception as exc:
         logger.debug("ai-analysis: ATR estimation failed: %s", exc)
@@ -1818,9 +1823,7 @@ async def get_risk_metrics(
         if app_state and app_state.broker and app_state.risk_manager:
             account_info = await _broker_call("get_account_info")
             positions = await _broker_call("get_positions")
-            positions_dicts = [
-                p.__dict__ if hasattr(p, "__dict__") else dict(p) for p in positions
-            ]
+            positions_dicts = [p.__dict__ if hasattr(p, "__dict__") else dict(p) for p in positions]
             assessment = app_state.risk_manager.assess_risk(account_info, positions_dicts)
             daily_pnl = sum(getattr(p, "unrealized_pnl", 0.0) or 0.0 for p in positions)
             return {

@@ -509,7 +509,6 @@ async def test_smtp(payload: SmtpTestPayload, request: Request):
         raise HTTPException(status_code=502, detail=f"Connection failed: {exc}") from exc
 
 
-
 # =============================================================================
 # COMPAT ALIASES — AdminSettingsSection.tsx uses /api/admin/settings (bare)
 # while the canonical route is /api/admin/settings/system.

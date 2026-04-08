@@ -19,7 +19,9 @@ from config.vault import vault
 
 
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 class DatabaseSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="DB_")

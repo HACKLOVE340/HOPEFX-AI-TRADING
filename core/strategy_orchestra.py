@@ -118,7 +118,12 @@ class StrategyOrchestra:
                 },
             )
         )
-        logger.info("Rebalanced: method=%s sharpe=%.2f strategies=%s", result.method, result.expected_sharpe, list(result.weights.keys()))
+        logger.info(
+            "Rebalanced: method=%s sharpe=%.2f strategies=%s",
+            result.method,
+            result.expected_sharpe,
+            list(result.weights.keys()),
+        )
         return result.to_dict()
 
     def get_rebalancer_status(self) -> dict:

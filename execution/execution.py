@@ -76,11 +76,11 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # ── env config ────────────────────────────────────────────────────────────────
-_BROKER_PRIMARY   = os.getenv("BROKER_PRIMARY",   "oanda")   # "oanda" | "ibkr" | "cme" | "cpp_shim"
-_BROKER_SECONDARY = os.getenv("BROKER_SECONDARY", "ibkr")    # fallback broker
-_CME_ENABLED      = os.getenv("CME_ENABLED",      "false").lower() == "true"
+_BROKER_PRIMARY = os.getenv("BROKER_PRIMARY", "oanda")  # "oanda" | "ibkr" | "cme" | "cpp_shim"
+_BROKER_SECONDARY = os.getenv("BROKER_SECONDARY", "ibkr")  # fallback broker
+_CME_ENABLED = os.getenv("CME_ENABLED", "false").lower() == "true"
 _CPP_SHIM_ENABLED = os.getenv("CPP_SHIM_ENABLED", "false").lower() == "true"
-_HEALTH_INTERVAL  = float(os.getenv("HEALTH_INTERVAL_S", "30"))
+_HEALTH_INTERVAL = float(os.getenv("HEALTH_INTERVAL_S", "30"))
 _LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 

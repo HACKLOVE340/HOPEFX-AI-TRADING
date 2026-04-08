@@ -1269,9 +1269,7 @@ async def example_usage():
     ftmo_secret_key = _os.environ.get("FTMO_SECRET_KEY")
     ftmo_account_id = _os.environ.get("FTMO_ACCOUNT_ID")
     if not all([ftmo_api_key, ftmo_secret_key, ftmo_account_id]):
-        raise ValueError(
-            "FTMO_API_KEY, FTMO_SECRET_KEY, and FTMO_ACCOUNT_ID environment variables must be set"
-        )
+        raise ValueError("FTMO_API_KEY, FTMO_SECRET_KEY, and FTMO_ACCOUNT_ID environment variables must be set")
 
     async with PropFirmFactory.create_broker(
         PropFirmType.FTMO,

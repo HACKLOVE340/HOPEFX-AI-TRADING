@@ -748,7 +748,9 @@ def _assert_safe_model_path(path: pathlib.Path) -> None:
     """Raise ValueError if *path* escapes the allowed model directory."""
     import pathlib as _pl
 
-    resolved = _pl.Path(path).resolve()  # codeql[py/path-injection] - resolved path confined to _MODEL_ROOT by relative_to check below
+    resolved = _pl.Path(
+        path
+    ).resolve()  # codeql[py/path-injection] - resolved path confined to _MODEL_ROOT by relative_to check below
     try:
         resolved.relative_to(_MODEL_ROOT)
     except ValueError as exc:

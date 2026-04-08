@@ -277,10 +277,15 @@ def test_paper_trading_status_endpoint(api_client):
 # ── validate_oanda.py --gate flag ─────────────────────────────────────────────
 
 
-def test_validate_oanda_gate_flag_runs(capsys):
-    """--gate flag prints gate status without crashing."""
+def test_validate_oanda_gate_flag_runs(caplog):
+    """--gate flag logs gate status without crashing."""
+    import logging
+
     from scripts.validate_oanda import validate_gate
 
-    validate_gate()  # should not raise
-    captured = capsys.readouterr()
-    assert "Phase" in captured.out or "Gate" in captured.out or "gate" in captured.out.lower()
+    with caplog.at_level(logging.INFO):
+        validate_gate()  # should not raise
+    assert any(
+        "Phase" in r.message or "Gate" in r.message or "gate" in r.message.lower()
+        for r in caplog.records
+    )

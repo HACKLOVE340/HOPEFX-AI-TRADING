@@ -390,7 +390,7 @@ def register_routers(
         # keeping the route list in sync automatically via this loop.
         for route in app.routes:
             if isinstance(route, APIRoute) and route.path.startswith("/api/"):
-                _v1_path = "/api/v1" + route.path[len("/api"):]
+                _v1_path = "/api/v1" + route.path[len("/api") :]
                 # Skip if already a v1 path (prevent infinite loop)
                 if "/v1/" in route.path:
                     continue

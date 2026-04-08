@@ -164,7 +164,7 @@ def _safe_float(obj, names: tuple[str, ...], default: float = 0.0) -> float:
     """
     for name in names:
         raw = getattr(obj, name, None)
-        if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+        if isinstance(raw, int | float) and not isinstance(raw, bool):
             return float(raw)
     return default
 
@@ -342,13 +342,16 @@ class Gatekeeper:
             # checks are not applicable and must not block the signal.  The
             # orchestrator data-quality gate (check 5) is the authoritative
             # staleness guard for price-less signals.
-            price_dependent_rules = frozenset({
-                "FIA_1.3_PRICE_TOLERANCE",
-                "FIA_3.1_MARKET_DATA_VALIDATION",
-            })
+            price_dependent_rules = frozenset(
+                {
+                    "FIA_1.3_PRICE_TOLERANCE",
+                    "FIA_3.1_MARKET_DATA_VALIDATION",
+                }
+            )
             if not has_prices:
                 fia_results = [
-                    r for r in fia_results
+                    r
+                    for r in fia_results
                     if r.rule not in price_dependent_rules
                     or r.status not in (RiskControlStatus.BLOCK, RiskControlStatus.KILL_SWITCH)
                 ]
@@ -646,6 +649,8 @@ class Gatekeeper:
         except Exception:
             logger.debug("_get_data_quality_from_orch: tick read failed", exc_info=True)
             return 1.0
+
+    def _get_blackout(self) -> bool:
         """Return True when a news/macro blackout is active.
 
         Priority

@@ -103,41 +103,43 @@ UTC = timezone.utc
 logger = logging.getLogger(__name__)
 
 # ── Contract specification ────────────────────────────────────────────────────
-_CME_MULTIPLIER = 100          # troy oz per GC contract
-_CME_TICK_SIZE = 0.10          # USD per troy oz
-_CME_TICK_VALUE = 10.00        # USD per tick per contract
+_CME_MULTIPLIER = 100  # troy oz per GC contract
+_CME_TICK_SIZE = 0.10  # USD per troy oz
+_CME_TICK_VALUE = 10.00  # USD per tick per contract
 _CME_EXCHANGE = "NYMEX"
-_CME_SEC_TYPE = "CONTFUT"      # continuous front-month
+_CME_SEC_TYPE = "CONTFUT"  # continuous front-month
 
 # ── Symbol normalisation ──────────────────────────────────────────────────────
 _SYMBOL_MAP: dict[str, str] = {
     "XAU_USD": "GC",
-    "XAUUSD":  "GC",
+    "XAUUSD": "GC",
     "XAU/USD": "GC",
-    "GOLD":    "GC",
-    "GC":      "GC",
+    "GOLD": "GC",
+    "GC": "GC",
 }
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-_FIX_HOST         = os.getenv("CME_FIX_HOST", "127.0.0.1")
-_FIX_PORT         = int(os.getenv("CME_FIX_PORT", "9876"))
-_FIX_SENDER_ID    = os.getenv("CME_FIX_SENDER_ID", "HOPEFX")
-_FIX_TARGET_ID    = os.getenv("CME_FIX_TARGET_ID", "CME")
-_FIX_USERNAME     = os.getenv("CME_FIX_USERNAME", "")
-_FIX_PASSWORD     = os.getenv("CME_FIX_PASSWORD", "")
-_FIX_CONFIG_FILE  = os.getenv("CME_FIX_CONFIG_FILE", "fix.cfg")
-_CME_ACCOUNT      = os.getenv("CME_ACCOUNT", "")
-_IBKR_FALLBACK    = os.getenv("CME_IBKR_FALLBACK", "true").lower() == "true"
-_PAPER_FALLBACK   = os.getenv("CME_PAPER_FALLBACK", "true").lower() == "true"
+_FIX_HOST = os.getenv("CME_FIX_HOST", "127.0.0.1")
+_FIX_PORT = int(os.getenv("CME_FIX_PORT", "9876"))
+_FIX_SENDER_ID = os.getenv("CME_FIX_SENDER_ID", "HOPEFX")
+_FIX_TARGET_ID = os.getenv("CME_FIX_TARGET_ID", "CME")
+_FIX_USERNAME = os.getenv("CME_FIX_USERNAME", "")
+_FIX_PASSWORD = os.getenv("CME_FIX_PASSWORD", "")
+_FIX_CONFIG_FILE = os.getenv("CME_FIX_CONFIG_FILE", "fix.cfg")
+_CME_ACCOUNT = os.getenv("CME_ACCOUNT", "")
+_IBKR_FALLBACK = os.getenv("CME_IBKR_FALLBACK", "true").lower() == "true"
+_PAPER_FALLBACK = os.getenv("CME_PAPER_FALLBACK", "true").lower() == "true"
 _DEFAULT_CONTRACTS = int(os.getenv("CME_DEFAULT_CONTRACTS", "1"))
-_LATENCY_WARN_MS  = float(os.getenv("CME_LATENCY_WARN_MS", "50"))
+_LATENCY_WARN_MS = float(os.getenv("CME_LATENCY_WARN_MS", "50"))
 
 
 # ── Data structures ───────────────────────────────────────────────────────────
 
+
 @dataclass
 class CMEFill:
     """Normalised fill record from CME execution."""
+
     order_id: str
     cl_ord_id: str
     symbol: str
@@ -146,7 +148,7 @@ class CMEFill:
     avg_price: float
     commission: float
     latency_ms: float
-    source: str          # "fix" | "ibkr" | "paper"
+    source: str  # "fix" | "ibkr" | "paper"
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
@@ -159,6 +161,7 @@ class CMEFill:
 
 
 # ── CME COMEX Connector ───────────────────────────────────────────────────────
+
 
 class CMEComexConnector(BrokerConnector):
     """
@@ -356,6 +359,7 @@ class CMEComexConnector(BrokerConnector):
         """Initialise FIX adapter for CME iLink 3."""
         try:
             from execution.fix_adapter import FIXAdapter
+
             self._fix_adapter = FIXAdapter(
                 config_file=self._fix_config_file,
                 sender_comp_id=self._fix_sender_id,
@@ -387,8 +391,8 @@ class CMEComexConnector(BrokerConnector):
         fix_side = FIXSide.BUY if side == OrderSide.BUY else FIXSide.SELL
         fix_type = {
             OrderType.MARKET: FIXOrdType.MARKET,
-            OrderType.LIMIT:  FIXOrdType.LIMIT,
-            OrderType.STOP:   FIXOrdType.STOP,
+            OrderType.LIMIT: FIXOrdType.LIMIT,
+            OrderType.STOP: FIXOrdType.STOP,
         }.get(order_type, FIXOrdType.MARKET)
 
         fix_order = FIXOrder(
@@ -406,6 +410,7 @@ class CMEComexConnector(BrokerConnector):
             loop = asyncio.get_running_loop()
             if loop.is_running():
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                     future = pool.submit(asyncio.run, self._fix_adapter.send_order(fix_order))
                     report = future.result(timeout=10.0)
@@ -432,12 +437,15 @@ class CMEComexConnector(BrokerConnector):
         """Initialise IBKR connector as fallback for GC futures."""
         try:
             from brokers.ibkr_connector import IBKRConnector
-            self._ibkr_connector = IBKRConnector({
-                "host": os.getenv("IBKR_HOST", "127.0.0.1"),
-                "port": int(os.getenv("IBKR_PORT", "7497")),
-                "client_id": int(os.getenv("IBKR_CLIENT_ID", "10")),
-                "account": os.getenv("IBKR_ACCOUNT", ""),
-            })
+
+            self._ibkr_connector = IBKRConnector(
+                {
+                    "host": os.getenv("IBKR_HOST", "127.0.0.1"),
+                    "port": int(os.getenv("IBKR_PORT", "7497")),
+                    "client_id": int(os.getenv("IBKR_CLIENT_ID", "10")),
+                    "account": os.getenv("IBKR_ACCOUNT", ""),
+                }
+            )
             connected = self._ibkr_connector.connect()
             if connected:
                 logger.info("CME: IBKR fallback connected for GC futures")
@@ -490,10 +498,14 @@ class CMEComexConnector(BrokerConnector):
     ) -> CMEFill:
         """Simulate a CME fill for paper trading."""
         import uuid
+
         fill_price = price or 2000.0  # placeholder — real price from market data
         logger.info(
             "CME PAPER fill: %s %s %d contracts @ %.2f",
-            side.value, symbol, int(quantity), fill_price,
+            side.value,
+            symbol,
+            int(quantity),
+            fill_price,
         )
         return CMEFill(
             order_id=str(uuid.uuid4()),
