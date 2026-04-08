@@ -225,7 +225,11 @@ class MacroStoreBridge:
                 # Persist a "last known good" snapshot for future fallbacks
                 try:
                     cache_data = {
-                        name: {str(idx): float(val) for idx, val in series.items() if val is not None}
+                        name: {
+                            str(idx): float(val)
+                            for idx, val in series.items()
+                            if val is not None
+                        }
                         for name, series in all_series.items()
                         if not series.empty
                     }
@@ -241,13 +245,16 @@ class MacroStoreBridge:
                     with open(_FRED_CACHE_PATH) as _cf:
                         cache_data = json.load(_cf)
                     all_series = {
-                        name: pd.Series({pd.Timestamp(k): v for k, v in vals.items()}, dtype=float)
+                        name: pd.Series(
+                            {pd.Timestamp(k): v for k, v in vals.items()}, dtype=float
+                        )
                         for name, vals in cache_data.items()
                     }
                     logger.info("MacroStoreBridge: loaded %d FRED series from local cache", len(all_series))
                 except FileNotFoundError:
                     logger.warning(
-                        "MacroStoreBridge: FRED fetch failed and no local cache at %s — macro features will be zero",
+                        "MacroStoreBridge: FRED fetch failed and no local cache at %s"
+                        " — macro features will be zero",
                         _FRED_CACHE_PATH,
                     )
                     return
@@ -383,13 +390,13 @@ class MacroStoreBridge:
         """
         try:
             loop = asyncio.get_running_loop()
-            asyncio.ensure_future(self._load_fred_into_store(), loop=loop)
+            asyncio.ensure_future(
+                self._load_fred_into_store(),
+                loop=loop,
+            )
         except RuntimeError:
-            # No running loop — schedule via a new event loop (sync context)
-            try:
-                asyncio.run(self._load_fred_into_store())
-            except Exception as exc:
-                logger.warning("MacroStoreBridge.force_refresh: failed: %s", exc)
+            logger.debug("MacroStoreBridge.force_refresh: no running event loop — using asyncio.run()")
+            asyncio.run(self._load_fred_into_store())
 
     @property
     def is_loaded(self) -> bool:
