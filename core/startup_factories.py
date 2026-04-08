@@ -264,12 +264,77 @@ async def init_database(s: Any) -> Any:
     return engine
 
 
+_REDIS_MAXMEMORY_DEFAULT = "512mb"
+_REDIS_MAXMEMORY_POLICY_DEFAULT = "allkeys-lru"
+
+
+def _enforce_redis_maxmemory(host: str, port: int) -> None:
+    """
+    Check Redis maxmemory and set a safe default if it is unlimited (0).
+
+    A Redis instance with maxmemory=0 will consume all available RAM under
+    tick-data load and trigger an OS OOM-kill, taking the kill-switch latch
+    and position state with it.
+
+    This runs synchronously at startup before the async event loop is busy.
+    Failures are logged as warnings — Redis being unreachable here does not
+    block startup (the MarketDataCache has its own fallback logic).
+    """
+    try:
+        import redis as _redis_sync
+
+        r = _redis_sync.Redis(
+            host=host,
+            port=port,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+        )
+        maxmemory = int(r.config_get("maxmemory").get("maxmemory", 0))
+        if maxmemory == 0:
+            configured = os.getenv("REDIS_MAXMEMORY", _REDIS_MAXMEMORY_DEFAULT)
+            policy = os.getenv("REDIS_MAXMEMORY_POLICY", _REDIS_MAXMEMORY_POLICY_DEFAULT)
+            try:
+                r.config_set("maxmemory", configured)
+                r.config_set("maxmemory-policy", policy)
+                logger.info(
+                    "Redis maxmemory was unlimited — set to %s with policy %s. "
+                    "Override with REDIS_MAXMEMORY / REDIS_MAXMEMORY_POLICY env vars.",
+                    configured,
+                    policy,
+                )
+            except Exception as set_exc:
+                logger.warning(
+                    "Redis maxmemory is UNLIMITED and could not be set automatically "
+                    "(%s). Add 'maxmemory %s' and 'maxmemory-policy %s' to your "
+                    "redis.conf to prevent OOM on VPS/K8s.",
+                    set_exc,
+                    configured,
+                    policy,
+                )
+        else:
+            logger.debug("Redis maxmemory OK: %d bytes", maxmemory)
+    except Exception as exc:
+        logger.warning(
+            "Could not check Redis maxmemory at startup (%s) — "
+            "ensure Redis is reachable and maxmemory is configured.",
+            exc,
+        )
+
+
 async def init_cache(s: Any) -> Any:
+    host = os.getenv("REDIS_HOST", "localhost")
+    port = int(os.getenv("REDIS_PORT", "6379"))
+
+    # Enforce maxmemory before the cache starts writing tick data.
+    # Runs in executor so the sync Redis client doesn't block the event loop.
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, _enforce_redis_maxmemory, host, port)
+
     from cache import MarketDataCache
 
     return MarketDataCache(
-        host=os.getenv("REDIS_HOST", "localhost"),
-        port=int(os.getenv("REDIS_PORT", "6379")),
+        host=host,
+        port=port,
         max_retries=1,
         socket_connect_timeout=1,
         enable_fallback=True,
