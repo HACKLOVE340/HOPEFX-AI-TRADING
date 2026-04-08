@@ -247,6 +247,7 @@ class TransactionCostModel:
         slippage_model: str = "fixed",
         slippage_pips: float = 0.0,
         slippage_std: float = 0.0,
+        seed: int = 42,
     ):
         self.commission_per_lot = commission_per_lot
         self.commission_rate = commission_rate
@@ -254,6 +255,10 @@ class TransactionCostModel:
         self.slippage_model = slippage_model
         self.slippage_pips = slippage_pips
         self.slippage_std = slippage_std
+        # Seeded RNG ensures reproducible backtest results across runs.
+        # Pass a different seed per strategy/run to get independent samples
+        # while still being reproducible.
+        self._rng = np.random.default_rng(seed)
 
     def calculate_costs(self, order: Order, tick: TickData, quantity: float) -> tuple[float, float, float]:
         """Returns (fill_price, commission, slippage)"""
@@ -265,7 +270,7 @@ class TransactionCostModel:
         if self.slippage_model == "fixed":
             slippage = self.slippage_pips * 0.0001  # Convert pips to price
         elif self.slippage_model == "gaussian":
-            slippage = np.random.normal(self.slippage_pips * 0.0001, self.slippage_std * 0.0001)
+            slippage = self._rng.normal(self.slippage_pips * 0.0001, self.slippage_std * 0.0001)
         else:
             slippage = 0.0
 
@@ -307,10 +312,13 @@ class BacktestEngine:
         enable_fractional: bool = False,
         leverage: float = 1.0,
         overnight_rate_annual: float = 0.004,  # ~0.4% p.a. XAUUSD long swap
+        seed: int = 42,
     ):
         self.initial_capital = initial_capital
         self.capital = initial_capital
-        self.transaction_costs = transaction_costs or TransactionCostModel()
+        # When no TransactionCostModel is supplied, create one with the same
+        # seed so the engine is reproducible end-to-end.
+        self.transaction_costs = transaction_costs or TransactionCostModel(seed=seed)
         self.data_frequency = data_frequency
         self.enable_fractional = enable_fractional
         self.leverage = leverage
