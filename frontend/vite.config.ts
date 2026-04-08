@@ -59,6 +59,11 @@ export default defineConfig({
     outDir: '../static',
     emptyOutDir: true,
     chunkSizeWarningLimit: 600,
+    // Vite 6 defaults to safari14 in its esbuild target, which cannot
+    // transform destructuring-with-defaults used by @tanstack/react-query v5.
+    // es2022 is supported by all modern browsers (Chrome 94+, Firefox 93+,
+    // Safari 15.4+, Edge 94+) and resolves the esbuild transform error.
+    target: 'es2022',
     rollupOptions: {
       output: {
         manualChunks(id: string) {
