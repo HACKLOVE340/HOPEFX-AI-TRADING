@@ -892,6 +892,57 @@ async def init_event_store(s: Any) -> Any:
     return es
 
 
+async def init_position_manager(s: Any) -> Any:
+    """
+    Wire the module-level PositionManager singleton with a Redis client and
+    restore any open positions that were persisted before the last restart.
+
+    This closes the crash-recovery gap: without this call, a process restart
+    with an open position leaves the in-memory state empty, risking duplicate
+    entries or missed stop-losses on the existing position.
+
+    Depends on 'cache' so Redis is available before we attempt to connect.
+    Falls back gracefully when Redis is unreachable — positions start empty
+    and a warning is logged so the operator knows to reconcile manually.
+    """
+    from execution.position_manager import position_manager as _pm
+
+    # Wire a Redis async client if available
+    try:
+        import redis.asyncio as aioredis
+
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        redis_client = aioredis.from_url(redis_url, decode_responses=False, socket_connect_timeout=2)
+        # Inject the Redis store into the existing singleton
+        from execution.redis_state import AsyncRedisStateStore
+
+        _pm._redis = redis_client
+        _pm._redis_store = AsyncRedisStateStore(redis_client)
+        logger.info("PositionManager: Redis client wired (%s)", redis_url)
+    except Exception as exc:
+        logger.warning(
+            "PositionManager: could not wire Redis client (%s) — "
+            "positions will not survive restarts. Set REDIS_URL to enable persistence.",
+            exc,
+        )
+
+    # Restore open positions from the previous session
+    try:
+        restored = await _pm.restore_from_redis()
+        if restored:
+            logger.info("PositionManager: restored %d open position(s) from Redis on startup", restored)
+        else:
+            logger.info("PositionManager: no open positions to restore from Redis")
+    except Exception as exc:
+        logger.warning(
+            "PositionManager: restore_from_redis() failed at startup (%s) — "
+            "starting with empty position state. Reconcile open positions manually.",
+            exc,
+        )
+
+    return _pm
+
+
 async def init_position_tracker(s: Any) -> Any:
     from execution.position_tracker import PositionTracker
 
@@ -1660,6 +1711,12 @@ def build_component_registry(app, feature_flags):
         .register("aml", F.init_aml, required=False, deps=["database"])
         .register("strategy_brain", F.init_strategy_brain, required=False, deps=["config"])
         .register("event_store", F.init_event_store, required=False, deps=["config"])
+        .register(
+            "position_manager",
+            F.init_position_manager,
+            required=False,
+            deps=["cache", "broker"],
+        )
         .register("position_tracker", F.init_position_tracker, required=False, deps=["config"])
         .register(
             "trade_executor",
