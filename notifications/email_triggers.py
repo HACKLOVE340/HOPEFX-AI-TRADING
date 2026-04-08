@@ -120,11 +120,11 @@ def _send(
 
         try:
             asyncio.get_running_loop()
-            # We are inside a running event loop — schedule fire-and-forget
+            # Running inside an async context — fire-and-forget
             asyncio.ensure_future(channel.send_email_async([to], subject, plain_body=subject, html_body=html))
             return True
         except RuntimeError:
-            # No running loop — run synchronously
+            # No running loop — call synchronously
             return asyncio.run(channel.send_email_async([to], subject, plain_body=subject, html_body=html))
     except Exception as exc:
         logger.error("email_triggers: send failed for %s: %s", template, exc)

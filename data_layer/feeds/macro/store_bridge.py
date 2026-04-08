@@ -390,13 +390,13 @@ class MacroStoreBridge:
         """
         try:
             loop = asyncio.get_running_loop()
-            asyncio.ensure_future(
-                self._load_fred_into_store(),
-                loop=loop,
-            )
+            asyncio.ensure_future(self._load_fred_into_store(), loop=loop)
         except RuntimeError:
-            asyncio.run(self._load_fred_into_store())
-            logger.warning("MacroStoreBridge.force_refresh: no event loop available")
+            # No running loop — schedule via a new event loop (sync context)
+            try:
+                asyncio.run(self._load_fred_into_store())
+            except Exception as exc:
+                logger.warning("MacroStoreBridge.force_refresh: failed: %s", exc)
 
     @property
     def is_loaded(self) -> bool:
