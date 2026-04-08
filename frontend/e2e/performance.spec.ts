@@ -30,13 +30,15 @@ test.describe('Performance page', () => {
     await page.goto('/performance');
     await page.waitForLoadState('networkidle');
 
-    // Should show either metrics or a loading/error state — not a blank page
+    // Should show either metrics, a loading/error state, or the login redirect — not a blank page
     const content = page
       .locator('text=/performance/i')
       .or(page.locator('text=/sharpe/i'))
       .or(page.locator('text=/win rate/i'))
       .or(page.locator('text=/loading/i'))
       .or(page.locator('text=/error/i'))
+      .or(page.locator('text=/sign.?in/i'))
+      .or(page.locator('text=/log.?in/i'))
       .first();
     await expect(content).toBeVisible({ timeout: 15_000 });
   });

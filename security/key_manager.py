@@ -21,11 +21,17 @@ logger = logging.getLogger(__name__)
 
 class KeyManager:
     """
-    Production-grade key management
+    Key management backed by environment variables.
+
     - No hardcoded keys
-    - Environment-only key loading
+    - Environment-only key loading (``HOPEFX_MASTER_KEY``)
     - Key rotation support
-    - HSM-ready architecture
+
+    NOTE: Keys are loaded from env vars into OS process memory.  This is a
+    software key store, not a hardware HSM.  A true HSM (YubiKey HSM 2,
+    AWS CloudHSM, Azure Dedicated HSM) is required for FIPS 140-2/3 compliance
+    and to prevent key extraction from memory.  See ``security/vault.py`` for
+    optional hardware backends.
     """
 
     def __init__(self):

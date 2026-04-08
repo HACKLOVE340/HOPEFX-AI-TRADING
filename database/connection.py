@@ -416,11 +416,43 @@ def _default_db_url() -> str:
     return url
 
 
+def _check_sqlite_multiworker(url: str) -> None:
+    """Raise RuntimeError when SQLite is configured in a multi-worker deployment.
+
+    SQLite uses file-level locking; concurrent writes from multiple OS processes
+    (e.g. ``uvicorn --workers 4``) corrupt the database.  PostgreSQL or another
+    server-based engine is required for any multi-worker or multi-node setup.
+    """
+    if not url.startswith("sqlite"):
+        return
+    # WEB_CONCURRENCY is set by Gunicorn, uvicorn-gunicorn-fastapi images, and
+    # Heroku/Render.  --workers CLI flag sets it automatically.
+    concurrency = int(_os.getenv("WEB_CONCURRENCY", "1"))
+    if concurrency > 1:
+        raise RuntimeError(
+            f"DATABASE_URL is SQLite but WEB_CONCURRENCY={concurrency}. "
+            "SQLite cannot safely handle concurrent writes from multiple OS processes "
+            "and will corrupt data. Set DATABASE_URL to a PostgreSQL connection string "
+            "(e.g. postgresql+psycopg2://user:pass@host/db) before starting with "
+            "multiple workers."
+        )
+    # Warn even for single-worker so operators know this is dev-only.
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "DATABASE_URL is using SQLite (%s). "
+        "This is only suitable for local development. "
+        "Use PostgreSQL for any production or multi-worker deployment.",
+        url,
+    )
+
+
 def _get_or_init_manager() -> "DatabaseManager":
     """Return the global manager, initialising it with defaults if needed."""
     global _db_manager
     if _db_manager is None:
-        _db_manager = DatabaseManager(_default_db_url())
+        url = _default_db_url()
+        _check_sqlite_multiworker(url)
+        _db_manager = DatabaseManager(url)
     return _db_manager
 
 

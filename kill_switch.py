@@ -13,6 +13,16 @@ Provides an instant, multi-trigger mechanism to halt all trading activity:
   • Event-bus integration: publishes/subscribes to KILL_SWITCH domain events
   • Environment variable override: HOPEFX_KILL_SWITCH=1
 
+IMPORTANT — this is a SOFTWARE kill switch only:
+  • State is an in-memory boolean flag backed by a Redis latch and a flag file.
+  • A Python process crash, OOM kill, or kernel panic can prevent the switch
+    from firing if it has not yet been activated.
+  • For hard real-money deployments consider a hardware kill switch in series:
+    e.g. a managed network ACL, exchange-level "cancel on disconnect" (CoD),
+    or a relay that cuts the WAN link on broker-level kill signals.
+  • The ``reqGlobalCancel()`` escalation (IBKR) provides broker-level
+    protection but still depends on this process being alive to issue it.
+
 Usage
 -----
     from kill_switch import KillSwitch

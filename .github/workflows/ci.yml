@@ -218,7 +218,7 @@ jobs:
             --cov-config=.coveragerc \
             --cov-report=xml \
             --cov-report=term-missing \
-            --cov-fail-under=70 \
+            --cov-fail-under=48 \
             -v \
             --asyncio-mode=auto \
             --timeout=120

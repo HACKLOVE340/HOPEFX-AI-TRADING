@@ -42,8 +42,9 @@ class MCCConfig:
 
     # Feature flags (enable gradually)
     enable_gpu: bool = False
-    enable_fpga: bool = False
     enable_arbitrage: bool = False
+    # NOTE: FPGA acceleration is not implemented — the flag is reserved for a
+    # future hardware-offload path and has no effect on the current runtime.
 
 
 class MasterControlCore:

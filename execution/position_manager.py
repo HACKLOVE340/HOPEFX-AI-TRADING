@@ -342,7 +342,14 @@ class PositionManager:
                     try:
                         await self._redis_store.save_position(pos.to_dict())
                     except (ConnectionError, RuntimeError, OSError) as exc:
-                        logger.warning("PositionManager: Redis persist failed on open: %s", exc)
+                        # Two-phase rollback: remove the in-memory record so
+                        # state stays consistent if Redis is unavailable.
+                        del self._positions[symbol]
+                        raise RuntimeError(
+                            f"PositionManager: could not persist position for {symbol!r} "
+                            f"to Redis — rolling back in-memory state. "
+                            f"Original error: {exc}"
+                        ) from exc
 
         _prom_positions_open_set(symbol, 1)
         _prom_mutation("open")
@@ -425,7 +432,15 @@ class PositionManager:
                     try:
                         await self._redis_store.remove_position(symbol)
                     except (ConnectionError, RuntimeError, OSError) as exc:
-                        logger.warning("PositionManager: Redis remove failed on close: %s", exc)
+                        # Two-phase rollback: restore the in-memory record so
+                        # state stays consistent if Redis removal fails.
+                        self._positions[symbol] = pos
+                        self._history.pop()
+                        raise RuntimeError(
+                            f"PositionManager: could not remove position for {symbol!r} "
+                            f"from Redis — rolling back in-memory state. "
+                            f"Original error: {exc}"
+                        ) from exc
 
                 if hasattr(span, "set_attribute"):
                     span.set_attribute("realized_pnl", result.realized_pnl)
