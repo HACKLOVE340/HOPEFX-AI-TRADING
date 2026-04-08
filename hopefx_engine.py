@@ -780,6 +780,37 @@ class HopeFXEngine:
                 )
                 trading_blocked = True
 
+        # ── LiveTradingGate — all 5 statistical safety checks ─────────────────
+        # Checks: kill switch, 30-day paper clock, OOS accuracy >= 0.60,
+        # Sharpe SE gate (N >= 600 trades), FEATURE_LIVE_TRADING=true.
+        # Fail-safe: any import/runtime error blocks the order.
+        if not trading_blocked:
+            try:
+                from core.live_trading_gate import get_gate as _get_gate
+
+                _gate_result = _get_gate().check()
+                if not _gate_result.allowed:
+                    logger.warning(
+                        "LiveTradingGate blocked order for %s: %s",
+                        sym_key,
+                        _gate_result.reason,
+                    )
+                    trading_blocked = True
+            except ImportError as _gate_err:
+                logger.error(
+                    "live_trading_gate import failed (%s) — blocking order for %s (fail-safe)",
+                    _gate_err,
+                    sym_key,
+                )
+                trading_blocked = True
+            except Exception as _gate_err:
+                logger.error(
+                    "LiveTradingGate check raised %s — blocking order for %s (fail-safe)",
+                    _gate_err,
+                    sym_key,
+                )
+                trading_blocked = True
+
         min_conf = float(_optional("MIN_SIGNAL_CONFIDENCE", "0.35"))
         if not trading_blocked and decision.action in ("long", "short") and decision.confidence >= min_conf:
             # Stamp the live mid-price onto the decision so RiskManager.size_order()
