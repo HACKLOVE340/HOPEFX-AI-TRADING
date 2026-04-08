@@ -4,24 +4,39 @@
 """
 AdaptiveEdgeSelector — Batch 1: init, config, dataclasses, regime detection.
 """
+
 from __future__ import annotations
 import pytest
 from strategies.adaptive_edge_selector import (
-    AdaptiveEdgeSelector, MarketSnapshot, EdgeDecision,
-    EDGE_SNIPER, EDGE_SKIP,
-    REGIME_TRENDING_UP, REGIME_TRENDING_DOWN, REGIME_RANGING,
-    REGIME_VOLATILE, REGIME_CHOPPY, REGIME_LOW_VOL, get_edge_selector,
+    AdaptiveEdgeSelector,
+    MarketSnapshot,
+    EdgeDecision,
+    EDGE_SNIPER,
+    EDGE_SKIP,
+    REGIME_TRENDING_UP,
+    REGIME_TRENDING_DOWN,
+    REGIME_RANGING,
+    REGIME_VOLATILE,
+    REGIME_CHOPPY,
+    REGIME_LOW_VOL,
+    get_edge_selector,
 )
 
 
 def _clean(monkeypatch):
     keys = [
-        "EDGE_SELECTOR_ENABLED", "EDGE_SELECTOR_MIN_CONFIDENCE",
-        "EDGE_SELECTOR_CONE_THRESHOLD", "EDGE_SELECTOR_ADX_TREND",
-        "EDGE_SELECTOR_ADX_CHOPPY", "EDGE_SELECTOR_RSI_OB",
-        "EDGE_SELECTOR_RSI_OS", "EDGE_SELECTOR_ATR_SL_MULT",
-        "EDGE_SELECTOR_ATR_TP_MULT", "EDGE_SELECTOR_MAX_LOT",
-        "EDGE_SELECTOR_GRID_MAX_LAYERS", "EDGE_SELECTOR_GRID_BE_PIPS",
+        "EDGE_SELECTOR_ENABLED",
+        "EDGE_SELECTOR_MIN_CONFIDENCE",
+        "EDGE_SELECTOR_CONE_THRESHOLD",
+        "EDGE_SELECTOR_ADX_TREND",
+        "EDGE_SELECTOR_ADX_CHOPPY",
+        "EDGE_SELECTOR_RSI_OB",
+        "EDGE_SELECTOR_RSI_OS",
+        "EDGE_SELECTOR_ATR_SL_MULT",
+        "EDGE_SELECTOR_ATR_TP_MULT",
+        "EDGE_SELECTOR_MAX_LOT",
+        "EDGE_SELECTOR_GRID_MAX_LAYERS",
+        "EDGE_SELECTOR_GRID_BE_PIPS",
         "EDGE_SELECTOR_GRID_DD_COOLDOWN",
     ]
     for k in keys:
@@ -30,10 +45,17 @@ def _clean(monkeypatch):
 
 def _snap(**kw):
     defaults = dict(
-        symbol="XAUUSD", price=2345.67, atr=1.25, adx=32.1,
-        rsi=68.0, volume_delta=15.0, cone_strength=0.87,
-        last_candles="bullish engulfing", news_spike=False,
-        liquidity="high", drawdown_pct=0.0,
+        symbol="XAUUSD",
+        price=2345.67,
+        atr=1.25,
+        adx=32.1,
+        rsi=68.0,
+        volume_delta=15.0,
+        cone_strength=0.87,
+        last_candles="bullish engulfing",
+        news_spike=False,
+        liquidity="high",
+        drawdown_pct=0.0,
     )
     defaults.update(kw)
     return MarketSnapshot(**defaults)
@@ -150,9 +172,19 @@ class TestMarketSnapshot:
 
     def test_to_dict_keys(self):
         d = _snap().to_dict()
-        assert {"symbol","price","atr","adx","rsi","volume_delta",
-                "cone_strength","last_candles","news_spike",
-                "liquidity","drawdown_pct"} == set(d.keys())
+        assert {
+            "symbol",
+            "price",
+            "atr",
+            "adx",
+            "rsi",
+            "volume_delta",
+            "cone_strength",
+            "last_candles",
+            "news_spike",
+            "liquidity",
+            "drawdown_pct",
+        } == set(d.keys())
 
     def test_to_dict_values(self):
         d = _snap().to_dict()
@@ -167,11 +199,17 @@ class TestMarketSnapshot:
 class TestEdgeDecision:
     def _make(self, edge=EDGE_SNIPER):
         return EdgeDecision(
-            regime=REGIME_TRENDING_UP, edge=edge, confidence=88,
-            reason="test", action="buy 0.01",
-            symbol="XAUUSD", entry_price=2345.67,
-            sl_price=2343.17, tp_price=2350.67,
-            lot_size=0.01, strategy_name="smc_ict",
+            regime=REGIME_TRENDING_UP,
+            edge=edge,
+            confidence=88,
+            reason="test",
+            action="buy 0.01",
+            symbol="XAUUSD",
+            entry_price=2345.67,
+            sl_price=2343.17,
+            tp_price=2350.67,
+            lot_size=0.01,
+            strategy_name="smc_ict",
         )
 
     def test_fields(self):
@@ -182,9 +220,20 @@ class TestEdgeDecision:
 
     def test_to_dict_keys(self):
         keys = set(self._make().to_dict().keys())
-        assert {"regime","edge","confidence","reason","action","symbol",
-                "entry_price","sl_price","tp_price","lot_size",
-                "strategy_name","timestamp"} == keys
+        assert {
+            "regime",
+            "edge",
+            "confidence",
+            "reason",
+            "action",
+            "symbol",
+            "entry_price",
+            "sl_price",
+            "tp_price",
+            "lot_size",
+            "strategy_name",
+            "timestamp",
+        } == keys
 
     def test_to_dict_prices_rounded(self):
         d = self._make()
@@ -193,11 +242,13 @@ class TestEdgeDecision:
 
     def test_timestamp_is_iso(self):
         from datetime import datetime
+
         dt = datetime.fromisoformat(self._make().timestamp)
         assert dt.tzinfo is not None
 
     def test_to_dict_json_serialisable(self):
         import json
+
         json.dumps(self._make().to_dict())  # must not raise
 
     def test_skip_decision_fields(self):
@@ -315,11 +366,13 @@ class TestSafetyGuards:
 class TestSingleton:
     def test_get_edge_selector_returns_instance(self):
         import strategies.adaptive_edge_selector as _mod
+
         _mod._selector = None
         sel = get_edge_selector()
         assert isinstance(sel, AdaptiveEdgeSelector)
 
     def test_get_edge_selector_same_instance(self):
         import strategies.adaptive_edge_selector as _mod
+
         _mod._selector = None
         assert get_edge_selector() is get_edge_selector()

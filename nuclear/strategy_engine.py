@@ -44,7 +44,9 @@ from typing import Any
 from nuclear.feature_builder import MultiTimeframeFeatures
 from nuclear.itos_cone_engine import ItosCone
 from nuclear.regime_classifier import (
-    REGIME_BREAKOUT, REGIME_HIGH_VOL, RegimeResult,
+    REGIME_BREAKOUT,
+    REGIME_HIGH_VOL,
+    RegimeResult,
 )
 from nuclear.redis_stream_reader import TickSnapshot
 
@@ -61,16 +63,16 @@ FLAT = "flat"
 class StrategySignal:
     """Raw signal from a strategy engine module."""
 
-    direction: str          # "long" / "short" / "flat"
-    strategy: str           # "smc_ict" / "breakout" / "mean_reversion"
+    direction: str  # "long" / "short" / "flat"
+    strategy: str  # "smc_ict" / "breakout" / "mean_reversion"
     entry_price: float
     stop_loss: float
     take_profit_1: float
     take_profit_2: float
     take_profit_3: float
-    confidence: float       # 0–1
+    confidence: float  # 0–1
     regime: str
-    timeframe: str          # primary timeframe that triggered the signal
+    timeframe: str  # primary timeframe that triggered the signal
     reasoning: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
     cone_aligned: bool = True
@@ -121,6 +123,7 @@ class StrategySignal:
 
 
 # ── SMC / ICT Engine ──────────────────────────────────────────────────────────
+
 
 class SMCICTEngine:
     """
@@ -180,9 +183,8 @@ class SMCICTEngine:
 
         # ── 1h context alignment ──────────────────────────────────────────────
         if h1:
-            h1_aligned = (
-                (structure == LONG and h1.price_above_ema_50) or
-                (structure == SHORT and not h1.price_above_ema_50)
+            h1_aligned = (structure == LONG and h1.price_above_ema_50) or (
+                structure == SHORT and not h1.price_above_ema_50
             )
             if not h1_aligned:
                 reasoning.append("1h: context not aligned — skipping")
@@ -286,6 +288,7 @@ class SMCICTEngine:
 
 
 # ── Breakout Engine ───────────────────────────────────────────────────────────
+
 
 class BreakoutEngine:
     """
@@ -395,6 +398,7 @@ class BreakoutEngine:
 
 # ── Mean Reversion Engine ─────────────────────────────────────────────────────
 
+
 class MeanReversionEngine:
     """
     Mean-reversion signal generator.
@@ -421,16 +425,12 @@ class MeanReversionEngine:
 
         # ── Long: oversold at BB lower ────────────────────────────────────────
         long_signal = (
-            entry_feat.rsi_oversold
-            and entry_feat.bb_pct_b < 0.1
-            and not entry_feat.lower_lows  # not in a downtrend
+            entry_feat.rsi_oversold and entry_feat.bb_pct_b < 0.1 and not entry_feat.lower_lows  # not in a downtrend
         )
 
         # ── Short: overbought at BB upper ─────────────────────────────────────
         short_signal = (
-            entry_feat.rsi_overbought
-            and entry_feat.bb_pct_b > 0.9
-            and not entry_feat.higher_highs  # not in an uptrend
+            entry_feat.rsi_overbought and entry_feat.bb_pct_b > 0.9 and not entry_feat.higher_highs  # not in an uptrend
         )
 
         if not long_signal and not short_signal:
@@ -439,13 +439,9 @@ class MeanReversionEngine:
         direction = LONG if long_signal else SHORT
 
         if long_signal:
-            reasoning.append(
-                f"RSI oversold ({entry_feat.rsi:.1f}) + BB pct_b={entry_feat.bb_pct_b:.2f} → long MR"
-            )
+            reasoning.append(f"RSI oversold ({entry_feat.rsi:.1f}) + BB pct_b={entry_feat.bb_pct_b:.2f} → long MR")
         else:
-            reasoning.append(
-                f"RSI overbought ({entry_feat.rsi:.1f}) + BB pct_b={entry_feat.bb_pct_b:.2f} → short MR"
-            )
+            reasoning.append(f"RSI overbought ({entry_feat.rsi:.1f}) + BB pct_b={entry_feat.bb_pct_b:.2f} → short MR")
 
         # Daily alignment check
         confidence = 0.55
@@ -469,7 +465,7 @@ class MeanReversionEngine:
         # Mean-reversion targets: tighter than trend-following
         if direction == LONG:
             sl = price - 1.2 * atr
-            tp1 = entry_feat.bb_mid          # target: BB mid
+            tp1 = entry_feat.bb_mid  # target: BB mid
             tp2 = price + 1.5 * atr
             tp3 = entry_feat.bb_upper
         else:
@@ -500,6 +496,7 @@ class MeanReversionEngine:
 
 
 # ── ITOS Cone Validator ───────────────────────────────────────────────────────
+
 
 class ConeValidator:
     """
@@ -554,9 +551,7 @@ class ConeValidator:
         if not direction_ok:
             signal.confidence *= 0.5
             signal.cone_aligned = False
-            signal.reasoning.append(
-                f"ITOS cone misaligned: signal={signal.direction} cone={bias} → confidence halved"
-            )
+            signal.reasoning.append(f"ITOS cone misaligned: signal={signal.direction} cone={bias} → confidence halved")
         else:
             signal.cone_aligned = True
             signal.reasoning.append(f"ITOS cone aligned: {bias}")
@@ -567,14 +562,11 @@ class ConeValidator:
             signal.direction = FLAT
             signal.confidence = 0.0
             signal.reasoning.append(
-                f"REJECTED: price {price:.2f} outside ±2σ cone "
-                f"[{lower_2s_1m:.2f}, {upper_2s_1m:.2f}]"
+                f"REJECTED: price {price:.2f} outside ±2σ cone [{lower_2s_1m:.2f}, {upper_2s_1m:.2f}]"
             )
             return signal
 
-        signal.reasoning.append(
-            f"Price {price:.2f} within ±2σ cone [{lower_2s_1m:.2f}, {upper_2s_1m:.2f}]"
-        )
+        signal.reasoning.append(f"Price {price:.2f} within ±2σ cone [{lower_2s_1m:.2f}, {upper_2s_1m:.2f}]")
 
         # Rule 3: High-vol cone → widen stops
         if vol_regime == "high_vol":
@@ -588,6 +580,7 @@ class ConeValidator:
 
 
 # ── NuclearStrategyEngine ─────────────────────────────────────────────────────
+
 
 class NuclearStrategyEngine:
     """
@@ -670,7 +663,8 @@ class NuclearStrategyEngine:
         if not validated.is_valid:
             logger.debug(
                 "NuclearStrategyEngine: signal invalid (RR=%.2f conf=%.2f)",
-                validated.risk_reward, validated.confidence,
+                validated.risk_reward,
+                validated.confidence,
             )
             return None
 
@@ -680,9 +674,13 @@ class NuclearStrategyEngine:
 
         logger.info(
             "NuclearStrategyEngine: %s %s @ %.4f SL=%.4f TP1=%.4f conf=%.2f RR=%.2f",
-            validated.direction, validated.strategy, validated.entry_price,
-            validated.stop_loss, validated.take_profit_1,
-            validated.confidence, validated.risk_reward,
+            validated.direction,
+            validated.strategy,
+            validated.entry_price,
+            validated.stop_loss,
+            validated.take_profit_1,
+            validated.confidence,
+            validated.risk_reward,
         )
         return validated
 

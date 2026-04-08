@@ -48,7 +48,7 @@ jobs:
           title: "chore: regenerate requirements.lock"
           body: |
             Automated regeneration of `requirements.lock` triggered by changes to `requirements.txt`.
-            
+
             Review pinned versions for any unexpected upgrades before merging.
           branch: chore/regenerate-lockfile
           delete-branch: true

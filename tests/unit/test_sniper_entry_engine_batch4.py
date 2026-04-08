@@ -39,6 +39,7 @@ from strategies.sniper_entry_engine import (
 # Shared bar / decision builders
 # ---------------------------------------------------------------------------
 
+
 def _bar(o, h, l, c):
     return {"open": o, "high": h, "low": l, "close": c, "volume": 1000}
 
@@ -93,8 +94,8 @@ def _make_ltf_df_with_displacement(base=1900.0):
         p = base + i * 0.5
         bars.append(_bar(p, p + 0.8, p - 0.3, p + 0.5))
     prev = _bar(1917.0, 1919.0, 1916.0, 1918.0)
-    curr = _bar(1918.0, 1947.0, 1917.5, 1945.0)   # large bullish body
-    nxt  = _bar(1945.0, 1948.0, 1922.0, 1944.0)   # nxt.low > prev.high → FVG
+    curr = _bar(1918.0, 1947.0, 1917.5, 1945.0)  # large bullish body
+    nxt = _bar(1945.0, 1948.0, 1922.0, 1944.0)  # nxt.low > prev.high → FVG
     bars.extend([prev, curr, nxt])
     return pd.DataFrame(bars)
 
@@ -102,6 +103,7 @@ def _make_ltf_df_with_displacement(base=1900.0):
 # ---------------------------------------------------------------------------
 # refine() — early-exit paths
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestRefineEarlyExits:
@@ -142,9 +144,7 @@ class TestRefineEarlyExits:
         assert result is None
 
     def test_insufficient_htf_bars_returns_none(self):
-        tiny_df = pd.DataFrame([
-            _bar(1900, 1905, 1895, 1902) for _ in range(5)
-        ])
+        tiny_df = pd.DataFrame([_bar(1900, 1905, 1895, 1902) for _ in range(5)])
         result = self.engine.refine(_decision(), tiny_df)
         assert result is None
 
@@ -163,9 +163,7 @@ class TestRefineEarlyExits:
 
     def test_orchestrator_returns_too_few_ltf_bars(self):
         mock_orch = MagicMock()
-        mock_orch.get_ohlcv_window.return_value = pd.DataFrame([
-            _bar(1900, 1905, 1895, 1902) for _ in range(10)
-        ])
+        mock_orch.get_ohlcv_window.return_value = pd.DataFrame([_bar(1900, 1905, 1895, 1902) for _ in range(10)])
         htf_df = _zigzag_up_df()
         result = self.engine.refine(_decision(), htf_df, orchestrator=mock_orch)
         assert result is None
@@ -181,6 +179,7 @@ class TestRefineEarlyExits:
 # ---------------------------------------------------------------------------
 # refine() — decision attribute access
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestRefineDecisionAttributes:
@@ -202,12 +201,8 @@ class TestRefineDecisionAttributes:
     def test_confidence_zero_still_processed(self):
         """Zero confidence is valid — engine should not short-circuit on it."""
         mock_orch = MagicMock()
-        mock_orch.get_ohlcv_window.return_value = pd.DataFrame([
-            _bar(1900, 1905, 1895, 1902) for _ in range(5)
-        ])
-        result = self.engine.refine(
-            _decision(confidence=0.0), pd.DataFrame(), orchestrator=mock_orch
-        )
+        mock_orch.get_ohlcv_window.return_value = pd.DataFrame([_bar(1900, 1905, 1895, 1902) for _ in range(5)])
+        result = self.engine.refine(_decision(confidence=0.0), pd.DataFrame(), orchestrator=mock_orch)
         assert result is None  # fails at HTF
 
     def test_very_high_confidence_capped_in_output(self):
@@ -215,9 +210,7 @@ class TestRefineDecisionAttributes:
         mock_orch = MagicMock()
         mock_orch.get_ohlcv_window.return_value = _make_ltf_df_with_displacement()
         htf_df = _zigzag_up_df()
-        result = self.engine.refine(
-            _decision(confidence=0.99), htf_df, orchestrator=mock_orch
-        )
+        result = self.engine.refine(_decision(confidence=0.99), htf_df, orchestrator=mock_orch)
         if result is not None:
             assert result.confidence <= 1.0
 
@@ -225,9 +218,7 @@ class TestRefineDecisionAttributes:
         mock_orch = MagicMock()
         mock_orch.get_ohlcv_window.return_value = _make_ltf_df_with_displacement()
         htf_df = _zigzag_up_df()
-        result = self.engine.refine(
-            _decision(symbol="EUR_USD"), htf_df, orchestrator=mock_orch
-        )
+        result = self.engine.refine(_decision(symbol="EUR_USD"), htf_df, orchestrator=mock_orch)
         if result is not None:
             assert result.symbol == "EUR_USD"
 
@@ -236,6 +227,7 @@ class TestRefineDecisionAttributes:
 # refine() — multi-symbol smoke tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestRefineMultiSymbol:
     """refine() handles different symbols without cross-contamination."""
@@ -243,26 +235,18 @@ class TestRefineMultiSymbol:
     def setup_method(self):
         self.engine = SniperEntryEngine()
 
-    @pytest.mark.parametrize("symbol", [
-        "XAU_USD", "EUR_USD", "GBP_USD", "USD_JPY", "BTC_USD"
-    ])
+    @pytest.mark.parametrize("symbol", ["XAU_USD", "EUR_USD", "GBP_USD", "USD_JPY", "BTC_USD"])
     def test_symbol_does_not_raise(self, symbol):
         mock_orch = MagicMock()
-        mock_orch.get_ohlcv_window.return_value = pd.DataFrame([
-            _bar(1900, 1905, 1895, 1902) for _ in range(5)
-        ])
+        mock_orch.get_ohlcv_window.return_value = pd.DataFrame([_bar(1900, 1905, 1895, 1902) for _ in range(5)])
         htf_df = _zigzag_up_df()
-        result = self.engine.refine(
-            _decision(symbol=symbol), htf_df, orchestrator=mock_orch
-        )
+        result = self.engine.refine(_decision(symbol=symbol), htf_df, orchestrator=mock_orch)
         assert result is None or isinstance(result, SniperSetup)
 
     def test_two_calls_independent(self):
         """Consecutive calls must not share state."""
         mock_orch = MagicMock()
-        mock_orch.get_ohlcv_window.return_value = pd.DataFrame([
-            _bar(1900, 1905, 1895, 1902) for _ in range(5)
-        ])
+        mock_orch.get_ohlcv_window.return_value = pd.DataFrame([_bar(1900, 1905, 1895, 1902) for _ in range(5)])
         htf_df = _zigzag_up_df()
         r1 = self.engine.refine(_decision(symbol="XAU_USD"), htf_df, orchestrator=mock_orch)
         r2 = self.engine.refine(_decision(symbol="EUR_USD"), htf_df, orchestrator=mock_orch)
@@ -274,6 +258,7 @@ class TestRefineMultiSymbol:
 # ---------------------------------------------------------------------------
 # refine() — full confirmed pipeline
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestRefineFullPipeline:
@@ -287,9 +272,7 @@ class TestRefineFullPipeline:
 
     def _make_orchestrator(self, ltf_df=None):
         mock_orch = MagicMock()
-        mock_orch.get_ohlcv_window.return_value = (
-            ltf_df if ltf_df is not None else _make_ltf_df_with_displacement()
-        )
+        mock_orch.get_ohlcv_window.return_value = ltf_df if ltf_df is not None else _make_ltf_df_with_displacement()
         return mock_orch
 
     def test_returns_sniper_setup_or_none(self):
@@ -348,6 +331,7 @@ class TestRefineFullPipeline:
 
     def test_setup_to_dict_is_json_serialisable(self):
         import json
+
         orch = self._make_orchestrator()
         htf_df = _zigzag_up_df()
         result = self.engine.refine(_decision(), htf_df, orchestrator=orch)
@@ -370,6 +354,7 @@ class TestRefineFullPipeline:
 
     def test_setup_timestamp_is_utc_iso(self):
         from datetime import datetime
+
         orch = self._make_orchestrator()
         htf_df = _zigzag_up_df()
         result = self.engine.refine(_decision(), htf_df, orchestrator=orch)
@@ -381,6 +366,7 @@ class TestRefineFullPipeline:
 # ---------------------------------------------------------------------------
 # Edge cases and robustness
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestRefineEdgeCases:
@@ -395,9 +381,7 @@ class TestRefineEdgeCases:
         df.loc[5, "close"] = float("nan")
         df.loc[10, "high"] = float("nan")
         mock_orch = MagicMock()
-        mock_orch.get_ohlcv_window.return_value = pd.DataFrame([
-            _bar(1900, 1905, 1895, 1902) for _ in range(5)
-        ])
+        mock_orch.get_ohlcv_window.return_value = pd.DataFrame([_bar(1900, 1905, 1895, 1902) for _ in range(5)])
         # Must not raise
         result = self.engine.refine(_decision(), df, orchestrator=mock_orch)
         assert result is None or isinstance(result, SniperSetup)
@@ -406,9 +390,7 @@ class TestRefineEdgeCases:
         bars = [_bar(0, 0, 0, 0) for _ in range(30)]
         df = pd.DataFrame(bars)
         mock_orch = MagicMock()
-        mock_orch.get_ohlcv_window.return_value = pd.DataFrame([
-            _bar(0, 0, 0, 0) for _ in range(5)
-        ])
+        mock_orch.get_ohlcv_window.return_value = pd.DataFrame([_bar(0, 0, 0, 0) for _ in range(5)])
         result = self.engine.refine(_decision(), df, orchestrator=mock_orch)
         assert result is None or isinstance(result, SniperSetup)
 
@@ -417,17 +399,13 @@ class TestRefineEdgeCases:
         mock_orch = MagicMock()
         mock_orch.get_ohlcv_window.return_value = _make_ltf_df_with_displacement()
         htf_df = _zigzag_up_df()
-        result = self.engine.refine(
-            _decision(), htf_df, orchestrator=mock_orch, spread=9999.0
-        )
+        result = self.engine.refine(_decision(), htf_df, orchestrator=mock_orch, spread=9999.0)
         assert result is None
 
     def test_spread_default_is_zero(self):
         """refine() signature default spread=0.0 — no TypeError."""
         mock_orch = MagicMock()
-        mock_orch.get_ohlcv_window.return_value = pd.DataFrame([
-            _bar(1900, 1905, 1895, 1902) for _ in range(5)
-        ])
+        mock_orch.get_ohlcv_window.return_value = pd.DataFrame([_bar(1900, 1905, 1895, 1902) for _ in range(5)])
         htf_df = _zigzag_up_df()
         # Call without spread kwarg
         result = self.engine.refine(_decision(), htf_df, orchestrator=mock_orch)
@@ -454,9 +432,7 @@ class TestRefineEdgeCases:
         original_shape = htf_df.shape
         original_cols = list(htf_df.columns)
         mock_orch = MagicMock()
-        mock_orch.get_ohlcv_window.return_value = pd.DataFrame([
-            _bar(1900, 1905, 1895, 1902) for _ in range(5)
-        ])
+        mock_orch.get_ohlcv_window.return_value = pd.DataFrame([_bar(1900, 1905, 1895, 1902) for _ in range(5)])
         self.engine.refine(_decision(), htf_df, orchestrator=mock_orch)
         assert htf_df.shape == original_shape
         assert list(htf_df.columns) == original_cols
@@ -475,6 +451,7 @@ class TestRefineEdgeCases:
 # SniperSetup.to_dict() round-trip
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestSniperSetupRoundTrip:
     """to_dict() produces a fully JSON-serialisable dict."""
@@ -483,12 +460,22 @@ class TestSniperSetupRoundTrip:
         ob = OrderBlock(direction="bullish", top=1895.0, bottom=1890.0, origin_index=5)
         dc = DisplacementCandle(
             direction="bullish",
-            open=1888.0, high=1910.0, low=1886.0, close=1908.0,
-            fvg_top=1912.0, fvg_bottom=1905.0, ce_level=1908.5, bar_index=8,
+            open=1888.0,
+            high=1910.0,
+            low=1886.0,
+            close=1908.0,
+            fvg_top=1912.0,
+            fvg_bottom=1905.0,
+            ce_level=1908.5,
+            bar_index=8,
         )
         ltf = LTFConfirmation(
-            confirmed=True, event="BOS_bullish",
-            displacement=dc, last_sh=1915.0, last_sl=1880.0, bars_analysed=100,
+            confirmed=True,
+            event="BOS_bullish",
+            displacement=dc,
+            last_sh=1915.0,
+            last_sl=1880.0,
+            bars_analysed=100,
         )
         return SniperSetup(
             symbol="XAU_USD",
@@ -510,6 +497,7 @@ class TestSniperSetupRoundTrip:
 
     def test_to_dict_json_serialisable(self):
         import json
+
         setup = self._make_full_setup()
         json.dumps(setup.to_dict())  # must not raise
 

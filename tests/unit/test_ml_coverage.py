@@ -24,15 +24,13 @@ from ml.signal_features import FeatureVector, SignalEnsemble, TechnicalIndicator
 @pytest.mark.unit
 class TestFeatureVector:
     def test_to_array(self):
-        fv = FeatureVector(symbol="XAUUSD", timestamp=1.0,
-                           features={"a": 1.0, "b": 2.0, "c": 3.0})
+        fv = FeatureVector(symbol="XAUUSD", timestamp=1.0, features={"a": 1.0, "b": 2.0, "c": 3.0})
         arr = fv.to_array()
         assert isinstance(arr, np.ndarray)
         assert arr.shape == (3,)
 
     def test_to_dict_keys(self):
-        fv = FeatureVector(symbol="XAUUSD", timestamp=1.0,
-                           features={"x": 0.5}, label=1.0)
+        fv = FeatureVector(symbol="XAUUSD", timestamp=1.0, features={"x": 0.5}, label=1.0)
         d = fv.to_dict()
         assert d["symbol"] == "XAUUSD"
         assert d["label"] == pytest.approx(1.0)
@@ -158,8 +156,10 @@ class TestSignalEnsemble:
 # ml/signal_validator.py
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _make_signals(n=50, direction="BUY", mean=0.0, std=0.1, conf=0.7):
     from ml.signal_validator import SignalRecord
+
     rng = np.random.default_rng(42)
     return [
         SignalRecord(
@@ -176,11 +176,13 @@ def _make_signals(n=50, direction="BUY", mean=0.0, std=0.1, conf=0.7):
 class TestSignalRecord:
     def test_defaults(self):
         from ml.signal_validator import SignalRecord
+
         s = SignalRecord(direction="BUY", confidence=0.8, raw_score=0.6)
         assert s.timestamp is None
 
     def test_with_timestamp(self):
         from ml.signal_validator import SignalRecord
+
         ts = datetime.now(UTC)
         s = SignalRecord(direction="SELL", confidence=0.6, raw_score=-0.3, timestamp=ts)
         assert s.timestamp == ts
@@ -190,6 +192,7 @@ class TestSignalRecord:
 class TestValidationReport:
     def test_passed_property(self):
         from ml.signal_validator import ValidationReport, ValidationStatus
+
         r = ValidationReport(
             timestamp=datetime.now(UTC),
             status=ValidationStatus.PASSED,
@@ -200,6 +203,7 @@ class TestValidationReport:
 
     def test_failed_property(self):
         from ml.signal_validator import ValidationReport, ValidationStatus
+
         r = ValidationReport(
             timestamp=datetime.now(UTC),
             status=ValidationStatus.FAILED,
@@ -210,6 +214,7 @@ class TestValidationReport:
 
     def test_to_dict_keys(self):
         from ml.signal_validator import ValidationReport, ValidationStatus
+
         r = ValidationReport(
             timestamp=datetime.now(UTC),
             status=ValidationStatus.PASSED,
@@ -217,12 +222,22 @@ class TestValidationReport:
             live_sample_size=50,
         )
         d = r.to_dict()
-        for key in ("timestamp", "status", "oos_sample_size", "live_sample_size",
-                    "psi", "ks_statistic", "ks_p_value", "passed", "checks"):
+        for key in (
+            "timestamp",
+            "status",
+            "oos_sample_size",
+            "live_sample_size",
+            "psi",
+            "ks_statistic",
+            "ks_p_value",
+            "passed",
+            "checks",
+        ):
             assert key in d
 
     def test_summary_string(self):
         from ml.signal_validator import ValidationReport, ValidationStatus
+
         r = ValidationReport(
             timestamp=datetime.now(UTC),
             status=ValidationStatus.WARNING,
@@ -237,6 +252,7 @@ class TestValidationReport:
 class TestSignalDistributionValidator:
     def test_insufficient_data_when_too_few_samples(self):
         from ml.signal_validator import SignalDistributionValidator, ValidationStatus
+
         v = SignalDistributionValidator(min_samples=30)
         v.set_oos_reference(_make_signals(10))
         report = v.validate(_make_signals(10))
@@ -244,6 +260,7 @@ class TestSignalDistributionValidator:
 
     def test_passed_when_distributions_match(self):
         from ml.signal_validator import SignalDistributionValidator, ValidationStatus
+
         v = SignalDistributionValidator(min_samples=30)
         oos = _make_signals(100, mean=0.0, std=0.1, conf=0.7)
         live = _make_signals(100, mean=0.0, std=0.1, conf=0.7)
@@ -253,6 +270,7 @@ class TestSignalDistributionValidator:
 
     def test_failed_when_distributions_diverge(self):
         from ml.signal_validator import SignalDistributionValidator, ValidationStatus
+
         v = SignalDistributionValidator(min_samples=30, psi_fail=0.01)
         oos = _make_signals(100, mean=0.0, std=0.05)
         live = _make_signals(100, mean=5.0, std=0.05)  # huge drift
@@ -262,6 +280,7 @@ class TestSignalDistributionValidator:
 
     def test_add_live_signal_accumulates(self):
         from ml.signal_validator import SignalDistributionValidator
+
         v = SignalDistributionValidator()
         sig = _make_signals(1)[0]
         v.add_live_signal(sig)
@@ -269,6 +288,7 @@ class TestSignalDistributionValidator:
 
     def test_clear_live_signals(self):
         from ml.signal_validator import SignalDistributionValidator
+
         v = SignalDistributionValidator()
         for s in _make_signals(5):
             v.add_live_signal(s)
@@ -277,6 +297,7 @@ class TestSignalDistributionValidator:
 
     def test_validate_uses_internal_buffer(self):
         from ml.signal_validator import SignalDistributionValidator
+
         v = SignalDistributionValidator(min_samples=30)
         oos = _make_signals(50)
         live = _make_signals(50)
@@ -288,6 +309,7 @@ class TestSignalDistributionValidator:
 
     def test_report_has_psi_and_ks(self):
         from ml.signal_validator import SignalDistributionValidator
+
         v = SignalDistributionValidator(min_samples=30)
         oos = _make_signals(50)
         live = _make_signals(50)
@@ -299,17 +321,20 @@ class TestSignalDistributionValidator:
 
     def test_get_validator_singleton(self):
         from ml.signal_validator import get_validator, SignalDistributionValidator
+
         v = get_validator()
         assert isinstance(v, SignalDistributionValidator)
 
     def test_compute_psi_identical_distributions(self):
         from ml.signal_validator import _compute_psi
+
         data = np.random.default_rng(0).normal(0, 1, 200)
         psi = _compute_psi(data, data)
         assert psi == pytest.approx(0.0, abs=0.01)
 
     def test_compute_psi_different_distributions(self):
         from ml.signal_validator import _compute_psi
+
         ref = np.random.default_rng(0).normal(0, 1, 200)
         cur = np.random.default_rng(1).normal(5, 1, 200)
         psi = _compute_psi(ref, cur)
@@ -317,6 +342,7 @@ class TestSignalDistributionValidator:
 
     def test_compute_psi_constant_returns_zero(self):
         from ml.signal_validator import _compute_psi
+
         data = np.ones(100)
         psi = _compute_psi(data, data)
         assert psi == pytest.approx(0.0)

@@ -13,6 +13,7 @@ Tests for:
 """
 
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 import numpy as np

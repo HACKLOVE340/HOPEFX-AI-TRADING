@@ -26,6 +26,7 @@ Version: 1.2.0
 
 import logging
 from datetime import timezone
+
 UTC = timezone.utc
 
 from .economic_calendar import EconomicCalendar, EconomicEvent, EventImportance

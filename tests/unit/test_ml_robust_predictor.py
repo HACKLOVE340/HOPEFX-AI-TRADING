@@ -22,6 +22,7 @@ UTC = timezone.utc
 # Shared OHLCV fixture
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def ohlcv_df():
     rng = np.random.default_rng(42)
@@ -46,10 +47,12 @@ def ohlcv_df():
 # Regime enum
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestRegimeEnum:
     def test_values(self):
         from ml.robust_predictor import Regime
+
         assert Regime.TRENDING.value == "trending"
         assert Regime.MEAN_REVERTING.value == "mean_reverting"
         assert Regime.HIGH_VOLATILITY.value == "high_volatility"
@@ -61,10 +64,12 @@ class TestRegimeEnum:
 # ModelConfig
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestModelConfig:
     def test_defaults(self):
         from ml.robust_predictor import ModelConfig
+
         cfg = ModelConfig()
         assert cfg.min_train_samples == 5000
         assert cfg.n_splits == 5
@@ -72,22 +77,26 @@ class TestModelConfig:
 
     def test_ensemble_methods_default(self):
         from ml.robust_predictor import ModelConfig
+
         cfg = ModelConfig()
         assert cfg.ensemble_methods == ["xgb", "lgb"]
 
     def test_ensemble_methods_custom(self):
         from ml.robust_predictor import ModelConfig
+
         cfg = ModelConfig(ensemble_methods=["xgb", "lgb", "rf"])
         assert "rf" in cfg.ensemble_methods
 
     def test_post_init_sets_ensemble_when_none(self):
         from ml.robust_predictor import ModelConfig
+
         cfg = ModelConfig(ensemble_methods=None)
         assert cfg.ensemble_methods is not None
         assert len(cfg.ensemble_methods) > 0
 
     def test_custom_values(self):
         from ml.robust_predictor import ModelConfig
+
         cfg = ModelConfig(max_depth=3, learning_rate=0.05)
         assert cfg.max_depth == 3
         assert cfg.learning_rate == pytest.approx(0.05)
@@ -97,10 +106,12 @@ class TestModelConfig:
 # PredictionResult
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestPredictionResult:
     def test_init(self):
         from ml.robust_predictor import PredictionResult, Regime
+
         pr = PredictionResult(
             direction=1,
             probability=0.72,
@@ -118,6 +129,7 @@ class TestPredictionResult:
 
     def test_direction_values(self):
         from ml.robust_predictor import PredictionResult, Regime
+
         for direction in (-1, 0, 1):
             pr = PredictionResult(
                 direction=direction,
@@ -137,16 +149,19 @@ class TestPredictionResult:
 # RegimeDetector
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestRegimeDetector:
     def test_init(self):
         from ml.robust_predictor import RegimeDetector
+
         rd = RegimeDetector()
         assert rd.lookback == 50
         assert rd.volatility_threshold > 0
 
     def test_detect_returns_array(self, ohlcv_df):
         from ml.robust_predictor import RegimeDetector
+
         rd = RegimeDetector()
         regimes = rd.detect(ohlcv_df)
         assert isinstance(regimes, np.ndarray)
@@ -154,13 +169,15 @@ class TestRegimeDetector:
 
     def test_detect_first_bars_unknown(self, ohlcv_df):
         from ml.robust_predictor import Regime, RegimeDetector
+
         rd = RegimeDetector()
         regimes = rd.detect(ohlcv_df)
         # First `lookback` bars should be UNKNOWN
-        assert all(r == Regime.UNKNOWN for r in regimes[:rd.lookback])
+        assert all(r == Regime.UNKNOWN for r in regimes[: rd.lookback])
 
     def test_detect_valid_regime_values(self, ohlcv_df):
         from ml.robust_predictor import Regime, RegimeDetector
+
         rd = RegimeDetector()
         regimes = rd.detect(ohlcv_df)
         valid = set(Regime)
@@ -168,27 +185,34 @@ class TestRegimeDetector:
 
     def test_detect_single_returns_regime(self, ohlcv_df):
         from ml.robust_predictor import Regime, RegimeDetector
+
         rd = RegimeDetector()
         result = rd.detect_single(ohlcv_df)
         assert isinstance(result, Regime)
 
     def test_detect_single_with_precomputed_columns(self):
         from ml.robust_predictor import Regime, RegimeDetector
+
         rd = RegimeDetector()
-        df = pd.DataFrame({
-            "regime_hurst": [0.6],
-            "regime_trend_str": [0.3],
-        })
+        df = pd.DataFrame(
+            {
+                "regime_hurst": [0.6],
+                "regime_trend_str": [0.3],
+            }
+        )
         result = rd.detect_single(df)
         assert result == Regime.TRENDING
 
     def test_detect_single_nan_columns_returns_unknown(self):
         from ml.robust_predictor import Regime, RegimeDetector
+
         rd = RegimeDetector()
-        df = pd.DataFrame({
-            "regime_hurst": [float("nan")],
-            "regime_trend_str": [0.3],
-        })
+        df = pd.DataFrame(
+            {
+                "regime_hurst": [float("nan")],
+                "regime_trend_str": [0.3],
+            }
+        )
         result = rd.detect_single(df)
         assert result == Regime.UNKNOWN
 
@@ -197,16 +221,19 @@ class TestRegimeDetector:
 # DriftDetector
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestDriftDetector:
     def test_init(self):
         from ml.robust_predictor import DriftDetector
+
         dd = DriftDetector(window_size=50, check_every=10, p_threshold=0.05)
         assert dd._window_size == 50
         assert dd._p_threshold == pytest.approx(0.05)
 
     def test_set_reference(self):
         from ml.robust_predictor import DriftDetector
+
         dd = DriftDetector()
         ref = np.random.default_rng(42).standard_normal(100)
         dd.set_reference(ref)
@@ -215,6 +242,7 @@ class TestDriftDetector:
 
     def test_update_returns_none_before_window_full(self):
         from ml.robust_predictor import DriftDetector
+
         dd = DriftDetector(window_size=50, check_every=10)
         ref = np.random.default_rng(42).standard_normal(100)
         dd.set_reference(ref)
@@ -224,6 +252,7 @@ class TestDriftDetector:
 
     def test_update_returns_drift_result_when_window_full(self):
         from ml.robust_predictor import DriftDetector, DriftResult
+
         rng = np.random.default_rng(42)
         dd = DriftDetector(window_size=50, check_every=10)
         ref = rng.standard_normal(100)
@@ -237,6 +266,7 @@ class TestDriftDetector:
 
     def test_drift_detected_on_shifted_distribution(self):
         from ml.robust_predictor import DriftDetector
+
         rng = np.random.default_rng(42)
         dd = DriftDetector(window_size=50, check_every=10, p_threshold=0.05)
         # Reference: N(0,1)
@@ -252,6 +282,7 @@ class TestDriftDetector:
 
     def test_no_drift_on_same_distribution(self):
         from ml.robust_predictor import DriftDetector
+
         rng = np.random.default_rng(42)
         dd = DriftDetector(window_size=50, check_every=10, p_threshold=0.05)
         ref = rng.standard_normal(200)
@@ -267,6 +298,7 @@ class TestDriftDetector:
 
     def test_drift_result_fields(self):
         from ml.robust_predictor import DriftDetector
+
         rng = np.random.default_rng(42)
         dd = DriftDetector(window_size=50, check_every=10)
         dd.set_reference(rng.standard_normal(100))
@@ -287,10 +319,12 @@ class TestDriftDetector:
 # RobustPredictor
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestRobustPredictor:
     def test_init_defaults(self):
         from ml.robust_predictor import ModelConfig, RobustPredictor
+
         rp = RobustPredictor()
         assert isinstance(rp.config, ModelConfig)
         assert rp.models == {}
@@ -298,18 +332,21 @@ class TestRobustPredictor:
 
     def test_init_custom_config(self):
         from ml.robust_predictor import ModelConfig, RobustPredictor
+
         cfg = ModelConfig(max_depth=3)
         rp = RobustPredictor(config=cfg)
         assert rp.config.max_depth == 3
 
     def test_should_retrain_insufficient_data(self):
         from ml.robust_predictor import RobustPredictor
+
         rp = RobustPredictor()
         # With no performance history, should not retrain
         assert rp.should_retrain([]) is False
 
     def test_should_retrain_poor_performance(self):
         from ml.robust_predictor import RobustPredictor
+
         rp = RobustPredictor()
         # Consistently poor accuracy should trigger retrain
         poor_perf = [0.45] * 20
@@ -318,11 +355,13 @@ class TestRobustPredictor:
 
     def test_regime_detector_attached(self):
         from ml.robust_predictor import RegimeDetector, RobustPredictor
+
         rp = RobustPredictor()
         assert isinstance(rp.regime_detector, RegimeDetector)
 
     def test_predict_raises_when_not_fitted(self, ohlcv_df):
         from ml.robust_predictor import RobustPredictor
+
         rp = RobustPredictor()
         with pytest.raises(ValueError, match="not trained"):
             rp.predict(ohlcv_df)

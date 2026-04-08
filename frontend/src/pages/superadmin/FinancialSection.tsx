@@ -722,4 +722,3 @@ const FinancialSection: React.FC = () => {
 };
 
 export default FinancialSection;
-

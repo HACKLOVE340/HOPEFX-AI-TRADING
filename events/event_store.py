@@ -15,6 +15,7 @@ from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum
 from typing import Any

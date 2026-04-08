@@ -70,10 +70,7 @@ def analyze_query_performance(query_name: str) -> None:
     _assert_dev_only()
 
     if query_name not in _ALLOWED_QUERIES:
-        raise ValueError(
-            f"Unknown query {query_name!r}. "
-            f"Allowed: {sorted(_ALLOWED_QUERIES)}"
-        )
+        raise ValueError(f"Unknown query {query_name!r}. Allowed: {sorted(_ALLOWED_QUERIES)}")
 
     query = _ALLOWED_QUERIES[query_name]
 

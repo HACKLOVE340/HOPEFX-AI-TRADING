@@ -70,21 +70,22 @@ class RedisCacheManager:
         # non-default host/port, otherwise fall back to a dedicated pool so
         # that explicit host/port configs still work (e.g. multi-Redis setups).
         import os
+
         default_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
         uses_defaults = (
-            host == "localhost"
-            and port == self._DEFAULT_REDIS_PORT
-            and db == 0
-            and "localhost:6379" in default_url
+            host == "localhost" and port == self._DEFAULT_REDIS_PORT and db == 0 and "localhost:6379" in default_url
         )
         if uses_defaults:
             try:
                 from cache.redis_pool import get_sync_client
+
                 self.client = get_sync_client()
             except Exception:
                 # Fallback: create a direct client if pool import fails
                 self.client = redis.Redis(
-                    host=host, port=port, db=db,
+                    host=host,
+                    port=port,
+                    db=db,
                     decode_responses=False,
                     socket_connect_timeout=5,
                     socket_timeout=5,

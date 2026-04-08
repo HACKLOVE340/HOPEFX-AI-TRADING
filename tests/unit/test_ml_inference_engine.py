@@ -23,6 +23,7 @@ import pytest
 # Shared OHLCV fixture (200 bars — above _MIN_BARS=100)
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def ohlcv_200():
     rng = np.random.default_rng(42)
@@ -66,10 +67,12 @@ def ohlcv_50():
 # InferenceEngine — init
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestInferenceEngineInit:
     def test_init_state(self):
         from ml.inference_engine import InferenceEngine
+
         engine = InferenceEngine()
         assert engine._predictor is None
         assert engine._predict_count == 0
@@ -78,11 +81,13 @@ class TestInferenceEngineInit:
 
     def test_init_drift_buffer_empty(self):
         from ml.inference_engine import InferenceEngine
+
         engine = InferenceEngine()
         assert len(engine._drift_buffer) == 0
 
     def test_init_signal_window_empty(self):
         from ml.inference_engine import InferenceEngine
+
         engine = InferenceEngine()
         assert len(engine._signal_window) == 0
 
@@ -91,24 +96,36 @@ class TestInferenceEngineInit:
 # InferenceEngine — predict (no model loaded → neutral fallback)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestInferenceEnginePredict:
     def test_predict_returns_dict(self, ohlcv_200):
         from ml.inference_engine import InferenceEngine
+
         engine = InferenceEngine()
         result = engine.predict(ohlcv_200)
         assert isinstance(result, dict)
 
     def test_predict_required_keys(self, ohlcv_200):
         from ml.inference_engine import InferenceEngine
+
         engine = InferenceEngine()
         result = engine.predict(ohlcv_200)
-        for key in ("direction", "probability", "confidence", "model_version",
-                    "bars_used", "last_close", "latency_ms", "fallback"):
+        for key in (
+            "direction",
+            "probability",
+            "confidence",
+            "model_version",
+            "bars_used",
+            "last_close",
+            "latency_ms",
+            "fallback",
+        ):
             assert key in result, f"Missing key: {key}"
 
     def test_predict_neutral_when_no_model(self, ohlcv_200):
         from ml.inference_engine import InferenceEngine
+
         engine = InferenceEngine()
         result = engine.predict(ohlcv_200)
         assert result["direction"] == "neutral"
@@ -116,24 +133,28 @@ class TestInferenceEnginePredict:
 
     def test_predict_direction_valid_value(self, ohlcv_200):
         from ml.inference_engine import InferenceEngine
+
         engine = InferenceEngine()
         result = engine.predict(ohlcv_200)
         assert result["direction"] in ("long", "short", "neutral")
 
     def test_predict_probability_in_range(self, ohlcv_200):
         from ml.inference_engine import InferenceEngine
+
         engine = InferenceEngine()
         result = engine.predict(ohlcv_200)
         assert 0.0 <= result["probability"] <= 1.0
 
     def test_predict_latency_ms_positive(self, ohlcv_200):
         from ml.inference_engine import InferenceEngine
+
         engine = InferenceEngine()
         result = engine.predict(ohlcv_200)
         assert result["latency_ms"] >= 0.0
 
     def test_predict_increments_count(self, ohlcv_200):
         from ml.inference_engine import InferenceEngine
+
         engine = InferenceEngine()
         engine.predict(ohlcv_200)
         engine.predict(ohlcv_200)
@@ -141,6 +162,7 @@ class TestInferenceEnginePredict:
 
     def test_predict_insufficient_bars_returns_neutral(self, ohlcv_50):
         from ml.inference_engine import InferenceEngine
+
         engine = InferenceEngine()
         result = engine.predict(ohlcv_50)
         assert result["direction"] == "neutral"
@@ -148,12 +170,14 @@ class TestInferenceEnginePredict:
 
     def test_predict_last_close_matches_data(self, ohlcv_200):
         from ml.inference_engine import InferenceEngine
+
         engine = InferenceEngine()
         result = engine.predict(ohlcv_200)
         assert result["last_close"] == pytest.approx(float(ohlcv_200["close"].iloc[-1]))
 
     def test_predict_bars_used(self, ohlcv_200):
         from ml.inference_engine import InferenceEngine
+
         engine = InferenceEngine()
         result = engine.predict(ohlcv_200)
         # bars_used may differ if resampling occurred, but should be > 0
@@ -161,6 +185,7 @@ class TestInferenceEnginePredict:
 
     def test_predict_with_custom_symbol(self, ohlcv_200):
         from ml.inference_engine import InferenceEngine
+
         engine = InferenceEngine()
         result = engine.predict(ohlcv_200, symbol="EUR_USD")
         assert isinstance(result, dict)
@@ -170,6 +195,7 @@ class TestInferenceEnginePredict:
 # _check_model_staleness
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestCheckModelStaleness:
     def test_disabled_when_max_age_zero(self, monkeypatch):
@@ -177,6 +203,7 @@ class TestCheckModelStaleness:
         # Re-import to pick up env var
         import importlib
         import ml.inference_engine as ie
+
         importlib.reload(ie)
         engine = ie.InferenceEngine()
         result = engine._check_model_staleness()
@@ -187,6 +214,7 @@ class TestCheckModelStaleness:
     def test_returns_false_when_no_model_file(self, monkeypatch, tmp_path):
         monkeypatch.setenv("MODEL_MAX_AGE_DAYS", "30")
         from ml.inference_engine import InferenceEngine
+
         engine = InferenceEngine()
         # Point to a non-existent path
         engine._active_model_path = tmp_path / "nonexistent.pkl"
@@ -196,6 +224,7 @@ class TestCheckModelStaleness:
     def test_detects_stale_model(self, tmp_path):
         from ml.inference_engine import InferenceEngine
         import ml.inference_engine as ie
+
         engine = InferenceEngine()
         # Create a file with old mtime (40 days ago)
         old_file = tmp_path / "old_model.pkl"
@@ -217,6 +246,7 @@ class TestCheckModelStaleness:
     def test_fresh_model_not_stale(self, tmp_path):
         from ml.inference_engine import InferenceEngine
         import ml.inference_engine as ie
+
         engine = InferenceEngine()
         fresh_file = tmp_path / "fresh_model.pkl"
         fresh_file.write_bytes(b"fake model")
@@ -235,10 +265,12 @@ class TestCheckModelStaleness:
 # _check_feature_drift
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestCheckFeatureDrift:
     def test_returns_false_when_no_train_stats(self, ohlcv_200):
         from ml.inference_engine import InferenceEngine
+
         engine = InferenceEngine()
         # No feature_stats.json → drift guard disabled
         X_row = pd.DataFrame({"f1": [0.5], "f2": [1.0]})
@@ -247,6 +279,7 @@ class TestCheckFeatureDrift:
 
     def test_returns_false_when_buffer_not_full(self, ohlcv_200, tmp_path):
         from ml.inference_engine import InferenceEngine
+
         engine = InferenceEngine()
         # Inject fake train stats
         stats = {"f1": {"mean": 0.5, "std": 0.1}, "f2": {"mean": 1.0, "std": 0.2}}
@@ -258,6 +291,7 @@ class TestCheckFeatureDrift:
 
     def test_appends_to_drift_buffer(self, ohlcv_200):
         from ml.inference_engine import InferenceEngine
+
         engine = InferenceEngine()
         engine._train_stats = {"f1": {"mean": 0.5, "std": 0.1}}
         X_row = pd.DataFrame({"f1": [0.5]})
@@ -269,15 +303,18 @@ class TestCheckFeatureDrift:
 # get_inference_engine singleton
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestGetInferenceEngine:
     def test_returns_inference_engine_instance(self):
         from ml.inference_engine import InferenceEngine, get_inference_engine
+
         engine = get_inference_engine()
         assert isinstance(engine, InferenceEngine)
 
     def test_returns_same_instance(self):
         from ml.inference_engine import get_inference_engine
+
         e1 = get_inference_engine()
         e2 = get_inference_engine()
         assert e1 is e2
@@ -287,6 +324,7 @@ class TestGetInferenceEngine:
 # Signal threshold env vars
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestSignalThresholds:
     def test_custom_thresholds_applied(self, monkeypatch, ohlcv_200):
@@ -295,6 +333,7 @@ class TestSignalThresholds:
         monkeypatch.setenv("SIGNAL_THRESHOLD_SHORT", "0.30")
         import importlib
         import ml.inference_engine as ie
+
         importlib.reload(ie)
         assert pytest.approx(0.70) == ie._THRESHOLD_LONG
         assert pytest.approx(0.30) == ie._THRESHOLD_SHORT
@@ -304,6 +343,7 @@ class TestSignalThresholds:
         monkeypatch.delenv("SIGNAL_THRESHOLD_SHORT", raising=False)
         import importlib
         import ml.inference_engine as ie
+
         importlib.reload(ie)
         assert pytest.approx(0.58) == ie._THRESHOLD_LONG
         assert pytest.approx(0.42) == ie._THRESHOLD_SHORT

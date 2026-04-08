@@ -53,17 +53,19 @@ from nuclear.itos_cone_engine import ItosCone, ItosConeEngine
 from nuclear.redis_stream_reader import OHLCVBar, TickSnapshot
 from nuclear.regime_classifier import RegimeClassifier, RegimeResult
 from nuclear.strategy_engine import (
-    FLAT, LONG, NuclearStrategyEngine,
+    FLAT,
+    LONG,
+    NuclearStrategyEngine,
 )
 
 UTC = timezone.utc
 logger = logging.getLogger(__name__)
 
 # ── Slippage model parameters ─────────────────────────────────────────────────
-_HALF_SPREAD_BPS = 3.0    # 0.3 pip half-spread
-_IMPACT_BPS = 1.5         # market impact
-_NOISE_BPS = 0.5          # random noise
-_COMMISSION_PER_LOT = 7.0 # USD per lot round-trip
+_HALF_SPREAD_BPS = 3.0  # 0.3 pip half-spread
+_IMPACT_BPS = 1.5  # market impact
+_NOISE_BPS = 0.5  # random noise
+_COMMISSION_PER_LOT = 7.0  # USD per lot round-trip
 
 # Minimum bars per timeframe for a valid backtest window
 _MIN_BARS_PER_TF = 5
@@ -82,9 +84,9 @@ class ShadowTrade:
     take_profit: float
     entry_time: datetime
     exit_time: datetime
-    exit_reason: str          # "tp1" / "sl" / "timeout" / "signal_flip"
-    pnl_pips: float           # price units
-    pnl_pct: float            # % of entry price
+    exit_reason: str  # "tp1" / "sl" / "timeout" / "signal_flip"
+    pnl_pips: float  # price units
+    pnl_pct: float  # % of entry price
     confidence: float
     regime: str
     timeframe: str
@@ -134,8 +136,8 @@ class BacktestResult:
     avg_loss_pct: float
     best_trade_pct: float
     worst_trade_pct: float
-    avg_rr: float                    # average realised risk/reward
-    cone_aligned_win_rate: float     # win rate for cone-aligned trades only
+    avg_rr: float  # average realised risk/reward
+    cone_aligned_win_rate: float  # win rate for cone-aligned trades only
     trades: list[ShadowTrade] = field(default_factory=list)
     equity_curve: list[float] = field(default_factory=list)
     timeframes_tested: list[str] = field(default_factory=list)
@@ -193,6 +195,7 @@ class BacktestResult:
 
 
 # ── ShadowBacktestEngine ──────────────────────────────────────────────────────
+
 
 class ShadowBacktestEngine:
     """
@@ -304,8 +307,11 @@ class ShadowBacktestEngine:
 
         logger.info(
             "ShadowBacktest %s: %d trades WR=%.1f%% Sharpe=%.2f MDD=%.2f%% conf=%.2f",
-            symbol, result.total_trades, result.win_rate * 100,
-            result.sharpe_ratio, result.max_drawdown_pct * 100,
+            symbol,
+            result.total_trades,
+            result.win_rate * 100,
+            result.sharpe_ratio,
+            result.max_drawdown_pct * 100,
             result.confidence_score,
         )
         return result
@@ -385,28 +391,28 @@ class ShadowBacktestEngine:
                 exit_reason = "timeout"
                 exit_time = tick.timestamp
 
-            pnl_pips, pnl_pct = self._compute_pnl(
-                fill_price, exit_price, signal.direction
-            )
+            pnl_pips, pnl_pct = self._compute_pnl(fill_price, exit_price, signal.direction)
 
-            trades.append(ShadowTrade(
-                trade_id=trade_id,
-                direction=signal.direction,
-                strategy=signal.strategy,
-                entry_price=fill_price,
-                exit_price=exit_price,
-                stop_loss=signal.stop_loss,
-                take_profit=signal.take_profit_1,
-                entry_time=tick.timestamp,
-                exit_time=exit_time,
-                exit_reason=exit_reason,
-                pnl_pips=pnl_pips,
-                pnl_pct=pnl_pct,
-                confidence=signal.confidence,
-                regime=signal.regime,
-                timeframe=signal.timeframe,
-                cone_aligned=signal.cone_aligned,
-            ))
+            trades.append(
+                ShadowTrade(
+                    trade_id=trade_id,
+                    direction=signal.direction,
+                    strategy=signal.strategy,
+                    entry_price=fill_price,
+                    exit_price=exit_price,
+                    stop_loss=signal.stop_loss,
+                    take_profit=signal.take_profit_1,
+                    entry_time=tick.timestamp,
+                    exit_time=exit_time,
+                    exit_reason=exit_reason,
+                    pnl_pips=pnl_pips,
+                    pnl_pct=pnl_pct,
+                    confidence=signal.confidence,
+                    regime=signal.regime,
+                    timeframe=signal.timeframe,
+                    cone_aligned=signal.cone_aligned,
+                )
+            )
             trade_id += 1
 
         return trades, trade_id
@@ -432,10 +438,10 @@ class ShadowBacktestEngine:
                 continue
 
             # Walk through last n_bars bars
-            walk_bars = bars[-(n_bars + 1):]
+            walk_bars = bars[-(n_bars + 1) :]
 
             for i in range(len(walk_bars) - 1):
-                history = bars[:-(n_bars - i)] if (n_bars - i) > 0 else bars
+                history = bars[: -(n_bars - i)] if (n_bars - i) > 0 else bars
                 if len(history) < 2:
                     continue
 
@@ -452,9 +458,9 @@ class ShadowBacktestEngine:
                 # Compute cone from this TF's history
                 try:
                     closes = np.array([b.close for b in history if b.close > 0])
-                    tf_cone = self._cone_engine.compute(
-                        closes, symbol=symbol, timeframe=tf
-                    ) if len(closes) >= 10 else cone
+                    tf_cone = (
+                        self._cone_engine.compute(closes, symbol=symbol, timeframe=tf) if len(closes) >= 10 else cone
+                    )
                     tf_cone_merged = cone_merged
                 except Exception as _exc:  # non-fatal: fall back to parent cone
                     logger.debug("Cone computation failed at bar %d/%s for %s: %s", i, tf, symbol, _exc)
@@ -498,28 +504,28 @@ class ShadowBacktestEngine:
                     bar_close=next_bar.close,
                 )
 
-                pnl_pips, pnl_pct = self._compute_pnl(
-                    fill_price, exit_price, signal.direction
-                )
+                pnl_pips, pnl_pct = self._compute_pnl(fill_price, exit_price, signal.direction)
 
-                trades.append(ShadowTrade(
-                    trade_id=trade_id,
-                    direction=signal.direction,
-                    strategy=signal.strategy,
-                    entry_price=fill_price,
-                    exit_price=exit_price,
-                    stop_loss=signal.stop_loss,
-                    take_profit=signal.take_profit_1,
-                    entry_time=next_bar.open_time,
-                    exit_time=next_bar.close_time or next_bar.open_time,
-                    exit_reason=exit_reason,
-                    pnl_pips=pnl_pips,
-                    pnl_pct=pnl_pct,
-                    confidence=signal.confidence,
-                    regime=signal.regime,
-                    timeframe=tf,
-                    cone_aligned=signal.cone_aligned,
-                ))
+                trades.append(
+                    ShadowTrade(
+                        trade_id=trade_id,
+                        direction=signal.direction,
+                        strategy=signal.strategy,
+                        entry_price=fill_price,
+                        exit_price=exit_price,
+                        stop_loss=signal.stop_loss,
+                        take_profit=signal.take_profit_1,
+                        entry_time=next_bar.open_time,
+                        exit_time=next_bar.close_time or next_bar.open_time,
+                        exit_reason=exit_reason,
+                        pnl_pips=pnl_pips,
+                        pnl_pct=pnl_pct,
+                        confidence=signal.confidence,
+                        regime=signal.regime,
+                        timeframe=tf,
+                        cone_aligned=signal.cone_aligned,
+                    )
+                )
                 trade_id += 1
 
         return trades, trade_id
@@ -647,16 +653,14 @@ class ShadowBacktestEngine:
 
         # Cone-aligned win rate
         aligned = [t for t in trades if t.cone_aligned]
-        cone_wr = (
-            sum(1 for t in aligned if t.is_winner) / len(aligned)
-            if aligned else 0.0
-        )
+        cone_wr = sum(1 for t in aligned if t.is_winner) / len(aligned) if aligned else 0.0
 
         # Average realised RR
-        avg_rr = float(np.mean([
-            abs(t.pnl_pct) / abs(t.entry_price - t.stop_loss + 1e-9) * t.entry_price
-            for t in trades
-        ])) if trades else 0.0
+        avg_rr = (
+            float(np.mean([abs(t.pnl_pct) / abs(t.entry_price - t.stop_loss + 1e-9) * t.entry_price for t in trades]))
+            if trades
+            else 0.0
+        )
 
         # Regime and strategy breakdowns
         regime_breakdown: dict[str, int] = {}

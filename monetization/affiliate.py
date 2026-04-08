@@ -19,12 +19,16 @@ import secrets
 import string
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+
 try:
     from enum import StrEnum
 except ImportError:
     from enum import Enum
+
     class StrEnum(str, Enum):  # Python 3.10 compat
         pass
+
+
 UTC = timezone.utc
 from decimal import Decimal
 from typing import Any

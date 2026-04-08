@@ -306,8 +306,10 @@ class TestModifyOrder:
         e.orders[order.id] = order
         e.pending_orders.add(order.id)
         # Patch both cancel and submit to avoid real async delays
-        with patch.object(e, "cancel_order", new=AsyncMock(return_value=True)), \
-             patch.object(e, "submit_order", new=AsyncMock(return_value="new_order_id")):
+        with (
+            patch.object(e, "cancel_order", new=AsyncMock(return_value=True)),
+            patch.object(e, "submit_order", new=AsyncMock(return_value="new_order_id")),
+        ):
             result = await e.modify_order(order.id, new_price=1.09)
         assert result is True
         await _cleanup(e)
@@ -401,8 +403,9 @@ class TestApplyFill:
         e = _engine()
         order = _market_order(qty=1.0)
         e.orders[order.id] = order
-        fill = Fill(order_id=order.id, symbol="EUR/USD", quantity=1.0,
-                    price=1.08, timestamp=datetime.now(UTC), side="buy")
+        fill = Fill(
+            order_id=order.id, symbol="EUR/USD", quantity=1.0, price=1.08, timestamp=datetime.now(UTC), side="buy"
+        )
         await e._apply_fill(order, fill)
         assert order.status == OrderStatus.FILLED
         assert order.filled_qty == 1.0
@@ -412,8 +415,9 @@ class TestApplyFill:
         e = _engine()
         order = _market_order(qty=2.0)
         e.orders[order.id] = order
-        fill = Fill(order_id=order.id, symbol="EUR/USD", quantity=1.0,
-                    price=1.08, timestamp=datetime.now(UTC), side="buy")
+        fill = Fill(
+            order_id=order.id, symbol="EUR/USD", quantity=1.0, price=1.08, timestamp=datetime.now(UTC), side="buy"
+        )
         await e._apply_fill(order, fill)
         assert order.status == OrderStatus.PARTIAL_FILL
 
@@ -426,8 +430,9 @@ class TestApplyFill:
         e.on_order_update = order_cb
         order = _market_order(qty=1.0)
         e.orders[order.id] = order
-        fill = Fill(order_id=order.id, symbol="EUR/USD", quantity=1.0,
-                    price=1.08, timestamp=datetime.now(UTC), side="buy")
+        fill = Fill(
+            order_id=order.id, symbol="EUR/USD", quantity=1.0, price=1.08, timestamp=datetime.now(UTC), side="buy"
+        )
         await e._apply_fill(order, fill)
         fill_cb.assert_called_once_with(fill)
         order_cb.assert_called_once_with(order)
@@ -438,8 +443,9 @@ class TestApplyFill:
         e.on_fill = MagicMock(side_effect=RuntimeError("cb error"))
         order = _market_order(qty=1.0)
         e.orders[order.id] = order
-        fill = Fill(order_id=order.id, symbol="EUR/USD", quantity=1.0,
-                    price=1.08, timestamp=datetime.now(UTC), side="buy")
+        fill = Fill(
+            order_id=order.id, symbol="EUR/USD", quantity=1.0, price=1.08, timestamp=datetime.now(UTC), side="buy"
+        )
         await e._apply_fill(order, fill)  # must not raise
 
     @pytest.mark.asyncio
@@ -447,10 +453,12 @@ class TestApplyFill:
         e = _engine()
         order = _market_order(qty=2.0)
         e.orders[order.id] = order
-        f1 = Fill(order_id=order.id, symbol="EUR/USD", quantity=1.0,
-                  price=1.08, timestamp=datetime.now(UTC), side="buy")
-        f2 = Fill(order_id=order.id, symbol="EUR/USD", quantity=1.0,
-                  price=1.10, timestamp=datetime.now(UTC), side="buy")
+        f1 = Fill(
+            order_id=order.id, symbol="EUR/USD", quantity=1.0, price=1.08, timestamp=datetime.now(UTC), side="buy"
+        )
+        f2 = Fill(
+            order_id=order.id, symbol="EUR/USD", quantity=1.0, price=1.10, timestamp=datetime.now(UTC), side="buy"
+        )
         await e._apply_fill(order, f1)
         await e._apply_fill(order, f2)
         assert abs(order.avg_fill_price - 1.09) < 0.001
@@ -541,8 +549,14 @@ class TestFormatOrder:
 
     def test_format_stop_order(self):
         e = _engine()
-        order = Order(id=str(uuid.uuid4()), symbol="EUR/USD", side="sell",
-                      quantity=1.0, order_type=OrderType.STOP, stop_price=1.07)
+        order = Order(
+            id=str(uuid.uuid4()),
+            symbol="EUR/USD",
+            side="sell",
+            quantity=1.0,
+            order_type=OrderType.STOP,
+            stop_price=1.07,
+        )
         formatted = e._format_order(order, {})
         assert formatted["type"] == "STP"
 

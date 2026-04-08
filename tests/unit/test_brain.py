@@ -181,7 +181,12 @@ class TestRegimeDetection:
         highs = [c + 0.001 for c in closes]
         lows = [c - 0.001 for c in closes]
         regime = brain._detect_regime_numpy(closes, highs, lows)
-        assert regime in (MarketRegime.TRENDING_UP, MarketRegime.TRENDING_DOWN, MarketRegime.RANGING, MarketRegime.VOLATILE)
+        assert regime in (
+            MarketRegime.TRENDING_UP,
+            MarketRegime.TRENDING_DOWN,
+            MarketRegime.RANGING,
+            MarketRegime.VOLATILE,
+        )
 
     def test_detect_regime_python_fallback(self, brain):
         import numpy as np

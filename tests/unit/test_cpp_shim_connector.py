@@ -23,6 +23,7 @@ import pytest
 # Stub pyzmq before the module is loaded
 # ---------------------------------------------------------------------------
 
+
 def _make_zmq_stub():
     """Return a minimal pyzmq stub that records sent messages."""
     mod = types.ModuleType("zmq")
@@ -81,6 +82,7 @@ from brokers.base import AccountInfo, OrderSide, OrderStatus, OrderType
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_connector(**kwargs) -> CPPShimConnector:
     defaults = dict(
         cmd_addr="tcp://127.0.0.1:6555",
@@ -108,6 +110,7 @@ def _connected_connector(pong_extra: dict | None = None) -> CPPShimConnector:
 # from_env()
 # ---------------------------------------------------------------------------
 
+
 class TestFromEnv:
     def test_returns_instance(self):
         conn = CPPShimConnector.from_env()
@@ -117,6 +120,7 @@ class TestFromEnv:
 # ---------------------------------------------------------------------------
 # connect()
 # ---------------------------------------------------------------------------
+
 
 class TestConnect:
     def test_connect_succeeds_when_ping_ok(self):
@@ -162,6 +166,7 @@ class TestConnect:
 # disconnect()
 # ---------------------------------------------------------------------------
 
+
 class TestDisconnect:
     def test_disconnect_returns_true(self):
         conn = _connected_connector()
@@ -182,6 +187,7 @@ class TestDisconnect:
 # ---------------------------------------------------------------------------
 # place_order() — fill path
 # ---------------------------------------------------------------------------
+
 
 class TestPlaceOrderFill:
     def _setup(self, fill_response: dict) -> CPPShimConnector:
@@ -232,7 +238,7 @@ class TestPlaceOrderFill:
         conn.place_order("XAU_USD", OrderSide.BUY, OrderType.LIMIT, 3.0, price=2100.0)
         sent = json.loads(conn._cmd_sock._sent[-1].decode())
         assert sent["cmd"] == "ORDER"
-        assert sent["symbol"] == "XAUUSD"   # normalised
+        assert sent["symbol"] == "XAUUSD"  # normalised
         assert sent["side"] == "BUY"
         assert sent["type"] == "LIMIT"
         assert sent["qty"] == 3.0
@@ -247,6 +253,7 @@ class TestPlaceOrderFill:
 # We queue two identical responses to cover both retry attempts, or patch
 # _recv directly to return a fixed value on every call.
 # ---------------------------------------------------------------------------
+
 
 class TestPlaceOrderReject:
     def test_reject_response_raises(self):
@@ -295,15 +302,19 @@ class TestPlaceOrderReject:
 # Symbol normalisation
 # ---------------------------------------------------------------------------
 
+
 class TestNormaliseSymbol:
-    @pytest.mark.parametrize("symbol,expected", [
-        ("XAU_USD", "XAUUSD"),
-        ("XAU/USD", "XAUUSD"),
-        ("GOLD",    "XAUUSD"),
-        ("GC",      "XAUUSD"),
-        ("xauusd",  "XAUUSD"),
-        ("BTCUSD",  "BTCUSD"),  # unmapped → uppercased, slashes stripped
-    ])
+    @pytest.mark.parametrize(
+        "symbol,expected",
+        [
+            ("XAU_USD", "XAUUSD"),
+            ("XAU/USD", "XAUUSD"),
+            ("GOLD", "XAUUSD"),
+            ("GC", "XAUUSD"),
+            ("xauusd", "XAUUSD"),
+            ("BTCUSD", "BTCUSD"),  # unmapped → uppercased, slashes stripped
+        ],
+    )
     def test_symbol_map(self, symbol, expected):
         assert CPPShimConnector._normalise_symbol(symbol) == expected
 
@@ -311,6 +322,7 @@ class TestNormaliseSymbol:
 # ---------------------------------------------------------------------------
 # get_account_info()
 # ---------------------------------------------------------------------------
+
 
 class TestGetAccountInfo:
     def test_returns_account_info(self):
@@ -329,6 +341,7 @@ class TestGetAccountInfo:
 # get_market_data() / get_positions()
 # ---------------------------------------------------------------------------
 
+
 class TestPassthroughMethods:
     def test_get_market_data_returns_empty(self):
         conn = _connected_connector()
@@ -342,6 +355,7 @@ class TestPassthroughMethods:
 # ---------------------------------------------------------------------------
 # cancel_order() / close_position() / get_order()
 # ---------------------------------------------------------------------------
+
 
 class TestUnsupportedOperations:
     def test_cancel_order_returns_false(self):
@@ -360,6 +374,7 @@ class TestUnsupportedOperations:
 # ---------------------------------------------------------------------------
 # metrics()
 # ---------------------------------------------------------------------------
+
 
 class TestMetrics:
     def test_initial_metrics(self):
@@ -410,6 +425,7 @@ class TestMetrics:
 # ---------------------------------------------------------------------------
 # _send / _recv helpers
 # ---------------------------------------------------------------------------
+
 
 class TestZMQHelpers:
     def test_send_encodes_json(self):

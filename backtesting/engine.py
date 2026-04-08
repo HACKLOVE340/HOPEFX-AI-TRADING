@@ -12,6 +12,7 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from enum import Enum
 from pathlib import Path
@@ -22,7 +23,9 @@ import pandas as pd
 
 
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 class OrderType(Enum):
     MARKET = "market"

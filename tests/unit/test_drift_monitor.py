@@ -3,6 +3,7 @@ tests/unit/test_drift_monitor.py
 
 Tests for ml/drift_monitor.py — PSI + KS-test feature drift detection.
 """
+
 from __future__ import annotations
 
 import json
@@ -71,8 +72,14 @@ class TestKSPValue:
 class TestFeatureDrift:
     def _make(self, psi: float, ks_p: float) -> FeatureDrift:
         return FeatureDrift(
-            feature="f", psi=psi, ks_pvalue=ks_p, z_score=1.0,
-            train_mean=0.0, train_std=1.0, live_mean=0.1, live_std=0.9,
+            feature="f",
+            psi=psi,
+            ks_pvalue=ks_p,
+            z_score=1.0,
+            train_mean=0.0,
+            train_std=1.0,
+            live_mean=0.1,
+            live_std=0.9,
         )
 
     def test_psi_level_green(self):
@@ -103,10 +110,7 @@ def _make_stats(features: list[str]) -> dict:
     rng = np.random.default_rng(0)
     ref = rng.normal(0, 1, 1000)
     percentiles = np.percentile(ref, np.linspace(0, 100, 20)).tolist()
-    return {
-        f: {"mean": 0.0, "std": 1.0, "percentiles": percentiles}
-        for f in features
-    }
+    return {f: {"mean": 0.0, "std": 1.0, "percentiles": percentiles} for f in features}
 
 
 class TestDriftMonitorInit:

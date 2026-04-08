@@ -52,18 +52,22 @@ def _make_engine(live_mode_confirmed: bool = False, paper: bool = True):
 
     broker = MagicMock()
     broker.paper_trading = paper
-    broker.place_order = MagicMock(return_value=MagicMock(
-        id="ord1",
-        status=MagicMock(value="FILLED"),
-        filled_quantity=1.0,
-        average_price=2350.0,
-    ))
-    broker.get_account_info = MagicMock(return_value=MagicMock(
-        balance=100_000.0,
-        equity=100_000.0,
-        margin_used=5_000.0,
-        margin_available=95_000.0,
-    ))
+    broker.place_order = MagicMock(
+        return_value=MagicMock(
+            id="ord1",
+            status=MagicMock(value="FILLED"),
+            filled_quantity=1.0,
+            average_price=2350.0,
+        )
+    )
+    broker.get_account_info = MagicMock(
+        return_value=MagicMock(
+            balance=100_000.0,
+            equity=100_000.0,
+            margin_used=5_000.0,
+            margin_available=95_000.0,
+        )
+    )
 
     risk = MagicMock()
     risk._trading_halted = False
@@ -375,11 +379,13 @@ class TestMarginCheck:
         engine, broker, _ = _make_engine()
         # margin_available=95000, margin_used=5000 → buffer = 95000/(5000+notional)
         # Order notional: 2350 * 100 = 235000 → buffer = 95000/240000 = 0.396 < 2.0
-        broker.get_account_info = MagicMock(return_value=MagicMock(
-            equity=100_000.0,
-            margin_used=5_000.0,
-            margin_available=95_000.0,
-        ))
+        broker.get_account_info = MagicMock(
+            return_value=MagicMock(
+                equity=100_000.0,
+                margin_used=5_000.0,
+                margin_available=95_000.0,
+            )
+        )
         req = _make_request(price=2350.0, quantity=100.0)  # notional = 235000
 
         async def run():
@@ -393,11 +399,13 @@ class TestMarginCheck:
         engine, broker, _ = _make_engine()
         # margin_available=95000, margin_used=5000
         # Order notional: 2350 * 0.1 = 235 → buffer = 95000/(5000+235) = 18.1x > 2.0
-        broker.get_account_info = MagicMock(return_value=MagicMock(
-            equity=100_000.0,
-            margin_used=5_000.0,
-            margin_available=95_000.0,
-        ))
+        broker.get_account_info = MagicMock(
+            return_value=MagicMock(
+                equity=100_000.0,
+                margin_used=5_000.0,
+                margin_available=95_000.0,
+            )
+        )
         req = _make_request(price=2350.0, quantity=0.1)  # notional = 235
 
         async def run():
@@ -408,6 +416,7 @@ class TestMarginCheck:
 
     def test_skips_check_when_no_broker(self):
         from execution.engine import ExecutionEngine
+
         engine = ExecutionEngine.__new__(ExecutionEngine)
         engine._broker = None
         engine._total_blocks = 0
@@ -429,12 +438,14 @@ class TestLeverageHardCap:
         engine, broker, _ = _make_engine()
         # equity=100000, order_notional = 2350 * 1000 = 2350000
         # leverage = 2350000/100000 = 23.5 > 10.0
-        broker.get_account_info = MagicMock(return_value=MagicMock(
-            equity=100_000.0,
-            balance=100_000.0,
-            margin_used=0.0,
-            margin_available=100_000.0,
-        ))
+        broker.get_account_info = MagicMock(
+            return_value=MagicMock(
+                equity=100_000.0,
+                balance=100_000.0,
+                margin_used=0.0,
+                margin_available=100_000.0,
+            )
+        )
         req = _make_request(price=2350.0, quantity=1000.0)
 
         async def run():
@@ -448,12 +459,14 @@ class TestLeverageHardCap:
         engine, broker, _ = _make_engine()
         # equity=100000, order_notional = 2350 * 0.1 = 235
         # leverage = 235/100000 = 0.00235 < 10.0
-        broker.get_account_info = MagicMock(return_value=MagicMock(
-            equity=100_000.0,
-            balance=100_000.0,
-            margin_used=0.0,
-            margin_available=100_000.0,
-        ))
+        broker.get_account_info = MagicMock(
+            return_value=MagicMock(
+                equity=100_000.0,
+                balance=100_000.0,
+                margin_used=0.0,
+                margin_available=100_000.0,
+            )
+        )
         req = _make_request(price=2350.0, quantity=0.1)
 
         async def run():
@@ -498,8 +511,8 @@ class TestKillSwitchEscalation:
         cb.broker = broker
         cb.limits = MagicMock()
 
-        with patch.object(cb, "_broker_level_cancel_all") as mock_escalate, \
-             patch.object(cb, "_send_emergency_alert"):
+        with patch.object(cb, "_broker_level_cancel_all") as mock_escalate, patch.object(cb, "_send_emergency_alert"):
+
             async def run():
                 await cb._execute_kill_switch("test_reason")
 
@@ -636,10 +649,12 @@ class TestByBitConnector:
         """Custom symbol_map in config overrides default mapping."""
         from brokers.bybit_connector import ByBitConnector
 
-        conn = ByBitConnector({
-            "sandbox": True,
-            "symbol_map": {"XAUUSD": "XAUUSD_CUSTOM"},
-        })
+        conn = ByBitConnector(
+            {
+                "sandbox": True,
+                "symbol_map": {"XAUUSD": "XAUUSD_CUSTOM"},
+            }
+        )
         assert conn._to_bybit("XAUUSD") == "XAUUSD_CUSTOM"
 
     def test_registered_in_factory(self):
@@ -681,8 +696,10 @@ class TestCOMEXGoldFutures:
             exchange = ""
             currency = ""
 
-        with patch.object(ibkr_mod, "_IB_AVAILABLE", True), \
-             patch.object(ibkr_mod, "Contract", FakeContract, create=True):
+        with (
+            patch.object(ibkr_mod, "_IB_AVAILABLE", True),
+            patch.object(ibkr_mod, "Contract", FakeContract, create=True),
+        ):
             result = ibkr_mod._build_contract("GC", "FUT", "IDEALPRO", "USD")
             assert result.exchange == "NYMEX"
 
@@ -696,8 +713,10 @@ class TestCOMEXGoldFutures:
             exchange = ""
             currency = ""
 
-        with patch.object(ibkr_mod, "_IB_AVAILABLE", True), \
-             patch.object(ibkr_mod, "Contract", FakeContract, create=True):
+        with (
+            patch.object(ibkr_mod, "_IB_AVAILABLE", True),
+            patch.object(ibkr_mod, "Contract", FakeContract, create=True),
+        ):
             result = ibkr_mod._build_contract("GC", "FUT", "NYMEX", "USD")
             assert result.exchange == "NYMEX"
 
@@ -711,8 +730,10 @@ class TestCOMEXGoldFutures:
             exchange = ""
             currency = ""
 
-        with patch.object(ibkr_mod, "_IB_AVAILABLE", True), \
-             patch.object(ibkr_mod, "Contract", FakeContract, create=True):
+        with (
+            patch.object(ibkr_mod, "_IB_AVAILABLE", True),
+            patch.object(ibkr_mod, "Contract", FakeContract, create=True),
+        ):
             result = ibkr_mod._build_contract("GC", "CONTFUT", "NYMEX", "USD")
             assert result.symbol == "GC"
 
@@ -720,7 +741,10 @@ class TestCOMEXGoldFutures:
         """get_comex_gold_contract() raises RuntimeError when ib_insync missing."""
         from brokers import ibkr_broker as ibkr_mod
 
-        with patch.object(ibkr_mod, "_IB_AVAILABLE", False), pytest.raises(RuntimeError, match="ib_insync not installed"):
+        with (
+            patch.object(ibkr_mod, "_IB_AVAILABLE", False),
+            pytest.raises(RuntimeError, match="ib_insync not installed"),
+        ):
             ibkr_mod.get_comex_gold_contract()
 
 
@@ -807,11 +831,13 @@ class TestSpreadMonitor:
 
         mock_monitor = MagicMock()
         mock_monitor.is_spread_spiking = MagicMock(return_value=True)
-        mock_monitor.get_snapshot = MagicMock(return_value=MagicMock(
-            current_spread=2.0,
-            baseline_spread=0.5,
-            ratio=4.0,
-        ))
+        mock_monitor.get_snapshot = MagicMock(
+            return_value=MagicMock(
+                current_spread=2.0,
+                baseline_spread=0.5,
+                ratio=4.0,
+            )
+        )
 
         req = _make_request()
         # Patch the spread_monitor module's get_spread_monitor (imported inside the method)

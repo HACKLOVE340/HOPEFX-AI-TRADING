@@ -363,6 +363,7 @@ async def lifespan(_app: FastAPI):
     # rather than returning an empty list until the first 15-minute scheduler tick.
     try:
         from api.social_feed import refresh_leaderboard_cache as _refresh_lb
+
         _refresh_lb()
         logger.info("✓ Leaderboard cache warmed up")
     except Exception as _lb_err:
@@ -372,6 +373,7 @@ async def lifespan(_app: FastAPI):
     # on a fresh start before the signal engine has emitted its first signal.
     try:
         from api.db_store import db_get as _db_get, db_set as _db_set
+
         if _db_get("signals:active") is None:
             _db_set("signals:active", [], changed_by="startup")
             logger.info("✓ signals:active key seeded in db_store")

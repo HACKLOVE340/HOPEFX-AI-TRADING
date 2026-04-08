@@ -451,9 +451,7 @@ class LLMAgent:
 
             key = api_key or _OPENAI_API_KEY or ""
             if not key:
-                raise ValueError(
-                    "OpenAI API key required — set OPENAI_API_KEY env var or pass api_key= to LLMAgent()"
-                )
+                raise ValueError("OpenAI API key required — set OPENAI_API_KEY env var or pass api_key= to LLMAgent()")
             self._anthropic_key = None
             self._openai_client = _openai.AsyncOpenAI(api_key=key)
             self.model = model or _OPENAI_MODEL

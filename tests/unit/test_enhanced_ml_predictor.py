@@ -24,6 +24,7 @@ UTC = timezone.utc
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_ohlcv(n: int = 300, seed: int = 42) -> pd.DataFrame:
     """Minimal OHLCV DataFrame with DatetimeIndex."""
     rng = np.random.default_rng(seed)
@@ -48,15 +49,18 @@ def _make_ohlcv(n: int = 300, seed: int = 42) -> pd.DataFrame:
 # Imports (deferred so import errors surface as test failures, not collection)
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def predictor_module():
     import enhanced_ml_predictor as m
+
     return m
 
 
 # ---------------------------------------------------------------------------
 # PredictionTarget / ModelArchitecture enums
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestEnums:
@@ -77,12 +81,11 @@ class TestEnums:
 # ModelConfig dataclass
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestModelConfig:
     def test_defaults(self, predictor_module):
-        cfg = predictor_module.ModelConfig(
-            architecture=predictor_module.ModelArchitecture.LSTM
-        )
+        cfg = predictor_module.ModelConfig(architecture=predictor_module.ModelArchitecture.LSTM)
         assert cfg.sequence_length > 0
         assert isinstance(cfg.hidden_units, list)
         assert 0.0 < cfg.dropout_rate < 1.0
@@ -97,15 +100,14 @@ class TestModelConfig:
         assert cfg.dropout_rate == 0.2
 
     def test_architecture_stored(self, predictor_module):
-        cfg = predictor_module.ModelConfig(
-            architecture=predictor_module.ModelArchitecture.TRANSFORMER
-        )
+        cfg = predictor_module.ModelConfig(architecture=predictor_module.ModelArchitecture.TRANSFORMER)
         assert cfg.architecture == predictor_module.ModelArchitecture.TRANSFORMER
 
 
 # ---------------------------------------------------------------------------
 # Prediction dataclass
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestPrediction:
@@ -183,6 +185,7 @@ class TestPrediction:
 # ---------------------------------------------------------------------------
 # AdvancedFeatureEngineer
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestAdvancedFeatureEngineer:
@@ -266,6 +269,7 @@ class TestAdvancedFeatureEngineer:
 # generate_synthetic_data
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestGenerateSyntheticData:
     def test_raises_in_production(self, predictor_module, monkeypatch):
@@ -313,6 +317,7 @@ class TestGenerateSyntheticData:
 # EnsemblePredictor
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestEnsemblePredictor:
     def test_init(self, predictor_module):
@@ -337,6 +342,7 @@ class TestEnsemblePredictor:
 # ---------------------------------------------------------------------------
 # EnhancedMLPredictor
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestEnhancedMLPredictor:

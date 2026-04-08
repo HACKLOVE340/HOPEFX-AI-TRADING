@@ -107,10 +107,7 @@ def get_redis_pool() -> ConnectionPool:
     """
     global _sync_pool
     if not SYNC_REDIS_AVAILABLE:
-        raise RuntimeError(
-            "redis package not installed.  "
-            "Fix with: pip install 'redis[hiredis]>=4.2'"
-        )
+        raise RuntimeError("redis package not installed.  Fix with: pip install 'redis[hiredis]>=4.2'")
     if _sync_pool is not None:
         return _sync_pool
     with _lock:
@@ -165,10 +162,7 @@ async def get_async_client() -> aioredis.Redis:  # type: ignore[name-defined]
     """
     global _async_client
     if not ASYNC_REDIS_AVAILABLE:
-        raise RuntimeError(
-            "redis[asyncio] not installed.  "
-            "Fix with: pip install 'redis[hiredis]>=4.2'"
-        )
+        raise RuntimeError("redis[asyncio] not installed.  Fix with: pip install 'redis[hiredis]>=4.2'")
     if _async_client is not None:
         return _async_client
     async with _async_lock:

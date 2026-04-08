@@ -16,6 +16,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import logging
+
 logger = logging.getLogger(__name__)
 
 UTC = timezone.utc

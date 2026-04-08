@@ -9,12 +9,14 @@ Strategy listings, pricing engine, subscription management, license validation
 """
 
 import logging
+
 logger = logging.getLogger(__name__)
 import json
 import secrets
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from enum import Enum
 from pathlib import Path

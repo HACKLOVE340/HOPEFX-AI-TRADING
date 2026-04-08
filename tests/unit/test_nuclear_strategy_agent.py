@@ -43,13 +43,14 @@ UTC = timezone.utc
 # Shared helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_bars(
     n: int = 60,
     start_price: float = 2000.0,
     timeframe: str = "daily",
     symbol: str = "XAU_USD",
-    trend: float = 0.5,          # price drift per bar
-    volatility: float = 5.0,     # random noise amplitude
+    trend: float = 0.5,  # price drift per bar
+    volatility: float = 5.0,  # random noise amplitude
     seed: int = 42,
 ) -> list:
     """Return a list of OHLCVBar objects with realistic price movement."""
@@ -119,6 +120,7 @@ def _make_macro(
 ):
     """Return a MacroSnapshot."""
     from nuclear.redis_stream_reader import MacroSnapshot
+
     return MacroSnapshot(vix=vix, dxy=dxy, spx=spx, gld=gld, us10y=us10y)
 
 
@@ -200,6 +202,7 @@ class _InMemoryReader:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def daily_bars():
     return _make_bars(n=60, timeframe="daily", trend=1.0)
@@ -233,6 +236,7 @@ def reader(daily_bars, hourly_bars, ticks, macro):
 def agent(reader):
     """NuclearStrategyAgent wired to the in-memory reader."""
     from nuclear.nuclear_agent import NuclearStrategyAgent
+
     return NuclearStrategyAgent(symbol="XAU_USD", reader=reader, bootstrap=False)
 
 
@@ -240,14 +244,24 @@ def agent(reader):
 # AnalysisResult
 # ===========================================================================
 
+
 class TestAnalysisResult:
     def test_to_dict_keys(self, agent):
         result = agent.analyze()
         d = result.to_dict()
         required = {
-            "symbol", "has_signal", "is_approved", "signal",
-            "regime", "backtest", "cone_merged", "ticks_available",
-            "bars_available", "pipeline_ms", "error", "computed_at",
+            "symbol",
+            "has_signal",
+            "is_approved",
+            "signal",
+            "regime",
+            "backtest",
+            "cone_merged",
+            "ticks_available",
+            "bars_available",
+            "pipeline_ms",
+            "error",
+            "computed_at",
         }
         assert required.issubset(d.keys())
 
@@ -278,6 +292,7 @@ class TestAnalysisResult:
 
     def test_is_approved_false_when_no_signal(self):
         from nuclear.nuclear_agent import AnalysisResult
+
         r = AnalysisResult(
             symbol="XAU_USD",
             signal=None,
@@ -300,6 +315,7 @@ class TestAnalysisResult:
 # ===========================================================================
 # RedisStreamReader buffer accessors (in-memory reader)
 # ===========================================================================
+
 
 class TestInMemoryReader:
     def test_get_ticks_returns_correct_count(self, reader, ticks):
@@ -337,6 +353,7 @@ class TestInMemoryReader:
 
     def test_get_macro_returns_snapshot(self, reader):
         from nuclear.redis_stream_reader import MacroSnapshot
+
         m = reader.get_macro()
         assert isinstance(m, MacroSnapshot)
 
@@ -349,9 +366,11 @@ class TestInMemoryReader:
 # FeatureBuilder
 # ===========================================================================
 
+
 class TestFeatureBuilder:
     def test_build_all_returns_mtf(self, reader):
         from nuclear.feature_builder import FeatureBuilder, MultiTimeframeFeatures
+
         fb = FeatureBuilder(reader, symbol="XAU_USD")
         mtf = fb.build_all()
         assert isinstance(mtf, MultiTimeframeFeatures)
@@ -359,18 +378,21 @@ class TestFeatureBuilder:
 
     def test_build_all_has_daily_features(self, reader):
         from nuclear.feature_builder import FeatureBuilder
+
         fb = FeatureBuilder(reader, symbol="XAU_USD")
         mtf = fb.build_all()
         assert "daily" in mtf.timeframes
 
     def test_build_all_has_macro(self, reader):
         from nuclear.feature_builder import FeatureBuilder, MacroFeatures
+
         fb = FeatureBuilder(reader, symbol="XAU_USD")
         mtf = fb.build_all()
         assert isinstance(mtf.macro, MacroFeatures)
 
     def test_build_timeframe_single(self, daily_bars):
         from nuclear.feature_builder import FeatureBuilder, TechnicalFeatures
+
         reader = _InMemoryReader(bars_by_tf={"daily": daily_bars})
         fb = FeatureBuilder(reader, symbol="XAU_USD")
         feat = fb.build_timeframe(daily_bars, "daily")
@@ -380,6 +402,7 @@ class TestFeatureBuilder:
 
     def test_technical_features_rsi_in_range(self, daily_bars):
         from nuclear.feature_builder import FeatureBuilder
+
         reader = _InMemoryReader(bars_by_tf={"daily": daily_bars})
         fb = FeatureBuilder(reader, symbol="XAU_USD")
         feat = fb.build_timeframe(daily_bars, "daily")
@@ -387,6 +410,7 @@ class TestFeatureBuilder:
 
     def test_technical_features_atr_positive(self, daily_bars):
         from nuclear.feature_builder import FeatureBuilder
+
         reader = _InMemoryReader(bars_by_tf={"daily": daily_bars})
         fb = FeatureBuilder(reader, symbol="XAU_USD")
         feat = fb.build_timeframe(daily_bars, "daily")
@@ -394,6 +418,7 @@ class TestFeatureBuilder:
 
     def test_to_dict_has_required_keys(self, daily_bars):
         from nuclear.feature_builder import FeatureBuilder
+
         reader = _InMemoryReader(bars_by_tf={"daily": daily_bars})
         fb = FeatureBuilder(reader, symbol="XAU_USD")
         feat = fb.build_timeframe(daily_bars, "daily")
@@ -403,6 +428,7 @@ class TestFeatureBuilder:
 
     def test_empty_bars_skipped_gracefully(self):
         from nuclear.feature_builder import FeatureBuilder, MultiTimeframeFeatures
+
         reader = _InMemoryReader(bars_by_tf={"daily": []})
         fb = FeatureBuilder(reader, symbol="XAU_USD")
         mtf = fb.build_all()
@@ -412,6 +438,7 @@ class TestFeatureBuilder:
 
     def test_subset_timeframes(self, reader):
         from nuclear.feature_builder import FeatureBuilder
+
         fb = FeatureBuilder(reader, symbol="XAU_USD")
         mtf = fb.build_all(timeframes=["daily"])
         assert "daily" in mtf.timeframes
@@ -421,6 +448,7 @@ class TestFeatureBuilder:
 # ===========================================================================
 # ItosConeEngine
 # ===========================================================================
+
 
 class TestItosConeEngine:
     def _closes(self, n=60, seed=1):
@@ -434,12 +462,14 @@ class TestItosConeEngine:
 
     def test_compute_returns_itos_cone(self):
         from nuclear.itos_cone_engine import ItosCone, ItosConeEngine
+
         engine = ItosConeEngine()
         cone = engine.compute(self._closes(), symbol="XAU_USD", timeframe="daily")
         assert isinstance(cone, ItosCone)
 
     def test_cone_has_expected_horizons(self):
         from nuclear.itos_cone_engine import ItosConeEngine
+
         engine = ItosConeEngine()
         cone = engine.compute(self._closes(), symbol="XAU_USD", timeframe="daily")
         for horizon in ("1d", "1w", "1m", "3m", "6m", "1y"):
@@ -447,6 +477,7 @@ class TestItosConeEngine:
 
     def test_cone_upper_above_lower(self):
         from nuclear.itos_cone_engine import ItosConeEngine
+
         engine = ItosConeEngine()
         cone = engine.compute(self._closes(), symbol="XAU_USD", timeframe="daily")
         for label, dot in cone.dots.items():
@@ -454,6 +485,7 @@ class TestItosConeEngine:
 
     def test_cone_current_price_anchored(self):
         from nuclear.itos_cone_engine import ItosConeEngine
+
         engine = ItosConeEngine()
         closes = self._closes()
         cone = engine.compute(closes, current_price=2100.0, symbol="XAU_USD", timeframe="daily")
@@ -461,18 +493,21 @@ class TestItosConeEngine:
 
     def test_cone_bias_is_valid_string(self):
         from nuclear.itos_cone_engine import ItosConeEngine
+
         engine = ItosConeEngine()
         cone = engine.compute(self._closes(), symbol="XAU_USD", timeframe="daily")
         assert cone.bias in ("bullish", "bearish", "neutral")
 
     def test_cone_vol_regime_is_valid(self):
         from nuclear.itos_cone_engine import ItosConeEngine
+
         engine = ItosConeEngine()
         cone = engine.compute(self._closes(), symbol="XAU_USD", timeframe="daily")
         assert cone.vol_regime in ("high_vol", "normal_vol", "low_vol")
 
     def test_price_in_cone_current_price(self):
         from nuclear.itos_cone_engine import ItosConeEngine
+
         engine = ItosConeEngine()
         closes = self._closes()
         cone = engine.compute(closes, symbol="XAU_USD", timeframe="daily")
@@ -481,6 +516,7 @@ class TestItosConeEngine:
 
     def test_cone_direction_at_returns_valid(self):
         from nuclear.itos_cone_engine import ItosConeEngine
+
         engine = ItosConeEngine()
         cone = engine.compute(self._closes(), symbol="XAU_USD", timeframe="daily")
         direction = cone.cone_direction_at("1m")
@@ -488,15 +524,25 @@ class TestItosConeEngine:
 
     def test_to_dict_structure(self):
         from nuclear.itos_cone_engine import ItosConeEngine
+
         engine = ItosConeEngine()
         cone = engine.compute(self._closes(), symbol="XAU_USD", timeframe="daily")
         d = cone.to_dict()
-        for key in ("symbol", "current_price", "drift_annual", "volatility_annual",
-                    "bias", "vol_regime", "dots", "confidence"):
+        for key in (
+            "symbol",
+            "current_price",
+            "drift_annual",
+            "volatility_annual",
+            "bias",
+            "vol_regime",
+            "dots",
+            "confidence",
+        ):
             assert key in d
 
     def test_merge_cones_returns_dict(self):
         from nuclear.itos_cone_engine import ItosConeEngine
+
         engine = ItosConeEngine()
         closes = self._closes()
         cone_d = engine.compute(closes, symbol="XAU_USD", timeframe="daily")
@@ -507,11 +553,13 @@ class TestItosConeEngine:
 
     def test_merge_cones_empty_returns_empty(self):
         from nuclear.itos_cone_engine import ItosConeEngine
+
         engine = ItosConeEngine()
         assert engine.merge_cones({}) == {}
 
     def test_compute_from_ohlcv(self, daily_bars):
         from nuclear.itos_cone_engine import ItosCone, ItosConeEngine
+
         engine = ItosConeEngine()
         bar_dicts = [{"close": b.close} for b in daily_bars]
         cone = engine.compute_from_ohlcv(bar_dicts, symbol="XAU_USD", timeframe="daily")
@@ -523,14 +571,17 @@ class TestItosConeEngine:
 # RegimeClassifier
 # ===========================================================================
 
+
 class TestRegimeClassifier:
     def _make_mtf(self, reader):
         from nuclear.feature_builder import FeatureBuilder
+
         fb = FeatureBuilder(reader, symbol="XAU_USD")
         return fb.build_all()
 
     def test_classify_returns_regime_result(self, reader):
         from nuclear.regime_classifier import RegimeClassifier, RegimeResult
+
         clf = RegimeClassifier()
         mtf = self._make_mtf(reader)
         result = clf.classify(mtf, {})
@@ -538,6 +589,7 @@ class TestRegimeClassifier:
 
     def test_regime_is_known_value(self, reader):
         from nuclear.regime_classifier import ALL_REGIMES, RegimeClassifier
+
         clf = RegimeClassifier()
         mtf = self._make_mtf(reader)
         result = clf.classify(mtf, {})
@@ -545,6 +597,7 @@ class TestRegimeClassifier:
 
     def test_confidence_in_range(self, reader):
         from nuclear.regime_classifier import RegimeClassifier
+
         clf = RegimeClassifier()
         mtf = self._make_mtf(reader)
         result = clf.classify(mtf, {})
@@ -552,16 +605,25 @@ class TestRegimeClassifier:
 
     def test_to_dict_has_required_keys(self, reader):
         from nuclear.regime_classifier import RegimeClassifier
+
         clf = RegimeClassifier()
         mtf = self._make_mtf(reader)
         result = clf.classify(mtf, {})
         d = result.to_dict()
-        for key in ("regime", "confidence", "is_trending", "is_volatile",
-                    "is_ranging", "preferred_strategy", "computed_at"):
+        for key in (
+            "regime",
+            "confidence",
+            "is_trending",
+            "is_volatile",
+            "is_ranging",
+            "preferred_strategy",
+            "computed_at",
+        ):
             assert key in d
 
     def test_preferred_strategy_is_valid(self, reader):
         from nuclear.regime_classifier import RegimeClassifier
+
         clf = RegimeClassifier()
         mtf = self._make_mtf(reader)
         result = clf.classify(mtf, {})
@@ -569,6 +631,7 @@ class TestRegimeClassifier:
 
     def test_history_grows_with_calls(self, reader):
         from nuclear.regime_classifier import RegimeClassifier
+
         clf = RegimeClassifier()
         mtf = self._make_mtf(reader)
         clf.classify(mtf, {})
@@ -578,6 +641,7 @@ class TestRegimeClassifier:
 
     def test_history_capped_at_n(self, reader):
         from nuclear.regime_classifier import RegimeClassifier
+
         clf = RegimeClassifier()
         mtf = self._make_mtf(reader)
         for _ in range(10):
@@ -587,18 +651,21 @@ class TestRegimeClassifier:
 
     def test_trending_up_properties(self):
         from nuclear.regime_classifier import REGIME_TRENDING_UP, RegimeResult
+
         r = RegimeResult(regime=REGIME_TRENDING_UP, confidence=0.8)
         assert r.is_trending is True
         assert r.is_ranging is False
 
     def test_range_bound_properties(self):
         from nuclear.regime_classifier import REGIME_RANGE_BOUND, RegimeResult
+
         r = RegimeResult(regime=REGIME_RANGE_BOUND, confidence=0.7)
         assert r.is_ranging is True
         assert r.is_trending is False
 
     def test_crisis_preferred_strategy(self):
         from nuclear.regime_classifier import REGIME_CRISIS, RegimeResult
+
         r = RegimeResult(regime=REGIME_CRISIS, confidence=0.9)
         assert r.preferred_strategy == "smc_ict"
 
@@ -607,10 +674,12 @@ class TestRegimeClassifier:
 # NuclearStrategyEngine
 # ===========================================================================
 
+
 class TestNuclearStrategyEngine:
     def _make_mtf_and_regime(self, reader):
         from nuclear.feature_builder import FeatureBuilder
         from nuclear.regime_classifier import RegimeClassifier
+
         fb = FeatureBuilder(reader, symbol="XAU_USD")
         mtf = fb.build_all()
         clf = RegimeClassifier()
@@ -619,6 +688,7 @@ class TestNuclearStrategyEngine:
 
     def test_generate_returns_signal_or_none(self, reader):
         from nuclear.strategy_engine import NuclearStrategyEngine
+
         engine = NuclearStrategyEngine()
         mtf, regime = self._make_mtf_and_regime(reader)
         result = engine.generate(mtf=mtf, regime=regime)
@@ -627,6 +697,7 @@ class TestNuclearStrategyEngine:
 
     def test_signal_direction_valid(self, reader):
         from nuclear.strategy_engine import NuclearStrategyEngine
+
         engine = NuclearStrategyEngine()
         mtf, regime = self._make_mtf_and_regime(reader)
         result = engine.generate(mtf=mtf, regime=regime)
@@ -635,6 +706,7 @@ class TestNuclearStrategyEngine:
 
     def test_signal_is_valid_when_returned(self, reader):
         from nuclear.strategy_engine import NuclearStrategyEngine
+
         engine = NuclearStrategyEngine()
         mtf, regime = self._make_mtf_and_regime(reader)
         result = engine.generate(mtf=mtf, regime=regime)
@@ -643,11 +715,13 @@ class TestNuclearStrategyEngine:
 
     def test_signal_history_empty_initially(self):
         from nuclear.strategy_engine import NuclearStrategyEngine
+
         engine = NuclearStrategyEngine()
         assert engine.signal_history() == []
 
     def test_signal_history_grows(self, reader):
         from nuclear.strategy_engine import NuclearStrategyEngine
+
         engine = NuclearStrategyEngine()
         mtf, regime = self._make_mtf_and_regime(reader)
         # Run multiple times to increase chance of getting a signal
@@ -659,17 +733,27 @@ class TestNuclearStrategyEngine:
 
     def test_signal_to_dict_structure(self, reader):
         from nuclear.strategy_engine import NuclearStrategyEngine
+
         engine = NuclearStrategyEngine()
         mtf, regime = self._make_mtf_and_regime(reader)
         result = engine.generate(mtf=mtf, regime=regime)
         if result is not None:
             d = result.to_dict()
-            for key in ("direction", "strategy", "entry_price", "stop_loss",
-                        "take_profit_1", "confidence", "risk_reward", "is_valid"):
+            for key in (
+                "direction",
+                "strategy",
+                "entry_price",
+                "stop_loss",
+                "take_profit_1",
+                "confidence",
+                "risk_reward",
+                "is_valid",
+            ):
                 assert key in d
 
     def test_risk_reward_positive_when_valid(self, reader):
         from nuclear.strategy_engine import NuclearStrategyEngine
+
         engine = NuclearStrategyEngine()
         mtf, regime = self._make_mtf_and_regime(reader)
         result = engine.generate(mtf=mtf, regime=regime)
@@ -680,6 +764,7 @@ class TestNuclearStrategyEngine:
 # ===========================================================================
 # ShadowBacktestEngine
 # ===========================================================================
+
 
 class TestShadowBacktestEngine:
     def _pipeline_inputs(self, reader):
@@ -750,9 +835,17 @@ class TestShadowBacktestEngine:
             regime=regime,
         )
         d = result.to_dict()
-        for key in ("symbol", "total_trades", "win_rate", "sharpe_ratio",
-                    "max_drawdown_pct", "confidence_score", "equity_curve",
-                    "trades", "computed_at"):
+        for key in (
+            "symbol",
+            "total_trades",
+            "win_rate",
+            "sharpe_ratio",
+            "max_drawdown_pct",
+            "confidence_score",
+            "equity_curve",
+            "trades",
+            "computed_at",
+        ):
             assert key in d
 
     def test_winning_plus_losing_equals_total(self, reader, ticks, daily_bars):
@@ -811,9 +904,11 @@ class TestShadowBacktestEngine:
 # SignalComposer
 # ===========================================================================
 
+
 class TestSignalComposer:
     def _make_raw_signal(self, direction="long", confidence=0.75):
         from nuclear.strategy_engine import StrategySignal
+
         entry = 2000.0
         sl = 1980.0 if direction == "long" else 2020.0
         tp1 = 2040.0 if direction == "long" else 1960.0
@@ -837,6 +932,7 @@ class TestSignalComposer:
 
     def _make_backtest(self, total_trades=10, win_rate=0.65, sharpe=1.5):
         from nuclear.shadow_backtest import BacktestResult
+
         return BacktestResult(
             symbol="XAU_USD",
             total_trades=total_trades,
@@ -858,15 +954,18 @@ class TestSignalComposer:
 
     def _make_regime(self, regime_name="trending_up", confidence=0.75):
         from nuclear.regime_classifier import RegimeResult
+
         return RegimeResult(regime=regime_name, confidence=confidence)
 
     def _make_mtf(self, reader):
         from nuclear.feature_builder import FeatureBuilder
+
         fb = FeatureBuilder(reader, symbol="XAU_USD")
         return fb.build_all()
 
     def test_compose_returns_nuclear_signal(self, reader):
         from nuclear.signal_composer import NuclearSignal, SignalComposer
+
         composer = SignalComposer()
         signal = composer.compose(
             raw_signal=self._make_raw_signal(),
@@ -879,6 +978,7 @@ class TestSignalComposer:
 
     def test_approved_signal_high_confidence(self, reader):
         from nuclear.signal_composer import SignalComposer
+
         composer = SignalComposer()
         signal = composer.compose(
             raw_signal=self._make_raw_signal(confidence=0.85),
@@ -892,6 +992,7 @@ class TestSignalComposer:
 
     def test_rejected_signal_low_confidence(self, reader):
         from nuclear.signal_composer import SignalComposer
+
         composer = SignalComposer()
         signal = composer.compose(
             raw_signal=self._make_raw_signal(confidence=0.10),
@@ -904,6 +1005,7 @@ class TestSignalComposer:
 
     def test_signal_id_format(self, reader):
         from nuclear.signal_composer import SignalComposer
+
         composer = SignalComposer()
         signal = composer.compose(
             raw_signal=self._make_raw_signal(),
@@ -916,6 +1018,7 @@ class TestSignalComposer:
 
     def test_to_dict_has_required_keys(self, reader):
         from nuclear.signal_composer import SignalComposer
+
         composer = SignalComposer()
         signal = composer.compose(
             raw_signal=self._make_raw_signal(),
@@ -925,13 +1028,25 @@ class TestSignalComposer:
             mtf=self._make_mtf(reader),
         )
         d = signal.to_dict()
-        for key in ("signal_id", "symbol", "direction", "strategy", "regime",
-                    "confidence", "approval_status", "entry_rules", "exit_rules",
-                    "risk_params", "explanation", "generated_at"):
+        for key in (
+            "signal_id",
+            "symbol",
+            "direction",
+            "strategy",
+            "regime",
+            "confidence",
+            "approval_status",
+            "entry_rules",
+            "exit_rules",
+            "risk_params",
+            "explanation",
+            "generated_at",
+        ):
             assert key in d
 
     def test_confidence_in_range(self, reader):
         from nuclear.signal_composer import SignalComposer
+
         composer = SignalComposer()
         signal = composer.compose(
             raw_signal=self._make_raw_signal(),
@@ -944,6 +1059,7 @@ class TestSignalComposer:
 
     def test_direction_preserved(self, reader):
         from nuclear.signal_composer import SignalComposer
+
         composer = SignalComposer()
         for direction in ("long", "short"):
             signal = composer.compose(
@@ -957,6 +1073,7 @@ class TestSignalComposer:
 
     def test_explanation_non_empty(self, reader):
         from nuclear.signal_composer import SignalComposer
+
         composer = SignalComposer()
         signal = composer.compose(
             raw_signal=self._make_raw_signal(),
@@ -971,6 +1088,7 @@ class TestSignalComposer:
         """Signal with RR < 1.5 must be REJECTED regardless of confidence."""
         from nuclear.signal_composer import SignalComposer
         from nuclear.strategy_engine import StrategySignal
+
         composer = SignalComposer()
         # entry=2000, sl=1999, tp1=2001 → RR ≈ 1.0 (below 1.5 minimum)
         bad_rr_signal = StrategySignal(
@@ -1001,9 +1119,11 @@ class TestSignalComposer:
 # NuclearStrategyAgent — core
 # ===========================================================================
 
+
 class TestNuclearStrategyAgent:
     def test_analyze_returns_analysis_result(self, agent):
         from nuclear.nuclear_agent import AnalysisResult
+
         result = agent.analyze()
         assert isinstance(result, AnalysisResult)
 
@@ -1015,9 +1135,18 @@ class TestNuclearStrategyAgent:
     def test_status_structure(self, agent):
         agent.analyze()
         s = agent.status()
-        for key in ("symbol", "running", "analysis_count", "approved_count",
-                    "error_count", "approval_rate", "reader",
-                    "last_regime", "last_pipeline_ms", "signal_history_count"):
+        for key in (
+            "symbol",
+            "running",
+            "analysis_count",
+            "approved_count",
+            "error_count",
+            "approval_rate",
+            "reader",
+            "last_regime",
+            "last_pipeline_ms",
+            "signal_history_count",
+        ):
             assert key in s, f"Missing key: {key}"
 
     def test_status_symbol_correct(self, agent):
@@ -1025,6 +1154,7 @@ class TestNuclearStrategyAgent:
 
     def test_get_last_result_none_before_analyze(self, reader):
         from nuclear.nuclear_agent import NuclearStrategyAgent
+
         fresh = NuclearStrategyAgent(symbol="XAU_USD", reader=reader, bootstrap=False)
         assert fresh.get_last_result() is None
 
@@ -1034,6 +1164,7 @@ class TestNuclearStrategyAgent:
 
     def test_approval_rate_zero_before_analyze(self, reader):
         from nuclear.nuclear_agent import NuclearStrategyAgent
+
         fresh = NuclearStrategyAgent(symbol="XAU_USD", reader=reader, bootstrap=False)
         assert fresh.status()["approval_rate"] == 0.0
 
@@ -1045,6 +1176,7 @@ class TestNuclearStrategyAgent:
 
     def test_get_signal_history_empty_initially(self, reader):
         from nuclear.nuclear_agent import NuclearStrategyAgent
+
         fresh = NuclearStrategyAgent(symbol="XAU_USD", reader=reader, bootstrap=False)
         assert fresh.get_signal_history() == []
 
@@ -1087,6 +1219,7 @@ class TestNuclearStrategyAgent:
 # ===========================================================================
 # NuclearStrategyAgent — clear_history
 # ===========================================================================
+
 
 class TestClearHistory:
     def _inject_signals(self, agent, n: int = 3):
@@ -1185,10 +1318,12 @@ class TestClearHistory:
 # NuclearStrategyAgent — lifecycle (async)
 # ===========================================================================
 
+
 class TestAgentLifecycle:
     @pytest.mark.asyncio
     async def test_start_sets_running(self, reader):
         from nuclear.nuclear_agent import NuclearStrategyAgent
+
         agent = NuclearStrategyAgent(symbol="XAU_USD", reader=reader, bootstrap=False)
         await agent.start()
         assert agent._running is True
@@ -1197,6 +1332,7 @@ class TestAgentLifecycle:
     @pytest.mark.asyncio
     async def test_stop_clears_running(self, reader):
         from nuclear.nuclear_agent import NuclearStrategyAgent
+
         agent = NuclearStrategyAgent(symbol="XAU_USD", reader=reader, bootstrap=False)
         await agent.start()
         await agent.stop()
@@ -1205,6 +1341,7 @@ class TestAgentLifecycle:
     @pytest.mark.asyncio
     async def test_double_start_is_idempotent(self, reader):
         from nuclear.nuclear_agent import NuclearStrategyAgent
+
         agent = NuclearStrategyAgent(symbol="XAU_USD", reader=reader, bootstrap=False)
         await agent.start()
         await agent.start()  # second call must not raise
@@ -1214,6 +1351,7 @@ class TestAgentLifecycle:
     @pytest.mark.asyncio
     async def test_analyze_works_after_start(self, reader):
         from nuclear.nuclear_agent import AnalysisResult, NuclearStrategyAgent
+
         agent = NuclearStrategyAgent(symbol="XAU_USD", reader=reader, bootstrap=False)
         await agent.start()
         result = agent.analyze()
@@ -1225,12 +1363,15 @@ class TestAgentLifecycle:
 # get_nuclear_agent() singleton
 # ===========================================================================
 
+
 class TestGetNuclearAgent:
     def test_returns_same_instance(self):
         import nuclear.nuclear_agent as _mod
+
         # Reset singleton so test is isolated
         _mod._agent_instance = None
         from nuclear.nuclear_agent import get_nuclear_agent
+
         a1 = get_nuclear_agent()
         a2 = get_nuclear_agent()
         assert a1 is a2
@@ -1238,16 +1379,20 @@ class TestGetNuclearAgent:
 
     def test_custom_symbol_on_first_call(self):
         import nuclear.nuclear_agent as _mod
+
         _mod._agent_instance = None
         from nuclear.nuclear_agent import get_nuclear_agent
+
         agent = get_nuclear_agent(symbol="EUR_USD")
         assert agent._symbol == "EUR_USD"
         _mod._agent_instance = None  # cleanup
 
     def test_second_call_ignores_symbol(self):
         import nuclear.nuclear_agent as _mod
+
         _mod._agent_instance = None
         from nuclear.nuclear_agent import get_nuclear_agent
+
         get_nuclear_agent(symbol="XAU_USD")
         agent2 = get_nuclear_agent(symbol="BTC_USD")
         # Singleton already created — symbol must not change
@@ -1258,6 +1403,7 @@ class TestGetNuclearAgent:
 # ===========================================================================
 # DELETE /history endpoint — router wiring
 # ===========================================================================
+
 
 class TestDeleteHistoryEndpoint:
     """
@@ -1275,6 +1421,7 @@ class TestDeleteHistoryEndpoint:
 
         # Override the lazy agent accessor to return our test agent
         from api import nuclear_strategy as _ns_module
+
         original = _ns_module._get_agent
 
         def _patched_get_agent():

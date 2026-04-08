@@ -24,6 +24,7 @@ import pytest
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_state(**kwargs):
     """Minimal AppState-like object."""
     s = MagicMock()
@@ -36,6 +37,7 @@ def _make_state(**kwargs):
 # ---------------------------------------------------------------------------
 # _is_feature_enabled
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestIsFeatureEnabled:
@@ -74,6 +76,7 @@ class TestIsFeatureEnabled:
 # _ConfigDatabaseDefaults
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestConfigDatabaseDefaults:
     def test_defaults(self):
@@ -101,6 +104,7 @@ class TestConfigDatabaseDefaults:
 # ---------------------------------------------------------------------------
 # _ConfigNamespace
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestConfigNamespace:
@@ -140,6 +144,7 @@ class TestConfigNamespace:
 # ---------------------------------------------------------------------------
 # init_env — development mode
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestInitEnvDev:
@@ -200,6 +205,7 @@ class TestInitEnvDev:
 # init_env — production mode (sys.exit guard)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestInitEnvProd:
     def test_exits_when_jwt_secret_missing_in_production(self, monkeypatch):
@@ -245,6 +251,7 @@ class TestInitEnvProd:
 # init_cache
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestInitCache:
     def test_returns_cache_object(self, monkeypatch):
@@ -276,6 +283,7 @@ class TestInitCache:
 # init_risk_manager
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestInitRiskManager:
     def test_returns_risk_manager(self):
@@ -301,6 +309,7 @@ class TestInitRiskManager:
 # ---------------------------------------------------------------------------
 # build_component_registry
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestBuildComponentRegistry:
@@ -338,6 +347,7 @@ class TestBuildComponentRegistry:
 # _get_log_activity
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestGetLogActivity:
     def test_returns_callable(self):
@@ -365,6 +375,7 @@ class TestGetLogActivity:
 # ---------------------------------------------------------------------------
 # init_config
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestInitConfig:

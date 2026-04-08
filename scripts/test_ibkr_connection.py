@@ -39,6 +39,7 @@ import argparse
 import os
 import sys
 import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -95,7 +96,9 @@ def run_checks(interactive: bool = True) -> int:
 
     # ── Check 2: Port sanity ─────────────────────────────────────────────────
     if PORT in LIVE_PORTS:
-        logger.warning(f"{_WARN}  Port {PORT} is a LIVE trading port. Use 7497 (TWS paper) or 4002 (Gateway paper) for testing.")
+        logger.warning(
+            f"{_WARN}  Port {PORT} is a LIVE trading port. Use 7497 (TWS paper) or 4002 (Gateway paper) for testing."
+        )
     elif PORT in PAPER_PORTS:
         _check(f"Port {PORT} is a paper port", True)
     else:

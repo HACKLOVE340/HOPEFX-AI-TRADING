@@ -25,9 +25,11 @@ UTC = timezone.utc
 # Module-level import fixture
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def eng():
     import backtesting.enhanced_engine as m
+
     return m
 
 
@@ -42,6 +44,7 @@ def test_ticks(eng):
 # ---------------------------------------------------------------------------
 # NanosecondTimestamp
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestNanosecondTimestamp:
@@ -87,6 +90,7 @@ class TestNanosecondTimestamp:
 # TickData
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestTickData:
     def _make_tick(self, eng, bid=1950.0, ask=1950.05):
@@ -117,18 +121,24 @@ class TestTickData:
     def test_imbalance_balanced(self, eng):
         ts = eng.NanosecondTimestamp.now()
         tick = eng.TickData(
-            timestamp=ts, symbol="XAUUSD",
-            bid=1950.0, ask=1950.05,
-            bid_size=10.0, ask_size=10.0,
+            timestamp=ts,
+            symbol="XAUUSD",
+            bid=1950.0,
+            ask=1950.05,
+            bid_size=10.0,
+            ask_size=10.0,
         )
         assert tick.imbalance == pytest.approx(0.0)
 
     def test_imbalance_bid_heavy(self, eng):
         ts = eng.NanosecondTimestamp.now()
         tick = eng.TickData(
-            timestamp=ts, symbol="XAUUSD",
-            bid=1950.0, ask=1950.05,
-            bid_size=30.0, ask_size=10.0,
+            timestamp=ts,
+            symbol="XAUUSD",
+            bid=1950.0,
+            ask=1950.05,
+            bid_size=30.0,
+            ask_size=10.0,
         )
         assert tick.imbalance == pytest.approx(0.5)
 
@@ -160,6 +170,7 @@ class TestTickData:
 # ---------------------------------------------------------------------------
 # TransactionCostModel
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestTransactionCostModel:
@@ -223,6 +234,7 @@ class TestTransactionCostModel:
 # ---------------------------------------------------------------------------
 # Position
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestPosition:
@@ -303,6 +315,7 @@ class TestPosition:
 # Standalone analytics functions
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestAnalyticsFunctions:
     def test_compute_drawdown_no_drawdown(self, eng):
@@ -346,6 +359,7 @@ class TestAnalyticsFunctions:
 # ---------------------------------------------------------------------------
 # InstitutionalRiskManager
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestInstitutionalRiskManager:
@@ -435,6 +449,7 @@ class TestInstitutionalRiskManager:
 # generate_test_data
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestGenerateTestData:
     def test_raises_in_production(self, eng, monkeypatch):
@@ -477,6 +492,7 @@ class TestGenerateTestData:
 # EnhancedBacktestEngine
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestEnhancedBacktestEngine:
     def test_init_defaults(self, eng):
@@ -506,9 +522,7 @@ class TestEnhancedBacktestEngine:
 
     def test_submit_order_no_price_data_fails(self, eng):
         engine = eng.EnhancedBacktestEngine(initial_capital=1_000_000.0)
-        ok, reason, order_id = engine.submit_order(
-            "XAUUSD", eng.OrderSide.BUY, size=1.0
-        )
+        ok, reason, order_id = engine.submit_order("XAUUSD", eng.OrderSide.BUY, size=1.0)
         assert ok is False
         assert reason == "NO_PRICE_DATA"
         assert order_id is None
@@ -516,9 +530,7 @@ class TestEnhancedBacktestEngine:
     def test_submit_order_after_tick_succeeds(self, eng, test_ticks):
         engine = eng.EnhancedBacktestEngine(initial_capital=1_000_000.0)
         engine.process_tick(test_ticks[0])
-        ok, reason, order_id = engine.submit_order(
-            "XAUUSD", eng.OrderSide.BUY, size=0.1
-        )
+        ok, reason, order_id = engine.submit_order("XAUUSD", eng.OrderSide.BUY, size=0.1)
         assert ok is True
         assert reason == "OK"
         assert order_id is not None
@@ -538,10 +550,6 @@ class TestEnhancedBacktestEngine:
         assert len(engine.equity_curve) == 50
 
     def test_execution_quality_latency_model(self, eng):
-        hft = eng.EnhancedBacktestEngine(
-            execution_quality=eng.ExecutionQuality.HFT_COLOCATED
-        )
-        retail = eng.EnhancedBacktestEngine(
-            execution_quality=eng.ExecutionQuality.RETAIL
-        )
+        hft = eng.EnhancedBacktestEngine(execution_quality=eng.ExecutionQuality.HFT_COLOCATED)
+        retail = eng.EnhancedBacktestEngine(execution_quality=eng.ExecutionQuality.RETAIL)
         assert hft.latency_model["mean"] < retail.latency_model["mean"]

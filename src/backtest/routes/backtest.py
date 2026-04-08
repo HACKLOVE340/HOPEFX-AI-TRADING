@@ -79,10 +79,7 @@ async def run_backtest(body: BacktestRequest) -> BacktestResult:
     if body.strategy not in STRATEGY_REGISTRY:
         raise HTTPException(
             status_code=400,
-            detail=(
-                "Unknown strategy. Use GET /api/backtest/strategies"
-                " to list available strategies."
-            ),
+            detail=("Unknown strategy. Use GET /api/backtest/strategies to list available strategies."),
         )
 
     try:

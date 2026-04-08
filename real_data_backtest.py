@@ -34,6 +34,7 @@ To accumulate ≥600 trades:
 from __future__ import annotations
 
 import logging
+
 logger = logging.getLogger(__name__)
 import math
 import os

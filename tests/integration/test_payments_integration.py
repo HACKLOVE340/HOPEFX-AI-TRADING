@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 
 import pytest

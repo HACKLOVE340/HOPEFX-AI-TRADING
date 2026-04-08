@@ -27,20 +27,21 @@ import pandas as pd
 import pytest
 
 # ── Synthetic OHLCV constants ─────────────────────────────────────────────────
-_FLAT_BASE_PRICE = 1800.0          # USD/oz — typical gold range for flat-market tests
-_PARABOLIC_BLOWOFF_BARS = 50       # bars where blow-off acceleration starts
-_PARABOLIC_GROWTH_RATE = 1.025     # +2.5% per bar in blow-off phase
-_PARABOLIC_PRE_RATE = 1.001        # +0.1% per bar in pre-blow-off phase
-_CRASH_START_BAR = 60              # bar where post-bubble crash begins
-_CRASH_MEAN_DAILY = -0.015         # mean daily return during crash
-_CRASH_DAILY_VOL = 0.04            # daily vol during crash (extreme)
-_FLAT_NOISE_SCALE = 10.0           # std dev of noise in flat-market prices
-_DATASET_YEARS = 50                # years assumed in the 58Y positional OOS fallback
+_FLAT_BASE_PRICE = 1800.0  # USD/oz — typical gold range for flat-market tests
+_PARABOLIC_BLOWOFF_BARS = 50  # bars where blow-off acceleration starts
+_PARABOLIC_GROWTH_RATE = 1.025  # +2.5% per bar in blow-off phase
+_PARABOLIC_PRE_RATE = 1.001  # +0.1% per bar in pre-blow-off phase
+_CRASH_START_BAR = 60  # bar where post-bubble crash begins
+_CRASH_MEAN_DAILY = -0.015  # mean daily return during crash
+_CRASH_DAILY_VOL = 0.04  # daily vol during crash (extreme)
+_FLAT_NOISE_SCALE = 10.0  # std dev of noise in flat-market prices
+_DATASET_YEARS = 50  # years assumed in the 58Y positional OOS fallback
 
 
 # ---------------------------------------------------------------------------
 # Helpers — synthetic OHLCV factories
 # ---------------------------------------------------------------------------
+
 
 def _flat_ohlcv(n: int = 250, base_price: float = 1500.0) -> pd.DataFrame:
     """Return n bars of flat/trending OHLCV (no parabolic signal)."""
@@ -199,9 +200,7 @@ class TestDetectParabolicMask:
         mask = _detect_parabolic_mask(df)
         assert len(mask) == len(df)
         # Mask should be a boolean dtype; pandas may represent as np.bool_ or bool
-        assert mask.dtype in (bool, np.bool_, "bool"), (
-            f"Expected boolean dtype, got {mask.dtype}"
-        )
+        assert mask.dtype in (bool, np.bool_, "bool"), f"Expected boolean dtype, got {mask.dtype}"
 
     def test_short_df_no_crash(self):
         from ml.regime_conditional import _detect_parabolic_mask
@@ -226,8 +225,7 @@ class TestDetectRegimeLabels:
         df.columns = [c.lower() for c in df.columns]
         labels = detect_regime_labels(df)
         assert REGIME_HIGH_VOL_PARABOLIC in labels.values, (
-            "detect_regime_labels should assign REGIME_HIGH_VOL_PARABOLIC=3 "
-            "for parabolic blow-off data"
+            "detect_regime_labels should assign REGIME_HIGH_VOL_PARABOLIC=3 for parabolic blow-off data"
         )
 
     def test_flat_market_no_parabolic_label(self):

@@ -11,6 +11,7 @@ Market Data Validation - FIA 3.1 Market Data Reasonability Checks
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from enum import Enum
 

@@ -15,6 +15,7 @@ Tests for:
 
 from datetime import datetime, timedelta, timezone
 import logging
+
 logger = logging.getLogger(__name__)
 
 UTC = timezone.utc

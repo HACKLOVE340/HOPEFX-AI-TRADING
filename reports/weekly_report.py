@@ -52,6 +52,7 @@ import smtplib
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText

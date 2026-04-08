@@ -16,7 +16,9 @@ from sklearn.ensemble import RandomForestClassifier
 
 
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 # Load historical data
 def load_data(file_path):

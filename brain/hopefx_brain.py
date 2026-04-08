@@ -73,8 +73,10 @@ try:
     from enum import StrEnum
 except ImportError:
     from enum import Enum
+
     class StrEnum(str, Enum):  # Python 3.10 compat
         pass
+
 
 logger = logging.getLogger(__name__)
 
@@ -556,9 +558,7 @@ class HOPEFXBrain:
                 raw_dir = str(sig.signal_type).lower()
                 confidence = float(getattr(sig, "confidence", 0.5))
             elif isinstance(sig, dict):
-                raw_dir = str(
-                    sig.get("direction", sig.get("signal", sig.get("type", "neutral")))
-                ).lower()
+                raw_dir = str(sig.get("direction", sig.get("signal", sig.get("type", "neutral")))).lower()
                 confidence = float(sig.get("confidence", sig.get("strength", 0.5)))
             else:
                 return "neutral", 0.0
@@ -820,13 +820,12 @@ class HOPEFXBrain:
                 _atr_val = 0.0
                 try:
                     import numpy as _np  # noqa: F401 — used for to_numpy()
+
                     _closes = ohlcv["close"].astype(float).to_numpy()
-                    _highs  = ohlcv["high"].astype(float).to_numpy()
-                    _lows   = ohlcv["low"].astype(float).to_numpy()
+                    _highs = ohlcv["high"].astype(float).to_numpy()
+                    _lows = ohlcv["low"].astype(float).to_numpy()
                     _trs = [
-                        max(_highs[i] - _lows[i],
-                            abs(_highs[i] - _closes[i - 1]),
-                            abs(_lows[i]  - _closes[i - 1]))
+                        max(_highs[i] - _lows[i], abs(_highs[i] - _closes[i - 1]), abs(_lows[i] - _closes[i - 1]))
                         for i in range(max(1, len(_closes) - 14), len(_closes))
                     ]
                     _atr_val = float(sum(_trs) / len(_trs)) if _trs else 0.0
@@ -837,7 +836,7 @@ class HOPEFXBrain:
                     symbol=symbol,
                     price=_price,
                     atr=_atr_val,
-                    adx=0.0,   # not computed here; edge selector falls back gracefully
+                    adx=0.0,  # not computed here; edge selector falls back gracefully
                     rsi=50.0,
                     volume_delta=0.0,
                     cone_strength=0.0,

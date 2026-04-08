@@ -49,8 +49,8 @@ from auth.service import hash_password
 from database.models import Base
 from database.user_models import User, UserRole, UserStatus
 import logging
-logger = logging.getLogger(__name__)
 
+logger = logging.getLogger(__name__)
 
 
 def _get_engine():

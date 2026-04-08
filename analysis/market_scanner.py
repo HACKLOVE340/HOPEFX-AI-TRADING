@@ -22,6 +22,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from enum import Enum
 from typing import Any

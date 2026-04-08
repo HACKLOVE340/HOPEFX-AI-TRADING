@@ -10,7 +10,9 @@ import redis
 
 
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 class TestRedisConnection:
     def __init__(self, host="localhost", port=6379, db=0):

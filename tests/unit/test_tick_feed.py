@@ -189,8 +189,7 @@ class TestTickAggregator:
     async def test_volume_accumulates(self):
         agg = TickAggregator(symbol="XAU_USD", timeframe_s=60)
         for _ in range(5):
-            t = Tick(symbol="XAU_USD", timestamp=datetime.now(UTC),
-                     bid=1900.0, ask=1900.5, volume=10.0)
+            t = Tick(symbol="XAU_USD", timestamp=datetime.now(UTC), bid=1900.0, ask=1900.5, volume=10.0)
             await agg.on_tick(t)
         assert agg._current_bar["volume"] == pytest.approx(50.0)
 
@@ -433,6 +432,7 @@ class TestGetTickFeed:
     def setup_method(self):
         # Reset the module-level singleton before each test
         import data.tick_feed as tf_module
+
         tf_module._manager = None
 
     def test_returns_manager(self):

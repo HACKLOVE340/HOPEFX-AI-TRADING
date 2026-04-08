@@ -67,14 +67,14 @@ ITOS_CONE_CHANNEL = "itos_cone_channel"
 MACRO_CHANNEL = "macro_channel"
 
 OHLCV_CHANNELS: dict[str, str] = {
-    "ohlcv_1m":      "1m",
-    "ohlcv_5m":      "5m",
-    "ohlcv_30m":     "30m",
-    "ohlcv_1h":      "1h",
-    "ohlcv_daily":   "daily",
-    "ohlcv_weekly":  "weekly",
+    "ohlcv_1m": "1m",
+    "ohlcv_5m": "5m",
+    "ohlcv_30m": "30m",
+    "ohlcv_1h": "1h",
+    "ohlcv_daily": "daily",
+    "ohlcv_weekly": "weekly",
     "ohlcv_monthly": "monthly",
-    "ohlcv_yearly":  "yearly",
+    "ohlcv_yearly": "yearly",
 }
 
 ALL_CHANNELS = [TICKS_CHANNEL, ITOS_CONE_CHANNEL, MACRO_CHANNEL] + list(OHLCV_CHANNELS.keys())
@@ -86,9 +86,11 @@ _BAR_BUFFER = 500
 
 # ── Data containers ───────────────────────────────────────────────────────────
 
+
 @dataclass
 class TickSnapshot:
     """Single tick from ticks_channel."""
+
     symbol: str
     bid: float
     ask: float
@@ -118,6 +120,7 @@ class TickSnapshot:
 @dataclass
 class OHLCVBar:
     """Single OHLCV bar from any ohlcv_* channel."""
+
     symbol: str
     timeframe: str
     open: float
@@ -147,6 +150,7 @@ class OHLCVBar:
 @dataclass
 class MacroSnapshot:
     """Latest macro data from macro_channel."""
+
     vix: float = 0.0
     dxy: float = 0.0
     spx: float = 0.0
@@ -181,6 +185,7 @@ class MacroSnapshot:
 
 # ── RedisStreamReader ─────────────────────────────────────────────────────────
 
+
 class RedisStreamReader:
     """
     Async Redis pub/sub consumer maintaining live ring buffers.
@@ -214,9 +219,7 @@ class RedisStreamReader:
 
         # Ring buffers
         self._ticks: deque[TickSnapshot] = deque(maxlen=_TICK_BUFFER)
-        self._bars: dict[str, deque[OHLCVBar]] = {
-            tf: deque(maxlen=_BAR_BUFFER) for tf in OHLCV_CHANNELS.values()
-        }
+        self._bars: dict[str, deque[OHLCVBar]] = {tf: deque(maxlen=_BAR_BUFFER) for tf in OHLCV_CHANNELS.values()}
         self._cone: dict[str, Any] = {}
         self._macro: MacroSnapshot = MacroSnapshot()
 
@@ -247,7 +250,10 @@ class RedisStreamReader:
         self._task = asyncio.create_task(self._listen_loop(), name="redis-stream-reader")
         logger.info(
             "RedisStreamReader started — %s:%d db=%d channels=%s",
-            self._host, self._port, self._db, ALL_CHANNELS,
+            self._host,
+            self._port,
+            self._db,
+            ALL_CHANNELS,
         )
 
     async def stop(self) -> None:
@@ -326,7 +332,8 @@ class RedisStreamReader:
                 self._connected = False
                 logger.warning(
                     "RedisStreamReader disconnected (%s) — reconnecting in %.1fs",
-                    exc, backoff,
+                    exc,
+                    backoff,
                 )
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 60.0)
@@ -336,9 +343,7 @@ class RedisStreamReader:
         try:
             import redis.asyncio as aioredis
         except ImportError as exc:
-            raise RuntimeError(
-                "redis package required: pip install redis>=5.0.0"
-            ) from exc
+            raise RuntimeError("redis package required: pip install redis>=5.0.0") from exc
 
         self._redis_client = aioredis.Redis(
             host=self._host,
@@ -507,12 +512,18 @@ class RedisStreamReader:
                     if c <= 0:
                         continue
                     ts = _parse_timestamp(payload.get("open_time") or payload.get("time"))
-                    bars.append(OHLCVBar(
-                        symbol=str(payload.get("symbol") or "XAU_USD"),
-                        timeframe=tf,
-                        open=o, high=h, low=lo, close=c, volume=v,
-                        open_time=ts,
-                    ))
+                    bars.append(
+                        OHLCVBar(
+                            symbol=str(payload.get("symbol") or "XAU_USD"),
+                            timeframe=tf,
+                            open=o,
+                            high=h,
+                            low=lo,
+                            close=c,
+                            volume=v,
+                            open_time=ts,
+                        )
+                    )
                 except Exception as _exc:  # skip malformed bar entries
                     logger.debug("Skipping malformed bar entry in %s: %s", key, _exc)
                     continue
@@ -538,13 +549,14 @@ class RedisStreamReader:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _parse_timestamp(raw: Any) -> datetime:
     """Parse a timestamp from various formats into a UTC datetime."""
     if raw is None:
         return datetime.now(UTC)
     if isinstance(raw, datetime):
         return raw.replace(tzinfo=UTC) if raw.tzinfo is None else raw
-    if isinstance(raw, (int, float)):
+    if isinstance(raw, int | float):
         # Unix seconds or milliseconds
         ts = float(raw)
         if ts > 1e12:

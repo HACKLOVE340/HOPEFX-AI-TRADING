@@ -99,7 +99,10 @@ class TestOANDARegistration:
     def test_oanda_registered_when_api_key_present(self):
         """When OANDA_API_KEY is present, OandaBroker should be registered."""
         mock_oanda = _make_mock_broker()
-        with patch.dict(os.environ, {"OANDA_API_KEY": "test_key", "OANDA_ACCOUNT_ID": "12345"}), patch("brokers.oanda_broker.OandaBroker", return_value=mock_oanda):
+        with (
+            patch.dict(os.environ, {"OANDA_API_KEY": "test_key", "OANDA_ACCOUNT_ID": "12345"}),
+            patch("brokers.oanda_broker.OandaBroker", return_value=mock_oanda),
+        ):
             mgr = _make_manager("ibkr")
             # Simulate what _auto_register does for OANDA
             api_key = os.getenv("OANDA_API_KEY") or os.getenv("BROKER_OANDA_TOKEN")
@@ -146,7 +149,6 @@ class TestAutoFailover:
         assert mgr._active_name == "paper"
 
     def test_no_double_failover_within_threshold(self):
-
         mgr = self._setup_three_broker_manager()
         exc = RuntimeError("oops")
         # Only 1 failure — should NOT trigger failover

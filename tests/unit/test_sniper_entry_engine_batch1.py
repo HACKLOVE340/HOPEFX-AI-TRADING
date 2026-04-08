@@ -40,6 +40,7 @@ UTC = timezone.utc
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _clean_sniper_env(monkeypatch):
     """Remove all SNIPER_* env vars so defaults are exercised cleanly."""
     keys = [
@@ -62,6 +63,7 @@ def _clean_sniper_env(monkeypatch):
 # ---------------------------------------------------------------------------
 # _env_* helper tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestEnvHelpers:
@@ -91,18 +93,21 @@ class TestEnvHelpers:
         monkeypatch.setenv("_TEST_INT", "abc")
         assert _env_int("_TEST_INT", 7) == 7
 
-    @pytest.mark.parametrize("val,expected", [
-        ("true", True),
-        ("True", True),
-        ("TRUE", True),
-        ("1", True),
-        ("yes", True),
-        ("false", False),
-        ("False", False),
-        ("FALSE", False),
-        ("0", False),
-        ("no", False),
-    ])
+    @pytest.mark.parametrize(
+        "val,expected",
+        [
+            ("true", True),
+            ("True", True),
+            ("TRUE", True),
+            ("1", True),
+            ("yes", True),
+            ("false", False),
+            ("False", False),
+            ("FALSE", False),
+            ("0", False),
+            ("no", False),
+        ],
+    )
     def test_env_bool_truthy_falsy(self, monkeypatch, val, expected):
         monkeypatch.setenv("_TEST_BOOL", val)
         assert _env_bool("_TEST_BOOL", not expected) is expected
@@ -123,6 +128,7 @@ class TestEnvHelpers:
 # ---------------------------------------------------------------------------
 # SniperEntryEngine initialisation — defaults
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestSniperEngineInitDefaults:
@@ -187,6 +193,7 @@ class TestSniperEngineInitDefaults:
 # ---------------------------------------------------------------------------
 # SniperEntryEngine initialisation — custom env vars
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestSniperEngineInitCustom:
@@ -263,6 +270,7 @@ class TestSniperEngineInitCustom:
 # Dataclass: OrderBlock
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestOrderBlock:
     """OrderBlock dataclass field validation."""
@@ -293,6 +301,7 @@ class TestOrderBlock:
 # Dataclass: DisplacementCandle
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestDisplacementCandle:
     """DisplacementCandle dataclass field validation."""
@@ -300,9 +309,14 @@ class TestDisplacementCandle:
     def test_bullish_displacement_fields(self):
         dc = DisplacementCandle(
             direction="bullish",
-            open=1890.0, high=1910.0, low=1888.0, close=1908.0,
-            fvg_top=1912.0, fvg_bottom=1905.0,
-            ce_level=1908.5, bar_index=10,
+            open=1890.0,
+            high=1910.0,
+            low=1888.0,
+            close=1908.0,
+            fvg_top=1912.0,
+            fvg_bottom=1905.0,
+            ce_level=1908.5,
+            bar_index=10,
         )
         assert dc.direction == "bullish"
         assert dc.ce_level == pytest.approx(1908.5)
@@ -311,9 +325,14 @@ class TestDisplacementCandle:
     def test_bearish_displacement_fields(self):
         dc = DisplacementCandle(
             direction="bearish",
-            open=2010.0, high=2012.0, low=1990.0, close=1992.0,
-            fvg_top=1988.0, fvg_bottom=1982.0,
-            ce_level=1985.0, bar_index=7,
+            open=2010.0,
+            high=2012.0,
+            low=1990.0,
+            close=1992.0,
+            fvg_top=1988.0,
+            fvg_bottom=1982.0,
+            ce_level=1985.0,
+            bar_index=7,
         )
         assert dc.direction == "bearish"
         assert dc.ce_level == pytest.approx(1985.0)
@@ -324,16 +343,24 @@ class TestDisplacementCandle:
         expected_ce = (fvg_top + fvg_bottom) / 2.0
         dc = DisplacementCandle(
             direction="bullish",
-            open=1890.0, high=1910.0, low=1888.0, close=1908.0,
-            fvg_top=fvg_top, fvg_bottom=fvg_bottom,
-            ce_level=expected_ce, bar_index=5,
+            open=1890.0,
+            high=1910.0,
+            low=1888.0,
+            close=1908.0,
+            fvg_top=fvg_top,
+            fvg_bottom=fvg_bottom,
+            ce_level=expected_ce,
+            bar_index=5,
         )
         assert dc.ce_level == pytest.approx(expected_ce)
 
     def test_default_fields_are_zero(self):
         dc = DisplacementCandle(
             direction="bullish",
-            open=1.0, high=1.0, low=1.0, close=1.0,
+            open=1.0,
+            high=1.0,
+            low=1.0,
+            close=1.0,
         )
         assert dc.fvg_top == pytest.approx(0.0)
         assert dc.fvg_bottom == pytest.approx(0.0)
@@ -345,6 +372,7 @@ class TestDisplacementCandle:
 # Dataclass: LTFConfirmation
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestLTFConfirmation:
     """LTFConfirmation dataclass field validation."""
@@ -352,8 +380,14 @@ class TestLTFConfirmation:
     def test_confirmed_true(self):
         dc = DisplacementCandle(
             direction="bullish",
-            open=1890.0, high=1910.0, low=1888.0, close=1908.0,
-            fvg_top=1912.0, fvg_bottom=1905.0, ce_level=1908.5, bar_index=5,
+            open=1890.0,
+            high=1910.0,
+            low=1888.0,
+            close=1908.0,
+            fvg_top=1912.0,
+            fvg_bottom=1905.0,
+            ce_level=1908.5,
+            bar_index=5,
         )
         conf = LTFConfirmation(
             confirmed=True,
@@ -380,13 +414,14 @@ class TestLTFConfirmation:
         assert conf.displacement is None
         assert conf.bars_analysed == 0
 
-    @pytest.mark.parametrize("event", [
-        "BOS_bullish", "BOS_bearish", "CHoCH_bullish", "CHoCH_bearish", "none"
-    ])
+    @pytest.mark.parametrize("event", ["BOS_bullish", "BOS_bearish", "CHoCH_bullish", "CHoCH_bearish", "none"])
     def test_valid_event_strings(self, event):
         conf = LTFConfirmation(
-            confirmed=False, event=event, displacement=None,
-            last_sh=None, last_sl=None,
+            confirmed=False,
+            event=event,
+            displacement=None,
+            last_sh=None,
+            last_sl=None,
         )
         assert conf.event == event
 
@@ -394,6 +429,7 @@ class TestLTFConfirmation:
 # ---------------------------------------------------------------------------
 # Dataclass: SniperSetup
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestSniperSetup:
@@ -403,12 +439,22 @@ class TestSniperSetup:
         ob = OrderBlock(direction="bullish", top=1895.0, bottom=1890.0, origin_index=5)
         dc = DisplacementCandle(
             direction="bullish",
-            open=1888.0, high=1905.0, low=1886.0, close=1903.0,
-            fvg_top=1905.0, fvg_bottom=1898.0, ce_level=entry, bar_index=8,
+            open=1888.0,
+            high=1905.0,
+            low=1886.0,
+            close=1903.0,
+            fvg_top=1905.0,
+            fvg_bottom=1898.0,
+            ce_level=entry,
+            bar_index=8,
         )
         ltf = LTFConfirmation(
-            confirmed=True, event="BOS_bullish",
-            displacement=dc, last_sh=1910.0, last_sl=1880.0, bars_analysed=100,
+            confirmed=True,
+            event="BOS_bullish",
+            displacement=dc,
+            last_sh=1910.0,
+            last_sl=1880.0,
+            bars_analysed=100,
         )
         return SniperSetup(
             symbol="XAU_USD",
@@ -446,8 +492,15 @@ class TestSniperSetup:
         setup = self._make_setup()
         d = setup.to_dict()
         expected_keys = {
-            "symbol", "direction", "entry_price", "stop_loss",
-            "take_profit", "confidence", "order_type", "reason", "timestamp",
+            "symbol",
+            "direction",
+            "entry_price",
+            "stop_loss",
+            "take_profit",
+            "confidence",
+            "order_type",
+            "reason",
+            "timestamp",
         }
         assert expected_keys == set(d.keys())
 
@@ -490,6 +543,7 @@ class TestSniperSetup:
 # Engine disabled path
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestSniperEngineDisabled:
     """When SNIPER_ENABLED=false, refine() always returns None."""
@@ -506,6 +560,7 @@ class TestSniperEngineDisabled:
         decision.tick_mid = 1900.0
 
         import pandas as pd
+
         htf_df = pd.DataFrame()
 
         result = engine.refine(decision, htf_df, orchestrator=None)
@@ -522,6 +577,7 @@ class TestSniperEngineDisabled:
         decision.tick_mid = 1900.0
 
         import pandas as pd
+
         result = engine.refine(decision, pd.DataFrame(), orchestrator=None)
         assert result is None
 
@@ -536,6 +592,7 @@ class TestSniperEngineDisabled:
         decision.tick_mid = 0.0
 
         import pandas as pd
+
         result = engine.refine(decision, pd.DataFrame(), orchestrator=None)
         assert result is None
 
@@ -550,5 +607,6 @@ class TestSniperEngineDisabled:
         decision.tick_mid = -1.0
 
         import pandas as pd
+
         result = engine.refine(decision, pd.DataFrame(), orchestrator=None)
         assert result is None

@@ -12,6 +12,7 @@ import enum
 import logging
 import uuid
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 
@@ -960,8 +961,8 @@ if SQLALCHEMY_AVAILABLE:
 
         id = Column(Integer, primary_key=True, autoincrement=True)
         report_id = Column(String(100), unique=True, nullable=False, index=True)
-        period = Column(String(20), nullable=False)          # e.g. "2025-Q1" or "2025-01"
-        jurisdiction = Column(String(100), nullable=False)   # e.g. "US-CA", "GB", "NG"
+        period = Column(String(20), nullable=False)  # e.g. "2025-Q1" or "2025-01"
+        jurisdiction = Column(String(100), nullable=False)  # e.g. "US-CA", "GB", "NG"
         total_revenue = Column(Float, nullable=False, default=0.0)
         taxable_amount = Column(Float, nullable=False, default=0.0)
         tax_rate_pct = Column(Float, nullable=False, default=0.0)
@@ -974,9 +975,7 @@ if SQLALCHEMY_AVAILABLE:
         created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
         updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
 
-        __table_args__ = (
-            UniqueConstraint("period", "jurisdiction", name="uq_tax_report_period_jurisdiction"),
-        )
+        __table_args__ = (UniqueConstraint("period", "jurisdiction", name="uq_tax_report_period_jurisdiction"),)
 
         def to_dict(self) -> dict:
             return {
@@ -1014,8 +1013,8 @@ if SQLALCHEMY_AVAILABLE:
 
         id = Column(Integer, primary_key=True, autoincrement=True)
         recon_id = Column(String(100), unique=True, nullable=False, index=True)
-        period = Column(String(20), nullable=False)          # e.g. "2025-01"
-        provider = Column(String(50), nullable=False)        # stripe | flutterwave | crypto
+        period = Column(String(20), nullable=False)  # e.g. "2025-01"
+        provider = Column(String(50), nullable=False)  # stripe | flutterwave | crypto
         expected_amount = Column(Float, nullable=False, default=0.0)
         actual_amount = Column(Float, nullable=False, default=0.0)
         discrepancy = Column(Float, nullable=False, default=0.0)
@@ -1028,9 +1027,7 @@ if SQLALCHEMY_AVAILABLE:
         resolved_at = Column(DateTime(timezone=True), nullable=True)
         resolved_by = Column(String(128), nullable=True)
 
-        __table_args__ = (
-            UniqueConstraint("period", "provider", name="uq_recon_period_provider"),
-        )
+        __table_args__ = (UniqueConstraint("period", "provider", name="uq_recon_period_provider"),)
 
         def to_dict(self) -> dict:
             return {
