@@ -768,6 +768,8 @@ def get_signal_engine_status() -> dict[str, Any]:
     except Exception as _exc:
         logger.debug("get_signal_engine_status: mtf_fusion unavailable: %s", _exc)
         status["phase1_mtf"] = {"is_ready": False}
+
+    # Phase 2: Anomaly
     anomaly = _get_anomaly_store()
     if anomaly is not None and hasattr(anomaly, "status"):
         status["phase2_anomaly"] = anomaly.status()
