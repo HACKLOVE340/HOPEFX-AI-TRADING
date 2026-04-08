@@ -126,7 +126,7 @@ class BrokerFactory:
             cls._brokers["cme"] = CMEComexConnector
             cls._brokers["cme_comex"] = CMEComexConnector
             cls._brokers["comex"] = CMEComexConnector
-            cls._brokers["gc"] = CMEComexConnector   # GC futures shorthand
+            cls._brokers["gc"] = CMEComexConnector  # GC futures shorthand
         except Exception as exc:
             logger.debug("cme_comex broker unavailable: %s", exc)
         try:

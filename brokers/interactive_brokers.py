@@ -442,4 +442,5 @@ try:
     InteractiveBrokersConnector.register(_IBKRConnector)
 except Exception as _exc:  # pragma: no cover – registration is best-effort
     import logging as _logging
+
     _logging.getLogger(__name__).debug("IBKRConnector registration skipped: %s", _exc)

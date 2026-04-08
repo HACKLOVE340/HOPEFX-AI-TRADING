@@ -61,6 +61,7 @@ logger = logging.getLogger(__name__)
 # Config helpers
 # ---------------------------------------------------------------------------
 
+
 def _env_float(key: str, default: float) -> float:
     try:
         return float(os.environ.get(key, default))
@@ -88,20 +89,23 @@ def _env_bool(key: str, default: bool) -> bool:
 # Data structures
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class OrderBlock:
     """A single identified Order Block."""
-    direction: str          # "bullish" | "bearish"
-    top: float              # upper boundary of the OB candle
-    bottom: float           # lower boundary of the OB candle
-    origin_index: int       # bar index within the analysis window
-    mitigated: bool = False # True once price has traded through the OB
+
+    direction: str  # "bullish" | "bearish"
+    top: float  # upper boundary of the OB candle
+    bottom: float  # lower boundary of the OB candle
+    origin_index: int  # bar index within the analysis window
+    mitigated: bool = False  # True once price has traded through the OB
 
 
 @dataclass
 class DisplacementCandle:
     """A large-body candle that creates a Fair Value Gap (FVG)."""
-    direction: str   # "bullish" | "bearish"
+
+    direction: str  # "bullish" | "bearish"
     open: float
     high: float
     low: float
@@ -109,18 +113,19 @@ class DisplacementCandle:
     # FVG boundaries created by this candle (gap between prev candle and next candle)
     fvg_top: float = 0.0
     fvg_bottom: float = 0.0
-    ce_level: float = 0.0   # Consequent Encroachment = midpoint of the FVG
+    ce_level: float = 0.0  # Consequent Encroachment = midpoint of the FVG
     bar_index: int = 0
 
 
 @dataclass
 class LTFConfirmation:
     """Result of the M5 drill-down analysis."""
+
     confirmed: bool
-    event: str              # "BOS_bullish" | "BOS_bearish" | "CHoCH_bullish" | "CHoCH_bearish" | "none"
+    event: str  # "BOS_bullish" | "BOS_bearish" | "CHoCH_bullish" | "CHoCH_bearish" | "none"
     displacement: DisplacementCandle | None
-    last_sh: float | None   # last M5 swing high
-    last_sl: float | None   # last M5 swing low
+    last_sh: float | None  # last M5 swing high
+    last_sl: float | None  # last M5 swing low
     bars_analysed: int = 0
 
 
@@ -132,12 +137,13 @@ class SniperSetup:
     Consumed by hopefx_engine._execute_decision() to place a LIMIT order
     instead of a MARKET order.
     """
+
     symbol: str
-    direction: str          # "long" | "short"
-    entry_price: float      # limit price (CE of M5 FVG)
-    stop_loss: float        # absolute SL price
-    take_profit: float      # absolute TP price
-    confidence: float       # boosted confidence (capped at 1.0)
+    direction: str  # "long" | "short"
+    entry_price: float  # limit price (CE of M5 FVG)
+    stop_loss: float  # absolute SL price
+    take_profit: float  # absolute TP price
+    confidence: float  # boosted confidence (capped at 1.0)
     order_type: str = "LIMIT"
     htf_ob: OrderBlock | None = None
     ltf_confirmation: LTFConfirmation | None = None
@@ -161,6 +167,7 @@ class SniperSetup:
 # ---------------------------------------------------------------------------
 # SniperEntryEngine
 # ---------------------------------------------------------------------------
+
 
 class SniperEntryEngine:
     """
@@ -241,7 +248,9 @@ class SniperEntryEngine:
         if spread > self.max_spread_points:
             logger.debug(
                 "SniperEntryEngine: spread=%.1f > max=%.1f — skipping %s",
-                spread, self.max_spread_points, symbol,
+                spread,
+                self.max_spread_points,
+                symbol,
             )
             return None
 
@@ -267,7 +276,9 @@ class SniperEntryEngine:
         if not ltf_conf.confirmed:
             logger.debug(
                 "SniperEntryEngine: LTF not confirmed (event=%s) for %s %s",
-                ltf_conf.event, direction, symbol,
+                ltf_conf.event,
+                direction,
+                symbol,
             )
             return None
 
@@ -287,9 +298,13 @@ class SniperEntryEngine:
 
         logger.info(
             "SniperEntryEngine: CONFIRMED %s %s — entry=%.5f sl=%.5f tp=%.5f conf=%.3f reason=%s",
-            direction, symbol,
-            setup.entry_price, setup.stop_loss, setup.take_profit,
-            setup.confidence, setup.reason,
+            direction,
+            symbol,
+            setup.entry_price,
+            setup.stop_loss,
+            setup.take_profit,
+            setup.confidence,
+            setup.reason,
         )
         return setup
 
@@ -351,7 +366,7 @@ class SniperEntryEngine:
         Bearish OB: last bullish candle before a strong bearish impulse that
                     breaks the prior swing low.
         """
-        window = prices[-self.ob_lookback - 2:]
+        window = prices[-self.ob_lookback - 2 :]
         n = len(window)
         candidates: list[OrderBlock] = []
 
@@ -368,20 +383,24 @@ class SniperEntryEngine:
             if direction == "long":
                 # Bearish candle followed by bullish impulse breaking prior high
                 if c_close < c_open and n_close > n_open and n_close > c_high:
-                    candidates.append(OrderBlock(
-                        direction="bullish",
+                    candidates.append(
+                        OrderBlock(
+                            direction="bullish",
+                            top=c_high,
+                            bottom=c_low,
+                            origin_index=i,
+                        )
+                    )
+            # Bullish candle followed by bearish impulse breaking prior low
+            elif c_close > c_open and n_close < n_open and n_close < c_low:
+                candidates.append(
+                    OrderBlock(
+                        direction="bearish",
                         top=c_high,
                         bottom=c_low,
                         origin_index=i,
-                    ))
-            # Bullish candle followed by bearish impulse breaking prior low
-            elif c_close > c_open and n_close < n_open and n_close < c_low:
-                candidates.append(OrderBlock(
-                    direction="bearish",
-                    top=c_high,
-                    bottom=c_low,
-                    origin_index=i,
-                ))
+                    )
+                )
 
         if not candidates:
             return None
@@ -419,9 +438,8 @@ class SniperEntryEngine:
         last_sl = struct.get("last_sl")
 
         # BOS or CHoCH must align with the required direction
-        event_ok = (
-            (direction == "long" and ("bullish" in event or event == "none"))
-            or (direction == "short" and ("bearish" in event or event == "none"))
+        event_ok = (direction == "long" and ("bullish" in event or event == "none")) or (
+            direction == "short" and ("bearish" in event or event == "none")
         )
 
         # Detect displacement candle + FVG in the last 30 bars
@@ -487,9 +505,14 @@ class SniperEntryEngine:
                 ce = (fvg_top + fvg_bottom) / 2.0
                 return DisplacementCandle(
                     direction="bullish",
-                    open=c_open, high=c_high, low=c_low, close=c_close,
-                    fvg_top=fvg_top, fvg_bottom=fvg_bottom,
-                    ce_level=ce, bar_index=i,
+                    open=c_open,
+                    high=c_high,
+                    low=c_low,
+                    close=c_close,
+                    fvg_top=fvg_top,
+                    fvg_bottom=fvg_bottom,
+                    ce_level=ce,
+                    bar_index=i,
                 )
             else:
                 # Bearish displacement: close < open, gap below prev low
@@ -502,9 +525,14 @@ class SniperEntryEngine:
                 ce = (fvg_top + fvg_bottom) / 2.0
                 return DisplacementCandle(
                     direction="bearish",
-                    open=c_open, high=c_high, low=c_low, close=c_close,
-                    fvg_top=fvg_top, fvg_bottom=fvg_bottom,
-                    ce_level=ce, bar_index=i,
+                    open=c_open,
+                    high=c_high,
+                    low=c_low,
+                    close=c_close,
+                    fvg_top=fvg_top,
+                    fvg_bottom=fvg_bottom,
+                    ce_level=ce,
+                    bar_index=i,
                 )
 
         return None

@@ -248,7 +248,7 @@ class TestStateUpdate:
         broker = AsyncMock()
         broker.get_account_info.side_effect = TimeoutError()
         brain.broker = broker
-        with pytest.raises(asyncio.TimeoutError):
+        with pytest.raises((TimeoutError, asyncio.TimeoutError)):
             await brain._update_state()
 
     @pytest.mark.asyncio

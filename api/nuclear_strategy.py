@@ -54,8 +54,10 @@ router = APIRouter()
 
 # ── Request / response models ─────────────────────────────────────────────────
 
+
 class AnalyzeRequest(BaseModel):
     """Optional parameters for POST /analyze/force."""
+
     n_ticks: int = Field(default=30, ge=1, le=200, description="Ticks to use")
     n_bars: int = Field(default=5, ge=1, le=50, description="Bars per TF for backtest")
     timeframes: list[str] | None = Field(
@@ -66,16 +68,19 @@ class AnalyzeRequest(BaseModel):
 
 class AgentStartRequest(BaseModel):
     """Optional parameters for POST /agent/start."""
+
     symbol: str = Field(default="XAU_USD", description="Instrument symbol")
     bootstrap: bool = Field(default=True, description="Pre-fill bar history from Redis")
 
 
 # ── Lazy agent accessor ───────────────────────────────────────────────────────
 
+
 def _get_agent():
     """Lazy-load the NuclearStrategyAgent singleton."""
     try:
         from nuclear.nuclear_agent import get_nuclear_agent
+
         return get_nuclear_agent()
     except Exception as exc:
         logger.error("NuclearStrategyAgent unavailable: %s", exc)
@@ -86,6 +91,7 @@ def _get_agent():
 
 
 # ── Read endpoints (trader role) ──────────────────────────────────────────────
+
 
 @router.get(
     "/status",
@@ -307,6 +313,7 @@ async def get_stream_status(
 
 # ── Mutating endpoints (admin role) ───────────────────────────────────────────
 
+
 @router.post(
     "/analyze/force",
     summary="Force a fresh pipeline run",
@@ -355,6 +362,7 @@ async def start_agent(
     """
     try:
         from nuclear.nuclear_agent import get_nuclear_agent
+
         agent = get_nuclear_agent(symbol=req.symbol)
         await agent.start()
         return {
@@ -383,6 +391,7 @@ async def stop_agent(
     """
     try:
         from nuclear.nuclear_agent import get_nuclear_agent
+
         agent = get_nuclear_agent()
         await agent.stop()
         return {"status": "stopped", "agent": agent.status()}

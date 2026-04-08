@@ -352,9 +352,7 @@ async def logout(
     """Revoke the current session and blacklist the access token."""
     # Use the bearer token from the Authorization header if not explicitly provided
     access_token = body.access_token or (credentials.credentials if credentials else None)
-    await asyncio.to_thread(
-        functools.partial(_svc().logout, body.refresh_token, access_token=access_token)
-    )
+    await asyncio.to_thread(functools.partial(_svc().logout, body.refresh_token, access_token=access_token))
     return {"message": "Logged out successfully"}
 
 
@@ -428,9 +426,7 @@ async def revoke_all_sessions(user_id: str = Depends(_get_current_user_id)):
 async def forgot_password(body: ForgotPasswordRequest, request: Request):
     """Request a password reset link. Always returns 200 to avoid email enumeration."""
     _check_ip_rate_limit(_get_client_ip(request))
-    _, msg, reset_token = await asyncio.to_thread(
-        functools.partial(_svc().request_password_reset, body.email)
-    )
+    _, msg, reset_token = await asyncio.to_thread(functools.partial(_svc().request_password_reset, body.email))
     if reset_token:
         try:
             from core.email_service import send_password_reset_email
@@ -452,9 +448,7 @@ async def forgot_password(body: ForgotPasswordRequest, request: Request):
 async def reset_password(body: ResetPasswordRequest, request: Request):
     """Set a new password using the reset token."""
     _check_ip_rate_limit(_get_client_ip(request))
-    ok, msg = await asyncio.to_thread(
-        functools.partial(_svc().reset_password, body.token, body.new_password)
-    )
+    ok, msg = await asyncio.to_thread(functools.partial(_svc().reset_password, body.token, body.new_password))
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
     return {"message": msg}

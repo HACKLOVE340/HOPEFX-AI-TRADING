@@ -409,7 +409,9 @@ async def start_copy_trading(
     if body.signal_id and body.signal_id in _feed_items:
         _feed_items[body.signal_id]["copies"] = _feed_items[body.signal_id].get("copies", 0) + 1
 
-    logger.info("copy_trading: user %s started copying trader %s (alloc=%.2f)", user.sub, trader_id, body.allocation_amount)
+    logger.info(
+        "copy_trading: user %s started copying trader %s (alloc=%.2f)", user.sub, trader_id, body.allocation_amount
+    )
     return record
 
 
@@ -515,6 +517,8 @@ def refresh_leaderboard_cache() -> None:
         )
     else:
         logger.debug("leaderboard cache refresh skipped — no profile data")
+
+
 # =============================================================================
 # FRONTEND COMPATIBILITY ALIAS — /api/leaderboard
 # =============================================================================

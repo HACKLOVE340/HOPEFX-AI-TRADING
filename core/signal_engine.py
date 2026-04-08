@@ -131,6 +131,7 @@ def _get_online_learner_store() -> Any | None:
     except Exception as _exc:
         logger.debug("_get_online_learner_store: feature-flags unavailable: %s", _exc)
         return None
+    if _online_learner_store is None:
         try:
             from research.pipeline.online_learning import OnlineLearnerStore
 
@@ -152,6 +153,7 @@ def _get_anomaly_store() -> Any | None:
     except Exception as _exc:
         logger.debug("_get_anomaly_store: feature-flags unavailable: %s", _exc)
         return None
+    if _anomaly_store is None:
         try:
             from research.pipeline.anomaly import AnomalyWeightStore
 

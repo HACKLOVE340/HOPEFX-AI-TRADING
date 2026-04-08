@@ -376,7 +376,7 @@ class APIGateway:
         from datetime import timedelta
 
         payload = {
-            "sub": user_id,   # standard claim — matches main auth/service.py
+            "sub": user_id,  # standard claim — matches main auth/service.py
             "role": role,
             "iat": datetime.now(UTC),
             "exp": datetime.now(UTC) + timedelta(hours=expires_hours),

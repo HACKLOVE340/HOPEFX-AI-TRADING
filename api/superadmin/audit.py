@@ -58,9 +58,7 @@ async def export_audit_log(user: TokenPayload = Depends(_require_superadmin)):
 
     result = await get_audit_log(limit=500, user=user)
     buf = io.StringIO()
-    writer = csv.DictWriter(
-        buf, fieldnames=["event_id", "user_id", "event_type", "detail", "ip_address", "created_at"]
-    )
+    writer = csv.DictWriter(buf, fieldnames=["event_id", "user_id", "event_type", "detail", "ip_address", "created_at"])
     writer.writeheader()
     writer.writerows(result["events"])
     buf.seek(0)

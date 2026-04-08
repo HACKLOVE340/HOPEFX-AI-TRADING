@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _is_production() -> bool:
     return os.getenv("APP_ENV", "development").lower() == "production"
 
@@ -43,9 +44,9 @@ def _build_csp(allowed_origins: list[str]) -> str:
     for origin in allowed_origins:
         connect_srcs.append(origin)
         if origin.startswith("https://"):
-            connect_srcs.append("wss://" + origin[len("https://"):])
+            connect_srcs.append("wss://" + origin[len("https://") :])
         elif origin.startswith("http://"):
-            connect_srcs.append("ws://" + origin[len("http://"):])
+            connect_srcs.append("ws://" + origin[len("http://") :])
 
     connect_src = " ".join(connect_srcs)
 
@@ -68,6 +69,7 @@ def _build_csp(allowed_origins: list[str]) -> str:
 
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
+
 
 def setup_cors(app: FastAPI) -> None:
     """Add CORS middleware with restricted origins.
@@ -131,6 +133,7 @@ def setup_cors(app: FastAPI) -> None:
 
 # ── Security headers ──────────────────────────────────────────────────────────
 
+
 def setup_security_headers(app: FastAPI) -> None:
     """Add security response headers to every reply.
 
@@ -153,18 +156,16 @@ def setup_security_headers(app: FastAPI) -> None:
     _csp = _build_csp(_allowed_origins)
 
     _STATIC_HEADERS: dict[str, str] = {
-        "X-Content-Type-Options":  "nosniff",
-        "X-Frame-Options":         "DENY",
-        "X-XSS-Protection":        "1; mode=block",
-        "Referrer-Policy":         "strict-origin-when-cross-origin",
-        "Permissions-Policy":      "geolocation=(), microphone=(), camera=()",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "X-XSS-Protection": "1; mode=block",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
         "Content-Security-Policy": _csp,
     }
     # HSTS only makes sense over TLS — skip in dev to avoid breaking http://
     if _is_production():
-        _STATIC_HEADERS["Strict-Transport-Security"] = (
-            "max-age=63072000; includeSubDomains; preload"
-        )
+        _STATIC_HEADERS["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
 
     class _SecurityHeaders(BaseHTTPMiddleware):
         _headers: ClassVar[dict[str, str]] = _STATIC_HEADERS
@@ -196,6 +197,7 @@ def setup_security_headers(app: FastAPI) -> None:
 
 # ── Prometheus metrics ────────────────────────────────────────────────────────
 
+
 def setup_metrics_middleware(app: FastAPI) -> None:
     """Add Prometheus HTTP metrics middleware."""
     try:
@@ -211,6 +213,7 @@ def setup_metrics_middleware(app: FastAPI) -> None:
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
+
 def register_all(app: FastAPI) -> None:
     """Register all middleware on *app* in the correct order.
 
@@ -218,6 +221,6 @@ def register_all(app: FastAPI) -> None:
     (last registered = outermost = first to process the request).
     We want: metrics → security headers → CORS (outermost).
     """
-    setup_metrics_middleware(app)   # innermost — runs after routing
-    setup_security_headers(app)     # middle
-    setup_cors(app)                 # outermost — handles preflight first
+    setup_metrics_middleware(app)  # innermost — runs after routing
+    setup_security_headers(app)  # middle
+    setup_cors(app)  # outermost — handles preflight first

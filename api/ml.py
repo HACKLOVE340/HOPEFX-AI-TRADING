@@ -876,11 +876,15 @@ def _ml_health_meta(saved_dir: Any) -> tuple:
         # Disallow absolute paths; interpret saved_dir as a subdirectory name.
         if raw_dir.is_absolute():
             raise ValueError("Absolute paths are not allowed for saved_dir")
-        candidate_dir = (ML_MODELS_DIR / raw_dir).resolve()  # codeql[py/path-injection] - raw_dir is relative-only; containment verified by relative_to-equivalent check below
+        candidate_dir = (
+            ML_MODELS_DIR / raw_dir
+        ).resolve()  # codeql[py/path-injection] - raw_dir is relative-only; containment verified by relative_to-equivalent check below
         # Ensure the resolved path is within the ML_MODELS_DIR tree.
         if ML_MODELS_DIR not in (candidate_dir, *candidate_dir.parents):
             raise ValueError("saved_dir escapes ML_MODELS_DIR")
-        meta_path = candidate_dir / "advanced_oos_meta.json"  # codeql[py/path-injection] - candidate_dir confined to ML_MODELS_DIR above
+        meta_path = (
+            candidate_dir / "advanced_oos_meta.json"
+        )  # codeql[py/path-injection] - candidate_dir confined to ML_MODELS_DIR above
     except Exception as exc:
         logger.warning("ml_health: invalid saved_dir %r: %s", saved_dir, exc)
         return oos_accuracy, feature_count, model_file, last_trained_at

@@ -341,6 +341,7 @@ class RealTimeSignalService:
             # Persist active signal list so /trading/signals fallback can read it
             try:
                 from api.db_store import db_set as _db_set
+
                 _db_set(
                     "signals:active",
                     [

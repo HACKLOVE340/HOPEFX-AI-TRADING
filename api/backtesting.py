@@ -533,7 +533,6 @@ async def run_walk_forward(
             _persist_wf_result(run_id, {**pending, "status": "error", "error": str(exc)})
             return
 
-
         # Build a synthetic date range spanning 3 years for the walk-forward splits
         from datetime import timedelta
 
@@ -581,12 +580,8 @@ async def run_walk_forward(
                 folds.append({"fold": i + 1, "error": str(exc)})
 
         valid = [f for f in folds if "error" not in f]
-        avg_test_sharpe = (
-            sum(f["test_sharpe"] for f in valid) / len(valid) if valid else 0.0
-        )
-        avg_test_return = (
-            sum(f["test_return_pct"] for f in valid) / len(valid) if valid else 0.0
-        )
+        avg_test_sharpe = sum(f["test_sharpe"] for f in valid) / len(valid) if valid else 0.0
+        avg_test_return = sum(f["test_return_pct"] for f in valid) / len(valid) if valid else 0.0
 
         _persist_wf_result(
             run_id,

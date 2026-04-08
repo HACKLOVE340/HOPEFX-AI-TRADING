@@ -141,7 +141,7 @@ def register_page_routes(app: FastAPI) -> None:
     #   Main app:   cd frontend && npm run build   → outputs to ../static/
     #   GodMode:    cd dashboard && npm run build  → outputs to dashboard/dist/
     _root = Path(__file__).parent.parent
-    _frontend_dist = _root / "static"          # frontend Vite build output
+    _frontend_dist = _root / "static"  # frontend Vite build output
     _dashboard_dist = _root / "dashboard" / "dist"  # legacy dashboard build
 
     if _frontend_dist.exists() and (_frontend_dist / "index.html").exists():
