@@ -434,7 +434,11 @@ class TestInstitutionalRiskManager:
     def test_register_emergency_callback(self, eng):
         rm = eng.InstitutionalRiskManager(initial_capital=100_000)
         called = []
-        rm.register_emergency_callback(lambda reason: called.append(reason))
+
+        def _cb(reason):
+            called.append(reason)
+
+        rm.register_emergency_callback(_cb)
         assert len(rm.emergency_callbacks) == 1
 
     def test_intraday_risk_ok(self, eng):
