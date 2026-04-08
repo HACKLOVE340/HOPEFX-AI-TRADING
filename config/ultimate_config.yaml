@@ -6,7 +6,7 @@ Override your existing config with these advanced settings
 
 mcc:
   enable_gpu: true
-  enable_fpga: false
+  # enable_fpga: not implemented — reserved for a future hardware-offload path.
   enable_arbitrage: true
   enable_risk_montecarlo: true
 
