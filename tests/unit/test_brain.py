@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections import deque
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -247,7 +246,7 @@ class TestStateUpdate:
     @pytest.mark.asyncio
     async def test_update_state_broker_timeout(self, brain):
         broker = AsyncMock()
-        broker.get_account_info.side_effect = asyncio.TimeoutError()
+        broker.get_account_info.side_effect = TimeoutError()
         brain.broker = broker
         with pytest.raises(asyncio.TimeoutError):
             await brain._update_state()
@@ -256,7 +255,7 @@ class TestStateUpdate:
     async def test_update_state_positions_timeout_graceful(self, brain):
         broker = AsyncMock()
         broker.get_account_info.return_value = {"balance": 1000, "equity": 1000, "margin_used": 0, "free_margin": 1000}
-        broker.get_positions.side_effect = asyncio.TimeoutError()
+        broker.get_positions.side_effect = TimeoutError()
         broker.get_pending_orders.return_value = []
         brain.broker = broker
         # positions timeout should set empty positions, not crash

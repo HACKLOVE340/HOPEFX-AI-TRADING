@@ -123,30 +123,30 @@ async def _run(args: argparse.Namespace) -> None:
     to_dt = datetime.fromisoformat(args.to_date).replace(tzinfo=UTC) if args.to_date else datetime.now(UTC)
 
     if args.granularity not in TIMEFRAME_SECONDS:
-        print(f"Unknown granularity '{args.granularity}'. Supported: {', '.join(TIMEFRAME_SECONDS)}")
+        logger.info(f"Unknown granularity '{args.granularity}'. Supported: {', '.join(TIMEFRAME_SECONDS)}")
         sys.exit(1)
 
     bar_secs = TIMEFRAME_SECONDS[args.granularity]
     total_bars_estimate = int((to_dt - from_dt).total_seconds() / bar_secs)
     output_path = _csv_path(args.symbol, args.granularity)
 
-    print("\nHOPEFX H1 Backfill")
-    print("=" * 50)
-    print(f"  Symbol      : {args.symbol}")
-    print(f"  Granularity : {args.granularity}")
-    print(f"  From        : {from_dt.strftime('%Y-%m-%d')}")
-    print(f"  To          : {to_dt.strftime('%Y-%m-%d')}")
-    print(f"  Est. bars   : ~{total_bars_estimate:,}")
-    print(f"  Output      : {output_path}")
-    print(f"  OANDA key   : {'SET' if os.getenv('OANDA_API_KEY') else 'NOT SET (yfinance fallback)'}")
-    print()
+    logger.info("\nHOPEFX H1 Backfill")
+    logger.info("=" * 50)
+    logger.info(f"  Symbol      : {args.symbol}")
+    logger.info(f"  Granularity : {args.granularity}")
+    logger.info(f"  From        : {from_dt.strftime('%Y-%m-%d')}")
+    logger.info(f"  To          : {to_dt.strftime('%Y-%m-%d')}")
+    logger.info(f"  Est. bars   : ~{total_bars_estimate:,}")
+    logger.info(f"  Output      : {output_path}")
+    logger.info(f"  OANDA key   : {'SET' if os.getenv('OANDA_API_KEY') else 'NOT SET (yfinance fallback)'}")
+    logger.info("")
 
     if args.dry_run:
-        print("Dry run — no data written.")
+        logger.info("Dry run — no data written.")
         return
 
     if not os.getenv("OANDA_API_KEY"):
-        print(
+        logger.info(
             "⚠️  OANDA_API_KEY not set.\n"
             "   Falling back to yfinance (GC=F proxy).\n"
             "   Note: yfinance H1 data is limited to ~730 days.\n"
@@ -161,16 +161,16 @@ async def _run(args: argparse.Namespace) -> None:
         to_date=to_dt,
     )
 
-    print()
-    print("=" * 50)
-    print(f"Backfill complete: {count:,} bars appended to {output_path}")
+    logger.info("")
+    logger.info("=" * 50)
+    logger.info(f"Backfill complete: {count:,} bars appended to {output_path}")
 
     if output_path.exists():
         size_kb = output_path.stat().st_size / 1024
-        print(f"File size: {size_kb:.1f} KB")
+        logger.info(f"File size: {size_kb:.1f} KB")
 
     if count == 0 and not os.getenv("OANDA_API_KEY"):
-        print(
+        logger.info(
             "\nNo bars appended. To get full H1 history back to 2015:\n"
             "  1. Register at https://www.oanda.com/register/ (free practice account)\n"
             "  2. Get your API key from My Account → Manage API Access\n"

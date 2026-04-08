@@ -1265,17 +1265,25 @@ async def example_usage():
     # Set FTMO_API_KEY, FTMO_SECRET_KEY, FTMO_ACCOUNT_ID before running.
     import os as _os
 
+    ftmo_api_key = _os.environ.get("FTMO_API_KEY")
+    ftmo_secret_key = _os.environ.get("FTMO_SECRET_KEY")
+    ftmo_account_id = _os.environ.get("FTMO_ACCOUNT_ID")
+    if not all([ftmo_api_key, ftmo_secret_key, ftmo_account_id]):
+        raise ValueError(
+            "FTMO_API_KEY, FTMO_SECRET_KEY, and FTMO_ACCOUNT_ID environment variables must be set"
+        )
+
     async with PropFirmFactory.create_broker(
         PropFirmType.FTMO,
-        api_key=_os.environ["FTMO_API_KEY"],
-        secret_key=_os.environ["FTMO_SECRET_KEY"],
-        account_id=_os.environ["FTMO_ACCOUNT_ID"],
+        api_key=ftmo_api_key,
+        secret_key=ftmo_secret_key,
+        account_id=ftmo_account_id,
         sandbox=True,
     ) as broker:
         # Get metrics
         metrics = await broker.get_metrics()
-        print(f"Balance: {metrics.account_balance}")
-        print(f"Daily P&L: {metrics.profit_loss}")
+        logger.info("Balance: %s", metrics.account_balance)
+        logger.info("Daily P&L: %s", metrics.profit_loss)
 
         # Check risk
         is_violated, _ = await broker.check_risk_violations()
@@ -1288,8 +1296,8 @@ async def example_usage():
                 stop_loss=1.0950,
                 take_profit=1.1050,
             )
-            print(f"Order placed: {result}")
+            logger.info("Order placed: %s", result)
 
         # Get open trades
         trades = await broker.get_open_trades()
-        print(f"Open trades: {len(trades)}")
+        logger.info("Open trades: %d", len(trades))

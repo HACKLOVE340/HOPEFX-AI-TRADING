@@ -1,0 +1,61 @@
+# HOPEFX-AI-TRADING
+# Copyright (c) 2025-2026
+# Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
+# All modifications must be shared under the same license.
+# No commercial use without explicit permission.
+"""
+HOPEFX SuperAdmin API Router — thin orchestrator.
+
+All sub-routers are mounted here.  External code that does::
+
+    from api.superadmin import router
+
+continues to work without changes.
+"""
+
+from fastapi import APIRouter, Depends
+from fastapi.responses import HTMLResponse
+
+from api.auth import TokenPayload
+
+from ._shared import _require_superadmin, _TEMPLATES_DIR
+from .overview import router as _overview_router
+from .users import router as _users_router
+from .platform import router as _platform_router
+from .ml_ai import router as _ml_ai_router
+from .financial import router as _financial_router
+from .security import router as _security_router
+from .logs import router as _logs_router
+from .feature_flags import router as _feature_flags_router
+from .audit import router as _audit_router
+from .infrastructure import router as _infrastructure_router
+
+router = APIRouter(prefix="/api/superadmin", tags=["SuperAdmin"])
+
+
+@router.get("/", response_class=HTMLResponse, include_in_schema=False)
+async def superadmin_dashboard(user: TokenPayload = Depends(_require_superadmin)) -> HTMLResponse:
+    """SuperAdmin master control center UI. Requires: role = superadmin."""
+    path = _TEMPLATES_DIR / "admin" / "superadmin.html"
+    if path.exists():
+        return HTMLResponse(content=path.read_text(encoding="utf-8"))
+    return HTMLResponse(
+        content="""<!DOCTYPE html><html><head><title>SuperAdmin</title></head>
+<body style="background:#0d1117;color:#e6edf3;font-family:sans-serif;padding:40px;">
+<h1>SuperAdmin Control Center</h1>
+<p style="color:#f85149;">Template not found: templates/admin/superadmin.html</p>
+<a href="/api/admin/" style="color:#58a6ff;">← Back to Admin</a>
+</body></html>"""
+    )
+
+
+router.include_router(_overview_router)
+router.include_router(_users_router)
+router.include_router(_platform_router)
+router.include_router(_ml_ai_router)
+router.include_router(_financial_router)
+router.include_router(_security_router)
+router.include_router(_logs_router)
+router.include_router(_feature_flags_router)
+router.include_router(_audit_router)
+router.include_router(_infrastructure_router)

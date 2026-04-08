@@ -317,19 +317,22 @@ async def get_user_trades(
 
         # Query real trades if DB is available
         db = next(get_db())
-        rows = db.query(Trade).filter(Trade.user_id == user_id).order_by(Trade.created_at.desc()).limit(100).all()
-        trades = [
-            {
-                "trade_id": str(r.id),
-                "symbol": r.symbol,
-                "direction": r.direction,
-                "lots": float(r.quantity),
-                "pnl": float(r.pnl) if r.pnl is not None else None,
-                "opened_at": r.created_at.isoformat() if r.created_at else None,
-                "closed_at": r.closed_at.isoformat() if hasattr(r, "closed_at") and r.closed_at else None,
-            }
-            for r in rows
-        ]
+        try:
+            rows = db.query(Trade).filter(Trade.user_id == user_id).order_by(Trade.created_at.desc()).limit(100).all()
+            trades = [
+                {
+                    "trade_id": str(r.id),
+                    "symbol": r.symbol,
+                    "direction": r.direction,
+                    "lots": float(r.quantity),
+                    "pnl": float(r.pnl) if r.pnl is not None else None,
+                    "opened_at": r.created_at.isoformat() if r.created_at else None,
+                    "closed_at": r.closed_at.isoformat() if hasattr(r, "closed_at") and r.closed_at else None,
+                }
+                for r in rows
+            ]
+        finally:
+            db.close()
     except Exception as exc:
         logger.debug("get_user_trades.db_unavailable: %s — returning empty list", exc)
     return {"trades": trades, "user_id": user_id, "total": len(trades)}

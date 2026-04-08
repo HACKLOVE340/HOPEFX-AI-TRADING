@@ -26,6 +26,9 @@ import argparse
 import os
 import sys
 from pathlib import Path
+import logging
+logger = logging.getLogger(__name__)
+
 
 # Ensure project root is on path
 _ROOT = Path(__file__).resolve().parent.parent
@@ -45,7 +48,7 @@ def _check(label: str, ok: bool, detail: str = "") -> bool:
     msg = f"{status} {label}"
     if detail:
         msg += f": {detail}"
-    print(msg)
+    logger.info(msg)
     return ok
 
 
@@ -54,24 +57,24 @@ def validate(practice: bool = True) -> bool:
     account_id = os.getenv("OANDA_ACCOUNT_ID") or os.getenv("BROKER_OANDA_ACCOUNT") or ""
 
     env_label = "practice" if practice else "LIVE"
-    print(f"\nOANDA {env_label} API validation")
-    print("=" * 40)
+    logger.info(f"\nOANDA {env_label} API validation")
+    logger.info("=" * 40)
 
     # ── 1. Credentials present ────────────────────────────────────────────────
     if not _check("OANDA_API_KEY set", bool(api_key)):
-        print("\n  Set OANDA_API_KEY in .env")
-        print("  Get a free practice account at https://www.oanda.com/register/")
+        logger.info("\n  Set OANDA_API_KEY in .env")
+        logger.info("  Get a free practice account at https://www.oanda.com/register/")
         return False
 
     if not _check("OANDA_ACCOUNT_ID set", bool(account_id)):
-        print("\n  Set OANDA_ACCOUNT_ID in .env")
+        logger.info("\n  Set OANDA_ACCOUNT_ID in .env")
         return False
 
     # ── 2. API reachability ───────────────────────────────────────────────────
     try:
         import requests
     except ImportError:
-        print("✗ requests library not installed — run: pip install requests")
+        logger.info("✗ requests library not installed — run: pip install requests")
         return False
 
     base = "https://api-fxpractice.oanda.com" if practice else "https://api-fxtrade.oanda.com"
@@ -180,19 +183,19 @@ def validate(practice: bool = True) -> bool:
         except Exception as exc:
             _check("Order placement test", False, str(exc))
     else:
-        print("  (Order placement test skipped for live endpoint)")
+        logger.info("  (Order placement test skipped for live endpoint)")
 
-    print()
-    print("All checks passed. HOPEFX is ready for paper trading.")
-    print("Start with: python app.py")
-    print("Monitor at: http://localhost:8000/app")
+    logger.info("")
+    logger.info("All checks passed. HOPEFX is ready for paper trading.")
+    logger.info("Start with: python app.py")
+    logger.info("Monitor at: http://localhost:8000/app")
     return True
 
 
 def validate_gate() -> None:
     """Print the current PaperTradingGate phase status."""
-    print("\nPhase Gate Status")
-    print("=" * 40)
+    logger.info("\nPhase Gate Status")
+    logger.info("=" * 40)
     try:
         from research.pipeline.paper_trading_gate import PaperTradingGate
 
@@ -203,19 +206,19 @@ def validate_gate() -> None:
         p3_ok, _ = gate.phase3_ready()
 
         if not p2_ok:
-            print("\nTo start the 30-day clock:")
-            print("  python -m research.pipeline.paper_trading_gate --set-start")
-            print("\nTo record fills (called automatically by broker callback):")
-            print("  python -m research.pipeline.paper_trading_gate --record-fill <pnl>")
+            logger.info("\nTo start the 30-day clock:")
+            logger.info("  python -m research.pipeline.paper_trading_gate --set-start")
+            logger.info("\nTo record fills (called automatically by broker callback):")
+            logger.info("  python -m research.pipeline.paper_trading_gate --record-fill <pnl>")
         elif not p3_ok:
-            print("\nPhase 2 gate passed. Enable anomaly weighting:")
-            print("  FEATURE_ANOMALY_WEIGHTING=true  (in .env)")
-            print("\nPhase 3 requires 500 fills and 90 days.")
+            logger.info("\nPhase 2 gate passed. Enable anomaly weighting:")
+            logger.info("  FEATURE_ANOMALY_WEIGHTING=true  (in .env)")
+            logger.info("\nPhase 3 requires 500 fills and 90 days.")
         else:
-            print("\nAll phase gates passed. Enable online learning:")
-            print("  FEATURE_ONLINE_LEARNING=true  (in .env)")
+            logger.info("\nAll phase gates passed. Enable online learning:")
+            logger.info("  FEATURE_ONLINE_LEARNING=true  (in .env)")
     except ImportError as exc:
-        print(f"  Gate module unavailable: {exc}")
+        logger.info(f"  Gate module unavailable: {exc}")
 
 
 def main() -> None:

@@ -20,7 +20,7 @@ import type { NuclearWsMessage, NuclearChartState, NuclearAlertMessage } from '.
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _envNuclearWsUrl = (import.meta as any).env?.VITE_NUCLEAR_WS_URL as string | undefined;
+const _envNuclearWsUrl = import.meta.env.VITE_NUCLEAR_WS_URL as string | undefined;
 
 function getNuclearWsUrl(): string {
   if (_envNuclearWsUrl) return _envNuclearWsUrl;

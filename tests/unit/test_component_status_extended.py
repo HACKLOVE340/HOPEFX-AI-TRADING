@@ -166,39 +166,47 @@ class TestComponentStatusIndividualChecks:
 class TestPrintComponentStatusReport:
     """Tests for print_component_status_report function."""
 
-    def test_print_report_runs(self, capsys):
+    def test_print_report_runs(self, caplog):
         """Test that print_component_status_report executes without error."""
+        import logging
+
         from utils.component_status import print_component_status_report
 
-        print_component_status_report()
-        captured = capsys.readouterr()
-        assert "HOPEFX" in captured.out
-        assert "COMPONENT STATUS REPORT" in captured.out
+        with caplog.at_level(logging.INFO):
+            print_component_status_report()
+        assert "HOPEFX" in caplog.text
+        assert "COMPONENT STATUS REPORT" in caplog.text
 
-    def test_print_report_shows_version(self, capsys):
+    def test_print_report_shows_version(self, caplog):
         """Test that print_component_status_report shows framework version."""
+        import logging
+
         from utils.component_status import print_component_status_report
 
-        print_component_status_report()
-        captured = capsys.readouterr()
-        assert "1.0.0" in captured.out
+        with caplog.at_level(logging.INFO):
+            print_component_status_report()
+        assert "1.0.0" in caplog.text
 
-    def test_print_report_shows_components(self, capsys):
+    def test_print_report_shows_components(self, caplog):
         """Test that print_component_status_report shows component names."""
+        import logging
+
         from utils.component_status import print_component_status_report
 
-        print_component_status_report()
-        captured = capsys.readouterr()
-        assert "config" in captured.out
-        assert "strategies" in captured.out
+        with caplog.at_level(logging.INFO):
+            print_component_status_report()
+        assert "config" in caplog.text
+        assert "strategies" in caplog.text
 
-    def test_print_report_shows_total(self, capsys):
+    def test_print_report_shows_total(self, caplog):
         """Test that print_component_status_report shows total count."""
+        import logging
+
         from utils.component_status import print_component_status_report
 
-        print_component_status_report()
-        captured = capsys.readouterr()
-        assert "Total:" in captured.out
+        with caplog.at_level(logging.INFO):
+            print_component_status_report()
+        assert "Total:" in caplog.text
 
 
 class TestComponentStatusErrors:

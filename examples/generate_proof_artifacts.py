@@ -51,6 +51,9 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report
 from sklearn.preprocessing import StandardScaler
+import logging
+logger = logging.getLogger(__name__)
+
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
@@ -153,7 +156,7 @@ def generate_xauusd_synthetic(start="2019-01-02", n_days=1260, seed=42) -> pd.Da
 
 # ── Load data: real first, synthetic fallback ─────────────────────────────────
 # Use 10 years to provide enough test bars for ≥300 trades.
-print("Fetching real XAUUSD data (GC=F via yfinance, 40 years) …")
+logger.info("Fetching real XAUUSD data (GC=F via yfinance, 40 years) …")
 try:
     df = fetch_real_xauusd(years=40)
     _USING_REAL_DATA = True
@@ -172,12 +175,12 @@ except Exception as exc:
         UserWarning,
         stacklevel=1,
     )
-    print(f"  ⚠ yfinance failed ({exc}) — using SYNTHETIC fallback")
+    logger.error(f"  ⚠ yfinance failed ({exc}) — using SYNTHETIC fallback")
     df = generate_xauusd_synthetic(n_days=10080)  # ~40 years
     _USING_REAL_DATA = False
     csv_path = DATA_DIR / "XAUUSD_40Y_synthetic.csv"
     df.to_csv(csv_path)
-    print(f"  Synthetic data: {len(df)} bars → {csv_path}")
+    logger.info(f"  Synthetic data: {len(df)} bars → {csv_path}")
 
 
 # ── 2. Feature engineering (stationary — no raw price lags) ──────────────────
@@ -387,7 +390,7 @@ def add_features(df: pd.DataFrame, macro_df=None) -> pd.DataFrame:
 
 # ── Fetch macro data ──────────────────────────────────────────────────────────
 macro_df = None
-print("Fetching macro data (DXY, VIX, yields, SPX) …")
+logger.info("Fetching macro data (DXY, VIX, yields, SPX) …")
 try:
     import yfinance as yf
 
@@ -414,17 +417,17 @@ try:
                 close.index = pd.to_datetime(close.index).tz_localize(None)
                 _frames[name] = close.rename(name)
         except Exception as _exc:
-            print(f"  Macro series fetch failed: {_exc} — skipping")
+            logger.error(f"  Macro series fetch failed: {_exc} — skipping")
     if _frames:
         macro_df = pd.concat(_frames.values(), axis=1).ffill()
-        print(f"  Macro data: {len(macro_df)} bars, {len(macro_df.columns)} series")
+        logger.info(f"  Macro data: {len(macro_df)} bars, {len(macro_df.columns)} series")
     else:
-        print("  No macro data fetched — proceeding without")
+        logger.info("  No macro data fetched — proceeding without")
 except Exception as _me:
-    print(f"  Macro fetch failed ({_me}) — proceeding without")
+    logger.error(f"  Macro fetch failed ({_me}) — proceeding without")
 
 
-print("Engineering features …")
+logger.info("Engineering features …")
 dff = add_features(df, macro_df=macro_df)
 
 # All columns except OHLCV and target are features
@@ -440,7 +443,7 @@ dff = dff.dropna(subset=["target"])
 
 X = dff[FEATURE_COLS].values
 y = dff["target"].values
-print(f"  {len(X)} samples, {len(FEATURE_COLS)} features, class balance: {y.mean():.2%} up-days")
+logger.info(f"  {len(X)} samples, {len(FEATURE_COLS)} features, class balance: {y.mean():.2%} up-days")
 
 
 # ── 3. Train RandomForest ─────────────────────────────────────────────────────
@@ -455,7 +458,7 @@ scaler = StandardScaler()
 X_train_s = scaler.fit_transform(X_train)
 X_test_s = scaler.transform(X_test)
 
-print("Training RandomForest (enhanced stationary features) …")
+logger.info("Training RandomForest (enhanced stationary features) …")
 clf = RandomForestClassifier(
     n_estimators=300,
     max_depth=8,
@@ -471,18 +474,18 @@ y_pred = clf.predict(X_test_s)
 y_prob = clf.predict_proba(X_test_s)[:, 1]
 
 report = classification_report(y_test, y_pred, target_names=["Down", "Up"], output_dict=True)
-print(f"  Test accuracy: {report['accuracy']:.3f}")
-print(f"  Up precision:  {report['Up']['precision']:.3f}  recall: {report['Up']['recall']:.3f}")
+logger.info(f"  Test accuracy: {report['accuracy']:.3f}")
+logger.info(f"  Up precision:  {report['Up']['precision']:.3f}  recall: {report['Up']['recall']:.3f}")
 
 # Save model + scaler
 model_path = MODEL_DIR / "rf_xauusd.pkl"
 joblib.dump({"model": clf, "scaler": scaler, "features": FEATURE_COLS}, model_path)
-print(f"  Saved model → {model_path}")
+logger.info(f"  Saved model → {model_path}")
 
 
 # ── 4. Backtest ───────────────────────────────────────────────────────────────
 
-print("Running backtest …")
+logger.info("Running backtest …")
 
 test_df = dff.iloc[split:].copy()
 test_df["signal_prob"] = y_prob
@@ -685,12 +688,12 @@ perf = {
 perf_path = RESULTS_DIR / "performance.json"
 with open(perf_path, "w") as f:
     json.dump(perf, f, indent=2)
-print(f"  Saved performance → {perf_path}")
+logger.info(f"  Saved performance → {perf_path}")
 
 trades_path = RESULTS_DIR / "trades.csv"
 if n_trades > 0:
     trades_df.to_csv(trades_path, index=False)
-    print(f"  Saved {n_trades} trades → {trades_path}")
+    logger.info(f"  Saved {n_trades} trades → {trades_path}")
 
 # ── 6. Equity curve plot ──────────────────────────────────────────────────────
 
@@ -807,14 +810,14 @@ plt.tight_layout()
 chart_path = RESULTS_DIR / "equity_curve.png"
 plt.savefig(chart_path, dpi=150, bbox_inches="tight")
 plt.close()
-print(f"  Saved equity curve → {chart_path}")
+logger.info(f"  Saved equity curve → {chart_path}")
 
 # ── 7. Print summary ──────────────────────────────────────────────────────────
 
-print("\n" + "=" * 55)
-print("  BACKTEST SUMMARY")
-print("=" * 55)
+logger.info("\n" + "=" * 55)
+logger.info("  BACKTEST SUMMARY")
+logger.info("=" * 55)
 for k, v in perf.items():
-    print(f"  {k:<28} {v}")
-print("=" * 55)
-print("\nAll artifacts saved. Ready to commit.")
+    logger.info(f"  {k:<28} {v}")
+logger.info("=" * 55)
+logger.info("\nAll artifacts saved. Ready to commit.")

@@ -29,6 +29,12 @@ export interface MatchedTerm {
   contribution: number;
 }
 
+export interface FeatureScore {
+  feature: string;
+  score: number;
+  direction: 'bullish' | 'bearish' | 'neutral';
+}
+
 // ─── Nuclear State ────────────────────────────────────────────────────────────
 
 export interface NuclearState {
@@ -50,6 +56,12 @@ export interface NuclearState {
   historical_analog: string | null;
   cooldown_remaining: number;
   event_count: number;
+  // Explainability engine fields (optional — populated when explainability is enabled)
+  feature_scores?: FeatureScore[];
+  decision_trace?: string[];
+  risk_narrative?: string;
+  action_advice?: string;
+  confidence_breakdown?: Record<string, number>;
 }
 
 // ─── Geopolitical Gauge ───────────────────────────────────────────────────────

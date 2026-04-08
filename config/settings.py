@@ -18,6 +18,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from config.vault import vault
 
 
+import logging
+logger = logging.getLogger(__name__)
+
 class DatabaseSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="DB_")
 
@@ -113,7 +116,7 @@ class SecuritySettings(BaseSettings):
         if not raw or raw.startswith("CHANGE_ME"):
             raise ValueError(
                 "SECURITY_JWT_SECRET must be set to a strong random value. "
-                'Generate one with: python -c "import secrets; print(secrets.token_hex(32))"'
+                'Generate one with: python -c "import secrets; logger.info(secrets.token_hex(32))"'
             )
         return v
 

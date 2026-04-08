@@ -924,7 +924,7 @@ class MarketDataCache:
     async def health_check_async(self) -> bool:
         """Async version of health check"""
         # Run sync health check in thread pool
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self.health_check)
 
     def close(self) -> None:

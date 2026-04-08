@@ -36,10 +36,10 @@ Usage
     gate.record_sharpe(before=1.52, after=1.40)
 
     if gate.phase2_ready():
-        print("Enable FEATURE_ANOMALY_WEIGHTING=true")
+        logger.info("Enable FEATURE_ANOMALY_WEIGHTING=true")
 
     if gate.phase3_ready():
-        print("Enable FEATURE_ONLINE_LEARNING=true")
+        logger.info("Enable FEATURE_ONLINE_LEARNING=true")
 
     # CLI usage
     python -m research.pipeline.paper_trading_gate --status
@@ -283,25 +283,25 @@ class PaperTradingGate:
     def print_status(self) -> None:
         """Print a human-readable status report to stdout."""
         s = self.status()
-        print("=" * 60)
-        print("OANDA Paper Trading Gate Status")
-        print("=" * 60)
-        print(f"  Run start (UTC) : {s['run_start_utc'] or 'NOT SET'}")
-        print(f"  Elapsed days    : {s['elapsed_days']}")
-        print(f"  Fill count      : {s['fill_count']}")
+        logger.info("=" * 60)
+        logger.info("OANDA Paper Trading Gate Status")
+        logger.info("=" * 60)
+        logger.info(f"  Run start (UTC) : {s['run_start_utc'] or 'NOT SET'}")
+        logger.info(f"  Elapsed days    : {s['elapsed_days']}")
+        logger.info(f"  Fill count      : {s['fill_count']}")
         if s["sharpe_before"] is not None:
             drop = s["sharpe_before"] - s["sharpe_after"]
-            print(f"  Sharpe before   : {s['sharpe_before']:.3f}")
-            print(f"  Sharpe after    : {s['sharpe_after']:.3f}")
-            print(f"  Sharpe drop     : {drop:.3f}")
-        print()
+            logger.info(f"  Sharpe before   : {s['sharpe_before']:.3f}")
+            logger.info(f"  Sharpe after    : {s['sharpe_after']:.3f}")
+            logger.info(f"  Sharpe drop     : {drop:.3f}")
+        logger.info("")
         p2 = "✅ READY" if s["phase2_ready"] else "❌ NOT READY"
         p3 = "✅ READY" if s["phase3_ready"] else "❌ NOT READY"
-        print(f"  Phase 2 (Anomaly)  : {p2}")
-        print(f"    {s['phase2_reason']}")
-        print(f"  Phase 3 (Online)   : {p3}")
-        print(f"    {s['phase3_reason']}")
-        print("=" * 60)
+        logger.info(f"  Phase 2 (Anomaly)  : {p2}")
+        logger.info(f"    {s['phase2_reason']}")
+        logger.info(f"  Phase 3 (Online)   : {p3}")
+        logger.info(f"    {s['phase3_reason']}")
+        logger.info("=" * 60)
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────
@@ -365,15 +365,15 @@ def _cli() -> None:
 
     if args.set_start:
         gate.set_run_start()
-        print(f"Run start set to {gate.run_start.isoformat()}")
+        logger.info(f"Run start set to {gate.run_start.isoformat()}")
 
     if args.record_fill is not None:
         count = gate.record_fill(pnl=args.record_fill)
-        print(f"Fill recorded. Total fills: {count}")
+        logger.info(f"Fill recorded. Total fills: {count}")
 
     if args.record_sharpe:
         gate.record_sharpe(before=args.record_sharpe[0], after=args.record_sharpe[1])
-        print(f"Sharpe recorded: {args.record_sharpe[0]:.3f} → {args.record_sharpe[1]:.3f}")
+        logger.info(f"Sharpe recorded: {args.record_sharpe[0]:.3f} → {args.record_sharpe[1]:.3f}")
 
     if args.status or not any([args.set_start, args.record_fill is not None, args.record_sharpe]):
         gate.print_status()

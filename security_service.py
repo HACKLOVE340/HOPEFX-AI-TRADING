@@ -86,7 +86,7 @@ class SecurityService:
             raise ValueError(
                 "SecurityService: SECRET_KEY is not set. "
                 "Set the SECRET_KEY environment variable to a cryptographically "
-                'random value: python3 -c "import secrets; print(secrets.token_hex(32))"'
+                'random value: python3 -c "import secrets; logger.info(secrets.token_hex(32))"'
             )
         self._algorithm = algorithm
         self._access_expire = timedelta(minutes=access_token_expire_minutes)

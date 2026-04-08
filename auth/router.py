@@ -24,6 +24,8 @@ Endpoints:
 
 from __future__ import annotations
 
+import asyncio
+import functools
 import logging
 import os
 import time
@@ -228,10 +230,13 @@ def _get_current_user_id(
 async def register(body: RegisterRequest, request: Request):
     """Create a new user account and send email verification."""
     _check_ip_rate_limit(_get_client_ip(request))
-    ok, msg, verify_token = _svc().register(
-        email=body.email,
-        username=body.username,
-        password=body.password,
+    ok, msg, verify_token = await asyncio.to_thread(
+        functools.partial(
+            _svc().register,
+            email=body.email,
+            username=body.username,
+            password=body.password,
+        )
     )
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
@@ -271,7 +276,7 @@ async def register(body: RegisterRequest, request: Request):
 @router.get("/verify-email")
 async def verify_email(token: str):
     """Verify email address from link. token= query param."""
-    ok, msg = _svc().verify_email(token)
+    ok, msg = await asyncio.to_thread(_svc().verify_email, token)
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
     return {"message": msg}
@@ -280,7 +285,7 @@ async def verify_email(token: str):
 @router.post("/resend-verification")
 async def resend_verification(body: ForgotPasswordRequest, request: Request):
     _check_ip_rate_limit(_get_client_ip(request))
-    ok, msg, verify_token = _svc().resend_verification(body.email)
+    ok, msg, verify_token = await asyncio.to_thread(_svc().resend_verification, body.email)
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
     if verify_token:
@@ -288,7 +293,7 @@ async def resend_verification(body: ForgotPasswordRequest, request: Request):
             from core.email_service import send_verification_email
 
             # Fetch username for the email
-            user = _svc().get_user_by_email(body.email)
+            user = await asyncio.to_thread(_svc().get_user_by_email, body.email)
             username = user.username if user else body.email
             send_verification_email(body.email, username, verify_token)
         except Exception as _e:
@@ -302,12 +307,15 @@ async def login(body: LoginRequest, request: Request):
     _check_ip_rate_limit(_get_client_ip(request))
     ip = _client_ip(request)
     device = request.headers.get("User-Agent", "")
-    ok, msg, tokens = _svc().login(
-        email=body.email,
-        password=body.password,
-        ip_address=ip,
-        device_info=device,
-        totp_code=body.totp_code,
+    ok, msg, tokens = await asyncio.to_thread(
+        functools.partial(
+            _svc().login,
+            email=body.email,
+            password=body.password,
+            ip_address=ip,
+            device_info=device,
+            totp_code=body.totp_code,
+        )
     )
     if not ok:
         raise HTTPException(status_code=401, detail=msg)
@@ -328,7 +336,9 @@ async def login(body: LoginRequest, request: Request):
 async def refresh(body: RefreshRequest, request: Request):
     """Rotate refresh token. Returns new access + refresh token pair."""
     _check_ip_rate_limit(_get_client_ip(request))
-    ok, msg, tokens = _svc().refresh(body.refresh_token, ip_address=_client_ip(request))
+    ok, msg, tokens = await asyncio.to_thread(
+        functools.partial(_svc().refresh, body.refresh_token, ip_address=_client_ip(request))
+    )
     if not ok:
         raise HTTPException(status_code=401, detail=msg)
     return tokens
@@ -342,14 +352,16 @@ async def logout(
     """Revoke the current session and blacklist the access token."""
     # Use the bearer token from the Authorization header if not explicitly provided
     access_token = body.access_token or (credentials.credentials if credentials else None)
-    _svc().logout(body.refresh_token, access_token=access_token)
+    await asyncio.to_thread(
+        functools.partial(_svc().logout, body.refresh_token, access_token=access_token)
+    )
     return {"message": "Logged out successfully"}
 
 
 @router.post("/logout-all")
 async def logout_all(user_id: str = Depends(_get_current_user_id)):
     """Revoke all active sessions for the current user."""
-    _svc().logout_all(user_id)
+    await asyncio.to_thread(_svc().logout_all, user_id)
     return {"message": "All sessions revoked"}
 
 
@@ -408,7 +420,7 @@ async def revoke_session(session_id: str, user_id: str = Depends(_get_current_us
 @router.delete("/sessions")
 async def revoke_all_sessions(user_id: str = Depends(_get_current_user_id)):
     """Revoke all sessions for the current user (alias for logout-all)."""
-    _svc().logout_all(user_id)
+    await asyncio.to_thread(_svc().logout_all, user_id)
     return {"message": "All sessions revoked"}
 
 
@@ -416,12 +428,14 @@ async def revoke_all_sessions(user_id: str = Depends(_get_current_user_id)):
 async def forgot_password(body: ForgotPasswordRequest, request: Request):
     """Request a password reset link. Always returns 200 to avoid email enumeration."""
     _check_ip_rate_limit(_get_client_ip(request))
-    _, msg, reset_token = _svc().request_password_reset(body.email)
+    _, msg, reset_token = await asyncio.to_thread(
+        functools.partial(_svc().request_password_reset, body.email)
+    )
     if reset_token:
         try:
             from core.email_service import send_password_reset_email
 
-            user = _svc().get_user_by_email(body.email)
+            user = await asyncio.to_thread(_svc().get_user_by_email, body.email)
             username = user.username if user else body.email
             send_password_reset_email(body.email, username, reset_token)
         except Exception as _e:
@@ -438,7 +452,9 @@ async def forgot_password(body: ForgotPasswordRequest, request: Request):
 async def reset_password(body: ResetPasswordRequest, request: Request):
     """Set a new password using the reset token."""
     _check_ip_rate_limit(_get_client_ip(request))
-    ok, msg = _svc().reset_password(body.token, body.new_password)
+    ok, msg = await asyncio.to_thread(
+        functools.partial(_svc().reset_password, body.token, body.new_password)
+    )
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
     return {"message": msg}
@@ -447,7 +463,7 @@ async def reset_password(body: ResetPasswordRequest, request: Request):
 @router.post("/2fa/setup")
 async def setup_2fa(user_id: str = Depends(_get_current_user_id)):
     """Generate TOTP secret and QR code URI. Call /2fa/confirm to activate."""
-    ok, uri_or_msg, secret = _svc().setup_2fa(user_id)
+    ok, uri_or_msg, secret = await asyncio.to_thread(_svc().setup_2fa, user_id)
     if not ok:
         raise HTTPException(status_code=400, detail=uri_or_msg)
     return {
@@ -463,7 +479,7 @@ async def confirm_2fa(
     user_id: str = Depends(_get_current_user_id),
 ):
     """Confirm 2FA setup with a valid TOTP code to activate it."""
-    ok, msg = _svc().confirm_2fa(user_id, body.code)
+    ok, msg = await asyncio.to_thread(_svc().confirm_2fa, user_id, body.code)
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
     return {"message": msg}
@@ -475,7 +491,7 @@ async def disable_2fa(
     user_id: str = Depends(_get_current_user_id),
 ):
     """Disable 2FA. Requires a valid TOTP code to confirm."""
-    ok, msg = _svc().disable_2fa(user_id, body.code)
+    ok, msg = await asyncio.to_thread(_svc().disable_2fa, user_id, body.code)
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
     return {"message": msg}
@@ -484,7 +500,7 @@ async def disable_2fa(
 @router.get("/me")
 async def get_me(user_id: str = Depends(_get_current_user_id)):
     """Return current user profile."""
-    user = _svc().get_user_by_id(user_id)
+    user = await asyncio.to_thread(_svc().get_user_by_id, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return {

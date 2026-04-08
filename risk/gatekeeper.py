@@ -644,9 +644,8 @@ class Gatekeeper:
             tick = getattr(self, "_orch", None) and self._orch.get_latest_tick()
             return float(tick.confidence) if tick else 1.0
         except Exception:
+            logger.debug("_get_data_quality_from_orch: tick read failed", exc_info=True)
             return 1.0
-
-    def _get_blackout(self) -> bool:
         """Return True when a news/macro blackout is active.
 
         Priority
@@ -689,6 +688,7 @@ class Gatekeeper:
         try:
             return float(self._orch.get_macro_impact_score())
         except Exception:
+            logger.debug("_get_impact_score_from_orch: orchestrator call failed", exc_info=True)
             return 0.0
 
     def _get_sentiment(self, signal) -> float:
@@ -704,9 +704,8 @@ class Gatekeeper:
             features = self._orch.get_ml_features()
             return float(features.get("news_sentiment_score", 0.0))
         except Exception:
+            logger.debug("_get_sentiment_from_orch: orchestrator call failed", exc_info=True)
             return 0.0
-
-    # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _reset_daily_counter_locked(self) -> None:
         """Thread-safe daily counter reset.  Call only while holding self._lock."""
@@ -774,7 +773,5 @@ def _make_gatekeeper() -> Gatekeeper:
             lineage_store=orchestrator._lineage,
         )
     except Exception:
+        logger.warning("_make_gatekeeper: orchestrator import failed — using bare Gatekeeper", exc_info=True)
         return Gatekeeper()
-
-
-gatekeeper = _make_gatekeeper()

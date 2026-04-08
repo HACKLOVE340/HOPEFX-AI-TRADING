@@ -5,7 +5,6 @@
 Coverage tests for execution/oms.py — Order, OrderLifecycleManager.
 """
 
-import asyncio
 from decimal import Decimal
 
 import pytest
@@ -18,7 +17,7 @@ import pytest
 @pytest.mark.unit
 class TestOMSOrder:
     def _make(self, qty=Decimal("1.0"), filled=Decimal("0"), status=None):
-        from execution.oms import Order, OrderStatus
+        from execution.oms import Order
         o = Order(symbol="XAUUSD", side="BUY", order_type="LIMIT",
                   quantity=qty, filled_quantity=filled)
         if status:

@@ -146,7 +146,7 @@ const CopyTrading: React.FC = () => {
       <div style={s.header}>
         <h1 style={s.title}>Copy Trading Marketplace</h1>
         <div style={{ display: 'flex', gap: 8 }}>
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} style={s.select}>
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as 'return' | 'sharpe' | 'followers')} style={s.select}>
             <option value="return">Sort by Return</option>
             <option value="sharpe">Sort by Sharpe</option>
             <option value="followers">Sort by Followers</option>

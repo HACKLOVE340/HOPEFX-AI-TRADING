@@ -5,6 +5,9 @@
 # No commercial use without explicit permission.
 # File 19: Create a quickstart script for one-command setup
 from pathlib import Path
+import logging
+logger = logging.getLogger(__name__)
+
 
 quickstart_content = '''#!/usr/bin/env python3
 """
@@ -156,4 +159,4 @@ if __name__ == "__main__":
 with Path("/mnt/kimi/output/hopefx_upgrade/quickstart.py").open("w") as f:
     f.write(quickstart_content)
 
-print("✅ quickstart.py created - One-command setup and demo")
+logger.info("✅ quickstart.py created - One-command setup and demo")

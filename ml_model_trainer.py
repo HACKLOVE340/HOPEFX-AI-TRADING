@@ -56,6 +56,9 @@ def _bbands(close):
 # Set DATA_PATH env var or pass --data argument; defaults to data/XAU_USD_H1.csv.
 import os
 
+
+import logging
+logger = logging.getLogger(__name__)
 _DATA_PATH = os.environ.get("DATA_PATH", "data/XAU_USD_H1.csv")
 data = pd.read_csv(_DATA_PATH)
 
@@ -85,12 +88,12 @@ if __name__ == "__main__":
     model.fit(X_train, y_train)
 
     cv_scores = cross_val_score(model, X, y, cv=5)
-    print(f"Cross-Validation Scores: {cv_scores}")
-    print(f"Average Score: {cv_scores.mean():.4f}")
+    logger.info(f"Cross-Validation Scores: {cv_scores}")
+    logger.info(f"Average Score: {cv_scores.mean():.4f}")
 
     predictions = model.predict(X_test)
-    print(confusion_matrix(y_test, predictions))
-    print(classification_report(y_test, predictions))
+    logger.info(confusion_matrix(y_test, predictions))
+    logger.info(classification_report(y_test, predictions))
 
     joblib.dump(model, "ml/saved_models/ensemble_rf.pkl")
-    print("Model saved to ml/saved_models/ensemble_rf.pkl")
+    logger.info("Model saved to ml/saved_models/ensemble_rf.pkl")

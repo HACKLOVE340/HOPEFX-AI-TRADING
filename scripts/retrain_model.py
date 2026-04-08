@@ -353,15 +353,15 @@ Examples:
                 csv_path=args.csv,
                 years=args.years,
             )
-            print(f"\n{'=' * 50}")
-            print(f"Results for {sym}:")
+            logger.info(f"\n{'=' * 50}")
+            logger.info(f"Results for {sym}:")
             for name, info in results.items():
                 m = info.get("metrics") or {}
                 acc = m.get("accuracy", m.get("rmse", "n/a"))
                 f1 = m.get("f1", "n/a")
                 path = info.get("model_path", "")
-                print(f"  {name:<20} accuracy={acc}  f1={f1}")
-                print(f"  {'':20} saved → {path}")
+                logger.info(f"  {name:<20} accuracy={acc}  f1={f1}")
+                logger.info(f"  {'':20} saved → {path}")
         except Exception:
             logger.exception("Failed for %s: %s", sym)
             all_ok = False
@@ -369,11 +369,11 @@ Examples:
     if not all_ok:
         sys.exit(1)
 
-    print(f"\nAll models saved to {args.model_dir}/")
-    print("Next steps:")
-    print("  1. Review manifest.json in each symbol directory")
-    print("  2. Restart the app to load new weights")
-    print("  3. Check /api/trading/regime for updated regime performance")
+    logger.info(f"\nAll models saved to {args.model_dir}/")
+    logger.info("Next steps:")
+    logger.info("  1. Review manifest.json in each symbol directory")
+    logger.info("  2. Restart the app to load new weights")
+    logger.info("  3. Check /api/trading/regime for updated regime performance")
 
 
 if __name__ == "__main__":

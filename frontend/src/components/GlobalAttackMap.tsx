@@ -16,6 +16,7 @@
  */
 
 import React, { useEffect, useRef } from 'react';
+import type { Map as LeafletMap, Marker as LeafletMarker, Icon as LeafletIconType } from 'leaflet';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -64,9 +65,8 @@ let leafletLoaded = false;
 async function ensureLeaflet(): Promise<typeof import('leaflet')> {
   const L = await import('leaflet');
   if (!leafletLoaded) {
-    // Fix default marker icon paths broken by bundlers
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    delete (L.Icon.Default.prototype as any)._getIconUrl;
+    // Fix default marker icon paths broken by bundlers (_getIconUrl is an internal field)
+    delete (L.Icon.Default.prototype as LeafletIconType & { _getIconUrl?: unknown })._getIconUrl;
     L.Icon.Default.mergeOptions({
       iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
       iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -85,10 +85,8 @@ export const GlobalAttackMap: React.FC<GlobalAttackMapProps> = ({
   height = 420,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mapRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const markersRef = useRef<Map<string, any>>(new Map());
+  const mapRef = useRef<LeafletMap | null>(null);
+  const markersRef = useRef<Map<string, LeafletMarker>>(new Map());
 
   // Initialise map once
   useEffect(() => {

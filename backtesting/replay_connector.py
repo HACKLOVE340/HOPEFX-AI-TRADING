@@ -46,12 +46,12 @@ Usage
         start=datetime(2020, 1, 1, tzinfo=timezone.utc),
         end=datetime(2020, 12, 31, tzinfo=timezone.utc),
     )
-    print(f"Sharpe: {metrics.sharpe_ratio:.2f}")
+    logger.info(f"Sharpe: {metrics.sharpe_ratio:.2f}")
 
     # Regime-shift stress test across all built-in regimes:
     stress = RegimeShiftStressTester(strategy_fn=my_strategy)
     report = await stress.run_all_regimes()
-    print(stress.summary(report))
+    logger.info(stress.summary(report))
 """
 
 from __future__ import annotations
@@ -271,7 +271,7 @@ class ReplayBacktestRunner:
         handler = ReplayDataHandler(replay_engine=replay, symbol=symbol)
 
         # Pre-load ticks synchronously (runs async generator to completion)
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         tick_count = handler.preload(start, end, loop=loop)
 
         if tick_count == 0:

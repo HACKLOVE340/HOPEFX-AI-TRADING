@@ -370,6 +370,27 @@ def _run_backtest_sync(req: BacktestRequest) -> dict:
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 
+def _run_real_backtest(
+    strategy_name: str,
+    symbol: str,
+    days: int,
+    initial_capital: float,
+) -> dict:
+    """Run a real backtest for the given strategy/symbol over a date range of `days` days."""
+    from datetime import timedelta
+
+    end_dt = datetime.now(UTC)
+    start_dt = end_dt - timedelta(days=days)
+    req = BacktestRequest(
+        strategy=strategy_name,
+        symbol=symbol,
+        start_date=start_dt.strftime("%Y-%m-%dT%H:%M:%S"),
+        end_date=end_dt.strftime("%Y-%m-%dT%H:%M:%S"),
+        initial_capital=initial_capital,
+    )
+    return _run_backtest_sync(req)
+
+
 @router.get("/strategies")
 async def list_strategies(_user: TokenPayload = Depends(get_current_user)):
     """List available strategies for backtesting."""
@@ -507,12 +528,11 @@ async def run_walk_forward(
 
     def _execute() -> None:
         try:
-            strategy = _load_strategy(req.strategy, req.strategy_params)
+            _load_strategy(req.strategy, req.strategy_params)
         except ValueError as exc:
             _persist_wf_result(run_id, {**pending, "status": "error", "error": str(exc)})
             return
 
-        import math
 
         # Build a synthetic date range spanning 3 years for the walk-forward splits
         from datetime import timedelta
@@ -717,7 +737,7 @@ async def run_multi_symbol_backtest(
     import functools
 
     try:
-        from backtest.multi_symbol_backtest import run_backtest as _run_backtest
+        from backtesting.multi_symbol_backtest import run_backtest as _run_backtest
     except ImportError as exc:
         logger.error("multi_symbol_backtest module unavailable: %s", exc)
         raise HTTPException(
@@ -725,7 +745,7 @@ async def run_multi_symbol_backtest(
             detail="multi_symbol_backtest module unavailable — check server logs",
         ) from None
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     try:
         report = await loop.run_in_executor(
             None,
@@ -835,7 +855,7 @@ async def get_reconciled_investigation(
         import sys
 
         sys.path.insert(0, str(Path(__file__).parent.parent))
-        from backtest.reconciled_backtest_investigation import run_investigation
+        from backtesting.reconciled_backtest_investigation import run_investigation
 
         results = run_investigation(smoke=False)
         cache_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
@@ -870,7 +890,7 @@ async def refresh_reconciled_investigation(
             from pathlib import Path as _Path
 
             sys.path.insert(0, str(_Path(__file__).parent.parent))
-            from backtest.reconciled_backtest_investigation import run_investigation
+            from backtesting.reconciled_backtest_investigation import run_investigation
 
             results = run_investigation(smoke=False)
             _Path("data/backtest_investigation.json").write_text(_json.dumps(results, indent=2), encoding="utf-8")

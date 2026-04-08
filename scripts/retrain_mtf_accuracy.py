@@ -674,35 +674,35 @@ def main() -> int:
     logger.info("Saved meta → %s", meta_path)
 
     # 11. Print summary
-    print("\n" + "=" * 65)
-    print("MTF RETRAIN SUMMARY")
-    print("=" * 65)
-    print(f"  Data:              58Y XAUUSD ({len(df):,} bars)")
-    print(f"  Features:          {len(selected_features)} (selected from {len(feature_cols)})")
-    print(f"  Horizon:           {HORIZON} bars")
-    print("  Ensemble:          XGB + RF + LGB + meta-LR")
-    print()
-    print(f"  Walk-forward acc:  {cv_acc_mean:.3f} ± {cv_acc_std:.3f}")
-    print(f"  Walk-forward AUC:  {np.mean(cv_aucs):.3f}")
-    print()
-    print(f"  OOS accuracy:      {oos_metrics['accuracy']:.3f}  (all predictions)")
-    print(f"  OOS acc confident: {oos_metrics['accuracy_confident']:.3f}  (conf > {ABSTAIN_THRESHOLD})")
-    print(f"  OOS AUC:           {oos_metrics['auc']:.3f}")
-    print(f"  OOS F1:            {oos_metrics['f1']:.3f}")
-    print(
+    logger.info("\n" + "=" * 65)
+    logger.info("MTF RETRAIN SUMMARY")
+    logger.info("=" * 65)
+    logger.info(f"  Data:              58Y XAUUSD ({len(df):,} bars)")
+    logger.info(f"  Features:          {len(selected_features)} (selected from {len(feature_cols)})")
+    logger.info(f"  Horizon:           {HORIZON} bars")
+    logger.info("  Ensemble:          XGB + RF + LGB + meta-LR")
+    logger.info("")
+    logger.info(f"  Walk-forward acc:  {cv_acc_mean:.3f} ± {cv_acc_std:.3f}")
+    logger.info(f"  Walk-forward AUC:  {np.mean(cv_aucs):.3f}")
+    logger.info("")
+    logger.info(f"  OOS accuracy:      {oos_metrics['accuracy']:.3f}  (all predictions)")
+    logger.info(f"  OOS acc confident: {oos_metrics['accuracy_confident']:.3f}  (conf > {ABSTAIN_THRESHOLD})")
+    logger.info(f"  OOS AUC:           {oos_metrics['auc']:.3f}")
+    logger.info(f"  OOS F1:            {oos_metrics['f1']:.3f}")
+    logger.info(
         f"  OOS p-value:       {oos_metrics['p_value']:.4f}  {'✓ significant' if oos_metrics['significant'] else '✗ not significant'}"
     )
-    print(f"  Abstain rate:      {oos_metrics['abstain_rate'] * 100:.1f}%")
-    print()
+    logger.info(f"  Abstain rate:      {oos_metrics['abstain_rate'] * 100:.1f}%")
+    logger.info("")
 
     target_met = oos_metrics["accuracy_confident"] >= 0.68
-    print(
+    logger.info(
         f"  Target (68%+):     {'✓ MET' if target_met else '✗ NOT MET'} — {oos_metrics['accuracy_confident'] * 100:.1f}%"
     )
-    print()
-    print(f"  Saved: {ensemble_path}")
-    print(f"  Meta:  {meta_path}")
-    print("=" * 65)
+    logger.info("")
+    logger.info(f"  Saved: {ensemble_path}")
+    logger.info(f"  Meta:  {meta_path}")
+    logger.info("=" * 65)
 
     return 0 if oos_metrics["significant"] else 1
 

@@ -793,15 +793,15 @@ class MarketplaceAPI:
 
 
 if __name__ == "__main__":
-    print("HOPEFX Marketplace Backend")
-    print("Features:")
-    print("  ✅ Strategy listings with approval workflow")
-    print("  ✅ Dynamic pricing engine with discounts")
-    print("  ✅ Subscription management (monthly/yearly)")
-    print("  ✅ License key generation and validation")
-    print("  ✅ SQLite database for persistence")
-    print("  ✅ Creator revenue tracking")
-    print("  ✅ Strategy search and filtering")
+    logger.info("HOPEFX Marketplace Backend")
+    logger.info("Features:")
+    logger.info("  ✅ Strategy listings with approval workflow")
+    logger.info("  ✅ Dynamic pricing engine with discounts")
+    logger.info("  ✅ Subscription management (monthly/yearly)")
+    logger.info("  ✅ License key generation and validation")
+    logger.info("  ✅ SQLite database for persistence")
+    logger.info("  ✅ Creator revenue tracking")
+    logger.info("  ✅ Strategy search and filtering")
 
 
 # ── Compatibility aliases expected by monetization/__init__.py ────────────────

@@ -179,7 +179,7 @@ class MobileAPIServer:
             raise ValueError(
                 "jwt_secret must be >= 32 characters. "
                 "Set SECURITY_JWT_SECRET env var or pass jwt_secret= explicitly. "
-                'Generate with: python -c "import secrets; print(secrets.token_hex(32))"'
+                'Generate with: python -c "import secrets; logger.info(secrets.token_hex(32))"'
             )
 
         self.app = FastAPI(

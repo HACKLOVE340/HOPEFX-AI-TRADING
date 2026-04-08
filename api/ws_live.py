@@ -763,8 +763,8 @@ async def _chartbot_broadcaster() -> None:
                             }
                             for a in (raw_articles or [])[:5]
                         ]
-                    except Exception:
-                        pass
+                    except Exception as _fmt_exc:  # nosec B110 — article formatting is non-fatal
+                        logger.debug("ws_live: article serialisation skipped: %s", _fmt_exc)
                     await _manager.broadcast(
                         "sentiment",
                         {"type": "sentiment_update", "data": {"signal": sentiment_features, "articles": articles}},
@@ -1105,7 +1105,7 @@ async def ws_nuclear(websocket: WebSocket) -> None:
     try:
         raw = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
         msg = json.loads(raw)
-    except (asyncio.TimeoutError, json.JSONDecodeError):
+    except (TimeoutError, json.JSONDecodeError):
         await websocket.send_text(json.dumps({"type": "error", "code": "AUTH_TIMEOUT"}))
         await websocket.close()
         return
@@ -1125,7 +1125,7 @@ async def ws_nuclear(websocket: WebSocket) -> None:
     await websocket.send_text(json.dumps({"type": "auth_ok", "user_id": user_id}))
 
     # ── Stream loop ───────────────────────────────────────────────────────────
-    last_heartbeat = asyncio.get_event_loop().time()
+    last_heartbeat = asyncio.get_running_loop().time()
     last_severity = -1
 
     async def _send(data: dict) -> bool:
@@ -1170,7 +1170,7 @@ async def ws_nuclear(websocket: WebSocket) -> None:
 
     try:
         while True:
-            now = asyncio.get_event_loop().time()
+            now = asyncio.get_running_loop().time()
 
             # Heartbeat
             if now - last_heartbeat >= _NUCLEAR_HEARTBEAT_INTERVAL:
@@ -1186,22 +1186,20 @@ async def ws_nuclear(websocket: WebSocket) -> None:
 
                 # Alert if severity crossed threshold
                 severity = state.get("severity", 0)
-                if severity >= 7 and last_severity < 7:
-                    if not await _send({
-                        "type": "nuclear_alert",
-                        "data": {
-                            "severity": severity,
-                            "action": state.get("action"),
-                            "explanation": state.get("explanation", ""),
-                            "ts": datetime.now(UTC).isoformat(),
-                        },
-                    }):
-                        break
+                if severity >= 7 and last_severity < 7 and not await _send({
+                    "type": "nuclear_alert",
+                    "data": {
+                        "severity": severity,
+                        "action": state.get("action"),
+                        "explanation": state.get("explanation", ""),
+                        "ts": datetime.now(UTC).isoformat(),
+                    },
+                }):
+                    break
 
                 # Resume notification
-                if last_severity >= 7 and severity < 7:
-                    if not await _send({"type": "nuclear_resume", "data": {"ts": datetime.now(UTC).isoformat()}}):
-                        break
+                if last_severity >= 7 and severity < 7 and not await _send({"type": "nuclear_resume", "data": {"ts": datetime.now(UTC).isoformat()}}):
+                    break
 
                 last_severity = severity
 
@@ -1211,7 +1209,7 @@ async def ws_nuclear(websocket: WebSocket) -> None:
                 inbound = json.loads(raw)
                 if inbound.get("type") == "ping":
                     await _send({"type": "pong"})
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
             except (WebSocketDisconnect, json.JSONDecodeError):
                 break

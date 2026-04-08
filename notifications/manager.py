@@ -390,7 +390,7 @@ class EmailChannel(NotificationChannel):
                 logger.warning("Email template render failed, using plain text: %s", exc)
 
         if self._send_mode == "sendgrid":
-            return await asyncio.get_event_loop().run_in_executor(
+            return await asyncio.get_running_loop().run_in_executor(
                 None,
                 self._send_via_sendgrid,
                 recipients,
@@ -399,7 +399,7 @@ class EmailChannel(NotificationChannel):
                 html_body,
             )
         if self._send_mode == "smtp":
-            return await asyncio.get_event_loop().run_in_executor(
+            return await asyncio.get_running_loop().run_in_executor(
                 None, self._send_via_smtp, recipients, subject, plain_body, html_body
             )
         return False
@@ -482,12 +482,12 @@ class ConsoleChannel(NotificationChannel):
         color = self.colors.get(notification.level, "")
         reset = self.reset
 
-        print(f"{color}[{notification.level.value.upper()}] {notification.title}{reset}")
-        print(f"  {notification.message}")
+        logger.info(f"{color}[{notification.level.value.upper()}] {notification.title}{reset}")
+        logger.info(f"  {notification.message}")
 
         if notification.data:
             for key, value in notification.data.items():
-                print(f"  • {key}: {value}")
+                logger.info(f"  • {key}: {value}")
 
         return True
 

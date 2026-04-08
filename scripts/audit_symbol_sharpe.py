@@ -473,20 +473,20 @@ def main(argv: list[str] | None = None) -> int:
 
         # Print summary
         status = "✅ PASS" if result["passed"] else "❌ FAIL"
-        print(f"\n{status}  {symbol}")
+        logger.info(f"\n{status}  {symbol}")
         if known_sharpe:
-            print(f"  Known Sharpe:          {known_sharpe}")
-        print(f"  Sharpe upper bound:    {result['sharpe_upper_bound']}")
-        print(f"  PSI:                   {result['psi']} ({result['psi_verdict']})")
-        print(f"  KS p-value:            {result['ks_p_value']} ({result['ks_verdict']})")
-        print(f"  Mean drift (sigma):    {result['mean_drift_sigma']}")
+            logger.info(f"  Known Sharpe:          {known_sharpe}")
+        logger.info(f"  Sharpe upper bound:    {result['sharpe_upper_bound']}")
+        logger.info(f"  PSI:                   {result['psi']} ({result['psi_verdict']})")
+        logger.info(f"  KS p-value:            {result['ks_p_value']} ({result['ks_verdict']})")
+        logger.info(f"  Mean drift (sigma):    {result['mean_drift_sigma']}")
         la = result.get("lookahead_checks", {})
         if isinstance(la, dict):
-            print(f"  Autocorr lag-1:        {la.get('autocorr_lag1', 'N/A')}")
-            print(f"  Sign predictability:   {la.get('sign_predictability', 'N/A')}")
-            print(f"  Rolling Sharpe min:    {la.get('rolling_sharpe_min', 'N/A')}")
+            logger.info(f"  Autocorr lag-1:        {la.get('autocorr_lag1', 'N/A')}")
+            logger.info(f"  Sign predictability:   {la.get('sign_predictability', 'N/A')}")
+            logger.info(f"  Rolling Sharpe min:    {la.get('rolling_sharpe_min', 'N/A')}")
         if result["flags"]:
-            print(f"  Flags:                 {', '.join(result['flags'])}")
+            logger.info(f"  Flags:                 {', '.join(result['flags'])}")
 
         if not result["passed"]:
             any_failed = True
@@ -513,16 +513,16 @@ def main(argv: list[str] | None = None) -> int:
     report_path = output_dir / f"sharpe_audit_{date_str}.json"
     report_path.write_text(json.dumps(report, indent=2, default=str))
 
-    print(f"\n{'=' * 60}")
-    print(f"Audit complete: {report['summary']['passed']}/{report['summary']['total']} passed")
-    print(f"Report saved:   {report_path}")
+    logger.info(f"\n{'=' * 60}")
+    logger.info(f"Audit complete: {report['summary']['passed']}/{report['summary']['total']} passed")
+    logger.info(f"Report saved:   {report_path}")
 
     if any_failed:
-        print("\nRECOMMENDATION: Symbols that failed the audit should be:")
-        print("  1. Re-examined for look-ahead bias in feature construction")
-        print("  2. Re-backtested with walk-forward validation")
-        print("  3. Excluded from live trading until Sharpe is confirmed OOS")
-        print("\nRun signal_validator.py against live fills to confirm distribution match.")
+        logger.error("\nRECOMMENDATION: Symbols that failed the audit should be:")
+        logger.info("  1. Re-examined for look-ahead bias in feature construction")
+        logger.info("  2. Re-backtested with walk-forward validation")
+        logger.info("  3. Excluded from live trading until Sharpe is confirmed OOS")
+        logger.info("\nRun signal_validator.py against live fills to confirm distribution match.")
 
     return 1 if (args.strict and any_failed) else 0
 

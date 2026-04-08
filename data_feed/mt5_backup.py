@@ -81,7 +81,7 @@ class MT5Backup:
             logger.error("MT5Backup.connect: MetaTrader5 SDK not installed")
             return False
 
-        self._loop = asyncio.get_event_loop()
+        self._loop = asyncio.get_running_loop()
         return await self._loop.run_in_executor(None, self._sync_connect)
 
     async def get_price(self) -> float | None:
@@ -92,13 +92,13 @@ class MT5Backup:
         """
         if not self.connected or not _MT5_AVAILABLE:
             return None
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_get_price)
 
     async def disconnect(self) -> None:
         """Shut down the MT5 terminal connection."""
         if self.connected and _MT5_AVAILABLE:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, _mt5.shutdown)
             self.connected = False
             logger.info("MT5Backup disconnected")

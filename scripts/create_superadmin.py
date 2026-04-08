@@ -45,6 +45,9 @@ from sqlalchemy.orm import sessionmaker
 from auth.jwt import create_access_token, hash_password
 from database.models import Base
 from database.user_models import User, UserRole, UserStatus
+import logging
+logger = logging.getLogger(__name__)
+
 
 
 # ── Password policy ───────────────────────────────────────────────────────────
@@ -187,7 +190,7 @@ def main():
     if args.password:
         err = _validate_password(args.password)
         if err:
-            print(f"\n[ERROR] {err}\n")
+            logger.error(f"\n[ERROR] {err}\n")
             sys.exit(1)
         password = args.password
         auto_generated = False
@@ -199,8 +202,8 @@ def main():
     result = _create_or_update(args.email, args.username, password, args.reset)
 
     if result["action"] == "exists":
-        print(f"\n[INFO] Superadmin '{result['username']}' already exists (role={result['role']}).")
-        print("       Use --reset to update the password.\n")
+        logger.info(f"\n[INFO] Superadmin '{result['username']}' already exists (role={result['role']}).")
+        logger.info("       Use --reset to update the password.\n")
         return
 
     # ── Generate a verification token ─────────────────────────────────────────
@@ -234,32 +237,32 @@ def main():
 
     # ── Print summary ─────────────────────────────────────────────────────────
     action_label = "CREATED" if result["action"] == "created" else "RESET"
-    print()
-    print("=" * 60)
-    print(f"  SUPERADMIN {action_label} SUCCESSFULLY")
-    print("=" * 60)
-    print(f"  Email    : {args.email}")
-    print(f"  Username : {args.username}")
+    logger.info("")
+    logger.info("=" * 60)
+    logger.info(f"  SUPERADMIN {action_label} SUCCESSFULLY")
+    logger.info("=" * 60)
+    logger.info(f"  Email    : {args.email}")
+    logger.info(f"  Username : {args.username}")
     if auto_generated:
-        print(f"  Password : {password}   ← SAVE THIS NOW")  # nosec B106 - intentional one-time display of auto-generated credential
+        logger.info(f"  Password : {password}   ← SAVE THIS NOW")  # nosec B106 - intentional one-time display of auto-generated credential
     else:
-        print("  Password : (your supplied value)")
-    print("  Role     : superadmin")
-    print(f"  User ID  : {result['user_id']}")
-    print()
-    print(token_line)
+        logger.info("  Password : (your supplied value)")
+    logger.info("  Role     : superadmin")
+    logger.info(f"  User ID  : {result['user_id']}")
+    logger.info("")
+    logger.info(token_line)
     if token_note:
-        print(token_note)
-    print()
-    print("  Login endpoint : POST /api/auth/login")
-    print('  Body           : {"username": "' + args.username + '", "password": "<password>"}')
-    print("  Swagger UI     : /docs")
-    print("  Superadmin UI  : /api/superadmin/")
-    print()
-    print(f"  Credentials saved to: {pw_file}")
-    print("  ⚠  Delete that file after saving to a password manager.")
-    print("=" * 60)
-    print()
+        logger.info(token_note)
+    logger.info("")
+    logger.info("  Login endpoint : POST /api/auth/login")
+    logger.info('  Body           : {"username": "' + args.username + '", "password": "<password>"}')
+    logger.info("  Swagger UI     : /docs")
+    logger.info("  Superadmin UI  : /api/superadmin/")
+    logger.info("")
+    logger.info(f"  Credentials saved to: {pw_file}")
+    logger.warning("  ⚠  Delete that file after saving to a password manager.")
+    logger.info("=" * 60)
+    logger.info("")
 
 
 if __name__ == "__main__":

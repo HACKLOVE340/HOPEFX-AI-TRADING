@@ -248,7 +248,7 @@ def cmd_start(args):
         if environment == "production":
             logger.error(
                 "CONFIG_ENCRYPTION_KEY must be set for production. "
-                'Generate one with: python -c "import secrets; print(secrets.token_hex(32))"'
+                'Generate one with: python -c "import secrets; logger.info(secrets.token_hex(32))"'
             )
             return 1
         logger.warning("CONFIG_ENCRYPTION_KEY not set. Using default for development only.")

@@ -704,9 +704,9 @@ class SmartOrderRouter:
 # =============================================================================
 
 if __name__ == "__main__":
-    print("=" * 70)
-    print("ENHANCED SMART ROUTER v3.0 - TEST SUITE")
-    print("=" * 70)
+    logger.info("=" * 70)
+    logger.info("ENHANCED SMART ROUTER v3.0 - TEST SUITE")
+    logger.info("=" * 70)
 
     async def test_router():
         # Initialize router
@@ -722,32 +722,32 @@ if __name__ == "__main__":
             arrival_price=1950.0,
         )
 
-        print(f"\nOrder: {order.side.name} {order.size} {order.symbol}")
-        print(f"Arrival price: {order.arrival_price}")
+        logger.info(f"\nOrder: {order.side.name} {order.size} {order.symbol}")
+        logger.info(f"Arrival price: {order.arrival_price}")
 
         # Execute
         result = await router.execute_order(order)
 
-        print("\n" + "=" * 70)
-        print("EXECUTION RESULT")
-        print("=" * 70)
-        print(f"Status: {result['status']}")
-        print(f"Filled: {result['filled_size']:.2f}")
-        print(f"Avg Price: {result['avg_price']:.4f}")
-        print(f"VWAP: {result['vwap']:.4f}")
-        print(f"Implementation Shortfall: {result['implementation_shortfall']:.4%}")
-        print(f"Total Fees: ${result['total_fees']:.2f}")
-        print(f"Avg Slippage: {result['total_slippage_bps']:.2f} bps")
-        print(f"Duration: {result['duration_seconds']:.2f}s")
+        logger.info("\n" + "=" * 70)
+        logger.info("EXECUTION RESULT")
+        logger.info("=" * 70)
+        logger.info(f"Status: {result['status']}")
+        logger.info(f"Filled: {result['filled_size']:.2f}")
+        logger.info(f"Avg Price: {result['avg_price']:.4f}")
+        logger.info(f"VWAP: {result['vwap']:.4f}")
+        logger.info(f"Implementation Shortfall: {result['implementation_shortfall']:.4%}")
+        logger.info(f"Total Fees: ${result['total_fees']:.2f}")
+        logger.info(f"Avg Slippage: {result['total_slippage_bps']:.2f} bps")
+        logger.info(f"Duration: {result['duration_seconds']:.2f}s")
 
         # Routing report
-        print("\n" + "=" * 70)
-        print("ROUTING REPORT")
-        print("=" * 70)
+        logger.info("\n" + "=" * 70)
+        logger.info("ROUTING REPORT")
+        logger.info("=" * 70)
         report = router.get_routing_report()
-        print(f"Venue distribution: {report['venue_usage']}")
+        logger.info(f"Venue distribution: {report['venue_usage']}")
 
-        print("\n✅ Smart Router test completed!")
+        logger.info("\n✅ Smart Router test completed!")
 
     # Run test
     asyncio.run(test_router())

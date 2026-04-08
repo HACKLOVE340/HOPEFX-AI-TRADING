@@ -83,7 +83,7 @@ import pandas as pd
 from sklearn.metrics import classification_report
 
 ROOT = Path("..").resolve()
-print("Project root:", ROOT)""",
+logger.info("Project root:", ROOT)""",
         [stdout(f"Project root: {ROOT}\n")],
     )
 )
@@ -103,8 +103,8 @@ cells.append(
     code(
         """\
 df = pd.read_csv(ROOT / "data" / "XAUUSD_2Y.csv", index_col=0, parse_dates=True)
-print(f"Shape: {df.shape}  |  {df.index[0].date()} → {df.index[-1].date()}")
-print(f"Price range: ${df['close'].min():.0f} – ${df['close'].max():.0f}")
+logger.info(f"Shape: {df.shape}  |  {df.index[0].date()} → {df.index[-1].date()}")
+logger.info(f"Price range: ${df['close'].min():.0f} – ${df['close'].max():.0f}")
 df.head()""",
         [
             stdout(
@@ -158,7 +158,7 @@ FEATURES = [
     "close_vs_sma20","close_vs_sma50","vol_ratio",
 ]
 dff = add_features(df)
-print(f"Feature matrix: {dff[FEATURES].shape}  |  up-days: {dff['target'].mean():.1%}")""",
+logger.info(f"Feature matrix: {dff[FEATURES].shape}  |  up-days: {dff['target'].mean():.1%}")""",
         [stdout(f"Feature matrix: ({len(df) - 50}, 17)  |  up-days: 48.0%\n")],
     )
 )
@@ -183,9 +183,9 @@ y_test  = dff["target"].values[split:]
 y_pred  = clf.predict(X_test)
 y_prob  = clf.predict_proba(X_test)[:, 1]
 
-print(classification_report(y_test, y_pred, target_names=["Down", "Up"]))
-print(f"Note: ~48% accuracy is expected for a direction classifier on financial data.")
-print(f"Edge comes from asymmetric ATR-based stop/TP sizing, not raw accuracy.")""",
+logger.info(classification_report(y_test, y_pred, target_names=["Down", "Up"]))
+logger.info(f"Note: ~48% accuracy is expected for a direction classifier on financial data.")
+logger.info(f"Edge comes from asymmetric ATR-based stop/TP sizing, not raw accuracy.")""",
         [
             stdout(
                 "              precision    recall  f1-score   support\n\n"
@@ -220,16 +220,16 @@ cells.append(
 perf = json.loads((ROOT / "examples" / "results" / "performance.json").read_text())
 trades_df = pd.read_csv(ROOT / "examples" / "results" / "trades.csv")
 
-print("=" * 45)
-print(f"  Period:          {perf['backtest_period']}")
-print(f"  Trades:          {perf['n_trades']}")
-print(f"  Win rate:        {perf['win_rate_pct']:.1f}%")
-print(f"  Profit factor:   {perf['profit_factor']:.3f}")
-print(f"  Total return:    {perf['total_return_pct']:+.2f}%")
-print(f"  Max drawdown:    {perf['max_drawdown_pct']:.1f}%")
-print(f"  Sharpe ratio:    {perf['sharpe_ratio']:.3f}")
-print(f"  Calmar ratio:    {perf['calmar_ratio']:.3f}")
-print("=" * 45)""",
+logger.info("=" * 45)
+logger.info(f"  Period:          {perf['backtest_period']}")
+logger.info(f"  Trades:          {perf['n_trades']}")
+logger.info(f"  Win rate:        {perf['win_rate_pct']:.1f}%")
+logger.info(f"  Profit factor:   {perf['profit_factor']:.3f}")
+logger.info(f"  Total return:    {perf['total_return_pct']:+.2f}%")
+logger.info(f"  Max drawdown:    {perf['max_drawdown_pct']:.1f}%")
+logger.info(f"  Sharpe ratio:    {perf['sharpe_ratio']:.3f}")
+logger.info(f"  Calmar ratio:    {perf['calmar_ratio']:.3f}")
+logger.info("=" * 45)""",
         [
             stdout(
                 "=" * 45 + "\n"
@@ -265,6 +265,9 @@ cells.append(
     code(
         """\
 from IPython.display import Image
+import logging
+logger = logging.getLogger(__name__)
+
 Image(ROOT / "examples" / "results" / "equity_curve.png", width=900)""",
         [display_img(IMG_B64)],
     )
@@ -287,10 +290,10 @@ cells.append(
     code(
         """\
 fi = sorted(zip(bundle["features"], clf.feature_importances_), key=lambda x: -x[1])
-print("Top-10 features by importance:")
+logger.info("Top-10 features by importance:")
 for name, imp in fi[:10]:
     bar = "█" * int(imp * 200)
-    print(f"  {name:<22} {imp:.4f}  {bar}")""",
+    logger.info(f"  {name:<22} {imp:.4f}  {bar}")""",
         [stdout("Top-10 features by importance:\n" + fi_lines + "\n")],
     )
 )
@@ -322,4 +325,4 @@ nb.metadata = {
     "language_info": {"name": "python", "version": "3.12.1"},
 }
 nbformat.write(nb, str(NB_PATH))
-print(f"Notebook written → {NB_PATH}  ({NB_PATH.stat().st_size // 1024} KB)")
+logger.info(f"Notebook written → {NB_PATH}  ({NB_PATH.stat().st_size // 1024} KB)")

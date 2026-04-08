@@ -38,6 +38,9 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import logging
+logger = logging.getLogger(__name__)
+
 
 # ---------------------------------------------------------------------------
 # Load .env if present (dev convenience)
@@ -67,7 +70,7 @@ def _check(label: str, ok: bool, detail: str = "") -> bool:
     line = f"{icon}  {label}"
     if detail:
         line += f"  — {detail}"
-    print(line)
+    logger.info(line)
     return ok
 
 
@@ -75,10 +78,10 @@ def run_checks(interactive: bool = True) -> int:
     """Run all checks. Returns 0 on full pass, 1 on any failure."""
     failures = 0
 
-    print("\n" + "=" * 60)
-    print("  IBKR Connection Smoke Test")
-    print(f"  Host: {HOST}:{PORT}  client_id={CLIENT_ID}")
-    print("=" * 60)
+    logger.info("\n" + "=" * 60)
+    logger.info("  IBKR Connection Smoke Test")
+    logger.info(f"  Host: {HOST}:{PORT}  client_id={CLIENT_ID}")
+    logger.info("=" * 60)
 
     # ── Check 1: ib_insync importable ────────────────────────────────────────
     try:
@@ -87,12 +90,12 @@ def run_checks(interactive: bool = True) -> int:
         _check("ib_insync importable", True, "ib_insync available")
     except ImportError as exc:
         _check("ib_insync importable", False, str(exc))
-        print("\n  Install: pip install ib_insync==0.9.86")
+        logger.info("\n  Install: pip install ib_insync==0.9.86")
         return 2
 
     # ── Check 2: Port sanity ─────────────────────────────────────────────────
     if PORT in LIVE_PORTS:
-        print(f"{_WARN}  Port {PORT} is a LIVE trading port. Use 7497 (TWS paper) or 4002 (Gateway paper) for testing.")
+        logger.warning(f"{_WARN}  Port {PORT} is a LIVE trading port. Use 7497 (TWS paper) or 4002 (Gateway paper) for testing.")
     elif PORT in PAPER_PORTS:
         _check(f"Port {PORT} is a paper port", True)
     else:
@@ -113,8 +116,8 @@ def run_checks(interactive: bool = True) -> int:
         _check("TCP connection established", True, f"{HOST}:{PORT}")
     except Exception as exc:
         _check("TCP connection established", False, str(exc))
-        print("\n  Ensure TWS/IB Gateway is running and API connections are enabled.")
-        print("  TWS: File → Global Configuration → API → Settings → Enable ActiveX and Socket Clients")
+        logger.info("\n  Ensure TWS/IB Gateway is running and API connections are enabled.")
+        logger.info("  TWS: File → Global Configuration → API → Settings → Enable ActiveX and Socket Clients")
         return 1
 
     try:
@@ -192,12 +195,12 @@ def run_checks(interactive: bool = True) -> int:
         ib.disconnect()
         _check("Disconnected cleanly", True)
 
-    print("\n" + "=" * 60)
+    logger.info("\n" + "=" * 60)
     if failures == 0:
-        print("  ALL CHECKS PASSED — IBKR paper connection is healthy.")
+        logger.info("  ALL CHECKS PASSED — IBKR paper connection is healthy.")
     else:
-        print(f"  {failures} CHECK(S) FAILED — review output above.")
-    print("=" * 60 + "\n")
+        logger.error(f"  {failures} CHECK(S) FAILED — review output above.")
+    logger.info("=" * 60 + "\n")
 
     return 0 if failures == 0 else 1
 

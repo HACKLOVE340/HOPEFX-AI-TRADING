@@ -55,6 +55,9 @@ from locust.exception import StopUser  # pylint: disable=no-name-in-module
 
 from locust import HttpUser, between, events, task  # pylint: disable=no-name-in-module
 
+import logging
+logger = logging.getLogger(__name__)
+
 _AUTH_TOKEN = os.getenv("AUTH_TOKEN", "")
 _THINK_TIME = float(os.getenv("THINK_TIME", "1.0"))
 _SYMBOLS = ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "AUDUSD"]
@@ -302,10 +305,10 @@ class AuthenticatedTrader(HttpUser):
 
 @events.test_start.add_listener
 def on_test_start(environment, **kwargs):
-    print(f"[locust] Starting load test against {environment.host}")
+    logger.info(f"[locust] Starting load test against {environment.host}")
     if not _AUTH_TOKEN:
-        print("[locust] AUTH_TOKEN not set — AuthenticatedTrader users will be skipped")
-    print(f"[locust] THINK_TIME multiplier: {_THINK_TIME}x")
+        logger.info("[locust] AUTH_TOKEN not set — AuthenticatedTrader users will be skipped")
+    logger.info(f"[locust] THINK_TIME multiplier: {_THINK_TIME}x")
 
 
 @events.test_stop.add_listener
@@ -314,7 +317,7 @@ def on_test_stop(environment, **kwargs):
     p95 = stats.get_response_time_percentile(0.95) or 0
     p99 = stats.get_response_time_percentile(0.99) or 0
     failure_rate = stats.num_failures / stats.num_requests * 100 if stats.num_requests > 0 else 0
-    print(
+    logger.info(
         f"[locust] Test complete — "
         f"requests={stats.num_requests} "
         f"failures={stats.num_failures} ({failure_rate:.1f}%) "
@@ -323,4 +326,4 @@ def on_test_stop(environment, **kwargs):
         f"rps={stats.current_rps:.1f}"
     )
     if failure_rate > 1.0:
-        print(f"[locust] FAIL: error rate {failure_rate:.1f}% exceeds 1% threshold")
+        logger.error(f"[locust] FAIL: error rate {failure_rate:.1f}% exceeds 1% threshold")

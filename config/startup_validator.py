@@ -71,7 +71,7 @@ def _validate_jwt(errors: list[str]) -> None:
     if not jwt_val:
         errors.append(
             "MISSING  SECURITY_JWT_SECRET: JWT signing key — "
-            'generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"',
+            'generate with: python -c "import secrets; logger.info(secrets.token_urlsafe(48))"',
         )
     elif len(jwt_val) < 32:
         errors.append(
@@ -129,7 +129,7 @@ def _validate_encryption_key(errors: list[str]) -> None:
     if not enc_key:
         errors.append(
             "MISSING  CONFIG_ENCRYPTION_KEY: required for encrypting stored credentials. "
-            'Generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"',
+            'Generate with: python -c "import secrets; logger.info(secrets.token_urlsafe(48))"',
         )
     elif len(enc_key) < 32:
         errors.append(
@@ -180,7 +180,7 @@ def _validate_kill_switch_token(errors: list[str]) -> None:
     if not ks_token:
         errors.append(
             "MISSING  HOPEFX_KILL_SWITCH_TOKEN: required to deactivate trading halts "
-            'via API. Generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"',
+            'via API. Generate with: python -c "import secrets; logger.info(secrets.token_urlsafe(48))"',
         )
     elif len(ks_token) < 32:
         errors.append(
@@ -228,12 +228,12 @@ def _validate_crypto_webhook_secret(errors: list[str]) -> None:
     if not secret:
         errors.append(
             "MISSING  CRYPTO_WEBHOOK_SECRET — crypto payment webhooks will be rejected in production. "
-            "Generate with: python3 -c \"import secrets; print(secrets.token_hex(32))\""
+            "Generate with: python3 -c \"import secrets; logger.info(secrets.token_hex(32))\""
         )
     elif len(secret) < 32:
         errors.append(
             f"WEAK     CRYPTO_WEBHOOK_SECRET is only {len(secret)} chars — minimum 32 required. "
-            "Regenerate with: python3 -c \"import secrets; print(secrets.token_hex(32))\""
+            "Regenerate with: python3 -c \"import secrets; logger.info(secrets.token_hex(32))\""
         )
 
 

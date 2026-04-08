@@ -5,7 +5,10 @@
 # No commercial use without explicit permission.
 
 # File 2: scripts/xauusd_bot.py - REAL working version (not aspirational)
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 xauusd_bot_content = '''#!/usr/bin/env python3
 """
@@ -365,4 +368,4 @@ if __name__ == '__main__':
 with Path("/mnt/kimi/output/hopefx_upgrade/scripts/xauusd_bot.py").open("w", encoding="utf-8") as f:
     f.write(xauusd_bot_content)
 
-print("✅ scripts/xauusd_bot.py created - REAL working paper trading bot")
+logger.info("scripts/xauusd_bot.py created - REAL working paper trading bot")

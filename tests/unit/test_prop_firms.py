@@ -13,11 +13,7 @@ Covers: PropFirmMetrics, PropFirmTrade, RiskLimits, PropFirmType,
 """
 
 import asyncio
-import hashlib
-import hmac
-import json
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -179,7 +175,7 @@ class TestBasePropFirmBrokerAbstract:
         """check_risk_violations returns True when remaining_daily_loss <= 0."""
         from brokers.prop_firms.all_brokers import (
             AccountStatus, BasePropFirmBroker, PropFirmMetrics,
-            PropFirmTrade, PropFirmType, TradingPhase,
+            PropFirmType, TradingPhase,
         )
 
         class MockBroker(BasePropFirmBroker):
@@ -250,7 +246,7 @@ class TestBasePropFirmBrokerAbstract:
 @pytest.mark.unit
 class TestFTMOBrokerSignature:
     def test_generate_signature_returns_dict(self):
-        from brokers.prop_firms.all_brokers import FTMOBroker, PropFirmType
+        from brokers.prop_firms.all_brokers import FTMOBroker
         broker = FTMOBroker("test-api-key", "test-secret-key", "ACC-001", sandbox=True)
         headers = broker._generate_signature("GET", "/accounts/ACC-001/metrics")
         assert isinstance(headers, dict)

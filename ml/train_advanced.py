@@ -1254,73 +1254,73 @@ def main():
     logger.info("Report saved → %s", report_path)
 
     # ── Summary ───────────────────────────────────────────────────────────────
-    print("\n" + "=" * 65)
-    print("ADVANCED TRAINING SUMMARY")
-    print("=" * 65)
-    print(f"  Symbol          : {args.symbol}  ({args.years} years)")
-    print(f"  Samples (total) : {len(X)}  (after filtered-target)")
-    print(f"  CV samples      : {len(X_cv)}")
-    print(f"  OOS samples     : {oos_n}  ({args.oos_years:.1f} years held out)")
-    print(f"  Features        : {X.shape[1]}")
-    print(f"  Macro features  : {macro_df is not None}")
-    print()
-    print(
+    logger.info("\n" + "=" * 65)
+    logger.info("ADVANCED TRAINING SUMMARY")
+    logger.info("=" * 65)
+    logger.info(f"  Symbol          : {args.symbol}  ({args.years} years)")
+    logger.info(f"  Samples (total) : {len(X)}  (after filtered-target)")
+    logger.info(f"  CV samples      : {len(X_cv)}")
+    logger.info(f"  OOS samples     : {oos_n}  ({args.oos_years:.1f} years held out)")
+    logger.info(f"  Features        : {X.shape[1]}")
+    logger.info(f"  Macro features  : {macro_df is not None}")
+    logger.info("")
+    logger.info(
         f"  Walk-forward accuracy : {wf.get('mean_accuracy', 0):.3f} ± {wf.get('std_accuracy', 0):.3f}",
     )
-    print(f"  Walk-forward F1       : {wf.get('mean_f1', 0):.3f}")
-    print(f"  Walk-forward AUC      : {wf.get('mean_auc', 0):.3f}")
-    print(
+    logger.info(f"  Walk-forward F1       : {wf.get('mean_f1', 0):.3f}")
+    logger.info(f"  Walk-forward AUC      : {wf.get('mean_auc', 0):.3f}")
+    logger.info(
         f"  p-value (vs random)   : {wf.get('p_value', 1):.4f}  "
         f"{'✓ significant' if wf.get('significant') else '✗ not significant'}",
     )
-    print()
-    print(f"  Final holdout accuracy: {final_metrics['accuracy']:.3f}")
-    print(f"  Final holdout F1      : {final_metrics['f1']:.3f}")
-    print(f"  Final holdout AUC     : {final_metrics['auc']:.3f}")
+    logger.info("")
+    logger.info(f"  Final holdout accuracy: {final_metrics['accuracy']:.3f}")
+    logger.info(f"  Final holdout F1      : {final_metrics['f1']:.3f}")
+    logger.info(f"  Final holdout AUC     : {final_metrics['auc']:.3f}")
 
     if oos_metrics:
-        print()
+        logger.info("")
         sig = "✓ significant" if oos_metrics.get("significant") else "✗ not significant"
         oos_period = oos_metrics.get("oos_period", "n/a")
         acc_se = oos_metrics.get("accuracy_se", 0)
-        print(f"  OOS period            : {oos_period}")
-        print(
+        logger.info(f"  OOS period            : {oos_period}")
+        logger.info(
             f"  OOS accuracy          : {oos_metrics['accuracy']:.3f} ± {acc_se:.3f}  (n={oos_metrics['oos_size']})",
         )
-        print(f"  OOS F1                : {oos_metrics['f1']:.3f}")
-        print(f"  OOS AUC               : {oos_metrics['auc']:.3f}")
-        print(f"  OOS p-value (binomial): {oos_metrics['p_value_binomial']:.4f}  {sig}")
-        print()
+        logger.info(f"  OOS F1                : {oos_metrics['f1']:.3f}")
+        logger.info(f"  OOS AUC               : {oos_metrics['auc']:.3f}")
+        logger.info(f"  OOS p-value (binomial): {oos_metrics['p_value_binomial']:.4f}  {sig}")
+        logger.info("")
         # Sharpe SE gate — always shown when OOS is run
         sg = oos_metrics.get("sharpe_gate", {})
         gate_status = "PASSED ✓" if sg.get("gate_passed") else "BLOCKED ✗"
-        print("  ─── Sharpe SE Gate ────────────────────────────────────────")
-        print(f"  N={sg.get('n_trades', '?')} OOS trades | SE={sg.get('se', '?')} | Gate: {gate_status}")
-        print(f"  Need N>={sg.get('target_n', 600)} for SE<=0.10 (credible Sharpe).")
-        print(f"  N_required for SE<=0.10: {sg.get('n_required_for_se_010', '?')}")
-        print("  Run multi-symbol backtest (XAU+BTC+ETH) targeting N=600.")
-        print("  Credible metric: OOS accuracy (binomial p-value above).")
-        print("  Do NOT commit live capital until 30+ days paper trading done.")
-        print("  ────────────────────────────────────────────────────────────")
+        logger.info("  ─── Sharpe SE Gate ────────────────────────────────────────")
+        logger.info(f"  N={sg.get('n_trades', '?')} OOS trades | SE={sg.get('se', '?')} | Gate: {gate_status}")
+        logger.info(f"  Need N>={sg.get('target_n', 600)} for SE<=0.10 (credible Sharpe).")
+        logger.info(f"  N_required for SE<=0.10: {sg.get('n_required_for_se_010', '?')}")
+        logger.info("  Run multi-symbol backtest (XAU+BTC+ETH) targeting N=600.")
+        logger.info("  Credible metric: OOS accuracy (binomial p-value above).")
+        logger.info("  Do NOT commit live capital until 30+ days paper trading done.")
+        logger.info("  ────────────────────────────────────────────────────────────")
 
-    print()
+    logger.info("")
     # Evaluate against OOS target (68% validated) rather than in-sample target
     oos_acc = oos_metrics.get("accuracy", 0) if oos_metrics else 0
     final_acc = final_metrics["accuracy"]
     if oos_acc >= 0.68:
-        print(f"  ✓ OOS TARGET MET: {oos_acc:.1%} >= 68.0% (validated production threshold)")
+        logger.info(f"  ✓ OOS TARGET MET: {oos_acc:.1%} >= 68.0% (validated production threshold)")
     elif oos_acc >= 0.55:
-        print(f"  ⚠ OOS above chance ({oos_acc:.1%}) but below 68% production threshold")
+        logger.warning(f"  ⚠ OOS above chance ({oos_acc:.1%}) but below 68% production threshold")
     elif oos_acc > 0:
-        print(f"  ✗ OOS below target ({oos_acc:.1%}) — check feature quality and data volume")
+        logger.info(f"  ✗ OOS below target ({oos_acc:.1%}) — check feature quality and data volume")
     elif final_acc >= 0.85:
-        print("  ✓ In-sample target met (no OOS run — use --oos-years 8 for validation)")
+        logger.info("  ✓ In-sample target met (no OOS run — use --oos-years 8 for validation)")
     elif final_acc >= 0.70:
-        print("  ⚠ Partial in-sample accuracy — run with --oos-years 8 to validate")
+        logger.warning("  ⚠ Partial in-sample accuracy — run with --oos-years 8 to validate")
     else:
-        print("  ✗ Below target — check feature quality and data volume")
+        logger.info("  ✗ Below target — check feature quality and data volume")
 
-    print("=" * 65)
+    logger.info("=" * 65)
 
     return report
 

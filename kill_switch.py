@@ -184,7 +184,21 @@ class KillSwitch:
         logger.warning("Kill switch DEACTIVATED — trading may resume")
 
     def is_active(self) -> bool:
-        """Return True when trading must be halted."""
+        """Return True when trading must be halted.
+
+        Priority order (highest to lowest):
+        1. In-memory ``_active`` flag (set by ``activate()`` / startup latch check)
+        2. ``kill_switch.flag`` file on disk (polled every 2 s — survives process crash)
+        3. ``HOPEFX_KILL_SWITCH=1`` environment variable (K8s override / ops runbook)
+        4. Redis distributed latch (cross-pod; ``ks:latch`` key, TTL=7d)
+        5. K8s ConfigMap watcher (Redis-down fallback; ``hopefx-kill-switch`` key)
+
+        When Redis is down:
+        - The flag file and env-var remain active (priority 2+3 are Redis-independent).
+        - The K8s ConfigMap watcher (priority 5) provides cross-pod propagation.
+        - Any pod that activated the switch writes a local JSON state file that
+          survives restarts even if Redis is unreachable at startup.
+        """
         return self._active
 
     def reset_for_testing(self) -> None:

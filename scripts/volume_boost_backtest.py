@@ -336,16 +336,16 @@ def monte_carlo(trades_df: pd.DataFrame, n_runs: int = 1000, seed: int = 42) -> 
 
 
 def print_summary(label: str, summary: dict, mc: dict) -> None:
-    print(f"\n{'=' * 62}")
-    print(f"  HOPEFX Volume-Boost Backtest — {label}")
-    print(f"{'=' * 62}")
+    logger.info(f"\n{'=' * 62}")
+    logger.info(f"  HOPEFX Volume-Boost Backtest — {label}")
+    logger.info(f"{'=' * 62}")
     for k, v in summary.items():
-        print(f"  {k:<28} {v}")
+        logger.info(f"  {k:<28} {v}")
     if mc:
-        print(f"\n  Monte Carlo worst-case drawdown ({mc['n_runs']} runs)")
+        logger.info(f"\n  Monte Carlo worst-case drawdown ({mc['n_runs']} runs)")
         for k, v in mc.items():
-            print(f"  {k:<28} {v}")
-    print(f"{'=' * 62}")
+            logger.info(f"  {k:<28} {v}")
+    logger.info(f"{'=' * 62}")
     if summary.get("total_trades", 0) < 200:
         logger.warning(
             "Trade count %d < 200 target (expected for daily bars — "

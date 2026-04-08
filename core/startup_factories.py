@@ -72,7 +72,7 @@ async def init_env(s: Any) -> bool:
         if is_production:
             logger.critical(
                 "STARTUP ABORTED: SECURITY_JWT_SECRET is missing in production. "
-                'Generate a secret: python3 -c "import secrets; print(secrets.token_hex(32))"'
+                'Generate a secret: python3 -c "import secrets; logger.info(secrets.token_hex(32))"'
             )
             sys.exit(1)
         # Generate a cryptographically-random ephemeral secret for dev.
@@ -91,7 +91,7 @@ async def init_env(s: Any) -> bool:
         if is_production:
             logger.critical(
                 "STARTUP ABORTED: CONFIG_ENCRYPTION_KEY is missing in production. "
-                'Generate a key: python3 -c "import secrets; print(secrets.token_urlsafe(48))"'
+                'Generate a key: python3 -c "import secrets; logger.info(secrets.token_urlsafe(48))"'
             )
             sys.exit(1)
         # Generate a cryptographically-random ephemeral key for dev.
@@ -629,7 +629,8 @@ def _resolve_clock_start_time() -> datetime | None:
 
     try:
         existing = json.loads(_OANDA_PAPER_STAMP_PATH.read_text(encoding="utf-8"))
-    except Exception:
+    except Exception as _exc:
+        logger.debug("_get_existing_stamp: cannot parse stamp file: %s", _exc)
         return datetime.now(UTC)
 
     if not existing.get("requires_real_account", False):
@@ -1117,7 +1118,8 @@ def _is_feature_enabled(flag_name: str, default: bool = False) -> bool:
         from config.feature_flags import flags
 
         return bool(getattr(flags, flag_name, default))
-    except Exception:
+    except Exception as _exc:
+        logger.debug("_get_feature_flag(%s): flags unavailable, using default=%s: %s", flag_name, default, _exc)
         return default
 
 
@@ -1127,7 +1129,8 @@ def _get_log_activity():
         from api.admin import log_activity
 
         return log_activity
-    except Exception:
+    except Exception as _exc:
+        logger.debug("_get_log_activity: api.admin unavailable, using logger.info: %s", _exc)
         return logger.info
 
 
@@ -1567,7 +1570,8 @@ async def init_daily_online_learner(s: Any) -> Any:
             if range_pct < 0.005:
                 return "ranging"
             return "trending"
-        except Exception:
+        except Exception as _exc:
+            logger.debug("_detect_regime(%s): CSV read/calc failed: %s", symbol, _exc)
             return None
 
     t = asyncio.create_task(_daily_ewc_loop())

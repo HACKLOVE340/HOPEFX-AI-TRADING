@@ -681,49 +681,49 @@ def main():
     logger.info("Training report saved to %s", report_path)
 
     # ── Summary ───────────────────────────────────────────────────────────────
-    print("\n" + "=" * 60)
-    print("TRAINING SUMMARY  (basic macro model — 65 stationary features)")
-    print("=" * 60)
+    logger.info("\n" + "=" * 60)
+    logger.info("TRAINING SUMMARY  (basic macro model — 65 stationary features)")
+    logger.info("=" * 60)
     for model_type in ("xgb", "rf"):
         wf = report[f"walkforward_{model_type}"]
         fin = report[f"final_{model_type}"]
-        print(f"\n{model_type.upper()}")
-        print(
+        logger.info(f"\n{model_type.upper()}")
+        logger.info(
             f"  Walk-forward accuracy : {wf['mean_accuracy']:.3f} ± {wf['std_accuracy']:.3f}",
         )
-        print(f"  Walk-forward F1       : {wf['mean_f1']:.3f}")
+        logger.info(f"  Walk-forward F1       : {wf['mean_f1']:.3f}")
         mean_sharpe = wf.get("mean_sharpe", 0.0)
-        print(
+        logger.info(
             f"  Walk-forward Sharpe   : {mean_sharpe:.3f}  (annualised, 1-bar, no costs — N < 250: SE ≈ ±0.54)",
         )
-        print(
+        logger.info(
             f"  p-value (vs random)   : {wf['p_value']:.4f}"
             f"  {'✓ significant' if wf['significant'] else '✗ not significant'}",
         )
-        print(f"  Final holdout accuracy: {fin['accuracy']:.3f}")
-        print(f"  Final holdout F1      : {fin['f1']:.3f}")
-        print(f"  Features used         : {fin['feature_count']}")
+        logger.info(f"  Final holdout accuracy: {fin['accuracy']:.3f}")
+        logger.info(f"  Final holdout F1      : {fin['f1']:.3f}")
+        logger.info(f"  Features used         : {fin['feature_count']}")
         if f"oos_{model_type}" in report:
             oos = report[f"oos_{model_type}"]
             sig = "✓ significant" if oos["significant"] else "✗ not significant"
             acc_se = oos.get("accuracy_se", 0.0)
-            print(
+            logger.info(
                 f"  OOS period            : {oos.get('oos_period', 'n/a')}",
             )
-            print(
+            logger.info(
                 f"  OOS accuracy          : {oos['accuracy']:.3f} ± {acc_se:.3f}  (n={oos['oos_size']})",
             )
-            print(f"  OOS F1                : {oos['f1']:.3f}")
-            print(f"  OOS AUC               : {oos.get('auc', 0.0):.3f}")
-            print(f"  OOS p-value (binomial): {oos['p_value_binomial']:.4f}  {sig}")
+            logger.info(f"  OOS F1                : {oos['f1']:.3f}")
+            logger.info(f"  OOS AUC               : {oos.get('auc', 0.0):.3f}")
+            logger.info(f"  OOS p-value (binomial): {oos['p_value_binomial']:.4f}  {sig}")
 
-    print()
-    print("  ─── Sharpe significance ─────────────────────────────────────")
-    print("  N=45 trades: Sharpe SE ≈ ±0.54 (need ~250 for SE ≤ ±0.3).")
-    print("  Credible performance number: OOS accuracy (p-value above).")
-    print("  Do NOT commit live capital until 30+ days paper trading done.")
-    print("  ─────────────────────────────────────────────────────────────")
-    print("=" * 60)
+    logger.info("")
+    logger.info("  ─── Sharpe significance ─────────────────────────────────────")
+    logger.info("  N=45 trades: Sharpe SE ≈ ±0.54 (need ~250 for SE ≤ ±0.3).")
+    logger.info("  Credible performance number: OOS accuracy (p-value above).")
+    logger.info("  Do NOT commit live capital until 30+ days paper trading done.")
+    logger.info("  ─────────────────────────────────────────────────────────────")
+    logger.info("=" * 60)
 
     return report
 

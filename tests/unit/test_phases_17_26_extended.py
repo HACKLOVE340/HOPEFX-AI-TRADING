@@ -19,6 +19,9 @@ from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
+import logging
+logger = logging.getLogger(__name__)
+
 
 # ===========================================================================
 # Phase 18: Chart Replay Engine - extended tests

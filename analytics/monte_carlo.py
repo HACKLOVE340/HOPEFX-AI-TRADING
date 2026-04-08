@@ -33,9 +33,9 @@ Usage
         initial_capital=100_000,
         n_paths=5000,
     )
-    print(result.sharpe_ci_95)   # (lower, upper) 95% CI on Sharpe
-    print(result.max_dd_ci_95)   # (lower, upper) 95% CI on max drawdown
-    print(result.ruin_probability)
+    logger.info(result.sharpe_ci_95)   # (lower, upper) 95% CI on Sharpe
+    logger.info(result.max_dd_ci_95)   # (lower, upper) 95% CI on max drawdown
+    logger.info(result.ruin_probability)
 
 Configuration (env vars)
 ------------------------

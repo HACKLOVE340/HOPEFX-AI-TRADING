@@ -736,21 +736,21 @@ if __name__ == "__main__":
                 from_date=from_dt,
                 to_date=to_dt,
             )
-            print(f"\nBackfill complete: {count} bars appended.")
-            print(f"Data saved to: {_csv_path(args.symbol, args.granularity)}")
+            logger.info(f"\nBackfill complete: {count} bars appended.")
+            logger.info(f"Data saved to: {_csv_path(args.symbol, args.granularity)}")
         elif args.timeframe:
             if args.timeframe not in TIMEFRAME_SECONDS:
-                print(f"Unknown timeframe '{args.timeframe}'. Supported: {', '.join(ALL_TIMEFRAMES)}")
+                logger.info(f"Unknown timeframe '{args.timeframe}'. Supported: {', '.join(ALL_TIMEFRAMES)}")
                 return
             count = await _update_timeframe(args.symbol, args.timeframe)
-            print(f"Fetched and appended {count} new bars for {args.symbol}/{args.timeframe}.")
+            logger.info(f"Fetched and appended {count} new bars for {args.symbol}/{args.timeframe}.")
         else:
             scheduler = DataScheduler(symbol=args.symbol)
             results = await scheduler.run_once()
             total = sum(results.values())
-            print(f"\nUpdate complete: {total} total new bars")
+            logger.info(f"\nUpdate complete: {total} total new bars")
             for tf, n in results.items():
                 path = _csv_path(args.symbol, tf)
-                print(f"  {tf:>4}  {n:>5} new bars  →  {path}")
+                logger.info(f"  {tf:>4}  {n:>5} new bars  →  {path}")
 
     asyncio.run(_main())

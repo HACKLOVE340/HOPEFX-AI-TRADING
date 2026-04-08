@@ -34,6 +34,9 @@ import asyncio
 import os
 import sys
 from pathlib import Path
+import logging
+logger = logging.getLogger(__name__)
+
 
 # Ensure project root is on path
 ROOT = Path(__file__).parent.parent
@@ -55,12 +58,12 @@ results: list[tuple[str, str, str]] = []  # (status, name, detail)
 
 def record(status: str, name: str, detail: str) -> None:
     results.append((status, name, detail))
-    print(f"  {status}  {name}: {detail}")
+    logger.info(f"  {status}  {name}: {detail}")
 
 
 # ── 1. Environment keys ───────────────────────────────────────────────────────
 
-print("\n=== 1. Environment keys ===")
+logger.info("\n=== 1. Environment keys ===")
 
 
 def check_env(var: str, critical: bool = True) -> bool:
@@ -84,7 +87,7 @@ check_env("NEWSAPI_ORG_KEY", critical=False)
 
 # ── 2. GoldFeedManager configured sources ────────────────────────────────────
 
-print("\n=== 2. Gold price feed sources ===")
+logger.info("\n=== 2. Gold price feed sources ===")
 
 gold_keys = {
     "GOLDAPI_IO_KEY": "GoldAPI.io",
@@ -103,7 +106,7 @@ else:
 
 # ── 3. NuclearStreamer WebSocket sources ──────────────────────────────────────
 
-print("\n=== 3. NuclearStreamer WebSocket sources ===")
+logger.info("\n=== 3. NuclearStreamer WebSocket sources ===")
 
 ws_keys = {
     "FINNHUB_API_KEY": "Finnhub",
@@ -120,7 +123,7 @@ else:
 
 # ── 4. FRED connectivity ──────────────────────────────────────────────────────
 
-print("\n=== 4. FRED macro feed ===")
+logger.info("\n=== 4. FRED macro feed ===")
 
 
 async def check_fred() -> None:
@@ -145,7 +148,7 @@ async def check_fred() -> None:
 
 # ── 5. CFTC COT ───────────────────────────────────────────────────────────────
 
-print("\n=== 5. CFTC COT feed ===")
+logger.info("\n=== 5. CFTC COT feed ===")
 
 
 async def check_cot() -> None:
@@ -167,7 +170,7 @@ async def check_cot() -> None:
 
 # ── 6. IMF gold ───────────────────────────────────────────────────────────────
 
-print("\n=== 6. IMF central bank gold feed ===")
+logger.info("\n=== 6. IMF central bank gold feed ===")
 
 
 async def check_imf() -> None:
@@ -193,7 +196,7 @@ async def check_imf() -> None:
 
 # ── 7. Yahoo macro ────────────────────────────────────────────────────────────
 
-print("\n=== 7. Yahoo Finance macro feed ===")
+logger.info("\n=== 7. Yahoo Finance macro feed ===")
 
 
 async def check_yahoo() -> None:
@@ -219,7 +222,7 @@ async def check_yahoo() -> None:
 
 # ── 8. FIX protocol backend ───────────────────────────────────────────────────
 
-print("\n=== 8. FIX protocol backend ===")
+logger.info("\n=== 8. FIX protocol backend ===")
 
 
 def check_fix() -> None:
@@ -246,7 +249,7 @@ check_fix()
 
 # ── 9. Redis ──────────────────────────────────────────────────────────────────
 
-print("\n=== 9. Redis ===")
+logger.info("\n=== 9. Redis ===")
 
 
 def check_redis() -> None:
@@ -273,19 +276,19 @@ async def main() -> int:
     check_redis()
 
     # Summary
-    print("\n=== Summary ===")
+    logger.info("\n=== Summary ===")
     passed = sum(1 for s, _, _ in results if s == OK)
     warned = sum(1 for s, _, _ in results if s == WARN)
     failed = sum(1 for s, _, _ in results if s == FAIL)
-    print(f"  {OK} {passed} passed   {WARN} {warned} warnings   {FAIL} {failed} failed")
+    logger.error(f"  {OK} {passed} passed   {WARN} {warned} warnings   {FAIL} {failed} failed")
 
     if failed > 0:
-        print("\nCritical failures detected. Fix the ❌ items before starting paper trading.")
+        logger.error("\nCritical failures detected. Fix the ❌ items before starting paper trading.")
         return 1
     if warned > 0:
-        print("\nWarnings present. Add missing API keys to .env to enable all features.")
+        logger.warning("\nWarnings present. Add missing API keys to .env to enable all features.")
     else:
-        print("\nAll checks passed. Ready to start paper trading.")
+        logger.info("\nAll checks passed. Ready to start paper trading.")
     return 0
 
 
