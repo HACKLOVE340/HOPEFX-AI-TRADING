@@ -59,7 +59,6 @@ const Login: React.FC = () => {
               style={s.input}
               placeholder="trader@hopefx.io"
               autoComplete="email"
-              required
               autoFocus
             />
           </div>
@@ -74,7 +73,6 @@ const Login: React.FC = () => {
               style={s.input}
               placeholder="••••••••"
               autoComplete="current-password"
-              required
             />
           </div>
 
