@@ -496,10 +496,31 @@ class CMEComexConnector(BrokerConnector):
         quantity: float,
         price: float | None,
     ) -> CMEFill:
-        """Simulate a CME fill for paper trading."""
+        """Simulate a CME fill for paper trading.
+
+        Fill price resolution order:
+        1. Explicit ``price`` argument (limit/stop orders).
+        2. Latest tick close from MarketDataCache (Redis).
+        3. Latest OHLCV bar close from OHLCVStore ring buffer.
+        4. Raises ``RuntimeError`` — no price source available.
+
+        A hard-coded fallback is intentionally absent: paper fills must
+        reflect real market prices so that P&L simulation is meaningful.
+        """
         import uuid
 
-        fill_price = price or 2000.0  # placeholder — real price from market data
+        fill_price: float | None = price
+
+        if fill_price is None or fill_price <= 0.0:
+            fill_price = self._resolve_market_price(symbol)
+
+        if fill_price is None or fill_price <= 0.0:
+            raise RuntimeError(
+                f"CME paper fill: no market price available for {symbol}. "
+                "Ensure the market data feed is running and has published at "
+                "least one tick or OHLCV bar before placing paper orders."
+            )
+
         logger.info(
             "CME PAPER fill: %s %s %d contracts @ %.2f",
             side.value,
@@ -518,6 +539,58 @@ class CMEComexConnector(BrokerConnector):
             latency_ms=0.0,
             source="paper",
         )
+
+    def _resolve_market_price(self, symbol: str) -> float | None:
+        """
+        Resolve the current mid-market price for *symbol* from live data.
+
+        Tries, in order:
+        1. MarketDataCache.get_latest_tick  (Redis tick stream)
+        2. OHLCVStore.get                   (Redis-backed OHLCV ring buffer)
+
+        Returns ``None`` when no data source has a price for the symbol.
+        """
+        cme_symbol = self._normalise_symbol(symbol)
+        # Attempt both the CME symbol ("GC") and the HOPEFX internal form
+        candidates = list({cme_symbol, symbol})
+
+        # 1. Latest tick from Redis
+        try:
+            import redis as _redis_lib
+            from market_data.redis_cache import MarketDataCache
+
+            r = _redis_lib.from_url(
+                os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+                socket_connect_timeout=1,
+                socket_timeout=1,
+                decode_responses=False,
+            )
+            r.ping()
+            cache = MarketDataCache(r)
+            for sym in candidates:
+                tick = cache.get_latest_tick(sym)
+                if tick:
+                    close = tick.get("close") or tick.get("c") or tick.get("price") or tick.get("last")
+                    if close and float(close) > 0:
+                        return float(close)
+        except Exception as exc:
+            logger.debug("CME paper: Redis tick lookup failed (%s)", exc)
+
+        # 2. Latest OHLCV bar from ring buffer
+        try:
+            from brokers.ohlcv_store import get_ohlcv_store
+
+            store = get_ohlcv_store()
+            for sym in candidates:
+                df = store.get(sym, bars=1, allow_partial=True)
+                if df is not None and not df.empty:
+                    close = float(df["close"].iloc[-1])
+                    if close > 0:
+                        return close
+        except Exception as exc:
+            logger.debug("CME paper: OHLCVStore lookup failed (%s)", exc)
+
+        return None
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
