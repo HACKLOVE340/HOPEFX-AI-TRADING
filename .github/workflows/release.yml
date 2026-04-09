@@ -88,8 +88,8 @@ jobs:
         run: python -m build
 
       - name: Create GitHub Release
-        # Pinned to a full commit SHA for supply-chain safety (trusted v2 release).
-        uses: softprops/action-gh-release@<FULL_40_CHAR_COMMIT_SHA_FOR_TRUSTED_V2_RELEASE>
+        # Pinned to SHA for supply-chain safety (tag: v2)
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe  # v2
         with:
           files: dist/*
           generate_release_notes: true
