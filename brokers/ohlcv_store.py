@@ -169,11 +169,10 @@ class OHLCVStore:
         if cache is not None:
             try:
                 raw = cache.get_bars(symbol, self._timeframe, n=bars)
-                if raw:
-                    if len(raw) >= bars or (allow_partial and raw):
-                        df = _bars_to_df(raw[-bars:])
-                        if df is not None and (len(df) >= bars or (allow_partial and len(df) > 0)):
-                            return df
+                if raw and (len(raw) >= bars or (allow_partial and raw)):
+                    df = _bars_to_df(raw[-bars:])
+                    if df is not None and (len(df) >= bars or (allow_partial and len(df) > 0)):
+                        return df
             except Exception as exc:
                 logger.debug("OHLCVStore: Redis get_bars failed: %s", exc)
 
