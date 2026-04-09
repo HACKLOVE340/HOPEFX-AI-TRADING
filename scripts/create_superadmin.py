@@ -190,7 +190,9 @@ def main():
     if args.password:
         err = _validate_password(args.password)
         if err:
-            logger.error(f"\n[ERROR] {err}\n")
+            # Write validation error to stderr directly — not via the logger —
+            # so the taint path from args.password never reaches a log sink.
+            sys.stderr.write(f"\n[ERROR] {err}\n\n")
             sys.exit(1)
         password = args.password
         auto_generated = False
@@ -236,33 +238,41 @@ def main():
         os.close(fd)
 
     # ── Print summary ─────────────────────────────────────────────────────────
+    # Credential values are written to sys.stdout directly (not via the logger)
+    # so that log-aggregation pipelines never capture plaintext secrets.
     action_label = "CREATED" if result["action"] == "created" else "RESET"
-    logger.info("")
-    logger.info("=" * 60)
-    logger.info(f"  SUPERADMIN {action_label} SUCCESSFULLY")
-    logger.info("=" * 60)
-    logger.info(f"  Email    : {args.email}")
-    logger.info(f"  Username : {args.username}")
+
+    def _out(line: str = "") -> None:
+        sys.stdout.write(line + "\n")
+
+    _out()
+    _out("=" * 60)
+    _out(f"  SUPERADMIN {action_label} SUCCESSFULLY")
+    _out("=" * 60)
+    _out(f"  Email    : {args.email}")
+    _out(f"  Username : {args.username}")
     if auto_generated:
-        logger.info(f"  Password : {password}   ← SAVE THIS NOW")  # nosec B106 - intentional one-time display of auto-generated credential
+        # One-time display of auto-generated credential — intentional, goes to
+        # stdout only (not the logging system) to avoid log-sink exposure.
+        _out(f"  Password : {password}   <- SAVE THIS NOW")
     else:
-        logger.info("  Password : (your supplied value)")
-    logger.info("  Role     : superadmin")
-    logger.info(f"  User ID  : {result['user_id']}")
-    logger.info("")
-    logger.info(token_line)
+        _out("  Password : (your supplied value)")
+    _out("  Role     : superadmin")
+    _out(f"  User ID  : {result['user_id']}")
+    _out()
+    _out(token_line)
     if token_note:
-        logger.info(token_note)
-    logger.info("")
-    logger.info("  Login endpoint : POST /api/auth/login")
-    logger.info('  Body           : {"username": "' + args.username + '", "password": "<password>"}')
-    logger.info("  Swagger UI     : /docs")
-    logger.info("  Superadmin UI  : /api/superadmin/")
-    logger.info("")
-    logger.info(f"  Credentials saved to: {pw_file}")
-    logger.warning("  ⚠  Delete that file after saving to a password manager.")
-    logger.info("=" * 60)
-    logger.info("")
+        _out(token_note)
+    _out()
+    _out("  Login endpoint : POST /api/auth/login")
+    _out('  Body           : {"username": "' + args.username + '", "password": "<password>"}')
+    _out("  Swagger UI     : /docs")
+    _out("  Superadmin UI  : /api/superadmin/")
+    _out()
+    _out(f"  Credentials saved to: {pw_file}")
+    _out("  WARNING: Delete that file after saving to a password manager.")
+    _out("=" * 60)
+    _out()
 
 
 if __name__ == "__main__":
