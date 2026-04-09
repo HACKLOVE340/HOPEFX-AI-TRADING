@@ -305,7 +305,7 @@ class TestPropEnforcer80PctAlert:
         """Below 80% of daily limit — no warning sent."""
         enforcer = self._make_enforcer()
         warnings_sent = []
-        enforcer._send_telegram_warning = lambda detail: warnings_sent.append(detail)
+        enforcer._send_telegram_warning = warnings_sent.append
 
         # 3% DD on 5% limit = 60% of limit — no alert
         enforcer.update_balance(current_equity=100_000.0, start_of_day_equity=100_000.0)
@@ -317,7 +317,7 @@ class TestPropEnforcer80PctAlert:
         """At 80% of daily limit (4% DD on 5% limit) — warning sent once."""
         enforcer = self._make_enforcer()
         warnings_sent = []
-        enforcer._send_telegram_warning = lambda detail: warnings_sent.append(detail)
+        enforcer._send_telegram_warning = warnings_sent.append
 
         enforcer.update_balance(current_equity=100_000.0, start_of_day_equity=100_000.0)
         # 4% DD = 80% of 5% daily limit → alert fires
@@ -330,7 +330,7 @@ class TestPropEnforcer80PctAlert:
         """Alert is sent at most once per day regardless of further equity drops."""
         enforcer = self._make_enforcer()
         warnings_sent = []
-        enforcer._send_telegram_warning = lambda detail: warnings_sent.append(detail)
+        enforcer._send_telegram_warning = warnings_sent.append
 
         enforcer.update_balance(current_equity=100_000.0, start_of_day_equity=100_000.0)
         enforcer.update_balance(current_equity=96_000.0)  # triggers alert
@@ -341,7 +341,7 @@ class TestPropEnforcer80PctAlert:
         """At or beyond the breach threshold — breach fires, not the 80% warning."""
         enforcer = self._make_enforcer()
         warnings_sent = []
-        enforcer._send_telegram_warning = lambda detail: warnings_sent.append(detail)
+        enforcer._send_telegram_warning = warnings_sent.append
 
         enforcer.update_balance(current_equity=100_000.0, start_of_day_equity=100_000.0)
         # Jump straight to 5.5% DD (past the 5% limit) — no warning, breach fires instead
@@ -352,7 +352,7 @@ class TestPropEnforcer80PctAlert:
         """After daily_reset(), the alert flag clears so it fires again next session."""
         enforcer = self._make_enforcer()
         warnings_sent = []
-        enforcer._send_telegram_warning = lambda detail: warnings_sent.append(detail)
+        enforcer._send_telegram_warning = warnings_sent.append
 
         enforcer.update_balance(current_equity=100_000.0, start_of_day_equity=100_000.0)
         enforcer.update_balance(current_equity=96_000.0)  # fires alert
@@ -369,7 +369,7 @@ class TestPropEnforcer80PctAlert:
         """At 80% of total DD limit (8% from HWM on 10% limit) — warning sent."""
         enforcer = self._make_enforcer()
         warnings_sent = []
-        enforcer._send_telegram_warning = lambda detail: warnings_sent.append(detail)
+        enforcer._send_telegram_warning = warnings_sent.append
 
         enforcer.update_balance(current_equity=100_000.0, start_of_day_equity=100_000.0)
         # 8% total DD = 80% of 10% max_dd limit → total alert fires
@@ -381,7 +381,7 @@ class TestPropEnforcer80PctAlert:
         """Total DD alert is sent at most once (until reset)."""
         enforcer = self._make_enforcer()
         warnings_sent = []
-        enforcer._send_telegram_warning = lambda detail: warnings_sent.append(detail)
+        enforcer._send_telegram_warning = warnings_sent.append
 
         enforcer.update_balance(current_equity=100_000.0, start_of_day_equity=100_000.0)
         enforcer.update_balance(current_equity=92_000.0)  # triggers total alert
@@ -391,7 +391,7 @@ class TestPropEnforcer80PctAlert:
     def test_trading_not_halted_after_80pct_alert(self):
         """80% alert is a warning only — trading must remain allowed."""
         enforcer = self._make_enforcer()
-        enforcer._send_telegram_warning = lambda detail: None  # suppress network call
+        enforcer._send_telegram_warning = lambda _: None  # suppress network call
 
         enforcer.update_balance(current_equity=100_000.0, start_of_day_equity=100_000.0)
         enforcer.update_balance(current_equity=96_000.0)  # 80% of daily limit
@@ -404,7 +404,7 @@ class TestPropEnforcer80PctAlert:
         """Warning message includes remaining buffer so trader knows headroom."""
         enforcer = self._make_enforcer()
         messages = []
-        enforcer._send_telegram_warning = lambda detail: messages.append(detail)
+        enforcer._send_telegram_warning = messages.append
 
         enforcer.update_balance(current_equity=100_000.0, start_of_day_equity=100_000.0)
         enforcer.update_balance(current_equity=96_000.0)
