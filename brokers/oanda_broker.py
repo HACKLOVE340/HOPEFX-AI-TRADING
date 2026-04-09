@@ -396,22 +396,8 @@ class OandaBroker:
                     )
                     return {"success": False, "order_id": None, "comment": error_msg}
 
-            except aiohttp.ClientConnectionError as exc:
-                last_error = f"Connection error: {exc}"
-                if attempt < _MAX_RETRIES:
-                    delay = _RETRY_BASE_DELAY * (2**attempt)
-                    logger.warning(
-                        "OANDA connection error | retrying in %.1fs | attempt=%d/%d | error=%s",
-                        delay,
-                        attempt + 1,
-                        _MAX_RETRIES + 1,
-                        exc,
-                    )
-                    await asyncio.sleep(delay)
-                    continue
-                logger.error("OandaBroker.place_order: connection failed after %d attempts: %s", _MAX_RETRIES + 1, exc)
-                return {"success": False, "order_id": None, "comment": last_error}
             except aiohttp.ServerTimeoutError as exc:
+                # ServerTimeoutError ⊂ ClientConnectionError — must come first.
                 last_error = f"Timeout: {exc}"
                 if attempt < _MAX_RETRIES:
                     delay = _RETRY_BASE_DELAY * (2**attempt)
@@ -425,9 +411,24 @@ class OandaBroker:
                     continue
                 logger.error("OandaBroker.place_order: timed out after %d attempts", _MAX_RETRIES + 1)
                 return {"success": False, "order_id": None, "comment": last_error}
+            except aiohttp.ClientConnectionError as exc:
+                last_error = f"Connection error: {exc}"
+                if attempt < _MAX_RETRIES:
+                    delay = _RETRY_BASE_DELAY * (2**attempt)
+                    logger.warning(
+                        "OANDA connection error | retrying in %.1fs | attempt=%d/%d | error=%s",
+                        delay,
+                        attempt + 1,
+                        _MAX_RETRIES + 1,
+                        type(exc).__name__,
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                logger.error("OandaBroker.place_order: connection failed after %d attempts", _MAX_RETRIES + 1)
+                return {"success": False, "order_id": None, "comment": last_error}
             except aiohttp.ClientError as exc:
-                logger.exception("OandaBroker.place_order: non-retryable client error: %s", exc)
-                return {"success": False, "order_id": None, "comment": f"Network error: {exc}"}
+                logger.exception("OandaBroker.place_order: non-retryable client error: %s", type(exc).__name__)
+                return {"success": False, "order_id": None, "comment": f"Network error: {type(exc).__name__}"}
 
         return {"success": False, "order_id": None, "comment": last_error}
 
