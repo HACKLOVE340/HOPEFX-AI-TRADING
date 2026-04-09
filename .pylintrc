@@ -54,7 +54,40 @@ disable=
     unnecessary-lambda,
     # W0105: pointless-string-statement — module-level string literals used as
     # section separators or informal documentation.
-    pointless-string-statement
+    pointless-string-statement,
+    # C0415: import-outside-toplevel — deferred imports inside functions are
+    # intentional throughout this codebase for optional/heavy dependencies and
+    # circular-import avoidance.
+    import-outside-toplevel,
+    # C0413: wrong-import-position — some modules have conditional imports after
+    # try/except blocks or after module-level constants; accepted project-wide.
+    wrong-import-position,
+    # C0411: wrong-import-order — import ordering is enforced by ruff/isort in
+    # CI; pylint's ordering check is redundant and produces false positives.
+    wrong-import-order,
+    # W0404: reimported — re-imports inside functions are intentional for
+    # deferred loading; top-level re-imports are caught by ruff F811.
+    reimported,
+    # R0917: too-many-positional-arguments — covered by too-many-arguments above.
+    too-many-positional-arguments,
+    # C0302: too-many-lines — large API modules are intentional; splitting would
+    # break the router registration pattern used throughout.
+    too-many-lines,
+    # W0707: raise-missing-from — not enforced project-wide; many raise sites
+    # intentionally suppress the original exception for cleaner user messages.
+    raise-missing-from,
+    # W1514: unspecified-encoding — open() calls without encoding are acceptable
+    # when reading binary or platform-default text files.
+    unspecified-encoding,
+    # C0206: consider-using-dict-items — stylistic; not enforced.
+    consider-using-dict-items,
+    # C0200: consider-using-enumerate — stylistic; not enforced.
+    consider-using-enumerate,
+    # R1702: too-many-nested-blocks — complex parsing/validation logic requires
+    # nesting; refactoring would reduce readability.
+    too-many-nested-blocks,
+    # W0611: unused-import — caught by ruff F401 in CI; pylint check is redundant.
+    unused-import
 
 [FORMAT]
 max-line-length=120
