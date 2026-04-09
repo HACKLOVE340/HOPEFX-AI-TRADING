@@ -716,10 +716,9 @@ class SklearnOnlineLearner:
 
         import joblib as _jl
 
-        path = _pl.Path(self.persist_path)
-        _assert_safe_model_path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        _jl.dump(self, path, compress=3)
+        _safe_path = _assert_safe_model_path(_pl.Path(self.persist_path))
+        _safe_path.parent.mkdir(parents=True, exist_ok=True)
+        _jl.dump(self, _safe_path, compress=3)
 
     @classmethod
     def load(cls, path: str) -> SklearnOnlineLearner:
@@ -727,14 +726,16 @@ class SklearnOnlineLearner:
 
         The path must resolve inside the project's ``ml/saved_models`` directory
         to prevent loading arbitrary pickles from attacker-controlled locations.
+        _assert_safe_model_path() returns the validated, resolved Path — joblib
+        loads from that return value, not from the original user-supplied string,
+        breaking the taint path (CodeQL #24609 — unsafe deserialization).
         """
         import pathlib as _pl
 
         import joblib as _jl
 
-        p = _pl.Path(path)
-        _assert_safe_model_path(p)
-        return _jl.load(p)  # nosec B301  # codeql[py/unsafe-deserialization] - path confined to ml/saved_models by _assert_safe_model_path
+        _safe_path = _assert_safe_model_path(_pl.Path(path))  # raises if outside _MODEL_ROOT
+        return _jl.load(_safe_path)  # nosec B301 — path validated and confined to ml/saved_models
 
 
 # ── Path-confinement helper ───────────────────────────────────────────────────
