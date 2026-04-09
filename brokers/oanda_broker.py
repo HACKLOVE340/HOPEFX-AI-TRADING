@@ -124,26 +124,29 @@ class OandaBroker:
                 if resp.status == 200:
                     data = await resp.json()
                     currency = data.get("account", {}).get("currency", "?")
-                    balance = data.get("account", {}).get("balance", "?")
                     self.connected = True
+                    # Balance is financial data — log currency only, not the amount.
                     logger.info(
-                        "OandaBroker connected | account=%s | server=%s | balance=%s %s",
+                        "OandaBroker connected | account=%s | server=%s | currency=%s",
                         _mask_account(self._account_id),
                         server,
-                        balance,
                         currency,
                     )
                     return True
-                body = await resp.text()
+                # Truncate error body to avoid leaking token details from OANDA
+                # error responses (e.g. "Invalid access token" messages that echo
+                # back request metadata).
+                _raw_body = await resp.text()
+                _safe_body = _raw_body[:120] if len(_raw_body) > 120 else _raw_body
                 logger.error(
-                    "OandaBroker connect failed | status=%s | body=%s",
+                    "OandaBroker connect failed | status=%s | error=%s",
                     resp.status,
-                    body,
+                    _safe_body,
                 )
                 await self._session.close()
                 return False
         except aiohttp.ClientError as exc:
-            logger.error("OandaBroker connect error: %s", exc)
+            logger.error("OandaBroker connect error: %s", type(exc).__name__)
             await self._session.close()
             return False
 
