@@ -32,11 +32,12 @@ import { useWebSocket } from './hooks/useWebSocket';
 import { usePlan } from './hooks/usePlan';
 
 // ── Public / auth pages ───────────────────────────────────────────────────────
-const LandingPage  = React.lazy(() => import('./pages/LandingPage'));
-const Login        = React.lazy(() => import('./pages/Login'));
-const Register     = React.lazy(() => import('./pages/Register'));
-const Onboarding   = React.lazy(() => import('./pages/Onboarding'));
-const NotFound     = React.lazy(() => import('./pages/NotFound'));
+const LandingPage             = React.lazy(() => import('./pages/LandingPage'));
+const Login                   = React.lazy(() => import('./pages/Login'));
+const Register                = React.lazy(() => import('./pages/Register'));
+const Onboarding              = React.lazy(() => import('./pages/Onboarding'));
+const NotFound                = React.lazy(() => import('./pages/NotFound'));
+const TermsAndRiskDisclosure  = React.lazy(() => import('./pages/TermsAndRiskDisclosure'));
 
 // ── Core ──────────────────────────────────────────────────────────────────────
 const TradingDashboard = React.lazy(() => import('./pages/TradingDashboard'));
@@ -390,12 +391,16 @@ const App: React.FC = () => (
       <ErrorBoundary>
         <Suspense fallback={<PageFallback />}>
           <Routes>
-            <Route path="/"           element={<LandingPage />} />
-            <Route path="/landing"    element={<LandingPage />} />
-            <Route path="/login"      element={<Login />} />
-            <Route path="/register"   element={<Register />} />
-            <Route path="/onboarding" element={<Onboarding />} />
-            <Route path="/*"          element={<AppShell />} />
+            <Route path="/"                element={<LandingPage />} />
+            <Route path="/landing"         element={<LandingPage />} />
+            <Route path="/login"           element={<Login />} />
+            <Route path="/register"        element={<Register />} />
+            <Route path="/onboarding"      element={<Onboarding />} />
+            {/* Public legal pages — no auth required */}
+            <Route path="/terms"           element={<TermsAndRiskDisclosure />} />
+            <Route path="/risk-disclosure" element={<TermsAndRiskDisclosure />} />
+            <Route path="/privacy"         element={<TermsAndRiskDisclosure />} />
+            <Route path="/*"               element={<AppShell />} />
           </Routes>
         </Suspense>
       </ErrorBoundary>
