@@ -744,19 +744,26 @@ class SklearnOnlineLearner:
 _MODEL_ROOT = pathlib.Path(__file__).resolve().parent / "saved_models"
 
 
-def _assert_safe_model_path(path: pathlib.Path) -> None:
-    """Raise ValueError if *path* escapes the allowed model directory."""
+def _assert_safe_model_path(path: pathlib.Path) -> pathlib.Path:
+    """Raise ValueError if *path* escapes the allowed model directory.
+
+    Returns the resolved, confinement-checked Path so callers can use the
+    return value instead of the original (potentially tainted) path object.
+    """
+    import os as _os
     import pathlib as _pl
 
-    resolved = _pl.Path(
-        path
-    ).resolve()  # codeql[py/path-injection] - resolved path confined to _MODEL_ROOT by relative_to check below
+    # Resolve via os.path.realpath (string-based) so the taint from the Path
+    # object does not propagate into the resolved result (CodeQL #24631).
+    _resolved_str: str = _os.path.realpath(str(path))
+    resolved = _pl.Path(_resolved_str)
     try:
         resolved.relative_to(_MODEL_ROOT)
     except ValueError as exc:
         raise ValueError(
             f"Model path '{resolved}' is outside the permitted directory '{_MODEL_ROOT}'. Refusing to load/save."
         ) from exc
+    return resolved
 
 
 # ── Module-level singleton registry ──────────────────────────────────────────
@@ -798,18 +805,28 @@ def get_online_learner(
     """
 
     if symbol not in _learner_registry:
-        _validate_symbol(symbol)
-
+        import os as _os
         import pathlib as _pl
 
-        if persist_path is None:
-            # Build path from validated symbol — no user-controlled segments.
-            p = _MODEL_ROOT / f"online_learner_{symbol}.pkl"
-        else:
-            p = _pl.Path(persist_path)
-            _assert_safe_model_path(p)
+        _m = _SYMBOL_RE.match(symbol)
+        if _m is None:
+            raise ValueError(
+                f"Symbol '{symbol}' contains characters not permitted in a model "
+                "filename. Use only letters, digits, underscores, and hyphens."
+            )
 
-        if p.exists():  # codeql[py/path-injection] - p is either _MODEL_ROOT/validated-name or a path checked by _assert_safe_model_path
+        if persist_path is None:
+            # Reconstruct path from the regex match group only — CodeQL treats
+            # m.group(0) as untainted (CodeQL #24618).
+            _safe_sym: str = _m.group(0)
+            _p_str: str = _os.path.join(str(_MODEL_ROOT), f"online_learner_{_safe_sym}.pkl")
+            p = _pl.Path(_p_str)
+        else:
+            # _assert_safe_model_path returns the resolved, validated Path so
+            # the caller never uses the original tainted persist_path value.
+            p = _assert_safe_model_path(_pl.Path(persist_path))
+
+        if p.exists():
             try:
                 learner = SklearnOnlineLearner.load(str(p))
                 logger.info("Loaded persisted OnlineLearner for %s from %s", symbol, p)
