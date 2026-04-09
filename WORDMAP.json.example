@@ -1,0 +1,67 @@
+{
+  "_comment": "Copy to WORDMAP.json. This file is gitignored — do not commit live values.",
+  "_description": "Optional nuclear/geopolitical risk keyword overrides for NuclearWordmapScorer. If nuclear_risk section is absent, the scorer uses built-in defaults.",
+
+  "nuclear_risk": {
+    "nuclear_military": {
+      "nuclear strike": 10.0,
+      "nuclear attack": 10.0,
+      "nuclear war": 10.0,
+      "nuclear weapon": 9.0,
+      "nuclear test": 8.5,
+      "icbm": 9.0,
+      "ballistic missile": 8.0,
+      "warhead": 8.5
+    },
+    "geopolitical_conflict": {
+      "world war": 10.0,
+      "military invasion": 9.0,
+      "declaration of war": 9.5,
+      "nato article 5": 9.0,
+      "armed conflict": 7.0,
+      "military escalation": 7.5
+    },
+    "financial_crisis": {
+      "bank run": 8.0,
+      "financial collapse": 9.0,
+      "market crash": 8.0,
+      "circuit breaker": 7.0,
+      "trading halt": 6.5,
+      "systemic risk": 7.5
+    },
+    "central_bank": {
+      "emergency rate cut": 8.0,
+      "emergency meeting": 7.5,
+      "quantitative easing": 5.0,
+      "rate hike": 4.0,
+      "fed funds": 3.5
+    },
+    "commodity_supply": {
+      "oil embargo": 8.0,
+      "supply disruption": 6.0,
+      "pipeline attack": 7.5,
+      "gold confiscation": 9.0,
+      "gold repatriation": 5.0
+    },
+    "pandemic_disaster": {
+      "pandemic": 7.0,
+      "lockdown": 5.0,
+      "emergency declaration": 6.0,
+      "natural disaster": 5.5
+    },
+    "political_instability": {
+      "coup": 8.5,
+      "government collapse": 8.0,
+      "assassination": 9.0,
+      "civil war": 8.5,
+      "martial law": 8.0
+    },
+    "sanctions_trade": {
+      "sanctions": 6.0,
+      "trade war": 5.5,
+      "tariff": 3.5,
+      "export ban": 5.0,
+      "asset freeze": 7.0
+    }
+  }
+}
