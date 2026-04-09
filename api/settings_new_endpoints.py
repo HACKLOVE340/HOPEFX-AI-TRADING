@@ -186,23 +186,32 @@ class WebhookTestPayload(BaseModel):
     secret: str = ""
 
 
-def _validate_webhook_url(url: str) -> None:
-    """Raise HTTPException 400 if the URL targets an internal/private host.
+def _resolve_and_validate_webhook_url(url: str) -> str:
+    """Resolve the webhook URL hostname, reject private/internal IPs, and return
+    a pinned URL with the IP substituted for the hostname.
 
-    Prevents SSRF by resolving the hostname and rejecting any IP address
-    that is private, loopback, link-local, reserved, or multicast.
+    Resolving once and pinning the IP prevents DNS rebinding: the HTTP client
+    uses the validated IP directly, so a second DNS lookup cannot return a
+    different (internal) address between validation and the actual request.
+
+    Raises HTTPException 400 if the URL is invalid or targets a private address.
+    Returns the pinned URL (scheme://ip:port/path) with Host header info.
     """
     parsed = urllib.parse.urlparse(url)
     hostname = parsed.hostname
     if not hostname:
         raise HTTPException(status_code=400, detail="Invalid webhook URL: missing hostname")
+
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
     try:
-        infos = socket.getaddrinfo(hostname, None)
+        infos = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
     except OSError:
         raise HTTPException(  # noqa: B904
             status_code=400,
             detail="Webhook URL hostname could not be resolved",
         )
+
+    safe_ip: str | None = None
     for info in infos:
         addr = info[4][0]
         try:
@@ -214,6 +223,17 @@ def _validate_webhook_url(url: str) -> None:
                 status_code=400,
                 detail="Webhook URL must not target internal or reserved addresses",
             )
+        if safe_ip is None:
+            safe_ip = addr  # pin to first validated address
+
+    if safe_ip is None:
+        raise HTTPException(status_code=400, detail="Webhook URL could not be resolved to a valid address")
+
+    # Build a pinned URL: replace hostname with the resolved IP so the HTTP
+    # client never performs a second DNS lookup (prevents DNS rebinding).
+    netloc = f"[{safe_ip}]:{port}" if ":" in safe_ip else f"{safe_ip}:{port}"
+    pinned = parsed._replace(netloc=netloc).geturl()
+    return pinned
 
 
 @router.post("/api/settings/integrations/test-webhook")
@@ -221,16 +241,28 @@ async def test_webhook(payload: WebhookTestPayload, request: Request):
     _get_user_id(request)  # must be authenticated
     if not payload.url.startswith("https://"):
         raise HTTPException(status_code=400, detail="Webhook URL must use HTTPS")
-    # Guard against SSRF: reject URLs that resolve to internal/private IPs.
-    _validate_webhook_url(payload.url)
+
+    # Resolve hostname once, validate against private-IP blocklist, and pin the
+    # request to the resolved IP to prevent DNS rebinding (CodeQL #24591 SSRF).
+    _parsed_orig = urllib.parse.urlparse(payload.url)
+    _orig_hostname = _parsed_orig.hostname or ""
+    pinned_url = _resolve_and_validate_webhook_url(payload.url)
+
     body = json.dumps({"event": "test", "source": "hopefx", "timestamp": int(time.time())})
-    headers = {"Content-Type": "application/json", "X-HopeFX-Event": "test"}
+    headers = {
+        "Content-Type": "application/json",
+        "X-HopeFX-Event": "test",
+        # Restore the original Host header so the server-side TLS/vhost routing works.
+        "Host": _orig_hostname,
+    }
     if payload.secret:
         sig = hmac.new(payload.secret.encode(), body.encode(), hashlib.sha256).hexdigest()
         headers["X-HopeFX-Signature"] = f"sha256={sig}"
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(payload.url, content=body, headers=headers)
+        # verify=True (default) — TLS certificate is validated against the
+        # original hostname even though we connect to the pinned IP.
+        async with httpx.AsyncClient(timeout=10, verify=True) as client:
+            resp = await client.post(pinned_url, content=body, headers=headers)
         if resp.status_code >= 400:
             raise HTTPException(status_code=502, detail=f"Webhook returned {resp.status_code}")
         return {"status": "delivered", "response_code": resp.status_code}
