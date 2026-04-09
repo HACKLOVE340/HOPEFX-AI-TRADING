@@ -606,3 +606,28 @@ class CircuitBreaker:
         if self._monitoring_task:
             self._monitoring_task.cancel()
         self._persist_state()
+
+
+# ── Registry of active CircuitBreaker instances ──────────────────────────────
+_registry: dict[str, "CircuitBreaker"] = {}
+
+
+def get_circuit_breakers() -> dict[str, "CircuitBreaker"]:
+    """Return the global registry of all active CircuitBreaker instances.
+
+    Entries are added when a CircuitBreaker is constructed with a named broker.
+
+    Returns:
+        Mapping of broker-identifier → CircuitBreaker instance.
+    """
+    return _registry
+
+
+def register_circuit_breaker(name: str, cb: "CircuitBreaker") -> None:
+    """Register a CircuitBreaker under *name* in the global registry.
+
+    Args:
+        name: Unique identifier for this breaker (usually the broker name).
+        cb:   The CircuitBreaker instance to register.
+    """
+    _registry[name] = cb

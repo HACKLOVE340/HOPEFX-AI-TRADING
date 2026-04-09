@@ -106,7 +106,7 @@ async def _get_redis() -> Any | None:
             _redis_client = await _gr()
         except Exception:
             try:
-                import redis.asyncio as aioredis
+                import redis.asyncio as aioredis  # pylint: disable=no-name-in-module
 
                 _redis_client = aioredis.from_url(
                     os.getenv("REDIS_URL", "redis://localhost:6379/0"),

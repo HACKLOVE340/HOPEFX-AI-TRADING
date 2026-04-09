@@ -105,7 +105,7 @@ class WebSocketConnectionLimiter:
             return
         self._connected = True
         try:
-            import redis.asyncio as aioredis
+            import redis.asyncio as aioredis  # pylint: disable=no-name-in-module
 
             redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
             self._redis = aioredis.from_url(

@@ -1583,3 +1583,41 @@ async def get_drift_report() -> dict:
             "requires_retrain": False,
             "live_samples": 0,
         }
+
+
+# ── Superadmin-facing aliases ────────────────────────────────────────────────
+# api/superadmin/ml_ai.py calls these; map them to the endpoint functions above.
+
+async def get_ml_status(user=None):
+    """Return ML engine status summary (superadmin alias)."""
+    return await ml_engine_health(user=user)  # type: ignore[call-arg]
+
+
+async def get_rl_status(user=None):
+    """Return RL model status (superadmin alias)."""
+    return await rl_status(user=user)  # type: ignore[call-arg]
+
+
+async def control_rl_agent(action: str) -> dict:
+    """Start or stop the RL agent (superadmin action).
+
+    Args:
+        action: ``"start"`` or ``"stop"``
+
+    Returns:
+        Status dict with ``action`` and ``status`` keys.
+    """
+    from ml.rl_agent import RLAgent
+
+    try:
+        agent = RLAgent.get_instance()
+        if action == "start":
+            await agent.start()
+        elif action == "stop":
+            await agent.stop()
+        else:
+            return {"action": action, "status": "error", "detail": f"Unknown action: {action}"}
+        return {"action": action, "status": "ok"}
+    except Exception as exc:
+        logger.warning("control_rl_agent %s failed: %s", action, exc)
+        return {"action": action, "status": "error", "detail": str(exc)}
