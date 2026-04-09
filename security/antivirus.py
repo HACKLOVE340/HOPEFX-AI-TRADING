@@ -706,12 +706,13 @@ rule SuspiciousImport {
 
 def _require_auth(request: Request) -> dict[str, Any]:
     try:
-        from auth.jwt_handler import verify_token
+        from auth.jwt import verify_token
 
+        _credentials_exc = HTTPException(status_code=401, detail="Invalid or expired token")
         token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         if not token:
             raise HTTPException(status_code=401, detail="Authentication required")
-        return verify_token(token)
+        return verify_token(token, _credentials_exc)
     except HTTPException:
         raise
     except Exception as exc:

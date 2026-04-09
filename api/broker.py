@@ -466,7 +466,7 @@ async def broker_status():
         }
 
     except Exception:
-        logger.exception("broker_status: unexpected error: %s")
+        logger.exception("broker_status: unexpected error")
         return {
             "broker": {"connected": False, "broker_type": "unknown", "error": "Unavailable — check server logs"},
             "data_feed": {"active": False, "source": "unknown"},
@@ -571,7 +571,7 @@ async def stamp_oanda_clock(req: StampOandaRequest):
             "clock": status,
         }
     except Exception:
-        logger.exception("stamp_oanda_clock: %s")
+        logger.exception("stamp_oanda_clock failed")
         from fastapi import HTTPException
 
         raise HTTPException(status_code=500, detail="Internal error — check server logs") from None

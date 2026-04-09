@@ -755,7 +755,7 @@ async def run_multi_symbol_backtest(
             ),
         )
     except Exception:  # pylint: disable=broad-exception-caught
-        logger.exception("Multi-symbol backtest failed: %s")
+        logger.exception("Multi-symbol backtest failed")
         raise HTTPException(status_code=500, detail="Backtest failed — check server logs") from None
 
     pooled = report.get("pooled", {})
@@ -981,7 +981,7 @@ async def run_replay_backtest(
                 },
             )
         except Exception:  # pylint: disable=broad-exception-caught
-            logger.exception("Replay backtest %s failed: %s", run_id)
+            logger.exception("Replay backtest %s failed", run_id)
             _persist_result(run_id, {"run_id": run_id, "status": "error", "error": "Task failed — check server logs"})
 
     _persist_result(run_id, {"run_id": run_id, "status": "running"})
@@ -1068,7 +1068,7 @@ async def run_regime_stress_test(
                 },
             )
         except Exception:  # pylint: disable=broad-exception-caught
-            logger.exception("Regime stress %s failed: %s", run_id)
+            logger.exception("Regime stress %s failed", run_id)
             _persist_result(run_id, {"run_id": run_id, "status": "error", "error": "Task failed — check server logs"})
 
     _persist_result(run_id, {"run_id": run_id, "status": "running"})
@@ -1380,11 +1380,10 @@ _compat_router = APIRouter(prefix="/api/backtesting", tags=["Backtesting"])
 @_compat_router.post("/run", status_code=status.HTTP_201_CREATED, include_in_schema=False)
 async def _compat_run_backtest(
     body: BacktestRequest,
-    background_tasks: BackgroundTasks,
     user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Alias: POST /api/backtesting/run → run_backtest."""
-    return await run_backtest(body, background_tasks, user)
+    return await run_backtest(body, user)
 
 
 @_compat_router.get("/results", include_in_schema=False)
@@ -1435,9 +1434,8 @@ async def _compat_wf_get(
 @_compat_router.post("/walk-forward/run", include_in_schema=False)
 async def _compat_wf_run(
     body: BacktestRequest,
-    background_tasks: BackgroundTasks,
     user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Alias: POST /api/backtesting/walk-forward/run → run_backtest (walk-forward mode)."""
     # Delegate to the primary run endpoint; callers may set body.walk_forward = True
-    return await run_backtest(body, background_tasks, user)
+    return await run_backtest(body, user)
