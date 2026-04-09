@@ -23,7 +23,19 @@ async def get_ml_status(user: TokenPayload = Depends(_require_superadmin)) -> di
     try:
         from api.ml import get_ml_status as _gms
 
-        return await _gms(user=user)
+        result = await _gms(user=user)
+        # ml_engine_health may return a Pydantic model or a JSONResponse;
+        # normalise to a plain dict so FastAPI can serialise the -> dict return type.
+        if hasattr(result, "model_dump"):
+            return result.model_dump()
+        if hasattr(result, "dict"):
+            return result.dict()
+        if hasattr(result, "body"):
+            # JSONResponse — decode the pre-serialised bytes
+            import json as _json
+
+            return _json.loads(result.body)
+        return result if isinstance(result, dict) else {"status": "unknown"}
     except Exception:
         return {"status": "unknown"}
 
