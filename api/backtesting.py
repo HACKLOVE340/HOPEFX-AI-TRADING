@@ -228,6 +228,7 @@ def _safe_csv_path(data_dir: pathlib.Path, stem: str) -> pathlib.Path | None:  #
     # representations so Path.__truediv__ never receives a tainted operand,
     # then resolve and confirm containment inside data_dir.
     import os as _os
+
     resolved_data_dir = data_dir.resolve()
     _candidate_str: str = _os.path.join(str(resolved_data_dir), _filename)
     candidate = pathlib.Path(_candidate_str).resolve()

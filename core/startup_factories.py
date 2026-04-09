@@ -329,8 +329,7 @@ def _enforce_redis_maxmemory(host: str, port: int) -> None:
             logger.debug("Redis maxmemory OK: %d bytes", maxmemory)
     except Exception as exc:
         logger.warning(
-            "Could not check Redis maxmemory at startup (%s) — "
-            "ensure Redis is reachable and maxmemory is configured.",
+            "Could not check Redis maxmemory at startup (%s) — ensure Redis is reachable and maxmemory is configured.",
             exc,
         )
 
