@@ -24,15 +24,15 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 try:
-    from redis.exceptions import TimeoutError as RedisTimeoutError  # re-exported  # noqa: F401  # pylint: disable=unused-import
-
     import redis
     from redis import Redis
+    from redis.exceptions import TimeoutError as RedisTimeoutError
 
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
     Redis = None  # type: ignore[assignment,misc]
+    RedisTimeoutError = Exception  # type: ignore[assignment,misc]
     logger.warning("Redis not available, using in-memory fallback")
 
 

@@ -432,8 +432,7 @@ def _check_sqlite_multiworker(url: str) -> None:
         concurrency = int(concurrency_value)
     except ValueError as exc:
         raise RuntimeError(
-            "Invalid WEB_CONCURRENCY configuration: "
-            f"expected an integer, got {concurrency_value!r}."
+            f"Invalid WEB_CONCURRENCY configuration: expected an integer, got {concurrency_value!r}."
         ) from exc
     if concurrency > 1:
         raise RuntimeError(
@@ -445,6 +444,7 @@ def _check_sqlite_multiworker(url: str) -> None:
         )
     # Warn even for single-worker so operators know this is dev-only.
     import logging as _logging
+
     _logging.getLogger(__name__).warning(
         "DATABASE_URL is using SQLite (%s). "
         "This is only suitable for local development. "

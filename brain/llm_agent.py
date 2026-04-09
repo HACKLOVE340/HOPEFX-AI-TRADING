@@ -374,9 +374,7 @@ class _ASTSandboxChecker(ast.NodeVisitor):
     def _check_module(self, module_name: str, lineno: int) -> None:
         root = module_name.split(".")[0]
         if root in _BANNED_MODULES:
-            self.violations.append(
-                f"Line {lineno}: import of banned module '{module_name}' is not allowed"
-            )
+            self.violations.append(f"Line {lineno}: import of banned module '{module_name}' is not allowed")
 
     def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:
@@ -391,9 +389,7 @@ class _ASTSandboxChecker(ast.NodeVisitor):
     def visit_Call(self, node: ast.Call) -> None:
         # Direct calls: eval(...), exec(...), open(...)
         if isinstance(node.func, ast.Name) and node.func.id in _BANNED_BUILTINS:
-            self.violations.append(
-                f"Line {node.lineno}: call to banned built-in '{node.func.id}' is not allowed"
-            )
+            self.violations.append(f"Line {node.lineno}: call to banned built-in '{node.func.id}' is not allowed")
         # Attribute calls: __builtins__['eval'](...) caught at Name level above;
         # also catch getattr(x, 'eval') patterns via the Name visitor.
         self.generic_visit(node)
@@ -506,13 +502,14 @@ def _compile_strategy(code: str) -> tuple[Any | None, str | None]:
     }
 
     try:
-        proc = subprocess.run(  # noqa: S603  # nosec B603
+        proc = subprocess.run(  # nosec B603
             [sys.executable, runner_path],
             capture_output=True,
             text=True,
             timeout=30,
             env=sandbox_env,
-            preexec_fn=_apply_resource_limits,  # nosec B603
+            preexec_fn=_apply_resource_limits,
+            check=False,  # nosec B603
         )
         stdout = proc.stdout.strip()
         if not stdout:
@@ -526,7 +523,7 @@ def _compile_strategy(code: str) -> tuple[Any | None, str | None]:
             spec = importlib.util.spec_from_file_location("_gen_strategy", tmp_path)
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)  # nosec B302
-            cls = getattr(module, "GeneratedStrategy")
+            cls = module.GeneratedStrategy
             instance = cls()  # pylint: disable=not-callable
             return instance, None
         return None, result.get("error", "Unknown sandbox error")
