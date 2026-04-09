@@ -990,7 +990,7 @@ class RiskAnalytics:
     risk metrics without needing to know the individual function names.
     """
 
-    def platform_var(self, confidence: float = 0.95) -> dict:
+    def platform_var(self, confidence: float = 0.95) -> dict[str, object]:
         """Return a platform-wide VaR summary.
 
         Attempts to fetch live returns from the execution engine; falls back to
@@ -1004,9 +1004,11 @@ class RiskAnalytics:
             supporting metrics.
         """
         try:
-            from execution.engine import get_engine
+            import execution.engine as _eng_mod
 
-            engine = get_engine()
+            # The engine module exposes a module-level singleton when running;
+            # fall back gracefully if it is not yet initialised.
+            engine = getattr(_eng_mod, "_engine_instance", None) or getattr(_eng_mod, "engine", None)
             returns = getattr(engine, "daily_returns", []) or []
         except Exception:
             returns = []
