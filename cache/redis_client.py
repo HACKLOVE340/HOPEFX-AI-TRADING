@@ -139,6 +139,51 @@ async def _try_sentinel(
         return None, None
 
 
+def _enforce_tls(redis_url: str) -> str:
+    """
+    Enforce TLS in production environments.
+
+    In production (APP_ENV=production) a plaintext redis:// URL is a
+    security misconfiguration — credentials and session tokens travel in
+    the clear.  This function:
+      - Raises RuntimeError if APP_ENV=production and the URL is redis://
+        (not rediss://).  The caller must fix the URL before deploying.
+      - Automatically upgrades redis:// → rediss:// when
+        REDIS_FORCE_TLS=true is set (useful for staging environments that
+        share the same config as production but haven't updated the URL).
+      - Logs a WARNING in non-production environments so operators notice
+        the plaintext connection without blocking startup.
+
+    Set REDIS_TLS_SKIP_VERIFY=true only in controlled test environments
+    where the Redis server uses a self-signed certificate.
+    """
+    app_env = os.getenv("APP_ENV", "development").lower()
+    force_tls = os.getenv("REDIS_FORCE_TLS", "false").lower() == "true"
+    is_plaintext = redis_url.startswith("redis://")
+
+    if not is_plaintext:
+        return redis_url  # already rediss:// or unix socket — nothing to do
+
+    if force_tls:
+        upgraded = "rediss://" + redis_url[len("redis://"):]
+        logger.info("Redis: REDIS_FORCE_TLS=true — upgraded URL to rediss://")
+        return upgraded
+
+    if app_env == "production":
+        raise RuntimeError(
+            "Redis TLS required in production: REDIS_URL must use rediss:// (not redis://). "
+            "Update REDIS_URL to rediss://<host>:<port>/<db> or set REDIS_FORCE_TLS=true "
+            "to auto-upgrade. This check prevents credentials from being sent in plaintext."
+        )
+
+    logger.warning(
+        "Redis: plaintext redis:// connection in %s environment. "
+        "Use rediss:// in production or set REDIS_FORCE_TLS=true.",
+        app_env,
+    )
+    return redis_url
+
+
 async def _try_direct(
     redis_url: str,
     decode_responses: bool,
@@ -146,9 +191,30 @@ async def _try_direct(
 ) -> Any | None:
     """Attempt direct Redis URL connection. Returns client or None."""
     try:
+        import ssl
+
         import redis.asyncio as aioredis  # pylint: disable=no-name-in-module
 
-        logger.info("Redis: connecting directly via URL")
+        # Enforce TLS policy before connecting.
+        redis_url = _enforce_tls(redis_url)
+
+        # Build SSL context for rediss:// connections.
+        ssl_context: ssl.SSLContext | None = None
+        if redis_url.startswith("rediss://"):
+            ssl_context = ssl.create_default_context()
+            if os.getenv("REDIS_TLS_SKIP_VERIFY", "false").lower() == "true":
+                ssl_context.check_hostname = False
+                ssl_context.verify_mode = ssl.CERT_NONE
+                logger.warning("Redis TLS: certificate verification disabled (REDIS_TLS_SKIP_VERIFY=true)")
+            ca_cert = os.getenv("REDIS_TLS_CA_CERT", "")
+            client_cert = os.getenv("REDIS_TLS_CLIENT_CERT", "")
+            client_key = os.getenv("REDIS_TLS_CLIENT_KEY", "")
+            if ca_cert:
+                ssl_context.load_verify_locations(ca_cert)
+            if client_cert and client_key:
+                ssl_context.load_cert_chain(client_cert, client_key)
+
+        logger.info("Redis: connecting directly via URL (tls=%s)", ssl_context is not None)
         client = aioredis.from_url(
             redis_url,
             decode_responses=decode_responses,
@@ -156,10 +222,13 @@ async def _try_direct(
             socket_timeout=5.0,
             socket_connect_timeout=3.0,
             retry_on_timeout=True,
+            ssl=ssl_context,
         )
         await client.ping()
-        logger.info("Redis direct connection established")
+        logger.info("Redis direct connection established (tls=%s)", ssl_context is not None)
         return client
+    except RuntimeError:
+        raise  # re-raise TLS enforcement errors — do not swallow
     except Exception as exc:
         logger.error("Redis direct connection failed: %s", exc)
         return None
