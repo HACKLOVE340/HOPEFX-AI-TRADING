@@ -12,8 +12,6 @@ checker.  If any test fails it means a bypass vector has been re-introduced.
 
 import ast
 
-import pytest
-
 from brain.llm_agent import _ast_sandbox_check, _compile_strategy
 
 
