@@ -4,6 +4,7 @@
 """SuperAdmin platform config and trading engine sub-router."""
 
 import logging
+import sys
 import time
 
 from fastapi import APIRouter, Depends
@@ -17,7 +18,7 @@ from ._shared import (
     MaintenanceBody,
     PauseBody,
     PlatformConfigBody,
-    _get_config_store,
+    _get_config_store as _shared_get_config_store,
     _log_superadmin_action,
     _require_superadmin,
     _utcnow,
@@ -26,6 +27,16 @@ from ._shared import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _get_config_store():
+    """Return config store, honouring any test-level patch on api.superadmin._get_config_store."""
+    parent = sys.modules.get("api.superadmin")
+    if parent is not None:
+        fn = getattr(parent, "_get_config_store", None)
+        if fn is not None and fn is not _get_config_store:
+            return fn()
+    return _shared_get_config_store()
 
 # ── Platform config ───────────────────────────────────────────────────────────
 

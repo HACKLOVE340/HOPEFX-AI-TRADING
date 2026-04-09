@@ -220,9 +220,23 @@ async def init_database(s: Any) -> Any:
 
     conn_str = s.config.database.get_connection_string()
 
-    # SQLite does not support pool_size / max_overflow — only pass them for
-    # PostgreSQL/MySQL connections.
+    # Block SQLite in multi-worker deployments — concurrent OS-process writes
+    # corrupt the database.  PostgreSQL is required for any production setup.
     is_sqlite = conn_str.startswith("sqlite")
+    if is_sqlite:
+        concurrency = int(os.getenv("WEB_CONCURRENCY", "1"))
+        if concurrency > 1:
+            raise RuntimeError(
+                f"DATABASE_URL is SQLite but WEB_CONCURRENCY={concurrency}. "
+                "SQLite cannot safely handle concurrent writes from multiple OS "
+                "processes and will corrupt data. Set DATABASE_URL to a "
+                "PostgreSQL connection string before starting with multiple workers."
+            )
+        logger.warning(
+            "Database is SQLite (%s). This is only suitable for local development. "
+            "Use PostgreSQL for production or multi-worker deployments.",
+            conn_str,
+        )
     engine_kwargs: ClassVar[dict] = {}
     if not is_sqlite:
         engine_kwargs["pool_size"] = int(os.getenv("DB_POOL_SIZE", str(s.config.database.connection_pool_size)))

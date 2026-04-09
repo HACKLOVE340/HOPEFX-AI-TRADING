@@ -374,8 +374,8 @@ const AppShell: React.FC = () => {
             {/* Superadmin-only */}
             <Route path="/superadmin"   element={wrap(superAdminOnly(<SuperAdminDashboard />))} />
 
-            {/* Fallback — 404 for any unmatched authenticated route */}
-            <Route path="*" element={wrap(<NotFound />)} />
+            {/* Fallback — redirect any unmatched route to /dashboard */}
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </Suspense>
       </main>
