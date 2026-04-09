@@ -61,7 +61,7 @@ class TestTickValidator:
 
     def test_negative_ask_rejected(self):
         tick = self._make_tick(ask=-1.0)
-        valid, reason = self.validator.validate(tick)
+        valid, _ = self.validator.validate(tick)
         assert valid is False
 
     def test_inverted_spread_rejected(self):

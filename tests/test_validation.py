@@ -128,7 +128,7 @@ class TestPropFirmValidator:
 
         # Add more losses
         self.validator.record_pnl(-4000)
-        valid, msg = self.validator.check_limits(current_equity=94000.0)
+        valid, _ = self.validator.check_limits(current_equity=94000.0)
         assert valid is False  # Now 6% loss
 
     def test_reset_daily(self):
