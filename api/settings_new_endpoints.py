@@ -205,11 +205,11 @@ def _resolve_and_validate_webhook_url(url: str) -> str:
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
     try:
         infos = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
-    except OSError:
+    except OSError as exc:
         raise HTTPException(
             status_code=400,
             detail="Webhook URL hostname could not be resolved",
-        )
+        ) from exc
 
     safe_ip: str | None = None
     for info in infos:
