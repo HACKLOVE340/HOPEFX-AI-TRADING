@@ -137,28 +137,51 @@ class OHLCVStore:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def get(self, symbol: str, bars: int = 150) -> pd.DataFrame | None:
+    def get(
+        self,
+        symbol: str,
+        bars: int = 150,
+        *,
+        allow_partial: bool = True,
+    ) -> pd.DataFrame | None:
         """
         Return the last ``bars`` closed OHLCV bars as a DataFrame.
 
         Tries Redis first, falls back to the in-memory ring buffer.
-        Returns None when fewer than ``bars`` are available.
+
+        Parameters
+        ----------
+        symbol:
+            Instrument symbol (e.g. ``"XAU_USD"``).
+        bars:
+            Desired number of bars.  When ``allow_partial=True`` (default)
+            the method returns whatever is available even if fewer than
+            ``bars`` bars have been collected.  When ``allow_partial=False``
+            the method returns ``None`` until at least ``bars`` bars exist.
+        allow_partial:
+            If ``True`` (default), return a partial DataFrame rather than
+            ``None`` when the buffer has fewer than ``bars`` entries.
+            Set to ``False`` to enforce the minimum-bars requirement (e.g.
+            for ML inference that needs a full lookback window).
         """
         # Primary: Redis
         cache = self._get_cache()
         if cache is not None:
             try:
                 raw = cache.get_bars(symbol, self._timeframe, n=bars)
-                if raw and len(raw) >= bars:
-                    df = _bars_to_df(raw[-bars:])
-                    if df is not None and len(df) >= bars:
-                        return df
+                if raw:
+                    if len(raw) >= bars or (allow_partial and raw):
+                        df = _bars_to_df(raw[-bars:])
+                        if df is not None and (len(df) >= bars or (allow_partial and len(df) > 0)):
+                            return df
             except Exception as exc:
                 logger.debug("OHLCVStore: Redis get_bars failed: %s", exc)
 
         # Fallback: in-memory ring buffer
         buf = self._buffers.get(symbol)
-        if buf is None or len(buf) < bars:
+        if buf is None or len(buf) == 0:
+            return None
+        if not allow_partial and len(buf) < bars:
             return None
         raw_list = list(buf)[-bars:]
         return _bars_to_df(raw_list)
