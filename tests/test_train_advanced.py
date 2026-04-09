@@ -84,7 +84,7 @@ class TestBuildAdvancedFeatures:
         from ml.advanced_features import build_advanced_features
 
         df = _make_ohlcv()
-        X, y = build_advanced_features(df, macro_df=None)
+        X, _ = build_advanced_features(df, macro_df=None)
         assert X.shape[1] == 100, f"Expected 100 features without macro, got {X.shape[1]}"
 
     def test_feature_count_with_macro(self):
@@ -92,7 +92,7 @@ class TestBuildAdvancedFeatures:
 
         df = _make_ohlcv()
         macro = _make_macro(df.index)
-        X, y = build_advanced_features(df, macro_df=macro)
+        X, _ = build_advanced_features(df, macro_df=macro)
         assert X.shape[1] == 129, f"Expected 129 features with macro, got {X.shape[1]}"
 
     def test_no_nan_in_features(self):
