@@ -122,7 +122,7 @@ class TestNewsFilter:
 
     def test_high_severity_outside_60_min_passes(self):
         nf = NewsFilter([NewsEvent(minutes_away=90, description="FOMC", severity="high")])
-        safe, reason = nf.is_safe("XAUUSD")
+        safe, _ = nf.is_safe("XAUUSD")
         assert safe is True
 
     def test_medium_severity_within_30_min_blocks(self):
@@ -133,7 +133,7 @@ class TestNewsFilter:
 
     def test_medium_severity_outside_30_min_passes(self):
         nf = NewsFilter([NewsEvent(minutes_away=45, description="CPI", severity="medium")])
-        safe, reason = nf.is_safe("XAUUSD")
+        safe, _ = nf.is_safe("XAUUSD")
         assert safe is True
 
     def test_any_event_within_15_min_blocks(self):

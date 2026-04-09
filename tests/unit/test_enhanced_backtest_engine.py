@@ -401,7 +401,7 @@ class TestInstitutionalRiskManager:
             max_position_pct=0.05,
         )
         # 100 lots at $1950 = $195,000 notional > 5% of $100k = $5,000
-        allowed, reason, _ = rm.check_pre_trade_risk(
+        allowed, _, _ = rm.check_pre_trade_risk(
             "XAUUSD", eng.OrderSide.BUY, size=100.0, price=1950.0, portfolio_state={}
         )
         assert allowed is False

@@ -223,7 +223,7 @@ class TestHelperFunctions:
         with patch("api.superadmin.platform._get_config_store", return_value=mock_store):
             _save_platform_config({"platform_name": "Test"})
         mock_store.set.assert_called_once()
-        key, value = mock_store.set.call_args[0]
+        _, value = mock_store.set.call_args[0]
         assert "platform_name" in value
 
     def test_save_platform_config_noop_when_no_store(self):
