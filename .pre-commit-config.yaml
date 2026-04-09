@@ -61,6 +61,23 @@ repos:
           - "high"
         additional_dependencies: ["bandit[toml]"]
 
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        name: detect-secrets
+        # Audit against the committed baseline so only NEW secrets fail the hook.
+        # To update the baseline after a legitimate change:
+        #   detect-secrets scan --baseline .secrets.baseline
+        args:
+          - "--baseline"
+          - ".secrets.baseline"
+          # Exclude files that legitimately contain placeholder/example values.
+          - "--exclude-files"
+          - "(frontend/package-lock\\.json|\\.env\\.example|data/.*\\.csv|ml/saved_models/.*)"
+        # Jupyter notebooks and lock files are excluded from all hooks.
+        exclude: (\.ipynb$|package-lock\.json$)
+
 # pytest belongs in the CI test job, not in pre-commit hooks.
 # Running the full test suite on every commit is too slow and fails in
 # environments where test dependencies are not installed.
