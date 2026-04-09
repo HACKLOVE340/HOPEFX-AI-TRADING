@@ -1,6 +1,11 @@
-[coverage]
-# Scope: core application packages only — excludes optional/whitelabel modules
-# that are not yet covered by the test suite.
+# HOPEFX-AI-TRADING — Coverage Configuration
+# This is the single authoritative source for coverage settings.
+# All other config files (setup.cfg, pytest.ini, pyproject.toml) must NOT
+# contain [coverage:*] or [tool.coverage.*] sections.
+# CI passes --cov-config=.coveragerc explicitly.
+
+[run]
+# Measure branch coverage across all core application packages.
 source =
     auth
     risk
@@ -25,18 +30,31 @@ omit =
     */setup.py
     */conftest.py
     */__pycache__/*
+    # Live-only broker files — require real credentials, excluded from unit coverage
     brokers/oanda.py
     brokers/oanda_stream.py
     brokers/oanda_ws.py
     brokers/interactive_brokers.py
+    # Optional ML modules with heavy external deps
     ml/rl_agent.py
     ml/advanced_ai.py
+    # Whitelabel customisations are not part of the core test suite
     whitelabel/*
-report_precision = 2
-# Global baseline — individual critical-path gates are enforced in CI
+
+[report]
+precision = 2
+# Global baseline — individual critical-path gates are enforced separately in CI.
+# See .github/workflows/ci.yml for per-package 90% branch gates.
 fail_under = 70
 show_missing = true
 skip_empty = true
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
 
 [html]
 directory = coverage_html_report
@@ -46,12 +64,11 @@ title = HOPEFX Coverage Report — Critical Paths
 output = coverage.xml
 
 # ── Critical path coverage gates ──────────────────────────────────────────────
-# These are enforced as separate pytest-cov runs in CI (see .github/workflows/ci.yml).
+# Enforced as separate pytest-cov runs in CI (see .github/workflows/ci.yml).
 # Each critical module must maintain ≥90% branch coverage.
 #
-# Modules gated at 90%:
 #   risk/           — VaR, drawdown, position sizing, circuit breakers
 #   execution/      — order routing, engine, TCA, algo orders
 #   kill_switch.py  — system-wide halt mechanism
-#   brokers/        — broker adapters (excluding live-only files)
+#   brokers/        — broker adapters (excluding live-only files above)
 #   compliance/     — KYC/AML gateway and rules
