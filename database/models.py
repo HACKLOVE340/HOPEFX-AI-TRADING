@@ -44,7 +44,7 @@ try:
         from sqlalchemy.orm import declarative_base
     except ImportError:
         from sqlalchemy.ext.declarative import declarative_base  # SQLAlchemy < 2.0
-    from sqlalchemy.orm import relationship, sessionmaker  # noqa: F401
+    from sqlalchemy.orm import relationship, sessionmaker  # noqa: F401  # pylint: disable=unused-import
 
     SQLALCHEMY_AVAILABLE = True
 except ImportError:
@@ -711,7 +711,7 @@ class MarketDataType(enum.Enum):
 # `from database.models import User` keeps working, and so SQLAlchemy resolves
 # the "User" string reference in Account.user without a second class definition.
 try:
-    from database.user_models import User  # noqa: F401
+    from database.user_models import User  # noqa: F401  # pylint: disable=unused-import
 except ImportError as _user_models_err:
     raise ImportError(
         "CRITICAL: database/user_models.py could not be imported. "

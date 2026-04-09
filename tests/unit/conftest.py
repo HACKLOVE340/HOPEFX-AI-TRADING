@@ -164,7 +164,7 @@ def _cme_fix_adapter_stub():
     the stub is active only while that module's tests run and is removed before
     any other module (e.g. test_connector_hub.py) that needs the real adapter.
     """
-    import execution  # ensure the real package is loaded first  # noqa: F401
+    import execution  # ensure the real package is loaded first  # noqa: F401  # pylint: disable=unused-import
 
     stub = _build_fix_adapter_stub()
     original = sys.modules.get("execution.fix_adapter")

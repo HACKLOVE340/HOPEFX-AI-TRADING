@@ -43,7 +43,7 @@ UTC = timezone.utc
 from pathlib import Path
 from typing import Any
 
-import redis.asyncio as aioredis  # redis-py >= 4.2
+import redis.asyncio as aioredis  # redis-py >= 4.2  # pylint: disable=no-name-in-module
 
 logger = logging.getLogger(__name__)
 
@@ -255,7 +255,7 @@ def _make_redis() -> aioredis.Redis:
 
     if sentinel_hosts_str:
         try:
-            from redis.asyncio.sentinel import Sentinel as _Sentinel
+            from redis.asyncio.sentinel import Sentinel as _Sentinel  # pylint: disable=no-name-in-module
 
             hosts = []
             for _entry in sentinel_hosts_str.split(","):

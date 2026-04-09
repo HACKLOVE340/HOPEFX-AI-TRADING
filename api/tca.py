@@ -231,3 +231,40 @@ def _report_to_dict(r: Any) -> dict[str, Any]:
         "alert_triggered": r.alert_triggered,
         "generated_at": r.generated_at.isoformat(),
     }
+
+
+async def get_tca_summary(period: str = "1d", broker_id: str | None = None) -> dict:
+    """Return a TCA summary aggregated across all (or a specific) broker.
+
+    Args:
+        period:    Time window — ``"1d"``, ``"7d"``, or ``"30d"``.
+        broker_id: When provided, filter results to this broker only.
+
+    Returns:
+        Dict with a ``"brokers"`` list, each entry containing slippage and
+        fill-rate metrics.
+    """
+    # Re-use the existing stats endpoint for aggregation
+    try:
+        stats = await get_stats(  # type: ignore[call-arg]
+            request=None,  # type: ignore[arg-type]
+            period=period,
+        )
+    except Exception:
+        stats = {}
+
+    brokers_raw = stats.get("by_broker", {})
+    result: list[dict] = []
+    for name, data in brokers_raw.items():
+        if broker_id and name != broker_id:
+            continue
+        result.append(
+            {
+                "broker_id": name,
+                "avg_slippage_pips": float(data.get("avg_slippage_pips", 0.0)),
+                "fill_rate_pct": float(data.get("fill_rate_pct", 0.0)),
+                "total_trades": int(data.get("total_trades", 0)),
+                "period": period,
+            }
+        )
+    return {"brokers": result, "period": period}

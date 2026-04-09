@@ -90,7 +90,7 @@ async def _get_redis() -> Any:
         except ImportError:
             # Fallback: direct URL
             try:
-                import redis.asyncio as aioredis
+                import redis.asyncio as aioredis  # pylint: disable=no-name-in-module
 
                 _redis_client = aioredis.from_url(REDIS_URL, decode_responses=True)
             except Exception as exc:

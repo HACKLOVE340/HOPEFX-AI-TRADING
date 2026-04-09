@@ -16,7 +16,7 @@ import enum
 from datetime import datetime, timezone
 
 try:
-    from enum import StrEnum
+    from enum import StrEnum  # pylint: disable=unused-import
 except ImportError:
     from enum import Enum
 

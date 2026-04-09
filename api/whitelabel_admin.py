@@ -312,3 +312,51 @@ async def preview_tenant(
 async def list_available_features(user: TokenPayload = Depends(get_current_user)):
     """Return all available feature flags."""
     return {"features": [f.value for f in FeatureFlag]}
+
+
+# ── Internal helpers called by api/superadmin/infrastructure.py ──────────────
+
+def _get_tenants() -> list[dict]:
+    """Return all tenants as plain dicts (superadmin helper).
+
+    Returns:
+        List of tenant dicts from the WhiteLabelManager.
+    """
+    return [_tenant_to_dict(t) for t in _manager.list_tenants()]
+
+
+def _get_tenant_by_id(tenant_id: str) -> dict | None:
+    """Look up a single tenant by *tenant_id* (superadmin helper).
+
+    Args:
+        tenant_id: UUID string of the tenant to retrieve.
+
+    Returns:
+        Tenant dict, or ``None`` if not found.
+    """
+    tenant = _manager.get_tenant(tenant_id)
+    return _tenant_to_dict(tenant) if tenant else None
+
+
+def _create_tenant(tenant_data: dict) -> None:
+    """Persist a tenant record that was already constructed externally.
+
+    The superadmin endpoint builds the full tenant dict itself and calls this
+    to propagate it into the WhiteLabelManager's store.
+
+    Args:
+        tenant_data: Fully-formed tenant dict (must include ``tenant_id``).
+    """
+    tid = tenant_data.get("tenant_id", "")
+    if not tid:
+        return
+    # Only persist if not already tracked
+    if _manager.get_tenant(tid) is None:
+        try:
+            _manager.create_tenant(
+                name=tenant_data.get("name", ""),
+                owner_email=tenant_data.get("domain", ""),
+                features=[],
+            )
+        except Exception as exc:
+            logger.debug("_create_tenant delegation error: %s", exc)

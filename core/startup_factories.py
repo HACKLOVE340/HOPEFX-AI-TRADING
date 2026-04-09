@@ -988,7 +988,7 @@ async def init_position_manager(s: Any) -> Any:
 
     # Wire a Redis async client if available
     try:
-        import redis.asyncio as aioredis
+        import redis.asyncio as aioredis  # pylint: disable=no-name-in-module
 
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
         redis_client = aioredis.from_url(redis_url, decode_responses=False, socket_connect_timeout=2)

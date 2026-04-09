@@ -799,3 +799,11 @@ def _build_eager_av_router() -> APIRouter:
 
 # Singleton eager router — imported by router_registry.py
 av_router = _build_eager_av_router()
+
+
+def get_av_engine() -> AntivirusScanner:
+    """Return the singleton AntivirusScanner instance.
+
+    Alias for :func:`get_scanner` — used by the security dashboard API.
+    """
+    return get_scanner()
