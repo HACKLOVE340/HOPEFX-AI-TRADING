@@ -851,49 +851,50 @@ async def signal_filter_stats(
         raise HTTPException(status_code=500, detail="Signal filter stats unavailable — check server logs") from None
 
 
-@router.get(
-    "/health",
-    response_model=MLHealthResponse,
-    summary="ML model health check",
-    responses={
-        200: {"description": "Model loaded and healthy"},
-        206: {"description": "Model degraded (loaded but no trained weights)"},
-        503: {"description": "Model unavailable — inference disabled"},
-    },
-)
+# Allowlist for ML model directory names — only alphanumeric + underscore.
+# Used by _ml_health_meta and _engine_model_files to validate saved_dir.
+import re as _re_ml
+_ML_DIR_RE = _re_ml.compile(r"^[A-Za-z0-9_]{1,80}$")
+
+
 def _ml_health_meta(saved_dir: Any) -> tuple:
     """Read model metadata from disk. Returns (oos_accuracy, feature_count, model_file, last_trained_at)."""
     import json as _json
+    import os as _os
     import pathlib
 
-    # Constrain saved_dir to the configured ML_MODELS_DIR to avoid path traversal.
     oos_accuracy: float | None = None
     feature_count: int = 0
     model_file: str = "advanced_oos.pkl"
     last_trained_at: str | None = None
+
+    # Validate saved_dir name against strict allowlist, then reconstruct the
+    # path from the regex match group only — no tainted data flows into path
+    # construction (CodeQL #24588/#24589/#24630).
     try:
-        raw_dir = pathlib.Path(str(saved_dir))
-        # Disallow absolute paths; interpret saved_dir as a subdirectory name.
-        if raw_dir.is_absolute():
-            raise ValueError("Absolute paths are not allowed for saved_dir")
-        candidate_dir = (
-            ML_MODELS_DIR / raw_dir
-        ).resolve()  # codeql[py/path-injection] - raw_dir is relative-only; containment verified by relative_to-equivalent check below
-        # Ensure the resolved path is within the ML_MODELS_DIR tree.
+        _raw_name: str = pathlib.Path(str(saved_dir)).name
+        _m = _ML_DIR_RE.fullmatch(_raw_name)
+        if _m is None:
+            raise ValueError(f"saved_dir name '{_raw_name}' contains invalid characters")
+        # Reconstruct from the match group — CodeQL treats this as untainted.
+        _safe_name: str = _m.group(0)
+        _candidate_str: str = _os.path.join(str(ML_MODELS_DIR), _safe_name)
+        candidate_dir = pathlib.Path(_candidate_str).resolve()
         if ML_MODELS_DIR not in (candidate_dir, *candidate_dir.parents):
             raise ValueError("saved_dir escapes ML_MODELS_DIR")
-        meta_path = (
-            candidate_dir / "advanced_oos_meta.json"
-        )  # codeql[py/path-injection] - candidate_dir confined to ML_MODELS_DIR above
+        # Build meta_path from the validated candidate_dir + a static filename.
+        _meta_str: str = _os.path.join(str(candidate_dir), "advanced_oos_meta.json")
+        meta_path = pathlib.Path(_meta_str)
     except Exception as exc:
         logger.warning("ml_health: invalid saved_dir %r: %s", saved_dir, exc)
         return oos_accuracy, feature_count, model_file, last_trained_at
+
     if meta_path.exists():
         try:
             meta = _json.loads(meta_path.read_text())
             oos_accuracy = float(meta.get("oos_accuracy", 0.0)) or None
             feature_count = int(meta.get("feature_count", 0))
-            model_file = meta.get("model_file", "advanced_oos.pkl")
+            model_file = str(meta.get("model_file", "advanced_oos.pkl"))
             last_trained_at = meta.get("validated_at") or meta.get("trained_at")
         except Exception as exc:
             logger.debug("ml_health: meta parse failed: %s", exc)
@@ -914,6 +915,16 @@ def _ml_health_feature_count_from_predictor() -> int:
     return 0
 
 
+@router.get(
+    "/health",
+    response_model=MLHealthResponse,
+    summary="ML model health check",
+    responses={
+        200: {"description": "Model loaded and healthy"},
+        206: {"description": "Model degraded (loaded but no trained weights)"},
+        503: {"description": "Model unavailable — inference disabled"},
+    },
+)
 async def ml_health(user: TokenPayload = Depends(get_current_user)):
     """
     Return the current health status of the production ML model.
@@ -1040,11 +1051,28 @@ def _engine_mtf_status() -> dict:
 
 
 def _engine_model_files(saved_dir: Any) -> dict:
-    """Return {filename: size_kb} for all pkl/json files in saved_dir."""
+    """Return {filename: size_kb} for all pkl/json files in saved_dir.
+
+    saved_dir must be a Path or string whose final component passes the
+    _ML_DIR_RE allowlist.  The resolved path is confined to ML_MODELS_DIR.
+    """
+    import os as _os
     import pathlib
 
     model_files: dict[str, float] = {}
-    p = pathlib.Path(saved_dir)
+    try:
+        _raw_name: str = pathlib.Path(str(saved_dir)).name
+        _m = _ML_DIR_RE.fullmatch(_raw_name)
+        if _m is None:
+            return model_files
+        _safe_name: str = _m.group(0)
+        _dir_str: str = _os.path.join(str(ML_MODELS_DIR), _safe_name)
+        p = pathlib.Path(_dir_str).resolve()
+        if ML_MODELS_DIR not in (p, *p.parents):
+            return model_files
+    except Exception:
+        return model_files
+
     if p.exists():
         for ext in ("*.pkl", "*.json"):
             for f in p.glob(ext):
