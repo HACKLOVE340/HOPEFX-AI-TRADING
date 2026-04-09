@@ -298,7 +298,7 @@ class TestExecutionEngineBrokerFaultInjection:
         """
         from execution.engine import ExecutionRequest, ExecutionStatus
 
-        engine, broker = self._make_engine()
+        engine, _ = self._make_engine()
 
         # Mock a successful broker submission
         mock_report = MagicMock()

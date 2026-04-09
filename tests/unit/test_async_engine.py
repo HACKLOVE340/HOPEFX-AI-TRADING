@@ -499,7 +499,7 @@ class TestPreTradeCheck:
     async def test_passes_no_price_cache(self):
         e = _engine()
         order = _market_order()
-        allowed, reason = await e._pre_trade_check(order)
+        allowed, _ = await e._pre_trade_check(order)
         assert allowed is True
 
 

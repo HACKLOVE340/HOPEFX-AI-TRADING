@@ -269,7 +269,7 @@ class TestLiveModeConfirmedGate:
 
     def test_is_live_broker_class_name_mock(self):
         """Brokers with 'mock' or 'paper' in their class name are NOT live."""
-        engine, broker, _ = _make_engine()
+        engine, _, _ = _make_engine()
         # MagicMock has 'mock' in name → not live
         assert engine._is_live_broker() is False
 
