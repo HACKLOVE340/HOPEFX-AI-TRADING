@@ -647,31 +647,43 @@ rule SuspiciousImport {
             summary = await scanner.scan_project()
             return summary
 
+        # Allowlist for scan file paths: relative path components only.
+        # Each component is alphanumeric + underscore + hyphen + dot (for extensions).
+        # No leading slash, no ".." segments, no path separators in component names.
+        _SCAN_PATH_RE = re.compile(
+            r"^(?:[A-Za-z0-9_\-][A-Za-z0-9_\-. ]{0,127})(?:/[A-Za-z0-9_\-][A-Za-z0-9_\-. ]{0,127}){0,15}$"
+        )
+
         @router.post("/scan/file")
         async def scan_file(request: Request, body: ScanRequest):
+            import os as _os
+
             _require_admin(request)
             if not body.file_path:
                 raise HTTPException(status_code=400, detail="file_path required")
-            # Strip every character that is not a safe path component character.
-            # This explicit substitution breaks the taint chain before the value
-            # reaches any filesystem call, so CodeQL can verify no user-supplied
-            # data flows into path construction unmodified.
-            sanitized = re.sub(r"[^A-Za-z0-9_./ -]", "", body.file_path)
-            if not sanitized:
+
+            # Validate against strict allowlist — no absolute paths, no ".." segments.
+            # Reconstruct the path from m.group(0) (regex match output) so no
+            # tainted data flows into path construction (CodeQL #24613/#24632).
+            _raw = body.file_path.strip()
+            if ".." in _raw.split("/"):
                 raise HTTPException(status_code=400, detail="Invalid file path")
-            # Resolve and confine the path to PROJECT_ROOT to prevent traversal.
+            _m = _SCAN_PATH_RE.match(_raw)
+            if _m is None:
+                raise HTTPException(status_code=400, detail="Invalid file path")
+            _safe_rel: str = _m.group(0)  # untainted — output of regex match
+
             resolved_root = PROJECT_ROOT.resolve()
+            _candidate_str: str = _os.path.join(str(resolved_root), _safe_rel)
             try:
-                path = (
-                    resolved_root / sanitized
-                ).resolve()  # codeql[py/path-injection] - sanitized contains only [A-Za-z0-9_./ -]; relative_to guard below
+                path = Path(_candidate_str).resolve()
                 path.relative_to(resolved_root)  # raises ValueError if outside root
             except (ValueError, OSError):
                 raise HTTPException(status_code=400, detail="Invalid file path") from None
-            if not path.exists():  # codeql[py/path-injection] - path confined to PROJECT_ROOT above
+            if not path.exists():
                 raise HTTPException(status_code=404, detail="File not found")
             threats = await asyncio.get_running_loop().run_in_executor(None, scanner._scan_file_sync, path)
-            return {"file": sanitized, "threats": threats}
+            return {"file": _safe_rel, "threats": threats}
 
         @router.post("/quarantine")
         async def quarantine(request: Request, body: QuarantineRequest):
