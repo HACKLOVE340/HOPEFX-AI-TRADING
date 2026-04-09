@@ -422,9 +422,11 @@ def generate_chart(output_dir: str = "helm/hopefx") -> list[str]:
             _os.close(fd)
         written.append(str(target))
 
-    # Log template names only — no content or secret values are logged.
-    for _written_path in written:
-        logger.debug("helm_chart: wrote template %s", _written_path)  # nosec B106 - path only, no secret data
+    # Log the relative template name only (not the full output_dir path) so
+    # user-controlled path data never reaches the logging sink.
+    # CodeQL #24621 — clear-text logging of sensitive information.
+    for _rel_name in FILES:
+        logger.debug("helm_chart: wrote template %s", _rel_name)
 
     return written
 
