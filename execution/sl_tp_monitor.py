@@ -190,7 +190,9 @@ class SLTPMonitor:
             logger.debug("SLTPMonitor: could not get positions: %s", exc)
             return
 
-        for pos in positions:
+        # get_all_positions() returns dict[str, Position]; iterate values.
+        pos_iter = positions.values() if isinstance(positions, dict) else positions
+        for pos in pos_iter:
             if pos.position_id in self._closing:
                 continue
             mid = self._get_mid(pos.symbol)
