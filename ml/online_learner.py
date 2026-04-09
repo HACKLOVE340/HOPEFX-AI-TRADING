@@ -12,6 +12,7 @@ Continuously adapts to market regime changes without catastrophic forgetting
 from __future__ import annotations
 
 import logging
+import os
 import pathlib
 
 try:
@@ -724,18 +725,21 @@ class SklearnOnlineLearner:
     def load(cls, path: str) -> SklearnOnlineLearner:
         """Load a persisted learner from *path*.
 
-        The path must resolve inside the project's ``ml/saved_models`` directory
-        to prevent loading arbitrary pickles from attacker-controlled locations.
-        _assert_safe_model_path() returns the validated, resolved Path — joblib
-        loads from that return value, not from the original user-supplied string,
-        breaking the taint path (CodeQL #24609 — unsafe deserialization).
+        Deserializing pickle/joblib data is unsafe unless the source is fully
+        trusted. We therefore require an explicit runtime opt-in before loading.
         """
         import pathlib as _pl
 
         import joblib as _jl
 
         _safe_path = _assert_safe_model_path(_pl.Path(path))  # raises if outside _MODEL_ROOT
-        return _jl.load(_safe_path)  # nosec B301 — path validated and confined to ml/saved_models
+        if not _trusted_pickle_load_enabled():
+            raise RuntimeError(
+                "Refusing to deserialize persisted learner from disk because "
+                "pickle/joblib loading is disabled by default. Set "
+                "HOPEFX_ALLOW_TRUSTED_MODEL_LOAD=1 only in fully trusted deployments."
+            )
+        return _jl.load(_safe_path)  # nosec B301
 
 
 # ── Path-confinement helper ───────────────────────────────────────────────────
@@ -765,6 +769,11 @@ def _assert_safe_model_path(path: pathlib.Path) -> pathlib.Path:
             f"Model path '{resolved}' is outside the permitted directory '{_MODEL_ROOT}'. Refusing to load/save."
         ) from exc
     return resolved
+
+
+def _trusted_pickle_load_enabled() -> bool:
+    """Return True only when trusted pickle/joblib model loading is explicitly enabled."""
+    return os.getenv("HOPEFX_ALLOW_TRUSTED_MODEL_LOAD", "").strip().lower() in {"1", "true", "yes"}
 
 
 # ── Module-level singleton registry ──────────────────────────────────────────
