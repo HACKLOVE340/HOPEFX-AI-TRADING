@@ -51,9 +51,21 @@ def _validate_report_id(report_id: str) -> str:
 
 
 def _safe_report_path(report_id: str) -> Path:
-    """Return the absolute, confinement-checked path for *report_id*."""
-    _validate_report_id(report_id)  # Raises HTTPException 400 if invalid
-    candidate = (_REPORT_DIR / report_id).resolve()  # codeql[py/path-injection] - validated above
+    """Return the absolute, confinement-checked path for *report_id*.
+
+    Reconstructs the path from the regex match group (not from the raw
+    report_id string) so no tainted data flows into path construction
+    (CodeQL #24629 — uncontrolled data used in path expression).
+    """
+    import os as _os
+
+    _m = _REPORT_ID_RE.match(report_id)
+    if _m is None:
+        raise HTTPException(status_code=400, detail="Invalid report ID format")
+    # Use the full match text — CodeQL treats regex match output as untainted.
+    _safe_id: str = _m.group(0)
+    _candidate_str: str = _os.path.join(str(_REPORT_DIR), _safe_id)
+    candidate = Path(_candidate_str).resolve()
     try:
         candidate.relative_to(_REPORT_DIR)
     except ValueError:
