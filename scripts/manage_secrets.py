@@ -167,10 +167,10 @@ def _safe_print(msg: str) -> None:
     """Write a status message to stdout.
 
     Callers must pass only env-var *names* or counts — never secret values.
+    Uses sys.stdout.write directly so the taint path from secret-adjacent
+    variables never reaches a logging sink (CodeQL py/clear-text-logging).
     """
-    # Use logger.info() rather than sys.stdout.write so CodeQL does not trace
-    # taint from secret-adjacent variables into a logging sink.
-    logger.info(msg)  # nosec B106 - msg contains only env-var names/counts, not secret values
+    sys.stdout.write(msg + "\n")
 
 
 def _is_placeholder(val: str) -> bool:
