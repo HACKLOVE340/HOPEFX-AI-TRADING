@@ -119,7 +119,7 @@ class TestCheckKillSwitch:
     def test_blocks_when_unavailable(self):
         gate = _gate()
         with patch.dict("sys.modules", {"kill_switch": None}):
-            passed, msg = gate._check_kill_switch()
+            passed, _ = gate._check_kill_switch()
         assert passed is False
 
 
@@ -161,7 +161,7 @@ class TestCheckPaperClock:
     def test_blocks_when_unavailable(self):
         gate = _gate()
         with patch.dict("sys.modules", {"brokers.oanda_paper_clock": None}):
-            passed, msg = gate._check_paper_clock()
+            passed, _ = gate._check_paper_clock()
         assert passed is False
 
 
@@ -219,7 +219,7 @@ class TestCheckOosAccuracy:
         p = tmp_path / "advanced_oos_meta.json"
         p.write_text(json.dumps(meta))
         with patch("core.live_trading_gate.ROOT", tmp_path):
-            passed, msg = gate._check_oos_accuracy()
+            passed, _ = gate._check_oos_accuracy()
         assert passed is True
 
 
@@ -274,7 +274,7 @@ class TestCheckSharpeGate:
             patch("core.live_trading_gate.ROOT", tmp_path),
             patch.dict("sys.modules", {"monitoring.sentry_config": MagicMock()}),
         ):
-            passed, msg = gate._check_sharpe_gate()
+            passed, _ = gate._check_sharpe_gate()
         assert passed is False
 
     def test_passes_via_authoritative_meta(self, tmp_path):
@@ -309,7 +309,7 @@ class TestCheckSharpeGate:
         meta_path.mkdir(parents=True)
         (meta_path / "advanced_oos_meta.json").write_text(json.dumps(meta))
         with patch("core.live_trading_gate.ROOT", tmp_path):
-            passed, msg = gate._check_sharpe_gate()
+            passed, _ = gate._check_sharpe_gate()
         assert passed is False
 
     def test_blocks_when_no_files(self, tmp_path):
@@ -329,20 +329,20 @@ class TestCheckFeatureFlag:
     def test_passes_when_enabled(self):
         gate = _gate()
         with patch.dict(os.environ, {"FEATURE_LIVE_TRADING": "true"}):
-            passed, msg = gate._check_feature_flag()
+            passed, _ = gate._check_feature_flag()
         assert passed is True
 
     def test_blocks_when_disabled(self):
         gate = _gate()
         with patch.dict(os.environ, {"FEATURE_LIVE_TRADING": "false"}):
-            passed, msg = gate._check_feature_flag()
+            passed, _ = gate._check_feature_flag()
         assert passed is False
 
     def test_blocks_when_unset(self):
         gate = _gate()
         env = {k: v for k, v in os.environ.items() if k != "FEATURE_LIVE_TRADING"}
         with patch.dict(os.environ, env, clear=True):
-            passed, msg = gate._check_feature_flag()
+            passed, _ = gate._check_feature_flag()
         assert passed is False
 
     def test_case_insensitive_true(self):
