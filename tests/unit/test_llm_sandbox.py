@@ -19,6 +19,7 @@ from brain.llm_agent import _ast_sandbox_check, _compile_strategy
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _violations(code: str) -> list[str]:
     tree = ast.parse(code)
     return _ast_sandbox_check(tree)
@@ -31,6 +32,7 @@ def _blocked(code: str) -> bool:
 # ---------------------------------------------------------------------------
 # Banned module imports — all forms
 # ---------------------------------------------------------------------------
+
 
 class TestBannedModuleImports:
     def test_import_os(self):
@@ -92,6 +94,7 @@ class TestBannedModuleImports:
 # Banned built-in calls
 # ---------------------------------------------------------------------------
 
+
 class TestBannedBuiltins:
     def test_eval(self):
         assert _blocked("eval('1+1')")
@@ -112,6 +115,7 @@ class TestBannedBuiltins:
 # ---------------------------------------------------------------------------
 # Previously-confirmed bypass vectors (regression)
 # ---------------------------------------------------------------------------
+
 
 class TestBypassVectors:
     def test_importlib_bypass(self):
@@ -139,6 +143,7 @@ class TestBypassVectors:
 # Safe code must NOT be blocked
 # ---------------------------------------------------------------------------
 
+
 class TestSafeCode:
     def test_numpy_allowed(self):
         code = (
@@ -160,27 +165,16 @@ class TestSafeCode:
 
     def test_math_allowed(self):
         code = (
-            "import math\n"
-            "class GeneratedStrategy:\n"
-            "    def signal(self, data):\n"
-            "        return math.log(max(data))\n"
+            "import math\nclass GeneratedStrategy:\n    def signal(self, data):\n        return math.log(max(data))\n"
         )
         assert not _blocked(code)
 
     def test_pure_python_allowed(self):
-        code = (
-            "class GeneratedStrategy:\n"
-            "    def signal(self, data):\n"
-            "        return sum(data) / len(data)\n"
-        )
+        code = "class GeneratedStrategy:\n    def signal(self, data):\n        return sum(data) / len(data)\n"
         assert not _blocked(code)
 
     def test_compile_strategy_safe_code(self):
-        code = (
-            "class GeneratedStrategy:\n"
-            "    def signal(self, data):\n"
-            "        return 1.0\n"
-        )
+        code = "class GeneratedStrategy:\n    def signal(self, data):\n        return 1.0\n"
         instance, err = _compile_strategy(code)
         assert err is None, f"Safe code was rejected: {err}"
         assert instance is not None

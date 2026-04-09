@@ -94,7 +94,7 @@ class WebSocketManager:
 
         try:
             raw = await asyncio.wait_for(websocket.recv(), timeout=_AUTH_TIMEOUT)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("WS auth timeout — closing connection")
             await self._reject(websocket, "auth_timeout")
             return False
@@ -131,7 +131,7 @@ class WebSocketManager:
         user_id = self._authenticated.pop(websocket, None)
         logger.info("WS disconnected: user=%s  pool_size=%d", user_id, len(self._authenticated))
 
-    async def connection_handler(self, websocket: Any, path: str = "") -> None:  # noqa: ARG002
+    async def connection_handler(self, websocket: Any, path: str = "") -> None:
         """Full connection lifecycle: auth -> message loop -> cleanup."""
         admitted = await self.register(websocket)
         if not admitted:

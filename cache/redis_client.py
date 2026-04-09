@@ -165,7 +165,7 @@ def _enforce_tls(redis_url: str) -> str:
         return redis_url  # already rediss:// or unix socket — nothing to do
 
     if force_tls:
-        upgraded = "rediss://" + redis_url[len("redis://"):]
+        upgraded = "rediss://" + redis_url[len("redis://") :]
         logger.info("Redis: REDIS_FORCE_TLS=true — upgraded URL to rediss://")
         return upgraded
 
