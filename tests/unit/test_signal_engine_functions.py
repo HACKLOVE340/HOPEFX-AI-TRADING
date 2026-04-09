@@ -386,14 +386,14 @@ class TestPredictBasic:
 
         model = MagicMock(spec=["predict"])
         model.predict.return_value = np.array([0.72])
-        prob, ver = _predict_basic(model, "v2", _make_data(), "XAUUSD", 0.5)
+        prob, _ = _predict_basic(model, "v2", _make_data(), "XAUUSD", 0.5)
         assert abs(prob - 0.72) < 1e-9
 
     def test_falls_back_to_confidence_when_no_predict(self):
         from core.signal_engine import _predict_basic
 
         model = MagicMock(spec=[])  # no predict or predict_proba
-        prob, ver = _predict_basic(model, "v3", _make_data(), "XAUUSD", 0.62)
+        prob, _ = _predict_basic(model, "v3", _make_data(), "XAUUSD", 0.62)
         assert prob == 0.62
 
     def test_handles_short_price_series_gracefully(self):
@@ -435,7 +435,7 @@ class TestComputeMlProbability:
             patch("core.signal_engine._ML_AVAILABLE", True),
             patch("core.signal_engine.get_advanced_predictor", return_value=adv),
         ):
-            prob, ver = _compute_ml_probability(_make_data(n=120), "XAUUSD", 0.5)
+            prob, _ = _compute_ml_probability(_make_data(n=120), "XAUUSD", 0.5)
         # We got a prob from the advanced path
         assert 0.0 <= prob <= 1.0
 
@@ -469,7 +469,7 @@ class TestComputeMlProbability:
             patch("core.signal_engine.get_active_model", return_value=None),
             patch("core.signal_engine.get_model_version", return_value="none"),
         ):
-            prob, ver = _compute_ml_probability(_make_data(), "XAUUSD", 0.55)
+            prob, _ = _compute_ml_probability(_make_data(), "XAUUSD", 0.55)
         assert prob == 0.55
 
     def test_exception_returns_base_confidence(self):
