@@ -265,6 +265,180 @@ class TestPropFirmConfig:
         assert goat["drawdown_mode"] == "balance"
 
 
+# ── PropEnforcer 80% drawdown alert tests ────────────────────────────────────
+
+
+class TestPropEnforcer80PctAlert:
+    """
+    PropEnforcer must send a Telegram warning (non-halting) when daily or
+    total drawdown reaches 80% of the configured limit.
+    """
+
+    def _make_enforcer(self):
+        from risk.compliance.prop_enforcer import PropEnforcer, PropConfig
+
+        enforcer = PropEnforcer.__new__(PropEnforcer)
+        import threading
+
+        enforcer.cfg = PropConfig(
+            daily_dd=0.05,
+            max_dd=0.10,
+            telegram_token="test-token",
+            telegram_chat_id="test-chat",
+        )
+        enforcer._lock = threading.Lock()
+        enforcer._start_balance = 0.0
+        enforcer._high_water_mark = 0.0
+        enforcer._sod_equity = 0.0
+        enforcer._current_equity = 0.0
+        enforcer._halted = False
+        enforcer._halt_reason = ""
+        enforcer._breach_log = []
+        enforcer._news_events = []
+        enforcer._on_breach_callbacks = []
+        enforcer._kill_switch_fn = None
+        enforcer._daily_alert_sent = False
+        enforcer._total_alert_sent = False
+        return enforcer
+
+    def test_no_alert_below_80pct_threshold(self):
+        """Below 80% of daily limit — no warning sent."""
+        enforcer = self._make_enforcer()
+        warnings_sent = []
+        enforcer._send_telegram_warning = lambda detail: warnings_sent.append(detail)
+
+        # 3% DD on 5% limit = 60% of limit — no alert
+        enforcer.update_balance(current_equity=100_000.0, start_of_day_equity=100_000.0)
+        enforcer.update_balance(current_equity=97_000.0)  # 3% DD
+        assert warnings_sent == []
+        assert enforcer._daily_alert_sent is False
+
+    def test_daily_alert_fires_at_80pct_of_limit(self):
+        """At 80% of daily limit (4% DD on 5% limit) — warning sent once."""
+        enforcer = self._make_enforcer()
+        warnings_sent = []
+        enforcer._send_telegram_warning = lambda detail: warnings_sent.append(detail)
+
+        enforcer.update_balance(current_equity=100_000.0, start_of_day_equity=100_000.0)
+        # 4% DD = 80% of 5% daily limit → alert fires
+        enforcer.update_balance(current_equity=96_000.0)
+        assert len(warnings_sent) == 1
+        assert "4.00%" in warnings_sent[0] or "approaching" in warnings_sent[0]
+        assert enforcer._daily_alert_sent is True
+
+    def test_daily_alert_fires_only_once(self):
+        """Alert is sent at most once per day regardless of further equity drops."""
+        enforcer = self._make_enforcer()
+        warnings_sent = []
+        enforcer._send_telegram_warning = lambda detail: warnings_sent.append(detail)
+
+        enforcer.update_balance(current_equity=100_000.0, start_of_day_equity=100_000.0)
+        enforcer.update_balance(current_equity=96_000.0)  # triggers alert
+        enforcer.update_balance(current_equity=95_500.0)  # still below breach — no second alert
+        assert len(warnings_sent) == 1
+
+    def test_daily_alert_not_sent_when_breach_occurs(self):
+        """At or beyond the breach threshold — breach fires, not the 80% warning."""
+        enforcer = self._make_enforcer()
+        warnings_sent = []
+        enforcer._send_telegram_warning = lambda detail: warnings_sent.append(detail)
+
+        enforcer.update_balance(current_equity=100_000.0, start_of_day_equity=100_000.0)
+        # Jump straight to 5.5% DD (past the 5% limit) — no warning, breach fires instead
+        enforcer.update_balance(current_equity=94_500.0)
+        assert warnings_sent == []  # warning not sent; breach path handles it
+
+    def test_daily_alert_reset_after_daily_reset(self):
+        """After daily_reset(), the alert flag clears so it fires again next session."""
+        enforcer = self._make_enforcer()
+        warnings_sent = []
+        enforcer._send_telegram_warning = lambda detail: warnings_sent.append(detail)
+
+        enforcer.update_balance(current_equity=100_000.0, start_of_day_equity=100_000.0)
+        enforcer.update_balance(current_equity=96_000.0)  # fires alert
+        assert len(warnings_sent) == 1
+
+        enforcer.daily_reset(new_equity=96_000.0)
+        assert enforcer._daily_alert_sent is False
+
+        # Next session: alert fires again at 80% of new SOD
+        enforcer.update_balance(current_equity=96_000.0 * 0.96)  # 4% of new SOD
+        assert len(warnings_sent) == 2
+
+    def test_total_alert_fires_at_80pct_of_max_dd(self):
+        """At 80% of total DD limit (8% from HWM on 10% limit) — warning sent."""
+        enforcer = self._make_enforcer()
+        warnings_sent = []
+        enforcer._send_telegram_warning = lambda detail: warnings_sent.append(detail)
+
+        enforcer.update_balance(current_equity=100_000.0, start_of_day_equity=100_000.0)
+        # 8% total DD = 80% of 10% max_dd limit → total alert fires
+        enforcer.update_balance(current_equity=92_000.0)
+        assert len(warnings_sent) == 1
+        assert enforcer._total_alert_sent is True
+
+    def test_total_alert_fires_only_once(self):
+        """Total DD alert is sent at most once (until reset)."""
+        enforcer = self._make_enforcer()
+        warnings_sent = []
+        enforcer._send_telegram_warning = lambda detail: warnings_sent.append(detail)
+
+        enforcer.update_balance(current_equity=100_000.0, start_of_day_equity=100_000.0)
+        enforcer.update_balance(current_equity=92_000.0)  # triggers total alert
+        enforcer.update_balance(current_equity=91_500.0)  # no second alert
+        assert len(warnings_sent) == 1
+
+    def test_trading_not_halted_after_80pct_alert(self):
+        """80% alert is a warning only — trading must remain allowed."""
+        enforcer = self._make_enforcer()
+        enforcer._send_telegram_warning = lambda detail: None  # suppress network call
+
+        enforcer.update_balance(current_equity=100_000.0, start_of_day_equity=100_000.0)
+        enforcer.update_balance(current_equity=96_000.0)  # 80% of daily limit
+
+        allowed, reason = enforcer.before_execute(instrument="XAUUSD")
+        assert allowed is True, f"Trading should not be halted at 80% alert: {reason}"
+        assert enforcer._halted is False
+
+    def test_alert_message_contains_buffer_info(self):
+        """Warning message includes remaining buffer so trader knows headroom."""
+        enforcer = self._make_enforcer()
+        messages = []
+        enforcer._send_telegram_warning = lambda detail: messages.append(detail)
+
+        enforcer.update_balance(current_equity=100_000.0, start_of_day_equity=100_000.0)
+        enforcer.update_balance(current_equity=96_000.0)
+
+        assert len(messages) == 1
+        assert "Remaining buffer" in messages[0]
+
+    def test_no_alert_without_telegram_credentials(self):
+        """If token/chat_id are empty, _send_telegram_warning returns silently."""
+        from risk.compliance.prop_enforcer import PropEnforcer, PropConfig
+        import threading
+
+        enforcer = PropEnforcer.__new__(PropEnforcer)
+        enforcer.cfg = PropConfig(daily_dd=0.05, max_dd=0.10, telegram_token="", telegram_chat_id="")
+        enforcer._lock = threading.Lock()
+        enforcer._start_balance = 0.0
+        enforcer._high_water_mark = 0.0
+        enforcer._sod_equity = 0.0
+        enforcer._current_equity = 0.0
+        enforcer._halted = False
+        enforcer._halt_reason = ""
+        enforcer._breach_log = []
+        enforcer._news_events = []
+        enforcer._on_breach_callbacks = []
+        enforcer._kill_switch_fn = None
+        enforcer._daily_alert_sent = False
+        enforcer._total_alert_sent = False
+
+        # Should not raise even without credentials
+        enforcer.update_balance(current_equity=100_000.0, start_of_day_equity=100_000.0)
+        enforcer.update_balance(current_equity=96_000.0)
+        assert enforcer._daily_alert_sent is True  # flag set even without send
+
+
 # ── Run directly ──────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
