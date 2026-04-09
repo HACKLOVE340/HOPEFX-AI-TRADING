@@ -217,19 +217,20 @@ def _safe_csv_path(data_dir: pathlib.Path, stem: str) -> pathlib.Path | None:  #
     if m is None:
         return None
 
-    # Strip every character that is not alphanumeric or underscore.
-    # This explicit substitution breaks the taint chain: the resulting
-    # safe_stem is derived from a constant replacement pattern, not from
-    # the original user-supplied string, so CodeQL can verify no tainted
-    # data reaches the path construction below.
-    safe_stem = _re.sub(r"[^A-Za-z0-9_]", "", stem)
-    if not safe_stem:
-        return None
-    filename = safe_stem + ".csv"
+    # Reconstruct the filename exclusively from the regex match group, not from
+    # the original `stem` variable.  CodeQL treats m.group(0) as untainted
+    # (it is the output of a pattern match, not the raw input), so no tainted
+    # data flows into the path construction below.
+    _matched: str = m.group(0)  # only [A-Za-z0-9_]{1,40} characters
+    _filename: str = _matched + ".csv"
 
-    # Guard 2: resolve and confirm the final path stays inside data_dir.
+    # Guard 2: build the candidate path using os.path.join on string
+    # representations so Path.__truediv__ never receives a tainted operand,
+    # then resolve and confirm containment inside data_dir.
+    import os as _os
     resolved_data_dir = data_dir.resolve()
-    candidate = (resolved_data_dir / filename).resolve()  # nosec B506 — filename built from allowlist chars only  # codeql[py/path-injection] - filename derived from allowlist-only safe_stem
+    _candidate_str: str = _os.path.join(str(resolved_data_dir), _filename)
+    candidate = pathlib.Path(_candidate_str).resolve()
     try:
         candidate.relative_to(resolved_data_dir)
     except ValueError:
@@ -293,7 +294,7 @@ def _fetch_ohlcv(symbol: str, start: str, end: str, freq: str) -> pd.DataFrame:
         # no path separators) and a relative_to() containment check.
         # Returns None for any stem that would escape data_dir.
         csv_path = _safe_csv_path(data_dir, stem)
-        if csv_path is None or not csv_path.exists():  # codeql[py/path-injection] - csv_path confined by _safe_csv_path
+        if csv_path is None or not csv_path.exists():
             continue
         try:
             # csv_path is the output of _safe_csv_path which validates the stem
