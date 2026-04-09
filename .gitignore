@@ -97,7 +97,8 @@ yarn-error.log*
 # Copy from *.example templates and fill in locally.
 WORDMAP.json
 !WORDMAP.json.example
-prop_firm_mode.json
+# prop_firm_mode.json is committed with placeholder credentials for CI.
+# Override locally with real credentials — do NOT commit real tokens.
 !prop_firm_mode.json.example
 
 # ML trained model artifacts (not source code)

@@ -1,0 +1,155 @@
+{
+  "_comment": "Copy to prop_firm_mode.json and fill in credentials. This file is gitignored.",
+  "_description": "Defines drawdown, daily-loss, and position-sizing rules for FTMO and Goat Funded (and compatible) prop-firm evaluation and funded accounts.",
+  "enabled": true,
+  "active_firm": "ftmo_standard",
+  "_flat_fields_note": "Top-level flat fields are read directly by PropFirmConfig, PropEnforcer, and Gatekeeper. Nested 'firms' block is the canonical reference.",
+  "daily_dd": 0.05,
+  "max_dd": 0.1,
+  "news_blackout": 5,
+  "weekend_close": true,
+  "breach_action": "pause",
+  "max_daily_trades": 20,
+  "risk_per_trade_pct": 1.0,
+  "min_confidence": 0.58,
+  "telegram_token": "CHANGE_ME_telegram_bot_token",
+  "telegram_chat_id": "CHANGE_ME_telegram_chat_id",
+  "enforcement": {
+    "halt_on_daily_drawdown_breach": true,
+    "halt_on_total_drawdown_breach": true,
+    "close_all_on_breach": true,
+    "alert_at_pct_of_daily_limit": 80,
+    "alert_at_pct_of_total_limit": 80,
+    "log_breaches": true
+  },
+  "firms": {
+    "ftmo_standard": {
+      "_name": "FTMO Standard Challenge / Funded Account",
+      "_ref": "https://ftmo.com/en/trading-rules/",
+      "account_currency": "USD",
+      "drawdown": {
+        "max_total_drawdown_pct": 10.0,
+        "max_daily_drawdown_pct": 5.0,
+        "drawdown_mode": "equity"
+      },
+      "profit_target": {
+        "phase1_pct": 10.0,
+        "phase2_pct": 5.0,
+        "funded_pct": null
+      },
+      "trading_days": {
+        "min_trading_days_phase1": 4,
+        "min_trading_days_phase2": 4
+      },
+      "position_limits": {
+        "max_lot_size": null,
+        "max_open_positions": null
+      },
+      "risk_per_trade_pct": 1.0,
+      "news_trading": {
+        "allowed": true
+      },
+      "overnight_holding": {
+        "allowed": true,
+        "weekend_holding_allowed": true
+      }
+    },
+    "ftmo_aggressive": {
+      "_name": "FTMO Aggressive Challenge / Funded Account",
+      "_ref": "https://ftmo.com/en/trading-rules/",
+      "account_currency": "USD",
+      "drawdown": {
+        "max_total_drawdown_pct": 20.0,
+        "max_daily_drawdown_pct": 10.0,
+        "drawdown_mode": "equity"
+      },
+      "profit_target": {
+        "phase1_pct": 20.0,
+        "phase2_pct": 10.0,
+        "funded_pct": null
+      },
+      "trading_days": {
+        "min_trading_days_phase1": 4,
+        "min_trading_days_phase2": 4
+      },
+      "position_limits": {
+        "max_lot_size": null,
+        "max_open_positions": null
+      },
+      "risk_per_trade_pct": 2.0,
+      "news_trading": {
+        "allowed": true
+      },
+      "overnight_holding": {
+        "allowed": true,
+        "weekend_holding_allowed": true
+      }
+    },
+    "goat_funded_standard": {
+      "_name": "Goat Funded Trader - Standard / One-Step",
+      "_ref": "https://goatfundedtrader.com/",
+      "account_currency": "USD",
+      "drawdown": {
+        "max_total_drawdown_pct": 8.0,
+        "max_daily_drawdown_pct": 4.0,
+        "drawdown_mode": "balance"
+      },
+      "profit_target": {
+        "phase1_pct": 10.0,
+        "phase2_pct": null,
+        "funded_pct": null
+      },
+      "trading_days": {
+        "min_trading_days_phase1": 3,
+        "min_trading_days_phase2": null
+      },
+      "position_limits": {
+        "max_lot_size": null,
+        "max_open_positions": null
+      },
+      "risk_per_trade_pct": 1.0,
+      "news_trading": {
+        "allowed": false,
+        "blackout_minutes_before_news": 5,
+        "blackout_minutes_after_news": 5
+      },
+      "overnight_holding": {
+        "allowed": true,
+        "weekend_holding_allowed": false
+      }
+    },
+    "goat_funded_swing": {
+      "_name": "Goat Funded Trader - Swing / Two-Step",
+      "_ref": "https://goatfundedtrader.com/",
+      "account_currency": "USD",
+      "drawdown": {
+        "max_total_drawdown_pct": 10.0,
+        "max_daily_drawdown_pct": 5.0,
+        "drawdown_mode": "balance"
+      },
+      "profit_target": {
+        "phase1_pct": 8.0,
+        "phase2_pct": 5.0,
+        "funded_pct": null
+      },
+      "trading_days": {
+        "min_trading_days_phase1": 5,
+        "min_trading_days_phase2": 5
+      },
+      "position_limits": {
+        "max_lot_size": null,
+        "max_open_positions": null
+      },
+      "risk_per_trade_pct": 1.5,
+      "news_trading": {
+        "allowed": false,
+        "blackout_minutes_before_news": 5,
+        "blackout_minutes_after_news": 5
+      },
+      "overnight_holding": {
+        "allowed": true,
+        "weekend_holding_allowed": true
+      }
+    }
+  }
+}
