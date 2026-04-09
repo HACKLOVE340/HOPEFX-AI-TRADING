@@ -66,12 +66,12 @@ if _FIX_BACKEND == "none":
 
 if _FIX_BACKEND == "none":
     try:
-        import simplefix  # type: ignore
+        import simplefix as _simplefix_mod  # type: ignore  # availability check only
 
         _FIX_BACKEND = "simplefix"
+        del _simplefix_mod
         logger.info("fix_adapter: using simplefix backend (message encoding only)")
     except ImportError:
-        simplefix = None  # type: ignore
         logger.warning(
             "fix_adapter: no FIX library found. Install quickfix or pyfixmsg for live execution.",
         )

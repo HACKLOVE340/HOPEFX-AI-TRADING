@@ -26,12 +26,9 @@ try:
 except ImportError:
     AIOHTTP_AVAILABLE = False
 
-try:
-    import plotly  # type: ignore[import]  # noqa: F401
+import importlib.util as _importlib_util
 
-    PLOTLY_AVAILABLE = True
-except ImportError:
-    PLOTLY_AVAILABLE = False
+PLOTLY_AVAILABLE = _importlib_util.find_spec("plotly") is not None
 
 logger = logging.getLogger(__name__)
 

@@ -1240,3 +1240,14 @@ async def ws_nuclear(websocket: WebSocket) -> None:
         logger.error("ws_nuclear error for user %s: %s", user_id, exc)
     finally:
         logger.debug("ws_nuclear: disconnected user=%s", user_id)
+
+
+async def broadcast_system_event(event: dict) -> None:
+    """Broadcast a system-level event to all connected WebSocket clients.
+
+    Used by superadmin endpoints (e.g. nuclear halt, maintenance mode).
+
+    Args:
+        event: dict payload to broadcast — should include a ``type`` key.
+    """
+    await _manager.broadcast("system", event)

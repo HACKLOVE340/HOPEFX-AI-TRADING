@@ -325,3 +325,7 @@ def get_sync_redis() -> Any | None:
     except Exception as exc:
         logger.debug("Sync Redis connection failed: %s", exc)
         return None
+
+
+# Convenience alias used by many modules that call `get_redis_client()`
+get_redis_client = get_redis

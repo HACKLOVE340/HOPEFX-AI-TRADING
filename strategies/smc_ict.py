@@ -324,10 +324,10 @@ class SMCICTStrategy(BaseStrategy):
                 }
 
             # ── Step 2: classify structure from last two SH and last two SL ───
-            sh_prev, sh_prev_val = swing_highs[-2]
-            sh_last, sh_last_val = swing_highs[-1]
-            sl_prev, sl_prev_val = swing_lows[-2]
-            sl_last, sl_last_val = swing_lows[-1]
+            _, sh_prev_val = swing_highs[-2]
+            _, sh_last_val = swing_highs[-1]
+            _, sl_prev_val = swing_lows[-2]
+            _, sl_last_val = swing_lows[-1]
 
             higher_high = sh_last_val > sh_prev_val
             higher_low = sl_last_val > sl_prev_val

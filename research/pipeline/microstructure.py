@@ -82,10 +82,11 @@ try:
     from pathlib import Path
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from data.order_book import OrderBook  # noqa: F401
+    from data.order_book import OrderBook as _OrderBook  # used for isinstance checks below
 
     OB_AVAILABLE = True
 except ImportError:
+    _OrderBook = None  # type: ignore[assignment,misc]
     OB_AVAILABLE = False
     logger.debug("data.order_book not importable — snapshot-push mode unavailable")
 
