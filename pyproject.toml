@@ -88,29 +88,7 @@ extend-exclude = '''
 # pytest config lives in pytest.ini — no [tool.pytest.ini_options] here to
 # avoid the "ignoring pytest config in pyproject.toml" warning on every run.
 
-["."]
-branch = true
-omit = [
-    "*/tests/*",
-    "*/test_*.py",
-    "*/__pycache__/*",
-    "*/venv/*",
-    "*/env/*",
-    "*/alembic/*",
-    "*/migrations/*",
-    "*/site-packages/*",
-    "*/setup.py",
-    "*/conftest.py",
-]
 
-[
-    "pragma: no cover",
-    "def __repr__",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if __name__ == .__main__.:",
-    "if TYPE_CHECKING:",
-]
 [tool.bandit]
 # Only fail on high-severity findings; medium/low are reported but non-blocking.
 # Tests and scripts are excluded — assert statements and hardcoded test
