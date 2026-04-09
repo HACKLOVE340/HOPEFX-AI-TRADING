@@ -6,6 +6,7 @@ Coverage tests for risk/manager.py — Part 1
 Targets: data classes, RiskConfig, RiskState, RiskManager construction,
          size_order hard gates, assess, update_equity, on_fill/on_close.
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -20,6 +21,7 @@ import pytest
 
 def _make_rm(**kwargs):
     from risk.manager import RiskManager
+
     return RiskManager(**kwargs)
 
 
@@ -55,10 +57,16 @@ def _signal(
 class TestPositionSizingResult:
     def _make(self, qty=1.0):
         from risk.manager import PositionSizingResult
+
         return PositionSizingResult(
-            symbol="XAU_USD", direction="long", quantity=qty,
-            notional_usd=qty * 1950.0, stop_loss_usd=1940.0,
-            take_profit_usd=1970.0, risk_usd=10.0, lineage_id="x",
+            symbol="XAU_USD",
+            direction="long",
+            quantity=qty,
+            notional_usd=qty * 1950.0,
+            stop_loss_usd=1940.0,
+            take_profit_usd=1970.0,
+            risk_usd=10.0,
+            lineage_id="x",
         )
 
     def test_size_alias(self):
@@ -93,6 +101,7 @@ class TestPositionSizingResult:
 class TestRiskConfig:
     def test_defaults(self):
         from risk.manager import RiskConfig
+
         c = RiskConfig()
         assert c.max_drawdown_pct > 0
         assert c.max_daily_loss_pct > 0
@@ -100,12 +109,14 @@ class TestRiskConfig:
 
     def test_custom_values(self):
         from risk.manager import RiskConfig
+
         c = RiskConfig(max_drawdown_pct=0.15, max_daily_loss_pct=0.03)
         assert c.max_drawdown_pct == pytest.approx(0.15)
         assert c.max_daily_loss_pct == pytest.approx(0.03)
 
     def test_kelly_fraction_stored(self):
         from risk.manager import RiskConfig
+
         c = RiskConfig(kelly_fraction=0.30)
         assert c.kelly_fraction == pytest.approx(0.30)
 
@@ -120,8 +131,10 @@ class TestRiskState:
     def _make(self, equity=100_000.0, peak=100_000.0, day_open=100_000.0):
         from risk.manager import RiskState
         import datetime
+
         return RiskState(
-            account_equity=equity, peak_equity=peak,
+            account_equity=equity,
+            peak_equity=peak,
             day_open_equity=day_open,
             trade_day=datetime.datetime.now(datetime.timezone.utc).day,
         )
@@ -145,10 +158,10 @@ class TestRiskState:
     def test_update_equity_day_rollover(self):
         import datetime
         from risk.manager import RiskState
+
         today = datetime.datetime.now(datetime.timezone.utc).day
         other_day = (today % 28) + 1
-        s = RiskState(account_equity=100_000.0, peak_equity=100_000.0,
-                      day_open_equity=100_000.0, trade_day=other_day)
+        s = RiskState(account_equity=100_000.0, peak_equity=100_000.0, day_open_equity=100_000.0, trade_day=other_day)
         s.update_equity(95_000.0)
         assert s.day_open_equity == pytest.approx(95_000.0)
 
@@ -169,6 +182,7 @@ class TestRiskManagerConstruction:
 
     def test_custom_config(self):
         from risk.manager import RiskConfig
+
         cfg = RiskConfig(max_drawdown_pct=0.20)
         rm = _make_rm(config=cfg)
         assert rm.config.max_drawdown_pct == pytest.approx(0.20)
@@ -188,7 +202,6 @@ class TestRiskManagerConstruction:
         assert rm.daily_starting_equity == pytest.approx(100_000.0)
 
     def test_halt_state_file_param(self, tmp_path):
-        from pathlib import Path
         f = tmp_path / "halt.json"
         rm = _make_rm(halt_state_file=str(f))
         assert rm._halt_state_file == f
@@ -351,6 +364,7 @@ class TestAssess:
 
     def test_returns_risk_assessment_type(self):
         from risk.manager import RiskAssessment
+
         assert isinstance(_make_rm(initial_balance=100_000.0).assess(_signal()), RiskAssessment)
 
     def test_includes_drawdown_pct(self):
@@ -443,6 +457,7 @@ class TestHaltResume:
 
     def test_halt_persists_to_file(self, tmp_path):
         import json
+
         f = tmp_path / "halt.json"
         rm = _make_rm(initial_balance=100_000.0, halt_state_file=str(f))
         rm._halt_trading("drawdown")
@@ -452,6 +467,7 @@ class TestHaltResume:
 
     def test_restore_halt_state_from_file(self, tmp_path):
         import json
+
         f = tmp_path / "halt.json"
         f.write_text(json.dumps({"halt": True, "halted": True, "reason": "restored"}))
         rm = _make_rm(initial_balance=100_000.0, halt_state_file=str(f))
@@ -460,6 +476,7 @@ class TestHaltResume:
 
     def test_clear_halt_state_removes_file(self, tmp_path):
         import json
+
         f = tmp_path / "halt.json"
         f.write_text(json.dumps({"halt": True, "reason": "x"}))
         rm = _make_rm(initial_balance=100_000.0, halt_state_file=str(f))
@@ -483,15 +500,18 @@ class TestCalculatePositionSize:
     def test_returns_positive_quantity(self):
         rm = _make_rm(initial_balance=100_000.0)
         r = rm.calculate_position_size(
-            symbol="XAU_USD", entry_price=1950.0,
-            account_balance=100_000.0, direction="long",
+            symbol="XAU_USD",
+            entry_price=1950.0,
+            account_balance=100_000.0,
+            direction="long",
         )
         assert r.quantity > 0
 
     def test_uses_account_equity_param(self):
         rm = _make_rm(initial_balance=100_000.0)
         r = rm.calculate_position_size(
-            symbol="XAU_USD", entry_price=1950.0,
+            symbol="XAU_USD",
+            entry_price=1950.0,
             account_equity=200_000.0,
         )
         assert r.notional_usd > 0
@@ -499,24 +519,30 @@ class TestCalculatePositionSize:
     def test_stop_loss_override(self):
         rm = _make_rm(initial_balance=100_000.0)
         r = rm.calculate_position_size(
-            symbol="XAU_USD", entry_price=1950.0,
-            account_balance=100_000.0, stop_loss_price=1930.0,
+            symbol="XAU_USD",
+            entry_price=1950.0,
+            account_balance=100_000.0,
+            stop_loss_price=1930.0,
         )
         assert r.stop_loss_usd == pytest.approx(1930.0)
 
     def test_take_profit_override(self):
         rm = _make_rm(initial_balance=100_000.0)
         r = rm.calculate_position_size(
-            symbol="XAU_USD", entry_price=1950.0,
-            account_balance=100_000.0, take_profit_price=1990.0,
+            symbol="XAU_USD",
+            entry_price=1950.0,
+            account_balance=100_000.0,
+            take_profit_price=1990.0,
         )
         assert r.take_profit_usd == pytest.approx(1990.0)
 
     def test_signal_strength_used_as_confidence(self):
         rm = _make_rm(initial_balance=100_000.0)
         r = rm.calculate_position_size(
-            symbol="XAU_USD", entry_price=1950.0,
-            account_balance=100_000.0, signal_strength=0.90,
+            symbol="XAU_USD",
+            entry_price=1950.0,
+            account_balance=100_000.0,
+            signal_strength=0.90,
         )
         assert r.quantity > 0
 
@@ -605,8 +631,14 @@ class TestGetDrawdownStatus:
     def test_returns_dict_with_keys(self):
         rm = _make_rm(initial_balance=100_000.0)
         s = rm.get_drawdown_status()
-        for k in ("total_hwm", "total_drawdown_pct", "daily_drawdown_pct",
-                  "daily_realised_pnl", "total_breach", "daily_breach"):
+        for k in (
+            "total_hwm",
+            "total_drawdown_pct",
+            "daily_drawdown_pct",
+            "daily_realised_pnl",
+            "total_breach",
+            "daily_breach",
+        ):
             assert k in s
 
     def test_fallback_path_without_tracker(self):
@@ -772,11 +804,13 @@ class TestCheckPriceTolerance:
 class TestDrawdownRiskLevel:
     def test_low_at_zero_drawdown(self):
         from risk.manager import RiskLevel
+
         rm = _make_rm(initial_balance=100_000.0)
         assert rm._drawdown_risk_level() == RiskLevel.LOW
 
     def test_medium_at_mid_drawdown(self):
         from risk.manager import RiskLevel
+
         rm = _make_rm(initial_balance=100_000.0)
         rm._state.account_equity = 95_000.0
         rm._state.peak_equity = 100_000.0
@@ -784,6 +818,7 @@ class TestDrawdownRiskLevel:
 
     def test_high_near_limit(self):
         from risk.manager import RiskLevel
+
         rm = _make_rm(initial_balance=100_000.0)
         rm._state.account_equity = 91_500.0
         rm._state.peak_equity = 100_000.0
@@ -862,12 +897,21 @@ class TestCheckCvarPreTrade:
 class TestFactorScaleSize:
     def _make_sizing(self):
         from risk.manager import PositionSizingResult
+
         return PositionSizingResult(
-            symbol="XAU_USD", direction="long", quantity=1.0,
-            notional_usd=1950.0, stop_loss_usd=1940.0,
-            take_profit_usd=1970.0, risk_usd=10.0, lineage_id="x",
-            kelly_f=0.25, quality_f=0.9, sentiment_f=0.9,
-            impact_f=0.9, dd_f=1.0,
+            symbol="XAU_USD",
+            direction="long",
+            quantity=1.0,
+            notional_usd=1950.0,
+            stop_loss_usd=1940.0,
+            take_profit_usd=1970.0,
+            risk_usd=10.0,
+            lineage_id="x",
+            kelly_f=0.25,
+            quality_f=0.9,
+            sentiment_f=0.9,
+            impact_f=0.9,
+            dd_f=1.0,
         )
 
     def test_returns_unchanged_when_no_engine(self):
@@ -888,9 +932,11 @@ class TestFactorScaleSize:
         sizing = self._make_sizing()
         engine = MagicMock()
         engine.factor_var.return_value = {"XAU_USD": 0.9, "OTHER": 0.1}
-        with patch("risk.manager.os.getenv", return_value="0.40"):
-            with patch("core.signal_engine._get_factor_engine", return_value=engine):
-                result = rm.factor_scale_size(sizing, {"XAU_USD": 1.0})
+        with (
+            patch("risk.manager.os.getenv", return_value="0.40"),
+            patch("core.signal_engine._get_factor_engine", return_value=engine),
+        ):
+            result = rm.factor_scale_size(sizing, {"XAU_USD": 1.0})
         # ratio = 0.9/1.0 = 0.90 > 0.40 → scale = 0.40/0.90 ≈ 0.44
         assert result.quantity < 1.0
 
@@ -933,7 +979,7 @@ class TestCheckCircuitBreakers:
         rm = _make_rm(initial_balance=100_000.0)
         # Drive drawdown through update_equity so dd_tracker stays in sync
         rm.update_equity(100_000.0)  # establish peak
-        rm.update_equity(85_000.0)   # 15% drawdown > 10% limit
+        rm.update_equity(85_000.0)  # 15% drawdown > 10% limit
         assert rm._halt is True
 
     def test_amber_warning_at_60pct_threshold(self):
@@ -1104,9 +1150,18 @@ class TestMetrics:
     def test_metrics_shape(self):
         rm = _make_rm(initial_balance=100_000.0)
         m = rm.metrics()
-        for k in ("account_equity", "peak_equity", "current_drawdown",
-                  "daily_drawdown", "daily_pnl", "total_pnl",
-                  "open_positions", "var_95", "halt", "halt_reason"):
+        for k in (
+            "account_equity",
+            "peak_equity",
+            "current_drawdown",
+            "daily_drawdown",
+            "daily_pnl",
+            "total_pnl",
+            "open_positions",
+            "var_95",
+            "halt",
+            "halt_reason",
+        ):
             assert k in m
 
     def test_metrics_initial_values(self):
@@ -1170,8 +1225,10 @@ class TestBalanceAliases:
 class TestRiskManagerSingleton:
     def test_singleton_exists(self):
         from risk.manager import risk_manager
+
         assert risk_manager is not None
 
     def test_singleton_is_risk_manager(self):
         from risk.manager import RiskManager, risk_manager
+
         assert isinstance(risk_manager, RiskManager)

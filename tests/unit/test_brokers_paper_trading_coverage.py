@@ -6,12 +6,12 @@ Coverage tests for brokers/paper_trading.py
 
 Targets: SlippageModel, PaperTradingBroker (all public + key private methods)
 """
+
 from __future__ import annotations
 
-import os
 import time
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from datetime import timezone
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -22,12 +22,13 @@ UTC = timezone.utc
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_broker(
     initial_balance: float = 10_000.0,
     commission_per_lot: float = 0.0,
     slippage_model: str = "zero",
     seed: int = 42,
-) -> "PaperTradingBroker":
+):
     from brokers.paper_trading import PaperTradingBroker
 
     broker = PaperTradingBroker(
@@ -158,7 +159,7 @@ class TestSlippageModelGaussian:
             assert fill > 0.0
 
     def test_gaussian_uses_symbol_spread(self):
-        from brokers.paper_trading import SlippageModel, _DEFAULT_SPREADS
+        from brokers.paper_trading import SlippageModel
         from brokers.base import OrderSide
 
         m = SlippageModel(model="gaussian", seed=0)
@@ -250,8 +251,10 @@ class TestPaperTradingBrokerInit:
     def test_redis_state_none_when_redis_unavailable(self, monkeypatch):
         # Simulate Redis being unavailable by making ping() raise
         import redis as _redis_lib
+
         monkeypatch.setattr(_redis_lib, "from_url", lambda *a, **kw: (_ for _ in ()).throw(ConnectionError("no redis")))
         from brokers.paper_trading import PaperTradingBroker
+
         broker = PaperTradingBroker(slippage_model="zero", seed=0)
         assert broker._redis_state is None
 
@@ -983,4 +986,3 @@ class TestMiscBroker:
     def test_repr_contains_name(self):
         broker = _make_broker()
         assert "PaperTradingBroker" in repr(broker)
-

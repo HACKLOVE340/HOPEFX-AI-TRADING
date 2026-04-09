@@ -156,7 +156,11 @@ class TestKillSwitchActivation:
     def test_activate_invokes_callbacks(self, tmp_path):
         ks = _make_ks(tmp_path)
         called = []
-        ks.register_callback(lambda r: called.append(r))
+
+        def _cb(r):
+            called.append(r)
+
+        ks.register_callback(_cb)
         ks.activate("cb test")
         assert called == ["cb test"]
         _clean(ks)
@@ -308,7 +312,11 @@ class TestKillSwitchCallbacks:
         ks = _make_ks(tmp_path)
         ks.activate("first")
         results = []
-        ks.register_callback(lambda r: results.append(r))
+
+        def _cb(r):
+            results.append(r)
+
+        ks.register_callback(_cb)
         ks.activate("second")  # idempotent — callback not called again
         assert results == []
         _clean(ks)
@@ -551,9 +559,7 @@ class TestKillSwitchStatePersistence:
         flag = tmp_path / "ks.flag"
         import datetime
 
-        flag.write_text(
-            f"activated_at={datetime.datetime.now(UTC).isoformat()}\nreason=flag_restore\n"
-        )
+        flag.write_text(f"activated_at={datetime.datetime.now(UTC).isoformat()}\nreason=flag_restore\n")
         from kill_switch import KillSwitch
 
         ks = KillSwitch(flag_file=flag, deactivation_token="tok")
@@ -731,9 +737,11 @@ class TestGetLatchRedis:
         mock_bus = MagicMock()
         mock_redis = MagicMock()
         mock_bus._redis = mock_redis
-        with patch("kill_switch.KillSwitch._get_latch_redis", wraps=ks._get_latch_redis):
-            with patch("core.event_bus.bus", mock_bus):
-                result = ks._get_latch_redis()
+        with (
+            patch("kill_switch.KillSwitch._get_latch_redis", wraps=ks._get_latch_redis),
+            patch("core.event_bus.bus", mock_bus),
+        ):
+            ks._get_latch_redis()
         # Either returns the bus redis or falls back — just must not raise
         _clean(ks)
 
@@ -742,9 +750,11 @@ class TestGetLatchRedis:
         mock_redis_lib = MagicMock()
         mock_client = MagicMock()
         mock_redis_lib.from_url.return_value = mock_client
-        with patch.dict("sys.modules", {"core.event_bus": None}):
-            with patch("redis.from_url", return_value=mock_client):
-                result = ks._get_latch_redis()
+        with (
+            patch.dict("sys.modules", {"core.event_bus": None}),
+            patch("redis.from_url", return_value=mock_client),
+        ):
+            ks._get_latch_redis()
         # Result is either mock_client or None — must not raise
         _clean(ks)
 
@@ -884,9 +894,11 @@ class TestRedisBreachListener:
         mock_bus.connect = AsyncMock()
         mock_bus.subscribe = _fake_subscribe
 
-        with patch("core.event_bus.bus", mock_bus):
-            with patch("core.event_bus.CH_BREACH", "hopefx:breach"):
-                await ks._redis_breach_listener()
+        with (
+            patch("core.event_bus.bus", mock_bus),
+            patch("core.event_bus.CH_BREACH", "hopefx:breach"),
+        ):
+            await ks._redis_breach_listener()
 
         assert ks.is_active() is True
         assert "remote" in ks.reason
@@ -909,9 +921,11 @@ class TestRedisBreachListener:
         mock_bus = MagicMock()
         mock_bus.connect = AsyncMock(side_effect=Exception("redis down"))
 
-        with patch("core.event_bus.bus", mock_bus):
-            with patch("core.event_bus.CH_BREACH", "hopefx:breach"):
-                await ks._redis_breach_listener()  # must not raise
+        with (
+            patch("core.event_bus.bus", mock_bus),
+            patch("core.event_bus.CH_BREACH", "hopefx:breach"),
+        ):
+            await ks._redis_breach_listener()  # must not raise
         assert ks.is_active() is False
         _clean(ks)
 
@@ -928,9 +942,11 @@ class TestRedisBreachListener:
         mock_bus.connect = AsyncMock()
         mock_bus.subscribe = _fake_subscribe
 
-        with patch("core.event_bus.bus", mock_bus):
-            with patch("core.event_bus.CH_BREACH", "hopefx:breach"):
-                await ks._redis_breach_listener()
+        with (
+            patch("core.event_bus.bus", mock_bus),
+            patch("core.event_bus.CH_BREACH", "hopefx:breach"),
+        ):
+            await ks._redis_breach_listener()
 
         assert ks.is_active() is False
         _clean(ks)
@@ -962,9 +978,11 @@ class TestPublishEvent:
         ks = _make_ks(tmp_path)
         mock_bus = MagicMock()
         mock_bus.publish_breach = AsyncMock()
-        with patch("core.event_bus.bus", mock_bus):
-            with patch("core.outbox.write_outbox_event_standalone", MagicMock()):
-                ks._publish_event("redis bus test")
+        with (
+            patch("core.event_bus.bus", mock_bus),
+            patch("core.outbox.write_outbox_event_standalone", MagicMock()),
+        ):
+            ks._publish_event("redis bus test")
         _clean(ks)
 
     def test_publish_event_k8s_skipped_outside_pod(self, tmp_path, monkeypatch):
@@ -992,10 +1010,12 @@ class TestPublishEvent:
             pass
 
         mock_bus.publish_breach = _fake_publish
-        with patch("core.event_bus.bus", mock_bus):
-            with patch("core.outbox.write_outbox_event_standalone", MagicMock()):
-                # Called from async context — running loop exists, task is created
-                ks._publish_event("redis async test")
+        with (
+            patch("core.event_bus.bus", mock_bus),
+            patch("core.outbox.write_outbox_event_standalone", MagicMock()),
+        ):
+            # Called from async context — running loop exists, task is created
+            ks._publish_event("redis async test")
         # Allow the task to complete
         await asyncio.sleep(0)
         _clean(ks)
@@ -1007,17 +1027,21 @@ class TestPublishEvent:
         mock_in_process_bus.publish = MagicMock(return_value=None)
         ks._event_bus = mock_in_process_bus
 
-        with patch("core.outbox.write_outbox_event_standalone", MagicMock()):
-            with patch("core.event_bus.bus", side_effect=Exception("redis unavailable")):
-                ks._publish_event("fallback test")
+        with (
+            patch("core.outbox.write_outbox_event_standalone", MagicMock()),
+            patch("core.event_bus.bus", side_effect=Exception("redis unavailable")),
+        ):
+            ks._publish_event("fallback test")
         _clean(ks)
 
     def test_publish_event_all_paths_fail_gracefully(self, tmp_path):
         """_publish_event must not raise even when all paths fail."""
         ks = _make_ks(tmp_path)
-        with patch("core.outbox.write_outbox_event_standalone", side_effect=Exception("outbox down")):
-            with patch("core.event_bus.bus", side_effect=Exception("redis down")):
-                ks._publish_event("all fail test")  # must not raise
+        with (
+            patch("core.outbox.write_outbox_event_standalone", side_effect=Exception("outbox down")),
+            patch("core.event_bus.bus", side_effect=Exception("redis down")),
+        ):
+            ks._publish_event("all fail test")  # must not raise
         _clean(ks)
 
     def test_publish_event_redis_sync_non_coroutine(self, tmp_path):
@@ -1025,13 +1049,13 @@ class TestPublishEvent:
         ks = _make_ks(tmp_path)
         mock_bus = MagicMock()
         mock_bus.publish_breach.return_value = "not a coroutine"
-        with patch("core.outbox.write_outbox_event_standalone", MagicMock()):
-            with patch("core.event_bus.bus", mock_bus):
-                # No running loop — hits the RuntimeError branch
-                import asyncio as _asyncio
-
-                # Temporarily remove the running loop by calling from sync context
-                ks._publish_event("sync non-coro test")
+        with (
+            patch("core.outbox.write_outbox_event_standalone", MagicMock()),
+            patch("core.event_bus.bus", mock_bus),
+        ):
+            # No running loop — hits the RuntimeError branch
+            # Temporarily remove the running loop by calling from sync context
+            ks._publish_event("sync non-coro test")
         _clean(ks)
 
     @pytest.mark.asyncio
@@ -1045,13 +1069,14 @@ class TestPublishEvent:
         from core.event_bus import DomainEvent
 
         mock_domain_event = MagicMock()
-        with patch("core.outbox.write_outbox_event_standalone", MagicMock()):
-            # Patch bus attribute to raise so Step 2 fails and Step 3 runs
-            import core.event_bus as _eb_mod
+        import core.event_bus as _eb_mod
 
-            with patch.object(_eb_mod, "bus", side_effect=Exception("redis down")):
-                with patch.object(DomainEvent, "create", return_value=mock_domain_event):
-                    ks._publish_event("in-process fallback async")
+        with (
+            patch("core.outbox.write_outbox_event_standalone", MagicMock()),
+            patch.object(_eb_mod, "bus", side_effect=Exception("redis down")),
+            patch.object(DomainEvent, "create", return_value=mock_domain_event),
+        ):
+            ks._publish_event("in-process fallback async")
         await asyncio.sleep(0)
         _clean(ks)
 
@@ -1065,12 +1090,14 @@ class TestPublishEvent:
         from core.event_bus import DomainEvent
 
         mock_domain_event = MagicMock()
-        with patch("core.outbox.write_outbox_event_standalone", MagicMock()):
-            import core.event_bus as _eb_mod
+        import core.event_bus as _eb_mod
 
-            with patch.object(_eb_mod, "bus", side_effect=Exception("redis down")):
-                with patch.object(DomainEvent, "create", return_value=mock_domain_event):
-                    ks._publish_event("in-process fallback sync")
+        with (
+            patch("core.outbox.write_outbox_event_standalone", MagicMock()),
+            patch.object(_eb_mod, "bus", side_effect=Exception("redis down")),
+            patch.object(DomainEvent, "create", return_value=mock_domain_event),
+        ):
+            ks._publish_event("in-process fallback sync")
         _clean(ks)
 
 
@@ -1164,7 +1191,6 @@ class TestKillSwitchRouteHandlers:
         app.include_router(router)
 
         # Override the admin dependency to inject a mock admin user
-        from fastapi.security import HTTPAuthorizationCredentials
 
         mock_user = MagicMock()
         mock_user.sub = "admin_user"
@@ -1176,7 +1202,6 @@ class TestKillSwitchRouteHandlers:
                 pass  # dependencies are closures — override via app
 
         # Override all dependencies that check auth
-        from fastapi import Request
 
         async def _mock_admin():
             return mock_user
@@ -1260,13 +1285,15 @@ class TestKillSwitchRouteHandlers:
         mock_user.sub = "admin_user"
         mock_user.role = "admin"
 
-        with patch("api.auth._decode_token", return_value=mock_user):
-            with patch.object(ks, "_clear_redis_latch"):
-                async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-                    resp = await client.post(
-                        "/api/kill-switch/deactivate",
-                        json={"token": "correct-tok"},
-                        headers={"Authorization": "Bearer fake-token"},
-                    )
+        with (
+            patch("api.auth._decode_token", return_value=mock_user),
+            patch.object(ks, "_clear_redis_latch"),
+        ):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.post(
+                    "/api/kill-switch/deactivate",
+                    json={"token": "correct-tok"},
+                    headers={"Authorization": "Bearer fake-token"},
+                )
         assert resp.status_code in (200, 401, 403, 503)
         _clean(ks)

@@ -15,7 +15,6 @@ External I/O (HTTP, DB, Redis) is patched at the boundary.
 
 from __future__ import annotations
 
-import json
 import os
 import tempfile
 from contextlib import contextmanager
@@ -190,8 +189,6 @@ class TestTradeReporting:
         assert tr._requires_immediate_reporting(trade) is True
 
     def test_generate_daily_report_structure(self, tmp_path):
-        from compliance.auditor import AuditLevel
-
         tr = self._make_reporter(tmp_path)
         trade = {"id": "t5", "symbol": "XAUUSD", "size": 5, "notional": 9500, "strategy_id": "s1"}
         tr.report_trade(trade)
@@ -448,7 +445,11 @@ class TestComplianceManager:
 
     def test_set_session_factory(self):
         cm = self._make()
-        cm.set_session_factory(lambda: MagicMock())
+
+        def _factory():
+            return MagicMock()
+
+        cm.set_session_factory(_factory)
         assert cm._session_factory is not None
 
 
@@ -546,15 +547,18 @@ class TestRegulatoryReporter:
 
         reporter = self._make_reporter(tmp_path)
         trade = {"id": "t3", "symbol": "XAUUSD", "size": 5}
+
         # Patch the module-level flag and _submit_with_retry to simulate failure
         async def _fail_retry(endpoint, payload, headers, record):
             record.last_error = "network error"
             reporter._dlq.enqueue(record)
             return False, None, "network error"
 
-        with patch.object(_rr_mod, "_REPORTING_ENABLED", True):
-            with patch.object(reporter, "_submit_with_retry", side_effect=_fail_retry):
-                record = await reporter.submit(trade)
+        with (
+            patch.object(_rr_mod, "_REPORTING_ENABLED", True),
+            patch.object(reporter, "_submit_with_retry", side_effect=_fail_retry),
+        ):
+            record = await reporter.submit(trade)
         assert record.status in ("failed", "dlq", "error", "submitted")
 
     def test_stats_returns_dict(self, tmp_path):

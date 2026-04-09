@@ -1,4 +1,5 @@
 """Extended coverage tests for low-coverage broker files."""
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -11,6 +12,7 @@ import pytest
 class TestIBKRBrokerModule:
     def _make(self):
         from brokers.ibkr_broker import IBKRBroker
+
         return IBKRBroker({"login": "testuser", "password": "pass", "server": "paper"})
 
     def test_init(self):
@@ -20,6 +22,7 @@ class TestIBKRBrokerModule:
     @pytest.mark.asyncio
     async def test_connect_no_ib_insync(self):
         from brokers.ibkr_broker import _IB_AVAILABLE
+
         if _IB_AVAILABLE:
             pytest.skip("ib_insync installed")
         b = self._make()
@@ -48,8 +51,7 @@ class TestIBKRBrokerModule:
     @pytest.mark.asyncio
     async def test_place_order_not_connected(self):
         b = self._make()
-        result = await b.place_order({"symbol": "XAUUSD", "action": "BUY",
-                                      "order_type": "MARKET", "quantity": 1.0})
+        result = await b.place_order({"symbol": "XAUUSD", "action": "BUY", "order_type": "MARKET", "quantity": 1.0})
         assert isinstance(result, dict)
         assert result.get("success") is False or "error" in result
 
@@ -84,6 +86,7 @@ class TestIBKRBrokerModule:
 
     def test_resolve_env_placeholder(self):
         from brokers.ibkr_broker import _resolve_env
+
         with patch.dict("os.environ", {"MY_VAR": "hello"}):
             assert _resolve_env("${MY_VAR:default}") == "hello"
         assert _resolve_env("${MISSING_VAR:fallback}") == "fallback"
@@ -99,8 +102,8 @@ class TestIBKRBrokerModule:
 class TestOANDAConnector:
     def _make(self):
         from brokers.oanda import OANDAConnector
-        return OANDAConnector({"api_key": "test-key", "account_id": "101-001",
-                               "environment": "practice"})
+
+        return OANDAConnector({"api_key": "test-key", "account_id": "101-001", "environment": "practice"})
 
     def _mock_session(self, status_code=200, json_data=None):
         sess = MagicMock()
@@ -120,6 +123,7 @@ class TestOANDAConnector:
 
     def test_init_missing_credentials_raises(self):
         from brokers.oanda import OANDAConnector
+
         with pytest.raises(ValueError):
             OANDAConnector({"api_key": "", "account_id": ""})
 
@@ -155,6 +159,7 @@ class TestOANDAConnector:
 
     def test_place_order_not_connected(self):
         from brokers.base import OrderSide, OrderType
+
         c = self._make()
         assert c.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 1.0) is None
 
@@ -174,10 +179,18 @@ class TestOANDAConnector:
     def test_get_account_info_connected(self):
         c = self._make()
         c.connected = True
-        payload = {"account": {"balance": "5000", "NAV": "5100",
-                               "marginUsed": "100", "marginAvailable": "5000",
-                               "unrealizedPL": "50", "pl": "200",
-                               "currency": "USD", "positions": []}}
+        payload = {
+            "account": {
+                "balance": "5000",
+                "NAV": "5100",
+                "marginUsed": "100",
+                "marginAvailable": "5000",
+                "unrealizedPL": "50",
+                "pl": "200",
+                "currency": "USD",
+                "positions": [],
+            }
+        }
         c.session = self._mock_session(200, payload)
         info = c.get_account_info()
         assert info is not None
@@ -185,20 +198,25 @@ class TestOANDAConnector:
     def test_get_positions_connected(self):
         c = self._make()
         c.connected = True
-        payload = {"positions": [{"instrument": "XAU_USD",
-                                   "long": {"units": "1", "averagePrice": "1950",
-                                            "unrealizedPL": "10", "pl": "0"},
-                                   "short": {"units": "0"}}]}
+        payload = {
+            "positions": [
+                {
+                    "instrument": "XAU_USD",
+                    "long": {"units": "1", "averagePrice": "1950", "unrealizedPL": "10", "pl": "0"},
+                    "short": {"units": "0"},
+                }
+            ]
+        }
         c.session = self._mock_session(200, payload)
         positions = c.get_positions()
         assert len(positions) >= 1
 
     def test_place_order_connected(self):
-        from brokers.base import OrderSide, OrderType
+        from brokers.base import OrderSide
+
         c = self._make()
         c.connected = True
-        payload = {"orderFillTransaction": {"id": "t1", "price": "1950",
-                                             "commission": "0", "units": "1"}}
+        payload = {"orderFillTransaction": {"id": "t1", "price": "1950", "commission": "0", "units": "1"}}
         c.session = self._mock_session(201, payload)
         order = c.place_order("XAU_USD", OrderSide.BUY, 1.0)
         assert order is not None
@@ -220,9 +238,15 @@ class TestOANDAConnector:
     def test_get_market_data_connected(self):
         c = self._make()
         c.connected = True
-        payload = {"candles": [{"time": "2024-01-01T00:00:00Z", "volume": 100,
-                                 "mid": {"o": "1950", "h": "1960",
-                                         "l": "1940", "c": "1955"}}]}
+        payload = {
+            "candles": [
+                {
+                    "time": "2024-01-01T00:00:00Z",
+                    "volume": 100,
+                    "mid": {"o": "1950", "h": "1960", "l": "1940", "c": "1955"},
+                }
+            ]
+        }
         c.session = self._mock_session(200, payload)
         data = c.get_market_data("XAU_USD")
         assert data is not None
@@ -235,6 +259,7 @@ class TestOANDAConnector:
 class TestOANDABroker:
     def _make(self):
         from brokers.oanda import OANDABroker
+
         return OANDABroker(api_key="test-key", account_id="101-001", server="practice")
 
     def _async_cm(self, mock_resp):
@@ -293,8 +318,7 @@ class TestOANDABroker:
     @pytest.mark.asyncio
     async def test_place_order_not_connected(self):
         b = self._make()
-        result = await b.place_order({"symbol": "XAU_USD", "direction": "buy",
-                                      "quantity": 1.0, "order_type": "MARKET"})
+        result = await b.place_order({"symbol": "XAU_USD", "direction": "buy", "quantity": 1.0, "order_type": "MARKET"})
         assert isinstance(result, dict)
         assert result.get("status") == "rejected" or result.get("success") is False
 
@@ -323,6 +347,7 @@ class TestOANDABroker:
 
     def test_market_data_forbidden(self):
         from brokers.oanda import MarketDataForbiddenError
+
         b = self._make()
         with pytest.raises(MarketDataForbiddenError):
             b.get_market_data("XAU_USD")
@@ -330,6 +355,7 @@ class TestOANDABroker:
     @pytest.mark.asyncio
     async def test_get_candles_forbidden(self):
         from brokers.oanda import MarketDataForbiddenError
+
         b = self._make()
         with pytest.raises(MarketDataForbiddenError):
             await b.get_candles("XAU_USD")
@@ -337,6 +363,7 @@ class TestOANDABroker:
     @pytest.mark.asyncio
     async def test_stream_prices_forbidden(self):
         from brokers.oanda import MarketDataForbiddenError
+
         b = self._make()
         with pytest.raises(MarketDataForbiddenError):
             await b.stream_prices(["XAU_USD"])
@@ -345,11 +372,21 @@ class TestOANDABroker:
     async def test_get_account_info_connected(self):
         b = self._make()
         b.connected = True
-        payload = {"account": {"id": "101-001", "currency": "USD", "balance": "5000",
-                               "NAV": "5100", "unrealizedPL": "50", "pl": "200",
-                               "marginUsed": "100", "marginAvailable": "5000",
-                               "openTradeCount": 0, "openPositionCount": 0,
-                               "marginRate": "0.02"}}
+        payload = {
+            "account": {
+                "id": "101-001",
+                "currency": "USD",
+                "balance": "5000",
+                "NAV": "5100",
+                "unrealizedPL": "50",
+                "pl": "200",
+                "marginUsed": "100",
+                "marginAvailable": "5000",
+                "openTradeCount": 0,
+                "openPositionCount": 0,
+                "marginRate": "0.02",
+            }
+        }
         mock_resp = MagicMock()
         mock_resp.raise_for_status = MagicMock()
         mock_resp.json = AsyncMock(return_value=payload)
@@ -364,10 +401,15 @@ class TestOANDABroker:
     async def test_get_open_positions_connected(self):
         b = self._make()
         b.connected = True
-        payload = {"positions": [{"instrument": "XAU_USD",
-                                   "long": {"units": "1", "averagePrice": "1950",
-                                            "unrealizedPL": "10", "pl": "0"},
-                                   "short": {"units": "0"}}]}
+        payload = {
+            "positions": [
+                {
+                    "instrument": "XAU_USD",
+                    "long": {"units": "1", "averagePrice": "1950", "unrealizedPL": "10", "pl": "0"},
+                    "short": {"units": "0"},
+                }
+            ]
+        }
         mock_resp = MagicMock()
         mock_resp.raise_for_status = MagicMock()
         mock_resp.json = AsyncMock(return_value=payload)
@@ -381,9 +423,15 @@ class TestOANDABroker:
     async def test_place_order_connected(self):
         b = self._make()
         b.connected = True
-        payload = {"orderFillTransaction": {"id": "t1", "price": "1950",
-                                             "tradeOpened": {"tradeID": "tr1"},
-                                             "commission": "0", "units": "1"}}
+        payload = {
+            "orderFillTransaction": {
+                "id": "t1",
+                "price": "1950",
+                "tradeOpened": {"tradeID": "tr1"},
+                "commission": "0",
+                "units": "1",
+            }
+        }
         mock_resp = MagicMock()
         mock_resp.status = 201
         mock_resp.raise_for_status = MagicMock()
@@ -391,6 +439,5 @@ class TestOANDABroker:
         mock_session = MagicMock()
         mock_session.post = MagicMock(return_value=self._async_cm(mock_resp))
         b._session = mock_session
-        result = await b.place_order({"symbol": "XAU_USD", "direction": "buy",
-                                      "quantity": 1.0, "order_type": "MARKET"})
+        result = await b.place_order({"symbol": "XAU_USD", "direction": "buy", "quantity": 1.0, "order_type": "MARKET"})
         assert result is not None

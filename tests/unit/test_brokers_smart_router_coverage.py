@@ -6,12 +6,12 @@ Coverage tests for brokers/smart_router.py
 
 Targets: BrokerScore, SmartOrderRouter, BrokerConnector
 """
+
 from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
-from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -21,6 +21,7 @@ UTC = timezone.utc
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_score(
     broker_id="b1",
@@ -332,8 +333,6 @@ class TestUpdateBrokerScores:
 
     @pytest.mark.asyncio
     async def test_fill_rate_updated_from_recent_fills(self):
-        from datetime import timedelta
-
         router = _make_router()
         now = datetime.now(UTC)
         fills = [
@@ -365,7 +364,7 @@ class TestUpdateBrokerScores:
         router.add_broker("a", conn)
         for _ in range(5):
             await router._update_broker_scores()
-        assert router.scores["a"].reliability_score < 0.99 * (0.9 ** 4)
+        assert router.scores["a"].reliability_score < 0.99 * (0.9**4)
 
 
 # ---------------------------------------------------------------------------
@@ -402,9 +401,7 @@ class TestExecuteWithFallback:
         router.scores["primary"].latency_ms = 1.0
         router.scores["fallback"].latency_ms = 200.0
 
-        result = await router.execute_with_fallback(
-            {"symbol": "EURUSD", "side": "buy", "type": "MARKET", "size": 1}
-        )
+        result = await router.execute_with_fallback({"symbol": "EURUSD", "side": "buy", "type": "MARKET", "size": 1})
         assert "fallback_used" in result["routing"]
 
     @pytest.mark.asyncio
@@ -433,9 +430,7 @@ class TestExecuteWithFallback:
         router.scores["bad"].latency_ms = 1.0
         router.scores["good"].latency_ms = 200.0
 
-        result = await router.execute_with_fallback(
-            {"symbol": "EURUSD", "side": "buy", "type": "MARKET", "size": 1}
-        )
+        result = await router.execute_with_fallback({"symbol": "EURUSD", "side": "buy", "type": "MARKET", "size": 1})
         assert "fallback_reason" in result["routing"]
         assert "primary error" in result["routing"]["fallback_reason"]
 
@@ -548,9 +543,7 @@ class TestBrokerConnector:
     @pytest.mark.asyncio
     async def test_place_order_filled_flag_false_when_not_filled(self):
         conn = _make_connector("a")
-        conn.client.place_order = AsyncMock(
-            return_value={"id": "x", "status": "REJECTED", "avg_price": 1.0}
-        )
+        conn.client.place_order = AsyncMock(return_value={"id": "x", "status": "REJECTED", "avg_price": 1.0})
         order = {"symbol": "EURUSD", "side": "buy", "type": "MARKET", "size": 1}
         await conn.place_order(order)
         assert conn.fill_history[0]["filled"] is False
