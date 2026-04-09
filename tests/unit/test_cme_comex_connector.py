@@ -220,6 +220,10 @@ class TestDisconnect:
 
 
 class TestPlaceOrderPaper:
+    # Simulated market price returned by _resolve_market_price in all paper tests.
+    # Using a realistic COMEX gold price rather than an arbitrary constant.
+    _MOCK_PRICE = 2347.50
+
     def setup_method(self):
         self.conn = _make_connector()
         with (
@@ -227,6 +231,14 @@ class TestPlaceOrderPaper:
             patch.object(self.conn, "_init_ibkr", return_value=False),
         ):
             self.conn.connect()
+        # Patch market-data resolution so tests run without Redis/OHLCVStore.
+        self._price_patcher = patch.object(
+            self.conn, "_resolve_market_price", return_value=self._MOCK_PRICE
+        )
+        self._price_patcher.start()
+
+    def teardown_method(self):
+        self._price_patcher.stop()
 
     def test_market_buy_returns_filled_order(self):
         order = self.conn.place_order(
@@ -251,7 +263,8 @@ class TestPlaceOrderPaper:
         assert order.average_price == 2400.0
         assert order.filled_quantity == 2.0
 
-    def test_market_order_uses_default_price_when_none(self):
+    def test_market_order_resolves_price_from_market_data(self):
+        """Market order with no explicit price uses _resolve_market_price."""
         order = self.conn.place_order(
             symbol="GC",
             side=OrderSide.BUY,
@@ -259,7 +272,19 @@ class TestPlaceOrderPaper:
             quantity=1.0,
             price=None,
         )
-        assert order.average_price == 2000.0
+        assert order.average_price == self._MOCK_PRICE
+
+    def test_market_order_raises_when_no_price_available(self):
+        """RuntimeError when neither Redis nor OHLCVStore has a price."""
+        with patch.object(self.conn, "_resolve_market_price", return_value=None):
+            with pytest.raises(RuntimeError, match="no market price available"):
+                self.conn.place_order(
+                    symbol="GC",
+                    side=OrderSide.BUY,
+                    order_type=OrderType.MARKET,
+                    quantity=1.0,
+                    price=None,
+                )
 
     def test_commission_stored_in_metadata(self):
         order = self.conn.place_order(
