@@ -9,7 +9,7 @@
  *  - Groups with no visible items are hidden entirely
  */
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useStore, selectIsAuth, selectUser, selectWsStatus, selectPlan } from '../../store';
 import { ThemeToggle } from '../ThemeToggle';
@@ -73,6 +73,72 @@ const LockBadge: React.FC<{ requiredPlan: string }> = ({ requiredPlan }) => (
   </span>
 );
 
+// ── Trading mode badge ────────────────────────────────────────────────────────
+// Fetches /api/health/live on mount and polls every 60 s.
+// Shows a persistent PAPER (amber) or LIVE (green) pill so operators always
+// know which mode the platform is running in.
+const TradingModeBadge: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
+  const [mode, setMode] = useState<'paper' | 'live' | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetch_mode = async () => {
+      try {
+        const res = await fetch('/api/health/live');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setMode(data.trading_mode === 'live' ? 'live' : 'paper');
+      } catch {
+        // health endpoint unavailable — don't show badge
+      }
+    };
+    fetch_mode();
+    const interval = setInterval(fetch_mode, 60_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
+
+  if (mode === null) return null;
+
+  const isLive = mode === 'live';
+  const label = isLive ? 'LIVE' : 'PAPER';
+  const bg    = isLive ? 'rgba(34,197,94,0.12)'  : 'rgba(251,191,36,0.12)';
+  const color = isLive ? '#22c55e'                : '#fbbf24';
+  const border = isLive ? 'rgba(34,197,94,0.35)' : 'rgba(251,191,36,0.35)';
+
+  if (collapsed) {
+    // Collapsed: show a coloured dot only
+    return (
+      <span
+        title={`Trading mode: ${label}`}
+        style={{
+          width: 8, height: 8, borderRadius: '50%', display: 'block',
+          background: color, margin: '0 auto',
+          boxShadow: `0 0 6px ${color}`,
+        }}
+      />
+    );
+  }
+
+  return (
+    <span
+      title={`Trading mode: ${label}${isLive ? ' — real orders will be placed' : ' — no real orders'}`}
+      style={{
+        fontSize: 9, fontWeight: 800, padding: '2px 7px', borderRadius: 4,
+        background: bg, color, border: `1px solid ${border}`,
+        textTransform: 'uppercase', letterSpacing: '0.08em',
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+      }}
+    >
+      <span style={{
+        width: 5, height: 5, borderRadius: '50%', background: color,
+        boxShadow: isLive ? `0 0 4px ${color}` : 'none',
+        flexShrink: 0,
+      }} />
+      {label}
+    </span>
+  );
+};
+
 // ── Group label ───────────────────────────────────────────────────────────────
 const GroupLabel: React.FC<{ label: string; collapsed: boolean }> = ({ label, collapsed }) => {
   if (collapsed) return <div style={{ height: 1, background: '#1e293b', margin: '6px 8px' }} />;
@@ -126,10 +192,20 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
         minHeight: 60,
       }}>
         {collapsed
-          ? <span style={{ fontSize: 20, fontWeight: 800, color: '#3b82f6' }}>H</span>
-          : <span style={{ fontSize: 18, fontWeight: 800, color: '#f8fafc', letterSpacing: -0.5 }}>
-              HOPE<span style={{ color: '#3b82f6' }}>FX</span>
-            </span>
+          ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 20, fontWeight: 800, color: '#3b82f6' }}>H</span>
+              <TradingModeBadge collapsed={true} />
+            </div>
+          )
+          : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+              <span style={{ fontSize: 18, fontWeight: 800, color: '#f8fafc', letterSpacing: -0.5, flexShrink: 0 }}>
+                HOPE<span style={{ color: '#3b82f6' }}>FX</span>
+              </span>
+              <TradingModeBadge collapsed={false} />
+            </div>
+          )
         }
         <button
           onClick={onToggle}
@@ -137,6 +213,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
           style={{
             background: 'transparent', border: 'none', color: '#64748b',
             fontSize: 18, cursor: 'pointer', padding: '2px 4px', lineHeight: 1,
+            flexShrink: 0,
           }}
         >
           {collapsed ? '›' : '‹'}
