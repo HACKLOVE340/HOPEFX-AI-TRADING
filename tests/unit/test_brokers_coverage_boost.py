@@ -2,11 +2,10 @@
 # Copyright (c) 2025-2026
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 """Broker coverage boost — targets uncovered lines in brokers/__init__.py and brokers/manager.py."""
+
 from __future__ import annotations
 
-import asyncio
-import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -15,13 +14,18 @@ import pytest
 # brokers/__init__.py — Order / Position / PaperTradingBroker
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestBrokersInitOrder:
     def _order(self, **kw):
-        from brokers import Order, OrderSide, OrderStatus, OrderType
+        from brokers import Order, OrderSide, OrderType
+
         defaults = dict(
-            id="o1", symbol="XAUUSD", side=OrderSide.BUY,
-            type=OrderType.MARKET, quantity=1.0,
+            id="o1",
+            symbol="XAUUSD",
+            side=OrderSide.BUY,
+            type=OrderType.MARKET,
+            quantity=1.0,
         )
         defaults.update(kw)
         return Order(**defaults)
@@ -32,18 +36,21 @@ class TestBrokersInitOrder:
 
     def test_is_complete_filled(self):
         from brokers import OrderStatus
+
         o = self._order()
         o.status = OrderStatus.FILLED
         assert o.is_complete is True
 
     def test_is_complete_cancelled(self):
         from brokers import OrderStatus
+
         o = self._order()
         o.status = OrderStatus.CANCELLED
         assert o.is_complete is True
 
     def test_is_complete_pending(self):
         from brokers import OrderStatus
+
         o = self._order()
         o.status = OrderStatus.PENDING
         assert o.is_complete is False
@@ -58,23 +65,29 @@ class TestBrokersInitOrder:
 class TestBrokersInitPosition:
     def _pos(self, **kw):
         from brokers import OrderSide, Position
+
         defaults = dict(
-            id="p1", symbol="XAUUSD", side=OrderSide.BUY,
-            quantity=1.0, entry_price=1950.0, current_price=1960.0,
+            id="p1",
+            symbol="XAUUSD",
+            side=OrderSide.BUY,
+            quantity=1.0,
+            entry_price=1950.0,
+            current_price=1960.0,
         )
         defaults.update(kw)
         return Position(**defaults)
 
     def test_update_price_buy(self):
-        pos = self._pos(side=__import__("brokers").OrderSide.BUY,
-                        quantity=2.0, entry_price=1950.0, current_price=1950.0)
+        pos = self._pos(
+            side=__import__("brokers").OrderSide.BUY, quantity=2.0, entry_price=1950.0, current_price=1950.0
+        )
         pos.update_price(1970.0)
         assert pos.unrealized_pnl == pytest.approx(40.0)
 
     def test_update_price_sell(self):
         from brokers import OrderSide
-        pos = self._pos(side=OrderSide.SELL, quantity=1.0,
-                        entry_price=1950.0, current_price=1950.0)
+
+        pos = self._pos(side=OrderSide.SELL, quantity=1.0, entry_price=1950.0, current_price=1950.0)
         pos.update_price(1930.0)
         assert pos.unrealized_pnl == pytest.approx(20.0)
 
@@ -92,6 +105,7 @@ class TestBrokersInitPosition:
 class TestPaperTradingBrokerInit:
     def _broker(self, **kw):
         from brokers import PaperTradingBroker
+
         return PaperTradingBroker(initial_balance=10_000.0, seed=42, **kw)
 
     @pytest.mark.asyncio
@@ -144,6 +158,7 @@ class TestPaperTradingBrokerInit:
     def test_place_order_not_connected_raises(self):
         from brokers.paper_trading import PaperTradingBroker
         from brokers.base import OrderSide, OrderType
+
         b = PaperTradingBroker({})
         b.connected = False
         with pytest.raises(ConnectionError):
@@ -153,6 +168,7 @@ class TestPaperTradingBrokerInit:
     async def test_place_order_market_buy(self):
         from brokers.paper_trading import PaperTradingBroker
         from brokers.base import OrderSide, OrderType, OrderStatus
+
         b = PaperTradingBroker({})
         await b.connect()
         b.update_market_price("XAUUSD", 1950.0)
@@ -164,6 +180,7 @@ class TestPaperTradingBrokerInit:
     async def test_place_order_market_sell(self):
         from brokers.paper_trading import PaperTradingBroker
         from brokers.base import OrderSide, OrderType
+
         b = PaperTradingBroker({})
         await b.connect()
         b.update_market_price("XAUUSD", 1950.0)
@@ -175,6 +192,7 @@ class TestPaperTradingBrokerInit:
     async def test_place_order_limit(self):
         from brokers.paper_trading import PaperTradingBroker
         from brokers.base import OrderSide, OrderType
+
         b = PaperTradingBroker({})
         await b.connect()
         b.update_market_price("XAUUSD", 1950.0)
@@ -186,6 +204,7 @@ class TestPaperTradingBrokerInit:
     async def test_cancel_order_pending(self):
         from brokers.paper_trading import PaperTradingBroker
         from brokers.base import OrderSide, OrderType
+
         b = PaperTradingBroker({})
         await b.connect()
         b.update_market_price("XAUUSD", 1950.0)
@@ -195,24 +214,28 @@ class TestPaperTradingBrokerInit:
 
     def test_cancel_order_not_found(self):
         from brokers.paper_trading import PaperTradingBroker
+
         b = PaperTradingBroker({})
         result = b.cancel_order("nonexistent")
         assert result is False
 
     def test_get_positions_returns_list(self):
         from brokers.paper_trading import PaperTradingBroker
+
         b = PaperTradingBroker({})
         positions = b.get_positions()
         assert isinstance(positions, list)
 
     def test_is_connected_false(self):
         from brokers.paper_trading import PaperTradingBroker
+
         b = PaperTradingBroker({})
         b.connected = False
         assert b.is_connected() is False
 
     def test_is_connected_true(self):
         from brokers.paper_trading import PaperTradingBroker
+
         b = PaperTradingBroker({})
         b.connected = True
         assert b.is_connected() is True
@@ -222,11 +245,13 @@ class TestPaperTradingBrokerInit:
 class TestCreateBroker:
     def test_create_paper_broker(self):
         from brokers import create_broker
+
         b = create_broker("paper", {"initial_balance": 5000.0})
         assert b is not None
 
     def test_create_unknown_raises(self):
         from brokers import create_broker
+
         with pytest.raises(ValueError, match="Unknown broker"):
             create_broker("unknown_xyz", {})
 
@@ -235,10 +260,12 @@ class TestCreateBroker:
 # brokers/manager.py — BrokerManager
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestBrokerManager:
     def _mgr(self):
         from brokers.manager import BrokerManager
+
         return BrokerManager(primary_broker_name="paper")
 
     def _mock_broker(self, connected=True):
@@ -325,12 +352,14 @@ class TestBrokerManager:
 
     def test_place_order_no_broker(self):
         from brokers.base import OrderSide, OrderType
+
         mgr = self._mgr()
         with pytest.raises(RuntimeError):
             mgr.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 1.0)
 
     def test_place_order_kill_switch_active(self):
         from brokers.base import OrderSide, OrderType
+
         mgr = self._mgr()
         b = self._mock_broker()
         mgr.register("paper", b)
@@ -343,6 +372,7 @@ class TestBrokerManager:
 
     def test_place_order_success(self):
         from brokers.base import OrderSide, OrderType
+
         mgr = self._mgr()
         b = self._mock_broker()
         mgr.register("paper", b)
@@ -483,25 +513,30 @@ class TestBrokerManager:
 # brokers/factory.py — BrokerFactory
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestBrokerFactory:
     def test_list_brokers(self):
         from brokers.factory import BrokerFactory
+
         brokers = BrokerFactory.list_brokers()
         assert isinstance(brokers, list)
 
     def test_get_broker_info_unknown(self):
         from brokers.factory import BrokerFactory
+
         info = BrokerFactory.get_broker_info("nonexistent_xyz")
         assert "error" in info or info == {}
 
     def test_create_broker_paper(self):
         from brokers.factory import BrokerFactory
+
         b = BrokerFactory.create_broker("paper", {"initial_balance": 1000.0})
         assert b is not None
 
     def test_create_broker_none_uses_env(self):
         from brokers.factory import BrokerFactory
+
         with patch.dict("os.environ", {"BROKER": "paper"}):
             b = BrokerFactory.create_broker(None, {})
             assert b is not None
@@ -511,20 +546,24 @@ class TestBrokerFactory:
 # brokers/ibkr_fix_bridge.py — IBKRFIXConfig
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestIBKRFIXConfig:
     def test_is_paper_true(self):
         from brokers.ibkr_fix_bridge import IBKRFIXConfig
+
         cfg = IBKRFIXConfig(host="127.0.0.1", port=7497)
         assert cfg.is_paper is True
 
     def test_is_paper_false(self):
         from brokers.ibkr_fix_bridge import IBKRFIXConfig
+
         cfg = IBKRFIXConfig(host="127.0.0.1", port=4001)
         assert cfg.is_paper is False
 
     def test_generate_quickfix_cfg(self):
         from brokers.ibkr_fix_bridge import IBKRFIXConfig
+
         cfg = IBKRFIXConfig(host="127.0.0.1", port=7497)
         text = cfg.generate_quickfix_cfg()
         assert "BeginString" in text or len(text) > 0
@@ -534,10 +573,12 @@ class TestIBKRFIXConfig:
 # brokers/ohlcv_store.py
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestOHLCVStore:
     def _store(self):
         from brokers.ohlcv_store import OHLCVStore
+
         return OHLCVStore()
 
     def test_push_and_get(self):
@@ -548,9 +589,14 @@ class TestOHLCVStore:
         assert len(bars) >= 1
 
     def test_get_missing_symbol(self):
+        import uuid
+
         store = self._store()
-        bars = store.get("EURUSD")
-        assert bars == [] or bars is None or isinstance(bars, list)
+        # Use a unique symbol guaranteed to have no data in Redis or the ring buffer.
+        unique_sym = f"NOSYM_{uuid.uuid4().hex}"
+        bars = store.get(unique_sym)
+        # get() returns None when the symbol has no data.
+        assert bars is None
 
     def test_symbols(self):
         store = self._store()
@@ -568,16 +614,18 @@ class TestOHLCVStore:
 # brokers/prop_firms/guard.py
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestPropFirmGuard:
     def test_check_prop_firm_rules_no_config(self):
         from brokers.prop_firms.guard import check_prop_firm_rules
+
         account = MagicMock()
         account.balance = 10000.0
         account.daily_loss = 0.0
         account.drawdown = 0.0
-        # Should not raise
-        try:
+        # Should not raise; suppress if config not present
+        import contextlib
+
+        with contextlib.suppress(Exception):
             check_prop_firm_rules(account)
-        except Exception:
-            pass  # acceptable if config not present
