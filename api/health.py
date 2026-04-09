@@ -128,7 +128,7 @@ async def _check_redis() -> ComponentStatus:
     t0 = time.perf_counter()
     try:
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-        import redis.asyncio as aioredis  # type: ignore[import]
+        import redis.asyncio as aioredis  # type: ignore[import]  # pylint: disable=no-name-in-module
 
         client = aioredis.from_url(redis_url, socket_connect_timeout=2, socket_timeout=2)
         pong = await asyncio.wait_for(client.ping(), timeout=_CHECK_TIMEOUT_SEC)

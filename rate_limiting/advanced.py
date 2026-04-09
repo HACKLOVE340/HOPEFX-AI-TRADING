@@ -142,7 +142,7 @@ async def _get_redis():
     if _redis_client is not None:
         return _redis_client if _redis_available else None
     try:
-        import redis.asyncio as aioredis
+        import redis.asyncio as aioredis  # pylint: disable=no-name-in-module
 
         client = aioredis.from_url(REDIS_URL, decode_responses=True, socket_timeout=1.0)
         await client.ping()
@@ -257,3 +257,43 @@ admin_rate_limit = rate_limit_dependency(ADMIN_RATE)
 websocket_rate_limit = rate_limit_dependency(WEBSOCKET_RATE)
 backtest_rate_limit = rate_limit_dependency(BACKTEST_RATE)
 withdrawal_rate_limit = rate_limit_dependency(WITHDRAWAL_RATE)
+
+
+# ── Public alias ─────────────────────────────────────────────────────────────
+# Superadmin and other modules import ``RateLimiter`` by name.
+# This is a thin public wrapper around the internal _InMemoryRateLimiter so
+# callers don't need to know the private name.
+
+class RateLimiter(_InMemoryRateLimiter):
+    """Public, importable rate-limiter class.
+
+    Wraps :class:`_InMemoryRateLimiter` and adds convenience helpers used by
+    the superadmin infrastructure dashboard.
+
+    Usage::
+
+        limiter = RateLimiter()
+        allowed = await limiter.is_allowed("user:123", limit=10, window_seconds=60)
+    """
+
+    async def check(self, key: str, limit: int, window_seconds: int) -> bool:
+        """Check whether *key* is within its rate limit.
+
+        Alias for :meth:`is_allowed` with positional-argument style.
+
+        Args:
+            key:            Unique identifier (e.g. ``"user:123"``).
+            limit:          Maximum allowed requests in *window_seconds*.
+            window_seconds: Sliding window duration in seconds.
+
+        Returns:
+            ``True`` if the request is allowed, ``False`` if it is rate-limited.
+        """
+        return await self.is_allowed(key, limit, window_seconds)
+
+    def status(self) -> dict:
+        """Return a summary of current window state for monitoring."""
+        return {
+            "backend": "in-memory",
+            "tracked_keys": len(self._windows),
+        }

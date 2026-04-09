@@ -24,7 +24,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 try:
-    from redis.exceptions import TimeoutError as RedisTimeoutError  # re-exported  # noqa: F401
+    from redis.exceptions import TimeoutError as RedisTimeoutError  # re-exported  # noqa: F401  # pylint: disable=unused-import
 
     import redis
     from redis import Redis

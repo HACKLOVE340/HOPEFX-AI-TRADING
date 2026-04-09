@@ -43,7 +43,7 @@ from datetime import datetime, timedelta, timezone
 UTC = timezone.utc
 from typing import ClassVar
 
-import redis.asyncio as aioredis
+import redis.asyncio as aioredis  # pylint: disable=no-name-in-module
 
 logger = logging.getLogger(__name__)
 

@@ -101,7 +101,7 @@ except ImportError:
     LIGHTGBM_AVAILABLE = False
 
 try:
-    import optuna
+    import optuna  # pylint: disable=unused-import
 
     OPTUNA_AVAILABLE = True
 except ImportError:

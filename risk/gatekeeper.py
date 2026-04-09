@@ -780,3 +780,7 @@ def _make_gatekeeper() -> Gatekeeper:
     except Exception:
         logger.warning("_make_gatekeeper: orchestrator import failed — using bare Gatekeeper", exc_info=True)
         return Gatekeeper()
+
+
+# Module-level singleton used by tests and scripts
+gatekeeper: Gatekeeper = _make_gatekeeper()

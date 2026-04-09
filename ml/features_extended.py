@@ -1167,3 +1167,37 @@ def build_extended_features_with_data_layer(
     )
     X = add_data_layer_features(X, as_of=as_of)
     return X, y
+
+
+# ── Alias expected by brain/hopefx_brain.py ───────────────────────────────────
+
+def build_features_extended(
+    ohlcv: pd.DataFrame,
+    macro_df: pd.DataFrame | None = None,
+    horizon: int = 1,
+    use_filtered_target: bool = True,
+    smoke: bool = False,
+) -> pd.DataFrame:
+    """Return only the feature matrix (X) from :func:`build_extended_features`.
+
+    This alias is used by :mod:`brain.hopefx_brain` when it needs a feature
+    DataFrame without the target series.
+
+    Args:
+        ohlcv:               OHLCV DataFrame (open, high, low, close, volume).
+        macro_df:            Optional macro indicators DataFrame.
+        horizon:             Prediction horizon in bars.
+        use_filtered_target: When ``True``, use ATR-filtered target labels.
+        smoke:               When ``True``, skip expensive computations.
+
+    Returns:
+        Feature DataFrame (X) from the extended feature pipeline.
+    """
+    X, _ = build_extended_features(
+        ohlcv=ohlcv,
+        macro_df=macro_df,
+        horizon=horizon,
+        use_filtered_target=use_filtered_target,
+        smoke=smoke,
+    )
+    return X

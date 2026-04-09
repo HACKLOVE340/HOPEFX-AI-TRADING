@@ -978,3 +978,71 @@ def calculate_var_garch(
         var_garch=max(var_garch, 0.0),
         converged=converged,
     )
+
+
+# ── High-level facade used by superadmin dashboard ───────────────────────────
+
+class RiskAnalytics:
+    """Facade that bundles the module-level analytics functions into a class.
+
+    Superadmin endpoints instantiate this and call methods to get platform-wide
+    risk metrics without needing to know the individual function names.
+    """
+
+    def platform_var(self, confidence: float = 0.95) -> dict:
+        """Return a platform-wide VaR summary.
+
+        Attempts to fetch live returns from the execution engine; falls back to
+        empty data gracefully.
+
+        Args:
+            confidence: Confidence level for VaR (default 0.95).
+
+        Returns:
+            Dict with ``var_95``, ``var_99``, ``expected_shortfall``, and
+            supporting metrics.
+        """
+        try:
+            from execution.engine import get_engine
+
+            engine = get_engine()
+            returns = getattr(engine, "daily_returns", []) or []
+        except Exception:
+            returns = []
+
+        if len(returns) < 10:
+            return {
+                "var_95": 0.0,
+                "var_99": 0.0,
+                "expected_shortfall": 0.0,
+                "max_drawdown": 0.0,
+                "current_drawdown": 0.0,
+                "sharpe_ratio": 0.0,
+                "sortino_ratio": 0.0,
+                "calmar_ratio": 0.0,
+                "portfolio_value": 0.0,
+                "currency": "USD",
+                "note": "Insufficient return history for VaR calculation",
+            }
+
+        import numpy as np
+
+        arr = np.asarray(returns, dtype=float)
+        var95 = float(compute_var(arr, confidence=0.95).var)
+        var99 = float(compute_var(arr, confidence=0.99).var)
+        es95 = float(compute_es(arr, confidence=0.95).es)
+        sharpe = float(compute_sharpe(arr).sharpe)
+        max_dd = float(compute_max_drawdown(np.cumsum(arr)))
+
+        return {
+            "var_95": round(var95, 4),
+            "var_99": round(var99, 4),
+            "expected_shortfall": round(es95, 4),
+            "max_drawdown": round(max_dd, 4),
+            "current_drawdown": 0.0,
+            "sharpe_ratio": round(sharpe, 4),
+            "sortino_ratio": 0.0,
+            "calmar_ratio": 0.0,
+            "portfolio_value": 0.0,
+            "currency": "USD",
+        }

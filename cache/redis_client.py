@@ -77,7 +77,7 @@ async def _try_cluster(
 ) -> Any | None:
     """Attempt Redis Cluster connection. Returns client or None."""
     try:
-        from redis.asyncio.cluster import ClusterNode, RedisCluster
+        from redis.asyncio.cluster import ClusterNode, RedisCluster  # pylint: disable=no-name-in-module
 
         hosts = _parse_hosts(hosts_str)
         startup_nodes = [ClusterNode(h, p) for h, p in hosts]
@@ -112,7 +112,7 @@ async def _try_sentinel(
 ) -> tuple[Any | None, Any | None]:
     """Attempt Redis Sentinel connection. Returns (client, sentinel) or (None, None)."""
     try:
-        from redis.asyncio.sentinel import Sentinel
+        from redis.asyncio.sentinel import Sentinel  # pylint: disable=no-name-in-module
 
         hosts = _parse_hosts(hosts_str, default_port=26379)
         logger.info(
@@ -146,7 +146,7 @@ async def _try_direct(
 ) -> Any | None:
     """Attempt direct Redis URL connection. Returns client or None."""
     try:
-        import redis.asyncio as aioredis
+        import redis.asyncio as aioredis  # pylint: disable=no-name-in-module
 
         logger.info("Redis: connecting directly via URL")
         client = aioredis.from_url(
