@@ -374,17 +374,17 @@ class _ASTSandboxChecker(ast.NodeVisitor):
                 f"Line {lineno}: import of banned module '{module_name}' is not allowed"
             )
 
-    def visit_Import(self, node: ast.Import) -> None:  # noqa: N802
+    def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:
             self._check_module(alias.name, node.lineno)
         self.generic_visit(node)
 
-    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:  # noqa: N802
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         if node.module:
             self._check_module(node.module, node.lineno)
         self.generic_visit(node)
 
-    def visit_Call(self, node: ast.Call) -> None:  # noqa: N802
+    def visit_Call(self, node: ast.Call) -> None:
         # Direct calls: eval(...), exec(...), open(...)
         if isinstance(node.func, ast.Name) and node.func.id in _BANNED_BUILTINS:
             self.violations.append(
@@ -394,7 +394,7 @@ class _ASTSandboxChecker(ast.NodeVisitor):
         # also catch getattr(x, 'eval') patterns via the Name visitor.
         self.generic_visit(node)
 
-    def visit_Attribute(self, node: ast.Attribute) -> None:  # noqa: N802
+    def visit_Attribute(self, node: ast.Attribute) -> None:
         # Catch os.system, os.popen, subprocess.run etc. via attribute access
         # on a banned-module name: e.g.  import os; os.system(...)
         if isinstance(node.value, ast.Name) and node.value.id in _BANNED_MODULES:
