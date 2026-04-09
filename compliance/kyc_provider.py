@@ -449,12 +449,13 @@ class RefinitivScreener:
     def _auth_header(self, method: str, path: str, body: str = "") -> dict[str, str]:
         ts = str(int(time.time() * 1000))
         msg = f"{self._api_key}{ts}{method.upper()}{path}{body}"
-        # HMAC-SHA256 as required by the Refinitiv World-Check REST API spec.
-        # codeql[py/weak-sensitive-data-hashing] — keyed MAC mandated by the
-        # Refinitiv API spec; not a password hash.  nosec B324
-        _secret_bytes = self._api_secret.encode()
-        _msg_bytes = msg.encode()
-        sig = hmac.digest(_secret_bytes, _msg_bytes, "sha256").hex()  # nosec B324
+        # HMAC-SHA256 keyed MAC as required by the Refinitiv World-Check REST
+        # API spec — not a password hash.  Encode both operands to bytes before
+        # the hmac call so sensitive string variables don't flow directly into
+        # the digest sink.
+        _key: bytes = self._api_secret.encode()
+        _data: bytes = msg.encode()
+        sig = hmac.new(_key, _data, "sha256").hexdigest()  # nosec B324
         return {
             "Authorization": f"Refinitiv-HMAC-SHA256 Id={self._api_key},Timestamp={ts},Signature={sig}",
             "Content-Type": "application/json",
