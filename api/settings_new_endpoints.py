@@ -206,7 +206,7 @@ def _resolve_and_validate_webhook_url(url: str) -> str:
     try:
         infos = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
     except OSError:
-        raise HTTPException(  # noqa: B904
+        raise HTTPException(
             status_code=400,
             detail="Webhook URL hostname could not be resolved",
         )
