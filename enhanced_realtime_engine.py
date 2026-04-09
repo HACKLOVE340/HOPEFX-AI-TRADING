@@ -50,12 +50,9 @@ try:
 except ImportError:
     REDIS_AVAILABLE = False
 
-try:
-    import zmq  # noqa: F401
+import importlib.util as _importlib_util
 
-    ZMQ_AVAILABLE = True
-except ImportError:
-    ZMQ_AVAILABLE = False
+ZMQ_AVAILABLE = _importlib_util.find_spec("zmq") is not None
 
 try:
     import uvloop

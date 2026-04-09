@@ -310,8 +310,13 @@ def check_env_example():
 
 def check_graphql():
     try:
-        from api.graphql_schema import graphql_router  # noqa: F401
+        import importlib.util as _ilu
 
+        if _ilu.find_spec("strawberry") is None:
+            raise ImportError("strawberry-graphql not installed")
+        from api.graphql_schema import graphql_router as _router
+
+        _ = _router  # explicitly reference to confirm import succeeded
         return "GraphQL router importable"
     except ImportError as e:
         raise AssertionError(f"GraphQL optional dep missing: {e}") from e

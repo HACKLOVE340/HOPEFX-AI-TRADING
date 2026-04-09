@@ -60,12 +60,9 @@ except ImportError:
     logger.warning("PyTorch not installed — deep models unavailable")
 
 # ── TensorFlow / Keras fallback ───────────────────────────────────────────────
-try:
-    import tensorflow as tf  # noqa: F401
+import importlib.util as _importlib_util
 
-    TF_AVAILABLE = True
-except ImportError:
-    TF_AVAILABLE = False
+TF_AVAILABLE = _importlib_util.find_spec("tensorflow") is not None
 
 
 # ─────────────────────────────────────────────────────────────────────────────

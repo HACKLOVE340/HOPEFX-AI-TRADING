@@ -1072,3 +1072,142 @@ _add_enum_value(TradeStatus, "ACTIVE", "active")
 _add_enum_value(TradeStatus, "CLOSING", "closing")
 _add_enum_value(TradeStatus, "PARTIALLY_FILLED", "partially_filled")
 _add_enum_value(OrderSide, "LONG", "long")
+
+
+# ── APIKey — per-user programmatic API keys ───────────────────────────────────
+if SQLALCHEMY_AVAILABLE:
+
+    class APIKey(Base):
+        """Programmatic API key issued to a user for external integrations."""
+
+        __tablename__ = "api_keys"
+
+        id = Column(String(36), primary_key=True, default=lambda: str(__import__("uuid").uuid4()))
+        user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+        name = Column(String(100), nullable=False)
+        key_hash = Column(String(64), unique=True, nullable=False)  # SHA-256 of raw key
+        key_prefix = Column(String(12), nullable=False)  # first 8 chars shown in UI
+        scopes = Column(Text, nullable=True)  # JSON-encoded list of scopes
+        is_active = Column(Boolean, default=True, nullable=False)
+        created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+        last_used_at = Column(DateTime(timezone=True), nullable=True)
+        expires_at = Column(DateTime(timezone=True), nullable=True)
+
+        __table_args__ = (
+            Index("idx_api_keys_user", "user_id"),
+            Index("idx_api_keys_hash", "key_hash"),
+        )
+
+        def to_dict(self) -> dict:
+            return {
+                "key_id": self.id,
+                "user_id": self.user_id,
+                "name": self.name,
+                "prefix": self.key_prefix,
+                "scopes": __import__("json").loads(self.scopes) if self.scopes else [],
+                "is_active": self.is_active,
+                "created_at": self.created_at.isoformat() if self.created_at else None,
+                "last_used_at": self.last_used_at.isoformat() if self.last_used_at else None,
+            }
+
+else:
+
+    class APIKey:  # type: ignore[no-redef]
+        __tablename__ = "api_keys"
+        __table__ = type("T", (), {"columns": []})()
+
+
+# ── AMLAlert — Anti-Money-Laundering compliance flags ────────────────────────
+if SQLALCHEMY_AVAILABLE:
+
+    class AMLAlert(Base):
+        """AML compliance alert raised by the risk engine."""
+
+        __tablename__ = "aml_alerts"
+
+        id = Column(String(36), primary_key=True, default=lambda: str(__import__("uuid").uuid4()))
+        user_id = Column(String(36), nullable=False, index=True)
+        username = Column(String(100), nullable=True)
+        alert_type = Column(String(50), nullable=False)
+        severity = Column(String(20), nullable=False, default="medium")  # low/medium/high/critical
+        amount = Column(Float, nullable=False, default=0.0)
+        currency = Column(String(10), nullable=False, default="USD")
+        description = Column(Text, nullable=True)
+        status = Column(String(20), nullable=False, default="pending")  # pending/reviewed/escalated/dismissed
+        notes = Column(Text, nullable=True)
+        reviewed_by = Column(String(128), nullable=True)
+        reviewed_at = Column(DateTime(timezone=True), nullable=True)
+        created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+
+        __table_args__ = (
+            Index("idx_aml_alerts_user", "user_id"),
+            Index("idx_aml_alerts_status", "status"),
+            Index("idx_aml_alerts_severity", "severity"),
+        )
+
+        def to_dict(self) -> dict:
+            return {
+                "alert_id": self.id,
+                "user_id": self.user_id,
+                "username": self.username or "",
+                "alert_type": self.alert_type,
+                "severity": self.severity,
+                "amount": float(self.amount),
+                "currency": self.currency,
+                "description": self.description or "",
+                "status": self.status,
+                "notes": self.notes or "",
+                "reviewed_by": self.reviewed_by,
+                "reviewed_at": self.reviewed_at.isoformat() if self.reviewed_at else None,
+                "created_at": self.created_at.isoformat() if self.created_at else None,
+            }
+
+else:
+
+    class AMLAlert:  # type: ignore[no-redef]
+        __tablename__ = "aml_alerts"
+        __table__ = type("T", (), {"columns": []})()
+
+
+# ── BrokerConnection — live broker integration records ───────────────────────
+if SQLALCHEMY_AVAILABLE:
+
+    class BrokerConnection(Base):
+        """Tracks active broker connections and their real-time health metrics."""
+
+        __tablename__ = "broker_connections"
+
+        id = Column(String(36), primary_key=True, default=lambda: str(__import__("uuid").uuid4()))
+        broker_name = Column(String(100), nullable=False, index=True)
+        broker_type = Column(String(50), nullable=False, default="unknown")  # oanda/ibkr/bybit/etc.
+        status = Column(String(20), nullable=False, default="disconnected")  # connected/disconnected/error
+        latency_ms = Column(Integer, nullable=True, default=0)
+        fill_rate_pct = Column(Float, nullable=True, default=0.0)
+        slippage_avg_pips = Column(Float, nullable=True, default=0.0)
+        orders_today = Column(Integer, nullable=True, default=0)
+        uptime_pct = Column(Float, nullable=True, default=0.0)
+        last_heartbeat = Column(DateTime(timezone=True), nullable=True)
+        created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+        updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+        __table_args__ = (Index("idx_broker_conn_name", "broker_name"),)
+
+        def to_dict(self) -> dict:
+            return {
+                "broker_id": self.id,
+                "name": self.broker_name,
+                "type": self.broker_type,
+                "status": self.status,
+                "latency_ms": self.latency_ms or 0,
+                "fill_rate_pct": float(self.fill_rate_pct or 0.0),
+                "slippage_avg_pips": float(self.slippage_avg_pips or 0.0),
+                "orders_today": self.orders_today or 0,
+                "uptime_pct": float(self.uptime_pct or 0.0),
+                "last_heartbeat": self.last_heartbeat.isoformat() if self.last_heartbeat else None,
+            }
+
+else:
+
+    class BrokerConnection:  # type: ignore[no-redef]
+        __tablename__ = "broker_connections"
+        __table__ = type("T", (), {"columns": []})()

@@ -348,3 +348,12 @@ try:
     from notifications.manager import NotificationChannel  # noqa: F401
 except Exception as _exc:
     logging.getLogger(__name__).debug("NotificationChannel unavailable: %s", _exc)
+
+try:
+    from notifications.alert_engine import get_alert_engine
+except Exception as _ae_exc:
+    logging.getLogger(__name__).debug("AlertEngine unavailable: %s", _ae_exc)
+
+    def get_alert_engine():  # type: ignore[misc]
+        """Stub when alert_engine module is unavailable."""
+        return None
