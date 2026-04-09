@@ -253,7 +253,7 @@ async def main() -> None:
     logger.info("Building feature matrix...")
     from ml.advanced_features import build_advanced_features
 
-    X, y = build_advanced_features(
+    X, _ = build_advanced_features(
         enriched,
         macro_df=macro_df,
         horizon=1,

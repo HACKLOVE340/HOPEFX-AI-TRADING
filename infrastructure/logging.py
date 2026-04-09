@@ -27,12 +27,9 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-try:
-    from pythonjsonlogger import jsonlogger  # noqa: F401
+import importlib.util as _importlib_util
 
-    JSON_LOGGER_AVAILABLE = True
-except ImportError:
-    JSON_LOGGER_AVAILABLE = False
+JSON_LOGGER_AVAILABLE = _importlib_util.find_spec("pythonjsonlogger") is not None
 
 try:
     import graypy  # For Graylog integration

@@ -45,14 +45,6 @@ from sqlalchemy.orm import relationship
 
 from database.models import Base
 
-try:
-    from enum import StrEnum
-except ImportError:
-    from enum import Enum
-
-    class StrEnum(str, Enum):  # Python 3.10 compat
-        pass
-
 
 class UserRole(StrEnum):
     USER = "user"

@@ -591,6 +591,8 @@ async def delete_indicator(ind_id: str, user: TokenPayload = Depends(get_current
 
 def _pearson_corr(a: list[float], b: list[float]) -> float:
     """Pearson correlation coefficient between two equal-length series."""
+    if len(a) < 2 or len(a) != len(b):
+        return 0.0
     n = len(a)
     ma, mb = sum(a) / n, sum(b) / n
     num = sum((a[i] - ma) * (b[i] - mb) for i in range(n))
@@ -601,18 +603,6 @@ def _pearson_corr(a: list[float], b: list[float]) -> float:
 
 def _returns_from_closes(closes: list[float]) -> list[float]:
     return [(closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes)) if closes[i - 1] > 0]
-
-
-def _pearson_corr(a: list[float], b: list[float]) -> float:
-    """Compute Pearson correlation between two equal-length lists."""
-    import statistics
-
-    if len(a) < 2 or len(a) != len(b):
-        return 0.0
-    try:
-        return statistics.correlation(a, b)
-    except Exception:
-        return 0.0
 
 
 async def _collect_series_from_engine(pe: Any, sym_list: list[str], window: int) -> dict[str, list[float]]:

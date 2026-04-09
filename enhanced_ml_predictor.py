@@ -67,14 +67,11 @@ try:
     TENSORFLOW_AVAILABLE = True
 except ImportError:
     TENSORFLOW_AVAILABLE = False
-    warnings.warn("TensorFlow not available - deep learning disabled", stacklevel=2)
+    import importlib.util as _importlib_util
 
-try:
-    import torch  # noqa: F401
+warnings.warn("TensorFlow not available - deep learning disabled", stacklevel=2)
 
-    PYTORCH_AVAILABLE = True
-except ImportError:
-    PYTORCH_AVAILABLE = False
+PYTORCH_AVAILABLE = _importlib_util.find_spec("torch") is not None
 
 try:
     from sklearn.calibration import CalibratedClassifierCV
@@ -104,16 +101,18 @@ except ImportError:
     LIGHTGBM_AVAILABLE = False
 
 try:
-    import optuna  # noqa: F401
+    import optuna
 
     OPTUNA_AVAILABLE = True
 except ImportError:
+    optuna = None  # type: ignore[assignment]  # graceful degradation; checked via OPTUNA_AVAILABLE
     OPTUNA_AVAILABLE = False
 
 try:
-    import shap  # noqa: F401
+    import shap as _shap_module
 
     SHAP_AVAILABLE = True
+    del _shap_module
 except ImportError:
     SHAP_AVAILABLE = False
 

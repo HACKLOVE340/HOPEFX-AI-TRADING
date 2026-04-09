@@ -56,14 +56,11 @@ import pandas as pd
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.preprocessing import StandardScaler
 
+import importlib.util as _importlib_util
+
 logger = logging.getLogger(__name__)
 
-try:
-    from research.pipeline.models_ensemble import EnsemblePredictor  # noqa: F401
-
-    ENSEMBLE_AVAILABLE = True
-except ImportError:
-    ENSEMBLE_AVAILABLE = False
+ENSEMBLE_AVAILABLE = _importlib_util.find_spec("research.pipeline.models_ensemble") is not None
 
 try:
     from hmmlearn.hmm import GaussianHMM
