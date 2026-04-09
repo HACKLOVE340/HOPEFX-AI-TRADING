@@ -28,7 +28,7 @@
 
 HOPEFX is a self-hosted, institutional-grade automated trading platform for XAUUSD
 and six additional forex/commodity symbols. It is built on FastAPI, SQLAlchemy,
-Redis, and a 176-feature XGBoost stacking ensemble (66.4% OOS accuracy, p=0.0000).
+Redis, and a 222-feature XGBoost stacking ensemble (59.92% OOS accuracy, p=0.0000).
 
 **Key architectural decisions:**
 
@@ -203,7 +203,7 @@ ml/
 | File | `advanced_oos.pkl` |
 | Algorithm | XGBoost stacking ensemble |
 | Features | 176 (stationary, regime-aware, macro-augmented) |
-| OOS accuracy | 66.4% (p=0.0000, N=1,260 bars, 7-year held-out) |
+| OOS accuracy | 59.92% (p=0.0000, N=2,016 bars) — see `ml/saved_models/advanced_oos_meta.json` |
 | OOS promotion gate | accuracy >= 0.60 AND p-value <= 0.05 |
 | Feature cache | Redis, 1-min TTL |
 | Fallback | SignalEngine falls back to rule-based strategies if model unavailable |
