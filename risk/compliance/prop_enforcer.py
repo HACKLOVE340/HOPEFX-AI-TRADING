@@ -190,6 +190,10 @@ class PropEnforcer:
         self._breach_log: list[BreachRecord] = []
         self._news_events: list[float] = []  # UTC timestamps of upcoming news
 
+        # Alert-sent flags — reset at daily_reset() to avoid repeated messages
+        self._daily_alert_sent: bool = False
+        self._total_alert_sent: bool = False
+
         # External kill-switch callback (e.g. KillSwitch.activate)
         self._kill_switch_fn = kill_switch_fn
 
@@ -210,6 +214,10 @@ class PropEnforcer:
         """
         Update equity state. Call on every account snapshot.
 
+        Fires a Telegram warning (non-halting) when daily drawdown reaches
+        80% of the configured daily limit (alert_pct_of_limit = 0.80 by default).
+        The alert is sent at most once per trading day; daily_reset() clears it.
+
         Parameters
         ----------
         current_equity      : latest floating equity
@@ -226,6 +234,39 @@ class PropEnforcer:
                 self._sod_equity = start_of_day_equity
             self._high_water_mark = max(self._high_water_mark, current_equity)
 
+            # ── 80% daily drawdown warning alert ─────────────────────────────
+            # Fires once when daily DD reaches 80% of the limit (non-halting).
+            # Uses a small epsilon to avoid float precision misses at exactly 80%.
+            _ALERT_EPSILON = 1e-9
+            if self._sod_equity > 0 and not self._daily_alert_sent:
+                daily_dd = (self._sod_equity - self._current_equity) / self._sod_equity
+                alert_threshold = self.cfg.daily_dd * 0.80 - _ALERT_EPSILON
+                if daily_dd >= alert_threshold and daily_dd < self.cfg.daily_dd:
+                    self._daily_alert_sent = True
+                    detail = (
+                        f"Daily drawdown at {daily_dd * 100:.2f}% — "
+                        f"approaching {self.cfg.daily_dd * 100:.1f}% limit "
+                        f"(SOD={self._sod_equity:.2f} current={self._current_equity:.2f}). "
+                        f"Remaining buffer: {(self.cfg.daily_dd - daily_dd) * self._sod_equity:.2f}"
+                    )
+                    logger.warning("PropEnforcer 80%% daily DD alert: %s", detail)
+                    self._send_telegram_warning(detail)
+
+            # ── 80% total drawdown warning alert ─────────────────────────────
+            if self._high_water_mark > 0 and not self._total_alert_sent:
+                total_dd = (self._high_water_mark - self._current_equity) / self._high_water_mark
+                alert_threshold = self.cfg.max_dd * 0.80 - _ALERT_EPSILON
+                if total_dd >= alert_threshold and total_dd < self.cfg.max_dd:
+                    self._total_alert_sent = True
+                    detail = (
+                        f"Total drawdown at {total_dd * 100:.2f}% — "
+                        f"approaching {self.cfg.max_dd * 100:.1f}% limit "
+                        f"(HWM={self._high_water_mark:.2f} current={self._current_equity:.2f}). "
+                        f"Remaining buffer: {(self.cfg.max_dd - total_dd) * self._high_water_mark:.2f}"
+                    )
+                    logger.warning("PropEnforcer 80%% total DD alert: %s", detail)
+                    self._send_telegram_warning(detail)
+
     def daily_reset(self, new_equity: float) -> None:
         """
         UTC 00:00 reset — update high-water mark and SOD equity.
@@ -239,6 +280,8 @@ class PropEnforcer:
                 self._halted = False
                 self._halt_reason = ""
                 logger.info("Daily reset — daily-DD halt cleared")
+            # Reset daily alert flag so the warning fires again next session
+            self._daily_alert_sent = False
         logger.info(
             "PropEnforcer daily reset | SOD equity=%.2f HWM=%.2f",
             new_equity,
@@ -377,6 +420,37 @@ class PropEnforcer:
 
         # Telegram alert
         self._send_telegram_alert(breach_type, detail)
+
+    def _send_telegram_warning(self, detail: str) -> None:
+        """
+        Send a non-halting Telegram warning (80% drawdown threshold reached).
+        Uses the same token/chat_id as breach alerts but with a warning emoji.
+        """
+        token = self.cfg.telegram_token
+        chat_id = self.cfg.telegram_chat_id
+        if not token or not chat_id:
+            return
+        try:
+            import urllib.parse
+            import urllib.request
+
+            text = (
+                f"⚠️ <b>HOPEFX PropEnforcer — DRAWDOWN WARNING</b>\n"
+                f"{detail}\n"
+                f"Time: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
+                f"<i>Trading continues — monitor closely.</i>"
+            )
+            data = urllib.parse.urlencode(
+                {"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
+            ).encode()
+            req = urllib.request.Request(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                data=data,
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=8)  # nosec B310 - URL is always https://api.telegram.org
+        except Exception as exc:
+            logger.warning("PropEnforcer Telegram warning failed: %s", exc)
 
     def _send_telegram_alert(self, breach_type: BreachType, detail: str) -> None:
         token = self.cfg.telegram_token
