@@ -43,6 +43,13 @@ _CHECK_TIMEOUT_SEC: float = 5.0
 _VERSION: str = os.getenv("APP_VERSION", "unknown")
 _SERVICE_NAME: str = os.getenv("OTEL_SERVICE_NAME", "hopefx-trading")
 
+# ── Trading mode ──────────────────────────────────────────────────────────────
+# Exposed on every health response so operators, dashboards, and monitoring
+# tools can immediately see whether the system is in paper or live mode.
+# BROKER_TYPE=paper is the safe default; live requires explicit opt-in.
+_BROKER_TYPE: str = os.getenv("BROKER_TYPE", "paper").lower()
+_TRADING_MODE: str = "live" if _BROKER_TYPE not in ("paper", "simulation", "demo", "backtest") else "paper"
+
 # ── Module-level cached DB engine ─────────────────────────────────────────────
 # Creating a new SQLAlchemy engine on every health check is extremely expensive
 # (TCP handshake + SSL negotiation + pool creation).  The engine is created once
@@ -108,6 +115,8 @@ class HealthComponents(BaseModel):
     version: str
     timestamp: str
     overall: str
+    trading_mode: str  # "paper" | "live"
+    broker_type: str   # raw BROKER_TYPE env value
     components: list[ComponentStatus]
 
 
@@ -323,6 +332,8 @@ async def liveness() -> dict[str, Any]:
         "status": "alive",
         "service": _SERVICE_NAME,
         "version": _VERSION,
+        "trading_mode": _TRADING_MODE,
+        "broker_type": _BROKER_TYPE,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -386,6 +397,8 @@ async def components_report() -> HealthComponents:
         version=_VERSION,
         timestamp=datetime.now(timezone.utc).isoformat(),
         overall=overall,
+        trading_mode=_TRADING_MODE,
+        broker_type=_BROKER_TYPE,
         components=checks,
     )
 
