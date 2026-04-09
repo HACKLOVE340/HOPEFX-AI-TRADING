@@ -20,8 +20,9 @@ test.describe('Landing page', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     expect(errors).toHaveLength(0);
-    // Should show the HopeFX brand
-    await expect(page.locator('text=HOPEFX').first()).toBeVisible();
+    // Should show the HopeFX brand (logo spans "HOPE" + "FX" as sibling nodes;
+    // getByText with regex matches any element containing "HOPEFX" in textContent)
+    await expect(page.getByText(/HOPEFX/i).first()).toBeVisible({ timeout: 10_000 });
   });
 
   test('has Sign In and Get Started links', async ({ page }) => {

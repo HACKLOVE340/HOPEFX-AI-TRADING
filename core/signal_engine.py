@@ -123,14 +123,21 @@ def _get_deep_ensemble_store() -> Any | None:
 def _get_online_learner_store() -> Any | None:
     """Return the module-level OnlineLearnerStore singleton, creating it on first call."""
     global _online_learner_store
+    # Check feature flag; fall back to env-var check if flags module unavailable
+    enabled = False
     try:
         from config.feature_flags import flags
 
-        if not flags.ONLINE_LEARNING:
-            return None
+        enabled = bool(flags.ONLINE_LEARNING)
     except Exception as _exc:
         logger.debug("_get_online_learner_store: feature-flags unavailable: %s", _exc)
+        import os
+
+        enabled = os.getenv("FEATURE_ONLINE_LEARNING", "").lower() in ("1", "true", "yes")
+
+    if not enabled:
         return None
+
     if _online_learner_store is None:
         try:
             from research.pipeline.online_learning import OnlineLearnerStore
@@ -145,14 +152,21 @@ def _get_online_learner_store() -> Any | None:
 def _get_anomaly_store() -> Any | None:
     """Return the module-level AnomalyWeightStore singleton, creating it on first call."""
     global _anomaly_store
+    # Check feature flag; fall back to env-var check if flags module unavailable
+    enabled = False
     try:
         from config.feature_flags import flags
 
-        if not flags.ANOMALY_WEIGHTING:
-            return None
+        enabled = bool(flags.ANOMALY_WEIGHTING)
     except Exception as _exc:
         logger.debug("_get_anomaly_store: feature-flags unavailable: %s", _exc)
+        import os
+
+        enabled = os.getenv("FEATURE_ANOMALY_WEIGHTING", "").lower() in ("1", "true", "yes")
+
+    if not enabled:
         return None
+
     if _anomaly_store is None:
         try:
             from research.pipeline.anomaly import AnomalyWeightStore

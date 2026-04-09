@@ -5,8 +5,26 @@
 # No commercial use without explicit permission.
 # security/vault.py
 """
-HOPEFX Hardware Security Module (HSM) Integration
-Enterprise-grade key management with secure enclaves
+HOPEFX Key Vault — software-based by default, hardware-optional.
+
+Default mode (``hsm_type='software'``):
+    AES-256 key derived via PBKDF2-HMAC-SHA256 from a password or a random
+    key stored on disk.  Keys are held in OS process memory — suitable for
+    development and single-node production when full HSM hardware is not
+    available.
+
+Optional hardware backends:
+    hsm_type='yubikey'   — YubiKey HSM via the ``yubihsm`` Python library.
+    hsm_type='cloudhsm'  — AWS KMS or Azure Key Vault (env: CLOUD_HSM_PROVIDER).
+
+IMPORTANT: The default software mode is NOT equivalent to a true hardware HSM.
+A hardware HSM provides:
+    - Keys that never leave the tamper-resistant hardware enclave
+    - Side-channel attack resistance at the silicon level
+    - FIPS 140-2/3 certification
+The software implementation provides none of those guarantees.  Use a hardware
+backend (YubiKey HSM 2 or cloud KMS) for any production deployment that handles
+real trading capital.
 """
 
 import hashlib
@@ -43,8 +61,17 @@ class EncryptedSecret:
 
 class HSMVault:
     """
-    Hardware Security Module abstraction layer.
-    Supports both software HSM (for development) and hardware HSM (production).
+    Key vault with optional hardware HSM backend.
+
+    DEFAULT (``hsm_type='software'``):
+        Software-based AES-256 encryption using PBKDF2-HMAC-SHA256.
+        Keys reside in OS process memory.  This is NOT a hardware HSM —
+        keys are extractable from a memory dump.  Use a hardware backend
+        for production deployments handling real trading capital.
+
+    HARDWARE BACKENDS (opt-in):
+        ``hsm_type='yubikey'``   — requires ``yubihsm`` library and a physical YubiKey HSM.
+        ``hsm_type='cloudhsm'``  — requires ``CLOUD_HSM_PROVIDER`` env var (aws or azure).
     """
 
     def __init__(self, hsm_type: str = "software", key_store_path: str = "data/keys/"):

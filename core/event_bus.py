@@ -357,6 +357,11 @@ class EventBus:
             logger.debug("Suppressed exception: %s", _exc)
 
         payload = json.dumps(message)
+        # NOTE: The wire format is JSON over Redis pub/sub.  For ultra-low-latency
+        # paths (sub-millisecond, co-located with CME) consider upgrading to a
+        # binary protocol such as MessagePack (already used in DomainEvent above)
+        # or FlatBuffers/SBE, which can reduce serialisation overhead ~10×.
+        # That optimisation is tracked as a future improvement.
         attempt = 0
         backoff = BASE_BACKOFF_S
 

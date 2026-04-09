@@ -29,15 +29,18 @@ test.describe('Marketplace', () => {
   });
 
   test('page title is visible', async ({ page }) => {
-    const title = page.locator('text=/marketplace/i, h1, h2').first();
+    const title = page.locator('h1').or(page.locator('h2')).or(page.locator('text=/marketplace/i')).first();
     await expect(title).toBeVisible({ timeout: 8_000 });
   });
 
   test('strategy listings or empty state renders', async ({ page }) => {
     // Either strategy cards or an empty state message
-    const content = page.locator(
-      '[data-testid="strategy-card"], .strategy-card, text=/no strategies/i, text=/marketplace/i'
-    ).first();
+    const content = page
+      .locator('[data-testid="strategy-card"]')
+      .or(page.locator('.strategy-card'))
+      .or(page.locator('text=/no strategies/i'))
+      .or(page.locator('text=/marketplace/i'))
+      .first();
     await expect(content).toBeVisible({ timeout: 10_000 });
   });
 
@@ -97,9 +100,13 @@ test.describe('Leaderboard', () => {
     await page.waitForLoadState('networkidle');
 
     // Either real data (% returns) or a visible fallback/error state
-    const content = page.locator(
-      'text=/%/, text=/no traders/i, text=/leaderboard/i, text=/loading/i, text=/failed/i'
-    ).first();
+    const content = page
+      .locator('text=/%/')
+      .or(page.locator('text=/no traders/i'))
+      .or(page.locator('text=/leaderboard/i'))
+      .or(page.locator('text=/loading/i'))
+      .or(page.locator('text=/failed/i'))
+      .first();
     await expect(content).toBeVisible({ timeout: 8_000 });
   });
 });

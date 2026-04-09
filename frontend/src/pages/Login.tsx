@@ -59,6 +59,7 @@ const Login: React.FC = () => {
               style={s.input}
               placeholder="trader@hopefx.io"
               autoComplete="email"
+              required
               autoFocus
             />
           </div>
@@ -73,6 +74,7 @@ const Login: React.FC = () => {
               style={s.input}
               placeholder="••••••••"
               autoComplete="current-password"
+              required
             />
           </div>
 
@@ -84,6 +86,8 @@ const Login: React.FC = () => {
         </form>
 
         <div style={s.footer}>
+          <a href="/register" style={s.link}>Create account</a>
+          <span style={{ color: '#334155' }}>·</span>
           <a href="/status" style={s.link}>System Status</a>
           <span style={{ color: '#334155' }}>·</span>
           <a href="mailto:support@hopefx.io" style={s.link}>Support</a>
