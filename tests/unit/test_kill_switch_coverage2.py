@@ -11,12 +11,13 @@ Supplemental kill_switch.py coverage tests targeting uncovered branches:
   - Router: rate limiting, auth error paths, deactivate already-inactive
   - Sentry / email notification paths in _activate_internal
 """
+
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
-import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -30,8 +31,10 @@ UTC = timezone.utc
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _ks(tmp_path: Path, token: str = "tok", **kwargs):
     from kill_switch import KillSwitch
+
     flag = tmp_path / "ks.flag"
     ks = KillSwitch(flag_file=flag, deactivation_token=token, **kwargs)
     return ks
@@ -48,28 +51,27 @@ def _clean(ks) -> None:
 # Redis latch paths
 # ---------------------------------------------------------------------------
 
+
 class TestRedisLatchPaths:
     def test_check_redis_latch_activates_when_latch_true(self, tmp_path):
         ks = _ks(tmp_path)
         mock_r = MagicMock()
-        mock_r.get.side_effect = lambda key: (
-            "true" if "active" in key else "drawdown breach on peer"
-        )
+        mock_r.get.side_effect = lambda key: ("true" if "active" in key else "drawdown breach on peer")
         with patch.object(ks, "_get_latch_redis", return_value=mock_r):
-            asyncio.get_event_loop().run_until_complete(ks._check_redis_latch())
+            asyncio.run(ks._check_redis_latch())
         assert ks.is_active()
         _clean(ks)
 
     def test_check_redis_latch_no_redis_returns_gracefully(self, tmp_path):
         ks = _ks(tmp_path)
         with patch.object(ks, "_get_latch_redis", return_value=None):
-            asyncio.get_event_loop().run_until_complete(ks._check_redis_latch())
+            asyncio.run(ks._check_redis_latch())
         assert not ks.is_active()
 
     def test_check_redis_latch_exception_non_fatal(self, tmp_path):
         ks = _ks(tmp_path)
         with patch.object(ks, "_get_latch_redis", side_effect=RuntimeError("boom")):
-            asyncio.get_event_loop().run_until_complete(ks._check_redis_latch())
+            asyncio.run(ks._check_redis_latch())
         assert not ks.is_active()
 
     def test_check_redis_latch_already_active_skips(self, tmp_path):
@@ -79,7 +81,7 @@ class TestRedisLatchPaths:
         mock_r = MagicMock()
         mock_r.get.return_value = "true"
         with patch.object(ks, "_get_latch_redis", return_value=mock_r):
-            asyncio.get_event_loop().run_until_complete(ks._check_redis_latch())
+            asyncio.run(ks._check_redis_latch())
         # Still active, reason unchanged
         assert ks._reason == "pre-existing"
         _clean(ks)
@@ -127,15 +129,16 @@ class TestRedisLatchPaths:
 # Stale flag-file restore
 # ---------------------------------------------------------------------------
 
+
 class TestStaleFlagFileRestore:
     def test_stale_flag_file_not_restored_in_non_production(self, tmp_path):
         flag = tmp_path / "ks.flag"
-        state = tmp_path / "ks.state.json"
         # Write a stale flag file (activated 25 hours ago)
         old_ts = (datetime.now(UTC) - timedelta(hours=25)).isoformat()
         flag.write_text(f"activated_at={old_ts}\nreason=old breach\n")
         with patch.dict(os.environ, {"APP_ENV": "development"}, clear=False):
             from kill_switch import KillSwitch
+
             ks = KillSwitch(flag_file=flag, deactivation_token="tok")
         assert not ks.is_active()
 
@@ -145,6 +148,7 @@ class TestStaleFlagFileRestore:
         flag.write_text(f"activated_at={recent_ts}\nreason=recent breach\n")
         with patch.dict(os.environ, {"APP_ENV": "development"}, clear=False):
             from kill_switch import KillSwitch
+
             ks = KillSwitch(flag_file=flag, deactivation_token="tok")
         assert ks.is_active()
         _clean(ks)
@@ -156,6 +160,7 @@ class TestStaleFlagFileRestore:
         state.write_text(json.dumps({"active": True, "reason": "old", "activated_at": old_ts}))
         with patch.dict(os.environ, {"APP_ENV": "development"}, clear=False):
             from kill_switch import KillSwitch
+
             ks = KillSwitch(flag_file=flag, deactivation_token="tok")
         assert not ks.is_active()
 
@@ -166,6 +171,7 @@ class TestStaleFlagFileRestore:
         state.write_text(json.dumps({"active": True, "reason": "old", "activated_at": old_ts}))
         with patch.dict(os.environ, {"APP_ENV": "production"}, clear=False):
             from kill_switch import KillSwitch
+
             ks = KillSwitch(flag_file=flag, deactivation_token="tok")
         assert ks.is_active()
         _clean(ks)
@@ -179,6 +185,7 @@ class TestStaleFlagFileRestore:
         state.write_text(json.dumps({"active": True, "reason": "naive ts", "activated_at": naive_ts}))
         with patch.dict(os.environ, {"APP_ENV": "production"}, clear=False):
             from kill_switch import KillSwitch
+
             ks = KillSwitch(flag_file=flag, deactivation_token="tok")
         assert ks.is_active()
         _clean(ks)
@@ -187,6 +194,7 @@ class TestStaleFlagFileRestore:
 # ---------------------------------------------------------------------------
 # K8s ConfigMap watcher
 # ---------------------------------------------------------------------------
+
 
 class TestK8sConfigMapWatcher:
     @pytest.mark.asyncio
@@ -201,9 +209,11 @@ class TestK8sConfigMapWatcher:
     @pytest.mark.asyncio
     async def test_watcher_import_error_returns_gracefully(self, tmp_path):
         ks = _ks(tmp_path)
-        with patch.dict(os.environ, {"KUBERNETES_SERVICE_HOST": "10.0.0.1"}):
-            with patch.dict(__import__("sys").modules, {"kubernetes_asyncio": None}):
-                await ks._k8s_configmap_watcher()
+        with (
+            patch.dict(os.environ, {"KUBERNETES_SERVICE_HOST": "10.0.0.1"}),
+            patch.dict(__import__("sys").modules, {"kubernetes_asyncio": None}),
+        ):
+            await ks._k8s_configmap_watcher()
         assert not ks.is_active()
 
     @pytest.mark.asyncio
@@ -211,11 +221,18 @@ class TestK8sConfigMapWatcher:
         ks = _ks(tmp_path)
         mock_k8s = MagicMock()
         mock_k8s.config.load_incluster_config = AsyncMock(side_effect=Exception("no incluster"))
-        with patch.dict(os.environ, {"KUBERNETES_SERVICE_HOST": "10.0.0.1"}):
-            with patch.dict(__import__("sys").modules, {"kubernetes_asyncio": mock_k8s,
-                                                         "kubernetes_asyncio.client": mock_k8s.client,
-                                                         "kubernetes_asyncio.config": mock_k8s.config}):
-                await ks._k8s_configmap_watcher()
+        with (
+            patch.dict(os.environ, {"KUBERNETES_SERVICE_HOST": "10.0.0.1"}),
+            patch.dict(
+                __import__("sys").modules,
+                {
+                    "kubernetes_asyncio": mock_k8s,
+                    "kubernetes_asyncio.client": mock_k8s.client,
+                    "kubernetes_asyncio.config": mock_k8s.config,
+                },
+            ),
+        ):
+            await ks._k8s_configmap_watcher()
         assert not ks.is_active()
 
     @pytest.mark.asyncio
@@ -243,17 +260,19 @@ class TestK8sConfigMapWatcher:
         mock_k8s_mod.config.load_incluster_config = AsyncMock()
         mock_k8s_mod.client.CoreV1Api.return_value = mock_v1
 
-        with patch.dict(os.environ, {"KUBERNETES_SERVICE_HOST": "10.0.0.1",
-                                      "K8S_KS_POLL_INTERVAL_S": "0.01"}):
-            with patch.dict(__import__("sys").modules, {
-                "kubernetes_asyncio": mock_k8s_mod,
-                "kubernetes_asyncio.client": mock_k8s_mod.client,
-                "kubernetes_asyncio.config": mock_k8s_mod.config,
-            }):
-                try:
-                    await asyncio.wait_for(ks._k8s_configmap_watcher(), timeout=2.0)
-                except (asyncio.CancelledError, asyncio.TimeoutError):
-                    pass
+        with (
+            patch.dict(os.environ, {"KUBERNETES_SERVICE_HOST": "10.0.0.1", "K8S_KS_POLL_INTERVAL_S": "0.01"}),
+            patch.dict(
+                __import__("sys").modules,
+                {
+                    "kubernetes_asyncio": mock_k8s_mod,
+                    "kubernetes_asyncio.client": mock_k8s_mod.client,
+                    "kubernetes_asyncio.config": mock_k8s_mod.config,
+                },
+            ),
+            contextlib.suppress(TimeoutError, asyncio.CancelledError),
+        ):
+            await asyncio.wait_for(ks._k8s_configmap_watcher(), timeout=2.0)
 
         assert ks.is_active()
         _clean(ks)
@@ -278,23 +297,26 @@ class TestK8sConfigMapWatcher:
         mock_k8s_mod.config.load_incluster_config = AsyncMock()
         mock_k8s_mod.client.CoreV1Api.return_value = mock_v1
 
-        with patch.dict(os.environ, {"KUBERNETES_SERVICE_HOST": "10.0.0.1",
-                                      "K8S_KS_POLL_INTERVAL_S": "0.01"}):
-            with patch.dict(__import__("sys").modules, {
-                "kubernetes_asyncio": mock_k8s_mod,
-                "kubernetes_asyncio.client": mock_k8s_mod.client,
-                "kubernetes_asyncio.config": mock_k8s_mod.config,
-            }):
-                try:
-                    await asyncio.wait_for(ks._k8s_configmap_watcher(), timeout=2.0)
-                except (asyncio.CancelledError, asyncio.TimeoutError):
-                    pass
+        with (
+            patch.dict(os.environ, {"KUBERNETES_SERVICE_HOST": "10.0.0.1", "K8S_KS_POLL_INTERVAL_S": "0.01"}),
+            patch.dict(
+                __import__("sys").modules,
+                {
+                    "kubernetes_asyncio": mock_k8s_mod,
+                    "kubernetes_asyncio.client": mock_k8s_mod.client,
+                    "kubernetes_asyncio.config": mock_k8s_mod.config,
+                },
+            ),
+            contextlib.suppress(TimeoutError, asyncio.CancelledError),
+        ):
+            await asyncio.wait_for(ks._k8s_configmap_watcher(), timeout=2.0)
         assert not ks.is_active()
 
 
 # ---------------------------------------------------------------------------
 # _write_k8s_configmap sync path (no running loop)
 # ---------------------------------------------------------------------------
+
 
 class TestWriteK8sConfigmapSync:
     def test_write_k8s_configmap_skips_outside_pod(self, tmp_path):
@@ -310,33 +332,44 @@ class TestWriteK8sConfigmapSync:
         mock_k8s_sync.CoreV1Api.return_value = mock_v1
         mock_k8s_sync_config = MagicMock()
 
-        with patch.dict(os.environ, {"KUBERNETES_SERVICE_HOST": "10.0.0.1"}):
-            with patch.dict(__import__("sys").modules, {
-                "kubernetes": mock_k8s_sync,
-                "kubernetes.client": mock_k8s_sync,
-                "kubernetes.config": mock_k8s_sync_config,
-            }):
-                # Ensure no running loop so sync path is taken
-                with patch("asyncio.get_running_loop", side_effect=RuntimeError("no loop")):
-                    ks._write_k8s_configmap("sync test reason")
+        with (
+            patch.dict(os.environ, {"KUBERNETES_SERVICE_HOST": "10.0.0.1"}),
+            patch.dict(
+                __import__("sys").modules,
+                {
+                    "kubernetes": mock_k8s_sync,
+                    "kubernetes.client": mock_k8s_sync,
+                    "kubernetes.config": mock_k8s_sync_config,
+                },
+            ),
+            # Ensure no running loop so sync path is taken
+            patch("asyncio.get_running_loop", side_effect=RuntimeError("no loop")),
+        ):
+            ks._write_k8s_configmap("sync test reason")
 
     def test_write_k8s_configmap_sync_exception_non_fatal(self, tmp_path):
         ks = _ks(tmp_path)
         mock_k8s_sync_config = MagicMock()
         mock_k8s_sync_config.load_incluster_config.side_effect = Exception("no config")
-        with patch.dict(os.environ, {"KUBERNETES_SERVICE_HOST": "10.0.0.1"}):
-            with patch.dict(__import__("sys").modules, {
-                "kubernetes": MagicMock(),
-                "kubernetes.client": MagicMock(),
-                "kubernetes.config": mock_k8s_sync_config,
-            }):
-                with patch("asyncio.get_running_loop", side_effect=RuntimeError("no loop")):
-                    ks._write_k8s_configmap("error path")  # should not raise
+        with (
+            patch.dict(os.environ, {"KUBERNETES_SERVICE_HOST": "10.0.0.1"}),
+            patch.dict(
+                __import__("sys").modules,
+                {
+                    "kubernetes": MagicMock(),
+                    "kubernetes.client": MagicMock(),
+                    "kubernetes.config": mock_k8s_sync_config,
+                },
+            ),
+            patch("asyncio.get_running_loop", side_effect=RuntimeError("no loop")),
+        ):
+            ks._write_k8s_configmap("error path")  # should not raise
 
 
 # ---------------------------------------------------------------------------
 # Poll loop OSError on flag file read
 # ---------------------------------------------------------------------------
+
 
 class TestPollLoopOSError:
     @pytest.mark.asyncio
@@ -363,10 +396,8 @@ class TestPollLoopOSError:
             task = asyncio.create_task(ks._poll_loop())
             await asyncio.sleep(0.05)
             task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await task
-            except asyncio.CancelledError:
-                pass
 
         # Should have activated with default reason
         assert ks.is_active()
@@ -377,38 +408,50 @@ class TestPollLoopOSError:
 # Sentry and email notification paths
 # ---------------------------------------------------------------------------
 
+
 class TestActivateInternalNotifications:
     def test_sentry_alert_called_on_activate(self, tmp_path):
         ks = _ks(tmp_path)
         mock_capture = MagicMock()
-        with patch("monitoring.sentry_config.capture_kill_switch_alert", mock_capture, create=True):
-            with patch.dict(__import__("sys").modules, {
-                "monitoring": MagicMock(),
-                "monitoring.sentry_config": MagicMock(capture_kill_switch_alert=mock_capture),
-            }):
-                ks.activate("sentry test")
+        with (
+            patch("monitoring.sentry_config.capture_kill_switch_alert", mock_capture, create=True),
+            patch.dict(
+                __import__("sys").modules,
+                {
+                    "monitoring": MagicMock(),
+                    "monitoring.sentry_config": MagicMock(capture_kill_switch_alert=mock_capture),
+                },
+            ),
+        ):
+            ks.activate("sentry test")
         # Sentry may or may not be called depending on import path; no crash is the key assertion
         _clean(ks)
 
     def test_sentry_exception_non_fatal(self, tmp_path):
         ks = _ks(tmp_path)
-        with patch.dict(__import__("sys").modules, {
-            "monitoring": MagicMock(),
-            "monitoring.sentry_config": MagicMock(
-                capture_kill_switch_alert=MagicMock(side_effect=RuntimeError("sentry down"))
-            ),
-        }):
+        with patch.dict(
+            __import__("sys").modules,
+            {
+                "monitoring": MagicMock(),
+                "monitoring.sentry_config": MagicMock(
+                    capture_kill_switch_alert=MagicMock(side_effect=RuntimeError("sentry down"))
+                ),
+            },
+        ):
             ks.activate("sentry error test")  # should not raise
         _clean(ks)
 
     def test_email_alert_exception_non_fatal(self, tmp_path):
         ks = _ks(tmp_path)
-        with patch.dict(__import__("sys").modules, {
-            "notifications": MagicMock(),
-            "notifications.email_triggers": MagicMock(
-                send_risk_halt_email=MagicMock(side_effect=RuntimeError("smtp down"))
-            ),
-        }):
+        with patch.dict(
+            __import__("sys").modules,
+            {
+                "notifications": MagicMock(),
+                "notifications.email_triggers": MagicMock(
+                    send_risk_halt_email=MagicMock(side_effect=RuntimeError("smtp down"))
+                ),
+            },
+        ):
             ks.activate("email error test")  # should not raise
         _clean(ks)
 
@@ -416,6 +459,7 @@ class TestActivateInternalNotifications:
 # ---------------------------------------------------------------------------
 # Router: rate limiting and auth error paths
 # ---------------------------------------------------------------------------
+
 
 class TestRouterRateLimitAndAuth:
     @pytest.mark.asyncio
@@ -539,6 +583,7 @@ class TestRouterRateLimitAndAuth:
 # Redis breach listener — already-active branch
 # ---------------------------------------------------------------------------
 
+
 class TestRedisBreachListenerAlreadyActive:
     @pytest.mark.asyncio
     async def test_listener_skips_when_already_active(self, tmp_path):
@@ -562,12 +607,12 @@ class TestRedisBreachListenerAlreadyActive:
         mock_bus.connect = AsyncMock()
         mock_bus.subscribe = fake_subscribe
 
-        with patch("core.event_bus.bus", mock_bus):
-            with patch("core.event_bus.CH_BREACH", "hopefx:breach"):
-                try:
-                    await asyncio.wait_for(ks._redis_breach_listener(), timeout=1.0)
-                except asyncio.TimeoutError:
-                    pass
+        with (
+            patch("core.event_bus.bus", mock_bus),
+            patch("core.event_bus.CH_BREACH", "hopefx:breach"),
+            contextlib.suppress(TimeoutError),
+        ):
+            await asyncio.wait_for(ks._redis_breach_listener(), timeout=1.0)
 
         assert ks._active
         _clean(ks)
@@ -586,9 +631,8 @@ class TestRedisBreachListenerAlreadyActive:
         mock_bus.connect = AsyncMock()
         mock_bus.subscribe = fake_subscribe
 
-        with patch("core.event_bus.bus", mock_bus):
-            with patch("core.event_bus.CH_BREACH", "hopefx:breach"):
-                await asyncio.wait_for(ks._redis_breach_listener(), timeout=2.0)
+        with patch("core.event_bus.bus", mock_bus), patch("core.event_bus.CH_BREACH", "hopefx:breach"):
+            await asyncio.wait_for(ks._redis_breach_listener(), timeout=2.0)
 
         assert not ks.is_active()
 
@@ -609,12 +653,12 @@ class TestRedisBreachListenerAlreadyActive:
         mock_bus.connect = AsyncMock()
         mock_bus.subscribe = fake_subscribe
 
-        with patch("core.event_bus.bus", mock_bus):
-            with patch("core.event_bus.CH_BREACH", "hopefx:breach"):
-                try:
-                    await asyncio.wait_for(ks._redis_breach_listener(), timeout=2.0)
-                except asyncio.TimeoutError:
-                    pass
+        with (
+            patch("core.event_bus.bus", mock_bus),
+            patch("core.event_bus.CH_BREACH", "hopefx:breach"),
+            contextlib.suppress(TimeoutError),
+        ):
+            await asyncio.wait_for(ks._redis_breach_listener(), timeout=2.0)
 
         assert not ks.is_active()
 
@@ -632,28 +676,31 @@ class TestRedisBreachListenerAlreadyActive:
         mock_bus.connect = AsyncMock()
         mock_bus.subscribe = fake_subscribe
 
-        with patch("core.event_bus.bus", mock_bus):
-            with patch("core.event_bus.CH_BREACH", "hopefx:breach"):
-                await ks._redis_breach_listener()  # should not raise
+        with patch("core.event_bus.bus", mock_bus), patch("core.event_bus.CH_BREACH", "hopefx:breach"):
+            await ks._redis_breach_listener()  # should not raise
 
 
 # ---------------------------------------------------------------------------
 # _get_latch_redis fallback exception path
 # ---------------------------------------------------------------------------
 
+
 class TestGetLatchRedisFallbackException:
     def test_redis_from_url_exception_returns_none(self, tmp_path):
         ks = _ks(tmp_path)
         # Make bus import fail AND redis.from_url fail
-        with patch.dict(__import__("sys").modules, {"core.event_bus": None}):
-            with patch("redis.from_url", side_effect=Exception("conn refused")):
-                result = ks._get_latch_redis()
+        with (
+            patch.dict(__import__("sys").modules, {"core.event_bus": None}),
+            patch("redis.from_url", side_effect=Exception("conn refused")),
+        ):
+            result = ks._get_latch_redis()
         assert result is None
 
 
 # ---------------------------------------------------------------------------
 # _clear_state OSError path
 # ---------------------------------------------------------------------------
+
 
 class TestClearStateOSError:
     def test_clear_state_oserror_non_fatal(self, tmp_path):
@@ -668,12 +715,14 @@ class TestClearStateOSError:
 # _restore_state: flag file exception path
 # ---------------------------------------------------------------------------
 
+
 class TestRestoreStateFlagFileException:
     def test_flag_file_read_exception_non_fatal(self, tmp_path):
         flag = tmp_path / "ks.flag"
         flag.write_text("reason=test\n")
         # Make _parse_flag_file raise
         from kill_switch import KillSwitch
+
         with patch.object(KillSwitch, "_parse_flag_file", side_effect=Exception("parse error")):
             ks = KillSwitch(flag_file=flag, deactivation_token="tok")
         # Should not be active (exception was caught)
@@ -683,6 +732,7 @@ class TestRestoreStateFlagFileException:
 # ---------------------------------------------------------------------------
 # K8s watcher: already-active branch and cm.data is None
 # ---------------------------------------------------------------------------
+
 
 class TestK8sWatcherEdgeCases:
     @pytest.mark.asyncio
@@ -708,17 +758,19 @@ class TestK8sWatcherEdgeCases:
         mock_k8s_mod.config.load_incluster_config = AsyncMock()
         mock_k8s_mod.client.CoreV1Api.return_value = mock_v1
 
-        with patch.dict(os.environ, {"KUBERNETES_SERVICE_HOST": "10.0.0.1",
-                                      "K8S_KS_POLL_INTERVAL_S": "0.01"}):
-            with patch.dict(__import__("sys").modules, {
-                "kubernetes_asyncio": mock_k8s_mod,
-                "kubernetes_asyncio.client": mock_k8s_mod.client,
-                "kubernetes_asyncio.config": mock_k8s_mod.config,
-            }):
-                try:
-                    await asyncio.wait_for(ks._k8s_configmap_watcher(), timeout=2.0)
-                except (asyncio.CancelledError, asyncio.TimeoutError):
-                    pass
+        with (
+            patch.dict(os.environ, {"KUBERNETES_SERVICE_HOST": "10.0.0.1", "K8S_KS_POLL_INTERVAL_S": "0.01"}),
+            patch.dict(
+                __import__("sys").modules,
+                {
+                    "kubernetes_asyncio": mock_k8s_mod,
+                    "kubernetes_asyncio.client": mock_k8s_mod.client,
+                    "kubernetes_asyncio.config": mock_k8s_mod.config,
+                },
+            ),
+            contextlib.suppress(TimeoutError, asyncio.CancelledError),
+        ):
+            await asyncio.wait_for(ks._k8s_configmap_watcher(), timeout=2.0)
         # Reason should be unchanged (not re-activated)
         assert ks._active
         _clean(ks)
@@ -745,23 +797,26 @@ class TestK8sWatcherEdgeCases:
         mock_k8s_mod.config.load_incluster_config = AsyncMock()
         mock_k8s_mod.client.CoreV1Api.return_value = mock_v1
 
-        with patch.dict(os.environ, {"KUBERNETES_SERVICE_HOST": "10.0.0.1",
-                                      "K8S_KS_POLL_INTERVAL_S": "0.01"}):
-            with patch.dict(__import__("sys").modules, {
-                "kubernetes_asyncio": mock_k8s_mod,
-                "kubernetes_asyncio.client": mock_k8s_mod.client,
-                "kubernetes_asyncio.config": mock_k8s_mod.config,
-            }):
-                try:
-                    await asyncio.wait_for(ks._k8s_configmap_watcher(), timeout=2.0)
-                except (asyncio.CancelledError, asyncio.TimeoutError):
-                    pass
+        with (
+            patch.dict(os.environ, {"KUBERNETES_SERVICE_HOST": "10.0.0.1", "K8S_KS_POLL_INTERVAL_S": "0.01"}),
+            patch.dict(
+                __import__("sys").modules,
+                {
+                    "kubernetes_asyncio": mock_k8s_mod,
+                    "kubernetes_asyncio.client": mock_k8s_mod.client,
+                    "kubernetes_asyncio.config": mock_k8s_mod.config,
+                },
+            ),
+            contextlib.suppress(TimeoutError, asyncio.CancelledError),
+        ):
+            await asyncio.wait_for(ks._k8s_configmap_watcher(), timeout=2.0)
         assert not ks.is_active()
 
 
 # ---------------------------------------------------------------------------
 # _write_k8s_configmap async path (running loop)
 # ---------------------------------------------------------------------------
+
 
 class TestWriteK8sConfigmapAsync:
     @pytest.mark.asyncio
@@ -775,15 +830,20 @@ class TestWriteK8sConfigmapAsync:
         mock_k8s_mod.config.load_incluster_config = AsyncMock()
         mock_k8s_mod.client.CoreV1Api.return_value = mock_v1
 
-        with patch.dict(os.environ, {"KUBERNETES_SERVICE_HOST": "10.0.0.1"}):
-            with patch.dict(__import__("sys").modules, {
-                "kubernetes_asyncio": mock_k8s_mod,
-                "kubernetes_asyncio.client": mock_k8s_mod.client,
-                "kubernetes_asyncio.config": mock_k8s_mod.config,
-            }):
-                ks._write_k8s_configmap("async test")
-                # Let the created task run
-                await asyncio.sleep(0.05)
+        with (
+            patch.dict(os.environ, {"KUBERNETES_SERVICE_HOST": "10.0.0.1"}),
+            patch.dict(
+                __import__("sys").modules,
+                {
+                    "kubernetes_asyncio": mock_k8s_mod,
+                    "kubernetes_asyncio.client": mock_k8s_mod.client,
+                    "kubernetes_asyncio.config": mock_k8s_mod.config,
+                },
+            ),
+        ):
+            ks._write_k8s_configmap("async test")
+            # Let the created task run
+            await asyncio.sleep(0.05)
 
     @pytest.mark.asyncio
     async def test_write_k8s_configmap_async_patch_exception(self, tmp_path):
@@ -793,19 +853,25 @@ class TestWriteK8sConfigmapAsync:
         mock_k8s_mod = MagicMock()
         mock_k8s_mod.config.load_incluster_config = AsyncMock(side_effect=Exception("k8s error"))
 
-        with patch.dict(os.environ, {"KUBERNETES_SERVICE_HOST": "10.0.0.1"}):
-            with patch.dict(__import__("sys").modules, {
-                "kubernetes_asyncio": mock_k8s_mod,
-                "kubernetes_asyncio.client": mock_k8s_mod.client,
-                "kubernetes_asyncio.config": mock_k8s_mod.config,
-            }):
-                ks._write_k8s_configmap("async error test")
-                await asyncio.sleep(0.05)  # let task run and hit exception
+        with (
+            patch.dict(os.environ, {"KUBERNETES_SERVICE_HOST": "10.0.0.1"}),
+            patch.dict(
+                __import__("sys").modules,
+                {
+                    "kubernetes_asyncio": mock_k8s_mod,
+                    "kubernetes_asyncio.client": mock_k8s_mod.client,
+                    "kubernetes_asyncio.config": mock_k8s_mod.config,
+                },
+            ),
+        ):
+            ks._write_k8s_configmap("async error test")
+            await asyncio.sleep(0.05)  # let task run and hit exception
 
 
 # ---------------------------------------------------------------------------
 # Router: deactivate with wrong token (403) and request.client is None
 # ---------------------------------------------------------------------------
+
 
 class TestRouterDeactivatePaths:
     @pytest.mark.asyncio
@@ -826,14 +892,13 @@ class TestRouterDeactivatePaths:
         mock_user.sub = "admin"
         mock_user.role = "admin"
 
-        with patch("api.auth._decode_token", return_value=mock_user):
-            with patch.object(ks, "_clear_redis_latch"):
-                async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-                    resp = await client.post(
-                        "/api/kill-switch/deactivate",
-                        json={"token": "wrong-token"},
-                        headers={"Authorization": "Bearer fake"},
-                    )
+        with patch("api.auth._decode_token", return_value=mock_user), patch.object(ks, "_clear_redis_latch"):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.post(
+                    "/api/kill-switch/deactivate",
+                    json={"token": "wrong-token"},
+                    headers={"Authorization": "Bearer fake"},
+                )
         assert resp.status_code == 403
         _clean(ks)
 
@@ -855,14 +920,13 @@ class TestRouterDeactivatePaths:
         mock_user.sub = "admin"
         mock_user.role = "admin"
 
-        with patch("api.auth._decode_token", return_value=mock_user):
-            with patch.object(ks, "_clear_redis_latch"):
-                async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-                    resp = await client.post(
-                        "/api/kill-switch/deactivate",
-                        json={"token": "correct-token"},
-                        headers={"Authorization": "Bearer fake"},
-                    )
+        with patch("api.auth._decode_token", return_value=mock_user), patch.object(ks, "_clear_redis_latch"):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.post(
+                    "/api/kill-switch/deactivate",
+                    json={"token": "correct-token"},
+                    headers={"Authorization": "Bearer fake"},
+                )
         assert resp.status_code == 200
         assert resp.json()["status"] == "deactivated"
         _clean(ks)
@@ -870,7 +934,7 @@ class TestRouterDeactivatePaths:
     @pytest.mark.asyncio
     async def test_activate_route_no_client_ip(self, tmp_path):
         """Cover `request.client.host if request.client else 'unknown'` when client is None."""
-        from fastapi import FastAPI, Request
+        from fastapi import FastAPI
         from httpx import AsyncClient
         from httpx._transports.asgi import ASGITransport
         from kill_switch import KillSwitch, create_kill_switch_router
@@ -910,8 +974,7 @@ class TestRouterDeactivatePaths:
         app.include_router(router)
 
         # _decode_token raises HTTPException (e.g. expired token → 401)
-        with patch("api.auth._decode_token",
-                   side_effect=FastAPIHTTPException(status_code=401, detail="expired")):
+        with patch("api.auth._decode_token", side_effect=FastAPIHTTPException(status_code=401, detail="expired")):
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
                 resp = await client.post(
                     "/api/kill-switch/activate",
@@ -920,4 +983,3 @@ class TestRouterDeactivatePaths:
                 )
         assert resp.status_code == 401
         _clean(ks)
-
