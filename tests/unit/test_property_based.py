@@ -116,7 +116,7 @@ class TestResolveSLTPProperties:
     def test_buy_sl_below_entry(self, entry: float) -> None:
         from core.signal_engine import _resolve_sl_tp
 
-        sl, tp = _resolve_sl_tp(signal=None, data={}, direction="BUY", entry_price=entry)
+        sl, _ = _resolve_sl_tp(signal=None, data={}, direction="BUY", entry_price=entry)
         assert sl < entry, f"BUY SL {sl} must be below entry {entry}"
 
     @given(entry=_price)
@@ -124,7 +124,7 @@ class TestResolveSLTPProperties:
     def test_buy_tp_above_entry(self, entry: float) -> None:
         from core.signal_engine import _resolve_sl_tp
 
-        sl, tp = _resolve_sl_tp(signal=None, data={}, direction="BUY", entry_price=entry)
+        _, tp = _resolve_sl_tp(signal=None, data={}, direction="BUY", entry_price=entry)
         assert tp > entry, f"BUY TP {tp} must be above entry {entry}"
 
     @given(entry=_price)
@@ -132,7 +132,7 @@ class TestResolveSLTPProperties:
     def test_sell_sl_above_entry(self, entry: float) -> None:
         from core.signal_engine import _resolve_sl_tp
 
-        sl, tp = _resolve_sl_tp(signal=None, data={}, direction="SELL", entry_price=entry)
+        sl, _ = _resolve_sl_tp(signal=None, data={}, direction="SELL", entry_price=entry)
         assert sl > entry, f"SELL SL {sl} must be above entry {entry}"
 
     @given(entry=_price)
@@ -140,7 +140,7 @@ class TestResolveSLTPProperties:
     def test_sell_tp_below_entry(self, entry: float) -> None:
         from core.signal_engine import _resolve_sl_tp
 
-        sl, tp = _resolve_sl_tp(signal=None, data={}, direction="SELL", entry_price=entry)
+        _, tp = _resolve_sl_tp(signal=None, data={}, direction="SELL", entry_price=entry)
         assert tp < entry, f"SELL TP {tp} must be below entry {entry}"
 
     @given(entry=_price)
