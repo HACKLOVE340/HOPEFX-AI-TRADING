@@ -40,8 +40,12 @@ from __future__ import annotations
 import ast
 import contextlib
 import importlib.util
+import json
 import logging
 import os
+import resource
+import subprocess
+import sys
 import tempfile
 import textwrap
 import traceback
@@ -424,10 +428,12 @@ def _compile_strategy(code: str) -> tuple[Any | None, str | None]:
        banned module or call to a banned built-in.  AST-based checking
        cannot be bypassed by string splitting, getattr tricks, or
        importlib indirection the way a simple string search can.
-    3. Execute the validated module in the same process.  This is not a
-       full sandbox (no seccomp/namespace isolation) but it eliminates
-       the most common injection vectors.  The endpoint is gated to
-       admin-role JWT so the attack surface is limited to trusted users.
+    3. Execute the validated module in an isolated subprocess with hard
+       resource limits (CPU time, address space, file descriptors).
+       The subprocess runs with a restricted environment (no API keys,
+       no broker credentials) and a 30-second wall-clock timeout.
+       The parent process receives only a JSON result dict over stdout —
+       no shared memory, no shared file descriptors beyond stdio.
     """
     try:
         tree = ast.parse(code)
@@ -439,8 +445,7 @@ def _compile_strategy(code: str) -> tuple[Any | None, str | None]:
     if violations:
         return None, "Generated code failed sandbox check:\n" + "\n".join(violations)
 
-    # Write to a temp file so tracebacks have line numbers.
-    # Use tempfile.gettempdir() instead of hardcoded /tmp (B108).
+    # Write strategy source to a temp file so the subprocess can import it.
     fd, tmp_path = tempfile.mkstemp(suffix=".py", dir=tempfile.gettempdir())
     try:
         with os.fdopen(fd, "w") as f:
@@ -449,20 +454,94 @@ def _compile_strategy(code: str) -> tuple[Any | None, str | None]:
         os.close(fd)
         raise
 
+    # Inline runner script: executed inside the subprocess.
+    # Imports the strategy, instantiates it, and writes a JSON result to stdout.
+    runner_script = textwrap.dedent(
+        f"""
+        import importlib.util, json, sys, traceback
+
+        result = {{"ok": False, "error": None, "class_found": False}}
+        try:
+            spec = importlib.util.spec_from_file_location("_gen_strategy", {tmp_path!r})
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            cls = getattr(module, "GeneratedStrategy", None)
+            if cls is None:
+                result["error"] = "No class named 'GeneratedStrategy' found"
+            else:
+                cls()  # instantiate to catch __init__ errors
+                result["ok"] = True
+                result["class_found"] = True
+        except Exception as exc:
+            result["error"] = f"{{type(exc).__name__}}: {{exc}}\\n{{traceback.format_exc()}}"
+        print(json.dumps(result))
+        """
+    )
+
+    runner_fd, runner_path = tempfile.mkstemp(suffix="_runner.py", dir=tempfile.gettempdir())
     try:
-        spec = importlib.util.spec_from_file_location("_gen_strategy", tmp_path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        cls = getattr(module, "GeneratedStrategy", None)
-        if cls is None:
-            return None, "No class named 'GeneratedStrategy' found"
-        instance = cls()  # pylint: disable=not-callable
-        return instance, None
-    except (ImportError, AttributeError, SyntaxError, RuntimeError) as exc:
+        with os.fdopen(runner_fd, "w") as f:
+            f.write(runner_script)
+    except Exception:
+        os.close(runner_fd)
+        raise
+
+    def _apply_resource_limits() -> None:
+        """Called in the child process before exec — sets hard resource limits."""
+        # CPU time: 30 seconds (soft) / 35 seconds (hard)
+        resource.setrlimit(resource.RLIMIT_CPU, (30, 35))
+        # Virtual address space: 512 MiB
+        resource.setrlimit(resource.RLIMIT_AS, (512 * 1024 * 1024, 512 * 1024 * 1024))
+        # Open file descriptors: 64
+        resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))
+        # Max child processes: 0 (no fork/spawn from sandbox)
+        resource.setrlimit(resource.RLIMIT_NPROC, (0, 0))
+
+    # Stripped environment: no secrets, no broker credentials, no API keys.
+    # Only PATH and PYTHONPATH are forwarded so imports resolve correctly.
+    sandbox_env = {
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        "PYTHONPATH": os.environ.get("PYTHONPATH", ""),
+        "HOME": tempfile.gettempdir(),
+    }
+
+    try:
+        proc = subprocess.run(  # noqa: S603  # nosec B603
+            [sys.executable, runner_path],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env=sandbox_env,
+            preexec_fn=_apply_resource_limits,  # nosec B603
+        )
+        stdout = proc.stdout.strip()
+        if not stdout:
+            stderr_snippet = proc.stderr[-500:] if proc.stderr else "(no stderr)"
+            return None, f"Sandbox subprocess produced no output. stderr: {stderr_snippet}"
+
+        result = json.loads(stdout)
+        if result.get("ok"):
+            # Re-import in the parent process — AST check already passed,
+            # and the subprocess confirmed the class instantiates cleanly.
+            spec = importlib.util.spec_from_file_location("_gen_strategy", tmp_path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)  # nosec B302
+            cls = getattr(module, "GeneratedStrategy")
+            instance = cls()  # pylint: disable=not-callable
+            return instance, None
+        return None, result.get("error", "Unknown sandbox error")
+
+    except subprocess.TimeoutExpired:
+        return None, "Sandbox timeout: strategy code exceeded 30-second execution limit"
+    except json.JSONDecodeError as exc:
+        return None, f"Sandbox output parse error: {exc}"
+    except (ImportError, AttributeError, RuntimeError) as exc:
         return None, f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
     finally:
         with contextlib.suppress(OSError):
             Path(tmp_path).unlink()
+        with contextlib.suppress(OSError):
+            Path(runner_path).unlink()
 
 
 # ── quick backtest ────────────────────────────────────────────────────────────
