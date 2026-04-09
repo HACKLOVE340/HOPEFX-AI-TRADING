@@ -46,6 +46,8 @@ class TestPropEnforcer:
         e._halt_reason = ""
         e._breach_log = []
         e._news_events = []
+        e._daily_alert_sent = False
+        e._total_alert_sent = False
         e._kill_switch_fn = None
         e._on_breach_callbacks = []
         return e
