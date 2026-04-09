@@ -1171,6 +1171,7 @@ def build_extended_features_with_data_layer(
 
 # ── Alias expected by brain/hopefx_brain.py ───────────────────────────────────
 
+
 def build_features_extended(
     ohlcv: pd.DataFrame,
     macro_df: pd.DataFrame | None = None,

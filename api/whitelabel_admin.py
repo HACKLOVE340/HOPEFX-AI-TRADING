@@ -316,6 +316,7 @@ async def list_available_features(user: TokenPayload = Depends(get_current_user)
 
 # ── Internal helpers called by api/superadmin/infrastructure.py ──────────────
 
+
 def _get_tenants() -> list[dict]:
     """Return all tenants as plain dicts (superadmin helper).
 

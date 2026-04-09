@@ -38,6 +38,7 @@ def _get_config_store():
             return fn()
     return _shared_get_config_store()
 
+
 # ── Platform config ───────────────────────────────────────────────────────────
 
 _PLATFORM_CONFIG_KEY = "superadmin_platform_config"

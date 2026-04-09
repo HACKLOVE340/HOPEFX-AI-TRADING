@@ -819,7 +819,9 @@ def _register_signal_read_routes(router: Any) -> None:
     async def get_latest_signals(symbol: str | None = None, limit: int = 10):
         svc = _get_signal_service()
         signals = svc.get_signal_history(symbol=symbol, hours=24)[:limit]
-        return _with_disclaimer({"signals": [s.to_dict() for s in signals], "count": len(signals), "symbol_filter": symbol})
+        return _with_disclaimer(
+            {"signals": [s.to_dict() for s in signals], "count": len(signals), "symbol_filter": symbol}
+        )
 
     @router.get("/active")
     async def get_active_signals(symbol: str | None = None):
@@ -854,11 +856,13 @@ def _register_signal_read_routes(router: Any) -> None:
         svc = _get_signal_service()
         recent = svc.get_signal_history(hours=1)
         engine_signals = [s.to_dict() for s in recent if s.metadata.get("source") == "signal_engine"][:10]
-        return _with_disclaimer({
-            "engine": engine_status,
-            "recent_engine_signals": engine_signals,
-            "recent_engine_signal_count": len(engine_signals),
-        })
+        return _with_disclaimer(
+            {
+                "engine": engine_status,
+                "recent_engine_signals": engine_signals,
+                "recent_engine_signal_count": len(engine_signals),
+            }
+        )
 
 
 from pydantic import BaseModel as _SignalBaseModel, Field as _SignalField
@@ -932,7 +936,9 @@ def _register_signal_write_routes(router: Any) -> None:
                 metadata=req.parameters or {},
             )
             if signal is None:
-                return _with_disclaimer({"signal": None, "message": "No signal generated (confidence or strategy threshold not met)"})
+                return _with_disclaimer(
+                    {"signal": None, "message": "No signal generated (confidence or strategy threshold not met)"}
+                )
             return _with_disclaimer({"signal": signal.to_dict()})
         except _HTTPException:
             raise
@@ -964,20 +970,22 @@ def _register_signal_write_routes(router: Any) -> None:
     @router.get("/alerts")
     async def list_alerts(symbol: str | None = None):
         alerts = _get_signal_service().get_alerts(symbol=symbol)
-        return _with_disclaimer({
-            "alerts": [
-                {
-                    "id": a.id,
-                    "symbol": a.symbol,
-                    "direction": a.direction,
-                    "min_confidence": a.min_confidence,
-                    "active": a.active,
-                    "created_at": a.created_at.isoformat(),
-                }
-                for a in alerts
-            ],
-            "count": len(alerts),
-        })
+        return _with_disclaimer(
+            {
+                "alerts": [
+                    {
+                        "id": a.id,
+                        "symbol": a.symbol,
+                        "direction": a.direction,
+                        "min_confidence": a.min_confidence,
+                        "active": a.active,
+                        "created_at": a.created_at.isoformat(),
+                    }
+                    for a in alerts
+                ],
+                "count": len(alerts),
+            }
+        )
 
     @router.delete("/alerts/{alert_id}")
     async def delete_alert(alert_id: str):
@@ -1039,11 +1047,13 @@ def _register_distribution_routes(
             )
             else None
         )
-        return _with_disclaimer({
-            "oos_sample_size": len(validator._oos_signals),
-            "live_buffer_size": len(validator._live_signals),
-            "validation": report.to_dict() if report else None,
-        })
+        return _with_disclaimer(
+            {
+                "oos_sample_size": len(validator._oos_signals),
+                "live_buffer_size": len(validator._live_signals),
+                "validation": report.to_dict() if report else None,
+            }
+        )
 
 
 def create_signals_router():

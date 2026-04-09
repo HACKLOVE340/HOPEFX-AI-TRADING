@@ -982,6 +982,7 @@ def calculate_var_garch(
 
 # ── High-level facade used by superadmin dashboard ───────────────────────────
 
+
 class RiskAnalytics:
     """Facade that bundles the module-level analytics functions into a class.
 

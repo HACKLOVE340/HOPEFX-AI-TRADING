@@ -116,7 +116,7 @@ class HealthComponents(BaseModel):
     timestamp: str
     overall: str
     trading_mode: str  # "paper" | "live"
-    broker_type: str   # raw BROKER_TYPE env value
+    broker_type: str  # raw BROKER_TYPE env value
     components: list[ComponentStatus]
 
 
