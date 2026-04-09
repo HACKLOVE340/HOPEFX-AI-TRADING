@@ -543,26 +543,33 @@ async def paper_trading_status():
         ("..." + _raw_account_id[-4:]) if len(_raw_account_id) > 4 else ("****" if _raw_account_id else None)
     )
 
-    # Merge — starter_status takes precedence for overlapping keys
-    merged = {
-        "started": clock_status.get("started", bool(starter_status)),
-        "started_utc": clock_status.get("started_utc"),
-        "elapsed_days": starter_status.get("elapsed_days", clock_status.get("elapsed_days", 0.0)),
+    # Build response from an explicit allowlist of typed fields.
+    # Each value is cast to a safe primitive so no internal object state or
+    # exception data can flow into the response (CodeQL py/information-exposure).
+    def _f(v: object, default: float = 0.0) -> float:
+        try:
+            return float(v)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return default
+
+    return {
+        "started": bool(clock_status.get("started", bool(starter_status))),
+        "started_utc": str(clock_status.get("started_utc") or ""),
+        "elapsed_days": _f(starter_status.get("elapsed_days", clock_status.get("elapsed_days"))),
         "remaining_days": max(
             0.0,
-            30.0 - float(starter_status.get("elapsed_days", clock_status.get("elapsed_days", 30.0))),
+            30.0 - _f(starter_status.get("elapsed_days", clock_status.get("elapsed_days", 30.0))),
         ),
         "target_days": 30,
-        "complete": starter_status.get("complete", clock_status.get("complete", False)),
-        "environment": clock_status.get("environment"),
+        "complete": bool(starter_status.get("complete", clock_status.get("complete", False))),
+        "environment": str(clock_status.get("environment") or ""),
         "account_id": _account_id_hint,  # masked — last 4 chars only
-        "current_balance": starter_status.get("current_balance"),
-        "start_balance": starter_status.get("start_balance"),
-        "drawdown_pct": starter_status.get("drawdown_pct"),
-        "trade_count": starter_status.get("trade_count"),
-        "updated_at": starter_status.get("updated_at"),
+        "current_balance": _f(starter_status.get("current_balance")) or None,
+        "start_balance": _f(starter_status.get("start_balance")) or None,
+        "drawdown_pct": _f(starter_status.get("drawdown_pct")) or None,
+        "trade_count": int(_f(starter_status.get("trade_count"))),
+        "updated_at": str(starter_status.get("updated_at") or ""),
     }
-    return merged  # codeql[py/information-exposure] - account_id masked; no exception data in response
 
 
 @router.get(
