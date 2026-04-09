@@ -63,6 +63,15 @@ _SIGNAL_WINDOW = int(os.getenv("SIGNAL_QUALITY_WINDOW", "100"))
 # Default: 30 days.  Set to 0 to disable the check.
 _MODEL_MAX_AGE_DAYS = float(os.getenv("MODEL_MAX_AGE_DAYS", "30"))
 
+# STALE_MODEL_BLOCK controls what happens when the model is stale:
+#   true  (default in production) — raise RuntimeError, block all inference.
+#         The pre-trade gate catches this and blocks the trade.
+#   false — degrade to neutral signal (warn-only, legacy behaviour).
+#
+# In production a stale model is a known-bad state: the operator must retrain
+# or explicitly set STALE_MODEL_BLOCK=false to acknowledge the risk.
+_STALE_MODEL_BLOCK: bool = os.getenv("STALE_MODEL_BLOCK", "true").lower() == "true"
+
 # ── Feature drift guard ───────────────────────────────────────────────────────
 # Warn (and optionally block) when live feature means deviate from training
 # means by more than DRIFT_Z_THRESHOLD standard deviations.
@@ -497,6 +506,10 @@ class InferenceEngine:
         Uses the mtime of advanced_oos.pkl (or the active model path if set).
         When MODEL_MAX_AGE_DAYS=0 the check is disabled and always returns False.
 
+        When STALE_MODEL_BLOCK=true (default) the caller raises RuntimeError
+        so the pre-trade gate blocks the trade.  When false, the caller
+        degrades to a neutral signal (warn-only legacy mode).
+
         Side-effects: updates self._model_stale and self._model_age_days.
         """
         if _MODEL_MAX_AGE_DAYS <= 0:
@@ -731,8 +744,10 @@ class InferenceEngine:
 
         # Step 3a: Stale model detection
         # Check whether the model file is older than MODEL_MAX_AGE_DAYS.
-        # A stale model degrades to neutral — it does not raise, so the
-        # system stays alive and the operator is alerted via logs + health().
+        # STALE_MODEL_BLOCK=true (default): raise RuntimeError — the pre-trade
+        # gate catches this and blocks the trade.  This is the correct
+        # production behaviour: a stale model is a known-bad state.
+        # STALE_MODEL_BLOCK=false: degrade to neutral (legacy warn-only mode).
         stale = self._check_model_staleness()
         if stale:
             base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
@@ -741,9 +756,16 @@ class InferenceEngine:
             base_result["model_age_days"] = self._model_age_days
             self._fallback_count += 1
             _PROM.fallback_total.labels(symbol=sym_label, reason="stale_model").inc()
+            if _STALE_MODEL_BLOCK:
+                raise RuntimeError(
+                    f"STALE MODEL BLOCKED: {sym_label} model is {self._model_age_days:.1f} days old "
+                    f"(max={_MODEL_MAX_AGE_DAYS:.0f} days). "
+                    "Retrain the model, or set STALE_MODEL_BLOCK=false to allow stale inference "
+                    "(not recommended in production)."
+                )
             logger.warning(
                 "STALE MODEL: returning neutral for %s (age=%.1f days > max=%.0f). "
-                "Retrain the model or set MODEL_MAX_AGE_DAYS=0 to suppress.",
+                "Set STALE_MODEL_BLOCK=true to block inference on stale models.",
                 sym_label,
                 self._model_age_days or 0,
                 _MODEL_MAX_AGE_DAYS,
@@ -1228,6 +1250,7 @@ class InferenceEngine:
             "stale_model": self._model_stale,
             "model_age_days": self._model_age_days,
             "model_max_age_days": _MODEL_MAX_AGE_DAYS if _MODEL_MAX_AGE_DAYS > 0 else None,
+            "stale_model_block": _STALE_MODEL_BLOCK,
             # ── Feature drift ──────────────────────────────────────────────
             "feature_drift_detected": self._drift_detected,
             "feature_drift_z_max": self._drift_z_max,
