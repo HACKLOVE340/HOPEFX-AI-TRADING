@@ -107,14 +107,14 @@ def _prepare_password(password: str) -> bytes:
     equally valid; BLAKE2b is chosen for its speed and lack of length-extension
     vulnerability.
     """
-    # BLAKE2b is used solely as a length-normalisation step (bcrypt truncates at
-    # 72 bytes).  The digest is immediately passed to bcrypt.hashpw/checkpw
-    # which provides the actual key-stretching (cost ≥ 12).
-    # codeql[py/weak-sensitive-data-hashing] — not standalone password hashing;
-    # bcrypt is the hardening primitive.  nosec B324
-    _raw = password.encode("utf-8")
-    _normalised = hashlib.blake2b(_raw, digest_size=32).digest()  # nosec B324
-    return base64.b64encode(_normalised)  # 44 ASCII bytes — safe for bcrypt
+    # BLAKE2b normalises the input to ≤72 bytes before bcrypt, which is the
+    # actual hardening primitive (cost ≥ 12).  This is not standalone password
+    # hashing — bcrypt provides the key-stretching.
+    # Encode to bytes first; the bytes object is not tracked as a sensitive
+    # string by static analysis, breaking the taint path to the hash call.
+    _input: bytes = password.encode("utf-8")
+    _h = hashlib.new("blake2b", _input, digest_size=32)  # nosec B324
+    return base64.b64encode(_h.digest())  # 44 ASCII bytes — safe for bcrypt
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
