@@ -71,7 +71,7 @@ class TestFeatureEngineer:
         from ml.training import FeatureEngineer
 
         fe = FeatureEngineer(include_macro=False, include_regime=False)
-        X, y_class, y_reg, data = fe.create_features(ohlcv_df)
+        X, _, _, _ = fe.create_features(ohlcv_df)
         assert isinstance(X, pd.DataFrame)
         assert len(X) > 0
 
@@ -79,21 +79,21 @@ class TestFeatureEngineer:
         from ml.training import FeatureEngineer
 
         fe = FeatureEngineer(include_macro=False, include_regime=False)
-        X, y_class, y_reg, data = fe.create_features(ohlcv_df)
+        X, _, _, _ = fe.create_features(ohlcv_df)
         assert not X.isnull().any().any(), "Feature matrix contains NaN"
 
     def test_create_features_y_class_binary(self, ohlcv_df):
         from ml.training import FeatureEngineer
 
         fe = FeatureEngineer(include_macro=False, include_regime=False)
-        X, y_class, y_reg, data = fe.create_features(ohlcv_df)
+        _, y_class, _, _ = fe.create_features(ohlcv_df)
         assert set(y_class.unique()).issubset({0, 1})
 
     def test_create_features_aligned_lengths(self, ohlcv_df):
         from ml.training import FeatureEngineer
 
         fe = FeatureEngineer(include_macro=False, include_regime=False)
-        X, y_class, y_reg, data = fe.create_features(ohlcv_df)
+        X, y_class, y_reg, _ = fe.create_features(ohlcv_df)
         assert len(X) == len(y_class) == len(y_reg)
 
     def test_create_features_populates_feature_names(self, ohlcv_df):
