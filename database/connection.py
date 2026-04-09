@@ -427,7 +427,14 @@ def _check_sqlite_multiworker(url: str) -> None:
         return
     # WEB_CONCURRENCY is set by Gunicorn, uvicorn-gunicorn-fastapi images, and
     # Heroku/Render.  --workers CLI flag sets it automatically.
-    concurrency = int(_os.getenv("WEB_CONCURRENCY", "1"))
+    concurrency_value = _os.getenv("WEB_CONCURRENCY", "1")
+    try:
+        concurrency = int(concurrency_value)
+    except ValueError as exc:
+        raise RuntimeError(
+            "Invalid WEB_CONCURRENCY configuration: "
+            f"expected an integer, got {concurrency_value!r}."
+        ) from exc
     if concurrency > 1:
         raise RuntimeError(
             f"DATABASE_URL is SQLite but WEB_CONCURRENCY={concurrency}. "
