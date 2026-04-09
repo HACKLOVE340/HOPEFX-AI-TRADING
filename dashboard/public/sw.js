@@ -1,3 +1,4 @@
+/* jshint esversion: 6 */
 const CACHE_NAME = 'hopefx-v9.5.0';
 const STATIC_ASSETS = [
   '/',
@@ -8,9 +9,9 @@ const STATIC_ASSETS = [
 ];
 
 // Install: Cache static assets
-self.addEventListener('install', (event) => {
+self.addEventListener('install', function(event) {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
+    caches.open(CACHE_NAME).then(function(cache) {
       return cache.addAll(STATIC_ASSETS);
     })
   );
@@ -18,13 +19,13 @@ self.addEventListener('install', (event) => {
 });
 
 // Activate: Clean old caches
-self.addEventListener('activate', (event) => {
+self.addEventListener('activate', function(event) {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
+    caches.keys().then(function(cacheNames) {
       return Promise.all(
         cacheNames
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name))
+          .filter(function(name) { return name !== CACHE_NAME; })
+          .map(function(name) { return caches.delete(name); })
       );
     })
   );
@@ -32,8 +33,8 @@ self.addEventListener('activate', (event) => {
 });
 
 // Fetch: Network first, cache fallback
-self.addEventListener('fetch', (event) => {
-  const { request } = event;
+self.addEventListener('fetch', function(event) {
+  var request = event.request;
 
   // Skip non-GET requests
   if (request.method !== 'GET') { return; }
@@ -46,14 +47,14 @@ self.addEventListener('fetch', (event) => {
 
   // Static assets: Cache first
   event.respondWith(
-    caches.match(request).then((cached) => {
+    caches.match(request).then(function(cached) {
       if (cached) { return cached; }
 
-      return fetch(request).then((response) => {
+      return fetch(request).then(function(response) {
         // Cache successful responses
         if (response.ok && response.type === 'basic') {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
+          var clone = response.clone();
+          caches.open(CACHE_NAME).then(function(cache) {
             cache.put(request, clone);
           });
         }
@@ -64,36 +65,36 @@ self.addEventListener('fetch', (event) => {
 });
 
 // Background sync for offline orders
-self.addEventListener('sync', (event) => {
+self.addEventListener('sync', function(event) {
   if (event.tag === 'pending-orders') {
     event.waitUntil(processPendingOrders());
   }
 });
 
-async function processPendingOrders() {
-  const db = await openDB('hopefx-orders', 1);
-  const orders = await db.getAll('pending');
-
-  for (const order of orders) {
-    try {
-      const response = await fetch('/api/v1/trades', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(order)
+function processPendingOrders() {
+  return openDB('hopefx-orders', 1).then(function(db) {
+    return db.getAll('pending').then(function(orders) {
+      var tasks = orders.map(function(order) {
+        return fetch('/api/v1/trades', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(order)
+        }).then(function(response) {
+          if (response.ok) {
+            return db.delete('pending', order.id);
+          }
+        }).catch(function(error) {
+          console.error('Failed to sync order:', error);
+        });
       });
-
-      if (response.ok) {
-        await db.delete('pending', order.id);
-      }
-    } catch (error) {
-      console.error('Failed to sync order:', error);
-    }
-  }
+      return Promise.all(tasks);
+    });
+  });
 }
 
 // Push notifications
-self.addEventListener('push', (event) => {
-  const data = event.data.json();
+self.addEventListener('push', function(event) {
+  var data = event.data.json();
 
   event.waitUntil(
     self.registration.showNotification('HOPEFX Alert', {
@@ -110,7 +111,7 @@ self.addEventListener('push', (event) => {
   );
 });
 
-self.addEventListener('notificationclick', (event) => {
+self.addEventListener('notificationclick', function(event) {
   event.notification.close();
 
   if (event.action === 'view') {
