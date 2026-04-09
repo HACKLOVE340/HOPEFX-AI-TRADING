@@ -311,12 +311,11 @@ class TestPositionManager:
         pos = await pm.open_position("XAUUSD", "BUY", 1.0, 1950.0, strategy_id="s1")
         assert pos.strategy_id == "s1"
 
-    def test_invalid_side_raises(self):
+    @pytest.mark.asyncio
+    async def test_invalid_side_raises(self):
         pm = self._pm()
-        import asyncio as _a
         with pytest.raises(ValueError, match="side must be"):
-            _a.get_event_loop().run_until_complete(
-                pm.open_position("XAUUSD", "long", 1.0, 1950.0))
+            await pm.open_position("XAUUSD", "long", 1.0, 1950.0)
 @pytest.mark.unit
 class TestBrokerState:
     def _s(self):
