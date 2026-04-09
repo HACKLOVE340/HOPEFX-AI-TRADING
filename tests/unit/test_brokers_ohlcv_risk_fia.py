@@ -121,7 +121,8 @@ class TestOHLCVStore:
         store = OHLCVStore(max_bars=100)  # fresh instance, no shared state
         # Use a unique symbol that has no Redis history
         store.push("TEST_ONLY_SYMBOL_XYZ", _make_bar())
-        result = store.get("TEST_ONLY_SYMBOL_XYZ", bars=500)
+        # allow_partial=False enforces the minimum-bars requirement
+        result = store.get("TEST_ONLY_SYMBOL_XYZ", bars=500, allow_partial=False)
         assert result is None
 
     def test_get_returns_df_when_sufficient(self):

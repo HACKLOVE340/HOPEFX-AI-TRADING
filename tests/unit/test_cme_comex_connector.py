@@ -232,9 +232,7 @@ class TestPlaceOrderPaper:
         ):
             self.conn.connect()
         # Patch market-data resolution so tests run without Redis/OHLCVStore.
-        self._price_patcher = patch.object(
-            self.conn, "_resolve_market_price", return_value=self._MOCK_PRICE
-        )
+        self._price_patcher = patch.object(self.conn, "_resolve_market_price", return_value=self._MOCK_PRICE)
         self._price_patcher.start()
 
     def teardown_method(self):
@@ -276,15 +274,17 @@ class TestPlaceOrderPaper:
 
     def test_market_order_raises_when_no_price_available(self):
         """RuntimeError when neither Redis nor OHLCVStore has a price."""
-        with patch.object(self.conn, "_resolve_market_price", return_value=None):
-            with pytest.raises(RuntimeError, match="no market price available"):
-                self.conn.place_order(
-                    symbol="GC",
-                    side=OrderSide.BUY,
-                    order_type=OrderType.MARKET,
-                    quantity=1.0,
-                    price=None,
-                )
+        with (
+            patch.object(self.conn, "_resolve_market_price", return_value=None),
+            pytest.raises(RuntimeError, match="no market price available"),
+        ):
+            self.conn.place_order(
+                symbol="GC",
+                side=OrderSide.BUY,
+                order_type=OrderType.MARKET,
+                quantity=1.0,
+                price=None,
+            )
 
     def test_commission_stored_in_metadata(self):
         order = self.conn.place_order(

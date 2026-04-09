@@ -7,6 +7,7 @@ Coverage tests for risk/orchestrator.py
 Targets: HedgePosition, RiskSnapshot, RiskOrchestrator (all public methods),
          state persistence, broker injection, FastAPI router, singleton.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -25,6 +26,7 @@ import pytest
 
 def _make_orch(tmp_path=None, **kwargs):
     from risk.orchestrator import RiskOrchestrator
+
     if tmp_path is not None:
         kwargs.setdefault("state_file", str(tmp_path / "orch_state.json"))
     return RiskOrchestrator(**kwargs)
@@ -39,6 +41,7 @@ def _make_orch(tmp_path=None, **kwargs):
 class TestHedgePosition:
     def test_fields(self):
         from risk.orchestrator import HedgePosition
+
         hp = HedgePosition(symbol="XAU_USD", units=1000.0, direction="short")
         assert hp.symbol == "XAU_USD"
         assert hp.units == pytest.approx(1000.0)
@@ -46,12 +49,14 @@ class TestHedgePosition:
 
     def test_opened_at_default(self):
         from risk.orchestrator import HedgePosition
+
         before = time.time()
         hp = HedgePosition(symbol="XAU_USD", units=500.0, direction="long")
         assert hp.opened_at >= before
 
     def test_order_id_default_none(self):
         from risk.orchestrator import HedgePosition
+
         hp = HedgePosition(symbol="XAU_USD", units=100.0, direction="short")
         assert hp.order_id is None
 
@@ -65,6 +70,7 @@ class TestHedgePosition:
 class TestRiskSnapshot:
     def test_fields(self):
         from risk.orchestrator import RiskSnapshot
+
         snap = RiskSnapshot(
             max_risk_fraction=0.5,
             current_exposure=0.3,
@@ -77,10 +83,14 @@ class TestRiskSnapshot:
 
     def test_timestamp_default(self):
         from risk.orchestrator import RiskSnapshot
+
         before = time.time()
         snap = RiskSnapshot(
-            max_risk_fraction=1.0, current_exposure=0.0,
-            hedge_active=False, hedge_positions=[], trading_allowed=True,
+            max_risk_fraction=1.0,
+            current_exposure=0.0,
+            hedge_active=False,
+            hedge_positions=[],
+            trading_allowed=True,
         )
         assert snap.timestamp >= before
 
@@ -374,8 +384,14 @@ class TestGetStatus:
     def test_required_keys(self, tmp_path):
         orch = _make_orch(tmp_path)
         s = orch.get_status()
-        for k in ("max_risk_fraction", "trading_allowed", "hedge_active",
-                  "hedge_positions", "event_count", "last_event"):
+        for k in (
+            "max_risk_fraction",
+            "trading_allowed",
+            "hedge_active",
+            "hedge_positions",
+            "event_count",
+            "last_event",
+        ):
             assert k in s
 
     def test_initial_values(self, tmp_path):
@@ -448,8 +464,7 @@ class TestStatePersistence:
             "trading_allowed": True,
             "hedge_active": True,
             "hedge_positions": [
-                {"symbol": "XAU_USD", "units": 1000.0,
-                 "direction": "short", "opened_at": time.time(), "order_id": "h1"}
+                {"symbol": "XAU_USD", "units": 1000.0, "direction": "short", "opened_at": time.time(), "order_id": "h1"}
             ],
         }
         f.write_text(json.dumps(state))
@@ -524,8 +539,8 @@ class TestGetBroker:
 class TestCreateOrchestratorRouter:
     def test_router_created(self, tmp_path):
         try:
-            from fastapi import FastAPI
             from risk.orchestrator import create_orchestrator_router
+
             orch = _make_orch(tmp_path)
             router = create_orchestrator_router(orch)
             assert router is not None
@@ -534,8 +549,8 @@ class TestCreateOrchestratorRouter:
 
     def test_router_has_routes(self, tmp_path):
         try:
-            from fastapi import FastAPI
             from risk.orchestrator import create_orchestrator_router
+
             orch = _make_orch(tmp_path)
             router = create_orchestrator_router(orch)
             assert len(router.routes) > 0
@@ -552,14 +567,17 @@ class TestCreateOrchestratorRouter:
 class TestRiskOrchestratorSingleton:
     def test_singleton_exists(self):
         from risk.orchestrator import risk_orchestrator
+
         assert risk_orchestrator is not None
 
     def test_singleton_is_orchestrator(self):
         from risk.orchestrator import RiskOrchestrator, risk_orchestrator
+
         assert isinstance(risk_orchestrator, RiskOrchestrator)
 
     def test_singleton_has_status(self):
         from risk.orchestrator import risk_orchestrator
+
         s = risk_orchestrator.get_status()
         assert "max_risk_fraction" in s
 

@@ -10,9 +10,9 @@ Targets: GateResult, _NewsCalendar, _EquityTracker, _safe_float,
          Gatekeeper lifecycle, orchestrator wiring, lineage writes,
          breach listener, metrics, module-level singleton.
 """
+
 from __future__ import annotations
 
-import asyncio
 import time
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -29,6 +29,7 @@ UTC = timezone.utc
 
 def _make_gk(**kwargs):
     from risk.gatekeeper import Gatekeeper
+
     return Gatekeeper(**kwargs)
 
 
@@ -67,6 +68,7 @@ def _signal(
 class TestGateResult:
     def test_passed_default(self):
         from risk.gatekeeper import GateResult
+
         r = GateResult(passed=True)
         assert r.passed is True
         assert r.reason == ""
@@ -74,6 +76,7 @@ class TestGateResult:
 
     def test_failed_with_reason(self):
         from risk.gatekeeper import GateResult
+
         r = GateResult(passed=False, reason="kill_switch_active", failures=[{"reason": "kill_switch_active"}])
         assert r.passed is False
         assert "kill_switch" in r.reason
@@ -88,29 +91,34 @@ class TestGateResult:
 class TestNewsCalendar:
     def test_no_events_not_blackout(self):
         from risk.gatekeeper import _NewsCalendar
+
         cal = _NewsCalendar()
         assert cal.is_blackout() is False
 
     def test_event_in_window_is_blackout(self):
         from risk.gatekeeper import _NewsCalendar
+
         cal = _NewsCalendar()
         cal.add_event(datetime.now(UTC) + timedelta(minutes=5))
         assert cal.is_blackout(window_minutes=30) is True
 
     def test_event_outside_window_not_blackout(self):
         from risk.gatekeeper import _NewsCalendar
+
         cal = _NewsCalendar()
         cal.add_event(datetime.now(UTC) + timedelta(hours=3))
         assert cal.is_blackout(window_minutes=30) is False
 
     def test_past_event_not_blackout(self):
         from risk.gatekeeper import _NewsCalendar
+
         cal = _NewsCalendar()
         cal.add_event(datetime.now(UTC) - timedelta(hours=2))
         assert cal.is_blackout(window_minutes=30) is False
 
     def test_clear_removes_events(self):
         from risk.gatekeeper import _NewsCalendar
+
         cal = _NewsCalendar()
         cal.add_event(datetime.now(UTC) + timedelta(minutes=5))
         cal.clear()
@@ -118,6 +126,7 @@ class TestNewsCalendar:
 
     def test_multiple_events_one_in_window(self):
         from risk.gatekeeper import _NewsCalendar
+
         cal = _NewsCalendar()
         cal.add_event(datetime.now(UTC) + timedelta(hours=5))
         cal.add_event(datetime.now(UTC) + timedelta(minutes=10))
@@ -133,31 +142,36 @@ class TestNewsCalendar:
 class TestEquityTracker:
     def test_initial_state(self):
         from risk.gatekeeper import _EquityTracker
+
         t = _EquityTracker(100_000.0)
         assert t.daily_dd == pytest.approx(0.0)
         assert t.max_dd == pytest.approx(0.0)
 
     def test_daily_dd_after_loss(self):
         from risk.gatekeeper import _EquityTracker
+
         t = _EquityTracker(100_000.0)
         t.update(95_000.0)
         assert t.daily_dd == pytest.approx(0.05)
 
     def test_max_dd_tracks_peak(self):
         from risk.gatekeeper import _EquityTracker
+
         t = _EquityTracker(100_000.0)
         t.update(110_000.0)  # new peak
-        t.update(99_000.0)   # drawdown from 110k → (110k-99k)/110k ≈ 0.10
+        t.update(99_000.0)  # drawdown from 110k → (110k-99k)/110k ≈ 0.10
         assert t.max_dd == pytest.approx(11_000.0 / 110_000.0, rel=1e-3)
 
     def test_zero_equity_guard(self):
         from risk.gatekeeper import _EquityTracker
+
         t = _EquityTracker(0.0)
         assert t.daily_dd == pytest.approx(0.0)
         assert t.max_dd == pytest.approx(0.0)
 
     def test_day_rollover_resets_daily_dd(self):
         from risk.gatekeeper import _EquityTracker
+
         t = _EquityTracker(100_000.0)
         t.update(90_000.0)
         assert t.daily_dd > 0
@@ -169,6 +183,7 @@ class TestEquityTracker:
 
     def test_equity_recovery_reduces_daily_dd(self):
         from risk.gatekeeper import _EquityTracker
+
         t = _EquityTracker(100_000.0)
         t.update(95_000.0)
         t.update(100_000.0)
@@ -184,28 +199,32 @@ class TestEquityTracker:
 class TestSafeFloat:
     def test_returns_first_numeric(self):
         from risk.gatekeeper import _safe_float
+
         obj = MagicMock()
         obj.tick_bid = 1.05
         assert _safe_float(obj, ("tick_bid", "bid")) == pytest.approx(1.05)
 
     def test_falls_back_to_second_name(self):
         from risk.gatekeeper import _safe_float
-        obj = MagicMock(spec=[])  # no attributes
+
         obj2 = type("O", (), {"bid": 1.10})()
         assert _safe_float(obj2, ("tick_bid", "bid")) == pytest.approx(1.10)
 
     def test_default_when_no_match(self):
         from risk.gatekeeper import _safe_float
+
         obj = type("O", (), {})()
         assert _safe_float(obj, ("tick_bid", "bid"), default=0.0) == pytest.approx(0.0)
 
     def test_skips_bool(self):
         from risk.gatekeeper import _safe_float
+
         obj = type("O", (), {"tick_bid": True})()
         assert _safe_float(obj, ("tick_bid",), default=99.0) == pytest.approx(99.0)
 
     def test_skips_string(self):
         from risk.gatekeeper import _safe_float
+
         obj = type("O", (), {"tick_bid": "1.05"})()
         assert _safe_float(obj, ("tick_bid",), default=0.0) == pytest.approx(0.0)
 
@@ -221,6 +240,7 @@ class TestRunChecksParams:
 
     def _call(self, **overrides):
         from risk.gatekeeper import Gatekeeper
+
         defaults = dict(
             kill_active=False,
             paused_until=0.0,
@@ -264,6 +284,7 @@ class TestRunChecksParams:
 
     def test_daily_dd_at_limit_blocks(self):
         from risk.gatekeeper import DAILY_DD_LIMIT_PCT
+
         failures = self._call(daily_dd=DAILY_DD_LIMIT_PCT)
         assert any(f["reason"] == "daily_dd_limit" for f in failures)
 
@@ -301,6 +322,7 @@ class TestRunChecksParams:
 
     def test_daily_trade_cap_blocks(self):
         from risk.gatekeeper import MAX_DAILY_TRADES
+
         failures = self._call(daily_trades=MAX_DAILY_TRADES)
         assert any(f["reason"] == "daily_trade_cap" for f in failures)
 
@@ -429,6 +451,7 @@ class TestGatekeeperEvaluate:
     async def test_evaluate_fia_block_on_rule_violation(self):
         from datetime import datetime, timezone
         from risk.fia_compliance import RiskCheckResult, RiskControlStatus
+
         gk = _make_gk()
         block_result = RiskCheckResult(
             rule="FIA_1.1_ORDER_SIZE",
@@ -446,6 +469,7 @@ class TestGatekeeperEvaluate:
     async def test_evaluate_fia_kill_switch_sets_kill_active(self):
         from datetime import datetime, timezone
         from risk.fia_compliance import RiskCheckResult, RiskControlStatus
+
         gk = _make_gk()
         ks_result = RiskCheckResult(
             rule="FIA_2.1_KILL_SWITCH",
@@ -485,8 +509,16 @@ class TestGatekeeperLifecycle:
     def test_metrics_shape(self):
         gk = _make_gk()
         m = gk.metrics()
-        for key in ("pass_count", "block_count", "fia_block_count", "daily_trades",
-                    "daily_dd_pct", "max_dd_pct", "kill_active", "paused"):
+        for key in (
+            "pass_count",
+            "block_count",
+            "fia_block_count",
+            "daily_trades",
+            "daily_dd_pct",
+            "max_dd_pct",
+            "kill_active",
+            "paused",
+        ):
             assert key in m
 
     def test_metrics_initial_values(self):
@@ -664,24 +696,28 @@ class TestBreachListener:
 class TestRunChecksUnified:
     def test_dict_signal_passes(self):
         from risk.gatekeeper import Gatekeeper
+
         gk = Gatekeeper()
         result = gk._run_checks({"confidence": 0.80, "spread": 0.50})
         assert result == []
 
     def test_dict_signal_low_confidence(self):
         from risk.gatekeeper import Gatekeeper
+
         gk = Gatekeeper()
         result = gk._run_checks({"confidence": 0.10, "spread": 0.50})
         assert any(f["reason"] == "low_confidence" for f in result)
 
     def test_object_signal_passes(self):
         from risk.gatekeeper import Gatekeeper
+
         gk = Gatekeeper()
         result = gk._run_checks(_signal())
         assert result == []
 
     def test_object_signal_wide_spread(self):
         from risk.gatekeeper import Gatekeeper
+
         gk = Gatekeeper()
         result = gk._run_checks(_signal(spread=10.0))
         assert any(f["reason"] == "spread_too_wide" for f in result)
@@ -697,8 +733,14 @@ class TestOnBusSignal:
     @pytest.mark.asyncio
     async def test_on_bus_signal_pass_publishes_order(self):
         gk = _make_gk()
-        sig = {"confidence": 0.80, "spread": 0.50, "symbol": "XAU_USD",
-               "direction": "long", "mid": 1950.0, "tick_seq": 1}
+        sig = {
+            "confidence": 0.80,
+            "spread": 0.50,
+            "symbol": "XAU_USD",
+            "direction": "long",
+            "mid": 1950.0,
+            "tick_seq": 1,
+        }
         with patch("risk.gatekeeper.bus") as mock_bus:
             mock_bus.publish_order = AsyncMock()
             await gk._on_bus_signal(sig)
@@ -748,8 +790,7 @@ class TestSignalConsumer:
     async def test_signal_consumer_processes_signal(self):
         gk = _make_gk()
         gk._running = True
-        sig = {"confidence": 0.80, "spread": 0.50, "symbol": "XAU_USD",
-               "direction": "long", "mid": 1950.0}
+        sig = {"confidence": 0.80, "spread": 0.50, "symbol": "XAU_USD", "direction": "long", "mid": 1950.0}
 
         async def fake_subscribe(channel):
             yield sig
@@ -886,13 +927,16 @@ class TestGetSentimentFallback:
 class TestGatekeeperSingleton:
     def test_singleton_exists(self):
         from risk.gatekeeper import gatekeeper
+
         assert gatekeeper is not None
 
     def test_singleton_is_gatekeeper_instance(self):
         from risk.gatekeeper import Gatekeeper, gatekeeper
+
         assert isinstance(gatekeeper, Gatekeeper)
 
     def test_singleton_has_metrics(self):
         from risk.gatekeeper import gatekeeper
+
         m = gatekeeper.metrics()
         assert "pass_count" in m
