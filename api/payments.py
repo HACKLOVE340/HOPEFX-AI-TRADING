@@ -30,6 +30,8 @@ from datetime import datetime, timedelta, timezone
 UTC = timezone.utc
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
+
+from api.auth import TokenPayload, get_current_user
 from pydantic import BaseModel, Field
 
 
@@ -174,7 +176,7 @@ def _update_payment(payment_id: str, **kwargs) -> None:
 
 
 @router.post("/crypto/address", response_model=AddressResponse)
-async def generate_deposit_address(req: AddressRequest):
+async def generate_deposit_address(req: AddressRequest, user: TokenPayload = Depends(get_current_user)):
     """
     Generate a unique deposit address for the requested currency.
 
@@ -245,7 +247,7 @@ async def generate_deposit_address(req: AddressRequest):
 
 
 @router.get("/crypto/status/{payment_id}", response_model=PaymentStatusResponse)
-async def get_payment_status(payment_id: str):
+async def get_payment_status(payment_id: str, user: TokenPayload = Depends(get_current_user)):
     """Poll confirmation status for a pending crypto payment."""
     p = _load_payment(payment_id)
     if p is None:
@@ -272,7 +274,7 @@ async def get_payment_status(payment_id: str):
 
 
 @router.get("/crypto/rates")
-async def get_rates_endpoint():
+async def get_rates_endpoint(user: TokenPayload = Depends(get_current_user)):
     """Return live USD rates for supported cryptocurrencies."""
     from payments.crypto.rate_feed import get_rates
 
@@ -462,7 +464,7 @@ class FiatWithdrawRequest(BaseModel):
 )
 async def fiat_deposit(
     req: FiatDepositRequest,
-    user_token: str = Depends(lambda: None),  # auth injected via Depends below
+    user: TokenPayload = Depends(get_current_user),
 ):
     """
     Initiate a fiat (USD) deposit.
@@ -524,7 +526,7 @@ async def _fiat_deposit_impl(req: FiatDepositRequest) -> dict:
     status_code=202,
     summary="Initiate a fiat withdrawal",
 )
-async def fiat_withdraw(req: FiatWithdrawRequest):
+async def fiat_withdraw(req: FiatWithdrawRequest, user: TokenPayload = Depends(get_current_user)):
     """
     Initiate a fiat (USD) withdrawal to bank account or card.
 
