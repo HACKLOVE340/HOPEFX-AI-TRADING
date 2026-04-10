@@ -190,14 +190,22 @@ class TestRoleEnforcement:
 
     @pytest.mark.parametrize("method,path", ADMIN_ONLY_ROUTES)
     def test_user_token_returns_403(self, client: TestClient, method: str, path: str) -> None:
-        resp = getattr(client, method.lower())(path, headers=_user_headers(), json={})
+        # GET and DELETE do not accept a request body; POST/PUT/PATCH do.
+        if method in ("GET", "DELETE"):
+            resp = getattr(client, method.lower())(path, headers=_user_headers())
+        else:
+            resp = getattr(client, method.lower())(path, headers=_user_headers(), json={})
         assert resp.status_code in (403, 422), (
             f"{method} {path} with user token returned {resp.status_code}, expected 403"
         )
 
     @pytest.mark.parametrize("method,path", ADMIN_ONLY_ROUTES)
     def test_trader_token_returns_403(self, client: TestClient, method: str, path: str) -> None:
-        resp = getattr(client, method.lower())(path, headers=_trader_headers(), json={})
+        # GET and DELETE do not accept a request body; POST/PUT/PATCH do.
+        if method in ("GET", "DELETE"):
+            resp = getattr(client, method.lower())(path, headers=_trader_headers())
+        else:
+            resp = getattr(client, method.lower())(path, headers=_trader_headers(), json={})
         assert resp.status_code in (403, 422), (
             f"{method} {path} with trader token returned {resp.status_code}, expected 403"
         )
@@ -523,7 +531,11 @@ class TestSettingsAuth:
     @pytest.mark.parametrize("method,path", ADMIN_SETTINGS)
     def test_admin_settings_require_admin(self, client: TestClient, method: str, path: str) -> None:
         assert getattr(client, method.lower())(path).status_code == 401
-        assert getattr(client, method.lower())(path, headers=_user_headers(), json={}).status_code in (403, 422)
+        # GET does not accept a request body; POST/PUT/PATCH do.
+        if method == "GET":
+            assert getattr(client, method.lower())(path, headers=_user_headers()).status_code in (403, 422)
+        else:
+            assert getattr(client, method.lower())(path, headers=_user_headers(), json={}).status_code in (403, 422)
 
     def test_kill_switch_admin_only(self, client: TestClient) -> None:
         resp = client.post("/api/admin/kill-switch/global", headers=_admin_headers())

@@ -125,8 +125,8 @@ def _get_mutation_runner(request: Request) -> Any:
 
 @router.post("/run", response_model=ChaosRunResponse)
 async def run_all_chaos_scenarios(
-    controller: Any = Depends(_get_chaos_controller),
     user: TokenPayload = Depends(require_role("admin")),
+    controller: Any = Depends(_get_chaos_controller),
 ) -> ChaosRunResponse:
     """
     Run all chaos scenarios against the live data pipeline (paper mode only).
@@ -176,8 +176,8 @@ async def run_all_chaos_scenarios(
 @router.post("/scenario/{scenario_name}", response_model=ScenarioResultOut)
 async def run_single_scenario(
     scenario_name: str,
-    controller: Any = Depends(_get_chaos_controller),
     user: TokenPayload = Depends(require_role("admin")),
+    controller: Any = Depends(_get_chaos_controller),
 ) -> ScenarioResultOut:
     """
     Run a single named chaos scenario.
@@ -242,8 +242,8 @@ async def run_mutation_tests(
     request: Request,
     background_tasks: BackgroundTasks,
     modules: str | None = None,
-    runner: Any = Depends(_get_mutation_runner),
     user: TokenPayload = Depends(require_role("admin")),
+    runner: Any = Depends(_get_mutation_runner),
 ) -> MutationRunResponse:
     """
     Trigger mutation testing in the background.
