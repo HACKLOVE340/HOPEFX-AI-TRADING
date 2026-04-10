@@ -967,9 +967,11 @@ class TestMonetizationEndpoints:
 
     def setup_method(self):
         app = FastAPI()
+        from api.auth import TokenPayload, get_current_user
         from api.monetization import router as mon_router
 
         app.include_router(mon_router)
+        app.dependency_overrides[get_current_user] = lambda: TokenPayload(sub="test_user", role="admin")
         self.client = TestClient(app)
 
     def test_get_pricing(self):
