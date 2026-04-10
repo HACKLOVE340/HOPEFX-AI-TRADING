@@ -308,6 +308,15 @@ async def subscribe(request: SubscribeRequest, user: TokenPayload = Depends(get_
     )
 
 
+@router.get("/subscription/{user_id}/limits")
+async def get_user_limits(user_id: str, user: TokenPayload = Depends(get_current_user)):
+    """
+    Get usage limits for a user based on their subscription.
+    """
+    limits = subscription_manager.get_user_limits(user_id)
+    return limits
+
+
 @router.get("/subscription/{user_id}")
 async def get_subscription(user_id: str, user: TokenPayload = Depends(get_current_user)):
     """
@@ -337,15 +346,6 @@ async def cancel_subscription(subscription_id: str, user: TokenPayload = Depends
         )
 
     return {"success": True, "message": "Subscription cancelled"}
-
-
-@router.get("/subscription/{user_id}/limits")
-async def get_user_limits(user_id: str, user: TokenPayload = Depends(get_current_user)):
-    """
-    Get usage limits for a user based on their subscription.
-    """
-    limits = subscription_manager.get_user_limits(user_id)
-    return limits
 
 
 # ==========================
@@ -433,6 +433,46 @@ async def affiliate_signup(request: AffiliateSignupRequest, user: TokenPayload =
     )
 
 
+@router.get("/affiliate/leaderboard")
+async def get_affiliate_leaderboard(
+    limit: int = Query(10, ge=1, le=100),
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Get affiliate leaderboard.
+    """
+    return affiliate_manager.get_leaderboard(limit)
+
+
+@router.get("/affiliate/{affiliate_id}/referrals")
+async def get_affiliate_referrals(
+    affiliate_id: str,
+    status: str | None = None,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Get all referrals for an affiliate.
+    """
+    from monetization import ReferralStatus
+
+    status_enum = None
+    if status:
+        try:
+            status_enum = ReferralStatus(status)
+        except ValueError:
+            logger.warning(
+                "get_affiliate_referrals: unrecognised status value %r — returning all referrals",
+                status,
+            )
+
+    referrals = affiliate_manager.get_affiliate_referrals(
+        affiliate_id,
+        status=status_enum,
+    )
+
+    return {"total": len(referrals), "referrals": [r.to_dict() for r in referrals]}
+
+
 @router.get("/affiliate/{user_id}")
 async def get_affiliate(user_id: str, user: TokenPayload = Depends(get_current_user)):
     """
@@ -479,46 +519,6 @@ async def create_referral(request: ReferralRequest, user: TokenPayload = Depends
         "referral_id": referral.referral_id,
         "expires_at": referral.expires_at.isoformat(),
     }
-
-
-@router.get("/affiliate/{affiliate_id}/referrals")
-async def get_affiliate_referrals(
-    affiliate_id: str,
-    status: str | None = None,
-    user: TokenPayload = Depends(get_current_user),
-):
-    """
-    Get all referrals for an affiliate.
-    """
-    from monetization import ReferralStatus
-
-    status_enum = None
-    if status:
-        try:
-            status_enum = ReferralStatus(status)
-        except ValueError:
-            logger.warning(
-                "get_affiliate_referrals: unrecognised status value %r — returning all referrals",
-                status,
-            )
-
-    referrals = affiliate_manager.get_affiliate_referrals(
-        affiliate_id,
-        status=status_enum,
-    )
-
-    return {"total": len(referrals), "referrals": [r.to_dict() for r in referrals]}
-
-
-@router.get("/affiliate/leaderboard")
-async def get_affiliate_leaderboard(
-    limit: int = Query(10, ge=1, le=100),
-    user: TokenPayload = Depends(get_current_user),
-):
-    """
-    Get affiliate leaderboard.
-    """
-    return affiliate_manager.get_leaderboard(limit)
 
 
 # ==========================
@@ -972,13 +972,11 @@ async def submit_strategy(request: SubmitStrategyRequest, user: TokenPayload = D
     return sub.to_dict()
 
 
-@router.get("/marketplace/submissions/{submission_id}")
-async def get_submission(submission_id: str, user: TokenPayload = Depends(get_current_user)):
-    """Get a strategy submission and its audit report."""
-    sub = submission_manager.get(submission_id)
-    if not sub:
-        raise HTTPException(status_code=404, detail="Submission not found")
-    return sub.to_dict()
+@router.get("/marketplace/submissions/pending")
+async def list_pending_submissions(user: TokenPayload = Depends(require_role("admin"))):
+    """List all submissions awaiting manual review (admin only)."""
+    subs = submission_manager.list_pending()
+    return {"submissions": [s.to_dict() for s in subs], "total": len(subs)}
 
 
 @router.get("/marketplace/submissions/creator/{creator_id}")
@@ -988,11 +986,13 @@ async def list_creator_submissions(creator_id: str, user: TokenPayload = Depends
     return {"submissions": [s.to_dict() for s in subs], "total": len(subs)}
 
 
-@router.get("/marketplace/submissions/pending")
-async def list_pending_submissions(user: TokenPayload = Depends(require_role("admin"))):
-    """List all submissions awaiting manual review (admin only)."""
-    subs = submission_manager.list_pending()
-    return {"submissions": [s.to_dict() for s in subs], "total": len(subs)}
+@router.get("/marketplace/submissions/{submission_id}")
+async def get_submission(submission_id: str, user: TokenPayload = Depends(get_current_user)):
+    """Get a strategy submission and its audit report."""
+    sub = submission_manager.get(submission_id)
+    if not sub:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    return sub.to_dict()
 
 
 @router.post("/marketplace/submissions/{submission_id}/approve")

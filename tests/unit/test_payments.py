@@ -363,10 +363,12 @@ class TestPaymentStatusAutoExpiry:
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
+        from api.auth import TokenPayload, get_current_user
         from api.payments import router
 
         app = FastAPI()
         app.include_router(router)
+        app.dependency_overrides[get_current_user] = lambda: TokenPayload(sub="test_user", role="user")
         client = TestClient(app)
 
         expired_payment = {
@@ -409,10 +411,12 @@ class TestPaymentRatesEndpoint:
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
+        from api.auth import TokenPayload, get_current_user
         from api.payments import router
 
         app = FastAPI()
         app.include_router(router)
+        app.dependency_overrides[get_current_user] = lambda: TokenPayload(sub="test_user", role="user")
         client = TestClient(app)
 
         mock_rates = {"BTC": 67_500.0, "ETH": 3_200.0, "USDT": 1.0}
@@ -438,10 +442,12 @@ class TestPaymentRatesEndpoint:
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
+        from api.auth import TokenPayload, get_current_user
         from api.payments import router
 
         app = FastAPI()
         app.include_router(router)
+        app.dependency_overrides[get_current_user] = lambda: TokenPayload(sub="test_user", role="user")
         client = TestClient(app)
 
         with patch(
