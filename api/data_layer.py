@@ -60,7 +60,9 @@ async def data_layer_health(user: TokenPayload = Depends(get_current_user)) -> d
 
 
 @router.get("/tick")
-async def get_latest_tick(symbol: str = Query("XAU_USD"), user: TokenPayload = Depends(get_current_user)) -> dict[str, Any]:
+async def get_latest_tick(
+    symbol: str = Query("XAU_USD"), user: TokenPayload = Depends(get_current_user)
+) -> dict[str, Any]:
     """Latest validated consensus tick."""
     orch = _get_orchestrator()
     tick = orch.get_latest_tick(symbol)
@@ -166,7 +168,9 @@ async def get_macro(user: TokenPayload = Depends(get_current_user)) -> dict[str,
 
 
 @router.get("/microstructure")
-async def get_microstructure(symbol: str = Query("XAU_USD"), user: TokenPayload = Depends(get_current_user)) -> dict[str, Any]:
+async def get_microstructure(
+    symbol: str = Query("XAU_USD"), user: TokenPayload = Depends(get_current_user)
+) -> dict[str, Any]:
     """Current microstructure snapshot — via orchestrator."""
     orch = _get_orchestrator()
     try:
@@ -203,7 +207,9 @@ async def get_microstructure(symbol: str = Query("XAU_USD"), user: TokenPayload 
 
 
 @router.get("/quality")
-async def get_quality_report(symbol: str = Query("XAU_USD"), user: TokenPayload = Depends(get_current_user)) -> dict[str, Any]:
+async def get_quality_report(
+    symbol: str = Query("XAU_USD"), user: TokenPayload = Depends(get_current_user)
+) -> dict[str, Any]:
     """Data quality report — via orchestrator."""
     orch = _get_orchestrator()
     try:
@@ -275,7 +281,9 @@ async def get_feed_health(user: TokenPayload = Depends(get_current_user)) -> dic
 
 
 @router.get("/ml-features")
-async def get_ml_features(symbol: str = Query("XAU_USD"), user: TokenPayload = Depends(get_current_user)) -> dict[str, Any]:
+async def get_ml_features(
+    symbol: str = Query("XAU_USD"), user: TokenPayload = Depends(get_current_user)
+) -> dict[str, Any]:
     """Complete ML feature set from all data layer components — via orchestrator."""
     orch = _get_orchestrator()
     try:
