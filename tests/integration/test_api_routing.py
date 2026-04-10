@@ -19,7 +19,6 @@ Uses real FastAPI TestClient with real app — no mocks, no stubs.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import time
@@ -33,6 +32,7 @@ os.environ.setdefault("SECURITY_JWT_SECRET", "test-secret-key-for-api-routing-te
 try:
     from fastapi.testclient import TestClient
     from app import app
+
     _import_error = None
 except (ImportError, ModuleNotFoundError, SystemExit) as e:
     _import_error = e
@@ -120,7 +120,7 @@ class TestAuthEndpoints:
     def test_login_with_invalid_credentials_returns_401(self, client):
         r = client.post(
             "/api/auth/login",
-            json={"username": "nonexistent@test.com", "password": "wrongpassword"},
+            json={"username": "nonexistent@test.com", "password": "wrongpassword"},  # pragma: allowlist secret
         )
         assert r.status_code in (401, 400, 422, 404)
 
@@ -208,7 +208,7 @@ class TestTradingEndpoints:
         assert r.status_code in (200, 503, 500)
         if r.status_code == 200:
             body = r.json()
-            assert isinstance(body, (list, dict))
+            assert isinstance(body, list | dict)
 
     def test_risk_metrics_endpoint(self, client):
         r = client.get("/api/trading/risk", headers=_trader_headers())
@@ -460,7 +460,7 @@ class TestBacktestingEndpoints:
         assert r.status_code in (200, 404, 503)
         if r.status_code == 200:
             body = r.json()
-            assert isinstance(body, (list, dict))
+            assert isinstance(body, list | dict)
 
 
 # ── 11. Signals router ────────────────────────────────────────────────────────
@@ -642,4 +642,3 @@ class TestWebSocketConnectivity:
                         break
             except Exception:
                 pass  # Acceptable in test env
-

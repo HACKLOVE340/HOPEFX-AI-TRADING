@@ -22,7 +22,7 @@ from core.secrets_manager import SecretsManager, get_secret
 
 class TestSecretsManager:
     def test_get_from_env(self):
-        with patch.dict(os.environ, {"SECURITY_JWT_SECRET": "test-secret-value"}):
+        with patch.dict(os.environ, {"SECURITY_JWT_SECRET": "test-secret-value"}):  # pragma: allowlist secret
             sm = SecretsManager()
             # jwt_secret_key maps to SECURITY_JWT_SECRET via _ENV_FALLBACK
             val = sm.get("jwt_secret_key", default="fallback")
@@ -61,7 +61,10 @@ class TestSecretsManager:
         assert len(sm._rotation_callbacks) >= 1
 
     def test_load_from_env(self):
-        with patch.dict(os.environ, {"SECURITY_JWT_SECRET": "jwt-val-32-chars-long-enough!!"}):
+        with patch.dict(
+            os.environ,
+            {"SECURITY_JWT_SECRET": "jwt-val-32-chars-long-enough!!"},  # pragma: allowlist secret
+        ):
             sm = SecretsManager()
             sm._load_from_env()
             # Should not raise

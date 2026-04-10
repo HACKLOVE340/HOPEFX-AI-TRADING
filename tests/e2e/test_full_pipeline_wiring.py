@@ -23,10 +23,8 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import time
-import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import timezone
 from pathlib import Path
 
 import numpy as np
@@ -39,7 +37,7 @@ os.environ.setdefault("SECURITY_JWT_SECRET", "test-secret-key-for-e2e-pipeline-w
 UTC = timezone.utc
 
 # ── Production imports ────────────────────────────────────────────────────────
-from brokers.base import AccountInfo, OrderSide, OrderType
+from brokers.base import OrderSide, OrderType
 from brokers.paper_trading import PaperTradingBroker
 from execution.engine import (
     EngineCircuitBreaker,
@@ -48,7 +46,7 @@ from execution.engine import (
     ExecutionStatus,
 )
 from kill_switch import KillSwitch
-from risk.circuit_breakers import CircuitBreaker, CircuitState, RiskLimits
+from risk.circuit_breakers import CircuitBreaker, RiskLimits
 from risk.manager import RiskConfig, RiskManager
 from risk.pre_trade_gate import GateOrder, PreTradeGate, TradeBlockedError
 
@@ -203,7 +201,9 @@ async def test_kill_switch_blocks_execution(paper_broker, risk_manager, kill_swi
 
     report = await execution_engine.execute(request)
     assert report.status == ExecutionStatus.BLOCKED
-    assert "kill" in report.message.lower() or "halt" in report.message.lower() or report.status == ExecutionStatus.BLOCKED
+    assert (
+        "kill" in report.message.lower() or "halt" in report.message.lower() or report.status == ExecutionStatus.BLOCKED
+    )
 
 
 @pytest.mark.asyncio
@@ -389,7 +389,7 @@ async def test_engine_circuit_breaker_blocks_when_open():
     await cb.record_failure()
     assert cb.is_open
 
-    with pytest.raises(Exception):
+    with pytest.raises(RuntimeError):
         await cb.check()
 
 
@@ -421,7 +421,7 @@ def test_risk_circuit_breaker_pre_trade_check_blocks_oversized():
     }
     allowed, reason = cb.pre_trade_check(order)
     assert isinstance(allowed, bool)
-    assert isinstance(reason, (str, type(None)))
+    assert isinstance(reason, str | type(None))
 
 
 # ── 7. PropEnforcer (guard.py) blocks drawdown breach ────────────────────────
@@ -451,17 +451,20 @@ def test_prop_enforcer_blocks_on_drawdown_breach(tmp_path):
 
     # Patch the config path
     import brokers.prop_firms.guard as guard_mod
+
     original_path = guard_mod._CONFIG_PATH
     guard_mod._CONFIG_PATH = config_path
     guard_mod._config = None  # force reload
 
     try:
+
         @dataclass
         class FakeAccount:
             balance: float = 100_000.0
             equity: float = 89_000.0  # 11% drawdown — above 10% limit
 
         from fastapi import HTTPException
+
         with pytest.raises(HTTPException) as exc_info:
             guard_mod.check_prop_firm_rules(FakeAccount())
         assert exc_info.value.status_code == 403
@@ -489,11 +492,13 @@ def test_prop_enforcer_passes_within_limits(tmp_path):
     config_path.write_text(json.dumps(config))
 
     import brokers.prop_firms.guard as guard_mod
+
     original_path = guard_mod._CONFIG_PATH
     guard_mod._CONFIG_PATH = config_path
     guard_mod._config = None
 
     try:
+
         @dataclass
         class FakeAccount:
             balance: float = 100_000.0
@@ -543,7 +548,7 @@ async def test_paper_broker_multiple_symbols():
     symbols = ["XAUUSD", "EURUSD", "GBPUSD"]
     prices = [2050.0, 1.0850, 1.2650]
 
-    for sym, price in zip(symbols, prices):
+    for sym, price in zip(symbols, prices, strict=False):
         broker.update_market_price(sym, price)
 
     for sym in symbols:
@@ -561,9 +566,7 @@ async def test_paper_broker_limit_order():
     await broker.connect()
     broker.update_market_price("XAUUSD", 2050.0)
 
-    order = broker.place_order(
-        "XAUUSD", OrderSide.BUY, OrderType.LIMIT, 0.1, price=2045.0
-    )
+    order = broker.place_order("XAUUSD", OrderSide.BUY, OrderType.LIMIT, 0.1, price=2045.0)
     assert order is not None
 
     # Price drops to fill the limit
@@ -732,6 +735,7 @@ def test_mt5_ex5_signal_exporter(tmp_path):
     assert path.exists()
 
     import json as _json
+
     payload = _json.loads(path.read_text())
     assert payload["symbol"] == "XAUUSD"
     assert payload["side"] == "BUY"

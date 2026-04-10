@@ -293,7 +293,10 @@ class TestSecretsManager:
 
     def test_load_from_env(self):
         sm = self._make_sm()
-        with patch.dict(os.environ, {"SECURITY_JWT_SECRET": "jwt-val-32-chars-long-enough!!"}):
+        with patch.dict(
+            os.environ,
+            {"SECURITY_JWT_SECRET": "jwt-val-32-chars-long-enough!!"},  # pragma: allowlist secret
+        ):
             sm._load_from_env()  # should not raise
 
     def test_get_sync_returns_value(self):
@@ -339,7 +342,7 @@ class TestGetSecretHelper:
     def test_get_secret_from_env(self):
         from core.secrets_manager import get_secret
 
-        with patch.dict(os.environ, {"MY_TEST_SECRET": "secret_value"}):
+        with patch.dict(os.environ, {"MY_TEST_SECRET": "secret_value"}):  # pragma: allowlist secret
             result = get_secret("MY_TEST_SECRET")
             assert result == "secret_value"
 

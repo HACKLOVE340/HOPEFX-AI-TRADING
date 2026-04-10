@@ -22,9 +22,8 @@ No mocks, no stubs — real production classes throughout.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
-import time
-from pathlib import Path
 
 import pytest
 
@@ -32,7 +31,7 @@ os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("SECURITY_JWT_SECRET", "test-secret-key-for-core-system-tests-32chars")
 
 from core.app_state import AppState
-from core.component_registry import Component, ComponentRegistry
+from core.component_registry import ComponentRegistry
 
 
 # ── 1. AppState ───────────────────────────────────────────────────────────────
@@ -63,6 +62,7 @@ class TestAppState:
     def test_app_state_singleton_imported(self):
         from core.app_state import app_state as s1
         from core.app_state import app_state as s2
+
         assert s1 is s2
 
 
@@ -237,7 +237,7 @@ class TestComponentRegistry:
         registry.register("x", _noop, required=False, deps=["y"])
         registry.register("y", _noop, required=False, deps=["x"])
 
-        with pytest.raises(Exception):
+        with pytest.raises(RuntimeError):
             state = AppState()
             await registry.start_all(state)
 
@@ -292,7 +292,6 @@ class TestEventBusLocalFallback:
 
         bus = EventBus()
         await bus.connect()
-        initial = bus._metrics.get("published", 0)
 
         await bus.publish("hopefx:metrics-test", {"x": 1})
         await bus.close()
@@ -362,22 +361,26 @@ class TestAppLifecycle:
     def test_app_imports_without_error(self):
         """app.py must import cleanly in test environment."""
         from app import app
+
         assert app is not None
 
     def test_app_has_routes_registered(self):
         """FastAPI app must have routes registered after import."""
         from app import app
+
         assert len(app.routes) > 0
 
     def test_app_state_singleton_accessible(self):
         """app_state singleton must be importable and consistent."""
         from core.app_state import app_state
+
         assert app_state is not None
         assert isinstance(app_state.background_tasks, list)
 
     def test_kill_switch_singleton_accessible(self):
         """KillSwitch module-level instance must be importable."""
         from kill_switch import KillSwitch
+
         ks = KillSwitch()
         assert ks is not None
         assert isinstance(ks.is_active(), bool)
@@ -385,12 +388,14 @@ class TestAppLifecycle:
     def test_app_exception_handler_registered(self):
         """Global exception handler must be registered on the app."""
         from app import app
+
         handlers = getattr(app, "exception_handlers", {})
         assert isinstance(handlers, dict)
 
     def test_fastapi_app_title_set(self):
         """FastAPI app must have a title set."""
         from app import app
+
         assert app.title is not None
         assert len(app.title) > 0
 
@@ -411,10 +416,8 @@ class TestBackgroundTasks:
         task = asyncio.create_task(price_stream_loop(_FakeWS()))
         await asyncio.sleep(0.05)
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError, Exception):
             await task
-        except (asyncio.CancelledError, Exception):
-            pass  # expected
 
     @pytest.mark.asyncio
     async def test_sharpe_circuit_breaker_runnable(self):
@@ -425,10 +428,8 @@ class TestBackgroundTasks:
         task = asyncio.create_task(cb.run())
         await asyncio.sleep(0.05)
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError, Exception):
             await task
-        except (asyncio.CancelledError, Exception):
-            pass  # expected
 
 
 # ── 7. Config and feature flags ───────────────────────────────────────────────
@@ -437,6 +438,7 @@ class TestBackgroundTasks:
 class TestConfigAndFeatureFlags:
     def test_feature_flags_importable(self):
         from config.feature_flags import flags, FeatureFlags
+
         assert flags is not None
         assert isinstance(flags, FeatureFlags)
         # FeatureFlags exposes registry() and enabled_features()
@@ -446,11 +448,13 @@ class TestConfigAndFeatureFlags:
     def test_startup_validator_runs_in_test_mode(self):
         """startup_validator must not call sys.exit in APP_ENV=test."""
         from config.startup_validator import validate_environment
+
         # Should not raise or exit in test mode
         validate_environment(strict=False)
 
     def test_env_validator_importable(self):
         from core.env_validator import validate_environment
+
         assert callable(validate_environment)
 
 
@@ -460,13 +464,15 @@ class TestConfigAndFeatureFlags:
 class TestSecretsManager:
     def test_secrets_manager_importable(self):
         from core.secrets_manager import SecretsManager
+
         sm = SecretsManager()
         assert sm is not None
 
     def test_secrets_manager_get_returns_env_value(self):
         from core.secrets_manager import SecretsManager
         import os
-        os.environ["TEST_SECRET_KEY_XYZ"] = "test-value-123"
+
+        os.environ["TEST_SECRET_KEY_XYZ"] = "test-value-123"  # pragma: allowlist secret
         sm = SecretsManager()
         val = sm.get("TEST_SECRET_KEY_XYZ")
         assert val == "test-value-123" or val is None  # may use vault in prod
@@ -478,6 +484,7 @@ class TestSecretsManager:
 class TestRouterRegistry:
     def test_router_registry_importable(self):
         from core.router_registry import register_routers
+
         assert callable(register_routers)
 
     def test_register_routers_accepts_fastapi_app(self):
@@ -487,10 +494,8 @@ class TestRouterRegistry:
         app = FastAPI()
         # register_routers wires all sub-routers onto the app
         # In test env some routers may fail to import — that is acceptable
-        try:
+        with contextlib.suppress(Exception):
             register_routers(app)
-        except Exception:
-            pass  # partial registration is acceptable in test env
         assert len(app.routes) >= 0
 
 
@@ -500,6 +505,7 @@ class TestRouterRegistry:
 class TestDomainModels:
     def test_domain_enums_importable(self):
         from core.domain_enums import TradeDirection, OrderStatus, OrderType
+
         assert TradeDirection.LONG is not None
         assert TradeDirection.SHORT is not None
         assert OrderStatus.FILLED is not None
@@ -507,6 +513,7 @@ class TestDomainModels:
 
     def test_domain_models_importable(self):
         from core.domain_models import Order, Position
+
         assert Order is not None
         assert Position is not None
 
@@ -545,6 +552,7 @@ class TestOutbox:
 
     def test_outbox_relay_importable(self):
         from core.outbox import OutboxRelay, get_relay
+
         relay = get_relay()
         assert relay is not None
         assert isinstance(relay, OutboxRelay)
@@ -556,11 +564,13 @@ class TestOutbox:
 class TestMetricsRegistry:
     def test_metrics_registry_importable(self):
         from infrastructure.metrics import get_metrics_registry
+
         registry = get_metrics_registry()
         assert registry is not None
 
     def test_metrics_registry_record_trade(self):
         from infrastructure.metrics import get_metrics_registry
+
         registry = get_metrics_registry()
         # Must not raise
         if hasattr(registry, "record_trade"):
@@ -568,6 +578,7 @@ class TestMetricsRegistry:
 
     def test_metrics_registry_get_summary(self):
         from infrastructure.metrics import get_metrics_registry
+
         registry = get_metrics_registry()
         if hasattr(registry, "get_summary"):
             summary = registry.get_summary()
