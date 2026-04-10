@@ -207,7 +207,9 @@ async def sumsub_webhook(
     gateway = _get_gateway()
     ok = await gateway.webhook_event(payload_bytes, x_payload_digest, raw)
     if not ok:
-        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+        # 400 (not 401) — the request is unauthenticated by HMAC signature,
+        # but 401 implies HTTP Bearer auth which webhooks don't use.
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
 
     return {"status": "processed"}
 
@@ -233,7 +235,8 @@ async def onfido_webhook(
     gateway = _get_gateway()
     ok = await gateway.webhook_event(payload_bytes, x_sha2_signature, raw)
     if not ok:
-        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+        # 400 (not 401) — HMAC signature mismatch is a bad request, not missing auth.
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
 
     return {"status": "processed"}
 

@@ -26,7 +26,7 @@ UTC = timezone.utc
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
 
@@ -124,7 +124,7 @@ class EventOut(BaseModel):
 
 class AutoPauseConfig(BaseModel):
     enabled: bool
-    minutes_before: int = 30
+    minutes_before: int = Field(default=30, ge=1, le=1440)
     min_importance: str = "high"
 
 

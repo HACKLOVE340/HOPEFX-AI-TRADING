@@ -232,11 +232,11 @@ class TestSignalsFlow:
     """Signal endpoints return well-formed responses."""
 
     def test_get_signals_summary_responds(self, signals_client):
-        r = signals_client.get("/api/signals/summary")
+        r = signals_client.get("/api/signals/summary", headers=_auth())
         assert r.status_code == 200
 
     def test_get_active_signals_returns_signals_key(self, signals_client):
-        r = signals_client.get("/api/signals/active")
+        r = signals_client.get("/api/signals/active", headers=_auth())
         assert r.status_code == 200
         body = r.json()
         # Response is {"signals": [...], "count": N}
@@ -244,12 +244,12 @@ class TestSignalsFlow:
         assert isinstance(body["signals"], list)
 
     def test_get_signal_history_returns_signals_key(self, signals_client):
-        r = signals_client.get("/api/signals/history")
+        r = signals_client.get("/api/signals/history", headers=_auth())
         assert r.status_code == 200
         body = r.json()
         assert "signals" in body
         assert isinstance(body["signals"], list)
 
     def test_get_signal_analytics_responds(self, signals_client):
-        r = signals_client.get("/api/signals/analytics")
+        r = signals_client.get("/api/signals/analytics", headers=_auth())
         assert r.status_code == 200
