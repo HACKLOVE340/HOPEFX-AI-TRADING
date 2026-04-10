@@ -731,7 +731,7 @@ async def get_correlation_matrix(
 
 
 @router.get("/api/advanced/cot-sentiment")
-async def get_cot_gold():
+async def get_cot_gold(user: TokenPayload = Depends(get_current_user)):
     """
     Return CFTC Commitment of Traders data for gold (COMEX).
     Fetches from CFTC public API. Returns HTTP 503 when the API is unreachable.
@@ -930,9 +930,9 @@ async def _adv_correlation(
 
 
 @_adv_router.get("/cot-sentiment", include_in_schema=False)
-async def _adv_cot_sentiment() -> dict[str, Any]:
+async def _adv_cot_sentiment(user: TokenPayload = Depends(get_current_user)) -> dict[str, Any]:
     """Alias: GET /api/advanced/cot-sentiment → COT gold data."""
-    return await get_cot_gold()
+    return await get_cot_gold(user=user)
 
 
 @_adv_router.get("/ab-tests", include_in_schema=False)
