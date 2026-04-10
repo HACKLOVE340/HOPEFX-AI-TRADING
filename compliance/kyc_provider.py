@@ -667,7 +667,8 @@ class KYCGateway:
 
     @staticmethod
     def _build_provider() -> KYCProvider:
-        name = KYC_PROVIDER.lower().strip()
+        # Re-read at call time so tests can override KYC_PROVIDER via env.
+        name = os.getenv("KYC_PROVIDER", KYC_PROVIDER).lower().strip()
         if name == "sumsub":
             return SumsubProvider()
         if name == "onfido":
@@ -687,7 +688,7 @@ class KYCGateway:
             )
             return MockKYCProvider()
         raise RuntimeError(
-            f"Unknown KYC_PROVIDER={KYC_PROVIDER!r}. "
+            f"Unknown KYC_PROVIDER={name!r}. "
             "Valid values: 'sumsub', 'onfido'. "
             "Set the KYC_PROVIDER environment variable and configure the "
             "corresponding API credentials (SUMSUB_APP_TOKEN / ONFIDO_API_TOKEN)."

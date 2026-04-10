@@ -8,8 +8,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timezone
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -153,12 +152,17 @@ class TestTradeReporting:
 
     def test_report_trade_no_crash(self):
         tr = TradeReporting(jurisdiction="US")
-        tr.report_trade({
-            "id": "t1", "symbol": "XAUUSD", "side": "buy",
-            "quantity": 1.0, "price": 1900.0,
-            "timestamp": datetime.now(UTC).isoformat(),
-            "notional_usd": 1900.0,
-        })
+        tr.report_trade(
+            {
+                "id": "t1",
+                "symbol": "XAUUSD",
+                "side": "buy",
+                "quantity": 1.0,
+                "price": 1900.0,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "notional_usd": 1900.0,
+            }
+        )
 
     def test_generate_daily_report(self):
         tr = TradeReporting(jurisdiction="US")
@@ -213,12 +217,16 @@ class TestRegulatoryReporter:
     @pytest.mark.asyncio
     async def test_submit_prop_firm_mode(self):
         """In PROP mode, submit returns a suppressed record without HTTP calls."""
-        with patch.dict(os.environ, {"REGULATORY_JURISDICTION": "PROP",
-                                     "PROP_FIRM_MODE": "true"}):
+        with patch.dict(os.environ, {"REGULATORY_JURISDICTION": "PROP", "PROP_FIRM_MODE": "true"}):
             reporter = RegulatoryReporter()
-            trade = {"id": "t1", "symbol": "XAUUSD", "side": "buy",
-                     "quantity": 1.0, "price": 1900.0,
-                     "timestamp": datetime.now(UTC).isoformat()}
+            trade = {
+                "id": "t1",
+                "symbol": "XAUUSD",
+                "side": "buy",
+                "quantity": 1.0,
+                "price": 1900.0,
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
             record = await reporter.submit(trade)
             # Any non-live status is acceptable
             assert record.status in ("skipped", "disabled", "prop_mode", "suppressed")
@@ -228,9 +236,14 @@ class TestRegulatoryReporter:
         """When REGULATORY_REPORTING_ENABLED=false, submit skips HTTP."""
         with patch.dict(os.environ, {"REGULATORY_REPORTING_ENABLED": "false"}):
             reporter = RegulatoryReporter()
-            trade = {"id": "t2", "symbol": "XAUUSD", "side": "sell",
-                     "quantity": 1.0, "price": 1900.0,
-                     "timestamp": datetime.now(UTC).isoformat()}
+            trade = {
+                "id": "t2",
+                "symbol": "XAUUSD",
+                "side": "sell",
+                "quantity": 1.0,
+                "price": 1900.0,
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
             record = await reporter.submit(trade)
             assert record.status in ("skipped", "disabled", "prop_mode", "suppressed")
 

@@ -32,13 +32,17 @@ class TestPropConfig:
 
     def test_from_file_flat_schema(self, tmp_path):
         p = tmp_path / "prop.json"
-        p.write_text(json.dumps({
-            "daily_dd": 0.03,
-            "max_dd": 0.08,
-            "news_blackout": 600,
-            "weekend_close": False,
-            "breach_action": "liquidate",
-        }))
+        p.write_text(
+            json.dumps(
+                {
+                    "daily_dd": 0.03,
+                    "max_dd": 0.08,
+                    "news_blackout": 600,
+                    "weekend_close": False,
+                    "breach_action": "liquidate",
+                }
+            )
+        )
         cfg = PropConfig.from_file(p)
         assert cfg.daily_dd == pytest.approx(0.03)
         assert cfg.max_dd == pytest.approx(0.08)

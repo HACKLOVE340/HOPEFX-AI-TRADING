@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timezone
 
 import pytest
@@ -22,10 +21,8 @@ UTC = timezone.utc
 _PAPER_CONFIG = [{"name": "paper", "rate_limit": 10, "symbols": ["XAUUSD"]}]
 
 
-def _order(oid="o1", symbol="XAUUSD", side="buy", qty=1.0,
-           order_type=OrderType.MARKET, price=None):
-    return Order(id=oid, symbol=symbol, side=side, quantity=qty,
-                 order_type=order_type, price=price)
+def _order(oid="o1", symbol="XAUUSD", side="buy", qty=1.0, order_type=OrderType.MARKET, price=None):
+    return Order(id=oid, symbol=symbol, side=side, quantity=qty, order_type=order_type, price=price)
 
 
 async def _engine() -> AsyncExecutionEngine:
@@ -52,8 +49,13 @@ class TestOrder:
 
 class TestOrderStatus:
     def test_all_statuses_exist(self):
-        for s in (OrderStatus.PENDING, OrderStatus.SUBMITTED,
-                  OrderStatus.FILLED, OrderStatus.CANCELLED, OrderStatus.REJECTED):
+        for s in (
+            OrderStatus.PENDING,
+            OrderStatus.SUBMITTED,
+            OrderStatus.FILLED,
+            OrderStatus.CANCELLED,
+            OrderStatus.REJECTED,
+        ):
             assert s
 
 
@@ -65,8 +67,7 @@ class TestOrderType:
 
 class TestFill:
     def test_fill_creation(self):
-        f = Fill(order_id="o1", symbol="XAUUSD", quantity=1.0,
-                 price=1900.0, timestamp=datetime.now(UTC), side="buy")
+        f = Fill(order_id="o1", symbol="XAUUSD", quantity=1.0, price=1900.0, timestamp=datetime.now(UTC), side="buy")
         assert f.order_id == "o1"
         assert f.fees == 0.0
 

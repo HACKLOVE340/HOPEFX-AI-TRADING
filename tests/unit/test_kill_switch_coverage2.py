@@ -56,7 +56,7 @@ class TestRedisLatchPaths:
     def test_check_redis_latch_activates_when_latch_true(self, tmp_path):
         ks = _ks(tmp_path)
         mock_r = MagicMock()
-        mock_r.get.side_effect = lambda key: ("true" if "active" in key else "drawdown breach on peer")
+        mock_r.get.side_effect = lambda key: "true" if "active" in key else "drawdown breach on peer"
         with patch.object(ks, "_get_latch_redis", return_value=mock_r):
             asyncio.run(ks._check_redis_latch())
         assert ks.is_active()
