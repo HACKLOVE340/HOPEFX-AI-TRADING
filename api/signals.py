@@ -810,13 +810,21 @@ def _get_signal_service() -> "RealTimeSignalService":
 
 def _register_signal_read_routes(router: Any) -> None:
     """Register read-only signal GET endpoints."""
+    from fastapi import Depends as _Depends
+
+    from api.auth import TokenPayload as _TokenPayload
+    from api.auth import get_current_user as _get_current_user
 
     @router.get("/summary")
-    async def get_signal_summary():
+    async def get_signal_summary(user: _TokenPayload = _Depends(_get_current_user)):
         return _with_disclaimer(_get_signal_service().get_signal_summary())
 
     @router.get("/latest")
-    async def get_latest_signals(symbol: str | None = None, limit: int = 10):
+    async def get_latest_signals(
+        symbol: str | None = None,
+        limit: int = 10,
+        user: _TokenPayload = _Depends(_get_current_user),
+    ):
         svc = _get_signal_service()
         signals = svc.get_signal_history(symbol=symbol, hours=24)[:limit]
         return _with_disclaimer(
@@ -824,25 +832,32 @@ def _register_signal_read_routes(router: Any) -> None:
         )
 
     @router.get("/active")
-    async def get_active_signals(symbol: str | None = None):
+    async def get_active_signals(
+        symbol: str | None = None,
+        user: _TokenPayload = _Depends(_get_current_user),
+    ):
         signals = _get_signal_service().get_active_signals(symbol=symbol)
         return _with_disclaimer({"signals": [s.to_dict() for s in signals], "count": len(signals)})
 
     @router.get("/history")
-    async def get_signal_history(symbol: str | None = None, hours: int = 24):
+    async def get_signal_history(
+        symbol: str | None = None,
+        hours: int = 24,
+        user: _TokenPayload = _Depends(_get_current_user),
+    ):
         signals = _get_signal_service().get_signal_history(symbol=symbol, hours=hours)
         return _with_disclaimer({"signals": [s.to_dict() for s in signals], "count": len(signals)})
 
     @router.get("/analytics")
-    async def get_signal_analytics():
+    async def get_signal_analytics(user: _TokenPayload = _Depends(_get_current_user)):
         return _with_disclaimer(_get_signal_service().get_analytics())
 
     @router.get("/channels")
-    async def get_websocket_channels():
+    async def get_websocket_channels(user: _TokenPayload = _Depends(_get_current_user)):
         return _with_disclaimer({"channels": _get_signal_service().get_websocket_channels()})
 
     @router.get("/engine")
-    async def get_engine_status():
+    async def get_engine_status(user: _TokenPayload = _Depends(_get_current_user)):
         try:
             from core.signal_engine import get_signal_engine_status as _get_engine_status
 
@@ -897,10 +912,17 @@ class _CreateAlertRequest(_SignalBaseModel):
 
 def _register_signal_write_routes(router: Any) -> None:
     """Register signal generation, alert, and distribution write endpoints."""
+    from fastapi import Depends as _Depends
     from fastapi import HTTPException as _HTTPException
 
+    from api.auth import TokenPayload as _TokenPayload
+    from api.auth import get_current_user as _get_current_user
+
     @router.post("/generate")
-    async def generate_signal(req: _GenerateSignalRequest):
+    async def generate_signal(
+        req: _GenerateSignalRequest,
+        user: _TokenPayload = _Depends(_get_current_user),
+    ):
         try:
             svc = _get_signal_service()
             try:
@@ -950,7 +972,10 @@ def _register_signal_write_routes(router: Any) -> None:
             ) from None
 
     @router.post("/alerts")
-    async def create_alert(req: _CreateAlertRequest):
+    async def create_alert(
+        req: _CreateAlertRequest,
+        user: _TokenPayload = _Depends(_get_current_user),
+    ):
         try:
             svc = _get_signal_service()
             notify_channels = ["web"]
@@ -968,7 +993,10 @@ def _register_signal_write_routes(router: Any) -> None:
             raise _HTTPException(status_code=500, detail="Alert creation failed — check server logs") from e
 
     @router.get("/alerts")
-    async def list_alerts(symbol: str | None = None):
+    async def list_alerts(
+        symbol: str | None = None,
+        user: _TokenPayload = _Depends(_get_current_user),
+    ):
         alerts = _get_signal_service().get_alerts(symbol=symbol)
         return _with_disclaimer(
             {
@@ -988,7 +1016,10 @@ def _register_signal_write_routes(router: Any) -> None:
         )
 
     @router.delete("/alerts/{alert_id}")
-    async def delete_alert(alert_id: str):
+    async def delete_alert(
+        alert_id: str,
+        user: _TokenPayload = _Depends(_get_current_user),
+    ):
         _get_signal_service().delete_alert(alert_id)
         return {"status": "deleted", "alert_id": alert_id}
 
@@ -997,9 +1028,16 @@ def _register_distribution_routes(
     router: Any, OOSSignalItem: Any, LiveSignalItem: Any, SetOOSReferenceRequest: Any, ValidateSignalsRequest: Any
 ) -> None:
     """Register signal distribution validation endpoints."""
+    from fastapi import Depends as _Depends
+
+    from api.auth import TokenPayload as _TokenPayload
+    from api.auth import get_current_user as _get_current_user
 
     @router.post("/distribution/oos-reference")
-    async def set_oos_reference(body: SetOOSReferenceRequest):
+    async def set_oos_reference(
+        body: SetOOSReferenceRequest,
+        user: _TokenPayload = _Depends(_get_current_user),
+    ):
         from ml.signal_validator import SignalRecord, get_validator
 
         validator = get_validator()
@@ -1010,7 +1048,10 @@ def _register_distribution_routes(
         return _with_disclaimer({"set": True, "oos_sample_size": len(records)})
 
     @router.post("/distribution/validate")
-    async def validate_signal_distribution(body: ValidateSignalsRequest):
+    async def validate_signal_distribution(
+        body: ValidateSignalsRequest,
+        user: _TokenPayload = _Depends(_get_current_user),
+    ):
         from ml.signal_validator import SignalRecord, get_validator
 
         validator = get_validator()
@@ -1025,7 +1066,10 @@ def _register_distribution_routes(
         return _with_disclaimer(validator.validate(live_records).to_dict())
 
     @router.post("/distribution/add-live")
-    async def add_live_signal(body: LiveSignalItem):
+    async def add_live_signal(
+        body: LiveSignalItem,
+        user: _TokenPayload = _Depends(_get_current_user),
+    ):
         from ml.signal_validator import SignalRecord, get_validator
 
         validator = get_validator()
@@ -1035,7 +1079,7 @@ def _register_distribution_routes(
         return _with_disclaimer({"buffered": True, "buffer_size": len(validator._live_signals)})
 
     @router.get("/distribution/status")
-    async def signal_distribution_status():
+    async def signal_distribution_status(user: _TokenPayload = _Depends(_get_current_user)):
         from ml.signal_validator import get_validator
 
         validator = get_validator()
