@@ -31,8 +31,10 @@ import json
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
+
+from api.auth import TokenPayload, get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -145,16 +147,16 @@ class PreferencesBody(BaseModel):
 
 
 @router.get("/api/settings/preferences", summary="Get user preferences")
-async def get_preferences(request: Request):
+async def get_preferences(user: TokenPayload = Depends(get_current_user)):
     """Return timezone and language preferences for the authenticated user."""
-    uid = _get_user_id(request)
+    uid = user.sub
     return _load(uid, "preferences", PreferencesBody().model_dump())
 
 
 @router.post("/api/settings/preferences", summary="Save user preferences")
-async def save_preferences(body: PreferencesBody, request: Request):
+async def save_preferences(body: PreferencesBody, user: TokenPayload = Depends(get_current_user)):
     """Persist timezone and language preferences."""
-    uid = _get_user_id(request)
+    uid = user.sub
     _save(uid, "preferences", body.model_dump())
     return {"status": "saved"}
 
@@ -173,16 +175,16 @@ class AppearanceBody(BaseModel):
 
 
 @router.get("/api/settings/appearance", summary="Get appearance settings")
-async def get_appearance(request: Request):
+async def get_appearance(user: TokenPayload = Depends(get_current_user)):
     """Return appearance/theme settings for the authenticated user."""
-    uid = _get_user_id(request)
+    uid = user.sub
     return _load(uid, "appearance", AppearanceBody().model_dump())
 
 
 @router.post("/api/settings/appearance", summary="Save appearance settings")
-async def save_appearance(body: AppearanceBody, request: Request):
+async def save_appearance(body: AppearanceBody, user: TokenPayload = Depends(get_current_user)):
     """Persist appearance/theme settings."""
-    uid = _get_user_id(request)
+    uid = user.sub
     _save(uid, "appearance", body.model_dump())
     return {"status": "saved"}
 
@@ -203,16 +205,16 @@ class TradingPrefsBody(BaseModel):
 
 
 @router.get("/api/settings/trading", summary="Get trading preferences")
-async def get_trading_prefs(request: Request):
+async def get_trading_prefs(user: TokenPayload = Depends(get_current_user)):
     """Return trading preferences for the authenticated user."""
-    uid = _get_user_id(request)
+    uid = user.sub
     return _load(uid, "trading", TradingPrefsBody().model_dump())
 
 
 @router.post("/api/settings/trading", summary="Save trading preferences")
-async def save_trading_prefs(body: TradingPrefsBody, request: Request):
+async def save_trading_prefs(body: TradingPrefsBody, user: TokenPayload = Depends(get_current_user)):
     """Persist trading preferences and sync kill switch with the risk engine."""
-    uid = _get_user_id(request)
+    uid = user.sub
     _save(uid, "trading", body.model_dump())
 
     if body.kill_switch_enabled:
@@ -237,9 +239,9 @@ class BrokerSettingsBody(BaseModel):
 
 
 @router.post("/api/settings/broker", summary="Save broker connection settings")
-async def save_broker_settings(body: BrokerSettingsBody, request: Request):
+async def save_broker_settings(body: BrokerSettingsBody, user: TokenPayload = Depends(get_current_user)):
     """Persist broker connection settings. API key is stored server-side only."""
-    uid = _get_user_id(request)
+    uid = user.sub
     _save(uid, "broker", body.model_dump())
     logger.info("Broker settings saved for user %s (type=%s)", uid, body.type)
     return {"status": "saved", "broker": body.type}
@@ -254,11 +256,9 @@ class ChangePasswordBody(BaseModel):
 
 
 @router.post("/api/auth/change-password", summary="Change authenticated user password")
-async def change_password(body: ChangePasswordBody, request: Request):
+async def change_password(body: ChangePasswordBody, user: TokenPayload = Depends(get_current_user)):
     """Change the password for the currently authenticated user."""
-    uid = _get_user_id(request)
-    if uid == "anonymous":
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+    uid = user.sub
 
     if len(body.new_password) < 8:
         raise HTTPException(
@@ -307,11 +307,9 @@ async def change_password(body: ChangePasswordBody, request: Request):
 
 
 @router.delete("/api/auth/account", summary="Delete authenticated user account")
-async def delete_account(request: Request):
+async def delete_account(user: TokenPayload = Depends(get_current_user)):
     """Permanently delete the authenticated user's account and all associated data."""
-    uid = _get_user_id(request)
-    if uid == "anonymous":
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+    uid = user.sub
 
     try:
         from database.connection import get_db_manager
