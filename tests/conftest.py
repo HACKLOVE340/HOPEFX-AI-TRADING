@@ -55,9 +55,15 @@ def _restore_critical_env_vars():
     Prevents test-ordering pollution from tests that mutate env vars without
     using monkeypatch (e.g. setting SECURITY_JWT_SECRET to a short value to
     test validation, then failing to restore it).
+
+    Covers all JWT secret aliases recognised by auth/jwt.py and api/auth.py:
+      - SECURITY_JWT_SECRET  (primary)
+      - JWT_SECRET_KEY       (legacy alias in auth/jwt.py)
+      - JWT_SECRET           (legacy alias in api/auth.py)
     """
     _KEYS = (
         "SECURITY_JWT_SECRET",
+        "JWT_SECRET_KEY",
         "JWT_SECRET",
         "APP_ENV",
         "BROKER",
@@ -72,9 +78,14 @@ def _restore_critical_env_vars():
             os.environ.pop(k, None)
         else:
             os.environ[k] = v
-    # Always guarantee a valid JWT secret after teardown
-    if len(os.environ.get("SECURITY_JWT_SECRET", "")) < 32:
-        os.environ["SECURITY_JWT_SECRET"] = _CANONICAL_JWT_SECRET
+    # Always guarantee a valid JWT secret after teardown — covers all aliases
+    for _alias in ("SECURITY_JWT_SECRET", "JWT_SECRET_KEY", "JWT_SECRET"):
+        if len(os.environ.get(_alias, "")) < 32:
+            # Only force-set the primary; aliases are optional
+            if _alias == "SECURITY_JWT_SECRET":
+                os.environ[_alias] = _CANONICAL_JWT_SECRET
+            else:
+                os.environ.pop(_alias, None)
 
 
 @pytest.fixture(autouse=True)
