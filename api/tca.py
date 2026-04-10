@@ -21,7 +21,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+
+from api.auth import TokenPayload, get_current_user, require_role
 
 logger = logging.getLogger(__name__)
 
@@ -46,11 +48,10 @@ def _require_auth(request: Request) -> dict[str, Any]:
 
 @router.get("/report")
 async def get_all_reports(
-    request: Request,
     last_n: int = Query(500, ge=1, le=10000),
+    user: TokenPayload = Depends(get_current_user),
 ) -> list[dict[str, Any]]:
     """Return per-broker TCA reports for all brokers with recent fills."""
-    _require_auth(request)
     from execution.tca_recorder import get_tca_recorder
 
     reports = get_tca_recorder().get_all_reports(last_n=last_n)
@@ -60,13 +61,12 @@ async def get_all_reports(
 @router.get("/report/{broker}")
 async def get_broker_report(
     broker: str,
-    request: Request,
     symbol: str | None = Query(None),
     session: str | None = Query(None),
     last_n: int = Query(500, ge=1, le=10000),
+    user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Return TCA report for a specific broker, optionally filtered by symbol/session."""
-    _require_auth(request)
     from execution.tca_recorder import get_tca_recorder
 
     report = get_tca_recorder().get_report(broker=broker, symbol=symbol, session=session, last_n=last_n)
@@ -77,13 +77,12 @@ async def get_broker_report(
 
 @router.get("/records")
 async def get_recent_records(
-    request: Request,
     n: int = Query(100, ge=1, le=1000),
     broker: str | None = Query(None),
     symbol: str | None = Query(None),
+    user: TokenPayload = Depends(get_current_user),
 ) -> list[dict[str, Any]]:
     """Return the N most recent TCA records, optionally filtered."""
-    _require_auth(request)
     from execution.tca_recorder import get_tca_recorder
 
     recorder = get_tca_recorder()
@@ -98,9 +97,8 @@ async def get_recent_records(
 
 
 @router.get("/alerts")
-async def get_alerts(request: Request) -> list[dict[str, Any]]:
+async def get_alerts(user: TokenPayload = Depends(get_current_user)) -> list[dict[str, Any]]:
     """Return brokers currently above the slippage alert threshold."""
-    _require_auth(request)
     from execution.tca_recorder import (
         TCA_ALERT_THRESHOLD_BPS,
         TCA_ALERT_WINDOW,
@@ -126,8 +124,8 @@ async def get_alerts(request: Request) -> list[dict[str, Any]]:
 
 @router.get("/stats")
 async def get_stats(
-    request: Request,
     n: int = Query(100, ge=1, le=5000),
+    user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
     """
     Rolling execution quality statistics across all brokers.
@@ -135,7 +133,6 @@ async def get_stats(
     Includes mean/p95/p99 slippage, fill rate, adverse fill rate,
     and per-session/per-broker breakdown.
     """
-    _require_auth(request)
     from execution.tca_recorder import get_tca_recorder
 
     recorder = get_tca_recorder()
@@ -191,12 +188,8 @@ async def get_stats(
 
 
 @router.delete("/records")
-async def flush_records(request: Request) -> dict[str, str]:
+async def flush_records(user: TokenPayload = Depends(require_role("admin"))) -> dict[str, str]:
     """Flush all in-memory TCA records (admin only)."""
-    payload = _require_auth(request)
-    role = payload.get("role", "")
-    if role not in ("admin", "superadmin"):
-        raise HTTPException(status_code=403, detail="Admin role required")
 
     from execution.tca_recorder import get_tca_recorder
 
@@ -204,7 +197,7 @@ async def flush_records(request: Request) -> dict[str, str]:
     recorder._all_records.clear()
     recorder._records.clear()
     recorder._broker_slippage.clear()
-    logger.warning("TCA records flushed by admin: %s", payload.get("sub"))
+    logger.warning("TCA records flushed by admin: %s", user.sub)
     return {"status": "flushed"}
 
 
@@ -244,12 +237,26 @@ async def get_tca_summary(period: str = "1d", broker_id: str | None = None) -> d
         Dict with a ``"brokers"`` list, each entry containing slippage and
         fill-rate metrics.
     """
-    # Re-use the existing stats endpoint for aggregation
+    # Call the recorder directly to avoid needing a TokenPayload
     try:
-        stats = await get_stats(  # type: ignore[call-arg]
-            request=None,  # type: ignore[arg-type]
-            period=period,
-        )
+        from execution.tca_recorder import get_tca_recorder as _get_recorder
+
+        recorder = _get_recorder()
+        records_raw = recorder.get_recent_records(n=500)
+        brokers_raw: dict = {}
+        for r in records_raw:
+            b = r.get("broker", "unknown")
+            brokers_raw.setdefault(b, []).append(r.get("slippage_bps", 0.0))
+        stats = {
+            "by_broker": {
+                b: {
+                    "avg_slippage_pips": sum(v) / len(v) if v else 0.0,
+                    "fill_rate_pct": 100.0,
+                    "total_trades": len(v),
+                }
+                for b, v in brokers_raw.items()
+            }
+        }
     except Exception:
         stats = {}
 
