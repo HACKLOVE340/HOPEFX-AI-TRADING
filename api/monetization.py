@@ -18,8 +18,10 @@ import logging
 from decimal import Decimal
 from typing import Any
 
-from fastapi import APIRouter, Body, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr, Field
+
+from api.auth import TokenPayload, get_current_user, require_role
 
 logger = logging.getLogger(__name__)
 
@@ -193,7 +195,7 @@ class WhiteLabelRequest(BaseModel):
 
 
 @router.get("/pricing", response_model=list[PricingTierResponse])
-async def get_pricing():
+async def get_pricing(user: TokenPayload = Depends(get_current_user)):
     """
     Get all pricing tiers.
 
@@ -215,7 +217,7 @@ async def get_pricing():
 
 
 @router.get("/pricing/{tier}")
-async def get_tier_pricing(tier: str):
+async def get_tier_pricing(tier: str, user: TokenPayload = Depends(get_current_user)):
     """
     Get pricing for a specific tier.
     """
@@ -241,7 +243,7 @@ async def get_tier_pricing(tier: str):
 
 
 @router.post("/subscribe", response_model=SubscribeResponse)
-async def subscribe(request: SubscribeRequest):
+async def subscribe(request: SubscribeRequest, user: TokenPayload = Depends(get_current_user)):
     """
     Subscribe to a plan.
 
@@ -307,7 +309,7 @@ async def subscribe(request: SubscribeRequest):
 
 
 @router.get("/subscription/{user_id}")
-async def get_subscription(user_id: str):
+async def get_subscription(user_id: str, user: TokenPayload = Depends(get_current_user)):
     """
     Get user's current subscription.
     """
@@ -323,7 +325,7 @@ async def get_subscription(user_id: str):
 
 
 @router.post("/subscription/{subscription_id}/cancel")
-async def cancel_subscription(subscription_id: str):
+async def cancel_subscription(subscription_id: str, user: TokenPayload = Depends(get_current_user)):
     """
     Cancel a subscription.
     """
@@ -338,7 +340,7 @@ async def cancel_subscription(subscription_id: str):
 
 
 @router.get("/subscription/{user_id}/limits")
-async def get_user_limits(user_id: str):
+async def get_user_limits(user_id: str, user: TokenPayload = Depends(get_current_user)):
     """
     Get usage limits for a user based on their subscription.
     """
@@ -352,7 +354,7 @@ async def get_user_limits(user_id: str):
 
 
 @router.post("/activate-code", response_model=ActivateCodeResponse)
-async def activate_code(request: ActivateCodeRequest):
+async def activate_code(request: ActivateCodeRequest, user: TokenPayload = Depends(get_current_user)):
     """
     Activate an access code for a user.
     """
@@ -390,7 +392,7 @@ async def activate_code(request: ActivateCodeRequest):
 
 
 @router.get("/validate-code/{code}")
-async def validate_code(code: str):
+async def validate_code(code: str, user: TokenPayload = Depends(get_current_user)):
     """
     Validate an access code without activating it.
     """
@@ -408,7 +410,7 @@ async def validate_code(code: str):
 
 
 @router.post("/affiliate/signup", response_model=AffiliateResponse)
-async def affiliate_signup(request: AffiliateSignupRequest):
+async def affiliate_signup(request: AffiliateSignupRequest, user: TokenPayload = Depends(get_current_user)):
     """
     Sign up for the affiliate program.
     """
@@ -432,7 +434,7 @@ async def affiliate_signup(request: AffiliateSignupRequest):
 
 
 @router.get("/affiliate/{user_id}")
-async def get_affiliate(user_id: str):
+async def get_affiliate(user_id: str, user: TokenPayload = Depends(get_current_user)):
     """
     Get affiliate account for a user.
     """
@@ -457,7 +459,7 @@ async def get_affiliate(user_id: str):
 
 
 @router.post("/affiliate/referral")
-async def create_referral(request: ReferralRequest):
+async def create_referral(request: ReferralRequest, user: TokenPayload = Depends(get_current_user)):
     """
     Create referral tracking for a referred user.
     """
@@ -480,7 +482,11 @@ async def create_referral(request: ReferralRequest):
 
 
 @router.get("/affiliate/{affiliate_id}/referrals")
-async def get_affiliate_referrals(affiliate_id: str, status: str | None = None):
+async def get_affiliate_referrals(
+    affiliate_id: str,
+    status: str | None = None,
+    user: TokenPayload = Depends(get_current_user),
+):
     """
     Get all referrals for an affiliate.
     """
@@ -505,7 +511,10 @@ async def get_affiliate_referrals(affiliate_id: str, status: str | None = None):
 
 
 @router.get("/affiliate/leaderboard")
-async def get_affiliate_leaderboard(limit: int = Query(10, ge=1, le=100)):
+async def get_affiliate_leaderboard(
+    limit: int = Query(10, ge=1, le=100),
+    user: TokenPayload = Depends(get_current_user),
+):
     """
     Get affiliate leaderboard.
     """
@@ -518,7 +527,7 @@ async def get_affiliate_leaderboard(limit: int = Query(10, ge=1, le=100)):
 
 
 @router.post("/marketplace/list")
-async def list_strategy(request: StrategyListRequest):
+async def list_strategy(request: StrategyListRequest, user: TokenPayload = Depends(get_current_user)):
     """
     List a new strategy in the marketplace.
     """
@@ -565,6 +574,7 @@ async def search_strategies(
     sort_by: str = Query("popular", pattern="^(popular|rating|newest|price_low|price_high)$"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    user: TokenPayload = Depends(get_current_user),
 ):
     """
     Search strategies in the marketplace.
@@ -594,7 +604,7 @@ async def search_strategies(
 
 
 @router.get("/marketplace/strategies/{strategy_id}")
-async def get_strategy(strategy_id: str):
+async def get_strategy(strategy_id: str, user: TokenPayload = Depends(get_current_user)):
     """
     Get strategy details.
     """
@@ -611,7 +621,7 @@ async def get_strategy(strategy_id: str):
 
 
 @router.post("/marketplace/purchase")
-async def purchase_strategy(request: StrategyPurchaseRequest):
+async def purchase_strategy(request: StrategyPurchaseRequest, user: TokenPayload = Depends(get_current_user)):
     """
     Initiate a strategy purchase via Stripe PaymentIntent.
 
@@ -681,7 +691,7 @@ async def purchase_strategy(request: StrategyPurchaseRequest):
 
 
 @router.post("/marketplace/review")
-async def add_review(request: ReviewRequest):
+async def add_review(request: ReviewRequest, user: TokenPayload = Depends(get_current_user)):
     """
     Add a review for a purchased strategy.
     """
@@ -703,7 +713,10 @@ async def add_review(request: ReviewRequest):
 
 
 @router.get("/marketplace/featured")
-async def get_featured_strategies(limit: int = Query(10, ge=1, le=50)):
+async def get_featured_strategies(
+    limit: int = Query(10, ge=1, le=50),
+    user: TokenPayload = Depends(get_current_user),
+):
     """
     Get featured strategies.
     """
@@ -712,7 +725,7 @@ async def get_featured_strategies(limit: int = Query(10, ge=1, le=50)):
 
 
 @router.get("/marketplace/stats")
-async def get_marketplace_stats():
+async def get_marketplace_stats(user: TokenPayload = Depends(get_current_user)):
     """
     Get marketplace statistics.
     """
@@ -725,7 +738,7 @@ async def get_marketplace_stats():
 
 
 @router.get("/analytics/dashboard")
-async def get_analytics_dashboard():
+async def get_analytics_dashboard(user: TokenPayload = Depends(get_current_user)):
     """
     Get revenue analytics dashboard data.
     """
@@ -736,6 +749,7 @@ async def get_analytics_dashboard():
 async def get_analytics_report(
     period: str = Query("monthly", pattern="^(daily|weekly|monthly|quarterly|yearly)$"),
     include_projections: bool = True,
+    user: TokenPayload = Depends(get_current_user),
 ):
     """
     Generate comprehensive revenue report.
@@ -752,7 +766,7 @@ async def get_analytics_report(
 
 
 @router.get("/analytics/revenue")
-async def get_revenue_breakdown():
+async def get_revenue_breakdown(user: TokenPayload = Depends(get_current_user)):
     """
     Get revenue breakdown by source and tier.
     """
@@ -763,7 +777,7 @@ async def get_revenue_breakdown():
 
 
 @router.get("/analytics/growth")
-async def get_growth_metrics():
+async def get_growth_metrics(user: TokenPayload = Depends(get_current_user)):
     """
     Get growth metrics (MRR, ARR, churn, LTV, etc).
     """
@@ -786,7 +800,7 @@ async def get_growth_metrics():
 
 
 @router.post("/partner/signup")
-async def partner_signup(request: PartnerSignupRequest):
+async def partner_signup(request: PartnerSignupRequest, user: TokenPayload = Depends(get_current_user)):
     """
     Apply to become a partner.
     """
@@ -815,7 +829,7 @@ async def partner_signup(request: PartnerSignupRequest):
 
 
 @router.get("/partner/{partner_id}")
-async def get_partner(partner_id: str):
+async def get_partner(partner_id: str, user: TokenPayload = Depends(get_current_user)):
     """
     Get partner details.
     """
@@ -830,7 +844,7 @@ async def get_partner(partner_id: str):
 
 
 @router.post("/white-label/create")
-async def create_white_label(request: WhiteLabelRequest):
+async def create_white_label(request: WhiteLabelRequest, user: TokenPayload = Depends(get_current_user)):
     """
     Create a white-label instance for a partner.
     """
@@ -865,7 +879,7 @@ async def create_white_label(request: WhiteLabelRequest):
 
 
 @router.get("/enterprise/stats")
-async def get_enterprise_stats():
+async def get_enterprise_stats(user: TokenPayload = Depends(get_current_user)):
     """
     Get enterprise program statistics.
     """
@@ -936,7 +950,7 @@ class ManualReviewRequest(BaseModel):
 
 
 @router.post("/marketplace/submit", status_code=status.HTTP_201_CREATED)
-async def submit_strategy(request: SubmitStrategyRequest):
+async def submit_strategy(request: SubmitStrategyRequest, user: TokenPayload = Depends(get_current_user)):
     """
     Submit a strategy for marketplace listing.
 
@@ -959,7 +973,7 @@ async def submit_strategy(request: SubmitStrategyRequest):
 
 
 @router.get("/marketplace/submissions/{submission_id}")
-async def get_submission(submission_id: str):
+async def get_submission(submission_id: str, user: TokenPayload = Depends(get_current_user)):
     """Get a strategy submission and its audit report."""
     sub = submission_manager.get(submission_id)
     if not sub:
@@ -968,21 +982,25 @@ async def get_submission(submission_id: str):
 
 
 @router.get("/marketplace/submissions/creator/{creator_id}")
-async def list_creator_submissions(creator_id: str):
+async def list_creator_submissions(creator_id: str, user: TokenPayload = Depends(get_current_user)):
     """List all submissions by a creator."""
     subs = submission_manager.list_by_creator(creator_id)
     return {"submissions": [s.to_dict() for s in subs], "total": len(subs)}
 
 
 @router.get("/marketplace/submissions/pending")
-async def list_pending_submissions():
+async def list_pending_submissions(user: TokenPayload = Depends(require_role("admin"))):
     """List all submissions awaiting manual review (admin only)."""
     subs = submission_manager.list_pending()
     return {"submissions": [s.to_dict() for s in subs], "total": len(subs)}
 
 
 @router.post("/marketplace/submissions/{submission_id}/approve")
-async def approve_submission(submission_id: str, body: ManualReviewRequest):
+async def approve_submission(
+    submission_id: str,
+    body: ManualReviewRequest,
+    user: TokenPayload = Depends(require_role("admin")),
+):
     """Manually approve a strategy submission (admin only)."""
     ok = submission_manager.manual_approve(submission_id, body.reviewer_id, body.notes)
     if not ok:
@@ -991,7 +1009,11 @@ async def approve_submission(submission_id: str, body: ManualReviewRequest):
 
 
 @router.post("/marketplace/submissions/{submission_id}/reject")
-async def reject_submission(submission_id: str, body: ManualReviewRequest):
+async def reject_submission(
+    submission_id: str,
+    body: ManualReviewRequest,
+    user: TokenPayload = Depends(require_role("admin")),
+):
     """Manually reject a strategy submission (admin only)."""
     ok = submission_manager.manual_reject(submission_id, body.reviewer_id, body.notes)
     if not ok:
@@ -1020,7 +1042,7 @@ class RegisterStripeAccountRequest(BaseModel):
 
 
 @router.post("/marketplace/sales")
-async def record_sale(request: RecordSaleRequest):
+async def record_sale(request: RecordSaleRequest, user: TokenPayload = Depends(get_current_user)):
     """
     Record a marketplace sale and compute the revenue split.
 
@@ -1045,7 +1067,7 @@ async def record_sale(request: RecordSaleRequest):
 
 
 @router.get("/marketplace/creators/{creator_id}/balance")
-async def get_creator_balance(creator_id: str):
+async def get_creator_balance(creator_id: str, user: TokenPayload = Depends(get_current_user)):
     """Get a creator's pending payout balance and earnings summary."""
     bal = revenue_engine.get_creator_balance(creator_id)
     return {
@@ -1060,28 +1082,31 @@ async def get_creator_balance(creator_id: str):
 
 
 @router.get("/marketplace/creators/{creator_id}/transactions")
-async def get_creator_transactions(creator_id: str):
+async def get_creator_transactions(creator_id: str, user: TokenPayload = Depends(get_current_user)):
     """List all sale transactions for a creator."""
     txns = revenue_engine.get_creator_transactions(creator_id)
     return {"transactions": [t.to_dict() for t in txns], "total": len(txns)}
 
 
 @router.get("/marketplace/creators/{creator_id}/payouts")
-async def get_creator_payouts(creator_id: str):
+async def get_creator_payouts(creator_id: str, user: TokenPayload = Depends(get_current_user)):
     """List all payout records for a creator."""
     payouts = revenue_engine.get_creator_payouts(creator_id)
     return {"payouts": [p.to_dict() for p in payouts], "total": len(payouts)}
 
 
 @router.post("/marketplace/creators/stripe-account")
-async def register_stripe_account(request: RegisterStripeAccountRequest):
+async def register_stripe_account(
+    request: RegisterStripeAccountRequest,
+    user: TokenPayload = Depends(get_current_user),
+):
     """Link a creator's Stripe Connect account for payouts."""
     revenue_engine.register_stripe_account(request.creator_id, request.stripe_account_id)
     return {"linked": True, "creator_id": request.creator_id}
 
 
 @router.post("/marketplace/payouts/process")
-async def process_payouts():
+async def process_payouts(user: TokenPayload = Depends(require_role("admin"))):
     """
     Trigger weekly payout processing for all eligible creators (admin only).
 
@@ -1095,6 +1120,6 @@ async def process_payouts():
 
 
 @router.get("/marketplace/platform/revenue")
-async def get_platform_revenue():
+async def get_platform_revenue(user: TokenPayload = Depends(require_role("admin"))):
     """Get aggregate platform revenue metrics (admin only)."""
     return revenue_engine.get_platform_revenue()
