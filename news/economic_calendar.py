@@ -327,6 +327,149 @@ class EconomicCalendar:
         }
 
 
+# ── Live feed ─────────────────────────────────────────────────────────────────
+
+# Finnhub impact → EventImportance mapping
+_FINNHUB_IMPACT_MAP: dict[str, EventImportance] = {
+    "1": EventImportance.LOW,
+    "2": EventImportance.MEDIUM,
+    "3": EventImportance.HIGH,
+}
+
+# Finnhub event name keywords → EventType
+_KEYWORD_TYPE_MAP: list[tuple[str, EventType]] = [
+    ("interest rate", EventType.INTEREST_RATE),
+    ("rate decision", EventType.INTEREST_RATE),
+    ("fomc", EventType.CENTRAL_BANK),
+    ("ecb", EventType.CENTRAL_BANK),
+    ("boj", EventType.CENTRAL_BANK),
+    ("boe", EventType.CENTRAL_BANK),
+    ("central bank", EventType.CENTRAL_BANK),
+    ("speech", EventType.CENTRAL_BANK_SPEECH),
+    ("press conference", EventType.CENTRAL_BANK_SPEECH),
+    ("gdp", EventType.GDP),
+    ("nonfarm", EventType.EMPLOYMENT),
+    ("non-farm", EventType.EMPLOYMENT),
+    ("employment", EventType.EMPLOYMENT),
+    ("jobless", EventType.EMPLOYMENT),
+    ("unemployment", EventType.EMPLOYMENT),
+    ("cpi", EventType.INFLATION),
+    ("ppi", EventType.INFLATION),
+    ("inflation", EventType.INFLATION),
+    ("retail sales", EventType.RETAIL_SALES),
+    ("pmi", EventType.PMI),
+    ("consumer confidence", EventType.CONSUMER_CONFIDENCE),
+    ("consumer sentiment", EventType.CONSUMER_CONFIDENCE),
+]
+
+# Country code → ISO currency
+_COUNTRY_CURRENCY: dict[str, str] = {
+    "US": "USD",
+    "EU": "EUR",
+    "GB": "GBP",
+    "JP": "JPY",
+    "CA": "CAD",
+    "AU": "AUD",
+    "NZ": "NZD",
+    "CH": "CHF",
+    "CN": "CNY",
+}
+
+
+def _classify_event_type(title: str) -> EventType:
+    lower = title.lower()
+    for keyword, etype in _KEYWORD_TYPE_MAP:
+        if keyword in lower:
+            return etype
+    return EventType.OTHER
+
+
+def fetch_live_calendar(days_ahead: int = 7) -> "EconomicCalendar":
+    """
+    Fetch the economic calendar from Finnhub's REST API.
+
+    Requires FINNHUB_API_KEY env var. Returns a populated EconomicCalendar.
+    Raises RuntimeError when the API key is absent or the request fails.
+
+    Finnhub endpoint: GET https://finnhub.io/api/v1/calendar/economic
+    Docs: https://finnhub.io/docs/api/economic-calendar
+    """
+    import json
+    import os
+    import urllib.request
+    from datetime import date
+
+    api_key = os.getenv("FINNHUB_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("FINNHUB_API_KEY is not set — cannot fetch live economic calendar")
+
+    today = date.today()
+    end_date = today + timedelta(days=days_ahead)
+    url = (
+        f"https://finnhub.io/api/v1/calendar/economic"
+        f"?from={today.isoformat()}&to={end_date.isoformat()}&token={api_key}"
+    )
+
+    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310 — hardcoded https:// Finnhub URL
+        payload = json.loads(resp.read())
+
+    cal = EconomicCalendar()
+    for item in payload.get("economicCalendar", []):
+        try:
+            # Parse scheduled time — Finnhub returns "YYYY-MM-DD HH:MM:SS" UTC
+            time_str = item.get("time", "")
+            if time_str:
+                scheduled = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
+            else:
+                date_str = item.get("date", "")
+                scheduled = datetime.strptime(date_str, "%Y-%m-%d").replace(
+                    hour=12, tzinfo=UTC
+                )
+
+            country = (item.get("country") or "").upper()
+            currency = _COUNTRY_CURRENCY.get(country)
+            impact_raw = str(item.get("impact", "1"))
+            # Finnhub uses "low"/"medium"/"high" strings in some versions
+            if impact_raw in _FINNHUB_IMPACT_MAP:
+                importance = _FINNHUB_IMPACT_MAP[impact_raw]
+            elif impact_raw.lower() == "high":
+                importance = EventImportance.HIGH
+            elif impact_raw.lower() == "medium":
+                importance = EventImportance.MEDIUM
+            else:
+                importance = EventImportance.LOW
+
+            title = item.get("event", "Unknown Event")
+            event = EconomicEvent(
+                title=title,
+                event_type=_classify_event_type(title),
+                importance=importance,
+                scheduled_time=scheduled,
+                country=country,
+                currency=currency,
+                forecast=_safe_float(item.get("estimate")),
+                previous=_safe_float(item.get("prev")),
+                actual=_safe_float(item.get("actual")),
+            )
+            cal.add_event(event)
+        except Exception as exc:
+            logger.debug("Skipping malformed Finnhub calendar item: %s — %s", item, exc)
+
+    logger.info("Fetched %d events from Finnhub economic calendar", len(cal.events))
+    return cal
+
+
+def _safe_float(value) -> float | None:
+    """Convert a value to float, returning None on failure."""
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 # Global calendar instance
 _economic_calendar = None
 
