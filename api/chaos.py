@@ -27,6 +27,8 @@ UTC = timezone.utc
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+
+from api.auth import TokenPayload, get_current_user, require_role
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -123,8 +125,8 @@ def _get_mutation_runner(request: Request) -> Any:
 
 @router.post("/run", response_model=ChaosRunResponse)
 async def run_all_chaos_scenarios(
-    request: Request,
     controller: Any = Depends(_get_chaos_controller),
+    user: TokenPayload = Depends(require_role("admin")),
 ) -> ChaosRunResponse:
     """
     Run all chaos scenarios against the live data pipeline (paper mode only).
@@ -174,8 +176,8 @@ async def run_all_chaos_scenarios(
 @router.post("/scenario/{scenario_name}", response_model=ScenarioResultOut)
 async def run_single_scenario(
     scenario_name: str,
-    request: Request,
     controller: Any = Depends(_get_chaos_controller),
+    user: TokenPayload = Depends(require_role("admin")),
 ) -> ScenarioResultOut:
     """
     Run a single named chaos scenario.
@@ -218,7 +220,7 @@ async def run_single_scenario(
 
 
 @router.get("/results", response_model=list[ScenarioResultOut])
-async def get_chaos_results() -> list[ScenarioResultOut]:
+async def get_chaos_results(user: TokenPayload = Depends(get_current_user)) -> list[ScenarioResultOut]:
     """Return results from the last chaos run."""
     if not _last_chaos_results:
         return []
@@ -241,6 +243,7 @@ async def run_mutation_tests(
     background_tasks: BackgroundTasks,
     modules: str | None = None,
     runner: Any = Depends(_get_mutation_runner),
+    user: TokenPayload = Depends(require_role("admin")),
 ) -> MutationRunResponse:
     """
     Trigger mutation testing in the background.
@@ -301,7 +304,7 @@ async def run_mutation_tests(
 
 
 @router.get("/mutation/results", response_model=MutationResultOut | None)
-async def get_mutation_results() -> MutationResultOut | None:
+async def get_mutation_results(user: TokenPayload = Depends(get_current_user)) -> MutationResultOut | None:
     """Return the last mutation test report, or null if none has run."""
     if _last_mutation_report is None:
         return None
@@ -323,7 +326,7 @@ async def get_mutation_results() -> MutationResultOut | None:
 
 
 @router.get("/status", response_model=ChaosStatusResponse)
-async def get_chaos_status() -> ChaosStatusResponse:
+async def get_chaos_status(user: TokenPayload = Depends(get_current_user)) -> ChaosStatusResponse:
     """Combined chaos + mutation testing status."""
     chaos_passed = chaos_failed = None
     if _last_chaos_results:
