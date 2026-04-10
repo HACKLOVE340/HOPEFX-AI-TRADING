@@ -1447,6 +1447,38 @@ class RiskManager:
     # ── Signal handlers ───────────────────────────────────────────────────────
 
     def _install_signal_handlers(self) -> None:
+        """Install OS-level signal handlers for graceful shutdown.
+
+        Guards
+        ------
+        - Skipped entirely in test/CI environments (APP_ENV=test or
+          ENVIRONMENT=testing/ci) to prevent SIGTERM handlers from calling
+          sys.exit(0) inside pytest, which causes Coverage INTERNALERROR and
+          intermittent SystemExit failures across the test suite.
+        - Skipped when called from a non-main thread (signal.signal() raises
+          ValueError in that case anyway; the try/except below is a safety net).
+
+        Production behaviour
+        --------------------
+        On SIGTERM or SIGINT the handler calls _halt_trading() to persist the
+        halt state to disk and activate the kill switch, then exits cleanly.
+        """
+        # Determine the current runtime environment from the two env vars used
+        # across the codebase (APP_ENV takes precedence over ENVIRONMENT).
+        _app_env = os.getenv("APP_ENV", "").lower()
+        _environment = os.getenv("ENVIRONMENT", "").lower()
+
+        # Skip signal handler installation in any non-production context.
+        # This prevents sys.exit(0) from being called during pytest runs,
+        # which would cause Coverage INTERNALERROR and SystemExit failures.
+        _non_prod = {"test", "testing", "ci", "development", "dev"}
+        if _app_env in _non_prod or _environment in _non_prod:
+            logger.debug(
+                "RiskManager: skipping signal handler installation in %s environment",
+                _app_env or _environment,
+            )
+            return
+
         def _handle(signum, frame):
             sig_name = _signal.Signals(signum).name
             logger.warning("Signal %s received — halting trading.", sig_name)
