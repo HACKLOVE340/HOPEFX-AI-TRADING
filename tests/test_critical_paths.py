@@ -434,54 +434,73 @@ class TestCompliance:
     @pytest.mark.asyncio
     async def test_kyc_gateway_dev_provider(self):
         """KYC_PROVIDER=mock uses the built-in dev provider (no external calls)."""
+        import importlib
         import os
+        import sys
 
         os.environ["KYC_PROVIDER"] = "mock"
-        # Re-import to pick up env var
-        import importlib
-
         import compliance.kyc_provider as _kyc_mod
 
+        # Reload to pick up env var; restore original module object afterwards
+        # so that enum identity is preserved for subsequent tests.
+        _orig = sys.modules.get("compliance.kyc_provider")
         importlib.reload(_kyc_mod)
-        gw = _kyc_mod.KYCGateway()
-        applicant = await gw.create_applicant(
-            "user3",
-            {"first_name": "John", "last_name": "Doe", "email": "j@example.com"},
-        )
-        assert applicant.applicant_id.startswith("mock_")
-        assert applicant.sdk_token != ""  # nosec B105 - test file
+        try:
+            gw = _kyc_mod.KYCGateway()
+            applicant = await gw.create_applicant(
+                "user3",
+                {"first_name": "John", "last_name": "Doe", "email": "j@example.com"},
+            )
+            assert applicant.applicant_id.startswith("mock_")
+            assert applicant.sdk_token != ""  # nosec B105 - test file
+        finally:
+            if _orig is not None:
+                sys.modules["compliance.kyc_provider"] = _orig
+                importlib.reload(_orig)
 
     @pytest.mark.asyncio
     async def test_kyc_gateway_sanctions_screen_no_match(self):
         """LocalSDNScreener screens without network when list not loaded."""
+        import importlib
         import os
+        import sys
 
         os.environ["KYC_PROVIDER"] = "mock"
-        import importlib
-
         import compliance.kyc_provider as _kyc_mod
 
+        _orig = sys.modules.get("compliance.kyc_provider")
         importlib.reload(_kyc_mod)
-        # LocalSDNScreener with empty list (not loaded) returns screened=False, is_match=False
-        screener = _kyc_mod.LocalSDNScreener()
-        result = await screener.screen("Alice Smith")
-        # Not loaded → screened=False, is_match=False (safe default)
-        assert not result.is_match
+        try:
+            # LocalSDNScreener with empty list (not loaded) returns screened=False, is_match=False
+            screener = _kyc_mod.LocalSDNScreener()
+            result = await screener.screen("Alice Smith")
+            # Not loaded → screened=False, is_match=False (safe default)
+            assert not result.is_match
+        finally:
+            if _orig is not None:
+                sys.modules["compliance.kyc_provider"] = _orig
+                importlib.reload(_orig)
 
     @pytest.mark.asyncio
     async def test_kyc_gateway_webhook_verified(self):
         """Dev provider always verifies webhooks (no secret required)."""
+        import importlib
         import os
+        import sys
 
         os.environ["KYC_PROVIDER"] = "mock"
-        import importlib
-
         import compliance.kyc_provider as _kyc_mod
 
+        _orig = sys.modules.get("compliance.kyc_provider")
         importlib.reload(_kyc_mod)
-        gw = _kyc_mod.KYCGateway()
-        ok = await gw.webhook_event(b"{}", "any-sig", {})
-        assert ok
+        try:
+            gw = _kyc_mod.KYCGateway()
+            ok = await gw.webhook_event(b"{}", "any-sig", {})
+            assert ok
+        finally:
+            if _orig is not None:
+                sys.modules["compliance.kyc_provider"] = _orig
+                importlib.reload(_orig)
 
 
 # ── analytics/monte_carlo.py ──────────────────────────────────────────────────
