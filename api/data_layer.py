@@ -32,7 +32,9 @@ from datetime import datetime, timezone
 UTC = timezone.utc
 from typing import Any, ClassVar
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from api.auth import TokenPayload, get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -51,14 +53,14 @@ def _get_orchestrator():
 
 
 @router.get("/health")
-async def data_layer_health() -> dict[str, Any]:
+async def data_layer_health(user: TokenPayload = Depends(get_current_user)) -> dict[str, Any]:
     """Full orchestrator health snapshot."""
     orch = _get_orchestrator()
     return orch.health()
 
 
 @router.get("/tick")
-async def get_latest_tick(symbol: str = Query("XAU_USD")) -> dict[str, Any]:
+async def get_latest_tick(symbol: str = Query("XAU_USD"), user: TokenPayload = Depends(get_current_user)) -> dict[str, Any]:
     """Latest validated consensus tick."""
     orch = _get_orchestrator()
     tick = orch.get_latest_tick(symbol)
@@ -79,7 +81,7 @@ async def get_latest_tick(symbol: str = Query("XAU_USD")) -> dict[str, Any]:
 
 
 @router.get("/sentiment")
-async def get_sentiment() -> dict[str, Any]:
+async def get_sentiment(user: TokenPayload = Depends(get_current_user)) -> dict[str, Any]:
     """Current news sentiment signal for gold — via orchestrator."""
     orch = _get_orchestrator()
     try:
@@ -117,7 +119,7 @@ async def get_sentiment() -> dict[str, Any]:
 
 
 @router.get("/macro")
-async def get_macro() -> dict[str, Any]:
+async def get_macro(user: TokenPayload = Depends(get_current_user)) -> dict[str, Any]:
     """Current macro features and economic calendar — via orchestrator."""
     orch = _get_orchestrator()
     try:
@@ -164,7 +166,7 @@ async def get_macro() -> dict[str, Any]:
 
 
 @router.get("/microstructure")
-async def get_microstructure(symbol: str = Query("XAU_USD")) -> dict[str, Any]:
+async def get_microstructure(symbol: str = Query("XAU_USD"), user: TokenPayload = Depends(get_current_user)) -> dict[str, Any]:
     """Current microstructure snapshot — via orchestrator."""
     orch = _get_orchestrator()
     try:
@@ -201,7 +203,7 @@ async def get_microstructure(symbol: str = Query("XAU_USD")) -> dict[str, Any]:
 
 
 @router.get("/quality")
-async def get_quality_report(symbol: str = Query("XAU_USD")) -> dict[str, Any]:
+async def get_quality_report(symbol: str = Query("XAU_USD"), user: TokenPayload = Depends(get_current_user)) -> dict[str, Any]:
     """Data quality report — via orchestrator."""
     orch = _get_orchestrator()
     try:
@@ -236,6 +238,7 @@ async def get_lineage(
     record_type: str | None = Query(None),
     symbol: str | None = Query("XAU_USD"),
     limit: int = Query(50, ge=1, le=500),
+    user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Recent lineage records (immutable audit trail) — via orchestrator."""
     orch = _get_orchestrator()
@@ -253,7 +256,7 @@ async def get_lineage(
 
 
 @router.get("/feeds")
-async def get_feed_health() -> dict[str, Any]:
+async def get_feed_health(user: TokenPayload = Depends(get_current_user)) -> dict[str, Any]:
     """Per-feed health and configuration status — via orchestrator."""
     orch = _get_orchestrator()
     try:
@@ -272,7 +275,7 @@ async def get_feed_health() -> dict[str, Any]:
 
 
 @router.get("/ml-features")
-async def get_ml_features(symbol: str = Query("XAU_USD")) -> dict[str, Any]:
+async def get_ml_features(symbol: str = Query("XAU_USD"), user: TokenPayload = Depends(get_current_user)) -> dict[str, Any]:
     """Complete ML feature set from all data layer components — via orchestrator."""
     orch = _get_orchestrator()
     try:
