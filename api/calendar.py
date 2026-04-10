@@ -25,8 +25,10 @@ from datetime import datetime, timedelta, timezone
 UTC = timezone.utc
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
+
+from api.auth import TokenPayload, get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -73,133 +75,33 @@ def _save_auto_pause(config: dict[str, Any], changed_by: str = "api") -> None:
         logger.warning("_save_auto_pause: config_store write failed: %s", exc)
 
 
-# ── Seed data helper ──────────────────────────────────────────────────────────
+# ── Live calendar fetch ───────────────────────────────────────────────────────
+
+# In-process cache: (calendar, fetched_at)
+_calendar_cache: tuple | None = None
+_CALENDAR_CACHE_TTL_SECONDS = 3600  # refresh at most once per hour
 
 
-def _seed_calendar():
-    """Return a seeded EconomicCalendar with realistic upcoming events."""
-    from news.economic_calendar import (
-        EconomicCalendar,
-        EconomicEvent,
-        EventImportance,
-        EventType,
-    )
+def _get_live_calendar():
+    """
+    Return a populated EconomicCalendar from Finnhub.
 
-    cal = EconomicCalendar()
-    now = datetime.now(UTC)
+    Results are cached for one hour to avoid hammering the API.
+    Raises RuntimeError when FINNHUB_API_KEY is absent or the request fails —
+    callers must handle this and return an appropriate HTTP error.
+    """
+    global _calendar_cache
+    now_ts = datetime.now(UTC).timestamp()
 
-    seed_events = [
-        # Today / tomorrow
-        {
-            "title": "US Non-Farm Payrolls",
-            "event_type": EventType.EMPLOYMENT,
-            "importance": EventImportance.CRITICAL,
-            "hours": 2,
-            "country": "US",
-            "currency": "USD",
-            "forecast": 185.0,
-            "previous": 175.0,
-        },
-        {
-            "title": "US CPI (YoY)",
-            "event_type": EventType.INFLATION,
-            "importance": EventImportance.HIGH,
-            "hours": 6,
-            "country": "US",
-            "currency": "USD",
-            "forecast": 3.1,
-            "previous": 3.2,
-        },
-        {
-            "title": "FOMC Meeting Minutes",
-            "event_type": EventType.CENTRAL_BANK,
-            "importance": EventImportance.CRITICAL,
-            "hours": 26,
-            "country": "US",
-            "currency": "USD",
-            "forecast": None,
-            "previous": None,
-        },
-        {
-            "title": "ECB Interest Rate Decision",
-            "event_type": EventType.CENTRAL_BANK,
-            "importance": EventImportance.CRITICAL,
-            "hours": 30,
-            "country": "EU",
-            "currency": "EUR",
-            "forecast": 4.5,
-            "previous": 4.5,
-        },
-        {
-            "title": "UK GDP (QoQ)",
-            "event_type": EventType.GDP,
-            "importance": EventImportance.HIGH,
-            "hours": 48,
-            "country": "UK",
-            "currency": "GBP",
-            "forecast": 0.2,
-            "previous": 0.1,
-        },
-        {
-            "title": "US Retail Sales (MoM)",
-            "event_type": EventType.RETAIL_SALES,
-            "importance": EventImportance.MEDIUM,
-            "hours": 52,
-            "country": "US",
-            "currency": "USD",
-            "forecast": 0.3,
-            "previous": -0.1,
-        },
-        {
-            "title": "US Initial Jobless Claims",
-            "event_type": EventType.EMPLOYMENT,
-            "importance": EventImportance.MEDIUM,
-            "hours": 72,
-            "country": "US",
-            "currency": "USD",
-            "forecast": 215.0,
-            "previous": 220.0,
-        },
-        {
-            "title": "BOJ Rate Decision",
-            "event_type": EventType.CENTRAL_BANK,
-            "importance": EventImportance.HIGH,
-            "hours": 96,
-            "country": "JP",
-            "currency": "JPY",
-            "forecast": -0.1,
-            "previous": -0.1,
-        },
-        {
-            "title": "US PPI (MoM)",
-            "event_type": EventType.INFLATION,
-            "importance": EventImportance.MEDIUM,
-            "hours": 120,
-            "country": "US",
-            "currency": "USD",
-            "forecast": 0.2,
-            "previous": 0.3,
-        },
-        {
-            "title": "Michigan Consumer Sentiment",
-            "event_type": EventType.CONSUMER_CONFIDENCE,
-            "importance": EventImportance.LOW,
-            "hours": 144,
-            "country": "US",
-            "currency": "USD",
-            "forecast": 68.0,
-            "previous": 67.4,
-        },
-    ]
+    if _calendar_cache is not None:
+        cal, fetched_at = _calendar_cache
+        if now_ts - fetched_at < _CALENDAR_CACHE_TTL_SECONDS:
+            return cal
 
-    for ev in seed_events:
-        hours = ev.pop("hours")
-        event = EconomicEvent(
-            scheduled_time=now + timedelta(hours=hours),
-            **ev,
-        )
-        cal.add_event(event)
+    from news.economic_calendar import fetch_live_calendar
 
+    cal = fetch_live_calendar(days_ahead=30)
+    _calendar_cache = (cal, now_ts)
     return cal
 
 
@@ -259,42 +161,51 @@ async def get_upcoming(
         None,
         description="Filter: low|medium|high|critical",
     ),
+    user: TokenPayload = Depends(get_current_user),
 ) -> list[EventOut]:
     """Return upcoming economic events within the specified window."""
-    try:
-        from news.economic_calendar import EventImportance
+    from fastapi import HTTPException
 
-        cal = _seed_calendar()
-        min_imp = None
-        if importance:
-            try:
-                min_imp = EventImportance(importance.lower())
-            except ValueError:
-                logger.warning(
-                    "get_upcoming: unrecognised importance value %r — returning all events",
-                    importance,
-                )
-        events = cal.get_upcoming_events(hours_ahead=hours, min_importance=min_imp)
-        return [_event_to_out(e) for e in events]
+    from news.economic_calendar import EventImportance
+
+    try:
+        cal = _get_live_calendar()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from None
     except Exception as exc:
-        logger.warning("Calendar error: %s", exc)
-        return []
+        logger.error("Calendar fetch error: %s", exc)
+        raise HTTPException(status_code=503, detail="Economic calendar unavailable") from None
+
+    min_imp = None
+    if importance:
+        try:
+            min_imp = EventImportance(importance.lower())
+        except ValueError:
+            logger.warning(
+                "get_upcoming: unrecognised importance value %r — returning all events",
+                importance,
+            )
+    events = cal.get_upcoming_events(hours_ahead=hours, min_importance=min_imp)
+    return [_event_to_out(e) for e in events]
 
 
 @router.get("/today", response_model=list[EventOut])
-async def get_today() -> list[EventOut]:
+async def get_today(user: TokenPayload = Depends(get_current_user)) -> list[EventOut]:
     """Return today's economic events."""
-    return await get_upcoming(hours=24)
+    return await get_upcoming(hours=24, user=user)
 
 
 @router.get("/high-impact", response_model=list[EventOut])
-async def get_high_impact() -> list[EventOut]:
+async def get_high_impact(user: TokenPayload = Depends(get_current_user)) -> list[EventOut]:
     """Return HIGH and CRITICAL events in the next 48 hours."""
-    return await get_upcoming(hours=48, importance="high")
+    return await get_upcoming(hours=48, importance="high", user=user)
 
 
 @router.post("/auto-pause", response_model=AutoPauseConfig)
-async def set_auto_pause(config: AutoPauseConfig) -> AutoPauseConfig:
+async def set_auto_pause(
+    config: AutoPauseConfig,
+    user: TokenPayload = Depends(get_current_user),
+) -> AutoPauseConfig:
     """
     Configure auto-pause trading before high-impact events.
 
@@ -302,13 +213,13 @@ async def set_auto_pause(config: AutoPauseConfig) -> AutoPauseConfig:
     survives pod restarts and is shared across all replicas.
     """
     new_config = config.model_dump()
-    _save_auto_pause(new_config, changed_by="calendar_api")
-    logger.info("Auto-pause config updated: %s", new_config)
+    _save_auto_pause(new_config, changed_by=user.sub)
+    logger.info("Auto-pause config updated by %s: %s", user.sub, new_config)
     return AutoPauseConfig(**new_config)
 
 
 @router.get("/auto-pause", response_model=AutoPauseConfig)
-async def get_auto_pause() -> AutoPauseConfig:
+async def get_auto_pause(user: TokenPayload = Depends(get_current_user)) -> AutoPauseConfig:
     """
     Return the current auto-pause config.
 
@@ -382,7 +293,10 @@ class FomcRegimeStatus(BaseModel):
 
 
 @router.get("/fomc", response_model=list[FomcEvent])
-async def get_fomc_calendar(upcoming_only: bool = True) -> list[FomcEvent]:
+async def get_fomc_calendar(
+    upcoming_only: bool = True,
+    user: TokenPayload = Depends(get_current_user),
+) -> list[FomcEvent]:
     """
     Return FOMC meeting dates with countdown timers.
 
@@ -417,7 +331,10 @@ async def get_fomc_calendar(upcoming_only: bool = True) -> list[FomcEvent]:
 
 
 @router.post("/fomc/regime", response_model=FomcRegimeStatus)
-async def set_fomc_regime(body: FomcRegimeOverride) -> FomcRegimeStatus:
+async def set_fomc_regime(
+    body: FomcRegimeOverride,
+    user: TokenPayload = Depends(get_current_user),
+) -> FomcRegimeStatus:
     """
     Record the FOMC outcome and apply a 48-hour regime adjustment.
 
@@ -454,7 +371,8 @@ async def set_fomc_regime(body: FomcRegimeOverride) -> FomcRegimeStatus:
     )
 
     logger.info(
-        "FOMC regime override set: outcome=%s multiplier=%.1f expires=%s",
+        "FOMC regime override set by %s: outcome=%s multiplier=%.1f expires=%s",
+        user.sub,
         outcome,
         multiplier,
         expires.isoformat(),
@@ -464,7 +382,7 @@ async def set_fomc_regime(body: FomcRegimeOverride) -> FomcRegimeStatus:
     try:
         from core.config_store import config_store
 
-        config_store.set("fomc_regime_override", _fomc_regime_override, changed_by="fomc_api")
+        config_store.set("fomc_regime_override", _fomc_regime_override, changed_by=user.sub)
     except Exception as exc:
         logger.warning("FOMC regime persist failed (non-fatal): %s", exc)
 
@@ -472,7 +390,7 @@ async def set_fomc_regime(body: FomcRegimeOverride) -> FomcRegimeStatus:
 
 
 @router.get("/fomc/regime", response_model=FomcRegimeStatus)
-async def get_fomc_regime() -> FomcRegimeStatus:
+async def get_fomc_regime(user: TokenPayload = Depends(get_current_user)) -> FomcRegimeStatus:
     """
     Return the current FOMC regime override status.
 
@@ -506,7 +424,7 @@ async def get_fomc_regime() -> FomcRegimeStatus:
 
 
 @router.delete("/fomc/regime")
-async def clear_fomc_regime() -> dict:
+async def clear_fomc_regime(user: TokenPayload = Depends(get_current_user)) -> dict:
     """Manually clear the FOMC regime override."""
     _fomc_regime_override.update(
         {
