@@ -23,7 +23,6 @@ No mocks, no stubs.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import time
@@ -37,6 +36,7 @@ os.environ.setdefault("SECURITY_JWT_SECRET", "test-secret-key-for-dashboard-real
 try:
     from fastapi.testclient import TestClient
     from app import app
+
     _import_error = None
 except (ImportError, ModuleNotFoundError, SystemExit) as e:
     _import_error = e
@@ -111,6 +111,7 @@ class TestWebSocketLiveConnectivity:
     def test_ws_live_endpoint_exists(self, ws_client):
         """WebSocket endpoint /ws/live must be reachable."""
         from starlette.websockets import WebSocketDisconnect
+
         try:
             with ws_client.websocket_connect("/ws/live") as ws:
                 try:
@@ -126,18 +127,17 @@ class TestWebSocketLiveConnectivity:
     def test_ws_live_sends_heartbeat(self, ws_client):
         """Server must send heartbeat messages on /ws/live."""
         from starlette.websockets import WebSocketDisconnect
+
         token = _mint_token()
         try:
             with ws_client.websocket_connect("/ws/live") as ws:
                 ws.send_text(json.dumps({"type": "auth", "token": f"Bearer {token}"}))
                 ws.send_text(json.dumps({"type": "subscribe", "channels": ["prices"]}))
-                heartbeat_received = False
                 try:
                     for _ in range(5):
                         data = ws.receive_text(timeout=3)
                         msg = json.loads(data)
                         if msg.get("type") == "heartbeat":
-                            heartbeat_received = True
                             break
                 except (WebSocketDisconnect, Exception):
                     pass
@@ -147,6 +147,7 @@ class TestWebSocketLiveConnectivity:
     def test_ws_live_auth_with_valid_jwt(self, ws_client):
         """Valid JWT auth must be accepted on /ws/live."""
         from starlette.websockets import WebSocketDisconnect
+
         token = _mint_token("trader")
         try:
             with ws_client.websocket_connect("/ws/live") as ws:
@@ -165,6 +166,7 @@ class TestWebSocketLiveConnectivity:
     def test_ws_live_rejects_invalid_token(self, ws_client):
         """Invalid JWT must result in connection close with code 4001."""
         from starlette.websockets import WebSocketDisconnect
+
         try:
             with ws_client.websocket_connect("/ws/live") as ws:
                 ws.send_text(json.dumps({"type": "auth", "token": "Bearer invalid.jwt.token"}))
@@ -183,6 +185,7 @@ class TestWebSocketLiveConnectivity:
     def test_ws_live_subscribe_to_prices_channel(self, ws_client):
         """Client can subscribe to prices channel after auth."""
         from starlette.websockets import WebSocketDisconnect
+
         token = _mint_token("trader")
         try:
             with ws_client.websocket_connect("/ws/live") as ws:
@@ -202,6 +205,7 @@ class TestWebSocketLiveConnectivity:
     def test_ws_live_subscribe_to_signals_channel(self, ws_client):
         """Client can subscribe to signals channel after auth."""
         from starlette.websockets import WebSocketDisconnect
+
         token = _mint_token("trader")
         try:
             with ws_client.websocket_connect("/ws/live") as ws:
@@ -220,6 +224,7 @@ class TestWebSocketLiveConnectivity:
     def test_ws_live_ping_receives_response(self, ws_client):
         """Ping message must receive a pong or heartbeat response."""
         from starlette.websockets import WebSocketDisconnect
+
         token = _mint_token("trader")
         try:
             with ws_client.websocket_connect("/ws/live") as ws:
@@ -248,6 +253,7 @@ class TestWebSocketLiveConnectivity:
     def test_ws_nuclear_endpoint_exists(self, ws_client):
         """Nuclear WebSocket endpoint must be reachable (may close immediately)."""
         from starlette.websockets import WebSocketDisconnect
+
         try:
             with ws_client.websocket_connect("/ws/nuclear") as ws:
                 try:
@@ -393,7 +399,7 @@ class TestRealtimePositionUpdates:
         )
         assert r.status_code in (200, 503, 500)
         if r.status_code == 200:
-            assert isinstance(r.json(), (list, dict))
+            assert isinstance(r.json(), list | dict)
 
 
 # ── 6. Alert system real-time tests ──────────────────────────────────────────
@@ -473,6 +479,7 @@ class TestWebSocketProtocol:
     def test_auth_message_format_accepted(self, ws_client):
         """Server accepts auth message in {type: auth, token: Bearer <jwt>} format."""
         from starlette.websockets import WebSocketDisconnect
+
         token = _mint_token("trader")
         try:
             with ws_client.websocket_connect("/ws/live") as ws:
@@ -481,8 +488,12 @@ class TestWebSocketProtocol:
                     data = ws.receive_text(timeout=3)
                     msg = json.loads(data)
                     assert msg.get("type") in (
-                        "auth_ok", "heartbeat", "error", "subscribed",
-                        "price_tick", "no_live_feed",
+                        "auth_ok",
+                        "heartbeat",
+                        "error",
+                        "subscribed",
+                        "price_tick",
+                        "no_live_feed",
                     )
                 except (WebSocketDisconnect, Exception):
                     pass
@@ -492,14 +503,19 @@ class TestWebSocketProtocol:
     def test_subscribe_message_format_accepted(self, ws_client):
         """Server accepts subscribe message in {type: subscribe, channels: [...]} format."""
         from starlette.websockets import WebSocketDisconnect
+
         token = _mint_token("trader")
         try:
             with ws_client.websocket_connect("/ws/live") as ws:
                 ws.send_text(json.dumps({"type": "auth", "token": f"Bearer {token}"}))
-                ws.send_text(json.dumps({
-                    "type": "subscribe",
-                    "channels": ["prices", "signals", "account"],
-                }))
+                ws.send_text(
+                    json.dumps(
+                        {
+                            "type": "subscribe",
+                            "channels": ["prices", "signals", "account"],
+                        }
+                    )
+                )
                 try:
                     for _ in range(3):
                         data = ws.receive_text(timeout=2)
@@ -513,6 +529,7 @@ class TestWebSocketProtocol:
     def test_unsubscribe_message_accepted(self, ws_client):
         """Server accepts unsubscribe message without crashing."""
         from starlette.websockets import WebSocketDisconnect
+
         token = _mint_token("trader")
         try:
             with ws_client.websocket_connect("/ws/live") as ws:
@@ -531,6 +548,7 @@ class TestWebSocketProtocol:
     def test_unknown_message_type_does_not_crash_server(self, ws_client):
         """Unknown message types must be ignored, not crash the server."""
         from starlette.websockets import WebSocketDisconnect
+
         token = _mint_token("trader")
         try:
             with ws_client.websocket_connect("/ws/live") as ws:
@@ -554,6 +572,7 @@ class TestDashboardModule:
         """dashboard/web_dashboard.py must be importable."""
         try:
             import dashboard.web_dashboard as wd
+
             assert wd is not None
         except (ImportError, NameError, Exception):
             pytest.skip("dashboard.web_dashboard not importable in test env")
@@ -562,6 +581,7 @@ class TestDashboardModule:
         """dashboard module must expose an app or router."""
         try:
             import dashboard.web_dashboard as wd
+
             assert hasattr(wd, "app") or hasattr(wd, "router") or hasattr(wd, "dashboard_router")
         except (ImportError, NameError, Exception):
             pytest.skip("dashboard.web_dashboard not importable in test env")
@@ -570,6 +590,7 @@ class TestDashboardModule:
         """dashboard/__init__.py must be importable."""
         try:
             import dashboard
+
             assert dashboard is not None
         except (ImportError, NameError, Exception):
             pytest.skip("dashboard package not importable in test env")

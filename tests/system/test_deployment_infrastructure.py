@@ -25,8 +25,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -203,22 +201,20 @@ class TestEnvironmentValidation:
             key, _, val = line.partition("=")
             raw_val = val.split("#")[0].strip()
             if raw_val and secret_pattern.match(raw_val):
-                is_placeholder = (
-                    "CHANGE_ME" in raw_val
-                    or "YOUR_" in raw_val
-                    or "example" in raw_val.lower()
-                )
+                is_placeholder = "CHANGE_ME" in raw_val or "YOUR_" in raw_val or "example" in raw_val.lower()
                 assert is_placeholder, f"Possible real secret in .env.example: {key}"
 
     def test_startup_validator_accepts_test_env(self):
         """startup_validator must not exit when APP_ENV=test."""
         from config.startup_validator import validate_environment
+
         # strict=False: only warns, does not exit
         validate_environment(strict=False)
 
     def test_startup_validator_detects_missing_jwt_secret(self, monkeypatch):
         """startup_validator must flag missing SECURITY_JWT_SECRET."""
         from config.startup_validator import validate_environment
+
         monkeypatch.delenv("SECURITY_JWT_SECRET", raising=False)
         monkeypatch.delenv("JWT_SECRET", raising=False)
         # Validator may raise StartupValidationError or SystemExit when secret is missing
@@ -234,9 +230,10 @@ class TestEnvironmentValidation:
         """JWT secret shorter than 32 chars must be rejected by auth module."""
         from api.auth import _get_jwt_secret
         import os
+
         original = os.environ.get("SECURITY_JWT_SECRET")
         try:
-            os.environ["SECURITY_JWT_SECRET"] = "short"
+            os.environ["SECURITY_JWT_SECRET"] = "short"  # pragma: allowlist secret
             with pytest.raises(RuntimeError, match="32"):
                 _get_jwt_secret()
         finally:
@@ -449,8 +446,7 @@ class TestSecurityBaseline:
         suspicious_pattern = re.compile(r"^[A-Z_]+=([a-zA-Z0-9]{40,})$", re.MULTILINE)
         matches = suspicious_pattern.findall(content)
         for match in matches:
-            assert "CHANGE_ME" in match or "example" in match.lower(), \
-                f"Possible hardcoded secret: {match[:20]}..."
+            assert "CHANGE_ME" in match or "example" in match.lower(), f"Possible hardcoded secret: {match[:20]}..."
 
 
 # ── 9. Python project configuration ──────────────────────────────────────────
@@ -501,8 +497,7 @@ class TestCICDConfig:
         assert (ROOT / ".github").is_dir()
 
     def test_github_workflows_has_yaml_files(self):
-        workflows = list((ROOT / ".github").rglob("*.yml")) + \
-                    list((ROOT / ".github").rglob("*.yaml"))
+        workflows = list((ROOT / ".github").rglob("*.yml")) + list((ROOT / ".github").rglob("*.yaml"))
         assert len(workflows) > 0
 
     def test_ci_workflow_references_pytest(self):
