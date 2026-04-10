@@ -23,7 +23,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
+
+from api.auth import TokenPayload, get_current_user, require_role
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -103,7 +105,7 @@ def _require_admin(request: Request) -> dict[str, Any]:
 @router.post("/applicants", response_model=ApplicantResponse, status_code=201)
 async def create_applicant(
     body: CreateApplicantRequest,
-    request: Request,
+    user: TokenPayload = Depends(get_current_user),
 ) -> ApplicantResponse:
     """
     Create a KYC applicant and return the provider SDK token.
@@ -114,8 +116,7 @@ async def create_applicant(
 
     Also runs a sanctions pre-screen — returns 403 if a match is found.
     """
-    payload = _require_auth(request)
-    user_id = payload.get("sub", "unknown")
+    user_id = user.sub
 
     gateway = _get_gateway()
     try:
@@ -149,10 +150,9 @@ async def create_applicant(
 @router.get("/applicants/{applicant_id}/status")
 async def get_applicant_status(
     applicant_id: str,
-    request: Request,
+    user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, str]:
     """Poll the KYC provider for the current verification status."""
-    _require_auth(request)
     gateway = _get_gateway()
     try:
         status_val = await gateway.check_status(applicant_id)
@@ -163,10 +163,9 @@ async def get_applicant_status(
 
 
 @router.get("/status")
-async def get_my_kyc_status(request: Request) -> dict[str, str]:
+async def get_my_kyc_status(user: TokenPayload = Depends(get_current_user)) -> dict[str, str]:
     """Return the current user's KYC status from the compliance manager."""
-    payload = _require_auth(request)
-    user_id = payload.get("sub", "unknown")
+    user_id = user.sub
     try:
         from compliance.compliance_manager import ComplianceManager
 
@@ -242,7 +241,7 @@ async def onfido_webhook(
 @router.post("/sanctions/screen", response_model=SanctionsScreenResponse)
 async def screen_sanctions(
     body: SanctionsScreenRequest,
-    request: Request,
+    user: TokenPayload = Depends(require_role("admin")),
 ) -> SanctionsScreenResponse:
     """
     Manual sanctions screening. Requires admin role.
@@ -250,7 +249,6 @@ async def screen_sanctions(
     Screens a name against Refinitiv World-Check (OFAC, EU, UN, HMT lists).
     Falls back to local OFAC SDN snapshot if Refinitiv is unavailable.
     """
-    _require_admin(request)
     gateway = _get_gateway()
     try:
         result = await gateway.screen_sanctions(
