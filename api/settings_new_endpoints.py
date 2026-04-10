@@ -43,9 +43,11 @@ from email.mime.text import MIMEText
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+
+from api.auth import TokenPayload, get_current_user, require_role
 
 logger = logging.getLogger(__name__)
 
@@ -146,8 +148,8 @@ class IntegrationsPayload(BaseModel):
 
 
 @router.get("/api/settings/integrations")
-async def get_integrations(request: Request):
-    uid = _get_user_id(request)
+async def get_integrations(user: TokenPayload = Depends(get_current_user)):
+    uid = user.sub
     data = _load_from_db(f"integrations:{uid}", {})
     # Never return raw passwords/secrets — mask them
     for field in (
@@ -163,8 +165,8 @@ async def get_integrations(request: Request):
 
 
 @router.post("/api/settings/integrations")
-async def save_integrations(payload: IntegrationsPayload, request: Request):
-    uid = _get_user_id(request)
+async def save_integrations(payload: IntegrationsPayload, user: TokenPayload = Depends(get_current_user)):
+    uid = user.sub
     existing = _load_from_db(f"integrations:{uid}", {})
     data = {**existing, **payload.model_dump()}
     # Preserve existing secrets if client sent masked value
@@ -237,8 +239,7 @@ def _resolve_and_validate_webhook_url(url: str) -> str:
 
 
 @router.post("/api/settings/integrations/test-webhook")
-async def test_webhook(payload: WebhookTestPayload, request: Request):
-    _get_user_id(request)  # must be authenticated
+async def test_webhook(payload: WebhookTestPayload, user: TokenPayload = Depends(get_current_user)):
     if not payload.url.startswith("https://"):
         raise HTTPException(status_code=400, detail="Webhook URL must use HTTPS")
 
@@ -285,21 +286,21 @@ class PrivacyPayload(BaseModel):
 
 
 @router.get("/api/settings/privacy")
-async def get_privacy(request: Request):
-    uid = _get_user_id(request)
+async def get_privacy(user: TokenPayload = Depends(get_current_user)):
+    uid = user.sub
     return _load_from_db(f"privacy:{uid}", PrivacyPayload().model_dump())
 
 
 @router.post("/api/settings/privacy")
-async def save_privacy(payload: PrivacyPayload, request: Request):
-    uid = _get_user_id(request)
+async def save_privacy(payload: PrivacyPayload, user: TokenPayload = Depends(get_current_user)):
+    uid = user.sub
     _save_to_db(f"privacy:{uid}", payload.model_dump())
     return {"status": "saved"}
 
 
 @router.get("/api/settings/privacy/export")
-async def export_user_data(request: Request):
-    uid = _get_user_id(request)
+async def export_user_data(user: TokenPayload = Depends(get_current_user)):
+    uid = user.sub
     export: dict[str, Any] = {
         "exported_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "user_id": uid,
@@ -339,14 +340,14 @@ class AccessibilityPayload(BaseModel):
 
 
 @router.get("/api/settings/accessibility")
-async def get_accessibility(request: Request):
-    uid = _get_user_id(request)
+async def get_accessibility(user: TokenPayload = Depends(get_current_user)):
+    uid = user.sub
     return _load_from_db(f"accessibility:{uid}", AccessibilityPayload().model_dump())
 
 
 @router.post("/api/settings/accessibility")
-async def save_accessibility(payload: AccessibilityPayload, request: Request):
-    uid = _get_user_id(request)
+async def save_accessibility(payload: AccessibilityPayload, user: TokenPayload = Depends(get_current_user)):
+    uid = user.sub
     _save_to_db(f"accessibility:{uid}", payload.model_dump())
     return {"status": "saved"}
 
@@ -360,8 +361,8 @@ class CreateApiKeyPayload(BaseModel):
 
 
 @router.get("/api/settings/api-keys")
-async def list_api_keys(request: Request):
-    uid = _get_user_id(request)
+async def list_api_keys(user: TokenPayload = Depends(get_current_user)):
+    uid = user.sub
     keys = _load_from_db(f"api_keys:{uid}", {"api_keys": []}).get("api_keys", [])
     # Never return full key — only prefix
     safe = []
@@ -381,8 +382,8 @@ async def list_api_keys(request: Request):
 
 
 @router.post("/api/settings/api-keys", status_code=201)
-async def create_api_key(payload: CreateApiKeyPayload, request: Request):
-    uid = _get_user_id(request)
+async def create_api_key(payload: CreateApiKeyPayload, user: TokenPayload = Depends(get_current_user)):
+    uid = user.sub
     if not payload.name.strip():
         raise HTTPException(status_code=400, detail="Key name is required")
     raw_key = f"hfx_{secrets.token_urlsafe(32)}"
@@ -409,8 +410,8 @@ async def create_api_key(payload: CreateApiKeyPayload, request: Request):
 
 
 @router.delete("/api/settings/api-keys/{key_id}")
-async def revoke_api_key(key_id: str, request: Request):
-    uid = _get_user_id(request)
+async def revoke_api_key(key_id: str, user: TokenPayload = Depends(get_current_user)):
+    uid = user.sub
     store = _load_from_db(f"api_keys:{uid}", {"api_keys": []})
     keys = store.get("api_keys", [])
     found = False
@@ -443,19 +444,17 @@ _SYSTEM_DEFAULTS: dict[str, Any] = {
 
 
 @router.get("/api/admin/settings/system")
-async def get_system_settings(request: Request):
-    _require_admin(request)
+async def get_system_settings(user: TokenPayload = Depends(require_role("admin"))):
     return _load_from_db("system_settings:global", _SYSTEM_DEFAULTS)
 
 
 @router.post("/api/admin/settings/system")
-async def save_system_settings(request: Request):
-    _require_admin(request)
+async def save_system_settings(request: Request, user: TokenPayload = Depends(require_role("admin"))):
     body = await request.json()
     current = _load_from_db("system_settings:global", _SYSTEM_DEFAULTS)
     updated = {**current, **body}
     _save_to_db("system_settings:global", updated)
-    logger.info("System settings updated by admin")
+    logger.info("System settings updated by admin %s", user.sub)
     return {"status": "saved"}
 
 
@@ -463,13 +462,12 @@ async def save_system_settings(request: Request):
 
 
 @router.post("/api/admin/backup/trigger")
-async def trigger_backup(request: Request):
-    _require_admin(request)
+async def trigger_backup(user: TokenPayload = Depends(require_role("admin"))):
     try:
         from database.backup import run_backup
 
         run_backup()
-        logger.info("Manual backup triggered by admin")
+        logger.info("Manual backup triggered by admin %s", user.sub)
         return {"status": "started"}
     except ImportError:
         logger.warning("Backup module not available — recording trigger only")
@@ -483,12 +481,11 @@ async def trigger_backup(request: Request):
 
 
 @router.post("/api/admin/kill-switch/global")
-async def global_kill_switch(request: Request):
-    _require_admin(request)
+async def global_kill_switch(user: TokenPayload = Depends(require_role("admin"))):
     try:
         from api.admin import log_activity
 
-        log_activity("GLOBAL KILL SWITCH activated by admin")
+        log_activity(f"GLOBAL KILL SWITCH activated by admin {user.sub}")
     except Exception:
         logger.debug("Suppressed exception (no detail) in %s", __name__)
     try:
@@ -514,8 +511,7 @@ class SmtpTestPayload(BaseModel):
 
 
 @router.post("/api/admin/settings/test-smtp")
-async def test_smtp(payload: SmtpTestPayload, request: Request):
-    _require_admin(request)
+async def test_smtp(payload: SmtpTestPayload, user: TokenPayload = Depends(require_role("admin"))):
     if not payload.host:
         raise HTTPException(status_code=400, detail="SMTP host is required")
     try:
@@ -549,12 +545,12 @@ async def test_smtp(payload: SmtpTestPayload, request: Request):
 
 
 @router.get("/api/admin/settings", include_in_schema=False)
-async def get_admin_settings_alias(request: Request):
+async def get_admin_settings_alias(user: TokenPayload = Depends(require_role("admin"))):
     """Alias: GET /api/admin/settings → get_system_settings."""
-    return await get_system_settings(request)
+    return await get_system_settings(user=user)
 
 
 @router.post("/api/admin/settings", include_in_schema=False)
-async def save_admin_settings_alias(request: Request):
+async def save_admin_settings_alias(request: Request, user: TokenPayload = Depends(require_role("admin"))):
     """Alias: POST /api/admin/settings → save_system_settings."""
-    return await save_system_settings(request)
+    return await save_system_settings(request=request, user=user)
