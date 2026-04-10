@@ -267,7 +267,9 @@ class TestMockKYCProvider:
         provider = MockKYCProvider()
         applicant = await provider.create_applicant("user1", {})
         status = await provider.get_status(applicant.applicant_id)
-        assert status in (VerificationStatus.APPROVED, VerificationStatus.PENDING)
+        # Compare by value to survive module-reload enum identity breaks
+        # (test_critical_paths.py reloads compliance.kyc_provider).
+        assert status.value in (VerificationStatus.APPROVED.value, VerificationStatus.PENDING.value)
 
     def test_verify_webhook_always_true(self):
         provider = MockKYCProvider()
@@ -280,7 +282,9 @@ class TestMockKYCProvider:
         )
         # MockKYCProvider may return empty string for applicant_id
         assert isinstance(applicant_id, str)
-        assert status in list(VerificationStatus)
+        # Compare by value to survive module-reload enum identity breaks.
+        valid_values = {v.value for v in VerificationStatus}
+        assert status.value in valid_values
 
     def test_verification_status_values(self):
         assert VerificationStatus.PENDING.value == "pending"
