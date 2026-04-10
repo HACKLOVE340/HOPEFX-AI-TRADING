@@ -102,13 +102,13 @@ class TestUpdateEquity:
     def test_daily_drawdown_breach_via_before_order(self):
         # breach_action="liquidate" -> kill_switch.activate()
         e = _engine(initial_equity=100_000.0, daily_dd=0.05, breach_action="liquidate")
-        e.update_equity(93_000.0)   # 7% drop > 5% limit
-        e.before_order()            # triggers the compliance check
+        e.update_equity(93_000.0)  # 7% drop > 5% limit
+        e.before_order()  # triggers the compliance check
         assert e.kill_switch.is_active is True
 
     def test_total_drawdown_breach_via_before_order(self):
         e = _engine(initial_equity=100_000.0, max_dd=0.10, breach_action="liquidate")
-        e.update_equity(89_000.0)   # 11% drop > 10% limit
+        e.update_equity(89_000.0)  # 11% drop > 10% limit
         e.before_order()
         assert e.kill_switch.is_active is True
 

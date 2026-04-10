@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -113,6 +113,7 @@ class TestAsyncRedisStateStore:
         r.sadd = MagicMock(return_value=None)
 
         import asyncio
+
         r.set = MagicMock(side_effect=lambda *a, **kw: asyncio.coroutine(lambda: True)())
 
         store = AsyncRedisStateStore(r)

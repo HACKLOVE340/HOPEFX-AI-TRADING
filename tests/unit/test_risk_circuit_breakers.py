@@ -5,9 +5,8 @@
 
 from __future__ import annotations
 
-import asyncio
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from datetime import timezone
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -25,6 +24,7 @@ UTC = timezone.utc
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_broker(balance: float = 100_000.0) -> MagicMock:
     broker = MagicMock()
@@ -44,6 +44,7 @@ def _make_cb(balance: float = 100_000.0) -> CircuitBreaker:
 # RiskLimits
 # ---------------------------------------------------------------------------
 
+
 class TestRiskLimits:
     def test_defaults(self):
         rl = RiskLimits()
@@ -62,6 +63,7 @@ class TestRiskLimits:
 # CircuitState
 # ---------------------------------------------------------------------------
 
+
 class TestCircuitState:
     def test_values(self):
         assert CircuitState.CLOSED.value == "closed"
@@ -72,6 +74,7 @@ class TestCircuitState:
 # ---------------------------------------------------------------------------
 # CircuitBreaker construction
 # ---------------------------------------------------------------------------
+
 
 class TestCircuitBreakerInit:
     def test_initial_state_closed(self):
@@ -95,6 +98,7 @@ class TestCircuitBreakerInit:
 # ---------------------------------------------------------------------------
 # pre_trade_check
 # ---------------------------------------------------------------------------
+
 
 class TestPreTradeCheck:
     def test_allows_normal_order(self):
@@ -140,6 +144,7 @@ class TestPreTradeCheck:
 # update_trade_result
 # ---------------------------------------------------------------------------
 
+
 class TestUpdateTradeResult:
     def test_loss_increments_streak(self):
         cb = _make_cb()
@@ -165,6 +170,7 @@ class TestUpdateTradeResult:
 # ---------------------------------------------------------------------------
 # manual_override
 # ---------------------------------------------------------------------------
+
 
 class TestManualOverride:
     def test_enable_override(self):
@@ -192,6 +198,7 @@ class TestManualOverride:
 # async trigger
 # ---------------------------------------------------------------------------
 
+
 class TestAsyncTrigger:
     @pytest.mark.asyncio
     async def test_trigger_opens_circuit(self):
@@ -218,6 +225,7 @@ class TestAsyncTrigger:
 # ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
+
 
 class TestRegistry:
     def test_register_and_retrieve(self):

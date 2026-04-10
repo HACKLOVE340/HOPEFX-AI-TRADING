@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from risk.intra_trade_monitor import IntraTradeMonitor, OpenPosition, UnwindSignal
+from risk.intra_trade_monitor import IntraTradeMonitor, OpenPosition
 
 UTC = timezone.utc
 

@@ -99,10 +99,10 @@ class TestStartStop:
         assert m._running is True
         await m.stop()
         task.cancel()
-        try:
+        import contextlib
+
+        with contextlib.suppress(asyncio.CancelledError, Exception):
             await task
-        except (asyncio.CancelledError, Exception):
-            pass
 
     @pytest.mark.asyncio
     async def test_stop_clears_running(self):
@@ -112,10 +112,10 @@ class TestStartStop:
         await m.stop()
         assert m._running is False
         task.cancel()
-        try:
+        import contextlib
+
+        with contextlib.suppress(asyncio.CancelledError, Exception):
             await task
-        except (asyncio.CancelledError, Exception):
-            pass
 
     @pytest.mark.asyncio
     async def test_double_start_noop(self):
@@ -126,10 +126,10 @@ class TestStartStop:
         assert m._running is True
         await m.stop()
         task.cancel()
-        try:
+        import contextlib
+
+        with contextlib.suppress(asyncio.CancelledError, Exception):
             await task
-        except (asyncio.CancelledError, Exception):
-            pass
 
 
 class TestCheckAllPositions:

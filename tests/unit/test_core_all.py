@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import os
-from datetime import datetime, timezone
+from datetime import timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -57,7 +57,7 @@ class TestSecretsManager:
     def test_on_rotation_registers_callback(self):
         sm = SecretsManager()
         called = []
-        sm.on_rotation(lambda keys: called.append(keys))
+        sm.on_rotation(called.append)
         assert len(sm._rotation_callbacks) >= 1
 
     def test_load_from_env(self):
@@ -121,10 +121,10 @@ class TestPositionReconciler:
         await rec.stop()
         assert rec._running is False
         task.cancel()
-        try:
+        import contextlib
+
+        with contextlib.suppress(asyncio.CancelledError, Exception):
             await task
-        except (asyncio.CancelledError, Exception):
-            pass
 
     @pytest.mark.asyncio
     async def test_reconcile_once_no_positions(self):
@@ -189,10 +189,10 @@ class TestOutboxRelay:
         relay.stop()
         await asyncio.sleep(0.05)
         task.cancel()
-        try:
+        import contextlib
+
+        with contextlib.suppress(asyncio.CancelledError, Exception):
             await task
-        except (asyncio.CancelledError, Exception):
-            pass
         assert relay._running is False
 
 
@@ -228,7 +228,5 @@ class TestRegimeRouter:
         sm = MagicMock()
         rr = RegimeRouter(strategy_manager=sm)
         # At least one routing/regime method should exist
-        has_method = any(
-            hasattr(rr, m) for m in ("route", "get_regime", "select", "update", "on_tick")
-        )
+        has_method = any(hasattr(rr, m) for m in ("route", "get_regime", "select", "update", "on_tick"))
         assert has_method
