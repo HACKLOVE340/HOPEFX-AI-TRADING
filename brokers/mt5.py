@@ -529,3 +529,7 @@ class MT5Connector(BrokerConnector):
             status=OrderStatus.OPEN,
             timestamp=datetime.fromtimestamp(mt5_order.time_setup),
         )
+
+
+# Alias for consistent naming across the codebase
+MT5Broker = MT5Connector

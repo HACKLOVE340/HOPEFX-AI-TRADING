@@ -538,3 +538,7 @@ class AlpacaConnector(BrokerConnector):
             "calculated": OrderStatus.OPEN,
         }
         return mapping.get(alpaca_status, OrderStatus.PENDING)
+
+
+# Alias for consistent naming across the codebase
+AlpacaBroker = AlpacaConnector

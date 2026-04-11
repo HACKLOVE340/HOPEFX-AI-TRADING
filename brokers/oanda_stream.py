@@ -444,3 +444,7 @@ class OANDAStream:
             filled_quantity=0.0,
             timestamp=datetime.now(UTC),
         )
+
+
+# Alias for consistent naming across the codebase
+OandaStreamClient = OANDAStream
