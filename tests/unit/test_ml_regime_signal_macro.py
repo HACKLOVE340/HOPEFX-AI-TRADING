@@ -69,7 +69,7 @@ class TestRegimeDetector:
         features.hawkes_intensity = 0.5
 
         import asyncio
-        regime, conf = asyncio.get_event_loop().run_until_complete(rd.detect(features))
+        regime, conf = asyncio.run(rd.detect(features))
         assert regime == MarketRegime.UNKNOWN
         assert conf == 0.0
 

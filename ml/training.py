@@ -1606,12 +1606,90 @@ def walk_forward_validate(
     return summary
 
 
+from dataclasses import dataclass, field as _dc_field
+
+
+@dataclass
+class TrainingConfig:
+    """Configuration for a training run."""
+
+    model_types: list[str] = _dc_field(default_factory=lambda: ["xgboost", "random_forest"])
+    prediction_horizon: int = 1
+    test_size: float = 0.2
+    model_dir: str = "ml/saved_models"
+    n_splits: int = 5
+    gap: int = 20
+    min_train_size: int | None = None
+    include_macro: bool = True
+    include_regime: bool = True
+    random_state: int = 42
+
+
+class ModelTrainer:
+    """
+    High-level trainer that wraps train_ml_pipeline and walk_forward_validate
+    behind a single object interface.
+
+    Usage
+    -----
+        trainer = ModelTrainer(config=TrainingConfig(model_types=["xgboost"]))
+        results = trainer.train(df)
+        wf = trainer.walk_forward(df)
+    """
+
+    def __init__(self, config: TrainingConfig | None = None) -> None:
+        self.config = config or TrainingConfig()
+        self.results: dict[str, Any] = {}
+        self.wf_results: dict[str, Any] = {}
+
+    def train(self, df: pd.DataFrame) -> dict[str, Any]:
+        """Run the full training pipeline and cache results."""
+        self.results = train_ml_pipeline(
+            df,
+            model_types=self.config.model_types,
+            prediction_horizon=self.config.prediction_horizon,
+            test_size=self.config.test_size,
+            model_dir=self.config.model_dir,
+        )
+        return self.results
+
+    def walk_forward(
+        self,
+        df: pd.DataFrame,
+        model_type: str | None = None,
+    ) -> dict[str, Any]:
+        """Run walk-forward validation and cache results."""
+        mt = model_type or (self.config.model_types[0] if self.config.model_types else "random_forest")
+        self.wf_results = walk_forward_validate(
+            df,
+            model_type=mt,
+            n_splits=self.config.n_splits,
+            gap=self.config.gap,
+            prediction_horizon=self.config.prediction_horizon,
+            min_train_size=self.config.min_train_size,
+        )
+        return self.wf_results
+
+    def summary(self) -> dict[str, Any]:
+        """Return a combined summary of training and walk-forward results."""
+        return {
+            "training": self.results,
+            "walk_forward": self.wf_results,
+            "config": {
+                "model_types": self.config.model_types,
+                "prediction_horizon": self.config.prediction_horizon,
+                "test_size": self.config.test_size,
+                "n_splits": self.config.n_splits,
+            },
+        }
+
+
 if __name__ == "__main__":
     logger.info("HOPEFX Machine Learning Pipeline")
     logger.info("Models: LSTM, XGBoost, Random Forest")
     logger.info("Features: Feature engineering, hyperparameter tuning, evaluation reports")
     logger.info("\nUsage:")
-    logger.info("  from ml.training import train_ml_pipeline, walk_forward_validate")
+    logger.info("  from ml.training import train_ml_pipeline, walk_forward_validate, ModelTrainer")
     logger.info(
         "  results = train_ml_pipeline(df, model_types=['lstm', 'xgboost', 'random_forest'])",
     )

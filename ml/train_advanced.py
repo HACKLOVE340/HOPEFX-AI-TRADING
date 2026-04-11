@@ -1327,3 +1327,86 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# ── AdvancedTrainer: object-oriented wrapper around the module-level functions ─
+
+from dataclasses import dataclass as _dc, field as _dcf
+from typing import Any as _Any
+
+
+@_dc
+class AdvancedTrainerConfig:
+    """Configuration for AdvancedTrainer."""
+
+    oos_years: int = 3
+    min_years: int = 5
+    model_dir: str = "ml/saved_models"
+    feature_importance: bool = True
+    sharpe_gate: bool = True
+
+
+class AdvancedTrainer:
+    """
+    Object-oriented wrapper around the module-level advanced training pipeline.
+
+    Provides a stable import surface for external callers:
+        from ml.train_advanced import AdvancedTrainer
+        trainer = AdvancedTrainer()
+        report = trainer.train(df)
+
+    Internally delegates to walk_forward_eval / train_final_model / oos_eval_advanced.
+    """
+
+    def __init__(self, config: AdvancedTrainerConfig | None = None) -> None:
+        self.config = config or AdvancedTrainerConfig()
+        self._report: dict[str, _Any] = {}
+        self._tracker: SharpeProgressTracker | None = None
+
+    # ── public API ────────────────────────────────────────────────────────────
+
+    def train(self, df: "pd.DataFrame") -> dict[str, _Any]:  # type: ignore[name-defined]
+        """
+        Run the full advanced training pipeline on *df* and return the report.
+
+        Steps
+        -----
+        1. Walk-forward cross-validation (expanding window)
+        2. Final model training on full in-sample data
+        3. OOS evaluation on held-out years
+        4. Sharpe gate check
+        """
+        import pandas as pd  # local import to avoid circular at module level
+
+        wf = walk_forward_eval(
+            df,
+            oos_years=self.config.oos_years,
+            min_years=self.config.min_years,
+        )
+        final = train_final_model(df, model_dir=self.config.model_dir)
+        oos = oos_eval_advanced(df, oos_years=self.config.oos_years)
+
+        self._report = {
+            "walk_forward": wf,
+            "final_model": final,
+            "oos_eval": oos,
+        }
+
+        if self.config.sharpe_gate:
+            n_trades = oos.get("n_trades", 0)
+            sharpe = oos.get("sharpe", 0.0)
+            gate = sharpe_gate_check(n_trades=n_trades, sharpe=sharpe)
+            self._report["sharpe_gate"] = gate
+
+        return self._report
+
+    def get_tracker(self) -> SharpeProgressTracker:
+        """Return a SharpeProgressTracker initialised from the last training run."""
+        if self._tracker is None:
+            self._tracker = SharpeProgressTracker()
+        return self._tracker
+
+    @property
+    def report(self) -> dict[str, _Any]:
+        """Last training report (empty dict if train() not yet called)."""
+        return self._report
