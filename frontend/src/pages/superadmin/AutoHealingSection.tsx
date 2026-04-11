@@ -1,6 +1,6 @@
 // superadmin/AutoHealingSection.tsx
 // Autonomous Healing Engine — Super Admin control panel
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import {
   SectionCard, ActionBtn, KpiTile, StatusBadge,
@@ -58,6 +58,49 @@ interface HealingConfig {
   max_healing_attempts: number;
   healing_cooldown_sec: number;
   log_level: 'minimal' | 'standard' | 'verbose' | 'debug';
+}
+
+interface DriftEvent {
+  path: string;
+  type: 'modified' | 'deleted' | 'new_file';
+  ts: string;
+  expected?: string;
+  actual?: string;
+  protected?: boolean;
+}
+
+interface PatchRecord {
+  endpoint: string;
+  file: string;
+  success: boolean;
+  message: string;
+  diff: string;
+  applied_at: string;
+}
+
+interface QuarantineEntry {
+  original: string;
+  quarantined_to: string;
+  ts: string;
+}
+
+interface PendingApproval {
+  endpoint: string;
+  fix: string;
+  category?: string;
+  queued_at: string;
+}
+
+interface TestRunResult {
+  ok: boolean;
+  ts?: string;
+  passed?: number;
+  failed?: number;
+  errors?: number;
+  duration_sec?: number;
+  output?: string;
+  status?: string;
+  success?: boolean;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -648,6 +691,275 @@ const SafetyGatesPanel: React.FC<{
   );
 };
 
+// ── Drift Event Log ───────────────────────────────────────────────────────────
+
+const DRIFT_TYPE_COLORS: Record<string, string> = {
+  modified: '#f59e0b',
+  deleted:  '#ef4444',
+  new_file: '#3b82f6',
+};
+
+const DriftLogPanel: React.FC<{
+  events: DriftEvent[];
+  loading: boolean;
+  onRefresh: () => void;
+}> = ({ events, loading, onRefresh }) => (
+  <SectionCard title="Drift Event Log" icon="⚠️" accent="#f59e0b"
+    subtitle="File integrity violations detected by the scan loop"
+    actions={<ActionBtn label="Refresh" onClick={onRefresh} icon="🔄" size="sm" loading={loading} />}>
+    {events.length === 0 ? (
+      <div style={{ textAlign: 'center', padding: '24px 0', color: '#475569', fontSize: 13 }}>
+        No drift events — all tracked files match baseline
+      </div>
+    ) : (
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid #1e293b' }}>
+              {['Time', 'Type', 'File', 'Protected', 'Hash (expected→actual)'].map(h => (
+                <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: '#475569', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: 10, whiteSpace: 'nowrap' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {events.slice().reverse().map((e, i) => (
+              <tr key={i} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
+                <td style={{ padding: '7px 10px', color: '#64748b', whiteSpace: 'nowrap' }}>{fmtDate(e.ts)}</td>
+                <td style={{ padding: '7px 10px' }}>
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
+                    background: `${DRIFT_TYPE_COLORS[e.type] ?? '#475569'}22`,
+                    color: DRIFT_TYPE_COLORS[e.type] ?? '#94a3b8',
+                    textTransform: 'uppercase',
+                  }}>{e.type}</span>
+                </td>
+                <td style={{ padding: '7px 10px', color: '#e2e8f0', fontFamily: 'monospace', fontSize: 11 }}>{e.path}</td>
+                <td style={{ padding: '7px 10px', textAlign: 'center' }}>
+                  {e.protected && <span style={{ color: '#ef4444', fontSize: 11, fontWeight: 700 }}>🔒</span>}
+                </td>
+                <td style={{ padding: '7px 10px', color: '#64748b', fontFamily: 'monospace', fontSize: 10 }}>
+                  {e.expected && e.actual ? `${e.expected}…→${e.actual}…` : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </SectionCard>
+);
+
+// ── Patch History Panel ───────────────────────────────────────────────────────
+
+const PatchHistoryPanel: React.FC<{
+  patches: PatchRecord[];
+  loading: boolean;
+  onRefresh: () => void;
+}> = ({ patches, loading, onRefresh }) => {
+  const [expandedDiff, setExpandedDiff] = useState<number | null>(null);
+  return (
+    <SectionCard title="Patch History" icon="🔧" accent="#22c55e"
+      subtitle="All patch attempts — applied, rejected, and rolled back"
+      actions={<ActionBtn label="Refresh" onClick={onRefresh} icon="🔄" size="sm" loading={loading} />}>
+      {patches.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '24px 0', color: '#475569', fontSize: 13 }}>No patches applied yet</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {patches.slice().reverse().map((p, i) => (
+            <div key={i} style={{
+              background: p.success ? '#052e1622' : '#450a0a22',
+              border: `1px solid ${p.success ? '#16a34a33' : '#dc262633'}`,
+              borderRadius: 8, padding: '10px 14px',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: p.success ? '#4ade80' : '#f87171' }}>
+                      {p.success ? '✓ APPLIED' : '✗ REJECTED'}
+                    </span>
+                    <span style={{ fontSize: 11, color: '#64748b' }}>{fmtDate(p.applied_at)}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#e2e8f0', fontFamily: 'monospace', marginBottom: 2 }}>{p.file}</div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>{p.message}</div>
+                </div>
+                {p.diff && (
+                  <ActionBtn
+                    label={expandedDiff === i ? 'Hide Diff' : 'View Diff'}
+                    onClick={() => setExpandedDiff(expandedDiff === i ? null : i)}
+                    size="sm" variant="ghost"
+                  />
+                )}
+              </div>
+              {expandedDiff === i && p.diff && (
+                <pre style={{
+                  marginTop: 10, padding: '10px 12px', borderRadius: 6,
+                  background: '#020817', border: '1px solid #1e293b',
+                  fontSize: 10, color: '#94a3b8', overflowX: 'auto',
+                  maxHeight: 300, lineHeight: 1.5,
+                }}>{p.diff}</pre>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </SectionCard>
+  );
+};
+
+// ── Quarantine Viewer ─────────────────────────────────────────────────────────
+
+const QuarantinePanel: React.FC<{
+  entries: QuarantineEntry[];
+  loading: boolean;
+  onRefresh: () => void;
+}> = ({ entries, loading, onRefresh }) => (
+  <SectionCard title="Quarantine Log" icon="🔐" accent="#f97316"
+    subtitle="Files copied to quarantine before any modification"
+    actions={<ActionBtn label="Refresh" onClick={onRefresh} icon="🔄" size="sm" loading={loading} />}>
+    {entries.length === 0 ? (
+      <div style={{ textAlign: 'center', padding: '24px 0', color: '#475569', fontSize: 13 }}>Quarantine is empty</div>
+    ) : (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {entries.slice().reverse().map((e, i) => (
+          <div key={i} style={{
+            display: 'grid', gridTemplateColumns: '140px 1fr 1fr',
+            gap: 12, padding: '8px 12px', borderRadius: 7,
+            background: '#0f172a', border: '1px solid #1e293b',
+            fontSize: 11, alignItems: 'center',
+          }}>
+            <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>{fmtDate(e.ts)}</span>
+            <span style={{ color: '#e2e8f0', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.original}</span>
+            <span style={{ color: '#475569', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>→ {e.quarantined_to}</span>
+          </div>
+        ))}
+      </div>
+    )}
+  </SectionCard>
+);
+
+// ── Pending Approval Panel ────────────────────────────────────────────────────
+
+const PendingApprovalPanel: React.FC<{
+  patches: PendingApproval[];
+  loading: boolean;
+  onRefresh: () => void;
+  onApprove: (idx: number) => void;
+  approvingIdx: number | null;
+}> = ({ patches, loading, onRefresh, onApprove, approvingIdx }) => (
+  <SectionCard title="Pending Approval Queue" icon="📋" accent="#a78bfa"
+    subtitle="Patches waiting for manual approval before the healer applies them"
+    actions={<ActionBtn label="Refresh" onClick={onRefresh} icon="🔄" size="sm" loading={loading} />}>
+    {patches.length === 0 ? (
+      <div style={{ textAlign: 'center', padding: '24px 0', color: '#475569', fontSize: 13 }}>No patches awaiting approval</div>
+    ) : (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {patches.map((p, i) => (
+          <div key={i} style={{
+            background: '#1e1040', border: '1px solid #4c1d9533',
+            borderRadius: 8, padding: '12px 14px',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+          }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                {p.category && (
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#a78bfa', background: '#2e1065', padding: '2px 7px', borderRadius: 4, textTransform: 'uppercase' }}>
+                    {p.category}
+                  </span>
+                )}
+                <span style={{ fontSize: 11, color: '#64748b' }}>Queued {fmtDate(p.queued_at)}</span>
+              </div>
+              <div style={{ fontSize: 12, color: '#e2e8f0', fontFamily: 'monospace' }}>{p.endpoint}</div>
+            </div>
+            <ActionBtn
+              label={approvingIdx === i ? 'Approving…' : 'Approve'}
+              onClick={() => onApprove(i)}
+              variant="success"
+              size="sm"
+              loading={approvingIdx === i}
+            />
+          </div>
+        ))}
+      </div>
+    )}
+  </SectionCard>
+);
+
+// ── Test Run Panel ────────────────────────────────────────────────────────────
+
+const TestRunPanel: React.FC<{
+  onRunTests: () => void;
+  running: boolean;
+  lastResult: TestRunResult | null;
+}> = ({ onRunTests, running, lastResult }) => {
+  const [showOutput, setShowOutput] = useState(false);
+  return (
+    <SectionCard title="Manual Test Trigger" icon="▶️" accent="#06b6d4"
+      subtitle="Run the enabled test suites immediately and see results">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: lastResult ? 16 : 0 }}>
+        <ActionBtn
+          label={running ? 'Running Tests…' : 'Run Tests Now'}
+          onClick={onRunTests}
+          variant="primary"
+          icon="▶️"
+          loading={running}
+        />
+        {lastResult && !running && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{
+              fontSize: 12, fontWeight: 700,
+              color: lastResult.success ? '#4ade80' : '#f87171',
+            }}>
+              {lastResult.success ? '✓ PASSED' : '✗ FAILED'}
+            </span>
+            {lastResult.passed != null && (
+              <span style={{ fontSize: 12, color: '#4ade80' }}>{lastResult.passed} passed</span>
+            )}
+            {lastResult.failed != null && lastResult.failed > 0 && (
+              <span style={{ fontSize: 12, color: '#f87171' }}>{lastResult.failed} failed</span>
+            )}
+            {lastResult.duration_sec != null && (
+              <span style={{ fontSize: 11, color: '#64748b' }}>{lastResult.duration_sec}s</span>
+            )}
+            {lastResult.ts && (
+              <span style={{ fontSize: 11, color: '#475569' }}>{fmtAgo(lastResult.ts)}</span>
+            )}
+          </div>
+        )}
+      </div>
+      {lastResult?.output && (
+        <>
+          <ActionBtn
+            label={showOutput ? 'Hide Output' : 'Show Output'}
+            onClick={() => setShowOutput(v => !v)}
+            size="sm" variant="ghost"
+          />
+          {showOutput && (
+            <pre style={{
+              marginTop: 10, padding: '12px 14px', borderRadius: 8,
+              background: '#020817', border: '1px solid #1e293b',
+              fontSize: 10, color: '#94a3b8', overflowX: 'auto',
+              maxHeight: 400, lineHeight: 1.6, whiteSpace: 'pre-wrap',
+            }}>{lastResult.output}</pre>
+          )}
+        </>
+      )}
+    </SectionCard>
+  );
+};
+
+// ── Main Component ────────────────────────────────────────────────────────────
+
+// ── Tab navigation for the live panels ───────────────────────────────────────
+
+type LiveTab = 'drift' | 'patches' | 'quarantine' | 'approval';
+
+const LIVE_TABS: { id: LiveTab; label: string; icon: string; accent: string }[] = [
+  { id: 'drift',     label: 'Drift Events',      icon: '⚠️', accent: '#f59e0b' },
+  { id: 'patches',   label: 'Patch History',      icon: '🔧', accent: '#22c55e' },
+  { id: 'quarantine',label: 'Quarantine',         icon: '🔐', accent: '#f97316' },
+  { id: 'approval',  label: 'Pending Approval',   icon: '📋', accent: '#a78bfa' },
+];
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 const AutoHealingSection: React.FC = () => {
@@ -659,24 +971,44 @@ const AutoHealingSection: React.FC = () => {
   const [refreshing, setRefreshing]     = useState(false);
   const [rebuildBusy, setRebuildBusy]   = useState(false);
   const [reindexBusy, setReindexBusy]   = useState(false);
+  const [testRunBusy, setTestRunBusy]   = useState(false);
   const [confirmNuclear, setConfirmNuclear] = useState(false);
   const [pendingCfg, setPendingCfg]     = useState<HealingConfig | null>(null);
+  const [activeTab, setActiveTab]       = useState<LiveTab>('drift');
+  const [approvingIdx, setApprovingIdx] = useState<number | null>(null);
 
+  // Live data
   const [liveStatus, setLiveStatus]     = useState<HealerLiveStatus | null>(null);
   const [testIndex, setTestIndex]       = useState<TestIndex | null>(null);
   const [cfg, setCfg]                   = useState<HealingConfig>(DEFAULT_CONFIG);
+  const [driftEvents, setDriftEvents]   = useState<DriftEvent[]>([]);
+  const [patchHistory, setPatchHistory] = useState<PatchRecord[]>([]);
+  const [quarantine, setQuarantine]     = useState<QuarantineEntry[]>([]);
+  const [pendingApproval, setPendingApproval] = useState<PendingApproval[]>([]);
+  const [lastTestResult, setLastTestResult]   = useState<TestRunResult | null>(null);
+
+  // Loading states per panel
+  const [driftLoading, setDriftLoading]       = useState(false);
+  const [patchLoading, setPatchLoading]       = useState(false);
+  const [quarLoading, setQuarLoading]         = useState(false);
+  const [approvalLoading, setApprovalLoading] = useState(false);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const errDetail = (e: unknown) =>
+    (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+
   const showMsg = (text: string, type: 'ok' | 'err' = 'ok') => {
     setMsg(text); setMsgType(type);
-    setTimeout(() => setMsg(''), 5000);
+    setTimeout(() => setMsg(''), 6000);
   };
+
+  // ── Loaders ────────────────────────────────────────────────────────────────
 
   const loadStatus = useCallback(async () => {
     try {
       const [healRes, testRes] = await Promise.all([
-        superadminApi.selfHealerStatus(),
+        superadminApi.autoHealStatus(),
         superadminApi.autoHealTestIndex(),
       ]);
       const h = healRes.data;
@@ -697,40 +1029,79 @@ const AutoHealingSection: React.FC = () => {
         last_run_passed:  t.last_run_passed ?? null,
         last_run_failed:  t.last_run_failed ?? null,
       });
-    } catch {
-      // status polling — silent fail
-    }
+    } catch { /* silent poll */ }
+  }, []);
+
+  const loadDrift = useCallback(async () => {
+    setDriftLoading(true);
+    try {
+      const res = await superadminApi.autoHealDrift(200);
+      setDriftEvents(res.data.events ?? []);
+    } catch { /* silent */ } finally { setDriftLoading(false); }
+  }, []);
+
+  const loadPatches = useCallback(async () => {
+    setPatchLoading(true);
+    try {
+      const res = await superadminApi.autoHealPatches(100);
+      setPatchHistory(res.data.patches ?? []);
+    } catch { /* silent */ } finally { setPatchLoading(false); }
+  }, []);
+
+  const loadQuarantine = useCallback(async () => {
+    setQuarLoading(true);
+    try {
+      const res = await superadminApi.autoHealQuarantine();
+      setQuarantine(res.data.entries ?? []);
+    } catch { /* silent */ } finally { setQuarLoading(false); }
+  }, []);
+
+  const loadApproval = useCallback(async () => {
+    setApprovalLoading(true);
+    try {
+      const res = await superadminApi.autoHealPendingApproval();
+      setPendingApproval(res.data.patches ?? []);
+    } catch { /* silent */ } finally { setApprovalLoading(false); }
   }, []);
 
   const loadConfig = useCallback(async () => {
     try {
       const res = await superadminApi.autoHealConfig();
       setCfg({ ...DEFAULT_CONFIG, ...res.data });
-    } catch {
-      // use defaults if config not yet saved
-    }
+    } catch { /* use defaults */ }
   }, []);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      await Promise.all([loadStatus(), loadConfig()]);
+      await Promise.all([loadStatus(), loadConfig(), loadDrift(), loadPatches(), loadQuarantine(), loadApproval()]);
     } catch (e: unknown) {
-      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load healing configuration');
-    } finally {
-      setLoading(false);
-    }
-  }, [loadStatus, loadConfig]);
+      setError(errDetail(e) ?? 'Failed to load healing configuration');
+    } finally { setLoading(false); }
+  }, [loadStatus, loadConfig, loadDrift, loadPatches, loadQuarantine, loadApproval]);
 
   useEffect(() => {
     load();
-    pollRef.current = setInterval(loadStatus, 15_000);
+    pollRef.current = setInterval(() => {
+      loadStatus();
+      loadApproval();
+    }, 15_000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [load, loadStatus]);
+  }, [load, loadStatus, loadApproval]);
+
+  // Reload active tab data when tab changes
+  useEffect(() => {
+    if (activeTab === 'drift')     loadDrift();
+    if (activeTab === 'patches')   loadPatches();
+    if (activeTab === 'quarantine') loadQuarantine();
+    if (activeTab === 'approval')  loadApproval();
+  }, [activeTab, loadDrift, loadPatches, loadQuarantine, loadApproval]);
+
+  // ── Handlers ───────────────────────────────────────────────────────────────
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadStatus();
+    await Promise.all([loadStatus(), loadDrift(), loadPatches(), loadQuarantine(), loadApproval()]);
     setRefreshing(false);
   };
 
@@ -741,9 +1112,8 @@ const AutoHealingSection: React.FC = () => {
       showMsg('Baseline rebuild triggered — this may take a moment');
       setTimeout(loadStatus, 3000);
     } catch (e: unknown) {
-      showMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Rebuild failed', 'err');
-    } finally {
-      setRebuildBusy(false); }
+      showMsg(errDetail(e) ?? 'Rebuild failed', 'err');
+    } finally { setRebuildBusy(false); }
   };
 
   const handleReindex = async () => {
@@ -753,29 +1123,51 @@ const AutoHealingSection: React.FC = () => {
       showMsg('Test re-scan started — index will update shortly');
       setTimeout(loadStatus, 4000);
     } catch (e: unknown) {
-      showMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Re-scan failed', 'err');
-    } finally {
-      setReindexBusy(false); }
+      showMsg(errDetail(e) ?? 'Re-scan failed', 'err');
+    } finally { setReindexBusy(false); }
+  };
+
+  const handleRunTests = async () => {
+    setTestRunBusy(true);
+    try {
+      const res = await superadminApi.autoHealRunTests();
+      setLastTestResult(res.data);
+      showMsg(res.data.success ? `Tests passed: ${res.data.passed ?? 0} ✓` : `Tests failed: ${res.data.failed ?? 0} ✗`, res.data.success ? 'ok' : 'err');
+      setTimeout(loadStatus, 2000);
+    } catch (e: unknown) {
+      showMsg(errDetail(e) ?? 'Test run failed', 'err');
+    } finally { setTestRunBusy(false); }
+  };
+
+  const handleApprove = async (idx: number) => {
+    setApprovingIdx(idx);
+    try {
+      await superadminApi.autoHealApprovePatch(idx);
+      showMsg('Patch approved and queued for application');
+      await loadApproval();
+    } catch (e: unknown) {
+      showMsg(errDetail(e) ?? 'Approval failed', 'err');
+    } finally { setApprovingIdx(null); }
   };
 
   const handleSave = async (overrideCfg?: HealingConfig) => {
     const toSave = overrideCfg ?? cfg;
     if (toSave.aggressiveness === 'nuclear' && !overrideCfg) {
-      setPendingCfg(toSave);
-      setConfirmNuclear(true);
-      return;
+      setPendingCfg(toSave); setConfirmNuclear(true); return;
     }
     setSaving(true);
     try {
       await superadminApi.autoHealSaveConfig(toSave);
-      showMsg('Auto-Healing configuration saved successfully');
+      showMsg('Configuration saved and applied to live engine');
     } catch (e: unknown) {
-      showMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Save failed', 'err');
-    } finally {
-      setSaving(false); }
+      showMsg(errDetail(e) ?? 'Save failed', 'err');
+    } finally { setSaving(false); }
   };
 
   const patchCfg = (patch: Partial<HealingConfig>) => setCfg(prev => ({ ...prev, ...patch }));
+
+  // Pending approval badge count
+  const approvalCount = useMemo(() => pendingApproval.length, [pendingApproval]);
 
   if (loading) return <><SAStyles /><LoadingRows rows={8} /></>;
   if (error)   return <><SAStyles /><ErrorState message={error} onRetry={load} /></>;
@@ -801,6 +1193,7 @@ const AutoHealingSection: React.FC = () => {
         />
       )}
 
+      {/* Live status card */}
       <LiveStatusCard
         status={liveStatus}
         testIndex={testIndex}
@@ -808,6 +1201,7 @@ const AutoHealingSection: React.FC = () => {
         refreshing={refreshing}
       />
 
+      {/* Configuration panels */}
       <HealingCorePanel
         cfg={cfg}
         onChange={patchCfg}
@@ -829,7 +1223,7 @@ const AutoHealingSection: React.FC = () => {
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '16px 20px', background: '#0a1628',
-        border: '1px solid #1e293b', borderRadius: 12, marginTop: 4,
+        border: '1px solid #1e293b', borderRadius: 12, marginTop: 4, marginBottom: 24,
       }}>
         <div style={{ fontSize: 12, color: '#475569' }}>
           Changes are applied immediately to the live healing engine
@@ -843,6 +1237,90 @@ const AutoHealingSection: React.FC = () => {
             loading={saving}
             icon="💾"
           />
+        </div>
+      </div>
+
+      {/* Manual test trigger */}
+      <TestRunPanel
+        onRunTests={handleRunTests}
+        running={testRunBusy}
+        lastResult={lastTestResult}
+      />
+
+      {/* Live data tabs */}
+      <div style={{
+        background: '#0a1628', border: '1px solid #1e293b',
+        borderRadius: 14, overflow: 'hidden', marginTop: 4,
+      }}>
+        {/* Tab bar */}
+        <div style={{
+          display: 'flex', borderBottom: '1px solid #1e293b',
+          background: '#060f1e', overflowX: 'auto',
+        }}>
+          {LIVE_TABS.map(tab => {
+            const active = activeTab === tab.id;
+            const badge = tab.id === 'approval' && approvalCount > 0 ? approvalCount : null;
+            return (
+              <button
+                key={tab.id}
+                className="sa-tab-btn"
+                onClick={() => setActiveTab(tab.id)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 7,
+                  padding: '12px 18px', border: 'none', cursor: 'pointer',
+                  background: active ? '#0f172a' : 'transparent',
+                  borderBottom: `2px solid ${active ? tab.accent : 'transparent'}`,
+                  color: active ? '#f1f5f9' : '#64748b',
+                  fontSize: 12, fontWeight: active ? 700 : 500,
+                  whiteSpace: 'nowrap', transition: 'all 0.15s',
+                }}
+              >
+                <span>{tab.icon}</span>
+                <span>{tab.label}</span>
+                {badge != null && (
+                  <span style={{
+                    background: '#a78bfa', color: '#0f0a1e',
+                    borderRadius: 10, fontSize: 10, fontWeight: 800,
+                    padding: '1px 6px', minWidth: 18, textAlign: 'center',
+                  }}>{badge}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Tab content */}
+        <div style={{ padding: '16px 20px' }}>
+          {activeTab === 'drift' && (
+            <DriftLogPanel
+              events={driftEvents}
+              loading={driftLoading}
+              onRefresh={loadDrift}
+            />
+          )}
+          {activeTab === 'patches' && (
+            <PatchHistoryPanel
+              patches={patchHistory}
+              loading={patchLoading}
+              onRefresh={loadPatches}
+            />
+          )}
+          {activeTab === 'quarantine' && (
+            <QuarantinePanel
+              entries={quarantine}
+              loading={quarLoading}
+              onRefresh={loadQuarantine}
+            />
+          )}
+          {activeTab === 'approval' && (
+            <PendingApprovalPanel
+              patches={pendingApproval}
+              loading={approvalLoading}
+              onRefresh={loadApproval}
+              onApprove={handleApprove}
+              approvingIdx={approvingIdx}
+            />
+          )}
         </div>
       </div>
 
