@@ -300,8 +300,13 @@ class IntraTradeMonitor:
             return 0.0
         # Dollar returns on the exposure
         dollar_returns = arr * total_exposure
-        # CVaR = mean of worst (1-confidence) fraction
-        cutoff = np.percentile(dollar_returns, (1 - _CVAR_CONFIDENCE) * 100)
+        if len(dollar_returns) < 2:
+            return 0.0
+        # CVaR = mean of worst (1-confidence) fraction.
+        # Pass q as a 1-element list to avoid numpy 2.x _quantile_is_valid
+        # 0-d array bug (triggered when q is converted to a 0-d float64 array).
+        q_val = 1.0 - float(_CVAR_CONFIDENCE)
+        cutoff = float(np.quantile(dollar_returns, [q_val])[0])
         tail = dollar_returns[dollar_returns <= cutoff]
         cvar_usd = -float(np.mean(tail)) if len(tail) > 0 else 0.0
         return cvar_usd / max(self._equity, 1.0)
