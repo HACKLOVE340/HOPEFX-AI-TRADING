@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import time
 from datetime import datetime, timezone
 
 import pytest
@@ -339,7 +338,7 @@ class TestCheckMessageThrottle:
         assert result.status == RiskControlStatus.PASS
 
     def test_exceeds_limit_blocks(self):
-        mgr = _mgr(**{"max_messages_per_second": 5})
+        mgr = _mgr(max_messages_per_second=5)
         for _ in range(5):
             mgr.check_message_throttle()
         result = mgr.check_message_throttle()
@@ -347,7 +346,7 @@ class TestCheckMessageThrottle:
         assert "FIA_3.4" in result.rule
 
     def test_metadata_on_block(self):
-        mgr = _mgr(**{"max_messages_per_second": 2})
+        mgr = _mgr(max_messages_per_second=2)
         mgr.check_message_throttle()
         mgr.check_message_throttle()
         result = mgr.check_message_throttle()
