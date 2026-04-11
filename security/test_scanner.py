@@ -285,16 +285,158 @@ def _enrich_with_run_stats(index: dict[str, Any]) -> dict[str, Any]:
     return index
 
 
-def record_test_run(passed: int, failed: int) -> None:
+def record_test_run(passed: int, failed: int, status: str = 'ok') -> None:
     """Called by the healer after running tests to persist run stats."""
+    payload = {
+        'ts': datetime.now(UTC).isoformat(),
+        'passed': passed,
+        'failed': failed,
+        'status': status,
+    }
     try:
         from cache.redis_client import get_redis_client
         rc = get_redis_client()
         if rc:
-            rc.set('heal:last_test_run', json.dumps({
-                'ts': datetime.now(UTC).isoformat(),
-                'passed': passed,
-                'failed': failed,
-            }), ex=86400)
+            rc.set('heal:last_test_run', json.dumps(payload), ex=86400)
+            rc.rpush('heal:test_run_history', json.dumps(payload))
+            rc.ltrim('heal:test_run_history', -100, -1)
     except Exception as exc:
         logger.debug('test_scanner: record_test_run failed: %s', exc)
+
+
+def get_test_run_history(limit: int = 20) -> list[dict[str, Any]]:
+    """Return the last N test run records."""
+    try:
+        from cache.redis_client import get_redis_client
+        rc = get_redis_client()
+        if rc:
+            raw = rc.lrange('heal:test_run_history', -limit, -1)
+            return [json.loads(r) for r in reversed(raw)]
+    except Exception as exc:
+        logger.debug('test_scanner: get_test_run_history: %s', exc)
+    return []
+
+
+# ── Background async re-index ─────────────────────────────────────────────────
+
+_reindex_lock: bool = False
+
+
+async def async_reindex(root: Path = PROJECT_ROOT) -> dict[str, Any]:
+    """
+    Run a full test scan in a thread pool so it doesn't block the event loop.
+    Uses a simple lock to prevent concurrent scans.
+    """
+    global _reindex_lock
+    if _reindex_lock:
+        logger.info('test_scanner: reindex already running, skipping')
+        cached = _load_cached_index()
+        return cached or {'total': 0, 'files': 0, 'by_category': {}, 'last_indexed': None}
+
+    _reindex_lock = True
+    try:
+        import asyncio
+        loop = asyncio.get_event_loop()
+        index = await loop.run_in_executor(None, lambda: scan_tests(root))
+        _save_index(index)
+        logger.info('test_scanner: async reindex complete — %d tests in %d files',
+                    index['total'], index['files'])
+        return _enrich_with_run_stats(index)
+    finally:
+        _reindex_lock = False
+
+
+# ── Pytest runner (sync, for use in subprocess or thread) ────────────────────
+
+def run_category_tests(
+    categories: list[str],
+    timeout_sec: int = 600,
+    parallel: bool = True,
+    per_suite_timeout: int = 120,
+) -> dict[str, Any]:
+    """
+    Run pytest for the given category list synchronously.
+    Returns {passed, failed, errors, duration_sec, output, success}.
+    """
+    import subprocess  # nosec B404
+    import time
+
+    index = get_test_index(force_rescan=False)
+    file_list: list[dict[str, Any]] = index.get('file_list', [])
+
+    paths = [
+        e['path'] for e in file_list
+        if e.get('category') in categories and Path(PROJECT_ROOT / e['path']).exists()
+    ][:200]
+
+    if not paths:
+        return {
+            'passed': 0, 'failed': 0, 'errors': 0,
+            'duration_sec': 0, 'output': 'No test files found for categories: ' + str(categories),
+            'success': True,
+        }
+
+    cmd = [
+        'python', '-m', 'pytest',
+        '--tb=short', '-q', '--no-header',
+        f'--timeout={per_suite_timeout}',
+    ]
+    if parallel:
+        cmd += ['-n', 'auto']
+    cmd += paths
+
+    t0 = time.time()
+    try:
+        result = subprocess.run(  # nosec B603
+            cmd,
+            cwd=str(PROJECT_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=timeout_sec,
+        )
+        duration = round(time.time() - t0, 2)
+        output = result.stdout + result.stderr
+        passed, failed, errors = _parse_pytest_summary(output)
+        success = result.returncode == 0
+        record_test_run(passed, failed, 'ok' if success else 'failed')
+        return {
+            'passed': passed, 'failed': failed, 'errors': errors,
+            'duration_sec': duration, 'output': output[-4000:],
+            'success': success, 'returncode': result.returncode,
+        }
+    except subprocess.TimeoutExpired:
+        duration = round(time.time() - t0, 2)
+        record_test_run(0, 0, 'timeout')
+        return {
+            'passed': 0, 'failed': 0, 'errors': 0,
+            'duration_sec': duration, 'output': f'Test run timed out after {timeout_sec}s',
+            'success': False, 'returncode': -1,
+        }
+    except FileNotFoundError:
+        return {
+            'passed': 0, 'failed': 0, 'errors': 0,
+            'duration_sec': 0, 'output': 'pytest not found in PATH',
+            'success': False, 'returncode': -1,
+        }
+    except Exception as exc:
+        return {
+            'passed': 0, 'failed': 0, 'errors': 0,
+            'duration_sec': 0, 'output': str(exc),
+            'success': False, 'returncode': -1,
+        }
+
+
+def _parse_pytest_summary(output: str) -> tuple[int, int, int]:
+    """Extract passed/failed/error counts from pytest output."""
+    import re
+    passed = failed = errors = 0
+    m = re.search(r'(\d+) passed', output)
+    if m:
+        passed = int(m.group(1))
+    m = re.search(r'(\d+) failed', output)
+    if m:
+        failed = int(m.group(1))
+    m = re.search(r'(\d+) error', output)
+    if m:
+        errors = int(m.group(1))
+    return passed, failed, errors
