@@ -147,6 +147,17 @@ class ModelPerformanceMonitor:
             for name, w in self._windows.items()
         }
 
+    def status(self) -> dict:
+        """Return a summary status dict (alias for get_stats with extra metadata)."""
+        return {
+            "current_version": self._current_version,
+            "previous_version": self._previous_version,
+            "running": self._running,
+            "window_trades": WINDOW_TRADES,
+            "rollback_threshold": ROLLBACK_THRESHOLD,
+            "versions": self.get_stats(),
+        }
+
     # ── Background loop ───────────────────────────────────────────────────────
 
     async def run(self) -> None:
