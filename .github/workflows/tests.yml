@@ -79,11 +79,7 @@ jobs:
       run: |
         pytest tests/ -v --tb=long \
           -m "not slow" \
-          --cov=config --cov=strategies --cov=risk --cov=brokers \
-          --cov=notifications --cov=cache --cov=database --cov=api \
-          --cov=data --cov=analysis --cov=ml --cov=utils --cov=auth \
-          --cov=execution --cov=strategy --cov=core --cov=compliance \
-          --cov=kill_switch \
+          --cov --cov-config=.coveragerc \
           --cov-report=xml --cov-report=term-missing \
           --cov-fail-under=70 \
           --asyncio-mode=auto \
@@ -247,10 +243,7 @@ jobs:
         run: |
           pytest tests/ \
             -m "not slow" \
-            --cov=config --cov=strategies --cov=risk --cov=brokers \
-            --cov=notifications --cov=cache --cov=database --cov=api \
-            --cov=data --cov=analysis --cov=ml --cov=utils --cov=auth \
-            --cov=execution --cov=strategy --cov=core \
+            --cov --cov-config=.coveragerc \
             --cov-report=xml --cov-report=term-missing \
             --cov-fail-under=70 \
             --asyncio-mode=auto \
