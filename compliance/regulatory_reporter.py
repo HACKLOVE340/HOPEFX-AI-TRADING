@@ -72,6 +72,8 @@ _REPORTING_ENABLED = os.getenv("REGULATORY_REPORTING_ENABLED", "false").lower() 
 _PROP_FIRM_MODE = os.getenv("PROP_FIRM_MODE", "false").lower() == "true"
 _DLQ_PATH = Path(os.getenv("REGULATORY_DLQ_PATH", "data/regulatory_dlq"))
 _RETRY_MAX = int(os.getenv("REGULATORY_RETRY_MAX", "5"))
+_RETRY_BACKOFF_BASE = float(os.getenv("REGULATORY_RETRY_BACKOFF_BASE", "2.0"))
+_RETRY_BACKOFF_CAP = float(os.getenv("REGULATORY_RETRY_BACKOFF_CAP", "30.0"))
 _TIMEOUT_S = float(os.getenv("REGULATORY_TIMEOUT_S", "10.0"))
 
 # ── Startup compliance check ───────────────────────────────────────────────────
@@ -558,7 +560,8 @@ class RegulatoryReporter:
             )
 
             if attempt < _RETRY_MAX:
-                await asyncio.sleep(min(2**attempt, 30))  # exponential backoff, cap 30s
+                delay = min(_RETRY_BACKOFF_BASE**attempt, _RETRY_BACKOFF_CAP)
+                await asyncio.sleep(delay)
 
         # All retries exhausted — enqueue to DLQ
         record.last_error = last_error

@@ -513,6 +513,9 @@ class TestRegulatoryReporter:
         mock_session.__aexit__ = AsyncMock(return_value=False)
         with patch.object(rr_mod, "_REPORTING_ENABLED", True), \
              patch.object(rr_mod, "_PROP_FIRM_MODE", False), \
+             patch.object(rr_mod, "_RETRY_MAX", 2), \
+             patch.object(rr_mod, "_RETRY_BACKOFF_BASE", 0.0), \
+             patch.object(rr_mod, "_RETRY_BACKOFF_CAP", 0.0), \
              patch("aiohttp.ClientSession", return_value=mock_session):
             reporter = RegulatoryReporter()
             record = await reporter.submit({"id": "t1", "symbol": "XAUUSD", "size": 1})
