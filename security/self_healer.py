@@ -180,6 +180,14 @@ def _quarantine(path: Path) -> Path:
     try:
         shutil.copy2(path, dest)
         logger.info("SelfHealer: quarantined %s → %s", path, dest)
+        # Log into the singleton's quarantine_log for the dashboard
+        if _healer_instance is not None:
+            _healer_instance._quarantine_log.append({
+                "original": str(path),
+                "quarantined_to": str(dest),
+                "ts": datetime.now(UTC).isoformat(),
+            })
+            _healer_instance._quarantine_log = _healer_instance._quarantine_log[-200:]
     except OSError as exc:
         logger.warning("SelfHealer: quarantine copy failed: %s", exc)
     return dest
@@ -288,6 +296,10 @@ class SelfHealer:
     """
     Autonomous code integrity monitor and patch applier.
 
+    Runtime-configurable via the SuperAdmin Auto-Healing panel.
+    All config attributes can be hot-patched by api/superadmin/auto_healing.py
+    without restarting the process.
+
     Usage::
 
         healer = SelfHealer()
@@ -300,22 +312,181 @@ class SelfHealer:
         self._baseline: dict[str, str] = {}
         self._drift_events: list[dict[str, Any]] = []
         self._patch_history: list[dict[str, Any]] = []
+        self._quarantine_log: list[dict[str, Any]] = []
         self._running = False
+
+        # ── Runtime-configurable settings (hot-patched by auto_healing.py) ──
+        self._enabled: bool = True
+        self._aggressiveness: str = "medium"          # low|medium|aggressive|nuclear
+        self._quarantine_enabled: bool = True
+        self._quarantine_retention_days: int = 30
+        self._max_patch_size: int = MAX_PATCH_SIZE
+        self._auto_rollback_sensitivity: str = "medium"  # low|medium|high
+        self._max_healing_attempts: int = 3
+        self._healing_cooldown_sec: int = 300
+        self._log_level: str = "standard"             # minimal|standard|verbose|debug
+        self._protected_paths: list[str] = [
+            "live_trading.py", "risk_manager.py", "ml/models/", "config/secrets/",
+        ]
+        self._tests_enabled: bool = True
+        self._test_categories: dict[str, bool] = {
+            "unit": True, "api": True, "broker": True, "risk": True,
+            "ml": True, "security": True, "performance": False, "e2e": False,
+        }
+        self._test_execution_strategy: list[str] = ["after_patch", "on_drift"]
+        self._test_timeout_sec: int = 120
+        self._global_test_timeout_sec: int = 600
+        self._parallel_tests: bool = True
+        self._require_approval_categories: list[str] = ["nuclear", "e2e"]
+        self._baseline_auto_rebuild: bool = True
+
+        # ── Internal state ────────────────────────────────────────────────────
+        self._incident_attempts: dict[str, int] = {}   # file → attempt count
+        self._last_heal_ts: dict[str, float] = {}      # file → epoch of last heal
+        self._last_test_run_ts: float = 0.0
+        self._last_test_result: dict[str, Any] = {}
+
+    def _log(self, level: str, msg: str, *args: Any) -> None:
+        """Respect _log_level: minimal suppresses INFO, debug emits everything."""
+        lvl_order = {"minimal": 0, "standard": 1, "verbose": 2, "debug": 3}
+        msg_order = {"debug": 0, "info": 1, "warning": 2, "error": 3, "critical": 4}
+        threshold = lvl_order.get(self._log_level, 1)
+        msg_lvl   = msg_order.get(level, 1)
+        if msg_lvl == 0 and threshold < 3:
+            return
+        if msg_lvl == 1 and threshold == 0:
+            return
+        getattr(logger, level)(msg, *args)
+
+    def _is_protected(self, rel_path: str) -> bool:
+        """Return True if rel_path matches any protected path prefix/pattern."""
+        norm = rel_path.replace("\\", "/")
+        for p in self._protected_paths:
+            p = p.strip()
+            if not p:
+                continue
+            if norm == p or norm.startswith(p.rstrip("/") + "/") or norm.endswith(p):
+                return True
+        return False
+
+    def _cooldown_ok(self, file_key: str) -> bool:
+        """Return True if enough time has passed since the last heal on this file."""
+        last = self._last_heal_ts.get(file_key, 0.0)
+        import time
+        return (time.time() - last) >= self._healing_cooldown_sec
+
+    def _attempts_ok(self, file_key: str) -> bool:
+        """Return True if we haven't exceeded max healing attempts for this file."""
+        return self._incident_attempts.get(file_key, 0) < self._max_healing_attempts
+
+    def _record_heal_attempt(self, file_key: str) -> None:
+        import time
+        self._incident_attempts[file_key] = self._incident_attempts.get(file_key, 0) + 1
+        self._last_heal_ts[file_key] = time.time()
+
+    def apply_config(self, cfg: dict[str, Any]) -> None:
+        """Hot-apply a config dict from the SuperAdmin panel."""
+        self._enabled                   = bool(cfg.get("enabled", self._enabled))
+        self._aggressiveness            = str(cfg.get("aggressiveness", self._aggressiveness))
+        self._quarantine_enabled        = bool(cfg.get("quarantine_enabled", self._quarantine_enabled))
+        self._quarantine_retention_days = int(cfg.get("quarantine_retention_days", self._quarantine_retention_days))
+        self._max_patch_size            = int(cfg.get("max_patch_bytes", self._max_patch_size))
+        self._auto_rollback_sensitivity = str(cfg.get("auto_rollback_sensitivity", self._auto_rollback_sensitivity))
+        self._max_healing_attempts      = int(cfg.get("max_healing_attempts", self._max_healing_attempts))
+        self._healing_cooldown_sec      = int(cfg.get("healing_cooldown_sec", self._healing_cooldown_sec))
+        self._log_level                 = str(cfg.get("log_level", self._log_level))
+        self._tests_enabled             = bool(cfg.get("tests_enabled", self._tests_enabled))
+        self._test_categories           = dict(cfg.get("test_categories", self._test_categories))
+        self._test_execution_strategy   = list(cfg.get("test_execution_strategy", self._test_execution_strategy))
+        self._test_timeout_sec          = int(cfg.get("test_timeout_sec", self._test_timeout_sec))
+        self._global_test_timeout_sec   = int(cfg.get("global_test_timeout_sec", self._global_test_timeout_sec))
+        self._parallel_tests            = bool(cfg.get("parallel_tests", self._parallel_tests))
+        self._require_approval_categories = list(cfg.get("require_approval_categories", self._require_approval_categories))
+        self._baseline_auto_rebuild     = bool(cfg.get("baseline_auto_rebuild", self._baseline_auto_rebuild))
+        raw_paths = cfg.get("protected_paths", "")
+        if isinstance(raw_paths, str):
+            self._protected_paths = [p.strip() for p in raw_paths.split(",") if p.strip()]
+        elif isinstance(raw_paths, list):
+            self._protected_paths = list(raw_paths)
+        # Propagate to module-level constants used by helpers
+        global HEAL_SCAN_INTERVAL, HEAL_PATCH_INTERVAL, MAX_PATCH_SIZE
+        HEAL_SCAN_INTERVAL  = int(cfg.get("scan_interval_sec", HEAL_SCAN_INTERVAL))
+        HEAL_PATCH_INTERVAL = int(cfg.get("patch_interval_sec", HEAL_PATCH_INTERVAL))
+        MAX_PATCH_SIZE      = self._max_patch_size
+        self._log("info", "SelfHealer: config applied — aggressiveness=%s enabled=%s",
+                  self._aggressiveness, self._enabled)
+
+    def get_full_status(self) -> dict[str, Any]:
+        """Return a rich status dict for the SuperAdmin panel."""
+        import time
+        applied = sum(1 for p in self._patch_history if p.get("success"))
+        failed  = sum(1 for p in self._patch_history if not p.get("success"))
+        last_scan = self._drift_events[-1]["ts"] if self._drift_events else None
+        cooldowns = {
+            k: max(0, int(self._healing_cooldown_sec - (time.time() - v)))
+            for k, v in self._last_heal_ts.items()
+            if (time.time() - v) < self._healing_cooldown_sec
+        }
+        return {
+            "running":                  self._running,
+            "enabled":                  self._enabled,
+            "aggressiveness":           self._aggressiveness,
+            "baseline_files":           len(self._baseline),
+            "drift_events":             len(self._drift_events),
+            "drift_events_recent":      self._drift_events[-20:],
+            "patches_applied":          applied,
+            "patches_failed":           failed,
+            "patch_history_recent":     self._patch_history[-20:],
+            "quarantine_log_recent":    self._quarantine_log[-20:],
+            "last_scan":                last_scan,
+            "last_test_run":            self._last_test_result.get("ts"),
+            "last_test_passed":         self._last_test_result.get("passed"),
+            "last_test_failed":         self._last_test_result.get("failed"),
+            "active_cooldowns":         cooldowns,
+            "incident_attempts":        dict(self._incident_attempts),
+            "protected_paths":          self._protected_paths,
+            "tests_enabled":            self._tests_enabled,
+            "test_execution_strategy":  self._test_execution_strategy,
+        }
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     async def run(self) -> None:
         """Main loop: integrity scan + patch drain, running forever."""
         self._running = True
+        # Load saved config from disk/Redis before starting loops
+        await self._load_saved_config()
         await self._ensure_baseline()
-        logger.info(
-            "SelfHealer: started — tracking %d files, scan_interval=%ds",
-            len(self._baseline),
-            HEAL_SCAN_INTERVAL,
+        self._log("info",
+            "SelfHealer: started — tracking %d files, scan=%ds patch=%ds aggressiveness=%s",
+            len(self._baseline), HEAL_SCAN_INTERVAL, HEAL_PATCH_INTERVAL, self._aggressiveness,
         )
-        scan_task = asyncio.create_task(self._scan_loop())
-        patch_task = asyncio.create_task(self._patch_loop())
-        await asyncio.gather(scan_task, patch_task)
+        scan_task  = asyncio.create_task(self._scan_loop(),  name="heal-scan")
+        patch_task = asyncio.create_task(self._patch_loop(), name="heal-patch")
+        sched_task = asyncio.create_task(self._scheduled_test_loop(), name="heal-test-sched")
+        await asyncio.gather(scan_task, patch_task, sched_task)
+
+    async def _load_saved_config(self) -> None:
+        """Pull config saved by the SuperAdmin panel and apply it."""
+        try:
+            import json as _json
+            from pathlib import Path as _Path
+            cfg_path = PROJECT_ROOT / "data" / "auto_healing_config.json"
+            if cfg_path.exists():
+                cfg = _json.loads(cfg_path.read_text())
+                self.apply_config(cfg)
+                return
+        except Exception as exc:
+            logger.debug("SelfHealer: disk config load: %s", exc)
+        try:
+            redis = await _get_redis()
+            if redis:
+                raw = await redis.get("superadmin:auto_healing:config")
+                if raw:
+                    import json as _json
+                    self.apply_config(_json.loads(raw))
+        except Exception as exc:
+            logger.debug("SelfHealer: redis config load: %s", exc)
 
     async def _ensure_baseline(self) -> None:
         """Load or build the file integrity baseline."""
@@ -341,7 +512,10 @@ class SelfHealer:
     async def _scan_loop(self) -> None:
         while self._running:
             try:
-                await self._scan_integrity()
+                if self._enabled:
+                    await self._scan_integrity()
+                else:
+                    self._log("debug", "SelfHealer: scan skipped — disabled")
             except Exception as exc:
                 logger.warning("SelfHealer: scan error: %s", exc)
             await asyncio.sleep(HEAL_SCAN_INTERVAL)
@@ -350,32 +524,35 @@ class SelfHealer:
         """Compare current file hashes against baseline; flag drift."""
         current = _build_manifest()
         drift: list[dict[str, Any]] = []
+        ts_now = datetime.now(UTC).isoformat()
 
         for rel_path, expected_hash in self._baseline.items():
             actual_hash = current.get(rel_path, "")
             if not actual_hash:
-                drift.append({"path": rel_path, "type": "deleted", "ts": datetime.now(UTC).isoformat()})
+                drift.append({"path": rel_path, "type": "deleted", "ts": ts_now,
+                               "protected": self._is_protected(rel_path)})
             elif actual_hash != expected_hash:
-                drift.append(
-                    {
-                        "path": rel_path,
-                        "type": "modified",
-                        "expected": expected_hash[:16],
-                        "actual": actual_hash[:16],
-                        "ts": datetime.now(UTC).isoformat(),
-                    }
-                )
+                drift.append({
+                    "path": rel_path, "type": "modified", "ts": ts_now,
+                    "expected": expected_hash[:16], "actual": actual_hash[:16],
+                    "protected": self._is_protected(rel_path),
+                })
 
         for rel_path in current:
             if rel_path not in self._baseline:
-                drift.append({"path": rel_path, "type": "new_file", "ts": datetime.now(UTC).isoformat()})
+                drift.append({"path": rel_path, "type": "new_file", "ts": ts_now,
+                               "protected": self._is_protected(rel_path)})
 
         if drift:
-            logger.warning("SelfHealer: %d drift event(s) detected", len(drift))
+            self._log("warning", "SelfHealer: %d drift event(s) detected", len(drift))
             self._drift_events.extend(drift)
-            # Keep last 500 events in memory
             self._drift_events = self._drift_events[-500:]
             await self._push_drift_alerts(drift)
+            # Persist drift log to Redis for the dashboard
+            await self._persist_drift_to_redis()
+            # Trigger tests if strategy includes on_drift
+            if self._tests_enabled and "on_drift" in self._test_execution_strategy:
+                asyncio.create_task(self._run_tests(trigger="on_drift"))
 
     async def _push_drift_alerts(self, drift: list[dict[str, Any]]) -> None:
         redis = await _get_redis()
@@ -385,32 +562,44 @@ class SelfHealer:
             for event in drift:
                 await redis.rpush(
                     "alerts:critical",
-                    json.dumps(
-                        {
-                            "type": "file_integrity_drift",
-                            "ip": "internal",
-                            "ts": event["ts"],
-                            "detail": event,
-                        }
-                    ),
+                    json.dumps({
+                        "type": "file_integrity_drift",
+                        "ip": "internal",
+                        "ts": event["ts"],
+                        "detail": event,
+                    }),
                 )
-                # Trim to last 1000 alerts
-                await redis.ltrim("alerts:critical", -1000, -1)
+            await redis.ltrim("alerts:critical", -1000, -1)
         except Exception as exc:
             logger.debug("SelfHealer: alert push failed: %s", exc)
+
+    async def _persist_drift_to_redis(self) -> None:
+        """Write the in-memory drift log to Redis so the dashboard can read it."""
+        redis = await _get_redis()
+        if not redis:
+            return
+        with contextlib.suppress(Exception):
+            await redis.set(
+                "heal:drift_events",
+                json.dumps(self._drift_events[-200:]),
+                ex=86400,
+            )
 
     # ── Patch drain loop ──────────────────────────────────────────────────────
 
     async def _patch_loop(self) -> None:
         while self._running:
             try:
-                await self._drain_approved_patches()
+                if self._enabled and self._aggressiveness != "low":
+                    await self._drain_approved_patches()
+                else:
+                    self._log("debug", "SelfHealer: patch loop skipped — disabled or low aggressiveness")
             except Exception as exc:
                 logger.warning("SelfHealer: patch drain error: %s", exc)
             await asyncio.sleep(HEAL_PATCH_INTERVAL)
 
     async def _drain_approved_patches(self) -> None:
-        """Apply all approved fixes from fixes:queue."""
+        """Apply all approved fixes from fixes:approved queue with full safety gates."""
         redis = await _get_redis()
         if not redis:
             return
@@ -436,46 +625,237 @@ class SelfHealer:
             if not endpoint or not new_code:
                 continue
 
-            # Resolve endpoint path to a real file
             target = self._resolve_endpoint_to_file(endpoint)
             if target is None:
-                logger.warning("SelfHealer: cannot resolve endpoint to file: %s", endpoint)
+                self._log("warning", "SelfHealer: cannot resolve endpoint to file: %s", endpoint)
                 continue
+
+            rel_path = str(target.relative_to(PROJECT_ROOT))
+
+            # ── Safety gate: protected paths ──────────────────────────────
+            if self._is_protected(rel_path):
+                self._log("warning",
+                    "SelfHealer: BLOCKED patch on protected path %s", rel_path)
+                record = self._make_patch_record(
+                    endpoint, rel_path, False,
+                    f"Blocked — protected path: {rel_path}", "",
+                )
+                self._store_patch_record(record)
+                with contextlib.suppress(Exception):
+                    await redis.rpush("heal:patch_history", json.dumps(record))
+                    await redis.ltrim("heal:patch_history", -200, -1)
+                continue
+
+            # ── Safety gate: cooldown ─────────────────────────────────────
+            if not self._cooldown_ok(rel_path):
+                self._log("info", "SelfHealer: cooldown active for %s, skipping", rel_path)
+                continue
+
+            # ── Safety gate: max attempts ─────────────────────────────────
+            if not self._attempts_ok(rel_path):
+                self._log("warning",
+                    "SelfHealer: max attempts (%d) reached for %s",
+                    self._max_healing_attempts, rel_path)
+                continue
+
+            # ── Safety gate: approval required ───────────────────────────
+            fix_category = fix.get("category", "")
+            if fix_category in self._require_approval_categories and self._aggressiveness != "nuclear":
+                self._log("info",
+                    "SelfHealer: patch for %s requires approval (category=%s)",
+                    rel_path, fix_category)
+                with contextlib.suppress(Exception):
+                    await redis.rpush("heal:pending_approval", json.dumps({
+                        **fix, "queued_at": datetime.now(UTC).isoformat(),
+                    }))
+                    await redis.ltrim("heal:pending_approval", -100, -1)
+                continue
+
+            # ── Run pre-patch tests ───────────────────────────────────────
+            if self._tests_enabled and "before_patch" in self._test_execution_strategy:
+                pre_ok = await self._run_tests(trigger="before_patch")
+                if not pre_ok and self._auto_rollback_sensitivity in ("medium", "high"):
+                    self._log("warning",
+                        "SelfHealer: pre-patch tests failed for %s — skipping patch", rel_path)
+                    continue
 
             original_code = ""
             if target.exists():
                 original_code = target.read_text(encoding="utf-8", errors="replace")
 
             success, msg = _apply_patch(target, new_code)
-            record: dict[str, Any] = {
-                "endpoint": endpoint,
-                "file": str(target.relative_to(PROJECT_ROOT)),
-                "success": success,
-                "message": msg,
-                "diff": _unified_diff(original_code, new_code, target.name) if success else "",
-                "applied_at": datetime.now(UTC).isoformat(),
-            }
-            self._patch_history.append(record)
-            self._patch_history = self._patch_history[-200:]
+            diff = _unified_diff(original_code, new_code, target.name) if success else ""
+            record = self._make_patch_record(endpoint, rel_path, success, msg, diff)
+            self._store_patch_record(record)
+            self._record_heal_attempt(rel_path)
 
             if success:
                 applied.append(raw)
-                # Update baseline hash for the patched file
-                self._baseline[str(target.relative_to(PROJECT_ROOT))] = _sha256(target)
+                self._baseline[rel_path] = _sha256(target)
                 _save_manifest(self._baseline)
-                logger.info("SelfHealer: patch applied to %s", target)
-            else:
-                logger.warning("SelfHealer: patch rejected for %s: %s", endpoint, msg)
+                self._log("info", "SelfHealer: patch applied to %s", target)
 
-            # Push result to Redis
+                # ── Run post-patch tests ──────────────────────────────────
+                if self._tests_enabled and "after_patch" in self._test_execution_strategy:
+                    post_ok = await self._run_tests(trigger="after_patch")
+                    if not post_ok and self._auto_rollback_sensitivity != "low":
+                        self._log("warning",
+                            "SelfHealer: post-patch tests failed — rolling back %s", rel_path)
+                        _git_rollback(target)
+                        self._baseline[rel_path] = _sha256(target)
+                        _save_manifest(self._baseline)
+                        record["message"] += " | ROLLED BACK: post-patch tests failed"
+                        record["success"] = False
+
+                # Auto-rebuild baseline if configured
+                if self._baseline_auto_rebuild:
+                    self._baseline[rel_path] = _sha256(target)
+            else:
+                self._log("warning", "SelfHealer: patch rejected for %s: %s", endpoint, msg)
+
             with contextlib.suppress(Exception):
                 await redis.rpush("heal:patch_history", json.dumps(record))
                 await redis.ltrim("heal:patch_history", -200, -1)
 
-        # Remove applied entries from the queue
         for raw in applied:
             with contextlib.suppress(Exception):
                 await redis.lrem("fixes:approved", 1, raw)
+
+    def _make_patch_record(
+        self, endpoint: str, rel_path: str, success: bool, msg: str, diff: str,
+    ) -> dict[str, Any]:
+        return {
+            "endpoint": endpoint,
+            "file": rel_path,
+            "success": success,
+            "message": msg,
+            "diff": diff,
+            "applied_at": datetime.now(UTC).isoformat(),
+        }
+
+    def _store_patch_record(self, record: dict[str, Any]) -> None:
+        self._patch_history.append(record)
+        self._patch_history = self._patch_history[-200:]
+
+    # ── Test runner ───────────────────────────────────────────────────────────
+
+    async def _scheduled_test_loop(self) -> None:
+        """Run tests on schedule if 'on_schedule' is in the execution strategy."""
+        while self._running:
+            await asyncio.sleep(60)  # check every minute
+            if not self._enabled or not self._tests_enabled:
+                continue
+            if "on_schedule" not in self._test_execution_strategy:
+                continue
+            import time
+            interval_sec = getattr(self, "_test_schedule_interval_min", 60) * 60
+            if (time.time() - self._last_test_run_ts) >= interval_sec:
+                asyncio.create_task(self._run_tests(trigger="on_schedule"))
+
+    async def _run_tests(self, trigger: str = "manual") -> bool:
+        """
+        Run enabled test categories via pytest subprocess.
+        Returns True if all tests pass (or no tests ran), False on failure.
+        """
+        import time
+        self._last_test_run_ts = time.time()
+        self._log("info", "SelfHealer: running tests (trigger=%s)", trigger)
+
+        # Build pytest args from enabled categories
+        try:
+            from security.test_scanner import get_test_index
+            index = get_test_index(force_rescan=False)
+            file_list: list[dict[str, Any]] = index.get("file_list", [])
+        except Exception as exc:
+            logger.debug("SelfHealer: test_scanner unavailable: %s", exc)
+            file_list = []
+
+        # Collect test paths for enabled categories
+        test_paths: list[str] = []
+        for entry in file_list:
+            cat = entry.get("category", "unit")
+            if self._test_categories.get(cat, False):
+                test_paths.append(entry["path"])
+
+        if not test_paths:
+            self._log("info", "SelfHealer: no test paths for enabled categories")
+            return True
+
+        # Limit to avoid runaway execution
+        test_paths = test_paths[:200]
+
+        cmd = [
+            "python", "-m", "pytest",
+            "--tb=no", "-q", "--no-header",
+            f"--timeout={self._test_timeout_sec}",
+        ]
+        if self._parallel_tests:
+            cmd += ["-n", "auto"]
+        cmd += test_paths
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                cwd=str(PROJECT_ROOT),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    proc.communicate(),
+                    timeout=self._global_test_timeout_sec,
+                )
+            except asyncio.TimeoutError:
+                proc.kill()
+                self._log("warning", "SelfHealer: test run timed out after %ds",
+                          self._global_test_timeout_sec)
+                self._record_test_result(0, 0, "timeout")
+                return False
+
+            output = stdout.decode(errors="replace")
+            passed, failed = self._parse_pytest_output(output)
+            success = proc.returncode == 0
+            self._record_test_result(passed, failed, "ok" if success else "failed")
+            self._log(
+                "info" if success else "warning",
+                "SelfHealer: tests done (trigger=%s) passed=%d failed=%d rc=%d",
+                trigger, passed, failed, proc.returncode,
+            )
+            return success
+        except FileNotFoundError:
+            self._log("warning", "SelfHealer: pytest not found — skipping test run")
+            return True
+        except Exception as exc:
+            logger.warning("SelfHealer: test run error: %s", exc)
+            return False
+
+    @staticmethod
+    def _parse_pytest_output(output: str) -> tuple[int, int]:
+        """Extract passed/failed counts from pytest -q output."""
+        import re
+        passed = failed = 0
+        m = re.search(r"(\d+) passed", output)
+        if m:
+            passed = int(m.group(1))
+        m = re.search(r"(\d+) failed", output)
+        if m:
+            failed = int(m.group(1))
+        return passed, failed
+
+    def _record_test_result(self, passed: int, failed: int, status: str) -> None:
+        self._last_test_result = {
+            "ts": datetime.now(UTC).isoformat(),
+            "passed": passed,
+            "failed": failed,
+            "status": status,
+        }
+        try:
+            from security.test_scanner import record_test_run
+            record_test_run(passed, failed)
+        except Exception:
+            pass
+
+    # ── Endpoint → file resolver ──────────────────────────────────────────────
 
     def _resolve_endpoint_to_file(self, endpoint: str) -> Path | None:
         """
@@ -513,7 +893,16 @@ class SelfHealer:
         if redis:
             with contextlib.suppress(Exception):
                 await redis.set("heal:manifest", json.dumps(self._baseline))
+        self._log("info", "SelfHealer: baseline rebuilt — %d files", len(self._baseline))
         return {"files": len(self._baseline), "rebuilt_at": datetime.now(UTC).isoformat()}
+
+    async def run_tests_now(self, trigger: str = "manual") -> dict[str, Any]:
+        """Trigger a test run immediately and return the result."""
+        success = await self._run_tests(trigger=trigger)
+        return {**self._last_test_result, "success": success}
+
+    def get_quarantine_log(self) -> list[dict[str, Any]]:
+        return list(self._quarantine_log)
 
     # ── FastAPI router ────────────────────────────────────────────────────────
 
