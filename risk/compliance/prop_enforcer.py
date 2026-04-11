@@ -126,10 +126,13 @@ class PropConfig:
                 or firm_cfg.get("news_trading", {}).get("blackout_minutes_before_news", 5) * 60
                 or 300,
             )
-            weekend_close = bool(
-                raw.get("weekend_close", True)
-                or firm_cfg.get("overnight_holding", {}).get("weekend_holding_allowed", False) is False,
-            )
+            # weekend_close: explicit key wins; fall back to firm config.
+            # weekend_holding_allowed=False means weekend_close=True (must close).
+            if "weekend_close" in raw:
+                weekend_close = bool(raw["weekend_close"])
+            else:
+                weekend_holding_allowed = firm_cfg.get("overnight_holding", {}).get("weekend_holding_allowed", True)
+                weekend_close = not weekend_holding_allowed
             return cls(
                 daily_dd=float(daily_dd),
                 max_dd=float(max_dd),

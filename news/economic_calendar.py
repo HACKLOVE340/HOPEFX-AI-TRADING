@@ -423,9 +423,7 @@ def fetch_live_calendar(days_ahead: int = 7) -> "EconomicCalendar":
                 scheduled = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
             else:
                 date_str = item.get("date", "")
-                scheduled = datetime.strptime(date_str, "%Y-%m-%d").replace(
-                    hour=12, tzinfo=UTC
-                )
+                scheduled = datetime.strptime(date_str, "%Y-%m-%d").replace(hour=12, tzinfo=UTC)
 
             country = (item.get("country") or "").upper()
             currency = _COUNTRY_CURRENCY.get(country)

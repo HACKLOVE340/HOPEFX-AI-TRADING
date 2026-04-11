@@ -19,7 +19,8 @@ import time
 
 import pytest
 
-os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-that-is-long-enough-for-hs256")
+os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
+os.environ.setdefault("JWT_SECRET_KEY", "test-only-jwt-secret-key-minimum-32-chars!!")
 
 # Load auth/jwt.py directly to avoid auth/__init__.py pulling in EmailStr
 _spec = importlib.util.spec_from_file_location("auth_jwt", pathlib.Path(__file__).parent.parent / "auth" / "jwt.py")

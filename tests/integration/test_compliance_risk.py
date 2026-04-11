@@ -60,10 +60,9 @@ if _import_error is not None:
 # Token helpers
 # ---------------------------------------------------------------------------
 
-_SECRET = os.environ.get(
-    "SECURITY_JWT_SECRET",
-    "test-only-jwt-secret-key-minimum-32-chars!!",
-)
+
+def _get_secret() -> str:
+    return os.environ.get("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
 
 
 def _mint(sub: str = "u1", role: str = "user", exp_offset: int = 3600, jti: str | None = None) -> str:
@@ -75,7 +74,7 @@ def _mint(sub: str = "u1", role: str = "user", exp_offset: int = 3600, jti: str 
     }
     if jti:
         payload["jti"] = jti
-    return jwt.encode(payload, _SECRET, algorithm="HS256")
+    return jwt.encode(payload, _get_secret(), algorithm="HS256")
 
 
 def _user_headers(sub: str = "u1") -> dict[str, str]:
@@ -154,16 +153,12 @@ class TestAuthGates:
     @pytest.mark.parametrize("method,path", PROTECTED_ROUTES)
     def test_no_token_returns_401(self, client: TestClient, method: str, path: str) -> None:
         resp = getattr(client, method.lower())(path)
-        assert resp.status_code == 401, (
-            f"{method} {path} returned {resp.status_code}, expected 401"
-        )
+        assert resp.status_code == 401, f"{method} {path} returned {resp.status_code}, expected 401"
 
     @pytest.mark.parametrize("method,path", PROTECTED_ROUTES)
     def test_expired_token_returns_401(self, client: TestClient, method: str, path: str) -> None:
         resp = getattr(client, method.lower())(path, headers=_expired_headers())
-        assert resp.status_code == 401, (
-            f"{method} {path} with expired token returned {resp.status_code}"
-        )
+        assert resp.status_code == 401, f"{method} {path} with expired token returned {resp.status_code}"
 
 
 # ---------------------------------------------------------------------------
@@ -624,9 +619,7 @@ class TestRiskLimits:
             headers=_user_headers(),
         )
         assert resp.status_code == 200
-        assert resp.json()["position_size_multiplier"] == pytest.approx(
-            self.EXPECTED_MULTIPLIERS[outcome], abs=1e-6
-        )
+        assert resp.json()["position_size_multiplier"] == pytest.approx(self.EXPECTED_MULTIPLIERS[outcome], abs=1e-6)
 
     def test_fomc_regime_expires_field_present(self, client: TestClient) -> None:
         resp = client.post(
@@ -676,7 +669,7 @@ class TestTokenValidation:
         """HS512-signed token must be rejected (server only accepts HS256)."""
         token = jwt.encode(
             {"sub": "u1", "role": "user", "exp": int(time.time()) + 3600},
-            _SECRET,
+            _get_secret(),
             algorithm="HS512",
         )
         resp = client.get("/api/calendar/upcoming", headers={"Authorization": f"Bearer {token}"})

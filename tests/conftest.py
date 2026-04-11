@@ -20,6 +20,10 @@ os.environ.setdefault(
     "SECURITY_JWT_SECRET",
     "test-only-jwt-secret-key-minimum-32-chars!!",
 )
+# Raise WS rate limits so the test suite (which opens many connections) is
+# not blocked by the per-IP concurrent/rate caps.
+os.environ.setdefault("WS_MAX_CONNECTIONS_PER_IP", "200")
+os.environ.setdefault("WS_MAX_CONNECTIONS_PER_MINUTE", "500")
 
 from datetime import datetime, timezone
 
@@ -242,6 +246,37 @@ def generate_ohlcv_from_close(closes: list) -> list:
 # Set HOPEFX_CI=1 so ml/train_advanced.py uses minimal estimators in tests.
 
 os.environ.setdefault("HOPEFX_CI", "1")
+
+
+# ── WebSocket limiter isolation ───────────────────────────────────────────────
+
+
+@pytest.fixture(autouse=True)
+def _reset_ws_limiter_state():
+    """Clear the in-process WS connection limiter counters before every test.
+
+    The limiter singleton accumulates open-connection counts when TestClient
+    WS sessions close without triggering the handler's finally/release path.
+    Clearing the counters prevents rate-limit rejections from polluting
+    subsequent tests.
+    """
+    try:
+        import rate_limiting.websocket_limiter as _wsl
+
+        lim = _wsl.get_ws_limiter()
+        lim._open_conns.clear()
+        lim._rate_window.clear()
+    except Exception:
+        pass
+    yield
+    try:
+        import rate_limiting.websocket_limiter as _wsl
+
+        lim = _wsl.get_ws_limiter()
+        lim._open_conns.clear()
+        lim._rate_window.clear()
+    except Exception:
+        pass
 
 
 # ── Kill switch isolation ─────────────────────────────────────────────────────
