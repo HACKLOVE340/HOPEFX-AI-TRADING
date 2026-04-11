@@ -23,7 +23,8 @@ export type SettingsTab =
   | 'sa-financial'
   | 'sa-security'
   | 'sa-logs'
-  | 'sa-feature-flags';
+  | 'sa-feature-flags'
+  | 'platform-config';
 
 export interface ProfileSettings {
   username: string;
