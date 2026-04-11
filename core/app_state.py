@@ -63,6 +63,12 @@ class AppState:
         self.order_book = None
         # Regime-aware strategy router
         self.regime_router = None
+        # Central decision engine — five-phase tick-to-order pipeline
+        # Populated by init_decision_engine() in startup_factories.py
+        self.decision_engine = None
+        # Feature engineer — sklearn-compatible OHLCV feature pipeline
+        # Populated by init_feature_engineer() in startup_factories.py
+        self.feature_engineer = None
         # Background asyncio tasks — populated at startup, cancelled at shutdown
         self.background_tasks: list = []
 
