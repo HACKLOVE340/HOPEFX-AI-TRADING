@@ -752,16 +752,83 @@ class SelfHealer:
             if (time.time() - self._last_test_run_ts) >= interval_sec:
                 asyncio.create_task(self._run_tests(trigger="on_schedule"))
 
+    # ── Plugin availability (probed once per process) ─────────────────────────
+
+    @staticmethod
+    def _pytest_available() -> bool:
+        """Return True if pytest is importable in this Python environment."""
+        try:
+            import importlib
+            return importlib.util.find_spec("pytest") is not None
+        except Exception:
+            return False
+
+    @staticmethod
+    def _xdist_available() -> bool:
+        """Return True if pytest-xdist is installed (provides -n flag)."""
+        try:
+            import importlib
+            return importlib.util.find_spec("xdist") is not None
+        except Exception:
+            return False
+
+    @staticmethod
+    def _timeout_plugin_available() -> bool:
+        """Return True if pytest-timeout is installed (provides --timeout flag)."""
+        try:
+            import importlib
+            return importlib.util.find_spec("pytest_timeout") is not None
+        except Exception:
+            return False
+
+    def _build_pytest_cmd(self, test_paths: list[str]) -> list[str]:
+        """
+        Build a pytest command that only uses flags for installed plugins.
+        Falls back gracefully when pytest-xdist or pytest-timeout are absent.
+        """
+        cmd = ["python", "-m", "pytest", "--tb=no", "-q", "--no-header"]
+
+        # --timeout only if pytest-timeout is installed
+        if self._timeout_plugin_available():
+            cmd.append(f"--timeout={self._test_timeout_sec}")
+        else:
+            self._log("debug",
+                "SelfHealer: pytest-timeout not installed — per-suite timeout disabled")
+
+        # -n auto only if pytest-xdist is installed AND parallel is requested
+        if self._parallel_tests:
+            if self._xdist_available():
+                cmd += ["-n", "auto"]
+            else:
+                self._log("debug",
+                    "SelfHealer: pytest-xdist not installed — running tests sequentially")
+
+        cmd += test_paths
+        return cmd
+
     async def _run_tests(self, trigger: str = "manual") -> bool:
         """
         Run enabled test categories via pytest subprocess.
+
+        Probes for pytest, pytest-timeout, and pytest-xdist at call time so
+        the healer degrades gracefully when any plugin is absent rather than
+        crashing or silently skipping the run.
+
         Returns True if all tests pass (or no tests ran), False on failure.
         """
         import time
         self._last_test_run_ts = time.time()
+
+        # Hard requirement: pytest itself must be present
+        if not self._pytest_available():
+            self._log("warning",
+                "SelfHealer: pytest not installed — install pytest>=7.4 to enable test gates")
+            self._record_test_result(0, 0, "skipped_no_pytest")
+            return True  # don't block healing when pytest is absent
+
         self._log("info", "SelfHealer: running tests (trigger=%s)", trigger)
 
-        # Build pytest args from enabled categories
+        # Collect test paths for enabled categories from the index
         try:
             from security.test_scanner import get_test_index
             index = get_test_index(force_rescan=False)
@@ -770,28 +837,19 @@ class SelfHealer:
             logger.debug("SelfHealer: test_scanner unavailable: %s", exc)
             file_list = []
 
-        # Collect test paths for enabled categories
-        test_paths: list[str] = []
-        for entry in file_list:
-            cat = entry.get("category", "unit")
-            if self._test_categories.get(cat, False):
-                test_paths.append(entry["path"])
+        test_paths: list[str] = [
+            entry["path"]
+            for entry in file_list
+            if self._test_categories.get(entry.get("category", "unit"), False)
+            and Path(PROJECT_ROOT / entry["path"]).exists()
+        ][:200]  # hard cap — never run more than 200 files per gate
 
         if not test_paths:
-            self._log("info", "SelfHealer: no test paths for enabled categories")
+            self._log("info", "SelfHealer: no test paths for enabled categories — skipping")
             return True
 
-        # Limit to avoid runaway execution
-        test_paths = test_paths[:200]
-
-        cmd = [
-            "python", "-m", "pytest",
-            "--tb=no", "-q", "--no-header",
-            f"--timeout={self._test_timeout_sec}",
-        ]
-        if self._parallel_tests:
-            cmd += ["-n", "auto"]
-        cmd += test_paths
+        cmd = self._build_pytest_cmd(test_paths)
+        self._log("debug", "SelfHealer: pytest cmd: %s", " ".join(cmd[:8]) + " …")
 
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -803,27 +861,31 @@ class SelfHealer:
             try:
                 stdout, stderr = await asyncio.wait_for(
                     proc.communicate(),
-                    timeout=self._global_test_timeout_sec,
+                    timeout=float(self._global_test_timeout_sec),
                 )
             except asyncio.TimeoutError:
-                proc.kill()
-                self._log("warning", "SelfHealer: test run timed out after %ds",
-                          self._global_test_timeout_sec)
+                with contextlib.suppress(Exception):
+                    proc.kill()
+                self._log("warning",
+                    "SelfHealer: test run timed out after %ds (global_test_timeout_sec)",
+                    self._global_test_timeout_sec)
                 self._record_test_result(0, 0, "timeout")
                 return False
 
-            output = stdout.decode(errors="replace")
+            output = (stdout + stderr).decode(errors="replace")
             passed, failed = self._parse_pytest_output(output)
             success = proc.returncode == 0
             self._record_test_result(passed, failed, "ok" if success else "failed")
             self._log(
                 "info" if success else "warning",
-                "SelfHealer: tests done (trigger=%s) passed=%d failed=%d rc=%d",
+                "SelfHealer: tests done trigger=%s passed=%d failed=%d rc=%d",
                 trigger, passed, failed, proc.returncode,
             )
             return success
+
         except FileNotFoundError:
-            self._log("warning", "SelfHealer: pytest not found — skipping test run")
+            # python -m pytest failed — python itself not on PATH (shouldn't happen)
+            self._log("warning", "SelfHealer: python not found on PATH — skipping test run")
             return True
         except Exception as exc:
             logger.warning("SelfHealer: test run error: %s", exc)
@@ -831,7 +893,7 @@ class SelfHealer:
 
     @staticmethod
     def _parse_pytest_output(output: str) -> tuple[int, int]:
-        """Extract passed/failed counts from pytest -q output."""
+        """Extract passed/failed counts from pytest -q summary line."""
         import re
         passed = failed = 0
         m = re.search(r"(\d+) passed", output)
@@ -851,7 +913,7 @@ class SelfHealer:
         }
         try:
             from security.test_scanner import record_test_run
-            record_test_run(passed, failed)
+            record_test_run(passed, failed, status)
         except Exception:
             pass
 
