@@ -16,6 +16,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pandas as pd
 import pytest
+import contextlib
 
 UTC = timezone.utc
 
@@ -24,9 +25,11 @@ UTC = timezone.utc
 # market_data/validation.py
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestDataQualityIssue:
     def test_enum_values(self):
         from market_data.validation import DataQualityIssue
+
         assert DataQualityIssue.STALE_DATA.value == "stale_data"
         assert DataQualityIssue.PRICE_JUMP.value == "price_jump"
         assert DataQualityIssue.ZERO_VOLUME.value == "zero_volume"
@@ -38,6 +41,7 @@ class TestDataQualityIssue:
 class TestValidationResult:
     def test_creation(self):
         from market_data.validation import ValidationResult
+
         ts = datetime.now(UTC)
         r = ValidationResult(is_valid=True, quality_score=0.9, issues=[], timestamp=ts)
         assert r.is_valid is True
@@ -59,6 +63,7 @@ class TestMarketDataValidator:
 
     def test_valid_tick_passes(self):
         from market_data.validation import MarketDataValidator
+
         v = MarketDataValidator(max_staleness_seconds=10)
         tick = self._fresh_tick(age_seconds=0)
         result = v.validate_tick(tick, "XAUUSD")
@@ -67,6 +72,7 @@ class TestMarketDataValidator:
 
     def test_stale_tick_flagged(self):
         from market_data.validation import MarketDataValidator, DataQualityIssue
+
         v = MarketDataValidator(max_staleness_seconds=1)
         tick = self._fresh_tick(age_seconds=10)
         result = v.validate_tick(tick, "XAUUSD")
@@ -75,6 +81,7 @@ class TestMarketDataValidator:
 
     def test_price_jump_flagged(self):
         from market_data.validation import MarketDataValidator, DataQualityIssue
+
         v = MarketDataValidator(max_price_jump_pct=0.01, reference_prices={"XAUUSD": 1980.0})
         tick = self._fresh_tick()
         tick["price"] = 2100.0  # >5% jump
@@ -84,6 +91,7 @@ class TestMarketDataValidator:
 
     def test_zero_volume_flagged(self):
         from market_data.validation import MarketDataValidator, DataQualityIssue
+
         v = MarketDataValidator(min_volume=10.0)
         tick = self._fresh_tick()
         tick["volume"] = 0.0
@@ -93,6 +101,7 @@ class TestMarketDataValidator:
 
     def test_negative_spread_flagged(self):
         from market_data.validation import MarketDataValidator, DataQualityIssue
+
         v = MarketDataValidator()
         tick = self._fresh_tick()
         tick["bid"] = 1981.0
@@ -103,6 +112,7 @@ class TestMarketDataValidator:
 
     def test_missing_fields_flagged(self):
         from market_data.validation import MarketDataValidator, DataQualityIssue
+
         v = MarketDataValidator()
         tick = {"volume": 100.0}  # no price, no timestamp
         result = v.validate_tick(tick, "XAUUSD")
@@ -111,6 +121,7 @@ class TestMarketDataValidator:
 
     def test_reference_price_updated_on_valid(self):
         from market_data.validation import MarketDataValidator
+
         v = MarketDataValidator()
         tick = self._fresh_tick()
         v.validate_tick(tick, "XAUUSD")
@@ -118,6 +129,7 @@ class TestMarketDataValidator:
 
     def test_quality_history_grows(self):
         from market_data.validation import MarketDataValidator
+
         v = MarketDataValidator()
         for _ in range(5):
             v.validate_tick(self._fresh_tick(), "XAUUSD")
@@ -125,12 +137,14 @@ class TestMarketDataValidator:
 
     def test_get_quality_report_empty(self):
         from market_data.validation import MarketDataValidator
+
         v = MarketDataValidator()
         report = v.get_quality_report()
         assert "message" in report
 
     def test_get_quality_report_with_history(self):
         from market_data.validation import MarketDataValidator
+
         v = MarketDataValidator()
         for _ in range(3):
             v.validate_tick(self._fresh_tick(), "XAUUSD")
@@ -141,47 +155,57 @@ class TestMarketDataValidator:
 
     def test_validate_ohlc_valid_df(self):
         from market_data.validation import MarketDataValidator
+
         v = MarketDataValidator()
         # Use integer index to avoid pd.infer_freq / pd.Timedelta("D") bug in pandas 2.x
-        df = pd.DataFrame({
-            "open": np.linspace(1970, 1990, 20),
-            "high": np.linspace(1975, 1995, 20),
-            "low": np.linspace(1965, 1985, 20),
-            "close": np.linspace(1972, 1992, 20),
-            "volume": np.ones(20) * 1000,
-        })
+        df = pd.DataFrame(
+            {
+                "open": np.linspace(1970, 1990, 20),
+                "high": np.linspace(1975, 1995, 20),
+                "low": np.linspace(1965, 1985, 20),
+                "close": np.linspace(1972, 1992, 20),
+                "volume": np.ones(20) * 1000,
+            }
+        )
         result = v.validate_ohlc(df, "XAUUSD")
         assert result.is_valid is True
 
     def test_validate_ohlc_invalid_relationships(self):
         from market_data.validation import MarketDataValidator
+
         v = MarketDataValidator()
-        df = pd.DataFrame({
-            "open": [1980, 1980, 1980, 1980, 1980],
-            "high": [1970, 1970, 1970, 1970, 1970],  # high < open — invalid
-            "low": [1990, 1990, 1990, 1990, 1990],   # low > open — invalid
-            "close": [1980, 1980, 1980, 1980, 1980],
-            "volume": [100, 100, 100, 100, 100],
-        })
+        df = pd.DataFrame(
+            {
+                "open": [1980, 1980, 1980, 1980, 1980],
+                "high": [1970, 1970, 1970, 1970, 1970],  # high < open — invalid
+                "low": [1990, 1990, 1990, 1990, 1990],  # low > open — invalid
+                "close": [1980, 1980, 1980, 1980, 1980],
+                "volume": [100, 100, 100, 100, 100],
+            }
+        )
         result = v.validate_ohlc(df, "XAUUSD")
         assert result.is_valid is False
 
     def test_validate_ohlc_excessive_nan(self):
         from market_data.validation import MarketDataValidator
+
         v = MarketDataValidator()
-        df = pd.DataFrame({
-            "open": [np.nan] * 10,
-            "high": [np.nan] * 10,
-            "low": [np.nan] * 10,
-            "close": [np.nan] * 10,
-            "volume": [np.nan] * 10,
-        })
+        df = pd.DataFrame(
+            {
+                "open": [np.nan] * 10,
+                "high": [np.nan] * 10,
+                "low": [np.nan] * 10,
+                "close": [np.nan] * 10,
+                "volume": [np.nan] * 10,
+            }
+        )
         result = v.validate_ohlc(df, "XAUUSD")
         issue_types = [i["type"] for i in result.issues]
         assert "excessive_nan" in issue_types
 
     def test_tick_with_unix_timestamp(self):
         from market_data.validation import MarketDataValidator
+
         v = MarketDataValidator(max_staleness_seconds=60)
         # Use a timezone-aware datetime to avoid offset-naive subtraction
         tick = {
@@ -194,6 +218,7 @@ class TestMarketDataValidator:
 
     def test_no_bid_ask_skips_spread_check(self):
         from market_data.validation import MarketDataValidator
+
         v = MarketDataValidator()
         tick = {"timestamp": datetime.now(UTC), "price": 1980.0, "volume": 100.0}
         result = v.validate_tick(tick, "XAUUSD")
@@ -205,6 +230,7 @@ class TestMarketDataValidator:
 # market_data/redis_cache.py
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestMarketDataCache:
     def _make_redis(self):
         r = MagicMock()
@@ -213,12 +239,14 @@ class TestMarketDataCache:
 
     def test_ping_true(self):
         from market_data.redis_cache import MarketDataCache
+
         r = self._make_redis()
         cache = MarketDataCache(r)
         assert cache.ping() is True
 
     def test_ping_false_on_exception(self):
         from market_data.redis_cache import MarketDataCache
+
         r = self._make_redis()
         r.ping.side_effect = Exception("connection refused")
         cache = MarketDataCache(r)
@@ -227,6 +255,7 @@ class TestMarketDataCache:
     def test_get_latest_tick_returns_dict(self):
         import json
         from market_data.redis_cache import MarketDataCache
+
         r = self._make_redis()
         tick = {"symbol": "XAUUSD", "price": 1980.0}
         r.zrevrange.return_value = [json.dumps(tick).encode()]
@@ -236,6 +265,7 @@ class TestMarketDataCache:
 
     def test_get_latest_tick_none_on_empty(self):
         from market_data.redis_cache import MarketDataCache
+
         r = self._make_redis()
         r.zrevrange.return_value = []
         cache = MarketDataCache(r)
@@ -243,6 +273,7 @@ class TestMarketDataCache:
 
     def test_get_latest_tick_none_on_exception(self):
         from market_data.redis_cache import MarketDataCache
+
         r = self._make_redis()
         r.zrevrange.side_effect = Exception("redis error")
         cache = MarketDataCache(r)
@@ -251,6 +282,7 @@ class TestMarketDataCache:
     def test_get_recent_ticks_returns_list(self):
         import json
         from market_data.redis_cache import MarketDataCache
+
         r = self._make_redis()
         ticks = [{"price": 1980.0 + i} for i in range(3)]
         r.zrevrange.return_value = [json.dumps(t).encode() for t in ticks]
@@ -260,6 +292,7 @@ class TestMarketDataCache:
 
     def test_get_recent_ticks_empty_on_exception(self):
         from market_data.redis_cache import MarketDataCache
+
         r = self._make_redis()
         r.zrevrange.side_effect = Exception("err")
         cache = MarketDataCache(r)
@@ -268,6 +301,7 @@ class TestMarketDataCache:
     def test_get_ticks_since_returns_list(self):
         import json
         from market_data.redis_cache import MarketDataCache
+
         r = self._make_redis()
         ticks = [{"price": 1980.0}]
         r.zrangebyscore.return_value = [json.dumps(t).encode() for t in ticks]
@@ -277,6 +311,7 @@ class TestMarketDataCache:
 
     def test_get_ticks_since_empty_on_exception(self):
         from market_data.redis_cache import MarketDataCache
+
         r = self._make_redis()
         r.zrangebyscore.side_effect = Exception("err")
         cache = MarketDataCache(r)
@@ -284,6 +319,7 @@ class TestMarketDataCache:
 
     def test_store_bar_calls_zadd(self):
         from market_data.redis_cache import MarketDataCache
+
         r = self._make_redis()
         cache = MarketDataCache(r)
         bar = {"bar_open_ts": 1700000000.0, "open": 1980.0, "close": 1985.0}
@@ -292,6 +328,7 @@ class TestMarketDataCache:
 
     def test_store_bar_silent_on_exception(self):
         from market_data.redis_cache import MarketDataCache
+
         r = self._make_redis()
         r.zadd.side_effect = Exception("redis down")
         cache = MarketDataCache(r)
@@ -301,6 +338,7 @@ class TestMarketDataCache:
     def test_get_bars_returns_chronological(self):
         import json
         from market_data.redis_cache import MarketDataCache
+
         r = self._make_redis()
         bars = [{"bar_open_ts": float(i), "close": 1980.0 + i} for i in range(3)]
         r.zrevrange.return_value = [json.dumps(b).encode() for b in reversed(bars)]
@@ -310,6 +348,7 @@ class TestMarketDataCache:
 
     def test_get_bars_empty_on_exception(self):
         from market_data.redis_cache import MarketDataCache
+
         r = self._make_redis()
         r.zrevrange.side_effect = Exception("err")
         cache = MarketDataCache(r)
@@ -318,6 +357,7 @@ class TestMarketDataCache:
     def test_get_bars_since_returns_list(self):
         import json
         from market_data.redis_cache import MarketDataCache
+
         r = self._make_redis()
         bars = [{"bar_open_ts": 1700000000.0}]
         r.zrangebyscore.return_value = [json.dumps(b).encode() for b in bars]
@@ -327,6 +367,7 @@ class TestMarketDataCache:
 
     def test_get_bars_since_empty_on_exception(self):
         from market_data.redis_cache import MarketDataCache
+
         r = self._make_redis()
         r.zrangebyscore.side_effect = Exception("err")
         cache = MarketDataCache(r)
@@ -335,6 +376,7 @@ class TestMarketDataCache:
     def test_get_latest_bar_returns_dict(self):
         import json
         from market_data.redis_cache import MarketDataCache
+
         r = self._make_redis()
         bar = {"close": 1985.0}
         r.get.return_value = json.dumps(bar).encode()
@@ -344,6 +386,7 @@ class TestMarketDataCache:
 
     def test_get_latest_bar_none_on_empty(self):
         from market_data.redis_cache import MarketDataCache
+
         r = self._make_redis()
         r.get.return_value = None
         cache = MarketDataCache(r)
@@ -351,6 +394,7 @@ class TestMarketDataCache:
 
     def test_get_latest_bar_none_on_exception(self):
         from market_data.redis_cache import MarketDataCache
+
         r = self._make_redis()
         r.get.side_effect = Exception("err")
         cache = MarketDataCache(r)
@@ -359,6 +403,7 @@ class TestMarketDataCache:
     def test_get_feed_health_returns_dict(self):
         import json
         from market_data.redis_cache import MarketDataCache
+
         r = self._make_redis()
         health = {"status": "ok"}
         r.get.return_value = json.dumps(health).encode()
@@ -368,6 +413,7 @@ class TestMarketDataCache:
 
     def test_get_feed_health_none_on_empty(self):
         from market_data.redis_cache import MarketDataCache
+
         r = self._make_redis()
         r.get.return_value = None
         cache = MarketDataCache(r)
@@ -375,14 +421,15 @@ class TestMarketDataCache:
 
     def test_get_feed_health_none_on_exception(self):
         from market_data.redis_cache import MarketDataCache
+
         r = self._make_redis()
         r.get.side_effect = Exception("err")
         cache = MarketDataCache(r)
         assert cache.get_feed_health() is None
 
     def test_custom_key_prefix(self):
-        import json
         from market_data.redis_cache import MarketDataCache
+
         r = self._make_redis()
         r.zrevrange.return_value = []
         cache = MarketDataCache(r, key_prefix="myapp:")
@@ -392,6 +439,7 @@ class TestMarketDataCache:
 
     def test_store_bar_without_bar_open_ts(self):
         from market_data.redis_cache import MarketDataCache
+
         r = self._make_redis()
         cache = MarketDataCache(r)
         # bar without bar_open_ts — should use time.time() as fallback
@@ -403,46 +451,93 @@ class TestMarketDataCache:
 # market_data/feed_handler.py
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestTick:
     def test_mid_with_bid_ask(self):
         from market_data.feed_handler import Tick
-        t = Tick(symbol="EURUSD", timestamp=datetime.now(UTC),
-                 bid=1.08, ask=1.09, bid_size=100, ask_size=100,
-                 last_price=1.085, last_size=0, exchange="oanda")
+
+        t = Tick(
+            symbol="EURUSD",
+            timestamp=datetime.now(UTC),
+            bid=1.08,
+            ask=1.09,
+            bid_size=100,
+            ask_size=100,
+            last_price=1.085,
+            last_size=0,
+            exchange="oanda",
+        )
         assert abs(t.mid - 1.085) < 1e-9
 
     def test_mid_fallback_to_last_price(self):
         from market_data.feed_handler import Tick
-        t = Tick(symbol="EURUSD", timestamp=datetime.now(UTC),
-                 bid=0, ask=0, bid_size=0, ask_size=0,
-                 last_price=1.085, last_size=0, exchange="oanda")
+
+        t = Tick(
+            symbol="EURUSD",
+            timestamp=datetime.now(UTC),
+            bid=0,
+            ask=0,
+            bid_size=0,
+            ask_size=0,
+            last_price=1.085,
+            last_size=0,
+            exchange="oanda",
+        )
         assert t.mid == 1.085
 
     def test_spread(self):
         from market_data.feed_handler import Tick
-        t = Tick(symbol="EURUSD", timestamp=datetime.now(UTC),
-                 bid=1.08, ask=1.09, bid_size=100, ask_size=100,
-                 last_price=1.085, last_size=0, exchange="oanda")
+
+        t = Tick(
+            symbol="EURUSD",
+            timestamp=datetime.now(UTC),
+            bid=1.08,
+            ask=1.09,
+            bid_size=100,
+            ask_size=100,
+            last_price=1.085,
+            last_size=0,
+            exchange="oanda",
+        )
         assert abs(t.spread - 0.01) < 1e-9
 
     def test_spread_zero_when_no_bid_ask(self):
         from market_data.feed_handler import Tick
-        t = Tick(symbol="EURUSD", timestamp=datetime.now(UTC),
-                 bid=0, ask=0, bid_size=0, ask_size=0,
-                 last_price=1.085, last_size=0, exchange="oanda")
+
+        t = Tick(
+            symbol="EURUSD",
+            timestamp=datetime.now(UTC),
+            bid=0,
+            ask=0,
+            bid_size=0,
+            ask_size=0,
+            last_price=1.085,
+            last_size=0,
+            exchange="oanda",
+        )
         assert t.spread == 0
 
     def test_is_trade_default_false(self):
         from market_data.feed_handler import Tick
-        t = Tick(symbol="EURUSD", timestamp=datetime.now(UTC),
-                 bid=1.08, ask=1.09, bid_size=100, ask_size=100,
-                 last_price=1.085, last_size=0, exchange="oanda")
+
+        t = Tick(
+            symbol="EURUSD",
+            timestamp=datetime.now(UTC),
+            bid=1.08,
+            ask=1.09,
+            bid_size=100,
+            ask_size=100,
+            last_price=1.085,
+            last_size=0,
+            exchange="oanda",
+        )
         assert t.is_trade is False
 
 
 class TestFeedHandler:
     def test_init(self):
         from market_data.feed_handler import FeedHandler
+
         fh = FeedHandler()
         assert fh.exchanges == {}
         assert fh.normalized_callbacks == []
@@ -450,6 +545,7 @@ class TestFeedHandler:
 
     def test_subscribe_adds_symbols(self):
         from market_data.feed_handler import FeedHandler
+
         fh = FeedHandler()
         fh.subscribe(["EURUSD", "XAUUSD"])
         assert "EURUSD" in fh.symbol_subscriptions
@@ -457,6 +553,7 @@ class TestFeedHandler:
 
     def test_on_tick_registers_callback(self):
         from market_data.feed_handler import FeedHandler
+
         fh = FeedHandler()
         cb = MagicMock()
         fh.on_tick(cb)
@@ -464,6 +561,7 @@ class TestFeedHandler:
 
     def test_parse_oanda_tick(self):
         from market_data.feed_handler import FeedHandler
+
         fh = FeedHandler()
         fh.subscribe(["EURUSD"])
         raw = {
@@ -478,67 +576,102 @@ class TestFeedHandler:
 
     def test_parse_binance_tick(self):
         from market_data.feed_handler import FeedHandler
+
         fh = FeedHandler()
-        raw = {"s": "BTCUSDT", "E": 1700000000000, "b": "50000", "a": "50001",
-               "B": "1.5", "A": "2.0", "c": "50000.5", "v": "100"}
+        raw = {
+            "s": "BTCUSDT",
+            "E": 1700000000000,
+            "b": "50000",
+            "a": "50001",
+            "B": "1.5",
+            "A": "2.0",
+            "c": "50000.5",
+            "v": "100",
+        }
         tick = fh._parse_binance(raw, "binance")
         assert tick.symbol == "BTCUSDT"
         assert tick.bid == 50000.0
 
     def test_parse_binance_trade_flag(self):
         from market_data.feed_handler import FeedHandler
+
         fh = FeedHandler()
-        raw = {"s": "BTCUSDT", "E": 1700000000000, "b": "50000", "a": "50001",
-               "B": "1.5", "A": "2.0", "c": "50000.5", "v": "100", "e": "trade"}
+        raw = {
+            "s": "BTCUSDT",
+            "E": 1700000000000,
+            "b": "50000",
+            "a": "50001",
+            "B": "1.5",
+            "A": "2.0",
+            "c": "50000.5",
+            "v": "100",
+            "e": "trade",
+        }
         tick = fh._parse_binance(raw, "binance")
         assert tick.is_trade is True
 
     def test_parse_generic_tick(self):
         from market_data.feed_handler import FeedHandler
+
         fh = FeedHandler()
-        raw = {"symbol": "XAUUSD", "bid": 1980.0, "ask": 1980.5,
-               "bidSize": 500, "askSize": 500, "price": 1980.25, "size": 10}
+        raw = {
+            "symbol": "XAUUSD",
+            "bid": 1980.0,
+            "ask": 1980.5,
+            "bidSize": 500,
+            "askSize": 500,
+            "price": 1980.25,
+            "size": 10,
+        }
         tick = fh._parse_generic(raw, "generic")
         assert tick.symbol == "XAUUSD"
         assert tick.bid == 1980.0
 
     def test_on_exchange_tick_dispatches_callback(self):
         from market_data.feed_handler import FeedHandler
+
         fh = FeedHandler()
         fh.subscribe(["EURUSD"])
         received = []
         fh.on_tick(lambda t: received.append(t))
-        raw = {"symbol": "EURUSD", "bid": 1.08, "ask": 1.09,
-               "bidSize": 100, "askSize": 100, "price": 1.085, "size": 0}
+        raw = {"symbol": "EURUSD", "bid": 1.08, "ask": 1.09, "bidSize": 100, "askSize": 100, "price": 1.085, "size": 0}
         fh._on_exchange_tick(raw, "generic")
         assert len(received) == 1
 
     def test_on_exchange_tick_ignores_unsubscribed(self):
         from market_data.feed_handler import FeedHandler
+
         fh = FeedHandler()
         fh.subscribe(["EURUSD"])
         received = []
         fh.on_tick(lambda t: received.append(t))
-        raw = {"symbol": "GBPUSD", "bid": 1.26, "ask": 1.261,
-               "bidSize": 100, "askSize": 100, "price": 1.2605, "size": 0}
+        raw = {
+            "symbol": "GBPUSD",
+            "bid": 1.26,
+            "ask": 1.261,
+            "bidSize": 100,
+            "askSize": 100,
+            "price": 1.2605,
+            "size": 0,
+        }
         fh._on_exchange_tick(raw, "generic")
         assert len(received) == 0
 
     def test_callback_exception_does_not_crash(self):
         from market_data.feed_handler import FeedHandler
+
         fh = FeedHandler()
         fh.subscribe(["EURUSD"])
         fh.on_tick(lambda t: (_ for _ in ()).throw(RuntimeError("boom")))
-        raw = {"symbol": "EURUSD", "bid": 1.08, "ask": 1.09,
-               "bidSize": 100, "askSize": 100, "price": 1.085, "size": 0}
+        raw = {"symbol": "EURUSD", "bid": 1.08, "ask": 1.09, "bidSize": 100, "askSize": 100, "price": 1.085, "size": 0}
         fh._on_exchange_tick(raw, "generic")  # should not raise
 
     def test_get_l1_book_returns_latest_quote(self):
         from market_data.feed_handler import FeedHandler
+
         fh = FeedHandler()
         fh.subscribe(["EURUSD"])
-        raw = {"symbol": "EURUSD", "bid": 1.08, "ask": 1.09,
-               "bidSize": 100, "askSize": 100, "price": 1.085, "size": 0}
+        raw = {"symbol": "EURUSD", "bid": 1.08, "ask": 1.09, "bidSize": 100, "askSize": 100, "price": 1.085, "size": 0}
         fh._on_exchange_tick(raw, "generic")
         tick = fh.get_l1_book("EURUSD")
         assert tick is not None
@@ -546,16 +679,27 @@ class TestFeedHandler:
 
     def test_get_l1_book_none_for_unknown(self):
         from market_data.feed_handler import FeedHandler
+
         fh = FeedHandler()
         assert fh.get_l1_book("UNKNOWN") is None
 
     def test_get_recent_trades_filters_trades(self):
         from market_data.feed_handler import FeedHandler
+
         fh = FeedHandler()
         fh.subscribe(["BTCUSDT"])
         # trade tick
-        raw_trade = {"s": "BTCUSDT", "E": 1700000000000, "b": "50000", "a": "50001",
-                     "B": "1.5", "A": "2.0", "c": "50000.5", "v": "100", "e": "trade"}
+        raw_trade = {
+            "s": "BTCUSDT",
+            "E": 1700000000000,
+            "b": "50000",
+            "a": "50001",
+            "B": "1.5",
+            "A": "2.0",
+            "c": "50000.5",
+            "v": "100",
+            "e": "trade",
+        }
         fh._on_exchange_tick(raw_trade, "binance")
         trades = fh.get_recent_trades("BTCUSDT")
         assert len(trades) == 1
@@ -563,6 +707,7 @@ class TestFeedHandler:
 
     def test_add_exchange_sets_callback(self):
         from market_data.feed_handler import FeedHandler, ExchangeFeed
+
         fh = FeedHandler()
         feed = ExchangeFeed("test", "ws://localhost")
         fh.add_exchange("test", feed)
@@ -571,6 +716,7 @@ class TestFeedHandler:
 
     def test_parse_coinbase_tick(self):
         from market_data.feed_handler import FeedHandler
+
         fh = FeedHandler()
         raw = {
             "product_id": "BTC-USD",
@@ -588,6 +734,7 @@ class TestFeedHandler:
 
     def test_normalize_dispatches_to_oanda(self):
         from market_data.feed_handler import FeedHandler
+
         fh = FeedHandler()
         raw = {
             "instrument": "EUR_USD",
@@ -599,18 +746,27 @@ class TestFeedHandler:
 
     def test_normalize_dispatches_to_binance(self):
         from market_data.feed_handler import FeedHandler
+
         fh = FeedHandler()
-        raw = {"s": "BTCUSDT", "E": 1700000000000, "b": "50000", "a": "50001",
-               "B": "1.5", "A": "2.0", "c": "50000.5", "v": "100"}
+        raw = {
+            "s": "BTCUSDT",
+            "E": 1700000000000,
+            "b": "50000",
+            "a": "50001",
+            "B": "1.5",
+            "A": "2.0",
+            "c": "50000.5",
+            "v": "100",
+        }
         tick = fh._normalize(raw, "binance")
         assert tick.exchange == "binance"
 
     def test_stats_ticks_processed_increments(self):
         from market_data.feed_handler import FeedHandler
+
         fh = FeedHandler()
         fh.subscribe(["EURUSD"])
-        raw = {"symbol": "EURUSD", "bid": 1.08, "ask": 1.09,
-               "bidSize": 100, "askSize": 100, "price": 1.085, "size": 0}
+        raw = {"symbol": "EURUSD", "bid": 1.08, "ask": 1.09, "bidSize": 100, "askSize": 100, "price": 1.085, "size": 0}
         fh._on_exchange_tick(raw, "generic")
         fh._on_exchange_tick(raw, "generic")
         assert fh.stats["ticks_processed"] == 2
@@ -619,6 +775,7 @@ class TestFeedHandler:
 class TestExchangeFeed:
     def test_init(self):
         from market_data.feed_handler import ExchangeFeed
+
         feed = ExchangeFeed("test", "ws://localhost")
         assert feed.name == "test"
         assert feed.ws_url == "ws://localhost"
@@ -626,6 +783,7 @@ class TestExchangeFeed:
 
     def test_set_callback(self):
         from market_data.feed_handler import ExchangeFeed
+
         feed = ExchangeFeed("test", "ws://localhost")
         cb = MagicMock()
         feed.set_callback(cb)
@@ -633,6 +791,7 @@ class TestExchangeFeed:
 
     def test_subscribe_adds_symbols(self):
         from market_data.feed_handler import ExchangeFeed
+
         feed = ExchangeFeed("test", "ws://localhost")
         feed.subscribe(["EURUSD", "XAUUSD"])
         assert "EURUSD" in feed.subscribed_symbols
@@ -643,9 +802,11 @@ class TestExchangeFeed:
 # market_data/order_book.py
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestBookLevel:
     def test_creation(self):
         from market_data.order_book import BookLevel
+
         bl = BookLevel(price=1980.0, size=500.0)
         assert bl.price == 1980.0
         assert bl.size == 500.0
@@ -654,6 +815,7 @@ class TestBookLevel:
 class TestOrderBookSnapshot:
     def _make_snapshot(self, n_levels=5):
         from market_data.order_book import BookLevel, OrderBookSnapshot
+
         bids = [BookLevel(1980.0 - i * 0.1, 100.0 + i * 10) for i in range(n_levels)]
         asks = [BookLevel(1980.1 + i * 0.1, 100.0 + i * 10) for i in range(n_levels)]
         return OrderBookSnapshot(
@@ -699,9 +861,15 @@ class TestOrderBookSnapshot:
         snap = self._make_snapshot()
         features = snap.to_ml_features()
         expected_keys = [
-            "micro_obi", "micro_weighted_mid_dev", "micro_bid_depth",
-            "micro_ask_depth", "micro_depth_ratio", "micro_depth_imbalance",
-            "micro_price_pressure", "micro_spread", "micro_spread_bps",
+            "micro_obi",
+            "micro_weighted_mid_dev",
+            "micro_bid_depth",
+            "micro_ask_depth",
+            "micro_depth_ratio",
+            "micro_depth_imbalance",
+            "micro_price_pressure",
+            "micro_spread",
+            "micro_spread_bps",
             "micro_cumulative_delta",
         ]
         for k in expected_keys:
@@ -714,6 +882,7 @@ class TestOrderBookSnapshot:
 
     def test_empty_book_no_crash(self):
         from market_data.order_book import OrderBookSnapshot
+
         snap = OrderBookSnapshot(
             symbol="XAUUSD",
             timestamp=datetime.now(UTC),
@@ -733,6 +902,7 @@ class TestOrderBookSnapshot:
 class TestOrderBook:
     def _make_book(self):
         from market_data.order_book import OrderBook
+
         return OrderBook("XAUUSD", max_levels=10)
 
     def _bids_asks(self):
@@ -742,6 +912,7 @@ class TestOrderBook:
 
     def test_apply_snapshot_returns_snapshot(self):
         from market_data.order_book import OrderBookSnapshot
+
         book = self._make_book()
         bids, asks = self._bids_asks()
         snap = book.apply_snapshot(bids, asks)
@@ -848,27 +1019,32 @@ class TestOrderBook:
 class TestPolygonL2Feed:
     def test_to_polygon_pair(self):
         from market_data.order_book import PolygonL2Feed
+
         assert PolygonL2Feed._to_polygon_pair("XAU_USD") == "XAU/USD"
         assert PolygonL2Feed._to_polygon_pair("EUR_USD") == "EUR/USD"
 
     def test_to_polygon_sub(self):
         from market_data.order_book import PolygonL2Feed
+
         assert PolygonL2Feed._to_polygon_sub("XAU_USD") == "C.XAU/USD"
 
     def test_get_snapshot_none_before_start(self):
         from market_data.order_book import PolygonL2Feed
+
         feed = PolygonL2Feed()
         assert feed.get_snapshot("XAU_USD") is None
 
     def test_stop_without_start(self):
         import asyncio
         from market_data.order_book import PolygonL2Feed
+
         feed = PolygonL2Feed()
         asyncio.run(feed.stop())
 
     def test_start_raises_without_api_key(self):
         import asyncio
         from market_data.order_book import PolygonL2Feed
+
         feed = PolygonL2Feed()
         feed._api_key = ""
         with pytest.raises(RuntimeError, match="POLYGON_API_KEY"):
@@ -878,11 +1054,13 @@ class TestPolygonL2Feed:
 class TestOrderBookFeed:
     def test_get_snapshot_none_before_start(self):
         from market_data.order_book import OrderBookFeed
+
         feed = OrderBookFeed()
         assert feed.get_snapshot("XAU_USD") is None
 
     def test_get_ml_features_neutral_before_start(self):
         from market_data.order_book import OrderBookFeed
+
         feed = OrderBookFeed()
         features = feed.get_ml_features("XAU_USD")
         assert features["micro_obi"] == 0.0
@@ -891,12 +1069,14 @@ class TestOrderBookFeed:
     def test_stop_without_start(self):
         import asyncio
         from market_data.order_book import OrderBookFeed
+
         feed = OrderBookFeed()
         asyncio.run(feed.stop())
 
     def test_start_unknown_provider_raises(self):
         import asyncio
         from market_data.order_book import OrderBookFeed
+
         feed = OrderBookFeed(provider="unknown_provider")
         with pytest.raises(RuntimeError, match="Unknown L2_PROVIDER"):
             asyncio.run(feed.start(["XAU_USD"]))
@@ -905,12 +1085,14 @@ class TestOrderBookFeed:
 class TestGetOrderBookFeed:
     def test_returns_instance(self):
         import market_data.order_book as ob_mod
+
         ob_mod._order_book_feed = None  # reset singleton
         feed = ob_mod.get_order_book_feed()
         assert feed is not None
 
     def test_singleton_behavior(self):
         import market_data.order_book as ob_mod
+
         ob_mod._order_book_feed = None
         f1 = ob_mod.get_order_book_feed()
         f2 = ob_mod.get_order_book_feed()
@@ -921,9 +1103,11 @@ class TestGetOrderBookFeed:
 # market_data/mt5_live_feed.py
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestFeedHealth:
     def test_defaults(self):
         from market_data.mt5_live_feed import FeedHealth
+
         h = FeedHealth()
         assert h.connected is False
         assert h.permanently_failed is False
@@ -936,6 +1120,7 @@ class TestFeedHealth:
 class TestMT5LiveFeed:
     def _make_feed(self, **kwargs):
         from market_data.mt5_live_feed import MT5LiveFeed
+
         return MT5LiveFeed(url="ws://localhost:8765", **kwargs)
 
     def test_init_defaults(self):
@@ -946,6 +1131,7 @@ class TestMT5LiveFeed:
 
     def test_health_property(self):
         from market_data.mt5_live_feed import FeedHealth
+
         feed = self._make_feed()
         h = feed.health
         assert isinstance(h, FeedHealth)
@@ -977,6 +1163,7 @@ class TestMT5LiveFeed:
 
     def test_max_reconnect_exceeded_marks_failed(self):
         from market_data.mt5_live_feed import WEBSOCKET_AVAILABLE
+
         if WEBSOCKET_AVAILABLE:
             pytest.skip("websocket available — test targets REST fallback path")
         feed = self._make_feed(max_reconnect_attempts=1)
@@ -1057,6 +1244,7 @@ class TestMT5LiveFeed:
 
     def test_get_avg_latency_after_ticks_with_timestamp(self):
         import time
+
         feed = self._make_feed()
         feed._on_tick = lambda d: None
         ts = time.time() - 0.01  # 10ms ago
@@ -1085,6 +1273,7 @@ class TestMT5LiveFeed:
 # Additional targeted tests to push coverage above 90%
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestValidationAdditional:
     """Cover lines 74 (int/float timestamp branch) and 149 (_is_trading_hours)."""
 
@@ -1092,6 +1281,7 @@ class TestValidationAdditional:
         """Line 74: isinstance(tick_time, int|float) branch."""
         from market_data.validation import MarketDataValidator
         import time
+
         v = MarketDataValidator(max_staleness_seconds=1)
         # Use a unix timestamp from 100 seconds ago — will be stale
         old_ts = time.time() - 100
@@ -1109,6 +1299,7 @@ class TestValidationAdditional:
     def test_is_trading_hours_always_true(self):
         """Line 149: _is_trading_hours returns True (forex 24/5)."""
         from market_data.validation import MarketDataValidator
+
         v = MarketDataValidator()
         dt = datetime.now(UTC)
         assert v._is_trading_hours(dt, "XAUUSD") is True
@@ -1116,16 +1307,20 @@ class TestValidationAdditional:
     def test_validate_ohlc_with_datetime_index_no_gaps(self):
         """Lines 223-227: DatetimeIndex gap-check branch — no gaps."""
         from market_data.validation import MarketDataValidator
+
         v = MarketDataValidator()
         # Use irregular spacing so infer_freq returns None → gap check skipped
         dates = pd.to_datetime(["2024-01-01", "2024-01-03", "2024-01-07"])
-        df = pd.DataFrame({
-            "open": [1970.0, 1975.0, 1980.0],
-            "high": [1975.0, 1980.0, 1985.0],
-            "low": [1965.0, 1970.0, 1975.0],
-            "close": [1972.0, 1977.0, 1982.0],
-            "volume": [1000.0, 1000.0, 1000.0],
-        }, index=dates)
+        df = pd.DataFrame(
+            {
+                "open": [1970.0, 1975.0, 1980.0],
+                "high": [1975.0, 1980.0, 1985.0],
+                "low": [1965.0, 1970.0, 1975.0],
+                "close": [1972.0, 1977.0, 1982.0],
+                "volume": [1000.0, 1000.0, 1000.0],
+            },
+            index=dates,
+        )
         result = v.validate_ohlc(df, "XAUUSD")
         assert result is not None
 
@@ -1136,18 +1331,22 @@ class TestRedisCacheAdditional:
     def test_log_error_with_sentry_available(self):
         """Lines 185/188-189: _log_error when _SENTRY=True."""
         import market_data.redis_cache as rc_mod
+
         original = rc_mod._SENTRY
         try:
             rc_mod._SENTRY = True
             import unittest.mock as um
+
             fake_sentry = um.MagicMock()
             with um.patch.dict("sys.modules", {"sentry_sdk": fake_sentry}):
                 r = MagicMock()
                 r.zrevrange.side_effect = Exception("redis error")
                 from market_data.redis_cache import MarketDataCache
+
                 cache = MarketDataCache(r)
                 # Patch sentry_sdk at module level
                 import market_data.redis_cache as rc
+
                 rc._SENTRY = True
                 with um.patch("market_data.redis_cache.sentry_sdk", fake_sentry):
                     cache.get_latest_tick("XAUUSD")
@@ -1159,6 +1358,7 @@ class TestRedisCacheAdditional:
         """Lines 188-189: sentry capture itself raises — should be suppressed."""
         import market_data.redis_cache as rc_mod
         import unittest.mock as um
+
         original = rc_mod._SENTRY
         try:
             rc_mod._SENTRY = True
@@ -1167,6 +1367,7 @@ class TestRedisCacheAdditional:
             r = MagicMock()
             r.zrevrange.side_effect = Exception("redis error")
             from market_data.redis_cache import MarketDataCache
+
             cache = MarketDataCache(r)
             with um.patch("market_data.redis_cache.sentry_sdk", fake_sentry):
                 result = cache.get_latest_tick("XAUUSD")
@@ -1181,6 +1382,7 @@ class TestFeedHandlerAdditional:
     def test_subscribe_propagates_to_exchanges(self):
         """Line 75: exchange.subscribe called when exchanges present."""
         from market_data.feed_handler import FeedHandler, ExchangeFeed
+
         fh = FeedHandler()
         feed = ExchangeFeed("test", "ws://localhost")
         fh.add_exchange("test", feed)
@@ -1190,6 +1392,7 @@ class TestFeedHandlerAdditional:
     def test_aiohttp_import_branch(self):
         """Lines 26-27: aiohttp import try/except."""
         import market_data.feed_handler as fh_mod
+
         # aiohttp may or may not be installed — either way module loads
         assert hasattr(fh_mod, "FeedHandler")
 
@@ -1197,6 +1400,7 @@ class TestFeedHandlerAdditional:
         """ExchangeFeed._send_subscription is a no-op base implementation."""
         import asyncio
         from market_data.feed_handler import ExchangeFeed
+
         feed = ExchangeFeed("test", "ws://localhost")
         # Should complete without error
         asyncio.run(feed._send_subscription())
@@ -1206,6 +1410,7 @@ class TestFeedHandlerAdditional:
         """Lines 226-245: _receive_loop processes TEXT messages and calls callback."""
         import asyncio as _asyncio
         from market_data.feed_handler import ExchangeFeed
+
         try:
             import aiohttp
         except ImportError:
@@ -1241,12 +1446,9 @@ class TestFeedHandlerAdditional:
         async def mock_connect():
             feed.connected = False
 
-        with patch.object(feed, "connect", mock_connect):
-            with patch("asyncio.sleep", return_value=None):
-                try:
-                    await _asyncio.wait_for(feed._receive_loop(), timeout=2.0)
-                except (_asyncio.TimeoutError, Exception):
-                    pass
+        with patch.object(feed, "connect", mock_connect), patch("asyncio.sleep", return_value=None):
+            with contextlib.suppress(TimeoutError, Exception):
+                await _asyncio.wait_for(feed._receive_loop(), timeout=2.0)
 
         assert len(received) >= 1 or call_count >= 1  # loop ran
 
@@ -1255,6 +1457,7 @@ class TestFeedHandlerAdditional:
         """Lines 237-241: exception in receive loop is caught and retried."""
         import asyncio as _asyncio
         from market_data.feed_handler import ExchangeFeed
+
         try:
             import aiohttp
         except ImportError:
@@ -1283,12 +1486,9 @@ class TestFeedHandlerAdditional:
         async def mock_connect():
             pass
 
-        with patch.object(feed, "connect", mock_connect):
-            with patch("asyncio.sleep", return_value=None):
-                try:
-                    await _asyncio.wait_for(feed._receive_loop(), timeout=2.0)
-                except (_asyncio.TimeoutError, Exception):
-                    pass
+        with patch.object(feed, "connect", mock_connect), patch("asyncio.sleep", return_value=None):
+            with contextlib.suppress(TimeoutError, Exception):
+                await _asyncio.wait_for(feed._receive_loop(), timeout=2.0)
 
         assert call_count >= 1
 
@@ -1299,12 +1499,10 @@ class TestPolygonL2FeedLifecycle:
     @pytest.mark.asyncio
     async def test_start_with_api_key_creates_task(self):
         """Lines 346-356: start() with valid api_key creates books and task."""
-        import asyncio as _asyncio
         from market_data.order_book import PolygonL2Feed
-        import market_data.order_book as ob_mod
 
         feed = PolygonL2Feed()
-        feed._api_key = "test_key"
+        feed._api_key = "test_key"  # pragma: allowlist secret
 
         # Patch _run_with_backoff to return immediately
         async def instant_backoff(symbols):
@@ -1325,7 +1523,7 @@ class TestPolygonL2FeedLifecycle:
         from market_data.order_book import PolygonL2Feed
 
         feed = PolygonL2Feed()
-        feed._api_key = "test_key"
+        feed._api_key = "test_key"  # pragma: allowlist secret
 
         async def long_running(symbols):
             await _asyncio.sleep(100)
@@ -1339,6 +1537,7 @@ class TestPolygonL2FeedLifecycle:
     def test_get_snapshot_after_book_set(self):
         """Line 361: get_snapshot returns snapshot from book."""
         from market_data.order_book import PolygonL2Feed, OrderBook
+
         feed = PolygonL2Feed()
         book = OrderBook("XAU_USD")
         bids = [(1980.0, 100)]
@@ -1355,9 +1554,8 @@ class TestMockL2FeedStart:
     @pytest.mark.asyncio
     async def test_start_creates_books_and_tasks(self, monkeypatch):
         """Lines 772-783: start() creates books and tasks."""
-        import asyncio as _asyncio
         from market_data.order_book import MockL2Feed
-        import market_data.order_book as ob_mod
+
         monkeypatch.setenv("APP_ENV", "development")
 
         feed = MockL2Feed()
@@ -1379,6 +1577,7 @@ class TestMockL2FeedStart:
         import asyncio as _asyncio
         from market_data.order_book import MockL2Feed, OrderBook
         import market_data.order_book as ob_mod
+
         monkeypatch.setenv("APP_ENV", "development")
 
         feed = MockL2Feed()
@@ -1450,6 +1649,7 @@ class TestOrderBookFeedProviders:
     def test_get_snapshot_with_provider(self):
         """Line 871: get_snapshot delegates to provider."""
         from market_data.order_book import OrderBookFeed, OrderBook
+
         feed = OrderBookFeed()
         mock_provider = MagicMock()
         book = OrderBook("XAU_USD")
@@ -1464,6 +1664,7 @@ class TestOrderBookFeedProviders:
     def test_get_ml_features_with_snapshot(self):
         """Line 877: get_ml_features returns real features when snapshot available."""
         from market_data.order_book import OrderBookFeed, OrderBook
+
         feed = OrderBookFeed()
         book = OrderBook("XAU_USD")
         bids = [(1980.0, 100)]
@@ -1479,6 +1680,7 @@ class TestOrderBookFeedProviders:
     def test_get_order_book_feed_singleton_reset(self):
         """Line 899: get_order_book_feed creates new instance after reset."""
         import market_data.order_book as ob_mod
+
         ob_mod._order_book_feed = None
         feed = ob_mod.get_order_book_feed()
         assert feed is not None
@@ -1491,25 +1693,26 @@ class TestOrderBookAdditional:
 
     def test_polygon_handle_quote_updates_book(self):
         from market_data.order_book import PolygonL2Feed, OrderBook
+
         feed = PolygonL2Feed()
         book = OrderBook("XAU_USD")
         feed._books["XAU_USD"] = book
         feed._pair_to_symbol["XAU/USD"] = "XAU_USD"
-        ev = {"ev": "Q", "pair": "XAU/USD", "bp": 2001.40, "bs": 500,
-              "ap": 2001.60, "as": 480, "t": 1711234567890}
+        ev = {"ev": "Q", "pair": "XAU/USD", "bp": 2001.40, "bs": 500, "ap": 2001.60, "as": 480, "t": 1711234567890}
         feed._handle_quote(ev)
         snap = book.get_snapshot()
         assert snap is not None
 
     def test_polygon_handle_quote_unknown_pair_ignored(self):
         from market_data.order_book import PolygonL2Feed
+
         feed = PolygonL2Feed()
-        ev = {"ev": "Q", "pair": "UNKNOWN/PAIR", "bp": 1.0, "bs": 100,
-              "ap": 1.01, "as": 100, "t": 1711234567890}
+        ev = {"ev": "Q", "pair": "UNKNOWN/PAIR", "bp": 1.0, "bs": 100, "ap": 1.01, "as": 100, "t": 1711234567890}
         feed._handle_quote(ev)  # should not raise
 
     def test_polygon_handle_quote_zero_price_ignored(self):
         from market_data.order_book import PolygonL2Feed, OrderBook
+
         feed = PolygonL2Feed()
         book = OrderBook("XAU_USD")
         feed._books["XAU_USD"] = book
@@ -1519,6 +1722,7 @@ class TestOrderBookAdditional:
 
     def test_polygon_handle_trade_buy_aggressor(self):
         from market_data.order_book import PolygonL2Feed, OrderBook
+
         feed = PolygonL2Feed()
         book = OrderBook("XAU_USD")
         feed._books["XAU_USD"] = book
@@ -1529,6 +1733,7 @@ class TestOrderBookAdditional:
 
     def test_polygon_handle_trade_sell_aggressor(self):
         from market_data.order_book import PolygonL2Feed, OrderBook
+
         feed = PolygonL2Feed()
         book = OrderBook("XAU_USD")
         feed._books["XAU_USD"] = book
@@ -1539,6 +1744,7 @@ class TestOrderBookAdditional:
 
     def test_polygon_handle_trade_infer_side_from_mid(self):
         from market_data.order_book import PolygonL2Feed, OrderBook
+
         feed = PolygonL2Feed()
         book = OrderBook("XAU_USD")
         # Set up a snapshot so mid_price is known
@@ -1554,12 +1760,14 @@ class TestOrderBookAdditional:
 
     def test_polygon_handle_trade_unknown_pair_ignored(self):
         from market_data.order_book import PolygonL2Feed
+
         feed = PolygonL2Feed()
         ev = {"ev": "T", "pair": "UNKNOWN/PAIR", "p": 100.0, "s": 10, "c": []}
         feed._handle_trade(ev)  # should not raise
 
     def test_polygon_handle_trade_zero_size_ignored(self):
         from market_data.order_book import PolygonL2Feed, OrderBook
+
         feed = PolygonL2Feed()
         book = OrderBook("XAU_USD")
         feed._books["XAU_USD"] = book
@@ -1570,6 +1778,7 @@ class TestOrderBookAdditional:
 
     def test_mock_l2_feed_blocked_in_production(self, monkeypatch):
         from market_data.order_book import MockL2Feed
+
         monkeypatch.setenv("APP_ENV", "production")
         with pytest.raises(RuntimeError, match="MockL2Feed cannot be used"):
             MockL2Feed()
@@ -1577,6 +1786,7 @@ class TestOrderBookAdditional:
     def test_mock_l2_feed_allowed_in_development(self, monkeypatch):
         import asyncio
         from market_data.order_book import MockL2Feed
+
         monkeypatch.setenv("APP_ENV", "development")
         feed = MockL2Feed()
         assert feed is not None
@@ -1584,6 +1794,7 @@ class TestOrderBookAdditional:
 
     def test_mock_l2_feed_get_snapshot_none_before_start(self, monkeypatch):
         from market_data.order_book import MockL2Feed
+
         monkeypatch.setenv("APP_ENV", "development")
         feed = MockL2Feed()
         assert feed.get_snapshot("XAU_USD") is None
@@ -1591,6 +1802,7 @@ class TestOrderBookAdditional:
     def test_order_book_feed_start_mock_provider(self, monkeypatch):
         import asyncio
         from market_data.order_book import OrderBookFeed
+
         monkeypatch.setenv("APP_ENV", "development")
         monkeypatch.setenv("L2_PROVIDER", "mock")
         feed = OrderBookFeed(provider="mock")
@@ -1600,6 +1812,7 @@ class TestOrderBookAdditional:
 
     def test_spread_history_tracked(self):
         from market_data.order_book import OrderBook
+
         book = OrderBook("XAUUSD")
         bids = [(1980.0, 100), (1979.9, 50)]
         asks = [(1980.1, 100), (1980.2, 50)]
@@ -1609,12 +1822,12 @@ class TestOrderBookAdditional:
 
     def test_polygon_handle_quote_bad_values_ignored(self):
         from market_data.order_book import PolygonL2Feed, OrderBook
+
         feed = PolygonL2Feed()
         book = OrderBook("XAU_USD")
         feed._books["XAU_USD"] = book
         feed._pair_to_symbol["XAU/USD"] = "XAU_USD"
-        ev = {"ev": "Q", "pair": "XAU/USD", "bp": "bad", "bs": "bad",
-              "ap": "bad", "as": "bad", "t": 0}
+        ev = {"ev": "Q", "pair": "XAU/USD", "bp": "bad", "bs": "bad", "ap": "bad", "as": "bad", "t": 0}
         feed._handle_quote(ev)  # bad values → TypeError/ValueError → ignored
 
 
@@ -1623,14 +1836,17 @@ class TestMT5LiveFeedAdditional:
 
     def test_rest_fallback_loop_no_url_exits(self):
         from market_data.mt5_live_feed import MT5LiveFeed
+
         feed = MT5LiveFeed(url="ws://localhost", rest_fallback_url=None)
         feed._running = False
         feed._rest_fallback_loop()  # exits immediately
 
     def test_run_with_backoff_no_websocket_uses_rest(self, monkeypatch):
         import market_data.mt5_live_feed as mt5_mod
+
         monkeypatch.setattr(mt5_mod, "WEBSOCKET_AVAILABLE", False)
         from market_data.mt5_live_feed import MT5LiveFeed
+
         feed = MT5LiveFeed(url="ws://localhost", rest_fallback_url=None)
         feed._running = True
         # _rest_fallback_loop will be called; with _running=False it exits
@@ -1639,6 +1855,7 @@ class TestMT5LiveFeedAdditional:
 
     def test_permanently_failed_property(self):
         from market_data.mt5_live_feed import MT5LiveFeed
+
         feed = MT5LiveFeed(url="ws://localhost")
         assert feed.permanently_failed is False
         feed._permanently_failed = True
@@ -1646,6 +1863,7 @@ class TestMT5LiveFeedAdditional:
 
     def test_stop_closes_ws(self):
         from market_data.mt5_live_feed import MT5LiveFeed
+
         feed = MT5LiveFeed(url="ws://localhost")
         mock_ws = MagicMock()
         feed._ws = mock_ws
@@ -1654,6 +1872,7 @@ class TestMT5LiveFeedAdditional:
 
     def test_stop_ws_close_exception_handled(self):
         from market_data.mt5_live_feed import MT5LiveFeed
+
         feed = MT5LiveFeed(url="ws://localhost")
         mock_ws = MagicMock()
         mock_ws.close.side_effect = Exception("close error")
@@ -1663,6 +1882,7 @@ class TestMT5LiveFeedAdditional:
     def test_track_latency_with_valid_timestamp(self):
         import time
         from market_data.mt5_live_feed import MT5LiveFeed
+
         feed = MT5LiveFeed(url="ws://localhost")
         ts = time.time() - 0.005
         feed._track_latency({"timestamp": ts})
@@ -1670,6 +1890,7 @@ class TestMT5LiveFeedAdditional:
 
     def test_smooth_ticks_buffer_capped_at_10(self):
         from market_data.mt5_live_feed import MT5LiveFeed
+
         feed = MT5LiveFeed(url="ws://localhost")
         for i in range(15):
             feed._smooth_ticks({"price": float(i)})
@@ -1678,6 +1899,7 @@ class TestMT5LiveFeedAdditional:
     def test_rest_fallback_loop_no_url_marks_permanently_failed(self):
         """Lines 357-368: no rest_fallback_url → permanently_failed."""
         from market_data.mt5_live_feed import MT5LiveFeed
+
         feed = MT5LiveFeed(url="ws://localhost", rest_fallback_url=None)
         feed._running = True
         feed._rest_fallback_loop()
@@ -1686,6 +1908,7 @@ class TestMT5LiveFeedAdditional:
     def test_rest_fallback_loop_invalid_scheme_raises(self):
         """Lines 369-372: invalid scheme raises ValueError."""
         from market_data.mt5_live_feed import MT5LiveFeed
+
         feed = MT5LiveFeed(url="ws://localhost", rest_fallback_url="ftp://bad-scheme")
         feed._running = True
         with pytest.raises(ValueError, match="http/https"):
@@ -1695,6 +1918,7 @@ class TestMT5LiveFeedAdditional:
         """Lines 168-220: max reconnect exceeded → permanently_failed."""
         import market_data.mt5_live_feed as mt5_mod
         from market_data.mt5_live_feed import MT5LiveFeed
+
         # Patch WEBSOCKET_AVAILABLE to True so it tries _connect
         original = mt5_mod.WEBSOCKET_AVAILABLE
         try:
@@ -1711,12 +1935,14 @@ class TestMT5LiveFeedAdditional:
         """Lines 410-416: _capture_sentry when sentry is available."""
         import market_data.mt5_live_feed as mt5_mod
         from unittest.mock import patch, MagicMock
+
         original = mt5_mod._SENTRY_AVAILABLE
         try:
             mt5_mod._SENTRY_AVAILABLE = True
             fake_sentry = MagicMock()
             with patch("market_data.mt5_live_feed.sentry_sdk", fake_sentry):
                 from market_data.mt5_live_feed import MT5LiveFeed
+
                 MT5LiveFeed._capture_sentry(Exception("test"))
                 fake_sentry.capture_exception.assert_called_once()
         finally:
@@ -1726,6 +1952,7 @@ class TestMT5LiveFeedAdditional:
         """Lines 413-416: sentry capture raises → suppressed."""
         import market_data.mt5_live_feed as mt5_mod
         from unittest.mock import patch, MagicMock
+
         original = mt5_mod._SENTRY_AVAILABLE
         try:
             mt5_mod._SENTRY_AVAILABLE = True
@@ -1733,6 +1960,7 @@ class TestMT5LiveFeedAdditional:
             fake_sentry.capture_exception.side_effect = Exception("sentry down")
             with patch("market_data.mt5_live_feed.sentry_sdk", fake_sentry):
                 from market_data.mt5_live_feed import MT5LiveFeed
+
                 MT5LiveFeed._capture_sentry(Exception("test"))  # should not raise
         finally:
             mt5_mod._SENTRY_AVAILABLE = original
@@ -1741,6 +1969,7 @@ class TestMT5LiveFeedAdditional:
         """Lines 182-220: _connect raises → error logged, then _running=False exits loop."""
         import market_data.mt5_live_feed as mt5_mod
         from market_data.mt5_live_feed import MT5LiveFeed
+
         original = mt5_mod.WEBSOCKET_AVAILABLE
         try:
             mt5_mod.WEBSOCKET_AVAILABLE = True
@@ -1755,9 +1984,8 @@ class TestMT5LiveFeedAdditional:
                 feed._running = False  # stop after first attempt
                 raise ConnectionRefusedError("refused")
 
-            with patch.object(feed, "_connect", fake_connect):
-                with patch("time.sleep"):
-                    feed._run_with_backoff()
+            with patch.object(feed, "_connect", fake_connect), patch("time.sleep"):
+                feed._run_with_backoff()
             assert call_count == 1
             assert feed._last_error is not None
         finally:
@@ -1767,6 +1995,7 @@ class TestMT5LiveFeedAdditional:
         """Lines 182-220: _connect succeeds (sets _connected=True), then _running=False."""
         import market_data.mt5_live_feed as mt5_mod
         from market_data.mt5_live_feed import MT5LiveFeed
+
         original = mt5_mod.WEBSOCKET_AVAILABLE
         try:
             mt5_mod.WEBSOCKET_AVAILABLE = True
@@ -1778,9 +2007,8 @@ class TestMT5LiveFeedAdditional:
                     feed._connected = True
                 feed._running = False  # stop after connect
 
-            with patch.object(feed, "_connect", fake_connect):
-                with patch("time.sleep"):
-                    feed._run_with_backoff()
+            with patch.object(feed, "_connect", fake_connect), patch("time.sleep"):
+                feed._run_with_backoff()
             # Loop exited — _running is False, feed ran through the connect path
             assert feed._running is False
         finally:
@@ -1790,6 +2018,7 @@ class TestMT5LiveFeedAdditional:
         """Lines 225-234: _connect creates WebSocketApp and calls run_forever."""
         import market_data.mt5_live_feed as mt5_mod
         from market_data.mt5_live_feed import MT5LiveFeed
+
         original = mt5_mod.WEBSOCKET_AVAILABLE
         try:
             mt5_mod.WEBSOCKET_AVAILABLE = True
@@ -1807,6 +2036,7 @@ class TestMT5LiveFeedAdditional:
     def test_on_message_handle_tick_raises_captured(self):
         """Lines 257-262: _handle_tick raises → captured, last_error set."""
         from market_data.mt5_live_feed import MT5LiveFeed
+
         feed = MT5LiveFeed(url="ws://localhost")
 
         def bad_handle(data):
@@ -1820,6 +2050,7 @@ class TestMT5LiveFeedAdditional:
         """Line 322: latency list capped at 100 entries."""
         import time
         from market_data.mt5_live_feed import MT5LiveFeed
+
         feed = MT5LiveFeed(url="ws://localhost")
         ts = time.time() - 0.001
         for _ in range(110):
@@ -1829,6 +2060,7 @@ class TestMT5LiveFeedAdditional:
     def test_start_creates_thread(self):
         """Lines 135-142: start() creates and starts a daemon thread."""
         from market_data.mt5_live_feed import MT5LiveFeed
+
         feed = MT5LiveFeed(url="ws://localhost")
         # Patch _run_with_backoff to return immediately
         feed._run_with_backoff = lambda: None
@@ -1841,6 +2073,7 @@ class TestMT5LiveFeedAdditional:
         """Lines 208-220: reconnect delay increases after each failed attempt."""
         import market_data.mt5_live_feed as mt5_mod
         from market_data.mt5_live_feed import MT5LiveFeed, _RECONNECT_INITIAL_DELAY
+
         original = mt5_mod.WEBSOCKET_AVAILABLE
         try:
             mt5_mod.WEBSOCKET_AVAILABLE = True
@@ -1855,9 +2088,8 @@ class TestMT5LiveFeedAdditional:
                     feed._running = False
                 raise ConnectionRefusedError("refused")
 
-            with patch.object(feed, "_connect", fake_connect):
-                with patch("time.sleep"):
-                    feed._run_with_backoff()
+            with patch.object(feed, "_connect", fake_connect), patch("time.sleep"):
+                feed._run_with_backoff()
             # After 2 failed attempts, delay should have increased
             assert feed._reconnect_delay > _RECONNECT_INITIAL_DELAY
         finally:
@@ -1866,8 +2098,8 @@ class TestMT5LiveFeedAdditional:
     def test_rest_fallback_loop_successful_tick(self):
         """Lines 364-402: REST fallback loop processes a valid JSON response."""
         import json
-        import urllib.request
         from market_data.mt5_live_feed import MT5LiveFeed
+
         feed = MT5LiveFeed(url="ws://localhost", rest_fallback_url="http://localhost:9999/tick")
         feed._running = True
         received = []
@@ -1878,8 +2110,10 @@ class TestMT5LiveFeedAdditional:
         class FakeResponse:
             def read(self):
                 return json.dumps({"price": 1980.0}).encode()
+
             def __enter__(self):
                 return self
+
             def __exit__(self, *a):
                 pass
 
@@ -1889,9 +2123,8 @@ class TestMT5LiveFeedAdditional:
             feed._running = False  # stop after first iteration
             return FakeResponse()
 
-        with patch("urllib.request.urlopen", fake_urlopen):
-            with patch("time.sleep"):
-                feed._rest_fallback_loop()
+        with patch("urllib.request.urlopen", fake_urlopen), patch("time.sleep"):
+            feed._rest_fallback_loop()
 
         assert call_count == 1
         assert len(received) == 1
@@ -1899,6 +2132,7 @@ class TestMT5LiveFeedAdditional:
     def test_rest_fallback_loop_json_decode_error(self):
         """Lines 372-382: REST fallback handles JSON decode error gracefully."""
         from market_data.mt5_live_feed import MT5LiveFeed
+
         feed = MT5LiveFeed(url="ws://localhost", rest_fallback_url="http://localhost:9999/tick")
         feed._running = True
 
@@ -1907,8 +2141,10 @@ class TestMT5LiveFeedAdditional:
         class FakeResponse:
             def read(self):
                 return b"not-json{{{"
+
             def __enter__(self):
                 return self
+
             def __exit__(self, *a):
                 pass
 
@@ -1919,15 +2155,15 @@ class TestMT5LiveFeedAdditional:
                 feed._running = False
             return FakeResponse()
 
-        with patch("urllib.request.urlopen", fake_urlopen):
-            with patch("time.sleep"):
-                feed._rest_fallback_loop()
+        with patch("urllib.request.urlopen", fake_urlopen), patch("time.sleep"):
+            feed._rest_fallback_loop()
 
         assert feed._last_error is not None
 
     def test_rest_fallback_loop_urlopen_exception(self):
         """Lines 389-402: REST fallback handles urlopen exception."""
         from market_data.mt5_live_feed import MT5LiveFeed
+
         feed = MT5LiveFeed(url="ws://localhost", rest_fallback_url="http://localhost:9999/tick")
         feed._running = True
 
@@ -1939,9 +2175,8 @@ class TestMT5LiveFeedAdditional:
             feed._running = False
             raise ConnectionError("connection refused")
 
-        with patch("urllib.request.urlopen", fake_urlopen):
-            with patch("time.sleep"):
-                feed._rest_fallback_loop()
+        with patch("urllib.request.urlopen", fake_urlopen), patch("time.sleep"):
+            feed._rest_fallback_loop()
 
         assert feed._last_error is not None
 
@@ -1952,6 +2187,7 @@ class TestFinnhubTradeFeed:
     @pytest.mark.asyncio
     async def test_start_without_api_key_returns_early(self):
         from market_data.order_book import FinnhubTradeFeed
+
         feed = FinnhubTradeFeed(shared_books={})
         feed._api_key = ""
         await feed.start()  # should return without setting _running
@@ -1960,6 +2196,7 @@ class TestFinnhubTradeFeed:
     @pytest.mark.asyncio
     async def test_stop_without_task(self):
         from market_data.order_book import FinnhubTradeFeed
+
         feed = FinnhubTradeFeed(shared_books={})
         await feed.stop()  # should not raise
 
@@ -1968,6 +2205,7 @@ class TestFinnhubTradeFeed:
         import asyncio as _asyncio
         from market_data.order_book import FinnhubTradeFeed
         import market_data.order_book as ob_mod
+
         feed = FinnhubTradeFeed(shared_books={})
         feed._running = True
 
@@ -1985,6 +2223,7 @@ class TestFinnhubTradeFeed:
     async def test_run_with_backoff_exception_then_stop(self):
         from market_data.order_book import FinnhubTradeFeed
         import market_data.order_book as ob_mod
+
         feed = FinnhubTradeFeed(shared_books={})
         feed._running = True
 
@@ -2004,6 +2243,7 @@ class TestFinnhubTradeFeed:
     async def test_stream_raises_without_websockets(self):
         import sys
         from market_data.order_book import FinnhubTradeFeed
+
         feed = FinnhubTradeFeed(shared_books={})
         original = sys.modules.get("websockets")
         sys.modules["websockets"] = None  # type: ignore
@@ -2022,6 +2262,7 @@ class TestFinnhubTradeFeedHandleTrade:
 
     def test_handle_trade_buy_side(self):
         from market_data.order_book import FinnhubTradeFeed, OrderBook
+
         book = OrderBook("XAU_USD")
         bids = [(2001.0, 500)]
         asks = [(2002.0, 500)]
@@ -2033,6 +2274,7 @@ class TestFinnhubTradeFeedHandleTrade:
 
     def test_handle_trade_sell_side(self):
         from market_data.order_book import FinnhubTradeFeed, OrderBook
+
         book = OrderBook("XAU_USD")
         bids = [(2001.0, 500)]
         asks = [(2002.0, 500)]
@@ -2044,6 +2286,7 @@ class TestFinnhubTradeFeedHandleTrade:
 
     def test_handle_trade_no_snapshot_defaults_buy(self):
         from market_data.order_book import FinnhubTradeFeed, OrderBook
+
         book = OrderBook("XAU_USD")
         # No snapshot yet
         feed = FinnhubTradeFeed(shared_books={"XAU_USD": book})
@@ -2053,6 +2296,7 @@ class TestFinnhubTradeFeedHandleTrade:
 
     def test_handle_trade_missing_price_ignored(self):
         from market_data.order_book import FinnhubTradeFeed, OrderBook
+
         book = OrderBook("XAU_USD")
         feed = FinnhubTradeFeed(shared_books={"XAU_USD": book})
         feed._handle_trade({"v": 100.0})  # no price
@@ -2060,6 +2304,7 @@ class TestFinnhubTradeFeedHandleTrade:
 
     def test_handle_trade_zero_size_ignored(self):
         from market_data.order_book import FinnhubTradeFeed, OrderBook
+
         book = OrderBook("XAU_USD")
         feed = FinnhubTradeFeed(shared_books={"XAU_USD": book})
         feed._handle_trade({"p": 2001.0, "v": 0.0})
@@ -2067,6 +2312,7 @@ class TestFinnhubTradeFeedHandleTrade:
 
     def test_handle_trade_non_xau_symbol_skipped(self):
         from market_data.order_book import FinnhubTradeFeed, OrderBook
+
         book = OrderBook("EUR_USD")
         feed = FinnhubTradeFeed(shared_books={"EUR_USD": book})
         feed._handle_trade({"p": 1.08, "v": 100.0})
@@ -2078,8 +2324,8 @@ class TestMockL2FeedGenerate:
 
     @pytest.mark.asyncio
     async def test_generate_produces_snapshots(self, monkeypatch):
-        import asyncio as _asyncio
         from market_data.order_book import MockL2Feed, OrderBook
+
         monkeypatch.setenv("APP_ENV", "development")
         feed = MockL2Feed()
         feed._running = True
@@ -2109,23 +2355,27 @@ class TestMultiSourceL2Feed:
     @pytest.mark.asyncio
     async def test_stop_without_start(self):
         from market_data.order_book import MultiSourceL2Feed
+
         feed = MultiSourceL2Feed()
         await feed.stop()  # should not raise
 
     @pytest.mark.asyncio
     async def test_stop_with_finnhub(self):
         from market_data.order_book import MultiSourceL2Feed, FinnhubTradeFeed
+
         feed = MultiSourceL2Feed()
         feed._finnhub = FinnhubTradeFeed(shared_books={})
         await feed.stop()
 
     def test_get_snapshot_none_before_start(self):
         from market_data.order_book import MultiSourceL2Feed
+
         feed = MultiSourceL2Feed()
         assert feed.get_snapshot("XAU_USD") is None
 
     def test_get_snapshot_after_book_populated(self):
         from market_data.order_book import MultiSourceL2Feed, OrderBook
+
         feed = MultiSourceL2Feed()
         book = OrderBook("XAU_USD")
         bids = [(1980.0, 100)]
@@ -2142,13 +2392,11 @@ class TestPolygonStreamBody:
     @pytest.mark.asyncio
     async def test_stream_full_handshake_and_message_processing(self):
         """Cover lines 402-456: full Polygon stream handshake + Q/T message dispatch."""
-        import asyncio as _asyncio
         import json as _json
         from market_data.order_book import PolygonL2Feed, OrderBook
-        import market_data.order_book as ob_mod
 
         feed = PolygonL2Feed()
-        feed._api_key = "test_key"
+        feed._api_key = "test_key"  # pragma: allowlist secret
         feed._running = True
         book = OrderBook("XAU_USD")
         feed._books["XAU_USD"] = book
@@ -2156,14 +2404,33 @@ class TestPolygonStreamBody:
 
         # Sequence of messages the mock WS will return
         messages = [
-            _json.dumps([{"status": "connected"}]),           # step 1: connected
-            _json.dumps([{"status": "auth_success"}]),        # step 2: auth
-            _json.dumps([{"status": "success"}]),             # step 3: subscribe
-            _json.dumps([{"ev": "Q", "pair": "XAU/USD",      # step 4a: quote
-                          "bp": 2001.40, "bs": 500,
-                          "ap": 2001.60, "as": 480, "t": 1711234567890}]),
-            _json.dumps([{"ev": "T", "pair": "XAU/USD",      # step 4b: trade
-                          "p": 2001.50, "s": 100, "c": [1]}]),
+            _json.dumps([{"status": "connected"}]),  # step 1: connected
+            _json.dumps([{"status": "auth_success"}]),  # step 2: auth
+            _json.dumps([{"status": "success"}]),  # step 3: subscribe
+            _json.dumps(
+                [
+                    {
+                        "ev": "Q",
+                        "pair": "XAU/USD",  # step 4a: quote
+                        "bp": 2001.40,
+                        "bs": 500,
+                        "ap": 2001.60,
+                        "as": 480,
+                        "t": 1711234567890,
+                    }
+                ]
+            ),
+            _json.dumps(
+                [
+                    {
+                        "ev": "T",
+                        "pair": "XAU/USD",  # step 4b: trade
+                        "p": 2001.50,
+                        "s": 100,
+                        "c": [1],
+                    }
+                ]
+            ),
         ]
         msg_iter = iter(messages)
 
@@ -2174,9 +2441,9 @@ class TestPolygonStreamBody:
                 if msg == messages[-1]:
                     feed._running = False
                 return msg
-            except StopIteration:
+            except StopIteration as exc:
                 feed._running = False
-                raise RuntimeError("no more messages")
+                raise RuntimeError("no more messages") from exc
 
         async def mock_send(data):
             pass
@@ -2193,6 +2460,7 @@ class TestPolygonStreamBody:
         class MockWSConnect:
             async def __aenter__(self):
                 return mock_ws
+
             async def __aexit__(self, *a):
                 pass
 
@@ -2200,6 +2468,7 @@ class TestPolygonStreamBody:
         fake_websockets.connect.return_value = MockWSConnect()
 
         import sys
+
         original = sys.modules.get("websockets")
         sys.modules["websockets"] = fake_websockets
         try:
@@ -2222,7 +2491,7 @@ class TestPolygonStreamBody:
         import sys
 
         feed = PolygonL2Feed()
-        feed._api_key = "bad_key"
+        feed._api_key = "bad_key"  # pragma: allowlist secret
         feed._running = True
 
         messages = [
@@ -2244,6 +2513,7 @@ class TestPolygonStreamBody:
         class MockWSConnect:
             async def __aenter__(self):
                 return mock_ws
+
             async def __aexit__(self, *a):
                 pass
 
@@ -2269,7 +2539,7 @@ class TestPolygonStreamBody:
         import sys
 
         feed = PolygonL2Feed()
-        feed._api_key = "test_key"
+        feed._api_key = "test_key"  # pragma: allowlist secret
         feed._running = True
 
         messages = [
@@ -2292,6 +2562,7 @@ class TestPolygonStreamBody:
         class MockWSConnect:
             async def __aenter__(self):
                 return mock_ws
+
             async def __aexit__(self, *a):
                 pass
 
@@ -2317,7 +2588,7 @@ class TestPolygonStreamBody:
         import sys
 
         feed = PolygonL2Feed()
-        feed._api_key = "test_key"
+        feed._api_key = "test_key"  # pragma: allowlist secret
         feed._running = True
 
         call_count = 0
@@ -2326,9 +2597,13 @@ class TestPolygonStreamBody:
             nonlocal call_count
             call_count += 1
             if call_count <= 3:
-                return _json.dumps([{"status": "connected"}]) if call_count == 1 else \
-                       _json.dumps([{"status": "auth_success"}]) if call_count == 2 else \
-                       _json.dumps([{"status": "success"}])
+                return (
+                    _json.dumps([{"status": "connected"}])
+                    if call_count == 1
+                    else _json.dumps([{"status": "auth_success"}])
+                    if call_count == 2
+                    else _json.dumps([{"status": "success"}])
+                )
             # Simulate timeout then stop
             feed._running = False
             raise TimeoutError("recv timeout")
@@ -2349,6 +2624,7 @@ class TestPolygonStreamBody:
         class MockWSConnect:
             async def __aenter__(self):
                 return mock_ws
+
             async def __aexit__(self, *a):
                 pass
 
@@ -2380,7 +2656,7 @@ class TestFinnhubStreamBody:
 
         book = OrderBook("XAU_USD")
         feed = FinnhubTradeFeed(shared_books={"XAU_USD": book})
-        feed._api_key = "test_key"
+        feed._api_key = "test_key"  # pragma: allowlist secret
         feed._running = True
 
         messages = [
@@ -2396,9 +2672,9 @@ class TestFinnhubStreamBody:
                 if msg == messages[-1]:
                     feed._running = False
                 return msg
-            except StopIteration:
+            except StopIteration as exc:
                 feed._running = False
-                raise RuntimeError("done")
+                raise RuntimeError("done") from exc
 
         sent = []
 
@@ -2416,6 +2692,7 @@ class TestFinnhubStreamBody:
         class MockWSConnect:
             async def __aenter__(self):
                 return mock_ws
+
             async def __aexit__(self, *a):
                 pass
 
@@ -2433,7 +2710,7 @@ class TestFinnhubStreamBody:
                 del sys.modules["websockets"]
 
         # Trade should have been recorded
-        assert book._cumulative_delta != 0 or True  # trade was processed
+        assert True  # trade was processed
 
     @pytest.mark.asyncio
     async def test_stream_error_message_raises(self):
@@ -2443,7 +2720,7 @@ class TestFinnhubStreamBody:
         import sys
 
         feed = FinnhubTradeFeed(shared_books={})
-        feed._api_key = "test_key"
+        feed._api_key = "test_key"  # pragma: allowlist secret
         feed._running = True
 
         messages = [
@@ -2465,6 +2742,7 @@ class TestFinnhubStreamBody:
         class MockWSConnect:
             async def __aenter__(self):
                 return mock_ws
+
             async def __aexit__(self, *a):
                 pass
 
@@ -2490,7 +2768,7 @@ class TestFinnhubStreamBody:
         import sys
 
         feed = FinnhubTradeFeed(shared_books={})
-        feed._api_key = "test_key"
+        feed._api_key = "test_key"  # pragma: allowlist secret
         feed._running = True
 
         call_count = 0
@@ -2519,6 +2797,7 @@ class TestFinnhubStreamBody:
         class MockWSConnect:
             async def __aenter__(self):
                 return mock_ws
+
             async def __aexit__(self, *a):
                 pass
 
@@ -2547,8 +2826,9 @@ class TestPolygonL2FeedAsync:
         import asyncio as _asyncio
         from market_data.order_book import PolygonL2Feed
         import market_data.order_book as ob_mod
+
         feed = PolygonL2Feed()
-        feed._api_key = "test_key"
+        feed._api_key = "test_key"  # pragma: allowlist secret
         feed._running = True
 
         call_count = 0
@@ -2570,8 +2850,9 @@ class TestPolygonL2FeedAsync:
     async def test_run_with_backoff_exception_then_stop(self):
         """_run_with_backoff retries on exception, then stops when _running=False."""
         from market_data.order_book import PolygonL2Feed
+
         feed = PolygonL2Feed()
-        feed._api_key = "test_key"
+        feed._api_key = "test_key"  # pragma: allowlist secret
         feed._running = True
 
         call_count = 0
@@ -2587,6 +2868,7 @@ class TestPolygonL2FeedAsync:
 
         feed._stream = fake_stream
         import market_data.order_book as ob_mod
+
         with patch.object(ob_mod.asyncio, "sleep", instant_sleep):
             await feed._run_with_backoff(["XAU_USD"])
         assert call_count == 1
@@ -2597,8 +2879,9 @@ class TestPolygonL2FeedAsync:
         """_stream raises RuntimeError when websockets not installed."""
         import sys
         from market_data.order_book import PolygonL2Feed
+
         feed = PolygonL2Feed()
-        feed._api_key = "test_key"
+        feed._api_key = "test_key"  # pragma: allowlist secret
         # Temporarily hide websockets
         original = sys.modules.get("websockets")
         sys.modules["websockets"] = None  # type: ignore

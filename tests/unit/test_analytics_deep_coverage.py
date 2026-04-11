@@ -7,11 +7,11 @@ Deep coverage tests for analytics/ module:
   analytics/performance.py, analytics/portfolio.py
 Real implementations only — no mocks of the modules under test.
 """
+
 from __future__ import annotations
 
-import math
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -24,10 +24,12 @@ UTC = timezone.utc
 # analytics/monte_carlo.py
 # ===========================================================================
 
+
 @pytest.mark.unit
 class TestMonteCarloEngine:
     def _engine(self, n_paths=200):
         from analytics.monte_carlo import MonteCarloEngine
+
         return MonteCarloEngine(n_paths=n_paths, seed=42)
 
     def _pnls(self, n=50):
@@ -36,6 +38,7 @@ class TestMonteCarloEngine:
 
     def test_run_iid_returns_bootstrap_result(self):
         from analytics.monte_carlo import BootstrapResult
+
         engine = self._engine()
         result = engine.run(self._pnls(), initial_capital=100_000)
         assert isinstance(result, BootstrapResult)
@@ -43,6 +46,7 @@ class TestMonteCarloEngine:
 
     def test_run_block_bootstrap(self):
         from analytics.monte_carlo import BootstrapResult
+
         engine = self._engine()
         result = engine.run(self._pnls(), method="block")
         assert isinstance(result, BootstrapResult)
@@ -105,12 +109,14 @@ class TestMonteCarloEngine:
 class TestRunBootstrap:
     def test_run_bootstrap_convenience(self):
         from analytics.monte_carlo import run_bootstrap, BootstrapResult
+
         pnls = list(np.random.default_rng(1).normal(30, 150, 40))
         result = run_bootstrap(pnls, initial_capital=100_000, n_paths=100)
         assert isinstance(result, BootstrapResult)
 
     def test_run_bootstrap_block_method(self):
         from analytics.monte_carlo import run_bootstrap
+
         pnls = list(np.random.default_rng(2).normal(30, 150, 40))
         result = run_bootstrap(pnls, method="block", n_paths=100)
         assert result.n_paths == 100
@@ -120,10 +126,12 @@ class TestRunBootstrap:
 # analytics/simulations.py
 # ===========================================================================
 
+
 @pytest.mark.unit
 class TestSimulationEngine:
     def _engine(self):
         from analytics.simulations import SimulationEngine
+
         return SimulationEngine()
 
     def _pnls(self):
@@ -151,7 +159,7 @@ class TestSimulationEngine:
         engine = self._engine()
 
         def fitness(params):
-            return -(params["x"] - 3.0) ** 2
+            return -((params["x"] - 3.0) ** 2)
 
         space = {"x": {"type": "float", "low": 0.0, "high": 10.0}}
         result = engine.genetic_algorithm_optimization(
@@ -178,14 +186,17 @@ class TestSimulationEngine:
 # analytics/performance.py
 # ===========================================================================
 
+
 @pytest.mark.unit
 class TestPerformanceAnalytics:
     def _analytics(self, equity=10_000.0):
         from analytics.performance import PerformanceAnalytics
+
         return PerformanceAnalytics(initial_equity=equity)
 
     def _trade(self, pnl=100.0, symbol="XAUUSD", side="buy"):
         from analytics.performance import TradeRecord
+
         now = datetime.now(UTC)
         return TradeRecord(
             id=f"t_{pnl}",
@@ -233,19 +244,17 @@ class TestPerformanceAnalytics:
 
     def _report(self, pnls):
         """Helper: build analytics, add trades, return report with tz-aware patch."""
-        from analytics.performance import PerformanceReport
-        import analytics.performance as perf_mod
         pa = self._analytics()
         for pnl in pnls:
             pa.record_trade(self._trade(pnl=pnl))
         # Patch _get_period_start to return tz-aware datetime so equity_curve
         # comparison (which uses UTC-aware timestamps) doesn't raise TypeError
-        with patch.object(pa, "_get_period_start",
-                          return_value=datetime.now(UTC) - timedelta(days=365)):
+        with patch.object(pa, "_get_period_start", return_value=datetime.now(UTC) - timedelta(days=365)):
             return pa.get_performance_report()
 
     def test_get_performance_report_returns_report(self):
         from analytics.performance import PerformanceReport
+
         report = self._report([100, -50, 200, -30, 150])
         assert isinstance(report, PerformanceReport)
 
@@ -255,7 +264,7 @@ class TestPerformanceAnalytics:
 
     def test_performance_report_win_rate(self):
         report = self._report([100, 200, -50])
-        assert abs(report.win_rate - 2/3) < 0.01
+        assert abs(report.win_rate - 2 / 3) < 0.01
 
     def test_performance_report_total_return(self):
         report = self._report([100, -50, 200])
@@ -270,6 +279,7 @@ class TestPerformanceAnalytics:
 
     def test_no_trades_report(self):
         from analytics.performance import PerformanceReport
+
         report = self._report([])
         assert isinstance(report, PerformanceReport)
         assert report.total_trades == 0
@@ -289,13 +299,13 @@ class TestPerformanceAnalytics:
     def test_strategy_breakdown(self):
         report = self._report([100, -50, 200])
         # trades_by_strategy or pnl_by_strategy contains our strategy
-        assert "test_strategy" in report.trades_by_strategy or \
-               "test_strategy" in report.pnl_by_strategy
+        assert "test_strategy" in report.trades_by_strategy or "test_strategy" in report.pnl_by_strategy
 
 
 # ===========================================================================
 # analytics/portfolio.py
 # ===========================================================================
+
 
 @pytest.mark.unit
 class TestPortfolioAnalytics:
@@ -307,6 +317,7 @@ class TestPortfolioAnalytics:
 
     def test_load_returns_data(self):
         from analytics.portfolio import PortfolioAnalytics
+
         pa = PortfolioAnalytics()
         df = self._returns_df()
         pa.load_returns_data(df)
@@ -315,6 +326,7 @@ class TestPortfolioAnalytics:
 
     def test_correlation_matrix_shape(self):
         from analytics.portfolio import PortfolioAnalytics
+
         pa = PortfolioAnalytics()
         pa.load_returns_data(self._returns_df())
         corr = pa.calculate_correlation_matrix()
@@ -322,6 +334,7 @@ class TestPortfolioAnalytics:
 
     def test_correlation_diagonal_is_one(self):
         from analytics.portfolio import PortfolioAnalytics
+
         pa = PortfolioAnalytics()
         pa.load_returns_data(self._returns_df())
         corr = pa.calculate_correlation_matrix()
@@ -330,15 +343,17 @@ class TestPortfolioAnalytics:
 
     def test_correlation_raises_without_data(self):
         from analytics.portfolio import PortfolioAnalytics
+
         pa = PortfolioAnalytics()
         with pytest.raises(ValueError):
             pa.calculate_correlation_matrix()
 
     def test_portfolio_performance(self):
         from analytics.portfolio import PortfolioAnalytics
+
         pa = PortfolioAnalytics()
         pa.load_returns_data(self._returns_df())
-        weights = np.array([1/3, 1/3, 1/3])
+        weights = np.array([1 / 3, 1 / 3, 1 / 3])
         ret, vol, sharpe = pa.portfolio_performance(weights)
         assert isinstance(ret, float)
         assert isinstance(vol, float)
@@ -346,15 +361,17 @@ class TestPortfolioAnalytics:
 
     def test_calculate_risk_metrics(self):
         from analytics.portfolio import PortfolioAnalytics
+
         pa = PortfolioAnalytics()
         pa.load_returns_data(self._returns_df())
-        weights = np.array([1/3, 1/3, 1/3])
+        weights = np.array([1 / 3, 1 / 3, 1 / 3])
         metrics = pa.calculate_risk_metrics(weights)
         assert isinstance(metrics, dict)
         assert len(metrics) > 0
 
     def test_optimize_portfolio_max_sharpe(self):
         from analytics.portfolio import PortfolioAnalytics
+
         pa = PortfolioAnalytics()
         pa.load_returns_data(self._returns_df())
         result = pa.optimize_portfolio(max_sharpe=True)
@@ -364,6 +381,7 @@ class TestPortfolioAnalytics:
 
     def test_optimize_portfolio_min_variance(self):
         from analytics.portfolio import PortfolioAnalytics
+
         pa = PortfolioAnalytics()
         pa.load_returns_data(self._returns_df())
         result = pa.optimize_portfolio(max_sharpe=False)
@@ -372,6 +390,7 @@ class TestPortfolioAnalytics:
 
     def test_efficient_frontier_returns_dataframe(self):
         from analytics.portfolio import PortfolioAnalytics
+
         pa = PortfolioAnalytics()
         pa.load_returns_data(self._returns_df())
         frontier = pa.generate_efficient_frontier(n_portfolios=10)
@@ -380,6 +399,7 @@ class TestPortfolioAnalytics:
 
     def test_covariance_matrix_shape(self):
         from analytics.portfolio import PortfolioAnalytics
+
         pa = PortfolioAnalytics()
         pa.load_returns_data(self._returns_df())
         cov = pa.calculate_covariance_matrix()
@@ -390,6 +410,7 @@ class TestPortfolioAnalytics:
 class TestRiskAnalyzer:
     def _analyzer(self):
         from analytics.portfolio import RiskAnalyzer
+
         rng = np.random.default_rng(7)
         returns = pd.DataFrame(
             rng.normal(0.001, 0.015, (252, 2)),

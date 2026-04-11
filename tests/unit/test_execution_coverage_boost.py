@@ -8,6 +8,7 @@ Covers missing branches in:
   tca, tca_recorder, market_impact, trade_executor, async_engine,
   oms, order_algorithms, spread_monitor.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -28,59 +29,53 @@ UTC = timezone.utc
 class TestAlmgrenChrissModel:
     def _model(self):
         from execution.market_impact import AlmgrenChrissModel
+
         return AlmgrenChrissModel()
 
     def test_estimate_normal(self):
         m = self._model()
-        est = m.estimate(order_size=100, adv=10000, volatility_daily=0.012,
-                         spread_bps=3.0, price=2000.0)
+        est = m.estimate(order_size=100, adv=10000, volatility_daily=0.012, spread_bps=3.0, price=2000.0)
         assert est.total_impact_bps > 0
         assert est.participation_rate == pytest.approx(0.01)
 
     def test_estimate_zero_adv_spread_only(self):
         m = self._model()
-        est = m.estimate(order_size=100, adv=0, volatility_daily=0.012,
-                         spread_bps=3.0, price=2000.0)
+        est = m.estimate(order_size=100, adv=0, volatility_daily=0.012, spread_bps=3.0, price=2000.0)
         assert est.temporary_impact_bps == 0.0
         assert est.permanent_impact_bps == 0.0
         assert est.spread_cost_bps > 0
 
     def test_participation_capped_at_max(self):
         m = self._model()
-        est = m.estimate(order_size=9999, adv=100, volatility_daily=0.01,
-                         spread_bps=2.0, price=1000.0)
+        est = m.estimate(order_size=9999, adv=100, volatility_daily=0.01, spread_bps=2.0, price=1000.0)
         assert est.participation_rate == pytest.approx(m.max_participation)
 
     def test_fill_price_buy(self):
         m = self._model()
-        est = m.estimate(order_size=10, adv=1000, volatility_daily=0.01,
-                         spread_bps=2.0, price=1000.0)
+        est = m.estimate(order_size=10, adv=1000, volatility_daily=0.01, spread_bps=2.0, price=1000.0)
         assert est.fill_price("BUY") > 1000.0
 
     def test_fill_price_sell(self):
         m = self._model()
-        est = m.estimate(order_size=10, adv=1000, volatility_daily=0.01,
-                         spread_bps=2.0, price=1000.0)
+        est = m.estimate(order_size=10, adv=1000, volatility_daily=0.01, spread_bps=2.0, price=1000.0)
         assert est.fill_price("SELL") < 1000.0
 
     def test_total_cost_usd(self):
         m = self._model()
-        est = m.estimate(order_size=1, adv=1000, volatility_daily=0.01,
-                         spread_bps=2.0, price=2000.0)
+        est = m.estimate(order_size=1, adv=1000, volatility_daily=0.01, spread_bps=2.0, price=2000.0)
         assert est.total_cost_usd > 0
 
     def test_slippage_bps_alias(self):
         m = self._model()
-        est = m.estimate(order_size=10, adv=1000, volatility_daily=0.01,
-                         spread_bps=2.0, price=1000.0)
+        est = m.estimate(order_size=10, adv=1000, volatility_daily=0.01, spread_bps=2.0, price=1000.0)
         assert est.slippage_bps == est.total_impact_bps
 
     def test_min_spread_bps_floor(self):
         m = self._model()
         # spread_bps=0 → should still have spread_cost >= _MIN_SPREAD_BPS
-        est = m.estimate(order_size=1, adv=1000, volatility_daily=0.01,
-                         spread_bps=0.0, price=1000.0)
+        est = m.estimate(order_size=1, adv=1000, volatility_daily=0.01, spread_bps=0.0, price=1000.0)
         from execution.market_impact import _MIN_SPREAD_BPS
+
         assert est.spread_cost_bps >= _MIN_SPREAD_BPS
 
 
@@ -88,56 +83,94 @@ class TestAlmgrenChrissModel:
 class TestFillSimulator:
     def _sim(self):
         from execution.market_impact import FillSimulator
+
         return FillSimulator()
 
     def test_simulate_fill_buy_normal(self):
         s = self._sim()
-        fill = s.simulate_fill(signal_price=2000.0, side="BUY", quantity=1.0,
-                               bar_high=2005.0, bar_low=1995.0,
-                               bar_volume=5000.0, adv=10000.0,
-                               volatility_daily=0.012)
+        fill = s.simulate_fill(
+            signal_price=2000.0,
+            side="BUY",
+            quantity=1.0,
+            bar_high=2005.0,
+            bar_low=1995.0,
+            bar_volume=5000.0,
+            adv=10000.0,
+            volatility_daily=0.012,
+        )
         assert fill.fill_price <= 2005.0
         assert fill.fill_quantity > 0
 
     def test_simulate_fill_sell_normal(self):
         s = self._sim()
-        fill = s.simulate_fill(signal_price=2000.0, side="SELL", quantity=1.0,
-                               bar_high=2005.0, bar_low=1995.0,
-                               bar_volume=5000.0, adv=10000.0,
-                               volatility_daily=0.012)
+        fill = s.simulate_fill(
+            signal_price=2000.0,
+            side="SELL",
+            quantity=1.0,
+            bar_high=2005.0,
+            bar_low=1995.0,
+            bar_volume=5000.0,
+            adv=10000.0,
+            volatility_daily=0.012,
+        )
         assert fill.fill_price >= 1995.0
 
     def test_partial_fill_when_large_order(self):
         s = self._sim()
-        fill = s.simulate_fill(signal_price=2000.0, side="BUY", quantity=9999.0,
-                               bar_high=2005.0, bar_low=1995.0,
-                               bar_volume=100.0, adv=10000.0,
-                               volatility_daily=0.012)
+        fill = s.simulate_fill(
+            signal_price=2000.0,
+            side="BUY",
+            quantity=9999.0,
+            bar_high=2005.0,
+            bar_low=1995.0,
+            bar_volume=100.0,
+            adv=10000.0,
+            volatility_daily=0.012,
+        )
         assert fill.partial_fill is True
         assert fill.fill_quantity < 9999.0
         assert "Partial fill" in fill.notes
 
     def test_no_partial_fill_small_order(self):
         s = self._sim()
-        fill = s.simulate_fill(signal_price=2000.0, side="BUY", quantity=0.1,
-                               bar_high=2005.0, bar_low=1995.0,
-                               bar_volume=5000.0, adv=10000.0,
-                               volatility_daily=0.012)
+        fill = s.simulate_fill(
+            signal_price=2000.0,
+            side="BUY",
+            quantity=0.1,
+            bar_high=2005.0,
+            bar_low=1995.0,
+            bar_volume=5000.0,
+            adv=10000.0,
+            volatility_daily=0.012,
+        )
         assert fill.partial_fill is False
 
     def test_simulate_fills_batch(self):
         s = self._sim()
         signals = [
-            {"signal_price": 2000.0, "side": "BUY", "quantity": 1.0,
-             "bar_high": 2005.0, "bar_low": 1995.0, "bar_volume": 5000.0},
-            {"signal_price": 1900.0, "side": "SELL", "quantity": 0.5,
-             "bar_high": 1905.0, "bar_low": 1895.0, "bar_volume": 3000.0},
+            {
+                "signal_price": 2000.0,
+                "side": "BUY",
+                "quantity": 1.0,
+                "bar_high": 2005.0,
+                "bar_low": 1995.0,
+                "bar_volume": 5000.0,
+            },
+            {
+                "signal_price": 1900.0,
+                "side": "SELL",
+                "quantity": 0.5,
+                "bar_high": 1905.0,
+                "bar_low": 1895.0,
+                "bar_volume": 3000.0,
+            },
         ]
         fills = s.simulate_fills_batch(signals, adv=10000.0, volatility_daily=0.012)
         assert len(fills) == 2
 
     def test_get_fill_simulator_singleton(self):
         from execution.market_impact import get_fill_simulator, FillSimulator
+
         s1 = get_fill_simulator()
         s2 = get_fill_simulator()
         assert s1 is s2
@@ -153,11 +186,19 @@ class TestFillSimulator:
 class TestTCARecord:
     def _record(self, side="BUY", signal=2000.0, fill=2001.0):
         from execution.tca_recorder import TCARecord
+
         return TCARecord(
-            request_id="req1", symbol="XAUUSD", side=side,
-            signal_price=signal, fill_price=fill, filled_quantity=1.0,
-            broker="oanda", latency_ms=10.0, model_version="v1",
-            session="london", signal_time=datetime.now(UTC),
+            request_id="req1",
+            symbol="XAUUSD",
+            side=side,
+            signal_price=signal,
+            fill_price=fill,
+            filled_quantity=1.0,
+            broker="oanda",
+            latency_ms=10.0,
+            model_version="v1",
+            session="london",
+            signal_time=datetime.now(UTC),
             fill_time=datetime.now(UTC),
         )
 
@@ -193,6 +234,7 @@ class TestTCARecord:
 class TestTCARecorder:
     def _recorder(self):
         from execution.tca_recorder import TCARecorder
+
         return TCARecorder()
 
     def test_record_signal_and_fill(self):
@@ -274,26 +316,31 @@ class TestTCARecorder:
 
     def test_get_session_london(self):
         from execution.tca_recorder import TCARecorder
+
         dt = datetime(2025, 1, 1, 10, 0, 0, tzinfo=UTC)
         assert TCARecorder._get_session(dt) == "london"
 
     def test_get_session_new_york(self):
         from execution.tca_recorder import TCARecorder
+
         dt = datetime(2025, 1, 1, 18, 0, 0, tzinfo=UTC)
         assert TCARecorder._get_session(dt) == "new_york"
 
     def test_get_session_asia(self):
         from execution.tca_recorder import TCARecorder
+
         dt = datetime(2025, 1, 1, 3, 0, 0, tzinfo=UTC)
         assert TCARecorder._get_session(dt) == "asia"
 
     def test_get_session_off_hours(self):
         from execution.tca_recorder import TCARecorder
+
         dt = datetime(2025, 1, 1, 23, 0, 0, tzinfo=UTC)
         assert TCARecorder._get_session(dt) == "off_hours"
 
     def test_get_tca_recorder_singleton(self):
         from execution.tca_recorder import get_tca_recorder, TCARecorder
+
         r1 = get_tca_recorder()
         r2 = get_tca_recorder()
         assert r1 is r2
@@ -337,6 +384,7 @@ class TestTCAMarketImpactModel:
     def test_calculate_returns_tuple(self):
         from decimal import Decimal
         from execution.tca import MarketImpactModel
+
         m = MarketImpactModel()
         temp, perm = m.calculate(
             order_size=Decimal("100"),
@@ -350,6 +398,7 @@ class TestTCAMarketImpactModel:
     def test_calculate_zero_adv(self):
         from decimal import Decimal
         from execution.tca import MarketImpactModel
+
         m = MarketImpactModel()
         temp, perm = m.calculate(
             order_size=Decimal("100"),
@@ -367,9 +416,13 @@ class TestTCAMetrics:
         from decimal import Decimal
         from execution.tca import TCAMetrics, BenchmarkType
         from core.types import Side
+
         return TCAMetrics(
-            order_id="o1", symbol="XAUUSD", side=Side.BUY,
-            quantity=Decimal("1"), arrival_price=Decimal("2000"),
+            order_id="o1",
+            symbol="XAUUSD",
+            side=Side.BUY,
+            quantity=Decimal("1"),
+            arrival_price=Decimal("2000"),
             arrival_time=datetime.now(UTC),
             benchmark_type=BenchmarkType.ARRIVAL,
             fills=[],
@@ -410,6 +463,7 @@ class TestMarketContextProvider:
     def test_get_adv_env_override(self):
         import os
         from execution.tca import MarketContextProvider
+
         ctx = MarketContextProvider()
         with patch.dict(os.environ, {"TCA_ADV_XAUUSD": "75000"}):
             adv, source = ctx.get_adv("XAUUSD")
@@ -418,6 +472,7 @@ class TestMarketContextProvider:
 
     def test_get_adv_default_fallback(self):
         from execution.tca import MarketContextProvider
+
         ctx = MarketContextProvider()
         adv, source = ctx.get_adv("UNKNOWN_SYM_XYZ")
         assert adv > 0
@@ -426,6 +481,7 @@ class TestMarketContextProvider:
     def test_get_volatility_env_override(self):
         import os
         from execution.tca import MarketContextProvider
+
         ctx = MarketContextProvider()
         with patch.dict(os.environ, {"TCA_VOL_XAUUSD": "0.025"}):
             vol, source = ctx.get_volatility("XAUUSD")
@@ -434,12 +490,14 @@ class TestMarketContextProvider:
 
     def test_get_volatility_default(self):
         from execution.tca import MarketContextProvider
+
         ctx = MarketContextProvider()
         vol, source = ctx.get_volatility("UNKNOWN_SYM_XYZ")
         assert vol > 0
 
     def test_accumulate_tick(self):
         from execution.tca import MarketContextProvider
+
         ctx = MarketContextProvider()
         ctx.accumulate_tick("XAUUSD", volume=1000.0, ts=datetime.now(UTC))
         # Should not raise
@@ -450,10 +508,16 @@ class TestTCAEngineLifecycle:
     def _fill(self, price="2001", qty="1", commission="0.5"):
         from decimal import Decimal
         from core.types import Fill, Side
+
         return Fill(
-            order_id="o1", fill_id="f1", symbol="XAUUSD",
-            side=Side.BUY, quantity=Decimal(qty), price=Decimal(price),
-            timestamp=datetime.now(UTC), venue="OANDA",
+            order_id="o1",
+            fill_id="f1",
+            symbol="XAUUSD",
+            side=Side.BUY,
+            quantity=Decimal(qty),
+            price=Decimal(price),
+            timestamp=datetime.now(UTC),
+            venue="OANDA",
             commission=Decimal(commission),
         )
 
@@ -462,10 +526,14 @@ class TestTCAEngineLifecycle:
         from decimal import Decimal
         from execution.tca import TCAEngine
         from core.types import Side
+
         tca = TCAEngine()
         await tca.start_order(
-            order_id="o1", symbol="XAUUSD", side=Side.BUY,
-            quantity=Decimal("1"), arrival_price=Decimal("2000"),
+            order_id="o1",
+            symbol="XAUUSD",
+            side=Side.BUY,
+            quantity=Decimal("1"),
+            arrival_price=Decimal("2000"),
         )
         await tca.record_fill("o1", self._fill())
         metrics = await tca.complete_order("o1")
@@ -477,10 +545,14 @@ class TestTCAEngineLifecycle:
         from decimal import Decimal
         from execution.tca import TCAEngine
         from core.types import Side
+
         tca = TCAEngine()
         await tca.start_order(
-            order_id="o2", symbol="XAUUSD", side=Side.SELL,
-            quantity=Decimal("1"), arrival_price=Decimal("2000"),
+            order_id="o2",
+            symbol="XAUUSD",
+            side=Side.SELL,
+            quantity=Decimal("1"),
+            arrival_price=Decimal("2000"),
         )
         metrics = await tca.complete_order("o2")
         assert metrics.fill_rate == 0.0
@@ -488,6 +560,7 @@ class TestTCAEngineLifecycle:
     @pytest.mark.asyncio
     async def test_complete_unknown_order_raises(self):
         from execution.tca import TCAEngine
+
         tca = TCAEngine()
         with pytest.raises(ValueError, match="Unknown order"):
             await tca.complete_order("nonexistent")
@@ -495,12 +568,14 @@ class TestTCAEngineLifecycle:
     @pytest.mark.asyncio
     async def test_record_fill_unknown_order_logs(self):
         from execution.tca import TCAEngine
+
         tca = TCAEngine()
         # Should not raise — just logs a warning
         await tca.record_fill("unknown_order", self._fill())
 
     def test_get_stats_empty(self):
         from execution.tca import TCAEngine
+
         tca = TCAEngine()
         assert tca.get_stats() == {}
 
@@ -509,6 +584,7 @@ class TestTCAEngineLifecycle:
         from decimal import Decimal
         from execution.tca import TCAEngine
         from core.types import Side
+
         tca = TCAEngine()
         await tca.start_order("o1", "XAUUSD", Side.BUY, Decimal("1"), Decimal("2000"))
         await tca.record_fill("o1", self._fill())
@@ -519,6 +595,7 @@ class TestTCAEngineLifecycle:
 
     def test_register_cost_callback(self):
         from execution.tca import TCAEngine
+
         tca = TCAEngine()
         cb = MagicMock()
         tca.register_cost_callback(cb)
@@ -529,11 +606,16 @@ class TestTCAEngineLifecycle:
         from decimal import Decimal
         from execution.tca import TCAEngine
         from core.types import Tick
+
         tca = TCAEngine()
         tick = Tick(
-            symbol="XAUUSD", bid=Decimal("1999.5"), ask=Decimal("2000.5"),
-            mid=Decimal("2000.0"), timestamp=datetime.now(UTC),
-            venue="OANDA", volume=Decimal("100"),
+            symbol="XAUUSD",
+            bid=Decimal("1999.5"),
+            ask=Decimal("2000.5"),
+            mid=Decimal("2000.0"),
+            timestamp=datetime.now(UTC),
+            venue="OANDA",
+            volume=Decimal("100"),
         )
         # Should not raise
         tca.update_market_data(tick)
@@ -543,12 +625,19 @@ class TestTCAEngineLifecycle:
         from decimal import Decimal
         from execution.tca import TCAEngine
         from core.types import Side, Fill
+
         tca = TCAEngine()
         await tca.start_order("o1", "XAUUSD", Side.SELL, Decimal("1"), Decimal("2000"))
         fill = Fill(
-            order_id="o1", fill_id="f1", symbol="XAUUSD",
-            side=Side.SELL, quantity=Decimal("1"), price=Decimal("1999"),
-            timestamp=datetime.now(UTC), venue="OANDA", commission=Decimal("0"),
+            order_id="o1",
+            fill_id="f1",
+            symbol="XAUUSD",
+            side=Side.SELL,
+            quantity=Decimal("1"),
+            price=Decimal("1999"),
+            timestamp=datetime.now(UTC),
+            venue="OANDA",
+            commission=Decimal("0"),
         )
         await tca.record_fill("o1", fill)
         metrics = await tca.complete_order("o1")
@@ -559,15 +648,21 @@ class TestTCAEngineLifecycle:
         from decimal import Decimal
         from execution.tca import TCAEngine
         from core.types import Side, Fill
+
         tca = TCAEngine()
         cb = MagicMock()
         tca.register_cost_callback(cb)
-        await tca.start_order("o1", "XAUUSD", Side.BUY, Decimal("1"), Decimal("2000"),
-                               expected_advantage_bps=0.0)
+        await tca.start_order("o1", "XAUUSD", Side.BUY, Decimal("1"), Decimal("2000"), expected_advantage_bps=0.0)
         fill = Fill(
-            order_id="o1", fill_id="f1", symbol="XAUUSD",
-            side=Side.BUY, quantity=Decimal("1"), price=Decimal("2500"),
-            timestamp=datetime.now(UTC), venue="OANDA", commission=Decimal("100"),
+            order_id="o1",
+            fill_id="f1",
+            symbol="XAUUSD",
+            side=Side.BUY,
+            quantity=Decimal("1"),
+            price=Decimal("2500"),
+            timestamp=datetime.now(UTC),
+            venue="OANDA",
+            commission=Decimal("100"),
         )
         await tca.record_fill("o1", fill)
         await tca.complete_order("o1")
@@ -583,6 +678,7 @@ class TestTCAEngineLifecycle:
 class TestPositionManagerBasic:
     def _pm(self):
         from execution.position_manager import PositionManager
+
         return PositionManager()
 
     @pytest.mark.asyncio
@@ -601,6 +697,7 @@ class TestPositionManagerBasic:
     @pytest.mark.asyncio
     async def test_open_duplicate_raises(self):
         from execution.position_manager import PositionAlreadyOpenError
+
         pm = self._pm()
         await pm.open_position("XAUUSD", "BUY", 1.0, 1900.0)
         with pytest.raises(PositionAlreadyOpenError):
@@ -641,6 +738,7 @@ class TestPositionManagerBasic:
     @pytest.mark.asyncio
     async def test_close_not_found_raises(self):
         from execution.position_manager import PositionNotFoundError
+
         pm = self._pm()
         with pytest.raises(PositionNotFoundError):
             await pm.close_position("MISSING", 1900.0)
@@ -676,6 +774,7 @@ class TestPositionManagerBasic:
     @pytest.mark.asyncio
     async def test_update_not_found_raises(self):
         from execution.position_manager import PositionNotFoundError
+
         pm = self._pm()
         with pytest.raises(PositionNotFoundError):
             await pm.update_position("MISSING", last_price=1900.0)
@@ -733,11 +832,17 @@ class TestPositionManagerBasic:
 
     def test_position_from_dict_roundtrip(self):
         from execution.position_manager import Position
+
         now = datetime.now(UTC)
         p = Position(
-            position_id="p1", symbol="XAUUSD", side="BUY",
-            quantity=2.0, entry_price=1900.0, opened_at=now,
-            stop_loss=1880.0, take_profit=1940.0,
+            position_id="p1",
+            symbol="XAUUSD",
+            side="BUY",
+            quantity=2.0,
+            entry_price=1900.0,
+            opened_at=now,
+            stop_loss=1880.0,
+            take_profit=1940.0,
         )
         d = p.to_dict()
         p2 = Position.from_dict(d)
@@ -746,8 +851,8 @@ class TestPositionManagerBasic:
 
     def test_position_from_dict_no_opened_at(self):
         from execution.position_manager import Position
-        d = {"position_id": "p1", "symbol": "XAUUSD", "side": "BUY",
-             "quantity": 1.0, "entry_price": 1900.0}
+
+        d = {"position_id": "p1", "symbol": "XAUUSD", "side": "BUY", "quantity": 1.0, "entry_price": 1900.0}
         p = Position.from_dict(d)
         assert p.opened_at is not None
 
@@ -760,8 +865,7 @@ class TestPositionManagerBasic:
     @pytest.mark.asyncio
     async def test_open_with_metadata(self):
         pm = self._pm()
-        pos = await pm.open_position("XAUUSD", "BUY", 1.0, 1900.0,
-                                     metadata={"strategy": "momentum"})
+        pos = await pm.open_position("XAUUSD", "BUY", 1.0, 1900.0, metadata={"strategy": "momentum"})
         assert pos.metadata["strategy"] == "momentum"
 
     @pytest.mark.asyncio
@@ -779,6 +883,7 @@ class TestPositionManagerBasic:
         history = pm.get_history()
         assert len(history) == 1
         assert history[0].symbol == "XAUUSD"
+
 
 # ---------------------------------------------------------------------------
 # redis_state — 71% coverage (async paths missing)
@@ -800,6 +905,7 @@ class TestAsyncRedisStateStoreFull:
     @pytest.mark.asyncio
     async def test_save_order_success(self):
         from execution.redis_state import AsyncRedisStateStore
+
         r = self._mock_r()
         store = AsyncRedisStateStore(r)
         await store.save_order({"order_id": "o1", "symbol": "XAUUSD"})
@@ -809,6 +915,7 @@ class TestAsyncRedisStateStoreFull:
     @pytest.mark.asyncio
     async def test_save_order_no_id_skipped(self):
         from execution.redis_state import AsyncRedisStateStore
+
         r = self._mock_r()
         store = AsyncRedisStateStore(r)
         await store.save_order({"symbol": "XAUUSD"})
@@ -817,6 +924,7 @@ class TestAsyncRedisStateStoreFull:
     @pytest.mark.asyncio
     async def test_save_order_connection_error(self):
         from execution.redis_state import AsyncRedisStateStore
+
         r = self._mock_r()
         r.set = AsyncMock(side_effect=ConnectionError("down"))
         store = AsyncRedisStateStore(r)
@@ -825,6 +933,7 @@ class TestAsyncRedisStateStoreFull:
     @pytest.mark.asyncio
     async def test_remove_order_success(self):
         from execution.redis_state import AsyncRedisStateStore
+
         r = self._mock_r()
         store = AsyncRedisStateStore(r)
         await store.remove_order("o1")
@@ -834,6 +943,7 @@ class TestAsyncRedisStateStoreFull:
     @pytest.mark.asyncio
     async def test_remove_order_connection_error(self):
         from execution.redis_state import AsyncRedisStateStore
+
         r = self._mock_r()
         r.delete = AsyncMock(side_effect=ConnectionError("down"))
         store = AsyncRedisStateStore(r)
@@ -842,6 +952,7 @@ class TestAsyncRedisStateStoreFull:
     @pytest.mark.asyncio
     async def test_load_orders_empty(self):
         from execution.redis_state import AsyncRedisStateStore
+
         r = self._mock_r()
         store = AsyncRedisStateStore(r)
         orders = await store.load_orders()
@@ -850,6 +961,7 @@ class TestAsyncRedisStateStoreFull:
     @pytest.mark.asyncio
     async def test_load_orders_with_data(self):
         from execution.redis_state import AsyncRedisStateStore
+
         r = self._mock_r()
         r.smembers = AsyncMock(return_value={b"o1"})
         r.get = AsyncMock(return_value=json.dumps({"order_id": "o1"}).encode())
@@ -860,6 +972,7 @@ class TestAsyncRedisStateStoreFull:
     @pytest.mark.asyncio
     async def test_load_orders_connection_error(self):
         from execution.redis_state import AsyncRedisStateStore
+
         r = self._mock_r()
         r.smembers = AsyncMock(side_effect=ConnectionError("down"))
         store = AsyncRedisStateStore(r)
@@ -869,6 +982,7 @@ class TestAsyncRedisStateStoreFull:
     @pytest.mark.asyncio
     async def test_save_position_success(self):
         from execution.redis_state import AsyncRedisStateStore
+
         r = self._mock_r()
         store = AsyncRedisStateStore(r)
         await store.save_position({"symbol": "XAUUSD", "side": "BUY"})
@@ -877,6 +991,7 @@ class TestAsyncRedisStateStoreFull:
     @pytest.mark.asyncio
     async def test_save_position_no_symbol_skipped(self):
         from execution.redis_state import AsyncRedisStateStore
+
         r = self._mock_r()
         store = AsyncRedisStateStore(r)
         await store.save_position({"side": "BUY"})
@@ -885,6 +1000,7 @@ class TestAsyncRedisStateStoreFull:
     @pytest.mark.asyncio
     async def test_save_position_connection_error(self):
         from execution.redis_state import AsyncRedisStateStore
+
         r = self._mock_r()
         r.set = AsyncMock(side_effect=ConnectionError("down"))
         store = AsyncRedisStateStore(r)
@@ -893,6 +1009,7 @@ class TestAsyncRedisStateStoreFull:
     @pytest.mark.asyncio
     async def test_remove_position_success(self):
         from execution.redis_state import AsyncRedisStateStore
+
         r = self._mock_r()
         store = AsyncRedisStateStore(r)
         await store.remove_position("XAUUSD")
@@ -902,6 +1019,7 @@ class TestAsyncRedisStateStoreFull:
     @pytest.mark.asyncio
     async def test_remove_position_connection_error(self):
         from execution.redis_state import AsyncRedisStateStore
+
         r = self._mock_r()
         r.delete = AsyncMock(side_effect=ConnectionError("down"))
         store = AsyncRedisStateStore(r)
@@ -910,6 +1028,7 @@ class TestAsyncRedisStateStoreFull:
     @pytest.mark.asyncio
     async def test_load_positions_with_data(self):
         from execution.redis_state import AsyncRedisStateStore
+
         r = self._mock_r()
         r.smembers = AsyncMock(return_value={b"XAUUSD"})
         r.get = AsyncMock(return_value=json.dumps({"symbol": "XAUUSD"}).encode())
@@ -920,6 +1039,7 @@ class TestAsyncRedisStateStoreFull:
     @pytest.mark.asyncio
     async def test_load_positions_connection_error(self):
         from execution.redis_state import AsyncRedisStateStore
+
         r = self._mock_r()
         r.smembers = AsyncMock(side_effect=ConnectionError("down"))
         store = AsyncRedisStateStore(r)
@@ -929,6 +1049,7 @@ class TestAsyncRedisStateStoreFull:
     @pytest.mark.asyncio
     async def test_load_state_on_boot_with_data(self):
         from execution.redis_state import AsyncRedisStateStore
+
         r = self._mock_r()
         r.smembers = AsyncMock(return_value={b"o1"})
         r.get = AsyncMock(return_value=json.dumps({"order_id": "o1"}).encode())
@@ -936,6 +1057,7 @@ class TestAsyncRedisStateStoreFull:
         state = await store.load_state_on_boot()
         assert "orders" in state
         assert "positions" in state
+
 
 # ---------------------------------------------------------------------------
 # spread_monitor — 67% coverage
@@ -946,6 +1068,7 @@ class TestAsyncRedisStateStoreFull:
 class TestSpreadMonitorFull:
     def _mon(self, **kw):
         from execution.spread_monitor import SpreadMonitor
+
         return SpreadMonitor(**kw)
 
     def test_on_tick_normal(self):
@@ -1030,17 +1153,19 @@ class TestSpreadMonitorFull:
 
     def test_ema_updates_over_ticks(self):
         m = self._mon()
-        for i in range(10):
+        for _i in range(10):
             m.on_tick("XAUUSD", bid=2000.0, ask=2000.2)
         snap = m.get_snapshot("XAUUSD")
         assert snap.baseline_spread > 0
 
     def test_get_spread_monitor_singleton(self):
         from execution.spread_monitor import get_spread_monitor, SpreadMonitor
+
         s1 = get_spread_monitor()
         s2 = get_spread_monitor()
         assert s1 is s2
         assert isinstance(s1, SpreadMonitor)
+
 
 # ---------------------------------------------------------------------------
 # smart_router — 72% coverage (missing: _route_via_algo, _execute_with_fallback,
@@ -1052,6 +1177,7 @@ class TestSpreadMonitorFull:
 class TestSmartRouterFull:
     def _router(self, brokers=None):
         from execution.smart_router import SmartRouter
+
         r = SmartRouter()
         for name, broker in (brokers or {}).items():
             r.add_broker(name, broker)
@@ -1059,10 +1185,14 @@ class TestSmartRouterFull:
 
     def _broker(self, status="filled", fill_price=2000.0):
         b = AsyncMock()
-        b.place_order = AsyncMock(return_value={
-            "status": status, "fill_price": fill_price,
-            "filled_qty": 1.0, "latency_ms": 10.0,
-        })
+        b.place_order = AsyncMock(
+            return_value={
+                "status": status,
+                "fill_price": fill_price,
+                "filled_qty": 1.0,
+                "latency_ms": 10.0,
+            }
+        )
         return b
 
     def test_add_broker(self):
@@ -1079,56 +1209,96 @@ class TestSmartRouterFull:
     @pytest.mark.asyncio
     async def test_route_no_brokers_rejected(self):
         r = self._router()
-        result = await r.route_and_execute({
-            "symbol": "XAUUSD", "direction": "long", "quantity": 1.0,
-            "order_type": "order", "mid_price": 2000.0, "spread": 0.3,
-            "sentiment": 0.0, "impact": 0.0, "features": {},
-        })
+        result = await r.route_and_execute(
+            {
+                "symbol": "XAUUSD",
+                "direction": "long",
+                "quantity": 1.0,
+                "order_type": "order",
+                "mid_price": 2000.0,
+                "spread": 0.3,
+                "sentiment": 0.0,
+                "impact": 0.0,
+                "features": {},
+            }
+        )
         assert result["status"] == "rejected"
 
     @pytest.mark.asyncio
     async def test_route_success(self):
         b = self._broker()
         r = self._router({"oanda": b})
-        result = await r.route_and_execute({
-            "symbol": "XAUUSD", "direction": "long", "quantity": 1.0,
-            "order_type": "order", "mid_price": 2000.0, "spread": 0.3,
-            "sentiment": 0.0, "impact": 0.0, "features": {},
-        })
+        result = await r.route_and_execute(
+            {
+                "symbol": "XAUUSD",
+                "direction": "long",
+                "quantity": 1.0,
+                "order_type": "order",
+                "mid_price": 2000.0,
+                "spread": 0.3,
+                "sentiment": 0.0,
+                "impact": 0.0,
+                "features": {},
+            }
+        )
         assert result["status"] in ("filled", "rejected", "algo_submitted")
 
     @pytest.mark.asyncio
     async def test_route_high_sentiment_blocked(self):
         b = self._broker()
         r = self._router({"oanda": b})
-        result = await r.route_and_execute({
-            "symbol": "XAUUSD", "direction": "long", "quantity": 1.0,
-            "order_type": "order", "mid_price": 2000.0, "spread": 0.3,
-            "sentiment": 0.95, "impact": 0.0, "features": {},
-        })
+        result = await r.route_and_execute(
+            {
+                "symbol": "XAUUSD",
+                "direction": "long",
+                "quantity": 1.0,
+                "order_type": "order",
+                "mid_price": 2000.0,
+                "spread": 0.3,
+                "sentiment": 0.95,
+                "impact": 0.0,
+                "features": {},
+            }
+        )
         assert result["status"] == "rejected"
 
     @pytest.mark.asyncio
     async def test_route_high_impact_blocked(self):
         b = self._broker()
         r = self._router({"oanda": b})
-        result = await r.route_and_execute({
-            "symbol": "XAUUSD", "direction": "long", "quantity": 1.0,
-            "order_type": "order", "mid_price": 2000.0, "spread": 0.3,
-            "sentiment": 0.0, "impact": 0.9, "features": {},
-        })
+        result = await r.route_and_execute(
+            {
+                "symbol": "XAUUSD",
+                "direction": "long",
+                "quantity": 1.0,
+                "order_type": "order",
+                "mid_price": 2000.0,
+                "spread": 0.3,
+                "sentiment": 0.0,
+                "impact": 0.9,
+                "features": {},
+            }
+        )
         assert result["status"] == "rejected"
 
     @pytest.mark.asyncio
     async def test_route_unwind_bypasses_gates(self):
         b = self._broker()
         r = self._router({"oanda": b})
-        result = await r.route_and_execute({
-            "symbol": "XAUUSD", "direction": "long", "quantity": 1.0,
-            "order_type": "order", "mid_price": 2000.0, "spread": 0.3,
-            "sentiment": 0.95, "impact": 0.9, "features": {},
-            "is_unwind": True,
-        })
+        result = await r.route_and_execute(
+            {
+                "symbol": "XAUUSD",
+                "direction": "long",
+                "quantity": 1.0,
+                "order_type": "order",
+                "mid_price": 2000.0,
+                "spread": 0.3,
+                "sentiment": 0.95,
+                "impact": 0.9,
+                "features": {},
+                "is_unwind": True,
+            }
+        )
         # Unwind bypasses sentiment/impact gates
         assert result["status"] in ("filled", "rejected", "algo_submitted")
 
@@ -1136,11 +1306,19 @@ class TestSmartRouterFull:
     async def test_route_wide_spread_blocked(self):
         b = self._broker()
         r = self._router({"oanda": b})
-        result = await r.route_and_execute({
-            "symbol": "XAUUSD", "direction": "long", "quantity": 1.0,
-            "order_type": "order", "mid_price": 2000.0, "spread": 200.0,
-            "sentiment": 0.0, "impact": 0.0, "features": {},
-        })
+        result = await r.route_and_execute(
+            {
+                "symbol": "XAUUSD",
+                "direction": "long",
+                "quantity": 1.0,
+                "order_type": "order",
+                "mid_price": 2000.0,
+                "spread": 200.0,
+                "sentiment": 0.0,
+                "impact": 0.0,
+                "features": {},
+            }
+        )
         assert result["status"] == "rejected"
 
     @pytest.mark.asyncio
@@ -1149,11 +1327,19 @@ class TestSmartRouterFull:
         b1.place_order = AsyncMock(side_effect=RuntimeError("broker down"))
         b2 = self._broker()
         r = self._router({"primary": b1, "secondary": b2})
-        result = await r.route_and_execute({
-            "symbol": "XAUUSD", "direction": "long", "quantity": 1.0,
-            "order_type": "order", "mid_price": 2000.0, "spread": 0.3,
-            "sentiment": 0.0, "impact": 0.0, "features": {},
-        })
+        result = await r.route_and_execute(
+            {
+                "symbol": "XAUUSD",
+                "direction": "long",
+                "quantity": 1.0,
+                "order_type": "order",
+                "mid_price": 2000.0,
+                "spread": 0.3,
+                "sentiment": 0.0,
+                "impact": 0.0,
+                "features": {},
+            }
+        )
         assert result["status"] in ("filled", "rejected")
 
     def test_get_routing_stats(self):
@@ -1168,6 +1354,7 @@ class TestSmartRouterFull:
 
     def test_broker_state_record_fill(self):
         from execution.smart_router import BrokerState
+
         s = BrokerState(broker_id="b1")
         s.record_fill(latency_ms=20.0, slippage_bps=2.0)
         assert s.total_fills == 1
@@ -1176,6 +1363,7 @@ class TestSmartRouterFull:
     def test_broker_state_record_error_opens_circuit(self):
         from execution.smart_router import BrokerState
         import os
+
         s = BrokerState(broker_id="b1")
         threshold = int(os.getenv("ROUTER_CB_ERRORS", "3"))
         for _ in range(threshold):
@@ -1185,6 +1373,7 @@ class TestSmartRouterFull:
     def test_broker_state_circuit_reset(self):
         from execution.smart_router import BrokerState
         import time
+
         s = BrokerState(broker_id="b1")
         s.circuit_open = True
         s.circuit_open_at = time.monotonic() - 999
@@ -1193,19 +1382,28 @@ class TestSmartRouterFull:
 
     def test_broker_state_routing_score(self):
         from execution.smart_router import BrokerState
+
         s = BrokerState(broker_id="b1")
         score = s.routing_score(direction="long", ofi=0.5, sentiment_score=0.1)
         assert 0.0 <= score <= 1.0
 
     def test_routing_decision_dataclass(self):
         from execution.smart_router import RoutingDecision
+
         d = RoutingDecision(
-            decision_id="d1", order_id="o1", selected_broker="oanda",
-            fallback_chain=["ibkr"], scores={"oanda": 0.8},
-            ofi=0.5, sentiment_score=0.1, impact_score=0.0,
-            spread_bps=2.0, reason="best_score",
+            decision_id="d1",
+            order_id="o1",
+            selected_broker="oanda",
+            fallback_chain=["ibkr"],
+            scores={"oanda": 0.8},
+            ofi=0.5,
+            sentiment_score=0.1,
+            impact_score=0.0,
+            spread_bps=2.0,
+            reason="best_score",
         )
         assert d.selected_broker == "oanda"
+
 
 # ---------------------------------------------------------------------------
 # sl_tp_monitor — 72% coverage (missing: _close_position retry/failure paths)
@@ -1216,6 +1414,7 @@ class TestSmartRouterFull:
 class TestSLTPMonitorClosePaths:
     def _make(self, broker_return=None, broker_error=None):
         from execution.sl_tp_monitor import SLTPMonitor
+
         pm = MagicMock()
         pm.get_all_positions.return_value = {}
         pm.close_position = AsyncMock()
@@ -1261,6 +1460,7 @@ class TestSLTPMonitorClosePaths:
     @pytest.mark.asyncio
     async def test_close_position_broker_error_retries(self):
         from execution.sl_tp_monitor import SLTPMonitor
+
         pm = MagicMock()
         pm.get_all_positions.return_value = {}
         pm.close_position = AsyncMock()
@@ -1289,6 +1489,7 @@ class TestSLTPMonitorClosePaths:
 
     def test_check_breach_zero_sl_ignored(self):
         from execution.sl_tp_monitor import SLTPMonitor
+
         pos = MagicMock()
         pos.side = "BUY"
         pos.stop_loss = 0.0
@@ -1297,11 +1498,13 @@ class TestSLTPMonitorClosePaths:
 
     def test_check_breach_unknown_side(self):
         from execution.sl_tp_monitor import SLTPMonitor
+
         pos = MagicMock()
         pos.side = "FLAT"
         pos.stop_loss = 1880.0
         pos.take_profit = 1940.0
         assert SLTPMonitor._check_breach(pos, 1875.0) is None
+
 
 # ---------------------------------------------------------------------------
 # async_engine — 70% coverage (missing: cancel, modify, batch, positions)
@@ -1312,12 +1515,17 @@ class TestSLTPMonitorClosePaths:
 class TestAsyncEngineExtra:
     def _engine(self):
         from execution.async_engine import AsyncExecutionEngine
+
         return AsyncExecutionEngine(broker_configs=[], paper_mode=True, paper_rng_seed=42)
 
     def _order(self, symbol="XAUUSD", side="buy", qty=1.0, otype=None):
         from execution.async_engine import Order, OrderType
+
         return Order(
-            id="", symbol=symbol, side=side, quantity=qty,
+            id="",
+            symbol=symbol,
+            side=side,
+            quantity=qty,
             order_type=otype or OrderType.MARKET,
         )
 
@@ -1329,11 +1537,9 @@ class TestAsyncEngineExtra:
 
     @pytest.mark.asyncio
     async def test_cancel_no_venue_returns_false(self):
-        from execution.async_engine import OrderStatus
         e = self._engine()
         o = self._order()
-        with patch.object(e, "_select_venue", return_value="paper"), \
-             patch.object(e, "_simulate_fill", AsyncMock()):
+        with patch.object(e, "_select_venue", return_value="paper"), patch.object(e, "_simulate_fill", AsyncMock()):
             await e.submit_order(o)
         # Remove venue from metadata to trigger the no-venue path
         e.orders[o.id].metadata.pop("venue", None)
@@ -1344,8 +1550,7 @@ class TestAsyncEngineExtra:
     async def test_batch_submit(self):
         e = self._engine()
         orders = [self._order(symbol=f"SYM{i}") for i in range(3)]
-        with patch.object(e, "_select_venue", return_value="paper"), \
-             patch.object(e, "_simulate_fill", AsyncMock()):
+        with patch.object(e, "_select_venue", return_value="paper"), patch.object(e, "_simulate_fill", AsyncMock()):
             results = await e.batch_submit(orders)
         assert len(results) == 3
 
@@ -1359,6 +1564,7 @@ class TestAsyncEngineExtra:
     @pytest.mark.asyncio
     async def test_get_positions_cached(self):
         import time
+
         e = self._engine()
         e.position_cache = {"XAUUSD": {"symbol": "XAUUSD", "quantity": 1.0}}
         e._position_cache_time = time.time()
@@ -1368,13 +1574,13 @@ class TestAsyncEngineExtra:
     @pytest.mark.asyncio
     async def test_select_venue_with_broker(self):
         from execution.async_engine import AsyncExecutionEngine, Order, OrderType
+
         e = AsyncExecutionEngine(
             broker_configs=[{"name": "oanda", "rate_limit": 10}],
             paper_mode=True,
         )
         e.brokers["oanda"] = {"name": "oanda"}
-        o = Order(id="x", symbol="XAUUSD", side="buy", quantity=1.0,
-                  order_type=OrderType.MARKET)
+        o = Order(id="x", symbol="XAUUSD", side="buy", quantity=1.0, order_type=OrderType.MARKET)
         venue = e._select_venue(o)
         assert venue == "oanda"
 
@@ -1388,6 +1594,7 @@ class TestAsyncEngineExtra:
     @pytest.mark.asyncio
     async def test_simulate_fill_market_order(self):
         from execution.async_engine import OrderStatus
+
         e = self._engine()
         o = self._order()
         o.id = "test_order"
@@ -1398,6 +1605,7 @@ class TestAsyncEngineExtra:
     @pytest.mark.asyncio
     async def test_simulate_fill_no_market_data_rejected(self):
         from execution.async_engine import OrderStatus
+
         e = self._engine()
         o = self._order()
         o.id = "test_order"
@@ -1408,6 +1616,7 @@ class TestAsyncEngineExtra:
     @pytest.mark.asyncio
     async def test_simulate_fill_raises_in_live_mode(self):
         from execution.async_engine import AsyncExecutionEngine
+
         e = AsyncExecutionEngine(broker_configs=[], paper_mode=False)
         o = self._order()
         o.id = "test"
@@ -1416,13 +1625,16 @@ class TestAsyncEngineExtra:
 
     def test_order_status_enum_values(self):
         from execution.async_engine import OrderStatus
+
         assert OrderStatus.PENDING.name == "PENDING"
         assert OrderStatus.FILLED.name == "FILLED"
 
     def test_order_type_enum_values(self):
         from execution.async_engine import OrderType
+
         assert OrderType.MARKET.name == "MARKET"
         assert OrderType.LIMIT.name == "LIMIT"
+
 
 # ---------------------------------------------------------------------------
 # trade_executor — 70% coverage
@@ -1433,10 +1645,16 @@ class TestAsyncEngineExtra:
 class TestTradeExecutorExtra:
     def _executor(self):
         from execution.trade_executor import TradeExecutor
+
         broker = MagicMock()
-        broker.place_order = MagicMock(return_value=MagicMock(
-            id="ord1", filled_quantity=1.0, average_price=2000.0, commission=0.5,
-        ))
+        broker.place_order = MagicMock(
+            return_value=MagicMock(
+                id="ord1",
+                filled_quantity=1.0,
+                average_price=2000.0,
+                commission=0.5,
+            )
+        )
         risk_manager = MagicMock()
         risk_manager.check_pre_trade = MagicMock(return_value=(True, "ok"))
         risk_manager.get_current_drawdown = MagicMock(return_value=0.01)
@@ -1444,8 +1662,7 @@ class TestTradeExecutorExtra:
         position_tracker = MagicMock()
         position_tracker.get_position = MagicMock(return_value=None)
         position_tracker.get_all_positions = MagicMock(return_value={})
-        return TradeExecutor(broker=broker, risk_manager=risk_manager,
-                             position_tracker=position_tracker)
+        return TradeExecutor(broker=broker, risk_manager=risk_manager, position_tracker=position_tracker)
 
     @pytest.mark.asyncio
     async def test_execute_missing_fields_rejected(self):
@@ -1464,6 +1681,7 @@ class TestTradeExecutorExtra:
     @pytest.mark.asyncio
     async def test_execute_buy_signal(self):
         from execution.trade_executor import OrderStatus
+
         ex = self._executor()
         result = await ex.execute_signal({"symbol": "XAUUSD", "action": "buy", "size": 1.0})
         assert result.status in (OrderStatus.FILLED, OrderStatus.REJECTED, OrderStatus.ERROR)
@@ -1471,6 +1689,7 @@ class TestTradeExecutorExtra:
     @pytest.mark.asyncio
     async def test_execute_sell_signal(self):
         from execution.trade_executor import OrderStatus
+
         ex = self._executor()
         result = await ex.execute_signal({"symbol": "XAUUSD", "action": "sell", "size": 1.0})
         assert result.status in (OrderStatus.FILLED, OrderStatus.REJECTED, OrderStatus.ERROR)
@@ -1478,13 +1697,15 @@ class TestTradeExecutorExtra:
     @pytest.mark.asyncio
     async def test_execute_close_signal(self):
         from execution.trade_executor import OrderStatus
+
         ex = self._executor()
         result = await ex.execute_signal({"symbol": "XAUUSD", "action": "close", "size": 1.0})
         assert result.status in (OrderStatus.FILLED, OrderStatus.REJECTED, OrderStatus.ERROR)
 
     @pytest.mark.asyncio
     async def test_drawdown_halt_blocks_trade(self):
-        from execution.trade_executor import TradeExecutor, OrderStatus, DRAWDOWN_HALT_PCT
+        from execution.trade_executor import TradeExecutor, DRAWDOWN_HALT_PCT
+
         broker = MagicMock()
         risk_manager = MagicMock()
         risk_manager.get_current_drawdown = MagicMock(return_value=DRAWDOWN_HALT_PCT + 0.01)
@@ -1492,15 +1713,15 @@ class TestTradeExecutorExtra:
         risk_manager.check_pre_trade = MagicMock(return_value=(True, "ok"))
         position_tracker = MagicMock()
         position_tracker.get_all_positions = MagicMock(return_value={})
-        ex = TradeExecutor(broker=broker, risk_manager=risk_manager,
-                           position_tracker=position_tracker)
+        ex = TradeExecutor(broker=broker, risk_manager=risk_manager, position_tracker=position_tracker)
         result = await ex.execute_signal({"symbol": "XAUUSD", "action": "buy", "size": 1.0})
         assert result.success is False
 
     @pytest.mark.asyncio
     async def test_streak_halt_blocks_trade(self):
-        from execution.trade_executor import TradeExecutor, OrderStatus, STREAK_HALT_LOSSES
+        from execution.trade_executor import TradeExecutor, STREAK_HALT_LOSSES
         import time
+
         broker = MagicMock()
         risk_manager = MagicMock()
         risk_manager.get_current_drawdown = MagicMock(return_value=0.01)
@@ -1508,8 +1729,7 @@ class TestTradeExecutorExtra:
         risk_manager.check_pre_trade = MagicMock(return_value=(True, "ok"))
         position_tracker = MagicMock()
         position_tracker.get_all_positions = MagicMock(return_value={})
-        ex = TradeExecutor(broker=broker, risk_manager=risk_manager,
-                           position_tracker=position_tracker)
+        ex = TradeExecutor(broker=broker, risk_manager=risk_manager, position_tracker=position_tracker)
         ex._consecutive_losses = STREAK_HALT_LOSSES
         ex._streak_halted_until = time.monotonic() + 9999
         result = await ex.execute_signal({"symbol": "XAUUSD", "action": "buy", "size": 1.0})
@@ -1523,10 +1743,15 @@ class TestTradeExecutorExtra:
 
     def test_execution_result_dataclass(self):
         from execution.trade_executor import ExecutionResult, OrderStatus
+
         r = ExecutionResult(
-            success=True, order_id="o1", filled_quantity=1.0,
-            average_price=2000.0, commission=0.5,
-            status=OrderStatus.FILLED, message="ok",
+            success=True,
+            order_id="o1",
+            filled_quantity=1.0,
+            average_price=2000.0,
+            commission=0.5,
+            status=OrderStatus.FILLED,
+            message="ok",
         )
         assert r.success is True
         assert r.latency_ms == 0.0

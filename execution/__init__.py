@@ -73,7 +73,7 @@ except Exception as _e:
     _log.debug("TCAEngine unavailable: %s", _e)
 
 try:
-    from execution.tca_recorder import TCARecorder  # noqa: F401
+    from execution.tca_recorder import TCARecorder
 except Exception as _e:
     _log.debug("TCARecorder unavailable: %s", _e)
 
@@ -91,7 +91,7 @@ except Exception as _e:
 
 # ── Market impact ─────────────────────────────────────────────────────────────
 try:
-    from execution.market_impact import AlmgrenChrissModel, FillSimulator  # noqa: F401
+    from execution.market_impact import AlmgrenChrissModel, FillSimulator
 except Exception as _e:
     _log.debug("MarketImpact unavailable: %s", _e)
 

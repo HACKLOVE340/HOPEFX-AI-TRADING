@@ -24,9 +24,10 @@ from brain.nuclear_supervisor import NuclearHopeFXSupervisor, get_nuclear_superv
 # StrategyBrain lives in strategies.strategy_brain; re-export here so that
 # callers using `from brain import StrategyBrain` continue to work.
 try:
-    from strategies.strategy_brain import StrategyBrain  # noqa: F401
+    from strategies.strategy_brain import StrategyBrain
 except Exception as _e:
     import logging as _l
+
     _l.getLogger(__name__).debug("StrategyBrain unavailable: %s", _e)
 
 __all__ = [

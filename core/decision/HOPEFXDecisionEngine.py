@@ -78,6 +78,7 @@ logger = logging.getLogger(__name__)
 
 class DecisionPhase(Enum):
     """Which phase the decision pipeline reached before stopping."""
+
     SIGNAL_GENERATION = "signal_generation"
     ML_ENRICHMENT = "ml_enrichment"
     RISK_GATE = "risk_gate"
@@ -87,6 +88,7 @@ class DecisionPhase(Enum):
 
 class DecisionOutcome(Enum):
     """Final outcome of a decision cycle."""
+
     NO_SIGNAL = "no_signal"
     ML_FILTERED = "ml_filtered"
     RISK_BLOCKED = "risk_blocked"
@@ -103,6 +105,7 @@ class DecisionOutcome(Enum):
 @dataclass
 class DecisionContext:
     """Immutable snapshot of all inputs to a single decision cycle."""
+
     symbol: str
     data: dict[str, Any]
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -112,6 +115,7 @@ class DecisionContext:
 @dataclass
 class DecisionResult:
     """Full audit record for one decision cycle."""
+
     decision_id: str
     symbol: str
     timestamp: datetime
@@ -183,6 +187,7 @@ class HOPEFXDecisionEngine:
     """
 
     import os as _os
+
     ML_THRESHOLD: float = float(_os.getenv("HOPEFX_ML_THRESHOLD", "0.52"))
 
     def __init__(
@@ -254,8 +259,11 @@ class HOPEFXDecisionEngine:
 
         logger.debug(
             "Decision %s: symbol=%s outcome=%s phase=%s latency=%.1fms",
-            ctx.decision_id, symbol, result.outcome.value,
-            result.phase_reached.value, result.latency_ms,
+            ctx.decision_id,
+            symbol,
+            result.outcome.value,
+            result.phase_reached.value,
+            result.latency_ms,
         )
         return result
 
@@ -318,9 +326,7 @@ class HOPEFXDecisionEngine:
         if signal is None:
             return None
 
-        direction: str = (
-            signal.signal_type.value if hasattr(signal.signal_type, "value") else str(signal.signal_type)
-        )
+        direction: str = signal.signal_type.value if hasattr(signal.signal_type, "value") else str(signal.signal_type)
         confidence: float = float(getattr(signal, "confidence", 0.0))
         result.direction = direction
         result.base_confidence = confidence
@@ -347,7 +353,7 @@ class HOPEFXDecisionEngine:
             try:
                 ohlcv_df = self._build_ohlcv_df(ctx.data)
                 raw = self._ml.predict(ohlcv_df)
-                if isinstance(raw, (int, float)):
+                if isinstance(raw, int | float):
                     prob = float(raw)
                 elif hasattr(raw, "__len__") and len(raw) > 0:
                     prob = float(raw[-1])
@@ -361,7 +367,9 @@ class HOPEFXDecisionEngine:
         if prob < self.ML_THRESHOLD:
             logger.debug(
                 "Phase2 ML filtered: prob=%.3f < threshold=%.3f symbol=%s",
-                prob, self.ML_THRESHOLD, ctx.symbol,
+                prob,
+                self.ML_THRESHOLD,
+                ctx.symbol,
             )
             return None
         return prob
@@ -371,6 +379,7 @@ class HOPEFXDecisionEngine:
         for fn_name in ("_apply_anomaly_weighting", "_apply_online_blend", "_apply_deep_ensemble_blend"):
             try:
                 import importlib
+
                 mod = importlib.import_module("core.signal_engine")
                 fn = getattr(mod, fn_name)
                 ohlcv_df = self._build_ohlcv_df(ctx.data)
@@ -451,7 +460,8 @@ class HOPEFXDecisionEngine:
             if not sizing.approved or sizing.recommended_size <= 0:
                 logger.info(
                     "Phase3 sizing rejected: symbol=%s reason=%s",
-                    ctx.symbol, getattr(sizing, "reason", "size=0"),
+                    ctx.symbol,
+                    getattr(sizing, "reason", "size=0"),
                 )
                 result.outcome = DecisionOutcome.SIZING_REJECTED
                 result.gate_reason = str(getattr(sizing, "reason", "size=0"))
@@ -501,7 +511,9 @@ class HOPEFXDecisionEngine:
         if not exec_result.success:
             logger.warning(
                 "Phase4 execution failed: symbol=%s status=%s msg=%s",
-                ctx.symbol, exec_result.status.value, exec_result.message,
+                ctx.symbol,
+                exec_result.status.value,
+                exec_result.message,
             )
             result.outcome = DecisionOutcome.EXECUTION_ERROR
             result.error = exec_result.message
@@ -542,6 +554,7 @@ class HOPEFXDecisionEngine:
         # Online learner feedback
         try:
             from core.signal_engine import _notify_online_learner
+
             _notify_online_learner(
                 ctx.symbol,
                 result.direction or "",
@@ -558,16 +571,20 @@ class HOPEFXDecisionEngine:
         """Build a rolling OHLCV DataFrame from the broker data dict."""
         try:
             from core.signal_engine import _build_ohlcv_df
+
             return _build_ohlcv_df(data)
         except Exception:
             import pandas as pd
-            return pd.DataFrame({
-                "open": [data.get("open", data.get("close", 0))],
-                "high": [data.get("high", data.get("close", 0))],
-                "low": [data.get("low", data.get("close", 0))],
-                "close": [data.get("close", 0)],
-                "volume": [data.get("volume", 0)],
-            })
+
+            return pd.DataFrame(
+                {
+                    "open": [data.get("open", data.get("close", 0))],
+                    "high": [data.get("high", data.get("close", 0))],
+                    "low": [data.get("low", data.get("close", 0))],
+                    "close": [data.get("close", 0)],
+                    "volume": [data.get("volume", 0)],
+                }
+            )
 
     def _resolve_sl_tp(
         self,
@@ -578,6 +595,7 @@ class HOPEFXDecisionEngine:
         """ATR-based SL/TP; falls back to 1%/2% of entry when ATR unavailable."""
         try:
             from core.signal_engine import _compute_atr
+
             atr = _compute_atr(
                 data.get("highs", []),
                 data.get("lows", []),
@@ -596,9 +614,11 @@ class HOPEFXDecisionEngine:
         """Estimate annualised volatility from recent price history."""
         try:
             from core.signal_engine import _estimate_annualised_volatility
+
             return _estimate_annualised_volatility(data, entry)
         except Exception:
             import numpy as np
+
             prices = data.get("prices", [entry])
             if len(prices) < 2:
                 return 0.15
@@ -643,7 +663,7 @@ class HOPEFXDecisionEngine:
 # ---------------------------------------------------------------------------
 
 
-def create_decision_router(engine: "HOPEFXDecisionEngine"):
+def create_decision_router(engine: HOPEFXDecisionEngine):
     """
     FastAPI router exposing decision engine status and manual tick injection.
 

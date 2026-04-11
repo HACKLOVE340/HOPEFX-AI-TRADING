@@ -7,10 +7,10 @@ Covers: aml.py, auditor.py, compliance_manager.py, kyc_provider.py,
         regulatory_reporter.py
 Real implementations only — external I/O patched at the boundary.
 """
+
 from __future__ import annotations
 
 import os
-import tempfile
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -24,10 +24,12 @@ UTC = timezone.utc
 # compliance/aml.py
 # ===========================================================================
 
+
 @pytest.mark.unit
 class TestAMLGateNoDb:
     def _gate(self):
         from compliance.aml import AMLGate
+
         return AMLGate(session_factory=None)
 
     def test_exceeds_single_cap_blocked(self):
@@ -66,6 +68,7 @@ class TestAMLGateWithDb:
     def _make_session(self, withdrawals=None, deposits=None):
         """Build a mock session_factory returning mock transactions."""
         from unittest.mock import MagicMock
+
         withdrawals = withdrawals or []
         deposits = deposits or []
 
@@ -82,6 +85,7 @@ class TestAMLGateWithDb:
 
     def test_velocity_limit_blocks(self):
         from compliance.aml import AMLGate, MAX_WITHDRAWALS_PER_DAY
+
         txns = [MagicMock(amount="100") for _ in range(MAX_WITHDRAWALS_PER_DAY)]
         factory = self._make_session(withdrawals=txns)
         gate = AMLGate(session_factory=factory)
@@ -91,6 +95,7 @@ class TestAMLGateWithDb:
 
     def test_daily_limit_exceeded_blocks(self):
         from compliance.aml import AMLGate
+
         # 4 withdrawals of 10000 each = 40000, adding 15000 exceeds 50000
         txns = [MagicMock(amount="10000") for _ in range(4)]
         factory = self._make_session(withdrawals=txns)
@@ -101,6 +106,7 @@ class TestAMLGateWithDb:
 
     def test_rapid_turnaround_flags(self):
         from compliance.aml import AMLGate
+
         # amount must be numeric for Decimal(str(dep.amount)) to work
         dep = MagicMock(amount=500.00)
         factory = self._make_session(withdrawals=[], deposits=[dep])
@@ -111,6 +117,7 @@ class TestAMLGateWithDb:
 
     def test_db_exception_fail_closed(self):
         from compliance.aml import AMLGate
+
         session = MagicMock()
         session.__enter__ = MagicMock(side_effect=RuntimeError("DB down"))
         session.__exit__ = MagicMock(return_value=False)
@@ -126,12 +133,14 @@ class TestAMLGateSingleton:
     def test_get_aml_gate_returns_instance(self):
         from compliance.aml import get_aml_gate, AMLGate
         import compliance.aml as aml_mod
+
         aml_mod._aml_gate = None
         gate = get_aml_gate()
         assert isinstance(gate, AMLGate)
 
     def test_init_aml_gate_wires_factory(self):
         from compliance.aml import init_aml_gate, get_aml_gate
+
         factory = MagicMock()
         gate = init_aml_gate(factory)
         assert gate._sf is factory
@@ -142,14 +151,17 @@ class TestAMLGateSingleton:
 # compliance/auditor.py
 # ===========================================================================
 
+
 @pytest.mark.unit
 class TestImmutableAuditLogDeep:
     def _log(self, tmp_path):
         from compliance.auditor import ImmutableAuditLog
+
         return ImmutableAuditLog(log_path=str(tmp_path) + "/")
 
     def test_append_increments_sequence(self, tmp_path):
         from compliance.auditor import AuditLevel
+
         log = self._log(tmp_path)
         r1 = log.append(AuditLevel.INFO, "TRADE", "sys", "OPEN", {})
         r2 = log.append(AuditLevel.INFO, "TRADE", "sys", "CLOSE", {})
@@ -158,6 +170,7 @@ class TestImmutableAuditLogDeep:
 
     def test_hash_chain_links(self, tmp_path):
         from compliance.auditor import AuditLevel
+
         log = self._log(tmp_path)
         log.append(AuditLevel.INFO, "TRADE", "sys", "OPEN", {"sym": "XAUUSD"})
         log.append(AuditLevel.INFO, "TRADE", "sys", "CLOSE", {"sym": "XAUUSD"})
@@ -165,6 +178,7 @@ class TestImmutableAuditLogDeep:
 
     def test_verify_integrity_passes(self, tmp_path):
         from compliance.auditor import AuditLevel
+
         log = self._log(tmp_path)
         for i in range(5):
             log.append(AuditLevel.COMPLIANCE, "ORDER", "engine", f"ACT_{i}", {"i": i})
@@ -172,6 +186,7 @@ class TestImmutableAuditLogDeep:
 
     def test_verify_integrity_detects_tamper(self, tmp_path):
         from compliance.auditor import AuditLevel
+
         log = self._log(tmp_path)
         log.append(AuditLevel.INFO, "TRADE", "sys", "OPEN", {"price": 3300})
         log.records[0].hash_chain = "tampered" * 4
@@ -179,6 +194,7 @@ class TestImmutableAuditLogDeep:
 
     def test_export_for_regulator_filters_by_date(self, tmp_path):
         from compliance.auditor import AuditLevel
+
         log = self._log(tmp_path)
         log.append(AuditLevel.COMPLIANCE, "TRADE", "sys", "OPEN", {"sym": "XAUUSD"})
         now = datetime.now(UTC)
@@ -191,6 +207,7 @@ class TestImmutableAuditLogDeep:
 
     def test_export_empty_outside_range(self, tmp_path):
         from compliance.auditor import AuditLevel
+
         log = self._log(tmp_path)
         log.append(AuditLevel.INFO, "TRADE", "sys", "OPEN", {})
         past = datetime.now(UTC) - timedelta(days=10)
@@ -202,6 +219,7 @@ class TestImmutableAuditLogDeep:
 
     def test_persist_creates_file(self, tmp_path):
         from compliance.auditor import AuditLevel
+
         log = self._log(tmp_path)
         log.append(AuditLevel.INFO, "TRADE", "sys", "OPEN", {"x": 1})
         files = list(tmp_path.iterdir())
@@ -209,6 +227,7 @@ class TestImmutableAuditLogDeep:
 
     def test_all_audit_levels(self, tmp_path):
         from compliance.auditor import AuditLevel
+
         log = self._log(tmp_path)
         for level in AuditLevel:
             r = log.append(level, "TEST", "sys", "ACT", {})
@@ -219,6 +238,7 @@ class TestImmutableAuditLogDeep:
 class TestTradeReporting:
     def test_report_trade_logs_audit(self, tmp_path):
         from compliance.auditor import TradeReporting
+
         tr = TradeReporting(jurisdiction="US")
         tr.audit_log.log_path = str(tmp_path) + "/"
         tr.report_trade({"id": "t1", "symbol": "XAUUSD", "size": 1, "notional": 3300})
@@ -226,6 +246,7 @@ class TestTradeReporting:
 
     def test_generate_daily_report_structure(self, tmp_path):
         from compliance.auditor import TradeReporting
+
         tr = TradeReporting(jurisdiction="US")
         tr.audit_log.log_path = str(tmp_path) + "/"
         report = tr.generate_daily_report()
@@ -235,26 +256,31 @@ class TestTradeReporting:
 
     def test_requires_immediate_reporting_large_trade(self):
         from compliance.auditor import TradeReporting
+
         tr = TradeReporting(jurisdiction="US")
         assert tr._requires_immediate_reporting({"size": 100}) is True
 
     def test_requires_immediate_reporting_suspicious(self):
         from compliance.auditor import TradeReporting
+
         tr = TradeReporting(jurisdiction="US")
         assert tr._requires_immediate_reporting({"size": 1, "flags": {"suspicious": True}}) is True
 
     def test_requires_immediate_reporting_normal(self):
         from compliance.auditor import TradeReporting
+
         tr = TradeReporting(jurisdiction="US")
         assert tr._requires_immediate_reporting({"size": 1}) is False
 
     def test_eu_jurisdiction_loads_mifid(self):
         from compliance.auditor import TradeReporting
+
         tr = TradeReporting(jurisdiction="EU")
         assert "mifid_ii" in tr.reporting_obligations
 
     def test_unknown_jurisdiction_empty_obligations(self):
         from compliance.auditor import TradeReporting
+
         tr = TradeReporting(jurisdiction="XX")
         assert tr.reporting_obligations == {}
 
@@ -263,10 +289,12 @@ class TestTradeReporting:
 # compliance/compliance_manager.py
 # ===========================================================================
 
+
 @pytest.mark.unit
 class TestComplianceManagerDeep:
     def _cm(self):
         from compliance.compliance_manager import ComplianceManager
+
         return ComplianceManager()
 
     def test_submit_kyc_sets_pending(self):
@@ -279,6 +307,7 @@ class TestComplianceManagerDeep:
         cm.submit_kyc("u1", "passport")
         assert cm.approve_kyc("u1") is True
         from compliance.compliance_manager import KYCStatus
+
         assert cm.get_kyc_status("u1") == KYCStatus.APPROVED
 
     def test_reject_kyc_sets_rejected(self):
@@ -286,10 +315,12 @@ class TestComplianceManagerDeep:
         cm.submit_kyc("u1", "passport")
         assert cm.reject_kyc("u1", reason="fraud") is True
         from compliance.compliance_manager import KYCStatus
+
         assert cm.get_kyc_status("u1") == KYCStatus.REJECTED
 
     def test_get_kyc_status_unverified_for_unknown(self):
         from compliance.compliance_manager import KYCStatus
+
         cm = self._cm()
         assert cm.get_kyc_status("nobody") == KYCStatus.UNVERIFIED
 
@@ -351,17 +382,19 @@ class TestComplianceManagerDeep:
 # compliance/kyc_provider.py
 # ===========================================================================
 
+
 @pytest.mark.unit
 class TestMockKYCProvider:
     def test_mock_blocked_in_production(self):
         from compliance.kyc_provider import MockKYCProvider
-        with patch.dict(os.environ, {"APP_ENV": "production"}):
-            with pytest.raises(RuntimeError, match="production"):
-                MockKYCProvider()
+
+        with patch.dict(os.environ, {"APP_ENV": "production"}), pytest.raises(RuntimeError, match="production"):
+            MockKYCProvider()
 
     @pytest.mark.asyncio
     async def test_mock_create_applicant(self):
         from compliance.kyc_provider import MockKYCProvider, VerificationStatus
+
         with patch.dict(os.environ, {"APP_ENV": "development"}):
             provider = MockKYCProvider()
             applicant = await provider.create_applicant("user1", {"email": "test@test.com"})
@@ -372,6 +405,7 @@ class TestMockKYCProvider:
     @pytest.mark.asyncio
     async def test_mock_get_status_approved(self):
         from compliance.kyc_provider import MockKYCProvider, VerificationStatus
+
         with patch.dict(os.environ, {"APP_ENV": "development", "KYC_MOCK_DELAY_S": "0"}):
             provider = MockKYCProvider()
             applicant = await provider.create_applicant("user1", {})
@@ -380,22 +414,23 @@ class TestMockKYCProvider:
 
     def test_mock_verify_webhook_always_true(self):
         from compliance.kyc_provider import MockKYCProvider
+
         with patch.dict(os.environ, {"APP_ENV": "development"}):
             provider = MockKYCProvider()
             assert provider.verify_webhook(b"payload", "sig") is True
 
     def test_mock_parse_webhook(self):
         from compliance.kyc_provider import MockKYCProvider, VerificationStatus
+
         with patch.dict(os.environ, {"APP_ENV": "development"}):
             provider = MockKYCProvider()
-            applicant_id, status = provider.parse_webhook(
-                {"applicant_id": "abc123"}
-            )
+            applicant_id, status = provider.parse_webhook({"applicant_id": "abc123"})
             assert applicant_id == "abc123"
             assert status == VerificationStatus.APPROVED
 
     def test_mock_parse_webhook_missing_id(self):
         from compliance.kyc_provider import MockKYCProvider, VerificationStatus
+
         with patch.dict(os.environ, {"APP_ENV": "development"}):
             provider = MockKYCProvider()
             applicant_id, status = provider.parse_webhook({})
@@ -408,6 +443,7 @@ class TestLocalSDNScreener:
     @pytest.mark.asyncio
     async def test_screen_returns_sanctions_result(self):
         from compliance.kyc_provider import LocalSDNScreener, SanctionsResult
+
         screener = LocalSDNScreener()
         result = await screener.screen("John Smith", dob="1990-01-01")
         assert isinstance(result, SanctionsResult)
@@ -417,6 +453,7 @@ class TestLocalSDNScreener:
     @pytest.mark.asyncio
     async def test_screen_known_name(self):
         from compliance.kyc_provider import LocalSDNScreener
+
         screener = LocalSDNScreener()
         # Result depends on local SDN list; just verify it returns a result
         result = await screener.screen("Test Person")
@@ -430,6 +467,7 @@ class TestKYCGateway:
     async def test_gateway_create_applicant_mock(self):
         from compliance.kyc_provider import KYCGateway
         from compliance.compliance_manager import ComplianceManager
+
         with patch.dict(os.environ, {"APP_ENV": "development", "KYC_PROVIDER": "mock", "KYC_MOCK_DELAY_S": "0"}):
             cm = ComplianceManager()
             gw = KYCGateway(compliance_manager=cm)
@@ -440,6 +478,7 @@ class TestKYCGateway:
     async def test_gateway_check_status(self):
         from compliance.kyc_provider import KYCGateway, VerificationStatus
         from compliance.compliance_manager import ComplianceManager
+
         with patch.dict(os.environ, {"APP_ENV": "development", "KYC_PROVIDER": "mock", "KYC_MOCK_DELAY_S": "0"}):
             cm = ComplianceManager()
             gw = KYCGateway(compliance_manager=cm)
@@ -451,6 +490,7 @@ class TestKYCGateway:
     async def test_gateway_screen_sanctions(self):
         from compliance.kyc_provider import KYCGateway, SanctionsResult
         from compliance.compliance_manager import ComplianceManager
+
         with patch.dict(os.environ, {"APP_ENV": "development", "KYC_PROVIDER": "mock"}):
             cm = ComplianceManager()
             gw = KYCGateway(compliance_manager=cm)
@@ -462,11 +502,13 @@ class TestKYCGateway:
 # compliance/regulatory_reporter.py
 # ===========================================================================
 
+
 @pytest.mark.unit
 class TestRegulatoryReporter:
     @pytest.mark.asyncio
     async def test_submit_prop_firm_suppressed(self):
         from compliance.regulatory_reporter import RegulatoryReporter
+
         with patch.dict(os.environ, {"REGULATORY_PROP_FIRM_MODE": "true"}):
             reporter = RegulatoryReporter()
             record = await reporter.submit({"id": "t1", "symbol": "XAUUSD", "size": 1})
@@ -475,6 +517,7 @@ class TestRegulatoryReporter:
     @pytest.mark.asyncio
     async def test_submit_disabled_suppressed(self):
         from compliance.regulatory_reporter import RegulatoryReporter
+
         with patch.dict(os.environ, {"REGULATORY_REPORTING_ENABLED": "false", "REGULATORY_PROP_FIRM_MODE": "false"}):
             reporter = RegulatoryReporter()
             record = await reporter.submit({"id": "t1", "symbol": "XAUUSD"})
@@ -484,6 +527,7 @@ class TestRegulatoryReporter:
     async def test_submit_http_success(self):
         import compliance.regulatory_reporter as rr_mod
         from compliance.regulatory_reporter import RegulatoryReporter
+
         mock_resp = AsyncMock()
         mock_resp.status = 200
         mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
@@ -492,9 +536,11 @@ class TestRegulatoryReporter:
         mock_session.post = MagicMock(return_value=mock_resp)
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=False)
-        with patch.object(rr_mod, "_REPORTING_ENABLED", True), \
-             patch.object(rr_mod, "_PROP_FIRM_MODE", False), \
-             patch("aiohttp.ClientSession", return_value=mock_session):
+        with (
+            patch.object(rr_mod, "_REPORTING_ENABLED", True),
+            patch.object(rr_mod, "_PROP_FIRM_MODE", False),
+            patch("aiohttp.ClientSession", return_value=mock_session),
+        ):
             reporter = RegulatoryReporter()
             record = await reporter.submit({"id": "t1", "symbol": "XAUUSD", "size": 1})
         assert record.status == "submitted"
@@ -503,6 +549,7 @@ class TestRegulatoryReporter:
     async def test_submit_http_failure_goes_to_dlq(self):
         import compliance.regulatory_reporter as rr_mod
         from compliance.regulatory_reporter import RegulatoryReporter
+
         mock_resp = AsyncMock()
         mock_resp.status = 500
         mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
@@ -511,12 +558,14 @@ class TestRegulatoryReporter:
         mock_session.post = MagicMock(return_value=mock_resp)
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=False)
-        with patch.object(rr_mod, "_REPORTING_ENABLED", True), \
-             patch.object(rr_mod, "_PROP_FIRM_MODE", False), \
-             patch.object(rr_mod, "_RETRY_MAX", 2), \
-             patch.object(rr_mod, "_RETRY_BACKOFF_BASE", 0.0), \
-             patch.object(rr_mod, "_RETRY_BACKOFF_CAP", 0.0), \
-             patch("aiohttp.ClientSession", return_value=mock_session):
+        with (
+            patch.object(rr_mod, "_REPORTING_ENABLED", True),
+            patch.object(rr_mod, "_PROP_FIRM_MODE", False),
+            patch.object(rr_mod, "_RETRY_MAX", 2),
+            patch.object(rr_mod, "_RETRY_BACKOFF_BASE", 0.0),
+            patch.object(rr_mod, "_RETRY_BACKOFF_CAP", 0.0),
+            patch("aiohttp.ClientSession", return_value=mock_session),
+        ):
             reporter = RegulatoryReporter()
             record = await reporter.submit({"id": "t1", "symbol": "XAUUSD", "size": 1})
         assert record.status in ("failed", "dlq")
@@ -524,6 +573,7 @@ class TestRegulatoryReporter:
     def test_get_regulatory_reporter_singleton(self):
         from compliance.regulatory_reporter import get_regulatory_reporter, RegulatoryReporter
         import compliance.regulatory_reporter as rr_mod
+
         rr_mod._reporter = None
         r1 = get_regulatory_reporter()
         r2 = get_regulatory_reporter()
@@ -532,6 +582,7 @@ class TestRegulatoryReporter:
 
     def test_reporter_stats(self):
         from compliance.regulatory_reporter import RegulatoryReporter
+
         reporter = RegulatoryReporter()
         stats = reporter.stats()
         assert "reporting_enabled" in stats
