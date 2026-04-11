@@ -195,3 +195,77 @@ class TestStatus:
         s = e.status()
         assert s["kill_switch"] is False
         assert s["daily_dd"] == pytest.approx(0.0, abs=0.01)
+
+
+
+class TestEdgeCases:
+    def test_daily_drawdown_zero_when_day_start_equity_zero(self):
+        e = _engine()
+        e._day_start_equity = 0.0
+        assert e._daily_drawdown() == pytest.approx(0.0)
+
+    def test_total_drawdown_zero_when_hwm_zero(self):
+        e = _engine()
+        e._high_water_mark = 0.0
+        assert e._total_drawdown() == pytest.approx(0.0)
+
+    def test_send_telegram_alert_no_token_no_crash(self):
+        e = _engine()
+        e._send_telegram_alert("test message")
+
+    def test_send_telegram_alert_with_token_handles_exception(self):
+        from unittest.mock import patch
+        e = _engine()
+        e.cfg.telegram_token = "fake_token"
+        e.cfg.telegram_chat_id = "fake_chat"
+        with patch("risk.compliance.prop_engine.requests.post", side_effect=Exception("network error")):
+            e._send_telegram_alert("test")
+
+    def test_is_weekend_window_friday_before_21_false(self):
+        e = _engine()
+        friday_early = datetime(2025, 1, 3, 18, 0, 0, tzinfo=UTC)
+        assert e._is_weekend_window(friday_early) is False
+
+    def test_is_weekend_window_friday_after_21_true(self):
+        e = _engine()
+        friday_late = datetime(2025, 1, 3, 22, 0, 0, tzinfo=UTC)
+        assert e._is_weekend_window(friday_late) is True
+
+    def test_is_weekend_window_sunday_before_23_true(self):
+        e = _engine()
+        sunday_early = datetime(2025, 1, 5, 10, 0, 0, tzinfo=UTC)
+        assert e._is_weekend_window(sunday_early) is True
+
+    def test_is_weekend_window_sunday_after_23_false(self):
+        e = _engine()
+        sunday_late = datetime(2025, 1, 5, 23, 30, 0, tzinfo=UTC)
+        assert e._is_weekend_window(sunday_late) is False
+
+    def test_weekend_close_blocks_saturday(self):
+        cfg = PropFirmConfig(weekend_close=True, breach_action="pause")
+        e = PropComplianceEngine(config=cfg, initial_equity=100_000.0)
+        saturday = datetime(2025, 1, 4, 12, 0, 0, tzinfo=UTC)
+        allowed, reason = e.before_order(now=saturday)
+        assert allowed is False
+        assert "weekend" in reason.lower()
+
+    def test_in_news_blackout_false_no_events(self):
+        e = _engine()
+        assert e._in_news_blackout(datetime.now(UTC)) is False
+
+    def test_breach_action_pause_sets_paused(self):
+        e = _engine(breach_action="pause")
+        e._breach(BreachType.DAILY_DD, "test breach")
+        assert e._paused is True
+
+    def test_breach_action_liquidate_activates_kill_switch(self):
+        e = _engine(breach_action="liquidate")
+        e._breach(BreachType.MAX_DD, "test breach")
+        assert e.kill_switch.is_active is True
+
+    def test_on_breach_callback_exception_does_not_propagate(self):
+        def bad_cb(bt, msg):
+            raise RuntimeError("boom")
+        e = _engine(breach_action="pause")
+        e._on_breach = bad_cb
+        e._breach(BreachType.DAILY_DD, "test")  # should not raise
