@@ -42,6 +42,7 @@ const ReportingSection       = lazy(() => import('./superadmin/ReportingSection'
 const SecurityInfraSection   = lazy(() => import('./superadmin/SecurityInfraSection'));
 const AuditTrailSection      = lazy(() => import('./superadmin/AuditTrailSection'));
 const SystemHealthSection    = lazy(() => import('./superadmin/SystemHealthSection'));
+const AutoHealingSection     = lazy(() => import('./superadmin/AutoHealingSection'));
 
 // ── Tab definitions ───────────────────────────────────────────────────────────
 
@@ -80,6 +81,7 @@ const TABS: TabDef[] = [
   { id: 'reporting',         label: 'Reporting',         icon: '📊', description: 'Generate & download reports',     accent: '#22c55e',  group: 'ops' },
   { id: 'security-infra',    label: 'Sec. Infra',        icon: '🔧', description: 'SelfHealer, HSM, Antivirus',      accent: '#f97316',  group: 'ops' },
   { id: 'system-health',     label: 'System Health',     icon: '💻', description: 'Services, backups, jobs',         accent: '#06b6d4',  group: 'ops' },
+  { id: 'auto-healing',      label: 'Auto Healing',      icon: '🛡️', description: 'Autonomous healing engine',       accent: '#22c55e',  group: 'ops' },
 ];
 
 const GROUP_LABELS: Record<string, string> = {
@@ -131,6 +133,7 @@ const SuperAdminDashboard: React.FC = () => {
       case 'security-infra':    return <SecurityInfraSection />;
       case 'audit-trail':       return <AuditTrailSection />;
       case 'system-health':     return <SystemHealthSection />;
+      case 'auto-healing':      return <AutoHealingSection />;
       default:                  return null;
     }
   };
