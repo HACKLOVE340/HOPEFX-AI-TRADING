@@ -452,54 +452,67 @@ class AdvancedFeatureEngineer:
             probs = counts / len(orderings)
             entropy = -np.sum(probs * np.log(probs + 1e-10))
 
-            return entropy / np.log(np.math.factorial(order))
+            import math as _math
+            return entropy / np.log(_math.factorial(order))
         except (ValueError, FloatingPointError):
             return 0
 
-    def _calculate_hurst(self, prices: np.ndarray) -> float:
-        """Calculate Hurst exponent"""
+    def _calculate_hurst(self, series: np.ndarray) -> float:
+        """
+        Calculate Hurst exponent via rescaled-range (R/S) analysis.
+
+        Accepts a returns series (not raw prices) — the rolling window in
+        _add_fractal_features passes df["returns"] which is already a
+        pct-change series, so we work directly on it.
+        """
         try:
-            if len(prices) < 10:
+            if len(series) < 10:
                 return 0.5
 
-            returns = np.diff(np.log(prices))
-            cumulative = np.cumsum(returns)
+            # series is already a returns array
+            returns = np.asarray(series, dtype=float)
+            # Replace any NaN/inf with 0 to avoid propagation
+            returns = np.where(np.isfinite(returns), returns, 0.0)
 
-            # Rescaled range analysis
-            mean = np.mean(cumulative)
-            deviations = cumulative - mean
+            cumulative = np.cumsum(returns - np.mean(returns))
 
-            max_dev = np.max(deviations)
-            min_dev = np.min(deviations)
+            max_dev = np.max(cumulative)
+            min_dev = np.min(cumulative)
             range_val = max_dev - min_dev
 
             std_dev = np.std(returns, ddof=1)
 
-            if std_dev > 0 and range_val > 0:
-                hurst = np.log(range_val / std_dev) / np.log(len(prices))
-                return max(0, min(hurst, 1))
+            if std_dev > 0 and range_val > 0 and len(returns) > 1:
+                hurst = np.log(range_val / std_dev) / np.log(len(returns))
+                return float(np.clip(hurst, 0.0, 1.0))
 
             return 0.5
-        except (ValueError, FloatingPointError):
+        except (ValueError, FloatingPointError, ZeroDivisionError):
             return 0.5
 
-    def _calculate_dfa(self, prices: np.ndarray) -> float:
-        """Calculate Detrended Fluctuation Analysis"""
+    def _calculate_dfa(self, series: np.ndarray) -> float:
+        """
+        Detrended Fluctuation Analysis approximation.
+
+        Accepts a returns series (same convention as _calculate_hurst).
+        Returns the detrended fluctuation value (normalised to [0, 1]).
+        """
         try:
-            if len(prices) < 10:
+            if len(series) < 10:
                 return 0.5
 
-            # Simple DFA approximation
-            returns = np.diff(np.log(prices))
+            returns = np.asarray(series, dtype=float)
+            returns = np.where(np.isfinite(returns), returns, 0.0)
+
             cumulative = np.cumsum(returns - np.mean(returns))
 
-            # Fit polynomial trend
+            # Fit linear trend and compute residual fluctuation
             x = np.arange(len(cumulative))
             coeffs = np.polyfit(x, cumulative, 1)
             trend = np.polyval(coeffs, x)
 
-            fluctuation = np.sqrt(np.mean((cumulative - trend) ** 2))
-
-            return fluctuation
-        except (ValueError, FloatingPointError):
+            fluctuation = float(np.sqrt(np.mean((cumulative - trend) ** 2)))
+            # Normalise to a bounded [0,1] range via tanh
+            return float(np.tanh(fluctuation))
+        except (ValueError, FloatingPointError, np.linalg.LinAlgError):
             return 0.5
