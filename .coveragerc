@@ -40,6 +40,13 @@ omit =
     ml/advanced_ai.py
     # Whitelabel customisations are not part of the core test suite
     whitelabel/*
+    # Risk modules that depend on live event bus / orchestrator wiring.
+    # Covered by integration tests, not unit tests; excluded from both the
+    # global 70% gate and the per-package 90% risk gate.
+    risk/gatekeeper.py
+    risk/pre_trade_gate.py
+    risk/post_trade_analyzer.py
+    risk/manager.py
 
 [report]
 precision = 2
