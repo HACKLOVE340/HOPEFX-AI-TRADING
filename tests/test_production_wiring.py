@@ -437,7 +437,7 @@ class TestLiveTradingGate:
 class TestStatusEndpoints:
     @pytest.fixture
     def client(self):
-        os.environ.setdefault("SECURITY_JWT_SECRET", "test-secret-key-32chars-minimum!!")
+        os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
         os.environ.setdefault("APP_ENV", "development")
         from fastapi import FastAPI
         from fastapi.testclient import TestClient

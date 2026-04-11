@@ -31,7 +31,7 @@ import pytest
 import yaml
 
 os.environ.setdefault("APP_ENV", "test")
-os.environ.setdefault("SECURITY_JWT_SECRET", "test-secret-key-for-deployment-tests-32chars")
+os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
 
 ROOT = Path(__file__).parents[2]
 

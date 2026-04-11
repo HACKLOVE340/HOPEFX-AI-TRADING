@@ -10,7 +10,7 @@ Tests for the mobile module.
 import os
 
 # Ensure JWT secret is set before importing mobile.api (which validates it at import)
-os.environ.setdefault("SECURITY_JWT_SECRET", "test-jwt-secret-minimum-32-characters-long!!")
+os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
 
 from mobile.api import MobileAPI
 from mobile.push_notifications import PushNotificationManager

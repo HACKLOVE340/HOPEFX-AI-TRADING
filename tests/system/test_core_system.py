@@ -28,7 +28,7 @@ import os
 import pytest
 
 os.environ.setdefault("APP_ENV", "test")
-os.environ.setdefault("SECURITY_JWT_SECRET", "test-secret-key-for-core-system-tests-32chars")
+os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
 
 from core.app_state import AppState
 from core.component_registry import ComponentRegistry

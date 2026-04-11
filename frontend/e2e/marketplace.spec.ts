@@ -22,10 +22,7 @@ test.describe('Marketplace', () => {
     const errors = captureConsoleErrors(page);
     await page.goto('/marketplace');
     await page.waitForLoadState('networkidle');
-    const critical = errors.filter(
-      (e) => !e.includes('401') && !e.includes('403') && !e.includes('net::ERR_')
-    );
-    expect(critical).toHaveLength(0);
+    expect(errors).toHaveLength(0);
   });
 
   test('page title is visible', async ({ page }) => {
@@ -73,10 +70,7 @@ test.describe('Leaderboard', () => {
     await page.goto('/leaderboard');
     await page.waitForLoadState('networkidle');
 
-    const critical = errors.filter(
-      (e) => !e.includes('401') && !e.includes('403') && !e.includes('net::ERR_')
-    );
-    expect(critical).toHaveLength(0);
+    expect(errors).toHaveLength(0);
 
     // Should show leaderboard heading
     await expect(page.locator('text=/leaderboard/i').first()).toBeVisible({ timeout: 8_000 });

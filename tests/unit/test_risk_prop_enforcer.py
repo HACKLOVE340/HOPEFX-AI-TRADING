@@ -13,8 +13,17 @@ import pytest
 from risk.compliance.prop_enforcer import BreachType, PropConfig, PropEnforcer
 
 
-def _enforcer(tmp_path, **kwargs) -> PropEnforcer:
-    return PropEnforcer(config_path=tmp_path / "missing.json", **kwargs)
+def _enforcer(tmp_path, weekend_close: bool = False, **kwargs) -> PropEnforcer:
+    """Create a PropEnforcer for testing.
+
+    weekend_close defaults to False so tests pass on any day of the week.
+    Tests that specifically exercise the weekend gate pass weekend_close=True.
+    """
+    import json
+
+    cfg_path = tmp_path / "test_prop_config.json"
+    cfg_path.write_text(json.dumps({"weekend_close": weekend_close}))
+    return PropEnforcer(config_path=cfg_path, **kwargs)
 
 
 class TestPropConfig:
