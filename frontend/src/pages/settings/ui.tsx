@@ -144,19 +144,25 @@ export const Card: React.FC<CardProps> = ({ children, style, danger }) => (
 
 interface SectionHeaderProps {
   title: string;
+  /** Long-form description shown below the title. */
   description?: string;
+  /** Alias for `description` — accepted for backwards compatibility. */
+  desc?: string;
   icon?: string;
 }
 
-export const SectionHeader: React.FC<SectionHeaderProps> = ({ title, description, icon }) => (
-  <div style={{ marginBottom: 24 }}>
-    <h2 style={{ fontSize: 20, fontWeight: 700, color: '#f8fafc', margin: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
-      {icon && <span style={{ fontSize: 22 }}>{icon}</span>}
-      {title}
-    </h2>
-    {description && <p style={{ fontSize: 14, color: '#64748b', marginTop: 6, marginBottom: 0 }}>{description}</p>}
-  </div>
-);
+export const SectionHeader: React.FC<SectionHeaderProps> = ({ title, description, desc, icon }) => {
+  const subtitle = description ?? desc;
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <h2 style={{ fontSize: 20, fontWeight: 700, color: '#f8fafc', margin: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+        {icon && <span style={{ fontSize: 22 }}>{icon}</span>}
+        {title}
+      </h2>
+      {subtitle && <p style={{ fontSize: 14, color: '#64748b', marginTop: 6, marginBottom: 0 }}>{subtitle}</p>}
+    </div>
+  );
+};
 
 // ── Button ────────────────────────────────────────────────────────────────────
 

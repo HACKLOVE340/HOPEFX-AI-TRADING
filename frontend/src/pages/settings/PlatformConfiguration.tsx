@@ -840,7 +840,7 @@ const NotifyTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig
 const KillSwitchTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <Card danger>
     <SectionHeader icon="🛑" title="Global Kill Switch" desc="kill_switch.py — immediately halts all trading across all pods" />
-    <div style={{ padding: '12px 0', marginBottom: 12, background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '12px 16px' }}>
+    <div style={{ marginBottom: 12, background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '12px 16px' }}>
       <div style={{ fontSize: 13, color: '#fca5a5', fontWeight: 600 }}>
         ⚠️ Activating the kill switch immediately stops all live trading, cancels pending orders, and blocks new order submission across all running pods.
       </div>
