@@ -299,6 +299,7 @@ class TestCheckRiskLimits:
     @pytest.mark.asyncio
     async def test_order_rate_limit_triggers_circuit(self):
         from datetime import datetime, timezone
+
         cb = _make_cb()
         # Fill orders_last_minute with recent timestamps
         now = datetime.now(timezone.utc)
@@ -393,10 +394,18 @@ class TestBrokerLevelCancelAll:
     def test_generic_fallback_calls_cancel_all_orders(self):
         # Use a plain object so MagicMock doesn't auto-create _ib
         class _Broker:
-            def get_balance(self): return 100_000.0
-            def get_positions(self): return []
-            def cancel_all_orders(self): self._cancelled = True
-            def get_daily_pnl(self): return 0.0
+            def get_balance(self):
+                return 100_000.0
+
+            def get_positions(self):
+                return []
+
+            def cancel_all_orders(self):
+                self._cancelled = True
+
+            def get_daily_pnl(self):
+                return 0.0
+
         broker = _Broker()
         cb = CircuitBreaker(broker=broker, redis_client=None)
         cb._broker_level_cancel_all("TEST")
@@ -626,6 +635,7 @@ class TestShutdown:
     @pytest.mark.asyncio
     async def test_shutdown_cancels_monitoring_task(self):
         import asyncio
+
         cb = _make_cb()
 
         async def _dummy():
@@ -669,7 +679,6 @@ class TestGetLastBreachReason:
 class TestMonitoringLoop:
     @pytest.mark.asyncio
     async def test_monitoring_loop_handles_exception(self):
-        import asyncio
         cb = _make_cb()
         cb._shutdown = False
         call_count = {"n": 0}
@@ -694,7 +703,6 @@ class TestMonitoringLoop:
 class TestScheduleRecovery:
     @pytest.mark.asyncio
     async def test_manual_override_skips_recovery(self):
-        import asyncio
         cb = _make_cb()
         cb.state = CircuitState.OPEN
         cb._manual_override = True
@@ -706,7 +714,6 @@ class TestScheduleRecovery:
 
     @pytest.mark.asyncio
     async def test_recovery_transitions_to_half_open(self):
-        import asyncio
         cb = _make_cb()
         cb.state = CircuitState.OPEN
         cb._manual_override = False
@@ -723,8 +730,8 @@ class TestScheduleRecovery:
 class TestCheckRecovery:
     @pytest.mark.asyncio
     async def test_recovery_closes_circuit_when_drawdown_recovered(self):
-        import asyncio
         from unittest.mock import patch
+
         cb = _make_cb()
         cb.state = CircuitState.HALF_OPEN
         cb.current_drawdown = 0.001  # well below 50% of daily limit
@@ -735,8 +742,8 @@ class TestCheckRecovery:
 
     @pytest.mark.asyncio
     async def test_recovery_reopens_circuit_when_drawdown_persists(self):
-        import asyncio
         from unittest.mock import patch
+
         cb = _make_cb()
         cb.state = CircuitState.HALF_OPEN
         cb.current_drawdown = 0.05  # above 50% of daily limit (0.03 * 0.5 = 0.015)
@@ -746,8 +753,8 @@ class TestCheckRecovery:
 
     @pytest.mark.asyncio
     async def test_check_recovery_exits_if_not_half_open(self):
-        import asyncio
         from unittest.mock import patch
+
         cb = _make_cb()
         cb.state = CircuitState.CLOSED  # not HALF_OPEN
         with patch("asyncio.sleep", return_value=None):
@@ -764,6 +771,7 @@ class TestManualOverrideDisable:
     @pytest.mark.asyncio
     async def test_disable_override_triggers_risk_check(self):
         import asyncio
+
         cb = _make_cb()
         cb.manual_override(enable=True, reason="test", authorized_by="admin")
         # Disable — this creates an asyncio task for _check_risk_limits
@@ -782,6 +790,7 @@ class TestSendCircuitBreakerTelegram:
     def test_no_alert_engine_no_crash(self):
         from unittest.mock import patch
         from risk.circuit_breakers import _send_circuit_breaker_telegram
+
         # Patch get_alert_engine inside the notifications module
         with patch("notifications.get_alert_engine", return_value=None):
             _send_circuit_breaker_telegram("TEST", "test message")
@@ -789,8 +798,10 @@ class TestSendCircuitBreakerTelegram:
     def test_import_error_no_crash(self):
         import sys
         from risk.circuit_breakers import _send_circuit_breaker_telegram
+
         # Temporarily replace notifications with a broken module
         import types
+
         broken = types.ModuleType("notifications")
         broken.get_alert_engine = None  # not callable
         old = sys.modules.get("notifications")

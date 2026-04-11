@@ -197,7 +197,6 @@ class TestStatus:
         assert s["daily_dd"] == pytest.approx(0.0, abs=0.01)
 
 
-
 class TestEdgeCases:
     def test_daily_drawdown_zero_when_day_start_equity_zero(self):
         e = _engine()
@@ -215,6 +214,7 @@ class TestEdgeCases:
 
     def test_send_telegram_alert_with_token_handles_exception(self):
         from unittest.mock import patch
+
         e = _engine()
         e.cfg.telegram_token = "fake_token"
         e.cfg.telegram_chat_id = "fake_chat"
@@ -266,6 +266,7 @@ class TestEdgeCases:
     def test_on_breach_callback_exception_does_not_propagate(self):
         def bad_cb(bt, msg):
             raise RuntimeError("boom")
+
         e = _engine(breach_action="pause")
         e._on_breach = bad_cb
         e._breach(BreachType.DAILY_DD, "test")  # should not raise

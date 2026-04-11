@@ -686,9 +686,11 @@ class TestGetCurrentExposureDataLayer:
 
         # Make risk_manager not have get_current_exposure so we fall through
         mock_rm = MagicMock(spec=[])
-        with patch("risk.manager.risk_manager", mock_rm):
-            with patch.dict("sys.modules", {"data_layer.orchestrator": mock_dl_module}):
-                exposure = await orch.get_current_exposure()
+        with (
+            patch("risk.manager.risk_manager", mock_rm),
+            patch.dict("sys.modules", {"data_layer.orchestrator": mock_dl_module}),
+        ):
+            exposure = await orch.get_current_exposure()
         assert exposure == pytest.approx(0.42)
 
     @pytest.mark.asyncio
@@ -704,9 +706,11 @@ class TestGetCurrentExposureDataLayer:
         mock_dl_module.orchestrator = mock_dl_orch
 
         mock_rm = MagicMock(spec=[])
-        with patch("risk.manager.risk_manager", mock_rm):
-            with patch.dict("sys.modules", {"data_layer.orchestrator": mock_dl_module}):
-                exposure = await orch.get_current_exposure()
+        with (
+            patch("risk.manager.risk_manager", mock_rm),
+            patch.dict("sys.modules", {"data_layer.orchestrator": mock_dl_module}),
+        ):
+            exposure = await orch.get_current_exposure()
         assert 0.0 <= exposure <= 1.0
 
     @pytest.mark.asyncio
@@ -721,9 +725,11 @@ class TestGetCurrentExposureDataLayer:
         mock_dl_module.orchestrator = mock_dl_orch
 
         mock_rm = MagicMock(spec=[])
-        with patch("risk.manager.risk_manager", mock_rm):
-            with patch.dict("sys.modules", {"data_layer.orchestrator": mock_dl_module}):
-                exposure = await orch.get_current_exposure()
+        with (
+            patch("risk.manager.risk_manager", mock_rm),
+            patch.dict("sys.modules", {"data_layer.orchestrator": mock_dl_module}),
+        ):
+            exposure = await orch.get_current_exposure()
         assert 0.0 <= exposure <= 1.0
 
 
@@ -759,7 +765,6 @@ class TestFastAPIRouterEndpoints:
     async def test_set_max_risk_endpoint(self, tmp_path):
         try:
             from risk.orchestrator import create_orchestrator_router
-            from pydantic import BaseModel
         except ImportError:
             pytest.skip("FastAPI not available")
 
