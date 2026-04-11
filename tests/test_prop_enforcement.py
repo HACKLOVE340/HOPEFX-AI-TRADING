@@ -285,6 +285,7 @@ class TestPropEnforcer80PctAlert:
             max_dd=0.10,
             telegram_token="test-token",
             telegram_chat_id="test-chat",
+            weekend_close=False,  # disable weekend gate so tests pass on any day
         )
         enforcer._lock = threading.Lock()
         enforcer._start_balance = 0.0

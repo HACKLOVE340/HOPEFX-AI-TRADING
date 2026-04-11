@@ -27,7 +27,7 @@ import jwt
 import pytest
 
 os.environ.setdefault("APP_ENV", "test")
-os.environ.setdefault("SECURITY_JWT_SECRET", "test-secret-key-for-api-routing-tests-32chars")
+os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
 
 try:
     from fastapi.testclient import TestClient
@@ -40,7 +40,9 @@ except (ImportError, ModuleNotFoundError, SystemExit) as e:
 if _import_error is not None:
     pytest.skip(f"Skipping API routing tests: {_import_error}", allow_module_level=True)
 
-_JWT_SECRET = os.environ.get("SECURITY_JWT_SECRET", "test-secret-key-for-api-routing-tests-32chars")
+
+def _get_jwt_secret() -> str:
+    return os.environ.get("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
 
 
 # ── Token helpers ─────────────────────────────────────────────────────────────
@@ -49,7 +51,7 @@ _JWT_SECRET = os.environ.get("SECURITY_JWT_SECRET", "test-secret-key-for-api-rou
 def _mint_token(role: str = "user", sub: str = "test-user", exp_offset: int = 3600) -> str:
     return jwt.encode(
         {"sub": sub, "role": role, "exp": int(time.time()) + exp_offset},
-        _JWT_SECRET,
+        _get_jwt_secret(),
         algorithm="HS256",
     )
 
@@ -141,7 +143,7 @@ class TestAuthEndpoints:
     def test_expired_token_returns_401(self, client):
         expired = jwt.encode(
             {"sub": "test-user", "role": "user", "exp": int(time.time()) - 3600},
-            _JWT_SECRET,
+            _get_jwt_secret(),
             algorithm="HS256",
         )
         r = client.get("/api/auth/me", headers={"Authorization": f"Bearer {expired}"})
@@ -558,7 +560,7 @@ class TestRoleBasedAccess:
     def test_superadmin_token_accepted(self, client):
         token = jwt.encode(
             {"sub": "superadmin", "role": "superadmin", "exp": int(time.time()) + 3600},
-            _JWT_SECRET,
+            _get_jwt_secret(),
             algorithm="HS256",
         )
         r = client.get(
@@ -601,9 +603,36 @@ class TestErrorHandling:
 # ── 16. WebSocket connectivity test ──────────────────────────────────────────
 
 
+@pytest.fixture(autouse=False)
+def _reset_ws_limiter():
+    """Reset the WebSocket connection limiter state before each WS test.
+
+    The in-process limiter accumulates connection counts across tests because
+    TestClient WS sessions may not trigger the handler's finally/release path.
+    Clearing _open_conns and _rate_window ensures each test starts clean.
+    """
+    try:
+        import rate_limiting.websocket_limiter as _wsl
+
+        limiter = _wsl.get_ws_limiter()
+        limiter._open_conns.clear()
+        limiter._rate_window.clear()
+    except Exception:
+        pass
+    yield
+    try:
+        import rate_limiting.websocket_limiter as _wsl
+
+        limiter = _wsl.get_ws_limiter()
+        limiter._open_conns.clear()
+        limiter._rate_window.clear()
+    except Exception:
+        pass
+
+
 @pytest.mark.integration
 class TestWebSocketConnectivity:
-    def test_ws_live_connection_closes_without_auth(self, client):
+    def test_ws_live_connection_closes_without_auth(self, client, _reset_ws_limiter):
         """WS connection without auth message must be closed with code 4001."""
         with client.websocket_connect("/ws/live") as ws:
             try:
@@ -616,7 +645,7 @@ class TestWebSocketConnectivity:
             except Exception:
                 pass  # Connection closed — expected
 
-    def test_ws_live_connection_with_valid_auth(self, client):
+    def test_ws_live_connection_with_valid_auth(self, client, _reset_ws_limiter):
         """WS connection with valid JWT auth must succeed."""
         token = _mint_token("trader")
         with client.websocket_connect("/ws/live") as ws:
@@ -628,7 +657,7 @@ class TestWebSocketConnectivity:
             except Exception:
                 pass  # Timeout or close — acceptable in test env
 
-    def test_ws_live_ping_pong(self, client):
+    def test_ws_live_ping_pong(self, client, _reset_ws_limiter):
         """WS ping message must receive a response."""
         token = _mint_token("trader")
         with client.websocket_connect("/ws/live") as ws:

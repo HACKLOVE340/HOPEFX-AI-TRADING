@@ -31,7 +31,7 @@ import jwt
 import pytest
 
 os.environ.setdefault("APP_ENV", "test")
-os.environ.setdefault("SECURITY_JWT_SECRET", "test-secret-key-for-dashboard-realtime-32chars")
+os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
 
 try:
     from fastapi.testclient import TestClient
@@ -44,13 +44,15 @@ except (ImportError, ModuleNotFoundError, SystemExit) as e:
 if _import_error is not None:
     pytest.skip(f"Skipping dashboard tests: {_import_error}", allow_module_level=True)
 
-_JWT_SECRET = os.environ.get("SECURITY_JWT_SECRET", "test-secret-key-for-dashboard-realtime-32chars")
+
+def _get_jwt_secret() -> str:
+    return os.environ.get("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
 
 
 def _mint_token(role: str = "trader") -> str:
     return jwt.encode(
         {"sub": "test-trader", "role": role, "exp": int(time.time()) + 3600},
-        _JWT_SECRET,
+        _get_jwt_secret(),
         algorithm="HS256",
     )
 

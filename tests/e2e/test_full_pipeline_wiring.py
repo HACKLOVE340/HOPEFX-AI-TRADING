@@ -32,7 +32,7 @@ import pandas as pd
 import pytest
 
 os.environ.setdefault("APP_ENV", "test")
-os.environ.setdefault("SECURITY_JWT_SECRET", "test-secret-key-for-e2e-pipeline-wiring-32c")
+os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
 
 UTC = timezone.utc
 
