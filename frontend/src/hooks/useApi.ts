@@ -392,6 +392,14 @@ export const superadminApi = {
   // ── Security Infrastructure ───────────────────────────────────────────────
   selfHealerStatus:  ()                        => api.get('/superadmin/security-infra/self-healer'),
   triggerIntegrityScan: ()                     => api.post('/superadmin/security-infra/self-healer/scan'),
+
+  // ── Autonomous Healing Engine ─────────────────────────────────────────────
+  autoHealConfig:        ()                    => api.get('/superadmin/auto-healing/config'),
+  autoHealSaveConfig:    (cfg: object)         => api.put('/superadmin/auto-healing/config', cfg),
+  autoHealTestIndex:     ()                    => api.get('/superadmin/auto-healing/tests/index'),
+  autoHealReindexTests:  ()                    => api.post('/superadmin/auto-healing/tests/reindex'),
+  autoHealRebuildBaseline: ()                  => api.post('/superadmin/auto-healing/baseline/rebuild'),
+  autoHealStatus:        ()                    => api.get('/superadmin/auto-healing/status'),
   antivirusStatus:   ()                        => api.get('/superadmin/security-infra/antivirus'),
   triggerAvScan:     (path?: string)           => api.post('/superadmin/security-infra/antivirus/scan', { path }),
   hsmStatus:         ()                        => api.get('/superadmin/security-infra/hsm'),
