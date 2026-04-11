@@ -146,3 +146,21 @@ class TestCheckSelfTrade:
         stp.add_resting_order(_order("r1", side="sell", price=1900.0, strategy_id="stratA"))
         result = stp.check_self_trade(_order("n1", side="buy", price=1900.0, strategy_id="stratB"))
         assert result is None
+
+    def test_group_level_same_strategy_crosses(self):
+        stp = SelfTradePrevention(prevention_level="group")
+        stp.add_resting_order(_order("r1", side="sell", price=1900.0, strategy_id="stratA"))
+        result = stp.check_self_trade(_order("n1", side="buy", price=1900.0, strategy_id="stratA"))
+        assert result is not None  # same strategy_id → same group entity
+
+    def test_group_level_different_strategy_no_cross(self):
+        stp = SelfTradePrevention(prevention_level="group")
+        stp.add_resting_order(_order("r1", side="sell", price=1900.0, strategy_id="stratA"))
+        result = stp.check_self_trade(_order("n1", side="buy", price=1900.0, strategy_id="stratB"))
+        assert result is None
+
+    def test_unknown_level_no_entity_match(self):
+        stp = SelfTradePrevention(prevention_level="unknown_xyz")
+        stp.add_resting_order(_order("r1", side="sell", price=1900.0, account_id="acc1"))
+        result = stp.check_self_trade(_order("n1", side="buy", price=1900.0, account_id="acc1"))
+        assert result is None  # unknown level → _same_entity returns False
