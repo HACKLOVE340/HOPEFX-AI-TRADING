@@ -1,0 +1,62 @@
+<?xml version="1.0"?>
+<!--
+  PMD ruleset for HOPEFX-AI-TRADING.
+  Used by Codacy and local PMD runs to enforce code quality on any Java/Kotlin
+  shim code (e.g. execution/cpp_shim JNI bridge, future Android client).
+
+  Only rules relevant to the project are enabled; the full PMD catalogue is
+  not imported to avoid false-positive noise on generated or vendored code.
+-->
+<ruleset name="HOPEFX PMD Rules"
+         xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0
+                             https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+
+  <description>
+    HOPEFX-AI-TRADING PMD ruleset.
+    Enforces best-practice rules for any JVM-language code in the repository.
+  </description>
+
+  <!-- ── Best practices ──────────────────────────────────────────────────── -->
+  <rule ref="category/java/bestpractices.xml/UnusedImports"/>
+  <rule ref="category/java/bestpractices.xml/UnusedLocalVariable"/>
+  <rule ref="category/java/bestpractices.xml/UnusedPrivateField"/>
+  <rule ref="category/java/bestpractices.xml/UnusedPrivateMethod"/>
+  <rule ref="category/java/bestpractices.xml/AvoidReassigningParameters"/>
+  <rule ref="category/java/bestpractices.xml/SystemPrintln"/>
+
+  <!-- ── Code style ──────────────────────────────────────────────────────── -->
+  <rule ref="category/java/codestyle.xml/UnnecessaryImport"/>
+  <rule ref="category/java/codestyle.xml/ExtendsObject"/>
+  <rule ref="category/java/codestyle.xml/ForLoopShouldBeWhileLoop"/>
+  <rule ref="category/java/codestyle.xml/UnnecessaryReturn"/>
+
+  <!-- ── Design ──────────────────────────────────────────────────────────── -->
+  <rule ref="category/java/design.xml/SimplifyBooleanReturns"/>
+  <rule ref="category/java/design.xml/SimplifyBooleanExpressions"/>
+  <rule ref="category/java/design.xml/AvoidDeeplyNestedIfStmts">
+    <properties>
+      <!-- Allow up to 4 levels; trading logic can be legitimately nested -->
+      <property name="problemDepth" value="4"/>
+    </properties>
+  </rule>
+
+  <!-- ── Error-prone ─────────────────────────────────────────────────────── -->
+  <rule ref="category/java/errorprone.xml/EmptyCatchBlock"/>
+  <rule ref="category/java/errorprone.xml/EmptyIfStmt"/>
+  <rule ref="category/java/errorprone.xml/EmptyWhileStmt"/>
+  <rule ref="category/java/errorprone.xml/EmptyTryBlock"/>
+  <rule ref="category/java/errorprone.xml/EmptyFinallyBlock"/>
+  <rule ref="category/java/errorprone.xml/AvoidBranchingStatementAsLastInLoop"/>
+  <rule ref="category/java/errorprone.xml/CloseResource"/>
+
+  <!-- ── Performance ─────────────────────────────────────────────────────── -->
+  <rule ref="category/java/performance.xml/StringInstantiation"/>
+  <rule ref="category/java/performance.xml/StringToString"/>
+  <rule ref="category/java/performance.xml/UseStringBufferForStringAppends"/>
+
+  <!-- ── Security ────────────────────────────────────────────────────────── -->
+  <rule ref="category/java/security.xml"/>
+
+</ruleset>
