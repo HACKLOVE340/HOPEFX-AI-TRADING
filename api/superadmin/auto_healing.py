@@ -226,16 +226,19 @@ async def get_test_index(
 async def reindex_tests(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
-    """Trigger a full codebase test scan in the background."""
+    """Trigger a full codebase test scan using async_reindex (non-blocking)."""
     import asyncio
 
     _log_superadmin_action(user, "auto_healing_test_reindex")
 
     async def _run_scan() -> None:
         try:
-            from security.test_scanner import get_test_index
-            get_test_index(force_rescan=True)
-            logger.info("auto_healing: test re-index complete")
+            from security.test_scanner import async_reindex
+            result = await async_reindex()
+            logger.info(
+                "auto_healing: test re-index complete — %d tests in %d files",
+                result.get("total", 0), result.get("files", 0),
+            )
         except Exception as exc:
             logger.warning("auto_healing: test re-index failed: %s", exc)
 
@@ -332,14 +335,58 @@ async def get_quarantine_log(
 async def run_tests_now(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
-    """Trigger an immediate test run and return the result."""
+    """
+    Trigger an immediate test run for all enabled categories.
+
+    Delegates to the live SelfHealer when available (uses its configured
+    categories, timeouts, and parallel flag).  Falls back to
+    run_category_tests() in a thread-pool executor so the event loop is
+    never blocked by the synchronous subprocess call.
+    """
+    import asyncio
+
     _log_superadmin_action(user, "auto_healing_test_run_manual")
+
+    # Prefer the live healer — it already knows which categories are enabled
     try:
         from security.self_healer import get_healer
         result = await get_healer().run_tests_now(trigger="manual")
         return {"ok": True, **result}
     except Exception as exc:
-        logger.warning("auto_healing run_tests_now: %s", exc)
+        logger.debug("auto_healing run_tests_now via healer failed: %s — falling back", exc)
+
+    # Fallback: load config, run via test_scanner in executor
+    try:
+        cfg = _load_config()
+        enabled_cats = [
+            cat for cat, on in cfg.get("test_categories", {}).items() if on
+        ]
+        if not enabled_cats:
+            return {
+                "ok": True, "passed": 0, "failed": 0,
+                "output": "No test categories enabled in config.",
+                "ts": _utcnow().isoformat(),
+            }
+
+        from security.test_scanner import run_category_tests
+
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: run_category_tests(
+                categories=enabled_cats,
+                timeout_sec=cfg.get("global_test_timeout_sec", 600),
+                parallel=cfg.get("parallel_tests", True),
+                per_suite_timeout=cfg.get("test_timeout_sec", 120),
+            ),
+        )
+        return {
+            "ok": True,
+            "ts": _utcnow().isoformat(),
+            **result,
+        }
+    except Exception as exc:
+        logger.warning("auto_healing run_tests_now fallback: %s", exc)
         return {"ok": False, "error": str(exc), "ts": _utcnow().isoformat()}
 
 
