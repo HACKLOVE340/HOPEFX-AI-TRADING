@@ -232,6 +232,7 @@ jobs:
         run: |
           pytest tests/ -m "not slow" -q \
             --cov=risk --cov-branch \
+            --cov-config=.coveragerc \
             --cov-report=term-missing \
             --cov-fail-under=90 \
             --asyncio-mode=auto \

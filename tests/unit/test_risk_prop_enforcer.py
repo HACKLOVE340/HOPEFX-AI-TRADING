@@ -190,3 +190,218 @@ class TestBreachCallback:
         assert "halted" in s
         assert "current_equity" in s
         assert "daily_dd_pct" in s
+
+
+class TestPropConfigNestedSchema:
+    """Cover the nested enforcement/firms schema path in PropConfig.from_file."""
+
+    def test_nested_enforcement_schema(self, tmp_path):
+        p = tmp_path / "prop.json"
+        p.write_text(
+            json.dumps(
+                {
+                    "enforcement": {
+                        "max_daily_drawdown_pct": 3.0,
+                        "max_total_drawdown_pct": 7.0,
+                    },
+                    "weekend_close": False,
+                }
+            )
+        )
+        cfg = PropConfig.from_file(p)
+        assert cfg.daily_dd == pytest.approx(0.03)
+        assert cfg.max_dd == pytest.approx(0.07)
+
+    def test_nested_firms_schema(self, tmp_path):
+        p = tmp_path / "prop.json"
+        p.write_text(
+            json.dumps(
+                {
+                    "active_firm": "ftmo",
+                    "firms": {
+                        "ftmo": {
+                            "drawdown": {
+                                "max_daily_drawdown_pct": 4.0,
+                                "max_total_drawdown_pct": 8.0,
+                            },
+                            "news_trading": {"blackout_minutes_before_news": 10},
+                            "overnight_holding": {"weekend_holding_allowed": False},
+                        }
+                    },
+                }
+            )
+        )
+        cfg = PropConfig.from_file(p)
+        # weekend_holding_allowed=False → weekend_close=True
+        assert cfg.weekend_close is True
+
+    def test_weekend_close_fallback_from_firm_cfg(self, tmp_path):
+        """No 'weekend_close' key → derive from overnight_holding."""
+        p = tmp_path / "prop.json"
+        p.write_text(
+            json.dumps(
+                {
+                    "active_firm": "goat",
+                    "firms": {
+                        "goat": {
+                            "overnight_holding": {"weekend_holding_allowed": True},
+                        }
+                    },
+                }
+            )
+        )
+        cfg = PropConfig.from_file(p)
+        assert cfg.weekend_close is False
+
+    def test_telegram_from_env(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "tok123")
+        monkeypatch.setenv("TELEGRAM_CHAT_ID", "chat456")
+        p = tmp_path / "prop.json"
+        p.write_text(json.dumps({"daily_dd": 0.05}))
+        cfg = PropConfig.from_file(p)
+        assert cfg.telegram_token == "tok123"
+        assert cfg.telegram_chat_id == "chat456"
+
+
+class TestUpdateBalanceAlerts:
+    """Cover the 80% drawdown warning alert paths."""
+
+    def test_daily_dd_80pct_alert_fires_once(self, tmp_path):
+        """Alert fires when daily DD reaches 80% of limit (non-halting)."""
+        e = _enforcer(tmp_path)
+        e.update_balance(100_000.0, 100_000.0)
+        # 80% of 5% daily limit = 4% drawdown → equity at 96_000
+        e.update_balance(96_000.0, 100_000.0)
+        assert e._daily_alert_sent is True
+        # Second call should not re-fire
+        e.update_balance(96_000.0, 100_000.0)
+        assert e._daily_alert_sent is True
+
+    def test_total_dd_80pct_alert_fires_once(self, tmp_path):
+        """Alert fires when total DD reaches 80% of max_dd limit."""
+        e = _enforcer(tmp_path)
+        e.update_balance(100_000.0, 100_000.0)
+        # 80% of 10% total limit = 8% drawdown → equity at 92_000
+        e.update_balance(92_000.0, 100_000.0)
+        assert e._total_alert_sent is True
+
+    def test_daily_alert_not_fired_below_threshold(self, tmp_path):
+        """Alert does NOT fire when DD is below 80% of limit."""
+        e = _enforcer(tmp_path)
+        e.update_balance(100_000.0, 100_000.0)
+        # Only 2% drawdown (limit is 5%, 80% threshold is 4%)
+        e.update_balance(98_000.0, 100_000.0)
+        assert e._daily_alert_sent is False
+
+    def test_daily_reset_clears_total_alert_flag(self, tmp_path):
+        """daily_reset clears _daily_alert_sent but NOT _total_alert_sent."""
+        e = _enforcer(tmp_path)
+        e._daily_alert_sent = True
+        e._total_alert_sent = True
+        e.daily_reset(new_equity=100_000.0)
+        assert e._daily_alert_sent is False
+        # total_alert_sent is NOT reset by daily_reset (by design)
+        assert e._total_alert_sent is True
+
+    def test_daily_reset_does_not_clear_total_dd_halt(self, tmp_path):
+        """daily_reset only clears DAILY_DD halts, not TOTAL_DD halts."""
+        e = _enforcer(tmp_path)
+        e._halted = True
+        e._halt_reason = "TOTAL_DD breach: ..."
+        e.daily_reset(new_equity=100_000.0)
+        # Total-DD halt must persist
+        assert e._halted is True
+
+
+class TestKillSwitchCallback:
+    """Cover kill_switch_fn invocation and exception handling."""
+
+    def test_kill_switch_fn_called_on_halt(self, tmp_path):
+        calls = []
+        e = _enforcer(tmp_path, kill_switch_fn=lambda msg: calls.append(msg))
+        e.update_balance(100_000.0, 100_000.0)
+        e.update_balance(94_000.0, 100_000.0)
+        e.before_execute()
+        assert len(calls) >= 1
+
+    def test_kill_switch_fn_exception_does_not_propagate(self, tmp_path):
+        def bad_ks(msg):
+            raise RuntimeError("ks exploded")
+
+        e = _enforcer(tmp_path, kill_switch_fn=bad_ks)
+        e.update_balance(100_000.0, 100_000.0)
+        e.update_balance(94_000.0, 100_000.0)
+        # Should not raise
+        ok, reason = e.before_execute()
+        assert ok is False
+
+
+class TestTelegramAlerts:
+    """Cover _send_telegram_warning and _send_telegram_alert with token set."""
+
+    def test_send_telegram_warning_with_token_handles_network_error(self, tmp_path):
+        """With token+chat_id set, network failure is swallowed."""
+        cfg_path = tmp_path / "prop.json"
+        cfg_path.write_text(
+            json.dumps(
+                {
+                    "telegram_token": "fake_token",
+                    "telegram_chat_id": "fake_chat",
+                    "weekend_close": False,
+                }
+            )
+        )
+        e = PropEnforcer(config_path=cfg_path)
+        # Should not raise even though the URL is invalid
+        e._send_telegram_warning("test warning detail")
+
+    def test_send_telegram_alert_with_token_handles_network_error(self, tmp_path):
+        """With token+chat_id set, network failure is swallowed."""
+        cfg_path = tmp_path / "prop.json"
+        cfg_path.write_text(
+            json.dumps(
+                {
+                    "telegram_token": "fake_token",
+                    "telegram_chat_id": "fake_chat",
+                    "weekend_close": False,
+                }
+            )
+        )
+        e = PropEnforcer(config_path=cfg_path)
+        e._send_telegram_alert(BreachType.DAILY_DD, "test breach detail")
+
+    def test_send_telegram_alert_all_breach_types(self, tmp_path):
+        """Exercise all BreachType emoji branches."""
+        cfg_path = tmp_path / "prop.json"
+        cfg_path.write_text(
+            json.dumps(
+                {
+                    "telegram_token": "fake_token",
+                    "telegram_chat_id": "fake_chat",
+                    "weekend_close": False,
+                }
+            )
+        )
+        e = PropEnforcer(config_path=cfg_path)
+        for bt in BreachType:
+            e._send_telegram_alert(bt, f"detail for {bt.name}")
+
+
+class TestGetEnforcerSingleton:
+    """Cover the module-level get_enforcer() singleton."""
+
+    def test_get_enforcer_returns_instance(self):
+        from risk.compliance.prop_enforcer import get_enforcer
+
+        inst = get_enforcer()
+        assert isinstance(inst, PropEnforcer)
+
+    def test_get_enforcer_returns_same_instance(self):
+        from risk.compliance import prop_enforcer as _mod
+        from risk.compliance.prop_enforcer import get_enforcer
+
+        # Reset singleton so we get a fresh one
+        _mod._default_enforcer = None
+        a = get_enforcer()
+        b = get_enforcer()
+        assert a is b
