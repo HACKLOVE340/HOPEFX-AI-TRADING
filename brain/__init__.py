@@ -21,11 +21,20 @@ Legacy components:
 from brain.hopefx_brain import BrainDecision, HOPEFXBrain, Regime, get_brain
 from brain.nuclear_supervisor import NuclearHopeFXSupervisor, get_nuclear_supervisor
 
+# StrategyBrain lives in strategies.strategy_brain; re-export here so that
+# callers using `from brain import StrategyBrain` continue to work.
+try:
+    from strategies.strategy_brain import StrategyBrain  # noqa: F401
+except Exception as _e:
+    import logging as _l
+    _l.getLogger(__name__).debug("StrategyBrain unavailable: %s", _e)
+
 __all__ = [
     "BrainDecision",
     "HOPEFXBrain",
     "NuclearHopeFXSupervisor",
     "Regime",
+    "StrategyBrain",
     "get_brain",
     "get_nuclear_supervisor",
 ]

@@ -61,3 +61,24 @@ __all__ = [
 ]
 
 __version__ = "1.0.0"
+
+# ── Aliases expected by external callers ──────────────────────────────────────
+try:
+    from .gatekeeper import Gatekeeper  # noqa: F401
+except Exception as _e:
+    import logging as _l; _l.getLogger(__name__).debug("Gatekeeper unavailable: %s", _e)
+
+try:
+    from .drawdown_tracker import DrawdownTracker  # noqa: F401
+except Exception as _e:
+    import logging as _l; _l.getLogger(__name__).debug("DrawdownTracker unavailable: %s", _e)
+
+try:
+    from .position_sizing import PositionSizer  # noqa: F401
+except Exception as _e:
+    import logging as _l; _l.getLogger(__name__).debug("PositionSizer unavailable: %s", _e)
+
+try:
+    from .pre_trade_gate import PreTradeGate  # noqa: F401
+except Exception as _e:
+    import logging as _l; _l.getLogger(__name__).debug("PreTradeGate unavailable: %s", _e)

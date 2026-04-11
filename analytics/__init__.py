@@ -45,6 +45,11 @@ __all__ = [
     "simulation_engine",
 ]
 
+# ── Canonical alias ───────────────────────────────────────────────────────────
+# AnalyticsEngine is the unified entry point expected by external callers.
+# It wraps PerformanceAnalytics which provides the full analytics surface.
+AnalyticsEngine = PerformanceAnalytics
+
 # Module metadata
 __version__ = "2.0.0"
 __author__ = "HOPEFX Development Team"
