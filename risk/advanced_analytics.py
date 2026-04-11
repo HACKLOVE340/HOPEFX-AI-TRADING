@@ -1458,6 +1458,168 @@ class AdvancedRiskAnalytics:
         }
 
     # ------------------------------------------------------------------
+    # Portfolio-level VaR (multi-asset, correlated)
+    # ------------------------------------------------------------------
+
+    def calculate_portfolio_var(
+        self,
+        positions: dict[str, dict[str, Any]],
+        confidence_level: float | None = None,
+        time_horizon: int = 1,
+        method: str = "historical",
+    ) -> VaRResult:
+        """
+        Calculate portfolio-level VaR across multiple correlated positions.
+
+        Each position entry must contain:
+            - ``returns``: NDArray of historical daily returns
+            - ``value``:   Current market value (dollar)
+
+        The portfolio return series is constructed as a value-weighted
+        combination of individual position returns, then VaR is computed
+        on the aggregate series using the requested method.
+
+        Args:
+            positions: Dict keyed by asset name.
+            confidence_level: VaR confidence (default from config).
+            time_horizon: Horizon in days (use calculate_var_multiday for >1).
+            method: "historical" | "parametric" | "monte_carlo"
+
+        Returns:
+            VaRResult for the combined portfolio.
+        """
+        confidence_level = confidence_level or self.var_confidence
+
+        if not positions:
+            raise ValueError("positions dict must not be empty")
+
+        names = list(positions.keys())
+        total_value = sum(positions[n].get("value", 0.0) for n in names)
+        if total_value <= 0:
+            raise ValueError("Total portfolio value must be positive")
+
+        # Build value-weighted portfolio return series
+        min_len = min(len(np.asarray(positions[n]["returns"])) for n in names)
+        if min_len < 2:
+            raise ValueError("Each position must have at least 2 return observations")
+
+        portfolio_returns = np.zeros(min_len, dtype=np.float64)
+        for name in names:
+            weight = positions[name].get("value", 0.0) / total_value
+            ret = np.asarray(positions[name]["returns"], dtype=np.float64)[-min_len:]
+            portfolio_returns += weight * ret
+
+        if method == "parametric":
+            return self.calculate_var_parametric(
+                portfolio_returns,
+                confidence_level=confidence_level,
+                time_horizon=time_horizon,
+                portfolio_value=total_value,
+            )
+        if method == "monte_carlo":
+            return self.calculate_var_monte_carlo(
+                portfolio_returns,
+                confidence_level=confidence_level,
+                time_horizon=time_horizon,
+                portfolio_value=total_value,
+                use_historical_bootstrap=True,
+            )
+        # Default: historical
+        if time_horizon > 1:
+            return self.calculate_var_multiday(
+                portfolio_returns,
+                confidence_level=confidence_level,
+                time_horizon=time_horizon,
+                portfolio_value=total_value,
+            )
+        return self.calculate_var_historical(
+            portfolio_returns,
+            confidence_level=confidence_level,
+            time_horizon=time_horizon,
+            portfolio_value=total_value,
+        )
+
+    # ------------------------------------------------------------------
+    # Risk report
+    # ------------------------------------------------------------------
+
+    def get_risk_report(
+        self,
+        returns: NDArray[np.float64],
+        equity_curve: NDArray[np.float64] | None = None,
+        portfolio_value: float | None = None,
+        symbol: str = "PORTFOLIO",
+    ) -> dict[str, Any]:
+        """
+        Generate a full production risk report.
+
+        Combines all metrics into a single dict suitable for API responses,
+        dashboards, and compliance logging.
+
+        Args:
+            returns: Daily return series.
+            equity_curve: Optional equity curve (computed from returns if absent).
+            portfolio_value: Optional current portfolio value for dollar VaR.
+            symbol: Label for the report.
+
+        Returns:
+            Dict with all risk metrics, VaR results, drawdown analysis,
+            stress test summary, and metadata.
+        """
+        returns = np.asarray(returns, dtype=np.float64)
+        ec: NDArray[np.float64] = (
+            equity_curve
+            if equity_curve is not None
+            else np.asarray(
+                np.cumprod(1 + returns) * (portfolio_value or 10_000.0),
+                dtype=np.float64,
+            )
+        )
+
+        metrics = self.calculate_all_metrics(returns, ec, portfolio_value)
+
+        # Stress test summary (informational — uses default scenarios)
+        dummy_portfolio = {
+            symbol: {
+                "value": portfolio_value or float(ec[-1]),
+                "asset_class": "gold" if "XAU" in symbol.upper() else "equities",
+            }
+        }
+        stress_results: list[StressTestResult] = self.run_all_stress_tests(dummy_portfolio)
+        stress_summary = {
+            r.scenario_name: {
+                "portfolio_impact_pct": r.portfolio_impact,
+                "dollar_impact": r.dollar_impact,
+                "risk_level": r.risk_level,
+            }
+            for r in stress_results
+        }
+
+        return {
+            "symbol": symbol,
+            "generated_at": datetime.now(UTC).isoformat(),
+            "portfolio_value": portfolio_value or float(ec[-1]),
+            "metrics": metrics,
+            "stress_scenarios": stress_summary,
+            "data_points": len(returns),
+            "var_enforcement": {
+                "multiday_enforced": ENFORCE_MULTIDAY_VAR,
+                "env_var": "HOPEFX_VAR_ENFORCE_MULTIDAY",
+            },
+        }
+
+    # ------------------------------------------------------------------
+    # Drawdown alias (analyze_drawdown → analyze_drawdowns)
+    # ------------------------------------------------------------------
+
+    def analyze_drawdown(
+        self,
+        equity_curve: NDArray[np.float64],
+    ) -> "DrawdownAnalysis":
+        """Alias for analyze_drawdowns (singular form used by some callers)."""
+        return self.analyze_drawdowns(equity_curve)
+
+    # ------------------------------------------------------------------
     # Convenience aliases expected by tests
     # ------------------------------------------------------------------
 
