@@ -39,7 +39,10 @@ __all__ = [
     "create_ml_router",
     "get_active_model",
     "get_advanced_predictor",
+    "get_inference_engine",
     "get_model_version",
+    "get_online_learner",
+    "get_predictor",
 ]
 
 # Module metadata
@@ -537,6 +540,45 @@ except Exception as _live_inf_exc:
     )
 
     def get_advanced_predictor():  # type: ignore[misc]
+        return None
+
+
+# ── Inference engine singleton ────────────────────────────────────────────────
+try:
+    from ml.inference_engine import get_inference_engine
+except Exception as _inf_eng_exc:
+    _ml_logger.warning(
+        "ml.inference_engine unavailable: %s",
+        _inf_eng_exc,
+    )
+
+    def get_inference_engine():  # type: ignore[misc]
+        return None
+
+
+# ── Online learner singleton ──────────────────────────────────────────────────
+try:
+    from ml.online_learner import get_online_learner
+except Exception as _ol_exc:
+    _ml_logger.warning(
+        "ml.online_learner unavailable: %s",
+        _ol_exc,
+    )
+
+    def get_online_learner(symbol: str = "XAUUSD"):  # type: ignore[misc]
+        return None
+
+
+# ── Advanced predictor (AdvancedPredictor singleton) ─────────────────────────
+try:
+    from ml.advanced_predictor import get_predictor
+except Exception as _ap_exc:
+    _ml_logger.warning(
+        "ml.advanced_predictor unavailable: %s",
+        _ap_exc,
+    )
+
+    def get_predictor():  # type: ignore[misc]
         return None
 
 

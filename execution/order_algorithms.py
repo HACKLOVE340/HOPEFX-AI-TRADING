@@ -463,3 +463,8 @@ class VWAPExecutor:
             "avg_price": round(avg_price, 4),
             "failed_slices": failed,
         }
+
+
+# ── Aliases for consistent naming ─────────────────────────────────────────────
+TWAPOrder = TWAPExecutor
+VWAPOrder = VWAPExecutor

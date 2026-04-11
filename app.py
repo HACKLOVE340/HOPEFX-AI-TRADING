@@ -259,6 +259,66 @@ try:
 except Exception as _superadmin_router_err:
     logger.warning("SuperAdmin router failed to register: %s", _superadmin_router_err)
 
+# ── Decision Engine router (/decision) ───────────────────────────────────────
+try:
+    from core.decision.HOPEFXDecisionEngine import create_decision_router
+    from core.app_state import app_state as _app_state
+
+    _decision_engine = getattr(_app_state, "decision_engine", None)
+    if _decision_engine is not None:
+        app.include_router(create_decision_router(_decision_engine))
+        logger.info("Decision engine router registered at /decision")
+    else:
+        # Engine not yet initialised (startup not complete) — register a
+        # deferred router that resolves the engine from app_state at request time.
+        from fastapi import APIRouter as _APIRouter
+
+        _decision_stub = _APIRouter(prefix="/decision", tags=["Decision Engine"])
+
+        @_decision_stub.get("/status")
+        async def _decision_status():
+            eng = getattr(_app_state, "decision_engine", None)
+            if eng is None:
+                return {"engine": "HOPEFXDecisionEngine", "status": "not_initialised"}
+            return eng.status()
+
+        @_decision_stub.post("/tick")
+        async def _decision_tick(payload: dict):
+            eng = getattr(_app_state, "decision_engine", None)
+            if eng is None:
+                from fastapi import HTTPException
+                raise HTTPException(503, "Decision engine not initialised")
+            result = await eng.process_tick(payload, symbol=payload.get("symbol", "XAUUSD"))
+            return result.to_dict()
+
+        @_decision_stub.post("/reset")
+        async def _decision_reset():
+            eng = getattr(_app_state, "decision_engine", None)
+            if eng is not None:
+                eng.reset_metrics()
+            return {"reset": True}
+
+        app.include_router(_decision_stub)
+        logger.info("Decision engine stub router registered at /decision (engine pending init)")
+except Exception as _decision_router_err:
+    logger.warning("Decision engine router failed to register: %s", _decision_router_err)
+
+# ── Hyperopt router (/api/hyperopt) ──────────────────────────────────────────
+try:
+    from backtesting.hyperopt import create_hyperopt_router as _create_hyperopt_router
+    app.include_router(_create_hyperopt_router(), prefix="/api")
+    logger.info("Hyperopt router registered at /api/hyperopt")
+except Exception as _hyperopt_router_err:
+    logger.warning("Hyperopt router failed to register: %s", _hyperopt_router_err)
+
+# ── Replay / stress-test router (/replay) ────────────────────────────────────
+try:
+    from backtesting.replay_connector import create_replay_router as _create_replay_router
+    app.include_router(_create_replay_router())
+    logger.info("Replay backtest router registered at /replay")
+except Exception as _replay_router_err:
+    logger.warning("Replay router failed to register: %s", _replay_router_err)
+
 # Prometheus /metrics endpoint + background sync to MetricsRegistry
 try:
     from prometheus_monitoring import setup_prometheus_monitoring

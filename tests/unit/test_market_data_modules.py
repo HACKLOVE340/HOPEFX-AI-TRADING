@@ -864,7 +864,7 @@ class TestPolygonL2Feed:
         import asyncio
         from market_data.order_book import PolygonL2Feed
         feed = PolygonL2Feed()
-        asyncio.get_event_loop().run_until_complete(feed.stop())
+        asyncio.run(feed.stop())
 
     def test_start_raises_without_api_key(self):
         import asyncio
@@ -872,7 +872,7 @@ class TestPolygonL2Feed:
         feed = PolygonL2Feed()
         feed._api_key = ""
         with pytest.raises(RuntimeError, match="POLYGON_API_KEY"):
-            asyncio.get_event_loop().run_until_complete(feed.start(["XAU_USD"]))
+            asyncio.run(feed.start(["XAU_USD"]))
 
 
 class TestOrderBookFeed:
@@ -892,14 +892,14 @@ class TestOrderBookFeed:
         import asyncio
         from market_data.order_book import OrderBookFeed
         feed = OrderBookFeed()
-        asyncio.get_event_loop().run_until_complete(feed.stop())
+        asyncio.run(feed.stop())
 
     def test_start_unknown_provider_raises(self):
         import asyncio
         from market_data.order_book import OrderBookFeed
         feed = OrderBookFeed(provider="unknown_provider")
         with pytest.raises(RuntimeError, match="Unknown L2_PROVIDER"):
-            asyncio.get_event_loop().run_until_complete(feed.start(["XAU_USD"]))
+            asyncio.run(feed.start(["XAU_USD"]))
 
 
 class TestGetOrderBookFeed:
@@ -1199,7 +1199,7 @@ class TestFeedHandlerAdditional:
         from market_data.feed_handler import ExchangeFeed
         feed = ExchangeFeed("test", "ws://localhost")
         # Should complete without error
-        asyncio.get_event_loop().run_until_complete(feed._send_subscription())
+        asyncio.run(feed._send_subscription())
 
     @pytest.mark.asyncio
     async def test_exchange_feed_receive_loop_text_message(self):
@@ -1580,7 +1580,7 @@ class TestOrderBookAdditional:
         monkeypatch.setenv("APP_ENV", "development")
         feed = MockL2Feed()
         assert feed is not None
-        asyncio.get_event_loop().run_until_complete(feed.stop())
+        asyncio.run(feed.stop())
 
     def test_mock_l2_feed_get_snapshot_none_before_start(self, monkeypatch):
         from market_data.order_book import MockL2Feed
@@ -1596,7 +1596,7 @@ class TestOrderBookAdditional:
         feed = OrderBookFeed(provider="mock")
         # start will create MockL2Feed and call start — but _generate is async
         # We just verify it doesn't raise on stop
-        asyncio.get_event_loop().run_until_complete(feed.stop())
+        asyncio.run(feed.stop())
 
     def test_spread_history_tracked(self):
         from market_data.order_book import OrderBook

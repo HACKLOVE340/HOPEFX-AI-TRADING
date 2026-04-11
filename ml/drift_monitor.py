@@ -212,6 +212,38 @@ class DriftMonitor:
         """
         self._stats: dict[str, dict[str, Any]] = train_stats
 
+    @classmethod
+    def from_reference_arrays(
+        cls,
+        reference_data: dict[str, "np.ndarray"],
+        n_bins: int = _PSI_BINS,
+    ) -> "DriftMonitor":
+        """
+        Build a DriftMonitor directly from reference numpy arrays.
+
+        Args:
+            reference_data: dict mapping feature_name → 1-D numpy array of
+                            training values.
+            n_bins: Number of percentile bins for PSI computation.
+
+        Returns:
+            DriftMonitor instance ready to call compute().
+        """
+        train_stats: dict[str, dict[str, Any]] = {}
+        for feat, arr in reference_data.items():
+            arr = np.asarray(arr, dtype=float)
+            if arr.size == 0:
+                continue
+            percentiles = np.linspace(0, 100, n_bins + 1)
+            bins = np.percentile(arr, percentiles).tolist()
+            train_stats[feat] = {
+                "mean": float(np.mean(arr)),
+                "std": float(np.std(arr)),
+                "percentiles": bins,
+                "reference": arr.tolist(),
+            }
+        return cls(train_stats)
+
     # ── Construction helpers ──────────────────────────────────────────────────
 
     @classmethod

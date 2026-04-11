@@ -135,8 +135,82 @@ class SecureVault:
         return self._pwd_context.verify(password, password_hash)
 
     def rotate_key(self, new_password: str) -> None:
-        """Rotate encryption key (re-encrypt all data)."""
-        # Implementation for key rotation with data migration
+        """Rotate the master encryption key.
+
+        Steps:
+        1. Validate the vault is currently initialised (old key present).
+        2. Derive a new Fernet key from *new_password*.
+        3. Store the new key in the keyring under a temporary name so that a
+           crash between steps cannot leave the vault in an unrecoverable state.
+        4. Atomically swap the active Fernet instance to the new key.
+        5. Overwrite the canonical keyring entry with the new key.
+        6. Remove the temporary keyring entry.
+
+        The vault does not maintain a registry of encrypted blobs — callers
+        that store Fernet tokens externally (e.g. in the database) must
+        re-encrypt those tokens themselves after rotation.  This method
+        provides the new Fernet instance via the vault so callers can call
+        ``vault.encrypt`` / ``vault.decrypt`` with the new key immediately
+        after this method returns.
+
+        Raises:
+            VaultError: if the vault is not initialised or key derivation fails.
+        """
+        import logging as _logging
+
+        _log = _logging.getLogger(__name__)
+
+        if not self._fernet:
+            raise VaultError("Vault not initialised — call initialize() before rotate_key()")
+
+        if not new_password:
+            raise VaultError("new_password must be a non-empty string")
+
+        _tmp_key_name = f"{self._key_name}_rotating"
+
+        try:
+            # 1. Derive new key
+            new_key: bytes = self._derive_key(new_password)
+            new_fernet = Fernet(new_key)
+
+            # 2. Write to temporary keyring slot first (crash-safe)
+            keyring.set_password(self._service_name, _tmp_key_name, new_key.decode())
+
+            # 3. Swap active Fernet — from this point all encrypt/decrypt uses
+            #    the new key.  Any in-flight decrypt of old tokens will fail
+            #    with InvalidToken; callers must handle that gracefully.
+            old_fernet = self._fernet
+            self._fernet = new_fernet
+
+            # 4. Persist new key to canonical keyring slot
+            keyring.set_password(self._service_name, self._key_name, new_key.decode())
+
+            # 5. Remove temporary slot
+            try:
+                keyring.delete_password(self._service_name, _tmp_key_name)
+            except Exception as cleanup_err:
+                # Non-fatal — the canonical slot is already updated.
+                _log.warning(
+                    "rotate_key: could not remove temporary keyring entry '%s': %s",
+                    _tmp_key_name,
+                    cleanup_err,
+                )
+
+            # 6. Zero old key from memory
+            del old_fernet
+
+            _log.info("SecureVault.rotate_key: key rotation completed successfully")
+
+        except VaultError:
+            raise
+        except Exception as exc:
+            # Attempt to clean up the temporary slot on failure
+            try:
+                keyring.delete_password(self._service_name, _tmp_key_name)
+            except Exception:
+                pass
+            _log.error("rotate_key failed: %s", exc, exc_info=True)
+            raise VaultError(f"Key rotation failed: {exc}") from exc
 
     def secure_delete(self) -> None:
         """Securely wipe vault keys from keyring and memory."""

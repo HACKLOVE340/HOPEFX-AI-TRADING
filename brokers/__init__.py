@@ -1274,4 +1274,75 @@ try:
 except Exception as _exc:
     logger.debug("IBKRBroker unavailable: %s", _exc)
 
+# ── Additional broker connectors ──────────────────────────────────────────────
+try:
+    from brokers.oanda_stream import OandaStreamClient, OANDAStream  # noqa: F401
+except Exception as _exc:
+    logger.debug("OandaStreamClient unavailable: %s", _exc)
+
+try:
+    from brokers.alpaca import AlpacaBroker, AlpacaConnector  # noqa: F401
+except Exception as _exc:
+    logger.debug("AlpacaBroker unavailable: %s", _exc)
+
+try:
+    from brokers.binance import BinanceBroker, BinanceConnector  # noqa: F401
+except Exception as _exc:
+    logger.debug("BinanceBroker unavailable: %s", _exc)
+
+try:
+    from brokers.bybit_connector import BybitConnector, ByBitConnector  # noqa: F401
+except Exception as _exc:
+    logger.debug("BybitConnector unavailable: %s", _exc)
+
+try:
+    from brokers.ccxt_connector import CCXTConnector  # noqa: F401
+except Exception as _exc:
+    logger.debug("CCXTConnector unavailable: %s", _exc)
+
+try:
+    from brokers.ibkr_connector import IBKRConnector  # noqa: F401
+except Exception as _exc:
+    logger.debug("IBKRConnector unavailable: %s", _exc)
+
+try:
+    from brokers.ibkr_fix_bridge import IBKRFIXBridge  # noqa: F401
+except Exception as _exc:
+    logger.debug("IBKRFIXBridge unavailable: %s", _exc)
+
+try:
+    from brokers.ohlcv_store import OHLCVStore  # noqa: F401
+except Exception as _exc:
+    logger.debug("OHLCVStore unavailable: %s", _exc)
+
+try:
+    from brokers.smart_router import SmartOrderRouter  # noqa: F401
+except Exception as _exc:
+    logger.debug("SmartOrderRouter unavailable: %s", _exc)
+
+try:
+    from brokers.advanced_orders import AdvancedOrderManager  # noqa: F401
+except Exception as _exc:
+    logger.debug("AdvancedOrderManager unavailable: %s", _exc)
+
+try:
+    from brokers.manager import BrokerManager  # noqa: F401
+except Exception as _exc:
+    logger.debug("BrokerManager unavailable: %s", _exc)
+
+try:
+    from brokers.oanda import OandaBroker  # noqa: F401
+except Exception as _exc:
+    logger.debug("OandaBroker unavailable: %s", _exc)
+
+try:
+    from brokers.ibkr import IBKRBroker as IBKRBrokerLegacy  # noqa: F401
+except Exception as _exc:
+    logger.debug("IBKRBrokerLegacy unavailable: %s", _exc)
+
+try:
+    from brokers.mt5 import MT5Broker as MT5BrokerConnector  # noqa: F401
+except Exception as _exc:
+    logger.debug("MT5BrokerConnector unavailable: %s", _exc)
+
 __version__ = "1.0.0"

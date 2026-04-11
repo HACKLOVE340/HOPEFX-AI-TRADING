@@ -604,3 +604,7 @@ class BinanceConnector(BrokerConnector):
         """Format quantity according to symbol's LOT_SIZE filter"""
         # Simplified - in production, should fetch exchange info for precise formatting
         return f"{quantity:.8f}".rstrip("0").rstrip(".")
+
+
+# Alias for consistent naming across the codebase
+BinanceBroker = BinanceConnector

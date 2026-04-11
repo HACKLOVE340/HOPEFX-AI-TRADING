@@ -417,6 +417,283 @@ class HyperoptEngine:
         except ImportError:
             return None
 
+    # ── Study persistence ────────────────────────────────────────────────────
+
+    def save_study(self, path: str) -> None:
+        """
+        Persist the completed Optuna study to a SQLite database at *path*.
+
+        The study can be reloaded with :meth:`load_study` and resumed with
+        additional trials without re-running completed ones.
+
+        Args:
+            path: File path for the SQLite DB (e.g. ``"studies/rsi.db"``).
+        """
+        import optuna
+
+        if self._study is None:
+            raise RuntimeError("No study to save — call run() first")
+
+        storage = f"sqlite:///{path}"
+        loaded = optuna.load_study(study_name=self.study_name, storage=storage)
+        # Copy trials from in-memory study to persistent storage
+        for trial in self._study.trials:
+            if trial.state == optuna.trial.TrialState.COMPLETE:
+                loaded.add_trial(trial)
+        logger.info("Saved study '%s' (%d trials) → %s", self.study_name, len(self._study.trials), path)
+
+    def load_study(self, path: str) -> "HyperoptResult":
+        """
+        Load a previously saved study from *path* and return its best result.
+
+        The loaded study is stored in ``self._study`` so that additional
+        :meth:`run` calls will warm-start from the existing trials.
+
+        Args:
+            path: SQLite DB path written by :meth:`save_study`.
+
+        Returns:
+            HyperoptResult from the best trial in the loaded study.
+        """
+        import optuna
+
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+        storage = f"sqlite:///{path}"
+        self._study = optuna.load_study(study_name=self.study_name, storage=storage)
+        best = self._study.best_trial
+        all_trials = [
+            {"number": t.number, "value": t.value, "params": t.params, "state": str(t.state)}
+            for t in self._study.trials
+        ]
+        result = HyperoptResult(
+            best_params=best.params,
+            best_value=best.value,
+            metric=self.metric,
+            n_trials=len(self._study.trials),
+            duration_seconds=0.0,
+            all_trials=all_trials,
+            study_name=self.study_name,
+        )
+        logger.info("Loaded study '%s' (%d trials) from %s", self.study_name, len(self._study.trials), path)
+        return result
+
+    # ── Walk-forward optimization ────────────────────────────────────────────
+
+    def walk_forward_optimize(
+        self,
+        n_splits: int = 5,
+        train_ratio: float = 0.7,
+        n_trials_per_fold: int | None = None,
+    ) -> "WalkForwardResult":
+        """
+        Walk-forward optimization — prevents in-sample overfitting.
+
+        Splits ``market_data`` into *n_splits* anchored windows.  For each
+        window the in-sample portion is optimised with Optuna and the
+        out-of-sample portion is evaluated with the best parameters.
+
+        Args:
+            n_splits: Number of walk-forward folds.
+            train_ratio: Fraction of each window used for training.
+            n_trials_per_fold: Optuna trials per fold (defaults to
+                ``self.n_trials // n_splits``, minimum 10).
+
+        Returns:
+            WalkForwardResult with per-fold metrics and aggregate statistics.
+        """
+        try:
+            import optuna
+
+            optuna.logging.set_verbosity(optuna.logging.WARNING)
+        except ImportError:
+            raise ImportError("optuna is required. pip install optuna") from None
+
+        n_trials_per_fold = n_trials_per_fold or max(10, self.n_trials // n_splits)
+        df = self.market_data
+        n = len(df)
+        window = n // n_splits
+
+        fold_results: list[dict[str, Any]] = []
+        t0 = time.time()
+
+        for fold in range(n_splits):
+            fold_start = fold * window
+            fold_end = fold_start + window if fold < n_splits - 1 else n
+            fold_df = df.iloc[fold_start:fold_end].copy()
+
+            split_idx = int(len(fold_df) * train_ratio)
+            if split_idx < 20 or len(fold_df) - split_idx < 5:
+                logger.warning("Walk-forward fold %d: insufficient data, skipping", fold)
+                continue
+
+            train_df = fold_df.iloc[:split_idx]
+            test_df = fold_df.iloc[split_idx:]
+
+            # Optimise on train
+            import optuna
+
+            sampler = optuna.samplers.TPESampler(seed=self.seed + fold)
+            study = optuna.create_study(direction=self.direction, sampler=sampler)
+
+            orig_data = self.market_data
+            self.market_data = train_df
+            study.optimize(self._objective, n_trials=n_trials_per_fold, show_progress_bar=False)
+            self.market_data = orig_data
+
+            best_params = study.best_trial.params
+            train_value = study.best_trial.value
+
+            # Evaluate on test
+            self.market_data = test_df
+            test_value = self._backtest_objective(best_params) if not self.custom_objective else self.custom_objective(best_params, test_df)
+            self.market_data = orig_data
+
+            fold_results.append(
+                {
+                    "fold": fold,
+                    "train_start": int(fold_start),
+                    "train_end": int(fold_start + split_idx),
+                    "test_start": int(fold_start + split_idx),
+                    "test_end": int(fold_end),
+                    "best_params": best_params,
+                    "train_value": float(train_value),
+                    "test_value": float(test_value) if test_value is not None else float("nan"),
+                }
+            )
+            logger.info(
+                "Walk-forward fold %d/%d: train_%s=%.4f test_%s=%.4f params=%s",
+                fold + 1, n_splits, self.metric, train_value, self.metric, test_value or 0, best_params,
+            )
+
+        return WalkForwardResult(
+            metric=self.metric,
+            n_splits=n_splits,
+            train_ratio=train_ratio,
+            fold_results=fold_results,
+            duration_seconds=time.time() - t0,
+        )
+
+    # ── Cross-validation ─────────────────────────────────────────────────────
+
+    def cross_validate(
+        self,
+        params: dict[str, Any],
+        n_splits: int = 5,
+    ) -> "CrossValidationResult":
+        """
+        Evaluate a fixed parameter set across *n_splits* time-series folds.
+
+        Uses a non-shuffled, forward-chaining split to preserve temporal order.
+        Each fold trains on all data up to the split point and tests on the
+        next segment — identical to sklearn's ``TimeSeriesSplit``.
+
+        Args:
+            params: Parameter dict to evaluate (e.g. from a prior hyperopt run).
+            n_splits: Number of CV folds.
+
+        Returns:
+            CrossValidationResult with per-fold and aggregate metric values.
+        """
+        df = self.market_data
+        n = len(df)
+        fold_size = n // (n_splits + 1)
+
+        fold_values: list[float] = []
+        t0 = time.time()
+
+        for fold in range(n_splits):
+            test_start = (fold + 1) * fold_size
+            test_end = test_start + fold_size if fold < n_splits - 1 else n
+            test_df = df.iloc[test_start:test_end].copy()
+
+            if len(test_df) < 10:
+                continue
+
+            orig_data = self.market_data
+            self.market_data = test_df
+            val = self._backtest_objective(params) if not self.custom_objective else self.custom_objective(params, test_df)
+            self.market_data = orig_data
+
+            fold_values.append(float(val) if val is not None else float("nan"))
+
+        valid = [v for v in fold_values if not (v != v)]  # filter NaN
+        return CrossValidationResult(
+            params=params,
+            metric=self.metric,
+            n_splits=n_splits,
+            fold_values=fold_values,
+            mean_value=float(np.mean(valid)) if valid else float("nan"),
+            std_value=float(np.std(valid)) if valid else float("nan"),
+            duration_seconds=time.time() - t0,
+        )
+
+
+# ── Walk-forward and CV result dataclasses ───────────────────────────────────
+
+
+@dataclass
+class WalkForwardResult:
+    """Result of a walk-forward optimization run."""
+
+    metric: str
+    n_splits: int
+    train_ratio: float
+    fold_results: list[dict[str, Any]]
+    duration_seconds: float
+
+    def mean_test_value(self) -> float:
+        vals = [f["test_value"] for f in self.fold_results if f["test_value"] == f["test_value"]]
+        return float(np.mean(vals)) if vals else float("nan")
+
+    def std_test_value(self) -> float:
+        vals = [f["test_value"] for f in self.fold_results if f["test_value"] == f["test_value"]]
+        return float(np.std(vals)) if vals else float("nan")
+
+    def best_fold_params(self) -> dict[str, Any]:
+        """Return params from the fold with the highest test value."""
+        if not self.fold_results:
+            return {}
+        return max(self.fold_results, key=lambda f: f["test_value"])["best_params"]
+
+    def summary(self) -> str:
+        lines = [
+            f"Walk-Forward Result — {self.metric}",
+            f"  Folds        : {self.n_splits}",
+            f"  Mean test    : {self.mean_test_value():.4f}",
+            f"  Std test     : {self.std_test_value():.4f}",
+            f"  Duration     : {self.duration_seconds:.1f}s",
+        ]
+        for f in self.fold_results:
+            lines.append(
+                f"  Fold {f['fold']}: train={f['train_value']:.4f} "
+                f"test={f['test_value']:.4f} params={f['best_params']}"
+            )
+        return "\n".join(lines)
+
+
+@dataclass
+class CrossValidationResult:
+    """Result of a cross-validation run."""
+
+    params: dict[str, Any]
+    metric: str
+    n_splits: int
+    fold_values: list[float]
+    mean_value: float
+    std_value: float
+    duration_seconds: float
+
+    def summary(self) -> str:
+        return (
+            f"Cross-Validation — {self.metric}\n"
+            f"  Params  : {self.params}\n"
+            f"  Folds   : {self.n_splits}\n"
+            f"  Mean    : {self.mean_value:.4f}\n"
+            f"  Std     : {self.std_value:.4f}\n"
+            f"  Values  : {[f'{v:.4f}' for v in self.fold_values]}\n"
+            f"  Duration: {self.duration_seconds:.1f}s"
+        )
+
 
 # ── REST API router ──────────────────────────────────────────────────────────
 

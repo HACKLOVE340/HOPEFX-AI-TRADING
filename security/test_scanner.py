@@ -346,6 +346,49 @@ async def async_reindex(root: Path = PROJECT_ROOT) -> dict[str, Any]:
         _reindex_lock = False
 
 
+# ── Plugin availability helpers ───────────────────────────────────────────────
+
+def _pytest_available() -> bool:
+    """Return True if pytest is importable."""
+    import importlib.util
+    return importlib.util.find_spec('pytest') is not None
+
+
+def _xdist_available() -> bool:
+    """Return True if pytest-xdist is installed."""
+    import importlib.util
+    return importlib.util.find_spec('xdist') is not None
+
+
+def _timeout_plugin_available() -> bool:
+    """Return True if pytest-timeout is installed."""
+    import importlib.util
+    return importlib.util.find_spec('pytest_timeout') is not None
+
+
+def _build_pytest_cmd(
+    paths: list[str],
+    per_suite_timeout: int,
+    parallel: bool,
+) -> list[str]:
+    """
+    Build a pytest command using only flags for installed plugins.
+    Degrades gracefully: no --timeout without pytest-timeout,
+    no -n without pytest-xdist.
+    """
+    cmd = ['python', '-m', 'pytest', '--tb=short', '-q', '--no-header']
+    if _timeout_plugin_available():
+        cmd.append(f'--timeout={per_suite_timeout}')
+    else:
+        logger.debug('test_scanner: pytest-timeout not installed — per-suite timeout disabled')
+    if parallel and _xdist_available():
+        cmd += ['-n', 'auto']
+    elif parallel:
+        logger.debug('test_scanner: pytest-xdist not installed — running tests sequentially')
+    cmd += paths
+    return cmd
+
+
 # ── Pytest runner (sync, for use in subprocess or thread) ────────────────────
 
 def run_category_tests(
@@ -356,34 +399,45 @@ def run_category_tests(
 ) -> dict[str, Any]:
     """
     Run pytest for the given category list synchronously.
-    Returns {passed, failed, errors, duration_sec, output, success}.
+
+    Probes for pytest, pytest-timeout, and pytest-xdist at call time and
+    builds the command with only the flags those plugins support.  Never
+    raises — always returns a result dict.
+
+    Returns {passed, failed, errors, duration_sec, output, success, returncode}.
     """
     import subprocess  # nosec B404
     import time
+
+    if not _pytest_available():
+        logger.warning(
+            'test_scanner: pytest not installed — '
+            'run: pip install pytest pytest-timeout pytest-xdist'
+        )
+        return {
+            'passed': 0, 'failed': 0, 'errors': 0, 'duration_sec': 0,
+            'output': 'pytest not installed. Add pytest>=7.4.0 to requirements-dev.txt.',
+            'success': False, 'returncode': -1,
+        }
 
     index = get_test_index(force_rescan=False)
     file_list: list[dict[str, Any]] = index.get('file_list', [])
 
     paths = [
         e['path'] for e in file_list
-        if e.get('category') in categories and Path(PROJECT_ROOT / e['path']).exists()
+        if e.get('category') in categories
+        and Path(PROJECT_ROOT / e['path']).exists()
     ][:200]
 
     if not paths:
         return {
-            'passed': 0, 'failed': 0, 'errors': 0,
-            'duration_sec': 0, 'output': 'No test files found for categories: ' + str(categories),
-            'success': True,
+            'passed': 0, 'failed': 0, 'errors': 0, 'duration_sec': 0,
+            'output': f'No test files found for categories: {categories}',
+            'success': True, 'returncode': 0,
         }
 
-    cmd = [
-        'python', '-m', 'pytest',
-        '--tb=short', '-q', '--no-header',
-        f'--timeout={per_suite_timeout}',
-    ]
-    if parallel:
-        cmd += ['-n', 'auto']
-    cmd += paths
+    cmd = _build_pytest_cmd(paths, per_suite_timeout, parallel)
+    logger.debug('test_scanner: running %s', ' '.join(cmd[:8]) + ' …')
 
     t0 = time.time()
     try:
@@ -409,20 +463,22 @@ def run_category_tests(
         record_test_run(0, 0, 'timeout')
         return {
             'passed': 0, 'failed': 0, 'errors': 0,
-            'duration_sec': duration, 'output': f'Test run timed out after {timeout_sec}s',
+            'duration_sec': duration,
+            'output': f'Test run timed out after {timeout_sec}s',
             'success': False, 'returncode': -1,
         }
     except FileNotFoundError:
+        # python binary not on PATH — extremely unlikely but handle it
         return {
-            'passed': 0, 'failed': 0, 'errors': 0,
-            'duration_sec': 0, 'output': 'pytest not found in PATH',
+            'passed': 0, 'failed': 0, 'errors': 0, 'duration_sec': 0,
+            'output': 'python not found on PATH',
             'success': False, 'returncode': -1,
         }
     except Exception as exc:
+        logger.warning('test_scanner: run_category_tests error: %s', exc)
         return {
-            'passed': 0, 'failed': 0, 'errors': 0,
-            'duration_sec': 0, 'output': str(exc),
-            'success': False, 'returncode': -1,
+            'passed': 0, 'failed': 0, 'errors': 0, 'duration_sec': 0,
+            'output': str(exc), 'success': False, 'returncode': -1,
         }
 
 

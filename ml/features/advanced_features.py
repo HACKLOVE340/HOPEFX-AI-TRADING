@@ -452,54 +452,391 @@ class AdvancedFeatureEngineer:
             probs = counts / len(orderings)
             entropy = -np.sum(probs * np.log(probs + 1e-10))
 
-            return entropy / np.log(np.math.factorial(order))
+            import math as _math
+            return entropy / np.log(_math.factorial(order))
         except (ValueError, FloatingPointError):
             return 0
 
-    def _calculate_hurst(self, prices: np.ndarray) -> float:
-        """Calculate Hurst exponent"""
+    def _calculate_hurst(self, series: np.ndarray) -> float:
+        """
+        Calculate Hurst exponent via rescaled-range (R/S) analysis.
+
+        Accepts a returns series (not raw prices) — the rolling window in
+        _add_fractal_features passes df["returns"] which is already a
+        pct-change series, so we work directly on it.
+        """
         try:
-            if len(prices) < 10:
+            if len(series) < 10:
                 return 0.5
 
-            returns = np.diff(np.log(prices))
-            cumulative = np.cumsum(returns)
+            # series is already a returns array
+            returns = np.asarray(series, dtype=float)
+            # Replace any NaN/inf with 0 to avoid propagation
+            returns = np.where(np.isfinite(returns), returns, 0.0)
 
-            # Rescaled range analysis
-            mean = np.mean(cumulative)
-            deviations = cumulative - mean
+            cumulative = np.cumsum(returns - np.mean(returns))
 
-            max_dev = np.max(deviations)
-            min_dev = np.min(deviations)
+            max_dev = np.max(cumulative)
+            min_dev = np.min(cumulative)
             range_val = max_dev - min_dev
 
             std_dev = np.std(returns, ddof=1)
 
-            if std_dev > 0 and range_val > 0:
-                hurst = np.log(range_val / std_dev) / np.log(len(prices))
-                return max(0, min(hurst, 1))
+            if std_dev > 0 and range_val > 0 and len(returns) > 1:
+                hurst = np.log(range_val / std_dev) / np.log(len(returns))
+                return float(np.clip(hurst, 0.0, 1.0))
 
             return 0.5
-        except (ValueError, FloatingPointError):
+        except (ValueError, FloatingPointError, ZeroDivisionError):
             return 0.5
 
-    def _calculate_dfa(self, prices: np.ndarray) -> float:
-        """Calculate Detrended Fluctuation Analysis"""
+    def _calculate_dfa(self, series: np.ndarray) -> float:
+        """
+        Detrended Fluctuation Analysis approximation.
+
+        Accepts a returns series (same convention as _calculate_hurst).
+        Returns the detrended fluctuation value (normalised to [0, 1]).
+        """
         try:
-            if len(prices) < 10:
+            if len(series) < 10:
                 return 0.5
 
-            # Simple DFA approximation
-            returns = np.diff(np.log(prices))
+            returns = np.asarray(series, dtype=float)
+            returns = np.where(np.isfinite(returns), returns, 0.0)
+
             cumulative = np.cumsum(returns - np.mean(returns))
 
-            # Fit polynomial trend
+            # Fit linear trend and compute residual fluctuation
             x = np.arange(len(cumulative))
             coeffs = np.polyfit(x, cumulative, 1)
             trend = np.polyval(coeffs, x)
 
-            fluctuation = np.sqrt(np.mean((cumulative - trend) ** 2))
-
-            return fluctuation
-        except (ValueError, FloatingPointError):
+            fluctuation = float(np.sqrt(np.mean((cumulative - trend) ** 2)))
+            # Normalise to a bounded [0,1] range via tanh
+            return float(np.tanh(fluctuation))
+        except (ValueError, FloatingPointError, np.linalg.LinAlgError):
             return 0.5
+
+    # =========================================================================
+    # sklearn-compatible interface
+    # =========================================================================
+
+    def fit(self, df: pd.DataFrame, y: pd.Series | None = None) -> "AdvancedFeatureEngineer":
+        """
+        Fit the engineer on *df* — computes and caches feature column names.
+
+        Calling ``fit`` before ``transform`` is required for the sklearn
+        pipeline interface.  The engineer is stateless beyond the column list,
+        so fitting is lightweight.
+
+        Args:
+            df: OHLCV DataFrame used to derive the feature schema.
+            y: Ignored (present for sklearn API compatibility).
+
+        Returns:
+            self
+        """
+        sample = self.engineer_features(df.copy(), include_advanced=True)
+        # Store feature columns (exclude raw OHLCV inputs)
+        ohlcv_cols = {"open", "high", "low", "close", "volume"}
+        self._feature_columns_: list[str] = [c for c in sample.columns if c not in ohlcv_cols]
+        self._is_fitted_ = True
+        logger.info("AdvancedFeatureEngineer fitted: %d feature columns", len(self._feature_columns_))
+        return self
+
+    def transform(self, df: pd.DataFrame, include_advanced: bool = True) -> pd.DataFrame:
+        """
+        Transform *df* into the feature matrix.
+
+        If ``fit`` has been called previously, only the columns seen during
+        fitting are returned (missing columns are filled with 0.0 so that
+        the output shape is always consistent).
+
+        Args:
+            df: OHLCV DataFrame.
+            include_advanced: Passed through to ``engineer_features``.
+
+        Returns:
+            DataFrame of engineered features (OHLCV columns excluded).
+        """
+        result = self.engineer_features(df.copy(), include_advanced=include_advanced)
+        ohlcv_cols = {"open", "high", "low", "close", "volume"}
+
+        if getattr(self, "_is_fitted_", False) and self._feature_columns_:
+            # Align to fitted schema — add missing cols as 0, drop extras
+            for col in self._feature_columns_:
+                if col not in result.columns:
+                    result[col] = 0.0
+            return result[self._feature_columns_]
+
+        return result[[c for c in result.columns if c not in ohlcv_cols]]
+
+    def fit_transform(self, df: pd.DataFrame, y: pd.Series | None = None) -> pd.DataFrame:
+        """Fit then transform in one call (sklearn API)."""
+        return self.fit(df, y).transform(df)
+
+    def get_feature_names_out(self) -> list[str]:
+        """
+        Return the list of feature column names produced by ``transform``.
+
+        Requires ``fit`` to have been called first.
+
+        Returns:
+            List of feature column names.
+
+        Raises:
+            RuntimeError: If called before ``fit``.
+        """
+        if not getattr(self, "_is_fitted_", False):
+            raise RuntimeError(
+                "AdvancedFeatureEngineer is not fitted. Call fit() or fit_transform() first."
+            )
+        return list(self._feature_columns_)
+
+    # Alias used by some sklearn utilities
+    get_feature_names = get_feature_names_out
+
+    # =========================================================================
+    # Feature importance and selection
+    # =========================================================================
+
+    def feature_importance(
+        self,
+        df: pd.DataFrame,
+        target: pd.Series,
+        method: str = "mutual_info",
+        n_top: int | None = None,
+    ) -> pd.Series:
+        """
+        Compute feature importance scores against *target*.
+
+        Two methods are supported:
+
+        ``mutual_info`` (default)
+            Uses ``sklearn.feature_selection.mutual_info_regression``.
+            Model-free, captures non-linear relationships.  Preferred for
+            initial feature screening.
+
+        ``random_forest``
+            Fits a ``RandomForestRegressor`` and returns its
+            ``feature_importances_`` attribute.  Slower but accounts for
+            feature interactions.
+
+        Args:
+            df: OHLCV DataFrame (will be transformed internally).
+            target: Target series aligned with *df* (e.g. next-bar returns).
+            method: ``"mutual_info"`` or ``"random_forest"``.
+            n_top: If set, return only the top-*n_top* features.
+
+        Returns:
+            pd.Series of importance scores indexed by feature name,
+            sorted descending.
+        """
+        from sklearn.feature_selection import mutual_info_regression
+
+        features = self.fit_transform(df)
+
+        # Align target to the transformed index (dropna may have shortened df)
+        target_aligned = target.reindex(features.index).dropna()
+        features_aligned = features.loc[target_aligned.index]
+
+        if features_aligned.empty:
+            raise ValueError("No overlapping rows between features and target after alignment.")
+
+        X = features_aligned.values.astype(np.float64)
+        y = target_aligned.values.astype(np.float64)
+
+        # Replace any remaining NaN/inf with column medians
+        col_medians = np.nanmedian(X, axis=0)
+        nan_mask = ~np.isfinite(X)
+        X[nan_mask] = np.take(col_medians, np.where(nan_mask)[1])
+
+        if method == "random_forest":
+            from sklearn.ensemble import RandomForestRegressor
+
+            rf = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
+            rf.fit(X, y)
+            scores = rf.feature_importances_
+        else:
+            # mutual_info (default)
+            scores = mutual_info_regression(X, y, random_state=42)
+
+        importance = pd.Series(scores, index=features_aligned.columns).sort_values(ascending=False)
+
+        if n_top is not None:
+            importance = importance.head(n_top)
+
+        logger.info(
+            "feature_importance (%s): top feature=%s (%.4f)",
+            method,
+            importance.index[0] if len(importance) else "none",
+            importance.iloc[0] if len(importance) else 0.0,
+        )
+        return importance
+
+    def select_features(
+        self,
+        df: pd.DataFrame,
+        target: pd.Series,
+        n_features: int = 30,
+        method: str = "mutual_info",
+    ) -> pd.DataFrame:
+        """
+        Return a feature DataFrame reduced to the *n_features* most important.
+
+        Fits the engineer, computes importance scores, then restricts the
+        output to the top-*n_features* columns.  The selected column list is
+        stored in ``self._selected_features_`` for use in subsequent
+        ``transform`` calls.
+
+        Args:
+            df: OHLCV DataFrame.
+            target: Target series (e.g. forward returns).
+            n_features: Number of features to retain.
+            method: Importance method — ``"mutual_info"`` or ``"random_forest"``.
+
+        Returns:
+            DataFrame with only the selected feature columns.
+        """
+        importance = self.feature_importance(df, target, method=method)
+        selected = importance.head(n_features).index.tolist()
+        self._selected_features_: list[str] = selected
+
+        features = self.transform(df)
+        available = [c for c in selected if c in features.columns]
+        logger.info(
+            "select_features: retained %d/%d features via %s",
+            len(available),
+            n_features,
+            method,
+        )
+        return features[available]
+
+    def get_selected_features(self) -> list[str]:
+        """
+        Return the feature names chosen by the last ``select_features`` call.
+
+        Raises:
+            RuntimeError: If ``select_features`` has not been called.
+        """
+        if not hasattr(self, "_selected_features_"):
+            raise RuntimeError("Call select_features() first.")
+        return list(self._selected_features_)
+
+    # =========================================================================
+    # Online / incremental update
+    # =========================================================================
+
+    def _engineer_live_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Compute a minimal, short-window feature set for live inference.
+
+        Unlike ``engineer_features``, this method does not call ``dropna()``
+        globally — it fills NaN values with 0 so that the last row is always
+        available even when the window is shorter than the longest indicator
+        period.  Only indicators that are meaningful on windows of 20+ bars
+        are included.
+
+        Args:
+            df: OHLCV DataFrame (at least 20 bars recommended).
+
+        Returns:
+            DataFrame with live-safe features; last row corresponds to the
+            most recent bar.
+        """
+        out = df.copy()
+
+        # Returns
+        out["returns"] = out["close"].pct_change(fill_method=None)
+        out["log_returns"] = np.log(out["close"] / out["close"].shift(1))
+
+        # Price position
+        rng = out["high"] - out["low"]
+        out["high_low_ratio"] = (out["close"] - out["low"]) / (rng + 1e-10)
+        out["close_open_ratio"] = out["close"] / out["open"]
+        out["body_size"] = abs(out["close"] - out["open"]) / (rng + 1e-10)
+
+        # Short-window MAs
+        for p in [5, 10, 20]:
+            out[f"sma_{p}"] = out["close"].rolling(p, min_periods=1).mean()
+            out[f"ema_{p}"] = out["close"].ewm(span=p, min_periods=1).mean()
+
+        out["price_sma_20_ratio"] = out["close"] / (out["sma_20"] + 1e-10)
+
+        # Volatility
+        out["volatility_10d"] = out["returns"].rolling(10, min_periods=2).std()
+        out["volatility_20d"] = out["returns"].rolling(20, min_periods=2).std()
+        out["tr"] = np.maximum(
+            out["high"] - out["low"],
+            np.maximum(
+                abs(out["high"] - out["close"].shift()),
+                abs(out["low"] - out["close"].shift()),
+            ),
+        )
+        out["atr_14"] = out["tr"].rolling(14, min_periods=1).mean()
+
+        # Momentum
+        out["rsi_14"] = self._calculate_rsi(out["close"], 14)
+        macd, signal, hist = self._calculate_macd(out["close"])
+        out["macd"] = macd
+        out["macd_signal"] = signal
+        out["macd_hist"] = hist
+
+        for p in [5, 10]:
+            out[f"roc_{p}"] = (out["close"] - out["close"].shift(p)) / (out["close"].shift(p) + 1e-10) * 100
+
+        # Volume
+        out["volume_sma_20"] = out["volume"].rolling(20, min_periods=1).mean()
+        out["volume_ratio"] = out["volume"] / (out["volume_sma_20"] + 1e-10)
+
+        # Fill remaining NaN with 0 so the last row is always complete
+        out = out.fillna(0.0)
+
+        ohlcv_cols = {"open", "high", "low", "close", "volume"}
+        feat_cols = [c for c in out.columns if c not in ohlcv_cols]
+        return out[feat_cols]
+
+    def online_update(self, new_bar: pd.Series, window: pd.DataFrame) -> pd.Series:
+        """
+        Compute features for a single new bar without re-processing the full
+        history — suitable for live inference on each incoming tick/bar.
+
+        Appends *new_bar* to *window*, runs ``engineer_features``, and returns
+        the feature row for the last bar only.
+
+        Args:
+            new_bar: A single OHLCV row as a pd.Series with index
+                ``["open", "high", "low", "close", "volume"]``.
+            window: Recent OHLCV history (at least ``lookback_periods`` bars)
+                used to compute rolling indicators.
+
+        Returns:
+            pd.Series of feature values for *new_bar*.
+        """
+        required = {"open", "high", "low", "close", "volume"}
+        missing = required - set(new_bar.index)
+        if missing:
+            raise ValueError(f"new_bar is missing columns: {missing}")
+
+        # Append new bar to window
+        new_row = pd.DataFrame([new_bar])
+        if not isinstance(window.index, pd.DatetimeIndex):
+            combined = pd.concat([window, new_row], ignore_index=True)
+        else:
+            combined = pd.concat([window, new_row])
+
+        # Compute a minimal feature set suitable for live inference.
+        # We bypass engineer_features (which calls dropna and requires 200+ bars)
+        # and compute only the indicators that work on short windows.
+        features = self._engineer_live_features(combined)
+
+        last_row = features.iloc[-1]
+
+        # If fitted, align to known feature schema
+        if getattr(self, "_is_fitted_", False) and self._feature_columns_:
+            ohlcv_cols = {"open", "high", "low", "close", "volume"}
+            feat_cols = [c for c in self._feature_columns_ if c in last_row.index and c not in ohlcv_cols]
+            return last_row[feat_cols]
+
+        ohlcv_cols = {"open", "high", "low", "close", "volume"}
+        return last_row[[c for c in last_row.index if c not in ohlcv_cols]]

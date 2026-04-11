@@ -1849,6 +1849,18 @@ def build_component_registry(app, feature_flags):
             deps=["risk_manager", "broker", "macro_store", "mtf_store"],
         )
         .register(
+            "feature_engineer",
+            F.init_feature_engineer,
+            required=False,
+            deps=["data_scheduler"],
+        )
+        .register(
+            "decision_engine",
+            F.init_decision_engine,
+            required=False,
+            deps=["strategy_brain", "risk_manager", "trade_executor", "feature_engineer"],
+        )
+        .register(
             "hourly_trainer",
             F.init_hourly_trainer,
             required=False,
@@ -2317,4 +2329,121 @@ def get_broker_manager():
 
     except Exception as exc:
         logger.debug("get_broker_manager: could not build manager: %s", exc)
+        return None
+
+
+def create_app_state():
+    """
+    Create and return a fresh AppState instance.
+
+    Convenience factory used by tests and external callers that need a
+    clean app state without importing core.app_state directly.
+    """
+    from core.app_state import AppState
+    return AppState()
+
+
+async def init_feature_engineer(s: Any) -> Any:
+    """
+    Initialise the AdvancedFeatureEngineer and attach it to app_state.
+
+    The engineer is fitted on a short warm-up window fetched from the
+    data layer.  If the data layer is unavailable the engineer is returned
+    unfitted — it will fit lazily on the first transform() call.
+
+    Stores the result in ``s.feature_engineer``.
+    """
+    try:
+        from ml.features.advanced_features import AdvancedFeatureEngineer
+        fe = AdvancedFeatureEngineer(lookback_periods=252)
+
+        # Attempt to warm-fit on recent OHLCV data
+        try:
+            import pandas as pd
+            import numpy as np
+            orch = getattr(s, "data_orchestrator", None) or getattr(s, "orchestrator", None)
+            if orch is not None and hasattr(orch, "get_ohlcv"):
+                df = await orch.get_ohlcv("XAUUSD", "1h", limit=300)
+                if df is not None and len(df) >= 60:
+                    fe.fit(df)
+                    logger.info("FeatureEngineer fitted on %d bars", len(df))
+                else:
+                    logger.info("FeatureEngineer: insufficient warm-up data — will fit lazily")
+            else:
+                logger.info("FeatureEngineer: data orchestrator unavailable — will fit lazily")
+        except Exception as _fit_exc:
+            logger.debug("FeatureEngineer warm-fit skipped: %s", _fit_exc)
+
+        s.feature_engineer = fe
+        return fe
+    except Exception as exc:
+        logger.warning("init_feature_engineer failed: %s", exc)
+        return None
+
+
+async def init_decision_engine(s: Any) -> Any:
+    """
+    Initialise HOPEFXDecisionEngine and attach it to app_state.
+
+    Wires all required sub-systems from app_state:
+      - brain / strategy_brain  → Phase 1 signal generation
+      - risk_manager            → Phase 3 position sizing
+      - gatekeeper              → Phase 3 pre-trade gate
+      - trade_executor          → Phase 4 order execution
+      - event_bus / bus         → Phase 5 fill broadcast
+      - feature_engineer        → optional ML feature pipeline
+      - compliance_manager      → optional Phase 5 audit log
+      - inference_engine        → optional Phase 2 ML predictor
+
+    All sub-systems are optional — the engine degrades gracefully when
+    any component is absent.  Stores the result in ``s.decision_engine``.
+    """
+    try:
+        from core.decision.HOPEFXDecisionEngine import HOPEFXDecisionEngine
+        from core.event_bus import bus as _bus
+
+        # Resolve brain: prefer strategy_brain (StrategyBrain), fall back to brain (HOPEFXBrain)
+        brain = getattr(s, "strategy_brain", None) or getattr(s, "brain", None)
+        if brain is None:
+            logger.warning("init_decision_engine: no brain available — decision engine will produce NO_SIGNAL")
+
+        risk_manager = getattr(s, "risk_manager", None)
+        gatekeeper = getattr(s, "gatekeeper", None)
+
+        # Gatekeeper may not be on app_state yet — build one if missing
+        if gatekeeper is None:
+            try:
+                from risk.gatekeeper import Gatekeeper
+                gatekeeper = Gatekeeper(orchestrator=getattr(s, "data_orchestrator", None))
+                logger.info("init_decision_engine: built Gatekeeper inline")
+            except Exception as _gk_exc:
+                logger.warning("init_decision_engine: could not build Gatekeeper: %s", _gk_exc)
+
+        trade_executor = getattr(s, "trade_executor", None)
+        feature_engineer = getattr(s, "feature_engineer", None)
+        compliance_manager = getattr(s, "compliance_manager", None)
+        ml_predictor = getattr(s, "inference_engine", None)
+
+        engine = HOPEFXDecisionEngine(
+            brain=brain,
+            risk_manager=risk_manager,
+            gatekeeper=gatekeeper,
+            trade_executor=trade_executor,
+            event_bus=_bus,
+            feature_engineer=feature_engineer,
+            compliance_manager=compliance_manager,
+            ml_predictor=ml_predictor,
+        )
+
+        s.decision_engine = engine
+        logger.info(
+            "HOPEFXDecisionEngine initialised — brain=%s risk=%s gate=%s executor=%s",
+            type(brain).__name__ if brain else "None",
+            type(risk_manager).__name__ if risk_manager else "None",
+            type(gatekeeper).__name__ if gatekeeper else "None",
+            type(trade_executor).__name__ if trade_executor else "None",
+        )
+        return engine
+    except Exception as exc:
+        logger.exception("init_decision_engine failed: %s", exc)
         return None
