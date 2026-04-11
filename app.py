@@ -287,6 +287,7 @@ try:
             eng = getattr(_app_state, "decision_engine", None)
             if eng is None:
                 from fastapi import HTTPException
+
                 raise HTTPException(503, "Decision engine not initialised")
             result = await eng.process_tick(payload, symbol=payload.get("symbol", "XAUUSD"))
             return result.to_dict()
@@ -306,6 +307,7 @@ except Exception as _decision_router_err:
 # ── Hyperopt router (/api/hyperopt) ──────────────────────────────────────────
 try:
     from backtesting.hyperopt import create_hyperopt_router as _create_hyperopt_router
+
     app.include_router(_create_hyperopt_router(), prefix="/api")
     logger.info("Hyperopt router registered at /api/hyperopt")
 except Exception as _hyperopt_router_err:
@@ -314,6 +316,7 @@ except Exception as _hyperopt_router_err:
 # ── Replay / stress-test router (/replay) ────────────────────────────────────
 try:
     from backtesting.replay_connector import create_replay_router as _create_replay_router
+
     app.include_router(_create_replay_router())
     logger.info("Replay backtest router registered at /replay")
 except Exception as _replay_router_err:

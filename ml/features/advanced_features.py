@@ -453,6 +453,7 @@ class AdvancedFeatureEngineer:
             entropy = -np.sum(probs * np.log(probs + 1e-10))
 
             import math as _math
+
             return entropy / np.log(_math.factorial(order))
         except (ValueError, FloatingPointError):
             return 0
@@ -588,9 +589,7 @@ class AdvancedFeatureEngineer:
             RuntimeError: If called before ``fit``.
         """
         if not getattr(self, "_is_fitted_", False):
-            raise RuntimeError(
-                "AdvancedFeatureEngineer is not fitted. Call fit() or fit_transform() first."
-            )
+            raise RuntimeError("AdvancedFeatureEngineer is not fitted. Call fit() or fit_transform() first.")
         return list(self._feature_columns_)
 
     # Alias used by some sklearn utilities

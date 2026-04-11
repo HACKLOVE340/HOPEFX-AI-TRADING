@@ -2340,6 +2340,7 @@ def create_app_state():
     clean app state without importing core.app_state directly.
     """
     from core.app_state import AppState
+
     return AppState()
 
 
@@ -2355,12 +2356,11 @@ async def init_feature_engineer(s: Any) -> Any:
     """
     try:
         from ml.features.advanced_features import AdvancedFeatureEngineer
+
         fe = AdvancedFeatureEngineer(lookback_periods=252)
 
         # Attempt to warm-fit on recent OHLCV data
         try:
-            import pandas as pd
-            import numpy as np
             orch = getattr(s, "data_orchestrator", None) or getattr(s, "orchestrator", None)
             if orch is not None and hasattr(orch, "get_ohlcv"):
                 df = await orch.get_ohlcv("XAUUSD", "1h", limit=300)
@@ -2414,6 +2414,7 @@ async def init_decision_engine(s: Any) -> Any:
         if gatekeeper is None:
             try:
                 from risk.gatekeeper import Gatekeeper
+
                 gatekeeper = Gatekeeper(orchestrator=getattr(s, "data_orchestrator", None))
                 logger.info("init_decision_engine: built Gatekeeper inline")
             except Exception as _gk_exc:

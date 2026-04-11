@@ -1331,7 +1331,7 @@ if __name__ == "__main__":
 
 # ── AdvancedTrainer: object-oriented wrapper around the module-level functions ─
 
-from dataclasses import dataclass as _dc, field as _dcf
+from dataclasses import dataclass as _dc
 from typing import Any as _Any
 
 
@@ -1365,7 +1365,7 @@ class AdvancedTrainer:
 
     # ── public API ────────────────────────────────────────────────────────────
 
-    def train(self, df: "pd.DataFrame") -> dict[str, _Any]:  # type: ignore[name-defined]
+    def train(self, df: pd.DataFrame) -> dict[str, _Any]:  # type: ignore[name-defined]
         """
         Run the full advanced training pipeline on *df* and return the report.
 
@@ -1376,7 +1376,6 @@ class AdvancedTrainer:
         3. OOS evaluation on held-out years
         4. Sharpe gate check
         """
-        import pandas as pd  # local import to avoid circular at module level
 
         wf = walk_forward_eval(
             df,

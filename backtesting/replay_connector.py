@@ -79,6 +79,7 @@ logger = logging.getLogger(__name__)
 
 # ── FastAPI request/response models (module-level so Pydantic can resolve refs) ──
 
+
 class ReplayRunRequest(BaseModel):
     strategy: str = "momentum"
     symbol: str = "XAU_USD"
@@ -375,7 +376,9 @@ class RegimeResult:
                 "total_return": getattr(m, "total_return", None),
                 "win_rate": getattr(m, "win_rate", None),
                 "total_trades": getattr(m, "total_trades", None),
-            } if m is not None else None,
+            }
+            if m is not None
+            else None,
         }
 
 
@@ -541,9 +544,7 @@ class RegimeShiftStressTester:
         regime = next((r for r in self._regimes if r.name == regime_name), None)
         if regime is None:
             available = [r.name for r in self._regimes]
-            raise ValueError(
-                f"Regime '{regime_name}' not found. Available: {available}"
-            )
+            raise ValueError(f"Regime '{regime_name}' not found. Available: {available}")
         logger.info(
             "RegimeShiftStressTester: running single regime=%s (%s → %s)",
             regime.name,
@@ -608,6 +609,7 @@ def create_replay_router():
         if name not in _MAP:
             raise ValueError(f"Unknown strategy '{name}'. Available: {list(_MAP)}")
         import importlib
+
         mod_path, cls_name = _MAP[name]
         mod = importlib.import_module(mod_path)
         return getattr(mod, cls_name)
@@ -630,6 +632,7 @@ def create_replay_router():
     @router.post("/stress", response_model=JobStatus, summary="Run regime-shift stress test")
     async def run_stress(req: StressRunRequest, background_tasks: BackgroundTasks):
         import uuid
+
         job_id = str(uuid.uuid4())[:8]
         _jobs[job_id] = {"status": "running", "result": None}
 

@@ -259,7 +259,7 @@ class AdvancedPatternDetector:
         for w in window_sizes:
             for start in range(0, n - w, w // 2):
                 end = start + w
-                w_peaks   = peaks[(peaks >= start) & (peaks < end)]
+                w_peaks = peaks[(peaks >= start) & (peaks < end)]
                 w_troughs = troughs[(troughs >= start) & (troughs < end)]
 
                 if len(w_peaks) < 2 or len(w_troughs) < 2:
@@ -300,19 +300,19 @@ class AdvancedPatternDetector:
 
                 # Classify by slope signs (threshold = 0.1 * atr / w)
                 slope_thresh = 0.1 * atr / w
-                h_flat    = abs(h_slope) < slope_thresh
+                h_flat = abs(h_slope) < slope_thresh
                 h_falling = h_slope < -slope_thresh
-                l_flat    = abs(l_slope) < slope_thresh
-                l_rising  = l_slope > slope_thresh
+                l_flat = abs(l_slope) < slope_thresh
+                l_rising = l_slope > slope_thresh
 
                 if h_flat and l_rising:
-                    ptype     = PatternType.TRIANGLE_ASCENDING
+                    ptype = PatternType.TRIANGLE_ASCENDING
                     direction = PatternDirection.BULLISH
                 elif h_falling and l_flat:
-                    ptype     = PatternType.TRIANGLE_DESCENDING
+                    ptype = PatternType.TRIANGLE_DESCENDING
                     direction = PatternDirection.BEARISH
                 elif h_falling and l_rising:
-                    ptype     = PatternType.TRIANGLE_SYMMETRICAL
+                    ptype = PatternType.TRIANGLE_SYMMETRICAL
                     direction = PatternDirection.NEUTRAL
                 else:
                     continue
@@ -326,37 +326,46 @@ class AdvancedPatternDetector:
                 entry_price = float(close[end - 1])
                 pattern_height = float(high[w_peaks[0]] - low[w_troughs[0]])
                 target_price = (
-                    entry_price + pattern_height if direction == PatternDirection.BULLISH
-                    else entry_price - pattern_height if direction == PatternDirection.BEARISH
+                    entry_price + pattern_height
+                    if direction == PatternDirection.BULLISH
+                    else entry_price - pattern_height
+                    if direction == PatternDirection.BEARISH
                     else entry_price + pattern_height  # symmetrical: bullish breakout target
                 )
-                stop_loss = float(low[start:end].min() if direction != PatternDirection.BEARISH
-                                  else high[start:end].max())
+                stop_loss = float(
+                    low[start:end].min() if direction != PatternDirection.BEARISH else high[start:end].max()
+                )
 
                 confidence = float(min(0.95, (h_r2 + l_r2) / 2 * 0.9 + 0.05))
-                rr = abs(target_price - entry_price) / abs(entry_price - stop_loss) if abs(entry_price - stop_loss) > 0 else 0.0
+                rr = (
+                    abs(target_price - entry_price) / abs(entry_price - stop_loss)
+                    if abs(entry_price - stop_loss) > 0
+                    else 0.0
+                )
 
-                patterns.append(PatternSignal(
-                    pattern_type=ptype,
-                    direction=direction,
-                    entry_price=entry_price,
-                    target_price=target_price,
-                    stop_loss=stop_loss,
-                    confidence=confidence,
-                    pattern_start_idx=start,
-                    pattern_end_idx=end - 1,
-                    formation_bars=w,
-                    risk_reward_ratio=rr,
-                    timestamp=index[end - 1],
-                    additional_data={
-                        "high_slope": float(h_slope),
-                        "low_slope": float(l_slope),
-                        "high_r2": float(h_r2),
-                        "low_r2": float(l_r2),
-                        "apex_x": float(apex_x),
-                        "apex_price": float(apex_price),
-                    },
-                ))
+                patterns.append(
+                    PatternSignal(
+                        pattern_type=ptype,
+                        direction=direction,
+                        entry_price=entry_price,
+                        target_price=target_price,
+                        stop_loss=stop_loss,
+                        confidence=confidence,
+                        pattern_start_idx=start,
+                        pattern_end_idx=end - 1,
+                        formation_bars=w,
+                        risk_reward_ratio=rr,
+                        timestamp=index[end - 1],
+                        additional_data={
+                            "high_slope": float(h_slope),
+                            "low_slope": float(l_slope),
+                            "high_r2": float(h_r2),
+                            "low_r2": float(l_r2),
+                            "apex_x": float(apex_x),
+                            "apex_price": float(apex_price),
+                        },
+                    )
+                )
 
         return patterns
 
@@ -383,15 +392,15 @@ class AdvancedPatternDetector:
         if n < self.min_pattern_bars * 2:
             return patterns
 
-        peaks   = argrelextrema(high, np.greater, order=3)[0]
-        troughs = argrelextrema(low,  np.less,    order=3)[0]
+        peaks = argrelextrema(high, np.greater, order=3)[0]
+        troughs = argrelextrema(low, np.less, order=3)[0]
 
         window_sizes = range(self.min_pattern_bars * 2, min(self.min_pattern_bars * 6, n), self.min_pattern_bars)
 
         for w in window_sizes:
             for start in range(0, n - w, w // 2):
                 end = start + w
-                w_peaks   = peaks[(peaks >= start) & (peaks < end)]
+                w_peaks = peaks[(peaks >= start) & (peaks < end)]
                 w_troughs = troughs[(troughs >= start) & (troughs < end)]
 
                 if len(w_peaks) < 2 or len(w_troughs) < 2:
@@ -412,7 +421,7 @@ class AdvancedPatternDetector:
                     r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
                     return slope, intercept, max(0.0, r2)
 
-                h_slope, h_intercept, h_r2 = _linreg(w_peaks.astype(float),   high[w_peaks])
+                h_slope, h_intercept, h_r2 = _linreg(w_peaks.astype(float), high[w_peaks])
                 l_slope, l_intercept, l_r2 = _linreg(w_troughs.astype(float), low[w_troughs])
 
                 if h_r2 < 0.5 or l_r2 < 0.5:
@@ -424,48 +433,62 @@ class AdvancedPatternDetector:
 
                 slope_thresh = 0.05 * atr / w
 
-                rising_wedge  = (h_slope > slope_thresh and l_slope > slope_thresh
-                                 and h_slope < l_slope)   # converging upward
-                falling_wedge = (h_slope < -slope_thresh and l_slope < -slope_thresh
-                                 and h_slope > l_slope)   # converging downward
+                rising_wedge = (
+                    h_slope > slope_thresh and l_slope > slope_thresh and h_slope < l_slope
+                )  # converging upward
+                falling_wedge = (
+                    h_slope < -slope_thresh and l_slope < -slope_thresh and h_slope > l_slope
+                )  # converging downward
 
                 if not rising_wedge and not falling_wedge:
                     continue
 
-                ptype     = PatternType.WEDGE_RISING  if rising_wedge  else PatternType.WEDGE_FALLING
-                direction = PatternDirection.BEARISH   if rising_wedge  else PatternDirection.BULLISH
+                ptype = PatternType.WEDGE_RISING if rising_wedge else PatternType.WEDGE_FALLING
+                direction = PatternDirection.BEARISH if rising_wedge else PatternDirection.BULLISH
 
-                entry_price    = float(close[end - 1])
+                entry_price = float(close[end - 1])
                 pattern_height = float(high[w_peaks[0]] - low[w_troughs[0]])
-                target_price   = (entry_price - pattern_height if direction == PatternDirection.BEARISH
-                                  else entry_price + pattern_height)
-                stop_loss      = (float(high[start:end].max()) if direction == PatternDirection.BEARISH
-                                  else float(low[start:end].min()))
+                target_price = (
+                    entry_price - pattern_height
+                    if direction == PatternDirection.BEARISH
+                    else entry_price + pattern_height
+                )
+                stop_loss = (
+                    float(high[start:end].max())
+                    if direction == PatternDirection.BEARISH
+                    else float(low[start:end].min())
+                )
 
                 convergence_ratio = abs(h_slope - l_slope) / (atr / w + 1e-9)
                 confidence = float(min(0.92, (h_r2 + l_r2) / 2 * 0.85 + convergence_ratio * 0.05))
-                rr = abs(target_price - entry_price) / abs(entry_price - stop_loss) if abs(entry_price - stop_loss) > 0 else 0.0
+                rr = (
+                    abs(target_price - entry_price) / abs(entry_price - stop_loss)
+                    if abs(entry_price - stop_loss) > 0
+                    else 0.0
+                )
 
-                patterns.append(PatternSignal(
-                    pattern_type=ptype,
-                    direction=direction,
-                    entry_price=entry_price,
-                    target_price=target_price,
-                    stop_loss=stop_loss,
-                    confidence=confidence,
-                    pattern_start_idx=start,
-                    pattern_end_idx=end - 1,
-                    formation_bars=w,
-                    risk_reward_ratio=rr,
-                    timestamp=index[end - 1],
-                    additional_data={
-                        "high_slope": float(h_slope),
-                        "low_slope": float(l_slope),
-                        "high_r2": float(h_r2),
-                        "low_r2": float(l_r2),
-                        "convergence_ratio": float(convergence_ratio),
-                    },
-                ))
+                patterns.append(
+                    PatternSignal(
+                        pattern_type=ptype,
+                        direction=direction,
+                        entry_price=entry_price,
+                        target_price=target_price,
+                        stop_loss=stop_loss,
+                        confidence=confidence,
+                        pattern_start_idx=start,
+                        pattern_end_idx=end - 1,
+                        formation_bars=w,
+                        risk_reward_ratio=rr,
+                        timestamp=index[end - 1],
+                        additional_data={
+                            "high_slope": float(h_slope),
+                            "low_slope": float(l_slope),
+                            "high_r2": float(h_r2),
+                            "low_r2": float(l_r2),
+                            "convergence_ratio": float(convergence_ratio),
+                        },
+                    )
+                )
 
         return patterns
 
@@ -508,12 +531,12 @@ class AdvancedPatternDetector:
             # Consolidation window after the pole
             for body_len in range(self.min_pattern_bars, min(self.min_pattern_bars * 3, n - pole_end)):
                 body_start = pole_end
-                body_end   = pole_end + body_len
+                body_end = pole_end + body_len
                 if body_end >= n:
                     break
 
                 b_high = high[body_start:body_end]
-                b_low  = low[body_start:body_end]
+                b_low = low[body_start:body_end]
                 b_close = close[body_start:body_end]
 
                 body_range = float(b_high.max() - b_low.min())
@@ -530,7 +553,7 @@ class AdvancedPatternDetector:
                 x = np.arange(body_len, dtype=float)
                 if body_len >= 3:
                     h_slope = float(np.polyfit(x, b_high, 1)[0])
-                    l_slope = float(np.polyfit(x, b_low,  1)[0])
+                    l_slope = float(np.polyfit(x, b_low, 1)[0])
                     converging = (h_slope < 0 and l_slope > 0) if bullish_pole else (h_slope > 0 and l_slope < 0)
                     is_pennant = converging
                 else:
@@ -539,35 +562,41 @@ class AdvancedPatternDetector:
                 ptype = PatternType.PENNANT if is_pennant else PatternType.FLAG
                 direction = PatternDirection.BULLISH if bullish_pole else PatternDirection.BEARISH
 
-                entry_price  = float(close[body_end - 1])
+                entry_price = float(close[body_end - 1])
                 target_price = entry_price + pole_length if bullish_pole else entry_price - pole_length
-                stop_loss    = float(b_low.min()) if bullish_pole else float(b_high.max())
+                stop_loss = float(b_low.min()) if bullish_pole else float(b_high.max())
 
-                rr = abs(target_price - entry_price) / abs(entry_price - stop_loss) if abs(entry_price - stop_loss) > 0 else 0.0
+                rr = (
+                    abs(target_price - entry_price) / abs(entry_price - stop_loss)
+                    if abs(entry_price - stop_loss) > 0
+                    else 0.0
+                )
 
                 # Confidence: higher when body is tight and counter-trend
                 tightness = 1.0 - body_range / (pole_length + 1e-9)
                 confidence = float(min(0.90, 0.60 + tightness * 0.25 + (0.05 if counter_trend else 0.0)))
 
-                patterns.append(PatternSignal(
-                    pattern_type=ptype,
-                    direction=direction,
-                    entry_price=entry_price,
-                    target_price=target_price,
-                    stop_loss=stop_loss,
-                    confidence=confidence,
-                    pattern_start_idx=pole_start,
-                    pattern_end_idx=body_end - 1,
-                    formation_bars=body_end - pole_start,
-                    risk_reward_ratio=rr,
-                    timestamp=index[body_end - 1],
-                    additional_data={
-                        "pole_length": float(pole_length),
-                        "body_range": float(body_range),
-                        "is_pennant": is_pennant,
-                        "counter_trend": counter_trend,
-                    },
-                ))
+                patterns.append(
+                    PatternSignal(
+                        pattern_type=ptype,
+                        direction=direction,
+                        entry_price=entry_price,
+                        target_price=target_price,
+                        stop_loss=stop_loss,
+                        confidence=confidence,
+                        pattern_start_idx=pole_start,
+                        pattern_end_idx=body_end - 1,
+                        formation_bars=body_end - pole_start,
+                        risk_reward_ratio=rr,
+                        timestamp=index[body_end - 1],
+                        additional_data={
+                            "pole_length": float(pole_length),
+                            "body_range": float(body_range),
+                            "is_pennant": is_pennant,
+                            "counter_trend": counter_trend,
+                        },
+                    )
+                )
                 # Only emit the first valid body length per pole to avoid duplicates
                 break
 
@@ -660,8 +689,8 @@ class AdvancedPatternDetector:
         atr = float(np.mean(high - low)) if n > 0 else 1.0
         cluster_tol = atr * 0.5  # levels within 0.5 ATR are the same zone
 
-        peaks   = argrelextrema(high, np.greater, order=3)[0]
-        troughs = argrelextrema(low,  np.less,    order=3)[0]
+        peaks = argrelextrema(high, np.greater, order=3)[0]
+        troughs = argrelextrema(low, np.less, order=3)[0]
 
         # Build candidate levels: (price, index, is_resistance)
         candidates: list[tuple[float, int, bool]] = []
@@ -695,10 +724,10 @@ class AdvancedPatternDetector:
                 continue  # single touch — not a confirmed level
 
             level_price = float(np.mean([c[0] for c in cluster]))
-            touches     = len(cluster)
-            last_idx    = max(c[1] for c in cluster)
-            res_count   = sum(1 for c in cluster if c[2])
-            sup_count   = touches - res_count
+            touches = len(cluster)
+            last_idx = max(c[1] for c in cluster)
+            res_count = sum(1 for c in cluster if c[2])
+            sup_count = touches - res_count
 
             # Classify as resistance or support by majority vote
             is_resistance = res_count >= sup_count
@@ -707,37 +736,43 @@ class AdvancedPatternDetector:
             # Target and stop
             if is_resistance:
                 target_price = level_price + atr
-                stop_loss    = level_price - atr * 0.5
+                stop_loss = level_price - atr * 0.5
             else:
                 target_price = level_price - atr
-                stop_loss    = level_price + atr * 0.5
+                stop_loss = level_price + atr * 0.5
 
-            rr = abs(target_price - level_price) / abs(level_price - stop_loss) if abs(level_price - stop_loss) > 0 else 0.0
+            rr = (
+                abs(target_price - level_price) / abs(level_price - stop_loss)
+                if abs(level_price - stop_loss) > 0
+                else 0.0
+            )
 
             # Confidence: 2 touches → 0.65, 3 → 0.75, 4 → 0.85, 5+ → 0.95
             confidence = float(min(0.95, 0.55 + touches * 0.10))
 
-            patterns.append(PatternSignal(
-                pattern_type=PatternType.SUPPORT_RESISTANCE,
-                direction=direction,
-                entry_price=level_price,
-                target_price=target_price,
-                stop_loss=stop_loss,
-                confidence=confidence,
-                pattern_start_idx=min(c[1] for c in cluster),
-                pattern_end_idx=last_idx,
-                formation_bars=last_idx - min(c[1] for c in cluster),
-                risk_reward_ratio=rr,
-                timestamp=index[min(last_idx, n - 1)],
-                additional_data={
-                    "level_price": level_price,
-                    "touches": touches,
-                    "resistance_touches": res_count,
-                    "support_touches": sup_count,
-                    "distance_from_current": float(abs(current_price - level_price)),
-                    "atr": atr,
-                },
-            ))
+            patterns.append(
+                PatternSignal(
+                    pattern_type=PatternType.SUPPORT_RESISTANCE,
+                    direction=direction,
+                    entry_price=level_price,
+                    target_price=target_price,
+                    stop_loss=stop_loss,
+                    confidence=confidence,
+                    pattern_start_idx=min(c[1] for c in cluster),
+                    pattern_end_idx=last_idx,
+                    formation_bars=last_idx - min(c[1] for c in cluster),
+                    risk_reward_ratio=rr,
+                    timestamp=index[min(last_idx, n - 1)],
+                    additional_data={
+                        "level_price": level_price,
+                        "touches": touches,
+                        "resistance_touches": res_count,
+                        "support_touches": sup_count,
+                        "distance_from_current": float(abs(current_price - level_price)),
+                        "atr": atr,
+                    },
+                )
+            )
 
         return patterns
 

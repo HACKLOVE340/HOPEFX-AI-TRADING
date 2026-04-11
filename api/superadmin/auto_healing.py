@@ -49,8 +49,14 @@ _DEFAULT_CONFIG: dict[str, Any] = {
     "quarantine_retention_days": 30,
     "tests_enabled": True,
     "test_categories": {
-        "unit": True, "api": True, "broker": True, "risk": True,
-        "ml": True, "security": True, "performance": False, "e2e": False,
+        "unit": True,
+        "api": True,
+        "broker": True,
+        "risk": True,
+        "ml": True,
+        "security": True,
+        "performance": False,
+        "e2e": False,
     },
     "test_execution_strategy": ["after_patch", "on_drift"],
     "test_timeout_sec": 120,
@@ -70,6 +76,7 @@ def _load_config() -> dict[str, Any]:
     # Redis first
     try:
         from cache.redis_client import get_redis_client
+
         rc = get_redis_client()
         if rc:
             raw = rc.get(_REDIS_CONFIG_KEY)
@@ -99,6 +106,7 @@ def _save_config(cfg: dict[str, Any]) -> None:
 
     try:
         from cache.redis_client import get_redis_client
+
         rc = get_redis_client()
         if rc:
             rc.set(_REDIS_CONFIG_KEY, json.dumps(cfg))
@@ -110,12 +118,14 @@ def _apply_config_to_healer(cfg: dict[str, Any]) -> None:
     """Push config into the live SelfHealer singleton via apply_config()."""
     try:
         from security.self_healer import get_healer
+
         get_healer().apply_config(cfg)
     except Exception as exc:
         logger.debug("auto_healing: apply_config_to_healer: %s", exc)
 
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
+
 
 class HealingConfigBody(BaseModel):
     enabled: bool = True
@@ -143,6 +153,7 @@ class HealingConfigBody(BaseModel):
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
+
 @router.get("/auto-healing/status")
 async def get_auto_healing_status(
     user: TokenPayload = Depends(_require_superadmin),
@@ -150,17 +161,18 @@ async def get_auto_healing_status(
     """Live healer status — delegates to SelfHealer singleton."""
     try:
         from security.self_healer import get_healer
+
         h = get_healer()
         applied = sum(1 for p in h._patch_history if p.get("success"))
-        failed  = sum(1 for p in h._patch_history if not p.get("success"))
+        failed = sum(1 for p in h._patch_history if not p.get("success"))
         last_scan = h._drift_events[-1]["ts"] if h._drift_events else None
         return {
-            "running":         h._running,
-            "baseline_files":  len(h._baseline),
-            "drift_events":    len(h._drift_events),
+            "running": h._running,
+            "baseline_files": len(h._baseline),
+            "drift_events": len(h._drift_events),
             "patches_applied": applied,
-            "patches_failed":  failed,
-            "last_scan":       last_scan,
+            "patches_failed": failed,
+            "last_scan": last_scan,
         }
     except Exception as exc:
         logger.debug("auto_healing status: %s", exc)
@@ -168,6 +180,7 @@ async def get_auto_healing_status(
     # Redis fallback
     try:
         from cache.redis_client import get_redis_client
+
         rc = get_redis_client()
         if rc:
             raw = rc.get("security:self_healer:status")
@@ -177,9 +190,12 @@ async def get_auto_healing_status(
         pass
 
     return {
-        "running": False, "baseline_files": 0,
-        "drift_events": 0, "patches_applied": 0,
-        "patches_failed": 0, "last_scan": None,
+        "running": False,
+        "baseline_files": 0,
+        "drift_events": 0,
+        "patches_applied": 0,
+        "patches_failed": 0,
+        "last_scan": None,
     }
 
 
@@ -200,8 +216,9 @@ async def save_healing_config(
     cfg = body.model_dump()
     _save_config(cfg)
     _apply_config_to_healer(cfg)
-    _log_superadmin_action(user, "auto_healing_config_save",
-                           f"aggressiveness={cfg['aggressiveness']} enabled={cfg['enabled']}")
+    _log_superadmin_action(
+        user, "auto_healing_config_save", f"aggressiveness={cfg['aggressiveness']} enabled={cfg['enabled']}"
+    )
     return {"ok": True, "saved_at": _utcnow().isoformat()}
 
 
@@ -212,13 +229,18 @@ async def get_test_index(
     """Return the cached test discovery index (no re-scan)."""
     try:
         from security.test_scanner import get_test_index
+
         return get_test_index(force_rescan=False)
     except Exception as exc:
         logger.warning("auto_healing test_index: %s", exc)
         return {
-            "total": 0, "files": 0, "by_category": {},
-            "last_indexed": None, "last_run": None,
-            "last_run_passed": None, "last_run_failed": None,
+            "total": 0,
+            "files": 0,
+            "by_category": {},
+            "last_indexed": None,
+            "last_run": None,
+            "last_run_passed": None,
+            "last_run_failed": None,
         }
 
 
@@ -234,10 +256,12 @@ async def reindex_tests(
     async def _run_scan() -> None:
         try:
             from security.test_scanner import async_reindex
+
             result = await async_reindex()
             logger.info(
                 "auto_healing: test re-index complete — %d tests in %d files",
-                result.get("total", 0), result.get("files", 0),
+                result.get("total", 0),
+                result.get("files", 0),
             )
         except Exception as exc:
             logger.warning("auto_healing: test re-index failed: %s", exc)
@@ -254,12 +278,14 @@ async def rebuild_baseline(
     _log_superadmin_action(user, "auto_healing_baseline_rebuild")
     try:
         from security.self_healer import get_healer
+
         result = await get_healer().rebuild_baseline()
         return {"ok": True, **result}
     except Exception as exc:
         logger.warning("auto_healing baseline rebuild: %s", exc)
         try:
             from security.self_healer import _build_manifest, _save_manifest
+
             manifest = _build_manifest()
             _save_manifest(manifest)
             return {"ok": True, "files": len(manifest), "rebuilt_at": _utcnow().isoformat()}
@@ -276,6 +302,7 @@ async def get_drift_history(
     """Return recent drift events from the live healer."""
     try:
         from security.self_healer import get_healer
+
         events = get_healer()._drift_events[-limit:]
         return {"events": events, "total": len(get_healer()._drift_events)}
     except Exception:
@@ -283,6 +310,7 @@ async def get_drift_history(
     # Redis fallback
     try:
         from cache.redis_client import get_redis_client
+
         rc = get_redis_client()
         if rc:
             raw = rc.get("heal:drift_events")
@@ -302,12 +330,14 @@ async def get_patch_history(
     """Return recent patch history from the live healer."""
     try:
         from security.self_healer import get_healer
+
         patches = get_healer()._patch_history[-limit:]
         return {"patches": patches, "total": len(get_healer()._patch_history)}
     except Exception:
         pass
     try:
         from cache.redis_client import get_redis_client
+
         rc = get_redis_client()
         if rc:
             raw = rc.lrange("heal:patch_history", -limit, -1)
@@ -325,6 +355,7 @@ async def get_quarantine_log(
     """Return the quarantine log."""
     try:
         from security.self_healer import get_healer
+
         return {"entries": get_healer().get_quarantine_log()}
     except Exception as exc:
         logger.debug("auto_healing quarantine: %s", exc)
@@ -350,6 +381,7 @@ async def run_tests_now(
     # Prefer the live healer — it already knows which categories are enabled
     try:
         from security.self_healer import get_healer
+
         result = await get_healer().run_tests_now(trigger="manual")
         return {"ok": True, **result}
     except Exception as exc:
@@ -358,12 +390,12 @@ async def run_tests_now(
     # Fallback: load config, run via test_scanner in executor
     try:
         cfg = _load_config()
-        enabled_cats = [
-            cat for cat, on in cfg.get("test_categories", {}).items() if on
-        ]
+        enabled_cats = [cat for cat, on in cfg.get("test_categories", {}).items() if on]
         if not enabled_cats:
             return {
-                "ok": True, "passed": 0, "failed": 0,
+                "ok": True,
+                "passed": 0,
+                "failed": 0,
                 "output": "No test categories enabled in config.",
                 "ts": _utcnow().isoformat(),
             }
@@ -397,6 +429,7 @@ async def get_pending_approval(
     """Return patches waiting for manual approval."""
     try:
         from cache.redis_client import get_redis_client
+
         rc = get_redis_client()
         if rc:
             raw = rc.lrange("heal:pending_approval", 0, -1)
@@ -415,6 +448,7 @@ async def approve_patch(
     _log_superadmin_action(user, "auto_healing_patch_approve", f"index={patch_index}")
     try:
         from cache.redis_client import get_redis_client
+
         rc = get_redis_client()
         if rc:
             entries = rc.lrange("heal:pending_approval", 0, -1)

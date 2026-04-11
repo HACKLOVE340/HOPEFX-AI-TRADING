@@ -25,6 +25,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from passlib.context import CryptContext
 
 from core.exceptions import AuthenticationError, VaultError
+import contextlib
 
 
 class SecureVault:
@@ -205,10 +206,8 @@ class SecureVault:
             raise
         except Exception as exc:
             # Attempt to clean up the temporary slot on failure
-            try:
+            with contextlib.suppress(Exception):
                 keyring.delete_password(self._service_name, _tmp_key_name)
-            except Exception:
-                pass
             _log.error("rotate_key failed: %s", exc, exc_info=True)
             raise VaultError(f"Key rotation failed: {exc}") from exc
 

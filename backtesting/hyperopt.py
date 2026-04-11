@@ -35,6 +35,7 @@ Usage:
 """
 
 import logging
+import math
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -545,7 +546,11 @@ class HyperoptEngine:
 
             # Evaluate on test
             self.market_data = test_df
-            test_value = self._backtest_objective(best_params) if not self.custom_objective else self.custom_objective(best_params, test_df)
+            test_value = (
+                self._backtest_objective(best_params)
+                if not self.custom_objective
+                else self.custom_objective(best_params, test_df)
+            )
             self.market_data = orig_data
 
             fold_results.append(
@@ -562,7 +567,13 @@ class HyperoptEngine:
             )
             logger.info(
                 "Walk-forward fold %d/%d: train_%s=%.4f test_%s=%.4f params=%s",
-                fold + 1, n_splits, self.metric, train_value, self.metric, test_value or 0, best_params,
+                fold + 1,
+                n_splits,
+                self.metric,
+                train_value,
+                self.metric,
+                test_value or 0,
+                best_params,
             )
 
         return WalkForwardResult(
@@ -611,12 +622,16 @@ class HyperoptEngine:
 
             orig_data = self.market_data
             self.market_data = test_df
-            val = self._backtest_objective(params) if not self.custom_objective else self.custom_objective(params, test_df)
+            val = (
+                self._backtest_objective(params)
+                if not self.custom_objective
+                else self.custom_objective(params, test_df)
+            )
             self.market_data = orig_data
 
             fold_values.append(float(val) if val is not None else float("nan"))
 
-        valid = [v for v in fold_values if not (v != v)]  # filter NaN
+        valid = [v for v in fold_values if not math.isnan(v)]  # filter NaN
         return CrossValidationResult(
             params=params,
             metric=self.metric,
@@ -665,8 +680,7 @@ class WalkForwardResult:
         ]
         for f in self.fold_results:
             lines.append(
-                f"  Fold {f['fold']}: train={f['train_value']:.4f} "
-                f"test={f['test_value']:.4f} params={f['best_params']}"
+                f"  Fold {f['fold']}: train={f['train_value']:.4f} test={f['test_value']:.4f} params={f['best_params']}"
             )
         return "\n".join(lines)
 

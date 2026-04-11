@@ -215,9 +215,9 @@ class DriftMonitor:
     @classmethod
     def from_reference_arrays(
         cls,
-        reference_data: dict[str, "np.ndarray"],
+        reference_data: dict[str, np.ndarray],
         n_bins: int = _PSI_BINS,
-    ) -> "DriftMonitor":
+    ) -> DriftMonitor:
         """
         Build a DriftMonitor directly from reference numpy arrays.
 
@@ -230,8 +230,8 @@ class DriftMonitor:
             DriftMonitor instance ready to call compute().
         """
         train_stats: dict[str, dict[str, Any]] = {}
-        for feat, arr in reference_data.items():
-            arr = np.asarray(arr, dtype=float)
+        for feat, raw_arr in reference_data.items():
+            arr = np.asarray(raw_arr, dtype=float)
             if arr.size == 0:
                 continue
             percentiles = np.linspace(0, 100, n_bins + 1)

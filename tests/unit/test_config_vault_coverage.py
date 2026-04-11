@@ -12,8 +12,7 @@ External I/O (keyring) is patched at the boundary.
 from __future__ import annotations
 
 import os
-import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -49,7 +48,6 @@ class TestSecureVaultInitialize:
         return v
 
     def test_initialize_with_stored_key(self):
-        from config.vault import SecureVault
         from cryptography.fernet import Fernet
 
         key = Fernet.generate_key()
@@ -59,25 +57,19 @@ class TestSecureVaultInitialize:
         assert v._fernet is not None
 
     def test_initialize_with_password_no_stored_key(self):
-        from config.vault import SecureVault
-
         v = self._fresh_vault()
-        with patch("keyring.get_password", return_value=None), \
-             patch("keyring.set_password"):
-            v.initialize(password="test-password-for-vault-init")
+        with patch("keyring.get_password", return_value=None), patch("keyring.set_password"):
+            v.initialize(password="test-password-for-vault-init")  # pragma: allowlist secret
         assert v._fernet is not None
 
     def test_initialize_no_key_no_password_raises(self):
-        from config.vault import SecureVault
         from core.exceptions import VaultError
 
         v = self._fresh_vault()
-        with patch("keyring.get_password", return_value=None):
-            with pytest.raises(VaultError, match="No stored key"):
-                v.initialize()
+        with patch("keyring.get_password", return_value=None), pytest.raises(VaultError, match="No stored key"):
+            v.initialize()
 
     def test_initialize_keyring_exception_raises_vault_error(self):
-        from config.vault import SecureVault
         from core.exceptions import VaultError
 
         v = self._fresh_vault()
@@ -86,7 +78,6 @@ class TestSecureVaultInitialize:
                 v.initialize()
 
     def test_double_initialize_sets_fernet(self):
-        from config.vault import SecureVault
         from cryptography.fernet import Fernet
 
         key = Fernet.generate_key()
@@ -236,7 +227,7 @@ class TestStartupValidatorDevMode:
     """In dev mode most checks are skipped."""
 
     def _run(self, env_overrides: dict):
-        from config.startup_validator import validate_environment_or_raise, StartupValidationError
+        from config.startup_validator import validate_environment_or_raise
 
         base = {
             "APP_ENV": "development",
@@ -253,32 +244,46 @@ class TestStartupValidatorDevMode:
     def test_dev_mode_with_oanda_broker_requires_credentials(self):
         from config.startup_validator import StartupValidationError
 
-        with patch.dict(os.environ, {
-            "APP_ENV": "development",
-            "SECURITY_JWT_SECRET": "a" * 40,
-            "BROKER_TYPE": "oanda",
-        }, clear=True):
-            with pytest.raises(StartupValidationError):
-                from config.startup_validator import validate_environment_or_raise
-                validate_environment_or_raise()
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "APP_ENV": "development",
+                    "SECURITY_JWT_SECRET": "a" * 40,
+                    "BROKER_TYPE": "oanda",
+                },
+                clear=True,
+            ),
+            pytest.raises(StartupValidationError),
+        ):
+            from config.startup_validator import validate_environment_or_raise
+
+            validate_environment_or_raise()
 
     def test_dev_mode_invalid_broker_type_raises(self):
         from config.startup_validator import StartupValidationError
 
-        with patch.dict(os.environ, {
-            "APP_ENV": "development",
-            "SECURITY_JWT_SECRET": "a" * 40,
-            "BROKER_TYPE": "unknown_broker",
-        }, clear=True):
-            with pytest.raises(StartupValidationError):
-                from config.startup_validator import validate_environment_or_raise
-                validate_environment_or_raise()
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "APP_ENV": "development",
+                    "SECURITY_JWT_SECRET": "a" * 40,
+                    "BROKER_TYPE": "unknown_broker",
+                },
+                clear=True,
+            ),
+            pytest.raises(StartupValidationError),
+        ):
+            from config.startup_validator import validate_environment_or_raise
+
+            validate_environment_or_raise()
 
 
 @pytest.mark.unit
 class TestStartupValidatorJWT:
     def _run_dev(self, jwt_val: str):
-        from config.startup_validator import validate_environment_or_raise, StartupValidationError
+        from config.startup_validator import validate_environment_or_raise
 
         env = {"APP_ENV": "development", "BROKER_TYPE": "paper"}
         if jwt_val:
@@ -292,39 +297,59 @@ class TestStartupValidatorJWT:
         with patch.dict(os.environ, {"APP_ENV": "development", "BROKER_TYPE": "paper"}, clear=True):
             with pytest.raises(StartupValidationError, match="SECURITY_JWT_SECRET"):
                 from config.startup_validator import validate_environment_or_raise
+
                 validate_environment_or_raise()
 
     def test_short_jwt_raises(self):
         from config.startup_validator import StartupValidationError
 
-        with patch.dict(os.environ, {
-            "APP_ENV": "development",
-            "BROKER_TYPE": "paper",
-            "SECURITY_JWT_SECRET": "short",
-        }, clear=True):
-            with pytest.raises(StartupValidationError, match="TOO_SHORT"):
-                from config.startup_validator import validate_environment_or_raise
-                validate_environment_or_raise()
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "APP_ENV": "development",
+                    "BROKER_TYPE": "paper",
+                    "SECURITY_JWT_SECRET": "short",  # pragma: allowlist secret
+                },
+                clear=True,
+            ),
+            pytest.raises(StartupValidationError, match="TOO_SHORT"),
+        ):
+            from config.startup_validator import validate_environment_or_raise
+
+            validate_environment_or_raise()
 
     def test_change_me_jwt_raises(self):
         from config.startup_validator import StartupValidationError
 
-        with patch.dict(os.environ, {
-            "APP_ENV": "development",
-            "BROKER_TYPE": "paper",
-            "SECURITY_JWT_SECRET": "CHANGE_ME_this_is_a_placeholder_value_here",
-        }, clear=True):
-            with pytest.raises(StartupValidationError, match="INSECURE"):
-                from config.startup_validator import validate_environment_or_raise
-                validate_environment_or_raise()
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "APP_ENV": "development",
+                    "BROKER_TYPE": "paper",
+                    "SECURITY_JWT_SECRET": "CHANGE_ME_this_is_a_placeholder_value_here",  # pragma: allowlist secret
+                },
+                clear=True,
+            ),
+            pytest.raises(StartupValidationError, match="INSECURE"),
+        ):
+            from config.startup_validator import validate_environment_or_raise
+
+            validate_environment_or_raise()
 
     def test_jwt_secret_key_fallback_accepted(self):
-        with patch.dict(os.environ, {
-            "APP_ENV": "development",
-            "BROKER_TYPE": "paper",
-            "JWT_SECRET_KEY": "a" * 40,
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "APP_ENV": "development",
+                "BROKER_TYPE": "paper",
+                "JWT_SECRET_KEY": "a" * 40,
+            },
+            clear=True,
+        ):
             from config.startup_validator import validate_environment_or_raise
+
             validate_environment_or_raise()  # should not raise
 
 
@@ -334,7 +359,7 @@ class TestStartupValidatorProduction:
         base = {
             "APP_ENV": "production",
             "SECURITY_JWT_SECRET": "a" * 48,
-            "DATABASE_URL": "postgresql://user:password123@host:5432/db",
+            "DATABASE_URL": "postgresql://user:password123@host:5432/db",  # pragma: allowlist secret
             "REDIS_URL": "redis://localhost:6379/0",
             "CONFIG_ENCRYPTION_KEY": "b" * 48,
             "HOPEFX_KILL_SWITCH_TOKEN": "c" * 48,
@@ -349,6 +374,7 @@ class TestStartupValidatorProduction:
     def test_full_production_config_passes(self):
         with patch.dict(os.environ, self._prod_env(), clear=True):
             from config.startup_validator import validate_environment_or_raise
+
             validate_environment_or_raise()
 
     def test_missing_database_url_raises(self):
@@ -359,6 +385,7 @@ class TestStartupValidatorProduction:
         with patch.dict(os.environ, env, clear=True):
             with pytest.raises(StartupValidationError, match="DATABASE_URL"):
                 from config.startup_validator import validate_environment_or_raise
+
                 validate_environment_or_raise()
 
     def test_missing_redis_url_raises(self):
@@ -366,10 +393,10 @@ class TestStartupValidatorProduction:
 
         env = self._prod_env()
         del env["REDIS_URL"]
-        with patch.dict(os.environ, env, clear=True):
-            with pytest.raises(StartupValidationError, match="REDIS_URL"):
-                from config.startup_validator import validate_environment_or_raise
-                validate_environment_or_raise()
+        with patch.dict(os.environ, env, clear=True), pytest.raises(StartupValidationError, match="REDIS_URL"):
+            from config.startup_validator import validate_environment_or_raise
+
+            validate_environment_or_raise()
 
     def test_invalid_redis_url_raises(self):
         from config.startup_validator import StartupValidationError
@@ -378,6 +405,7 @@ class TestStartupValidatorProduction:
         with patch.dict(os.environ, env, clear=True):
             with pytest.raises(StartupValidationError, match="INVALID.*REDIS_URL"):
                 from config.startup_validator import validate_environment_or_raise
+
                 validate_environment_or_raise()
 
     def test_redis_host_without_url_suggests_url(self):
@@ -386,19 +414,19 @@ class TestStartupValidatorProduction:
         env = self._prod_env()
         del env["REDIS_URL"]
         env["REDIS_HOST"] = "myredis.host"
-        with patch.dict(os.environ, env, clear=True):
-            with pytest.raises(StartupValidationError, match="REDIS_URL"):
-                from config.startup_validator import validate_environment_or_raise
-                validate_environment_or_raise()
+        with patch.dict(os.environ, env, clear=True), pytest.raises(StartupValidationError, match="REDIS_URL"):
+            from config.startup_validator import validate_environment_or_raise
+
+            validate_environment_or_raise()
 
     def test_short_encryption_key_raises(self):
         from config.startup_validator import StartupValidationError
 
         env = self._prod_env({"CONFIG_ENCRYPTION_KEY": "short"})
-        with patch.dict(os.environ, env, clear=True):
-            with pytest.raises(StartupValidationError, match="TOO_SHORT"):
-                from config.startup_validator import validate_environment_or_raise
-                validate_environment_or_raise()
+        with patch.dict(os.environ, env, clear=True), pytest.raises(StartupValidationError, match="TOO_SHORT"):
+            from config.startup_validator import validate_environment_or_raise
+
+            validate_environment_or_raise()
 
     def test_wildcard_cors_raises(self):
         from config.startup_validator import StartupValidationError
@@ -407,6 +435,7 @@ class TestStartupValidatorProduction:
         with patch.dict(os.environ, env, clear=True):
             with pytest.raises(StartupValidationError, match="INSECURE.*ALLOWED_ORIGINS"):
                 from config.startup_validator import validate_environment_or_raise
+
                 validate_environment_or_raise()
 
     def test_db_host_without_password_raises(self):
@@ -418,6 +447,7 @@ class TestStartupValidatorProduction:
         with patch.dict(os.environ, env, clear=True):
             with pytest.raises(StartupValidationError, match="DB_PASSWORD"):
                 from config.startup_validator import validate_environment_or_raise
+
                 validate_environment_or_raise()
 
     def test_short_db_password_raises(self):
@@ -426,10 +456,11 @@ class TestStartupValidatorProduction:
         env = self._prod_env()
         del env["DATABASE_URL"]
         env["DB_HOST"] = "mydb.host"
-        env["DB_PASSWORD"] = "short"
+        env["DB_PASSWORD"] = "short"  # pragma: allowlist secret
         with patch.dict(os.environ, env, clear=True):
             with pytest.raises(StartupValidationError, match="TOO_SHORT.*DB_PASSWORD"):
                 from config.startup_validator import validate_environment_or_raise
+
                 validate_environment_or_raise()
 
     def test_oanda_broker_requires_token(self):
@@ -439,46 +470,52 @@ class TestStartupValidatorProduction:
         with patch.dict(os.environ, env, clear=True):
             with pytest.raises(StartupValidationError, match="BROKER_OANDA_TOKEN"):
                 from config.startup_validator import validate_environment_or_raise
+
                 validate_environment_or_raise()
 
     def test_oanda_broker_with_credentials_passes(self):
-        env = self._prod_env({
-            "BROKER_TYPE": "oanda",
-            "BROKER_OANDA_TOKEN": "live-token-abc123",
-            "BROKER_OANDA_ACCOUNT": "001-001-12345678-001",
-        })
+        env = self._prod_env(
+            {
+                "BROKER_TYPE": "oanda",
+                "BROKER_OANDA_TOKEN": "live-token-abc123",
+                "BROKER_OANDA_ACCOUNT": "001-001-12345678-001",
+            }
+        )
         with patch.dict(os.environ, env, clear=True):
             from config.startup_validator import validate_environment_or_raise
+
             validate_environment_or_raise()
 
     def test_invalid_sentry_dsn_raises(self):
         from config.startup_validator import StartupValidationError
 
         env = self._prod_env({"SENTRY_DSN": "not-a-valid-dsn"})
-        with patch.dict(os.environ, env, clear=True):
-            with pytest.raises(StartupValidationError, match="SENTRY_DSN"):
-                from config.startup_validator import validate_environment_or_raise
-                validate_environment_or_raise()
+        with patch.dict(os.environ, env, clear=True), pytest.raises(StartupValidationError, match="SENTRY_DSN"):
+            from config.startup_validator import validate_environment_or_raise
+
+            validate_environment_or_raise()
 
     def test_valid_sentry_dsn_passes(self):
         env = self._prod_env({"SENTRY_DSN": "https://abc@sentry.io/123"})
         with patch.dict(os.environ, env, clear=True):
             from config.startup_validator import validate_environment_or_raise
+
             validate_environment_or_raise()
 
     def test_invalid_ibkr_port_raises(self):
         from config.startup_validator import StartupValidationError
 
         env = self._prod_env({"IBKR_PORT": "9999"})
-        with patch.dict(os.environ, env, clear=True):
-            with pytest.raises(StartupValidationError, match="IBKR_PORT"):
-                from config.startup_validator import validate_environment_or_raise
-                validate_environment_or_raise()
+        with patch.dict(os.environ, env, clear=True), pytest.raises(StartupValidationError, match="IBKR_PORT"):
+            from config.startup_validator import validate_environment_or_raise
+
+            validate_environment_or_raise()
 
     def test_valid_ibkr_port_passes(self):
         env = self._prod_env({"IBKR_PORT": "4001"})
         with patch.dict(os.environ, env, clear=True):
             from config.startup_validator import validate_environment_or_raise
+
             validate_environment_or_raise()
 
     def test_invalid_mobile_cors_raises(self):
@@ -488,12 +525,14 @@ class TestStartupValidatorProduction:
         with patch.dict(os.environ, env, clear=True):
             with pytest.raises(StartupValidationError, match="MOBILE_CORS_ORIGINS"):
                 from config.startup_validator import validate_environment_or_raise
+
                 validate_environment_or_raise()
 
     def test_valid_mobile_cors_passes(self):
         env = self._prod_env({"MOBILE_CORS_ORIGINS": "https://app.example.com"})
         with patch.dict(os.environ, env, clear=True):
             from config.startup_validator import validate_environment_or_raise
+
             validate_environment_or_raise()
 
     def test_invalid_argocd_webhook_raises(self):
@@ -503,6 +542,7 @@ class TestStartupValidatorProduction:
         with patch.dict(os.environ, env, clear=True):
             with pytest.raises(StartupValidationError, match="ARGOCD_ROLLBACK_WEBHOOK"):
                 from config.startup_validator import validate_environment_or_raise
+
                 validate_environment_or_raise()
 
     def test_invalid_llm_backend_raises(self):
@@ -512,21 +552,23 @@ class TestStartupValidatorProduction:
         with patch.dict(os.environ, env, clear=True):
             with pytest.raises(StartupValidationError, match="LLM_BACKEND"):
                 from config.startup_validator import validate_environment_or_raise
+
                 validate_environment_or_raise()
 
     def test_change_me_llm_key_raises(self):
         from config.startup_validator import StartupValidationError
 
         env = self._prod_env({"ANTHROPIC_API_KEY": "CHANGE_ME_replace_with_real_key"})
-        with patch.dict(os.environ, env, clear=True):
-            with pytest.raises(StartupValidationError, match="INSECURE"):
-                from config.startup_validator import validate_environment_or_raise
-                validate_environment_or_raise()
+        with patch.dict(os.environ, env, clear=True), pytest.raises(StartupValidationError, match="INSECURE"):
+            from config.startup_validator import validate_environment_or_raise
+
+            validate_environment_or_raise()
 
     def test_strict_mode_calls_sys_exit(self):
         with patch.dict(os.environ, {"APP_ENV": "development", "BROKER_TYPE": "paper"}, clear=True):
             with pytest.raises(SystemExit):
                 from config.startup_validator import validate_environment
+
                 validate_environment(strict=True)
 
     def test_missing_crypto_webhook_secret_raises(self):
@@ -537,6 +579,7 @@ class TestStartupValidatorProduction:
         with patch.dict(os.environ, env, clear=True):
             with pytest.raises(StartupValidationError, match="CRYPTO_WEBHOOK_SECRET"):
                 from config.startup_validator import validate_environment_or_raise
+
                 validate_environment_or_raise()
 
     def test_weak_crypto_webhook_secret_raises(self):
@@ -546,4 +589,5 @@ class TestStartupValidatorProduction:
         with patch.dict(os.environ, env, clear=True):
             with pytest.raises(StartupValidationError, match="WEAK.*CRYPTO_WEBHOOK_SECRET"):
                 from config.startup_validator import validate_environment_or_raise
+
                 validate_environment_or_raise()

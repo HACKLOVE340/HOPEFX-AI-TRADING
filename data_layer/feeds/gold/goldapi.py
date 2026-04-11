@@ -27,7 +27,7 @@ from data_layer.types import FeedSource, GoldTick, OHLCVBar
 logger = logging.getLogger(__name__)
 
 _BASE = "https://www.goldapi.io/api"
-_UTC  = timezone.utc
+_UTC = timezone.utc
 
 # GoldAPI timeframe → calendar days per bar (used to build date-range requests)
 _TF_TO_DAYS: dict[str, int] = {
@@ -151,7 +151,8 @@ class GoldAPIFeed(GoldFeedBase):
                 # Non-fatal: log and skip this date (holiday / weekend / rate limit)
                 logger.debug(
                     "GoldAPIFeed.fetch_ohlcv: skipping %s — %s",
-                    date_str, exc,
+                    date_str,
+                    exc,
                 )
                 cursor -= timedelta(days=days_per_bar)
                 continue
@@ -161,10 +162,10 @@ class GoldAPIFeed(GoldFeedBase):
                 cursor -= timedelta(days=days_per_bar)
                 continue
 
-            open_price  = float(data.get("open_price")  or data.get("price") or 0)
-            high_price  = float(data.get("high_price")  or data.get("price") or 0)
-            low_price   = float(data.get("low_price")   or data.get("price") or 0)
-            close_price = float(data.get("price")       or 0)
+            open_price = float(data.get("open_price") or data.get("price") or 0)
+            high_price = float(data.get("high_price") or data.get("price") or 0)
+            low_price = float(data.get("low_price") or data.get("price") or 0)
+            close_price = float(data.get("price") or 0)
 
             if close_price <= 0:
                 cursor -= timedelta(days=days_per_bar)
@@ -178,25 +179,25 @@ class GoldAPIFeed(GoldFeedBase):
             if low_price <= 0 or low_price > close_price:
                 low_price = min(open_price, close_price)
 
-            bar_open_dt  = datetime(cursor.year, cursor.month, cursor.day,
-                                    0, 0, 0, tzinfo=_UTC)
-            bar_close_dt = datetime(cursor.year, cursor.month, cursor.day,
-                                    23, 59, 59, tzinfo=_UTC)
+            bar_open_dt = datetime(cursor.year, cursor.month, cursor.day, 0, 0, 0, tzinfo=_UTC)
+            bar_close_dt = datetime(cursor.year, cursor.month, cursor.day, 23, 59, 59, tzinfo=_UTC)
 
-            bars.append(OHLCVBar(
-                symbol="XAU_USD",
-                timeframe=timeframe,
-                open_time=bar_open_dt,
-                close_time=bar_close_dt,
-                open=round(open_price,  4),
-                high=round(high_price,  4),
-                low=round(low_price,    4),
-                close=round(close_price, 4),
-                volume=0.0,          # GoldAPI does not provide volume
-                tick_count=0,
-                source=FeedSource.GOLDAPI,
-                lineage_id=str(uuid.uuid4()),
-            ))
+            bars.append(
+                OHLCVBar(
+                    symbol="XAU_USD",
+                    timeframe=timeframe,
+                    open_time=bar_open_dt,
+                    close_time=bar_close_dt,
+                    open=round(open_price, 4),
+                    high=round(high_price, 4),
+                    low=round(low_price, 4),
+                    close=round(close_price, 4),
+                    volume=0.0,  # GoldAPI does not provide volume
+                    tick_count=0,
+                    source=FeedSource.GOLDAPI,
+                    lineage_id=str(uuid.uuid4()),
+                )
+            )
             fetched += 1
             cursor -= timedelta(days=days_per_bar)
 
@@ -204,6 +205,8 @@ class GoldAPIFeed(GoldFeedBase):
         bars.reverse()
         logger.info(
             "GoldAPIFeed.fetch_ohlcv: fetched %d/%d bars (timeframe=%s)",
-            len(bars), effective_limit, timeframe,
+            len(bars),
+            effective_limit,
+            timeframe,
         )
         return bars
