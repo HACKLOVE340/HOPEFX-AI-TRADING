@@ -58,7 +58,9 @@ export async function waitForLoad(page: Page): Promise<void> {
  *   - ResizeObserver loop errors (browser quirk, not app errors)
  *   - favicon 404s
  *   - net::ERR_* network errors (backend not running in CI)
- *   - HTTP 401/403/500 resource failures (expected when backend is absent)
+ *   - HTTP 4xx/5xx resource failures (expected when backend is absent in CI)
+ *   - WebSocket connection errors (no backend in CI)
+ *   - React Router future-flag warnings logged as errors
  */
 export function captureConsoleErrors(page: Page): string[] {
   const errors: string[] = [];
@@ -69,10 +71,17 @@ export function captureConsoleErrors(page: Page): string[] {
         text.includes('ResizeObserver') ||
         text.includes('favicon') ||
         text.includes('net::ERR_') ||
+        text.includes('net::ERR_CONNECTION_REFUSED') ||
+        text.includes('Failed to load resource') ||
         text.includes('401') ||
         text.includes('403') ||
+        text.includes('404') ||
         text.includes('500') ||
-        text.includes('Failed to load resource')
+        text.includes('WebSocket') ||
+        text.includes('ws://') ||
+        text.includes('wss://') ||
+        text.includes('ECONNREFUSED') ||
+        text.includes('React Router')
       ) return;
       errors.push(text);
     }
