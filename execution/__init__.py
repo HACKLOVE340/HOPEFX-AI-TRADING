@@ -147,4 +147,31 @@ try:
 except Exception as _e:
     _log.debug("PromMetrics unavailable: %s", _e)
 
+# ── Canonical aliases (expected by external callers and tests) ────────────────
+try:
+    from execution.oms import OrderLifecycleManager as OrderManagementSystem  # noqa: F401
+except Exception as _e:
+    _log.debug("OrderManagementSystem alias unavailable: %s", _e)
+
+try:
+    from execution.tca import TCAEngine as TCARecorder  # noqa: F401
+    from execution.tca import MarketImpactModel  # noqa: F401
+except Exception as _e:
+    _log.debug("TCARecorder/MarketImpactModel alias unavailable: %s", _e)
+
+try:
+    from execution.throttler import MessageThrottler as OrderThrottler  # noqa: F401
+except Exception as _e:
+    _log.debug("OrderThrottler alias unavailable: %s", _e)
+
+try:
+    from execution.redis_state import RedisStateStore as RedisOrderState  # noqa: F401
+except Exception as _e:
+    _log.debug("RedisOrderState alias unavailable: %s", _e)
+
+try:
+    from execution.market_impact import AlmgrenChrissModel, FillSimulator  # noqa: F401
+except Exception as _e:
+    _log.debug("MarketImpact unavailable: %s", _e)
+
 __version__ = "1.0.0"

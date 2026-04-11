@@ -2318,3 +2318,14 @@ def get_broker_manager():
     except Exception as exc:
         logger.debug("get_broker_manager: could not build manager: %s", exc)
         return None
+
+
+def create_app_state():
+    """
+    Create and return a fresh AppState instance.
+
+    Convenience factory used by tests and external callers that need a
+    clean app state without importing core.app_state directly.
+    """
+    from core.app_state import AppState
+    return AppState()
