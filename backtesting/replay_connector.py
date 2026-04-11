@@ -323,6 +323,29 @@ class RegimeResult:
         max_dd = getattr(self.metrics, "max_drawdown", 1.0)
         return max_dd < 0.20  # < 20% drawdown = survived
 
+    def to_dict(self) -> dict[str, Any]:
+        """Serialise to a JSON-safe dict."""
+        m = self.metrics
+        return {
+            "regime": {
+                "name": self.regime.name,
+                "start": self.regime.start.isoformat(),
+                "end": self.regime.end.isoformat(),
+                "description": self.regime.description,
+                "expected_vol_mult": self.regime.expected_vol_mult,
+            },
+            "passed": self.passed,
+            "tick_count": self.tick_count,
+            "error": self.error,
+            "metrics": {
+                "sharpe_ratio": getattr(m, "sharpe_ratio", None),
+                "max_drawdown": getattr(m, "max_drawdown", None),
+                "total_return": getattr(m, "total_return", None),
+                "win_rate": getattr(m, "win_rate", None),
+                "total_trades": getattr(m, "total_trades", None),
+            } if m is not None else None,
+        }
+
 
 @dataclass
 class StressReport:
@@ -346,6 +369,20 @@ class StressReport:
     def worst_sharpe(self) -> float:
         sharpes = [getattr(r.metrics, "sharpe_ratio", 0.0) for r in self.results if r.metrics is not None]
         return min(sharpes) if sharpes else 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialise to a JSON-safe dict for API responses and audit logs."""
+        return {
+            "strategy_name": self.strategy_name,
+            "generated_at": self.generated_at,
+            "regimes_run": self.regimes_run,
+            "regimes_passed": self.regimes_passed,
+            "regimes_failed": self.regimes_failed,
+            "worst_drawdown": self.worst_drawdown(),
+            "best_sharpe": self.best_sharpe(),
+            "worst_sharpe": self.worst_sharpe(),
+            "results": [r.to_dict() for r in self.results],
+        }
 
 
 class RegimeShiftStressTester:
@@ -455,6 +492,34 @@ class RegimeShiftStressTester:
                 error="Regime simulation failed — check server logs",
             )
 
+    async def run_single_regime(self, regime_name: str) -> RegimeResult:
+        """
+        Run the strategy against a single named stress regime.
+
+        Args:
+            regime_name: Must match one of the ``name`` fields in
+                ``self._regimes`` (e.g. ``"covid_crash_2020"``).
+
+        Returns:
+            RegimeResult for the requested regime.
+
+        Raises:
+            ValueError: If *regime_name* is not found in the configured regimes.
+        """
+        regime = next((r for r in self._regimes if r.name == regime_name), None)
+        if regime is None:
+            available = [r.name for r in self._regimes]
+            raise ValueError(
+                f"Regime '{regime_name}' not found. Available: {available}"
+            )
+        logger.info(
+            "RegimeShiftStressTester: running single regime=%s (%s → %s)",
+            regime.name,
+            regime.start.date(),
+            regime.end.date(),
+        )
+        return await self._run_regime(regime)
+
     def summary(self, report: StressReport) -> str:
         """Return a human-readable summary of the stress report."""
         lines = [
@@ -479,3 +544,106 @@ class RegimeShiftStressTester:
             if r.error:
                 lines.append(f"       ERROR: {r.error}")
         return "\n".join(lines)
+
+
+# ── FastAPI router ────────────────────────────────────────────────────────────
+
+
+def create_replay_router():
+    """
+    FastAPI router for replay backtest and regime-shift stress test endpoints.
+
+    Mount with::
+
+        from backtesting.replay_connector import create_replay_router
+        app.include_router(create_replay_router())
+    """
+    from fastapi import APIRouter, BackgroundTasks, HTTPException
+    from pydantic import BaseModel
+
+    router = APIRouter(prefix="/replay", tags=["Replay Backtest"])
+    _jobs: dict[str, Any] = {}
+
+    class ReplayRunRequest(BaseModel):
+        strategy: str = "momentum"
+        symbol: str = "XAU_USD"
+        start: str  # ISO date string, e.g. "2023-01-01"
+        end: str
+        initial_capital: float = 10_000.0
+
+    class StressRunRequest(BaseModel):
+        strategy: str = "momentum"
+        strategy_name: str = "unnamed"
+        initial_capital: float = 10_000.0
+        regime: str | None = None  # None = run all regimes
+
+    class JobStatus(BaseModel):
+        job_id: str
+        status: str
+        result: dict | None = None
+
+    def _resolve_strategy(name: str) -> Any:
+        """Resolve a strategy name to a callable."""
+        _MAP = {
+            "momentum": ("strategies.momentum", "MomentumStrategy"),
+            "rsi": ("strategies.rsi_strategy", "RSIStrategy"),
+            "macd": ("strategies.macd_strategy", "MACDStrategy"),
+            "ma_crossover": ("strategies.ma_crossover", "MovingAverageCrossover"),
+        }
+        if name not in _MAP:
+            raise ValueError(f"Unknown strategy '{name}'. Available: {list(_MAP)}")
+        import importlib
+        mod_path, cls_name = _MAP[name]
+        mod = importlib.import_module(mod_path)
+        return getattr(mod, cls_name)
+
+    @router.get("/regimes", summary="List available stress regimes")
+    async def list_regimes():
+        return {
+            "regimes": [
+                {
+                    "name": r.name,
+                    "start": r.start.isoformat(),
+                    "end": r.end.isoformat(),
+                    "description": r.description,
+                    "expected_vol_mult": r.expected_vol_mult,
+                }
+                for r in STRESS_REGIMES
+            ]
+        }
+
+    @router.post("/stress", response_model=JobStatus, summary="Run regime-shift stress test")
+    async def run_stress(req: StressRunRequest, background_tasks: BackgroundTasks):
+        import uuid
+        job_id = str(uuid.uuid4())[:8]
+        _jobs[job_id] = {"status": "running", "result": None}
+
+        async def _run():
+            try:
+                strategy_cls = _resolve_strategy(req.strategy)
+                tester = RegimeShiftStressTester(
+                    strategy_fn=strategy_cls,
+                    strategy_name=req.strategy_name,
+                    initial_capital=req.initial_capital,
+                )
+                if req.regime:
+                    result = await tester.run_single_regime(req.regime)
+                    _jobs[job_id] = {"status": "completed", "result": result.to_dict()}
+                else:
+                    report = await tester.run_all_regimes()
+                    _jobs[job_id] = {"status": "completed", "result": report.to_dict()}
+            except Exception as exc:
+                logger.exception("Stress test job %s failed", job_id)
+                _jobs[job_id] = {"status": "error", "result": {"error": str(exc)}}
+
+        background_tasks.add_task(_run)
+        return JobStatus(job_id=job_id, status="running")
+
+    @router.get("/stress/{job_id}", response_model=JobStatus)
+    async def get_stress_status(job_id: str):
+        if job_id not in _jobs:
+            raise HTTPException(404, f"Job {job_id} not found")
+        job = _jobs[job_id]
+        return JobStatus(job_id=job_id, status=job["status"], result=job["result"])
+
+    return router
