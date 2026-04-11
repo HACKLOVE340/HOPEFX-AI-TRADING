@@ -107,24 +107,10 @@ def _save_config(cfg: dict[str, Any]) -> None:
 
 
 def _apply_config_to_healer(cfg: dict[str, Any]) -> None:
-    """Push relevant config values into the live SelfHealer instance."""
+    """Push config into the live SelfHealer singleton via apply_config()."""
     try:
         from security.self_healer import get_healer
-        import security.self_healer as _sh
-
-        healer = get_healer()
-        _sh.HEAL_SCAN_INTERVAL = cfg.get("scan_interval_sec", 120)
-        _sh.HEAL_PATCH_INTERVAL = cfg.get("patch_interval_sec", 60)
-        _sh.MAX_PATCH_SIZE = cfg.get("max_patch_bytes", 65536)
-
-        if hasattr(healer, "_enabled"):
-            healer._enabled = cfg.get("enabled", True)
-        if hasattr(healer, "_quarantine_enabled"):
-            healer._quarantine_enabled = cfg.get("quarantine_enabled", True)
-        if hasattr(healer, "_aggressiveness"):
-            healer._aggressiveness = cfg.get("aggressiveness", "medium")
-        if hasattr(healer, "_max_patch_size"):
-            healer._max_patch_size = cfg.get("max_patch_bytes", 65536)
+        get_healer().apply_config(cfg)
     except Exception as exc:
         logger.debug("auto_healing: apply_config_to_healer: %s", exc)
 
@@ -269,16 +255,129 @@ async def rebuild_baseline(
         return {"ok": True, **result}
     except Exception as exc:
         logger.warning("auto_healing baseline rebuild: %s", exc)
-        # Fallback: rebuild via module-level helpers
         try:
             from security.self_healer import _build_manifest, _save_manifest
             manifest = _build_manifest()
             _save_manifest(manifest)
-            return {
-                "ok": True,
-                "files": len(manifest),
-                "rebuilt_at": _utcnow().isoformat(),
-            }
+            return {"ok": True, "files": len(manifest), "rebuilt_at": _utcnow().isoformat()}
         except Exception as exc2:
             logger.error("auto_healing baseline rebuild fallback: %s", exc2)
             return {"ok": False, "error": str(exc2), "rebuilt_at": _utcnow().isoformat()}
+
+
+@router.get("/auto-healing/drift")
+async def get_drift_history(
+    limit: int = 100,
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    """Return recent drift events from the live healer."""
+    try:
+        from security.self_healer import get_healer
+        events = get_healer()._drift_events[-limit:]
+        return {"events": events, "total": len(get_healer()._drift_events)}
+    except Exception:
+        pass
+    # Redis fallback
+    try:
+        from cache.redis_client import get_redis_client
+        rc = get_redis_client()
+        if rc:
+            raw = rc.get("heal:drift_events")
+            if raw:
+                events = json.loads(raw)[-limit:]
+                return {"events": events, "total": len(events)}
+    except Exception as exc:
+        logger.debug("auto_healing drift: %s", exc)
+    return {"events": [], "total": 0}
+
+
+@router.get("/auto-healing/patches")
+async def get_patch_history(
+    limit: int = 50,
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    """Return recent patch history from the live healer."""
+    try:
+        from security.self_healer import get_healer
+        patches = get_healer()._patch_history[-limit:]
+        return {"patches": patches, "total": len(get_healer()._patch_history)}
+    except Exception:
+        pass
+    try:
+        from cache.redis_client import get_redis_client
+        rc = get_redis_client()
+        if rc:
+            raw = rc.lrange("heal:patch_history", -limit, -1)
+            patches = [json.loads(r) for r in raw]
+            return {"patches": patches, "total": len(patches)}
+    except Exception as exc:
+        logger.debug("auto_healing patches: %s", exc)
+    return {"patches": [], "total": 0}
+
+
+@router.get("/auto-healing/quarantine")
+async def get_quarantine_log(
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    """Return the quarantine log."""
+    try:
+        from security.self_healer import get_healer
+        return {"entries": get_healer().get_quarantine_log()}
+    except Exception as exc:
+        logger.debug("auto_healing quarantine: %s", exc)
+    return {"entries": []}
+
+
+@router.post("/auto-healing/tests/run")
+async def run_tests_now(
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    """Trigger an immediate test run and return the result."""
+    _log_superadmin_action(user, "auto_healing_test_run_manual")
+    try:
+        from security.self_healer import get_healer
+        result = await get_healer().run_tests_now(trigger="manual")
+        return {"ok": True, **result}
+    except Exception as exc:
+        logger.warning("auto_healing run_tests_now: %s", exc)
+        return {"ok": False, "error": str(exc), "ts": _utcnow().isoformat()}
+
+
+@router.get("/auto-healing/pending-approval")
+async def get_pending_approval(
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    """Return patches waiting for manual approval."""
+    try:
+        from cache.redis_client import get_redis_client
+        rc = get_redis_client()
+        if rc:
+            raw = rc.lrange("heal:pending_approval", 0, -1)
+            return {"patches": [json.loads(r) for r in raw]}
+    except Exception as exc:
+        logger.debug("auto_healing pending_approval: %s", exc)
+    return {"patches": []}
+
+
+@router.post("/auto-healing/approve/{patch_index}")
+async def approve_patch(
+    patch_index: int,
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    """Move a pending patch to fixes:approved queue."""
+    _log_superadmin_action(user, "auto_healing_patch_approve", f"index={patch_index}")
+    try:
+        from cache.redis_client import get_redis_client
+        rc = get_redis_client()
+        if rc:
+            entries = rc.lrange("heal:pending_approval", 0, -1)
+            if patch_index < 0 or patch_index >= len(entries):
+                return {"ok": False, "error": "Invalid patch index"}
+            entry = entries[patch_index]
+            rc.lrem("heal:pending_approval", 1, entry)
+            rc.rpush("fixes:approved", entry)
+            return {"ok": True, "approved_at": _utcnow().isoformat()}
+    except Exception as exc:
+        logger.warning("auto_healing approve_patch: %s", exc)
+        return {"ok": False, "error": str(exc)}
+    return {"ok": False, "error": "Redis unavailable"}
