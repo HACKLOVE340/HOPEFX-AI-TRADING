@@ -607,3 +607,232 @@ class TestConcurrentAccess:
         )
         # Should not raise or corrupt state
         assert isinstance(orch._hedge_active, bool)
+
+
+# ---------------------------------------------------------------------------
+# _clear_state OSError path
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestClearStateOSError:
+    def test_clear_state_oserror_no_crash(self, tmp_path):
+        """OSError during unlink is swallowed."""
+        orch = _make_orch(tmp_path)
+        orch._persist_state()
+        # Make the file read-only so unlink fails on some systems,
+        # or just patch Path.unlink to raise OSError
+        with patch.object(orch._state_file.__class__, "unlink", side_effect=OSError("permission denied")):
+            orch._clear_state()  # should not raise
+
+
+# ---------------------------------------------------------------------------
+# _get_broker lazy-load paths
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestGetBrokerLazyLoad:
+    def test_engine_found_but_no_broker_attr(self, tmp_path):
+        """Engine exists but has no _broker attribute → returns None."""
+        orch = _make_orch(tmp_path)
+        mock_engine = MagicMock(spec=[])  # no _broker attribute
+        mock_module = MagicMock()
+        mock_module._engine_instance = mock_engine
+        with patch.dict("sys.modules", {"hopefx_engine": mock_module}):
+            result = orch._get_broker()
+        assert result is None
+
+    def test_engine_found_broker_is_none(self, tmp_path):
+        """Engine exists, _broker is None → returns None."""
+        orch = _make_orch(tmp_path)
+        mock_engine = MagicMock()
+        mock_engine._broker = None
+        mock_module = MagicMock()
+        mock_module._engine_instance = mock_engine
+        with patch.dict("sys.modules", {"hopefx_engine": mock_module}):
+            result = orch._get_broker()
+        assert result is None
+
+    def test_engine_instance_is_none(self, tmp_path):
+        """Module exists but _engine_instance is None → returns None."""
+        orch = _make_orch(tmp_path)
+        mock_module = MagicMock()
+        mock_module._engine_instance = None
+        with patch.dict("sys.modules", {"hopefx_engine": mock_module}):
+            result = orch._get_broker()
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# get_current_exposure — data_layer.orchestrator path
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestGetCurrentExposureDataLayer:
+    @pytest.mark.asyncio
+    async def test_data_layer_tick_with_exposure(self, tmp_path):
+        """Covers the data_layer.orchestrator tick.exposure path."""
+        orch = _make_orch(tmp_path)
+
+        mock_tick = MagicMock()
+        mock_tick.exposure = 0.42
+        mock_dl_orch = MagicMock()
+        mock_dl_orch.get_latest_tick.return_value = mock_tick
+
+        mock_dl_module = MagicMock()
+        mock_dl_module.orchestrator = mock_dl_orch
+
+        # Make risk_manager not have get_current_exposure so we fall through
+        mock_rm = MagicMock(spec=[])
+        with patch("risk.manager.risk_manager", mock_rm):
+            with patch.dict("sys.modules", {"data_layer.orchestrator": mock_dl_module}):
+                exposure = await orch.get_current_exposure()
+        assert exposure == pytest.approx(0.42)
+
+    @pytest.mark.asyncio
+    async def test_data_layer_tick_without_exposure_attr(self, tmp_path):
+        """Tick exists but has no exposure attr → falls through to proxy."""
+        orch = _make_orch(tmp_path)
+
+        mock_tick = MagicMock(spec=[])  # no exposure attribute
+        mock_dl_orch = MagicMock()
+        mock_dl_orch.get_latest_tick.return_value = mock_tick
+
+        mock_dl_module = MagicMock()
+        mock_dl_module.orchestrator = mock_dl_orch
+
+        mock_rm = MagicMock(spec=[])
+        with patch("risk.manager.risk_manager", mock_rm):
+            with patch.dict("sys.modules", {"data_layer.orchestrator": mock_dl_module}):
+                exposure = await orch.get_current_exposure()
+        assert 0.0 <= exposure <= 1.0
+
+    @pytest.mark.asyncio
+    async def test_data_layer_tick_is_none(self, tmp_path):
+        """get_latest_tick returns None → falls through to proxy."""
+        orch = _make_orch(tmp_path)
+
+        mock_dl_orch = MagicMock()
+        mock_dl_orch.get_latest_tick.return_value = None
+
+        mock_dl_module = MagicMock()
+        mock_dl_module.orchestrator = mock_dl_orch
+
+        mock_rm = MagicMock(spec=[])
+        with patch("risk.manager.risk_manager", mock_rm):
+            with patch.dict("sys.modules", {"data_layer.orchestrator": mock_dl_module}):
+                exposure = await orch.get_current_exposure()
+        assert 0.0 <= exposure <= 1.0
+
+
+# ---------------------------------------------------------------------------
+# FastAPI router endpoint bodies
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestFastAPIRouterEndpoints:
+    """Call the router endpoint functions directly to cover their bodies."""
+
+    @pytest.mark.asyncio
+    async def test_get_status_endpoint(self, tmp_path):
+        try:
+            from risk.orchestrator import create_orchestrator_router
+        except ImportError:
+            pytest.skip("FastAPI not available")
+
+        orch = _make_orch(tmp_path)
+        router = create_orchestrator_router(orch)
+        if router is None:
+            pytest.skip("FastAPI not available")
+
+        # Find and call the get_status route handler directly
+        for route in router.routes:
+            if hasattr(route, "path") and route.path == "/status":
+                result = await route.endpoint()
+                assert "max_risk_fraction" in result
+                break
+
+    @pytest.mark.asyncio
+    async def test_set_max_risk_endpoint(self, tmp_path):
+        try:
+            from risk.orchestrator import create_orchestrator_router
+            from pydantic import BaseModel
+        except ImportError:
+            pytest.skip("FastAPI not available")
+
+        orch = _make_orch(tmp_path)
+        router = create_orchestrator_router(orch)
+        if router is None:
+            pytest.skip("FastAPI not available")
+
+        for route in router.routes:
+            if hasattr(route, "path") and route.path == "/set_max_risk":
+                req = MagicMock()
+                req.fraction = 0.5
+                result = await route.endpoint(req)
+                assert result["status"] == "ok"
+                assert result["max_risk"] == pytest.approx(0.5)
+                break
+
+    @pytest.mark.asyncio
+    async def test_activate_hedge_endpoint(self, tmp_path):
+        try:
+            from risk.orchestrator import create_orchestrator_router
+        except ImportError:
+            pytest.skip("FastAPI not available")
+
+        orch = _make_orch(tmp_path)
+        router = create_orchestrator_router(orch)
+        if router is None:
+            pytest.skip("FastAPI not available")
+
+        for route in router.routes:
+            if hasattr(route, "path") and route.path == "/hedge/activate":
+                req = MagicMock()
+                req.symbol = "XAU_USD"
+                result = await route.endpoint(req)
+                assert result["status"] == "ok"
+                assert result["hedge_active"] is True
+                break
+
+    @pytest.mark.asyncio
+    async def test_deactivate_hedge_endpoint(self, tmp_path):
+        try:
+            from risk.orchestrator import create_orchestrator_router
+        except ImportError:
+            pytest.skip("FastAPI not available")
+
+        orch = _make_orch(tmp_path)
+        router = create_orchestrator_router(orch)
+        if router is None:
+            pytest.skip("FastAPI not available")
+
+        await orch.activate_hedge_mode("XAU_USD")
+        for route in router.routes:
+            if hasattr(route, "path") and route.path == "/hedge/deactivate":
+                result = await route.endpoint()
+                assert result["status"] == "ok"
+                assert result["hedge_active"] is False
+                break
+
+    @pytest.mark.asyncio
+    async def test_get_exposure_endpoint(self, tmp_path):
+        try:
+            from risk.orchestrator import create_orchestrator_router
+        except ImportError:
+            pytest.skip("FastAPI not available")
+
+        orch = _make_orch(tmp_path)
+        router = create_orchestrator_router(orch)
+        if router is None:
+            pytest.skip("FastAPI not available")
+
+        for route in router.routes:
+            if hasattr(route, "path") and route.path == "/exposure":
+                result = await route.endpoint()
+                assert "current_exposure" in result
+                assert 0.0 <= result["current_exposure"] <= 1.0
+                break
