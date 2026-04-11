@@ -204,3 +204,10 @@ data/macro/*.csv
 admin_password.txt
 .python-version
 mutants/
+
+# Runtime-generated audit logs
+data/audit/
+
+# Playwright test artifacts
+frontend/test-results/
+frontend/playwright-report/
