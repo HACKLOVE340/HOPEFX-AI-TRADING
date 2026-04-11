@@ -12,10 +12,7 @@ import { test, expect } from '@playwright/test';
 import { captureConsoleErrors } from './helpers';
 
 function noCriticalErrors(errors: string[]): void {
-  const critical = errors.filter(
-    (e) => !e.includes('401') && !e.includes('403') && !e.includes('net::ERR_')
-  );
-  expect(critical).toHaveLength(0);
+  expect(errors).toHaveLength(0);
 }
 
 test.describe('Performance page', () => {

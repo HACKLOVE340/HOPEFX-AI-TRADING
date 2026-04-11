@@ -52,18 +52,27 @@ export async function waitForLoad(page: Page): Promise<void> {
 }
 
 /**
- * Assert no console errors occurred (ignores known third-party noise).
+ * Capture browser console errors, filtering out known-benign noise.
+ *
+ * Filtered automatically:
+ *   - ResizeObserver loop errors (browser quirk, not app errors)
+ *   - favicon 404s
+ *   - net::ERR_* network errors (backend not running in CI)
+ *   - HTTP 401/403/500 resource failures (expected when backend is absent)
  */
 export function captureConsoleErrors(page: Page): string[] {
   const errors: string[] = [];
   page.on('console', (msg) => {
     if (msg.type() === 'error') {
       const text = msg.text();
-      // Ignore known benign errors
       if (
         text.includes('ResizeObserver') ||
         text.includes('favicon') ||
-        text.includes('net::ERR_')
+        text.includes('net::ERR_') ||
+        text.includes('401') ||
+        text.includes('403') ||
+        text.includes('500') ||
+        text.includes('Failed to load resource')
       ) return;
       errors.push(text);
     }
