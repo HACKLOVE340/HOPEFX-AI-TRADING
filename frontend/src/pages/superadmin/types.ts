@@ -22,7 +22,8 @@ export type SuperAdminTab =
   | 'nuclear-controls'
   | 'rate-limiting'
   | 'audit-trail'
-  | 'security-infra';
+  | 'security-infra'
+  | 'auto-healing';
 
 export interface PlatformOverview {
   total_users: number;
