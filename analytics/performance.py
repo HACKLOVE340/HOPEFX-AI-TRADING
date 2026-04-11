@@ -555,8 +555,8 @@ class PerformanceAnalytics:
             return now - timedelta(days=90)
         if period == MetricPeriod.YEAR:
             return now - timedelta(days=365)
-        # ALL_TIME
-        return datetime.min
+        # ALL_TIME — return tz-aware minimum so comparisons with UTC timestamps work
+        return datetime.min.replace(tzinfo=UTC)
 
     def _get_period_returns(self, start_date: datetime) -> list[float]:
         """Get daily returns for a period."""
