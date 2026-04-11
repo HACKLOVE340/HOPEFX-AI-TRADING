@@ -65,7 +65,39 @@ from datetime import datetime, timezone
 UTC = timezone.utc
 from typing import Any
 
+from pydantic import BaseModel
+
+# FastAPI types imported at module level so `from __future__ import annotations`
+# doesn't turn them into unresolvable forward references in endpoint signatures.
+try:
+    from fastapi import APIRouter, BackgroundTasks, HTTPException
+except ImportError:  # pragma: no cover
+    APIRouter = BackgroundTasks = HTTPException = None  # type: ignore[assignment,misc]
+
 logger = logging.getLogger(__name__)
+
+
+# ── FastAPI request/response models (module-level so Pydantic can resolve refs) ──
+
+class ReplayRunRequest(BaseModel):
+    strategy: str = "momentum"
+    symbol: str = "XAU_USD"
+    start: str  # ISO date string, e.g. "2023-01-01"
+    end: str
+    initial_capital: float = 10_000.0
+
+
+class StressRunRequest(BaseModel):
+    strategy: str = "momentum"
+    strategy_name: str = "unnamed"
+    initial_capital: float = 10_000.0
+    regime: str | None = None  # None = run all regimes
+
+
+class ReplayJobStatus(BaseModel):
+    job_id: str
+    status: str
+    result: dict | None = None
 
 
 # ── Regime definitions ────────────────────────────────────────────────────────
@@ -558,29 +590,12 @@ def create_replay_router():
         from backtesting.replay_connector import create_replay_router
         app.include_router(create_replay_router())
     """
-    from fastapi import APIRouter, BackgroundTasks, HTTPException
-    from pydantic import BaseModel
-
     router = APIRouter(prefix="/replay", tags=["Replay Backtest"])
     _jobs: dict[str, Any] = {}
 
-    class ReplayRunRequest(BaseModel):
-        strategy: str = "momentum"
-        symbol: str = "XAU_USD"
-        start: str  # ISO date string, e.g. "2023-01-01"
-        end: str
-        initial_capital: float = 10_000.0
-
-    class StressRunRequest(BaseModel):
-        strategy: str = "momentum"
-        strategy_name: str = "unnamed"
-        initial_capital: float = 10_000.0
-        regime: str | None = None  # None = run all regimes
-
-    class JobStatus(BaseModel):
-        job_id: str
-        status: str
-        result: dict | None = None
+    # Use module-level models (ReplayRunRequest, StressRunRequest, ReplayJobStatus)
+    # so Pydantic v2 can resolve forward references when building the OpenAPI schema.
+    JobStatus = ReplayJobStatus
 
     def _resolve_strategy(name: str) -> Any:
         """Resolve a strategy name to a callable."""
