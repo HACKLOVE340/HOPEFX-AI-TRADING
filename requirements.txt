@@ -28,6 +28,7 @@ kubernetes>=29.0.0            # sync K8s client (used when no event loop is runn
 # To upgrade: audit CVE list, run full test suite, update checksums.
 PyJWT==2.12.0
 passlib==1.7.4
+argon2-cffi>=23.1.0,<24.0.0
 bcrypt>=4.1.3,<6.0.0
 cryptography==46.0.7
 pyotp>=2.9.0,<3.0.0
