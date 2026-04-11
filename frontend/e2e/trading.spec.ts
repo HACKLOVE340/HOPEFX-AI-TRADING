@@ -23,11 +23,7 @@ test.describe('Trading page', () => {
     const errors = captureConsoleErrors(page);
     await page.goto('/trading');
     await page.waitForLoadState('networkidle');
-    // Filter out expected 401/403 from unauthenticated API calls
-    const critical = errors.filter(
-      (e) => !e.includes('401') && !e.includes('403') && !e.includes('net::ERR_')
-    );
-    expect(critical).toHaveLength(0);
+    expect(errors).toHaveLength(0);
   });
 
   test('chart container is present', async ({ page }) => {

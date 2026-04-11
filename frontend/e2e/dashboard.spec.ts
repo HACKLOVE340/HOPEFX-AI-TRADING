@@ -25,7 +25,7 @@ test.describe('Dashboard', () => {
     const errors = captureConsoleErrors(page);
     await gotoDashboard(page);
     // Allow redirect to login — just check no crash
-    expect(errors.filter((e) => !e.includes('401') && !e.includes('403'))).toHaveLength(0);
+    expect(errors).toHaveLength(0);
   });
 
   test('sidebar navigation is visible', async ({ page }) => {
@@ -79,7 +79,7 @@ test.describe('Navigation', () => {
     const errors = captureConsoleErrors(page);
     await page.goto('/performance');
     await page.waitForLoadState('networkidle');
-    expect(errors.filter((e) => !e.includes('401'))).toHaveLength(0);
+    expect(errors).toHaveLength(0);
     // Performance page should render something
     await expect(page.locator('body')).not.toBeEmpty();
   });
@@ -88,7 +88,7 @@ test.describe('Navigation', () => {
     const errors = captureConsoleErrors(page);
     await page.goto('/leaderboard');
     await page.waitForLoadState('networkidle');
-    expect(errors.filter((e) => !e.includes('401'))).toHaveLength(0);
+    expect(errors).toHaveLength(0);
     await expect(page.locator('text=Leaderboard').first()).toBeVisible({ timeout: 8_000 });
   });
 
@@ -96,7 +96,7 @@ test.describe('Navigation', () => {
     const errors = captureConsoleErrors(page);
     await page.goto('/status');
     await page.waitForLoadState('networkidle');
-    expect(errors.filter((e) => !e.includes('401'))).toHaveLength(0);
+    expect(errors).toHaveLength(0);
   });
 
   test('unknown route redirects to /dashboard', async ({ page }) => {
