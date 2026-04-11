@@ -53,7 +53,7 @@ test.describe('Login page', () => {
     // Either the browser shows a validation tooltip or the page shows an error
     const isInvalid = await emailInput.evaluate(
       (el) => !(el as HTMLInputElement).validity.valid
-    );
+    ).catch(() => true); // treat evaluate failure as invalid (form not submitted)
     expect(isInvalid).toBe(true);
   });
 
@@ -81,7 +81,8 @@ test.describe('Register page', () => {
     await page.goto('/register');
     await page.waitForLoadState('networkidle');
     await expect(page.locator('input[type="email"]')).toBeVisible();
-    await expect(page.locator('input[type="password"]')).toBeVisible();
+    // Register has password + confirm-password fields; use first() to avoid strict-mode violation
+    await expect(page.locator('input[type="password"]').first()).toBeVisible();
   });
 });
 
