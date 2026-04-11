@@ -2,10 +2,11 @@
 # Tests for ml/pipeline, ml/drift_monitor, ml/performance_monitor,
 #           ml/signal_filter, ml/model_registry
 """Real unit tests. No mocks/stubs/fake data."""
+
 from __future__ import annotations
 
 import tempfile
-from datetime import datetime, timezone
+from datetime import timezone
 from pathlib import Path
 
 import numpy as np
@@ -31,9 +32,11 @@ def _ohlcv(n=80, seed=42):
 
 # ── ml/pipeline — FeatureEngineer ────────────────────────────────────────────
 
+
 class TestFeatureEngineer:
     def test_compute_returns_dataframe(self):
         from ml.pipeline import FeatureEngineer
+
         fe = FeatureEngineer(lookback=5)
         out = fe.compute(_ohlcv())
         assert isinstance(out, pd.DataFrame)
@@ -41,16 +44,19 @@ class TestFeatureEngineer:
 
     def test_compute_has_return_columns(self):
         from ml.pipeline import FeatureEngineer
+
         out = FeatureEngineer(lookback=5).compute(_ohlcv())
         assert "ret_1" in out.columns
 
     def test_compute_drops_nan_rows(self):
         from ml.pipeline import FeatureEngineer
+
         out = FeatureEngineer(lookback=20).compute(_ohlcv(n=60))
         assert not out.isnull().any().any()
 
     def test_shorter_lookback_more_rows(self):
         from ml.pipeline import FeatureEngineer
+
         df = _ohlcv(n=60)
         out5 = FeatureEngineer(lookback=5).compute(df)
         out20 = FeatureEngineer(lookback=20).compute(df)
@@ -58,15 +64,18 @@ class TestFeatureEngineer:
 
     def test_rsi_column_present(self):
         from ml.pipeline import FeatureEngineer
+
         out = FeatureEngineer(lookback=5).compute(_ohlcv(n=60))
         assert any("rsi" in c.lower() for c in out.columns)
 
 
 # ── ml/pipeline — StationarityTester ─────────────────────────────────────────
 
+
 class TestStationarityTester:
     def test_stationary_series_passes(self):
         from ml.pipeline import StationarityTester
+
         rng = np.random.default_rng(1)
         series = pd.Series(rng.normal(0, 1, 200))
         result = StationarityTester().test(series, name="test")
@@ -74,6 +83,7 @@ class TestStationarityTester:
 
     def test_random_walk_fails(self):
         from ml.pipeline import StationarityTester
+
         rng = np.random.default_rng(2)
         series = pd.Series(np.cumsum(rng.normal(0, 1, 200)))
         result = StationarityTester().test(series, name="rw")
@@ -81,6 +91,7 @@ class TestStationarityTester:
 
     def test_result_has_adf_pvalue(self):
         from ml.pipeline import StationarityTester
+
         rng = np.random.default_rng(3)
         series = pd.Series(rng.normal(0, 1, 100))
         result = StationarityTester().test(series)
@@ -88,6 +99,7 @@ class TestStationarityTester:
 
     def test_to_dict(self):
         from ml.pipeline import StationarityTester
+
         rng = np.random.default_rng(4)
         series = pd.Series(rng.normal(0, 1, 100))
         d = StationarityTester().test(series).to_dict()
@@ -96,6 +108,7 @@ class TestStationarityTester:
 
     def test_dataframe_test(self):
         from ml.pipeline import FeatureEngineer, StationarityTester
+
         features = FeatureEngineer(lookback=5).compute(_ohlcv(n=80))
         cols = list(features.columns)
         results = StationarityTester().test_dataframe(features, feature_cols=cols)
@@ -105,15 +118,17 @@ class TestStationarityTester:
 
 # ── ml/pipeline — WalkForwardValidator ───────────────────────────────────────
 
+
 class TestWalkForwardValidator:
     def test_split_returns_folds(self):
         from ml.pipeline import WalkForwardValidator
-        df = _ohlcv(n=200)
+
         folds = WalkForwardValidator(n_folds=3, min_train_size=0.5).split(200)
         assert len(folds) == 3
 
     def test_fold_has_train_test_attrs(self):
         from ml.pipeline import WalkForwardValidator
+
         folds = WalkForwardValidator(n_folds=3, min_train_size=0.5).split(200)
         fold = folds[0]
         # fold is a tuple of (train_range, test_range)
@@ -122,6 +137,7 @@ class TestWalkForwardValidator:
 
     def test_folds_non_overlapping_test(self):
         from ml.pipeline import WalkForwardValidator
+
         folds = WalkForwardValidator(n_folds=3, min_train_size=0.5).split(200)
         for i in range(len(folds) - 1):
             # test range of fold i ends before test range of fold i+1 starts
@@ -130,9 +146,11 @@ class TestWalkForwardValidator:
 
 # ── ml/pipeline — XGBoostPredictor ───────────────────────────────────────────
 
+
 class TestXGBoostPredictor:
     def _xy(self, n=200, seed=7):
         from ml.pipeline import FeatureEngineer
+
         df = _ohlcv(n=n, seed=seed)
         X = FeatureEngineer(lookback=5).compute(df)
         y = (X["ret_1"].shift(-1) > 0).astype(int).dropna()
@@ -140,6 +158,7 @@ class TestXGBoostPredictor:
 
     def test_fit_and_predict(self):
         from ml.pipeline import XGBoostPredictor
+
         X, y = self._xy()
         model = XGBoostPredictor(params={"n_estimators": 10, "max_depth": 3})
         model.fit(X, y)
@@ -149,6 +168,7 @@ class TestXGBoostPredictor:
 
     def test_predict_proba_shape(self):
         from ml.pipeline import XGBoostPredictor
+
         X, y = self._xy()
         model = XGBoostPredictor(params={"n_estimators": 10, "max_depth": 3})
         model.fit(X, y)
@@ -158,6 +178,7 @@ class TestXGBoostPredictor:
 
     def test_feature_importances(self):
         from ml.pipeline import XGBoostPredictor
+
         X, y = self._xy()
         model = XGBoostPredictor(params={"n_estimators": 10})
         model.fit(X, y)
@@ -167,6 +188,7 @@ class TestXGBoostPredictor:
 
     def test_save_and_load(self):
         from ml.pipeline import XGBoostPredictor
+
         X, y = self._xy()
         model = XGBoostPredictor(params={"n_estimators": 10})
         model.fit(X, y)
@@ -180,6 +202,7 @@ class TestXGBoostPredictor:
 
     def test_threshold_affects_predictions(self):
         from ml.pipeline import XGBoostPredictor
+
         X, y = self._xy()
         model = XGBoostPredictor(params={"n_estimators": 10})
         model.fit(X, y)
@@ -190,9 +213,11 @@ class TestXGBoostPredictor:
 
 # ── ml/drift_monitor ─────────────────────────────────────────────────────────
 
+
 class TestDriftMonitorFunctions:
     def test_psi_zero_for_identical(self):
         from ml.drift_monitor import _psi
+
         rng = np.random.default_rng(1)
         arr = rng.normal(0, 1, 500)
         psi = _psi(arr, arr, n_bins=10)
@@ -200,6 +225,7 @@ class TestDriftMonitorFunctions:
 
     def test_psi_large_for_shifted(self):
         from ml.drift_monitor import _psi
+
         rng = np.random.default_rng(2)
         ref = rng.normal(0, 1, 500)
         live = rng.normal(5, 1, 500)
@@ -208,6 +234,7 @@ class TestDriftMonitorFunctions:
 
     def test_ks_pvalue_same_dist(self):
         from ml.drift_monitor import _ks_pvalue
+
         rng = np.random.default_rng(3)
         arr = rng.normal(0, 1, 200)
         p = _ks_pvalue(arr, arr)
@@ -215,6 +242,7 @@ class TestDriftMonitorFunctions:
 
     def test_ks_pvalue_different_dist(self):
         from ml.drift_monitor import _ks_pvalue
+
         rng = np.random.default_rng(4)
         ref = rng.normal(0, 1, 200)
         live = rng.normal(10, 1, 200)
@@ -227,6 +255,7 @@ class TestDriftMonitor:
         rng = np.random.default_rng(seed)
         ref = {"feat_a": rng.normal(0, 1, 500), "feat_b": rng.normal(5, 2, 500)}
         from ml.drift_monitor import DriftMonitor
+
         return DriftMonitor.from_reference_arrays(ref, n_bins=10)
 
     def test_from_reference_arrays(self):
@@ -235,6 +264,7 @@ class TestDriftMonitor:
 
     def test_compute_no_drift(self):
         from ml.drift_monitor import DriftMonitor
+
         rng = np.random.default_rng(6)
         ref = {"feat_a": rng.normal(0, 1, 500)}
         monitor = DriftMonitor.from_reference_arrays(ref)
@@ -246,6 +276,7 @@ class TestDriftMonitor:
 
     def test_compute_detects_drift(self):
         from ml.drift_monitor import DriftMonitor
+
         rng = np.random.default_rng(7)
         ref = {"feat_a": rng.normal(0, 1, 500)}
         monitor = DriftMonitor.from_reference_arrays(ref)
@@ -255,6 +286,7 @@ class TestDriftMonitor:
 
     def test_report_overall_status(self):
         from ml.drift_monitor import DriftMonitor
+
         rng = np.random.default_rng(8)
         ref = {"feat_a": rng.normal(0, 1, 500)}
         monitor = DriftMonitor.from_reference_arrays(ref)
@@ -264,6 +296,7 @@ class TestDriftMonitor:
 
     def test_report_to_dict(self):
         from ml.drift_monitor import DriftMonitor
+
         rng = np.random.default_rng(9)
         ref = {"feat_a": rng.normal(0, 1, 500)}
         monitor = DriftMonitor.from_reference_arrays(ref)
@@ -275,42 +308,67 @@ class TestDriftMonitor:
 
     def test_feature_drift_psi_level(self):
         from ml.drift_monitor import FeatureDrift
+
         fd = FeatureDrift(
-            feature="f", psi=0.05, ks_pvalue=0.5,
-            z_score=0.1, train_mean=0.0, train_std=1.0,
-            live_mean=0.1, live_std=1.0,
+            feature="f",
+            psi=0.05,
+            ks_pvalue=0.5,
+            z_score=0.1,
+            train_mean=0.0,
+            train_std=1.0,
+            live_mean=0.1,
+            live_std=1.0,
         )
         assert fd.psi_level == "green"
 
     def test_feature_drift_psi_yellow(self):
         from ml.drift_monitor import FeatureDrift
+
         fd = FeatureDrift(
-            feature="f", psi=0.15, ks_pvalue=0.5,
-            z_score=0.1, train_mean=0.0, train_std=1.0,
-            live_mean=0.5, live_std=1.0,
+            feature="f",
+            psi=0.15,
+            ks_pvalue=0.5,
+            z_score=0.1,
+            train_mean=0.0,
+            train_std=1.0,
+            live_mean=0.5,
+            live_std=1.0,
         )
         assert fd.psi_level == "yellow"
 
     def test_feature_drift_psi_red(self):
         from ml.drift_monitor import FeatureDrift
+
         fd = FeatureDrift(
-            feature="f", psi=0.30, ks_pvalue=0.01,
-            z_score=3.0, train_mean=0.0, train_std=1.0,
-            live_mean=5.0, live_std=1.0,
+            feature="f",
+            psi=0.30,
+            ks_pvalue=0.01,
+            z_score=3.0,
+            train_mean=0.0,
+            train_std=1.0,
+            live_mean=5.0,
+            live_std=1.0,
         )
         assert fd.psi_level == "red"
 
     def test_feature_drift_ks_alarm(self):
         from ml.drift_monitor import FeatureDrift
+
         fd = FeatureDrift(
-            feature="f", psi=0.05, ks_pvalue=0.01,
-            z_score=0.1, train_mean=0.0, train_std=1.0,
-            live_mean=0.1, live_std=1.0,
+            feature="f",
+            psi=0.05,
+            ks_pvalue=0.01,
+            z_score=0.1,
+            train_mean=0.0,
+            train_std=1.0,
+            live_mean=0.1,
+            live_std=1.0,
         )
         assert fd.ks_alarm is True
 
     def test_from_feature_stats_missing_path(self):
         from ml.drift_monitor import DriftMonitor
+
         # Missing path returns empty monitor (no crash)
         monitor = DriftMonitor.from_feature_stats("/nonexistent/path/feature_stats.json")
         assert monitor is not None
@@ -318,9 +376,11 @@ class TestDriftMonitor:
 
 # ── ml/performance_monitor ────────────────────────────────────────────────────
 
+
 class TestVersionWindow:
     def test_record_and_mean(self):
         from ml.performance_monitor import _VersionWindow
+
         w = _VersionWindow("v1", maxlen=10)
         w.record(100.0)
         w.record(-50.0)
@@ -328,6 +388,7 @@ class TestVersionWindow:
 
     def test_trade_count(self):
         from ml.performance_monitor import _VersionWindow
+
         w = _VersionWindow("v1", maxlen=10)
         for _ in range(5):
             w.record(10.0)
@@ -335,11 +396,13 @@ class TestVersionWindow:
 
     def test_mean_pnl_none_when_empty(self):
         from ml.performance_monitor import _VersionWindow
+
         w = _VersionWindow("v1", maxlen=10)
         assert w.mean_pnl is None
 
     def test_maxlen_respected(self):
         from ml.performance_monitor import _VersionWindow
+
         w = _VersionWindow("v1", maxlen=3)
         for i in range(10):
             w.record(float(i))
@@ -349,11 +412,13 @@ class TestVersionWindow:
 class TestModelPerformanceMonitor:
     def test_instantiation(self):
         from ml.performance_monitor import ModelPerformanceMonitor
+
         m = ModelPerformanceMonitor()
         assert m is not None
 
     def test_record_trade_no_version(self):
         from ml.performance_monitor import ModelPerformanceMonitor
+
         m = ModelPerformanceMonitor()
         m.record_trade(100.0)
         stats = m.get_stats()
@@ -361,6 +426,7 @@ class TestModelPerformanceMonitor:
 
     def test_record_trade_with_version(self):
         from ml.performance_monitor import ModelPerformanceMonitor
+
         m = ModelPerformanceMonitor()
         m.record_trade(50.0, model_version="v1")
         m.record_trade(-20.0, model_version="v1")
@@ -369,6 +435,7 @@ class TestModelPerformanceMonitor:
 
     def test_on_model_promoted(self):
         from ml.performance_monitor import ModelPerformanceMonitor
+
         m = ModelPerformanceMonitor()
         m.on_model_promoted("v2", "v1")
         assert m._current_version == "v2"
@@ -376,6 +443,7 @@ class TestModelPerformanceMonitor:
 
     def test_status_returns_dict(self):
         from ml.performance_monitor import ModelPerformanceMonitor
+
         m = ModelPerformanceMonitor()
         m.record_trade(10.0, model_version="v1")
         s = m.status()
@@ -383,12 +451,14 @@ class TestModelPerformanceMonitor:
 
     def test_stop(self):
         from ml.performance_monitor import ModelPerformanceMonitor
+
         m = ModelPerformanceMonitor()
         m.stop()
         assert m._running is False
 
     def test_should_rollback_worse_performance(self):
         from ml.performance_monitor import ModelPerformanceMonitor
+
         m = ModelPerformanceMonitor()
         should, reason = m._should_rollback(cur_mean=-50.0, prev_mean=100.0)
         assert should is True
@@ -396,12 +466,14 @@ class TestModelPerformanceMonitor:
 
     def test_should_not_rollback_better_performance(self):
         from ml.performance_monitor import ModelPerformanceMonitor
+
         m = ModelPerformanceMonitor()
         should, _ = m._should_rollback(cur_mean=100.0, prev_mean=50.0)
         assert should is False
 
     def test_should_not_rollback_no_prev(self):
         from ml.performance_monitor import ModelPerformanceMonitor
+
         m = ModelPerformanceMonitor()
         should, _ = m._should_rollback(cur_mean=50.0, prev_mean=None)
         assert should is False
@@ -409,9 +481,11 @@ class TestModelPerformanceMonitor:
 
 # ── ml/signal_filter ─────────────────────────────────────────────────────────
 
+
 class TestSignalFilter:
     def setup_method(self):
         from ml.signal_filter import SignalFilter
+
         self.sf = SignalFilter()
 
     def test_high_confidence_passes(self):
@@ -433,14 +507,24 @@ class TestSignalFilter:
 
     def test_filter_result_bool(self):
         from ml.signal_filter import FilterResult
-        fr = FilterResult(passed=True, reason="ok", gate="", confidence=0.8,
-                          expected_value=0.5, regime="trending", mtf_aligned=True)
+
+        fr = FilterResult(
+            passed=True, reason="ok", gate="", confidence=0.8, expected_value=0.5, regime="trending", mtf_aligned=True
+        )
         assert bool(fr) is True
 
     def test_filter_result_bool_false(self):
         from ml.signal_filter import FilterResult
-        fr = FilterResult(passed=False, reason="low conf", gate="confidence",
-                          confidence=0.3, expected_value=0.0, regime="unknown", mtf_aligned=False)
+
+        fr = FilterResult(
+            passed=False,
+            reason="low conf",
+            gate="confidence",
+            confidence=0.3,
+            expected_value=0.0,
+            regime="unknown",
+            mtf_aligned=False,
+        )
         assert bool(fr) is False
 
     def test_record_outcome_and_ev_stats(self):
@@ -469,9 +553,11 @@ class TestSignalFilter:
 
 # ── ml/model_registry ────────────────────────────────────────────────────────
 
+
 class TestModelRegistry:
     def _registry(self, tmp_path):
         from ml.model_registry import ModelRegistry
+
         return ModelRegistry(registry_path=Path(tmp_path) / "registry.json")
 
     def test_instantiation(self, tmp_path):
@@ -503,8 +589,9 @@ class TestModelRegistry:
         reg = self._registry(tmp_path)
         model_file = Path(tmp_path) / "model.joblib"
         model_file.write_bytes(b"dummy")
-        reg.register("v1", model_file, oos_accuracy=0.65, oos_auc=0.70,
-                     oos_p_value=0.03, sharpe_gate_passed=True, n_trades=100)
+        reg.register(
+            "v1", model_file, oos_accuracy=0.65, oos_auc=0.70, oos_p_value=0.03, sharpe_gate_passed=True, n_trades=100
+        )
         v = reg.get_version("v1")
         assert v is not None
         assert v["name"] == "v1"
@@ -521,8 +608,9 @@ class TestModelRegistry:
         reg = self._registry(tmp_path)
         model_file = Path(tmp_path) / "model.joblib"
         model_file.write_bytes(b"dummy")
-        reg.register("v1", model_file, oos_accuracy=0.65, oos_auc=0.70,
-                     oos_p_value=0.03, sharpe_gate_passed=True, n_trades=100)
+        reg.register(
+            "v1", model_file, oos_accuracy=0.65, oos_auc=0.70, oos_p_value=0.03, sharpe_gate_passed=True, n_trades=100
+        )
         result = reg.promote("v1")
         assert result is not None
         assert reg.active_version() is not None
@@ -531,8 +619,9 @@ class TestModelRegistry:
         reg = self._registry(tmp_path)
         model_file = Path(tmp_path) / "model.joblib"
         model_file.write_bytes(b"dummy")
-        reg.register("v1", model_file, oos_accuracy=0.65, oos_auc=0.70,
-                     oos_p_value=0.03, sharpe_gate_passed=True, n_trades=100)
+        reg.register(
+            "v1", model_file, oos_accuracy=0.65, oos_auc=0.70, oos_p_value=0.03, sharpe_gate_passed=True, n_trades=100
+        )
         reg.retire("v1")
         v = reg.get_version("v1")
         assert v is None or v.get("state") == "retired"
@@ -541,8 +630,9 @@ class TestModelRegistry:
         reg = self._registry(tmp_path)
         model_file = Path(tmp_path) / "model.joblib"
         model_file.write_bytes(b"dummy")
-        reg.register("v1", model_file, oos_accuracy=0.65, oos_auc=0.70,
-                     oos_p_value=0.03, sharpe_gate_passed=True, n_trades=100)
+        reg.register(
+            "v1", model_file, oos_accuracy=0.65, oos_auc=0.70, oos_p_value=0.03, sharpe_gate_passed=True, n_trades=100
+        )
         # Delete the file then verify
         model_file.unlink()
         ok, msg = reg.verify("v1")
@@ -553,9 +643,9 @@ class TestModelRegistry:
         model_file = Path(tmp_path) / "model.joblib"
         model_file.write_bytes(b"dummy")
         # oos_accuracy below threshold, sharpe_gate_passed=False
-        entry = reg.register("v_bad", model_file, oos_accuracy=0.40,
-                              oos_auc=0.45, oos_p_value=0.5,
-                              sharpe_gate_passed=False, n_trades=10)
+        reg.register(
+            "v_bad", model_file, oos_accuracy=0.40, oos_auc=0.45, oos_p_value=0.5, sharpe_gate_passed=False, n_trades=10
+        )
         # Should be in staging, not promoted
         v = reg.get_version("v_bad")
         assert v["state"] == "staging"

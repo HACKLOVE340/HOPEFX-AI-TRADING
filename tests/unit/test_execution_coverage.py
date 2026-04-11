@@ -1,6 +1,7 @@
 # HOPEFX-AI-TRADING
 # Tests for execution/ — throttler, spread_monitor, position_tracker, tca
 """Real unit tests. No mocks/stubs/fake data."""
+
 from __future__ import annotations
 
 import time
@@ -14,9 +15,11 @@ UTC = timezone.utc
 
 # ── execution/throttler ───────────────────────────────────────────────────────
 
+
 class TestMessageThrottler:
     def setup_method(self):
         from execution.throttler import MessageThrottler
+
         self.throttler = MessageThrottler(
             max_messages_per_second=10,
             max_messages_per_minute=100,
@@ -63,11 +66,13 @@ class TestMessageThrottler:
 
     def test_throttle_level_normal_initially(self):
         from execution.throttler import ThrottleLevel
+
         status = self.throttler.get_status()
         assert status["level"] == ThrottleLevel.NORMAL.value
 
     def test_throttle_level_enum_values(self):
         from execution.throttler import ThrottleLevel
+
         assert ThrottleLevel.NORMAL.value == "normal"
         assert ThrottleLevel.WARNING.value == "warning"
         assert ThrottleLevel.THROTTLED.value == "throttled"
@@ -75,6 +80,7 @@ class TestMessageThrottler:
 
     def test_throttle_state_dataclass(self):
         from execution.throttler import ThrottleState, ThrottleLevel
+
         state = ThrottleState(
             messages_in_window=5,
             window_start=time.time(),
@@ -96,7 +102,8 @@ class TestMessageThrottler:
         assert throttler.can_send("order") is False
 
     def test_cooldown_state_set(self):
-        from execution.throttler import MessageThrottler, ThrottleLevel
+        from execution.throttler import MessageThrottler
+
         throttler = MessageThrottler(
             max_messages_per_second=2,
             max_messages_per_minute=100,
@@ -112,9 +119,11 @@ class TestMessageThrottler:
 
 # ── execution/spread_monitor ──────────────────────────────────────────────────
 
+
 class TestSpreadMonitor:
     def setup_method(self):
         from execution.spread_monitor import SpreadMonitor
+
         self.monitor = SpreadMonitor(
             spike_multiplier=3.0,
             baseline_window=10,
@@ -132,7 +141,7 @@ class TestSpreadMonitor:
         assert snap.current_spread == pytest.approx(1.0)
 
     def test_tick_count_increments(self):
-        for i in range(5):
+        for _i in range(5):
             snap = self.monitor.on_tick("XAUUSD", 1900.0, 1901.0)
         assert snap.tick_count == 5
 
@@ -172,6 +181,7 @@ class TestSpreadMonitor:
 
     def test_spread_snapshot_namedtuple(self):
         from execution.spread_monitor import SpreadSnapshot
+
         snap = SpreadSnapshot(
             symbol="XAUUSD",
             current_spread=1.0,
@@ -185,6 +195,7 @@ class TestSpreadMonitor:
 
     def test_singleton(self):
         from execution.spread_monitor import get_spread_monitor
+
         m1 = get_spread_monitor()
         m2 = get_spread_monitor()
         assert m1 is m2
@@ -205,15 +216,17 @@ class TestSpreadMonitor:
 
 # ── execution/position_tracker ────────────────────────────────────────────────
 
+
 def _make_pos(pid="p1", symbol="XAUUSD", side="buy", qty=1.0, entry=1900.0):
     from execution.position_tracker import Position
-    return Position(id=pid, symbol=symbol, side=side,
-                    quantity=qty, entry_price=entry, current_price=entry)
+
+    return Position(id=pid, symbol=symbol, side=side, quantity=qty, entry_price=entry, current_price=entry)
 
 
 class TestPositionTracker:
     def setup_method(self):
         from execution.position_tracker import PositionTracker
+
         self.tracker = PositionTracker()
 
     @pytest.mark.asyncio
@@ -304,15 +317,17 @@ class TestPositionTracker:
 
 # ── execution/tca ─────────────────────────────────────────────────────────────
 
+
 class TestTCAEngine:
     def setup_method(self):
         from execution.tca import TCAEngine
+
         self.engine = TCAEngine(window_size=100)
 
-    def _make_fill(self, order_id="ord1", symbol="XAUUSD", side=None,
-                   qty="1.0", price="1900.0"):
+    def _make_fill(self, order_id="ord1", symbol="XAUUSD", side=None, qty="1.0", price="1900.0"):
         from execution.tca import Fill, Side
         from core.types import OrderId, Symbol, Venue
+
         if side is None:
             side = Side.BUY
         return Fill(
@@ -327,7 +342,8 @@ class TestTCAEngine:
         )
 
     def test_start_order(self):
-        from execution.tca import Side, BenchmarkType
+        from execution.tca import Side
+
         self.engine.start_order(
             order_id="ord1",
             symbol="XAUUSD",
@@ -338,19 +354,27 @@ class TestTCAEngine:
         # No exception = pass
 
     def test_record_fill(self):
-        from execution.tca import Side, BenchmarkType
+        from execution.tca import Side
+
         self.engine.start_order(
-            order_id="ord1", symbol="XAUUSD", side=Side.BUY,
-            quantity=Decimal("1.0"), arrival_price=Decimal("1900.0"),
+            order_id="ord1",
+            symbol="XAUUSD",
+            side=Side.BUY,
+            quantity=Decimal("1.0"),
+            arrival_price=Decimal("1900.0"),
         )
         fill = self._make_fill()
         self.engine.record_fill("ord1", fill)
 
     def test_complete_order_returns_metrics(self):
         from execution.tca import Side
+
         self.engine.start_order(
-            order_id="ord1", symbol="XAUUSD", side=Side.BUY,
-            quantity=Decimal("1.0"), arrival_price=Decimal("1900.0"),
+            order_id="ord1",
+            symbol="XAUUSD",
+            side=Side.BUY,
+            quantity=Decimal("1.0"),
+            arrival_price=Decimal("1900.0"),
         )
         fill = self._make_fill()
         self.engine.record_fill("ord1", fill)
@@ -363,12 +387,15 @@ class TestTCAEngine:
 
     def test_get_stats_after_order(self):
         from execution.tca import Side
+
         self.engine.start_order(
-            order_id="ord2", symbol="XAUUSD", side=Side.SELL,
-            quantity=Decimal("1.0"), arrival_price=Decimal("1900.0"),
+            order_id="ord2",
+            symbol="XAUUSD",
+            side=Side.SELL,
+            quantity=Decimal("1.0"),
+            arrival_price=Decimal("1900.0"),
         )
-        fill = self._make_fill("ord2", side=__import__("execution.tca", fromlist=["Side"]).Side.SELL,
-                               price="1899.0")
+        fill = self._make_fill("ord2", side=__import__("execution.tca", fromlist=["Side"]).Side.SELL, price="1899.0")
         self.engine.record_fill("ord2", fill)
         self.engine.complete_order("ord2")
         stats = self.engine.get_stats()

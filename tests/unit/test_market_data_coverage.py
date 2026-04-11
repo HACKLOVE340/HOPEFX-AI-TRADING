@@ -4,15 +4,13 @@
 Real unit tests for market_data modules.
 No mocks/stubs — uses real class instantiation and in-process fake Redis.
 """
+
 from __future__ import annotations
 
 import json
 import time
-from collections import deque
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
 
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -59,8 +57,11 @@ class TestFeedHandler:
         self.fh.subscribe(["XAUUSD"])
         self.fh.on_tick(received.append)
 
-        raw = {"instrument": "XAU_USD", "bids": [{"price": "1900.0", "liquidity": "100"}],
-               "asks": [{"price": "1901.0", "liquidity": "100"}]}
+        raw = {
+            "instrument": "XAU_USD",
+            "bids": [{"price": "1900.0", "liquidity": "100"}],
+            "asks": [{"price": "1901.0", "liquidity": "100"}],
+        }
         self.fh._on_exchange_tick(raw, "oanda")
         assert len(received) == 1
         assert received[0].symbol == "XAUUSD"
@@ -70,54 +71,89 @@ class TestFeedHandler:
         self.fh.subscribe(["EURUSD"])
         self.fh.on_tick(received.append)
 
-        raw = {"instrument": "XAU_USD", "bids": [{"price": "1900.0", "liquidity": "100"}],
-               "asks": [{"price": "1901.0", "liquidity": "100"}]}
+        raw = {
+            "instrument": "XAU_USD",
+            "bids": [{"price": "1900.0", "liquidity": "100"}],
+            "asks": [{"price": "1901.0", "liquidity": "100"}],
+        }
         self.fh._on_exchange_tick(raw, "oanda")
         assert len(received) == 0
 
     def test_stats_incremented(self):
         self.fh.subscribe(["XAUUSD"])
-        raw = {"instrument": "XAU_USD", "bids": [{"price": "1900.0", "liquidity": "100"}],
-               "asks": [{"price": "1901.0", "liquidity": "100"}]}
+        raw = {
+            "instrument": "XAU_USD",
+            "bids": [{"price": "1900.0", "liquidity": "100"}],
+            "asks": [{"price": "1901.0", "liquidity": "100"}],
+        }
         self.fh._on_exchange_tick(raw, "oanda")
         assert self.fh.stats["ticks_processed"] == 1
 
     def test_parse_oanda(self):
-        raw = {"instrument": "XAU_USD", "bids": [{"price": "1900.5", "liquidity": "50"}],
-               "asks": [{"price": "1901.5", "liquidity": "50"}]}
+        raw = {
+            "instrument": "XAU_USD",
+            "bids": [{"price": "1900.5", "liquidity": "50"}],
+            "asks": [{"price": "1901.5", "liquidity": "50"}],
+        }
         tick = self.fh._parse_oanda(raw, "oanda")
         assert tick.symbol == "XAUUSD"
         assert tick.bid == pytest.approx(1900.5)
         assert tick.ask == pytest.approx(1901.5)
 
     def test_parse_binance(self):
-        raw = {"s": "BTCUSDT", "E": 1700000000000, "b": "30000.0", "a": "30001.0",
-               "B": "1.5", "A": "2.0", "c": "30000.5", "v": "100.0", "e": "trade"}
+        raw = {
+            "s": "BTCUSDT",
+            "E": 1700000000000,
+            "b": "30000.0",
+            "a": "30001.0",
+            "B": "1.5",
+            "A": "2.0",
+            "c": "30000.5",
+            "v": "100.0",
+            "e": "trade",
+        }
         tick = self.fh._parse_binance(raw, "binance")
         assert tick.symbol == "BTCUSDT"
         assert tick.is_trade is True
         assert tick.bid == pytest.approx(30000.0)
 
     def test_parse_coinbase(self):
-        raw = {"product_id": "BTC-USD", "time": "2024-01-01T00:00:00",
-               "best_bid": "29999.0", "best_ask": "30001.0",
-               "bid_size": "1.0", "ask_size": "1.0", "price": "30000.0",
-               "last_size": "0.5", "type": "match"}
+        raw = {
+            "product_id": "BTC-USD",
+            "time": "2024-01-01T00:00:00",
+            "best_bid": "29999.0",
+            "best_ask": "30001.0",
+            "bid_size": "1.0",
+            "ask_size": "1.0",
+            "price": "30000.0",
+            "last_size": "0.5",
+            "type": "match",
+        }
         tick = self.fh._parse_coinbase(raw, "coinbase")
         assert tick.symbol == "BTCUSD"
         assert tick.is_trade is True
 
     def test_parse_generic(self):
-        raw = {"symbol": "XAUUSD", "bid": "1900.0", "ask": "1901.0",
-               "bidSize": "10", "askSize": "10", "price": "1900.5", "size": "1"}
+        raw = {
+            "symbol": "XAUUSD",
+            "bid": "1900.0",
+            "ask": "1901.0",
+            "bidSize": "10",
+            "askSize": "10",
+            "price": "1900.5",
+            "size": "1",
+        }
         tick = self.fh._parse_generic(raw, "generic")
         assert tick.symbol == "XAUUSD"
         assert tick.exchange == "generic"
 
     def test_get_l1_book_returns_latest_quote(self):
         self.fh.subscribe(["XAUUSD"])
-        raw = {"instrument": "XAU_USD", "bids": [{"price": "1900.0", "liquidity": "100"}],
-               "asks": [{"price": "1901.0", "liquidity": "100"}]}
+        raw = {
+            "instrument": "XAU_USD",
+            "bids": [{"price": "1900.0", "liquidity": "100"}],
+            "asks": [{"price": "1901.0", "liquidity": "100"}],
+        }
         self.fh._on_exchange_tick(raw, "oanda")
         l1 = self.fh.get_l1_book("XAUUSD")
         assert l1 is not None
@@ -128,16 +164,28 @@ class TestFeedHandler:
 
     def test_get_recent_trades_empty_when_no_trades(self):
         self.fh.subscribe(["XAUUSD"])
-        raw = {"instrument": "XAU_USD", "bids": [{"price": "1900.0", "liquidity": "100"}],
-               "asks": [{"price": "1901.0", "liquidity": "100"}]}
+        raw = {
+            "instrument": "XAU_USD",
+            "bids": [{"price": "1900.0", "liquidity": "100"}],
+            "asks": [{"price": "1901.0", "liquidity": "100"}],
+        }
         self.fh._on_exchange_tick(raw, "oanda")
         trades = self.fh.get_recent_trades("XAUUSD")
         assert trades == []
 
     def test_get_recent_trades_returns_trade_ticks(self):
         self.fh.subscribe(["BTCUSDT"])
-        raw = {"s": "BTCUSDT", "E": 1700000000000, "b": "30000.0", "a": "30001.0",
-               "B": "1.5", "A": "2.0", "c": "30000.5", "v": "100.0", "e": "trade"}
+        raw = {
+            "s": "BTCUSDT",
+            "E": 1700000000000,
+            "b": "30000.0",
+            "a": "30001.0",
+            "B": "1.5",
+            "A": "2.0",
+            "c": "30000.5",
+            "v": "100.0",
+            "e": "trade",
+        }
         self.fh._on_exchange_tick(raw, "binance")
         trades = self.fh.get_recent_trades("BTCUSDT")
         assert len(trades) == 1
@@ -148,8 +196,11 @@ class TestFeedHandler:
 
         self.fh.subscribe(["XAUUSD"])
         self.fh.on_tick(bad_callback)
-        raw = {"instrument": "XAU_USD", "bids": [{"price": "1900.0", "liquidity": "100"}],
-               "asks": [{"price": "1901.0", "liquidity": "100"}]}
+        raw = {
+            "instrument": "XAU_USD",
+            "bids": [{"price": "1900.0", "liquidity": "100"}],
+            "asks": [{"price": "1901.0", "liquidity": "100"}],
+        }
         # Should not raise
         self.fh._on_exchange_tick(raw, "oanda")
 
@@ -161,20 +212,33 @@ class TestFeedHandler:
     def test_tick_buffer_bounded(self):
         self.fh.subscribe(["XAUUSD"])
         for i in range(10005):
-            raw = {"instrument": "XAU_USD",
-                   "bids": [{"price": str(1900 + i * 0.01), "liquidity": "100"}],
-                   "asks": [{"price": str(1901 + i * 0.01), "liquidity": "100"}]}
+            raw = {
+                "instrument": "XAU_USD",
+                "bids": [{"price": str(1900 + i * 0.01), "liquidity": "100"}],
+                "asks": [{"price": str(1901 + i * 0.01), "liquidity": "100"}],
+            }
             self.fh._on_exchange_tick(raw, "oanda")
         assert len(self.fh.tick_buffer) <= 10000
 
     def test_normalize_dispatches_to_correct_parser(self):
-        raw_oanda = {"instrument": "XAU_USD", "bids": [{"price": "1900.0", "liquidity": "100"}],
-                     "asks": [{"price": "1901.0", "liquidity": "100"}]}
+        raw_oanda = {
+            "instrument": "XAU_USD",
+            "bids": [{"price": "1900.0", "liquidity": "100"}],
+            "asks": [{"price": "1901.0", "liquidity": "100"}],
+        }
         tick = self.fh._normalize(raw_oanda, "oanda")
         assert tick.exchange == "oanda"
 
-        raw_binance = {"s": "BTCUSDT", "E": 1700000000000, "b": "30000.0", "a": "30001.0",
-                       "B": "1.5", "A": "2.0", "c": "30000.5", "v": "100.0"}
+        raw_binance = {
+            "s": "BTCUSDT",
+            "E": 1700000000000,
+            "b": "30000.0",
+            "a": "30001.0",
+            "B": "1.5",
+            "A": "2.0",
+            "c": "30000.5",
+            "v": "100.0",
+        }
         tick2 = self.fh._normalize(raw_binance, "binance")
         assert tick2.exchange == "binance"
 
@@ -187,7 +251,10 @@ class TestExchangeFeed:
 
     def test_set_callback(self):
         feed = ExchangeFeed("test", "ws://localhost")
-        cb = lambda d, n: None
+
+        def cb(d, n):
+            return None
+
         feed.set_callback(cb)
         assert feed.callback is cb
 
@@ -199,7 +266,7 @@ class TestExchangeFeed:
 
 # ── market_data/validation ────────────────────────────────────────────────────
 
-from market_data.validation import DataQualityIssue, MarketDataValidator, ValidationResult
+from market_data.validation import DataQualityIssue, MarketDataValidator
 
 
 class TestMarketDataValidator:
@@ -285,24 +352,28 @@ class TestMarketDataValidator:
 
     def test_validate_ohlc_valid_dataframe(self):
         # Use integer index to avoid pandas freq inference issues
-        df = pd.DataFrame({
-            "open": [1900.0] * 10,
-            "high": [1910.0] * 10,
-            "low": [1890.0] * 10,
-            "close": [1905.0] * 10,
-            "volume": [100.0] * 10,
-        })
+        df = pd.DataFrame(
+            {
+                "open": [1900.0] * 10,
+                "high": [1910.0] * 10,
+                "low": [1890.0] * 10,
+                "close": [1905.0] * 10,
+                "volume": [100.0] * 10,
+            }
+        )
         result = self.validator.validate_ohlc(df, "XAUUSD")
         assert result.is_valid is True
 
     def test_validate_ohlc_invalid_high_low(self):
-        df = pd.DataFrame({
-            "open": [1900.0] * 5,
-            "high": [1890.0] * 5,   # high < low — invalid
-            "low": [1910.0] * 5,
-            "close": [1905.0] * 5,
-            "volume": [100.0] * 5,
-        })
+        df = pd.DataFrame(
+            {
+                "open": [1900.0] * 5,
+                "high": [1890.0] * 5,  # high < low — invalid
+                "low": [1910.0] * 5,
+                "close": [1905.0] * 5,
+                "volume": [100.0] * 5,
+            }
+        )
         result = self.validator.validate_ohlc(df, "XAUUSD")
         assert result.is_valid is False
 
@@ -364,7 +435,7 @@ class FakeRedis:
         items = sorted(self._zsets[key].items(), key=lambda x: -x[1])
         if stop == -1:
             return [k.encode() if isinstance(k, str) else k for k, _ in items[start:]]
-        return [k.encode() if isinstance(k, str) else k for k, _ in items[start:stop + 1]]
+        return [k.encode() if isinstance(k, str) else k for k, _ in items[start : stop + 1]]
 
     def zrangebyscore(self, key, min_score, max_score):
         if key not in self._zsets:
@@ -433,8 +504,14 @@ class TestMarketDataCache:
         assert len(result) >= 1
 
     def test_store_bar(self):
-        bar = {"open": 1900.0, "high": 1910.0, "low": 1890.0, "close": 1905.0,
-               "volume": 100.0, "bar_open_ts": time.time()}
+        bar = {
+            "open": 1900.0,
+            "high": 1910.0,
+            "low": 1890.0,
+            "close": 1905.0,
+            "volume": 100.0,
+            "bar_open_ts": time.time(),
+        }
         self.cache.store_bar("XAUUSD", "1h", bar)
         key = "hopefx:ohlcv:XAUUSD:1h"
         assert key in self.redis._zsets
@@ -446,8 +523,14 @@ class TestMarketDataCache:
     def test_store_and_get_bars(self):
         now = time.time()
         for i in range(3):
-            bar = {"open": 1900.0 + i, "high": 1910.0, "low": 1890.0,
-                   "close": 1905.0, "volume": 100.0, "bar_open_ts": now + i * 3600}
+            bar = {
+                "open": 1900.0 + i,
+                "high": 1910.0,
+                "low": 1890.0,
+                "close": 1905.0,
+                "volume": 100.0,
+                "bar_open_ts": now + i * 3600,
+            }
             self.cache.store_bar("XAUUSD", "1h", bar)
         result = self.cache.get_bars("XAUUSD", "1h")
         assert len(result) == 3
@@ -455,8 +538,14 @@ class TestMarketDataCache:
     def test_get_bars_since(self):
         now = time.time()
         for i in range(5):
-            bar = {"open": 1900.0 + i, "high": 1910.0, "low": 1890.0,
-                   "close": 1905.0, "volume": 100.0, "bar_open_ts": now + i * 3600}
+            bar = {
+                "open": 1900.0 + i,
+                "high": 1910.0,
+                "low": 1890.0,
+                "close": 1905.0,
+                "volume": 100.0,
+                "bar_open_ts": now + i * 3600,
+            }
             self.cache.store_bar("XAUUSD", "1h", bar)
         result = self.cache.get_bars_since("XAUUSD", "1h", now + 2 * 3600)
         assert len(result) >= 1
@@ -484,6 +573,7 @@ class TestMarketDataCache:
         class BrokenRedis:
             def zrevrange(self, *a, **kw):
                 raise ConnectionError("Redis down")
+
             def ping(self):
                 raise ConnectionError("Redis down")
 
