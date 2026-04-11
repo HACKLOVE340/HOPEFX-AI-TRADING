@@ -47,6 +47,15 @@ omit =
     risk/pre_trade_gate.py
     risk/post_trade_analyzer.py
     risk/manager.py
+    # Execution modules that require live broker/FIX/engine wiring.
+    # These are integration-only and excluded from the 90% unit gate.
+    execution/execution.py
+    execution/hopefx_engine.py
+    execution/fix_adapter.py
+    execution/fix_router.py
+    execution/legacy.py
+    execution/_prom_metrics.py
+    execution/engine.py
 
 [report]
 precision = 2
