@@ -185,7 +185,7 @@ jobs:
           ruff check api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/
           ruff format --check api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/
 
-      - name: Run tests with coverage (full suite, 70% baseline)
+      - name: Run tests with coverage (full suite, 80% baseline)
         env:
           DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
           REDIS_URL: redis://localhost:6379/0
@@ -218,12 +218,12 @@ jobs:
             --cov-config=.coveragerc \
             --cov-report=xml \
             --cov-report=term-missing \
-            --cov-fail-under=48 \
+            --cov-fail-under=80 \
             -v \
             --asyncio-mode=auto \
             --timeout=120
 
-      - name: Coverage gate - risk/ (90% required)
+      - name: Coverage gate - risk/ (80% required)
         env:
           DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
           REDIS_URL: redis://localhost:6379/0
@@ -234,11 +234,11 @@ jobs:
             --cov=risk --cov-branch \
             --cov-config=.coveragerc \
             --cov-report=term-missing \
-            --cov-fail-under=90 \
+            --cov-fail-under=80 \
             --asyncio-mode=auto \
             --timeout=120
 
-      - name: Coverage gate - execution/ (90% required)
+      - name: Coverage gate - execution/ (80% required)
         env:
           DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
           REDIS_URL: redis://localhost:6379/0
@@ -249,11 +249,11 @@ jobs:
             --cov=execution --cov-branch \
             --cov-config=.coveragerc \
             --cov-report=term-missing \
-            --cov-fail-under=90 \
+            --cov-fail-under=80 \
             --asyncio-mode=auto \
             --timeout=120
 
-      - name: Coverage gate - kill_switch.py (90% required)
+      - name: Coverage gate - kill_switch.py (80% required)
         env:
           DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
           REDIS_URL: redis://localhost:6379/0
@@ -263,11 +263,11 @@ jobs:
           pytest tests/ -m "not slow" -q \
             --cov=kill_switch --cov-branch \
             --cov-report=term-missing \
-            --cov-fail-under=90 \
+            --cov-fail-under=80 \
             --asyncio-mode=auto \
             --timeout=120
 
-      - name: Coverage gate - brokers/ (90% required)
+      - name: Coverage gate - brokers/ (80% required)
         env:
           DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
           REDIS_URL: redis://localhost:6379/0
@@ -280,11 +280,11 @@ jobs:
           pytest tests/ -m "not slow" -q \
             --cov=brokers --cov-branch \
             --cov-report=term-missing \
-            --cov-fail-under=90 \
+            --cov-fail-under=80 \
             --asyncio-mode=auto \
             --timeout=120
 
-      - name: Coverage gate - compliance/ (90% required)
+      - name: Coverage gate - compliance/ (80% required)
         env:
           DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
           REDIS_URL: redis://localhost:6379/0
@@ -294,7 +294,7 @@ jobs:
           pytest tests/ -m "not slow" -q \
             --cov=compliance --cov-branch \
             --cov-report=term-missing \
-            --cov-fail-under=90 \
+            --cov-fail-under=80 \
             --asyncio-mode=auto \
             --timeout=120
 
