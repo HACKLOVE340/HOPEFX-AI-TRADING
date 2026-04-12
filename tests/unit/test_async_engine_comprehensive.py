@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -681,6 +681,7 @@ class TestShutdown:
     @pytest.mark.asyncio
     async def test_shutdown_cancels_tasks(self):
         e = await _engine()
+
         # Add a dummy task
         async def _dummy():
             await asyncio.sleep(100)

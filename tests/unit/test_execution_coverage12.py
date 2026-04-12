@@ -1,6 +1,7 @@
 # tests/unit/test_execution_coverage12.py
 """Targeted coverage for smart_router: _execute_with_fallback, _pre_route_gate,
 _route_via_algo, _submit_child_order, _explain_selection, metrics."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
@@ -16,9 +17,7 @@ def _router_with_broker(fill_status="filled", fill_price=2350.0, raise_exc=None)
     if raise_exc:
         broker.place_order = AsyncMock(side_effect=raise_exc)
     else:
-        broker.place_order = AsyncMock(
-            return_value={"status": fill_status, "fill_price": fill_price, "quantity": 0.01}
-        )
+        broker.place_order = AsyncMock(return_value={"status": fill_status, "fill_price": fill_price, "quantity": 0.01})
     r.add_broker("b1", broker)
     # Inject a state so ranking works
     r._states["b1"] = BrokerState(broker_id="b1", ema_latency_ms=10.0, fill_rate=0.99)
@@ -87,9 +86,7 @@ class TestExecuteWithFallback:
         b1 = MagicMock()
         b1.place_order = AsyncMock(return_value={"status": "rejected", "reason": "b1_fail"})
         b2 = MagicMock()
-        b2.place_order = AsyncMock(
-            return_value={"status": "filled", "fill_price": 2351.0, "quantity": 0.01}
-        )
+        b2.place_order = AsyncMock(return_value={"status": "filled", "fill_price": 2351.0, "quantity": 0.01})
         r.add_broker("b1", b1)
         r.add_broker("b2", b2)
         r._states["b1"] = BrokerState(broker_id="b1", ema_latency_ms=200.0, fill_rate=0.5)
@@ -115,6 +112,7 @@ class TestExecuteWithFallback:
 class TestPreRouteGate:
     def _router(self):
         from execution.smart_router import SmartRouter
+
         return SmartRouter()
 
     def test_high_spread_rejected(self):
@@ -168,11 +166,13 @@ class TestPreRouteGate:
     async def test_unwind_bypasses_gate(self):
         r = _router_with_broker(fill_status="filled")
         # High spread + high impact but is_unwind=True → should not be rejected by gate
-        result = await r.route_and_execute(_order(
-            spread=100.0,
-            impact=0.99,
-            is_unwind=True,
-        ))
+        result = await r.route_and_execute(
+            _order(
+                spread=100.0,
+                impact=0.99,
+                is_unwind=True,
+            )
+        )
         assert result["status"] == "filled"
 
 
@@ -196,9 +196,7 @@ class TestRouteViaAlgo:
         r._algo.submit_auto = AsyncMock(return_value=None)
         # Add a broker so fallback can fill
         broker = MagicMock()
-        broker.place_order = AsyncMock(
-            return_value={"status": "filled", "fill_price": 2350.0, "quantity": 0.01}
-        )
+        broker.place_order = AsyncMock(return_value={"status": "filled", "fill_price": 2350.0, "quantity": 0.01})
         r.add_broker("b1", broker)
         r._states["b1"] = BrokerState(broker_id="b1", ema_latency_ms=10.0, fill_rate=0.99)
         result = await r.route_and_execute(_order(qty=_ALGO_LARGE_THRESHOLD + 1.0))
@@ -218,17 +216,19 @@ class TestSubmitChildOrder:
     @pytest.mark.asyncio
     async def test_child_order_filled(self):
         r = _router_with_broker(fill_status="filled", fill_price=2350.0)
-        result = await r._submit_child_order({
-            "child_id": "c1",
-            "algo_id": "algo1",
-            "symbol": "XAUUSD",
-            "side": "BUY",
-            "quantity": 0.01,
-            "mid_price": 2350.0,
-            "bid": 2349.0,
-            "ask": 2351.0,
-            "spread": 2.0,
-        })
+        result = await r._submit_child_order(
+            {
+                "child_id": "c1",
+                "algo_id": "algo1",
+                "symbol": "XAUUSD",
+                "side": "BUY",
+                "quantity": 0.01,
+                "mid_price": 2350.0,
+                "bid": 2349.0,
+                "ask": 2351.0,
+                "spread": 2.0,
+            }
+        )
         assert result["status"] == "filled"
 
     @pytest.mark.asyncio
@@ -236,29 +236,33 @@ class TestSubmitChildOrder:
         from execution.smart_router import SmartRouter
 
         r = SmartRouter()
-        result = await r._submit_child_order({
-            "child_id": "c2",
-            "algo_id": "algo1",
-            "symbol": "XAUUSD",
-            "side": "BUY",
-            "quantity": 0.01,
-            "mid_price": 2350.0,
-        })
+        result = await r._submit_child_order(
+            {
+                "child_id": "c2",
+                "algo_id": "algo1",
+                "symbol": "XAUUSD",
+                "side": "BUY",
+                "quantity": 0.01,
+                "mid_price": 2350.0,
+            }
+        )
         assert result["status"] == "rejected"
 
     @pytest.mark.asyncio
     async def test_child_order_sell_direction(self):
         r = _router_with_broker(fill_status="filled", fill_price=2349.0)
-        result = await r._submit_child_order({
-            "child_id": "c3",
-            "algo_id": "algo1",
-            "symbol": "XAUUSD",
-            "side": "SELL",
-            "quantity": 0.01,
-            "mid_price": 2350.0,
-            "bid": 2349.0,
-            "ask": 2351.0,
-        })
+        result = await r._submit_child_order(
+            {
+                "child_id": "c3",
+                "algo_id": "algo1",
+                "symbol": "XAUUSD",
+                "side": "SELL",
+                "quantity": 0.01,
+                "mid_price": 2350.0,
+                "bid": 2349.0,
+                "ask": 2351.0,
+            }
+        )
         assert result["status"] == "filled"
 
 

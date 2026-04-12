@@ -2,11 +2,13 @@
 # Copyright (c) 2025-2026
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 """Comprehensive tests for execution/sl_tp_monitor.py."""
+
 from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from execution.sl_tp_monitor import SLTPMonitor
+
 
 def _pos(symbol="XAUUSD", side="BUY", qty=1.0, sl=None, tp=None, pid="pos_1"):
     p = MagicMock()
@@ -18,19 +20,24 @@ def _pos(symbol="XAUUSD", side="BUY", qty=1.0, sl=None, tp=None, pid="pos_1"):
     p.take_profit = tp
     return p
 
+
 def _pm(positions=None):
     pm = MagicMock()
     pm.get_all_positions = MagicMock(return_value=positions or {})
     pm.close_position = AsyncMock()
     return pm
 
+
 def _broker(success=True):
     b = MagicMock()
-    order = MagicMock(); order.id = "ord_1"
+    order = MagicMock()
+    order.id = "ord_1"
     b.place_order = MagicMock(return_value=order if success else None)
     return b
 
+
 # ── _check_breach ──────────────────────────────────────────────────────────────
+
 
 class TestCheckBreach:
     def test_long_sl_breached(self):
@@ -105,16 +112,20 @@ class TestCheckBreach:
         p = _pos(side="UNKNOWN", sl=1950.0, tp=2100.0)
         assert SLTPMonitor._check_breach(p, 1940.0) is None
 
+
 # ── _get_mid ───────────────────────────────────────────────────────────────────
+
 
 class TestGetMid:
     def test_get_mid_from_mid_attr(self):
-        tick = MagicMock(); tick.mid = 2000.0
+        tick = MagicMock()
+        tick.mid = 2000.0
         monitor = SLTPMonitor(_pm(), _broker(), {"XAUUSD": tick})
         assert monitor._get_mid("XAUUSD") == pytest.approx(2000.0)
 
     def test_get_mid_from_price_attr(self):
-        tick = MagicMock(spec=["price"]); tick.price = 2010.0
+        tick = MagicMock(spec=["price"])
+        tick.price = 2010.0
         monitor = SLTPMonitor(_pm(), _broker(), {"XAUUSD": tick})
         assert monitor._get_mid("XAUUSD") == pytest.approx(2010.0)
 
@@ -126,7 +137,9 @@ class TestGetMid:
         monitor = SLTPMonitor(_pm(), _broker(), {"XAUUSD": None})
         assert monitor._get_mid("XAUUSD") is None
 
+
 # ── Lifecycle ──────────────────────────────────────────────────────────────────
+
 
 class TestSLTPMonitorLifecycle:
     @pytest.mark.asyncio
@@ -159,7 +172,9 @@ class TestSLTPMonitorLifecycle:
         monitor = SLTPMonitor(_pm(), _broker(), {})
         await monitor.stop()  # must not raise
 
+
 # ── _check_all_positions ───────────────────────────────────────────────────────
+
 
 class TestCheckAllPositions:
     @pytest.mark.asyncio
@@ -179,7 +194,8 @@ class TestCheckAllPositions:
     async def test_zero_mid_price_skips(self):
         pos = _pos(side="BUY", sl=1950.0)
         pm = _pm(positions={"XAUUSD": pos})
-        tick = MagicMock(); tick.mid = 0.0
+        tick = MagicMock()
+        tick.mid = 0.0
         monitor = SLTPMonitor(pm, _broker(), {"XAUUSD": tick})
         await monitor._check_all_positions()  # must not raise
 
@@ -187,7 +203,8 @@ class TestCheckAllPositions:
     async def test_already_closing_skips(self):
         pos = _pos(side="BUY", sl=1950.0, pid="pos_1")
         pm = _pm(positions={"XAUUSD": pos})
-        tick = MagicMock(); tick.mid = 1940.0
+        tick = MagicMock()
+        tick.mid = 1940.0
         monitor = SLTPMonitor(pm, _broker(), {"XAUUSD": tick})
         monitor._closing.add("pos_1")  # mark as already closing
         with patch.object(monitor, "_close_position", new=AsyncMock()) as mock_close:
@@ -198,7 +215,8 @@ class TestCheckAllPositions:
     async def test_sl_breach_triggers_close(self):
         pos = _pos(side="BUY", sl=1950.0, pid="pos_1")
         pm = _pm(positions={"XAUUSD": pos})
-        tick = MagicMock(); tick.mid = 1940.0
+        tick = MagicMock()
+        tick.mid = 1940.0
         monitor = SLTPMonitor(pm, _broker(), {"XAUUSD": tick})
         with patch.object(monitor, "_close_position", new=AsyncMock()) as mock_close:
             with patch("asyncio.create_task", side_effect=lambda coro, **kw: asyncio.ensure_future(coro)):
@@ -218,16 +236,18 @@ class TestCheckAllPositions:
         monitor = SLTPMonitor(pm, _broker(), {})
         await monitor._check_all_positions()  # must not raise
 
+
 # ── _close_position ────────────────────────────────────────────────────────────
+
 
 class TestClosePosition:
     @pytest.mark.asyncio
     async def test_close_buy_position_uses_sell(self):
-        from brokers.base import OrderSide
         pos = _pos(side="BUY", qty=1.0, pid="pos_1")
         pm = _pm(positions={"XAUUSD": pos})
         broker = _broker(success=True)
-        tick = MagicMock(); tick.mid = 1940.0
+        tick = MagicMock()
+        tick.mid = 1940.0
         monitor = SLTPMonitor(pm, broker, {"XAUUSD": tick})
         with patch("asyncio.get_running_loop") as mock_loop:
             mock_loop.return_value.run_in_executor = AsyncMock(return_value=MagicMock(id="ord_close"))

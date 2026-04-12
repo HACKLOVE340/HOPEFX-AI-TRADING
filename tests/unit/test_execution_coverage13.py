@@ -1,5 +1,6 @@
 # tests/unit/test_execution_coverage13.py
 """Targeted coverage for position_manager, execution/__init__, tca, trade_executor missing lines."""
+
 from __future__ import annotations
 
 import pytest
@@ -7,13 +8,16 @@ import pytest
 
 # ── execution/__init__.py — import all re-exports ─────────────────────────────
 
+
 class TestExecutionInit:
     def test_import_execution_package(self):
         import execution
+
         assert execution is not None
 
     def test_legacy_exports(self):
         from execution import ExecutionResult, Order, OrderStatus, PaperExecutor, SmartOrderRouter
+
         assert ExecutionResult is not None
         assert Order is not None
         assert OrderStatus is not None
@@ -22,56 +26,69 @@ class TestExecutionInit:
 
     def test_trade_executor_export(self):
         from execution import TradeExecutor
+
         assert TradeExecutor is not None
 
     def test_smart_router_export(self):
         from execution import SmartRouter
+
         assert SmartRouter is not None
 
     def test_position_manager_export(self):
         from execution import PositionManager
+
         assert PositionManager is not None
 
     def test_oms_exports(self):
         from execution import ComplexOrderManager, OrderLifecycleManager
+
         assert OrderLifecycleManager is not None
         assert ComplexOrderManager is not None
 
     def test_position_tracker_export(self):
         from execution import PositionTracker
+
         assert PositionTracker is not None
 
     def test_async_engine_export(self):
         from execution import AsyncExecutionEngine
+
         assert AsyncExecutionEngine is not None
 
     def test_tca_engine_export(self):
         from execution import TCAEngine
+
         assert TCAEngine is not None
 
     def test_sl_tp_monitor_export(self):
         from execution import SLTPMonitor
+
         assert SLTPMonitor is not None
 
     def test_throttler_export(self):
         from execution import MessageThrottler
+
         assert MessageThrottler is not None
 
     def test_spread_monitor_export(self):
         from execution import SpreadMonitor
+
         assert SpreadMonitor is not None
 
     def test_broker_circuit_breaker_export(self):
         from execution import BrokerCircuitBreaker
+
         assert BrokerCircuitBreaker is not None
 
     def test_order_algorithms_export(self):
         from execution import TWAPExecutor, VWAPExecutor
+
         assert TWAPExecutor is not None
         assert VWAPExecutor is not None
 
 
 # ── position_manager — Prometheus helpers and validation paths ────────────────
+
 
 class TestPositionManagerValidation:
     @pytest.mark.asyncio
@@ -121,8 +138,12 @@ class TestPositionManagerValidation:
 
         pm = PositionManager()
         pos = await pm.open_position(
-            "XAUUSD", "BUY", 0.1, 2350.0,
-            stop_loss=2340.0, take_profit=2370.0,
+            "XAUUSD",
+            "BUY",
+            0.1,
+            2350.0,
+            stop_loss=2340.0,
+            take_profit=2370.0,
             strategy_id="test_strat",
         )
         assert pos.stop_loss == 2340.0
@@ -214,6 +235,7 @@ class TestPositionManagerValidation:
 
 # ── tca.py — missing benchmark types and VWAP/TWAP paths ─────────────────────
 
+
 class TestTCABenchmarkTypes:
     @pytest.mark.asyncio
     async def test_vwap_benchmark(self):
@@ -223,7 +245,11 @@ class TestTCABenchmarkTypes:
 
         engine = TCAEngine()
         await engine.start_order(
-            "ord_vwap", "XAUUSD", Side.BUY, Decimal("1"), Decimal("2350"),
+            "ord_vwap",
+            "XAUUSD",
+            Side.BUY,
+            Decimal("1"),
+            Decimal("2350"),
             benchmark=BenchmarkType.VWAP,
         )
         assert "ord_vwap" in engine._active_orders
@@ -236,7 +262,11 @@ class TestTCABenchmarkTypes:
 
         engine = TCAEngine()
         await engine.start_order(
-            "ord_twap", "XAUUSD", Side.BUY, Decimal("1"), Decimal("2350"),
+            "ord_twap",
+            "XAUUSD",
+            Side.BUY,
+            Decimal("1"),
+            Decimal("2350"),
             benchmark=BenchmarkType.TWAP,
         )
         assert "ord_twap" in engine._active_orders
@@ -249,7 +279,11 @@ class TestTCABenchmarkTypes:
 
         engine = TCAEngine()
         await engine.start_order(
-            "ord_close", "XAUUSD", Side.BUY, Decimal("1"), Decimal("2350"),
+            "ord_close",
+            "XAUUSD",
+            Side.BUY,
+            Decimal("1"),
+            Decimal("2350"),
             benchmark=BenchmarkType.CLOSE,
         )
         assert "ord_close" in engine._active_orders
@@ -266,13 +300,22 @@ class TestTCABenchmarkTypes:
         # _vwap_cache stores a deque of (ts, price, qty) tuples
         engine._vwap_cache["XAUUSD"] = deque([(datetime.now(timezone.utc), Decimal("2348"), Decimal("1"))])
         await engine.start_order(
-            "ord_v2", "XAUUSD", Side.BUY, Decimal("1"), Decimal("2350"),
+            "ord_v2",
+            "XAUUSD",
+            Side.BUY,
+            Decimal("1"),
+            Decimal("2350"),
             benchmark=BenchmarkType.VWAP,
         )
         fill = Fill(
-            order_id="ord_v2", fill_id="f1", symbol="XAUUSD",
-            side=Side.BUY, price=Decimal("2351"), quantity=Decimal("1"),
-            commission=Decimal("0.5"), timestamp=datetime.now(timezone.utc),
+            order_id="ord_v2",
+            fill_id="f1",
+            symbol="XAUUSD",
+            side=Side.BUY,
+            price=Decimal("2351"),
+            quantity=Decimal("1"),
+            commission=Decimal("0.5"),
+            timestamp=datetime.now(timezone.utc),
             venue=Venue.PAPER,
         )
         await engine.record_fill("ord_v2", fill)
@@ -290,13 +333,22 @@ class TestTCABenchmarkTypes:
         engine = TCAEngine()
         engine._twap_cache["XAUUSD"] = deque([(datetime.now(timezone.utc), Decimal("2349"))])
         await engine.start_order(
-            "ord_t2", "XAUUSD", Side.BUY, Decimal("1"), Decimal("2350"),
+            "ord_t2",
+            "XAUUSD",
+            Side.BUY,
+            Decimal("1"),
+            Decimal("2350"),
             benchmark=BenchmarkType.TWAP,
         )
         fill = Fill(
-            order_id="ord_t2", fill_id="f2", symbol="XAUUSD",
-            side=Side.BUY, price=Decimal("2351"), quantity=Decimal("1"),
-            commission=Decimal("0.5"), timestamp=datetime.now(timezone.utc),
+            order_id="ord_t2",
+            fill_id="f2",
+            symbol="XAUUSD",
+            side=Side.BUY,
+            price=Decimal("2351"),
+            quantity=Decimal("1"),
+            commission=Decimal("0.5"),
+            timestamp=datetime.now(timezone.utc),
             venue=Venue.PAPER,
         )
         await engine.record_fill("ord_t2", fill)
@@ -319,6 +371,7 @@ class TestTCABenchmarkTypes:
 
 
 # ── trade_executor — _notify_inference_engine_fill and get_risk_status ────────
+
 
 class TestTradeExecutorMiscPaths:
     def _executor(self):
@@ -351,9 +404,13 @@ class TestTradeExecutorMiscPaths:
 
         ex = self._executor()
         result = ExecutionResult(
-            success=True, order_id="o1",
-            filled_quantity=0.01, average_price=2350.0,
-            commission=0.5, status=OrderStatus.FILLED, message="ok",
+            success=True,
+            order_id="o1",
+            filled_quantity=0.01,
+            average_price=2350.0,
+            commission=0.5,
+            status=OrderStatus.FILLED,
+            message="ok",
         )
         # Should not raise even if inference engine is unavailable
         await ex._notify_inference_engine_fill(result, {"symbol": "XAUUSD", "confidence": 0.8})
@@ -370,9 +427,13 @@ class TestTradeExecutorMiscPaths:
 
         ex.register_callback(async_cb)
         result = ExecutionResult(
-            success=True, order_id="o1",
-            filled_quantity=0.01, average_price=2350.0,
-            commission=0.5, status=OrderStatus.FILLED, message="ok",
+            success=True,
+            order_id="o1",
+            filled_quantity=0.01,
+            average_price=2350.0,
+            commission=0.5,
+            status=OrderStatus.FILLED,
+            message="ok",
         )
         await ex._notify_callbacks(result, {"symbol": "XAUUSD"})
         assert len(fired) == 1

@@ -1,6 +1,7 @@
 # HOPEFX-AI-TRADING
 # Tests for kill_switch.py — real unit tests, no mocks/stubs
 """Covers activate, deactivate, callbacks, status, flag file, token, router."""
+
 from __future__ import annotations
 
 import tempfile
@@ -15,12 +16,14 @@ UTC = timezone.utc
 def _fresh_ks(**kwargs):
     """Return a fresh KillSwitch with no persisted state."""
     from kill_switch import KillSwitch
+
     ks = KillSwitch(**kwargs)
     ks.reset_for_testing()
     return ks
 
 
 # ── basic activate / deactivate ───────────────────────────────────────────────
+
 
 class TestKillSwitchActivate:
     def test_initially_inactive(self):
@@ -64,6 +67,7 @@ class TestKillSwitchActivate:
 
     def test_deactivate_with_token_clears_reason(self):
         from kill_switch import KillSwitch
+
         ks = KillSwitch(deactivation_token="tok")
         ks.reset_for_testing()
         ks.activate("test")
@@ -73,6 +77,7 @@ class TestKillSwitchActivate:
 
     def test_deactivate_with_token_clears_activated_at(self):
         from kill_switch import KillSwitch
+
         ks = KillSwitch(deactivation_token="tok")
         ks.reset_for_testing()
         ks.activate("test")
@@ -96,9 +101,11 @@ class TestKillSwitchActivate:
 
 # ── deactivation token ────────────────────────────────────────────────────────
 
+
 class TestKillSwitchToken:
     def test_wrong_token_raises(self):
         from kill_switch import KillSwitch
+
         ks = KillSwitch(deactivation_token="secret")
         ks.reset_for_testing()
         ks.activate("locked")
@@ -108,6 +115,7 @@ class TestKillSwitchToken:
 
     def test_correct_token_deactivates(self):
         from kill_switch import KillSwitch
+
         ks = KillSwitch(deactivation_token="secret")
         ks.reset_for_testing()
         ks.activate("locked")
@@ -125,6 +133,7 @@ class TestKillSwitchToken:
 
 
 # ── callbacks ─────────────────────────────────────────────────────────────────
+
 
 class TestKillSwitchCallbacks:
     def test_callback_called_on_activate(self):
@@ -147,8 +156,10 @@ class TestKillSwitchCallbacks:
 
     def test_callback_exception_does_not_crash(self):
         ks = _fresh_ks()
+
         def bad_cb(reason):
             raise RuntimeError("callback error")
+
         ks.register_callback(bad_cb)
         ks.activate("test")  # should not raise
         ks.reset_for_testing()
@@ -174,6 +185,7 @@ class TestKillSwitchCallbacks:
 
 # ── status ────────────────────────────────────────────────────────────────────
 
+
 class TestKillSwitchStatus:
     def test_status_inactive(self):
         ks = _fresh_ks()
@@ -198,6 +210,7 @@ class TestKillSwitchStatus:
 
     def test_status_token_configured_flag(self):
         from kill_switch import KillSwitch
+
         ks = KillSwitch(deactivation_token="tok")
         ks.reset_for_testing()
         s = ks.status()
@@ -212,11 +225,13 @@ class TestKillSwitchStatus:
 
 # ── flag file ─────────────────────────────────────────────────────────────────
 
+
 class TestKillSwitchFlagFile:
     def test_flag_file_created_on_activate(self):
         with tempfile.TemporaryDirectory() as d:
             flag = Path(d) / "kill.flag"
             from kill_switch import KillSwitch
+
             ks = KillSwitch(flag_file=flag)
             ks.reset_for_testing()
             ks.activate("flag test")
@@ -227,6 +242,7 @@ class TestKillSwitchFlagFile:
         with tempfile.TemporaryDirectory() as d:
             flag = Path(d) / "kill.flag"
             from kill_switch import KillSwitch
+
             ks = KillSwitch(flag_file=flag)
             ks.reset_for_testing()
             ks.activate("flag reason")
@@ -244,6 +260,7 @@ class TestKillSwitchFlagFile:
         with tempfile.TemporaryDirectory() as d:
             flag = Path(d) / "kill.flag"
             from kill_switch import KillSwitch
+
             ks = KillSwitch(flag_file=flag)
             ks.reset_for_testing()
             s = ks.status()
@@ -253,22 +270,28 @@ class TestKillSwitchFlagFile:
 
 # ── event bus integration ─────────────────────────────────────────────────────
 
+
 class TestKillSwitchEventBus:
     def test_set_event_bus(self):
         ks = _fresh_ks()
+
         class FakeBus:
             published = []
+
             def publish(self, event):
                 self.published.append(event)
+
         bus = FakeBus()
         ks.set_event_bus(bus)
         assert ks._event_bus is bus
 
     def test_on_bus_event_activates(self):
         ks = _fresh_ks()
+
         class KillEvent:
             type = "kill_switch"
             reason = "bus triggered"
+
         ks.on_bus_event(KillEvent())
         assert ks.is_active() is True
         ks.reset_for_testing()
@@ -276,8 +299,10 @@ class TestKillSwitchEventBus:
     def test_on_bus_event_always_activates(self):
         # on_bus_event activates regardless of event type — caller filters
         ks = _fresh_ks()
+
         class AnyEvent:
             pass
+
         ks.on_bus_event(AnyEvent())
         assert ks.is_active() is True
         ks.reset_for_testing()
@@ -285,15 +310,18 @@ class TestKillSwitchEventBus:
 
 # ── router factory ────────────────────────────────────────────────────────────
 
+
 class TestCreateKillSwitchRouter:
     def test_router_created(self):
-        from kill_switch import create_kill_switch_router, KillSwitch
+        from kill_switch import create_kill_switch_router
+
         ks = _fresh_ks()
         router = create_kill_switch_router(ks)
         assert router is not None
 
     def test_router_has_routes(self):
         from kill_switch import create_kill_switch_router
+
         ks = _fresh_ks()
         router = create_kill_switch_router(ks)
         routes = [r.path for r in router.routes]
@@ -301,6 +329,7 @@ class TestCreateKillSwitchRouter:
 
     def test_router_has_status_route(self):
         from kill_switch import create_kill_switch_router
+
         ks = _fresh_ks()
         router = create_kill_switch_router(ks)
         paths = [r.path for r in router.routes]
@@ -308,6 +337,7 @@ class TestCreateKillSwitchRouter:
 
     def test_router_has_activate_route(self):
         from kill_switch import create_kill_switch_router
+
         ks = _fresh_ks()
         router = create_kill_switch_router(ks)
         paths = [r.path for r in router.routes]
@@ -315,6 +345,7 @@ class TestCreateKillSwitchRouter:
 
     def test_router_has_deactivate_route(self):
         from kill_switch import create_kill_switch_router
+
         ks = _fresh_ks()
         router = create_kill_switch_router(ks)
         paths = [r.path for r in router.routes]

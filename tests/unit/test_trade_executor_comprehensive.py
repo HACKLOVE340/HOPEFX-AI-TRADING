@@ -19,7 +19,6 @@ import pytest
 from execution.trade_executor import (
     DRAWDOWN_HALT_PCT,
     MAX_RISK_PCT_PER_TRADE,
-    STREAK_COOLDOWN_MINUTES,
     STREAK_HALT_LOSSES,
     ExecutionResult,
     OrderStatus,
@@ -223,18 +222,14 @@ class TestExecuteSignalClose:
     async def test_close_position_not_found_returns_error(self):
         ex = _make_executor()
         ex.position_tracker.get_position = MagicMock(return_value=None)
-        result = await ex.execute_signal(
-            {"symbol": "XAUUSD", "action": "close", "size": 1.0, "position_id": "ghost"}
-        )
+        result = await ex.execute_signal({"symbol": "XAUUSD", "action": "close", "size": 1.0, "position_id": "ghost"})
         assert result.success is False
         assert "not found" in result.message
 
     @pytest.mark.asyncio
     async def test_close_success(self):
         ex = _make_executor()
-        result = await ex.execute_signal(
-            {"symbol": "XAUUSD", "action": "close", "size": 1.0, "position_id": "pos_1"}
-        )
+        result = await ex.execute_signal({"symbol": "XAUUSD", "action": "close", "size": 1.0, "position_id": "pos_1"})
         assert result.success is True
         assert result.status == OrderStatus.FILLED
 
@@ -242,17 +237,13 @@ class TestExecuteSignalClose:
     async def test_close_broker_failure(self):
         ex = _make_executor()
         ex.broker.close_position = AsyncMock(return_value=False)
-        result = await ex.execute_signal(
-            {"symbol": "XAUUSD", "action": "close", "size": 1.0, "position_id": "pos_1"}
-        )
+        result = await ex.execute_signal({"symbol": "XAUUSD", "action": "close", "size": 1.0, "position_id": "pos_1"})
         assert result.success is False
 
     @pytest.mark.asyncio
     async def test_close_updates_risk_manager_equity(self):
         ex = _make_executor()
-        await ex.execute_signal(
-            {"symbol": "XAUUSD", "action": "close", "size": 1.0, "position_id": "pos_1"}
-        )
+        await ex.execute_signal({"symbol": "XAUUSD", "action": "close", "size": 1.0, "position_id": "pos_1"})
         ex.risk_manager.update_equity.assert_called_once()
 
 
