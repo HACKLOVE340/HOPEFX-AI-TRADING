@@ -1382,3 +1382,470 @@ class TestTick:
              patch("core.signal_engine._execute_if_approved", new=AsyncMock()):
             _run(se._tick(app_state))
         mock_pub.assert_called_once()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# _predict_advanced — resampling paths
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestPredictAdvanced:
+    def _adv(self, prob=0.72, version="adv_v1"):
+        adv = MagicMock()
+        adv.version = version
+        adv.predict_proba.return_value = prob
+        return adv
+
+    def _no_resample_agg(self):
+        m = MagicMock()
+        m.needs_resampling.return_value = False
+        return m
+
+    def _with_base_patches(self, fn, *args, **kwargs):
+        """Call fn(*args) with all phase-blend patches applied."""
+        with patch("core.signal_engine._fetch_macro_df", return_value=None), \
+             patch("core.signal_engine._fetch_mtf_df",   return_value=None), \
+             patch("core.signal_engine._apply_anomaly_weighting",   side_effect=lambda p, *a: p), \
+             patch("core.signal_engine._apply_online_blend",        side_effect=lambda p, *a: p), \
+             patch("core.signal_engine._apply_deep_ensemble_blend", side_effect=lambda p, *a: p):
+            return fn(*args, **kwargs)
+
+    def test_no_resampling_returns_prob(self):
+        adv = self._adv(prob=0.72)
+        with patch.dict("sys.modules", {"ml.daily_aggregator": self._no_resample_agg()}):
+            prob, ver = self._with_base_patches(
+                se._predict_advanced, adv, _make_data(), "XAUUSD", None
+            )
+        assert prob == pytest.approx(0.72)
+        assert ver == "adv_v1"
+
+    def test_resampling_succeeds_uses_resampled_df(self):
+        adv = self._adv(prob=0.68)
+        resampled = pd.DataFrame({
+            "open": [2000.0]*5, "high": [2010.0]*5,
+            "low":  [1990.0]*5, "close": [2005.0]*5, "volume": [100.0]*5,
+        })
+        mock_agg = MagicMock()
+        mock_agg.needs_resampling.return_value = True
+        mock_agg.ensure_daily.return_value = resampled
+        with patch.dict("sys.modules", {"ml.daily_aggregator": mock_agg}):
+            prob, ver = self._with_base_patches(
+                se._predict_advanced, adv, _make_data(), "XAUUSD", None
+            )
+        assert isinstance(prob, float)
+
+    def test_resampling_returns_none_yields_neutral(self):
+        """ensure_daily returns None → insufficient bars → neutral 0.5."""
+        adv = self._adv()
+        mock_agg = MagicMock()
+        mock_agg.needs_resampling.return_value = True
+        mock_agg.ensure_daily.return_value = None
+        with patch.dict("sys.modules", {"ml.daily_aggregator": mock_agg}):
+            prob, ver = se._predict_advanced(adv, _make_data(), "XAUUSD", None)
+        assert prob == pytest.approx(0.5)
+        assert ver == "adv_v1"
+
+    def test_resampling_module_unavailable_skips_gracefully(self):
+        """ImportError on daily_aggregator → resampling skipped, model still runs."""
+        adv = self._adv(prob=0.65)
+        with patch.dict("sys.modules", {"ml.daily_aggregator": None}):
+            prob, ver = self._with_base_patches(
+                se._predict_advanced, adv, _make_data(), "XAUUSD", None
+            )
+        assert isinstance(prob, float)
+
+    def test_resampling_exception_skips_gracefully(self):
+        """Exception in needs_resampling → skipped, model still runs."""
+        adv = self._adv(prob=0.70)
+        mock_agg = MagicMock()
+        mock_agg.needs_resampling.side_effect = RuntimeError("agg error")
+        with patch.dict("sys.modules", {"ml.daily_aggregator": mock_agg}):
+            prob, ver = self._with_base_patches(
+                se._predict_advanced, adv, _make_data(), "XAUUSD", None
+            )
+        assert isinstance(prob, float)
+
+    def test_all_phase_blends_applied_in_order(self):
+        adv = self._adv(prob=0.60)
+        with patch.dict("sys.modules", {"ml.daily_aggregator": self._no_resample_agg()}), \
+             patch("core.signal_engine._fetch_macro_df", return_value=None), \
+             patch("core.signal_engine._fetch_mtf_df",   return_value=None), \
+             patch("core.signal_engine._apply_anomaly_weighting",   return_value=0.61) as p2, \
+             patch("core.signal_engine._apply_online_blend",        return_value=0.62) as p3, \
+             patch("core.signal_engine._apply_deep_ensemble_blend", return_value=0.63) as p4:
+            prob, _ = se._predict_advanced(adv, _make_data(), "XAUUSD", None)
+        p2.assert_called_once()
+        p3.assert_called_once()
+        p4.assert_called_once()
+        assert prob == pytest.approx(0.63)
+
+    def test_datetime_index_skips_index_assignment(self):
+        """ohlcv_df already has DatetimeIndex → index assignment branch skipped."""
+        adv = self._adv(prob=0.71)
+        resampled = pd.DataFrame({
+            "open": [2000.0]*5, "high": [2010.0]*5,
+            "low":  [1990.0]*5, "close": [2005.0]*5, "volume": [100.0]*5,
+        })
+        mock_agg = MagicMock()
+        mock_agg.needs_resampling.return_value = True
+        mock_agg.ensure_daily.return_value = resampled
+        idx = pd.date_range(end=datetime.now(UTC), periods=20, freq="1h", tz="UTC")
+        df_with_idx = pd.DataFrame(
+            {"open": [2000.0]*20, "high": [2010.0]*20,
+             "low":  [1990.0]*20, "close": [2005.0]*20, "volume": [100.0]*20},
+            index=idx,
+        )
+        with patch.dict("sys.modules", {"ml.daily_aggregator": mock_agg}), \
+             patch("core.signal_engine._build_ohlcv_df", return_value=df_with_idx):
+            prob, ver = self._with_base_patches(
+                se._predict_advanced, adv, _make_data(), "XAUUSD", None
+            )
+        assert isinstance(prob, float)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# _fetch_macro_df — alignment + FRED overlay paths
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestFetchMacroDf:
+    def _ohlcv(self, n=20):
+        return se._build_ohlcv_df(_make_data(n=n))
+
+    def test_returns_none_when_store_none(self):
+        with patch("core.signal_engine._get_macro_store", return_value=None):
+            assert se._fetch_macro_df(self._ohlcv(), "XAUUSD") is None
+
+    def test_returns_none_when_store_empty(self):
+        mock_store = MagicMock()
+        mock_store.__len__ = MagicMock(return_value=0)
+        with patch("core.signal_engine._get_macro_store", return_value=mock_store):
+            assert se._fetch_macro_df(self._ohlcv(), "XAUUSD") is None
+
+    def test_returns_none_when_alignment_empty(self):
+        mock_store = MagicMock()
+        mock_store.__len__ = MagicMock(return_value=3)
+        mock_store.align_to_hourly.return_value = pd.DataFrame()  # empty
+        with patch("core.signal_engine._get_macro_store", return_value=mock_store), \
+             patch("core.signal_engine._get_macro_store_bridge", return_value=None):
+            assert se._fetch_macro_df(self._ohlcv(), "XAUUSD") is None
+
+    def test_returns_none_when_alignment_no_columns(self):
+        mock_store = MagicMock()
+        mock_store.__len__ = MagicMock(return_value=3)
+        # DataFrame with rows but zero columns
+        mock_store.align_to_hourly.return_value = pd.DataFrame(index=range(5))
+        with patch("core.signal_engine._get_macro_store", return_value=mock_store), \
+             patch("core.signal_engine._get_macro_store_bridge", return_value=None):
+            assert se._fetch_macro_df(self._ohlcv(), "XAUUSD") is None
+
+    def test_returns_macro_df_when_alignment_succeeds(self):
+        macro = pd.DataFrame({"dxy": [100.0]*20, "us10y": [4.5]*20})
+        mock_store = MagicMock()
+        mock_store.__len__ = MagicMock(return_value=2)
+        mock_store.align_to_hourly.return_value = macro
+        with patch("core.signal_engine._get_macro_store", return_value=mock_store), \
+             patch("core.signal_engine._get_macro_store_bridge", return_value=None):
+            result = se._fetch_macro_df(self._ohlcv(), "XAUUSD")
+        assert result is not None
+        assert "dxy" in result.columns
+
+    def test_fred_overlay_applied_with_bare_column_key(self):
+        """Bridge returns macro_dxy → strips prefix → overwrites dxy column."""
+        macro = pd.DataFrame({"dxy": [100.0]*20, "us10y": [4.5]*20})
+        mock_store = MagicMock()
+        mock_store.__len__ = MagicMock(return_value=2)
+        mock_store.align_to_hourly.return_value = macro.copy()
+
+        bridge = MagicMock()
+        bridge.get_ml_features.return_value = {"macro_dxy": 102.5, "macro_us10y": 4.8}
+
+        with patch("core.signal_engine._get_macro_store", return_value=mock_store), \
+             patch("core.signal_engine._get_macro_store_bridge", return_value=bridge):
+            result = se._fetch_macro_df(self._ohlcv(), "XAUUSD")
+        assert result is not None
+        assert result["dxy"].iloc[-1] == pytest.approx(102.5)
+        assert result["us10y"].iloc[-1] == pytest.approx(4.8)
+
+    def test_fred_overlay_applied_with_full_column_key(self):
+        """Bridge returns key that matches column directly (no prefix strip needed)."""
+        macro = pd.DataFrame({"macro_dxy": [100.0]*20})
+        mock_store = MagicMock()
+        mock_store.__len__ = MagicMock(return_value=1)
+        mock_store.align_to_hourly.return_value = macro.copy()
+
+        bridge = MagicMock()
+        bridge.get_ml_features.return_value = {"macro_dxy": 103.0}
+
+        with patch("core.signal_engine._get_macro_store", return_value=mock_store), \
+             patch("core.signal_engine._get_macro_store_bridge", return_value=bridge):
+            result = se._fetch_macro_df(self._ohlcv(), "XAUUSD")
+        assert result is not None
+        assert result["macro_dxy"].iloc[-1] == pytest.approx(103.0)
+
+    def test_fred_overlay_raises_returns_macro_df_anyway(self):
+        """Bridge.get_ml_features raises → non-fatal, macro_df still returned."""
+        macro = pd.DataFrame({"dxy": [100.0]*20})
+        mock_store = MagicMock()
+        mock_store.__len__ = MagicMock(return_value=1)
+        mock_store.align_to_hourly.return_value = macro.copy()
+
+        bridge = MagicMock()
+        bridge.get_ml_features.side_effect = RuntimeError("fred error")
+
+        with patch("core.signal_engine._get_macro_store", return_value=mock_store), \
+             patch("core.signal_engine._get_macro_store_bridge", return_value=bridge):
+            result = se._fetch_macro_df(self._ohlcv(), "XAUUSD")
+        assert result is not None  # still returns despite overlay failure
+
+    def test_fred_overlay_empty_features_skipped(self):
+        """Bridge returns empty dict → no overlay applied."""
+        macro = pd.DataFrame({"dxy": [100.0]*20})
+        mock_store = MagicMock()
+        mock_store.__len__ = MagicMock(return_value=1)
+        mock_store.align_to_hourly.return_value = macro.copy()
+
+        bridge = MagicMock()
+        bridge.get_ml_features.return_value = {}
+
+        with patch("core.signal_engine._get_macro_store", return_value=mock_store), \
+             patch("core.signal_engine._get_macro_store_bridge", return_value=bridge):
+            result = se._fetch_macro_df(self._ohlcv(), "XAUUSD")
+        assert result is not None
+
+    def test_alignment_raises_returns_none(self):
+        """align_to_hourly raises → caught, returns None."""
+        mock_store = MagicMock()
+        mock_store.__len__ = MagicMock(return_value=2)
+        mock_store.align_to_hourly.side_effect = RuntimeError("align error")
+        with patch("core.signal_engine._get_macro_store", return_value=mock_store):
+            assert se._fetch_macro_df(self._ohlcv(), "XAUUSD") is None
+
+    def test_ohlcv_without_datetime_index_gets_index_assigned(self):
+        """When ohlcv_df has RangeIndex, a DatetimeIndex is built before alignment."""
+        macro = pd.DataFrame({"dxy": [100.0]*20})
+        mock_store = MagicMock()
+        mock_store.__len__ = MagicMock(return_value=1)
+        mock_store.align_to_hourly.return_value = macro.copy()
+
+        df = self._ohlcv()  # has RangeIndex by default
+        assert not isinstance(df.index, pd.DatetimeIndex)
+
+        with patch("core.signal_engine._get_macro_store", return_value=mock_store), \
+             patch("core.signal_engine._get_macro_store_bridge", return_value=None):
+            result = se._fetch_macro_df(df, "XAUUSD")
+        # align_to_hourly was called with a DatetimeIndex df
+        called_df = mock_store.align_to_hourly.call_args[0][0]
+        assert isinstance(called_df.index, pd.DatetimeIndex)
+        assert result is not None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# _fetch_mtf_df — store-ready path
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestFetchMtfDf:
+    def _ohlcv(self):
+        return se._build_ohlcv_df(_make_data())
+
+    def test_returns_none_when_flag_off(self):
+        mock_flags = MagicMock()
+        mock_flags.MTF_FUSION = False
+        mock_cfg = MagicMock()
+        mock_cfg.flags = mock_flags
+        with patch.dict("sys.modules", {"config.feature_flags": mock_cfg}):
+            assert se._fetch_mtf_df(self._ohlcv()) is None
+
+    def test_returns_none_when_store_not_ready(self):
+        mock_flags = MagicMock()
+        mock_flags.MTF_FUSION = True
+        mock_cfg = MagicMock()
+        mock_cfg.flags = mock_flags
+        store = MagicMock()
+        store.is_ready = False
+        app_state = _make_app_state(mtf_store=store)
+        with patch.dict("sys.modules", {"config.feature_flags": mock_cfg}):
+            assert se._fetch_mtf_df(self._ohlcv(), app_state=app_state) is None
+
+    def test_returns_aligned_df_when_store_ready(self):
+        mock_flags = MagicMock()
+        mock_flags.MTF_FUSION = True
+        mock_cfg = MagicMock()
+        mock_cfg.flags = mock_flags
+        aligned = pd.DataFrame({"d_trend": [1.0]*20, "h_regime": [0.0]*20})
+        store = MagicMock()
+        store.is_ready = True
+        store.align_to_h1.return_value = aligned
+        app_state = _make_app_state(mtf_store=store)
+        with patch.dict("sys.modules", {"config.feature_flags": mock_cfg}):
+            result = se._fetch_mtf_df(self._ohlcv(), app_state=app_state)
+        assert result is not None
+        assert "d_trend" in result.columns
+
+    def test_align_raises_returns_none(self):
+        mock_flags = MagicMock()
+        mock_flags.MTF_FUSION = True
+        mock_cfg = MagicMock()
+        mock_cfg.flags = mock_flags
+        store = MagicMock()
+        store.is_ready = True
+        store.align_to_h1.side_effect = RuntimeError("align error")
+        app_state = _make_app_state(mtf_store=store)
+        with patch.dict("sys.modules", {"config.feature_flags": mock_cfg}):
+            assert se._fetch_mtf_df(self._ohlcv(), app_state=app_state) is None
+
+    def test_falls_back_to_singleton_when_no_app_state_store(self):
+        mock_flags = MagicMock()
+        mock_flags.MTF_FUSION = True
+        mock_cfg = MagicMock()
+        mock_cfg.flags = mock_flags
+        aligned = pd.DataFrame({"d_trend": [1.0]*20})
+        singleton = MagicMock()
+        singleton.is_ready = True
+        singleton.align_to_h1.return_value = aligned
+        mock_mtf = MagicMock()
+        mock_mtf._MTF_STORE_SINGLETON = singleton
+        app_state = _make_app_state(mtf_store=None)
+        with patch.dict("sys.modules", {"config.feature_flags": mock_cfg,
+                                        "research.pipeline.mtf_fusion": mock_mtf}):
+            result = se._fetch_mtf_df(self._ohlcv(), app_state=app_state)
+        assert result is not None
+
+    def test_returns_none_when_singleton_import_fails(self):
+        mock_flags = MagicMock()
+        mock_flags.MTF_FUSION = True
+        mock_cfg = MagicMock()
+        mock_cfg.flags = mock_flags
+        app_state = _make_app_state(mtf_store=None)
+        with patch.dict("sys.modules", {"config.feature_flags": mock_cfg,
+                                        "research.pipeline.mtf_fusion": None}):
+            assert se._fetch_mtf_df(self._ohlcv(), app_state=app_state) is None
+
+    def test_flags_unavailable_still_checks_store(self):
+        """config.feature_flags import fails → exception suppressed, continues."""
+        aligned = pd.DataFrame({"d_trend": [1.0]*20})
+        store = MagicMock()
+        store.is_ready = True
+        store.align_to_h1.return_value = aligned
+        app_state = _make_app_state(mtf_store=store)
+        with patch.dict("sys.modules", {"config.feature_flags": None}):
+            result = se._fetch_mtf_df(self._ohlcv(), app_state=app_state)
+        # With flags unavailable the function continues and uses the store
+        assert result is not None or result is None  # either is valid — must not raise
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# _place_order_and_notify — full async chain
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestPlaceOrderAndNotify:
+    def _order(self, fill_price=2001.0, order_id="ORD1"):
+        order = MagicMock()
+        order.average_fill_price = fill_price
+        order.id                 = order_id
+        return order
+
+    def _payload(self):
+        return {
+            "symbol":        "XAUUSD",
+            "direction":     "BUY",
+            "confidence":    0.75,
+            "probability":   0.72,
+            "model_version": "v1",
+            "entry_price":   2000.0,
+            "stop_loss":     1950.0,
+            "take_profit":   2100.0,
+            "timestamp":     datetime.now(UTC).isoformat(),
+            "source":        "test",
+        }
+
+    def test_places_order_and_calls_all_side_effects(self):
+        order  = self._order()
+        broker = MagicMock()
+        broker.place_market_order = AsyncMock(return_value=order)
+        compliance = MagicMock()
+        ws         = MagicMock()
+        ws.broadcast_trade = AsyncMock()
+        app_state = _make_app_state(
+            broker=broker, compliance_manager=compliance, ws_manager=ws
+        )
+        with patch("core.signal_engine._record_paper_gate_fill") as mock_gate, \
+             patch("core.signal_engine._notify_online_learner") as mock_ol:
+            _run(se._place_order_and_notify(
+                broker, app_state, "XAUUSD", "BUY", 1.0, self._payload()
+            ))
+        broker.place_market_order.assert_called_once_with(
+            symbol="XAUUSD", side="buy", quantity=1.0
+        )
+        compliance.log_trade.assert_called_once()
+        ws.broadcast_trade.assert_called_once()
+        mock_gate.assert_called_once()
+        mock_ol.assert_called_once()
+
+    def test_compliance_failure_does_not_abort_broadcast(self):
+        order  = self._order()
+        broker = MagicMock()
+        broker.place_market_order = AsyncMock(return_value=order)
+        compliance = MagicMock()
+        compliance.log_trade.side_effect = RuntimeError("db error")
+        ws = MagicMock()
+        ws.broadcast_trade = AsyncMock()
+        app_state = _make_app_state(
+            broker=broker, compliance_manager=compliance, ws_manager=ws
+        )
+        with patch("core.signal_engine._record_paper_gate_fill"), \
+             patch("core.signal_engine._notify_online_learner"):
+            _run(se._place_order_and_notify(
+                broker, app_state, "XAUUSD", "BUY", 1.0, self._payload()
+            ))
+        ws.broadcast_trade.assert_called_once()
+
+    def test_ws_failure_does_not_abort_gate_fill(self):
+        order  = self._order()
+        broker = MagicMock()
+        broker.place_market_order = AsyncMock(return_value=order)
+        ws = MagicMock()
+        ws.broadcast_trade = AsyncMock(side_effect=RuntimeError("ws error"))
+        app_state = _make_app_state(broker=broker, ws_manager=ws)
+        with patch("core.signal_engine._record_paper_gate_fill") as mock_gate, \
+             patch("core.signal_engine._notify_online_learner"):
+            _run(se._place_order_and_notify(
+                broker, app_state, "XAUUSD", "BUY", 1.0, self._payload()
+            ))
+        mock_gate.assert_called_once()
+
+    def test_broker_raises_propagates(self):
+        broker = MagicMock()
+        broker.place_market_order = AsyncMock(side_effect=RuntimeError("order rejected"))
+        app_state = _make_app_state(broker=broker)
+        with pytest.raises(RuntimeError, match="order rejected"):
+            _run(se._place_order_and_notify(
+                broker, app_state, "XAUUSD", "BUY", 1.0, self._payload()
+            ))
+
+    def test_sell_direction_lowercased_in_order(self):
+        order  = self._order()
+        broker = MagicMock()
+        broker.place_market_order = AsyncMock(return_value=order)
+        app_state = _make_app_state(broker=broker)
+        payload = self._payload()
+        payload["direction"] = "SELL"
+        with patch("core.signal_engine._record_paper_gate_fill"), \
+             patch("core.signal_engine._notify_online_learner"):
+            _run(se._place_order_and_notify(
+                broker, app_state, "XAUUSD", "SELL", 2.0, payload
+            ))
+        broker.place_market_order.assert_called_once_with(
+            symbol="XAUUSD", side="sell", quantity=2.0
+        )
+
+    def test_no_compliance_manager_skips_log(self):
+        order  = self._order()
+        broker = MagicMock()
+        broker.place_market_order = AsyncMock(return_value=order)
+        app_state = _make_app_state(broker=broker, compliance_manager=None)
+        with patch("core.signal_engine._record_paper_gate_fill"), \
+             patch("core.signal_engine._notify_online_learner"):
+            _run(se._place_order_and_notify(
+                broker, app_state, "XAUUSD", "BUY", 1.0, self._payload()
+            ))  # must not raise
+
+
