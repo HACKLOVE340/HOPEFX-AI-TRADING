@@ -13,7 +13,7 @@ Covers: GeopoliticalEvent, CountryRisk, GeopoliticalRiskAssessment,
 """
 
 from datetime import datetime, timezone
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -269,16 +269,18 @@ class TestGeopoliticalRiskProviderInit:
         p._cache_timestamp = datetime.now(UTC)
         assert p._is_cache_valid() is True
 
-    def test_get_current_events_returns_empty_in_ci(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_get_current_events_returns_empty_in_ci(self, monkeypatch):
         """In CI environment, no live network calls are made."""
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import GeopoliticalRiskProvider
 
         p = GeopoliticalRiskProvider()
-        events = p.get_current_events(force_refresh=True)
+        events = await p.get_current_events(force_refresh=True)
         assert isinstance(events, list)
 
-    def test_get_current_events_uses_cache(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_get_current_events_uses_cache(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import (
             GeopoliticalEvent,
@@ -300,7 +302,7 @@ class TestGeopoliticalRiskProviderInit:
         )
         p._cache["events"] = [cached_event]
         p._cache_timestamp = datetime.now(UTC)
-        events = p.get_current_events(force_refresh=False)
+        events = await p.get_current_events(force_refresh=False)
         assert len(events) == 1
         assert events[0].title == "Cached Event"
 
@@ -455,36 +457,40 @@ class TestCalculateRiskScore:
 
 @pytest.mark.unit
 class TestGetRiskAssessment:
-    def test_returns_assessment_object(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_returns_assessment_object(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import GeopoliticalRiskAssessment, GeopoliticalRiskProvider
 
         p = GeopoliticalRiskProvider()
-        assessment = p.get_risk_assessment()
+        assessment = await p.get_risk_assessment()
         assert isinstance(assessment, GeopoliticalRiskAssessment)
 
-    def test_global_risk_score_in_range(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_global_risk_score_in_range(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import GeopoliticalRiskProvider
 
         p = GeopoliticalRiskProvider()
-        assessment = p.get_risk_assessment()
+        assessment = await p.get_risk_assessment()
         assert 0.0 <= assessment.global_risk_score <= 100.0
 
-    def test_gold_outlook_is_gold_impact(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_gold_outlook_is_gold_impact(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import GeopoliticalRiskProvider, GoldImpact
 
         p = GeopoliticalRiskProvider()
-        assessment = p.get_risk_assessment()
+        assessment = await p.get_risk_assessment()
         assert isinstance(assessment.gold_outlook, GoldImpact)
 
-    def test_trading_recommendations_is_list(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_trading_recommendations_is_list(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import GeopoliticalRiskProvider
 
         p = GeopoliticalRiskProvider()
-        assessment = p.get_risk_assessment()
+        assessment = await p.get_risk_assessment()
         assert isinstance(assessment.trading_recommendations, list)
 
 
@@ -495,55 +501,63 @@ class TestGetRiskAssessment:
 
 @pytest.mark.unit
 class TestGetGoldTradingSignal:
-    def test_returns_dict(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_returns_dict(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import GeopoliticalRiskProvider
 
         p = GeopoliticalRiskProvider()
-        signal = p.get_gold_trading_signal()
+        signal = await p.get_gold_trading_signal()
         assert isinstance(signal, dict)
 
-    def test_required_keys(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_required_keys(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import GeopoliticalRiskProvider
 
         p = GeopoliticalRiskProvider()
-        signal = p.get_gold_trading_signal()
+        signal = await p.get_gold_trading_signal()
         for key in ("symbol", "direction", "strength", "confidence", "risk_score", "gold_outlook", "timestamp"):
             assert key in signal, f"Missing key: {key}"
 
-    def test_symbol_is_xauusd(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_symbol_is_xauusd(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import GeopoliticalRiskProvider
 
         p = GeopoliticalRiskProvider()
-        assert p.get_gold_trading_signal()["symbol"] == "XAUUSD"
+        signal = await p.get_gold_trading_signal()
+        assert signal["symbol"] == "XAUUSD"
 
-    def test_direction_valid_value(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_direction_valid_value(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import GeopoliticalRiskProvider
 
         p = GeopoliticalRiskProvider()
-        direction = p.get_gold_trading_signal()["direction"]
+        direction = (await p.get_gold_trading_signal())["direction"]
         assert direction in ("BUY", "SELL", "HOLD")
 
-    def test_strength_in_range(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_strength_in_range(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import GeopoliticalRiskProvider
 
         p = GeopoliticalRiskProvider()
-        strength = p.get_gold_trading_signal()["strength"]
+        strength = (await p.get_gold_trading_signal())["strength"]
         assert 0.0 <= strength <= 1.0
 
-    def test_confidence_in_range(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_confidence_in_range(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import GeopoliticalRiskProvider
 
         p = GeopoliticalRiskProvider()
-        confidence = p.get_gold_trading_signal()["confidence"]
+        confidence = (await p.get_gold_trading_signal())["confidence"]
         assert 0.0 <= confidence <= 1.0
 
-    def test_strongly_bullish_maps_to_buy(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_strongly_bullish_maps_to_buy(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import (
             GeopoliticalRiskAssessment,
@@ -552,7 +566,6 @@ class TestGetGoldTradingSignal:
         )
 
         p = GeopoliticalRiskProvider()
-        # Inject a strongly bullish assessment
         assessment = GeopoliticalRiskAssessment(
             global_risk_score=90.0,
             gold_outlook=GoldImpact.STRONGLY_BULLISH,
@@ -564,12 +577,13 @@ class TestGetGoldTradingSignal:
             country_risks={},
             trading_recommendations=["Buy gold"],
         )
-        with patch.object(p, "get_risk_assessment", return_value=assessment):
-            signal = p.get_gold_trading_signal()
+        with patch.object(p, "get_risk_assessment", new=AsyncMock(return_value=assessment)):
+            signal = await p.get_gold_trading_signal()
         assert signal["direction"] == "BUY"
         assert signal["strength"] == pytest.approx(1.0)
 
-    def test_strongly_bearish_maps_to_sell(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_strongly_bearish_maps_to_sell(self, monkeypatch):
         monkeypatch.setenv("HOPEFX_CI", "1")
         from news.geopolitical_risk import (
             GeopoliticalRiskAssessment,
@@ -589,7 +603,7 @@ class TestGetGoldTradingSignal:
             country_risks={},
             trading_recommendations=["Sell gold"],
         )
-        with patch.object(p, "get_risk_assessment", return_value=assessment):
-            signal = p.get_gold_trading_signal()
+        with patch.object(p, "get_risk_assessment", new=AsyncMock(return_value=assessment)):
+            signal = await p.get_gold_trading_signal()
         assert signal["direction"] == "SELL"
         assert signal["strength"] == pytest.approx(1.0)
