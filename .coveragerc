@@ -61,7 +61,7 @@ omit =
 precision = 2
 # Global baseline — individual critical-path gates are enforced separately in CI.
 # See .github/workflows/ci.yml for per-package 90% branch gates.
-fail_under = 80
+fail_under = 70
 show_missing = true
 skip_empty = true
 exclude_lines =

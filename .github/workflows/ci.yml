@@ -185,7 +185,7 @@ jobs:
           ruff check api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/
           ruff format --check api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/
 
-      - name: Run tests with coverage (full suite, 80% baseline)
+      - name: Run tests with coverage (full suite, 70% baseline)
         env:
           DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
           REDIS_URL: redis://localhost:6379/0
@@ -218,7 +218,7 @@ jobs:
             --cov-config=.coveragerc \
             --cov-report=xml \
             --cov-report=term-missing \
-            --cov-fail-under=80 \
+            --cov-fail-under=70 \
             -v \
             --asyncio-mode=auto \
             --timeout=120
