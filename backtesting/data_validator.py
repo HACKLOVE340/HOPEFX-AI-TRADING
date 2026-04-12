@@ -141,7 +141,7 @@ async def _fetch_ccxt(
     if ccxt_async is None:
         # Not yet imported — attempt a real import.
         try:
-            import ccxt.async_support as _ccxt_async  # noqa: PLC0415
+            import ccxt.async_support as _ccxt_async
 
             ccxt_async = _ccxt_async
         except ImportError:
