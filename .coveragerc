@@ -42,13 +42,13 @@ omit =
     whitelabel/*
     # Risk modules that depend on live event bus / orchestrator wiring.
     # Covered by integration tests, not unit tests; excluded from both the
-    # global 70% gate and the per-package 90% risk gate.
+    # global 70% gate and the per-package 80% risk gate.
     risk/gatekeeper.py
     risk/pre_trade_gate.py
     risk/post_trade_analyzer.py
     risk/manager.py
     # Execution modules that require live broker/FIX/engine wiring.
-    # These are integration-only and excluded from the 90% unit gate.
+    # These are integration-only and excluded from the 80% unit gate.
     execution/execution.py
     execution/hopefx_engine.py
     execution/fix_adapter.py
@@ -60,7 +60,7 @@ omit =
 [report]
 precision = 2
 # Global baseline — individual critical-path gates are enforced separately in CI.
-# See .github/workflows/ci.yml for per-package 90% branch gates.
+# See .github/workflows/ci.yml and tests.yml for per-package 80% branch gates.
 fail_under = 70
 show_missing = true
 skip_empty = true
@@ -80,8 +80,9 @@ title = HOPEFX Coverage Report — Critical Paths
 output = coverage.xml
 
 # ── Critical path coverage gates ──────────────────────────────────────────────
-# Enforced as separate pytest-cov runs in CI (see .github/workflows/ci.yml).
-# Each critical module must maintain ≥90% branch coverage.
+# Enforced as separate pytest-cov runs in CI (see .github/workflows/ci.yml
+# and .github/workflows/tests.yml).
+# Each critical module must maintain ≥80% branch coverage.
 #
 #   risk/           — VaR, drawdown, position sizing, circuit breakers
 #   execution/      — order routing, engine, TCA, algo orders
