@@ -89,9 +89,15 @@ class TestConnect:
 
     @pytest.mark.asyncio
     async def test_returns_true_when_already_connected(self):
-        broker = _make_broker(connected=True)
-        with patch("brokers.ibkr._IB_AVAILABLE", True):
+        broker = IBKRBroker(config={"server": "paper"})
+        # Simulate an already-established connection
+        broker.connected = True
+        import brokers.ibkr as _ibkr_mod
+
+        with patch("brokers.ibkr._IB_AVAILABLE", True), patch.object(_ibkr_mod, "IB", MagicMock()) as mock_ib_cls:
             result = await broker.connect()
+        # Must short-circuit and never instantiate IB again
+        mock_ib_cls.assert_not_called()
         assert result is True
 
     @pytest.mark.asyncio
@@ -595,93 +601,65 @@ class TestBuildHelpers:
             with pytest.raises(RuntimeError, match="ib_insync not available"):
                 broker._build_ib_order("BUY", 1.0, "MARKET", {})
 
-    @pytest.mark.skipif(
-        not __import__("brokers.ibkr", fromlist=["_IB_AVAILABLE"])._IB_AVAILABLE,
-        reason="ib_insync not installed — order/contract builder tests require it",
-    )
     def test_build_ib_order_market(self):
         import brokers.ibkr as _ibkr
 
         broker = _make_broker()
         mock_mo = MagicMock(return_value=MagicMock())
-        with patch.object(_ibkr, "MarketOrder", mock_mo):
+        with patch("brokers.ibkr._IB_AVAILABLE", True), patch.object(_ibkr, "MarketOrder", mock_mo):
             broker._build_ib_order("BUY", 1.0, "MARKET", {})
         mock_mo.assert_called_once_with("BUY", 1.0)
 
-    @pytest.mark.skipif(
-        not __import__("brokers.ibkr", fromlist=["_IB_AVAILABLE"])._IB_AVAILABLE,
-        reason="ib_insync not installed",
-    )
     def test_build_ib_order_limit(self):
         import brokers.ibkr as _ibkr
 
         broker = _make_broker()
         mock_lo = MagicMock(return_value=MagicMock())
-        with patch.object(_ibkr, "LimitOrder", mock_lo):
+        with patch("brokers.ibkr._IB_AVAILABLE", True), patch.object(_ibkr, "LimitOrder", mock_lo):
             broker._build_ib_order("BUY", 1.0, "LIMIT", {"mid_price": 1800.0})
         mock_lo.assert_called_once_with("BUY", 1.0, 1800.0)
 
-    @pytest.mark.skipif(
-        not __import__("brokers.ibkr", fromlist=["_IB_AVAILABLE"])._IB_AVAILABLE,
-        reason="ib_insync not installed",
-    )
     def test_build_ib_order_stop(self):
         import brokers.ibkr as _ibkr
 
         broker = _make_broker()
         mock_so = MagicMock(return_value=MagicMock())
-        with patch.object(_ibkr, "StopOrder", mock_so):
+        with patch("brokers.ibkr._IB_AVAILABLE", True), patch.object(_ibkr, "StopOrder", mock_so):
             broker._build_ib_order("SELL", 1.0, "STOP", {"stop_price": 1790.0})
         mock_so.assert_called_once_with("SELL", 1.0, 1790.0)
 
-    @pytest.mark.skipif(
-        not __import__("brokers.ibkr", fromlist=["_IB_AVAILABLE"])._IB_AVAILABLE,
-        reason="ib_insync not installed",
-    )
     def test_build_ib_order_stop_limit(self):
         import brokers.ibkr as _ibkr
 
         broker = _make_broker()
         mock_slo = MagicMock(return_value=MagicMock())
-        with patch.object(_ibkr, "StopLimitOrder", mock_slo):
+        with patch("brokers.ibkr._IB_AVAILABLE", True), patch.object(_ibkr, "StopLimitOrder", mock_slo):
             broker._build_ib_order("BUY", 1.0, "STOP_LIMIT", {"mid_price": 1800.0, "stop_price": 1790.0})
         mock_slo.assert_called_once_with("BUY", 1.0, 1800.0, 1790.0)
 
-    @pytest.mark.skipif(
-        not __import__("brokers.ibkr", fromlist=["_IB_AVAILABLE"])._IB_AVAILABLE,
-        reason="ib_insync not installed",
-    )
     def test_build_ib_order_unknown_type_falls_back_to_market(self):
         import brokers.ibkr as _ibkr
 
         broker = _make_broker()
         mock_mo = MagicMock(return_value=MagicMock())
-        with patch.object(_ibkr, "MarketOrder", mock_mo):
+        with patch("brokers.ibkr._IB_AVAILABLE", True), patch.object(_ibkr, "MarketOrder", mock_mo):
             broker._build_ib_order("BUY", 1.0, "UNKNOWN_TYPE", {})
         mock_mo.assert_called_once()
 
-    @pytest.mark.skipif(
-        not __import__("brokers.ibkr", fromlist=["_IB_AVAILABLE"])._IB_AVAILABLE,
-        reason="ib_insync not installed",
-    )
     def test_build_gold_contract_futures(self):
         import brokers.ibkr as _ibkr
 
         broker = _make_broker()
         mock_future = MagicMock(return_value=MagicMock())
-        with patch.object(_ibkr, "Future", mock_future):
+        with patch("brokers.ibkr._IB_AVAILABLE", True), patch.object(_ibkr, "Future", mock_future):
             broker._build_gold_contract("XAUUSD", use_futures=True)
         mock_future.assert_called_once_with(symbol="GC", exchange="NYMEX", currency="USD")
 
-    @pytest.mark.skipif(
-        not __import__("brokers.ibkr", fromlist=["_IB_AVAILABLE"])._IB_AVAILABLE,
-        reason="ib_insync not installed",
-    )
     def test_build_gold_contract_spot(self):
         import brokers.ibkr as _ibkr
 
         broker = _make_broker()
         mock_commodity = MagicMock(return_value=MagicMock())
-        with patch.object(_ibkr, "Commodity", mock_commodity):
+        with patch("brokers.ibkr._IB_AVAILABLE", True), patch.object(_ibkr, "Commodity", mock_commodity):
             broker._build_gold_contract("XAUUSD", use_futures=False)
         mock_commodity.assert_called_once_with("XAUUSD", "SMART", "USD")

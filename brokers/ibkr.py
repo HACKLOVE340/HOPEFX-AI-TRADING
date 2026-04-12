@@ -71,6 +71,12 @@ try:
 except ImportError:
     _IB_AVAILABLE = False
     IB = None
+    Commodity = None
+    Future = None
+    LimitOrder = None
+    MarketOrder = None
+    StopLimitOrder = None
+    StopOrder = None
     logger.warning("ib_insync not installed — IBKRBroker unavailable. pip install ib_insync==0.9.86")
 
 # ── env config ────────────────────────────────────────────────────────────────

@@ -285,8 +285,20 @@ class TestFetchCCXT:
         mock_ccxt_async = MagicMock()
         mock_ccxt_async.binance = MagicMock(return_value=mock_exchange)
 
-        with patch.dict("sys.modules", {"ccxt.async_support": mock_ccxt_async}):
+        # _fetch_ccxt does a local `import ccxt.async_support` on every call.
+        # Override sys.modules so that import resolves to our mock regardless
+        # of whether ccxt is installed in the test environment.
+        import sys
+
+        orig = sys.modules.get("ccxt.async_support")
+        sys.modules["ccxt.async_support"] = mock_ccxt_async
+        try:
             result = await _fetch_ccxt("binance", "XAU/USDT", "1h", ts)
+        finally:
+            if orig is None:
+                sys.modules.pop("ccxt.async_support", None)
+            else:
+                sys.modules["ccxt.async_support"] = orig
 
         assert result is not None
         assert len(result) == 3
