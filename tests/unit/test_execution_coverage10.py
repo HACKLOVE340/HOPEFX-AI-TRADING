@@ -1,5 +1,6 @@
 # tests/unit/test_execution_coverage10.py
 """Targeted coverage for async_engine missing lines: _simulate_fill, _apply_fill, modify_order."""
+
 from __future__ import annotations
 
 import asyncio
@@ -108,7 +109,6 @@ class TestSimulateFill:
 
     @pytest.mark.asyncio
     async def test_on_order_update_callback_fires(self):
-
         e = await _engine_with_price()
         updates = []
         e.on_order_update = lambda o: updates.append(o)
@@ -194,7 +194,6 @@ class TestModifyOrder:
 class TestCloseAllPositions:
     @pytest.mark.asyncio
     async def test_close_all_with_positions(self):
-
         e = await _engine_with_price()
         # Inject a position into cache
         e.position_cache["XAUUSD"] = {

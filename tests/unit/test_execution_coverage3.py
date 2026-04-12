@@ -1,5 +1,6 @@
 # tests/unit/test_execution_coverage3.py
 """Coverage tests for execution/ modules: broker_circuit_breaker, order_algorithms."""
+
 from __future__ import annotations
 
 import asyncio
@@ -120,6 +121,7 @@ class TestBrokerCircuitBreakerBasic:
         await cb.record_failure("connection")
         await cb.record_failure("connection")
         await asyncio.sleep(0.05)
+
         # First call transitions to HALF_OPEN and increments counter
         # Second call should raise CircuitOpenError
         async def ok():

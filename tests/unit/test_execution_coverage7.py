@@ -1,5 +1,6 @@
 # tests/unit/test_execution_coverage7.py
 """Coverage tests for execution/tca.py — TCAEngine, MarketImpactModel, MarketContextProvider."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone

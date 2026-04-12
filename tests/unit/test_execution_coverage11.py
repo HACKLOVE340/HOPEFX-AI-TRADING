@@ -1,5 +1,6 @@
 # tests/unit/test_execution_coverage11.py
 """Targeted coverage for trade_executor._execute_open success path and _execute_close."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -75,15 +76,17 @@ class TestExecuteOpenSuccessPath:
 
         with patch("risk.pre_trade_gate.PreTradeGate.check", return_value=None):
             ex = TradeExecutor(broker=broker, risk_manager=rm, position_tracker=pt)
-            result = await ex.execute_signal({
-                "action": "buy",
-                "symbol": "XAUUSD",
-                "size": 0.01,
-                "entry_price": 2350.0,
-                "stop_loss": 2340.0,
-                "take_profit": 2370.0,
-                "confidence": 0.8,
-            })
+            result = await ex.execute_signal(
+                {
+                    "action": "buy",
+                    "symbol": "XAUUSD",
+                    "size": 0.01,
+                    "entry_price": 2350.0,
+                    "stop_loss": 2340.0,
+                    "take_profit": 2370.0,
+                    "confidence": 0.8,
+                }
+            )
         assert result.success is True
         assert result.order_id == "ord_filled"
 
@@ -97,15 +100,17 @@ class TestExecuteOpenSuccessPath:
 
         with patch("risk.pre_trade_gate.PreTradeGate.check", return_value=None):
             ex = TradeExecutor(broker=broker, risk_manager=rm, position_tracker=pt)
-            result = await ex.execute_signal({
-                "action": "sell",
-                "symbol": "XAUUSD",
-                "size": 0.01,
-                "entry_price": 2350.0,
-                "stop_loss": 2360.0,
-                "take_profit": 2330.0,
-                "confidence": 0.75,
-            })
+            result = await ex.execute_signal(
+                {
+                    "action": "sell",
+                    "symbol": "XAUUSD",
+                    "size": 0.01,
+                    "entry_price": 2350.0,
+                    "stop_loss": 2360.0,
+                    "take_profit": 2330.0,
+                    "confidence": 0.75,
+                }
+            )
         assert result.success is True
 
     @pytest.mark.asyncio
@@ -125,13 +130,15 @@ class TestExecuteOpenSuccessPath:
 
         with patch("risk.pre_trade_gate.PreTradeGate.check", return_value=None):
             ex = TradeExecutor(broker=broker, risk_manager=rm, position_tracker=pt)
-            result = await ex.execute_signal({
-                "action": "buy",
-                "symbol": "XAUUSD",
-                "size": 0.01,
-                "entry_price": 2350.0,
-                "confidence": 0.8,
-            })
+            result = await ex.execute_signal(
+                {
+                    "action": "buy",
+                    "symbol": "XAUUSD",
+                    "size": 0.01,
+                    "entry_price": 2350.0,
+                    "confidence": 0.8,
+                }
+            )
         assert result.success is True  # partial counts as success
 
     @pytest.mark.asyncio
@@ -151,13 +158,15 @@ class TestExecuteOpenSuccessPath:
 
         with patch("risk.pre_trade_gate.PreTradeGate.check", return_value=None):
             ex = TradeExecutor(broker=broker, risk_manager=rm, position_tracker=pt)
-            result = await ex.execute_signal({
-                "action": "buy",
-                "symbol": "XAUUSD",
-                "size": 0.01,
-                "entry_price": 2350.0,
-                "confidence": 0.8,
-            })
+            result = await ex.execute_signal(
+                {
+                    "action": "buy",
+                    "symbol": "XAUUSD",
+                    "size": 0.01,
+                    "entry_price": 2350.0,
+                    "confidence": 0.8,
+                }
+            )
         assert result.success is False
 
     @pytest.mark.asyncio
@@ -172,13 +181,15 @@ class TestExecuteOpenSuccessPath:
         err = TradeBlockedError(reason_code="MAX_POSITIONS", detail="too many open")
         with patch("risk.pre_trade_gate.PreTradeGate.check", side_effect=err):
             ex = TradeExecutor(broker=broker, risk_manager=rm, position_tracker=pt)
-            result = await ex.execute_signal({
-                "action": "buy",
-                "symbol": "XAUUSD",
-                "size": 0.01,
-                "entry_price": 2350.0,
-                "confidence": 0.8,
-            })
+            result = await ex.execute_signal(
+                {
+                    "action": "buy",
+                    "symbol": "XAUUSD",
+                    "size": 0.01,
+                    "entry_price": 2350.0,
+                    "confidence": 0.8,
+                }
+            )
         assert result.success is False
         assert "MAX_POSITIONS" in result.message
 
@@ -194,13 +205,15 @@ class TestExecuteOpenSuccessPath:
         err = RiskManagerError("internal error")
         with patch("risk.pre_trade_gate.PreTradeGate.check", side_effect=err):
             ex = TradeExecutor(broker=broker, risk_manager=rm, position_tracker=pt)
-            result = await ex.execute_signal({
-                "action": "buy",
-                "symbol": "XAUUSD",
-                "size": 0.01,
-                "entry_price": 2350.0,
-                "confidence": 0.8,
-            })
+            result = await ex.execute_signal(
+                {
+                    "action": "buy",
+                    "symbol": "XAUUSD",
+                    "size": 0.01,
+                    "entry_price": 2350.0,
+                    "confidence": 0.8,
+                }
+            )
         assert result.success is False
 
     @pytest.mark.asyncio
@@ -239,13 +252,15 @@ class TestExecuteOpenSuccessPath:
         with patch("risk.pre_trade_gate.PreTradeGate.check", return_value=None):
             ex = TradeExecutor(broker=broker, risk_manager=rm, position_tracker=pt)
             ex.register_callback(lambda r, s: fired.append(r))
-            await ex.execute_signal({
-                "action": "buy",
-                "symbol": "XAUUSD",
-                "size": 0.01,
-                "entry_price": 2350.0,
-                "confidence": 0.8,
-            })
+            await ex.execute_signal(
+                {
+                    "action": "buy",
+                    "symbol": "XAUUSD",
+                    "size": 0.01,
+                    "entry_price": 2350.0,
+                    "confidence": 0.8,
+                }
+            )
         assert len(fired) == 1
         assert fired[0].success is True
 
@@ -260,12 +275,14 @@ class TestExecuteClose:
         pt = _make_pt(has_position=True)
 
         ex = TradeExecutor(broker=broker, risk_manager=rm, position_tracker=pt)
-        result = await ex.execute_signal({
-            "action": "close",
-            "symbol": "XAUUSD",
-            "size": 0.01,
-            "position_id": "pos1",
-        })
+        result = await ex.execute_signal(
+            {
+                "action": "close",
+                "symbol": "XAUUSD",
+                "size": 0.01,
+                "position_id": "pos1",
+            }
+        )
         assert result is not None
 
     @pytest.mark.asyncio
@@ -277,12 +294,14 @@ class TestExecuteClose:
         pt = _make_pt(has_position=False)
 
         ex = TradeExecutor(broker=broker, risk_manager=rm, position_tracker=pt)
-        result = await ex.execute_signal({
-            "action": "close",
-            "symbol": "XAUUSD",
-            "size": 0.01,
-            "position_id": "nonexistent",
-        })
+        result = await ex.execute_signal(
+            {
+                "action": "close",
+                "symbol": "XAUUSD",
+                "size": 0.01,
+                "position_id": "nonexistent",
+            }
+        )
         assert result is not None
         assert result.success is False
 
@@ -295,12 +314,14 @@ class TestExecuteClose:
         pt = _make_pt(has_position=True)
 
         ex = TradeExecutor(broker=broker, risk_manager=rm, position_tracker=pt)
-        await ex.execute_signal({
-            "action": "close",
-            "symbol": "XAUUSD",
-            "size": 0.01,
-            "position_id": "pos1",
-        })
+        await ex.execute_signal(
+            {
+                "action": "close",
+                "symbol": "XAUUSD",
+                "size": 0.01,
+                "position_id": "pos1",
+            }
+        )
         # Winning trade → consecutive_losses reset to 0
         assert ex._consecutive_losses == 0
 
@@ -314,12 +335,14 @@ class TestExecuteClose:
         pt = _make_pt(has_position=True)
 
         ex = TradeExecutor(broker=broker, risk_manager=rm, position_tracker=pt)
-        result = await ex.execute_signal({
-            "action": "close",
-            "symbol": "XAUUSD",
-            "size": 0.01,
-            "position_id": "pos1",
-        })
+        result = await ex.execute_signal(
+            {
+                "action": "close",
+                "symbol": "XAUUSD",
+                "size": 0.01,
+                "position_id": "pos1",
+            }
+        )
         assert result.success is False
 
     @pytest.mark.asyncio

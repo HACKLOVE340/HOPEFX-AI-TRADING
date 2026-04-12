@@ -1,5 +1,6 @@
 # tests/unit/test_execution_coverage8.py
 """Coverage tests for execution/async_engine.py and execution/smart_router.py."""
+
 from __future__ import annotations
 
 import asyncio
@@ -11,6 +12,7 @@ import pytest
 
 def _make_order(symbol="XAUUSD", side="BUY", qty=0.1, order_type=None, price=None):
     from execution.async_engine import Order, OrderType
+
     return Order(
         id=str(uuid.uuid4()),
         symbol=symbol,
@@ -23,6 +25,7 @@ def _make_order(symbol="XAUUSD", side="BUY", qty=0.1, order_type=None, price=Non
 
 async def _make_engine(extra_broker=False):
     from execution.async_engine import AsyncExecutionEngine
+
     configs = [{"name": "paper", "type": "paper", "symbols": ["XAUUSD", "EURUSD"], "latency_ms": 1}]
     if extra_broker:
         configs.append({"name": "paper2", "type": "paper", "symbols": ["XAUUSD"], "latency_ms": 1})
@@ -67,6 +70,7 @@ class TestAsyncExecutionEngineBasic:
     @pytest.mark.asyncio
     async def test_submit_limit_order(self):
         from execution.async_engine import OrderType
+
         e = await _make_engine()
         order = _make_order(order_type=OrderType.LIMIT, price=2350.0)
         order_id = await e.submit_order(order)
@@ -76,6 +80,7 @@ class TestAsyncExecutionEngineBasic:
     async def test_cancel_order_existing(self):
         import asyncio as aio
         from execution.async_engine import OrderStatus
+
         e = await _make_engine()
         order = _make_order()
         order.status = OrderStatus.PENDING
@@ -154,21 +159,25 @@ class TestAsyncEngineOrderDataclass:
 
     def test_order_status_enum(self):
         from execution.async_engine import OrderStatus
+
         assert OrderStatus.PENDING is not None
         assert OrderStatus.FILLED is not None
         assert OrderStatus.CANCELLED is not None
 
     def test_order_type_enum(self):
         from execution.async_engine import OrderType
+
         assert OrderType.MARKET is not None
         assert OrderType.LIMIT is not None
 
 
 # ── SmartRouter ───────────────────────────────────────────────────────────────
 
+
 class TestSmartRouterBasic:
     def _router(self):
         from execution.smart_router import SmartRouter
+
         return SmartRouter()
 
     def test_instantiation(self):
@@ -204,43 +213,53 @@ class TestSmartRouterBasic:
         broker = MagicMock()
         broker.place_order = AsyncMock(return_value=MagicMock(id="ord1", fill_price=2350.0, status="filled"))
         r.add_broker("test_broker", broker)
-        result = await r.route_and_execute({"symbol": "XAUUSD", "direction": "long", "lots": 0.01, "mid_price": 2350.0, "ofi": 0.5, "sentiment": 0.6})
+        result = await r.route_and_execute(
+            {"symbol": "XAUUSD", "direction": "long", "lots": 0.01, "mid_price": 2350.0, "ofi": 0.5, "sentiment": 0.6}
+        )
         assert isinstance(result, dict)
 
     def test_ofi_alignment_long_positive(self):
         from execution.smart_router import _ofi_alignment
+
         assert _ofi_alignment(ofi=1.0, direction="long") == pytest.approx(1.0)
 
     def test_ofi_alignment_long_negative(self):
         from execution.smart_router import _ofi_alignment
+
         assert _ofi_alignment(ofi=-1.0, direction="long") == pytest.approx(0.0)
 
     def test_ofi_alignment_short(self):
         from execution.smart_router import _ofi_alignment
+
         assert _ofi_alignment(ofi=-1.0, direction="short") == pytest.approx(1.0)
 
     def test_ofi_alignment_unknown(self):
         from execution.smart_router import _ofi_alignment
+
         assert _ofi_alignment(ofi=0.5, direction="unknown") == pytest.approx(0.5)
 
     def test_spread_to_bps_normal(self):
         from execution.smart_router import _spread_to_bps
+
         assert _spread_to_bps(spread_usd=0.5, mid=2500.0) == pytest.approx(2.0)
 
     def test_spread_to_bps_zero_mid(self):
         from execution.smart_router import _spread_to_bps
+
         assert _spread_to_bps(spread_usd=0.5, mid=0.0) == 0.0
 
 
 class TestBrokerState:
     def test_record_fill_updates_total(self):
         from execution.smart_router import BrokerState
+
         s = BrokerState(broker_id="b1")
         s.record_fill(latency_ms=10.0, slippage_bps=1.0)
         assert s.total_fills == 1
 
     def test_record_error_increments(self):
         from execution.smart_router import BrokerState
+
         s = BrokerState(broker_id="b1")
         s.record_error()
         s.record_error()
@@ -248,12 +267,14 @@ class TestBrokerState:
 
     def test_routing_score_returns_float(self):
         from execution.smart_router import BrokerState
+
         s = BrokerState(broker_id="b1")
         score = s.routing_score(direction="long", ofi=0.0, sentiment_score=0.5)
         assert isinstance(score, float)
 
     def test_routing_score_fast_beats_slow(self):
         from execution.smart_router import BrokerState
+
         fast = BrokerState(broker_id="fast", ema_latency_ms=5.0, fill_rate=0.99)
         slow = BrokerState(broker_id="slow", ema_latency_ms=500.0, fill_rate=0.99)
         assert fast.routing_score("long", 0.0, 0.5) > slow.routing_score("long", 0.0, 0.5)
@@ -261,6 +282,7 @@ class TestBrokerState:
     def test_check_circuit_reset_after_timeout(self):
         import time
         from execution.smart_router import BrokerState
+
         s = BrokerState(broker_id="b1")
         s.circuit_open = True
         s.circuit_open_at = time.monotonic() - 9999
@@ -270,6 +292,7 @@ class TestBrokerState:
     def test_circuit_stays_open_if_recent(self):
         import time
         from execution.smart_router import BrokerState
+
         s = BrokerState(broker_id="b1")
         s.circuit_open = True
         s.circuit_open_at = time.monotonic()

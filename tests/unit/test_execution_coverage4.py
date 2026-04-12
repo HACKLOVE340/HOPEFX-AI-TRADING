@@ -1,5 +1,6 @@
 # tests/unit/test_execution_coverage4.py
 """Coverage tests for order_algorithms (TWAP, VWAP, PartialFillAggregator)."""
+
 from __future__ import annotations
 
 import pytest

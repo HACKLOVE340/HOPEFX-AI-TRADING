@@ -2,36 +2,46 @@
 # Copyright (c) 2025-2026
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 """Comprehensive tests for execution/position_manager.py."""
+
 from __future__ import annotations
 import asyncio
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from execution.position_manager import (
-    Position, PositionAlreadyOpenError, PositionCloseResult,
-    PositionManager, PositionNotFoundError,
+    Position,
+    PositionAlreadyOpenError,
+    PositionCloseResult,
+    PositionManager,
+    PositionNotFoundError,
 )
 
 UTC = timezone.utc
 
+
 def _pm():
     return PositionManager(redis_client=None)
 
+
 def _pos(symbol="XAUUSD", side="BUY", qty=1.0, entry=2000.0, sl=None, tp=None):
-    from dataclasses import dataclass
     return Position(
         position_id=f"pos_{symbol}",
-        symbol=symbol, side=side, quantity=qty, entry_price=entry,
-        stop_loss=sl, take_profit=tp,
+        symbol=symbol,
+        side=side,
+        quantity=qty,
+        entry_price=entry,
+        stop_loss=sl,
+        take_profit=tp,
     )
 
+
 # ── Position dataclass ─────────────────────────────────────────────────────────
+
 
 class TestPositionDataclass:
     def test_to_dict_keys(self):
         p = _pos()
         d = p.to_dict()
-        for k in ("position_id","symbol","side","quantity","entry_price","opened_at"):
+        for k in ("position_id", "symbol", "side", "quantity", "entry_price", "opened_at"):
             assert k in d
 
     def test_to_dict_values(self):
@@ -54,13 +64,19 @@ class TestPositionDataclass:
         assert p2.take_profit == pytest.approx(p.take_profit)
 
     def test_from_dict_no_opened_at(self):
-        d = {"position_id":"p1","symbol":"XAUUSD","side":"BUY","quantity":1.0,"entry_price":2000.0}
+        d = {"position_id": "p1", "symbol": "XAUUSD", "side": "BUY", "quantity": 1.0, "entry_price": 2000.0}
         p = Position.from_dict(d)
         assert isinstance(p.opened_at, datetime)
 
     def test_from_dict_string_opened_at(self):
-        d = {"position_id":"p1","symbol":"XAUUSD","side":"BUY","quantity":1.0,
-             "entry_price":2000.0,"opened_at":"2025-01-01T00:00:00+00:00"}
+        d = {
+            "position_id": "p1",
+            "symbol": "XAUUSD",
+            "side": "BUY",
+            "quantity": 1.0,
+            "entry_price": 2000.0,
+            "opened_at": "2025-01-01T00:00:00+00:00",
+        }
         p = Position.from_dict(d)
         assert p.opened_at.year == 2025
 
@@ -78,20 +94,29 @@ class TestPositionDataclass:
         p = _pos(tp=2100.0)
         assert p.take_profit == pytest.approx(2100.0)
 
+
 # ── PositionCloseResult ────────────────────────────────────────────────────────
+
 
 class TestPositionCloseResult:
     def test_fields(self):
         r = PositionCloseResult(
-            position_id="p1", symbol="XAUUSD", side="BUY",
-            quantity=1.0, entry_price=2000.0, fill_price=2050.0,
-            realized_pnl=50.0, duration_seconds=60.0,
+            position_id="p1",
+            symbol="XAUUSD",
+            side="BUY",
+            quantity=1.0,
+            entry_price=2000.0,
+            fill_price=2050.0,
+            realized_pnl=50.0,
+            duration_seconds=60.0,
             closed_at=datetime.now(UTC),
         )
         assert r.realized_pnl == pytest.approx(50.0)
         assert r.fill_price == pytest.approx(2050.0)
 
+
 # ── PositionManager — open_position ───────────────────────────────────────────
+
 
 class TestPositionManagerOpen:
     @pytest.mark.asyncio
@@ -179,7 +204,9 @@ class TestPositionManagerOpen:
         assert pm.get_position("XAUUSD") is not None
         assert pm.get_position("EURUSD") is not None
 
+
 # ── PositionManager — close_position ──────────────────────────────────────────
+
 
 class TestPositionManagerClose:
     @pytest.mark.asyncio
@@ -253,7 +280,9 @@ class TestPositionManagerClose:
         result = await pm.close_position("XAUUSD", fill_price=2075.0)
         assert result.fill_price == pytest.approx(2075.0)
 
+
 # ── PositionManager — update_position ─────────────────────────────────────────
+
 
 class TestPositionManagerUpdate:
     @pytest.mark.asyncio
@@ -290,7 +319,9 @@ class TestPositionManagerUpdate:
         pos = await pm.update_position("XAUUSD", last_price=2010.0)
         assert pos.stop_loss == pytest.approx(1950.0)  # unchanged
 
+
 # ── PositionManager — queries ──────────────────────────────────────────────────
+
 
 class TestPositionManagerQueries:
     @pytest.mark.asyncio
@@ -356,7 +387,9 @@ class TestPositionManagerQueries:
         history = pm.get_history(limit=3)
         assert len(history) == 3
 
+
 # ── PositionAlreadyOpenError / PositionNotFoundError ──────────────────────────
+
 
 class TestCustomExceptions:
     def test_already_open_error_message(self):
@@ -373,7 +406,9 @@ class TestCustomExceptions:
     def test_not_found_is_exception(self):
         assert isinstance(PositionNotFoundError("X"), Exception)
 
+
 # ── PositionManager — concurrent safety ───────────────────────────────────────
+
 
 class TestPositionManagerConcurrency:
     @pytest.mark.asyncio

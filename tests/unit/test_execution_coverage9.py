@@ -1,5 +1,6 @@
 # tests/unit/test_execution_coverage9.py
 """Coverage tests for execution/trade_executor.py."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -11,7 +12,7 @@ def _make_risk_manager(allow=True, drawdown=0.0, balance=100000.0, halted=False)
     rm = MagicMock()
     rm.check_pre_trade = MagicMock(return_value=(allow, "ok" if allow else "blocked"))
     rm.get_account_balance = MagicMock(return_value=balance)
-    rm.current_drawdown = drawdown   # attribute, not method
+    rm.current_drawdown = drawdown  # attribute, not method
     rm._trading_halted = halted
     rm._halt_reason = None
     rm.validate_trade = MagicMock(return_value=(True, "ok"))
@@ -46,6 +47,7 @@ def _make_position_tracker():
 
 def _executor(allow=True, drawdown=0.0, halted=False):
     from execution.trade_executor import TradeExecutor
+
     rm = _make_risk_manager(allow=allow, drawdown=drawdown, halted=halted)
     broker = _make_broker()
     pt = _make_position_tracker()
@@ -56,43 +58,73 @@ class TestTradeExecutorBasic:
     @pytest.mark.asyncio
     async def test_execute_buy_signal(self):
         ex = _executor()
-        result = await ex.execute_signal({
-            "action": "open", "symbol": "XAUUSD", "direction": "long",
-            "size": 0.01, "entry_price": 2350.0, "stop_loss": 2340.0,
-            "take_profit": 2370.0, "confidence": 0.8,
-        })
+        result = await ex.execute_signal(
+            {
+                "action": "open",
+                "symbol": "XAUUSD",
+                "direction": "long",
+                "size": 0.01,
+                "entry_price": 2350.0,
+                "stop_loss": 2340.0,
+                "take_profit": 2370.0,
+                "confidence": 0.8,
+            }
+        )
         assert result is not None
 
     @pytest.mark.asyncio
     async def test_execute_sell_signal(self):
         ex = _executor()
-        result = await ex.execute_signal({
-            "action": "open", "symbol": "XAUUSD", "direction": "short",
-            "size": 0.01, "entry_price": 2350.0, "stop_loss": 2360.0,
-            "take_profit": 2330.0, "confidence": 0.75,
-        })
+        result = await ex.execute_signal(
+            {
+                "action": "open",
+                "symbol": "XAUUSD",
+                "direction": "short",
+                "size": 0.01,
+                "entry_price": 2350.0,
+                "stop_loss": 2360.0,
+                "take_profit": 2330.0,
+                "confidence": 0.75,
+            }
+        )
         assert result is not None
 
     @pytest.mark.asyncio
     async def test_execute_close_signal(self):
         ex = _executor()
-        await ex.execute_signal({
-            "action": "open", "symbol": "XAUUSD", "direction": "long",
-            "size": 0.01, "entry_price": 2350.0, "confidence": 0.8,
-        })
-        result = await ex.execute_signal({
-            "action": "close", "symbol": "XAUUSD", "direction": "long",
-            "close_price": 2360.0,
-        })
+        await ex.execute_signal(
+            {
+                "action": "open",
+                "symbol": "XAUUSD",
+                "direction": "long",
+                "size": 0.01,
+                "entry_price": 2350.0,
+                "confidence": 0.8,
+            }
+        )
+        result = await ex.execute_signal(
+            {
+                "action": "close",
+                "symbol": "XAUUSD",
+                "direction": "long",
+                "close_price": 2360.0,
+            }
+        )
         assert result is not None
 
     @pytest.mark.asyncio
     async def test_risk_blocked_returns_failure(self):
         ex = _executor(allow=False)
-        result = await ex.execute_signal({
-            "action": "open", "symbol": "XAUUSD", "direction": "long",
-            "size": 0.01, "entry_price": 2350.0, "confidence": 0.8,
-        })
+        result = await ex.execute_signal(
+            {
+                "action": "open",
+                "symbol": "XAUUSD",
+                "direction": "long",
+                "size": 0.01,
+                "entry_price": 2350.0,
+                "confidence": 0.8,
+            }
+        )
         assert result is not None
         assert not result.success
 
@@ -104,10 +136,16 @@ class TestTradeExecutorBasic:
             ks_instance.is_active.return_value = True
             ks_instance.reason = "manual halt"
             MockKS.return_value = ks_instance
-            result = await ex.execute_signal({
-                "action": "open", "symbol": "XAUUSD", "direction": "long",
-                "size": 0.01, "entry_price": 2350.0, "confidence": 0.8,
-            })
+            result = await ex.execute_signal(
+                {
+                    "action": "open",
+                    "symbol": "XAUUSD",
+                    "direction": "long",
+                    "size": 0.01,
+                    "entry_price": 2350.0,
+                    "confidence": 0.8,
+                }
+            )
             assert result is not None
             assert not result.success
 
@@ -172,9 +210,13 @@ class TestTradeExecutorBasic:
         fired = []
         ex.register_callback(lambda r, s: fired.append(r))
         result = ExecutionResult(
-            success=True, order_id="o1",
-            filled_quantity=0.01, average_price=2350.0,
-            commission=0.5, status=OrderStatus.FILLED, message="ok",
+            success=True,
+            order_id="o1",
+            filled_quantity=0.01,
+            average_price=2350.0,
+            commission=0.5,
+            status=OrderStatus.FILLED,
+            message="ok",
         )
         await ex._notify_callbacks(result, {"symbol": "XAUUSD"})
         assert len(fired) == 1
@@ -182,15 +224,22 @@ class TestTradeExecutorBasic:
     @pytest.mark.asyncio
     async def test_broker_exception_returns_failure(self):
         from execution.trade_executor import TradeExecutor
+
         rm = _make_risk_manager(allow=True)
         broker = MagicMock()
         broker.place_order = AsyncMock(side_effect=ConnectionError("broker down"))
         pt = _make_position_tracker()
         ex = TradeExecutor(broker=broker, risk_manager=rm, position_tracker=pt)
-        result = await ex.execute_signal({
-            "action": "open", "symbol": "XAUUSD", "direction": "long",
-            "size": 0.01, "entry_price": 2350.0, "confidence": 0.8,
-        })
+        result = await ex.execute_signal(
+            {
+                "action": "open",
+                "symbol": "XAUUSD",
+                "direction": "long",
+                "size": 0.01,
+                "entry_price": 2350.0,
+                "confidence": 0.8,
+            }
+        )
         assert result is not None
         assert not result.success
 

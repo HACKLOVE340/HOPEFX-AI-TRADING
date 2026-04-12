@@ -1,9 +1,9 @@
 # tests/unit/test_execution_coverage5.py
 """Coverage tests for execution/oms.py — OrderLifecycleManager, ComplexOrderManager."""
+
 from __future__ import annotations
 
 from decimal import Decimal
-
 
 
 class TestOrderLifecycleManager:
