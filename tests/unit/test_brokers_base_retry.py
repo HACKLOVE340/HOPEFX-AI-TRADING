@@ -5,12 +5,11 @@
 Unit tests for brokers/base.py.
 Covers with_retry (sync + async), RateLimiter, dataclasses, BrokerConnector.
 """
+
 from __future__ import annotations
 
-import asyncio
 import time
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -28,6 +27,7 @@ from brokers.base import (
 
 
 # ── with_retry — sync ─────────────────────────────────────────────────────────
+
 
 class TestWithRetrySync:
     def test_succeeds_on_first_attempt(self):
@@ -93,6 +93,7 @@ class TestWithRetrySync:
 
 # ── with_retry — async ────────────────────────────────────────────────────────
 
+
 class TestWithRetryAsync:
     @pytest.mark.asyncio
     async def test_async_succeeds_on_first_attempt(self):
@@ -141,6 +142,7 @@ class TestWithRetryAsync:
 
 # ── RateLimiter ───────────────────────────────────────────────────────────────
 
+
 class TestRateLimiter:
     @pytest.mark.asyncio
     async def test_acquire_does_not_raise(self):
@@ -161,6 +163,7 @@ class TestRateLimiter:
         rl._last = time.monotonic()
 
         slept = []
+
         async def fake_sleep(d):
             slept.append(d)
 
@@ -172,6 +175,7 @@ class TestRateLimiter:
 
 
 # ── Dataclasses ───────────────────────────────────────────────────────────────
+
 
 class TestOrder:
     def test_order_creation(self):
@@ -188,14 +192,17 @@ class TestOrder:
 
     def test_average_fill_price_alias(self):
         o = Order(
-            id="1", symbol="X", side=OrderSide.BUY,
-            type=OrderType.LIMIT, quantity=1.0, average_price=1800.0,
+            id="1",
+            symbol="X",
+            side=OrderSide.BUY,
+            type=OrderType.LIMIT,
+            quantity=1.0,
+            average_price=1800.0,
         )
         assert o.average_fill_price == 1800.0
 
     def test_average_fill_price_none(self):
-        o = Order(id="1", symbol="X", side=OrderSide.SELL,
-                  type=OrderType.MARKET, quantity=1.0)
+        o = Order(id="1", symbol="X", side=OrderSide.SELL, type=OrderType.MARKET, quantity=1.0)
         assert o.average_fill_price is None
 
 
@@ -226,16 +233,20 @@ class TestAccountInfo:
 
     def test_getitem(self):
         ai = AccountInfo(
-            balance=5000.0, equity=5100.0,
-            margin_used=100.0, margin_available=4900.0,
+            balance=5000.0,
+            equity=5100.0,
+            margin_used=100.0,
+            margin_available=4900.0,
             positions_count=1,
         )
         assert ai["balance"] == 5000.0
 
     def test_get_with_default(self):
         ai = AccountInfo(
-            balance=5000.0, equity=5100.0,
-            margin_used=100.0, margin_available=4900.0,
+            balance=5000.0,
+            equity=5100.0,
+            margin_used=100.0,
+            margin_available=4900.0,
             positions_count=1,
         )
         assert ai.get("balance") == 5000.0
@@ -243,6 +254,7 @@ class TestAccountInfo:
 
 
 # ── OrderType / OrderSide / OrderStatus enums ─────────────────────────────────
+
 
 class TestEnums:
     def test_order_type_values(self):
@@ -263,20 +275,38 @@ class TestEnums:
 
 # ── BrokerConnector abstract base ─────────────────────────────────────────────
 
+
 class TestBrokerConnector:
     def _make_concrete(self):
         """Create a minimal concrete subclass."""
+
         class ConcreteBroker(BrokerConnector):
-            def connect(self): return True
-            def disconnect(self): return True
+            def connect(self):
+                return True
+
+            def disconnect(self):
+                return True
+
             def place_order(self, symbol, side, order_type, quantity, price=None, stop_price=None, **kw):
                 return None
-            def cancel_order(self, order_id): return True
-            def get_order(self, order_id): return None
-            def get_positions(self): return []
-            def close_position(self, symbol): return True
-            def get_account_info(self): return None
-            def get_market_data(self, symbol, timeframe="1h", limit=100): return []
+
+            def cancel_order(self, order_id):
+                return True
+
+            def get_order(self, order_id):
+                return None
+
+            def get_positions(self):
+                return []
+
+            def close_position(self, symbol):
+                return True
+
+            def get_account_info(self):
+                return None
+
+            def get_market_data(self, symbol, timeframe="1h", limit=100):
+                return []
 
         return ConcreteBroker({"rate_limit_rps": 5.0})
 
@@ -299,15 +329,32 @@ class TestBrokerConnector:
 
     def test_default_rate_limiter(self):
         class MinBroker(BrokerConnector):
-            def connect(self): return True
-            def disconnect(self): return True
-            def place_order(self, *a, **k): return None
-            def cancel_order(self, *a): return True
-            def get_order(self, *a): return None
-            def get_positions(self): return []
-            def close_position(self, *a): return True
-            def get_account_info(self): return None
-            def get_market_data(self, *a, **k): return []
+            def connect(self):
+                return True
+
+            def disconnect(self):
+                return True
+
+            def place_order(self, *a, **k):
+                return None
+
+            def cancel_order(self, *a):
+                return True
+
+            def get_order(self, *a):
+                return None
+
+            def get_positions(self):
+                return []
+
+            def close_position(self, *a):
+                return True
+
+            def get_account_info(self):
+                return None
+
+            def get_market_data(self, *a, **k):
+                return []
 
         b = MinBroker({})
         assert b.rate_limiter._rate == 10.0

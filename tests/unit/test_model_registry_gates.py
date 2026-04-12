@@ -11,9 +11,7 @@ retire, verify, and singleton — the areas with incomplete branch coverage.
 from __future__ import annotations
 
 import json
-import os
 import pickle
-import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -22,10 +20,12 @@ import pytest
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture()
 def registry(tmp_path):
     """Return a ModelRegistry backed by a temp directory."""
     from ml.model_registry import ModelRegistry
+
     reg = ModelRegistry(registry_path=tmp_path / "registry.json")
     return reg
 
@@ -39,6 +39,7 @@ def artifact(tmp_path):
 
 
 # ── _gate_check branches ──────────────────────────────────────────────────────
+
 
 class TestGateCheck:
     def test_passes_when_all_thresholds_met(self, registry):
@@ -73,6 +74,7 @@ class TestGateCheck:
 
     def test_fails_when_sharpe_gate_not_passed(self, registry):
         import ml.model_registry as mr
+
         entry = {
             "oos_accuracy": 0.70,
             "oos_p_value": 0.001,
@@ -85,6 +87,7 @@ class TestGateCheck:
 
     def test_sharpe_gate_skipped_when_not_required(self, registry):
         import ml.model_registry as mr
+
         entry = {
             "oos_accuracy": 0.70,
             "oos_p_value": 0.001,
@@ -96,6 +99,7 @@ class TestGateCheck:
 
 
 # ── register ──────────────────────────────────────────────────────────────────
+
 
 class TestRegister:
     def test_register_creates_entry(self, registry, artifact):
@@ -132,6 +136,7 @@ class TestRegister:
 
 
 # ── promote ───────────────────────────────────────────────────────────────────
+
 
 class TestPromote:
     def _register_good(self, registry, artifact, name="v1"):
@@ -174,16 +179,22 @@ class TestPromote:
         a2.write_bytes(pickle.dumps({}))
 
         registry.register(
-            name="v1", file_path=a1,
-            oos_accuracy=0.70, oos_p_value=0.001, sharpe_gate_passed=True,
+            name="v1",
+            file_path=a1,
+            oos_accuracy=0.70,
+            oos_p_value=0.001,
+            sharpe_gate_passed=True,
         )
         with patch.object(registry, "_update_symlink"):
             registry.promote("v1")
 
         # Register and promote v2
         registry.register(
-            name="v2", file_path=a2,
-            oos_accuracy=0.72, oos_p_value=0.001, sharpe_gate_passed=True,
+            name="v2",
+            file_path=a2,
+            oos_accuracy=0.72,
+            oos_p_value=0.001,
+            sharpe_gate_passed=True,
         )
         with patch.object(registry, "_update_symlink"):
             registry.promote("v2")
@@ -197,8 +208,10 @@ class TestPromote:
         mock_monitor = MagicMock()
         mock_get_monitor = MagicMock(return_value=mock_monitor)
 
-        with patch.object(registry, "_update_symlink"), \
-             patch.dict("sys.modules", {"ml.performance_monitor": MagicMock(get_monitor=mock_get_monitor)}):
+        with (
+            patch.object(registry, "_update_symlink"),
+            patch.dict("sys.modules", {"ml.performance_monitor": MagicMock(get_monitor=mock_get_monitor)}),
+        ):
             registry.promote("v1")
 
         mock_monitor.on_model_promoted.assert_called_once()
@@ -207,14 +220,17 @@ class TestPromote:
         self._register_good(registry, artifact)
         mock_get_monitor = MagicMock(side_effect=RuntimeError("monitor down"))
 
-        with patch.object(registry, "_update_symlink"), \
-             patch.dict("sys.modules", {"ml.performance_monitor": MagicMock(get_monitor=mock_get_monitor)}):
+        with (
+            patch.object(registry, "_update_symlink"),
+            patch.dict("sys.modules", {"ml.performance_monitor": MagicMock(get_monitor=mock_get_monitor)}),
+        ):
             entry = registry.promote("v1")  # must not raise
 
         assert entry["state"] == "production"
 
 
 # ── _update_symlink ───────────────────────────────────────────────────────────
+
 
 class TestUpdateSymlink:
     def test_symlink_created(self, registry, artifact):
@@ -239,6 +255,7 @@ class TestUpdateSymlink:
 
 
 # ── verify / verify_active ────────────────────────────────────────────────────
+
 
 class TestVerify:
     def test_verify_returns_false_for_unknown_version(self, registry):
@@ -297,6 +314,7 @@ class TestVerify:
 
 # ── retire ────────────────────────────────────────────────────────────────────
 
+
 class TestRetire:
     def test_retire_sets_state(self, registry, artifact):
         registry.register(name="v1", file_path=artifact)
@@ -310,6 +328,7 @@ class TestRetire:
 
 # ── active_version / active_path ──────────────────────────────────────────────
 
+
 class TestActiveVersion:
     def test_active_version_returns_none_when_empty(self, registry):
         assert registry.active_version() is None
@@ -319,8 +338,11 @@ class TestActiveVersion:
 
     def test_active_version_returns_entry_after_promote(self, registry, artifact):
         registry.register(
-            name="v1", file_path=artifact,
-            oos_accuracy=0.70, oos_p_value=0.001, sharpe_gate_passed=True,
+            name="v1",
+            file_path=artifact,
+            oos_accuracy=0.70,
+            oos_p_value=0.001,
+            sharpe_gate_passed=True,
         )
         with patch.object(registry, "_update_symlink"):
             registry.promote("v1")
@@ -331,8 +353,11 @@ class TestActiveVersion:
 
     def test_active_path_returns_path_after_promote(self, registry, artifact):
         registry.register(
-            name="v1", file_path=artifact,
-            oos_accuracy=0.70, oos_p_value=0.001, sharpe_gate_passed=True,
+            name="v1",
+            file_path=artifact,
+            oos_accuracy=0.70,
+            oos_p_value=0.001,
+            sharpe_gate_passed=True,
         )
         with patch.object(registry, "_update_symlink"):
             registry.promote("v1")
@@ -343,6 +368,7 @@ class TestActiveVersion:
 
 
 # ── _load / _save edge cases ──────────────────────────────────────────────────
+
 
 class TestManifestIO:
     def test_load_returns_skeleton_when_file_absent(self, registry):
@@ -369,6 +395,7 @@ class TestManifestIO:
 
 
 # ── bootstrap_from_meta ───────────────────────────────────────────────────────
+
 
 class TestBootstrapFromMeta:
     def test_bootstrap_returns_none_when_artifact_missing(self, registry, tmp_path):
@@ -433,8 +460,12 @@ class TestBootstrapFromMeta:
         meta_path = tmp_path / "meta.json"
         meta_path.write_text(json.dumps(meta))
 
-        with patch.object(registry, "_update_symlink"), \
-             patch.dict("sys.modules", {"ml.performance_monitor": MagicMock(get_monitor=MagicMock(return_value=MagicMock()))}):
+        with (
+            patch.object(registry, "_update_symlink"),
+            patch.dict(
+                "sys.modules", {"ml.performance_monitor": MagicMock(get_monitor=MagicMock(return_value=MagicMock()))}
+            ),
+        ):
             result = registry.bootstrap_from_meta(
                 meta_path=meta_path,
                 model_path=artifact,
@@ -448,9 +479,11 @@ class TestBootstrapFromMeta:
 
 # ── sha256_file ───────────────────────────────────────────────────────────────
 
+
 class TestSha256File:
     def test_sha256_file_returns_hex_string(self, tmp_path):
         from ml.model_registry import sha256_file
+
         p = tmp_path / "data.bin"
         p.write_bytes(b"hello world")
         digest = sha256_file(p)
@@ -459,6 +492,7 @@ class TestSha256File:
 
     def test_sha256_file_is_deterministic(self, tmp_path):
         from ml.model_registry import sha256_file
+
         p = tmp_path / "data.bin"
         p.write_bytes(b"deterministic content")
         assert sha256_file(p) == sha256_file(p)
@@ -466,11 +500,14 @@ class TestSha256File:
 
 # ── Singleton ─────────────────────────────────────────────────────────────────
 
+
 class TestSingleton:
     def test_get_registry_returns_same_instance(self):
         import ml.model_registry as mr
+
         mr._registry = None
         from ml.model_registry import get_registry, ModelRegistry
+
         a = get_registry()
         b = get_registry()
         assert a is b
@@ -478,7 +515,9 @@ class TestSingleton:
 
     def test_get_registry_creates_on_first_call(self):
         import ml.model_registry as mr
+
         mr._registry = None
         from ml.model_registry import get_registry, ModelRegistry
+
         reg = get_registry()
         assert isinstance(reg, ModelRegistry)

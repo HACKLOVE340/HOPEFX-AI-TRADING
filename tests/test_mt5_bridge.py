@@ -10,12 +10,10 @@ from __future__ import annotations
 import json
 import threading
 import time
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-import brokers.mt5_bridge as mt5_mod
 from brokers.mt5_bridge import (
     EX5SignalExporter,
     FillStatus,
@@ -67,7 +65,6 @@ class TestRetryDecorator:
 
     def test_backoff_doubles(self):
         wait_calls = []
-        original_wait = threading.Event.wait
 
         def fake_wait(self, timeout=None):
             wait_calls.append(timeout)
@@ -203,6 +200,7 @@ class TestEX5SignalExporter:
         # Set mtime to 25 hours ago
         old_time = time.time() - 25 * 3600
         import os
+
         os.utime(old_file, (old_time, old_time))
 
         new_file = tmp_path / "new_signal.json"
@@ -222,7 +220,7 @@ class TestMT5BridgeSignalExportMode:
         bridge = MT5Bridge(
             server="test_server",
             login=12345,
-            password="test_pass",
+            password="test_pass",  # pragma: allowlist secret
             enforcer=enforcer,
             signal_dir=tmp_path,
         )
@@ -301,9 +299,14 @@ class TestMT5BridgeSignalExportMode:
         )
         # poll_fill will timeout — patch it to return a result
         mock_result = MT5FillResult(
-            ticket=1, status=FillStatus.FILLED,
-            filled_volume=0.1, fill_price=2000.0,
-            commission=0.0, swap=0.0, profit=0.0, comment="ok",
+            ticket=1,
+            status=FillStatus.FILLED,
+            filled_volume=0.1,
+            fill_price=2000.0,
+            commission=0.0,
+            swap=0.0,
+            profit=0.0,
+            comment="ok",
         )
         with patch.object(bridge._exporter, "poll_fill", return_value=mock_result):
             result = bridge.send_order(order)
@@ -322,9 +325,14 @@ class TestMT5BridgeSignalExportMode:
             timeout_sec=0.1,
         )
         mock_result = MT5FillResult(
-            ticket=1, status=FillStatus.FILLED,
-            filled_volume=0.1, fill_price=2000.0,
-            commission=0.0, swap=0.0, profit=0.0, comment="ok",
+            ticket=1,
+            status=FillStatus.FILLED,
+            filled_volume=0.1,
+            fill_price=2000.0,
+            commission=0.0,
+            swap=0.0,
+            profit=0.0,
+            comment="ok",
         )
         with patch.object(bridge._exporter, "poll_fill", return_value=mock_result):
             result = bridge.send_order(order)
@@ -334,9 +342,14 @@ class TestMT5BridgeSignalExportMode:
         bridge = self._make_bridge(tmp_path)
         bridge.connect()
         mock_result = MT5FillResult(
-            ticket=1, status=FillStatus.FILLED,
-            filled_volume=0.1, fill_price=2000.0,
-            commission=0.0, swap=0.0, profit=0.0, comment="close",
+            ticket=1,
+            status=FillStatus.FILLED,
+            filled_volume=0.1,
+            fill_price=2000.0,
+            commission=0.0,
+            swap=0.0,
+            profit=0.0,
+            comment="close",
         )
         with patch.object(bridge._exporter, "poll_fill", return_value=mock_result):
             results = bridge.close_position("XAUUSD", volume=0.1)
@@ -375,17 +388,28 @@ class TestAsyncWrappers:
     @pytest.mark.asyncio
     async def test_async_send_order(self, tmp_path):
         bridge = MT5Bridge(
-            server="s", login=1, password="p", signal_dir=tmp_path,
+            server="s",
+            login=1,
+            password="p",
+            signal_dir=tmp_path,
         )
         bridge.connect()
         order = MT5Order(
-            symbol="XAUUSD", side=OrderSide.BUY, volume=0.1, stop_loss=1900.0,
+            symbol="XAUUSD",
+            side=OrderSide.BUY,
+            volume=0.1,
+            stop_loss=1900.0,
             timeout_sec=0.1,
         )
         mock_result = MT5FillResult(
-            ticket=1, status=FillStatus.FILLED,
-            filled_volume=0.1, fill_price=2000.0,
-            commission=0.0, swap=0.0, profit=0.0, comment="ok",
+            ticket=1,
+            status=FillStatus.FILLED,
+            filled_volume=0.1,
+            fill_price=2000.0,
+            commission=0.0,
+            swap=0.0,
+            profit=0.0,
+            comment="ok",
         )
         with patch.object(bridge._exporter, "poll_fill", return_value=mock_result):
             result = await bridge.async_send_order(order)
@@ -394,13 +418,21 @@ class TestAsyncWrappers:
     @pytest.mark.asyncio
     async def test_async_close_position(self, tmp_path):
         bridge = MT5Bridge(
-            server="s", login=1, password="p", signal_dir=tmp_path,
+            server="s",
+            login=1,
+            password="p",
+            signal_dir=tmp_path,
         )
         bridge.connect()
         mock_result = MT5FillResult(
-            ticket=1, status=FillStatus.FILLED,
-            filled_volume=0.1, fill_price=2000.0,
-            commission=0.0, swap=0.0, profit=0.0, comment="close",
+            ticket=1,
+            status=FillStatus.FILLED,
+            filled_volume=0.1,
+            fill_price=2000.0,
+            commission=0.0,
+            swap=0.0,
+            profit=0.0,
+            comment="close",
         )
         with patch.object(bridge._exporter, "poll_fill", return_value=mock_result):
             results = await bridge.async_close_position("XAUUSD", volume=0.1)

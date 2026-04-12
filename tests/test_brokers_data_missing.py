@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import pytest
-from unittest.mock import MagicMock
 
 
 # ===========================================================================
@@ -24,9 +23,9 @@ from brokers.advanced_orders import (
 )
 
 
-def _make_order(symbol="XAUUSD", side=OrderSide.BUY, qty=1.0,
-                price=2000.0, otype=OrderType.LIMIT) -> Order:
+def _make_order(symbol="XAUUSD", side=OrderSide.BUY, qty=1.0, price=2000.0, otype=OrderType.LIMIT) -> Order:
     import uuid
+
     return Order(
         id=str(uuid.uuid4()),
         symbol=symbol,
@@ -50,6 +49,7 @@ class TestAdvancedOrderDataclasses:
 
     def test_oco_to_dict(self):
         import uuid
+
         o1 = _make_order()
         o2 = _make_order(side=OrderSide.SELL, otype=OrderType.STOP)
         oco = OCOOrder(id=str(uuid.uuid4()), symbol="XAUUSD", order1=o1, order2=o2)
@@ -60,12 +60,17 @@ class TestAdvancedOrderDataclasses:
 
     def test_bracket_to_dict(self):
         import uuid
+
         entry = _make_order(otype=OrderType.MARKET)
         sl = _make_order(side=OrderSide.SELL, otype=OrderType.STOP, price=1950.0)
         tp = _make_order(side=OrderSide.SELL, otype=OrderType.LIMIT, price=2050.0)
         bracket = BracketOrder(
-            id=str(uuid.uuid4()), symbol="XAUUSD", side=OrderSide.BUY,
-            entry_order=entry, stop_loss_order=sl, take_profit_order=tp,
+            id=str(uuid.uuid4()),
+            symbol="XAUUSD",
+            side=OrderSide.BUY,
+            entry_order=entry,
+            stop_loss_order=sl,
+            take_profit_order=tp,
         )
         d = bracket.to_dict()
         assert "entry_order" in d
@@ -90,8 +95,11 @@ class TestAdvancedOrderManager:
     def test_create_order_returns_order(self):
         mgr = self._make_manager()
         order = mgr.create_order(
-            symbol="XAUUSD", side=OrderSide.BUY, order_type=OrderType.LIMIT,
-            quantity=1.0, price=2000.0,
+            symbol="XAUUSD",
+            side=OrderSide.BUY,
+            order_type=OrderType.LIMIT,
+            quantity=1.0,
+            price=2000.0,
         )
         assert order is not None
         assert order.symbol == "XAUUSD"
@@ -99,8 +107,11 @@ class TestAdvancedOrderManager:
     def test_create_trailing_stop(self):
         mgr = self._make_manager()
         order = mgr.create_trailing_stop(
-            symbol="XAUUSD", side=OrderSide.BUY, quantity=1.0,
-            trail_amount=10.0, activation_price=2010.0,
+            symbol="XAUUSD",
+            side=OrderSide.BUY,
+            quantity=1.0,
+            trail_amount=10.0,
+            activation_price=2010.0,
         )
         assert isinstance(order, TrailingStopOrder)
         assert order.trail_amount == pytest.approx(10.0)
@@ -108,17 +119,24 @@ class TestAdvancedOrderManager:
     def test_create_oco_order(self):
         mgr = self._make_manager()
         oco = mgr.create_oco_order(
-            symbol="XAUUSD", side=OrderSide.BUY, quantity=1.0,
-            limit_price=2050.0, stop_price=1950.0,
+            symbol="XAUUSD",
+            side=OrderSide.BUY,
+            quantity=1.0,
+            limit_price=2050.0,
+            stop_price=1950.0,
         )
         assert isinstance(oco, OCOOrder)
 
     def test_create_bracket_order(self):
         mgr = self._make_manager()
         bracket = mgr.create_bracket_order(
-            symbol="XAUUSD", side=OrderSide.BUY, quantity=1.0,
-            entry_type=OrderType.LIMIT, entry_price=2000.0,
-            stop_loss_price=1950.0, take_profit_price=2050.0,
+            symbol="XAUUSD",
+            side=OrderSide.BUY,
+            quantity=1.0,
+            entry_type=OrderType.LIMIT,
+            entry_price=2000.0,
+            stop_loss_price=1950.0,
+            take_profit_price=2050.0,
         )
         assert isinstance(bracket, BracketOrder)
 
@@ -138,8 +156,11 @@ class TestAdvancedOrderManager:
     def test_cancel_order_pending(self):
         mgr = self._make_manager()
         order = mgr.create_order(
-            symbol="XAUUSD", side=OrderSide.BUY, order_type=OrderType.LIMIT,
-            quantity=1.0, price=2000.0,
+            symbol="XAUUSD",
+            side=OrderSide.BUY,
+            order_type=OrderType.LIMIT,
+            quantity=1.0,
+            price=2000.0,
         )
         result = mgr.cancel_order(order.id)
         assert result is True
@@ -147,7 +168,9 @@ class TestAdvancedOrderManager:
     def test_handle_order_fill(self):
         mgr = self._make_manager()
         order = mgr.create_order(
-            symbol="XAUUSD", side=OrderSide.BUY, order_type=OrderType.MARKET,
+            symbol="XAUUSD",
+            side=OrderSide.BUY,
+            order_type=OrderType.MARKET,
             quantity=1.0,
         )
         mgr.handle_order_fill(order.id, fill_price=2001.0, fill_quantity=1.0)
@@ -157,7 +180,10 @@ class TestAdvancedOrderManager:
     def test_update_trailing_stop(self):
         mgr = self._make_manager()
         order = mgr.create_trailing_stop(
-            symbol="XAUUSD", side=OrderSide.BUY, quantity=1.0, trail_amount=10.0,
+            symbol="XAUUSD",
+            side=OrderSide.BUY,
+            quantity=1.0,
+            trail_amount=10.0,
         )
         mgr.update_trailing_stop(order.id, current_price=2020.0)
         # Should not raise
@@ -173,6 +199,7 @@ from brokers.ohlcv_store import OHLCVStore, get_ohlcv_store
 class TestOHLCVStore:
     def _make_bar(self, ts_offset: int = 0) -> dict:
         import time
+
         return {
             "bar_open_ts": time.time() - ts_offset,
             "open": 2000.0,

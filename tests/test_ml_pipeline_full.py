@@ -38,16 +38,21 @@ def _make_ohlcv(n=600, seed=42):
     open_ = close + rng.normal(0, 3, n)
     volume = rng.uniform(1000, 10000, n)
     idx = pd.date_range("2023-01-01", periods=n, freq="1h")
-    return pd.DataFrame({
-        "open": open_, "high": high, "low": low,
-        "close": close, "volume": volume,
-    }, index=idx)
+    return pd.DataFrame(
+        {
+            "open": open_,
+            "high": high,
+            "low": low,
+            "close": close,
+            "volume": volume,
+        },
+        index=idx,
+    )
 
 
 def _make_xy(n=200, n_features=10, seed=42):
     rng = np.random.default_rng(seed)
-    X = pd.DataFrame(rng.standard_normal((n, n_features)),
-                     columns=[f"f{i}" for i in range(n_features)])
+    X = pd.DataFrame(rng.standard_normal((n, n_features)), columns=[f"f{i}" for i in range(n_features)])
     y = pd.Series(rng.integers(0, 2, n))
     return X, y
 
@@ -58,6 +63,7 @@ def _make_xy(n=200, n_features=10, seed=42):
 class TestHasStatsmodelsFalse:
     def test_stationarity_tester_fallback_when_no_statsmodels(self, monkeypatch):
         import ml.pipeline as pm
+
         monkeypatch.setattr(pm, "_STATSMODELS", False)
         tester = StationarityTester()
         series = pd.Series(np.random.randn(200))
@@ -67,6 +73,7 @@ class TestHasStatsmodelsFalse:
 
     def test_stationarity_tester_fallback_nonstationary(self, monkeypatch):
         import ml.pipeline as pm
+
         monkeypatch.setattr(pm, "_STATSMODELS", False)
         tester = StationarityTester()
         # Random walk — heuristic should flag as non-stationary
@@ -76,12 +83,15 @@ class TestHasStatsmodelsFalse:
 
     def test_test_dataframe_fallback(self, monkeypatch):
         import ml.pipeline as pm
+
         monkeypatch.setattr(pm, "_STATSMODELS", False)
         tester = StationarityTester()
-        df = pd.DataFrame({
-            "a": np.random.randn(200),
-            "b": np.cumsum(np.random.randn(200)),
-        })
+        df = pd.DataFrame(
+            {
+                "a": np.random.randn(200),
+                "b": np.cumsum(np.random.randn(200)),
+            }
+        )
         results = tester.test_dataframe(df, ["a", "b"])
         assert "a" in results
         assert "b" in results
@@ -94,6 +104,7 @@ class TestHasSciPyFalse:
     def test_pipeline_run_without_scipy(self, tmp_path, monkeypatch):
         """MLPipeline.run() uses scipy.stats.binomtest — test fallback when absent."""
         import ml.pipeline as pm
+
         monkeypatch.setattr(pm, "_STATSMODELS", False)
         pipeline = MLPipeline(model_dir=str(tmp_path), n_folds=3)
         df = _make_ohlcv(600)
@@ -124,8 +135,9 @@ class TestMLPipelineGateFailures:
     def test_accuracy_gate_failure_no_model_saved(self, tmp_path):
         pipeline = MLPipeline(model_dir=str(tmp_path), n_folds=3)
         df = _make_ohlcv(600)
-        with patch.object(pipeline, "_walk_forward_validate",
-                          return_value=self._bad_report(accuracy=0.50, p_value=0.0001)):
+        with patch.object(
+            pipeline, "_walk_forward_validate", return_value=self._bad_report(accuracy=0.50, p_value=0.0001)
+        ):
             report = pipeline.run(df)
         assert report.passes_accuracy_gate is False
         assert not (tmp_path / "xgb_xauusd.pkl").exists()
@@ -133,8 +145,9 @@ class TestMLPipelineGateFailures:
     def test_pvalue_gate_failure_no_model_saved(self, tmp_path):
         pipeline = MLPipeline(model_dir=str(tmp_path), n_folds=3)
         df = _make_ohlcv(600)
-        with patch.object(pipeline, "_walk_forward_validate",
-                          return_value=self._bad_report(accuracy=0.70, p_value=0.5)):
+        with patch.object(
+            pipeline, "_walk_forward_validate", return_value=self._bad_report(accuracy=0.70, p_value=0.5)
+        ):
             report = pipeline.run(df)
         assert report.passes_pvalue_gate is False
         assert not (tmp_path / "xgb_xauusd.pkl").exists()
@@ -283,9 +296,7 @@ class TestFeatureEngineerMissingCols:
 
 class TestDropNonstationary:
     def test_drop_nonstationary_reduces_features(self, tmp_path):
-        pipeline = MLPipeline(
-            model_dir=str(tmp_path), n_folds=3, drop_nonstationary=True
-        )
+        pipeline = MLPipeline(model_dir=str(tmp_path), n_folds=3, drop_nonstationary=True)
         df = _make_ohlcv(600)
         report = pipeline.run(df)
         assert isinstance(report, ValidationReport)
@@ -293,12 +304,8 @@ class TestDropNonstationary:
         assert len(pipeline._stationary_features) > 0
 
     def test_no_drop_keeps_all_features(self, tmp_path):
-        pipeline_drop = MLPipeline(
-            model_dir=str(tmp_path / "drop"), n_folds=3, drop_nonstationary=True
-        )
-        pipeline_keep = MLPipeline(
-            model_dir=str(tmp_path / "keep"), n_folds=3, drop_nonstationary=False
-        )
+        pipeline_drop = MLPipeline(model_dir=str(tmp_path / "drop"), n_folds=3, drop_nonstationary=True)
+        pipeline_keep = MLPipeline(model_dir=str(tmp_path / "keep"), n_folds=3, drop_nonstationary=False)
         df = _make_ohlcv(600)
         pipeline_drop.run(df)
         pipeline_keep.run(df)

@@ -8,8 +8,6 @@ joblib.load and build_advanced_features are mocked — no real model file needed
 
 from __future__ import annotations
 
-import sys
-import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -31,13 +29,15 @@ from ml.advanced_predictor import (
 def _make_ohlcv(n=200, seed=42):
     rng = np.random.default_rng(seed)
     close = 2000.0 + np.cumsum(rng.normal(0, 5, n))
-    return pd.DataFrame({
-        "open": close + rng.normal(0, 1, n),
-        "high": close + rng.uniform(1, 10, n),
-        "low": close - rng.uniform(1, 10, n),
-        "close": close,
-        "volume": rng.uniform(1000, 5000, n),
-    })
+    return pd.DataFrame(
+        {
+            "open": close + rng.normal(0, 1, n),
+            "high": close + rng.uniform(1, 10, n),
+            "low": close - rng.uniform(1, 10, n),
+            "close": close,
+            "volume": rng.uniform(1000, 5000, n),
+        }
+    )
 
 
 def _make_mock_sklearn_model(prob=0.75, n_features=10):
@@ -115,14 +115,15 @@ class TestSGDAdapter:
     def test_sklearn_unavailable_clf_is_none(self, monkeypatch):
         """When SGDClassifier import fails, _clf stays None."""
         import sklearn.linear_model as slm
-        monkeypatch.setattr(slm, "SGDClassifier",
-                            MagicMock(side_effect=ImportError("no sklearn")))
+
+        monkeypatch.setattr(slm, "SGDClassifier", MagicMock(side_effect=ImportError("no sklearn")))
         adapter = _SGDAdapter.__new__(_SGDAdapter)
         adapter.n_features = 10
         adapter._n_updates = 0
         adapter._classes_seen = set()
         adapter._clf = None
         import threading
+
         adapter._lock = threading.Lock()
         adapter._init_clf()
         assert adapter._clf is None
@@ -149,8 +150,7 @@ class TestAdvancedPredictorLoad:
         mock_model = _make_mock_sklearn_model()
 
         with patch("joblib.load", return_value=mock_model):
-            with patch("ml.advanced_predictor.AdvancedPredictor._verify_integrity",
-                       return_value=True):
+            with patch("ml.advanced_predictor.AdvancedPredictor._verify_integrity", return_value=True):
                 pred = _make_predictor(model_path=model_file)
                 result = pred._load()
 
@@ -162,8 +162,7 @@ class TestAdvancedPredictorLoad:
         model_file.write_bytes(b"fake")
 
         with patch("joblib.load", side_effect=RuntimeError("corrupt")):
-            with patch("ml.advanced_predictor.AdvancedPredictor._verify_integrity",
-                       return_value=True):
+            with patch("ml.advanced_predictor.AdvancedPredictor._verify_integrity", return_value=True):
                 pred = _make_predictor(model_path=model_file)
                 result = pred._load()
 
@@ -174,8 +173,7 @@ class TestAdvancedPredictorLoad:
         model_file = tmp_path / "advanced_oos.pkl"
         model_file.write_bytes(b"fake")
 
-        with patch("ml.advanced_predictor.AdvancedPredictor._verify_integrity",
-                   return_value=False):
+        with patch("ml.advanced_predictor.AdvancedPredictor._verify_integrity", return_value=False):
             pred = _make_predictor(model_path=model_file)
             result = pred._load()
 
@@ -199,8 +197,7 @@ class TestAdvancedPredictorEarlyExits:
         mock_model = _make_mock_sklearn_model()
 
         with patch("joblib.load", return_value=mock_model):
-            with patch("ml.advanced_predictor.AdvancedPredictor._verify_integrity",
-                       return_value=True):
+            with patch("ml.advanced_predictor.AdvancedPredictor._verify_integrity", return_value=True):
                 pred = _make_predictor(model_path=model_file, min_bars=100)
                 pred._load()
 
@@ -215,8 +212,7 @@ class TestAdvancedPredictorEarlyExits:
         mock_model = _make_mock_sklearn_model()
 
         with patch("joblib.load", return_value=mock_model):
-            with patch("ml.advanced_predictor.AdvancedPredictor._verify_integrity",
-                       return_value=True):
+            with patch("ml.advanced_predictor.AdvancedPredictor._verify_integrity", return_value=True):
                 pred = _make_predictor(model_path=model_file, min_bars=50)
                 pred._load()
 
@@ -232,8 +228,7 @@ class TestAdvancedPredictorEarlyExits:
         mock_model = _make_mock_sklearn_model()
 
         with patch("joblib.load", return_value=mock_model):
-            with patch("ml.advanced_predictor.AdvancedPredictor._verify_integrity",
-                       return_value=True):
+            with patch("ml.advanced_predictor.AdvancedPredictor._verify_integrity", return_value=True):
                 pred = _make_predictor(model_path=model_file, min_bars=50)
                 pred._load()
 
@@ -251,8 +246,7 @@ class TestAdvancedPredictorEarlyExits:
         mock_model.predict_proba.side_effect = RuntimeError("predict error")
 
         with patch("joblib.load", return_value=mock_model):
-            with patch("ml.advanced_predictor.AdvancedPredictor._verify_integrity",
-                       return_value=True):
+            with patch("ml.advanced_predictor.AdvancedPredictor._verify_integrity", return_value=True):
                 pred = _make_predictor(model_path=model_file, min_bars=50)
                 pred._load()
 
@@ -274,8 +268,7 @@ class TestAdvancedPredictorDirections:
         mock_model = _make_mock_sklearn_model(prob=prob)
 
         with patch("joblib.load", return_value=mock_model):
-            with patch("ml.advanced_predictor.AdvancedPredictor._verify_integrity",
-                       return_value=True):
+            with patch("ml.advanced_predictor.AdvancedPredictor._verify_integrity", return_value=True):
                 pred = _make_predictor(model_path=model_file, min_bars=50)
                 pred._load()
         return pred
@@ -330,9 +323,18 @@ class TestAdvancedPredictorDirections:
         X, _ = _make_features(1, 10)
         with patch.object(pred, "_build_features", return_value=X):
             result = pred.predict(ohlcv)
-        for key in ("direction", "probability", "confidence", "high_confidence",
-                    "abstain", "model_version", "bars_used", "last_close",
-                    "feature_count", "latency_ms"):
+        for key in (
+            "direction",
+            "probability",
+            "confidence",
+            "high_confidence",
+            "abstain",
+            "model_version",
+            "bars_used",
+            "last_close",
+            "feature_count",
+            "latency_ms",
+        ):
             assert key in result
 
 
@@ -346,8 +348,7 @@ class TestAdvancedPredictorProbabilityField:
         mock_model = _make_mock_sklearn_model(prob=0.75)
 
         with patch("joblib.load", return_value=mock_model):
-            with patch("ml.advanced_predictor.AdvancedPredictor._verify_integrity",
-                       return_value=True):
+            with patch("ml.advanced_predictor.AdvancedPredictor._verify_integrity", return_value=True):
                 pred = _make_predictor(model_path=model_file, min_bars=50)
                 pred._load()
 
@@ -382,8 +383,7 @@ class TestAdvancedPredictorUpdate:
         mock_model = _make_mock_sklearn_model()
 
         with patch("joblib.load", return_value=mock_model):
-            with patch("ml.advanced_predictor.AdvancedPredictor._verify_integrity",
-                       return_value=True):
+            with patch("ml.advanced_predictor.AdvancedPredictor._verify_integrity", return_value=True):
                 pred = _make_predictor(model_path=model_file, min_bars=50)
                 pred._load()
 
@@ -444,11 +444,13 @@ class TestGetPredictor:
 class TestHybridEnsemblePredictor:
     def test_hybrid_instantiates(self):
         from ml.advanced_predictor import HybridEnsemblePredictor
+
         hybrid = HybridEnsemblePredictor()
         assert hybrid is not None
 
     def test_hybrid_predict_proba_returns_float(self):
         from ml.advanced_predictor import HybridEnsemblePredictor
+
         hybrid = HybridEnsemblePredictor()
         X = np.random.randn(1, 10)
         # _xgb_predict falls back to 0.5 when model not loaded
@@ -458,6 +460,7 @@ class TestHybridEnsemblePredictor:
 
     def test_hybrid_effective_weights_no_lstm_no_rl(self):
         from ml.advanced_predictor import HybridEnsemblePredictor
+
         hybrid = HybridEnsemblePredictor()
         hybrid._has_lstm = False
         hybrid._has_rl = False
@@ -468,6 +471,7 @@ class TestHybridEnsemblePredictor:
 
     def test_hybrid_effective_weights_all_unavailable(self):
         from ml.advanced_predictor import HybridEnsemblePredictor
+
         hybrid = HybridEnsemblePredictor()
         hybrid._has_xgb = False
         hybrid._has_lstm = False
@@ -478,6 +482,7 @@ class TestHybridEnsemblePredictor:
 
     def test_hybrid_xgb_predict_returns_05_when_no_model(self):
         from ml.advanced_predictor import HybridEnsemblePredictor
+
         hybrid = HybridEnsemblePredictor()
         X = np.random.randn(1, 10)
         result = hybrid._xgb_predict(X)
@@ -485,6 +490,7 @@ class TestHybridEnsemblePredictor:
 
     def test_hybrid_lstm_predict_returns_05_when_unavailable(self):
         from ml.advanced_predictor import HybridEnsemblePredictor
+
         hybrid = HybridEnsemblePredictor()
         hybrid._has_lstm = False
         X_seq = np.random.randn(1, 60, 10)
@@ -493,6 +499,7 @@ class TestHybridEnsemblePredictor:
 
     def test_get_hybrid_predictor_singleton(self):
         from ml.advanced_predictor import get_hybrid_predictor
+
         ap_mod._hybrid_predictor = None
         h1 = get_hybrid_predictor()
         h2 = get_hybrid_predictor()

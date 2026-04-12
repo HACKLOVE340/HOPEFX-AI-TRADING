@@ -5,11 +5,10 @@
 Unit tests for ml/live_inference.py.
 Covers _FeatureCache, AdvancedModelPredictor, LiveInferenceLoop.
 """
+
 from __future__ import annotations
 
-import asyncio
 import time
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
@@ -21,18 +20,25 @@ def _ohlcv(n: int = 120) -> pd.DataFrame:
     np.random.seed(11)
     idx = pd.date_range("2024-01-01", periods=n, freq="1h", tz="UTC")
     c = 2000.0 + np.cumsum(np.random.randn(n))
-    return pd.DataFrame({
-        "open": c - 0.5, "high": c + 1.0,
-        "low": c - 1.0, "close": c,
-        "volume": np.ones(n) * 500,
-    }, index=idx)
+    return pd.DataFrame(
+        {
+            "open": c - 0.5,
+            "high": c + 1.0,
+            "low": c - 1.0,
+            "close": c,
+            "volume": np.ones(n) * 500,
+        },
+        index=idx,
+    )
 
 
 # ── _FeatureCache ─────────────────────────────────────────────────────────────
 
+
 class TestFeatureCache:
     def _make_cache(self):
         from ml.live_inference import _FeatureCache
+
         c = _FeatureCache()
         c._connected = True  # skip real Redis connect
         return c
@@ -52,7 +58,6 @@ class TestFeatureCache:
 
     def test_expired_entry_returns_none(self):
         cache = self._make_cache()
-        df = pd.DataFrame({"f1": [1.0]})
         key = cache._make_key("XAUUSD", "ts1")
         # Set with already-expired time
         cache._mem[key] = (time.monotonic() - 1.0, '{"f1": 1.0}')
@@ -133,6 +138,7 @@ class TestFeatureCache:
 
     def test_try_connect_handles_redis_unavailable(self):
         from ml.live_inference import _FeatureCache
+
         cache = _FeatureCache()
         with patch.dict("sys.modules", {"redis": None}):
             cache._try_connect()
@@ -141,14 +147,17 @@ class TestFeatureCache:
 
 def _FeatureCache_make_key(symbol, ts):
     from ml.live_inference import _FeatureCache
+
     return _FeatureCache._make_key(symbol, ts)
 
 
 # ── AdvancedModelPredictor ────────────────────────────────────────────────────
 
+
 class TestAdvancedModelPredictor:
     def _make(self, tmp_path, connected=False):
         from ml.live_inference import _FeatureCache, AdvancedModelPredictor
+
         cache = _FeatureCache()
         cache._connected = True
         p = AdvancedModelPredictor(
@@ -268,8 +277,7 @@ class TestAdvancedModelPredictor:
         p = self._make(tmp_path)
         with patch.object(p, "predict_proba", return_value=0.60):
             sig = p.predict_signal(_ohlcv(120))
-        for k in ["direction", "probability", "confidence", "model_version",
-                   "bars_used", "last_close"]:
+        for k in ["direction", "probability", "confidence", "model_version", "bars_used", "last_close"]:
             assert k in sig
 
     def test_build_features_uses_cache(self, tmp_path):
@@ -290,15 +298,20 @@ class TestAdvancedModelPredictor:
 
 # ── LiveInferenceLoop ─────────────────────────────────────────────────────────
 
+
 class TestLiveInferenceLoop:
     def _make_loop(self):
         from ml.live_inference import LiveInferenceLoop
+
         loop = LiveInferenceLoop(symbol="XAUUSD", interval_seconds=0.01, min_bars=10)
         mock_pred = MagicMock()
         mock_pred.predict_signal.return_value = {
-            "direction": "long", "probability": 0.70,
-            "confidence": 0.40, "model_version": "v1",
-            "bars_used": 120, "last_close": 2000.0,
+            "direction": "long",
+            "probability": 0.70,
+            "confidence": 0.40,
+            "model_version": "v1",
+            "bars_used": 120,
+            "last_close": 2000.0,
         }
         loop._predictor = mock_pred
         return loop
@@ -345,9 +358,11 @@ class TestLiveInferenceLoop:
         loop = self._make_loop()
         cb = MagicMock()
         loop.add_callback(cb)
-        with patch.object(loop, "_fetch_ohlcv", return_value=_ohlcv(120)), \
-             patch.object(loop, "_fetch_macro", return_value=None), \
-             patch.object(loop, "_apply_signal_filter", side_effect=lambda s, o: s):
+        with (
+            patch.object(loop, "_fetch_ohlcv", return_value=_ohlcv(120)),
+            patch.object(loop, "_fetch_macro", return_value=None),
+            patch.object(loop, "_apply_signal_filter", side_effect=lambda s, o: s),
+        ):
             await loop._tick()
         cb.assert_called_once()
         assert loop._tick_count == 1
@@ -356,8 +371,10 @@ class TestLiveInferenceLoop:
     async def test_tick_handles_predict_exception(self):
         loop = self._make_loop()
         loop._predictor.predict_signal.side_effect = RuntimeError("model crash")
-        with patch.object(loop, "_fetch_ohlcv", return_value=_ohlcv(120)), \
-             patch.object(loop, "_fetch_macro", return_value=None):
+        with (
+            patch.object(loop, "_fetch_ohlcv", return_value=_ohlcv(120)),
+            patch.object(loop, "_fetch_macro", return_value=None),
+        ):
             await loop._tick()
         assert loop._error_count == 1
 
@@ -366,9 +383,11 @@ class TestLiveInferenceLoop:
         loop = self._make_loop()
         bad_cb = MagicMock(side_effect=RuntimeError("cb crash"))
         loop.add_callback(bad_cb)
-        with patch.object(loop, "_fetch_ohlcv", return_value=_ohlcv(120)), \
-             patch.object(loop, "_fetch_macro", return_value=None), \
-             patch.object(loop, "_apply_signal_filter", side_effect=lambda s, o: s):
+        with (
+            patch.object(loop, "_fetch_ohlcv", return_value=_ohlcv(120)),
+            patch.object(loop, "_fetch_macro", return_value=None),
+            patch.object(loop, "_apply_signal_filter", side_effect=lambda s, o: s),
+        ):
             await loop._tick()  # must not raise
         assert loop._tick_count == 1
 
@@ -382,8 +401,7 @@ class TestLiveInferenceLoop:
             call_count += 1
             loop.stop()
 
-        with patch.object(loop, "_tick", side_effect=fake_tick), \
-             patch("asyncio.sleep", new_callable=AsyncMock):
+        with patch.object(loop, "_tick", side_effect=fake_tick), patch("asyncio.sleep", new_callable=AsyncMock):
             await loop.run()
 
         assert call_count >= 1
@@ -401,8 +419,7 @@ class TestLiveInferenceLoop:
                 raise RuntimeError("tick error")
             loop.stop()
 
-        with patch.object(loop, "_tick", side_effect=boom), \
-             patch("asyncio.sleep", new_callable=AsyncMock):
+        with patch.object(loop, "_tick", side_effect=boom), patch("asyncio.sleep", new_callable=AsyncMock):
             await loop.run()
 
         assert loop._error_count == 1
@@ -420,10 +437,13 @@ class TestLiveInferenceLoop:
     @pytest.mark.asyncio
     async def test_fetch_ohlcv_returns_none_when_all_fail(self):
         loop = self._make_loop()
-        with patch.dict("sys.modules", {
-            "brokers.ohlcv_store": None,
-            "data_layer.orchestrator": None,
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "brokers.ohlcv_store": None,
+                "data_layer.orchestrator": None,
+            },
+        ):
             result = await loop._fetch_ohlcv()
         assert result is None
 
@@ -456,11 +476,14 @@ class TestLiveInferenceLoop:
 
 # ── Singleton ─────────────────────────────────────────────────────────────────
 
+
 class TestSingleton:
     def test_get_advanced_predictor_returns_same_instance(self):
         import ml.live_inference as li
+
         li._predictor = None
         from ml.live_inference import get_advanced_predictor, AdvancedModelPredictor
+
         a = get_advanced_predictor()
         b = get_advanced_predictor()
         assert a is b

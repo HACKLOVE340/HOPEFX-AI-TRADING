@@ -7,7 +7,6 @@ EWCRegularizer/OnlineLearner (torch-guarded), and get_online_learner().
 
 from __future__ import annotations
 
-import sys
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -28,13 +27,15 @@ from ml.online_learner import (
 def _make_bars(n=50, seed=42):
     rng = np.random.default_rng(seed)
     close = 2000.0 + np.cumsum(rng.normal(0, 5, n))
-    return pd.DataFrame({
-        "open": close + rng.normal(0, 1, n),
-        "high": close + rng.uniform(1, 10, n),
-        "low": close - rng.uniform(1, 10, n),
-        "close": close,
-        "volume": rng.uniform(1000, 5000, n),
-    })
+    return pd.DataFrame(
+        {
+            "open": close + rng.normal(0, 1, n),
+            "high": close + rng.uniform(1, 10, n),
+            "low": close - rng.uniform(1, 10, n),
+            "close": close,
+            "volume": rng.uniform(1000, 5000, n),
+        }
+    )
 
 
 def _make_learner(n_features=20, **kwargs):
@@ -55,7 +56,7 @@ class TestInitModel:
 
     def test_sklearn_unavailable_model_is_none(self, monkeypatch):
         import sklearn.linear_model as slm
-        original = slm.SGDClassifier
+
         monkeypatch.setattr(slm, "SGDClassifier", MagicMock(side_effect=ImportError("no sklearn")))
         learner = SklearnOnlineLearner.__new__(SklearnOnlineLearner)
         learner.symbol = "XAUUSD"
@@ -70,6 +71,7 @@ class TestInitModel:
         learner._anchor_intercept = None
         learner._base_alpha = 1e-4
         from collections import deque
+
         learner._prob_window = deque(maxlen=50)
         learner._ref_probs = None
         learner._drift_count = 0
@@ -77,8 +79,9 @@ class TestInitModel:
         learner._rolling_accuracy = 0.5
         learner.persist_path = None
         # Simulate sklearn import failure
-        with patch("ml.online_learner.SklearnOnlineLearner._init_model",
-                   side_effect=lambda: setattr(learner, "_model", None)):
+        with patch(
+            "ml.online_learner.SklearnOnlineLearner._init_model", side_effect=lambda: setattr(learner, "_model", None)
+        ):
             learner._init_model()
         assert learner._model is None
 
@@ -134,6 +137,7 @@ class TestPartialFit:
     def test_persist_path_saves_model(self, tmp_path):
         """persist_path must be inside ml/saved_models — use the real dir."""
         import os
+
         save_dir = "ml/saved_models"
         os.makedirs(save_dir, exist_ok=True)
         path = os.path.join(save_dir, "_test_online_learner_tmp.pkl")
@@ -170,13 +174,15 @@ class TestPredictProba:
         bars = _make_bars(50)
         learner.partial_fit(bars)
         # Pass a DataFrame with all zeros
-        zero_bars = pd.DataFrame({
-            "open": [0.0] * 50,
-            "high": [0.0] * 50,
-            "low": [0.0] * 50,
-            "close": [0.0] * 50,
-            "volume": [0.0] * 50,
-        })
+        zero_bars = pd.DataFrame(
+            {
+                "open": [0.0] * 50,
+                "high": [0.0] * 50,
+                "low": [0.0] * 50,
+                "close": [0.0] * 50,
+                "volume": [0.0] * 50,
+            }
+        )
         result = learner.predict_proba(zero_bars)
         # May return None or a float — just verify no exception
         assert result is None or isinstance(result, float)
@@ -298,6 +304,7 @@ class TestXGBoostOnlineModel:
     def _make_base_model(self):
         """Return a fitted XGBoost base model."""
         from ml.pipeline import XGBoostPredictor
+
         pred = XGBoostPredictor()
         rng = np.random.default_rng(42)
         X = pd.DataFrame(rng.standard_normal((200, 10)), columns=[f"f{i}" for i in range(10)])
@@ -334,6 +341,7 @@ class TestTorchComponents:
         if ol_mod.HAS_TORCH:
             pytest.skip("torch is installed — testing torch-absent path not applicable")
         from ml.online_learner import nn as fake_nn
+
         with pytest.raises(ImportError):
             fake_nn.Module()  # _FakeModule raises ImportError on instantiation
 
@@ -359,6 +367,7 @@ class TestTorchComponents:
     @pytest.mark.skipif(not ol_mod.HAS_TORCH, reason="torch not installed")
     def test_online_learner_no_model_no_optimizer(self):
         from ml.online_learner import OnlineLearner
+
         learner = OnlineLearner(model=None)
         assert learner.optimizer is None
         assert learner.ewc is None
@@ -384,6 +393,7 @@ class TestGetOnlineLearner:
     def test_singleton_loads_persisted_state(self, tmp_path):
         """If persist_path exists, get_online_learner loads it."""
         import joblib
+
         path = tmp_path / "learner.pkl"
         # Create and persist a learner
         learner = _make_learner(n_features=20, persist_path=str(path))
@@ -393,8 +403,7 @@ class TestGetOnlineLearner:
         joblib.dump(learner, str(path))
 
         ol_mod._online_learner = None
-        with patch("ml.online_learner.SklearnOnlineLearner",
-                   wraps=SklearnOnlineLearner) as mock_cls:
+        with patch("ml.online_learner.SklearnOnlineLearner", wraps=SklearnOnlineLearner):
             loaded = get_online_learner(persist_path=str(path))
         assert loaded is not None
         ol_mod._online_learner = None

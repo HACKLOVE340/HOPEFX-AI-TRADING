@@ -13,7 +13,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 import brokers.oanda_paper_clock as opc_mod
 from brokers.oanda_paper_clock import OandaPaperClock, get_clock
@@ -58,11 +57,14 @@ class TestMaybeStart:
     def test_pending_placeholder_overwritten_with_real_account(self, tmp_path):
         clock = _make_clock(tmp_path)
         started = datetime.now(UTC).isoformat()
-        _write_stamp(clock._stamp_path, {
-            "started_utc": started,
-            "requires_real_account": True,
-            "environment": "practice",
-        })
+        _write_stamp(
+            clock._stamp_path,
+            {
+                "started_utc": started,
+                "requires_real_account": True,
+                "environment": "practice",
+            },
+        )
         result = clock.maybe_start(account_id="101-001-REALACCT", environment="practice")
         assert result is True
         data = json.loads(clock._stamp_path.read_text())
@@ -142,12 +144,15 @@ class TestStatusWithStamp:
     def test_status_complete_when_30_days_elapsed(self, tmp_path):
         clock = _make_clock(tmp_path)
         started = (datetime.now(UTC) - timedelta(days=31)).isoformat()
-        _write_stamp(clock._stamp_path, {
-            "started_utc": started,
-            "target_days": 30,
-            "account_id": "101-001-…",
-            "environment": "practice",
-        })
+        _write_stamp(
+            clock._stamp_path,
+            {
+                "started_utc": started,
+                "target_days": 30,
+                "account_id": "101-001-…",
+                "environment": "practice",
+            },
+        )
         status = clock.status()
         assert status["complete"] is True
         assert status["elapsed_days"] >= 30.0
@@ -155,12 +160,15 @@ class TestStatusWithStamp:
     def test_status_pending_placeholder(self, tmp_path):
         clock = _make_clock(tmp_path)
         started = datetime.now(UTC).isoformat()
-        _write_stamp(clock._stamp_path, {
-            "started_utc": started,
-            "requires_real_account": True,
-            "target_days": 30,
-            "environment": "practice",
-        })
+        _write_stamp(
+            clock._stamp_path,
+            {
+                "started_utc": started,
+                "requires_real_account": True,
+                "target_days": 30,
+                "environment": "practice",
+            },
+        )
         status = clock.status()
         assert status["started"] is True
         assert status["account_id"] == "PENDING"
@@ -190,12 +198,15 @@ class TestHelperMethods:
     def test_is_complete_true_after_30_days(self, tmp_path):
         clock = _make_clock(tmp_path)
         started = (datetime.now(UTC) - timedelta(days=31)).isoformat()
-        _write_stamp(clock._stamp_path, {
-            "started_utc": started,
-            "target_days": 30,
-            "account_id": "101-001-…",
-            "environment": "practice",
-        })
+        _write_stamp(
+            clock._stamp_path,
+            {
+                "started_utc": started,
+                "target_days": 30,
+                "account_id": "101-001-…",
+                "environment": "practice",
+            },
+        )
         assert clock.is_complete() is True
 
     def test_elapsed_days_zero_when_not_started(self, tmp_path):
@@ -205,12 +216,15 @@ class TestHelperMethods:
     def test_elapsed_days_positive_after_start(self, tmp_path):
         clock = _make_clock(tmp_path)
         started = (datetime.now(UTC) - timedelta(days=5)).isoformat()
-        _write_stamp(clock._stamp_path, {
-            "started_utc": started,
-            "target_days": 30,
-            "account_id": "101-001-…",
-            "environment": "practice",
-        })
+        _write_stamp(
+            clock._stamp_path,
+            {
+                "started_utc": started,
+                "target_days": 30,
+                "account_id": "101-001-…",
+                "environment": "practice",
+            },
+        )
         assert clock.elapsed_days() >= 4.9
 
 
@@ -243,8 +257,11 @@ class TestSharpeStatus:
         clock = _make_clock(tmp_path)
         mock_tracker = MagicMock()
         mock_tracker.status.return_value = {
-            "n_trades": 10, "sharpe": 1.5, "gate_passed": False,
-            "sharpe_se": 0.3, "pct_to_gate": 50.0,
+            "n_trades": 10,
+            "sharpe": 1.5,
+            "gate_passed": False,
+            "sharpe_se": 0.3,
+            "pct_to_gate": 50.0,
         }
         clock._sharpe_tracker = mock_tracker
         status = clock.sharpe_status()
@@ -265,8 +282,11 @@ class TestRecordFill:
         clock = _make_clock(tmp_path)
         mock_tracker = MagicMock()
         mock_tracker.update.return_value = {
-            "n_trades": 1, "sharpe": 0.5, "gate_passed": False,
-            "sharpe_se": 0.1, "pct_to_gate": 10.0,
+            "n_trades": 1,
+            "sharpe": 0.5,
+            "gate_passed": False,
+            "sharpe_se": 0.1,
+            "pct_to_gate": 10.0,
         }
         clock._sharpe_tracker = mock_tracker
         result = clock.record_fill(0.01, "XAUUSD")
@@ -277,12 +297,14 @@ class TestRecordFill:
         clock = _make_clock(tmp_path)
         mock_tracker = MagicMock()
         mock_tracker.update.return_value = {
-            "n_trades": 1, "sharpe": 0.5, "gate_passed": False,
-            "sharpe_se": 0.1, "pct_to_gate": 10.0,
+            "n_trades": 1,
+            "sharpe": 0.5,
+            "gate_passed": False,
+            "sharpe_se": 0.1,
+            "pct_to_gate": 10.0,
         }
         clock._sharpe_tracker = mock_tracker
-        with patch("brokers.oanda_paper_clock.OandaPaperClock.record_fill",
-                   wraps=clock.record_fill):
+        with patch("brokers.oanda_paper_clock.OandaPaperClock.record_fill", wraps=clock.record_fill):
             result = clock.record_fill(0.01, "XAUUSD")
         assert result is not None
 

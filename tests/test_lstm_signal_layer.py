@@ -17,11 +17,6 @@ import pytest
 
 import ml.lstm_signal_layer as lstm_mod
 from ml.lstm_signal_layer import (
-    LSTM_ABSTAIN_HIGH,
-    LSTM_ABSTAIN_LOW,
-    LSTM_HIGH_CONF,
-    LSTM_MIN_BARS,
-    LSTM_SEQ_LEN,
     LSTMSignalLayer,
     get_lstm_signal_layer,
 )
@@ -33,13 +28,16 @@ from ml.lstm_signal_layer import (
 def _make_ohlcv(n=200):
     """Return a minimal OHLCV DataFrame with n rows."""
     idx = pd.date_range("2024-01-01", periods=n, freq="1h")
-    return pd.DataFrame({
-        "open": np.random.uniform(1900, 2100, n),
-        "high": np.random.uniform(2000, 2200, n),
-        "low": np.random.uniform(1800, 2000, n),
-        "close": np.random.uniform(1900, 2100, n),
-        "volume": np.random.uniform(1000, 5000, n),
-    }, index=idx)
+    return pd.DataFrame(
+        {
+            "open": np.random.uniform(1900, 2100, n),
+            "high": np.random.uniform(2000, 2200, n),
+            "low": np.random.uniform(1800, 2000, n),
+            "close": np.random.uniform(1900, 2100, n),
+            "volume": np.random.uniform(1000, 5000, n),
+        },
+        index=idx,
+    )
 
 
 def _make_layer(model_path=None, seq_len=10, min_bars=20):
@@ -122,6 +120,7 @@ class TestNeutral:
     def test_neutral_returns_correct_structure(self):
         layer = _make_layer()
         import time
+
         t0 = time.perf_counter()
         ohlcv = _make_ohlcv(50)
         result = layer._neutral(ohlcv, reason="test", t0=t0)
@@ -135,6 +134,7 @@ class TestNeutral:
     def test_neutral_with_none_ohlcv(self):
         layer = _make_layer()
         import time
+
         t0 = time.perf_counter()
         result = layer._neutral(None, reason="no_data", t0=t0)
         assert result["bars_used"] == 0

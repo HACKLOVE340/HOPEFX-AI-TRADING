@@ -9,20 +9,15 @@ Tests must use brokers.base.OrderSide/OrderType to match the comparison.
 
 from __future__ import annotations
 
-import sys
-import time
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 from brokers import PaperTradingBroker
 from brokers.base import (
     AccountInfo,
-    Order,
     OrderSide,
     OrderStatus,
     OrderType,
-    Position,
 )
 
 # brokers/__init__.py re-exports these — test them too
@@ -309,32 +304,46 @@ class TestBrokerInitDataclasses:
 
     def test_order_remaining_quantity(self):
         o = BrokerInitOrder(
-            id="x", symbol="X", side=BrokerInitOrderSide.BUY,
-            type=BrokerInitOrderType.MARKET, quantity=10.0, filled_quantity=3.0,
+            id="x",
+            symbol="X",
+            side=BrokerInitOrderSide.BUY,
+            type=BrokerInitOrderType.MARKET,
+            quantity=10.0,
+            filled_quantity=3.0,
         )
         assert o.remaining_quantity == pytest.approx(7.0)
 
     def test_order_is_complete_filled(self):
         o = BrokerInitOrder(
-            id="x", symbol="X", side=BrokerInitOrderSide.BUY,
-            type=BrokerInitOrderType.MARKET, quantity=1.0,
+            id="x",
+            symbol="X",
+            side=BrokerInitOrderSide.BUY,
+            type=BrokerInitOrderType.MARKET,
+            quantity=1.0,
             status=BrokerInitOrderStatus.FILLED,
         )
         assert o.is_complete is True
 
     def test_order_is_complete_pending(self):
         o = BrokerInitOrder(
-            id="x", symbol="X", side=BrokerInitOrderSide.BUY,
-            type=BrokerInitOrderType.LIMIT, quantity=1.0,
+            id="x",
+            symbol="X",
+            side=BrokerInitOrderSide.BUY,
+            type=BrokerInitOrderType.LIMIT,
+            quantity=1.0,
             status=BrokerInitOrderStatus.PENDING,
         )
         assert o.is_complete is False
 
     def test_order_to_dict(self):
         o = BrokerInitOrder(
-            id="x", symbol="XAUUSD", side=BrokerInitOrderSide.BUY,
-            type=BrokerInitOrderType.MARKET, quantity=1.0,
-            status=BrokerInitOrderStatus.FILLED, filled_quantity=1.0,
+            id="x",
+            symbol="XAUUSD",
+            side=BrokerInitOrderSide.BUY,
+            type=BrokerInitOrderType.MARKET,
+            quantity=1.0,
+            status=BrokerInitOrderStatus.FILLED,
+            filled_quantity=1.0,
             average_fill_price=2000.0,
         )
         d = o.to_dict()
@@ -343,23 +352,36 @@ class TestBrokerInitDataclasses:
 
     def test_position_market_value(self):
         p = BrokerInitPosition(
-            id="p1", symbol="X", side=BrokerInitOrderSide.BUY,
-            quantity=2.0, entry_price=100.0, current_price=110.0,
+            id="p1",
+            symbol="X",
+            side=BrokerInitOrderSide.BUY,
+            quantity=2.0,
+            entry_price=100.0,
+            current_price=110.0,
         )
         assert p.market_value == pytest.approx(220.0)
 
     def test_position_total_pnl(self):
         p = BrokerInitPosition(
-            id="p1", symbol="X", side=BrokerInitOrderSide.BUY,
-            quantity=1.0, entry_price=100.0, current_price=110.0,
-            unrealized_pnl=10.0, realized_pnl=5.0,
+            id="p1",
+            symbol="X",
+            side=BrokerInitOrderSide.BUY,
+            quantity=1.0,
+            entry_price=100.0,
+            current_price=110.0,
+            unrealized_pnl=10.0,
+            realized_pnl=5.0,
         )
         assert p.total_pnl == pytest.approx(15.0)
 
     def test_position_update_price_long(self):
         p = BrokerInitPosition(
-            id="p1", symbol="X", side=BrokerInitOrderSide.BUY,
-            quantity=1.0, entry_price=100.0, current_price=100.0,
+            id="p1",
+            symbol="X",
+            side=BrokerInitOrderSide.BUY,
+            quantity=1.0,
+            entry_price=100.0,
+            current_price=100.0,
         )
         p.update_price(110.0)
         assert p.current_price == pytest.approx(110.0)
@@ -367,16 +389,24 @@ class TestBrokerInitDataclasses:
 
     def test_position_update_price_short(self):
         p = BrokerInitPosition(
-            id="p1", symbol="X", side=BrokerInitOrderSide.SELL,
-            quantity=1.0, entry_price=100.0, current_price=100.0,
+            id="p1",
+            symbol="X",
+            side=BrokerInitOrderSide.SELL,
+            quantity=1.0,
+            entry_price=100.0,
+            current_price=100.0,
         )
         p.update_price(90.0)
         assert p.unrealized_pnl == pytest.approx(10.0)
 
     def test_position_to_dict(self):
         p = BrokerInitPosition(
-            id="p1", symbol="XAUUSD", side=BrokerInitOrderSide.BUY,
-            quantity=1.0, entry_price=2000.0, current_price=2010.0,
+            id="p1",
+            symbol="XAUUSD",
+            side=BrokerInitOrderSide.BUY,
+            quantity=1.0,
+            entry_price=2000.0,
+            current_price=2010.0,
             unrealized_pnl=10.0,
         )
         d = p.to_dict()

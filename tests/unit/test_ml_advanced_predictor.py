@@ -5,12 +5,9 @@
 Unit tests for ml/advanced_predictor.py.
 Covers AdvancedPredictor, _SGDAdapter, integrity check, predict branches.
 """
+
 from __future__ import annotations
 
-import json
-import pickle
-import threading
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -21,18 +18,24 @@ import pytest
 def _ohlcv(n: int = 150) -> pd.DataFrame:
     np.random.seed(42)
     c = 2000.0 + np.cumsum(np.random.randn(n))
-    return pd.DataFrame({
-        "open": c - 0.5, "high": c + 1.0,
-        "low": c - 1.0, "close": c,
-        "volume": np.ones(n) * 500,
-    })
+    return pd.DataFrame(
+        {
+            "open": c - 0.5,
+            "high": c + 1.0,
+            "low": c - 1.0,
+            "close": c,
+            "volume": np.ones(n) * 500,
+        }
+    )
 
 
 # ── _SGDAdapter ───────────────────────────────────────────────────────────────
 
+
 class TestSGDAdapter:
     def test_init_creates_classifier(self):
         from ml.advanced_predictor import _SGDAdapter
+
         a = _SGDAdapter(10)
         assert a._clf is not None
         assert a.n_updates == 0
@@ -40,6 +43,7 @@ class TestSGDAdapter:
     def test_update_noop_when_online_learning_disabled(self):
         import ml.advanced_predictor as ap
         from ml.advanced_predictor import _SGDAdapter
+
         a = _SGDAdapter(10)
         with patch.object(ap, "ONLINE_LEARNING_ENABLED", False):
             a.update(np.zeros(10), 1)
@@ -48,6 +52,7 @@ class TestSGDAdapter:
     def test_update_increments_when_enabled(self):
         import ml.advanced_predictor as ap
         from ml.advanced_predictor import _SGDAdapter
+
         a = _SGDAdapter(10)
         with patch.object(ap, "ONLINE_LEARNING_ENABLED", True):
             a.update(np.random.randn(10), 1)
@@ -55,6 +60,7 @@ class TestSGDAdapter:
 
     def test_predict_proba_returns_none_before_min_updates(self):
         from ml.advanced_predictor import _SGDAdapter
+
         a = _SGDAdapter(10)
         result = a.predict_proba(np.zeros(10))
         assert result is None  # n_updates < 10
@@ -62,6 +68,7 @@ class TestSGDAdapter:
     def test_predict_proba_returns_float_after_updates(self):
         import ml.advanced_predictor as ap
         from ml.advanced_predictor import _SGDAdapter
+
         a = _SGDAdapter(5)
         with patch.object(ap, "ONLINE_LEARNING_ENABLED", True):
             for i in range(12):
@@ -71,6 +78,7 @@ class TestSGDAdapter:
 
     def test_init_handles_sklearn_unavailable(self):
         from ml.advanced_predictor import _SGDAdapter
+
         with patch.dict("sys.modules", {"sklearn.linear_model": None}):
             a = _SGDAdapter(10)
         # clf may be None if sklearn unavailable — should not raise
@@ -79,9 +87,11 @@ class TestSGDAdapter:
 
 # ── AdvancedPredictor — loading ───────────────────────────────────────────────
 
+
 class TestAdvancedPredictorLoad:
     def _make(self, tmp_path):
         from ml.advanced_predictor import AdvancedPredictor
+
         return AdvancedPredictor(model_path=tmp_path / "model.pkl")
 
     def test_is_available_false_when_no_file(self, tmp_path):
@@ -120,6 +130,7 @@ class TestAdvancedPredictorLoad:
     def test_load_succeeds_with_valid_model(self, tmp_path):
         from sklearn.linear_model import LogisticRegression
         import joblib
+
         model_path = tmp_path / "model.pkl"
         clf = LogisticRegression()
         clf.fit(np.random.randn(20, 5), [0, 1] * 10)
@@ -133,9 +144,11 @@ class TestAdvancedPredictorLoad:
 
 # ── AdvancedPredictor — integrity check ──────────────────────────────────────
 
+
 class TestIntegrityCheck:
     def test_returns_false_when_artifact_missing(self, tmp_path):
         from ml.advanced_predictor import AdvancedPredictor
+
         p = AdvancedPredictor(model_path=tmp_path / "missing.pkl")
         result = p._verify_integrity()
         assert result is False
@@ -144,6 +157,7 @@ class TestIntegrityCheck:
         model_path = tmp_path / "model.pkl"
         model_path.write_bytes(b"data")
         from ml.advanced_predictor import AdvancedPredictor
+
         p = AdvancedPredictor(model_path=model_path)
         # No registry → no digest → warn+allow
         with patch.dict("sys.modules", {"ml.model_registry": None}):
@@ -154,6 +168,7 @@ class TestIntegrityCheck:
         model_path = tmp_path / "model.pkl"
         model_path.write_bytes(b"real data")
         from ml.advanced_predictor import AdvancedPredictor
+
         p = AdvancedPredictor(model_path=model_path)
 
         mock_registry = MagicMock()
@@ -179,6 +194,7 @@ class TestIntegrityCheck:
         model_path.write_bytes(b"real data")
         from ml.advanced_predictor import AdvancedPredictor
         import hashlib
+
         actual_digest = hashlib.sha256(b"real data").hexdigest()
 
         p = AdvancedPredictor(model_path=model_path)
@@ -202,10 +218,12 @@ class TestIntegrityCheck:
 
 # ── AdvancedPredictor — predict ───────────────────────────────────────────────
 
+
 class TestAdvancedPredictorPredict:
     def _loaded_predictor(self, tmp_path):
         """Return a predictor with a mocked loaded model."""
         from ml.advanced_predictor import AdvancedPredictor
+
         p = AdvancedPredictor(model_path=tmp_path / "model.pkl")
         mock_model = MagicMock()
         mock_model.predict_proba.return_value = np.array([[0.3, 0.7]])
@@ -216,6 +234,7 @@ class TestAdvancedPredictorPredict:
 
     def test_returns_neutral_when_model_unavailable(self, tmp_path):
         from ml.advanced_predictor import AdvancedPredictor
+
         p = AdvancedPredictor(model_path=tmp_path / "missing.pkl")
         result = p.predict(_ohlcv(150))
         assert result["direction"] == "neutral"
@@ -242,37 +261,46 @@ class TestAdvancedPredictorPredict:
 
     def test_long_direction_on_high_probability(self, tmp_path):
         import ml.advanced_predictor as ap
+
         p = self._loaded_predictor(tmp_path)
         p._model.predict_proba.return_value = np.array([[0.1, 0.9]])
         X = pd.DataFrame(np.random.randn(1, 10), columns=[f"f{i}" for i in range(10)])
-        with patch.object(p, "_build_features", return_value=X), \
-             patch.object(ap, "THRESHOLD_LONG", 0.58), \
-             patch.object(ap, "ABSTAIN_LOW", 0.46), \
-             patch.object(ap, "ABSTAIN_HIGH", 0.54):
+        with (
+            patch.object(p, "_build_features", return_value=X),
+            patch.object(ap, "THRESHOLD_LONG", 0.58),
+            patch.object(ap, "ABSTAIN_LOW", 0.46),
+            patch.object(ap, "ABSTAIN_HIGH", 0.54),
+        ):
             result = p.predict(_ohlcv(150))
         assert result["direction"] == "long"
         assert result["probability"] == pytest.approx(0.9, abs=0.01)
 
     def test_short_direction_on_low_probability(self, tmp_path):
         import ml.advanced_predictor as ap
+
         p = self._loaded_predictor(tmp_path)
         p._model.predict_proba.return_value = np.array([[0.9, 0.1]])
         X = pd.DataFrame(np.random.randn(1, 10), columns=[f"f{i}" for i in range(10)])
-        with patch.object(p, "_build_features", return_value=X), \
-             patch.object(ap, "THRESHOLD_SHORT", 0.42), \
-             patch.object(ap, "ABSTAIN_LOW", 0.46), \
-             patch.object(ap, "ABSTAIN_HIGH", 0.54):
+        with (
+            patch.object(p, "_build_features", return_value=X),
+            patch.object(ap, "THRESHOLD_SHORT", 0.42),
+            patch.object(ap, "ABSTAIN_LOW", 0.46),
+            patch.object(ap, "ABSTAIN_HIGH", 0.54),
+        ):
             result = p.predict(_ohlcv(150))
         assert result["direction"] == "short"
 
     def test_neutral_in_dead_band(self, tmp_path):
         import ml.advanced_predictor as ap
+
         p = self._loaded_predictor(tmp_path)
         p._model.predict_proba.return_value = np.array([[0.5, 0.5]])
         X = pd.DataFrame(np.random.randn(1, 10), columns=[f"f{i}" for i in range(10)])
-        with patch.object(p, "_build_features", return_value=X), \
-             patch.object(ap, "ABSTAIN_LOW", 0.46), \
-             patch.object(ap, "ABSTAIN_HIGH", 0.54):
+        with (
+            patch.object(p, "_build_features", return_value=X),
+            patch.object(ap, "ABSTAIN_LOW", 0.46),
+            patch.object(ap, "ABSTAIN_HIGH", 0.54),
+        ):
             result = p.predict(_ohlcv(150))
         assert result["direction"] == "neutral"
         assert result["abstain"] is True
@@ -287,36 +315,53 @@ class TestAdvancedPredictorPredict:
 
     def test_result_has_all_required_keys(self, tmp_path):
         import ml.advanced_predictor as ap
+
         p = self._loaded_predictor(tmp_path)
         p._model.predict_proba.return_value = np.array([[0.2, 0.8]])
         X = pd.DataFrame(np.random.randn(1, 10), columns=[f"f{i}" for i in range(10)])
-        with patch.object(p, "_build_features", return_value=X), \
-             patch.object(ap, "ABSTAIN_LOW", 0.46), \
-             patch.object(ap, "ABSTAIN_HIGH", 0.54):
+        with (
+            patch.object(p, "_build_features", return_value=X),
+            patch.object(ap, "ABSTAIN_LOW", 0.46),
+            patch.object(ap, "ABSTAIN_HIGH", 0.54),
+        ):
             result = p.predict(_ohlcv(150))
-        for key in ["direction", "probability", "confidence", "high_confidence",
-                    "abstain", "model_version", "bars_used", "last_close",
-                    "feature_count", "latency_ms"]:
+        for key in [
+            "direction",
+            "probability",
+            "confidence",
+            "high_confidence",
+            "abstain",
+            "model_version",
+            "bars_used",
+            "last_close",
+            "feature_count",
+            "latency_ms",
+        ]:
             assert key in result, f"Missing key: {key}"
 
     def test_mtf_features_appended(self, tmp_path):
         import ml.advanced_predictor as ap
+
         p = self._loaded_predictor(tmp_path)
         p._model.predict_proba.return_value = np.array([[0.2, 0.8]])
         X = pd.DataFrame(np.random.randn(1, 10), columns=[f"f{i}" for i in range(10)])
         mtf = pd.DataFrame({"d_trend": [1.0]}, index=X.index)
-        with patch.object(p, "_build_features", return_value=X), \
-             patch.object(ap, "ABSTAIN_LOW", 0.46), \
-             patch.object(ap, "ABSTAIN_HIGH", 0.54):
+        with (
+            patch.object(p, "_build_features", return_value=X),
+            patch.object(ap, "ABSTAIN_LOW", 0.46),
+            patch.object(ap, "ABSTAIN_HIGH", 0.54),
+        ):
             result = p.predict(_ohlcv(150), mtf_df=mtf)
         assert result is not None
 
 
 # ── _align_features ───────────────────────────────────────────────────────────
 
+
 class TestAlignFeatures:
     def test_fills_missing_columns_with_zero(self, tmp_path):
         from ml.advanced_predictor import AdvancedPredictor
+
         p = AdvancedPredictor(model_path=tmp_path / "m.pkl")
         p._feature_names = ["a", "b", "c"]
         X = pd.DataFrame({"a": [1.0], "b": [2.0]})  # missing "c"
@@ -326,6 +371,7 @@ class TestAlignFeatures:
 
     def test_drops_extra_columns(self, tmp_path):
         from ml.advanced_predictor import AdvancedPredictor
+
         p = AdvancedPredictor(model_path=tmp_path / "m.pkl")
         p._feature_names = ["a", "b"]
         X = pd.DataFrame({"a": [1.0], "b": [2.0], "extra": [99.0]})
@@ -334,6 +380,7 @@ class TestAlignFeatures:
 
     def test_noop_when_no_feature_names(self, tmp_path):
         from ml.advanced_predictor import AdvancedPredictor
+
         p = AdvancedPredictor(model_path=tmp_path / "m.pkl")
         p._feature_names = None
         X = pd.DataFrame({"a": [1.0]})
@@ -343,15 +390,18 @@ class TestAlignFeatures:
 
 # ── update ────────────────────────────────────────────────────────────────────
 
+
 class TestUpdate:
     def test_update_returns_false_when_model_not_loaded(self, tmp_path):
         from ml.advanced_predictor import AdvancedPredictor
+
         p = AdvancedPredictor(model_path=tmp_path / "missing.pkl")
         result = p.update(_ohlcv(150), label=1)
         assert result is False
 
     def test_update_returns_false_when_feature_build_fails(self, tmp_path):
         from ml.advanced_predictor import AdvancedPredictor
+
         p = AdvancedPredictor(model_path=tmp_path / "m.pkl")
         p._model = MagicMock()
         with patch.object(p, "_build_features", return_value=None):
@@ -361,11 +411,14 @@ class TestUpdate:
 
 # ── Singleton ─────────────────────────────────────────────────────────────────
 
+
 class TestSingleton:
     def test_get_predictor_returns_same_instance(self):
         import ml.advanced_predictor as ap
+
         ap._predictor = None
         from ml.advanced_predictor import get_predictor, AdvancedPredictor
+
         a = get_predictor()
         b = get_predictor()
         assert a is b

@@ -16,6 +16,7 @@ UTC = timezone.utc
 # Helpers
 # ===========================================================================
 
+
 def _make_daily_ohlcv(n: int = 300) -> pd.DataFrame:
     rng = np.random.default_rng(42)
     idx = pd.date_range("2020-01-01", periods=n, freq="D")
@@ -102,7 +103,6 @@ class TestSignalFilter:
 from ml.signal_validator import (
     SignalDistributionValidator,
     SignalRecord,
-    ValidationReport,
     ValidationStatus,
     get_validator,
 )
@@ -238,8 +238,10 @@ class TestMacroFeatures:
     def test_with_macro_df(self):
         ohlcv = _make_daily_ohlcv(100)
         macro = pd.DataFrame(
-            {"dxy": 100.0 + np.random.default_rng(1).standard_normal(100),
-             "vix": 20.0 + np.random.default_rng(2).standard_normal(100)},
+            {
+                "dxy": 100.0 + np.random.default_rng(1).standard_normal(100),
+                "vix": 20.0 + np.random.default_rng(2).standard_normal(100),
+            },
             index=ohlcv.index,
         )
         result = add_macro_features(ohlcv, macro_df=macro)
@@ -329,6 +331,7 @@ class TestRegimeConditional:
 
     def test_regime_model_fit_predict(self):
         from sklearn.datasets import make_classification
+
         X_arr, y_arr = make_classification(n_samples=200, n_features=10, random_state=42)
         X = pd.DataFrame(X_arr, columns=[f"f{i}" for i in range(10)])
         y = pd.Series(y_arr)
@@ -339,6 +342,7 @@ class TestRegimeConditional:
 
     def test_regime_model_predict_proba(self):
         from sklearn.datasets import make_classification
+
         X_arr, y_arr = make_classification(n_samples=200, n_features=10, random_state=42)
         X = pd.DataFrame(X_arr, columns=[f"f{i}" for i in range(10)])
         y = pd.Series(y_arr)
