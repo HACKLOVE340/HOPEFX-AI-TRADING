@@ -436,7 +436,7 @@ class MultiSourceValidator:
                     # Try nearest timestamp within tolerance
                     diffs = abs(src_df.index - ts)
                     nearest_idx = diffs.argmin()
-                    if diffs.iloc[nearest_idx] < self._bar_ms(timeframe) * 1.5:
+                    if diffs[nearest_idx] < self._bar_ms(timeframe) * 1.5:
                         prices[src_name] = float(src_df.iloc[nearest_idx]["close"])
 
             # ── Price agreement check ─────────────────────────────────────────
