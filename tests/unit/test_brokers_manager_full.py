@@ -5,6 +5,7 @@
 Unit tests for brokers/manager.py.
 Targets the 75% → 90%+ branch coverage gap.
 """
+
 from __future__ import annotations
 
 import os
@@ -12,11 +13,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from brokers.base import AccountInfo, Order, OrderSide, OrderStatus, OrderType, Position
+from brokers.base import AccountInfo, Order, OrderSide, OrderType, Position
 from brokers.manager import BrokerHealth, BrokerManager, _MAX_CONSECUTIVE_FAILURES
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _mock_broker(connected: bool = True) -> MagicMock:
     b = MagicMock()
@@ -37,6 +39,7 @@ def _manager_with_broker(name="paper", connected=True) -> tuple[BrokerManager, M
 
 # ── BrokerHealth ──────────────────────────────────────────────────────────────
 
+
 class TestBrokerHealth:
     def test_to_dict_has_expected_keys(self):
         h = BrokerHealth("paper", True, 0, None, True, "PAPER")
@@ -47,6 +50,7 @@ class TestBrokerHealth:
 
 
 # ── register / set_active ─────────────────────────────────────────────────────
+
 
 class TestRegisterSetActive:
     def test_register_stores_broker(self):
@@ -71,6 +75,7 @@ class TestRegisterSetActive:
 
 
 # ── connect_all / disconnect_all ──────────────────────────────────────────────
+
 
 class TestConnectDisconnect:
     def test_connect_all_returns_results(self):
@@ -132,6 +137,7 @@ class TestConnectDisconnect:
 
 # ── place_order ───────────────────────────────────────────────────────────────
 
+
 class TestPlaceOrder:
     def test_place_order_delegates_to_broker(self):
         mgr, broker = _manager_with_broker()
@@ -168,6 +174,7 @@ class TestPlaceOrder:
 
 # ── cancel_order ──────────────────────────────────────────────────────────────
 
+
 class TestCancelOrder:
     def test_cancel_order_delegates(self):
         mgr, broker = _manager_with_broker()
@@ -185,6 +192,7 @@ class TestCancelOrder:
 
 # ── get_order ─────────────────────────────────────────────────────────────────
 
+
 class TestGetOrder:
     def test_get_order_delegates(self):
         mgr, broker = _manager_with_broker()
@@ -200,6 +208,7 @@ class TestGetOrder:
 
 
 # ── get_positions / close_position ───────────────────────────────────────────
+
 
 class TestPositions:
     def test_get_positions_delegates(self):
@@ -249,6 +258,7 @@ class TestPositions:
 
 # ── get_account_info / get_market_data ───────────────────────────────────────
 
+
 class TestAccountAndMarket:
     def test_get_account_info_delegates(self):
         mgr, broker = _manager_with_broker()
@@ -264,6 +274,7 @@ class TestAccountAndMarket:
 
 
 # ── heartbeat ─────────────────────────────────────────────────────────────────
+
 
 class TestHeartbeat:
     def test_heartbeat_returns_health_for_each_broker(self):
@@ -296,6 +307,7 @@ class TestHeartbeat:
 
 # ── is_connected / get_active_broker_name ────────────────────────────────────
 
+
 class TestStatus:
     def test_is_connected_true(self):
         mgr, _ = _manager_with_broker()
@@ -316,6 +328,7 @@ class TestStatus:
 
 
 # ── _record_failure / auto-failover ──────────────────────────────────────────
+
 
 class TestFailureAndFailover:
     def test_record_failure_increments_counter(self):
@@ -366,6 +379,7 @@ class TestFailureAndFailover:
 
 # ── place_order_fix ───────────────────────────────────────────────────────────
 
+
 class TestPlaceOrderFix:
     @pytest.mark.asyncio
     async def test_raises_when_fix_bridge_not_started(self):
@@ -387,6 +401,7 @@ class TestPlaceOrderFix:
 
 # ── Context manager ───────────────────────────────────────────────────────────
 
+
 class TestContextManager:
     def test_enter_calls_connect_all(self):
         mgr, broker = _manager_with_broker()
@@ -402,16 +417,21 @@ class TestContextManager:
 
 # ── from_env ──────────────────────────────────────────────────────────────────
 
+
 class TestFromEnv:
     def test_from_env_creates_manager(self):
-        with patch.dict(os.environ, {"BROKER_PRIMARY": "paper", "BROKER_ENABLE_FIX": "false"}), \
-             patch.object(BrokerManager, "_auto_register"):
+        with (
+            patch.dict(os.environ, {"BROKER_PRIMARY": "paper", "BROKER_ENABLE_FIX": "false"}),
+            patch.object(BrokerManager, "_auto_register"),
+        ):
             mgr = BrokerManager.from_env()
         assert isinstance(mgr, BrokerManager)
         assert mgr._primary_name == "paper"
 
     def test_from_env_enable_fix(self):
-        with patch.dict(os.environ, {"BROKER_PRIMARY": "paper", "BROKER_ENABLE_FIX": "true"}), \
-             patch.object(BrokerManager, "_auto_register"):
+        with (
+            patch.dict(os.environ, {"BROKER_PRIMARY": "paper", "BROKER_ENABLE_FIX": "true"}),
+            patch.object(BrokerManager, "_auto_register"),
+        ):
             mgr = BrokerManager.from_env()
         assert mgr._enable_fix is True

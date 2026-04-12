@@ -5,6 +5,7 @@
 Unit tests for ml/performance_monitor.py.
 Targets the 65% → 95%+ branch coverage gap.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -15,16 +16,20 @@ import pytest
 
 def _fresh_monitor():
     import ml.performance_monitor as pm
+
     pm._monitor = None
     from ml.performance_monitor import ModelPerformanceMonitor
+
     return ModelPerformanceMonitor()
 
 
 # ── _VersionWindow ────────────────────────────────────────────────────────────
 
+
 class TestVersionWindow:
     def test_record_increments_total_trades(self):
         from ml.performance_monitor import _VersionWindow
+
         w = _VersionWindow("v1", 10)
         w.record(5.0)
         w.record(-2.0)
@@ -32,11 +37,13 @@ class TestVersionWindow:
 
     def test_mean_pnl_none_when_empty(self):
         from ml.performance_monitor import _VersionWindow
+
         w = _VersionWindow("v1", 10)
         assert w.mean_pnl is None
 
     def test_mean_pnl_correct(self):
         from ml.performance_monitor import _VersionWindow
+
         w = _VersionWindow("v1", 10)
         w.record(10.0)
         w.record(20.0)
@@ -44,6 +51,7 @@ class TestVersionWindow:
 
     def test_trade_count_matches_window(self):
         from ml.performance_monitor import _VersionWindow
+
         w = _VersionWindow("v1", 3)
         for v in [1.0, 2.0, 3.0, 4.0]:  # 4 into maxlen=3
             w.record(v)
@@ -51,6 +59,7 @@ class TestVersionWindow:
 
 
 # ── on_model_promoted ─────────────────────────────────────────────────────────
+
 
 class TestOnModelPromoted:
     def test_sets_current_and_previous(self):
@@ -73,6 +82,7 @@ class TestOnModelPromoted:
 
 
 # ── record_trade ──────────────────────────────────────────────────────────────
+
 
 class TestRecordTrade:
     def test_record_trade_creates_window_on_demand(self):
@@ -99,6 +109,7 @@ class TestRecordTrade:
 
 
 # ── get_stats / status ────────────────────────────────────────────────────────
+
 
 class TestStats:
     def test_get_stats_empty(self):
@@ -131,6 +142,7 @@ class TestStats:
 
 # ── _should_rollback ──────────────────────────────────────────────────────────
 
+
 class TestShouldRollback:
     def test_no_rollback_when_current_good(self):
         m = _fresh_monitor()
@@ -139,6 +151,7 @@ class TestShouldRollback:
 
     def test_rollback_when_current_far_below_positive_prev(self):
         import ml.performance_monitor as pm
+
         m = _fresh_monitor()
         with patch.object(pm, "ROLLBACK_THRESHOLD", 0.20):
             ok, reason = m._should_rollback(0.5, 10.0)  # 95% below
@@ -147,6 +160,7 @@ class TestShouldRollback:
 
     def test_no_rollback_when_within_threshold(self):
         import ml.performance_monitor as pm
+
         m = _fresh_monitor()
         with patch.object(pm, "ROLLBACK_THRESHOLD", 0.20):
             ok, _ = m._should_rollback(8.5, 10.0)  # 15% below — within 20%
@@ -154,6 +168,7 @@ class TestShouldRollback:
 
     def test_rollback_when_prev_negative_and_cur_worse(self):
         import ml.performance_monitor as pm
+
         m = _fresh_monitor()
         with patch.object(pm, "ROLLBACK_THRESHOLD", 0.20):
             ok, reason = m._should_rollback(-5.0, -1.0)
@@ -161,6 +176,7 @@ class TestShouldRollback:
 
     def test_no_rollback_when_prev_negative_and_cur_not_much_worse(self):
         import ml.performance_monitor as pm
+
         m = _fresh_monitor()
         with patch.object(pm, "ROLLBACK_THRESHOLD", 0.20):
             ok, _ = m._should_rollback(-1.1, -1.0)
@@ -168,6 +184,7 @@ class TestShouldRollback:
 
     def test_rollback_absolute_loss_guard_no_prev(self):
         import ml.performance_monitor as pm
+
         m = _fresh_monitor()
         with patch.object(pm, "ROLLBACK_THRESHOLD", 0.20):
             ok, reason = m._should_rollback(-0.5, None)
@@ -176,6 +193,7 @@ class TestShouldRollback:
 
     def test_no_rollback_absolute_loss_guard_within_threshold(self):
         import ml.performance_monitor as pm
+
         m = _fresh_monitor()
         with patch.object(pm, "ROLLBACK_THRESHOLD", 0.20):
             ok, _ = m._should_rollback(-0.10, None)
@@ -188,6 +206,7 @@ class TestShouldRollback:
 
 
 # ── _evaluate ────────────────────────────────────────────────────────────────
+
 
 class TestEvaluate:
     @pytest.mark.asyncio
@@ -205,6 +224,7 @@ class TestEvaluate:
     @pytest.mark.asyncio
     async def test_evaluate_skips_when_insufficient_trades(self):
         import ml.performance_monitor as pm
+
         m = _fresh_monitor()
         m.on_model_promoted("v2", "v1")
         m.record_trade(5.0, "v2")  # only 1 trade
@@ -217,6 +237,7 @@ class TestEvaluate:
     @pytest.mark.asyncio
     async def test_evaluate_triggers_rollback_when_degraded(self):
         import ml.performance_monitor as pm
+
         m = _fresh_monitor()
         m.on_model_promoted("v2", "v1")
         # Fill v2 with bad trades
@@ -226,11 +247,15 @@ class TestEvaluate:
         for _ in range(25):
             m.record_trade(10.0, "v1")
 
-        with patch.object(pm, "MIN_TRADES", 20), \
-             patch.object(pm, "ROLLBACK_THRESHOLD", 0.20), \
-             patch.object(m, "_rollback") as mock_rb:
+        with (
+            patch.object(pm, "MIN_TRADES", 20),
+            patch.object(pm, "ROLLBACK_THRESHOLD", 0.20),
+            patch.object(m, "_rollback") as mock_rb,
+        ):
+
             async def _noop(*a, **k):
                 return None
+
             mock_rb.side_effect = _noop
             await m._evaluate()
 
@@ -239,6 +264,7 @@ class TestEvaluate:
     @pytest.mark.asyncio
     async def test_evaluate_skips_when_cur_mean_none(self):
         import ml.performance_monitor as pm
+
         m = _fresh_monitor()
         m.on_model_promoted("v2", "v1")
         # Don't record any trades for v2 — mean_pnl will be None
@@ -251,6 +277,7 @@ class TestEvaluate:
 
 # ── _rollback ─────────────────────────────────────────────────────────────────
 
+
 class TestRollback:
     @pytest.mark.asyncio
     async def test_rollback_increments_count(self):
@@ -259,14 +286,14 @@ class TestRollback:
         m._previous_version = "v1"
 
         mock_registry = MagicMock()
-        mock_registry._load.return_value = {
-            "versions": {"v1": {"state": "retired"}}
-        }
+        mock_registry._load.return_value = {"versions": {"v1": {"state": "retired"}}}
         mock_registry.promote.return_value = {"state": "production"}
         mock_get_registry = MagicMock(return_value=mock_registry)
 
-        with patch.dict("sys.modules", {"ml.model_registry": MagicMock(get_registry=mock_get_registry)}), \
-             patch.object(m, "_fire_rollback_alert"):
+        with (
+            patch.dict("sys.modules", {"ml.model_registry": MagicMock(get_registry=mock_get_registry)}),
+            patch.object(m, "_fire_rollback_alert"),
+        ):
             await m._rollback("v2", "v1", "test reason")
 
         assert m._rollback_count == 1
@@ -278,8 +305,10 @@ class TestRollback:
         m = _fresh_monitor()
         mock_get_registry = MagicMock(side_effect=RuntimeError("registry down"))
 
-        with patch.dict("sys.modules", {"ml.model_registry": MagicMock(get_registry=mock_get_registry)}), \
-             patch.object(m, "_fire_rollback_alert"):
+        with (
+            patch.dict("sys.modules", {"ml.model_registry": MagicMock(get_registry=mock_get_registry)}),
+            patch.object(m, "_fire_rollback_alert"),
+        ):
             await m._rollback("v2", "v1", "test reason")  # must not raise
 
         assert m._rollback_count == 1
@@ -294,8 +323,10 @@ class TestRollback:
         mock_registry.promote.return_value = {"state": "production"}
         mock_get_registry = MagicMock(return_value=mock_registry)
 
-        with patch.dict("sys.modules", {"ml.model_registry": MagicMock(get_registry=mock_get_registry)}), \
-             patch.object(m, "_fire_rollback_alert"):
+        with (
+            patch.dict("sys.modules", {"ml.model_registry": MagicMock(get_registry=mock_get_registry)}),
+            patch.object(m, "_fire_rollback_alert"),
+        ):
             await m._rollback("v2", "v1", "reason")
 
         # _save should NOT have been called (no restage needed)
@@ -303,6 +334,7 @@ class TestRollback:
 
 
 # ── _fire_rollback_alert ──────────────────────────────────────────────────────
+
 
 class TestFireRollbackAlert:
     def test_handles_outbox_failure(self):
@@ -318,10 +350,13 @@ class TestFireRollbackAlert:
         mock_ae = MagicMock()
         mock_ae.send_alert.side_effect = RuntimeError("alert down")
         mock_app_state = MagicMock(alert_engine=mock_ae)
-        with patch.dict("sys.modules", {
-            "core.outbox": mock_outbox,
-            "app": MagicMock(app_state=mock_app_state),
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "core.outbox": mock_outbox,
+                "app": MagicMock(app_state=mock_app_state),
+            },
+        ):
             m._fire_rollback_alert("v2", "v1", "reason")  # must not raise
 
     def test_calls_outbox_and_alert(self):
@@ -330,10 +365,13 @@ class TestFireRollbackAlert:
         mock_outbox = MagicMock()
         mock_ae = MagicMock()
         mock_app_state = MagicMock(alert_engine=mock_ae)
-        with patch.dict("sys.modules", {
-            "core.outbox": mock_outbox,
-            "app": MagicMock(app_state=mock_app_state),
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "core.outbox": mock_outbox,
+                "app": MagicMock(app_state=mock_app_state),
+            },
+        ):
             m._fire_rollback_alert("v2", "v1", "reason")
 
         mock_outbox.write_outbox_event_standalone.assert_called_once()
@@ -342,17 +380,18 @@ class TestFireRollbackAlert:
 
 # ── run() loop ────────────────────────────────────────────────────────────────
 
+
 class TestRunLoop:
     @pytest.mark.asyncio
     async def test_run_stops_on_cancel(self):
         import ml.performance_monitor as pm
+
         m = _fresh_monitor()
 
         async def cancel_on_eval():
             raise asyncio.CancelledError()
 
-        with patch.object(m, "_evaluate", side_effect=cancel_on_eval), \
-             patch.object(pm, "CHECK_INTERVAL", 0.001):
+        with patch.object(m, "_evaluate", side_effect=cancel_on_eval), patch.object(pm, "CHECK_INTERVAL", 0.001):
             await m.run()
 
         assert m._running is True
@@ -360,6 +399,7 @@ class TestRunLoop:
     @pytest.mark.asyncio
     async def test_run_handles_evaluation_exception(self):
         import ml.performance_monitor as pm
+
         m = _fresh_monitor()
         call_count = 0
 
@@ -373,9 +413,11 @@ class TestRunLoop:
         async def fast_sleep(_):
             return
 
-        with patch.object(m, "_evaluate", side_effect=boom), \
-             patch("asyncio.sleep", side_effect=fast_sleep), \
-             patch.object(pm, "CHECK_INTERVAL", 0.001):
+        with (
+            patch.object(m, "_evaluate", side_effect=boom),
+            patch("asyncio.sleep", side_effect=fast_sleep),
+            patch.object(pm, "CHECK_INTERVAL", 0.001),
+        ):
             await m.run()
 
         assert call_count >= 1
@@ -389,11 +431,14 @@ class TestRunLoop:
 
 # ── Singleton ─────────────────────────────────────────────────────────────────
 
+
 class TestSingleton:
     def test_get_monitor_returns_same_instance(self):
         import ml.performance_monitor as pm
+
         pm._monitor = None
         from ml.performance_monitor import get_monitor, ModelPerformanceMonitor
+
         a = get_monitor()
         b = get_monitor()
         assert a is b
