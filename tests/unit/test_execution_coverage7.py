@@ -151,13 +151,11 @@ class TestTCAMetrics:
 
 class TestMarketContextProvider:
     def test_get_adv_env_override(self, monkeypatch):
+        # TCA_ADV_{SYMBOL} is read at call-time via os.getenv — no reload needed.
         monkeypatch.setenv("TCA_ADV_XAUUSD", "99999")
-        from importlib import reload
+        from execution.tca import MarketContextProvider
 
-        import execution.tca as tca_mod
-
-        reload(tca_mod)
-        ctx = tca_mod.MarketContextProvider()
+        ctx = MarketContextProvider()
         adv, source = ctx.get_adv("XAUUSD")
         assert adv == pytest.approx(99999.0)
         assert "env" in source
@@ -171,13 +169,11 @@ class TestMarketContextProvider:
         assert source in ("default", "env_global")
 
     def test_get_volatility_env_override(self, monkeypatch):
+        # TCA_VOL_{SYMBOL} is read at call-time via os.getenv — no reload needed.
         monkeypatch.setenv("TCA_VOL_XAUUSD", "0.025")
-        from importlib import reload
+        from execution.tca import MarketContextProvider
 
-        import execution.tca as tca_mod
-
-        reload(tca_mod)
-        ctx = tca_mod.MarketContextProvider()
+        ctx = MarketContextProvider()
         vol, source = ctx.get_volatility("XAUUSD")
         assert vol == pytest.approx(0.025)
         assert "env" in source
