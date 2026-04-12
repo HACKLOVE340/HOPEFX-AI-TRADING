@@ -21,12 +21,12 @@ from brokers.bybit_connector import ByBitConnector, BybitConnector, _DEFAULT_SYM
 def _make_connector(connected=True, **config_overrides):
     """Return a ByBitConnector with a mocked CCXTConnector."""
     config = {
-        "api_key": "test_key",
-        "api_secret": "test_secret",
+        "api_key": "test_key",  # pragma: allowlist secret
+        "api_secret": "test_secret",  # pragma: allowlist secret
         "sandbox": True,
         **config_overrides,
     }
-    with MagicMock() as mock_ccxt_cls:
+    with MagicMock():
         pass
 
     mock_ccxt = MagicMock()
@@ -124,9 +124,16 @@ class TestSymbolTranslation:
         }
         with pytest.MonkeyPatch().context() as mp:
             import brokers.bybit_connector as bbc
-            mp.setattr(bbc, "CCXTConnector" if hasattr(bbc, "CCXTConnector") else "_ccxt_cls", MagicMock(return_value=mock_ccxt), raising=False)
+
+            mp.setattr(
+                bbc,
+                "CCXTConnector" if hasattr(bbc, "CCXTConnector") else "_ccxt_cls",
+                MagicMock(return_value=mock_ccxt),
+                raising=False,
+            )
             # Patch the import inside __init__
             import sys
+
             fake_ccxt_mod = MagicMock()
             fake_ccxt_mod.CCXTConnector = MagicMock(return_value=mock_ccxt)
             with pytest.MonkeyPatch().context() as mp2:
@@ -172,8 +179,10 @@ class TestGetAccountInfo:
     def test_returns_ccxt_account_info(self):
         c, mock_ccxt = _make_connector()
         expected = AccountInfo(
-            balance=5000.0, equity=5100.0,
-            margin_used=100.0, margin_available=4900.0,
+            balance=5000.0,
+            equity=5100.0,
+            margin_used=100.0,
+            margin_available=4900.0,
             positions_count=1,
         )
         mock_ccxt.get_account_info.return_value = expected

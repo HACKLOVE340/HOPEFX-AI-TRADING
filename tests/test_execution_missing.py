@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import asyncio
-import time
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -39,8 +38,10 @@ class TestCircuitBreakerBasic:
     @pytest.mark.asyncio
     async def test_failures_open_circuit(self):
         cb = BrokerCircuitBreaker("test", max_failures=3, reset_timeout=60, half_open_max=1)
+
         async def fail():
             raise ConnectionError("down")
+
         for _ in range(3):
             with pytest.raises(ConnectionError):
                 await cb.call(fail)
@@ -50,8 +51,10 @@ class TestCircuitBreakerBasic:
     @pytest.mark.asyncio
     async def test_open_raises_circuit_open_error(self):
         cb = BrokerCircuitBreaker("test", max_failures=2, reset_timeout=9999)
+
         async def fail():
             raise ConnectionError("down")
+
         for _ in range(2):
             with pytest.raises(ConnectionError):
                 await cb.call(fail)
@@ -62,8 +65,10 @@ class TestCircuitBreakerBasic:
     @pytest.mark.asyncio
     async def test_half_open_success_closes(self):
         cb = BrokerCircuitBreaker("test", max_failures=2, reset_timeout=0.01, half_open_max=2)
+
         async def fail():
             raise ConnectionError("down")
+
         for _ in range(2):
             with pytest.raises(ConnectionError):
                 await cb.call(fail)
@@ -75,8 +80,10 @@ class TestCircuitBreakerBasic:
     @pytest.mark.asyncio
     async def test_half_open_failure_reopens(self):
         cb = BrokerCircuitBreaker("test", max_failures=2, reset_timeout=0.01, half_open_max=2)
+
         async def fail():
             raise ConnectionError("down")
+
         for _ in range(2):
             with pytest.raises(ConnectionError):
                 await cb.call(fail)
@@ -102,8 +109,10 @@ class TestCircuitBreakerBasic:
     @pytest.mark.asyncio
     async def test_async_callable_forwarded(self):
         cb = BrokerCircuitBreaker("test", max_failures=3, reset_timeout=60)
+
         async def async_fn():
             return 42
+
         result = await cb.call(async_fn)
         assert result == 42
 
@@ -141,16 +150,14 @@ from execution.market_impact import (
 class TestAlmgrenChrissModel:
     def test_estimate_returns_impact(self):
         model = AlmgrenChrissModel()
-        est = model.estimate(order_size=100, adv=10_000, volatility_daily=0.012,
-                             spread_bps=3.0, price=2000.0)
+        est = model.estimate(order_size=100, adv=10_000, volatility_daily=0.012, spread_bps=3.0, price=2000.0)
         assert isinstance(est, ImpactEstimate)
         assert est.total_impact_bps > 0
         assert est.total_cost_usd > 0
 
     def test_zero_adv_spread_only(self):
         model = AlmgrenChrissModel()
-        est = model.estimate(order_size=100, adv=0, volatility_daily=0.012,
-                             spread_bps=3.0, price=2000.0)
+        est = model.estimate(order_size=100, adv=0, volatility_daily=0.012, spread_bps=3.0, price=2000.0)
         assert est.temporary_impact_bps == 0.0
         assert est.permanent_impact_bps == 0.0
         assert est.spread_cost_bps > 0
@@ -167,8 +174,7 @@ class TestAlmgrenChrissModel:
 
     def test_participation_capped(self):
         model = AlmgrenChrissModel(max_participation=0.10)
-        est = model.estimate(order_size=999_999, adv=1_000, volatility_daily=0.01,
-                             spread_bps=3.0, price=2000.0)
+        est = model.estimate(order_size=999_999, adv=1_000, volatility_daily=0.01, spread_bps=3.0, price=2000.0)
         assert est.participation_rate <= 0.10
 
     def test_slippage_alias(self):
@@ -181,9 +187,14 @@ class TestFillSimulator:
     def test_full_fill_small_order(self):
         sim = FillSimulator()
         fill = sim.simulate_fill(
-            signal_price=2000.0, side="BUY", quantity=1.0,
-            bar_high=2005.0, bar_low=1995.0, bar_volume=10_000.0,
-            adv=100_000.0, volatility_daily=0.012,
+            signal_price=2000.0,
+            side="BUY",
+            quantity=1.0,
+            bar_high=2005.0,
+            bar_low=1995.0,
+            bar_volume=10_000.0,
+            adv=100_000.0,
+            volatility_daily=0.012,
         )
         assert isinstance(fill, SimulatedFill)
         assert fill.partial_fill is False
@@ -192,9 +203,14 @@ class TestFillSimulator:
     def test_partial_fill_large_order(self):
         sim = FillSimulator()
         fill = sim.simulate_fill(
-            signal_price=2000.0, side="BUY", quantity=999_999.0,
-            bar_high=2005.0, bar_low=1995.0, bar_volume=100.0,
-            adv=1_000.0, volatility_daily=0.012,
+            signal_price=2000.0,
+            side="BUY",
+            quantity=999_999.0,
+            bar_high=2005.0,
+            bar_low=1995.0,
+            bar_volume=100.0,
+            adv=1_000.0,
+            volatility_daily=0.012,
         )
         assert fill.partial_fill is True
         assert fill.fill_quantity < 999_999.0
@@ -202,28 +218,50 @@ class TestFillSimulator:
     def test_buy_fill_clamped_to_bar_high(self):
         sim = FillSimulator()
         fill = sim.simulate_fill(
-            signal_price=2000.0, side="BUY", quantity=1.0,
-            bar_high=2000.5, bar_low=1999.0, bar_volume=10_000.0,
-            adv=100_000.0, volatility_daily=0.012,
+            signal_price=2000.0,
+            side="BUY",
+            quantity=1.0,
+            bar_high=2000.5,
+            bar_low=1999.0,
+            bar_volume=10_000.0,
+            adv=100_000.0,
+            volatility_daily=0.012,
         )
         assert fill.fill_price <= 2000.5
 
     def test_sell_fill_clamped_to_bar_low(self):
         sim = FillSimulator()
         fill = sim.simulate_fill(
-            signal_price=2000.0, side="SELL", quantity=1.0,
-            bar_high=2001.0, bar_low=1999.5, bar_volume=10_000.0,
-            adv=100_000.0, volatility_daily=0.012,
+            signal_price=2000.0,
+            side="SELL",
+            quantity=1.0,
+            bar_high=2001.0,
+            bar_low=1999.5,
+            bar_volume=10_000.0,
+            adv=100_000.0,
+            volatility_daily=0.012,
         )
         assert fill.fill_price >= 1999.5
 
     def test_batch_simulate(self):
         sim = FillSimulator()
         signals = [
-            {"signal_price": 2000.0, "side": "BUY", "quantity": 1.0,
-             "bar_high": 2005.0, "bar_low": 1995.0, "bar_volume": 10_000.0},
-            {"signal_price": 2001.0, "side": "SELL", "quantity": 1.0,
-             "bar_high": 2006.0, "bar_low": 1996.0, "bar_volume": 10_000.0},
+            {
+                "signal_price": 2000.0,
+                "side": "BUY",
+                "quantity": 1.0,
+                "bar_high": 2005.0,
+                "bar_low": 1995.0,
+                "bar_volume": 10_000.0,
+            },
+            {
+                "signal_price": 2001.0,
+                "side": "SELL",
+                "quantity": 1.0,
+                "bar_high": 2006.0,
+                "bar_low": 1996.0,
+                "bar_volume": 10_000.0,
+            },
         ]
         fills = sim.simulate_fills_batch(signals, adv=100_000.0, volatility_daily=0.012)
         assert len(fills) == 2
@@ -240,7 +278,6 @@ class TestFillSimulator:
 
 from execution.order_algorithms import (
     PartialFillAggregator,
-    PartialFillState,
     TWAPExecutor,
     VWAPExecutor,
 )
@@ -294,8 +331,12 @@ class TestTWAPExecutor:
     async def test_no_router_returns_pending(self):
         exec_ = TWAPExecutor(router=None)
         result = await exec_.execute(
-            parent_id="t1", symbol="XAUUSD", side="long",
-            total_lots=0.01, duration_s=0.01, slices=2,
+            parent_id="t1",
+            symbol="XAUUSD",
+            side="long",
+            total_lots=0.01,
+            duration_s=0.01,
+            slices=2,
         )
         assert result["algo"] == "twap"
         assert result["target_lots"] == pytest.approx(0.01)
@@ -306,8 +347,13 @@ class TestTWAPExecutor:
         router.route = AsyncMock(return_value={"status": "filled", "fill_price": 2000.0})
         exec_ = TWAPExecutor(router=router)
         result = await exec_.execute(
-            parent_id="t1", symbol="XAUUSD", side="long",
-            total_lots=0.002, duration_s=0.01, slices=2, mid_price=2000.0,
+            parent_id="t1",
+            symbol="XAUUSD",
+            side="long",
+            total_lots=0.002,
+            duration_s=0.01,
+            slices=2,
+            mid_price=2000.0,
         )
         assert result["status"] == "filled"
         assert result["filled_lots"] > 0
@@ -318,8 +364,13 @@ class TestTWAPExecutor:
         router.route = AsyncMock(side_effect=RuntimeError("broker down"))
         exec_ = TWAPExecutor(router=router)
         result = await exec_.execute(
-            parent_id="t1", symbol="XAUUSD", side="long",
-            total_lots=0.002, duration_s=0.01, slices=2, mid_price=2000.0,
+            parent_id="t1",
+            symbol="XAUUSD",
+            side="long",
+            total_lots=0.002,
+            duration_s=0.01,
+            slices=2,
+            mid_price=2000.0,
         )
         assert result["failed_slices"] == 2
 
@@ -329,8 +380,12 @@ class TestVWAPExecutor:
     async def test_no_router_returns_result(self):
         exec_ = VWAPExecutor(router=None)
         result = await exec_.execute(
-            parent_id="v1", symbol="XAUUSD", side="long",
-            total_lots=0.01, duration_s=0.01, slices=3,
+            parent_id="v1",
+            symbol="XAUUSD",
+            side="long",
+            total_lots=0.01,
+            duration_s=0.01,
+            slices=3,
         )
         assert result["algo"] == "vwap"
 
@@ -351,16 +406,14 @@ class TestPositionTracker:
     @pytest.mark.asyncio
     async def test_add_and_get(self):
         tracker = PositionTracker()
-        pos = Position(id="p1", symbol="XAUUSD", side="long",
-                       quantity=1.0, entry_price=2000.0, current_price=2000.0)
+        pos = Position(id="p1", symbol="XAUUSD", side="long", quantity=1.0, entry_price=2000.0, current_price=2000.0)
         await tracker.add_position(pos)
         assert tracker.get_position("p1") is pos
 
     @pytest.mark.asyncio
     async def test_update_position(self):
         tracker = PositionTracker()
-        pos = Position(id="p1", symbol="XAUUSD", side="long",
-                       quantity=1.0, entry_price=2000.0, current_price=2000.0)
+        pos = Position(id="p1", symbol="XAUUSD", side="long", quantity=1.0, entry_price=2000.0, current_price=2000.0)
         await tracker.add_position(pos)
         result = await tracker.update_position("p1", quantity=2.0)
         assert result is True
@@ -375,8 +428,7 @@ class TestPositionTracker:
     @pytest.mark.asyncio
     async def test_close_position_long(self):
         tracker = PositionTracker()
-        pos = Position(id="p1", symbol="XAUUSD", side="long",
-                       quantity=1.0, entry_price=2000.0, current_price=2000.0)
+        pos = Position(id="p1", symbol="XAUUSD", side="long", quantity=1.0, entry_price=2000.0, current_price=2000.0)
         await tracker.add_position(pos)
         closed = await tracker.close_position("p1", exit_price=2010.0, commission=1.0)
         assert closed is not None
@@ -386,8 +438,7 @@ class TestPositionTracker:
     @pytest.mark.asyncio
     async def test_close_position_short(self):
         tracker = PositionTracker()
-        pos = Position(id="p1", symbol="XAUUSD", side="short",
-                       quantity=1.0, entry_price=2000.0, current_price=2000.0)
+        pos = Position(id="p1", symbol="XAUUSD", side="short", quantity=1.0, entry_price=2000.0, current_price=2000.0)
         await tracker.add_position(pos)
         closed = await tracker.close_position("p1", exit_price=1990.0)
         assert closed.realized_pnl == pytest.approx(10.0)
@@ -401,8 +452,7 @@ class TestPositionTracker:
     @pytest.mark.asyncio
     async def test_update_prices(self):
         tracker = PositionTracker()
-        pos = Position(id="p1", symbol="XAUUSD", side="long",
-                       quantity=1.0, entry_price=2000.0, current_price=2000.0)
+        pos = Position(id="p1", symbol="XAUUSD", side="long", quantity=1.0, entry_price=2000.0, current_price=2000.0)
         await tracker.add_position(pos)
         await tracker.update_prices("XAUUSD", 2010.0)
         assert tracker.get_position("p1").current_price == pytest.approx(2010.0)
@@ -410,10 +460,12 @@ class TestPositionTracker:
     @pytest.mark.asyncio
     async def test_get_exposure(self):
         tracker = PositionTracker()
-        await tracker.add_position(Position(id="p1", symbol="XAUUSD", side="long",
-                                            quantity=2.0, entry_price=2000.0, current_price=2000.0))
-        await tracker.add_position(Position(id="p2", symbol="XAUUSD", side="short",
-                                            quantity=1.0, entry_price=2000.0, current_price=2000.0))
+        await tracker.add_position(
+            Position(id="p1", symbol="XAUUSD", side="long", quantity=2.0, entry_price=2000.0, current_price=2000.0)
+        )
+        await tracker.add_position(
+            Position(id="p2", symbol="XAUUSD", side="short", quantity=1.0, entry_price=2000.0, current_price=2000.0)
+        )
         exp = tracker.get_exposure("XAUUSD")
         assert exp["long"] == pytest.approx(2.0)
         assert exp["short"] == pytest.approx(1.0)
@@ -422,22 +474,26 @@ class TestPositionTracker:
     @pytest.mark.asyncio
     async def test_get_total_pnl(self):
         tracker = PositionTracker()
-        pos = Position(id="p1", symbol="XAUUSD", side="long",
-                       quantity=1.0, entry_price=2000.0, current_price=2010.0,
-                       unrealized_pnl=10.0)
+        pos = Position(
+            id="p1",
+            symbol="XAUUSD",
+            side="long",
+            quantity=1.0,
+            entry_price=2000.0,
+            current_price=2010.0,
+            unrealized_pnl=10.0,
+        )
         await tracker.add_position(pos)
         pnl = tracker.get_total_pnl()
         assert pnl["unrealized"] == pytest.approx(10.0)
 
     def test_position_update_price_long(self):
-        pos = Position(id="p1", symbol="XAUUSD", side="long",
-                       quantity=2.0, entry_price=2000.0, current_price=2000.0)
+        pos = Position(id="p1", symbol="XAUUSD", side="long", quantity=2.0, entry_price=2000.0, current_price=2000.0)
         pos.update_price(2010.0)
         assert pos.unrealized_pnl == pytest.approx(20.0)
 
     def test_position_market_value(self):
-        pos = Position(id="p1", symbol="XAUUSD", side="long",
-                       quantity=2.0, entry_price=2000.0, current_price=2005.0)
+        pos = Position(id="p1", symbol="XAUUSD", side="long", quantity=2.0, entry_price=2000.0, current_price=2005.0)
         assert pos.market_value == pytest.approx(4010.0)
 
 
@@ -522,7 +578,7 @@ class TestSpreadMonitor:
 # tca_recorder
 # ===========================================================================
 
-from execution.tca_recorder import TCARecord, TCARecorder, get_tca_recorder
+from execution.tca_recorder import TCARecorder, get_tca_recorder
 
 
 class TestTCARecorder:
@@ -533,15 +589,13 @@ class TestTCARecorder:
     def test_record_signal_and_fill(self):
         rec = self._make_recorder()
         rec.record_signal("req1", "XAUUSD", "BUY", signal_price=2000.0, quantity=1.0)
-        record = rec.record_fill("req1", fill_price=2001.0, filled_quantity=1.0,
-                                 broker="oanda", latency_ms=42.0)
+        record = rec.record_fill("req1", fill_price=2001.0, filled_quantity=1.0, broker="oanda", latency_ms=42.0)
         assert record is not None
         assert record.slippage_bps > 0
 
     def test_fill_without_signal_returns_none(self):
         rec = self._make_recorder()
-        result = rec.record_fill("unknown_req", fill_price=2001.0,
-                                 filled_quantity=1.0, broker="oanda")
+        result = rec.record_fill("unknown_req", fill_price=2001.0, filled_quantity=1.0, broker="oanda")
         assert result is None
 
     def test_slippage_bps_buy_adverse(self):
@@ -612,8 +666,7 @@ class TestThrottler:
 
     def test_exceeds_per_second_throttles(self):
         # burst_allowance=0 so limit is strict
-        t = MessageThrottler(max_messages_per_second=2, max_messages_per_minute=1000,
-                             burst_allowance=0)
+        t = MessageThrottler(max_messages_per_second=2, max_messages_per_minute=1000, burst_allowance=0)
         t.record_message()
         t.record_message()
         assert t.can_send() is False
@@ -625,6 +678,5 @@ class TestThrottler:
     def test_status_keys(self):
         t = MessageThrottler(max_messages_per_second=10, max_messages_per_minute=100)
         s = t.get_status()
-        for k in ("level", "messages_per_second", "messages_per_minute",
-                  "max_per_second", "max_per_minute"):
+        for k in ("level", "messages_per_second", "messages_per_minute", "max_per_second", "max_per_minute"):
             assert k in s

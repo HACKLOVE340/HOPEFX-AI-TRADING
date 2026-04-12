@@ -5,6 +5,7 @@
 Unit tests for ml/lstm_signal_layer.py.
 Targets the 54% → 95%+ branch coverage gap.
 """
+
 from __future__ import annotations
 
 import time
@@ -13,30 +14,34 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
-import pytest
 
 
 def _make_ohlcv(n: int = 150) -> pd.DataFrame:
     """Return a minimal OHLCV DataFrame."""
     np.random.seed(42)
     close = 1800.0 + np.cumsum(np.random.randn(n))
-    return pd.DataFrame({
-        "open": close - 0.5,
-        "high": close + 1.0,
-        "low": close - 1.0,
-        "close": close,
-        "volume": np.random.randint(100, 1000, n).astype(float),
-    })
+    return pd.DataFrame(
+        {
+            "open": close - 0.5,
+            "high": close + 1.0,
+            "low": close - 1.0,
+            "close": close,
+            "volume": np.random.randint(100, 1000, n).astype(float),
+        }
+    )
 
 
 def _fresh_layer(model_path="nonexistent.pt", seq_len=10, min_bars=20):
     import ml.lstm_signal_layer as lsl
+
     lsl._lstm_layer = None
     from ml.lstm_signal_layer import LSTMSignalLayer
+
     return LSTMSignalLayer(model_path=Path(model_path), seq_len=seq_len, min_bars=min_bars)
 
 
 # ── _load ─────────────────────────────────────────────────────────────────────
+
 
 class TestLoad:
     def test_returns_false_when_model_file_missing(self):
@@ -86,6 +91,7 @@ class TestLoad:
 
 # ── _neutral ──────────────────────────────────────────────────────────────────
 
+
 class TestNeutral:
     def test_neutral_returns_correct_structure(self):
         layer = _fresh_layer()
@@ -110,6 +116,7 @@ class TestNeutral:
 
 
 # ── predict — model unavailable paths ────────────────────────────────────────
+
 
 class TestPredictModelUnavailable:
     def test_returns_neutral_when_model_missing(self):
@@ -143,6 +150,7 @@ class TestPredictModelUnavailable:
 
 
 # ── predict — sequence build paths ───────────────────────────────────────────
+
 
 class TestPredictSequenceBuild:
     def _loaded_layer(self, tmp_path):
@@ -190,6 +198,7 @@ class TestPredictSequenceBuild:
 
 # ── predict — direction branches ──────────────────────────────────────────────
 
+
 class TestPredictDirections:
     def _layer_with_prob(self, tmp_path, prob: float):
         p = tmp_path / "model.pt"
@@ -204,47 +213,59 @@ class TestPredictDirections:
 
     def test_long_direction_when_prob_high(self, tmp_path):
         import ml.lstm_signal_layer as lsl
+
         layer, seq = self._layer_with_prob(tmp_path, 0.80)
         ohlcv = _make_ohlcv(150)
-        with patch.object(layer, "_build_sequence", return_value=seq), \
-             patch.object(lsl, "_THRESHOLD_LONG", 0.54), \
-             patch.object(lsl, "LSTM_ABSTAIN_LOW", 0.46), \
-             patch.object(lsl, "LSTM_ABSTAIN_HIGH", 0.54):
+        with (
+            patch.object(layer, "_build_sequence", return_value=seq),
+            patch.object(lsl, "_THRESHOLD_LONG", 0.54),
+            patch.object(lsl, "LSTM_ABSTAIN_LOW", 0.46),
+            patch.object(lsl, "LSTM_ABSTAIN_HIGH", 0.54),
+        ):
             result = layer.predict(ohlcv)
         assert result["direction"] == "long"
         assert result["abstain"] is False
 
     def test_short_direction_when_prob_low(self, tmp_path):
         import ml.lstm_signal_layer as lsl
+
         layer, seq = self._layer_with_prob(tmp_path, 0.20)
         ohlcv = _make_ohlcv(150)
-        with patch.object(layer, "_build_sequence", return_value=seq), \
-             patch.object(lsl, "_THRESHOLD_SHORT", 0.46), \
-             patch.object(lsl, "LSTM_ABSTAIN_LOW", 0.46), \
-             patch.object(lsl, "LSTM_ABSTAIN_HIGH", 0.54):
+        with (
+            patch.object(layer, "_build_sequence", return_value=seq),
+            patch.object(lsl, "_THRESHOLD_SHORT", 0.46),
+            patch.object(lsl, "LSTM_ABSTAIN_LOW", 0.46),
+            patch.object(lsl, "LSTM_ABSTAIN_HIGH", 0.54),
+        ):
             result = layer.predict(ohlcv)
         assert result["direction"] == "short"
 
     def test_neutral_when_prob_in_dead_band(self, tmp_path):
         import ml.lstm_signal_layer as lsl
+
         layer, seq = self._layer_with_prob(tmp_path, 0.50)
         ohlcv = _make_ohlcv(150)
-        with patch.object(layer, "_build_sequence", return_value=seq), \
-             patch.object(lsl, "LSTM_ABSTAIN_LOW", 0.46), \
-             patch.object(lsl, "LSTM_ABSTAIN_HIGH", 0.54):
+        with (
+            patch.object(layer, "_build_sequence", return_value=seq),
+            patch.object(lsl, "LSTM_ABSTAIN_LOW", 0.46),
+            patch.object(lsl, "LSTM_ABSTAIN_HIGH", 0.54),
+        ):
             result = layer.predict(ohlcv)
         assert result["direction"] == "neutral"
         assert result["abstain"] is True
 
     def test_high_confidence_flag(self, tmp_path):
         import ml.lstm_signal_layer as lsl
+
         layer, seq = self._layer_with_prob(tmp_path, 0.90)
         ohlcv = _make_ohlcv(150)
-        with patch.object(layer, "_build_sequence", return_value=seq), \
-             patch.object(lsl, "LSTM_HIGH_CONF", 0.60), \
-             patch.object(lsl, "LSTM_ABSTAIN_LOW", 0.46), \
-             patch.object(lsl, "LSTM_ABSTAIN_HIGH", 0.54), \
-             patch.object(lsl, "_THRESHOLD_LONG", 0.54):
+        with (
+            patch.object(layer, "_build_sequence", return_value=seq),
+            patch.object(lsl, "LSTM_HIGH_CONF", 0.60),
+            patch.object(lsl, "LSTM_ABSTAIN_LOW", 0.46),
+            patch.object(lsl, "LSTM_ABSTAIN_HIGH", 0.54),
+            patch.object(lsl, "_THRESHOLD_LONG", 0.54),
+        ):
             result = layer.predict(ohlcv)
         assert result["high_confidence"] is True
 
@@ -257,6 +278,7 @@ class TestPredictDirections:
 
 
 # ── _build_sequence ───────────────────────────────────────────────────────────
+
 
 class TestBuildSequence:
     def test_returns_none_when_advanced_features_fails(self):
@@ -310,6 +332,7 @@ class TestBuildSequence:
 
 # ── stats / is_available ──────────────────────────────────────────────────────
 
+
 class TestStats:
     def test_stats_returns_expected_keys(self):
         layer = _fresh_layer()
@@ -340,11 +363,14 @@ class TestStats:
 
 # ── Singleton ─────────────────────────────────────────────────────────────────
 
+
 class TestSingleton:
     def test_get_lstm_signal_layer_returns_same_instance(self):
         import ml.lstm_signal_layer as lsl
+
         lsl._lstm_layer = None
         from ml.lstm_signal_layer import get_lstm_signal_layer, LSTMSignalLayer
+
         a = get_lstm_signal_layer()
         b = get_lstm_signal_layer()
         assert a is b

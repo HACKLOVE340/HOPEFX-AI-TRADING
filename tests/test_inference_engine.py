@@ -4,10 +4,10 @@
 Branch coverage for InferenceEngine: staleness, drift, nudge, predict, health.
 No real model files or network calls — all external dependencies are mocked.
 """
+
 from __future__ import annotations
 
 import time
-from collections import deque
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -21,6 +21,7 @@ from ml.inference_engine import InferenceEngine
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_ohlcv(n: int = 150, freq: str = "D") -> pd.DataFrame:
     """Daily OHLCV so daily_aggregator doesn't resample away bars."""
@@ -51,6 +52,7 @@ def engine() -> InferenceEngine:
 # _check_model_staleness
 # ---------------------------------------------------------------------------
 
+
 class TestCheckModelStaleness:
     def test_disabled_when_max_age_zero(self, engine, monkeypatch):
         monkeypatch.setattr(ie, "_MODEL_MAX_AGE_DAYS", 0.0)
@@ -70,6 +72,7 @@ class TestCheckModelStaleness:
 
     def test_old_file_returns_true(self, engine, tmp_path, monkeypatch):
         import os
+
         monkeypatch.setattr(ie, "_MODEL_MAX_AGE_DAYS", 0.001)
         monkeypatch.setattr(ie, "_SAVED", tmp_path)
         f = tmp_path / "advanced_oos.pkl"
@@ -82,6 +85,7 @@ class TestCheckModelStaleness:
 # ---------------------------------------------------------------------------
 # _check_feature_drift
 # ---------------------------------------------------------------------------
+
 
 class TestCheckFeatureDrift:
     def test_no_train_stats_returns_false(self, engine, monkeypatch):
@@ -117,9 +121,9 @@ class TestCheckFeatureDrift:
 # _get_data_layer_nudge
 # ---------------------------------------------------------------------------
 
+
 class TestDataLayerNudge:
-    def _mock_mod(self, blackout=0.0, confidence=0.9, sentiment=0.5,
-                  impact=0.0, ofi=0.3, pressure=0.2):
+    def _mock_mod(self, blackout=0.0, confidence=0.9, sentiment=0.5, impact=0.0, ofi=0.3, pressure=0.2):
         mock_tick = MagicMock()
         mock_tick.confidence = confidence
         mock_orch = MagicMock()
@@ -161,6 +165,7 @@ class TestDataLayerNudge:
 # predict
 # ---------------------------------------------------------------------------
 
+
 class TestPredict:
     def _patch_all(self, monkeypatch, engine, prob: float = 0.80):
         pred = MagicMock()
@@ -173,9 +178,7 @@ class TestPredict:
         engine._load_train_stats = lambda: None
 
         mock_features = MagicMock()
-        mock_features.build_extended_features_with_data_layer.return_value = (
-            _make_feature_df(), pd.Series([1])
-        )
+        mock_features.build_extended_features_with_data_layer.return_value = (_make_feature_df(), pd.Series([1]))
         monkeypatch.setitem(
             __import__("sys").modules,
             "ml.features_extended",
@@ -191,8 +194,10 @@ class TestPredict:
     def test_long_signal(self, engine, monkeypatch):
         self._patch_all(monkeypatch, engine, prob=0.80)
         result = engine.predict(
-            _make_ohlcv(150), symbol="XAU_USD",
-            threshold_long=0.58, threshold_short=0.42,
+            _make_ohlcv(150),
+            symbol="XAU_USD",
+            threshold_long=0.58,
+            threshold_short=0.42,
         )
         assert result["direction"] == "long"
         assert result["confidence"] > 0
@@ -200,16 +205,20 @@ class TestPredict:
     def test_short_signal(self, engine, monkeypatch):
         self._patch_all(monkeypatch, engine, prob=0.20)
         result = engine.predict(
-            _make_ohlcv(150), symbol="XAU_USD",
-            threshold_long=0.58, threshold_short=0.42,
+            _make_ohlcv(150),
+            symbol="XAU_USD",
+            threshold_long=0.58,
+            threshold_short=0.42,
         )
         assert result["direction"] == "short"
 
     def test_neutral_signal(self, engine, monkeypatch):
         self._patch_all(monkeypatch, engine, prob=0.50)
         result = engine.predict(
-            _make_ohlcv(150), symbol="XAU_USD",
-            threshold_long=0.58, threshold_short=0.42,
+            _make_ohlcv(150),
+            symbol="XAU_USD",
+            threshold_long=0.58,
+            threshold_short=0.42,
         )
         assert result["direction"] == "neutral"
 
@@ -235,15 +244,13 @@ class TestPredict:
         engine._get_predictor = lambda: no_pred
         engine._load_train_stats = lambda: None
         mock_features = MagicMock()
-        mock_features.build_extended_features_with_data_layer.return_value = (
-            _make_feature_df(), pd.Series([1])
-        )
-        monkeypatch.setitem(
-            __import__("sys").modules, "ml.features_extended", mock_features
-        )
+        mock_features.build_extended_features_with_data_layer.return_value = (_make_feature_df(), pd.Series([1]))
+        monkeypatch.setitem(__import__("sys").modules, "ml.features_extended", mock_features)
         result = engine.predict(
-            _make_ohlcv(150), symbol="XAU_USD",
-            threshold_long=0.58, threshold_short=0.42,
+            _make_ohlcv(150),
+            symbol="XAU_USD",
+            threshold_long=0.58,
+            threshold_short=0.42,
         )
         assert result["direction"] == "neutral"
 
@@ -259,14 +266,23 @@ class TestPredict:
     def test_result_keys_present(self, engine, monkeypatch):
         self._patch_all(monkeypatch, engine, prob=0.80)
         result = engine.predict(_make_ohlcv(150), symbol="XAU_USD")
-        for key in ("direction", "probability", "confidence", "model_version",
-                    "bars_used", "last_close", "latency_ms", "fallback"):
+        for key in (
+            "direction",
+            "probability",
+            "confidence",
+            "model_version",
+            "bars_used",
+            "last_close",
+            "latency_ms",
+            "fallback",
+        ):
             assert key in result
 
 
 # ---------------------------------------------------------------------------
 # health
 # ---------------------------------------------------------------------------
+
 
 class TestHealth:
     def test_ok_with_available_predictor(self, engine):
@@ -305,6 +321,5 @@ class TestHealth:
         no_pred.is_available = False
         engine._get_predictor = lambda: no_pred
         result = engine.health()
-        for key in ("status", "model_available", "predict_count",
-                    "fallback_rate", "threshold_long", "threshold_short"):
+        for key in ("status", "model_available", "predict_count", "fallback_rate", "threshold_long", "threshold_short"):
             assert key in result

@@ -9,14 +9,14 @@ brokers.paper_trading (which has a different API). We load __init__.py in
 isolation with a stub for brokers.paper_trading so the override is a no-op
 and we get the class that has _calculate_slippage / place_order.
 """
+
 from __future__ import annotations
 
-import asyncio
 import importlib.util
 import pathlib
 import sys
 from types import ModuleType
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -26,6 +26,7 @@ import pytest
 # no-op and we test the class actually defined in __init__.py.
 # ---------------------------------------------------------------------------
 
+
 def _load_init_module() -> ModuleType:
     fake_pt = ModuleType("brokers.paper_trading")
     fake_factory = ModuleType("brokers.factory")
@@ -34,10 +35,7 @@ def _load_init_module() -> ModuleType:
     fake_base.AccountInfo = object  # type: ignore[attr-defined]
     fake_base.BrokerConnector = object  # type: ignore[attr-defined]
 
-    saved = {
-        k: sys.modules.get(k)
-        for k in ("brokers.paper_trading", "brokers.factory", "brokers.base")
-    }
+    saved = {k: sys.modules.get(k) for k in ("brokers.paper_trading", "brokers.factory", "brokers.base")}
     sys.modules["brokers.paper_trading"] = fake_pt
     sys.modules["brokers.factory"] = fake_factory
     sys.modules["brokers.base"] = fake_base
@@ -72,6 +70,7 @@ BaseBroker = _mod.BaseBroker
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_broker(balance: float = 100_000.0, seed: int = 42) -> PaperTradingBroker:
     return PaperTradingBroker(initial_balance=balance, seed=seed)
 
@@ -89,6 +88,7 @@ def _make_price_feed(symbol: str = "XAUUSD", price: float = 2000.0):
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
+
 
 class TestEnums:
     def test_order_type_values(self):
@@ -113,9 +113,9 @@ class TestEnums:
 # Order dataclass
 # ---------------------------------------------------------------------------
 
+
 class TestOrder:
-    def _make(self, qty: float = 1.0, filled: float = 0.0,
-              status: OrderStatus = OrderStatus.PENDING) -> Order:
+    def _make(self, qty: float = 1.0, filled: float = 0.0, status: OrderStatus = OrderStatus.PENDING) -> Order:
         return Order(
             id="o1",
             symbol="XAUUSD",
@@ -152,9 +152,9 @@ class TestOrder:
 # Position dataclass
 # ---------------------------------------------------------------------------
 
+
 class TestPosition:
-    def _make(self, qty: float = 1.0, entry: float = 1900.0,
-              current: float = 1910.0) -> Position:
+    def _make(self, qty: float = 1.0, entry: float = 1900.0, current: float = 1910.0) -> Position:
         return Position(
             id="p1",
             symbol="XAUUSD",
@@ -175,8 +175,12 @@ class TestPosition:
 
     def test_unrealized_pnl_sell(self):
         p = Position(
-            id="p2", symbol="XAUUSD", side=OrderSide.SELL,
-            quantity=1.0, entry_price=1900.0, current_price=1900.0,
+            id="p2",
+            symbol="XAUUSD",
+            side=OrderSide.SELL,
+            quantity=1.0,
+            entry_price=1900.0,
+            current_price=1900.0,
         )
         p.update_price(1890.0)
         assert p.unrealized_pnl == pytest.approx(10.0)
@@ -189,14 +193,14 @@ class TestPosition:
 
     def test_to_dict_keys(self):
         d = self._make().to_dict()
-        for key in ("id", "symbol", "side", "quantity", "entry_price",
-                    "current_price", "unrealized_pnl"):
+        for key in ("id", "symbol", "side", "quantity", "entry_price", "current_price", "unrealized_pnl"):
             assert key in d
 
 
 # ---------------------------------------------------------------------------
 # PaperTradingBroker — sync place_order path
 # ---------------------------------------------------------------------------
+
 
 class TestPaperTradingBrokerSync:
     def test_initial_balance(self):
@@ -257,6 +261,7 @@ class TestPaperTradingBrokerSync:
 # PaperTradingBroker — _calculate_slippage
 # ---------------------------------------------------------------------------
 
+
 class TestCalculateSlippage:
     def test_no_slippage_model(self):
         b = PaperTradingBroker(slippage_model="none", seed=42)
@@ -276,7 +281,7 @@ class TestCalculateSlippage:
 
     def test_large_order_higher_slippage(self):
         b = PaperTradingBroker(slippage_model="gaussian", seed=0)
-        small = b._calculate_slippage("XAUUSD", 1.0, "buy")
+        b._calculate_slippage("XAUUSD", 1.0, "buy")
         b2 = PaperTradingBroker(slippage_model="gaussian", seed=0)
         large = b2._calculate_slippage("XAUUSD", 1_000_000.0, "buy")
         # Large orders should generally produce more slippage (not guaranteed
@@ -287,6 +292,7 @@ class TestCalculateSlippage:
 # ---------------------------------------------------------------------------
 # PaperTradingBroker — _simulate_fill_quantity
 # ---------------------------------------------------------------------------
+
 
 class TestSimulateFillQuantity:
     def test_small_order_fully_filled(self):
@@ -305,6 +311,7 @@ class TestSimulateFillQuantity:
 # ---------------------------------------------------------------------------
 # PaperTradingBroker — async API
 # ---------------------------------------------------------------------------
+
 
 class TestPaperTradingBrokerAsync:
     @pytest.mark.asyncio
@@ -325,8 +332,7 @@ class TestPaperTradingBrokerAsync:
         b = _make_broker()
         await b.connect()
         info = await b.get_account_info()
-        for key in ("balance", "equity", "margin_used", "free_margin",
-                    "unrealized_pnl", "open_positions"):
+        for key in ("balance", "equity", "margin_used", "free_margin", "unrealized_pnl", "open_positions"):
             assert key in info
 
     @pytest.mark.asyncio
@@ -398,6 +404,7 @@ class TestPaperTradingBrokerAsync:
 # ---------------------------------------------------------------------------
 # create_broker factory
 # ---------------------------------------------------------------------------
+
 
 class TestCreateBroker:
     def test_paper_broker(self):

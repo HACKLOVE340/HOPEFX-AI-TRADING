@@ -7,9 +7,6 @@ FIXAdapter is mocked — no FIX network required.
 
 from __future__ import annotations
 
-import sys
-import tempfile
-from dataclasses import replace
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 

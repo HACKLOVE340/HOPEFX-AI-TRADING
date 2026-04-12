@@ -13,17 +13,15 @@ from __future__ import annotations
 import asyncio
 import math
 import time
-import types
-import unittest.mock as mock
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _make_state(model_version: str = "v1", window: int = 50, min_trades: int = 20):
     """Return a fresh CircuitState with patched module-level constants."""
-    import ml.sharpe_circuit_breaker as scb
     from ml.sharpe_circuit_breaker import CircuitState
     import collections
 
@@ -35,9 +33,11 @@ def _make_state(model_version: str = "v1", window: int = 50, min_trades: int = 2
 
 # ── CircuitState.record ───────────────────────────────────────────────────────
 
+
 class TestCircuitStateRecord:
     def test_record_increments_total_trades(self):
         from ml.sharpe_circuit_breaker import CircuitState
+
         s = CircuitState(model_version="v1")
         s.record(10.0)
         s.record(-5.0)
@@ -45,12 +45,14 @@ class TestCircuitStateRecord:
 
     def test_record_appends_to_window(self):
         from ml.sharpe_circuit_breaker import CircuitState
+
         s = CircuitState(model_version="v1")
         s.record(3.0)
         assert list(s.pnl_window) == [3.0]
 
 
 # ── CircuitState.rolling_sharpe ───────────────────────────────────────────────
+
 
 class TestRollingSharpeBranches:
     """Exercise every branch in rolling_sharpe()."""
@@ -61,16 +63,20 @@ class TestRollingSharpeBranches:
 
     def test_returns_none_when_insufficient_trades(self):
         import ml.sharpe_circuit_breaker as scb
+
         with patch.object(scb, "MIN_TRADES", 20):
             from ml.sharpe_circuit_breaker import CircuitState
+
             s = CircuitState(model_version="v1")
             self._fill(s, [1.0] * 5)
             assert s.rolling_sharpe() is None
 
     def test_returns_float_when_enough_trades(self):
         import ml.sharpe_circuit_breaker as scb
+
         with patch.object(scb, "MIN_TRADES", 5):
             from ml.sharpe_circuit_breaker import CircuitState
+
             s = CircuitState(model_version="v1")
             self._fill(s, [1.0, 2.0, 3.0, 4.0, 5.0])
             result = s.rolling_sharpe()
@@ -78,8 +84,10 @@ class TestRollingSharpeBranches:
 
     def test_zero_std_positive_mean_returns_large_positive(self):
         import ml.sharpe_circuit_breaker as scb
+
         with patch.object(scb, "MIN_TRADES", 3), patch.object(scb, "ANNUALISE_FACTOR", math.sqrt(252)):
             from ml.sharpe_circuit_breaker import CircuitState
+
             s = CircuitState(model_version="v1")
             self._fill(s, [5.0, 5.0, 5.0])
             result = s.rolling_sharpe()
@@ -88,8 +96,10 @@ class TestRollingSharpeBranches:
 
     def test_zero_std_negative_mean_returns_large_negative(self):
         import ml.sharpe_circuit_breaker as scb
+
         with patch.object(scb, "MIN_TRADES", 3), patch.object(scb, "ANNUALISE_FACTOR", math.sqrt(252)):
             from ml.sharpe_circuit_breaker import CircuitState
+
             s = CircuitState(model_version="v1")
             self._fill(s, [-5.0, -5.0, -5.0])
             result = s.rolling_sharpe()
@@ -97,8 +107,10 @@ class TestRollingSharpeBranches:
 
     def test_zero_std_zero_mean_returns_zero(self):
         import ml.sharpe_circuit_breaker as scb
+
         with patch.object(scb, "MIN_TRADES", 3):
             from ml.sharpe_circuit_breaker import CircuitState
+
             s = CircuitState(model_version="v1")
             self._fill(s, [0.0, 0.0, 0.0])
             result = s.rolling_sharpe()
@@ -107,8 +119,10 @@ class TestRollingSharpeBranches:
     def test_normal_sharpe_calculation(self):
         import ml.sharpe_circuit_breaker as scb
         import numpy as np
+
         with patch.object(scb, "MIN_TRADES", 5), patch.object(scb, "ANNUALISE_FACTOR", 1.0):
             from ml.sharpe_circuit_breaker import CircuitState
+
             s = CircuitState(model_version="v1")
             values = [1.0, 2.0, 3.0, 4.0, 5.0]
             self._fill(s, values)
@@ -120,12 +134,15 @@ class TestRollingSharpeBranches:
 
 # ── SharpeCircuitBreaker public API ───────────────────────────────────────────
 
+
 class TestSharpeCircuitBreakerAPI:
     def _make_cb(self):
         import ml.sharpe_circuit_breaker as scb
+
         # Reset singleton so tests are isolated
         scb._sharpe_cb = None
         from ml.sharpe_circuit_breaker import SharpeCircuitBreaker
+
         return SharpeCircuitBreaker()
 
     def test_record_trade_creates_state(self):
@@ -159,6 +176,7 @@ class TestSharpeCircuitBreakerAPI:
 
     def test_auto_reset_after_elapsed_time(self):
         import ml.sharpe_circuit_breaker as scb
+
         cb = self._make_cb()
         cb.record_trade(1.0, "v1")
         state = cb._states["v1"]
@@ -176,6 +194,7 @@ class TestSharpeCircuitBreakerAPI:
 
     def test_no_auto_reset_when_reset_after_zero(self):
         import ml.sharpe_circuit_breaker as scb
+
         cb = self._make_cb()
         cb.record_trade(1.0, "v1")
         state = cb._states["v1"]
@@ -245,18 +264,22 @@ class TestSharpeCircuitBreakerAPI:
 
 # ── SharpeCircuitBreaker._evaluate_one ───────────────────────────────────────
 
+
 class TestEvaluateOne:
     """Async tests for the evaluation loop internals."""
 
     def _make_cb(self):
         import ml.sharpe_circuit_breaker as scb
+
         scb._sharpe_cb = None
         from ml.sharpe_circuit_breaker import SharpeCircuitBreaker
+
         return SharpeCircuitBreaker()
 
     @pytest.mark.asyncio
     async def test_evaluate_one_insufficient_trades_skips(self):
         import ml.sharpe_circuit_breaker as scb
+
         cb = self._make_cb()
         cb.record_trade(1.0, "v1")
         state = cb._states["v1"]
@@ -270,6 +293,7 @@ class TestEvaluateOne:
     @pytest.mark.asyncio
     async def test_evaluate_one_good_sharpe_resets_counter(self):
         import ml.sharpe_circuit_breaker as scb
+
         cb = self._make_cb()
         # Fill with positive PnL so Sharpe > MIN_SHARPE
         for _ in range(25):
@@ -285,14 +309,18 @@ class TestEvaluateOne:
     @pytest.mark.asyncio
     async def test_evaluate_one_bad_sharpe_increments_counter(self):
         import ml.sharpe_circuit_breaker as scb
+
         cb = self._make_cb()
         # Fill with negative PnL so Sharpe < 0
         for _ in range(25):
             cb.record_trade(-10.0, "v1")
         state = cb._states["v1"]
 
-        with patch.object(scb, "MIN_TRADES", 20), patch.object(scb, "MIN_SHARPE", 1.0), \
-             patch.object(scb, "CONSECUTIVE_WINDOWS", 5):
+        with (
+            patch.object(scb, "MIN_TRADES", 20),
+            patch.object(scb, "MIN_SHARPE", 1.0),
+            patch.object(scb, "CONSECUTIVE_WINDOWS", 5),
+        ):
             await cb._evaluate_one(state)
 
         assert state.consecutive_bad_windows == 1
@@ -301,16 +329,20 @@ class TestEvaluateOne:
     @pytest.mark.asyncio
     async def test_evaluate_one_trips_after_consecutive_windows(self):
         import ml.sharpe_circuit_breaker as scb
+
         cb = self._make_cb()
         for _ in range(25):
             cb.record_trade(-10.0, "v1")
         state = cb._states["v1"]
         state.consecutive_bad_windows = 2  # one more will trip
 
-        with patch.object(scb, "MIN_TRADES", 20), patch.object(scb, "MIN_SHARPE", 1.0), \
-             patch.object(scb, "CONSECUTIVE_WINDOWS", 3), \
-             patch.object(cb, "_fire_trip_event", return_value=None), \
-             patch.object(cb, "_retire_model", return_value=None) as mock_retire:
+        with (
+            patch.object(scb, "MIN_TRADES", 20),
+            patch.object(scb, "MIN_SHARPE", 1.0),
+            patch.object(scb, "CONSECUTIVE_WINDOWS", 3),
+            patch.object(cb, "_fire_trip_event", return_value=None),
+            patch.object(cb, "_retire_model", return_value=None),
+        ):
             await cb._evaluate_one(state)
 
         assert state.is_open is True
@@ -319,6 +351,7 @@ class TestEvaluateOne:
     @pytest.mark.asyncio
     async def test_evaluate_one_does_not_re_trip_open_circuit(self):
         import ml.sharpe_circuit_breaker as scb
+
         cb = self._make_cb()
         for _ in range(25):
             cb.record_trade(-10.0, "v1")
@@ -326,9 +359,12 @@ class TestEvaluateOne:
         state.is_open = True  # already open
         state.consecutive_bad_windows = 10
 
-        with patch.object(scb, "MIN_TRADES", 20), patch.object(scb, "MIN_SHARPE", 1.0), \
-             patch.object(scb, "CONSECUTIVE_WINDOWS", 3), \
-             patch.object(cb, "_trip") as mock_trip:
+        with (
+            patch.object(scb, "MIN_TRADES", 20),
+            patch.object(scb, "MIN_SHARPE", 1.0),
+            patch.object(scb, "CONSECUTIVE_WINDOWS", 3),
+            patch.object(cb, "_trip") as mock_trip,
+        ):
             await cb._evaluate_one(state)
 
         mock_trip.assert_not_called()
@@ -336,11 +372,14 @@ class TestEvaluateOne:
 
 # ── SharpeCircuitBreaker._trip ────────────────────────────────────────────────
 
+
 class TestTrip:
     def _make_cb(self):
         import ml.sharpe_circuit_breaker as scb
+
         scb._sharpe_cb = None
         from ml.sharpe_circuit_breaker import SharpeCircuitBreaker
+
         return SharpeCircuitBreaker()
 
     @pytest.mark.asyncio
@@ -349,8 +388,7 @@ class TestTrip:
         cb.record_trade(-1.0, "v1")
         state = cb._states["v1"]
 
-        with patch.object(cb, "_fire_trip_event"), \
-             patch.object(cb, "_retire_model", return_value=None):
+        with patch.object(cb, "_fire_trip_event"), patch.object(cb, "_retire_model", return_value=None):
             await cb._trip(state, -5.0)
 
         assert state.is_open is True
@@ -363,8 +401,10 @@ class TestTrip:
         cb.record_trade(-1.0, "v1")
         state = cb._states["v1"]
 
-        with patch.object(cb, "_fire_trip_event") as mock_fire, \
-             patch.object(cb, "_retire_model", return_value=None) as mock_retire:
+        with (
+            patch.object(cb, "_fire_trip_event") as mock_fire,
+            patch.object(cb, "_retire_model", return_value=None) as mock_retire,
+        ):
             await cb._trip(state, -2.0)
 
         mock_fire.assert_called_once_with(state)
@@ -373,11 +413,14 @@ class TestTrip:
 
 # ── _fire_trip_event ──────────────────────────────────────────────────────────
 
+
 class TestFireTripEvent:
     def _make_cb(self):
         import ml.sharpe_circuit_breaker as scb
+
         scb._sharpe_cb = None
         from ml.sharpe_circuit_breaker import SharpeCircuitBreaker
+
         return SharpeCircuitBreaker()
 
     def test_fire_trip_event_handles_outbox_import_error(self):
@@ -425,11 +468,14 @@ class TestFireTripEvent:
 
 # ── _retire_model ─────────────────────────────────────────────────────────────
 
+
 class TestRetireModel:
     def _make_cb(self):
         import ml.sharpe_circuit_breaker as scb
+
         scb._sharpe_cb = None
         from ml.sharpe_circuit_breaker import SharpeCircuitBreaker
+
         return SharpeCircuitBreaker()
 
     @pytest.mark.asyncio
@@ -437,11 +483,7 @@ class TestRetireModel:
         cb = self._make_cb()
 
         mock_registry = MagicMock()
-        mock_registry._load.return_value = {
-            "versions": {
-                "v1": {"state": "production"}
-            }
-        }
+        mock_registry._load.return_value = {"versions": {"v1": {"state": "production"}}}
         mock_get_registry = MagicMock(return_value=mock_registry)
 
         with patch.dict("sys.modules", {"ml.model_registry": MagicMock(get_registry=mock_get_registry)}):
@@ -456,11 +498,7 @@ class TestRetireModel:
         cb = self._make_cb()
 
         mock_registry = MagicMock()
-        mock_registry._load.return_value = {
-            "versions": {
-                "v1": {"state": "staging"}
-            }
-        }
+        mock_registry._load.return_value = {"versions": {"v1": {"state": "staging"}}}
         mock_get_registry = MagicMock(return_value=mock_registry)
 
         with patch.dict("sys.modules", {"ml.model_registry": MagicMock(get_registry=mock_get_registry)}):
@@ -478,24 +516,27 @@ class TestRetireModel:
 
 # ── run() loop ────────────────────────────────────────────────────────────────
 
+
 class TestRunLoop:
     def _make_cb(self):
         import ml.sharpe_circuit_breaker as scb
+
         scb._sharpe_cb = None
         from ml.sharpe_circuit_breaker import SharpeCircuitBreaker
+
         return SharpeCircuitBreaker()
 
     @pytest.mark.asyncio
     async def test_run_stops_on_cancel(self):
         import ml.sharpe_circuit_breaker as scb
+
         cb = self._make_cb()
 
         # _evaluate_all raises CancelledError on first call, simulating task cancellation
         async def cancel_on_eval():
             raise asyncio.CancelledError()
 
-        with patch.object(cb, "_evaluate_all", side_effect=cancel_on_eval), \
-             patch.object(scb, "EVAL_INTERVAL_S", 0.001):
+        with patch.object(cb, "_evaluate_all", side_effect=cancel_on_eval), patch.object(scb, "EVAL_INTERVAL_S", 0.001):
             await cb.run()
 
         # run() returns cleanly after CancelledError
@@ -504,6 +545,7 @@ class TestRunLoop:
     @pytest.mark.asyncio
     async def test_run_handles_evaluation_exception(self):
         import ml.sharpe_circuit_breaker as scb
+
         cb = self._make_cb()
         call_count = 0
 
@@ -519,9 +561,11 @@ class TestRunLoop:
         async def fast_sleep(_):
             return
 
-        with patch.object(cb, "_evaluate_all", side_effect=boom), \
-             patch("asyncio.sleep", side_effect=fast_sleep), \
-             patch.object(scb, "EVAL_INTERVAL_S", 0.001):
+        with (
+            patch.object(cb, "_evaluate_all", side_effect=boom),
+            patch("asyncio.sleep", side_effect=fast_sleep),
+            patch.object(scb, "EVAL_INTERVAL_S", 0.001),
+        ):
             await cb.run()
 
         assert call_count >= 1
@@ -529,11 +573,14 @@ class TestRunLoop:
 
 # ── _evaluate_all ─────────────────────────────────────────────────────────────
 
+
 class TestEvaluateAll:
     def _make_cb(self):
         import ml.sharpe_circuit_breaker as scb
+
         scb._sharpe_cb = None
         from ml.sharpe_circuit_breaker import SharpeCircuitBreaker
+
         return SharpeCircuitBreaker()
 
     @pytest.mark.asyncio
@@ -555,18 +602,23 @@ class TestEvaluateAll:
 
 # ── Singleton ─────────────────────────────────────────────────────────────────
 
+
 class TestSingleton:
     def test_get_sharpe_cb_returns_same_instance(self):
         import ml.sharpe_circuit_breaker as scb
+
         scb._sharpe_cb = None  # reset
         from ml.sharpe_circuit_breaker import get_sharpe_cb
+
         a = get_sharpe_cb()
         b = get_sharpe_cb()
         assert a is b
 
     def test_get_sharpe_cb_creates_instance_on_first_call(self):
         import ml.sharpe_circuit_breaker as scb
+
         scb._sharpe_cb = None
         from ml.sharpe_circuit_breaker import get_sharpe_cb, SharpeCircuitBreaker
+
         cb = get_sharpe_cb()
         assert isinstance(cb, SharpeCircuitBreaker)

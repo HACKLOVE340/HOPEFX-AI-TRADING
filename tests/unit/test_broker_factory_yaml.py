@@ -11,7 +11,6 @@ create_broker() edge cases, list_brokers(), and get_broker_info().
 from __future__ import annotations
 
 import os
-import textwrap
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -21,9 +20,11 @@ import yaml
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _fresh_factory():
     """Return BrokerFactory with a clean broker registry."""
     from brokers.factory import BrokerFactory
+
     BrokerFactory._brokers = {}
     return BrokerFactory
 
@@ -36,15 +37,18 @@ def _write_yaml(tmp_path: Path, content: dict) -> Path:
 
 # ── _load_yaml_config ─────────────────────────────────────────────────────────
 
+
 class TestLoadYamlConfig:
     def test_returns_none_when_file_missing(self, tmp_path):
         from brokers.factory import BrokerFactory
+
         result = BrokerFactory._load_yaml_config(str(tmp_path / "nonexistent.yaml"))
         assert result is None
 
     def test_returns_dict_when_file_exists(self, tmp_path):
         p = _write_yaml(tmp_path, {"brokers": {"default": "paper"}})
         from brokers.factory import BrokerFactory
+
         result = BrokerFactory._load_yaml_config(str(p))
         assert isinstance(result, dict)
         assert result["brokers"]["default"] == "paper"
@@ -53,6 +57,7 @@ class TestLoadYamlConfig:
         p = tmp_path / "empty.yaml"
         p.write_text("")
         from brokers.factory import BrokerFactory
+
         result = BrokerFactory._load_yaml_config(str(p))
         # yaml.safe_load("") returns None
         assert result is None
@@ -60,9 +65,11 @@ class TestLoadYamlConfig:
 
 # ── get_broker_from_yaml — missing / bad config ───────────────────────────────
 
+
 class TestGetBrokerFromYamlErrors:
     def test_returns_none_when_config_file_missing(self, tmp_path):
         from brokers.factory import BrokerFactory
+
         result = BrokerFactory.get_broker_from_yaml(
             name="any",
             config_path=str(tmp_path / "missing.yaml"),
@@ -72,6 +79,7 @@ class TestGetBrokerFromYamlErrors:
     def test_returns_none_when_broker_name_not_in_yaml(self, tmp_path):
         p = _write_yaml(tmp_path, {"brokers": {"default": "paper"}})
         from brokers.factory import BrokerFactory
+
         result = BrokerFactory.get_broker_from_yaml(
             name="nonexistent_profile",
             config_path=str(p),
@@ -79,13 +87,17 @@ class TestGetBrokerFromYamlErrors:
         assert result is None
 
     def test_returns_none_for_unsupported_broker_type(self, tmp_path):
-        p = _write_yaml(tmp_path, {
-            "brokers": {
-                "default": "exotic",
-                "exotic": {"type": "exotic_broker"},
-            }
-        })
+        p = _write_yaml(
+            tmp_path,
+            {
+                "brokers": {
+                    "default": "exotic",
+                    "exotic": {"type": "exotic_broker"},
+                }
+            },
+        )
         from brokers.factory import BrokerFactory
+
         result = BrokerFactory.get_broker_from_yaml(
             name="exotic",
             config_path=str(p),
@@ -93,13 +105,17 @@ class TestGetBrokerFromYamlErrors:
         assert result is None
 
     def test_uses_env_broker_when_name_is_none(self, tmp_path):
-        p = _write_yaml(tmp_path, {
-            "brokers": {
-                "default": "paper_profile",
-                "paper_profile": {"type": "unsupported_xyz"},
-            }
-        })
+        p = _write_yaml(
+            tmp_path,
+            {
+                "brokers": {
+                    "default": "paper_profile",
+                    "paper_profile": {"type": "unsupported_xyz"},
+                }
+            },
+        )
         from brokers.factory import BrokerFactory
+
         with patch.dict(os.environ, {"BROKER": "paper_profile"}):
             result = BrokerFactory.get_broker_from_yaml(
                 name=None,
@@ -109,13 +125,17 @@ class TestGetBrokerFromYamlErrors:
         assert result is None
 
     def test_uses_yaml_default_when_name_and_env_absent(self, tmp_path):
-        p = _write_yaml(tmp_path, {
-            "brokers": {
-                "default": "my_default",
-                "my_default": {"type": "unsupported_xyz"},
-            }
-        })
+        p = _write_yaml(
+            tmp_path,
+            {
+                "brokers": {
+                    "default": "my_default",
+                    "my_default": {"type": "unsupported_xyz"},
+                }
+            },
+        )
         from brokers.factory import BrokerFactory
+
         env = {k: v for k, v in os.environ.items() if k != "BROKER"}
         with patch.dict(os.environ, env, clear=True):
             result = BrokerFactory.get_broker_from_yaml(
@@ -127,16 +147,20 @@ class TestGetBrokerFromYamlErrors:
 
 # ── get_broker_from_yaml — type dispatch ──────────────────────────────────────
 
+
 class TestGetBrokerFromYamlTypeDispatch:
     """Each broker type (mt5, oanda, ibkr) is dispatched to the right class."""
 
     def _yaml_with_type(self, tmp_path, broker_type):
-        return _write_yaml(tmp_path, {
-            "brokers": {
-                "default": "profile",
-                "profile": {"type": broker_type, "host": "localhost"},
-            }
-        })
+        return _write_yaml(
+            tmp_path,
+            {
+                "brokers": {
+                    "default": "profile",
+                    "profile": {"type": broker_type, "host": "localhost"},
+                }
+            },
+        )
 
     def test_mt5_type_creates_mt5_broker(self, tmp_path):
         p = self._yaml_with_type(tmp_path, "mt5")
@@ -145,6 +169,7 @@ class TestGetBrokerFromYamlTypeDispatch:
         mock_module = MagicMock(MT5Broker=mock_mt5_class)
 
         from brokers.factory import BrokerFactory
+
         with patch.dict("sys.modules", {"brokers.mt5_broker": mock_module}):
             result = BrokerFactory.get_broker_from_yaml(name="profile", config_path=str(p))
 
@@ -158,6 +183,7 @@ class TestGetBrokerFromYamlTypeDispatch:
         mock_module = MagicMock(OandaBroker=mock_oanda_class)
 
         from brokers.factory import BrokerFactory
+
         with patch.dict("sys.modules", {"brokers.oanda_broker": mock_module}):
             result = BrokerFactory.get_broker_from_yaml(name="profile", config_path=str(p))
 
@@ -171,6 +197,7 @@ class TestGetBrokerFromYamlTypeDispatch:
         mock_module = MagicMock(IBKRBroker=mock_ibkr_class)
 
         from brokers.factory import BrokerFactory
+
         with patch.dict("sys.modules", {"brokers.ibkr_broker": mock_module}):
             result = BrokerFactory.get_broker_from_yaml(name="profile", config_path=str(p))
 
@@ -189,6 +216,7 @@ class TestGetBrokerFromYamlTypeDispatch:
 
 
 # ── create_broker ─────────────────────────────────────────────────────────────
+
 
 class TestCreateBroker:
     def _mock_broker_class(self):
@@ -241,6 +269,7 @@ class TestCreateBroker:
 
 # ── register_broker ───────────────────────────────────────────────────────────
 
+
 class TestRegisterBroker:
     def test_register_broker_stores_class(self):
         factory = _fresh_factory()
@@ -283,6 +312,7 @@ class TestRegisterBroker:
 
 # ── list_brokers / get_broker_info ────────────────────────────────────────────
 
+
 class TestListAndInfo:
     def test_list_brokers_returns_list(self):
         factory = _fresh_factory()
@@ -314,6 +344,7 @@ class TestListAndInfo:
 
 
 # ── _ensure_registered lazy loading ──────────────────────────────────────────
+
 
 class TestEnsureRegistered:
     def test_ensure_registered_is_idempotent(self):
