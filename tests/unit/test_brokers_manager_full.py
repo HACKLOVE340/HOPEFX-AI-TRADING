@@ -8,7 +8,7 @@ Targets the 75% → 90%+ branch coverage gap.
 from __future__ import annotations
 
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -378,10 +378,7 @@ class TestPlaceOrderFix:
         mgr, _ = _manager_with_broker()
         mock_fix = MagicMock()
         mock_fix._started = True
-        mock_fix.place_order = MagicMock(return_value={"status": "ok"})
-        # Make it awaitable
-        import asyncio
-        mock_fix.place_order = MagicMock(return_value=asyncio.coroutine(lambda *a: {"status": "ok"})())
+        mock_fix.place_order = AsyncMock(return_value={"status": "ok"})
         mgr._fix_bridge = mock_fix
 
         result = await mgr.place_order_fix(MagicMock())
