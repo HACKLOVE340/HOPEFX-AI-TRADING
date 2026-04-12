@@ -842,49 +842,63 @@ class TestGeopoliticalRiskProvider:
         provider = GeopoliticalRiskProvider()
         assert provider is not None
 
-    def test_get_current_events_returns_list(self):
+    @pytest.mark.asyncio
+    async def test_get_current_events_returns_list(self):
         """get_current_events returns a list."""
+        import os
+        os.environ.setdefault("HOPEFX_CI", "1")
         from news import GeopoliticalRiskProvider
 
         provider = GeopoliticalRiskProvider()
-        events = provider.get_current_events()
+        events = await provider.get_current_events()
         assert isinstance(events, list)
 
-    def test_get_risk_assessment_returns_assessment(self):
+    @pytest.mark.asyncio
+    async def test_get_risk_assessment_returns_assessment(self):
         """get_risk_assessment returns a GeopoliticalRiskAssessment."""
+        import os
+        os.environ.setdefault("HOPEFX_CI", "1")
         from news import GeopoliticalRiskAssessment, GeopoliticalRiskProvider
 
         provider = GeopoliticalRiskProvider()
-        assessment = provider.get_risk_assessment()
+        assessment = await provider.get_risk_assessment()
         assert isinstance(assessment, GeopoliticalRiskAssessment)
 
-    def test_risk_assessment_has_required_fields(self):
+    @pytest.mark.asyncio
+    async def test_risk_assessment_has_required_fields(self):
         """Risk assessment has all required fields."""
+        import os
+        os.environ.setdefault("HOPEFX_CI", "1")
         from news import GeopoliticalRiskProvider
 
         provider = GeopoliticalRiskProvider()
-        assessment = provider.get_risk_assessment()
+        assessment = await provider.get_risk_assessment()
         data = assessment.to_dict()
         for field in ["global_risk_score", "gold_outlook", "trading_recommendations"]:
             assert field in data, f"Missing field: {field}"
 
-    def test_get_gold_trading_signal_structure(self):
+    @pytest.mark.asyncio
+    async def test_get_gold_trading_signal_structure(self):
         """get_gold_trading_signal returns expected keys."""
+        import os
+        os.environ.setdefault("HOPEFX_CI", "1")
         from news import GeopoliticalRiskProvider
 
         provider = GeopoliticalRiskProvider()
-        signal = provider.get_gold_trading_signal()
+        signal = await provider.get_gold_trading_signal()
         assert isinstance(signal, dict)
         assert "direction" in signal
         assert "confidence" in signal
 
-    def test_gold_trading_signal_direction_valid(self):
+    @pytest.mark.asyncio
+    async def test_gold_trading_signal_direction_valid(self):
         """Signal direction is one of the normalized uppercase values: BUY, SELL, HOLD."""
+        import os
+        os.environ.setdefault("HOPEFX_CI", "1")
         from news import GeopoliticalRiskProvider
 
         provider = GeopoliticalRiskProvider()
-        signal = provider.get_gold_trading_signal()
-        # The provider always returns uppercase; normalize defensively just in case.
+        signal = await provider.get_gold_trading_signal()
         direction = signal["direction"].upper()
         assert direction in ("BUY", "SELL", "HOLD")
 

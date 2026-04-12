@@ -54,6 +54,7 @@ from data_layer.feeds.news.newsapi import NewsAPIFeed
 from data_layer.feeds.news.newsdata import NewsDataFeed
 from data_layer.sentiment.scorer import GoldSentimentScorer, gold_sentiment_scorer
 from data_layer.types import NewsArticle, NewsSource
+from news.geopolitical_risk import GeopoliticalRiskProvider
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +107,8 @@ class NewsSentimentEngine:
         self._redis = None
         self._lineage = None
         self._lock = asyncio.Lock()
+        # Geopolitical risk provider — runs its own async background poll loop
+        self._geo_provider: GeopoliticalRiskProvider = GeopoliticalRiskProvider()
         self._article_count: int = 0
         self._last_fetch_at: dict[NewsSource, float] = {}
         # Cross-feed deduplication: URL fingerprint → ingested_at epoch.
@@ -164,15 +167,17 @@ class NewsSentimentEngine:
                 "FINNHUB_API_KEY, FMP_API_KEY, NEWSDATA_IO_KEY, "
                 "ALPHA_VANTAGE_KEY, NEWSAPI_ORG_KEY"
             )
-            return
+        else:
+            for src, feed in configured:
+                task = asyncio.create_task(
+                    self._poll_loop(src, feed),
+                    name=f"news_feed_{src.value}",
+                )
+                self._tasks.append(task)
+                logger.info("NewsSentimentEngine: started feed %s", src.value)
 
-        for src, feed in configured:
-            task = asyncio.create_task(
-                self._poll_loop(src, feed),
-                name=f"news_feed_{src.value}",
-            )
-            self._tasks.append(task)
-            logger.info("NewsSentimentEngine: started feed %s", src.value)
+        # Start geopolitical risk background poll (non-blocking async loop)
+        await self._geo_provider.start()
 
     async def stop(self) -> None:
         self._running = False
@@ -182,6 +187,8 @@ class NewsSentimentEngine:
         self._tasks.clear()
         for feed in self._feeds.values():
             await feed.close()
+        # Stop geopolitical risk background poll
+        await self._geo_provider.stop()
 
     # ── Polling loop ──────────────────────────────────────────────────────────
 
@@ -438,7 +445,22 @@ class NewsSentimentEngine:
         self._article_count = 0
         logger.info("NewsSentimentEngine: in-memory cache flushed")
 
+    def get_geopolitical_risk_score(self) -> float:
+        """
+        Return the latest cached geopolitical global risk score [0, 100].
+
+        Served from the background-poll cache — never blocks the event loop.
+        Returns 20.0 (baseline) when no events have been fetched yet.
+        """
+        cached_events = self._geo_provider._cache.get("events", [])
+        if not cached_events:
+            return 20.0
+        # Reuse the provider's scoring logic on the cached events
+        return self._geo_provider._calculate_global_risk(cached_events)
+
     def health(self) -> dict[str, Any]:
+        geo_events = len(self._geo_provider._cache.get("events", []))
+        geo_ts = self._geo_provider._cache_timestamp
         return {
             "running": self._running,
             "article_count": self._article_count,
@@ -446,6 +468,14 @@ class NewsSentimentEngine:
             "active_feeds": [src.value for src, feed in self._feeds.items() if feed.is_configured],
             "last_fetch": {src.value: round(time.time() - ts, 1) for src, ts in self._last_fetch_at.items()},
             "feed_health": {src.value: feed.health_summary() for src, feed in self._feeds.items()},
+            "geopolitical": {
+                "running": self._geo_provider._running,
+                "cached_events": geo_events,
+                "cache_age_s": round(
+                    (datetime.now(UTC) - geo_ts).total_seconds(), 1
+                ) if geo_ts else None,
+                "risk_score": self.get_geopolitical_risk_score(),
+            },
         }
 
     # ── Internal helpers ──────────────────────────────────────────────────────

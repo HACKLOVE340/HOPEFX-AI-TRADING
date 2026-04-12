@@ -38,8 +38,12 @@ This module is particularly valuable for XAU/USD (Gold) trading since:
 Author: HOPEFX Development Team
 """
 
+import asyncio
+import contextlib
 import json
 import logging
+import os
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
@@ -47,7 +51,7 @@ UTC = timezone.utc
 from enum import Enum
 from typing import Any
 
-import requests
+import aiohttp
 
 logger = logging.getLogger(__name__)
 
@@ -332,6 +336,7 @@ class GeopoliticalRiskProvider:
                 - data_layers: List of layers to monitor
                 - time_range: Time range for events (e.g., '7d')
                 - cache_ttl: Cache time-to-live in seconds
+                - poll_interval: Background poll interval in seconds (default 300)
         """
         self.config = config or {}
 
@@ -339,6 +344,7 @@ class GeopoliticalRiskProvider:
         self.base_url = self.config.get("api_endpoint", "https://worldmonitor.app")
         self.time_range = self.config.get("time_range", "7d")
         self.cache_ttl = self.config.get("cache_ttl", 300)  # 5 minutes
+        self._poll_interval: float = float(self.config.get("poll_interval", 300))
 
         # Layers to monitor (from the URL provided)
         self.data_layers = self.config.get(
@@ -347,95 +353,119 @@ class GeopoliticalRiskProvider:
         )
 
         # Cache for events
-        self._cache = {}
-        self._cache_timestamp = None
+        self._cache: dict = {}
+        self._cache_timestamp: datetime | None = None
 
         # Historical events for trend analysis
-        self.event_history = []
+        self.event_history: list[GeopoliticalEvent] = []
+
+        # Background polling task
+        self._poll_task: asyncio.Task | None = None
+        self._running: bool = False
 
         logger.info("GeopoliticalRiskProvider initialized with layers: %s", self.data_layers)
 
-    def get_current_events(self, force_refresh: bool = False) -> list[GeopoliticalEvent]:
+    # ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    async def start(self) -> None:
+        """Start the background polling loop."""
+        if self._running:
+            return
+        self._running = True
+        self._poll_task = asyncio.create_task(
+            self._poll_loop(), name="geopolitical_risk_poll"
+        )
+        logger.info(
+            "GeopoliticalRiskProvider: background poll started (interval=%.0fs)",
+            self._poll_interval,
+        )
+
+    async def stop(self) -> None:
+        """Cancel the background polling loop."""
+        self._running = False
+        if self._poll_task and not self._poll_task.done():
+            self._poll_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._poll_task
+        self._poll_task = None
+        logger.info("GeopoliticalRiskProvider: background poll stopped")
+
+    async def _poll_loop(self) -> None:
+        """Continuously refresh geopolitical events in the background."""
+        # Stagger startup by 10 s so it doesn't race with other feed startups
+        await asyncio.sleep(10)
+        while self._running:
+            t0 = time.monotonic()
+            try:
+                await self._refresh_cache()
+            except asyncio.CancelledError:
+                break
+            except Exception as exc:
+                logger.warning("GeopoliticalRiskProvider poll error: %s", exc)
+            elapsed = time.monotonic() - t0
+            await asyncio.sleep(max(1.0, self._poll_interval - elapsed))
+
+    async def _refresh_cache(self) -> None:
+        """Fetch fresh events and update the internal cache. Called by the poll loop."""
+        if os.getenv("HOPEFX_CI") or os.getenv("ENVIRONMENT", "").lower() in (
+            "testing",
+            "test",
+            "ci",
+        ):
+            return
+
+        try:
+            events = await self._fetch_events_from_source()
+            for event in events:
+                event.gold_impact = self._assess_gold_impact(event)
+                event.risk_score = self._calculate_risk_score(event)
+                event.affected_currencies = self._get_affected_currencies(event)
+
+            self._cache["events"] = events
+            self._cache_timestamp = datetime.now(UTC)
+
+            cutoff = datetime.now(UTC) - timedelta(days=7)
+            self.event_history.extend(events)
+            self.event_history = [e for e in self.event_history if e.timestamp > cutoff]
+
+            logger.debug(
+                "GeopoliticalRiskProvider: cache refreshed with %d events", len(events)
+            )
+        except Exception as exc:
+            logger.error("GeopoliticalRiskProvider: cache refresh failed: %s", exc)
+
+    async def get_current_events(self, force_refresh: bool = False) -> list[GeopoliticalEvent]:
         """
-        Get current geopolitical events.
+        Return current geopolitical events.
 
-        Args:
-            force_refresh: Force refresh from source, ignoring cache
-
-        Returns:
-            List of GeopoliticalEvent objects
+        Normally served from the cache populated by the background poll loop.
+        Pass force_refresh=True to trigger an immediate async fetch.
         """
-        import os as _os
-
-        # Check cache validity
         if not force_refresh and self._is_cache_valid():
             return self._cache.get("events", [])
 
-        # In CI / test environments skip live network fetch — return empty list
-        # so tests that verify the return type pass without network access.
-        if _os.getenv("HOPEFX_CI") or _os.getenv("ENVIRONMENT", "").lower() in (
+        if os.getenv("HOPEFX_CI") or os.getenv("ENVIRONMENT", "").lower() in (
             "testing",
             "test",
             "ci",
         ):
             return self._cache.get("events", [])
 
-        events = []
+        await self._refresh_cache()
+        return self._cache.get("events", [])
 
-        try:
-            events = self._fetch_events_from_source()
+    async def get_risk_assessment(self) -> GeopoliticalRiskAssessment:
+        """Return a comprehensive geopolitical risk assessment."""
+        events = await self.get_current_events()
 
-            # Assess gold impact for each event
-            for event in events:
-                event.gold_impact = self._assess_gold_impact(event)
-                event.risk_score = self._calculate_risk_score(event)
-                event.affected_currencies = self._get_affected_currencies(event)
-
-            # Update cache
-            self._cache["events"] = events
-            self._cache_timestamp = datetime.now(UTC)
-
-            # Store in history
-            self.event_history.extend(events)
-            # Keep only last 7 days
-            cutoff = datetime.now(UTC) - timedelta(days=7)
-            self.event_history = [e for e in self.event_history if e.timestamp > cutoff]
-
-        except Exception as e:
-            logger.error("Error fetching geopolitical events: %s", e)
-
-            # Return cached data if available
-            events = self._cache.get("events", [])
-
-        return events
-
-    def get_risk_assessment(self) -> GeopoliticalRiskAssessment:
-        """
-        Get comprehensive geopolitical risk assessment.
-
-        Returns:
-            GeopoliticalRiskAssessment with all risk metrics
-        """
-        events = self.get_current_events()
-
-        # Count event types
         conflicts = [e for e in events if e.event_type == GeopoliticalEventType.CONFLICT]
         sanctions = [e for e in events if e.event_type == GeopoliticalEventType.SANCTIONS]
         hotspots = [e for e in events if e.event_type == GeopoliticalEventType.HOTSPOT]
 
-        # Calculate global risk score
         global_risk = self._calculate_global_risk(events)
-
-        # Determine gold outlook
         gold_outlook = self._determine_gold_outlook(events, global_risk)
-
-        # Get high-risk regions
         high_risk_regions = self._identify_high_risk_regions(events)
-
-        # Get country risks
         country_risks = self._get_country_risks(events)
-
-        # Generate trading recommendations
         recommendations = self._generate_trading_recommendations(events, global_risk, gold_outlook)
 
         return GeopoliticalRiskAssessment(
@@ -445,21 +475,15 @@ class GeopoliticalRiskProvider:
             sanctions_count=len(sanctions),
             hotspots=len(hotspots),
             high_risk_regions=high_risk_regions,
-            key_events=events[:10],  # Top 10 events
+            key_events=events[:10],
             country_risks=country_risks,
             trading_recommendations=recommendations,
         )
 
-    def get_gold_trading_signal(self) -> dict[str, Any]:
-        """
-        Get geopolitical-based gold trading signal.
+    async def get_gold_trading_signal(self) -> dict[str, Any]:
+        """Return a geopolitical-based gold trading signal."""
+        assessment = await self.get_risk_assessment()
 
-        Returns:
-            Trading signal with direction and confidence
-        """
-        assessment = self.get_risk_assessment()
-
-        # Map gold outlook to signal
         signal_map = {
             GoldImpact.STRONGLY_BULLISH: {"direction": "BUY", "strength": 1.0},
             GoldImpact.BULLISH: {"direction": "BUY", "strength": 0.7},
@@ -469,8 +493,6 @@ class GeopoliticalRiskProvider:
         }
 
         signal_info = signal_map.get(assessment.gold_outlook, {"direction": "HOLD", "strength": 0.5})
-
-        # Calculate confidence based on data quality
         confidence = self._calculate_signal_confidence(assessment)
 
         return {
@@ -486,9 +508,9 @@ class GeopoliticalRiskProvider:
             "timestamp": datetime.now(UTC).isoformat(),
         }
 
-    def _fetch_events_from_source(self) -> list[GeopoliticalEvent]:
+    async def _fetch_events_from_source(self) -> list[GeopoliticalEvent]:
         """
-        Fetch live events from the World Monitor API.
+        Fetch live events from the World Monitor API using aiohttp (non-blocking).
 
         Calls the World Monitor GeoJSON endpoint for each configured data layer
         and maps each feature to a GeopoliticalEvent.  The endpoint returns
@@ -501,48 +523,53 @@ class GeopoliticalRiskProvider:
             geometry.coordinates   — [lon, lat] (optional)
 
         Configuration keys (passed via __init__ config dict):
-            api_endpoint  : base URL, default "https://worldmonitor.app"
-            api_key       : Bearer token (env var WORLDMONITOR_API_KEY)
-            time_range    : lookback window, default "7d"
+            api_endpoint   : base URL, default "https://worldmonitor.app"
+            api_key        : Bearer token (env var WORLDMONITOR_API_KEY)
+            time_range     : lookback window, default "7d"
             request_timeout: HTTP timeout in seconds, default 15
 
         Raises RuntimeError in APP_ENV=production when the API is unreachable
         and no cached events are available.
         """
-        import os as _os
-
-        api_key = self.config.get("api_key") or _os.getenv("WORLDMONITOR_API_KEY", "")
-        timeout = int(self.config.get("request_timeout", 15))
-        _is_production = _os.getenv("APP_ENV", "production").lower() == "production"
+        api_key = self.config.get("api_key") or os.getenv("WORLDMONITOR_API_KEY", "")
+        timeout_s = int(self.config.get("request_timeout", 15))
+        _is_production = os.getenv("APP_ENV", "production").lower() == "production"
 
         headers: dict[str, str] = {"Accept": "application/json"}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
 
-        events: list[GeopoliticalEvent] = field(default_factory=list)
-        fetch_errors: list[str] = field(default_factory=list)
+        timeout = aiohttp.ClientTimeout(total=timeout_s)
+        events: list[GeopoliticalEvent] = []
+        fetch_errors: list[str] = []
 
-        for layer in self.data_layers:
-            url = f"{self.base_url}/api/v1/events?layer={layer}&range={self.time_range}&format=geojson"
-            try:
-                resp = requests.get(url, headers=headers, timeout=timeout)
-                resp.raise_for_status()
-                data = resp.json()
-                layer_events = self._parse_geojson_features(data.get("features", []), layer)
-                events.extend(layer_events)
-                logger.debug(
-                    "World Monitor layer=%s returned %d features",
-                    layer,
-                    len(layer_events),
+        async with aiohttp.ClientSession(headers=headers, timeout=timeout) as session:
+            for layer in self.data_layers:
+                url = (
+                    f"{self.base_url}/api/v1/events"
+                    f"?layer={layer}&range={self.time_range}&format=geojson"
                 )
-            except requests.exceptions.HTTPError as exc:
-                msg = f"layer={layer} HTTP {exc.response.status_code}: {exc}"
-                logger.warning("World Monitor fetch error: %s", msg)
-                fetch_errors.append(msg)
-            except requests.exceptions.RequestException as exc:
-                msg = f"layer={layer} network error: {exc}"
-                logger.warning("World Monitor fetch error: %s", msg)
-                fetch_errors.append(msg)
+                try:
+                    async with session.get(url) as resp:
+                        if resp.status >= 400:
+                            msg = f"layer={layer} HTTP {resp.status}"
+                            logger.warning("World Monitor fetch error: %s", msg)
+                            fetch_errors.append(msg)
+                            continue
+                        data = await resp.json(content_type=None)
+                        layer_events = self._parse_geojson_features(
+                            data.get("features", []), layer
+                        )
+                        events.extend(layer_events)
+                        logger.debug(
+                            "World Monitor layer=%s returned %d features",
+                            layer,
+                            len(layer_events),
+                        )
+                except aiohttp.ClientError as exc:
+                    msg = f"layer={layer} network error: {exc}"
+                    logger.warning("World Monitor fetch error: %s", msg)
+                    fetch_errors.append(msg)
 
         if not events and fetch_errors:
             cached = self._cache.get("events", [])
@@ -554,7 +581,7 @@ class GeopoliticalRiskProvider:
                 )
                 return cached
             # Secondary fallback: GDELT GKG (free, no API key required)
-            gdelt_events = self._fetch_events_from_gdelt()
+            gdelt_events = await self._fetch_events_from_gdelt()
             if gdelt_events:
                 logger.info(
                     "World Monitor unavailable — using %d events from GDELT fallback",
@@ -576,19 +603,16 @@ class GeopoliticalRiskProvider:
         logger.info("Fetched %d geopolitical events from World Monitor", len(events))
         return events
 
-    def _fetch_events_from_gdelt(self) -> list[GeopoliticalEvent]:
+    async def _fetch_events_from_gdelt(self) -> list[GeopoliticalEvent]:
         """
-        Fetch geopolitical events from the GDELT Project GKG API.
+        Fetch geopolitical events from the GDELT Project GKG API using aiohttp.
 
         Uses the GDELT 2.0 Event Database query API (free, no key required).
         Filters for conflict/crisis themes relevant to gold trading.
 
         Reference: https://blog.gdeltproject.org/gdelt-2-0-our-global-world-in-realtime/
         """
-
-        timeout = int(self.config.get("request_timeout", 15))
-        # GDELT GKG API — returns JSON articles matching a theme query
-        # Themes: CRISISLEX_CRISISLEXREC, CONFLICT, WB_2671_POLITICAL_STABILITY
+        timeout_s = int(self.config.get("request_timeout", 15))
         gdelt_url = (
             "https://api.gdeltproject.org/api/v2/doc/doc"
             "?query=gold+conflict+sanctions+geopolitical"
@@ -596,11 +620,13 @@ class GeopoliticalRiskProvider:
             "&timespan=1d"
         )
         try:
-            resp = requests.get(gdelt_url, timeout=timeout)
-            resp.raise_for_status()
-            data = resp.json()
+            timeout = aiohttp.ClientTimeout(total=timeout_s)
+            async with aiohttp.ClientSession(timeout=timeout) as session, session.get(gdelt_url) as resp:
+                resp.raise_for_status()
+                data = await resp.json(content_type=None)
+
             articles = data.get("articles", [])
-            events: list[GeopoliticalEvent] = field(default_factory=list)
+            events: list[GeopoliticalEvent] = []
             for article in articles:
                 title = article.get("title", "")
                 url_str = article.get("url", "")
@@ -1220,9 +1246,9 @@ class WorldMonitorAPIClient:
 
         logger.info("WorldMonitorAPIClient initialized with base_url: %s", self.base_url)
 
-    def _make_request(self, endpoint: str, params: dict | None = None) -> dict | None:
+    async def _make_request(self, endpoint: str, params: dict | None = None) -> dict | None:
         """
-        Make API request to World Monitor.
+        Make an async API request to World Monitor via aiohttp.
 
         Args:
             endpoint: API endpoint path
@@ -1232,28 +1258,24 @@ class WorldMonitorAPIClient:
             JSON response or None if failed
         """
         url = f"{self.base_url}{endpoint}"
-
         headers = {"Accept": "application/json", "User-Agent": "HOPEFX-AI-Trading/1.0"}
-
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
         try:
-            response = requests.get(url, params=params, headers=headers, timeout=self.timeout)
-            response.raise_for_status()
-            return response.json()
-
-        except requests.exceptions.RequestException as e:
+            timeout = aiohttp.ClientTimeout(total=self.timeout)
+            async with aiohttp.ClientSession(headers=headers, timeout=timeout) as session, session.get(url, params=params) as response:
+                response.raise_for_status()
+                return await response.json(content_type=None)
+        except aiohttp.ClientError as e:
             logger.warning("World Monitor API request failed: %s - %s", endpoint, e)
-
             return None
-        except json.JSONDecodeError as e:
+        except (json.JSONDecodeError, ValueError) as e:
             logger.warning("World Monitor API response not JSON: %s - %s", endpoint, e)
-
             return None
 
-    def _get_cached_or_fetch(self, layer: str, params: dict | None = None) -> dict | None:
-        """Get data from cache or fetch from API."""
+    async def _get_cached_or_fetch(self, layer: str, params: dict | None = None) -> dict | None:
+        """Get data from cache or fetch from API (async)."""
         cache_key = f"{layer}:{json.dumps(params or {}, sort_keys=True)}"
 
         # Check cache
@@ -1268,10 +1290,9 @@ class WorldMonitorAPIClient:
         endpoint = self.API_ENDPOINTS.get(layer)
         if not endpoint:
             logger.warning("Unknown layer: %s", layer)
-
             return None
 
-        data = self._make_request(endpoint, params)
+        data = await self._make_request(endpoint, params)
 
         if data:
             self._cache[cache_key] = data
@@ -1279,7 +1300,7 @@ class WorldMonitorAPIClient:
 
         return data
 
-    def get_conflicts(self, region: str | None = None) -> list[dict]:
+    async def get_conflicts(self, region: str | None = None) -> list[dict]:
         """
         Get active conflict events from ACLED.
 
@@ -1299,141 +1320,78 @@ class WorldMonitorAPIClient:
             return data.get("events", data.get("data", []))
         return []
 
-    def get_country_intel(self, country: str | None = None) -> dict:
-        """
-        Get country-level intelligence including risk scores and sanctions.
-
-        Args:
-            country: ISO country code (e.g., 'US', 'RU', 'IR')
-
-        Returns:
-            Country intelligence data
-        """
+    async def get_country_intel(self, country: str | None = None) -> dict:
+        """Get country-level intelligence including risk scores and sanctions."""
         params = {}
         if country:
             params["country"] = country
-
-        data = self._get_cached_or_fetch("country_intel", params)
+        data = await self._get_cached_or_fetch("country_intel", params)
         return data or {}
 
-    def get_military_theater(self, theater: str | None = None) -> dict:
-        """
-        Get military force posture by theater.
-
-        Theaters: Middle East, Eastern Europe, Western Pacific, etc.
-
-        Args:
-            theater: Theater name
-
-        Returns:
-            Military posture data
-        """
+    async def get_military_theater(self, theater: str | None = None) -> dict:
+        """Get military force posture by theater."""
         params = {}
         if theater:
             params["theater"] = theater
-
-        data = self._get_cached_or_fetch("theater", params)
+        data = await self._get_cached_or_fetch("theater", params)
         return data or {}
 
-    def get_news_intel(self, topic: str | None = None, hours: int = 24) -> list[dict]:
-        """
-        Get global news intelligence from GDELT.
-
-        Args:
-            topic: Filter by topic (e.g., 'sanctions', 'conflict', 'gold')
-            hours: Look back period in hours
-
-        Returns:
-            List of news items
-        """
-        params = {"hours": hours}
+    async def get_news_intel(self, topic: str | None = None, hours: int = 24) -> list[dict]:
+        """Get global news intelligence from GDELT."""
+        params: dict = {"hours": hours}
         if topic:
             params["topic"] = topic
-
-        data = self._get_cached_or_fetch("news", params)
-
+        data = await self._get_cached_or_fetch("news", params)
         if data and isinstance(data, dict):
             return data.get("articles", data.get("news", []))
         return []
 
-    def get_outages(self) -> list[dict]:
-        """
-        Get current internet/infrastructure outages.
-
-        Returns:
-            List of outage events
-        """
-        data = self._get_cached_or_fetch("outages")
-
+    async def get_outages(self) -> list[dict]:
+        """Get current internet/infrastructure outages."""
+        data = await self._get_cached_or_fetch("outages")
         if data and isinstance(data, dict):
             return data.get("outages", [])
         return []
 
-    def get_satellite_fires(self, region: str | None = None) -> list[dict]:
-        """
-        Get satellite fire detections from NASA FIRMS.
-
-        Args:
-            region: Filter by region
-
-        Returns:
-            List of fire detections
-        """
+    async def get_satellite_fires(self, region: str | None = None) -> list[dict]:
+        """Get satellite fire detections from NASA FIRMS."""
         params = {}
         if region:
             params["region"] = region
-
-        data = self._get_cached_or_fetch("fires", params)
-
+        data = await self._get_cached_or_fetch("fires", params)
         if data and isinstance(data, dict):
             return data.get("fires", [])
         return []
 
-    def get_military_flights(self, region: str | None = None) -> list[dict]:
-        """
-        Get military flight tracking data from OpenSky.
-
-        Args:
-            region: Filter by region
-
-        Returns:
-            List of military flight tracks
-        """
+    async def get_military_flights(self, region: str | None = None) -> list[dict]:
+        """Get military flight tracking data from OpenSky."""
         params = {}
         if region:
             params["region"] = region
-
-        data = self._get_cached_or_fetch("flights", params)
-
+        data = await self._get_cached_or_fetch("flights", params)
         if data and isinstance(data, dict):
             return data.get("flights", data.get("aircraft", []))
         return []
 
-    def get_all_layers(self) -> dict[str, Any]:
-        """
-        Fetch data from all enabled layers.
-
-        Returns:
-            Dictionary with data from each layer
-        """
-        results = {}
-
-        for layer in self.enabled_layers:
-            if layer in self.API_ENDPOINTS:
-                data = self._get_cached_or_fetch(layer)
-                if data:
-                    results[layer] = data
-
+    async def get_all_layers(self) -> dict[str, Any]:
+        """Fetch data from all enabled layers concurrently."""
+        tasks = {
+            layer: self._get_cached_or_fetch(layer)
+            for layer in self.enabled_layers
+            if layer in self.API_ENDPOINTS
+        }
+        results_list = await asyncio.gather(*tasks.values(), return_exceptions=True)
+        results: dict[str, Any] = {}
+        for layer, result in zip(tasks.keys(), results_list, strict=True):
+            if isinstance(result, Exception):
+                logger.debug("WorldMonitorAPIClient layer=%s error: %s", layer, result)
+            elif result:
+                results[layer] = result
         return results
 
-    def calculate_gold_risk_score(self) -> dict[str, Any]:
-        """
-        Calculate gold-relevant risk score from all layers.
-
-        Returns:
-            Risk assessment with weighted scores
-        """
-        all_data = self.get_all_layers()
+    async def calculate_gold_risk_score(self) -> dict[str, Any]:
+        """Calculate gold-relevant risk score from all layers."""
+        all_data = await self.get_all_layers()
 
         total_score = 0.0
         total_weight = 0.0
@@ -1441,8 +1399,6 @@ class WorldMonitorAPIClient:
 
         for layer, data in all_data.items():
             weight = self.layer_weights.get(layer, 0.5)
-
-            # Calculate layer score based on data content
             if isinstance(data, dict):
                 event_count = len(data.get("events", data.get("data", [])))
             elif isinstance(data, list):
@@ -1450,22 +1406,17 @@ class WorldMonitorAPIClient:
             else:
                 event_count = 0
 
-            # Score scales with event count (with diminishing returns)
             layer_score = min(100, event_count * 10)
-
             layer_scores[layer] = {
                 "score": layer_score,
                 "weight": weight,
                 "event_count": event_count,
             }
-
             total_score += layer_score * weight
             total_weight += weight
 
-        # Normalize score
         final_score = total_score / total_weight if total_weight > 0 else 0
 
-        # Determine gold outlook
         if final_score >= 70:
             outlook = GoldImpact.STRONGLY_BULLISH
         elif final_score >= 50:
@@ -1842,20 +1793,20 @@ def get_api_client(config: dict | None = None) -> WorldMonitorAPIClient:
     return _api_client
 
 
-def get_gold_geopolitical_signal() -> dict[str, Any]:
+async def get_gold_geopolitical_signal() -> dict[str, Any]:
     """
-    Convenience function to get geopolitical-based gold trading signal.
+    Async convenience function to get geopolitical-based gold trading signal.
 
     Returns:
         Trading signal dictionary
     """
     provider = get_geopolitical_provider()
-    return provider.get_gold_trading_signal()
+    return await provider.get_gold_trading_signal()
 
 
-def get_gold_signal_from_api(config: dict | None = None) -> dict[str, Any]:
+async def get_gold_signal_from_api(config: dict | None = None) -> dict[str, Any]:
     """
-    Get gold trading signal using direct World Monitor API.
+    Get gold trading signal using direct World Monitor API (async).
 
     This uses the live API endpoints instead of sample data.
 
@@ -1866,7 +1817,7 @@ def get_gold_signal_from_api(config: dict | None = None) -> dict[str, Any]:
         Trading signal with real-time data
     """
     client = get_api_client(config)
-    return client.calculate_gold_risk_score()
+    return await client.calculate_gold_risk_score()
 
 
 def create_self_hosted_setup() -> str:
