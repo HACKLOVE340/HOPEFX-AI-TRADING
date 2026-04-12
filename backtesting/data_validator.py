@@ -127,20 +127,35 @@ async def _fetch_ccxt(
     since_ms: int,
     limit: int = 1000,
 ) -> pd.DataFrame | None:
-    """Fetch OHLCV from a ccxt exchange. Returns DataFrame or None on failure."""
-    try:
-        import ccxt.async_support as ccxt_async
-    except ImportError:
-        logger.debug("ccxt not installed — skipping %s source", exchange_id)
-        return None
+    """Fetch OHLCV from a ccxt exchange. Returns DataFrame or None on failure.
+
+    Uses sys.modules lookup so the module reference can be patched in tests
+    without triggering live network calls.  Explicitly detects HTTP 451
+    (geo-blocked / restricted location) and returns None rather than raising.
+    """
+    import sys
+
+    # Resolve ccxt.async_support via sys.modules so unit tests can inject a
+    # mock by setting sys.modules["ccxt.async_support"] = mock_object.
+    ccxt_async = sys.modules.get("ccxt.async_support")
+    if ccxt_async is None:
+        # Not yet imported — attempt a real import.
+        try:
+            import ccxt.async_support as _ccxt_async  # noqa: PLC0415
+
+            ccxt_async = _ccxt_async
+        except ImportError:
+            logger.debug("ccxt not installed — skipping %s source", exchange_id)
+            return None
 
     exchange = None
     try:
         exchange_cls = getattr(ccxt_async, exchange_id, None)
         if exchange_cls is None:
+            logger.debug("ccxt: exchange '%s' not found in ccxt.async_support", exchange_id)
             return None
         exchange = exchange_cls({"enableRateLimit": True})
-        all_bars = []
+        all_bars: list = []
         since = since_ms
         while True:
             bars = await exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=limit)
@@ -161,14 +176,24 @@ async def _fetch_ccxt(
         logger.info("ccxt/%s: fetched %d bars for %s", exchange_id, len(df), symbol)
         return df
     except Exception as exc:
-        logger.warning("ccxt/%s fetch failed for %s: %s", exchange_id, symbol, exc)
+        exc_str = str(exc)
+        # HTTP 451 = geo-blocked / restricted location (e.g. Binance in some regions).
+        # Treat as a clean "source unavailable" rather than an unexpected error.
+        if "451" in exc_str or "restricted location" in exc_str.lower() or "unavailable from" in exc_str.lower():
+            logger.info(
+                "ccxt/%s: geo-blocked for %s (HTTP 451 / restricted location) — skipping source",
+                exchange_id,
+                symbol,
+            )
+        else:
+            logger.warning("ccxt/%s fetch failed for %s: %s", exchange_id, symbol, exc)
         return None
     finally:
         if exchange is not None:
             try:
                 await exchange.close()
             except Exception as _exc:
-                logger.debug("Suppressed exception: %s", _exc)
+                logger.debug("Suppressed close exception: %s", _exc)
 
 
 async def _fetch_yfinance(

@@ -278,6 +278,7 @@ class TestFetchCCXT:
         bars = [[ts + i * 3_600_000, 1800.0, 1801.0, 1799.0, 1800.5, 100.0] for i in range(3)]
 
         mock_exchange = AsyncMock()
+        # First call returns 3 bars; second call returns [] to stop pagination.
         mock_exchange.fetch_ohlcv = AsyncMock(side_effect=[bars, []])
         mock_exchange.rateLimit = 100
         mock_exchange.close = AsyncMock()
@@ -285,22 +286,14 @@ class TestFetchCCXT:
         mock_ccxt_async = MagicMock()
         mock_ccxt_async.binance = MagicMock(return_value=mock_exchange)
 
-        # _fetch_ccxt does a local `import ccxt.async_support` on every call.
-        # Override sys.modules so that import resolves to our mock regardless
-        # of whether ccxt is installed in the test environment.
-        import sys
-
-        orig = sys.modules.get("ccxt.async_support")
-        sys.modules["ccxt.async_support"] = mock_ccxt_async
-        try:
+        # _fetch_ccxt resolves ccxt.async_support via sys.modules so that this
+        # patch intercepts the lookup even when the real ccxt package is
+        # installed (which would otherwise cause a live Binance API call and
+        # fail with HTTP 451 in geo-restricted CI environments).
+        with patch.dict("sys.modules", {"ccxt.async_support": mock_ccxt_async}):
             result = await _fetch_ccxt("binance", "XAU/USDT", "1h", ts)
-        finally:
-            if orig is None:
-                sys.modules.pop("ccxt.async_support", None)
-            else:
-                sys.modules["ccxt.async_support"] = orig
 
-        assert result is not None
+        assert result is not None, "_fetch_ccxt returned None — expected a DataFrame"
         assert len(result) == 3
 
     @pytest.mark.asyncio
