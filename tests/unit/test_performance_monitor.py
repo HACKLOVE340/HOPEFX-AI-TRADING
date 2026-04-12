@@ -229,7 +229,9 @@ class TestEvaluate:
         with patch.object(pm, "MIN_TRADES", 20), \
              patch.object(pm, "ROLLBACK_THRESHOLD", 0.20), \
              patch.object(m, "_rollback") as mock_rb:
-            mock_rb.return_value = asyncio.coroutine(lambda *a, **k: None)()
+            async def _noop(*a, **k):
+                return None
+            mock_rb.side_effect = _noop
             await m._evaluate()
 
         mock_rb.assert_called_once()
