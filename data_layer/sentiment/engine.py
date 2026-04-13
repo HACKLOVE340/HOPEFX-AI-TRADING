@@ -471,9 +471,7 @@ class NewsSentimentEngine:
             "geopolitical": {
                 "running": self._geo_provider._running,
                 "cached_events": geo_events,
-                "cache_age_s": round(
-                    (datetime.now(UTC) - geo_ts).total_seconds(), 1
-                ) if geo_ts else None,
+                "cache_age_s": round((datetime.now(UTC) - geo_ts).total_seconds(), 1) if geo_ts else None,
                 "risk_score": self.get_geopolitical_risk_score(),
             },
         }
