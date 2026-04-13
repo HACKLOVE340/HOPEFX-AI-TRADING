@@ -98,12 +98,12 @@ def broker():
 class TestPaperTradingBrokerConnect:
     def test_connect_sets_connected(self):
         b = PaperTradingBroker(config={"initial_balance": 5000.0, "slippage_model": "zero"}, seed=0)
-        result = asyncio.get_event_loop().run_until_complete(b.connect())
+        result = asyncio.run(b.connect())
         assert result is True
         assert b.connected is True
 
     def test_disconnect_clears_connected(self, broker):
-        result = asyncio.get_event_loop().run_until_complete(broker.disconnect())
+        result = asyncio.run(broker.disconnect())
         assert result is True
         assert broker.connected is False
 
@@ -204,7 +204,7 @@ class TestPaperTradingBrokerPositions:
     def test_close_all_positions(self, broker):
         broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 1.0)
         broker.place_order("EURUSD", OrderSide.BUY, OrderType.MARKET, 1.0)
-        closed = asyncio.get_event_loop().run_until_complete(broker.close_all_positions())
+        closed = asyncio.run(broker.close_all_positions())
         assert closed == 2
         assert len(broker.positions) == 0
 
@@ -282,11 +282,11 @@ class TestPaperTradingBrokerCommission:
 
 class TestPaperTradingBrokerAsync:
     def test_place_market_order_async(self, broker):
-        order = asyncio.get_event_loop().run_until_complete(broker.place_market_order("XAUUSD", "buy", 1.0))
+        order = asyncio.run(broker.place_market_order("XAUUSD", "buy", 1.0))
         assert order.status == OrderStatus.FILLED
 
     def test_place_market_order_sell_async(self, broker):
-        order = asyncio.get_event_loop().run_until_complete(broker.place_market_order("XAUUSD", "sell", 1.0))
+        order = asyncio.run(broker.place_market_order("XAUUSD", "sell", 1.0))
         assert order.status == OrderStatus.FILLED
 
     def test_set_spread(self, broker):
@@ -413,14 +413,14 @@ class TestInitPaperBroker:
 
     def test_connect_sets_connected(self):
         b = PaperTradingBroker(config={"initial_balance": 5000.0, "slippage_model": "zero"}, seed=0)
-        result = asyncio.get_event_loop().run_until_complete(b.connect())
+        result = asyncio.run(b.connect())
         assert result is True
         assert b.connected is True
 
     def test_disconnect_clears_connected(self):
         b = PaperTradingBroker(config={"initial_balance": 5000.0, "slippage_model": "zero"}, seed=0)
-        asyncio.get_event_loop().run_until_complete(b.connect())
-        result = asyncio.get_event_loop().run_until_complete(b.disconnect())
+        asyncio.run(b.connect())
+        result = asyncio.run(b.disconnect())
         assert result is True
         assert b.connected is False
 
@@ -595,7 +595,7 @@ class TestBaseBrokerCloseAll:
             id="p2", symbol="Y", side=InitOrderSide.SELL, quantity=1.0, entry_price=100.0, current_price=100.0
         )
         b._positions_to_return = [pos1, pos2]
-        closed = asyncio.get_event_loop().run_until_complete(b.close_all_positions())
+        closed = asyncio.run(b.close_all_positions())
         assert set(closed) == {"p1", "p2"}
 
     def test_cancel_all_orders(self):
@@ -617,7 +617,7 @@ class TestBaseBrokerCloseAll:
             status=InitOrderStatus.PENDING,
         )
         b._orders_to_return = [o1, o2]
-        cancelled = asyncio.get_event_loop().run_until_complete(b.cancel_all_orders())
+        cancelled = asyncio.run(b.cancel_all_orders())
         assert set(cancelled) == {"o1", "o2"}
 
     def test_close_all_positions_with_failure(self):
@@ -655,7 +655,7 @@ class TestBaseBrokerCloseAll:
             id="p1", symbol="X", side=InitOrderSide.BUY, quantity=1.0, entry_price=100.0, current_price=100.0
         )
         b._positions_to_return = [pos]
-        closed = asyncio.get_event_loop().run_until_complete(b.close_all_positions())
+        closed = asyncio.run(b.close_all_positions())
         assert closed == []  # failed, so nothing closed
 
 
@@ -880,7 +880,7 @@ class TestSmartOrderRouter:
             broker_id, decision = await router.route_order({"symbol": "XAUUSD"})
             return broker_id, decision
 
-        broker_id, decision = asyncio.get_event_loop().run_until_complete(run())
+        broker_id, decision = asyncio.run(run())
         assert broker_id == "b1"
         assert "selected_broker" in decision
 
@@ -896,7 +896,7 @@ class TestSmartOrderRouter:
             broker_id, decision = await router.route_order({"symbol": "XAUUSD"})
             return broker_id, decision
 
-        broker_id, decision = asyncio.get_event_loop().run_until_complete(run())
+        broker_id, decision = asyncio.run(run())
         assert broker_id in ("b1", "b2", "b3")
         assert len(decision["alternative_brokers"]) == 2
 
@@ -911,7 +911,7 @@ class TestSmartOrderRouter:
         async def run():
             await router._update_broker_scores()
 
-        asyncio.get_event_loop().run_until_complete(run())
+        asyncio.run(run())
         assert router.scores["flaky"].reliability_score < initial_reliability
 
     def test_execute_with_fallback_success(self):
@@ -929,7 +929,7 @@ class TestSmartOrderRouter:
         async def run():
             return await router.execute_with_fallback({"symbol": "XAUUSD"})
 
-        result = asyncio.get_event_loop().run_until_complete(run())
+        result = asyncio.run(run())
         assert result["status"] == "filled"
 
 
