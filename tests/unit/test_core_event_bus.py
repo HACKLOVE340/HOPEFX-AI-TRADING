@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -63,10 +63,21 @@ def test_domain_event_decode_roundtrip():
 
 def test_domain_event_all_known_types():
     known = [
-        "PRICE_UPDATE", "SIGNAL_GENERATED", "ORDER_SUBMITTED", "ORDER_FILLED",
-        "POSITION_OPENED", "POSITION_CLOSED", "RISK_VIOLATION", "KILL_SWITCH",
-        "REGIME_CHANGE", "COMPOSITE_SIGNAL", "HEARTBEAT",
-        "TICK", "SIGNAL", "ORDER", "BREACH",
+        "PRICE_UPDATE",
+        "SIGNAL_GENERATED",
+        "ORDER_SUBMITTED",
+        "ORDER_FILLED",
+        "POSITION_OPENED",
+        "POSITION_CLOSED",
+        "RISK_VIOLATION",
+        "KILL_SWITCH",
+        "REGIME_CHANGE",
+        "COMPOSITE_SIGNAL",
+        "HEARTBEAT",
+        "TICK",
+        "SIGNAL",
+        "ORDER",
+        "BREACH",
     ]
     for t in known:
         evt = DomainEvent.create(t, "src", {})

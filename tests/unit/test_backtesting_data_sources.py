@@ -231,7 +231,7 @@ class TestAlphaVantageSource:
         assert src.api_key == key
 
     def test_get_data_returns_empty_without_key(self):
-        src = AlphaVantageSource(api_key="")
+        src = AlphaVantageSource(api_key="")  # pragma: allowlist secret
         result = src.get_data("AAPL", START, END)
         assert result.empty
 
@@ -254,7 +254,7 @@ class TestAlphaVantageSource:
             }
         }
         with patch("requests.get", return_value=mock_response):
-            src = AlphaVantageSource(api_key="testkey")
+            src = AlphaVantageSource(api_key="testkey")  # pragma: allowlist secret
             result = src.get_data("AAPL", START, END)
         assert not result.empty
         assert "close" in result.columns
@@ -272,7 +272,7 @@ class TestAlphaVantageSource:
             }
         }
         with patch("requests.get", return_value=mock_response):
-            src = AlphaVantageSource(api_key="testkey")
+            src = AlphaVantageSource(api_key="testkey")  # pragma: allowlist secret
             result = src.get_data("EUR/USD", START, END)
         assert not result.empty
 
@@ -280,23 +280,23 @@ class TestAlphaVantageSource:
         mock_response = MagicMock()
         mock_response.json.return_value = {"Note": "API rate limit reached"}
         with patch("requests.get", return_value=mock_response):
-            src = AlphaVantageSource(api_key="testkey")
+            src = AlphaVantageSource(api_key="testkey")  # pragma: allowlist secret
             result = src.get_data("AAPL", START, END)
         assert result.empty
 
     def test_get_data_returns_empty_on_exception(self):
         with patch("requests.get", side_effect=RuntimeError("network")):
-            src = AlphaVantageSource(api_key="testkey")
+            src = AlphaVantageSource(api_key="testkey")  # pragma: allowlist secret
             result = src.get_data("AAPL", START, END)
         assert result.empty
 
     def test_get_forex_delegates_to_get_data(self):
-        src = AlphaVantageSource(api_key="")
+        src = AlphaVantageSource(api_key="")  # pragma: allowlist secret
         result = src.get_forex("EUR", "USD", START, END)
         assert result.empty  # no key → empty
 
     def test_get_crypto_returns_empty_without_key(self):
-        src = AlphaVantageSource(api_key="")
+        src = AlphaVantageSource(api_key="")  # pragma: allowlist secret
         result = src.get_crypto("BTC", "USD", START, END)
         assert result.empty
 
@@ -314,7 +314,7 @@ class TestAlphaVantageSource:
             }
         }
         with patch("requests.get", return_value=mock_response):
-            src = AlphaVantageSource(api_key="testkey")
+            src = AlphaVantageSource(api_key="testkey")  # pragma: allowlist secret
             result = src.get_crypto("BTC", "USD", START, END)
         assert not result.empty
 
@@ -322,7 +322,7 @@ class TestAlphaVantageSource:
         mock_response = MagicMock()
         mock_response.json.return_value = {"Error Message": "invalid symbol"}
         with patch("requests.get", return_value=mock_response):
-            src = AlphaVantageSource(api_key="testkey")
+            src = AlphaVantageSource(api_key="testkey")  # pragma: allowlist secret
             result = src.get_crypto("INVALID", "USD")
         assert result.empty
 

@@ -59,7 +59,7 @@ def _make_connector(**kwargs) -> CMEComexConnector:
         fix_sender_id="TEST",
         fix_target_id="CME",
         fix_username="",
-        fix_password="",
+        fix_password="",  # pragma: allowlist secret
         fix_config_file="fix.cfg",
         cme_account="TEST_ACCT",
         ibkr_fallback=False,

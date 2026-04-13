@@ -284,7 +284,12 @@ class TestFIXAdapterInit:
         from execution.fix_adapter import FIXAdapter
 
         return FIXAdapter(
-            host="127.0.0.1", port=9876, sender_comp_id="TEST", target_comp_id="CME", username="", password=""
+            host="127.0.0.1",
+            port=9876,
+            sender_comp_id="TEST",
+            target_comp_id="CME",
+            username="",
+            password="",  # pragma: allowlist secret
         )
 
     def test_circuit_breaker_accessible(self):

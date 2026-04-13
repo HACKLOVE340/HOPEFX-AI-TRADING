@@ -103,7 +103,9 @@ class TestOANDAConnector:
     def _make(self):
         from brokers.oanda import OANDAConnector
 
-        return OANDAConnector({"api_key": "test-key", "account_id": "101-001", "environment": "practice"})  # pragma: allowlist secret
+        return OANDAConnector(
+            {"api_key": "test-key", "account_id": "101-001", "environment": "practice"}  # pragma: allowlist secret
+        )  # pragma: allowlist secret
 
     def _mock_session(self, status_code=200, json_data=None):
         sess = MagicMock()

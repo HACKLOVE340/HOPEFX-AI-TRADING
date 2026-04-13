@@ -403,9 +403,7 @@ async def test_fetch_aws_returns_secrets_on_success(monkeypatch):
 
     mock_boto3 = MagicMock()
     mock_client = MagicMock()
-    mock_client.get_secret_value.return_value = {
-        "SecretString": json.dumps({"JWT_SECRET_KEY": "aws-jwt"})
-    }
+    mock_client.get_secret_value.return_value = {"SecretString": json.dumps({"JWT_SECRET_KEY": "aws-jwt"})}
     mock_boto3.client.return_value = mock_client
 
     with patch.dict("sys.modules", {"boto3": mock_boto3}):

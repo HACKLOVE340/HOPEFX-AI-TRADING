@@ -228,7 +228,7 @@ class TestEX5SignalExporter:
     def test_stop_loss_required(self):
         from brokers.mt5_bridge import MT5Bridge, MT5Order, OrderSide
 
-        bridge = MT5Bridge(server="test", login=1, password="pw")
+        bridge = MT5Bridge(server="test", login=1, password="pw")  # pragma: allowlist secret
         bridge._connected = True
         with pytest.raises(ValueError, match="stop_loss"):
             bridge.send_order(MT5Order("XAUUSD", OrderSide.BUY, 0.1))
