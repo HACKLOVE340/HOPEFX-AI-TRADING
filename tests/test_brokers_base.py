@@ -118,9 +118,6 @@ class TestWithRetryAsync:
                 raise ValueError("transient")
             return "ok"
 
-        with patch("brokers.base.asyncio.sleep", new_callable=lambda: lambda: asyncio.coroutine(lambda _: None)):
-            pass
-
         # Use real asyncio.sleep with tiny delay
         result = await fn()
         assert result == "ok"
