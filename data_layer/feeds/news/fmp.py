@@ -36,7 +36,7 @@ class FMPFeed(NewsFeedBase):
     """Financial Modeling Prep news adapter."""
 
     name = NewsSource.FMP
-    _api_key_env = "FMP_API_KEY"
+    _api_key_env = "FMP_API_KEY"  # pragma: allowlist secret
     _min_interval_s = 30.0  # 250 req/day ≈ 1 req/5.8min; use 30s for bursts
 
     async def fetch_articles(self, limit: int = 50) -> list[NewsArticle]:

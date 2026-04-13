@@ -444,7 +444,7 @@ class TestEngineKillSwitchHooks:
         """validate_startup_environment() does not raise in APP_ENV=test."""
 
         os.environ["APP_ENV"] = "test"
-        os.environ["SECURITY_JWT_SECRET"] = "test-only-jwt-secret-key-minimum-32-chars!!"
+        os.environ["SECURITY_JWT_SECRET"] = "test-only-jwt-secret-key-minimum-32-chars!!"  # pragma: allowlist secret
         from hopefx_engine import validate_startup_environment
 
         # Should not raise even with missing broker credentials
@@ -458,7 +458,7 @@ class TestEngineKillSwitchHooks:
         original = os.environ.get("SECURITY_JWT_SECRET")
         try:
             os.environ["APP_ENV"] = "test"
-            os.environ["SECURITY_JWT_SECRET"] = "short"
+            os.environ["SECURITY_JWT_SECRET"] = "short"  # pragma: allowlist secret
             from hopefx_engine import validate_startup_environment
 
             issues = validate_startup_environment()

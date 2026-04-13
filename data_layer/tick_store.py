@@ -20,7 +20,7 @@ Required setup:
     -- creates the ticks table and hypertable automatically.
 
 Configure via env var:
-    TIMESCALEDB_URL=postgresql+psycopg2://user:pass@host:5432/hopefx
+    TIMESCALEDB_URL=postgresql+psycopg2://user:pass@host:5432/hopefx  # pragma: allowlist secret
 
 Tier 2 — Redis TimeSeries (via redis-py TS module)
 --------------------------------------------------

@@ -140,7 +140,7 @@ def test_fetch_env_returns_dict(monkeypatch):
     result = sm._fetch_env()
     assert isinstance(result, dict)
     assert "jwt_secret_key" in result
-    assert result["jwt_secret_key"] == "jwt-val"
+    assert result["jwt_secret_key"] == "jwt-val"  # pragma: allowlist secret
 
 
 def test_fetch_env_skips_unset_vars():
@@ -358,7 +358,7 @@ async def test_fetch_vault_returns_secrets_on_success(monkeypatch):
     mock_client = MagicMock()
     mock_client.is_authenticated.return_value = True
     mock_client.secrets.kv.v2.read_secret_version.return_value = {
-        "data": {"data": {"JWT_SECRET_KEY": "vault-jwt", "DB_PASSWORD": "vault-db"}}
+        "data": {"data": {"JWT_SECRET_KEY": "vault-jwt", "DB_PASSWORD": "vault-db"}}  # pragma: allowlist secret
     }
     mock_hvac.Client.return_value = mock_client
 

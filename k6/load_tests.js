@@ -248,7 +248,7 @@ function testAuthLogin() {
   group('auth_login', () => {
     const res = http.post(
       BASE_URL + '/auth/login',
-      JSON.stringify({ email: 'loadtest@example.com', password: 'LoadTest123!' }),
+      JSON.stringify({ email: 'loadtest@example.com', password: 'LoadTest123!' }),  // pragma: allowlist secret
       { headers: headers(), tags: { name: 'auth_login' } },
     );
     const ok = check(res, {
@@ -331,7 +331,7 @@ function testRateLimitEnforced() {
     for (let i = 0; i < 15; i++) {
       const res = http.post(
         BASE_URL + '/auth/login',
-        JSON.stringify({ email: 'ratelimit@example.com', password: 'wrong' }),
+        JSON.stringify({ email: 'ratelimit@example.com', password: 'wrong' }),  // pragma: allowlist secret
         { headers: headers(), tags: { name: 'rate_limit_probe' } },
       );
       if (res.status === 429) { got429 = true; break; }

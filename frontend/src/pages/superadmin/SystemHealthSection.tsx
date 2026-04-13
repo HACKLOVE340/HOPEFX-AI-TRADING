@@ -152,7 +152,7 @@ const SystemHealthSection: React.FC = () => {
             borderRadius: 8, color: tab === t ? '#f8fafc' : '#64748b',
             padding: '7px 14px', fontSize: 13, cursor: 'pointer',
           }}>
-            {{ services: `Services (${services.length})`, backups: `Backups (${backups.length})`, jobs: `Jobs (${jobs.length})`, apikeys: `API Keys (${apiKeys.length})` }[t]}
+            {{ services: `Services (${services.length})`, backups: `Backups (${backups.length})`, jobs: `Jobs (${jobs.length})`, apikeys: `API Keys (${apiKeys.length})` }[t]}  {/* pragma: allowlist secret */}  // pragma: allowlist secret
           </button>
         ))}
         <ActionBtn label="Refresh" onClick={load} accent="#475569" size="sm" style={{ marginLeft: 'auto' }} />

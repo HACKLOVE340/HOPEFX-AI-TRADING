@@ -38,7 +38,7 @@ from config.config_manager import (
 # ---------------------------------------------------------------------------
 
 ENCRYPTION_KEY = "test-encryption-key-for-testing-purposes"
-SALT_HEX = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"
+SALT_HEX = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"  # pragma: allowlist secret
 
 
 def _make_redis_mock():
@@ -105,7 +105,7 @@ class TestMarketDataCacheInit:
             host="redis.example.com",
             port=6380,
             db=2,
-            password="secret",
+            password="secret",  # pragma: allowlist secret
             socket_timeout=10,
             max_retries=5,
             retry_delay=0.5,
@@ -717,7 +717,7 @@ class TestDatabaseConfigExtended:
             host="localhost",
             port=5432,
             username="user",
-            password="pass",
+            password="pass",  # pragma: allowlist secret
             database="hopefx",
         )
 
@@ -761,7 +761,7 @@ class TestDatabaseConfigExtended:
             host="localhost",
             port=3306,
             username="user",
-            password="pass",
+            password="pass",  # pragma: allowlist secret
             database="mydb",
             ssl_enabled=False,
         )
@@ -774,7 +774,7 @@ class TestDatabaseConfigExtended:
             host="localhost",
             port=3306,
             username="user",
-            password="pass",
+            password="pass",  # pragma: allowlist secret
             database="mydb",
             ssl_enabled=True,
         )
@@ -1061,8 +1061,8 @@ class TestConfigManagerAPICredentials:
         mgr.load_config("development")
         mgr.update_api_credential("binance", "newkey", "newsecret")
         cfg = mgr.get_api_config("binance")
-        assert cfg.api_key == "newkey"
-        assert cfg.api_secret == "newsecret"
+        assert cfg.api_key == "newkey"  # pragma: allowlist secret
+        assert cfg.api_secret == "newsecret"  # pragma: allowlist secret
 
     def test_update_api_credential_creates_new_provider(self, tmp_path):
         mgr = ConfigManager(config_dir=str(tmp_path))
@@ -1070,7 +1070,7 @@ class TestConfigManagerAPICredentials:
         mgr.update_api_credential("alpaca", "alp_key", "alp_secret")
         cfg = mgr.get_api_config("alpaca")
         assert cfg is not None
-        assert cfg.api_key == "alp_key"
+        assert cfg.api_key == "alp_key"  # pragma: allowlist secret
 
 
 @pytest.mark.unit
@@ -1198,8 +1198,8 @@ class TestEncryptDecryptIntegration:
 
         mgr2 = ConfigManager(config_dir=str(tmp_path))
         loaded = mgr2.load_config("creds_test")
-        assert loaded.api_configs["alpaca"].api_key == "real_api_key"
-        assert loaded.api_configs["alpaca"].api_secret == "real_api_secret"
+        assert loaded.api_configs["alpaca"].api_key == "real_api_key"  # pragma: allowlist secret
+        assert loaded.api_configs["alpaca"].api_secret == "real_api_secret"  # pragma: allowlist secret
 
     def test_database_password_survives_save_load(self, tmp_path):
         mgr = ConfigManager(config_dir=str(tmp_path))
@@ -1209,12 +1209,12 @@ class TestEncryptDecryptIntegration:
             host="db.example.com",
             port=5432,
             username="admin",
-            password="s3cr3t",
+            password="s3cr3t",  # pragma: allowlist secret
             database="hopefx",
         )
         mgr.save_config(cfg)
 
         mgr2 = ConfigManager(config_dir=str(tmp_path))
         loaded = mgr2.load_config("db_test")
-        assert loaded.database.password == "s3cr3t"
+        assert loaded.database.password == "s3cr3t"  # pragma: allowlist secret
         assert loaded.database.username == "admin"

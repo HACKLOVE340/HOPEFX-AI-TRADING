@@ -44,7 +44,7 @@ _start_time = time.time()
 
 _uptime_cache: dict[str, float] = {}
 _REDIS_HASH_KEY = "hopefx:uptime_history"
-_DB_KEY_PREFIX = "status:uptime:"
+_DB_KEY_PREFIX = "status:uptime:"  # pragma: allowlist secret
 
 
 def _get_redis():

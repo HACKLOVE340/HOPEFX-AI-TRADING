@@ -77,10 +77,10 @@ jobs:
       env:
         CONFIG_ENCRYPTION_KEY: ${{ secrets.CONFIG_ENCRYPTION_KEY || 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }}
         CONFIG_SALT: ${{ secrets.CONFIG_SALT || 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' }}
-        SECURITY_JWT_SECRET: ${{ secrets.SECURITY_JWT_SECRET || 'ci-test-secret-key-minimum-32-characters-long' }}
+        SECURITY_JWT_SECRET: ${{ secrets.SECURITY_JWT_SECRET || 'ci-test-secret-key-minimum-32-characters-long' }}  # pragma: allowlist secret
         REDIS_URL: redis://localhost:6379/15
         ENVIRONMENT: testing
-        OANDA_API_KEY: ci-placeholder
+        OANDA_API_KEY: ci-placeholder  # pragma: allowlist secret
         OANDA_ACCOUNT_ID: ci-placeholder
         OANDA_PRACTICE: "true"
         INITIAL_BALANCE: "100000"
@@ -103,7 +103,7 @@ jobs:
       env:
         REDIS_URL: redis://localhost:6379/15
         ENVIRONMENT: testing
-        SECURITY_JWT_SECRET: ci-test-secret-key-minimum-32-characters-long
+        SECURITY_JWT_SECRET: ci-test-secret-key-minimum-32-characters-long  # pragma: allowlist secret
       run: |
         pytest tests/ -m "not slow" -q \
           --cov=risk --cov-branch \
@@ -116,7 +116,7 @@ jobs:
       env:
         REDIS_URL: redis://localhost:6379/15
         ENVIRONMENT: testing
-        SECURITY_JWT_SECRET: ci-test-secret-key-minimum-32-characters-long
+        SECURITY_JWT_SECRET: ci-test-secret-key-minimum-32-characters-long  # pragma: allowlist secret
       run: |
         pytest tests/ -m "not slow" -q \
           --cov=execution --cov-branch \
@@ -129,7 +129,7 @@ jobs:
       env:
         REDIS_URL: redis://localhost:6379/15
         ENVIRONMENT: testing
-        SECURITY_JWT_SECRET: ci-test-secret-key-minimum-32-characters-long
+        SECURITY_JWT_SECRET: ci-test-secret-key-minimum-32-characters-long  # pragma: allowlist secret
       run: |
         pytest tests/ -m "not slow" -q \
           --cov=kill_switch --cov-branch \
@@ -142,8 +142,8 @@ jobs:
       env:
         REDIS_URL: redis://localhost:6379/15
         ENVIRONMENT: testing
-        SECURITY_JWT_SECRET: ci-test-secret-key-minimum-32-characters-long
-        OANDA_API_KEY: ci-placeholder
+        SECURITY_JWT_SECRET: ci-test-secret-key-minimum-32-characters-long  # pragma: allowlist secret
+        OANDA_API_KEY: ci-placeholder  # pragma: allowlist secret
         OANDA_ACCOUNT_ID: ci-placeholder
         OANDA_PRACTICE: "true"
       run: |
@@ -158,7 +158,7 @@ jobs:
       env:
         REDIS_URL: redis://localhost:6379/15
         ENVIRONMENT: testing
-        SECURITY_JWT_SECRET: ci-test-secret-key-minimum-32-characters-long
+        SECURITY_JWT_SECRET: ci-test-secret-key-minimum-32-characters-long  # pragma: allowlist secret
       run: |
         pytest tests/ -m "not slow" -q \
           --cov=compliance --cov-branch \
@@ -171,7 +171,7 @@ jobs:
       env:
         REDIS_URL: redis://localhost:6379/15
         ENVIRONMENT: testing
-        SECURITY_JWT_SECRET: ci-test-secret-key-minimum-32-characters-long
+        SECURITY_JWT_SECRET: ci-test-secret-key-minimum-32-characters-long  # pragma: allowlist secret
         INITIAL_BALANCE: "100000"
         ML_MIN_TRADE_PROB: "0.58"
       run: |
@@ -248,7 +248,7 @@ jobs:
         env:
           CONFIG_ENCRYPTION_KEY: ${{ secrets.CONFIG_ENCRYPTION_KEY || 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }}
           CONFIG_SALT: ${{ secrets.CONFIG_SALT || 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' }}
-          SECURITY_JWT_SECRET: ${{ secrets.SECURITY_JWT_SECRET || 'ci-test-secret-key-minimum-32-characters-long' }}
+          SECURITY_JWT_SECRET: ${{ secrets.SECURITY_JWT_SECRET || 'ci-test-secret-key-minimum-32-characters-long' }}  # pragma: allowlist secret
           REDIS_URL: redis://localhost:6379/15
           ENVIRONMENT: testing
         run: |

@@ -43,7 +43,7 @@ class NewsAPIFeed(NewsFeedBase):
     """
 
     name = NewsSource.NEWSAPI
-    _api_key_env = "NEWSAPI_ORG_KEY"  # primary
+    _api_key_env = "NEWSAPI_ORG_KEY"  # primary  # pragma: allowlist secret
     _min_interval_s = 60.0
 
     def __init__(self) -> None:

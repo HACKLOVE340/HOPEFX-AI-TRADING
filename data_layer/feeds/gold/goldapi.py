@@ -45,7 +45,7 @@ class GoldAPIFeed(GoldFeedBase):
     """GoldAPI.io — REST polling adapter."""
 
     name = FeedSource.GOLDAPI
-    _api_key_env = "GOLDAPI_IO_KEY"
+    _api_key_env = "GOLDAPI_IO_KEY"  # pragma: allowlist secret
     _base_url = _BASE
     _min_interval_s = 2.0  # conservative — free tier is 100 req/month
 

@@ -338,7 +338,7 @@ def test_verify_model_registry_empty_versions_bootstraps(monkeypatch):
     mock_reg._load.return_value = {"versions": {}, "active_version": None}
     mock_reg.bootstrap_from_meta.return_value = {
         "name": "advanced_oos_v1",
-        "sha256": "abc123def456",
+        "sha256": "abc123def456",  # pragma: allowlist secret
     }
     mock_cls = MagicMock(return_value=mock_reg)
 

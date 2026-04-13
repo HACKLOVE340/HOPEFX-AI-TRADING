@@ -36,7 +36,7 @@ class FinnhubFeed(NewsFeedBase):
     """Finnhub news + native sentiment scores."""
 
     name = NewsSource.FINNHUB
-    _api_key_env = "FINNHUB_API_KEY"
+    _api_key_env = "FINNHUB_API_KEY"  # pragma: allowlist secret
     _min_interval_s = 5.0  # free tier: 60 req/min
 
     async def fetch_articles(self, limit: int = 50) -> list[NewsArticle]:

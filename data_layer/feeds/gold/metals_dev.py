@@ -35,7 +35,7 @@ class MetalsDevFeed(GoldFeedBase):
     """Metals.dev — REST polling with optional WebSocket upgrade."""
 
     name = FeedSource.METALS_DEV
-    _api_key_env = "METALS_DEV_KEY"
+    _api_key_env = "METALS_DEV_KEY"  # pragma: allowlist secret
     _base_url = _REST_BASE
     _min_interval_s = 10.0  # paid tier supports higher frequency
 

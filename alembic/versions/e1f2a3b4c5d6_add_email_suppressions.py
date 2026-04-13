@@ -19,8 +19,8 @@ from typing import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "e1f2a3b4c5d6"
-down_revision: str | Sequence[str] | None = "d9ffd7d4576b"
+revision: str = "e1f2a3b4c5d6"  # pragma: allowlist secret
+down_revision: str | Sequence[str] | None = "d9ffd7d4576b"  # pragma: allowlist secret
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

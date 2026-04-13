@@ -13,8 +13,8 @@ Create Date: 2024-01-01 00:00:00.000000
 from alembic import op
 import sqlalchemy as sa
 
-revision = "a1b2c3d4e5f6"
-down_revision = "746b2609eac5"
+revision = "a1b2c3d4e5f6"  # pragma: allowlist secret
+down_revision = "746b2609eac5"  # pragma: allowlist secret
 branch_labels = None
 depends_on = None
 

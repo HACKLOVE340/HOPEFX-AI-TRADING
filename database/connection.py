@@ -409,7 +409,7 @@ def _default_db_url() -> str:
         logger.warning(
             "DATABASE_URL not set — using SQLite fallback (%s). "
             "SQLite does not support concurrent writes. "
-            "Set DATABASE_URL=postgresql://user:pass@host:5432/hopefx for production.",
+            "Set DATABASE_URL=postgresql://user:pass@host:5432/hopefx for production.",  # pragma: allowlist secret
             fallback,
         )
         return fallback
@@ -439,7 +439,7 @@ def _check_sqlite_multiworker(url: str) -> None:
             f"DATABASE_URL is SQLite but WEB_CONCURRENCY={concurrency}. "
             "SQLite cannot safely handle concurrent writes from multiple OS processes "
             "and will corrupt data. Set DATABASE_URL to a PostgreSQL connection string "
-            "(e.g. postgresql+psycopg2://user:pass@host/db) before starting with "
+            "(e.g. postgresql+psycopg2://user:pass@host/db) before starting with "  # pragma: allowlist secret
             "multiple workers."
         )
     # Warn even for single-worker so operators know this is dev-only.

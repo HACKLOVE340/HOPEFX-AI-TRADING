@@ -279,7 +279,7 @@ class TestBeforeSend:
     def test_scrubs_request_data(self):
         event = {
             "transaction": "/api/auth/login",
-            "request": {"data": {"password": "secret", "username": "alice"}},  # nosec B105 - test file
+            "request": {"data": {"password": "secret", "username": "alice"}},  # nosec B105 - test file  # pragma: allowlist secret
         }
         result = self.before_send(event, {})
         assert result["request"]["data"]["password"] == "[Filtered]"
@@ -302,7 +302,7 @@ class TestBeforeSend:
     def test_scrubs_extra_context(self):
         event = {
             "transaction": "/api/broker/connect",
-            "extra": {"api_key": "oanda-key-123", "symbol": "XAUUSD"},
+            "extra": {"api_key": "oanda-key-123", "symbol": "XAUUSD"},  # pragma: allowlist secret
         }
         result = self.before_send(event, {})
         assert result["extra"]["api_key"] == "[Filtered]"

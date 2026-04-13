@@ -36,7 +36,7 @@ class AlphaVantageNewsFeed(NewsFeedBase):
     """Alpha Vantage News & Sentiment adapter."""
 
     name = NewsSource.ALPHA_VANTAGE
-    _api_key_env = "ALPHA_VANTAGE_KEY"
+    _api_key_env = "ALPHA_VANTAGE_KEY"  # pragma: allowlist secret
     _min_interval_s = 300.0  # 25 req/day ≈ 1 req/58min; use 5min for bursts
 
     async def fetch_articles(self, limit: int = 50) -> list[NewsArticle]:

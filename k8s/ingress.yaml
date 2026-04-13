@@ -52,7 +52,7 @@ spec:
         - hopefx.com
         - www.hopefx.com
         - api.hopefx.com
-      secretName: hopefx-tls
+      secretName: hopefx-tls  # pragma: allowlist secret
   rules:
     # API subdomain
     - host: api.hopefx.com

@@ -29,7 +29,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 # Set env vars before any project imports so module-level reads pick them up
-os.environ["SECURITY_JWT_SECRET"] = "test-only-jwt-secret-key-minimum-32-chars!!"
+os.environ["SECURITY_JWT_SECRET"] = "test-only-jwt-secret-key-minimum-32-chars!!"  # pragma: allowlist secret
 os.environ["ALLOWED_SYMBOLS"] = "XAUUSD,EURUSD,BTCUSD"
 os.environ["MAX_ORDER_QUANTITY"] = "10.0"
 # Ensure kill switch is never active during tests regardless of persisted state.

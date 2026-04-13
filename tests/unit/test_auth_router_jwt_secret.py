@@ -27,8 +27,8 @@ from fastapi.security import HTTPAuthorizationCredentials
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-_VALID_SECRET = "a-valid-secret-that-is-at-least-32-chars-long!"
-_OTHER_SECRET = "another-valid-secret-that-is-32-chars-long!!"
+_VALID_SECRET = "a-valid-secret-that-is-at-least-32-chars-long!"  # pragma: allowlist secret
+_OTHER_SECRET = "another-valid-secret-that-is-32-chars-long!!"  # pragma: allowlist secret
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
