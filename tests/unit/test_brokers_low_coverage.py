@@ -23,7 +23,6 @@ import json
 import threading
 import time
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -53,6 +52,7 @@ def mt5_broker(mt5_mod):
     with patch.dict("sys.modules", {"MetaTrader5": mt5_mod}):
         import importlib
         import brokers.mt5_broker as mod
+
         importlib.reload(mod)
         broker = mod.MT5Broker({"login": "12345678", "password": "pass", "server": "Demo"})
         yield broker, mod, mt5_mod
@@ -107,6 +107,7 @@ class TestMT5BrokerConnect:
     def test_connect_sdk_unavailable(self):
         with patch("brokers.mt5_broker._MT5_AVAILABLE", False):
             import brokers.mt5_broker as mod
+
             broker = mod.MT5Broker({"login": "1", "password": "p", "server": "s"})
             result = asyncio.get_event_loop().run_until_complete(broker.connect())
             assert result is False
@@ -136,9 +137,16 @@ class TestMT5BrokerAccount:
         broker, mod, mt5 = mt5_broker
         broker.connected = True
         info = MagicMock(
-            login=12345678, server="Demo", balance=10000.0, equity=10100.0,
-            margin=500.0, margin_free=9600.0, margin_level=2020.0,
-            currency="USD", leverage=100, profit=100.0,
+            login=12345678,
+            server="Demo",
+            balance=10000.0,
+            equity=10100.0,
+            margin=500.0,
+            margin_free=9600.0,
+            margin_level=2020.0,
+            currency="USD",
+            leverage=100,
+            profit=100.0,
         )
         mt5.account_info.return_value = info
         result = asyncio.get_event_loop().run_until_complete(broker.get_account_info())
@@ -162,9 +170,18 @@ class TestMT5BrokerAccount:
         broker, mod, mt5 = mt5_broker
         broker.connected = True
         pos = MagicMock(
-            ticket=1, symbol="XAUUSD", type=0, volume=0.1,
-            price_open=1900.0, price_current=1910.0, sl=1880.0,
-            tp=1950.0, profit=100.0, comment="", magic=0, time=1700000000,
+            ticket=1,
+            symbol="XAUUSD",
+            type=0,
+            volume=0.1,
+            price_open=1900.0,
+            price_current=1910.0,
+            sl=1880.0,
+            tp=1950.0,
+            profit=100.0,
+            comment="",
+            magic=0,
+            time=1700000000,
         )
         mt5.positions_get.return_value = [pos]
         result = asyncio.get_event_loop().run_until_complete(broker.get_positions())
@@ -175,9 +192,18 @@ class TestMT5BrokerAccount:
         broker, mod, mt5 = mt5_broker
         broker.connected = True
         pos = MagicMock(
-            ticket=2, symbol="EURUSD", type=1, volume=0.05,
-            price_open=1.08, price_current=1.07, sl=1.09,
-            tp=1.06, profit=-50.0, comment="", magic=0, time=1700000001,
+            ticket=2,
+            symbol="EURUSD",
+            type=1,
+            volume=0.05,
+            price_open=1.08,
+            price_current=1.07,
+            sl=1.09,
+            tp=1.06,
+            profit=-50.0,
+            comment="",
+            magic=0,
+            time=1700000001,
         )
         mt5.positions_get.return_value = [pos]
         result = asyncio.get_event_loop().run_until_complete(broker.get_positions())
@@ -200,8 +226,16 @@ class TestMT5BrokerAccount:
         broker, mod, mt5 = mt5_broker
         broker.connected = True
         order = MagicMock(
-            ticket=10, symbol="XAUUSD", type=2, volume_current=0.1,
-            price_open=1900.0, sl=1880.0, tp=1950.0, comment="", magic=0, time_setup=1700000000,
+            ticket=10,
+            symbol="XAUUSD",
+            type=2,
+            volume_current=0.1,
+            price_open=1900.0,
+            sl=1880.0,
+            tp=1950.0,
+            comment="",
+            magic=0,
+            time_setup=1700000000,
         )
         mt5.orders_get.return_value = [order]
         result = asyncio.get_event_loop().run_until_complete(broker.get_orders())
@@ -278,8 +312,9 @@ class TestMT5BrokerPlaceOrder:
         result_obj = MagicMock(retcode=10009, order=12347, comment="OK")
         mt5.order_send.return_value = result_obj
         result = asyncio.get_event_loop().run_until_complete(
-            broker.place_order({"symbol": "XAUUSD", "action": "buy", "volume": 0.01,
-                                 "order_type": "limit", "price": 1900.0})
+            broker.place_order(
+                {"symbol": "XAUUSD", "action": "buy", "volume": 0.01, "order_type": "limit", "price": 1900.0}
+            )
         )
         assert result["success"] is True
 
@@ -290,8 +325,9 @@ class TestMT5BrokerPlaceOrder:
         result_obj = MagicMock(retcode=10009, order=12348, comment="OK")
         mt5.order_send.return_value = result_obj
         result = asyncio.get_event_loop().run_until_complete(
-            broker.place_order({"symbol": "XAUUSD", "action": "sell", "volume": 0.01,
-                                 "order_type": "stop", "price": 1880.0})
+            broker.place_order(
+                {"symbol": "XAUUSD", "action": "sell", "volume": 0.01, "order_type": "stop", "price": 1880.0}
+            )
         )
         assert result["success"] is True
 
@@ -299,8 +335,7 @@ class TestMT5BrokerPlaceOrder:
         broker, mod, mt5 = mt5_broker
         broker.connected = True
         result = asyncio.get_event_loop().run_until_complete(
-            broker.place_order({"symbol": "XAUUSD", "action": "buy", "volume": 0.01,
-                                 "order_type": "iceberg"})
+            broker.place_order({"symbol": "XAUUSD", "action": "buy", "volume": 0.01, "order_type": "iceberg"})
         )
         assert result["success"] is False
 
@@ -453,6 +488,7 @@ class TestMT5BrokerCloseModifyCancel:
         assert s["broker"] == "mt5"
         assert s["connected"] is True
 
+
 # ── PART 2: oanda_broker.py ──────────────────────────────────────────────────
 
 from brokers.oanda_broker import OandaBroker, _resolve_env, _mask_account
@@ -489,7 +525,9 @@ class TestOandaHelpers:
 
 
 def _make_oanda_broker():
-    return OandaBroker({"login": "101-123-4567890-001", "password": "token123", "server": "practice"})
+    return OandaBroker(
+        {"login": "101-123-4567890-001", "password": "token123", "server": "practice"}  # pragma: allowlist secret
+    )
 
 
 def _mock_response(status=200, json_data=None, text_data=""):
@@ -532,6 +570,7 @@ class TestOandaBrokerConnect:
     @pytest.mark.asyncio
     async def test_connect_client_error(self):
         import aiohttp
+
         broker = _make_oanda_broker()
         with patch("aiohttp.ClientSession") as MockSession:
             session = MagicMock()
@@ -597,12 +636,21 @@ class TestOandaBrokerAccount:
     @pytest.mark.asyncio
     async def test_get_account_info_success(self):
         broker = self._connected_broker()
-        data = {"account": {
-            "id": "101-123-4567890-001", "currency": "USD",
-            "balance": "10000", "NAV": "10100", "unrealizedPL": "100",
-            "pl": "50", "marginUsed": "500", "marginAvailable": "9600",
-            "openTradeCount": 2, "openPositionCount": 1, "marginRate": "0.02",
-        }}
+        data = {
+            "account": {
+                "id": "101-123-4567890-001",
+                "currency": "USD",
+                "balance": "10000",
+                "NAV": "10100",
+                "unrealizedPL": "100",
+                "pl": "50",
+                "marginUsed": "500",
+                "marginAvailable": "9600",
+                "openTradeCount": 2,
+                "openPositionCount": 1,
+                "marginRate": "0.02",
+            }
+        }
         resp = _mock_response(200, data)
         broker._session.get.return_value = resp
         result = await broker.get_account_info()
@@ -626,10 +674,17 @@ class TestOandaBrokerAccount:
     @pytest.mark.asyncio
     async def test_get_positions_success(self):
         broker = self._connected_broker()
-        data = {"positions": [
-            {"instrument": "XAU_USD", "long": {"units": "100"}, "short": {"units": "0"},
-             "unrealizedPL": "50", "pl": "20"},
-        ]}
+        data = {
+            "positions": [
+                {
+                    "instrument": "XAU_USD",
+                    "long": {"units": "100"},
+                    "short": {"units": "0"},
+                    "unrealizedPL": "50",
+                    "pl": "20",
+                },
+            ]
+        }
         resp = _mock_response(200, data)
         broker._session.get.return_value = resp
         result = await broker.get_positions()
@@ -653,10 +708,19 @@ class TestOandaBrokerAccount:
     @pytest.mark.asyncio
     async def test_get_orders_success(self):
         broker = self._connected_broker()
-        data = {"orders": [
-            {"id": "1", "type": "LIMIT", "instrument": "XAU_USD",
-             "units": "100", "price": "1900", "state": "PENDING", "timeInForce": "GTC"},
-        ]}
+        data = {
+            "orders": [
+                {
+                    "id": "1",
+                    "type": "LIMIT",
+                    "instrument": "XAU_USD",
+                    "units": "100",
+                    "price": "1900",
+                    "state": "PENDING",
+                    "timeInForce": "GTC",
+                },
+            ]
+        }
         resp = _mock_response(200, data)
         broker._session.get.return_value = resp
         result = await broker.get_orders()
@@ -692,8 +756,7 @@ class TestOandaBrokerPlaceOrder:
     async def test_place_order_market_success(self):
         broker = self._connected_broker()
         data = {
-            "orderFillTransaction": {"orderID": "101", "price": "1920.5",
-                                      "tradeOpened": {"tradeID": "201"}},
+            "orderFillTransaction": {"orderID": "101", "price": "1920.5", "tradeOpened": {"tradeID": "201"}},
             "orderCreateTransaction": {"id": "101"},
         }
         resp = _mock_response(201, data)
@@ -708,23 +771,30 @@ class TestOandaBrokerPlaceOrder:
         data = {"orderCreateTransaction": {"id": "102"}}
         resp = _mock_response(201, data)
         broker._session.post.return_value = resp
-        result = await broker.place_order({
-            "instrument": "XAU_USD", "units": 100,
-            "order_type": "LIMIT", "price": 1900.0,
-        })
+        result = await broker.place_order(
+            {
+                "instrument": "XAU_USD",
+                "units": 100,
+                "order_type": "LIMIT",
+                "price": 1900.0,
+            }
+        )
         assert result["success"] is True
 
     @pytest.mark.asyncio
     async def test_place_order_with_sl_tp(self):
         broker = self._connected_broker()
-        data = {"orderFillTransaction": {"orderID": "103", "price": "1920.0",
-                                          "tradeOpened": {"tradeID": "203"}}}
+        data = {"orderFillTransaction": {"orderID": "103", "price": "1920.0", "tradeOpened": {"tradeID": "203"}}}
         resp = _mock_response(201, data)
         broker._session.post.return_value = resp
-        result = await broker.place_order({
-            "instrument": "XAU_USD", "units": 100,
-            "sl_distance": 10.0, "tp_price": 1950.0,
-        })
+        result = await broker.place_order(
+            {
+                "instrument": "XAU_USD",
+                "units": 100,
+                "sl_distance": 10.0,
+                "tp_price": 1950.0,
+            }
+        )
         assert result["success"] is True
 
     @pytest.mark.asyncio
@@ -766,6 +836,7 @@ class TestOandaBrokerPlaceOrder:
     @pytest.mark.asyncio
     async def test_place_order_timeout_retries(self):
         import aiohttp
+
         broker = self._connected_broker()
         broker._session.post.side_effect = aiohttp.ServerTimeoutError()
         with patch("asyncio.sleep", new_callable=AsyncMock):
@@ -775,6 +846,7 @@ class TestOandaBrokerPlaceOrder:
     @pytest.mark.asyncio
     async def test_place_order_connection_error_retries(self):
         import aiohttp
+
         broker = self._connected_broker()
         broker._session.post.side_effect = aiohttp.ClientConnectionError("refused")
         with patch("asyncio.sleep", new_callable=AsyncMock):
@@ -784,6 +856,7 @@ class TestOandaBrokerPlaceOrder:
     @pytest.mark.asyncio
     async def test_place_order_generic_client_error(self):
         import aiohttp
+
         broker = self._connected_broker()
         broker._session.post.side_effect = aiohttp.ClientError("generic")
         result = await broker.place_order({"instrument": "XAU_USD", "units": 100})
@@ -792,14 +865,16 @@ class TestOandaBrokerPlaceOrder:
     @pytest.mark.asyncio
     async def test_place_order_long_client_id_truncated(self):
         broker = self._connected_broker()
-        data = {"orderFillTransaction": {"orderID": "104", "price": "1920.0",
-                                          "tradeOpened": {"tradeID": "204"}}}
+        data = {"orderFillTransaction": {"orderID": "104", "price": "1920.0", "tradeOpened": {"tradeID": "204"}}}
         resp = _mock_response(201, data)
         broker._session.post.return_value = resp
-        result = await broker.place_order({
-            "instrument": "XAU_USD", "units": 100,
-            "client_id": "x" * 200,
-        })
+        result = await broker.place_order(
+            {
+                "instrument": "XAU_USD",
+                "units": 100,
+                "client_id": "x" * 200,
+            }
+        )
         assert result["success"] is True
 
     @pytest.mark.asyncio
@@ -832,10 +907,16 @@ class TestOandaBrokerPlaceOrder:
         assert s["broker"] == "oanda"
         assert s["connected"] is True
 
+
 # ── PART 3: mt5_zmq_bridge.py ────────────────────────────────────────────────
 
 from brokers.mt5_zmq_bridge import (
-    MT5ZmqBridge, BridgeStatus, FillResult, TickData, BridgeStats, get_bridge,
+    MT5ZmqBridge,
+    BridgeStatus,
+    FillResult,
+    TickData,
+    BridgeStats,
+    get_bridge,
 )
 
 
@@ -932,16 +1013,23 @@ class TestMT5ZmqBridgeConnected:
         def inject_fill(cmd_id, payload, **_):
             # Inject fill into the pending queue
             import time as _time
+
             _time.sleep(0.01)
             with b._lock:
                 q = b._pending.get(cmd_id)
             if q:
-                q.put_nowait({
-                    "type": "FILL", "id": cmd_id,
-                    "ticket": 99999, "symbol": "XAUUSD",
-                    "side": "BUY", "lots": 0.01, "price": 1920.5,
-                    "ts": int(_time.time() * 1000),
-                })
+                q.put_nowait(
+                    {
+                        "type": "FILL",
+                        "id": cmd_id,
+                        "ticket": 99999,
+                        "symbol": "XAUUSD",
+                        "side": "BUY",
+                        "lots": 0.01,
+                        "price": 1920.5,
+                        "ts": int(_time.time() * 1000),
+                    }
+                )
 
         original_send = b._send_and_wait
 
@@ -962,6 +1050,7 @@ class TestMT5ZmqBridgeConnected:
 
         def inject_error(cmd_id, payload, **_):
             import time as _time
+
             _time.sleep(0.01)
             with b._lock:
                 q = b._pending.get(cmd_id)
@@ -1018,10 +1107,15 @@ class TestMT5ZmqBridgeDispatch:
         b = self._bridge()
         received = []
         b.register_tick_callback(lambda t: received.append(t))
-        b._dispatch({
-            "type": "TICK", "symbol": "XAUUSD",
-            "bid": 1919.5, "ask": 1920.0, "ts": 1700000000000,
-        })
+        b._dispatch(
+            {
+                "type": "TICK",
+                "symbol": "XAUUSD",
+                "bid": 1919.5,
+                "ask": 1920.0,
+                "ts": 1700000000000,
+            }
+        )
         assert len(received) == 1
         assert received[0].symbol == "XAUUSD"
         assert b._stats.ticks_received == 1
@@ -1035,6 +1129,7 @@ class TestMT5ZmqBridgeDispatch:
     def test_dispatch_fill_to_pending(self):
         b = self._bridge()
         from queue import Queue
+
         q = Queue(maxsize=1)
         b._pending["abc"] = q
         b._dispatch({"type": "FILL", "id": "abc", "ticket": 1, "price": 1920.0, "lots": 0.01, "ts": 0})
@@ -1044,6 +1139,7 @@ class TestMT5ZmqBridgeDispatch:
     def test_dispatch_error_to_pending(self):
         b = self._bridge()
         from queue import Queue
+
         q = Queue(maxsize=1)
         b._pending["xyz"] = q
         b._dispatch({"type": "ERROR", "id": "xyz", "code": 10006, "msg": "err"})
@@ -1053,6 +1149,7 @@ class TestMT5ZmqBridgeDispatch:
     def test_dispatch_pong(self):
         b = self._bridge()
         from queue import Queue
+
         q = Queue(maxsize=1)
         b._pending["ping1"] = q
         b._dispatch({"type": "PONG", "id": "ping1", "ts": 0})
@@ -1073,20 +1170,30 @@ class TestMT5ZmqBridgeDispatch:
         assert fr.ok is True
 
     def test_fill_result_not_ok(self):
-        fr = FillResult(command_id="a", ticket=0, symbol="XAUUSD", side="BUY", lots=0.01,
-                        fill_price=0.0, error_code=10006, error_msg="err")
+        fr = FillResult(
+            command_id="a",
+            ticket=0,
+            symbol="XAUUSD",
+            side="BUY",
+            lots=0.01,
+            fill_price=0.0,
+            error_code=10006,
+            error_msg="err",
+        )
         assert fr.ok is False
 
 
 class TestMT5ZmqBridgeSingleton:
     def test_get_bridge_returns_instance(self):
         import brokers.mt5_zmq_bridge as mod
+
         mod._bridge = None
         b = get_bridge()
         assert isinstance(b, MT5ZmqBridge)
         # Second call returns same instance
         assert get_bridge() is b
         mod._bridge = None  # cleanup
+
 
 # ── PART 4: prop_firms/ftmo.py ───────────────────────────────────────────────
 
@@ -1095,10 +1202,17 @@ from brokers.prop_firms.ftmo import FTMOBroker, FTMOMetrics, FTMOPhase
 
 def _ftmo_metrics(**overrides):
     defaults = dict(
-        account_balance=100000.0, equity=100500.0, profit_loss=500.0,
-        drawdown=0.01, daily_loss_limit=5000.0, remaining_daily_loss=4500.0,
-        monthly_loss_limit=10000.0, remaining_monthly_loss=9500.0,
-        phase=FTMOPhase.CHALLENGE, days_remaining=25, phase_progress=0.1,
+        account_balance=100000.0,
+        equity=100500.0,
+        profit_loss=500.0,
+        drawdown=0.01,
+        daily_loss_limit=5000.0,
+        remaining_daily_loss=4500.0,
+        monthly_loss_limit=10000.0,
+        remaining_monthly_loss=9500.0,
+        phase=FTMOPhase.CHALLENGE,
+        days_remaining=25,
+        phase_progress=0.1,
     )
     defaults.update(overrides)
     return FTMOMetrics(**defaults)
@@ -1160,10 +1274,17 @@ class TestFTMOBrokerGetMetrics:
     async def test_get_metrics_success(self):
         b = FTMOBroker("key", "secret", "acct123")
         data = {
-            "accountBalance": "100000", "equity": "100500", "profitLoss": "500",
-            "drawdown": "0.01", "dailyLossLimit": "5000", "remainingDailyLoss": "4500",
-            "monthlyLossLimit": "10000", "remainingMonthlyLoss": "9500",
-            "phase": "challenge", "daysRemaining": "25", "phaseProgress": "0.1",
+            "accountBalance": "100000",
+            "equity": "100500",
+            "profitLoss": "500",
+            "drawdown": "0.01",
+            "dailyLossLimit": "5000",
+            "remainingDailyLoss": "4500",
+            "monthlyLossLimit": "10000",
+            "remainingMonthlyLoss": "9500",
+            "phase": "challenge",
+            "daysRemaining": "25",
+            "phaseProgress": "0.1",
         }
         resp = _ftmo_resp(200, data)
         session = MagicMock()
@@ -1196,10 +1317,17 @@ class TestFTMOBrokerGetMetrics:
     async def test_get_metrics_updates_rate_limit(self):
         b = FTMOBroker("key", "secret", "acct123")
         data = {
-            "accountBalance": "100000", "equity": "100500", "profitLoss": "500",
-            "drawdown": "0.01", "dailyLossLimit": "5000", "remainingDailyLoss": "4500",
-            "monthlyLossLimit": "10000", "remainingMonthlyLoss": "9500",
-            "phase": "funded", "daysRemaining": "0", "phaseProgress": "1.0",
+            "accountBalance": "100000",
+            "equity": "100500",
+            "profitLoss": "500",
+            "drawdown": "0.01",
+            "dailyLossLimit": "5000",
+            "remainingDailyLoss": "4500",
+            "monthlyLossLimit": "10000",
+            "remainingMonthlyLoss": "9500",
+            "phase": "funded",
+            "daysRemaining": "0",
+            "phaseProgress": "1.0",
         }
         resp = _ftmo_resp(200, data)
         resp.headers = {"X-RateLimit-Remaining": "42", "X-RateLimit-Reset": "9999"}
@@ -1236,8 +1364,7 @@ class TestFTMOBrokerPlaceOrder:
         # Use large quantity so potential_loss > remaining_daily_loss
         with patch.object(b, "get_account_metrics", return_value=_ftmo_metrics(remaining_daily_loss=5.0)):
             with pytest.raises(ValueError, match="exceed daily loss limit"):
-                await b.place_order("EURUSD", "MARKET", "BUY", 1000.0,
-                                    price=1.08, stop_loss=1.07)
+                await b.place_order("EURUSD", "MARKET", "BUY", 1000.0, price=1.08, stop_loss=1.07)
 
     @pytest.mark.asyncio
     async def test_place_order_success(self):
@@ -1270,10 +1397,11 @@ class TestFTMOBrokerOther:
     @pytest.mark.asyncio
     async def test_get_trade_history_success(self):
         b = FTMOBroker("key", "secret", "acct123")
-        data = {"trades": [
-            {"id": "1", "symbol": "EURUSD", "closeTime": "2025-01-01T00:00:00Z",
-             "profit": "100"},
-        ]}
+        data = {
+            "trades": [
+                {"id": "1", "symbol": "EURUSD", "closeTime": "2025-01-01T00:00:00Z", "profit": "100"},
+            ]
+        }
         resp = _ftmo_resp(200, data)
         session = MagicMock()
         session.get.return_value = resp
@@ -1284,8 +1412,7 @@ class TestFTMOBrokerOther:
     @pytest.mark.asyncio
     async def test_check_violation_daily_loss(self):
         b = FTMOBroker("key", "secret", "acct123")
-        with patch.object(b, "get_account_metrics",
-                          return_value=_ftmo_metrics(remaining_daily_loss=0)):
+        with patch.object(b, "get_account_metrics", return_value=_ftmo_metrics(remaining_daily_loss=0)):
             violated, reason = await b.check_violation()
         assert violated is True
         assert "daily" in reason.lower()
@@ -1293,8 +1420,7 @@ class TestFTMOBrokerOther:
     @pytest.mark.asyncio
     async def test_check_violation_monthly_loss(self):
         b = FTMOBroker("key", "secret", "acct123")
-        with patch.object(b, "get_account_metrics",
-                          return_value=_ftmo_metrics(remaining_monthly_loss=0)):
+        with patch.object(b, "get_account_metrics", return_value=_ftmo_metrics(remaining_monthly_loss=0)):
             violated, reason = await b.check_violation()
         assert violated is True
         assert "monthly" in reason.lower()
@@ -1302,8 +1428,7 @@ class TestFTMOBrokerOther:
     @pytest.mark.asyncio
     async def test_check_violation_drawdown(self):
         b = FTMOBroker("key", "secret", "acct123")
-        with patch.object(b, "get_account_metrics",
-                          return_value=_ftmo_metrics(drawdown=0.06)):
+        with patch.object(b, "get_account_metrics", return_value=_ftmo_metrics(drawdown=0.06)):
             violated, reason = await b.check_violation()
         assert violated is True
         assert "drawdown" in reason.lower()
@@ -1352,16 +1477,17 @@ class TestFTMOBrokerOther:
 class TestFTMOConnector:
     def test_ftmo_connector_init(self):
         from brokers.prop_firms.ftmo import FTMOConnector
+
         with patch("brokers.mt5.MT5Connector.__init__", return_value=None):
             c = FTMOConnector.__new__(FTMOConnector)
             c.challenge_type = "demo"
             c.server = "FTMO-Demo"
-            rules = {"max_daily_loss": "5%"}
             # Just verify the class exists and has expected attributes
             assert FTMOConnector is not None
 
     def test_ftmo_connector_get_rules(self):
         from brokers.prop_firms.ftmo import FTMOConnector
+
         with patch("brokers.mt5.MT5Connector.__init__", return_value=None):
             c = FTMOConnector.__new__(FTMOConnector)
             c.challenge_type = "demo"
@@ -1371,18 +1497,25 @@ class TestFTMOConnector:
             assert "max_daily_loss" in rules
             assert "profit_target" in rules
 
+
 # ── PART 5: mt5_bridge.py ────────────────────────────────────────────────────
 
 from brokers.mt5_bridge import (
-    MT5Bridge, MT5Order, MT5FillResult, EX5SignalExporter,
-    OrderSide, OrderType, FillStatus, _retry,
+    MT5Bridge,
+    MT5Order,
+    EX5SignalExporter,
+    OrderSide,
+    FillStatus,
+    _retry,
 )
 
 
 def _signal_bridge(tmp_path):
     """MT5Bridge in signal-export mode (no MT5 SDK)."""
     return MT5Bridge(
-        server="Demo", login=12345678, password="pass",
+        server="Demo",
+        login=12345678,
+        password="pass",  # pragma: allowlist secret
         signal_dir=tmp_path / "signals",
     )
 
@@ -1432,8 +1565,7 @@ class TestMT5BridgeRetry:
 class TestEX5SignalExporter:
     def test_export_creates_file(self, tmp_path):
         exporter = EX5SignalExporter(tmp_path / "signals")
-        order = MT5Order(symbol="XAUUSD", side=OrderSide.BUY, volume=0.1,
-                         stop_loss=1880.0, take_profit=1950.0)
+        order = MT5Order(symbol="XAUUSD", side=OrderSide.BUY, volume=0.1, stop_loss=1880.0, take_profit=1950.0)
         path = exporter.export(order)
         assert path.exists()
         data = json.loads(path.read_text())
@@ -1497,6 +1629,7 @@ class TestEX5SignalExporter:
         path = exporter.export(order)
         # Make file appear old
         import os
+
         old_time = time.time() - 25 * 3600
         os.utime(path, (old_time, old_time))
         removed = exporter.cleanup_old_signals(max_age_hours=24)
@@ -1586,8 +1719,7 @@ class TestMT5BridgeSignalMode:
     def test_send_order_signal_export_timeout(self, tmp_path):
         bridge = _signal_bridge(tmp_path)
         bridge.connect()
-        order = MT5Order(symbol="XAUUSD", side=OrderSide.BUY, volume=0.1,
-                         stop_loss=1880.0, timeout_sec=0.05)
+        order = MT5Order(symbol="XAUUSD", side=OrderSide.BUY, volume=0.1, stop_loss=1880.0, timeout_sec=0.05)
         with pytest.raises(TimeoutError):
             bridge.send_order(order)
 
@@ -1643,8 +1775,7 @@ class TestMT5BridgeSignalMode:
     async def test_async_send_order_signal_mode(self, tmp_path):
         bridge = _signal_bridge(tmp_path)
         bridge.connect()
-        order = MT5Order(symbol="XAUUSD", side=OrderSide.BUY, volume=0.1,
-                         stop_loss=1880.0, timeout_sec=0.05)
+        order = MT5Order(symbol="XAUUSD", side=OrderSide.BUY, volume=0.1, stop_loss=1880.0, timeout_sec=0.05)
         with pytest.raises(TimeoutError):
             await bridge.async_send_order(order)
 
@@ -1669,6 +1800,7 @@ class TestMT5BridgeSignalMode:
         bridge.connect()
         result = await bridge.async_cancel_order(12345, "XAUUSD")
         assert result is True
+
 
 # ── PART 6: brokers/mt5.py (MT5Connector) ────────────────────────────────────
 
@@ -1708,8 +1840,9 @@ def mt5_connector():
     with patch.dict("sys.modules", {"MetaTrader5": mt5_mock}):
         import importlib
         import brokers.mt5 as mod
+
         importlib.reload(mod)
-        config = {"server": "ICMarkets-Demo", "login": 12345678, "password": "pass"}
+        config = {"server": "ICMarkets-Demo", "login": 12345678, "password": "pass"}  # pragma: allowlist secret
         connector = mod.MT5Connector(config)
         yield connector, mod, mt5_mock
 
@@ -1720,6 +1853,7 @@ class TestMT5ConnectorInit:
         with patch.dict("sys.modules", {"MetaTrader5": mt5_mock}):
             import importlib
             import brokers.mt5 as mod
+
             importlib.reload(mod)
             with pytest.raises(ValueError, match="requires"):
                 mod.MT5Connector({"server": "Demo"})
@@ -1727,6 +1861,7 @@ class TestMT5ConnectorInit:
     def test_init_sdk_unavailable_raises(self):
         with patch("brokers.mt5.MT5_AVAILABLE", False):
             import brokers.mt5 as mod
+
             with pytest.raises(ImportError):
                 mod.MT5Connector({"server": "Demo", "login": 1, "password": "p"})
 
@@ -1795,14 +1930,16 @@ class TestMT5ConnectorPlaceOrder:
 
     def test_place_order_not_connected(self, mt5_connector):
         conn, mod, mt5 = mt5_connector
-        from brokers.base import OrderSide, OrderType
+        from brokers.base import OrderSide
+
         result = conn.place_order("XAUUSD", OrderSide.BUY, 0.01)
         assert result is None
 
     def test_place_order_market_buy(self, mt5_connector):
         conn, mod, mt5 = mt5_connector
         conn.connected = True
-        from brokers.base import OrderSide, OrderType
+        from brokers.base import OrderSide
+
         sym_info = MagicMock(visible=True)
         mt5.symbol_info.return_value = sym_info
         tick = MagicMock(ask=1920.0, bid=1919.5)
@@ -1816,7 +1953,8 @@ class TestMT5ConnectorPlaceOrder:
     def test_place_order_market_sell(self, mt5_connector):
         conn, mod, mt5 = mt5_connector
         conn.connected = True
-        from brokers.base import OrderSide, OrderType
+        from brokers.base import OrderSide
+
         sym_info = MagicMock(visible=True)
         mt5.symbol_info.return_value = sym_info
         tick = MagicMock(ask=1920.0, bid=1919.5)
@@ -1830,30 +1968,31 @@ class TestMT5ConnectorPlaceOrder:
         conn, mod, mt5 = mt5_connector
         conn.connected = True
         from brokers.base import OrderSide, OrderType
+
         sym_info = MagicMock(visible=True)
         mt5.symbol_info.return_value = sym_info
         result_obj = MagicMock(retcode=10009, order=1003, volume=0.01, price=1900.0, deal=2003)
         mt5.order_send.return_value = result_obj
-        order = conn.place_order("XAUUSD", OrderSide.BUY, 0.01,
-                                  order_type=OrderType.LIMIT, price=1900.0)
+        order = conn.place_order("XAUUSD", OrderSide.BUY, 0.01, order_type=OrderType.LIMIT, price=1900.0)
         assert order is not None
 
     def test_place_order_stop(self, mt5_connector):
         conn, mod, mt5 = mt5_connector
         conn.connected = True
         from brokers.base import OrderSide, OrderType
+
         sym_info = MagicMock(visible=True)
         mt5.symbol_info.return_value = sym_info
         result_obj = MagicMock(retcode=10009, order=1004, volume=0.01, price=1880.0, deal=2004)
         mt5.order_send.return_value = result_obj
-        order = conn.place_order("XAUUSD", OrderSide.SELL, 0.01,
-                                  order_type=OrderType.STOP, price=1880.0)
+        order = conn.place_order("XAUUSD", OrderSide.SELL, 0.01, order_type=OrderType.STOP, price=1880.0)
         assert order is not None
 
     def test_place_order_symbol_not_found(self, mt5_connector):
         conn, mod, mt5 = mt5_connector
         conn.connected = True
         from brokers.base import OrderSide
+
         mt5.symbol_info.return_value = None
         result = conn.place_order("INVALID", OrderSide.BUY, 0.01)
         assert result is None
@@ -1862,6 +2001,7 @@ class TestMT5ConnectorPlaceOrder:
         conn, mod, mt5 = mt5_connector
         conn.connected = True
         from brokers.base import OrderSide
+
         sym_info = MagicMock(visible=False)
         mt5.symbol_info.return_value = sym_info
         mt5.symbol_select.return_value = False
@@ -1872,6 +2012,7 @@ class TestMT5ConnectorPlaceOrder:
         conn, mod, mt5 = mt5_connector
         conn.connected = True
         from brokers.base import OrderSide
+
         sym_info = MagicMock(visible=True)
         mt5.symbol_info.return_value = sym_info
         mt5.symbol_info_tick.return_value = None
@@ -1882,16 +2023,17 @@ class TestMT5ConnectorPlaceOrder:
         conn, mod, mt5 = mt5_connector
         conn.connected = True
         from brokers.base import OrderSide, OrderType
+
         sym_info = MagicMock(visible=True)
         mt5.symbol_info.return_value = sym_info
-        result = conn.place_order("XAUUSD", OrderSide.BUY, 0.01,
-                                   order_type=OrderType.STOP_LIMIT)
+        result = conn.place_order("XAUUSD", OrderSide.BUY, 0.01, order_type=OrderType.STOP_LIMIT)
         assert result is None
 
     def test_place_order_retcode_not_done(self, mt5_connector):
         conn, mod, mt5 = mt5_connector
         conn.connected = True
         from brokers.base import OrderSide
+
         sym_info = MagicMock(visible=True)
         mt5.symbol_info.return_value = sym_info
         tick = MagicMock(ask=1920.0, bid=1919.5)
@@ -1905,20 +2047,21 @@ class TestMT5ConnectorPlaceOrder:
         conn, mod, mt5 = mt5_connector
         conn.connected = True
         from brokers.base import OrderSide
+
         sym_info = MagicMock(visible=True)
         mt5.symbol_info.return_value = sym_info
         tick = MagicMock(ask=1920.0, bid=1919.5)
         mt5.symbol_info_tick.return_value = tick
         result_obj = MagicMock(retcode=10009, order=1005, volume=0.01, price=1920.0, deal=2005)
         mt5.order_send.return_value = result_obj
-        order = conn.place_order("XAUUSD", OrderSide.BUY, 0.01,
-                                  stop_loss=1880.0, take_profit=1950.0)
+        order = conn.place_order("XAUUSD", OrderSide.BUY, 0.01, stop_loss=1880.0, take_profit=1950.0)
         assert order is not None
 
     def test_place_order_exception(self, mt5_connector):
         conn, mod, mt5 = mt5_connector
         conn.connected = True
         from brokers.base import OrderSide
+
         mt5.symbol_info.side_effect = Exception("crash")
         result = conn.place_order("XAUUSD", OrderSide.BUY, 0.01)
         assert result is None
@@ -1961,8 +2104,9 @@ class TestMT5ConnectorOther:
     def test_get_order_found(self, mt5_connector):
         conn, mod, mt5 = mt5_connector
         conn.connected = True
-        o = MagicMock(ticket=1001, symbol="XAUUSD", type=0,
-                      volume_current=0.01, price_open=1920.0, time_setup=1700000000)
+        o = MagicMock(
+            ticket=1001, symbol="XAUUSD", type=0, volume_current=0.01, price_open=1920.0, time_setup=1700000000
+        )
         mt5.orders_get.return_value = [o]
         result = conn.get_order("1001")
         assert result is not None
@@ -1989,8 +2133,7 @@ class TestMT5ConnectorOther:
     def test_get_positions_success(self, mt5_connector):
         conn, mod, mt5 = mt5_connector
         conn.connected = True
-        pos = MagicMock(symbol="XAUUSD", type=0, volume=0.1,
-                        price_open=1900.0, profit=100.0, time=1700000000)
+        pos = MagicMock(symbol="XAUUSD", type=0, volume=0.1, price_open=1900.0, profit=100.0, time=1700000000)
         mt5.positions_get.return_value = [pos]
         tick = MagicMock(bid=1919.5, ask=1920.0)
         mt5.symbol_info_tick.return_value = tick
@@ -2001,8 +2144,7 @@ class TestMT5ConnectorOther:
     def test_get_positions_short(self, mt5_connector):
         conn, mod, mt5 = mt5_connector
         conn.connected = True
-        pos = MagicMock(symbol="EURUSD", type=1, volume=0.05,
-                        price_open=1.08, profit=-20.0, time=1700000001)
+        pos = MagicMock(symbol="EURUSD", type=1, volume=0.05, price_open=1.08, profit=-20.0, time=1700000001)
         mt5.positions_get.return_value = [pos]
         tick = MagicMock(bid=1.079, ask=1.080)
         mt5.symbol_info_tick.return_value = tick
@@ -2083,8 +2225,7 @@ class TestMT5ConnectorOther:
     def test_get_account_info_success(self, mt5_connector):
         conn, mod, mt5 = mt5_connector
         conn.connected = True
-        acct = MagicMock(balance=10000.0, equity=10100.0, margin=500.0,
-                         margin_free=9600.0)
+        acct = MagicMock(balance=10000.0, equity=10100.0, margin=500.0, margin_free=9600.0)
         mt5.account_info.return_value = acct
         mt5.positions_get.return_value = []
         result = conn.get_account_info()
@@ -2113,8 +2254,9 @@ class TestMT5ConnectorOther:
     def test_get_market_data_success(self, mt5_connector):
         conn, mod, mt5 = mt5_connector
         conn.connected = True
-        rates = [{"time": 1700000000, "open": 1900.0, "high": 1920.0,
-                  "low": 1890.0, "close": 1910.0, "tick_volume": 1000}]
+        rates = [
+            {"time": 1700000000, "open": 1900.0, "high": 1920.0, "low": 1890.0, "close": 1910.0, "tick_volume": 1000}
+        ]
         mt5.copy_rates_from_pos.return_value = rates
         result = conn.get_market_data("XAUUSD", timeframe="H1", limit=1)
         assert result is not None
@@ -2124,8 +2266,7 @@ class TestMT5ConnectorOther:
     def test_get_market_data_all_timeframes(self, mt5_connector):
         conn, mod, mt5 = mt5_connector
         conn.connected = True
-        rates = [{"time": 1700000000, "open": 1.0, "high": 1.1,
-                  "low": 0.9, "close": 1.05, "tick_volume": 100}]
+        rates = [{"time": 1700000000, "open": 1.0, "high": 1.1, "low": 0.9, "close": 1.05, "tick_volume": 100}]
         mt5.copy_rates_from_pos.return_value = rates
         for tf in ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"]:
             result = conn.get_market_data("EURUSD", timeframe=tf, limit=1)
@@ -2134,8 +2275,7 @@ class TestMT5ConnectorOther:
     def test_get_market_data_unknown_timeframe(self, mt5_connector):
         conn, mod, mt5 = mt5_connector
         conn.connected = True
-        rates = [{"time": 1700000000, "open": 1.0, "high": 1.1,
-                  "low": 0.9, "close": 1.05, "tick_volume": 100}]
+        rates = [{"time": 1700000000, "open": 1.0, "high": 1.1, "low": 0.9, "close": 1.05, "tick_volume": 100}]
         mt5.copy_rates_from_pos.return_value = rates
         result = conn.get_market_data("EURUSD", timeframe="INVALID", limit=1)
         assert result is not None  # falls back to H1
@@ -2188,8 +2328,7 @@ class TestMT5ConnectorOther:
     def test_mt5_order_to_order_sell(self, mt5_connector):
         conn, mod, mt5 = mt5_connector
         conn.connected = True
-        o = MagicMock(ticket=2001, symbol="EURUSD", type=1,
-                      volume_current=0.05, price_open=1.08, time_setup=1700000000)
+        o = MagicMock(ticket=2001, symbol="EURUSD", type=1, volume_current=0.05, price_open=1.08, time_setup=1700000000)
         mt5.orders_get.return_value = [o]
         result = conn.get_order("2001")
         assert result is not None
@@ -2197,8 +2336,9 @@ class TestMT5ConnectorOther:
     def test_mt5_order_to_order_limit(self, mt5_connector):
         conn, mod, mt5 = mt5_connector
         conn.connected = True
-        o = MagicMock(ticket=3001, symbol="XAUUSD", type=2,
-                      volume_current=0.1, price_open=1900.0, time_setup=1700000000)
+        o = MagicMock(
+            ticket=3001, symbol="XAUUSD", type=2, volume_current=0.1, price_open=1900.0, time_setup=1700000000
+        )
         mt5.orders_get.return_value = [o]
         result = conn.get_order("3001")
         assert result is not None
