@@ -372,9 +372,7 @@ class GeopoliticalRiskProvider:
         if self._running:
             return
         self._running = True
-        self._poll_task = asyncio.create_task(
-            self._poll_loop(), name="geopolitical_risk_poll"
-        )
+        self._poll_task = asyncio.create_task(self._poll_loop(), name="geopolitical_risk_poll")
         logger.info(
             "GeopoliticalRiskProvider: background poll started (interval=%.0fs)",
             self._poll_interval,
@@ -428,9 +426,7 @@ class GeopoliticalRiskProvider:
             self.event_history.extend(events)
             self.event_history = [e for e in self.event_history if e.timestamp > cutoff]
 
-            logger.debug(
-                "GeopoliticalRiskProvider: cache refreshed with %d events", len(events)
-            )
+            logger.debug("GeopoliticalRiskProvider: cache refreshed with %d events", len(events))
         except Exception as exc:
             logger.error("GeopoliticalRiskProvider: cache refresh failed: %s", exc)
 
@@ -545,10 +541,7 @@ class GeopoliticalRiskProvider:
 
         async with aiohttp.ClientSession(headers=headers, timeout=timeout) as session:
             for layer in self.data_layers:
-                url = (
-                    f"{self.base_url}/api/v1/events"
-                    f"?layer={layer}&range={self.time_range}&format=geojson"
-                )
+                url = f"{self.base_url}/api/v1/events?layer={layer}&range={self.time_range}&format=geojson"
                 try:
                     async with session.get(url) as resp:
                         if resp.status >= 400:
@@ -557,9 +550,7 @@ class GeopoliticalRiskProvider:
                             fetch_errors.append(msg)
                             continue
                         data = await resp.json(content_type=None)
-                        layer_events = self._parse_geojson_features(
-                            data.get("features", []), layer
-                        )
+                        layer_events = self._parse_geojson_features(data.get("features", []), layer)
                         events.extend(layer_events)
                         logger.debug(
                             "World Monitor layer=%s returned %d features",
@@ -1264,7 +1255,10 @@ class WorldMonitorAPIClient:
 
         try:
             timeout = aiohttp.ClientTimeout(total=self.timeout)
-            async with aiohttp.ClientSession(headers=headers, timeout=timeout) as session, session.get(url, params=params) as response:
+            async with (
+                aiohttp.ClientSession(headers=headers, timeout=timeout) as session,
+                session.get(url, params=params) as response,
+            ):
                 response.raise_for_status()
                 return await response.json(content_type=None)
         except aiohttp.ClientError as e:
@@ -1376,9 +1370,7 @@ class WorldMonitorAPIClient:
     async def get_all_layers(self) -> dict[str, Any]:
         """Fetch data from all enabled layers concurrently."""
         tasks = {
-            layer: self._get_cached_or_fetch(layer)
-            for layer in self.enabled_layers
-            if layer in self.API_ENDPOINTS
+            layer: self._get_cached_or_fetch(layer) for layer in self.enabled_layers if layer in self.API_ENDPOINTS
         }
         results_list = await asyncio.gather(*tasks.values(), return_exceptions=True)
         results: dict[str, Any] = {}

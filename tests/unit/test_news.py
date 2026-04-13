@@ -846,6 +846,7 @@ class TestGeopoliticalRiskProvider:
     async def test_get_current_events_returns_list(self):
         """get_current_events returns a list."""
         import os
+
         os.environ.setdefault("HOPEFX_CI", "1")
         from news import GeopoliticalRiskProvider
 
@@ -857,6 +858,7 @@ class TestGeopoliticalRiskProvider:
     async def test_get_risk_assessment_returns_assessment(self):
         """get_risk_assessment returns a GeopoliticalRiskAssessment."""
         import os
+
         os.environ.setdefault("HOPEFX_CI", "1")
         from news import GeopoliticalRiskAssessment, GeopoliticalRiskProvider
 
@@ -868,6 +870,7 @@ class TestGeopoliticalRiskProvider:
     async def test_risk_assessment_has_required_fields(self):
         """Risk assessment has all required fields."""
         import os
+
         os.environ.setdefault("HOPEFX_CI", "1")
         from news import GeopoliticalRiskProvider
 
@@ -881,6 +884,7 @@ class TestGeopoliticalRiskProvider:
     async def test_get_gold_trading_signal_structure(self):
         """get_gold_trading_signal returns expected keys."""
         import os
+
         os.environ.setdefault("HOPEFX_CI", "1")
         from news import GeopoliticalRiskProvider
 
@@ -894,6 +898,7 @@ class TestGeopoliticalRiskProvider:
     async def test_gold_trading_signal_direction_valid(self):
         """Signal direction is one of the normalized uppercase values: BUY, SELL, HOLD."""
         import os
+
         os.environ.setdefault("HOPEFX_CI", "1")
         from news import GeopoliticalRiskProvider
 
