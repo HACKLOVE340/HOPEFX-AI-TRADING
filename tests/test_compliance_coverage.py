@@ -342,7 +342,7 @@ class TestTradeReporting:
             await asyncio.sleep(0.05)
             return record
 
-        record = asyncio.get_event_loop().run_until_complete(run())
+        record = asyncio.run(run())
         assert record.sequence_number == 1
 
     def test_sync_write_failure_does_not_raise(self):
@@ -628,7 +628,7 @@ class TestSumsubProviderHTTP:
             with patch("aiohttp.ClientSession", side_effect=lambda: next(sessions)):
                 return await provider.create_applicant("user1", {"email": "a@b.com"})
 
-        applicant = asyncio.get_event_loop().run_until_complete(run())
+        applicant = asyncio.run(run())
         assert applicant.applicant_id == "app_123"
         assert applicant.sdk_token == "sdk_tok_abc"
 
@@ -646,7 +646,7 @@ class TestSumsubProviderHTTP:
                 return await provider.create_applicant("user1", {})
 
         with pytest.raises(RuntimeError, match="Sumsub create_applicant failed"):
-            asyncio.get_event_loop().run_until_complete(run())
+            asyncio.run(run())
 
     def test_get_status_green(self):
         provider = self._make_provider()
@@ -661,7 +661,7 @@ class TestSumsubProviderHTTP:
             with patch("aiohttp.ClientSession", return_value=session):
                 return await provider.get_status("app_123")
 
-        status = asyncio.get_event_loop().run_until_complete(run())
+        status = asyncio.run(run())
         assert status == VerificationStatus.APPROVED
 
     def test_get_status_red(self):
@@ -677,7 +677,7 @@ class TestSumsubProviderHTTP:
             with patch("aiohttp.ClientSession", return_value=session):
                 return await provider.get_status("app_123")
 
-        status = asyncio.get_event_loop().run_until_complete(run())
+        status = asyncio.run(run())
         assert status == VerificationStatus.REJECTED
 
     def test_get_status_http_error_returns_pending(self):
@@ -693,7 +693,7 @@ class TestSumsubProviderHTTP:
             with patch("aiohttp.ClientSession", return_value=session):
                 return await provider.get_status("app_123")
 
-        status = asyncio.get_event_loop().run_until_complete(run())
+        status = asyncio.run(run())
         assert status == VerificationStatus.PENDING
 
     def test_get_status_no_aiohttp_returns_pending(self):
@@ -703,7 +703,7 @@ class TestSumsubProviderHTTP:
             with patch.dict("sys.modules", {"aiohttp": None}):
                 return await provider.get_status("app_123")
 
-        status = asyncio.get_event_loop().run_until_complete(run())
+        status = asyncio.run(run())
         assert status == VerificationStatus.PENDING
 
 
@@ -751,7 +751,7 @@ class TestOnfidoProviderHTTP:
                     "user1", {"first_name": "John", "last_name": "Doe", "email": "j@d.com"}
                 )
 
-        applicant = asyncio.get_event_loop().run_until_complete(run())
+        applicant = asyncio.run(run())
         assert applicant.applicant_id == "onfido_app_123"
         assert applicant.sdk_token == "onfido_sdk_tok"
 
@@ -769,7 +769,7 @@ class TestOnfidoProviderHTTP:
                 return await provider.create_applicant("user1", {})
 
         with pytest.raises(RuntimeError, match="Onfido create_applicant failed"):
-            asyncio.get_event_loop().run_until_complete(run())
+            asyncio.run(run())
 
     def test_get_status_clear(self):
         provider = self._make_provider()
@@ -784,7 +784,7 @@ class TestOnfidoProviderHTTP:
             with patch("aiohttp.ClientSession", return_value=session):
                 return await provider.get_status("app_123")
 
-        status = asyncio.get_event_loop().run_until_complete(run())
+        status = asyncio.run(run())
         assert status == VerificationStatus.APPROVED
 
     def test_get_status_no_checks_returns_pending(self):
@@ -800,7 +800,7 @@ class TestOnfidoProviderHTTP:
             with patch("aiohttp.ClientSession", return_value=session):
                 return await provider.get_status("app_123")
 
-        status = asyncio.get_event_loop().run_until_complete(run())
+        status = asyncio.run(run())
         assert status == VerificationStatus.PENDING
 
     def test_get_status_http_error_returns_pending(self):
@@ -816,7 +816,7 @@ class TestOnfidoProviderHTTP:
             with patch("aiohttp.ClientSession", return_value=session):
                 return await provider.get_status("app_123")
 
-        status = asyncio.get_event_loop().run_until_complete(run())
+        status = asyncio.run(run())
         assert status == VerificationStatus.PENDING
 
 
@@ -935,7 +935,7 @@ class TestMockKYCProvider:
             async def run():
                 return await provider.create_applicant("user1", {"email": "test@test.com"})
 
-            applicant = asyncio.get_event_loop().run_until_complete(run())
+            applicant = asyncio.run(run())
             # Mock provider creates applicant in PENDING state; get_status returns APPROVED
             assert applicant.user_id == "user1"
             assert applicant.provider == "mock"
@@ -948,7 +948,7 @@ class TestMockKYCProvider:
             async def run():
                 return await provider.get_status("applicant_id_123")
 
-            status = asyncio.get_event_loop().run_until_complete(run())
+            status = asyncio.run(run())
             assert status == VerificationStatus.APPROVED
 
     def test_verify_webhook_always_true(self):
@@ -982,7 +982,7 @@ class TestLocalSDNScreener:
             async def run():
                 return await screener.screen("John Doe")
 
-            result = asyncio.get_event_loop().run_until_complete(run())
+            result = asyncio.run(run())
         assert result.screened is False
         assert result.is_match is False
         assert result.provider == "local_sdn"
@@ -995,7 +995,7 @@ class TestLocalSDNScreener:
         async def run():
             return await screener.screen("Alice Brown")
 
-        result = asyncio.get_event_loop().run_until_complete(run())
+        result = asyncio.run(run())
         assert result.screened is True
         assert result.is_match is False
 
@@ -1007,7 +1007,7 @@ class TestLocalSDNScreener:
         async def run():
             return await screener.screen("John Smith")
 
-        result = asyncio.get_event_loop().run_until_complete(run())
+        result = asyncio.run(run())
         assert result.screened is True
         assert result.is_match is True
         assert "OFAC_SDN" in result.matched_lists
@@ -1026,7 +1026,7 @@ class TestLocalSDNScreener:
                         screened=False, is_match=False, match_score=0.0, matched_lists=[], provider="local_sdn"
                     )
 
-        result = asyncio.get_event_loop().run_until_complete(run())
+        result = asyncio.run(run())
         assert result.is_match is False
 
 
@@ -1067,7 +1067,7 @@ class TestKYCGateway:
         async def run():
             return await gateway.create_applicant("user1", {"first_name": "John", "last_name": "Doe"})
 
-        applicant = asyncio.get_event_loop().run_until_complete(run())
+        applicant = asyncio.run(run())
         assert applicant.applicant_id == "app_123"
 
     def test_create_applicant_sanctions_match_raises(self):
@@ -1079,7 +1079,7 @@ class TestKYCGateway:
             return await gateway.create_applicant("user1", {"first_name": "Bad", "last_name": "Actor"})
 
         with pytest.raises(PermissionError, match="sanctions match"):
-            asyncio.get_event_loop().run_until_complete(run())
+            asyncio.run(run())
 
     def test_create_applicant_no_name_skips_sanctions(self):
         provider = self._make_mock_provider()
@@ -1089,7 +1089,7 @@ class TestKYCGateway:
         async def run():
             return await gateway.create_applicant("user1", {})
 
-        applicant = asyncio.get_event_loop().run_until_complete(run())
+        applicant = asyncio.run(run())
         assert applicant is not None
         screener.screen.assert_not_called()
 
@@ -1102,7 +1102,7 @@ class TestKYCGateway:
         async def run():
             return await gateway.create_applicant("user1", {"document_type": "passport"})
 
-        asyncio.get_event_loop().run_until_complete(run())
+        asyncio.run(run())
         assert cm.get_kyc_status("user1") == KYCStatus.PENDING
 
     def test_check_status_approved(self):
@@ -1119,7 +1119,7 @@ class TestKYCGateway:
         async def run():
             return await gateway.check_status("app_123")
 
-        status = asyncio.get_event_loop().run_until_complete(run())
+        status = asyncio.run(run())
         assert status == VerificationStatus.APPROVED
 
     def test_check_status_rejected_updates_compliance(self):
@@ -1137,7 +1137,7 @@ class TestKYCGateway:
         async def run():
             return await gateway.check_status("app_123")
 
-        asyncio.get_event_loop().run_until_complete(run())
+        asyncio.run(run())
         assert cm.get_kyc_status("user1") == KYCStatus.REJECTED
 
     def test_webhook_event_valid(self):
@@ -1153,7 +1153,7 @@ class TestKYCGateway:
         async def run():
             return await gateway.webhook_event(b"payload", "sig", {"applicantId": "app_123"})
 
-        result = asyncio.get_event_loop().run_until_complete(run())
+        result = asyncio.run(run())
         assert result is True
 
     def test_webhook_event_invalid_signature(self):
@@ -1164,7 +1164,7 @@ class TestKYCGateway:
         async def run():
             return await gateway.webhook_event(b"payload", "bad_sig", {})
 
-        result = asyncio.get_event_loop().run_until_complete(run())
+        result = asyncio.run(run())
         assert result is False
 
     def test_screen_sanctions_falls_back_to_local(self):
@@ -1182,7 +1182,7 @@ class TestKYCGateway:
         async def run():
             return await gateway.screen_sanctions("John Doe")
 
-        result = asyncio.get_event_loop().run_until_complete(run())
+        result = asyncio.run(run())
         assert result is not None
 
     def test_build_provider_mock_in_dev(self):
@@ -1307,7 +1307,7 @@ class TestRegulatoryReporter:
             async def run():
                 return await reporter.submit({"id": "t1", "symbol": "XAUUSD"})
 
-            record = asyncio.get_event_loop().run_until_complete(run())
+            record = asyncio.run(run())
             assert record.status == "suppressed"
 
     def test_submit_suppressed_in_prop_firm_mode(self):
@@ -1328,7 +1328,7 @@ class TestRegulatoryReporter:
             async def run():
                 return await reporter.submit({"id": "t1", "symbol": "XAUUSD"})
 
-            record = asyncio.get_event_loop().run_until_complete(run())
+            record = asyncio.run(run())
             assert record.status == "suppressed"
 
     def test_retry_dlq_empty(self):
@@ -1340,7 +1340,7 @@ class TestRegulatoryReporter:
         async def run():
             return await reporter.retry_dlq()
 
-        ok, failed = asyncio.get_event_loop().run_until_complete(run())
+        ok, failed = asyncio.run(run())
         assert ok == 0
         assert failed == 0
 
@@ -1383,7 +1383,7 @@ class TestRegulatoryReporter:
                 with patch.object(reporter, "_build_headers", return_value={}):
                     return await reporter.retry_dlq()
 
-        ok, failed = asyncio.get_event_loop().run_until_complete(run())
+        ok, failed = asyncio.run(run())
         assert ok == 1
         assert failed == 0
 
@@ -1410,7 +1410,7 @@ class TestRegulatoryReporter:
                 with patch.object(reporter, "_build_headers", return_value={}):
                     return await reporter.retry_dlq()
 
-        ok, failed = asyncio.get_event_loop().run_until_complete(run())
+        ok, failed = asyncio.run(run())
         assert ok == 0
         assert failed == 1
 
@@ -1475,7 +1475,7 @@ class TestRegulatoryReporterInternals:
             with patch("aiohttp.ClientSession", side_effect=Exception("network error")):
                 return await self.reporter._http_post("https://example.com", {"data": "test"}, {})
 
-        success, code, error = asyncio.get_event_loop().run_until_complete(run())
+        success, code, error = asyncio.run(run())
         assert success is False
         assert error is not None
 
@@ -1494,7 +1494,7 @@ class TestRegulatoryReporterInternals:
             with patch.object(self.reporter, "_http_post", return_value=(True, 200, None)):
                 return await self.reporter._submit_with_retry("https://example.com", {}, {}, record)
 
-        success, code, error = asyncio.get_event_loop().run_until_complete(run())
+        success, code, error = asyncio.run(run())
         assert success is True
         assert code == 200
 
@@ -1514,7 +1514,7 @@ class TestRegulatoryReporterInternals:
                 with patch("asyncio.sleep", return_value=None):
                     return await self.reporter._submit_with_retry("https://example.com", {}, {}, record)
 
-        success, code, error = asyncio.get_event_loop().run_until_complete(run())
+        success, code, error = asyncio.run(run())
         assert success is False
         assert self.reporter._dlq.size() > 0
 
@@ -1525,7 +1525,7 @@ class TestRegulatoryReporterInternals:
             with patch.object(self.reporter, "_submit_with_retry", return_value=(True, 200, None)):
                 return await self.reporter._submit_cftc_sdr(trade, "r1", "t1")
 
-        record = asyncio.get_event_loop().run_until_complete(run())
+        record = asyncio.run(run())
         assert record.status == "submitted"
 
     def test_submit_cftc_sdr_failure(self):
@@ -1535,7 +1535,7 @@ class TestRegulatoryReporterInternals:
             with patch.object(self.reporter, "_submit_with_retry", return_value=(False, 500, "error")):
                 return await self.reporter._submit_cftc_sdr(trade, "r1", "t1")
 
-        record = asyncio.get_event_loop().run_until_complete(run())
+        record = asyncio.run(run())
         assert record.status == "dlq"
 
     def test_submit_mifid_ii_success(self):
@@ -1545,7 +1545,7 @@ class TestRegulatoryReporterInternals:
             with patch.object(self.reporter, "_submit_with_retry", return_value=(True, 201, None)):
                 return await self.reporter._submit_mifid_ii(trade, "r1", "t1")
 
-        record = asyncio.get_event_loop().run_until_complete(run())
+        record = asyncio.run(run())
         assert record.status == "submitted"
 
     def test_submit_enabled_us_jurisdiction(self):
@@ -1582,7 +1582,7 @@ class TestRegulatoryReporterInternals:
                 ):
                     return await reporter.submit({"id": "t1"})
 
-            record = asyncio.get_event_loop().run_until_complete(run())
+            record = asyncio.run(run())
             assert record.status == "submitted"
 
     def test_submit_enabled_eu_jurisdiction(self):
@@ -1619,5 +1619,5 @@ class TestRegulatoryReporterInternals:
                 ):
                     return await reporter.submit({"id": "t1"})
 
-            record = asyncio.get_event_loop().run_until_complete(run())
+            record = asyncio.run(run())
             assert record.status == "submitted"
