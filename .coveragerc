@@ -18,6 +18,7 @@ source =
     compliance
     analytics
     backtesting
+    core
 branch = true
 omit =
     */tests/*
@@ -56,6 +57,20 @@ omit =
     execution/legacy.py
     execution/_prom_metrics.py
     execution/engine.py
+    # core/ modules excluded from unit coverage:
+    # GPU engine requires CUDA hardware — untestable in CI without GPU
+    core/acceleration/gpu_engine.py
+    # Decision engine requires full app wiring (brain+risk+executor+bus)
+    # covered by integration tests
+    core/decision/HOPEFXDecisionEngine.py
+    # Background tasks, health, metrics, middleware, page_routes are
+    # FastAPI-wired and covered by API integration tests
+    core/background_tasks.py
+    core/health.py
+    core/metrics.py
+    core/middleware.py
+    core/page_routes.py
+    core/email_webhook.py
 
 [report]
 precision = 2
