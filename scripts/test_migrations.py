@@ -18,8 +18,7 @@ Usage:
     python scripts/test_migrations.py
 
     # Against a real PostgreSQL DB (staging):
-    DATABASE_URL=postgresql://user:pass@host:5432/hopefx_staging \  # pragma: allowlist secret
-        python scripts/test_migrations.py
+    DATABASE_URL=postgresql://user:pass@host:5432/hopefx_staging python scripts/test_migrations.py  # pragma: allowlist secret
 
     # Verbose (show each revision):
     python scripts/test_migrations.py --verbose
