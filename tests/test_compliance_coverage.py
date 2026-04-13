@@ -12,12 +12,12 @@ Covers:
   - compliance/regulatory_reporter.py (DeadLetterQueue, RegulatoryReporter,
                                         ReportRecord)
 """
+
 from __future__ import annotations
 
 import asyncio
 import hashlib
 import hmac
-import json
 import os
 import tempfile
 from contextlib import contextmanager
@@ -190,6 +190,7 @@ class TestAMLGateWithDb:
 class TestAMLGateSingleton:
     def test_get_aml_gate_creates_default(self):
         import compliance.aml as aml_mod
+
         aml_mod._aml_gate = None
         gate = get_aml_gate()
         assert isinstance(gate, AMLGate)
@@ -201,6 +202,7 @@ class TestAMLGateSingleton:
 
     def test_get_aml_gate_returns_existing(self):
         import compliance.aml as aml_mod
+
         existing = AMLGate()
         aml_mod._aml_gate = existing
         assert get_aml_gate() is existing
@@ -224,9 +226,7 @@ class TestImmutableAuditLog:
         self.log = ImmutableAuditLog(log_path=self.tmpdir + "/")
 
     def test_append_creates_record(self):
-        record = self.log.append(
-            AuditLevel.INFO, "ORDER", "system", "test_action", {"key": "val"}
-        )
+        record = self.log.append(AuditLevel.INFO, "ORDER", "system", "test_action", {"key": "val"})
         assert isinstance(record, AuditRecord)
         assert record.sequence_number == 1
         assert record.category == "ORDER"
@@ -452,6 +452,7 @@ class TestComplianceManagerWithDb:
             q.all.return_value = audit_rows or []
             session.query.return_value = q
             yield session
+
         return session_factory
 
     def test_submit_kyc_with_db_no_existing(self):
@@ -578,7 +579,11 @@ class TestSumsubProviderHTTP:
     """Tests for Sumsub HTTP methods using mocked aiohttp."""
 
     def _make_provider(self):
-        with patch.dict(os.environ, {"SUMSUB_APP_TOKEN": "tok", "SUMSUB_SECRET_KEY": "secret"}):
+        env = {
+            "SUMSUB_APP_TOKEN": "tok",
+            "SUMSUB_SECRET_KEY": "secret",  # pragma: allowlist secret
+        }
+        with patch.dict(os.environ, env):
             return SumsubProvider()
 
     def _mock_response(self, status, json_data):
@@ -742,9 +747,9 @@ class TestOnfidoProviderHTTP:
 
         async def run():
             with patch("aiohttp.ClientSession", side_effect=lambda: next(sessions)):
-                return await provider.create_applicant("user1", {
-                    "first_name": "John", "last_name": "Doe", "email": "j@d.com"
-                })
+                return await provider.create_applicant(
+                    "user1", {"first_name": "John", "last_name": "Doe", "email": "j@d.com"}
+                )
 
         applicant = asyncio.get_event_loop().run_until_complete(run())
         assert applicant.applicant_id == "onfido_app_123"
@@ -817,7 +822,7 @@ class TestOnfidoProviderHTTP:
 
 class TestSumsubProvider:
     def test_verify_webhook_valid(self):
-        secret = "test_secret"
+        secret = "test_secret"  # pragma: allowlist secret
         payload = b'{"applicantId": "a1"}'
         sig = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
         with patch.dict(os.environ, {"SUMSUB_SECRET_KEY": secret, "SUMSUB_APP_TOKEN": "tok"}):
@@ -825,7 +830,11 @@ class TestSumsubProvider:
             assert provider.verify_webhook(payload, sig) is True
 
     def test_verify_webhook_invalid(self):
-        with patch.dict(os.environ, {"SUMSUB_SECRET_KEY": "secret", "SUMSUB_APP_TOKEN": "tok"}):
+        env_invalid = {
+            "SUMSUB_SECRET_KEY": "secret",  # pragma: allowlist secret
+            "SUMSUB_APP_TOKEN": "tok",
+        }
+        with patch.dict(os.environ, env_invalid):
             provider = SumsubProvider()
             assert provider.verify_webhook(b"payload", "wrong_sig") is False
 
@@ -969,8 +978,10 @@ class TestLocalSDNScreener:
     def test_screen_not_loaded_ci_returns_safe_default(self):
         screener = LocalSDNScreener()
         with patch.dict(os.environ, {"HOPEFX_CI": "1"}):
+
             async def run():
                 return await screener.screen("John Doe")
+
             result = asyncio.get_event_loop().run_until_complete(run())
         assert result.screened is False
         assert result.is_match is False
@@ -983,6 +994,7 @@ class TestLocalSDNScreener:
 
         async def run():
             return await screener.screen("Alice Brown")
+
         result = asyncio.get_event_loop().run_until_complete(run())
         assert result.screened is True
         assert result.is_match is False
@@ -994,6 +1006,7 @@ class TestLocalSDNScreener:
 
         async def run():
             return await screener.screen("John Smith")
+
         result = asyncio.get_event_loop().run_until_complete(run())
         assert result.screened is True
         assert result.is_match is True
@@ -1010,9 +1023,9 @@ class TestLocalSDNScreener:
                     screener._loaded = False
                     # Simulate load failure by setting _loaded=False after load
                     return SanctionsResult(
-                        screened=False, is_match=False, match_score=0.0,
-                        matched_lists=[], provider="local_sdn"
+                        screened=False, is_match=False, match_score=0.0, matched_lists=[], provider="local_sdn"
                     )
+
         result = asyncio.get_event_loop().run_until_complete(run())
         assert result.is_match is False
 
@@ -1020,12 +1033,14 @@ class TestLocalSDNScreener:
 class TestKYCGateway:
     def _make_mock_provider(self, status=VerificationStatus.APPROVED):
         provider = MagicMock()
-        provider.create_applicant = AsyncMock(return_value=KYCApplicant(
-            applicant_id="app_123",
-            user_id="user1",
-            provider="mock",
-            sdk_token="tok_123",
-        ))
+        provider.create_applicant = AsyncMock(
+            return_value=KYCApplicant(
+                applicant_id="app_123",
+                user_id="user1",
+                provider="mock",
+                sdk_token="tok_123",
+            )
+        )
         provider.get_status = AsyncMock(return_value=status)
         provider.verify_webhook = MagicMock(return_value=True)
         provider.parse_webhook = MagicMock(return_value=("app_123", status))
@@ -1033,13 +1048,15 @@ class TestKYCGateway:
 
     def _make_mock_screener(self, is_match=False):
         screener = MagicMock()
-        screener.screen = AsyncMock(return_value=SanctionsResult(
-            screened=True,
-            is_match=is_match,
-            match_score=0.9 if is_match else 0.0,
-            matched_lists=["OFAC_SDN"] if is_match else [],
-            provider="mock_screener",
-        ))
+        screener.screen = AsyncMock(
+            return_value=SanctionsResult(
+                screened=True,
+                is_match=is_match,
+                match_score=0.9 if is_match else 0.0,
+                matched_lists=["OFAC_SDN"] if is_match else [],
+                provider="mock_screener",
+            )
+        )
         return screener
 
     def test_create_applicant_no_sanctions(self):
@@ -1048,9 +1065,8 @@ class TestKYCGateway:
         gateway = KYCGateway(provider=provider, screener=screener)
 
         async def run():
-            return await gateway.create_applicant("user1", {
-                "first_name": "John", "last_name": "Doe"
-            })
+            return await gateway.create_applicant("user1", {"first_name": "John", "last_name": "Doe"})
+
         applicant = asyncio.get_event_loop().run_until_complete(run())
         assert applicant.applicant_id == "app_123"
 
@@ -1060,9 +1076,8 @@ class TestKYCGateway:
         gateway = KYCGateway(provider=provider, screener=screener)
 
         async def run():
-            return await gateway.create_applicant("user1", {
-                "first_name": "Bad", "last_name": "Actor"
-            })
+            return await gateway.create_applicant("user1", {"first_name": "Bad", "last_name": "Actor"})
+
         with pytest.raises(PermissionError, match="sanctions match"):
             asyncio.get_event_loop().run_until_complete(run())
 
@@ -1073,6 +1088,7 @@ class TestKYCGateway:
 
         async def run():
             return await gateway.create_applicant("user1", {})
+
         applicant = asyncio.get_event_loop().run_until_complete(run())
         assert applicant is not None
         screener.screen.assert_not_called()
@@ -1085,7 +1101,8 @@ class TestKYCGateway:
 
         async def run():
             return await gateway.create_applicant("user1", {"document_type": "passport"})
-        applicant = asyncio.get_event_loop().run_until_complete(run())
+
+        asyncio.get_event_loop().run_until_complete(run())
         assert cm.get_kyc_status("user1") == KYCStatus.PENDING
 
     def test_check_status_approved(self):
@@ -1093,12 +1110,15 @@ class TestKYCGateway:
         gateway = KYCGateway(provider=provider, screener=self._make_mock_screener())
         # Pre-populate applicant
         gateway._applicants["app_123"] = KYCApplicant(
-            applicant_id="app_123", user_id="user1", provider="mock",
+            applicant_id="app_123",
+            user_id="user1",
+            provider="mock",
             status=VerificationStatus.PENDING,
         )
 
         async def run():
             return await gateway.check_status("app_123")
+
         status = asyncio.get_event_loop().run_until_complete(run())
         assert status == VerificationStatus.APPROVED
 
@@ -1108,12 +1128,15 @@ class TestKYCGateway:
         cm.submit_kyc("user1", "passport")
         gateway = KYCGateway(provider=provider, screener=self._make_mock_screener(), compliance_manager=cm)
         gateway._applicants["app_123"] = KYCApplicant(
-            applicant_id="app_123", user_id="user1", provider="mock",
+            applicant_id="app_123",
+            user_id="user1",
+            provider="mock",
             status=VerificationStatus.PENDING,
         )
 
         async def run():
             return await gateway.check_status("app_123")
+
         asyncio.get_event_loop().run_until_complete(run())
         assert cm.get_kyc_status("user1") == KYCStatus.REJECTED
 
@@ -1121,12 +1144,15 @@ class TestKYCGateway:
         provider = self._make_mock_provider()
         gateway = KYCGateway(provider=provider, screener=self._make_mock_screener())
         gateway._applicants["app_123"] = KYCApplicant(
-            applicant_id="app_123", user_id="user1", provider="mock",
+            applicant_id="app_123",
+            user_id="user1",
+            provider="mock",
             status=VerificationStatus.PENDING,
         )
 
         async def run():
             return await gateway.webhook_event(b"payload", "sig", {"applicantId": "app_123"})
+
         result = asyncio.get_event_loop().run_until_complete(run())
         assert result is True
 
@@ -1137,22 +1163,25 @@ class TestKYCGateway:
 
         async def run():
             return await gateway.webhook_event(b"payload", "bad_sig", {})
+
         result = asyncio.get_event_loop().run_until_complete(run())
         assert result is False
 
     def test_screen_sanctions_falls_back_to_local(self):
         # Primary screener returns screened=False → fallback to local SDN
         primary = MagicMock()
-        primary.screen = AsyncMock(return_value=SanctionsResult(
-            screened=False, is_match=False, match_score=0.0,
-            matched_lists=[], provider="refinitiv_unavailable"
-        ))
+        primary.screen = AsyncMock(
+            return_value=SanctionsResult(
+                screened=False, is_match=False, match_score=0.0, matched_lists=[], provider="refinitiv_unavailable"
+            )
+        )
         gateway = KYCGateway(provider=self._make_mock_provider(), screener=primary)
         # Patch fallback screener
         gateway._fallback_screener = self._make_mock_screener(is_match=False)
 
         async def run():
             return await gateway.screen_sanctions("John Doe")
+
         result = asyncio.get_event_loop().run_until_complete(run())
         assert result is not None
 
@@ -1173,6 +1202,7 @@ class TestKYCGateway:
 
     def test_get_kyc_gateway_singleton(self):
         import compliance.kyc_provider as kyc_mod
+
         kyc_mod._kyc_gateway = None
         with patch.dict(os.environ, {"KYC_PROVIDER": "mock", "APP_ENV": "development", "KYC_MOCK_DELAY_S": "0"}):
             gw = get_kyc_gateway()
@@ -1184,6 +1214,7 @@ class TestKYCGateway:
 
     def test_init_kyc_gateway(self):
         import compliance.kyc_provider as kyc_mod
+
         kyc_mod._kyc_gateway = None
         cm = ComplianceManager()
         with patch.dict(os.environ, {"KYC_PROVIDER": "mock", "APP_ENV": "development", "KYC_MOCK_DELAY_S": "0"}):
@@ -1197,7 +1228,6 @@ class TestKYCGateway:
 # ─────────────────────────────────────────────────────────────────────────────
 from compliance.regulatory_reporter import (
     DeadLetterQueue,
-    RegulatoryReporter,
     ReportRecord,
 )
 
@@ -1260,12 +1290,16 @@ class TestRegulatoryReporter:
         self.tmpdir = tempfile.mkdtemp()
 
     def test_submit_suppressed_when_disabled(self):
-        with patch.dict(os.environ, {
-            "REGULATORY_REPORTING_ENABLED": "false",
-            "PROP_FIRM_MODE": "false",
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "REGULATORY_REPORTING_ENABLED": "false",
+                "PROP_FIRM_MODE": "false",
+            },
+        ):
             import importlib
             import compliance.regulatory_reporter as rr_mod
+
             importlib.reload(rr_mod)
             reporter = rr_mod.RegulatoryReporter()
             reporter._dlq = rr_mod.DeadLetterQueue(path=Path(self.tmpdir))
@@ -1277,12 +1311,16 @@ class TestRegulatoryReporter:
             assert record.status == "suppressed"
 
     def test_submit_suppressed_in_prop_firm_mode(self):
-        with patch.dict(os.environ, {
-            "REGULATORY_REPORTING_ENABLED": "true",
-            "PROP_FIRM_MODE": "true",
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "REGULATORY_REPORTING_ENABLED": "true",
+                "PROP_FIRM_MODE": "true",
+            },
+        ):
             import importlib
             import compliance.regulatory_reporter as rr_mod
+
             importlib.reload(rr_mod)
             reporter = rr_mod.RegulatoryReporter()
             reporter._dlq = rr_mod.DeadLetterQueue(path=Path(self.tmpdir))
@@ -1295,6 +1333,7 @@ class TestRegulatoryReporter:
 
     def test_retry_dlq_empty(self):
         import compliance.regulatory_reporter as rr_mod
+
         reporter = rr_mod.RegulatoryReporter()
         reporter._dlq = rr_mod.DeadLetterQueue(path=Path(self.tmpdir))
 
@@ -1322,6 +1361,7 @@ class TestRegulatoryReporter:
 
     def test_retry_dlq_with_entries_success(self):
         import compliance.regulatory_reporter as rr_mod
+
         reporter = rr_mod.RegulatoryReporter()
         reporter._dlq = rr_mod.DeadLetterQueue(path=Path(self.tmpdir))
 
@@ -1349,6 +1389,7 @@ class TestRegulatoryReporter:
 
     def test_retry_dlq_with_entries_failure(self):
         import compliance.regulatory_reporter as rr_mod
+
         reporter = rr_mod.RegulatoryReporter()
         reporter._dlq = rr_mod.DeadLetterQueue(path=Path(self.tmpdir))
 
@@ -1380,13 +1421,18 @@ class TestRegulatoryReporterInternals:
     def setup_method(self):
         self.tmpdir = tempfile.mkdtemp()
         import compliance.regulatory_reporter as rr_mod
+
         self.reporter = rr_mod.RegulatoryReporter()
         self.reporter._dlq = rr_mod.DeadLetterQueue(path=Path(self.tmpdir))
 
     def test_build_cftc_payload(self):
         trade = {
-            "id": "t1", "symbol": "XAUUSD", "direction": "long",
-            "fill_price": 2000.0, "quantity": 1.0, "notional_usd": 2000.0,
+            "id": "t1",
+            "symbol": "XAUUSD",
+            "direction": "long",
+            "fill_price": 2000.0,
+            "quantity": 1.0,
+            "notional_usd": 2000.0,
         }
         payload = self.reporter._build_cftc_payload(trade, "r1")
         assert payload["reportId"] == "r1"
@@ -1427,56 +1473,58 @@ class TestRegulatoryReporterInternals:
     def test_http_post_exception_returns_false(self):
         async def run():
             with patch("aiohttp.ClientSession", side_effect=Exception("network error")):
-                return await self.reporter._http_post(
-                    "https://example.com", {"data": "test"}, {}
-                )
+                return await self.reporter._http_post("https://example.com", {"data": "test"}, {})
+
         success, code, error = asyncio.get_event_loop().run_until_complete(run())
         assert success is False
         assert error is not None
 
     def test_submit_with_retry_success_first_attempt(self):
-        import compliance.regulatory_reporter as rr_mod
         record = ReportRecord(
-            report_id="r1", jurisdiction="US", endpoint="https://example.com",
-            trade_id="t1", payload={}, submitted_at=datetime.now(UTC).isoformat(),
+            report_id="r1",
+            jurisdiction="US",
+            endpoint="https://example.com",
+            trade_id="t1",
+            payload={},
+            submitted_at=datetime.now(UTC).isoformat(),
             status="pending",
         )
 
         async def run():
             with patch.object(self.reporter, "_http_post", return_value=(True, 200, None)):
-                return await self.reporter._submit_with_retry(
-                    "https://example.com", {}, {}, record
-                )
+                return await self.reporter._submit_with_retry("https://example.com", {}, {}, record)
+
         success, code, error = asyncio.get_event_loop().run_until_complete(run())
         assert success is True
         assert code == 200
 
     def test_submit_with_retry_all_fail_enqueues_dlq(self):
-        import compliance.regulatory_reporter as rr_mod
         record = ReportRecord(
-            report_id="r1", jurisdiction="US", endpoint="https://example.com",
-            trade_id="t1", payload={}, submitted_at=datetime.now(UTC).isoformat(),
+            report_id="r1",
+            jurisdiction="US",
+            endpoint="https://example.com",
+            trade_id="t1",
+            payload={},
+            submitted_at=datetime.now(UTC).isoformat(),
             status="pending",
         )
 
         async def run():
             with patch.object(self.reporter, "_http_post", return_value=(False, 500, "server error")):
                 with patch("asyncio.sleep", return_value=None):
-                    return await self.reporter._submit_with_retry(
-                        "https://example.com", {}, {}, record
-                    )
+                    return await self.reporter._submit_with_retry("https://example.com", {}, {}, record)
+
         success, code, error = asyncio.get_event_loop().run_until_complete(run())
         assert success is False
         assert self.reporter._dlq.size() > 0
 
     def test_submit_cftc_sdr_success(self):
-        trade = {"id": "t1", "symbol": "XAUUSD", "direction": "long",
-                 "fill_price": 2000.0, "quantity": 1.0}
+        trade = {"id": "t1", "symbol": "XAUUSD", "direction": "long", "fill_price": 2000.0, "quantity": 1.0}
 
         async def run():
-            with patch.object(self.reporter, "_submit_with_retry",
-                              return_value=(True, 200, None)):
+            with patch.object(self.reporter, "_submit_with_retry", return_value=(True, 200, None)):
                 return await self.reporter._submit_cftc_sdr(trade, "r1", "t1")
+
         record = asyncio.get_event_loop().run_until_complete(run())
         assert record.status == "submitted"
 
@@ -1484,9 +1532,9 @@ class TestRegulatoryReporterInternals:
         trade = {"id": "t1"}
 
         async def run():
-            with patch.object(self.reporter, "_submit_with_retry",
-                              return_value=(False, 500, "error")):
+            with patch.object(self.reporter, "_submit_with_retry", return_value=(False, 500, "error")):
                 return await self.reporter._submit_cftc_sdr(trade, "r1", "t1")
+
         record = asyncio.get_event_loop().run_until_complete(run())
         assert record.status == "dlq"
 
@@ -1494,60 +1542,82 @@ class TestRegulatoryReporterInternals:
         trade = {"id": "t1", "direction": "long", "fill_price": 2000.0, "quantity": 1.0}
 
         async def run():
-            with patch.object(self.reporter, "_submit_with_retry",
-                              return_value=(True, 201, None)):
+            with patch.object(self.reporter, "_submit_with_retry", return_value=(True, 201, None)):
                 return await self.reporter._submit_mifid_ii(trade, "r1", "t1")
+
         record = asyncio.get_event_loop().run_until_complete(run())
         assert record.status == "submitted"
 
     def test_submit_enabled_us_jurisdiction(self):
         """When reporting enabled and jurisdiction=US, routes to CFTC SDR."""
         import compliance.regulatory_reporter as rr_mod
-        with patch.dict(os.environ, {
-            "REGULATORY_REPORTING_ENABLED": "true",
-            "PROP_FIRM_MODE": "false",
-            "REGULATORY_JURISDICTION": "US",
-        }):
+
+        with patch.dict(
+            os.environ,
+            {
+                "REGULATORY_REPORTING_ENABLED": "true",
+                "PROP_FIRM_MODE": "false",
+                "REGULATORY_JURISDICTION": "US",
+            },
+        ):
             import importlib
+
             importlib.reload(rr_mod)
             reporter = rr_mod.RegulatoryReporter()
             reporter._dlq = rr_mod.DeadLetterQueue(path=Path(self.tmpdir))
 
             async def run():
-                with patch.object(reporter, "_submit_cftc_sdr",
-                                  return_value=ReportRecord(
-                                      report_id="r1", jurisdiction="US",
-                                      endpoint="https://example.com",
-                                      trade_id="t1", payload={},
-                                      submitted_at=datetime.now(UTC).isoformat(),
-                                      status="submitted",
-                                  )):
+                with patch.object(
+                    reporter,
+                    "_submit_cftc_sdr",
+                    return_value=ReportRecord(
+                        report_id="r1",
+                        jurisdiction="US",
+                        endpoint="https://example.com",
+                        trade_id="t1",
+                        payload={},
+                        submitted_at=datetime.now(UTC).isoformat(),
+                        status="submitted",
+                    ),
+                ):
                     return await reporter.submit({"id": "t1"})
+
             record = asyncio.get_event_loop().run_until_complete(run())
             assert record.status == "submitted"
 
     def test_submit_enabled_eu_jurisdiction(self):
         """When reporting enabled and jurisdiction=EU, routes to MiFID II."""
         import compliance.regulatory_reporter as rr_mod
-        with patch.dict(os.environ, {
-            "REGULATORY_REPORTING_ENABLED": "true",
-            "PROP_FIRM_MODE": "false",
-            "REGULATORY_JURISDICTION": "EU",
-        }):
+
+        with patch.dict(
+            os.environ,
+            {
+                "REGULATORY_REPORTING_ENABLED": "true",
+                "PROP_FIRM_MODE": "false",
+                "REGULATORY_JURISDICTION": "EU",
+            },
+        ):
             import importlib
+
             importlib.reload(rr_mod)
             reporter = rr_mod.RegulatoryReporter()
             reporter._dlq = rr_mod.DeadLetterQueue(path=Path(self.tmpdir))
 
             async def run():
-                with patch.object(reporter, "_submit_mifid_ii",
-                                  return_value=ReportRecord(
-                                      report_id="r1", jurisdiction="EU",
-                                      endpoint="https://example.com",
-                                      trade_id="t1", payload={},
-                                      submitted_at=datetime.now(UTC).isoformat(),
-                                      status="submitted",
-                                  )):
+                with patch.object(
+                    reporter,
+                    "_submit_mifid_ii",
+                    return_value=ReportRecord(
+                        report_id="r1",
+                        jurisdiction="EU",
+                        endpoint="https://example.com",
+                        trade_id="t1",
+                        payload={},
+                        submitted_at=datetime.now(UTC).isoformat(),
+                        status="submitted",
+                    ),
+                ):
                     return await reporter.submit({"id": "t1"})
+
             record = asyncio.get_event_loop().run_until_complete(run())
             assert record.status == "submitted"
