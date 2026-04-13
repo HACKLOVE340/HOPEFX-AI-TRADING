@@ -3,13 +3,25 @@ name: CI
 on:
   push:
     branches: [main, develop]
+    paths-ignore:
+      - "frontend/**"
+      - "dashboard/**"
+      - "mobile/**"
+      - "mobile-app/**"
+      - "helm/**"
+      - "k8s/**"
+      - "docs/**"
+      - "*.md"
+      - "Dockerfile"
+      - "docker-compose*.yml"
   pull_request:
     branches: [main]
 
-# Cancel in-progress runs on the same branch to free up runners
+# Use SHA so Dependabot bumps get their own group and don't cancel
+# runs triggered by real code changes.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   pre-commit:

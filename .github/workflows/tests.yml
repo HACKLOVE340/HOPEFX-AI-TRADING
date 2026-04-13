@@ -3,13 +3,25 @@ name: Tests
 on:
   push:
     branches: [ main, develop, copilot/** ]
+    paths-ignore:
+      - "frontend/**"
+      - "dashboard/**"
+      - "mobile/**"
+      - "mobile-app/**"
+      - "helm/**"
+      - "k8s/**"
+      - "docs/**"
+      - "*.md"
+      - "Dockerfile"
+      - "docker-compose*.yml"
   pull_request:
     branches: [ main, develop ]
 
-# Cancel in-progress runs on the same branch to free up runners
+# Use SHA so each push gets its own group — Dependabot bumps no longer
+# cancel in-flight test runs triggered by real code changes.
 concurrency:
-  group: tests-${{ github.ref }}
-  cancel-in-progress: true
+  group: tests-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   test:
