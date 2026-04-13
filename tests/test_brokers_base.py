@@ -6,7 +6,6 @@ Full branch coverage for with_retry, RateLimiter, dataclasses, and BrokerConnect
 
 from __future__ import annotations
 
-import asyncio
 import time
 from datetime import datetime
 from unittest.mock import patch

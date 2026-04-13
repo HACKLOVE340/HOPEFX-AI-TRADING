@@ -2,10 +2,11 @@
 # Copyright (c) 2025-2026
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 """ZMQ bridge start/stop and recv_loop coverage tests."""
+
 from __future__ import annotations
 import json
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 import pytest
 
 
@@ -27,8 +28,8 @@ def _zmq_mock():
 
 
 def _load_bridge_mod(zmq_mod):
-    import importlib
     import brokers.mt5_zmq_bridge as mod
+
     mod.zmq = zmq_mod
     mod._ZMQ_AVAILABLE = True
     mod.Again = zmq_mod.Again
@@ -125,8 +126,7 @@ class TestZmqBridgeRecvLoop:
     def test_dispatches_tick(self):
         zmq_mod, ctx, push, pull, pub = _zmq_mock()
         messages = [
-            json.dumps({"type": "TICK", "symbol": "XAUUSD",
-                        "bid": 1919.5, "ask": 1920.0, "ts": 1700000000000}),
+            json.dumps({"type": "TICK", "symbol": "XAUUSD", "bid": 1919.5, "ask": 1920.0, "ts": 1700000000000}),
         ]
         call_count = [0]
 
@@ -222,7 +222,6 @@ class TestZmqBridgeSendAndWait:
         mod = _load_bridge_mod(zmq_mod)
         b = self._connected(mod)
         import threading
-        from queue import Queue
 
         original_send = b._send_and_wait
 
@@ -233,6 +232,7 @@ class TestZmqBridgeSendAndWait:
                     q = b._pending.get(cmd_id)
                 if q:
                     q.put_nowait({"type": "PONG", "id": cmd_id, "ts": 0})
+
             t = threading.Thread(target=_inject, daemon=True)
             t.start()
             return original_send(cmd_id, payload, **kwargs)
@@ -254,12 +254,18 @@ class TestZmqBridgeSendAndWait:
             with b._lock:
                 q = b._pending.get(cmd_id)
             if q:
-                q.put_nowait({
-                    "type": "FILL", "id": cmd_id,
-                    "ticket": 42, "symbol": "XAUUSD",
-                    "side": "BUY", "lots": 0.01, "price": 1920.0,
-                    "ts": int(time.time() * 1000),
-                })
+                q.put_nowait(
+                    {
+                        "type": "FILL",
+                        "id": cmd_id,
+                        "ticket": 42,
+                        "symbol": "XAUUSD",
+                        "side": "BUY",
+                        "lots": 0.01,
+                        "price": 1920.0,
+                        "ts": int(time.time() * 1000),
+                    }
+                )
 
         original = b._send_and_wait
 
