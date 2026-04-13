@@ -35,7 +35,7 @@ jobs:
         # Pinned to SHA for supply-chain safety (tag: v4.4.5)
         # max-allowed-issues set to a realistic ceiling for security-only scan.
         # Lower this number in future PRs as findings are resolved.
-        uses: codacy/codacy-analysis-cli-action@d840f886c4bd4edc059706d09c6a1586111c540b
+        uses: codacy/codacy-analysis-cli-action@562ee3e92b8e92df8b67e0a5ff8aa8e261919c08
         with:
           project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
           verbose: true
