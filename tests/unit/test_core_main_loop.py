@@ -14,8 +14,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -196,14 +194,223 @@ async def test_main_loop_run_cancels_cleanly(monkeypatch):
 
 def _aiter(items):
     """Return an async iterator over items."""
+
     class _AI:
         def __init__(self):
             self._items = iter(items)
+
         def __aiter__(self):
             return self
+
         async def __anext__(self):
             try:
                 return next(self._items)
             except StopIteration:
                 raise StopAsyncIteration
+
     return _AI()
+
+
+# ── MainLoop._request_shutdown ────────────────────────────────────────────────
+
+
+def test_request_shutdown_sets_event():
+    with _patch_all_subsystems():
+        loop = MainLoop()
+        # _shutdown_event is created in __init__ but needs a running loop
+        # We test the method directly by creating a new event
+        loop._shutdown_event = asyncio.Event()
+        loop._request_shutdown()
+        assert loop._shutdown_event.is_set()
+
+
+# ── MainLoop._stop_all ────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_stop_all_with_no_tasks():
+    with _patch_all_subsystems():
+        loop = MainLoop()
+        loop._tasks = []
+        loop._start_time = None
+
+        mock_bus = MagicMock()
+        mock_bus.close = AsyncMock()
+        mock_bus.metrics = MagicMock(return_value={})
+
+        with patch.object(ml_mod, "bus", mock_bus):
+            with patch("pathlib.Path.mkdir"):
+                with patch("builtins.open", side_effect=OSError("no write")):
+                    await loop._stop_all()
+
+
+@pytest.mark.asyncio
+async def test_stop_all_handles_stop_errors():
+    with _patch_all_subsystems():
+        loop = MainLoop()
+        loop._tasks = []
+        loop._start_time = None
+
+        # Make sub-system stops raise
+        loop._router.stop = AsyncMock(side_effect=RuntimeError("stop error"))
+        loop._gatekeeper.stop = AsyncMock(side_effect=RuntimeError("stop error"))
+        loop._strategy.stop = AsyncMock()
+        loop._ingest.stop = AsyncMock()
+        loop._news.stop = AsyncMock()
+        loop._fault.stop = AsyncMock()
+
+        mock_bus = MagicMock()
+        mock_bus.close = AsyncMock()
+        mock_bus.metrics = MagicMock(return_value={})
+
+        with patch.object(ml_mod, "bus", mock_bus):
+            with patch("builtins.open", side_effect=OSError("no write")):
+                await loop._stop_all()  # must not raise
+
+
+# ── MainLoop._breach_watcher ──────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_breach_watcher_kill_switch_triggers_shutdown():
+    with _patch_all_subsystems():
+        loop = MainLoop()
+        loop._shutdown_event = asyncio.Event()
+
+        kill_msg = {"reason": "kill_switch"}
+
+        async def _aiter_kill():
+            yield kill_msg
+
+        mock_bus = MagicMock()
+        mock_bus.subscribe = MagicMock(return_value=_aiter_kill())
+
+        with patch.object(ml_mod, "bus", mock_bus):
+            await loop._breach_watcher()
+
+        assert loop._shutdown_event.is_set()
+
+
+@pytest.mark.asyncio
+async def test_breach_watcher_kill_event_triggers_shutdown():
+    with _patch_all_subsystems():
+        loop = MainLoop()
+        loop._shutdown_event = asyncio.Event()
+
+        async def _aiter_kill():
+            yield {"reason": "kill_event"}
+
+        mock_bus = MagicMock()
+        mock_bus.subscribe = MagicMock(return_value=_aiter_kill())
+
+        with patch.object(ml_mod, "bus", mock_bus):
+            await loop._breach_watcher()
+
+        assert loop._shutdown_event.is_set()
+
+
+@pytest.mark.asyncio
+async def test_breach_watcher_ignores_non_kill_reasons():
+    with _patch_all_subsystems():
+        loop = MainLoop()
+        loop._shutdown_event = asyncio.Event()
+
+        async def _aiter_msgs():
+            yield {"reason": "drawdown_warning"}
+            # Stop iteration — watcher should not set shutdown
+
+        mock_bus = MagicMock()
+        mock_bus.subscribe = MagicMock(return_value=_aiter_msgs())
+
+        with patch.object(ml_mod, "bus", mock_bus):
+            await loop._breach_watcher()
+
+        assert not loop._shutdown_event.is_set()
+
+
+# ── _verify_model_registry — bootstrap path ───────────────────────────────────
+
+
+def test_verify_model_registry_empty_versions_bootstraps(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "development")
+
+    mock_reg = MagicMock()
+    mock_reg._load.return_value = {"versions": {}, "active_version": None}
+    mock_reg.bootstrap_from_meta.return_value = {
+        "name": "advanced_oos_v1",
+        "sha256": "abc123def456",
+    }
+    mock_cls = MagicMock(return_value=mock_reg)
+
+    with patch.dict("sys.modules", {"ml.model_registry": MagicMock(ModelRegistry=mock_cls)}):
+        ml_mod._verify_model_registry()
+
+    mock_reg.bootstrap_from_meta.assert_called_once()
+
+
+def test_verify_model_registry_bootstrap_returns_none(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "development")
+
+    mock_reg = MagicMock()
+    mock_reg._load.return_value = {"versions": {}, "active_version": None}
+    mock_reg.bootstrap_from_meta.return_value = None
+    mock_cls = MagicMock(return_value=mock_reg)
+
+    with patch.dict("sys.modules", {"ml.model_registry": MagicMock(ModelRegistry=mock_cls)}):
+        ml_mod._verify_model_registry()  # must not raise
+
+
+def test_verify_model_registry_active_version_integrity_ok(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "development")
+
+    mock_reg = MagicMock()
+    mock_reg._load.return_value = {"versions": {"v1": {}}, "active_version": "v1"}
+    mock_reg.verify_active.return_value = (True, "SHA-256 OK")
+    mock_cls = MagicMock(return_value=mock_reg)
+
+    with patch.dict("sys.modules", {"ml.model_registry": MagicMock(ModelRegistry=mock_cls)}):
+        ml_mod._verify_model_registry()  # must not raise
+
+
+def test_verify_model_registry_integrity_fail_exits_in_production(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+
+    mock_reg = MagicMock()
+    mock_reg._load.return_value = {"versions": {"v1": {}}, "active_version": "v1"}
+    mock_reg.verify_active.return_value = (False, "hash mismatch")
+    mock_cls = MagicMock(return_value=mock_reg)
+
+    with patch.dict("sys.modules", {"ml.model_registry": MagicMock(ModelRegistry=mock_cls)}):
+        with pytest.raises(SystemExit):
+            ml_mod._verify_model_registry()
+
+
+def test_verify_model_registry_exception_fatal_in_production(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+
+    mock_module = MagicMock()
+    mock_module.ModelRegistry.side_effect = RuntimeError("registry broken")
+
+    with patch.dict("sys.modules", {"ml.model_registry": mock_module}):
+        with pytest.raises(SystemExit):
+            ml_mod._verify_model_registry()
+
+
+# ── _validate_startup_env — soft required warnings ────────────────────────────
+
+
+def test_validate_startup_env_warns_missing_soft_vars(monkeypatch, caplog):
+    monkeypatch.setenv("OANDA_API_KEY", "key")
+    monkeypatch.setenv("OANDA_ACCOUNT_ID", "acc")
+    monkeypatch.delenv("REDIS_URL", raising=False)
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
+    monkeypatch.delenv("INITIAL_BALANCE", raising=False)
+
+    with patch.object(ml_mod, "_verify_model_registry", return_value=None):
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            ml_mod._validate_startup_env()
+    # Should have logged warnings for missing soft vars
+    assert any("Missing optional" in r.message for r in caplog.records)

@@ -120,6 +120,7 @@ def test_compute_signal_strength_short():
 def test_notify_fill_no_crash():
     """notify_fill(features, label, primary_prob) — no-op when online learner absent."""
     import pandas as pd
+
     features = pd.DataFrame({"a": [1.0], "b": [2.0]})
     se.notify_fill(features, label=1, primary_prob=0.72)  # must not raise
 
@@ -127,6 +128,7 @@ def test_notify_fill_no_crash():
 def test_notify_fill_no_store_no_crash():
     """notify_fill is a no-op when _get_online_learner_store returns None."""
     import pandas as pd
+
     with patch.object(se, "_get_online_learner_store", return_value=None):
         se.notify_fill(pd.DataFrame(), label=0)
 
@@ -254,6 +256,7 @@ def test_apply_deep_ensemble_blend_exception():
 
 def test_fetch_mtf_df_no_store():
     import pandas as pd
+
     df = pd.DataFrame({"close": [1900.0, 1910.0]})
     result = se._fetch_mtf_df(df, app_state=None)
     assert result is None or hasattr(result, "columns")
@@ -261,6 +264,7 @@ def test_fetch_mtf_df_no_store():
 
 def test_fetch_mtf_df_store_not_ready():
     import pandas as pd
+
     mock_store = MagicMock()
     mock_store.is_ready = False
     state = MagicMock()
@@ -272,6 +276,7 @@ def test_fetch_mtf_df_store_not_ready():
 
 def test_fetch_mtf_df_store_ready():
     import pandas as pd
+
     mock_store = MagicMock()
     mock_store.is_ready = True
     mock_store.align_to_h1.return_value = pd.DataFrame({"d_trend": [0.5, 0.6]})
@@ -287,6 +292,7 @@ def test_fetch_mtf_df_store_ready():
 
 def test_fetch_macro_df_no_store():
     import pandas as pd
+
     df = pd.DataFrame({"close": [1900.0, 1910.0]})
     with patch.object(se, "_get_macro_store", return_value=None):
         result = se._fetch_macro_df(df, "XAUUSD")
@@ -295,6 +301,7 @@ def test_fetch_macro_df_no_store():
 
 def test_fetch_macro_df_empty_store():
     import pandas as pd
+
     mock_store = MagicMock()
     mock_store.__len__ = MagicMock(return_value=0)
     df = pd.DataFrame({"close": [1900.0, 1910.0]})
@@ -305,6 +312,7 @@ def test_fetch_macro_df_empty_store():
 
 def test_fetch_macro_df_alignment_exception():
     import pandas as pd
+
     mock_store = MagicMock()
     mock_store.__len__ = MagicMock(return_value=5)
     mock_store.align_to_hourly.side_effect = RuntimeError("align error")
@@ -333,10 +341,13 @@ def test_get_signal_engine_status_has_all_keys():
 
 def test_predict_advanced_with_mock_predictor():
     """With a mock predictor, returns its predict_proba result."""
-    import pandas as pd
     data = {
-        "close": 1920.0, "open": 1900.0, "high": 1930.0, "low": 1890.0,
-        "volume": 5000, "closes": [1900.0 + i for i in range(50)],
+        "close": 1920.0,
+        "open": 1900.0,
+        "high": 1930.0,
+        "low": 1890.0,
+        "volume": 5000,
+        "closes": [1900.0 + i for i in range(50)],
     }
     mock_pred = MagicMock()
     mock_pred.predict_proba.return_value = 0.72
@@ -354,8 +365,12 @@ def test_predict_advanced_with_mock_predictor():
 def test_compute_ml_probability_handles_advanced_predictor_exception():
     """Exception in _predict_advanced → _compute_ml_probability returns base_confidence."""
     data = {
-        "close": 1920.0, "open": 1900.0, "high": 1930.0, "low": 1890.0,
-        "volume": 5000, "closes": [1900.0] * 10,
+        "close": 1920.0,
+        "open": 1900.0,
+        "high": 1930.0,
+        "low": 1890.0,
+        "volume": 5000,
+        "closes": [1900.0] * 10,
     }
     mock_pred = MagicMock()
     mock_pred.is_available = True
@@ -371,11 +386,16 @@ def test_compute_ml_probability_handles_advanced_predictor_exception():
 
 def test_predict_basic_with_mock_model():
     import numpy as np
+
     mock_model = MagicMock()
     mock_model.predict_proba.return_value = np.array([[0.35, 0.65]])
     data = {
-        "close": 1920.0, "open": 1900.0, "high": 1930.0, "low": 1890.0,
-        "volume": 5000, "prices": [1900.0 + i for i in range(25)],
+        "close": 1920.0,
+        "open": 1900.0,
+        "high": 1930.0,
+        "low": 1890.0,
+        "volume": 5000,
+        "prices": [1900.0 + i for i in range(25)],
     }
     result = se._predict_basic(mock_model, "v1", data, "XAUUSD", 0.5)
     assert isinstance(result[0], float)
@@ -385,11 +405,16 @@ def test_predict_basic_with_mock_model():
 def test_predict_basic_predict_only_model():
     """Model with predict() but no predict_proba()."""
     import numpy as np
+
     mock_model = MagicMock(spec=["predict"])
     mock_model.predict.return_value = np.array([0.68])
     data = {
-        "close": 1920.0, "open": 1900.0, "high": 1930.0, "low": 1890.0,
-        "volume": 5000, "prices": [1900.0] * 5,
+        "close": 1920.0,
+        "open": 1900.0,
+        "high": 1930.0,
+        "low": 1890.0,
+        "volume": 5000,
+        "prices": [1900.0] * 5,
     }
     result = se._predict_basic(mock_model, "v1", data, "XAUUSD", 0.5)
     assert result[0] == pytest.approx(0.68)
@@ -399,8 +424,12 @@ def test_predict_basic_no_predict_method():
     """Model with neither predict_proba nor predict → returns base_confidence."""
     mock_model = MagicMock(spec=[])
     data = {
-        "close": 1920.0, "open": 1900.0, "high": 1930.0, "low": 1890.0,
-        "volume": 5000, "prices": [1900.0] * 5,
+        "close": 1920.0,
+        "open": 1900.0,
+        "high": 1930.0,
+        "low": 1890.0,
+        "volume": 5000,
+        "prices": [1900.0] * 5,
     }
     result = se._predict_basic(mock_model, "v1", data, "XAUUSD", 0.55)
     assert result[0] == pytest.approx(0.55)
@@ -430,8 +459,12 @@ def test_compute_ml_probability_uses_advanced_predictor():
     mock_pred = MagicMock()
     mock_pred.is_available = True
     data = {
-        "close": 1920.0, "open": 1900.0, "high": 1930.0, "low": 1890.0,
-        "volume": 5000, "closes": [1900.0] * 10,
+        "close": 1920.0,
+        "open": 1900.0,
+        "high": 1930.0,
+        "low": 1890.0,
+        "volume": 5000,
+        "closes": [1900.0] * 10,
     }
     with patch.object(se, "_ML_AVAILABLE", True):
         with patch("core.signal_engine.get_advanced_predictor", return_value=mock_pred):
@@ -444,8 +477,12 @@ def test_compute_ml_probability_uses_basic_model():
     """Falls back to basic model when advanced predictor unavailable."""
     mock_model = MagicMock()
     data = {
-        "close": 1920.0, "open": 1900.0, "high": 1930.0, "low": 1890.0,
-        "volume": 5000, "prices": [1900.0] * 5,
+        "close": 1920.0,
+        "open": 1900.0,
+        "high": 1930.0,
+        "low": 1890.0,
+        "volume": 5000,
+        "prices": [1900.0] * 5,
     }
     with patch.object(se, "_ML_AVAILABLE", True):
         with patch("core.signal_engine.get_advanced_predictor", return_value=None):

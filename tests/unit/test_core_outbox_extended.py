@@ -9,7 +9,6 @@ Extended coverage for core/outbox.py — relay batch, helpers, in-process fallba
 
 from __future__ import annotations
 
-import asyncio
 import json
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -134,7 +133,10 @@ async def test_publish_in_process_success():
 
 @pytest.mark.asyncio
 async def test_publish_in_process_exception():
-    with patch.dict("sys.modules", {"core.event_bus": MagicMock(bus=MagicMock(publish=AsyncMock(side_effect=RuntimeError("bus error"))))}):
+    with patch.dict(
+        "sys.modules",
+        {"core.event_bus": MagicMock(bus=MagicMock(publish=AsyncMock(side_effect=RuntimeError("bus error"))))},
+    ):
         await _publish_in_process("hopefx:test", json.dumps({"x": 1}))  # must not raise
 
 
@@ -289,6 +291,7 @@ async def test_relay_batch_session_error():
 
 def test_get_relay_returns_singleton():
     from core.outbox import get_relay
+
     outbox_mod._relay = None
     r1 = get_relay()
     r2 = get_relay()

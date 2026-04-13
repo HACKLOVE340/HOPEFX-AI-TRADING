@@ -9,9 +9,8 @@ Extended coverage for core/position_reconciler.py.
 
 from __future__ import annotations
 
-import asyncio
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -46,9 +45,7 @@ def _make_reconciler(db_positions=None, broker=None):
         q = session.query.return_value
         # Support both .filter_by() and .filter() chains
         q.filter_by.return_value.all.return_value = positions
-        q.filter_by.return_value.first.return_value = (
-            positions[0] if positions else None
-        )
+        q.filter_by.return_value.first.return_value = positions[0] if positions else None
         q.filter.return_value = q
         q.all.return_value = positions
         q.first.return_value = positions[0] if positions else None

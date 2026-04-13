@@ -11,10 +11,8 @@ External transports (SendGrid, SMTP) are patched at the boundary.
 
 from __future__ import annotations
 
-import os
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 import core.email_service as svc
 
@@ -70,10 +68,13 @@ def test_send_via_sendgrid_success(monkeypatch):
     mock_sg = MagicMock()
     mock_sg.send.return_value = mock_response
 
-    with patch.dict("sys.modules", {
-        "sendgrid": MagicMock(SendGridAPIClient=MagicMock(return_value=mock_sg)),
-        "sendgrid.helpers.mail": MagicMock(Mail=MagicMock()),
-    }):
+    with patch.dict(
+        "sys.modules",
+        {
+            "sendgrid": MagicMock(SendGridAPIClient=MagicMock(return_value=mock_sg)),
+            "sendgrid.helpers.mail": MagicMock(Mail=MagicMock()),
+        },
+    ):
         result = svc._send_via_sendgrid("to@test.com", "Subj", "<p>h</p>", "t")
     assert result is True
 
@@ -89,20 +90,26 @@ def test_send_via_sendgrid_error_status(monkeypatch):
     mock_sg = MagicMock()
     mock_sg.send.return_value = mock_response
 
-    with patch.dict("sys.modules", {
-        "sendgrid": MagicMock(SendGridAPIClient=MagicMock(return_value=mock_sg)),
-        "sendgrid.helpers.mail": MagicMock(Mail=MagicMock()),
-    }):
+    with patch.dict(
+        "sys.modules",
+        {
+            "sendgrid": MagicMock(SendGridAPIClient=MagicMock(return_value=mock_sg)),
+            "sendgrid.helpers.mail": MagicMock(Mail=MagicMock()),
+        },
+    ):
         result = svc._send_via_sendgrid("to@test.com", "Subj", "<p>h</p>", "t")
     assert result is False
 
 
 def test_send_via_sendgrid_exception(monkeypatch):
     monkeypatch.setenv("SENDGRID_API_KEY", "SG.fake")
-    with patch.dict("sys.modules", {
-        "sendgrid": MagicMock(SendGridAPIClient=MagicMock(side_effect=Exception("network"))),
-        "sendgrid.helpers.mail": MagicMock(Mail=MagicMock()),
-    }):
+    with patch.dict(
+        "sys.modules",
+        {
+            "sendgrid": MagicMock(SendGridAPIClient=MagicMock(side_effect=Exception("network"))),
+            "sendgrid.helpers.mail": MagicMock(Mail=MagicMock()),
+        },
+    ):
         result = svc._send_via_sendgrid("to@test.com", "Subj", "<p>h</p>", "t")
     assert result is False
 

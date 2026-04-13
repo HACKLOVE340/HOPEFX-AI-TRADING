@@ -39,6 +39,7 @@ def test_gpu_config_custom():
 
 def test_gpu_config_is_dataclass():
     from dataclasses import fields
+
     f_names = {f.name for f in fields(GPUConfig)}
     assert "device" in f_names
     assert "batch_size" in f_names
@@ -50,12 +51,14 @@ def test_gpu_inference_engine_requires_torch():
     if HAS_TORCH:
         pytest.skip("torch is installed")
     from core.acceleration import GPUInferenceEngine
+
     with pytest.raises((ImportError, Exception)):
         GPUInferenceEngine()
 
 
 def test_gpu_feature_engine_requires_cupy():
     from core.acceleration import GPUFeatureEngine
+
     with pytest.raises((ImportError, Exception)):
         GPUFeatureEngine()
 
@@ -64,6 +67,7 @@ def test_quantized_transformer_requires_torch():
     if HAS_TORCH:
         pytest.skip("torch is installed")
     from core.acceleration import QuantizedTransformer
+
     with pytest.raises((ImportError, Exception)):
         QuantizedTransformer()
 
@@ -76,6 +80,7 @@ def test_module_exports_expected_names():
 def test_has_torch_false_in_ci():
     try:
         import torch  # noqa: F401
+
         pytest.skip("torch is installed")
     except ImportError:
         assert HAS_TORCH is False

@@ -13,7 +13,6 @@ test.  External I/O (Prometheus, event bus) is patched at the boundary.
 from __future__ import annotations
 
 import asyncio
-import time
 from unittest.mock import patch
 
 import pytest
@@ -259,9 +258,10 @@ async def test_decorator_opens_on_repeated_failure():
 async def test_transition_survives_prometheus_error():
     """Prometheus gauge failure must not crash the circuit breaker."""
     cb = _fresh(failure_threshold=1, reset_timeout=60.0)
-    with patch("core.circuit_breaker._PROM_AVAILABLE", True), patch(
-        "core.circuit_breaker._CB_STATE_GAUGE"
-    ) as mock_gauge:
+    with (
+        patch("core.circuit_breaker._PROM_AVAILABLE", True),
+        patch("core.circuit_breaker._CB_STATE_GAUGE") as mock_gauge,
+    ):
         mock_gauge.labels.side_effect = RuntimeError("prom down")
         try:
             async with cb:

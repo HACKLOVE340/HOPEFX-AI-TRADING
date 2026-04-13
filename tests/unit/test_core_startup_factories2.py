@@ -11,9 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -33,12 +31,10 @@ def test_stamp_oanda_paper_start_no_write_when_already_stamped(tmp_path, monkeyp
 
 def test_stamp_oanda_paper_start_creates_file(tmp_path, monkeypatch):
     from datetime import datetime, timezone
+
     stamp_path = tmp_path / "data" / "oanda_paper_start.json"
     monkeypatch.setattr(sf, "_OANDA_PAPER_STAMP_PATH", stamp_path)
-    monkeypatch.setattr(
-        sf, "_resolve_clock_start_time",
-        lambda: datetime(2025, 1, 1, tzinfo=timezone.utc)
-    )
+    monkeypatch.setattr(sf, "_resolve_clock_start_time", lambda: datetime(2025, 1, 1, tzinfo=timezone.utc))
     sf._stamp_oanda_paper_start("ACC123456", practice=True)
     assert stamp_path.exists()
     data = json.loads(stamp_path.read_text())
@@ -48,12 +44,10 @@ def test_stamp_oanda_paper_start_creates_file(tmp_path, monkeypatch):
 
 def test_stamp_oanda_paper_start_live_env(tmp_path, monkeypatch):
     from datetime import datetime, timezone
+
     stamp_path = tmp_path / "data" / "oanda_paper_start.json"
     monkeypatch.setattr(sf, "_OANDA_PAPER_STAMP_PATH", stamp_path)
-    monkeypatch.setattr(
-        sf, "_resolve_clock_start_time",
-        lambda: datetime(2025, 3, 1, tzinfo=timezone.utc)
-    )
+    monkeypatch.setattr(sf, "_resolve_clock_start_time", lambda: datetime(2025, 3, 1, tzinfo=timezone.utc))
     sf._stamp_oanda_paper_start("LIVE_ACC_789", practice=False)
     data = json.loads(stamp_path.read_text())
     assert data["environment"] == "live"
@@ -71,11 +65,15 @@ def test_resolve_clock_start_time_no_file(tmp_path, monkeypatch):
 
 def test_resolve_clock_start_time_real_account_stamped(tmp_path, monkeypatch):
     stamp_path = tmp_path / "stamp.json"
-    stamp_path.write_text(json.dumps({
-        "started_utc": "2025-01-01T00:00:00+00:00",
-        "requires_real_account": False,
-        "account_id": "REAL123…",
-    }))
+    stamp_path.write_text(
+        json.dumps(
+            {
+                "started_utc": "2025-01-01T00:00:00+00:00",
+                "requires_real_account": False,
+                "account_id": "REAL123…",
+            }
+        )
+    )
     monkeypatch.setattr(sf, "_OANDA_PAPER_STAMP_PATH", stamp_path)
     result = sf._resolve_clock_start_time()
     assert result is None
@@ -83,10 +81,14 @@ def test_resolve_clock_start_time_real_account_stamped(tmp_path, monkeypatch):
 
 def test_resolve_clock_start_time_pending_placeholder(tmp_path, monkeypatch):
     stamp_path = tmp_path / "stamp.json"
-    stamp_path.write_text(json.dumps({
-        "started_utc": "2025-01-01T00:00:00+00:00",
-        "requires_real_account": True,
-    }))
+    stamp_path.write_text(
+        json.dumps(
+            {
+                "started_utc": "2025-01-01T00:00:00+00:00",
+                "requires_real_account": True,
+            }
+        )
+    )
     monkeypatch.setattr(sf, "_OANDA_PAPER_STAMP_PATH", stamp_path)
     result = sf._resolve_clock_start_time()
     assert result is not None
@@ -113,9 +115,7 @@ async def test_connect_paper_broker_no_oanda_creds():
     log_activity = MagicMock()
 
     with patch("core.startup_factories._validate_oanda_account_pending"):
-        broker = await sf._connect_paper_broker(
-            state, "oanda", "", "", log_activity
-        )
+        broker = await sf._connect_paper_broker(state, "oanda", "", "", log_activity)
     assert broker is not None
     assert hasattr(broker, "connect") or hasattr(broker, "connected")
 
@@ -128,9 +128,7 @@ async def test_connect_paper_broker_with_creds():
     log_activity = MagicMock()
 
     with patch("core.startup_factories._validate_oanda_account_pending"):
-        broker = await sf._connect_paper_broker(
-            state, "oanda", "tok123", "acc456", log_activity
-        )
+        broker = await sf._connect_paper_broker(state, "oanda", "tok123", "acc456", log_activity)
     assert broker is not None
 
 
@@ -140,6 +138,7 @@ async def test_connect_paper_broker_with_creds():
 @pytest.mark.asyncio
 async def test_init_prop_enforcer_no_kill_switch():
     from core.startup_factories import init_prop_enforcer
+
     state = MagicMock()
     state.kill_switch = None
     result = await init_prop_enforcer(state)
@@ -150,6 +149,7 @@ async def test_init_prop_enforcer_no_kill_switch():
 @pytest.mark.asyncio
 async def test_init_prop_enforcer_with_kill_switch():
     from core.startup_factories import init_prop_enforcer
+
     state = MagicMock()
     state.kill_switch = MagicMock()
     state.kill_switch.activate = MagicMock()
@@ -163,6 +163,7 @@ async def test_init_prop_enforcer_with_kill_switch():
 @pytest.mark.asyncio
 async def test_init_aml_no_crash():
     from core.startup_factories import init_aml
+
     state = MagicMock()
     state.db_session_factory = None
     result = await init_aml(state)
@@ -175,6 +176,7 @@ async def test_init_aml_no_crash():
 @pytest.mark.asyncio
 async def test_init_strategy_brain_returns_brain():
     from core.startup_factories import init_strategy_brain
+
     state = MagicMock()
     result = await init_strategy_brain(state)
     assert result is not None
@@ -186,6 +188,7 @@ async def test_init_strategy_brain_returns_brain():
 @pytest.mark.asyncio
 async def test_init_anomaly_store_disabled(monkeypatch):
     from core.startup_factories import init_anomaly_store
+
     monkeypatch.setattr(sf, "_is_feature_enabled", lambda flag, default=False: False)
     state = MagicMock()
     result = await init_anomaly_store(state)
@@ -198,6 +201,7 @@ async def test_init_anomaly_store_disabled(monkeypatch):
 @pytest.mark.asyncio
 async def test_init_online_learner_store_disabled(monkeypatch):
     from core.startup_factories import init_online_learner_store
+
     monkeypatch.setattr(sf, "_is_feature_enabled", lambda flag, default=False: False)
     state = MagicMock()
     result = await init_online_learner_store(state)
@@ -210,6 +214,7 @@ async def test_init_online_learner_store_disabled(monkeypatch):
 @pytest.mark.asyncio
 async def test_init_deep_ensemble_store_disabled(monkeypatch):
     from core.startup_factories import init_deep_ensemble_store
+
     monkeypatch.setattr(sf, "_is_feature_enabled", lambda flag, default=False: False)
     state = MagicMock()
     result = await init_deep_ensemble_store(state)
@@ -222,6 +227,7 @@ async def test_init_deep_ensemble_store_disabled(monkeypatch):
 @pytest.mark.asyncio
 async def test_init_macro_store_returns_store():
     from core.startup_factories import init_macro_store
+
     state = MagicMock()
     result = await init_macro_store(state)
     # Returns a MacroStore or None — must not raise
@@ -234,6 +240,7 @@ async def test_init_macro_store_returns_store():
 @pytest.mark.asyncio
 async def test_init_risk_manager_returns_manager():
     from core.startup_factories import init_risk_manager
+
     state = MagicMock()
     state.config = MagicMock()
     state.config.risk = MagicMock()
@@ -267,6 +274,7 @@ def test_run_startup_stress_tests_with_config():
 
 def test_config_database_defaults_get_connection_string(monkeypatch):
     from core.startup_factories import _ConfigDatabaseDefaults
+
     monkeypatch.setenv("DATABASE_URL", "sqlite:///test.db")
     db = _ConfigDatabaseDefaults()
     url = db.get_connection_string()
@@ -275,6 +283,7 @@ def test_config_database_defaults_get_connection_string(monkeypatch):
 
 def test_config_database_defaults_no_url(monkeypatch):
     from core.startup_factories import _ConfigDatabaseDefaults
+
     monkeypatch.delenv("DATABASE_URL", raising=False)
     db = _ConfigDatabaseDefaults()
     url = db.get_connection_string()
@@ -286,6 +295,7 @@ def test_config_database_defaults_no_url(monkeypatch):
 
 def test_config_namespace_wraps_dict():
     from core.startup_factories import _ConfigNamespace
+
     ns = _ConfigNamespace({"foo": "bar", "baz": 42})
     assert ns.foo == "bar"
     assert ns.baz == 42
@@ -295,6 +305,7 @@ def test_config_namespace_wraps_dict():
 
 def test_config_namespace_empty_dict():
     from core.startup_factories import _ConfigNamespace
+
     ns = _ConfigNamespace({})
     assert ns.environment in ("development", "production", "staging", "test")
 
@@ -305,6 +316,7 @@ def test_config_namespace_empty_dict():
 @pytest.mark.asyncio
 async def test_init_config_returns_namespace():
     from core.startup_factories import init_config
+
     state = MagicMock()
     result = await init_config(state)
     assert result is not None
@@ -317,6 +329,7 @@ async def test_init_config_returns_namespace():
 @pytest.mark.asyncio
 async def test_init_secrets_manager_no_crash():
     from core.startup_factories import init_secrets_manager
+
     state = MagicMock()
     result = await init_secrets_manager(state)
     assert result is not None
@@ -328,6 +341,7 @@ async def test_init_secrets_manager_no_crash():
 @pytest.mark.asyncio
 async def test_init_performance_monitor_no_crash():
     from core.startup_factories import init_performance_monitor
+
     state = MagicMock()
     state.db_session_factory = None
     result = await init_performance_monitor(state)
@@ -340,6 +354,7 @@ async def test_init_performance_monitor_no_crash():
 @pytest.mark.asyncio
 async def test_init_outbox_relay_no_crash():
     from core.startup_factories import init_outbox_relay
+
     state = MagicMock()
     state.background_tasks = []
     result = await init_outbox_relay(state)
@@ -359,6 +374,7 @@ async def test_init_outbox_relay_no_crash():
 @pytest.mark.asyncio
 async def test_init_position_manager_no_crash():
     from core.startup_factories import init_position_manager
+
     state = MagicMock()
     result = await init_position_manager(state)
     assert result is not None or result is None
@@ -370,6 +386,7 @@ async def test_init_position_manager_no_crash():
 @pytest.mark.asyncio
 async def test_init_position_tracker_no_crash():
     from core.startup_factories import init_position_tracker
+
     state = MagicMock()
     state.db_session_factory = None
     result = await init_position_tracker(state)
@@ -382,6 +399,7 @@ async def test_init_position_tracker_no_crash():
 @pytest.mark.asyncio
 async def test_init_trade_executor_no_crash():
     from core.startup_factories import init_trade_executor
+
     state = MagicMock()
     state.broker = None
     state.risk_manager = None
@@ -395,6 +413,7 @@ async def test_init_trade_executor_no_crash():
 @pytest.mark.asyncio
 async def test_init_wallet_no_crash():
     from core.startup_factories import init_wallet
+
     state = MagicMock()
     state.db_session_factory = None
     result = await init_wallet(state)
@@ -407,6 +426,7 @@ async def test_init_wallet_no_crash():
 @pytest.mark.asyncio
 async def test_init_regime_router_no_crash():
     from core.startup_factories import init_regime_router
+
     state = MagicMock()
     result = await init_regime_router(state)
     assert result is not None or result is None
@@ -418,6 +438,7 @@ async def test_init_regime_router_no_crash():
 @pytest.mark.asyncio
 async def test_init_inference_engine_no_crash():
     from core.startup_factories import init_inference_engine
+
     state = MagicMock()
     result = await init_inference_engine(state)
     assert result is not None or result is None
@@ -429,6 +450,7 @@ async def test_init_inference_engine_no_crash():
 @pytest.mark.asyncio
 async def test_init_mtf_store_no_crash():
     from core.startup_factories import init_mtf_store
+
     state = MagicMock()
     result = await init_mtf_store(state)
     assert result is not None or result is None

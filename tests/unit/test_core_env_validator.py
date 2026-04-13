@@ -9,8 +9,6 @@ Coverage tests for core/env_validator.py.
 
 from __future__ import annotations
 
-import os
-from unittest.mock import patch
 
 import pytest
 

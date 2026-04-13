@@ -12,7 +12,7 @@ External I/O (DB, Redis, broker) is patched at the boundary.
 from __future__ import annotations
 
 import os
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -102,6 +102,7 @@ def test_create_app_state_has_expected_attributes():
 def test_init_env_importable():
     from core.startup_factories import init_env
     import inspect
+
     assert inspect.iscoroutinefunction(init_env)
 
 
@@ -111,6 +112,7 @@ def test_init_env_importable():
 def test_init_config_importable():
     from core.startup_factories import init_config
     import inspect
+
     assert inspect.iscoroutinefunction(init_config)
 
 
@@ -120,6 +122,7 @@ def test_init_config_importable():
 def test_init_risk_manager_importable():
     from core.startup_factories import init_risk_manager
     import inspect
+
     assert inspect.iscoroutinefunction(init_risk_manager)
 
 
@@ -129,6 +132,7 @@ def test_init_risk_manager_importable():
 @pytest.mark.asyncio
 async def test_init_risk_manager_no_db():
     from core.startup_factories import init_risk_manager
+
     state = MagicMock()
     state.config = MagicMock()
     state.config.risk = MagicMock()
@@ -145,6 +149,7 @@ async def test_init_risk_manager_no_db():
 @pytest.mark.asyncio
 async def test_init_secrets_manager_no_crash():
     from core.startup_factories import init_secrets_manager
+
     state = MagicMock()
     result = await init_secrets_manager(state)
     assert result is not None
@@ -155,6 +160,7 @@ async def test_init_secrets_manager_no_crash():
 
 def test_enforce_redis_maxmemory_no_crash():
     from core.startup_factories import _enforce_redis_maxmemory
+
     # Redis is not running in CI — must not raise
     _enforce_redis_maxmemory("localhost", 6379)
 
@@ -165,19 +171,20 @@ def test_enforce_redis_maxmemory_no_crash():
 @pytest.mark.asyncio
 async def test_init_env_dev_generates_ephemeral_secrets(monkeypatch):
     from core.startup_factories import init_env
+
     monkeypatch.setenv("APP_ENV", "development")
     monkeypatch.delenv("SECURITY_JWT_SECRET", raising=False)
     monkeypatch.delenv("CONFIG_ENCRYPTION_KEY", raising=False)
     state = MagicMock()
     result = await init_env(state)
     assert result is True
-    import os
     assert len(os.environ.get("SECURITY_JWT_SECRET", "")) >= 32
 
 
 @pytest.mark.asyncio
 async def test_init_env_uses_existing_secrets(monkeypatch):
     from core.startup_factories import init_env
+
     monkeypatch.setenv("APP_ENV", "development")
     monkeypatch.setenv("SECURITY_JWT_SECRET", "a" * 32)
     monkeypatch.setenv("CONFIG_ENCRYPTION_KEY", "b" * 32)
@@ -192,6 +199,7 @@ async def test_init_env_uses_existing_secrets(monkeypatch):
 @pytest.mark.asyncio
 async def test_init_model_registry_no_crash(monkeypatch):
     from core.startup_factories import init_model_registry
+
     state = MagicMock()
     # Should not raise even if ml.model_registry is unavailable
     result = await init_model_registry(state)
@@ -204,6 +212,7 @@ async def test_init_model_registry_no_crash(monkeypatch):
 @pytest.mark.asyncio
 async def test_init_database_no_crash(monkeypatch, tmp_path):
     from core.startup_factories import init_database
+
     db_path = tmp_path / "test.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
     state = MagicMock()
@@ -223,6 +232,7 @@ async def test_init_database_no_crash(monkeypatch, tmp_path):
 @pytest.mark.asyncio
 async def test_init_cache_no_crash():
     from core.startup_factories import init_cache
+
     state = MagicMock()
     state.config = MagicMock()
     result = await init_cache(state)
@@ -235,6 +245,7 @@ async def test_init_cache_no_crash():
 @pytest.mark.asyncio
 async def test_init_strategy_brain_no_crash():
     from core.startup_factories import init_strategy_brain
+
     state = MagicMock()
     state.config = MagicMock()
     result = await init_strategy_brain(state)
@@ -247,6 +258,7 @@ async def test_init_strategy_brain_no_crash():
 @pytest.mark.asyncio
 async def test_init_compliance_no_crash():
     from core.startup_factories import init_compliance
+
     state = MagicMock()
     state.database = None
     result = await init_compliance(state)
@@ -259,6 +271,7 @@ async def test_init_compliance_no_crash():
 @pytest.mark.asyncio
 async def test_init_outbox_relay_no_crash():
     from core.startup_factories import init_outbox_relay
+
     state = MagicMock()
     result = await init_outbox_relay(state)
     assert result is not None or result is None
@@ -270,6 +283,7 @@ async def test_init_outbox_relay_no_crash():
 @pytest.mark.asyncio
 async def test_init_event_store_no_crash():
     from core.startup_factories import init_event_store
+
     state = MagicMock()
     result = await init_event_store(state)
     assert result is not None or result is None
@@ -281,6 +295,7 @@ async def test_init_event_store_no_crash():
 def test_build_component_registry_returns_registry():
     from core.startup_factories import build_component_registry
     from core.component_registry import ComponentRegistry
+
     app = MagicMock()
     flags = MagicMock()
     flags.FEATURE_PAYMENTS = False
@@ -294,5 +309,6 @@ def test_build_component_registry_returns_registry():
 
 def test_resolve_clock_start_time_returns_none_or_datetime():
     from core.startup_factories import _resolve_clock_start_time
+
     result = _resolve_clock_start_time()
     assert result is None or hasattr(result, "year")

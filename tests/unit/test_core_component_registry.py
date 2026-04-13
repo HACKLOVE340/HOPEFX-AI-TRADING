@@ -19,7 +19,6 @@ from core.component_registry import Component, ComponentRegistry
 
 class _AppState:
     """Minimal app-state stand-in."""
-    pass
 
 
 async def _ok_factory(app_state):
@@ -74,7 +73,7 @@ async def test_start_all_sets_instance():
     result = await reg.start_all(state)
     assert result["comp"].status == "ok"
     assert result["comp"].instance == "instance"
-    assert getattr(state, "comp") == "instance"
+    assert state.comp == "instance"
 
 
 @pytest.mark.asyncio
@@ -83,7 +82,7 @@ async def test_start_all_sync_factory():
     reg.register("sync", _sync_factory)
     state = _AppState()
     await reg.start_all(state)
-    assert getattr(state, "sync") == "sync_instance"
+    assert state.sync == "sync_instance"
 
 
 @pytest.mark.asyncio
@@ -106,7 +105,7 @@ async def test_optional_failure_does_not_raise():
     result = await reg.start_all(state)
     assert result["bad"].status == "failed"
     assert "factory error" in result["bad"].error
-    assert getattr(state, "bad") is None
+    assert state.bad is None
 
 
 # ── Required failure — raises RuntimeError ────────────────────────────────────

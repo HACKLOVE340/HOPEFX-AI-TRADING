@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
+from pydantic import ValidationError
 
 from core.domain_enums import (
     BrokerType,
@@ -134,7 +135,7 @@ def test_tick_data_valid():
 
 
 def test_tick_data_ask_must_exceed_bid():
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         TickData(
             symbol="EURUSD",
             bid=Decimal("1.10000"),
@@ -145,7 +146,7 @@ def test_tick_data_ask_must_exceed_bid():
 
 
 def test_tick_data_mid_must_be_midpoint():
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         TickData(
             symbol="EURUSD",
             bid=Decimal("1.08000"),
@@ -163,7 +164,7 @@ def test_tick_data_frozen():
         mid=Decimal("1.25050"),
         volume=500,
     )
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         tick.volume = 999  # frozen model
 
 
@@ -187,7 +188,7 @@ def test_ohlcv_valid():
 
 
 def test_ohlcv_high_below_open_raises():
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         OHLCV(
             symbol="XAUUSD",
             timestamp=datetime.now(UTC),
@@ -201,7 +202,7 @@ def test_ohlcv_high_below_open_raises():
 
 
 def test_ohlcv_low_above_close_raises():
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         OHLCV(
             symbol="XAUUSD",
             timestamp=datetime.now(UTC),
@@ -313,7 +314,7 @@ def test_signal_valid():
 
 
 def test_signal_strength_bounds():
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         Signal(
             strategy_id="s",
             symbol="X",
@@ -331,7 +332,7 @@ def test_signal_frozen():
         strength=0.5,
         confidence=0.5,
     )
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         sig.strength = 0.9
 
 

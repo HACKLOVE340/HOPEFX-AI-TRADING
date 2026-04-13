@@ -12,7 +12,6 @@ lz4 and msgpack are required by the module — they are installed in CI.
 from __future__ import annotations
 
 import asyncio
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -51,9 +50,17 @@ def test_domain_event_unknown_type_code():
 
 def test_domain_event_all_known_types():
     known = [
-        "PRICE_UPDATE", "SIGNAL_GENERATED", "ORDER_SUBMITTED", "ORDER_FILLED",
-        "POSITION_OPENED", "POSITION_CLOSED", "RISK_VIOLATION", "KILL_SWITCH",
-        "REGIME_CHANGE", "COMPOSITE_SIGNAL", "HEARTBEAT",
+        "PRICE_UPDATE",
+        "SIGNAL_GENERATED",
+        "ORDER_SUBMITTED",
+        "ORDER_FILLED",
+        "POSITION_OPENED",
+        "POSITION_CLOSED",
+        "RISK_VIOLATION",
+        "KILL_SWITCH",
+        "REGIME_CHANGE",
+        "COMPOSITE_SIGNAL",
+        "HEARTBEAT",
     ]
     for i, t in enumerate(known, 1):
         evt = DomainEvent.create(event_type=t, source="s", data={})

@@ -15,7 +15,6 @@ from decimal import Decimal
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from core.risk import (
     CopulaRiskModel,
@@ -87,10 +86,12 @@ def test_garch_model_simulate():
 
 def test_copula_model_fit_and_simulate():
     rng = np.random.default_rng(7)
-    df = pd.DataFrame({
-        "XAUUSD": rng.normal(0.0002, 0.01, 300),
-        "EURUSD": rng.normal(0.0001, 0.008, 300),
-    })
+    df = pd.DataFrame(
+        {
+            "XAUUSD": rng.normal(0.0002, 0.01, 300),
+            "EURUSD": rng.normal(0.0001, 0.008, 300),
+        }
+    )
     copula = CopulaRiskModel()
     copula.fit(df)
     sims = copula.simulate(n_sims=100)
