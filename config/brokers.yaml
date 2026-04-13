@@ -16,7 +16,7 @@ brokers:
   prop_mt5:
     type: "mt5"
     login: "${PROP_MT5_LOGIN:12345678}"
-    password: "${PROP_MT5_PASSWORD:your_prop_password}"
+    password: "${PROP_MT5_PASSWORD:your_prop_password}"  # pragma: allowlist secret
     server: "${PROP_MT5_SERVER:YourPropFirm-Server}"
     # Optional: path to MT5 terminal executable (leave blank for auto-detect).
     terminal_path: ""
@@ -26,7 +26,7 @@ brokers:
   amp_demo:
     type: "mt5"
     login: "${AMP_MT5_LOGIN:98765432}"
-    password: "${AMP_MT5_PASSWORD:your_amp_password}"
+    password: "${AMP_MT5_PASSWORD:your_amp_password}"  # pragma: allowlist secret
     server: "${AMP_MT5_SERVER:AMPGlobalUSA-Demo}"
     terminal_path: ""
     timeout_ms: 60000
@@ -49,7 +49,7 @@ brokers:
   ibkr_paper:
     type: "ibkr"
     login: "${IBKR_USERNAME:your_ibkr_username}"
-    password: "${IBKR_PASSWORD:your_ibkr_password}"
+    password: "${IBKR_PASSWORD:your_ibkr_password}"  # pragma: allowlist secret
     server: "${IBKR_SERVER:paper}"
     # TWS / IB Gateway host (usually localhost).
     host: "127.0.0.1"

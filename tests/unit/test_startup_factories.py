@@ -96,9 +96,9 @@ class TestConfigDatabaseDefaults:
     def test_get_connection_string_from_env(self, monkeypatch):
         from core.startup_factories import _ConfigDatabaseDefaults
 
-        monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@localhost/db")
+        monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@localhost/db")  # pragma: allowlist secret
         cfg = _ConfigDatabaseDefaults()
-        assert cfg.get_connection_string() == "postgresql://user:pass@localhost/db"
+        assert cfg.get_connection_string() == "postgresql://user:pass@localhost/db"  # pragma: allowlist secret
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +183,7 @@ class TestInitEnvDev:
         monkeypatch.setenv("SECURITY_JWT_SECRET", "existing-secret-value")
         s = _make_state()
         asyncio.run(init_env(s))
-        assert os.environ["SECURITY_JWT_SECRET"] == "existing-secret-value"
+        assert os.environ["SECURITY_JWT_SECRET"] == "existing-secret-value"  # pragma: allowlist secret
 
     def test_ephemeral_secrets_are_random(self, monkeypatch):
         """Two separate calls generate different ephemeral secrets."""

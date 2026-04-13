@@ -34,7 +34,7 @@ class TestEncryptionManager:
 
         # Set test values
         os.environ["CONFIG_ENCRYPTION_KEY"] = "test-encryption-key-for-testing-purposes"
-        os.environ["CONFIG_SALT"] = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"
+        os.environ["CONFIG_SALT"] = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"  # pragma: allowlist secret
 
         yield
 
@@ -77,7 +77,7 @@ class TestEncryptionManager:
         """Test encryption with complex strings."""
         manager = EncryptionManager()
 
-        original = '{"api_key": "abc123", "secret": "xyz!@#$%"}'
+        original = '{"api_key": "abc123", "secret": "xyz!@#$%"}'  # pragma: allowlist secret
         encrypted = manager.encrypt(original)
         decrypted = manager.decrypt(encrypted)
 
@@ -96,7 +96,7 @@ class TestEncryptionManager:
         """Test password hashing."""
         manager = EncryptionManager()
 
-        password = "my_secure_password_123"
+        password = "my_secure_password_123"  # pragma: allowlist secret
         hashed = manager.hash_password(password)
 
         assert hashed is not None
@@ -107,7 +107,7 @@ class TestEncryptionManager:
         """Test correct password verification."""
         manager = EncryptionManager()
 
-        password = "my_secure_password_123"
+        password = "my_secure_password_123"  # pragma: allowlist secret
         hashed = manager.hash_password(password)
 
         assert manager.verify_password(password, hashed) is True
@@ -116,7 +116,7 @@ class TestEncryptionManager:
         """Test incorrect password verification."""
         manager = EncryptionManager()
 
-        password = "my_secure_password_123"
+        password = "my_secure_password_123"  # pragma: allowlist secret
         hashed = manager.hash_password(password)
 
         assert manager.verify_password("wrong_password", hashed) is False
@@ -149,8 +149,8 @@ class TestAPIConfig:
         config = APIConfig(provider="OANDA", api_key="test-api-key", api_secret="test-api-secret")
 
         assert config.provider == "OANDA"
-        assert config.api_key == "test-api-key"
-        assert config.api_secret == "test-api-secret"
+        assert config.api_key == "test-api-key"  # pragma: allowlist secret
+        assert config.api_secret == "test-api-secret"  # pragma: allowlist secret
 
     def test_api_config_defaults(self):
         """Test APIConfig default values."""
@@ -206,7 +206,7 @@ class TestDatabaseConfig:
             host="localhost",
             port=5432,
             username="user",
-            password="pass",
+            password="pass",  # pragma: allowlist secret
             database="mydb",
         )
 
@@ -286,7 +286,7 @@ class TestConfigManager:
     def setup_env(self):
         """Set up encryption environment variables."""
         os.environ["CONFIG_ENCRYPTION_KEY"] = "test-encryption-key-for-testing-purposes"
-        os.environ["CONFIG_SALT"] = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"
+        os.environ["CONFIG_SALT"] = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"  # pragma: allowlist secret
 
     def test_config_manager_initialization(self):
         """Test ConfigManager initialization."""

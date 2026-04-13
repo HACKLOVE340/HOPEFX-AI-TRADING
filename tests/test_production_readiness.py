@@ -77,7 +77,7 @@ def test_sqlite_engine_no_pool_kwargs(monkeypatch, tmp_path):
 
 def test_postgres_engine_gets_pool_kwargs():
     """PostgreSQL connection string triggers pool_size/max_overflow kwargs."""
-    conn_str = "postgresql://user:pass@localhost:5432/db"
+    conn_str = "postgresql://user:pass@localhost:5432/db"  # pragma: allowlist secret
     is_sqlite = conn_str.startswith("sqlite")
     engine_kwargs: dict = {}
     if not is_sqlite:

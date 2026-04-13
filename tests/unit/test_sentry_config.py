@@ -30,10 +30,10 @@ def _make_event(transaction: str = "/api/signals") -> dict[str, Any]:
     return {
         "transaction": transaction,
         "request": {
-            "data": {"username": "alice", "password": "s3cr3t"},  # nosec B105 - test file
+            "data": {"username": "alice", "password": "s3cr3t"},  # nosec B105 - test file  # pragma: allowlist secret
             "headers": {"Authorization": "Bearer tok123"},
         },
-        "extra": {"api_key": "key_abc", "note": "ok"},
+        "extra": {"api_key": "key_abc", "note": "ok"},  # pragma: allowlist secret
     }
 
 

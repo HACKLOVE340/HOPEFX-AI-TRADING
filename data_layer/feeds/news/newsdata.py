@@ -34,7 +34,7 @@ class NewsDataFeed(NewsFeedBase):
     """NewsData.io adapter."""
 
     name = NewsSource.NEWSDATA
-    _api_key_env = "NEWSDATA_IO_KEY"
+    _api_key_env = "NEWSDATA_IO_KEY"  # pragma: allowlist secret
     _min_interval_s = 300.0  # 200 credits/day ≈ 1 req/7.2min; use 5min
 
     async def fetch_articles(self, limit: int = 50) -> list[NewsArticle]:

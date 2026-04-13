@@ -15,8 +15,8 @@ from typing import Sequence
 
 
 # revision identifiers, used by Alembic.
-revision: str = "d9ffd7d4576b"
-down_revision: str | Sequence[str] | None = "a1b2c3d4e5f6"
+revision: str = "d9ffd7d4576b"  # pragma: allowlist secret
+down_revision: str | Sequence[str] | None = "a1b2c3d4e5f6"  # pragma: allowlist secret
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

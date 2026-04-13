@@ -31,7 +31,7 @@ class MetalsAPIFeed(GoldFeedBase):
     """Metals-API — REST polling adapter."""
 
     name = FeedSource.METALS_API
-    _api_key_env = "METALS_API_KEY"
+    _api_key_env = "METALS_API_KEY"  # pragma: allowlist secret
     _base_url = _BASE
     _min_interval_s = 60.0
 

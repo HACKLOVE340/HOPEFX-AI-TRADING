@@ -539,7 +539,7 @@ class TestNewsProvider:
                 )
 
         provider = ConcreteProvider(api_key="test_key")
-        assert provider.api_key == "test_key"
+        assert provider.api_key == "test_key"  # pragma: allowlist secret
 
 
 class TestNewsAPIProvider:
@@ -550,7 +550,7 @@ class TestNewsAPIProvider:
         from news.providers import NewsAPIProvider
 
         provider = NewsAPIProvider(api_key="test_api_key")
-        assert provider.api_key == "test_api_key"
+        assert provider.api_key == "test_api_key"  # pragma: allowlist secret
         assert provider.BASE_URL == "https://newsapi.org/v2"
 
     def test_provider_without_api_key(self):

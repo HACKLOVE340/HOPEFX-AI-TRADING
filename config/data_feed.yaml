@@ -34,7 +34,7 @@ data_feed:
 
   goldapi:
     provider: "goldapi"
-    api_key: "${DATA_FEED_GOLDAPI_KEY:your_goldapi_key_here}"
+    api_key: "${DATA_FEED_GOLDAPI_KEY:your_goldapi_key_here}"  # pragma: allowlist secret
     url: "https://www.goldapi.io/api/XAU/USD"
 
   metalpriceapi:
@@ -45,6 +45,6 @@ data_feed:
   mt5_demo:
     provider: "mt5"
     login: "${MT5_DEMO_LOGIN:your_mt5_demo_login}"
-    password: "${MT5_DEMO_PASSWORD:your_mt5_demo_password}"
+    password: "${MT5_DEMO_PASSWORD:your_mt5_demo_password}"  # pragma: allowlist secret
     # Change to your prop firm demo server if preferred.
     server: "${MT5_DEMO_SERVER:AMPGlobalUSA-Demo}"

@@ -1211,7 +1211,7 @@ class TestOANDAStream:
         from brokers.oanda_stream import OANDAStream
 
         return OANDAStream(
-            api_key="test-key",
+            api_key="test-key",  # pragma: allowlist secret
             account_id="101-001",
             instruments=["XAU_USD"],
             practice=True,
@@ -1421,7 +1421,7 @@ class TestOandaBroker:
     def _make_broker(self):
         from brokers.oanda_broker import OandaBroker
 
-        return OandaBroker({"login": "101-001", "password": "test-token", "server": "practice"})
+        return OandaBroker({"login": "101-001", "password": "test-token", "server": "practice"})  # pragma: allowlist secret
 
     def test_init(self):
         b = self._make_broker()
@@ -1753,7 +1753,7 @@ class TestMT5BridgeReal:
     def _make_bridge(self, tmp_path):
         from brokers.mt5_bridge import MT5Bridge
 
-        return MT5Bridge(server="Demo", login=12345, password="pass", signal_dir=tmp_path / "signals")
+        return MT5Bridge(server="Demo", login=12345, password="pass", signal_dir=tmp_path / "signals")  # pragma: allowlist secret
 
     def test_init(self, tmp_path):
         b = self._make_bridge(tmp_path)
@@ -1825,7 +1825,7 @@ class TestMT5BridgeReal:
             "os.environ",
             {
                 "MT5_LOGIN": "12345",
-                "MT5_PASSWORD": "pass",
+                "MT5_PASSWORD": "pass",  # pragma: allowlist secret
                 "MT5_SERVER": "Demo",
             },
         ):
@@ -2062,7 +2062,7 @@ class TestMT5BrokerConnector:
     def _make_broker(self):
         from brokers.mt5_broker import MT5Broker
 
-        return MT5Broker({"login": "12345", "password": "pass", "server": "Demo"})
+        return MT5Broker({"login": "12345", "password": "pass", "server": "Demo"})  # pragma: allowlist secret
 
     def test_init(self):
         b = self._make_broker()

@@ -59,21 +59,21 @@ class MT5Connector(BrokerConnector):
         config = {
             'server': 'ICMarkets-Demo',
             'login': 12345678,
-            'password': 'your_password'
+            'password': 'your_password'  # pragma: allowlist secret
         }
 
         # Connect to FTMO prop firm
         config = {
             'server': 'FTMO-Demo',
             'login': 98765432,
-            'password': 'ftmo_password'
+            'password': 'ftmo_password'  # pragma: allowlist secret
         }
 
         # Connect to TopstepTrader
         config = {
             'server': 'TopstepTrader-Server01',
             'login': 11111111,
-            'password': 'topstep_pass'
+            'password': 'topstep_pass'  # pragma: allowlist secret
         }
     """
 

@@ -26,7 +26,7 @@ class TestAuthRoutesDeleted:
         """auth/routes.py must be deleted — it contained a hardcoded JWT secret."""
         routes_path = Path(__file__).parent.parent / "auth" / "routes.py"
         assert not routes_path.exists(), (
-            "auth/routes.py still exists. It contains SECRET_KEY='your_secret_key' "
+            "auth/routes.py still exists. It contains SECRET_KEY='your_secret_key' "  # pragma: allowlist secret
             "and fake_hash_password backdoor. Delete it immediately."
         )
 
@@ -92,7 +92,7 @@ class TestStartupValidator:
         )
 
         env = {
-            "DB_PASSWORD": "strongpassword123",  # nosec B105 - test file
+            "DB_PASSWORD": "strongpassword123",  # nosec B105 - test file  # pragma: allowlist secret
             "DB_HOST": "localhost",
             "REDIS_URL": "redis://localhost:6379/0",
         }
@@ -106,8 +106,8 @@ class TestStartupValidator:
         )
 
         env = {
-            "SECRET_KEY": "short",  # < 32 chars  # nosec B105 - test file
-            "DB_PASSWORD": "strongpassword123",  # nosec B105 - test file
+            "SECRET_KEY": "short",  # < 32 chars  # nosec B105 - test file  # pragma: allowlist secret
+            "DB_PASSWORD": "strongpassword123",  # nosec B105 - test file  # pragma: allowlist secret
             "DB_HOST": "localhost",
             "REDIS_URL": "redis://localhost:6379/0",
         }
@@ -136,7 +136,7 @@ class TestStartupValidator:
 
         env = {
             "SECRET_KEY": "a" * 32,
-            "DB_PASSWORD": "strongpassword123",  # nosec B105 - test file
+            "DB_PASSWORD": "strongpassword123",  # nosec B105 - test file  # pragma: allowlist secret
             "DB_HOST": "localhost",
             "REDIS_URL": "http://localhost:6379",  # wrong scheme
         }
@@ -163,7 +163,7 @@ class TestStartupValidator:
 
         env = {
             "SECRET_KEY": "a" * 32,
-            "DB_PASSWORD": "strongpassword123",  # nosec B105 - test file
+            "DB_PASSWORD": "strongpassword123",  # nosec B105 - test file  # pragma: allowlist secret
             "DB_HOST": "localhost",
             "REDIS_URL": "redis://localhost:6379/0",
             "IBKR_PORT": "9999",  # not a valid IBKR port

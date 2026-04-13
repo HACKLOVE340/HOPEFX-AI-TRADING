@@ -74,9 +74,9 @@ repos:
           - ".secrets.baseline"
           # Exclude files that legitimately contain placeholder/example values.
           - "--exclude-files"
-          - "(frontend/package-lock\\.json|\\.env\\.example|data/.*\\.csv|ml/saved_models/.*)"
-        # Jupyter notebooks and lock files are excluded from all hooks.
-        exclude: (\.ipynb$|package-lock\.json$)
+          - "(frontend/package-lock\\.json|\\.env\\.example|data/.*\\.csv|ml/saved_models/.*|docs/.*\\.md|docs/archive/.*|DEPLOYMENT\\.md|dashboard/dist/.*)"
+        # Jupyter notebooks, lock files, markdown docs, and build artifacts are excluded.
+        exclude: (\.ipynb$|package-lock\.json$|\.md$|dashboard/dist/)
 
 # pytest belongs in the CI test job, not in pre-commit hooks.
 # Running the full test suite on every commit is too slow and fails in

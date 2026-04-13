@@ -86,7 +86,7 @@ spec:
             claimName: hopefx-events-pvc
         - name: hsm-credentials
           secret:
-            secretName: hsm-cloud-credentials
+            secretName: hsm-cloud-credentials  # pragma: allowlist secret
         - name: config
           configMap:
             name: hopefx-config

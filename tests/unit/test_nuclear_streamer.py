@@ -482,7 +482,7 @@ class TestOANDAStreamArchitecturalBoundary:
         from brokers.oanda_stream import OANDAStream, StreamingForbiddenError
 
         broker = OANDAStream(
-            api_key="test-key",
+            api_key="test-key",  # pragma: allowlist secret
             account_id="test-account",
             instruments=["XAU_USD"],
         )
@@ -496,7 +496,7 @@ class TestOANDAStreamArchitecturalBoundary:
 
         with caplog.at_level(logging.WARNING, logger="brokers.oanda_stream"):
             OANDAStream(
-                api_key="test-key",
+                api_key="test-key",  # pragma: allowlist secret
                 account_id="test-account",
                 instruments=["XAU_USD"],
                 on_tick=lambda t: None,
@@ -509,7 +509,7 @@ class TestOANDAStreamArchitecturalBoundary:
         from brokers.oanda_stream import OANDAStream
 
         broker = OANDAStream(
-            api_key="test-key",
+            api_key="test-key",  # pragma: allowlist secret
             account_id="test-account",
             instruments=["XAU_USD"],
         )

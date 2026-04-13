@@ -32,7 +32,7 @@ class MyForexFundsConnector(MT5Connector):
     Example:
         config = {
             'login': 12345678,
-            'password': 'your_password',
+            'password': 'your_password',  # pragma: allowlist secret
             'server': 'MyForexFunds-Demo',
             'account_size': 100000
         }

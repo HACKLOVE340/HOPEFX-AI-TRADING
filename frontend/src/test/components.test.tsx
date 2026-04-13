@@ -284,7 +284,7 @@ describe('Login page', () => {
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
 
     await waitFor(() => {
-      expect(authApi.login).toHaveBeenCalledWith({ email: 'trader@hopefx.io', password: 'pass123' });
+      expect(authApi.login).toHaveBeenCalledWith({ email: 'trader@hopefx.io', password: 'pass123' });  // pragma: allowlist secret
     });
   });
 
@@ -346,7 +346,7 @@ describe('Login page', () => {
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
 
     await waitFor(() => {
-      expect(authApi.login).toHaveBeenCalledWith({ email: 'trader@hopefx.io', password: 'pass' });
+      expect(authApi.login).toHaveBeenCalledWith({ email: 'trader@hopefx.io', password: 'pass' });  // pragma: allowlist secret
     });
   });
 

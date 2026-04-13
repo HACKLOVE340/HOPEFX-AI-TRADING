@@ -91,7 +91,7 @@ def _validate_database(errors: list[str]) -> None:
 
     if not db_url and not db_host:
         errors.append(
-            "MISSING  DATABASE_URL or DB_HOST: set DATABASE_URL=postgresql://user:pass@host:5432/db",
+            "MISSING  DATABASE_URL or DB_HOST: set DATABASE_URL=postgresql://user:pass@host:5432/db",  # pragma: allowlist secret
         )
     if not db_url and db_host and not db_pass:
         errors.append(

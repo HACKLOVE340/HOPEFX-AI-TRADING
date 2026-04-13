@@ -32,7 +32,7 @@ class The5ersConnector(MT5Connector):
     Example:
         config = {
             'login': 12345678,
-            'password': 'your_password',
+            'password': 'your_password',  # pragma: allowlist secret
             'server': 'The5ers-Demo',
             'program': 'high_stakes'
         }
