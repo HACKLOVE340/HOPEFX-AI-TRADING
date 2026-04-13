@@ -326,3 +326,198 @@ def test_get_signal_engine_status_has_all_keys():
     assert "phase4_deep" in status
     assert "symbols" in status
     assert "interval_seconds" in status
+
+
+# ── _predict_advanced ─────────────────────────────────────────────────────────
+
+
+def test_predict_advanced_with_mock_predictor():
+    """With a mock predictor, returns its predict_proba result."""
+    import pandas as pd
+    data = {
+        "close": 1920.0, "open": 1900.0, "high": 1930.0, "low": 1890.0,
+        "volume": 5000, "closes": [1900.0 + i for i in range(50)],
+    }
+    mock_pred = MagicMock()
+    mock_pred.predict_proba.return_value = 0.72
+    mock_pred.version = "v2"
+    with patch.object(se, "_apply_anomaly_weighting", return_value=0.72):
+        with patch.object(se, "_apply_online_blend", return_value=0.72):
+            with patch.object(se, "_apply_deep_ensemble_blend", return_value=0.72):
+                with patch.object(se, "_fetch_macro_df", return_value=None):
+                    with patch.object(se, "_fetch_mtf_df", return_value=None):
+                        result = se._predict_advanced(mock_pred, data, "XAUUSD", None)
+    assert result[0] == pytest.approx(0.72)
+    assert result[1] == "v2"
+
+
+def test_compute_ml_probability_handles_advanced_predictor_exception():
+    """Exception in _predict_advanced → _compute_ml_probability returns base_confidence."""
+    data = {
+        "close": 1920.0, "open": 1900.0, "high": 1930.0, "low": 1890.0,
+        "volume": 5000, "closes": [1900.0] * 10,
+    }
+    mock_pred = MagicMock()
+    mock_pred.is_available = True
+    with patch.object(se, "_ML_AVAILABLE", True):
+        with patch("core.signal_engine.get_advanced_predictor", return_value=mock_pred):
+            with patch.object(se, "_predict_advanced", side_effect=RuntimeError("model error")):
+                result = se._compute_ml_probability(data, "XAUUSD", 0.55)
+    assert result == (0.55, "none")
+
+
+# ── _predict_basic ────────────────────────────────────────────────────────────
+
+
+def test_predict_basic_with_mock_model():
+    import numpy as np
+    mock_model = MagicMock()
+    mock_model.predict_proba.return_value = np.array([[0.35, 0.65]])
+    data = {
+        "close": 1920.0, "open": 1900.0, "high": 1930.0, "low": 1890.0,
+        "volume": 5000, "prices": [1900.0 + i for i in range(25)],
+    }
+    result = se._predict_basic(mock_model, "v1", data, "XAUUSD", 0.5)
+    assert isinstance(result[0], float)
+    assert result[1] == "v1"
+
+
+def test_predict_basic_predict_only_model():
+    """Model with predict() but no predict_proba()."""
+    import numpy as np
+    mock_model = MagicMock(spec=["predict"])
+    mock_model.predict.return_value = np.array([0.68])
+    data = {
+        "close": 1920.0, "open": 1900.0, "high": 1930.0, "low": 1890.0,
+        "volume": 5000, "prices": [1900.0] * 5,
+    }
+    result = se._predict_basic(mock_model, "v1", data, "XAUUSD", 0.5)
+    assert result[0] == pytest.approx(0.68)
+
+
+def test_predict_basic_no_predict_method():
+    """Model with neither predict_proba nor predict → returns base_confidence."""
+    mock_model = MagicMock(spec=[])
+    data = {
+        "close": 1920.0, "open": 1900.0, "high": 1930.0, "low": 1890.0,
+        "volume": 5000, "prices": [1900.0] * 5,
+    }
+    result = se._predict_basic(mock_model, "v1", data, "XAUUSD", 0.55)
+    assert result[0] == pytest.approx(0.55)
+
+
+# ── _compute_ml_probability ───────────────────────────────────────────────────
+
+
+def test_compute_ml_probability_no_ml():
+    """When ML unavailable, returns base_confidence."""
+    with patch.object(se, "_ML_AVAILABLE", False):
+        result = se._compute_ml_probability({"close": 1920.0}, "XAUUSD", 0.55)
+    assert result == (0.55, "none")
+
+
+def test_compute_ml_probability_no_model():
+    """When no model loaded, returns base_confidence."""
+    with patch.object(se, "_ML_AVAILABLE", True):
+        with patch("core.signal_engine.get_advanced_predictor", return_value=None):
+            with patch("core.signal_engine.get_active_model", return_value=None):
+                result = se._compute_ml_probability({"close": 1920.0}, "XAUUSD", 0.55)
+    assert result == (0.55, "none")
+
+
+def test_compute_ml_probability_uses_advanced_predictor():
+    """When advanced predictor is available, uses it."""
+    mock_pred = MagicMock()
+    mock_pred.is_available = True
+    data = {
+        "close": 1920.0, "open": 1900.0, "high": 1930.0, "low": 1890.0,
+        "volume": 5000, "closes": [1900.0] * 10,
+    }
+    with patch.object(se, "_ML_AVAILABLE", True):
+        with patch("core.signal_engine.get_advanced_predictor", return_value=mock_pred):
+            with patch.object(se, "_predict_advanced", return_value=(0.72, "v2")):
+                result = se._compute_ml_probability(data, "XAUUSD", 0.5)
+    assert result == (0.72, "v2")
+
+
+def test_compute_ml_probability_uses_basic_model():
+    """Falls back to basic model when advanced predictor unavailable."""
+    mock_model = MagicMock()
+    data = {
+        "close": 1920.0, "open": 1900.0, "high": 1930.0, "low": 1890.0,
+        "volume": 5000, "prices": [1900.0] * 5,
+    }
+    with patch.object(se, "_ML_AVAILABLE", True):
+        with patch("core.signal_engine.get_advanced_predictor", return_value=None):
+            with patch("core.signal_engine.get_active_model", return_value=mock_model):
+                with patch("core.signal_engine.get_model_version", return_value="v1"):
+                    with patch.object(se, "_predict_basic", return_value=(0.65, "v1")):
+                        result = se._compute_ml_probability(data, "XAUUSD", 0.5)
+    assert result == (0.65, "v1")
+
+
+# ── _compute_signal ───────────────────────────────────────────────────────────
+
+
+def test_compute_signal_no_consensus():
+    """When brain returns no consensus, _compute_signal returns None."""
+    mock_brain = MagicMock()
+    mock_brain.analyze_joint.return_value = {"consensus_reached": False, "reason": "no consensus"}
+    data = {"close": 1920.0, "open": 1900.0, "high": 1930.0, "low": 1890.0, "volume": 5000}
+    result = se._compute_signal(mock_brain, data, "XAUUSD")
+    assert result is None
+
+
+def test_compute_signal_with_consensus():
+    """When brain returns consensus, _compute_signal returns a dict."""
+    mock_signal = MagicMock()
+    mock_signal.signal_type.value = "LONG"
+    mock_signal.confidence = 0.75
+    mock_brain = MagicMock()
+    mock_brain.analyze_joint.return_value = {
+        "consensus_reached": True,
+        "consensus_signal": mock_signal,
+    }
+    data = {"close": 1920.0, "open": 1900.0, "high": 1930.0, "low": 1890.0, "volume": 5000}
+    result = se._compute_signal(mock_brain, data, "XAUUSD")
+    assert result is not None
+    assert result["direction"] == "LONG"
+    assert result["base_confidence"] == 0.75
+
+
+def test_compute_signal_no_signal_object():
+    """When consensus_signal is None, returns None."""
+    mock_brain = MagicMock()
+    mock_brain.analyze_joint.return_value = {
+        "consensus_reached": True,
+        "consensus_signal": None,
+    }
+    data = {"close": 1920.0}
+    result = se._compute_signal(mock_brain, data, "XAUUSD")
+    assert result is None
+
+
+# ── _run_signal_filter ────────────────────────────────────────────────────────
+
+
+def test_run_signal_filter_returns_bool():
+    signal = {"direction": "LONG", "strength": 0.8, "confidence": 0.7}
+    result = se._run_signal_filter(signal, "XAUUSD", {})
+    assert isinstance(result, bool)
+
+
+# ── _compute_atr ──────────────────────────────────────────────────────────────
+
+
+def test_compute_atr_basic():
+    highs = [1930.0] * 14
+    lows = [1890.0] * 14
+    closes = [1910.0] * 14
+    result = se._compute_atr(highs, lows, closes, 1910.0)
+    assert isinstance(result, float)
+    assert result > 0
+
+
+def test_compute_atr_insufficient_data():
+    result = se._compute_atr([1930.0], [1890.0], [1910.0], 1910.0)
+    assert isinstance(result, float)
