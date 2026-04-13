@@ -247,11 +247,17 @@ class RegulatoryReporter:
         trade_id = str(trade.get("id", trade.get("trade_id", uuid.uuid4())))
         report_id = str(uuid.uuid4())
 
+        # Read config at call time so tests can patch os.environ without
+        # reloading the module (module-level constants are frozen at import).
+        prop_firm_mode = os.getenv("PROP_FIRM_MODE", "false").lower() == "true"
+        reporting_enabled = os.getenv("REGULATORY_REPORTING_ENABLED", "false").lower() == "true"
+        jurisdiction = os.getenv("REGULATORY_JURISDICTION", "US").upper()
+
         # Prop-firm mode: suppress live reporting, still audit
-        if _PROP_FIRM_MODE:
+        if prop_firm_mode:
             record = ReportRecord(
                 report_id=report_id,
-                jurisdiction=_JURISDICTION,
+                jurisdiction=jurisdiction,
                 endpoint="suppressed:prop_firm_mode",
                 trade_id=trade_id,
                 payload=trade,
@@ -266,10 +272,10 @@ class RegulatoryReporter:
             return record
 
         # Reporting disabled — log warning but don't transmit
-        if not _REPORTING_ENABLED:
+        if not reporting_enabled:
             record = ReportRecord(
                 report_id=report_id,
-                jurisdiction=_JURISDICTION,
+                jurisdiction=jurisdiction,
                 endpoint="suppressed:reporting_disabled",
                 trade_id=trade_id,
                 payload=trade,
@@ -285,7 +291,7 @@ class RegulatoryReporter:
             return record
 
         # Select reporter by jurisdiction
-        if _JURISDICTION == "EU":
+        if jurisdiction == "EU":
             record = await self._submit_mifid_ii(trade, report_id, trade_id)
         else:
             # US: CFTC SDR + SEC CAT
