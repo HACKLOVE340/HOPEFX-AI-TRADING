@@ -100,7 +100,10 @@ class TestOANDARegistration:
         """When OANDA_API_KEY is present, OandaBroker should be registered."""
         mock_oanda = _make_mock_broker()
         with (
-            patch.dict(os.environ, {"OANDA_API_KEY": "test_key", "OANDA_ACCOUNT_ID": "12345"}),  # pragma: allowlist secret
+            patch.dict(
+                os.environ,
+                {"OANDA_API_KEY": "test_key", "OANDA_ACCOUNT_ID": "12345"},  # pragma: allowlist secret
+            ),  # pragma: allowlist secret
             patch("brokers.oanda_broker.OandaBroker", return_value=mock_oanda),
         ):
             mgr = _make_manager("ibkr")

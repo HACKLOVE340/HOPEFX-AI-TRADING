@@ -14,9 +14,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from unittest.mock import MagicMock, patch
 
 from core.event_bus import DomainEvent
 from core.strategy_orchestra import (

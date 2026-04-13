@@ -1046,7 +1046,7 @@ class TestPolygonL2Feed:
         from market_data.order_book import PolygonL2Feed
 
         feed = PolygonL2Feed()
-        feed._api_key = ""
+        feed._api_key = ""  # pragma: allowlist secret
         with pytest.raises(RuntimeError, match="POLYGON_API_KEY"):
             asyncio.run(feed.start(["XAU_USD"]))
 
@@ -2189,7 +2189,7 @@ class TestFinnhubTradeFeed:
         from market_data.order_book import FinnhubTradeFeed
 
         feed = FinnhubTradeFeed(shared_books={})
-        feed._api_key = ""
+        feed._api_key = ""  # pragma: allowlist secret
         await feed.start()  # should return without setting _running
         assert feed._running is False
 

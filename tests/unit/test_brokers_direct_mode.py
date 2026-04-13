@@ -60,7 +60,12 @@ def _bridge(tmp_path, mt5):
     # The _restore_mt5_bridge_module fixture (above) undoes this after each test.
     mod.mt5 = mt5
     mod._MT5_AVAILABLE = True
-    b = mod.MT5Bridge(server="Demo", login=12345678, password="pass", signal_dir=tmp_path / "signals")
+    b = mod.MT5Bridge(
+        server="Demo",
+        login=12345678,
+        password="pass",  # pragma: allowlist secret
+        signal_dir=tmp_path / "signals",  # pragma: allowlist secret
+    )  # pragma: allowlist secret
     b._connected = True
     return b, mod
 

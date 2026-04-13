@@ -146,7 +146,11 @@ class TestAPIConfig:
 
     def test_api_config_creation(self):
         """Test APIConfig creation."""
-        config = APIConfig(provider="OANDA", api_key="test-api-key", api_secret="test-api-secret")
+        config = APIConfig(
+            provider="OANDA",
+            api_key="test-api-key",  # pragma: allowlist secret
+            api_secret="test-api-secret",  # pragma: allowlist secret
+        )  # pragma: allowlist secret
 
         assert config.provider == "OANDA"
         assert config.api_key == "test-api-key"  # pragma: allowlist secret
@@ -154,7 +158,7 @@ class TestAPIConfig:
 
     def test_api_config_defaults(self):
         """Test APIConfig default values."""
-        config = APIConfig(provider="Binance", api_key="key", api_secret="secret")
+        config = APIConfig(provider="Binance", api_key="key", api_secret="secret")  # pragma: allowlist secret
 
         assert config.sandbox_mode is True  # Default should be sandbox
         assert config.timeout == 30
@@ -162,7 +166,7 @@ class TestAPIConfig:
 
     def test_api_config_validate(self):
         """Test APIConfig validation."""
-        config = APIConfig(provider="OANDA", api_key="key", api_secret="secret")
+        config = APIConfig(provider="OANDA", api_key="key", api_secret="secret")  # pragma: allowlist secret
 
         assert config.validate() is True
 
@@ -177,7 +181,7 @@ class TestDatabaseConfig:
             host="localhost",
             port=5432,
             username="",
-            password="",  # nosec B106 - test file
+            password="",  # nosec B106 - test file  # pragma: allowlist secret
             database="test.db",
         )
 
@@ -191,7 +195,7 @@ class TestDatabaseConfig:
             host="localhost",
             port=5432,
             username="",
-            password="",  # nosec B106 - test file
+            password="",  # nosec B106 - test file  # pragma: allowlist secret
             database="test.db",
         )
 

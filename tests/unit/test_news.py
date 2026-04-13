@@ -495,7 +495,7 @@ class TestNewsProvider:
         from news.providers import NewsProvider
 
         with pytest.raises(TypeError):
-            NewsProvider(api_key="test_key")  # type: ignore[abstract]  # pylint: disable=abstract-class-instantiated
+            NewsProvider(api_key="test_key")  # type: ignore[abstract]  # pylint: disable=abstract-class-instantiated  # pragma: allowlist secret
 
     def test_incomplete_subclass_missing_both_raises_type_error(self):
         """A subclass missing both abstract methods raises TypeError."""
@@ -538,7 +538,7 @@ class TestNewsProvider:
                     symbols=[],
                 )
 
-        provider = ConcreteProvider(api_key="test_key")
+        provider = ConcreteProvider(api_key="test_key")  # pragma: allowlist secret
         assert provider.api_key == "test_key"  # pragma: allowlist secret
 
 
@@ -549,7 +549,7 @@ class TestNewsAPIProvider:
         """Test NewsAPI provider initialization."""
         from news.providers import NewsAPIProvider
 
-        provider = NewsAPIProvider(api_key="test_api_key")
+        provider = NewsAPIProvider(api_key="test_api_key")  # pragma: allowlist secret
         assert provider.api_key == "test_api_key"  # pragma: allowlist secret
         assert provider.BASE_URL == "https://newsapi.org/v2"
 
@@ -558,7 +558,7 @@ class TestNewsAPIProvider:
         from news.providers import NewsAPIProvider
 
         with pytest.raises(ValueError):
-            NewsAPIProvider(api_key="")
+            NewsAPIProvider(api_key="")  # pragma: allowlist secret
 
     @patch("news.providers.requests.get")
     def test_get_news_success(self, mock_get):
@@ -581,7 +581,7 @@ class TestNewsAPIProvider:
         }
         mock_get.return_value = mock_response
 
-        provider = NewsAPIProvider(api_key="test_key")
+        provider = NewsAPIProvider(api_key="test_key")  # pragma: allowlist secret
         articles = provider.get_news(query="gold")
 
         assert len(articles) >= 0  # May be empty if API fails

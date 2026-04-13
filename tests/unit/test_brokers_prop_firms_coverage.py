@@ -101,8 +101,8 @@ class TestPropFirmInitModule:
 
         cfg = PropFirmConfig(
             firm_id="ftmo",
-            api_key="k",
-            secret_key="s",
+            api_key="k",  # pragma: allowlist secret
+            secret_key="s",  # pragma: allowlist secret
             account_id="acc",
             tier=PropFirmTier.PROFESSIONAL,
             base_url="https://api.ftmo.com",

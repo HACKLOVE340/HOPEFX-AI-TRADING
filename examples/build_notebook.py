@@ -11,8 +11,12 @@ Run once; the resulting .ipynb renders on GitHub without needing a kernel.
 
 import base64
 import json
+import logging
 from pathlib import Path
+
 import nbformat
+
+logger = logging.getLogger(__name__)
 from nbformat.v4 import new_notebook, new_markdown_cell, new_code_cell, new_output
 
 ROOT = Path(__file__).resolve().parent.parent

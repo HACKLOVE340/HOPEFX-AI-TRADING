@@ -673,27 +673,27 @@ class TestAPIConfigExtended:
     """Extended APIConfig tests."""
 
     def test_validate_missing_api_key(self):
-        cfg = APIConfig(provider="p", api_key="", api_secret="s")
+        cfg = APIConfig(provider="p", api_key="", api_secret="s")  # pragma: allowlist secret
         assert cfg.validate() is False
 
     def test_validate_missing_api_secret(self):
-        cfg = APIConfig(provider="p", api_key="k", api_secret="")  # nosec B106 - test file
+        cfg = APIConfig(provider="p", api_key="k", api_secret="")  # nosec B106 - test file  # pragma: allowlist secret
         assert cfg.validate() is False
 
     def test_validate_missing_provider(self):
-        cfg = APIConfig(provider="", api_key="k", api_secret="s")
+        cfg = APIConfig(provider="", api_key="k", api_secret="s")  # pragma: allowlist secret
         assert cfg.validate() is False
 
     def test_validate_valid_config(self):
-        cfg = APIConfig(provider="binance", api_key="key", api_secret="secret")
+        cfg = APIConfig(provider="binance", api_key="key", api_secret="secret")  # pragma: allowlist secret
         assert cfg.validate() is True
 
     def test_defaults_sandbox_true(self):
-        cfg = APIConfig(provider="p", api_key="k", api_secret="s")
+        cfg = APIConfig(provider="p", api_key="k", api_secret="s")  # pragma: allowlist secret
         assert cfg.sandbox_mode is True
 
     def test_rate_limit_default(self):
-        cfg = APIConfig(provider="p", api_key="k", api_secret="s")
+        cfg = APIConfig(provider="p", api_key="k", api_secret="s")  # pragma: allowlist secret
         assert cfg.rate_limit == 100
 
 
@@ -707,7 +707,7 @@ class TestDatabaseConfigExtended:
             host="",
             port=0,
             username="",
-            password="",  # nosec B106 - test file
+            password="",  # nosec B106 - test file  # pragma: allowlist secret
             database="test.db",
         )
 
@@ -733,7 +733,7 @@ class TestDatabaseConfigExtended:
             host="h",
             port=1521,
             username="u",
-            password="p",
+            password="p",  # pragma: allowlist secret
             database="d",
         )
         assert cfg.validate() is False
@@ -787,7 +787,7 @@ class TestDatabaseConfigExtended:
             host="h",
             port=9042,
             username="u",
-            password="p",
+            password="p",  # pragma: allowlist secret
             database="d",
         )
         with pytest.raises(ValueError):
@@ -858,12 +858,14 @@ class TestAppConfigValidation:
 
     def test_validate_propagates_api_config_failure(self):
         cfg = AppConfig()
-        cfg.api_configs["bad"] = APIConfig(provider="", api_key="", api_secret="")  # nosec B106 - test file
+        cfg.api_configs["bad"] = APIConfig(provider="", api_key="", api_secret="")  # nosec B106 - test file  # pragma: allowlist secret
         assert cfg.validate() is False
 
     def test_validate_with_valid_api_config(self):
         cfg = AppConfig()
-        cfg.api_configs["binance"] = APIConfig(provider="binance", api_key="k", api_secret="s")
+        cfg.api_configs["binance"] = APIConfig(
+            provider="binance", api_key="k", api_secret="s"
+        )  # pragma: allowlist secret
         assert cfg.validate() is True
 
 
@@ -1015,7 +1017,11 @@ class TestConfigManagerSaveConfig:
     def test_save_encrypts_api_credentials(self, tmp_path):
         mgr = ConfigManager(config_dir=str(tmp_path))
         cfg = AppConfig(environment="enc_test")
-        cfg.api_configs["binance"] = APIConfig(provider="binance", api_key="myapikey", api_secret="mysecret")
+        cfg.api_configs["binance"] = APIConfig(
+            provider="binance",
+            api_key="myapikey",  # pragma: allowlist secret
+            api_secret="mysecret",  # pragma: allowlist secret
+        )  # pragma: allowlist secret
         mgr.save_config(cfg)
 
         raw = json.loads((tmp_path / "config.enc_test.json").read_text())
@@ -1193,7 +1199,11 @@ class TestEncryptDecryptIntegration:
     def test_api_credentials_survive_save_load(self, tmp_path):
         mgr = ConfigManager(config_dir=str(tmp_path))
         cfg = AppConfig(environment="creds_test")
-        cfg.api_configs["alpaca"] = APIConfig(provider="alpaca", api_key="real_api_key", api_secret="real_api_secret")
+        cfg.api_configs["alpaca"] = APIConfig(
+            provider="alpaca",
+            api_key="real_api_key",  # pragma: allowlist secret
+            api_secret="real_api_secret",  # pragma: allowlist secret
+        )  # pragma: allowlist secret
         mgr.save_config(cfg)
 
         mgr2 = ConfigManager(config_dir=str(tmp_path))

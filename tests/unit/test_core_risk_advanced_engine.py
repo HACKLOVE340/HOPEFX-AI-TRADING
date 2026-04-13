@@ -13,12 +13,10 @@ importable and the public API is intact.
 
 from __future__ import annotations
 
-import pytest
-
 
 def test_import_advanced_engine():
     """Module must be importable without GPU hardware."""
-    import core.risk.advanced_engine as ae  # noqa: F401
+    import core.risk.advanced_engine as ae
 
     assert ae is not None
 

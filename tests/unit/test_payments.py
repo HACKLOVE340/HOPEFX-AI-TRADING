@@ -237,7 +237,7 @@ class TestPaymentsWebhook:
         """No secret + CRYPTO_WEBHOOK_VERIFY=false in dev returns True (bypass)."""
         import api.payments as pm
 
-        pm._WEBHOOK_SECRET = ""  # nosec B105 - test file
+        pm._WEBHOOK_SECRET = ""  # nosec B105 - test file  # pragma: allowlist secret
         body = b'{"payment_id":"PAY_1"}'
 
         with patch.dict(os.environ, {"APP_ENV": "development", "CRYPTO_WEBHOOK_VERIFY": "false"}):
@@ -249,7 +249,7 @@ class TestPaymentsWebhook:
         """No secret in production mode returns False."""
         import api.payments as pm
 
-        pm._WEBHOOK_SECRET = ""  # nosec B105 - test file
+        pm._WEBHOOK_SECRET = ""  # nosec B105 - test file  # pragma: allowlist secret
         body = b'{"payment_id":"PAY_1"}'
 
         with patch.dict(os.environ, {"APP_ENV": "production"}):

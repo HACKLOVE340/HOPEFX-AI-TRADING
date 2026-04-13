@@ -390,7 +390,7 @@ class TestAsyncWrappers:
         bridge = MT5Bridge(
             server="s",
             login=1,
-            password="p",
+            password="p",  # pragma: allowlist secret
             signal_dir=tmp_path,
         )
         bridge.connect()
@@ -420,7 +420,7 @@ class TestAsyncWrappers:
         bridge = MT5Bridge(
             server="s",
             login=1,
-            password="p",
+            password="p",  # pragma: allowlist secret
             signal_dir=tmp_path,
         )
         bridge.connect()
