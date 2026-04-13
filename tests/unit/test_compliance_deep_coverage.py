@@ -525,7 +525,6 @@ class TestRegulatoryReporter:
 
     @pytest.mark.asyncio
     async def test_submit_http_success(self):
-        import compliance.regulatory_reporter as rr_mod
         from compliance.regulatory_reporter import RegulatoryReporter
 
         mock_resp = AsyncMock()
@@ -537,8 +536,13 @@ class TestRegulatoryReporter:
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=False)
         with (
-            patch.object(rr_mod, "_REPORTING_ENABLED", True),
-            patch.object(rr_mod, "_PROP_FIRM_MODE", False),
+            patch.dict(
+                os.environ,
+                {
+                    "REGULATORY_REPORTING_ENABLED": "true",
+                    "PROP_FIRM_MODE": "false",
+                },
+            ),
             patch("aiohttp.ClientSession", return_value=mock_session),
         ):
             reporter = RegulatoryReporter()
@@ -559,8 +563,13 @@ class TestRegulatoryReporter:
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=False)
         with (
-            patch.object(rr_mod, "_REPORTING_ENABLED", True),
-            patch.object(rr_mod, "_PROP_FIRM_MODE", False),
+            patch.dict(
+                os.environ,
+                {
+                    "REGULATORY_REPORTING_ENABLED": "true",
+                    "PROP_FIRM_MODE": "false",
+                },
+            ),
             patch.object(rr_mod, "_RETRY_MAX", 2),
             patch.object(rr_mod, "_RETRY_BACKOFF_BASE", 0.0),
             patch.object(rr_mod, "_RETRY_BACKOFF_CAP", 0.0),
