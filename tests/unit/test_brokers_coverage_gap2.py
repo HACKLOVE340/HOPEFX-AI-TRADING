@@ -6,12 +6,9 @@ Coverage gap-fill tests for mt5_bridge (direct MT5 mode), oanda_broker
 (close_trade, cancel_order, get_tick, get_ohlcv_candles), and
 mt5_zmq_bridge (recv_loop, start/stop with ZMQ mocked).
 """
+
 from __future__ import annotations
 
-import asyncio
-import threading
-import time
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -105,6 +102,7 @@ class TestOandaCloseTrade:
     @pytest.mark.asyncio
     async def test_close_trade_connection_error(self):
         import aiohttp
+
         b = _connected_oanda()
         b._session.put.side_effect = aiohttp.ClientConnectionError("refused")
         with patch("asyncio.sleep", new_callable=AsyncMock):
@@ -114,6 +112,7 @@ class TestOandaCloseTrade:
     @pytest.mark.asyncio
     async def test_close_trade_generic_client_error(self):
         import aiohttp
+
         b = _connected_oanda()
         b._session.put.side_effect = aiohttp.ClientError("generic")
         result = await b.close_trade("t1")
@@ -181,6 +180,7 @@ class TestOandaCancelOrder:
     @pytest.mark.asyncio
     async def test_cancel_order_connection_error(self):
         import aiohttp
+
         b = _connected_oanda()
         b._session.put.side_effect = aiohttp.ClientConnectionError("refused")
         with patch("asyncio.sleep", new_callable=AsyncMock):
@@ -190,6 +190,7 @@ class TestOandaCancelOrder:
     @pytest.mark.asyncio
     async def test_cancel_order_client_error(self):
         import aiohttp
+
         b = _connected_oanda()
         b._session.put.side_effect = aiohttp.ClientError("generic")
         result = await b.cancel_order("ord-1")
@@ -232,6 +233,7 @@ class TestOandaGetTick:
     @pytest.mark.asyncio
     async def test_get_tick_client_error(self):
         import aiohttp
+
         b = _connected_oanda()
         b._session.get.side_effect = aiohttp.ClientError("err")
         result = await b.get_tick("XAU_USD")
@@ -248,10 +250,16 @@ class TestOandaGetOhlcv:
     @pytest.mark.asyncio
     async def test_get_ohlcv_success(self):
         b = _connected_oanda()
-        data = {"candles": [
-            {"complete": True, "time": "2025-01-01T00:00:00Z", "volume": 100,
-             "mid": {"o": "1900.0", "h": "1920.0", "l": "1890.0", "c": "1910.0"}},
-        ]}
+        data = {
+            "candles": [
+                {
+                    "complete": True,
+                    "time": "2025-01-01T00:00:00Z",
+                    "volume": 100,
+                    "mid": {"o": "1900.0", "h": "1920.0", "l": "1890.0", "c": "1910.0"},
+                },
+            ]
+        }
         r = _resp(200, data)
         b._session.get.return_value = r
         result = await b.get_ohlcv_candles("XAU_USD")
@@ -261,10 +269,16 @@ class TestOandaGetOhlcv:
     @pytest.mark.asyncio
     async def test_get_ohlcv_skips_incomplete(self):
         b = _connected_oanda()
-        data = {"candles": [
-            {"complete": False, "time": "2025-01-01T01:00:00Z", "volume": 10,
-             "mid": {"o": "1910.0", "h": "1915.0", "l": "1905.0", "c": "1912.0"}},
-        ]}
+        data = {
+            "candles": [
+                {
+                    "complete": False,
+                    "time": "2025-01-01T01:00:00Z",
+                    "volume": 10,
+                    "mid": {"o": "1910.0", "h": "1915.0", "l": "1905.0", "c": "1912.0"},
+                },
+            ]
+        }
         r = _resp(200, data)
         b._session.get.return_value = r
         result = await b.get_ohlcv_candles("XAU_USD")
@@ -281,6 +295,7 @@ class TestOandaGetOhlcv:
     @pytest.mark.asyncio
     async def test_get_ohlcv_client_error(self):
         import aiohttp
+
         b = _connected_oanda()
         b._session.get.side_effect = aiohttp.ClientError("err")
         result = await b.get_ohlcv_candles("XAU_USD")
@@ -289,23 +304,34 @@ class TestOandaGetOhlcv:
     @pytest.mark.asyncio
     async def test_get_ohlcv_with_from_to(self):
         b = _connected_oanda()
-        data = {"candles": [
-            {"complete": True, "time": "2025-01-01T00:00:00Z", "volume": 50,
-             "mid": {"o": "1900.0", "h": "1905.0", "l": "1895.0", "c": "1902.0"}},
-        ]}
+        data = {
+            "candles": [
+                {
+                    "complete": True,
+                    "time": "2025-01-01T00:00:00Z",
+                    "volume": 50,
+                    "mid": {"o": "1900.0", "h": "1905.0", "l": "1895.0", "c": "1902.0"},
+                },
+            ]
+        }
         r = _resp(200, data)
         b._session.get.return_value = r
-        result = await b.get_ohlcv_candles("XAU_USD", from_time="2025-01-01T00:00:00Z",
-                                            to_time="2025-01-02T00:00:00Z")
+        result = await b.get_ohlcv_candles("XAU_USD", from_time="2025-01-01T00:00:00Z", to_time="2025-01-02T00:00:00Z")
         assert len(result) == 1
 
     @pytest.mark.asyncio
     async def test_get_ohlcv_with_from_only(self):
         b = _connected_oanda()
-        data = {"candles": [
-            {"complete": True, "time": "2025-01-01T00:00:00Z", "volume": 50,
-             "mid": {"o": "1900.0", "h": "1905.0", "l": "1895.0", "c": "1902.0"}},
-        ]}
+        data = {
+            "candles": [
+                {
+                    "complete": True,
+                    "time": "2025-01-01T00:00:00Z",
+                    "volume": 50,
+                    "mid": {"o": "1900.0", "h": "1905.0", "l": "1895.0", "c": "1902.0"},
+                },
+            ]
+        }
         r = _resp(200, data)
         b._session.get.return_value = r
         result = await b.get_ohlcv_candles("XAU_USD", from_time="2025-01-01T00:00:00Z")
@@ -314,10 +340,11 @@ class TestOandaGetOhlcv:
     @pytest.mark.asyncio
     async def test_get_ohlcv_malformed_candle_skipped(self):
         b = _connected_oanda()
-        data = {"candles": [
-            {"complete": True, "time": "2025-01-01T00:00:00Z", "volume": 50,
-             "mid": {}},  # missing o/h/l/c
-        ]}
+        data = {
+            "candles": [
+                {"complete": True, "time": "2025-01-01T00:00:00Z", "volume": 50, "mid": {}},  # missing o/h/l/c
+            ]
+        }
         r = _resp(200, data)
         b._session.get.return_value = r
         result = await b.get_ohlcv_candles("XAU_USD")
@@ -354,5 +381,3 @@ class TestOandaGetOhlcv:
         with patch("asyncio.sleep", new_callable=AsyncMock):
             result = await b.cancel_order("ord-1")
         assert result["success"] is False
-
-

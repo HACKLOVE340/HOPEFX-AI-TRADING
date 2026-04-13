@@ -2,13 +2,16 @@
 # Copyright (c) 2025-2026
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 """Direct MT5 mode and ZMQ bridge start/stop coverage tests."""
+
 from __future__ import annotations
-import time
 from unittest.mock import MagicMock, patch
 import pytest
 
 from brokers.mt5_bridge import (
-    MT5Bridge, MT5Order, MT5FillResult, FillStatus, OrderSide, OrderType,
+    MT5Order,
+    FillStatus,
+    OrderSide,
+    OrderType,
 )
 
 
@@ -33,13 +36,12 @@ def _mt5_mock():
 
 
 def _bridge(tmp_path, mt5):
-    import importlib
     import brokers.mt5_bridge as mod
+
     # Patch mt5 directly on the module so _send_direct uses our mock
     mod.mt5 = mt5
     mod._MT5_AVAILABLE = True
-    b = mod.MT5Bridge(server="Demo", login=12345678, password="pass",
-                      signal_dir=tmp_path / "signals")
+    b = mod.MT5Bridge(server="Demo", login=12345678, password="pass", signal_dir=tmp_path / "signals")
     b._connected = True
     return b, mod
 
@@ -72,8 +74,9 @@ class TestSendDirect:
         b, mod = _bridge(tmp_path, mt5)
         mt5.symbol_info.return_value = MagicMock(visible=True)
         mt5.order_send.return_value = MagicMock(retcode=10009, order=3, volume=0.1, price=1900.0, comment="OK")
-        order = MT5Order(symbol="XAUUSD", side=OrderSide.BUY, volume=0.1,
-                         order_type=OrderType.LIMIT, price=1900.0, stop_loss=1880.0)
+        order = MT5Order(
+            symbol="XAUUSD", side=OrderSide.BUY, volume=0.1, order_type=OrderType.LIMIT, price=1900.0, stop_loss=1880.0
+        )
         with patch.object(mod, "_MT5_AVAILABLE", True), patch.object(mod, "mt5", mt5):
             fill = b._send_direct(order)
         assert fill.ticket == 3
@@ -83,8 +86,9 @@ class TestSendDirect:
         b, mod = _bridge(tmp_path, mt5)
         mt5.symbol_info.return_value = MagicMock(visible=True)
         mt5.symbol_info_tick.return_value = MagicMock(ask=1920.0, bid=1919.5)
-        order = MT5Order(symbol="XAUUSD", side=OrderSide.BUY, volume=0.1,
-                         order_type=OrderType.LIMIT, price=None, stop_loss=1880.0)
+        order = MT5Order(
+            symbol="XAUUSD", side=OrderSide.BUY, volume=0.1, order_type=OrderType.LIMIT, price=None, stop_loss=1880.0
+        )
         with patch.object(mod, "_MT5_AVAILABLE", True), patch.object(mod, "mt5", mt5):
             with pytest.raises(ValueError, match="LIMIT"):
                 b._send_direct(order)
@@ -94,8 +98,9 @@ class TestSendDirect:
         b, mod = _bridge(tmp_path, mt5)
         mt5.symbol_info.return_value = MagicMock(visible=True)
         mt5.order_send.return_value = MagicMock(retcode=10009, order=4, volume=0.1, price=1880.0, comment="OK")
-        order = MT5Order(symbol="XAUUSD", side=OrderSide.SELL, volume=0.1,
-                         order_type=OrderType.STOP, price=1880.0, stop_loss=1900.0)
+        order = MT5Order(
+            symbol="XAUUSD", side=OrderSide.SELL, volume=0.1, order_type=OrderType.STOP, price=1880.0, stop_loss=1900.0
+        )
         with patch.object(mod, "_MT5_AVAILABLE", True), patch.object(mod, "mt5", mt5):
             fill = b._send_direct(order)
         assert fill.ticket == 4
@@ -104,8 +109,9 @@ class TestSendDirect:
         mt5 = _mt5_mock()
         b, mod = _bridge(tmp_path, mt5)
         mt5.symbol_info.return_value = MagicMock(visible=True)
-        order = MT5Order(symbol="XAUUSD", side=OrderSide.BUY, volume=0.1,
-                         order_type=OrderType.STOP, price=None, stop_loss=1880.0)
+        order = MT5Order(
+            symbol="XAUUSD", side=OrderSide.BUY, volume=0.1, order_type=OrderType.STOP, price=None, stop_loss=1880.0
+        )
         with patch.object(mod, "_MT5_AVAILABLE", True), patch.object(mod, "mt5", mt5):
             with pytest.raises(ValueError, match="STOP"):
                 b._send_direct(order)
@@ -167,8 +173,7 @@ class TestSendDirect:
         mt5.symbol_info.return_value = MagicMock(visible=True)
         mt5.symbol_info_tick.return_value = MagicMock(ask=1920.0, bid=1919.5)
         mt5.order_send.return_value = MagicMock(retcode=10009, order=5, volume=0.1, price=1920.0, comment="OK")
-        order = MT5Order(symbol="XAUUSD", side=OrderSide.BUY, volume=0.1,
-                         stop_loss=1880.0, take_profit=1960.0)
+        order = MT5Order(symbol="XAUUSD", side=OrderSide.BUY, volume=0.1, stop_loss=1880.0, take_profit=1960.0)
         with patch.object(mod, "_MT5_AVAILABLE", True), patch.object(mod, "mt5", mt5):
             fill = b._send_direct(order)
         assert fill.ticket == 5
@@ -245,9 +250,17 @@ class TestGetAccountDirect:
     def test_success(self, tmp_path):
         mt5 = _mt5_mock()
         b, mod = _bridge(tmp_path, mt5)
-        info = MagicMock(login=12345678, server="Demo", balance=10000.0,
-                         equity=10100.0, margin=500.0, margin_free=9600.0,
-                         margin_level=2020.0, leverage=100, currency="USD")
+        info = MagicMock(
+            login=12345678,
+            server="Demo",
+            balance=10000.0,
+            equity=10100.0,
+            margin=500.0,
+            margin_free=9600.0,
+            margin_level=2020.0,
+            leverage=100,
+            currency="USD",
+        )
         mt5.account_info.return_value = info
         with patch.object(mod, "_MT5_AVAILABLE", True), patch.object(mod, "mt5", mt5):
             result = b.get_account()
@@ -366,8 +379,7 @@ class TestMonitorFillDirect:
         mt5 = _mt5_mock()
         b, mod = _bridge(tmp_path, mt5)
         mt5.orders_get.return_value = []
-        deal = MagicMock(order=1001, volume=0.1, price=1920.0,
-                         commission=-2.5, swap=0.0, profit=50.0, comment="OK")
+        deal = MagicMock(order=1001, volume=0.1, price=1920.0, commission=-2.5, swap=0.0, profit=50.0, comment="OK")
         mt5.history_deals_get.return_value = [deal]
         with patch.object(mod, "_MT5_AVAILABLE", True), patch.object(mod, "mt5", mt5):
             result = b.monitor_fill(1001, poll_interval=0.01, timeout_sec=2.0)
@@ -378,8 +390,7 @@ class TestMonitorFillDirect:
         mt5 = _mt5_mock()
         b, mod = _bridge(tmp_path, mt5)
         calls = [0]
-        deal = MagicMock(order=1001, volume=0.1, price=1920.0,
-                         commission=0.0, swap=0.0, profit=0.0, comment="")
+        deal = MagicMock(order=1001, volume=0.1, price=1920.0, commission=0.0, swap=0.0, profit=0.0, comment="")
 
         def orders_side(**kw):
             calls[0] += 1
@@ -387,8 +398,7 @@ class TestMonitorFillDirect:
 
         mt5.orders_get.side_effect = orders_side
         mt5.history_deals_get.return_value = [deal]
-        with patch.object(mod, "_MT5_AVAILABLE", True), patch.object(mod, "mt5", mt5), \
-             patch("time.sleep"):
+        with patch.object(mod, "_MT5_AVAILABLE", True), patch.object(mod, "mt5", mt5), patch("time.sleep"):
             result = b.monitor_fill(1001, poll_interval=0.01, timeout_sec=2.0)
         assert result.ticket == 1001
 
@@ -456,4 +466,3 @@ class TestConnectDirectMode:
             b.disconnect()
         assert b._connected is False
         mt5.shutdown.assert_called_once()
-
