@@ -112,9 +112,10 @@ class TestAsyncRedisStateStore:
         r.set = MagicMock(return_value=None)
         r.sadd = MagicMock(return_value=None)
 
-        import asyncio
+        async def _async_true(*a, **kw):
+            return True
 
-        r.set = MagicMock(side_effect=lambda *a, **kw: asyncio.coroutine(lambda: True)())
+        r.set = MagicMock(side_effect=_async_true)
 
         store = AsyncRedisStateStore(r)
         # Just verify it doesn't crash on construction
