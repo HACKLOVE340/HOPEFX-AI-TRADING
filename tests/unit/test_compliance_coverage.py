@@ -543,19 +543,17 @@ class TestRegulatoryReporter:
 
     @pytest.mark.asyncio
     async def test_submit_http_failure_goes_to_dlq(self, tmp_path):
-        import compliance.regulatory_reporter as _rr_mod
-
         reporter = self._make_reporter(tmp_path)
         trade = {"id": "t3", "symbol": "XAUUSD", "size": 5}
 
-        # Patch the module-level flag and _submit_with_retry to simulate failure
+        # Patch env to enable reporting and simulate HTTP failure via _submit_with_retry
         async def _fail_retry(endpoint, payload, headers, record):
             record.last_error = "network error"
             reporter._dlq.enqueue(record)
             return False, None, "network error"
 
         with (
-            patch.object(_rr_mod, "_REPORTING_ENABLED", True),
+            patch.dict(os.environ, {"REGULATORY_REPORTING_ENABLED": "true", "PROP_FIRM_MODE": "false"}),
             patch.object(reporter, "_submit_with_retry", side_effect=_fail_retry),
         ):
             record = await reporter.submit(trade)
