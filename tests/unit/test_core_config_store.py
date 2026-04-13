@@ -12,9 +12,8 @@ with real code paths.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
 
 from core.config_store import ConfigStore, config_store
 
@@ -136,7 +135,6 @@ def test_delete_returns_false_when_no_db():
 
 
 def test_delete_removes_from_redis():
-    import json
     cs, r = _store_with_redis({"del_key": "val"})
     cs._db_session = lambda: None
     cs.delete("del_key")
@@ -186,7 +184,6 @@ def test_db_delete_returns_false_when_no_session():
 
 def test_get_warms_redis_from_db():
     """When Redis misses but DB has the value, Redis is warmed."""
-    import json
 
     cs = ConfigStore()
     r = MagicMock()

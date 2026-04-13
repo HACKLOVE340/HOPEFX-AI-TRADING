@@ -504,20 +504,27 @@ class TestStrategyOrchestraExtended:
     """Additional coverage for strategy_orchestra.py."""
 
     def _make_orchestra(self):
-        from core.event_bus import EventBus as CoreEventBus
         from unittest.mock import MagicMock
+
         mock_bus = MagicMock()
         mock_bus.subscribe = MagicMock()
         mock_bus.publish = MagicMock()
         from core.strategy_orchestra import StrategyOrchestra
+
         return StrategyOrchestra(event_bus=mock_bus)
 
     def _make_strategy(self, name="TrendStrategy"):
         from strategies.base import BaseStrategy, StrategyConfig
+
         config = StrategyConfig(name=name, symbol="XAUUSD", timeframe="1H", parameters={})
+
         class _S(BaseStrategy):
-            def analyze(self, data): return {}
-            def generate_signal(self, analysis): return None
+            def analyze(self, data):
+                return {}
+
+            def generate_signal(self, analysis):
+                return None
+
         return _S(config_or_name=config)
 
     def test_register_strategy_adds_to_dicts(self):
@@ -579,8 +586,8 @@ class TestStrategyOrchestraExtended:
         assert suit["trending_up"] == 0.5
 
     def test_on_regime_change_updates_current_regime(self):
-        from unittest.mock import MagicMock
         from core.event_bus_legacy import DomainEvent
+
         orch = self._make_orchestra()
         evt = DomainEvent.create("REGIME_CHANGE", "detector", {"regime": "trending_up"})
         orch._on_regime_change(evt)
@@ -588,12 +595,13 @@ class TestStrategyOrchestraExtended:
 
     def test_on_position_closed_increments_signals(self):
         from core.event_bus_legacy import DomainEvent
+
         orch = self._make_orchestra()
         s = self._make_strategy("TrendC")
         orch.register_strategy(s)
-        evt = DomainEvent.create("POSITION_CLOSED", "broker", {
-            "strategy_id": "TrendC", "pnl": 100.0, "entry_price": 1900.0
-        })
+        evt = DomainEvent.create(
+            "POSITION_CLOSED", "broker", {"strategy_id": "TrendC", "pnl": 100.0, "entry_price": 1900.0}
+        )
         orch._on_position_closed(evt)
         assert orch.performance["TrendC"].total_signals == 1
 
@@ -604,16 +612,19 @@ class TestStrategyOrchestraExtended:
 
     def test_set_and_get_shared_orchestra(self):
         from core.strategy_orchestra import set_shared_orchestra, _get_shared_orchestra
+
         orch = self._make_orchestra()
         set_shared_orchestra(orch)
         assert _get_shared_orchestra() is orch
         # Reset
         import core.strategy_orchestra as so_mod
+
         so_mod._shared_orchestra = None
 
     def test_get_shared_orchestra_none_when_not_set(self):
         from core.strategy_orchestra import _get_shared_orchestra
         import core.strategy_orchestra as so_mod
+
         so_mod._shared_orchestra = None
         result = _get_shared_orchestra()
         assert result is None or hasattr(result, "__class__")
@@ -627,6 +638,7 @@ class TestOutboxRelayExtended:
 
     def test_outbox_constants(self):
         from core.outbox import RELAY_INTERVAL_SECONDS, BATCH_SIZE, MAX_ATTEMPTS
+
         assert RELAY_INTERVAL_SECONDS > 0
         assert BATCH_SIZE > 0
         assert MAX_ATTEMPTS > 0
@@ -634,6 +646,7 @@ class TestOutboxRelayExtended:
     def test_write_outbox_event_no_session(self):
         from core.outbox import write_outbox_event
         from unittest.mock import MagicMock
+
         session = MagicMock()
         session.add.side_effect = ImportError("no model")
         # Must not raise
@@ -641,12 +654,14 @@ class TestOutboxRelayExtended:
 
     def test_write_outbox_event_standalone_no_db(self):
         from core.outbox import write_outbox_event_standalone
+
         result = write_outbox_event_standalone("TEST", "hopefx:test", {"x": 1})
         assert result is False  # no DB in test env
 
     @pytest.mark.asyncio
     async def test_outbox_relay_run_stops_cleanly(self):
         from core.outbox import OutboxRelay
+
         relay = OutboxRelay()
         task = asyncio.create_task(relay.run())
         await asyncio.sleep(0.05)
@@ -662,6 +677,7 @@ class TestOutboxRelayExtended:
     @pytest.mark.asyncio
     async def test_relay_batch_no_session(self):
         from core.outbox import OutboxRelay
+
         relay = OutboxRelay()
         await relay._relay_batch()  # no DB — must not raise
 
@@ -698,8 +714,8 @@ class TestPositionReconcilerExtended:
         assert r._mismatches == 0
 
     def test_calc_pnl_buy(self):
-        from core.position_reconciler import PositionReconciler
         from unittest.mock import MagicMock
+
         r = self._make_reconciler()
         pos = MagicMock()
         pos.side = "buy"
@@ -711,6 +727,7 @@ class TestPositionReconcilerExtended:
     def test_calc_pnl_sell(self):
         r = self._make_reconciler()
         from unittest.mock import MagicMock
+
         pos = MagicMock()
         pos.side = "sell"
         pos.quantity = 1.0
