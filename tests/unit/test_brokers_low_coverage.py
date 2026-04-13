@@ -66,7 +66,7 @@ class TestMT5BrokerConnect:
         info = MagicMock(balance=10000.0, currency="USD")
         mt5.account_info.return_value = info
 
-        result = asyncio.get_event_loop().run_until_complete(broker.connect())
+        result = asyncio.run(broker.connect())
         assert result is True
         assert broker.connected is True
 
@@ -75,7 +75,7 @@ class TestMT5BrokerConnect:
         mt5.initialize.return_value = False
         mt5.last_error.return_value = (1, "init error")
 
-        result = asyncio.get_event_loop().run_until_complete(broker.connect())
+        result = asyncio.run(broker.connect())
         assert result is False
 
     def test_connect_login_fails(self, mt5_broker):
@@ -84,13 +84,13 @@ class TestMT5BrokerConnect:
         mt5.login.return_value = False
         mt5.last_error.return_value = (2, "login error")
 
-        result = asyncio.get_event_loop().run_until_complete(broker.connect())
+        result = asyncio.run(broker.connect())
         assert result is False
 
     def test_connect_invalid_login(self, mt5_broker):
         broker, mod, mt5 = mt5_broker
         broker._config["login"] = "not_a_number"
-        result = asyncio.get_event_loop().run_until_complete(broker.connect())
+        result = asyncio.run(broker.connect())
         assert result is False
 
     def test_connect_with_terminal_path(self, mt5_broker):
@@ -99,7 +99,7 @@ class TestMT5BrokerConnect:
         mt5.initialize.return_value = True
         mt5.login.return_value = True
         mt5.account_info.return_value = MagicMock(balance=0.0, currency="USD")
-        result = asyncio.get_event_loop().run_until_complete(broker.connect())
+        result = asyncio.run(broker.connect())
         assert result is True
         call_kwargs = mt5.initialize.call_args[1]
         assert "path" in call_kwargs
@@ -109,20 +109,20 @@ class TestMT5BrokerConnect:
             import brokers.mt5_broker as mod
 
             broker = mod.MT5Broker({"login": "1", "password": "p", "server": "s"})
-            result = asyncio.get_event_loop().run_until_complete(broker.connect())
+            result = asyncio.run(broker.connect())
             assert result is False
 
     def test_disconnect(self, mt5_broker):
         broker, mod, mt5 = mt5_broker
         broker.connected = True
-        asyncio.get_event_loop().run_until_complete(broker.disconnect())
+        asyncio.run(broker.disconnect())
         assert broker.connected is False
         mt5.shutdown.assert_called_once()
 
     def test_disconnect_not_connected(self, mt5_broker):
         broker, mod, mt5 = mt5_broker
         broker.connected = False
-        asyncio.get_event_loop().run_until_complete(broker.disconnect())
+        asyncio.run(broker.disconnect())
         mt5.shutdown.assert_not_called()
 
 
@@ -130,7 +130,7 @@ class TestMT5BrokerAccount:
     def test_get_account_info_not_connected(self, mt5_broker):
         broker, mod, mt5 = mt5_broker
         broker.connected = False
-        result = asyncio.get_event_loop().run_until_complete(broker.get_account_info())
+        result = asyncio.run(broker.get_account_info())
         assert result is None
 
     def test_get_account_info_success(self, mt5_broker):
@@ -149,7 +149,7 @@ class TestMT5BrokerAccount:
             profit=100.0,
         )
         mt5.account_info.return_value = info
-        result = asyncio.get_event_loop().run_until_complete(broker.get_account_info())
+        result = asyncio.run(broker.get_account_info())
         assert result["balance"] == 10000.0
         assert result["currency"] == "USD"
 
@@ -157,13 +157,13 @@ class TestMT5BrokerAccount:
         broker, mod, mt5 = mt5_broker
         broker.connected = True
         mt5.account_info.return_value = None
-        result = asyncio.get_event_loop().run_until_complete(broker.get_account_info())
+        result = asyncio.run(broker.get_account_info())
         assert result is None
 
     def test_get_positions_not_connected(self, mt5_broker):
         broker, mod, mt5 = mt5_broker
         broker.connected = False
-        result = asyncio.get_event_loop().run_until_complete(broker.get_positions())
+        result = asyncio.run(broker.get_positions())
         assert result == []
 
     def test_get_positions_success(self, mt5_broker):
@@ -184,7 +184,7 @@ class TestMT5BrokerAccount:
             time=1700000000,
         )
         mt5.positions_get.return_value = [pos]
-        result = asyncio.get_event_loop().run_until_complete(broker.get_positions())
+        result = asyncio.run(broker.get_positions())
         assert len(result) == 1
         assert result[0]["type"] == "buy"
 
@@ -206,20 +206,20 @@ class TestMT5BrokerAccount:
             time=1700000001,
         )
         mt5.positions_get.return_value = [pos]
-        result = asyncio.get_event_loop().run_until_complete(broker.get_positions())
+        result = asyncio.run(broker.get_positions())
         assert result[0]["type"] == "sell"
 
     def test_get_positions_none(self, mt5_broker):
         broker, mod, mt5 = mt5_broker
         broker.connected = True
         mt5.positions_get.return_value = None
-        result = asyncio.get_event_loop().run_until_complete(broker.get_positions())
+        result = asyncio.run(broker.get_positions())
         assert result == []
 
     def test_get_orders_not_connected(self, mt5_broker):
         broker, mod, mt5 = mt5_broker
         broker.connected = False
-        result = asyncio.get_event_loop().run_until_complete(broker.get_orders())
+        result = asyncio.run(broker.get_orders())
         assert result == []
 
     def test_get_orders_success(self, mt5_broker):
@@ -238,14 +238,14 @@ class TestMT5BrokerAccount:
             time_setup=1700000000,
         )
         mt5.orders_get.return_value = [order]
-        result = asyncio.get_event_loop().run_until_complete(broker.get_orders())
+        result = asyncio.run(broker.get_orders())
         assert len(result) == 1
 
     def test_get_orders_none(self, mt5_broker):
         broker, mod, mt5 = mt5_broker
         broker.connected = True
         mt5.orders_get.return_value = None
-        result = asyncio.get_event_loop().run_until_complete(broker.get_orders())
+        result = asyncio.run(broker.get_orders())
         assert result == []
 
 
@@ -253,9 +253,7 @@ class TestMT5BrokerPlaceOrder:
     def test_place_order_not_connected(self, mt5_broker):
         broker, mod, mt5 = mt5_broker
         broker.connected = False
-        result = asyncio.get_event_loop().run_until_complete(
-            broker.place_order({"symbol": "XAUUSD", "action": "buy", "volume": 0.01})
-        )
+        result = asyncio.run(broker.place_order({"symbol": "XAUUSD", "action": "buy", "volume": 0.01}))
         assert result["success"] is False
 
     def test_place_order_market_buy_success(self, mt5_broker):
@@ -266,9 +264,7 @@ class TestMT5BrokerPlaceOrder:
         mt5.symbol_info.return_value = MagicMock()
         result_obj = MagicMock(retcode=10009, order=12345, comment="OK", volume=0.01, price=1920.0)
         mt5.order_send.return_value = result_obj
-        result = asyncio.get_event_loop().run_until_complete(
-            broker.place_order({"symbol": "XAUUSD", "action": "buy", "volume": 0.01})
-        )
+        result = asyncio.run(broker.place_order({"symbol": "XAUUSD", "action": "buy", "volume": 0.01}))
         assert result["success"] is True
         assert result["order"] == 12345
 
@@ -280,18 +276,14 @@ class TestMT5BrokerPlaceOrder:
         mt5.symbol_info.return_value = MagicMock()
         result_obj = MagicMock(retcode=10009, order=12346, comment="OK")
         mt5.order_send.return_value = result_obj
-        result = asyncio.get_event_loop().run_until_complete(
-            broker.place_order({"symbol": "XAUUSD", "action": "sell", "volume": 0.01})
-        )
+        result = asyncio.run(broker.place_order({"symbol": "XAUUSD", "action": "sell", "volume": 0.01}))
         assert result["success"] is True
 
     def test_place_order_no_tick(self, mt5_broker):
         broker, mod, mt5 = mt5_broker
         broker.connected = True
         mt5.symbol_info_tick.return_value = None
-        result = asyncio.get_event_loop().run_until_complete(
-            broker.place_order({"symbol": "XAUUSD", "action": "buy", "volume": 0.01})
-        )
+        result = asyncio.run(broker.place_order({"symbol": "XAUUSD", "action": "buy", "volume": 0.01}))
         assert result["success"] is False
 
     def test_place_order_symbol_not_found(self, mt5_broker):
@@ -300,9 +292,7 @@ class TestMT5BrokerPlaceOrder:
         tick = MagicMock(ask=1920.0, bid=1919.5)
         mt5.symbol_info_tick.return_value = tick
         mt5.symbol_info.return_value = None
-        result = asyncio.get_event_loop().run_until_complete(
-            broker.place_order({"symbol": "XAUUSD", "action": "buy", "volume": 0.01})
-        )
+        result = asyncio.run(broker.place_order({"symbol": "XAUUSD", "action": "buy", "volume": 0.01}))
         assert result["success"] is False
 
     def test_place_order_limit_buy(self, mt5_broker):
@@ -311,7 +301,7 @@ class TestMT5BrokerPlaceOrder:
         mt5.symbol_info.return_value = MagicMock()
         result_obj = MagicMock(retcode=10009, order=12347, comment="OK")
         mt5.order_send.return_value = result_obj
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             broker.place_order(
                 {"symbol": "XAUUSD", "action": "buy", "volume": 0.01, "order_type": "limit", "price": 1900.0}
             )
@@ -324,7 +314,7 @@ class TestMT5BrokerPlaceOrder:
         mt5.symbol_info.return_value = MagicMock()
         result_obj = MagicMock(retcode=10009, order=12348, comment="OK")
         mt5.order_send.return_value = result_obj
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             broker.place_order(
                 {"symbol": "XAUUSD", "action": "sell", "volume": 0.01, "order_type": "stop", "price": 1880.0}
             )
@@ -334,7 +324,7 @@ class TestMT5BrokerPlaceOrder:
     def test_place_order_unknown_type(self, mt5_broker):
         broker, mod, mt5 = mt5_broker
         broker.connected = True
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             broker.place_order({"symbol": "XAUUSD", "action": "buy", "volume": 0.01, "order_type": "iceberg"})
         )
         assert result["success"] is False
@@ -347,9 +337,7 @@ class TestMT5BrokerPlaceOrder:
         mt5.symbol_info.return_value = MagicMock()
         mt5.order_send.return_value = None
         mt5.last_error.return_value = (3, "send error")
-        result = asyncio.get_event_loop().run_until_complete(
-            broker.place_order({"symbol": "XAUUSD", "action": "buy", "volume": 0.01})
-        )
+        result = asyncio.run(broker.place_order({"symbol": "XAUUSD", "action": "buy", "volume": 0.01}))
         assert result["success"] is False
 
     def test_place_order_retcode_not_done(self, mt5_broker):
@@ -360,9 +348,7 @@ class TestMT5BrokerPlaceOrder:
         mt5.symbol_info.return_value = MagicMock()
         result_obj = MagicMock(retcode=10006, order=0, comment="Rejected")
         mt5.order_send.return_value = result_obj
-        result = asyncio.get_event_loop().run_until_complete(
-            broker.place_order({"symbol": "XAUUSD", "action": "buy", "volume": 0.01})
-        )
+        result = asyncio.run(broker.place_order({"symbol": "XAUUSD", "action": "buy", "volume": 0.01}))
         assert result["success"] is False
 
 
@@ -370,14 +356,14 @@ class TestMT5BrokerCloseModifyCancel:
     def test_close_position_not_connected(self, mt5_broker):
         broker, mod, mt5 = mt5_broker
         broker.connected = False
-        result = asyncio.get_event_loop().run_until_complete(broker.close_position(12345))
+        result = asyncio.run(broker.close_position(12345))
         assert result["success"] is False
 
     def test_close_position_not_found(self, mt5_broker):
         broker, mod, mt5 = mt5_broker
         broker.connected = True
         mt5.positions_get.return_value = []
-        result = asyncio.get_event_loop().run_until_complete(broker.close_position(12345))
+        result = asyncio.run(broker.close_position(12345))
         assert result["success"] is False
 
     def test_close_position_success(self, mt5_broker):
@@ -389,7 +375,7 @@ class TestMT5BrokerCloseModifyCancel:
         mt5.symbol_info_tick.return_value = tick
         result_obj = MagicMock(retcode=10009, order=99, comment="OK")
         mt5.order_send.return_value = result_obj
-        result = asyncio.get_event_loop().run_until_complete(broker.close_position(12345))
+        result = asyncio.run(broker.close_position(12345))
         assert result["success"] is True
 
     def test_close_position_partial(self, mt5_broker):
@@ -401,7 +387,7 @@ class TestMT5BrokerCloseModifyCancel:
         mt5.symbol_info_tick.return_value = tick
         result_obj = MagicMock(retcode=10009, order=100, comment="OK")
         mt5.order_send.return_value = result_obj
-        result = asyncio.get_event_loop().run_until_complete(broker.close_position(12345, volume=0.1))
+        result = asyncio.run(broker.close_position(12345, volume=0.1))
         assert result["success"] is True
 
     def test_close_position_no_tick(self, mt5_broker):
@@ -410,13 +396,13 @@ class TestMT5BrokerCloseModifyCancel:
         pos = MagicMock(type=0, volume=0.1, symbol="XAUUSD", magic=0)
         mt5.positions_get.return_value = [pos]
         mt5.symbol_info_tick.return_value = None
-        result = asyncio.get_event_loop().run_until_complete(broker.close_position(12345))
+        result = asyncio.run(broker.close_position(12345))
         assert result["success"] is False
 
     def test_modify_position_not_connected(self, mt5_broker):
         broker, mod, mt5 = mt5_broker
         broker.connected = False
-        result = asyncio.get_event_loop().run_until_complete(broker.modify_position(1, 1880.0, 1950.0))
+        result = asyncio.run(broker.modify_position(1, 1880.0, 1950.0))
         assert result["success"] is False
 
     def test_modify_position_success(self, mt5_broker):
@@ -424,7 +410,7 @@ class TestMT5BrokerCloseModifyCancel:
         broker.connected = True
         result_obj = MagicMock(retcode=10009, comment="OK")
         mt5.order_send.return_value = result_obj
-        result = asyncio.get_event_loop().run_until_complete(broker.modify_position(1, 1880.0, 1950.0))
+        result = asyncio.run(broker.modify_position(1, 1880.0, 1950.0))
         assert result["success"] is True
 
     def test_modify_position_send_none(self, mt5_broker):
@@ -432,13 +418,13 @@ class TestMT5BrokerCloseModifyCancel:
         broker.connected = True
         mt5.order_send.return_value = None
         mt5.last_error.return_value = (4, "err")
-        result = asyncio.get_event_loop().run_until_complete(broker.modify_position(1, 1880.0, 1950.0))
+        result = asyncio.run(broker.modify_position(1, 1880.0, 1950.0))
         assert result["success"] is False
 
     def test_cancel_order_not_connected(self, mt5_broker):
         broker, mod, mt5 = mt5_broker
         broker.connected = False
-        result = asyncio.get_event_loop().run_until_complete(broker.cancel_order(99))
+        result = asyncio.run(broker.cancel_order(99))
         assert result["success"] is False
 
     def test_cancel_order_success(self, mt5_broker):
@@ -446,7 +432,7 @@ class TestMT5BrokerCloseModifyCancel:
         broker.connected = True
         result_obj = MagicMock(retcode=10009, comment="OK")
         mt5.order_send.return_value = result_obj
-        result = asyncio.get_event_loop().run_until_complete(broker.cancel_order(99))
+        result = asyncio.run(broker.cancel_order(99))
         assert result["success"] is True
 
     def test_cancel_order_send_none(self, mt5_broker):
@@ -454,13 +440,13 @@ class TestMT5BrokerCloseModifyCancel:
         broker.connected = True
         mt5.order_send.return_value = None
         mt5.last_error.return_value = (5, "err")
-        result = asyncio.get_event_loop().run_until_complete(broker.cancel_order(99))
+        result = asyncio.run(broker.cancel_order(99))
         assert result["success"] is False
 
     def test_get_tick_not_connected(self, mt5_broker):
         broker, mod, mt5 = mt5_broker
         broker.connected = False
-        result = asyncio.get_event_loop().run_until_complete(broker.get_tick("XAUUSD"))
+        result = asyncio.run(broker.get_tick("XAUUSD"))
         assert result is None
 
     def test_get_tick_success(self, mt5_broker):
@@ -468,7 +454,7 @@ class TestMT5BrokerCloseModifyCancel:
         broker.connected = True
         tick = MagicMock(bid=1919.5, ask=1920.0, time=1700000000)
         mt5.symbol_info_tick.return_value = tick
-        result = asyncio.get_event_loop().run_until_complete(broker.get_tick("XAUUSD"))
+        result = asyncio.run(broker.get_tick("XAUUSD"))
         assert result["bid"] == 1919.5
         assert result["ask"] == 1920.0
 
@@ -476,7 +462,7 @@ class TestMT5BrokerCloseModifyCancel:
         broker, mod, mt5 = mt5_broker
         broker.connected = True
         mt5.symbol_info_tick.return_value = None
-        result = asyncio.get_event_loop().run_until_complete(broker.get_tick("XAUUSD"))
+        result = asyncio.run(broker.get_tick("XAUUSD"))
         assert result is None
 
     def test_status(self, mt5_broker):
