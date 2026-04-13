@@ -35,10 +35,29 @@ def _mt5_mock():
     return m
 
 
+@pytest.fixture(autouse=True)
+def _restore_mt5_bridge_module():
+    """Restore brokers.mt5_bridge module-level globals after every test.
+
+    _bridge() mutates mod.mt5 and mod._MT5_AVAILABLE directly so that
+    _send_direct() picks up the mock.  Without cleanup those mutations
+    persist across tests and break TestMT5BridgeSignalMode (which relies
+    on _MT5_AVAILABLE=False) when the full suite runs.
+    """
+    import brokers.mt5_bridge as mod
+
+    orig_mt5 = mod.mt5
+    orig_avail = mod._MT5_AVAILABLE
+    yield
+    mod.mt5 = orig_mt5
+    mod._MT5_AVAILABLE = orig_avail
+
+
 def _bridge(tmp_path, mt5):
     import brokers.mt5_bridge as mod
 
-    # Patch mt5 directly on the module so _send_direct uses our mock
+    # Mutate module globals so _send_direct() uses our mock.
+    # The _restore_mt5_bridge_module fixture (above) undoes this after each test.
     mod.mt5 = mt5
     mod._MT5_AVAILABLE = True
     b = mod.MT5Bridge(server="Demo", login=12345678, password="pass", signal_dir=tmp_path / "signals")
