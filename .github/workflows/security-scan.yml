@@ -152,7 +152,7 @@ jobs:
         # are found; we report but do not block CI until the finding backlog
         # is cleared.  Also handles the zero-SHA edge case on first push to
         # a new branch where github.event.before is all zeros.
-        uses: trufflesecurity/trufflehog@d73edfb85d79432e3c767c407afdee59c9a34fde
+        uses: trufflesecurity/trufflehog@47e7b7cd74f578e1e3145d48f669f22fd1330ca6
         continue-on-error: true
         with:
           path: ./
