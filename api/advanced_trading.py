@@ -62,11 +62,86 @@ def set_state(state) -> None:
     app_state = state
 
 
-# ── In-memory stores ──────────────────────────────────────────────────────────
+# ── Redis-backed stores ───────────────────────────────────────────────────────
+# A/B tests, shared backtest results, custom indicators, and Monte Carlo cache
+# are stored in Redis so they survive restarts and are visible across replicas.
+# All helpers fall back to in-process dicts when Redis is unavailable.
+#
+# Key layout:
+#   advanced:ab_test:{test_id}        → JSON  (no TTL — user-managed)
+#   advanced:shared_result:{slug}     → JSON  (TTL 30 days)
+#   advanced:indicator:{ind_id}       → JSON  (no TTL — user-managed)
+#   advanced:mc_cache:{run_id}        → JSON  (TTL 1 hour)
+
+import json as _json
+
+_SHARED_RESULT_TTL = 60 * 60 * 24 * 30  # 30 days
+_MC_CACHE_TTL = 60 * 60               # 1 hour
+
+# In-process fallback stores
 _ab_tests: dict[str, dict] = {}
-_shared_results: dict[str, dict] = {}  # slug → backtest result
+_shared_results: dict[str, dict] = {}
 _indicators: dict[str, dict] = {}
-_mc_cache: dict[str, dict] = {}  # run_id → monte carlo result
+_mc_cache: dict[str, dict] = {}
+
+
+def _get_sync_redis():
+    try:
+        from cache.redis_pool import get_sync_client
+        return get_sync_client()
+    except Exception:
+        return None
+
+
+def _kv_set(key: str, data: dict, ttl: int | None = None) -> None:
+    r = _get_sync_redis()
+    if r:
+        try:
+            raw = _json.dumps(data)
+            if ttl:
+                r.setex(key, ttl, raw)
+            else:
+                r.set(key, raw)
+            return
+        except Exception:
+            pass
+
+
+def _kv_get(key: str) -> dict | None:
+    r = _get_sync_redis()
+    if r:
+        try:
+            raw = r.get(key)
+            return _json.loads(raw) if raw else None
+        except Exception:
+            pass
+    return None
+
+
+def _kv_del(key: str) -> None:
+    r = _get_sync_redis()
+    if r:
+        try:
+            r.delete(key)
+            return
+        except Exception:
+            pass
+
+
+def _kv_scan(pattern: str) -> list[dict]:
+    r = _get_sync_redis()
+    if r:
+        try:
+            keys = r.keys(pattern)
+            result = []
+            for k in keys:
+                raw = r.get(k)
+                if raw:
+                    result.append(_json.loads(raw))
+            return result
+        except Exception:
+            pass
+    return []
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -151,7 +226,7 @@ async def start_ab_test(
     best_sharpe = max(result_a["sharpe_ratio"], result_b["sharpe_ratio"])
 
     test_id = str(uuid.uuid4())[:12]
-    _ab_tests[test_id] = {
+    test_data = {
         "test_id": test_id,
         "user_id": user.sub,
         "symbol": req.symbol,
@@ -163,18 +238,21 @@ async def start_ab_test(
         "winner": winner,
         "recommendation": (f"Deploy {winner} — higher risk-adjusted returns (Sharpe {best_sharpe:.2f})"),
     }
-    return _ab_tests[test_id]
+    _kv_set(f"advanced:ab_test:{test_id}", test_data)
+    _ab_tests[test_id] = test_data  # fallback mirror
+    return test_data
 
 
 @router.get("/api/advanced/ab-tests")
 async def list_ab_tests(user: TokenPayload = Depends(get_current_user)):
-    tests = [t for t in _ab_tests.values() if t["user_id"] == user.sub]
+    tests = _kv_scan("advanced:ab_test:*") or list(_ab_tests.values())
+    tests = [t for t in tests if t.get("user_id") == user.sub]
     return {"tests": tests, "total": len(tests)}
 
 
 @router.get("/api/advanced/ab-tests/{test_id}")
 async def get_ab_test(test_id: str, user: TokenPayload = Depends(get_current_user)):
-    t = _ab_tests.get(test_id)
+    t = _kv_get(f"advanced:ab_test:{test_id}") or _ab_tests.get(test_id)
     if not t or t["user_id"] != user.sub:
         raise HTTPException(status_code=404, detail="Test not found")
     return t
@@ -201,12 +279,14 @@ async def share_backtest(run_id: str, user: TokenPayload = Depends(get_current_u
         )
 
     slug = f"{run_id[:8]}-{uuid.uuid4().hex[:6]}"
-    _shared_results[slug] = {
+    shared = {
         **result,
         "shared_by": user.sub,
         "shared_at": datetime.now(UTC).isoformat(),
         "slug": slug,
     }
+    _kv_set(f"advanced:shared_result:{slug}", shared, ttl=_SHARED_RESULT_TTL)
+    _shared_results[slug] = shared  # fallback mirror
     base_url = "https://hopefx.io"
     return {
         "url": f"{base_url}/backtest/shared/{slug}",
@@ -217,7 +297,7 @@ async def share_backtest(run_id: str, user: TokenPayload = Depends(get_current_u
 @router.get("/api/backtesting/shared/{slug}")
 async def get_shared_backtest(slug: str):
     """Public endpoint — no auth required."""
-    result = _shared_results.get(slug)
+    result = _kv_get(f"advanced:shared_result:{slug}") or _shared_results.get(slug)
     if not result:
         raise HTTPException(status_code=404, detail="Shared backtest not found")
     # Strip internal fields
@@ -553,7 +633,8 @@ async def preview_indicator(
 
 @router.get("/api/indicators")
 async def list_indicators(user: TokenPayload = Depends(get_current_user)):
-    user_indicators = [i for i in _indicators.values() if i["user_id"] == user.sub]
+    all_inds = _kv_scan("advanced:indicator:*") or list(_indicators.values())
+    user_indicators = [i for i in all_inds if i.get("user_id") == user.sub]
     return {"indicators": user_indicators}
 
 
@@ -563,7 +644,7 @@ async def save_indicator(
     user: TokenPayload = Depends(get_current_user),
 ):
     ind_id = str(uuid.uuid4())[:12]
-    _indicators[ind_id] = {
+    ind_data = {
         "id": ind_id,
         "user_id": user.sub,
         "name": req.name,
@@ -572,15 +653,18 @@ async def save_indicator(
         "color": req.color,
         "created_at": datetime.now(UTC).isoformat(),
     }
-    return _indicators[ind_id]
+    _kv_set(f"advanced:indicator:{ind_id}", ind_data)
+    _indicators[ind_id] = ind_data  # fallback mirror
+    return ind_data
 
 
 @router.delete("/api/indicators/{ind_id}")
 async def delete_indicator(ind_id: str, user: TokenPayload = Depends(get_current_user)):
-    ind = _indicators.get(ind_id)
+    ind = _kv_get(f"advanced:indicator:{ind_id}") or _indicators.get(ind_id)
     if not ind or ind["user_id"] != user.sub:
         raise HTTPException(status_code=404, detail="Indicator not found")
-    del _indicators[ind_id]
+    _kv_del(f"advanced:indicator:{ind_id}")
+    _indicators.pop(ind_id, None)
     return {"deleted": True}
 
 
@@ -892,15 +976,17 @@ async def run_monte_carlo(
     mc = _run_monte_carlo(win_rate, avg_win, avg_loss, n_trades, capital, req.simulations)
     mc["run_id"] = run_id
     mc["computed_at"] = datetime.now(UTC).isoformat()
-    _mc_cache[run_id] = mc
+    _kv_set(f"advanced:mc_cache:{run_id}", mc, ttl=_MC_CACHE_TTL)
+    _mc_cache[run_id] = mc  # fallback mirror
     return mc
 
 
 @router.get("/api/backtesting/{run_id}/monte-carlo")
 async def get_monte_carlo(run_id: str, user: TokenPayload = Depends(get_current_user)):
     """Return cached Monte Carlo results. Returns 404 when not yet computed."""
-    if run_id in _mc_cache:
-        return _mc_cache[run_id]
+    mc = _kv_get(f"advanced:mc_cache:{run_id}") or _mc_cache.get(run_id)
+    if mc:
+        return mc
     raise HTTPException(
         status_code=404,
         detail=f"No Monte Carlo results for run '{run_id}'. POST to compute first.",

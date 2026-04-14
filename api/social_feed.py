@@ -35,12 +35,134 @@ from api.db_store import db_get, db_set
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/feed", tags=["Social Feed"])
 
-# ── In-memory stores ──────────────────────────────────────────────────────────
+# ── Redis-backed stores ───────────────────────────────────────────────────────
+# Feed items, reactions, and comments are stored in Redis so they survive
+# restarts and are shared across replicas.  All helpers fall back to in-process
+# dicts when Redis is unavailable.
+#
+# Key layout:
+#   social:feed:{signal_id}          → JSON feed item dict
+#   social:reactions:{signal_id}     → Redis hash  {user_id: "up"|"down"}
+#   social:comments:{signal_id}      → Redis list  of JSON comment strings
+#   social:feed:index                → Redis sorted set  signal_id → created_at ts
 
-_feed_items: dict[str, dict] = {}  # signal_id → feed item
-_reactions: dict[str, dict[str, str]] = {}  # signal_id → {user_id: "up"|"down"}
-_comments: dict[str, list[dict]] = {}  # signal_id → list of comments
+import json as _json
+
+_FEED_TTL = 60 * 60 * 24 * 90  # 90 days
+
+# In-process fallback stores
+_feed_items: dict[str, dict] = {}
+_reactions: dict[str, dict[str, str]] = {}
+_comments: dict[str, list[dict]] = {}
 _opted_in: set = set()  # user_ids who opted into public feed
+
+
+def _get_sync_redis():
+    try:
+        from cache.redis_pool import get_sync_client
+        return get_sync_client()
+    except Exception:
+        return None
+
+
+def _feed_set(sid: str, item: dict) -> None:
+    r = _get_sync_redis()
+    if r:
+        try:
+            import time as _time
+            r.setex(f"social:feed:{sid}", _FEED_TTL, _json.dumps(item))
+            r.zadd("social:feed:index", {sid: _time.time()})
+            return
+        except Exception as _e:
+            logger.debug("Redis feed_set failed: %s", _e)
+    _feed_items[sid] = item
+
+
+def _feed_get(sid: str) -> dict | None:
+    r = _get_sync_redis()
+    if r:
+        try:
+            raw = r.get(f"social:feed:{sid}")
+            return _json.loads(raw) if raw else None
+        except Exception as _e:
+            logger.debug("Redis feed_get failed: %s", _e)
+    return _feed_items.get(sid)
+
+
+def _feed_all_public() -> list[dict]:
+    r = _get_sync_redis()
+    if r:
+        try:
+            sids = r.zrevrange("social:feed:index", 0, 499)
+            items = []
+            for sid in sids:
+                raw = r.get(f"social:feed:{sid}")
+                if raw:
+                    item = _json.loads(raw)
+                    if item.get("is_public"):
+                        items.append(item)
+            return items
+        except Exception as _e:
+            logger.debug("Redis feed_all_public failed: %s", _e)
+    return [v for v in _feed_items.values() if v.get("is_public")]
+
+
+def _reaction_set(sid: str, user_id: str, reaction: str) -> None:
+    r = _get_sync_redis()
+    if r:
+        try:
+            r.hset(f"social:reactions:{sid}", user_id, reaction)
+            r.expire(f"social:reactions:{sid}", _FEED_TTL)
+            return
+        except Exception as _e:
+            logger.debug("Redis reaction_set failed: %s", _e)
+    _reactions.setdefault(sid, {})[user_id] = reaction
+
+
+def _reaction_del(sid: str, user_id: str) -> None:
+    r = _get_sync_redis()
+    if r:
+        try:
+            r.hdel(f"social:reactions:{sid}", user_id)
+            return
+        except Exception as _e:
+            logger.debug("Redis reaction_del failed: %s", _e)
+    _reactions.get(sid, {}).pop(user_id, None)
+
+
+def _reaction_get(sid: str, user_id: str) -> str | None:
+    r = _get_sync_redis()
+    if r:
+        try:
+            val = r.hget(f"social:reactions:{sid}", user_id)
+            return val.decode() if val else None
+        except Exception as _e:
+            logger.debug("Redis reaction_get failed: %s", _e)
+    return _reactions.get(sid, {}).get(user_id)
+
+
+def _comment_append(sid: str, comment: dict) -> None:
+    r = _get_sync_redis()
+    if r:
+        try:
+            r.rpush(f"social:comments:{sid}", _json.dumps(comment))
+            r.expire(f"social:comments:{sid}", _FEED_TTL)
+            return
+        except Exception as _e:
+            logger.debug("Redis comment_append failed: %s", _e)
+    _comments.setdefault(sid, []).append(comment)
+
+
+def _comments_get(sid: str) -> list[dict]:
+    r = _get_sync_redis()
+    if r:
+        try:
+            raws = r.lrange(f"social:comments:{sid}", 0, -1)
+            return [_json.loads(x) for x in raws]
+        except Exception as _e:
+            logger.debug("Redis comments_get failed: %s", _e)
+    return _comments.get(sid, [])
+
 
 # ── Persistence helpers ───────────────────────────────────────────────────────
 
@@ -96,9 +218,7 @@ def _publish_signal(signal: dict, username: str, trader_id: str) -> dict:
         "is_public": True,
         "created_at": datetime.now(UTC).isoformat(),
     }
-    _feed_items[sid] = item
-    _reactions[sid] = {}
-    _comments[sid] = []
+    _feed_set(sid, item)
     return item
 
 
@@ -112,7 +232,7 @@ async def get_feed(
     symbol: str | None = None,
 ):
     """Return paginated community signal feed (public — no auth required)."""
-    items = [v for v in _feed_items.values() if v.get("is_public")]
+    items = _feed_all_public()
     if symbol:
         items = [i for i in items if i["symbol"] == symbol]
     items.sort(key=lambda x: x["created_at"], reverse=True)
@@ -132,11 +252,11 @@ async def react_to_signal(
     user: TokenPayload = Depends(get_current_user),
 ):
     """Toggle a thumbs-up or thumbs-down reaction on a signal."""
-    if signal_id not in _feed_items:
+    item = _feed_get(signal_id)
+    if not item:
         raise HTTPException(status_code=404, detail="Signal not found")
 
-    item = _feed_items[signal_id]
-    prev = _reactions[signal_id].get(user.sub)
+    prev = _reaction_get(signal_id, user.sub)
 
     # Remove previous reaction counts
     if prev == "up":
@@ -146,16 +266,17 @@ async def react_to_signal(
 
     # Toggle: clicking same reaction removes it
     if prev == body.reaction:
-        _reactions[signal_id].pop(user.sub, None)
+        _reaction_del(signal_id, user.sub)
         new_reaction = None
     else:
-        _reactions[signal_id][user.sub] = body.reaction
+        _reaction_set(signal_id, user.sub, body.reaction)
         new_reaction = body.reaction
         if body.reaction == "up":
             item["thumbs_up"] += 1
         else:
             item["thumbs_down"] += 1
 
+    _feed_set(signal_id, item)
     return {
         "signal_id": signal_id,
         "thumbs_up": item["thumbs_up"],
@@ -171,7 +292,8 @@ async def add_comment(
     user: TokenPayload = Depends(get_current_user),
 ):
     """Add a comment to a feed signal."""
-    if signal_id not in _feed_items:
+    item = _feed_get(signal_id)
+    if not item:
         raise HTTPException(status_code=404, detail="Signal not found")
 
     comment = {
@@ -182,17 +304,18 @@ async def add_comment(
         "text": body.text,
         "created_at": datetime.now(UTC).isoformat(),
     }
-    _comments[signal_id].append(comment)
-    _feed_items[signal_id]["comment_count"] = len(_comments[signal_id])
+    _comment_append(signal_id, comment)
+    item["comment_count"] = len(_comments_get(signal_id))
+    _feed_set(signal_id, item)
     return comment
 
 
 @router.get("/{signal_id}/comments")
 async def get_comments(signal_id: str):
     """Return all comments for a signal (public)."""
-    if signal_id not in _feed_items:
+    if not _feed_get(signal_id):
         raise HTTPException(status_code=404, detail="Signal not found")
-    return {"comments": _comments.get(signal_id, [])}
+    return {"comments": _comments_get(signal_id)}
 
 
 @router.post("/opt-in")
@@ -232,7 +355,7 @@ async def feed_status(user: TokenPayload = Depends(get_current_user)):
 
     # Count signals this user has published to the feed
     signal_count = sum(
-        1 for item in _feed_items.values() if item.get("trader_id") == user.sub and item.get("is_public")
+        1 for item in _feed_all_public() if item.get("trader_id") == user.sub
     )
 
     # Follower count from profile store
@@ -406,8 +529,11 @@ async def start_copy_trading(
     _save_copies(user.sub)
 
     # Increment copy count on the feed item if a signal_id was provided
-    if body.signal_id and body.signal_id in _feed_items:
-        _feed_items[body.signal_id]["copies"] = _feed_items[body.signal_id].get("copies", 0) + 1
+    if body.signal_id:
+        _item = _feed_get(body.signal_id)
+        if _item:
+            _item["copies"] = _item.get("copies", 0) + 1
+            _feed_set(body.signal_id, _item)
 
     logger.info(
         "copy_trading: user %s started copying trader %s (alloc=%.2f)", user.sub, trader_id, body.allocation_amount
