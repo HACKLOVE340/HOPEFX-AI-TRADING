@@ -53,6 +53,8 @@ from typing import Any
 import aiohttp
 import requests
 
+import re
+
 logger = logging.getLogger(__name__)
 
 _PRACTICE_BASE = "https://api-fxpractice.oanda.com"
@@ -60,6 +62,27 @@ _LIVE_BASE = "https://api-fxtrade.oanda.com"
 _DEFAULT_TIMEOUT = float(os.getenv("OANDA_TIMEOUT_S", "10"))
 _MAX_RETRIES = int(os.getenv("OANDA_MAX_RETRIES", "3"))
 _RETRY_BACKOFF = float(os.getenv("OANDA_RETRY_BACKOFF_S", "0.5"))
+
+# OANDA v20 account ID format: 101-XXX-XXXXXXXX-XXX
+# e.g. 101-001-12345678-001  (practice) or 001-001-12345678-001 (live)
+_ACCOUNT_ID_RE = re.compile(r"^\d{3}-\d{3}-\d{6,10}-\d{3}$")
+
+
+def validate_oanda_account_id(account_id: str) -> bool:
+    """
+    Return True when *account_id* matches the OANDA v20 format.
+
+    Valid format: ``101-XXX-XXXXXXXX-XXX``
+    Examples:
+      101-001-12345678-001  ✓
+      001-001-123456789-001 ✓
+      ACC123                ✗  (test fixture — not a real account)
+      PENDING               ✗  (placeholder — broker not yet connected)
+
+    Called by OANDABroker.connect() and OANDAConnector.__init__() to
+    reject placeholder values before they reach the API.
+    """
+    return bool(_ACCOUNT_ID_RE.match(account_id or ""))
 
 
 # ── Architectural boundary enforcement ───────────────────────────────────────
@@ -182,6 +205,14 @@ class OANDABroker:
             return True
         if not self._account_id or not self._token:
             logger.error("OANDABroker: missing OANDA_ACCOUNT_ID or OANDA_API_TOKEN")  # nosec B105 - logs absence, not value
+            return False
+        if not validate_oanda_account_id(self._account_id):
+            logger.error(
+                "OANDABroker: account_id %r does not match OANDA v20 format "
+                "(expected 101-XXX-XXXXXXXX-XXX). "
+                "Set OANDA_ACCOUNT_ID to your real practice account ID.",
+                self._account_id[:12] if self._account_id else "",
+            )
             return False
         headers = {
             "Authorization": f"Bearer {self._token}",
@@ -566,6 +597,12 @@ class OANDAConnector:
             raise ValueError(
                 "OANDAConnector requires 'api_key' and 'account_id' in config "
                 "or OANDA_API_TOKEN / OANDA_ACCOUNT_ID env vars."
+            )
+        if not validate_oanda_account_id(account_id):
+            raise ValueError(
+                f"OANDAConnector: account_id {account_id!r} does not match "
+                "OANDA v20 format (expected 101-XXX-XXXXXXXX-XXX). "
+                "Obtain your account ID from the OANDA portal."
             )
         env = config.get("environment", "practice")
         self.environment = env
