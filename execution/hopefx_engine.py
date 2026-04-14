@@ -794,6 +794,33 @@ class HopeFXEngine:
             latency_ms,
         )
 
+        # ── Copy trading — broadcast fill to all active followers ─────────
+        # The leader_id is the authenticated user whose strategy produced
+        # this signal.  We use signal.lineage_id as a stable leader key
+        # (it is set to the strategy/model ID in the signal pipeline).
+        try:
+            from social import copy_trading_engine as _cte
+            if _cte.broker is not None:
+                leader_id = getattr(signal, "user_id", None) or signal.lineage_id or "system"
+                copy_results = _cte.broadcast_trade(
+                    leader_id=leader_id,
+                    symbol=signal.symbol,
+                    direction=signal.direction,
+                    quantity=quantity,
+                    fill_price=fill_price,
+                    fill_id=fill_record.fill_id,
+                )
+                if copy_results:
+                    logger.info(
+                        "copy_trading: broadcast fill %s to %d follower(s): %s",
+                        fill_record.fill_id,
+                        len(copy_results),
+                        {fid: r["status"] for fid, r in copy_results.items()},
+                    )
+        except Exception as _copy_exc:
+            # Copy trading must never crash the primary fill path
+            logger.error("copy_trading.broadcast_trade error (non-fatal): %s", _copy_exc)
+
     async def _close_position_for_unwind(self, unwind) -> None:
         """
         Close a position triggered by IntraTradeMonitor auto-unwind.
@@ -890,6 +917,18 @@ class HopeFXEngine:
             )
         except (RuntimeError, AttributeError, TypeError) as exc:
             logger.debug("ShadowTradingEngine.on_live_close error: %s", exc)
+
+        # ── Notify paper trading clock (Sharpe tracker) ───────────────────────
+        # record_fill() expects a fractional return: pnl / entry_value.
+        # entry_value = entry_price * quantity * 100 (same denominator used
+        # to compute realised_pnl above).  Guard against zero entry_price.
+        try:
+            entry_value = pos["entry_price"] * pos["quantity"] * 100.0
+            trade_return = realised_pnl / entry_value if entry_value != 0.0 else 0.0
+            from brokers.oanda_paper_clock import get_clock
+            get_clock().record_fill(trade_return=trade_return, symbol=unwind.symbol)
+        except Exception as exc:
+            logger.debug("HopeFXEngine: paper clock record_fill failed: %s", exc)
 
         # Remove from open positions
         self._open_positions.pop(unwind.symbol, None)

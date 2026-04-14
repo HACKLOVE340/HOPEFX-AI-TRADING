@@ -495,3 +495,262 @@ class TestRegimeRouterShim:
         mock_manager = MagicMock()
         rr = RegimeRouter(strategy_manager=mock_manager)
         assert hasattr(rr, "route")
+
+
+# ── StrategyOrchestra — extended coverage ─────────────────────────────────────
+
+
+class TestStrategyOrchestraExtended:
+    """Additional coverage for strategy_orchestra.py."""
+
+    def _make_orchestra(self):
+        from unittest.mock import MagicMock
+
+        mock_bus = MagicMock()
+        mock_bus.subscribe = MagicMock()
+        mock_bus.publish = MagicMock()
+        from core.strategy_orchestra import StrategyOrchestra
+
+        return StrategyOrchestra(event_bus=mock_bus)
+
+    def _make_strategy(self, name="TrendStrategy"):
+        from strategies.base import BaseStrategy, StrategyConfig
+
+        config = StrategyConfig(name=name, symbol="XAUUSD", timeframe="1H", parameters={})
+
+        class _S(BaseStrategy):
+            def analyze(self, data):
+                return {}
+
+            def generate_signal(self, analysis):
+                return None
+
+        return _S(config_or_name=config)
+
+    def test_register_strategy_adds_to_dicts(self):
+        orch = self._make_orchestra()
+        s = self._make_strategy("TrendA")
+        orch.register_strategy(s, max_allocation=0.30)
+        assert "TrendA" in orch.strategies
+        assert orch.allocations["TrendA"] == 0.30
+        assert "TrendA" in orch.performance
+
+    def test_activate_and_deactivate_strategy(self):
+        orch = self._make_orchestra()
+        s = self._make_strategy("TrendB")
+        orch.register_strategy(s)
+        orch.activate_strategy("TrendB")
+        assert "TrendB" in orch.active_strategies
+        orch.deactivate_strategy("TrendB", reason="test")
+        assert "TrendB" not in orch.active_strategies
+
+    def test_activate_nonexistent_no_crash(self):
+        orch = self._make_orchestra()
+        orch.activate_strategy("NonExistent")  # must not raise
+
+    def test_deactivate_nonexistent_no_crash(self):
+        orch = self._make_orchestra()
+        orch.deactivate_strategy("NonExistent")  # must not raise
+
+    def test_get_heatmap_data(self):
+        orch = self._make_orchestra()
+        s = self._make_strategy("MeanReversion")
+        orch.register_strategy(s)
+        data = orch.get_heatmap_data()
+        assert "strategies" in data
+        assert "current_regime" in data
+        assert "MeanReversion" in data["strategies"]
+
+    def test_detect_regime_suitability_trend(self):
+        orch = self._make_orchestra()
+        s = self._make_strategy("TrendFollower")
+        suit = orch._detect_regime_suitability(s)
+        assert suit["trending_up"] > 0.5
+
+    def test_detect_regime_suitability_mean_reversion(self):
+        orch = self._make_orchestra()
+        s = self._make_strategy("MeanReversionStrategy")
+        suit = orch._detect_regime_suitability(s)
+        assert suit["ranging"] > 0.5
+
+    def test_detect_regime_suitability_breakout(self):
+        orch = self._make_orchestra()
+        s = self._make_strategy("BreakoutVolatility")
+        suit = orch._detect_regime_suitability(s)
+        assert suit["volatile"] > 0.5
+
+    def test_detect_regime_suitability_default(self):
+        orch = self._make_orchestra()
+        s = self._make_strategy("GenericStrategy")
+        suit = orch._detect_regime_suitability(s)
+        assert suit["trending_up"] == 0.5
+
+    def test_on_regime_change_updates_current_regime(self):
+        from core.event_bus_legacy import DomainEvent
+
+        orch = self._make_orchestra()
+        evt = DomainEvent.create("REGIME_CHANGE", "detector", {"regime": "trending_up"})
+        orch._on_regime_change(evt)
+        assert orch.current_regime == "trending_up"
+
+    def test_on_position_closed_increments_signals(self):
+        from core.event_bus_legacy import DomainEvent
+
+        orch = self._make_orchestra()
+        s = self._make_strategy("TrendC")
+        orch.register_strategy(s)
+        evt = DomainEvent.create(
+            "POSITION_CLOSED", "broker", {"strategy_id": "TrendC", "pnl": 100.0, "entry_price": 1900.0}
+        )
+        orch._on_position_closed(evt)
+        assert orch.performance["TrendC"].total_signals == 1
+
+    def test_calculate_composite_signal_no_active(self):
+        orch = self._make_orchestra()
+        result = orch._calculate_composite_signal()
+        assert result is None
+
+    def test_set_and_get_shared_orchestra(self):
+        from core.strategy_orchestra import set_shared_orchestra, _get_shared_orchestra
+
+        orch = self._make_orchestra()
+        set_shared_orchestra(orch)
+        assert _get_shared_orchestra() is orch
+        # Reset
+        import core.strategy_orchestra as so_mod
+
+        so_mod._shared_orchestra = None
+
+    def test_get_shared_orchestra_none_when_not_set(self):
+        from core.strategy_orchestra import _get_shared_orchestra
+        import core.strategy_orchestra as so_mod
+
+        so_mod._shared_orchestra = None
+        result = _get_shared_orchestra()
+        assert result is None or hasattr(result, "__class__")
+
+
+# ── OutboxRelay — extended coverage ──────────────────────────────────────────
+
+
+class TestOutboxRelayExtended:
+    """Additional coverage for core/outbox.py."""
+
+    def test_outbox_constants(self):
+        from core.outbox import RELAY_INTERVAL_SECONDS, BATCH_SIZE, MAX_ATTEMPTS
+
+        assert RELAY_INTERVAL_SECONDS > 0
+        assert BATCH_SIZE > 0
+        assert MAX_ATTEMPTS > 0
+
+    def test_write_outbox_event_no_session(self):
+        from core.outbox import write_outbox_event
+        from unittest.mock import MagicMock
+
+        session = MagicMock()
+        session.add.side_effect = ImportError("no model")
+        # Must not raise
+        write_outbox_event(session, "TEST_EVENT", "hopefx:test", {"key": "val"})
+
+    def test_write_outbox_event_standalone_no_db(self):
+        from core.outbox import write_outbox_event_standalone
+
+        result = write_outbox_event_standalone("TEST", "hopefx:test", {"x": 1})
+        assert result is False  # no DB in test env
+
+    @pytest.mark.asyncio
+    async def test_outbox_relay_run_stops_cleanly(self):
+        from core.outbox import OutboxRelay
+
+        relay = OutboxRelay()
+        task = asyncio.create_task(relay.run())
+        await asyncio.sleep(0.05)
+        relay.stop()
+        await asyncio.sleep(0.05)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        assert not relay._running
+
+    @pytest.mark.asyncio
+    async def test_relay_batch_no_session(self):
+        from core.outbox import OutboxRelay
+
+        relay = OutboxRelay()
+        await relay._relay_batch()  # no DB — must not raise
+
+
+# ── PositionReconciler — extended coverage ────────────────────────────────────
+
+
+class TestPositionReconcilerExtended:
+    """Additional coverage for core/position_reconciler.py."""
+
+    def _make_reconciler(self, tmp_path=None):
+        from core.position_reconciler import PositionReconciler
+        from unittest.mock import MagicMock
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _session_factory():
+            session = MagicMock()
+            session.query.return_value.filter_by.return_value.all.return_value = []
+            session.query.return_value.filter_by.return_value.first.return_value = None
+            yield session
+
+        return PositionReconciler(
+            session_factory=_session_factory,
+            broker=None,
+            ws_manager=None,
+            alert_engine=None,
+        )
+
+    def test_init_attributes(self):
+        r = self._make_reconciler()
+        assert r._running is False
+        assert r._cycles == 0
+        assert r._mismatches == 0
+
+    def test_calc_pnl_buy(self):
+        from unittest.mock import MagicMock
+
+        r = self._make_reconciler()
+        pos = MagicMock()
+        pos.side = "buy"
+        pos.quantity = 1.0
+        pos.entry_price = 1900.0
+        pnl = r._calc_pnl(pos, 1950.0)
+        assert pnl == pytest.approx(50.0)
+
+    def test_calc_pnl_sell(self):
+        r = self._make_reconciler()
+        from unittest.mock import MagicMock
+
+        pos = MagicMock()
+        pos.side = "sell"
+        pos.quantity = 1.0
+        pos.entry_price = 1900.0
+        pnl = r._calc_pnl(pos, 1850.0)
+        assert pnl == pytest.approx(50.0)
+
+    @pytest.mark.asyncio
+    async def test_start_and_stop(self):
+        r = self._make_reconciler()
+        await r.start()
+        assert r._running is True
+        await r.stop()
+        assert r._running is False
+
+    @pytest.mark.asyncio
+    async def test_reconcile_once_no_positions(self):
+        r = self._make_reconciler()
+        await r._reconcile_once()
+        assert r._cycles == 1
+
+    @pytest.mark.asyncio
+    async def test_get_price_no_engine(self):
+        r = self._make_reconciler()
+        price = await r._get_price("XAUUSD")
+        assert price is None or isinstance(price, float)

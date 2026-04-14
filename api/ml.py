@@ -170,22 +170,31 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
             except Exception as exc:
                 logger.debug("CSV load failed (%s): %s", csv_path, exc)
 
-    # 3. Paper broker simulated prices
-    try:
-        from app import app_state
+    # 3. Paper broker OHLCV — only in non-production environments.
+    # PaperTradingBroker.get_market_data() returns synthetic price series
+    # (deterministic oscillation around a seed price, volume=1000.0).
+    # Feeding synthetic bars into the ML predictor in production would produce
+    # signals from fabricated data, not market data.  Block this path when
+    # APP_ENV=production so the function returns an empty DataFrame and the
+    # caller logs a warning instead of silently using fake bars.
+    import os as _os
 
-        broker = getattr(app_state, "broker", None)
-        if broker and hasattr(broker, "get_market_data"):
-            raw = broker.get_market_data(symbol.upper().replace("_", ""), "1h", lookback)
-            if raw:
-                df = pd.DataFrame(raw)
-                df["time"] = pd.to_datetime(df["timestamp"], unit="s", utc=True)
-                df = df.set_index("time")[["open", "high", "low", "close", "volume"]].dropna()
-                if len(df) >= 20:
-                    logger.debug("ML predict: loaded %d bars from paper broker", len(df))
-                    return df
-    except Exception as exc:
-        logger.debug("Paper broker OHLCV load failed: %s", exc)
+    if _os.getenv("APP_ENV", "development").lower() != "production":
+        try:
+            from app import app_state
+
+            broker = getattr(app_state, "broker", None)
+            if broker and hasattr(broker, "get_market_data"):
+                raw = broker.get_market_data(symbol.upper().replace("_", ""), "1h", lookback)
+                if raw:
+                    df = pd.DataFrame(raw)
+                    df["time"] = pd.to_datetime(df["timestamp"], unit="s", utc=True)
+                    df = df.set_index("time")[["open", "high", "low", "close", "volume"]].dropna()
+                    if len(df) >= 20:
+                        logger.debug("ML predict: loaded %d bars from paper broker", len(df))
+                        return df
+        except Exception as exc:
+            logger.debug("Paper broker OHLCV load failed: %s", exc)
 
     # No OHLCV data available from any source — return empty DataFrame.
     # Callers must check len(df) >= minimum_bars before proceeding.

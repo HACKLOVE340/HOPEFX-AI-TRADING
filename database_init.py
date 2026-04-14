@@ -45,7 +45,7 @@ def initialize_database(db_url: str | None = None) -> None:
                 "DATABASE_URL is not set — using SQLite fallback (%s). "
                 "SQLite does not support concurrent writes and will corrupt "
                 "under multi-worker load. "
-                "Set DATABASE_URL=postgresql://user:pass@host:5432/hopefx for production.",
+                "Set DATABASE_URL=postgresql://user:pass@host:5432/hopefx for production.",  # pragma: allowlist secret
                 db_url,
             )
 

@@ -165,7 +165,7 @@ class TestNotificationManager:
             "smtp_host": "smtp.example.com",
             "smtp_port": 587,
             "smtp_username": "test@example.com",
-            "smtp_password": "password",  # nosec B105 - test file
+            "smtp_password": "password",  # nosec B105 - test file  # pragma: allowlist secret
             "smtp_to": "recipient@example.com",
         }
         manager = NotificationManager(config)

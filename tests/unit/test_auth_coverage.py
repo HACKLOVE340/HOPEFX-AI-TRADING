@@ -58,7 +58,7 @@ class TestAuthService:
         """JWT encode → decode must preserve sub and role."""
         import jwt
 
-        secret = "test-secret-key"
+        secret = "test-secret-key"  # pragma: allowlist secret
         token = _make_jwt("alice", "admin", secret)
         payload = jwt.decode(token, secret, algorithms=["HS256"])
         assert payload["sub"] == "alice"
@@ -68,7 +68,7 @@ class TestAuthService:
         """Expired JWT must raise DecodeError / ExpiredSignatureError."""
         import jwt
 
-        secret = "test-secret-key"
+        secret = "test-secret-key"  # pragma: allowlist secret
         payload = {
             "sub": "bob",
             "exp": datetime.now(UTC) - timedelta(seconds=1),
@@ -218,7 +218,7 @@ class TestAuthApiEndpoints:
             json={
                 "email": "new@example.com",
                 "username": "newtrader",
-                "password": "SecurePass123!",  # nosec B105 - test file
+                "password": "SecurePass123!",  # nosec B105 - test file  # pragma: allowlist secret
             },
         )
         assert res.status_code == 201
@@ -232,7 +232,7 @@ class TestAuthApiEndpoints:
             "/api/auth/login",
             json={
                 "username": "testuser",
-                "password": "SecurePass123!",  # nosec B105 - test file
+                "password": "SecurePass123!",  # nosec B105 - test file  # pragma: allowlist secret
             },
         )
         # 200 or 422 depending on mock wiring — just ensure no 500

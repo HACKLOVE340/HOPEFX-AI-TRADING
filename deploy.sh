@@ -47,7 +47,7 @@ ENCRYPTION_KEY="${ENCRYPTION_KEY:-}"
 prompt() {
   local var="$1" prompt_text="$2" secret="${3:-false}"
   if [[ -z "${!var:-}" ]]; then
-    if [[ "$secret" == "true" ]]; then
+    if [[ "$secret" == "true" ]]; then  # pragma: allowlist secret
       # read into a nameref so shellcheck SC2229 is satisfied
       local -n _prompt_ref="$var"
       read -rsp "  $prompt_text: " _prompt_ref; echo

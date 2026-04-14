@@ -24,7 +24,7 @@ from fastapi.testclient import TestClient
 # Pin the JWT secret for this module — must be set before any api.auth import.
 # We force-set (not setdefault) so other tests that mutate the env var don't
 # break our token verification.
-_TEST_SECRET = "integration-test-secret-key-32chars!!"
+_TEST_SECRET = "integration-test-secret-key-32chars!!"  # pragma: allowlist secret
 os.environ["SECURITY_JWT_SECRET"] = _TEST_SECRET
 
 _SECRET = _TEST_SECRET

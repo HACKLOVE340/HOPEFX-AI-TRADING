@@ -142,7 +142,7 @@ def test_validate_passes_when_all_set(tmp_path, monkeypatch):
 
 def test_validate_fails_when_placeholder(tmp_path, monkeypatch):
     env_file = tmp_path / ".env"
-    env_file.write_text("SECURITY_JWT_SECRET=CHANGE_ME_generate_a_random_48_char_secret\n")
+    env_file.write_text("SECURITY_JWT_SECRET=CHANGE_ME_generate_a_random_48_char_secret\n")  # pragma: allowlist secret
     monkeypatch.setattr("scripts.manage_secrets.ENV_FILE", env_file)
 
     rc = cmd_validate(_FakeArgs())
@@ -183,7 +183,7 @@ def test_rotate_replaces_key(tmp_path, monkeypatch):
 def test_audit_detects_hardcoded_secret(tmp_path, monkeypatch):
     # Create a fake .py file with a hardcoded secret
     fake_py = tmp_path / "bad_code.py"
-    fake_py.write_text('api_key = "sk-abcdefghijklmnopqrstuvwxyz123456"\n')
+    fake_py.write_text('api_key = "sk-abcdefghijklmnopqrstuvwxyz123456"\n')  # pragma: allowlist secret
     monkeypatch.setattr("scripts.manage_secrets.ROOT", tmp_path)
 
     rc = cmd_audit(_FakeArgs())

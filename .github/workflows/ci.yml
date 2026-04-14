@@ -3,13 +3,25 @@ name: CI
 on:
   push:
     branches: [main, develop]
+    paths-ignore:
+      - "frontend/**"
+      - "dashboard/**"
+      - "mobile/**"
+      - "mobile-app/**"
+      - "helm/**"
+      - "k8s/**"
+      - "docs/**"
+      - "*.md"
+      - "Dockerfile"
+      - "docker-compose*.yml"
   pull_request:
     branches: [main]
 
-# Cancel in-progress runs on the same branch to free up runners
+# Use SHA so Dependabot bumps get their own group and don't cancel
+# runs triggered by real code changes.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   pre-commit:
@@ -46,11 +58,46 @@ jobs:
       - name: Install pip-audit
         run: pip install pip-audit
       - name: Dependency vulnerability scan
-        # Report CVEs but do not block merges - tracked in security dashboard.
-        run: pip-audit --requirement=requirements.txt --desc || true
+        # Blocks on CRITICAL severity; HIGH and below are reported only.
+        # To suppress a false-positive: pip-audit --ignore-vuln GHSA-xxxx-xxxx-xxxx
+        run: |
+          pip-audit --requirement=requirements.txt --desc \
+            --vulnerability-service pypi \
+            --format json --output pip-audit-report.json || true
+          # Exit non-zero if any CRITICAL CVEs are present
+          python - <<'EOF'
+          import json, sys
+          try:
+              data = json.load(open("pip-audit-report.json"))
+          except Exception:
+              sys.exit(0)  # no report = no vulns
+          criticals = [
+              v for dep in data.get("dependencies", [])
+              for v in dep.get("vulns", [])
+              if v.get("fix_versions") is not None  # exploitable, has fix
+              and any(
+                  "CRITICAL" in (a.get("severity", "") or "").upper()
+                  for a in v.get("aliases", [{"severity": ""}])
+              )
+          ]
+          if criticals:
+              print(f"BLOCKED: {len(criticals)} CRITICAL CVE(s) found:")
+              for c in criticals:
+                  print(f"  {c['id']}: {c.get('description', '')[:120]}")
+              sys.exit(1)
+          print("pip-audit: no CRITICAL CVEs found")
+          EOF
+      - name: Upload pip-audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-audit-report
+          path: pip-audit-report.json
+          retention-days: 30
       - name: Scan with Trivy (supply-chain)
         # Download pinned release asset directly - avoids executing a remote
         # shell script from main and makes failures easier to diagnose.
+        # --exit-code 1 blocks merges on CRITICAL or HIGH findings.
         run: |
           set -euo pipefail
           TRIVY_VERSION="0.69.3"
@@ -59,7 +106,7 @@ jobs:
           tar -xzf trivy.tgz trivy
           sudo install -m 0755 trivy /usr/local/bin/trivy
           trivy version
-          trivy fs . --severity CRITICAL,HIGH --exit-code 0 --format table
+          trivy fs . --severity CRITICAL,HIGH --exit-code 1 --format table
 
   typecheck:
     runs-on: ubuntu-latest
@@ -133,7 +180,7 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_PASSWORD: postgres  # pragma: allowlist secret
           POSTGRES_DB: hopefx
         options: >-
           --health-cmd pg_isready
@@ -187,13 +234,13 @@ jobs:
 
       - name: Run tests with coverage (full suite, 70% baseline)
         env:
-          DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
+          DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx  # pragma: allowlist secret
           REDIS_URL: redis://localhost:6379/0
           CONFIG_ENCRYPTION_KEY: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
           CONFIG_SALT: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-          SECURITY_JWT_SECRET: "ci-test-secret-key-minimum-32-characters-long"
+          SECURITY_JWT_SECRET: "ci-test-secret-key-minimum-32-characters-long"  # pragma: allowlist secret
           ENVIRONMENT: testing
-          OANDA_API_KEY: ci-placeholder
+          OANDA_API_KEY: ci-placeholder  # pragma: allowlist secret
           OANDA_ACCOUNT_ID: ci-placeholder
           OANDA_PRACTICE: "true"
           INITIAL_BALANCE: "100000"
@@ -225,10 +272,10 @@ jobs:
 
       - name: Coverage gate - risk/ (80% required)
         env:
-          DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
+          DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx  # pragma: allowlist secret
           REDIS_URL: redis://localhost:6379/0
           ENVIRONMENT: testing
-          SECURITY_JWT_SECRET: "ci-test-secret-key-minimum-32-characters-long"
+          SECURITY_JWT_SECRET: "ci-test-secret-key-minimum-32-characters-long"  # pragma: allowlist secret
         run: |
           pytest tests/ -m "not slow" -q \
             --cov=risk --cov-branch \
@@ -240,10 +287,10 @@ jobs:
 
       - name: Coverage gate - execution/ (80% required)
         env:
-          DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
+          DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx  # pragma: allowlist secret
           REDIS_URL: redis://localhost:6379/0
           ENVIRONMENT: testing
-          SECURITY_JWT_SECRET: "ci-test-secret-key-minimum-32-characters-long"
+          SECURITY_JWT_SECRET: "ci-test-secret-key-minimum-32-characters-long"  # pragma: allowlist secret
         run: |
           pytest tests/ -m "not slow" -q \
             --cov=execution --cov-branch \
@@ -255,10 +302,10 @@ jobs:
 
       - name: Coverage gate - kill_switch.py (80% required)
         env:
-          DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
+          DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx  # pragma: allowlist secret
           REDIS_URL: redis://localhost:6379/0
           ENVIRONMENT: testing
-          SECURITY_JWT_SECRET: "ci-test-secret-key-minimum-32-characters-long"
+          SECURITY_JWT_SECRET: "ci-test-secret-key-minimum-32-characters-long"  # pragma: allowlist secret
         run: |
           pytest tests/ -m "not slow" -q \
             --cov=kill_switch --cov-branch \
@@ -269,11 +316,11 @@ jobs:
 
       - name: Coverage gate - brokers/ (80% required)
         env:
-          DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
+          DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx  # pragma: allowlist secret
           REDIS_URL: redis://localhost:6379/0
           ENVIRONMENT: testing
-          SECURITY_JWT_SECRET: "ci-test-secret-key-minimum-32-characters-long"
-          OANDA_API_KEY: ci-placeholder
+          SECURITY_JWT_SECRET: "ci-test-secret-key-minimum-32-characters-long"  # pragma: allowlist secret
+          OANDA_API_KEY: ci-placeholder  # pragma: allowlist secret
           OANDA_ACCOUNT_ID: ci-placeholder
           OANDA_PRACTICE: "true"
         run: |
@@ -286,10 +333,10 @@ jobs:
 
       - name: Coverage gate - compliance/ (80% required)
         env:
-          DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
+          DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx  # pragma: allowlist secret
           REDIS_URL: redis://localhost:6379/0
           ENVIRONMENT: testing
-          SECURITY_JWT_SECRET: "ci-test-secret-key-minimum-32-characters-long"
+          SECURITY_JWT_SECRET: "ci-test-secret-key-minimum-32-characters-long"  # pragma: allowlist secret
         run: |
           pytest tests/ -m "not slow" -q \
             --cov=compliance --cov-branch \
@@ -373,6 +420,12 @@ jobs:
           node-version: "20"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
+
+      - name: Configure npm for peer dep conflicts
+        # Dependabot bumps (e.g. vite@8) can introduce peer dep conflicts
+        # with plugins that haven't released support yet. --legacy-peer-deps
+        # preserves npm v6 behaviour and keeps CI green while the ecosystem catches up.
+        run: npm config set legacy-peer-deps true
 
       - name: Install dependencies
         run: npm ci

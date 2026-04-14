@@ -533,7 +533,7 @@ def _make_stripe_mock() -> MagicMock:
         amount=180000,
         currency="usd",
         status="requires_payment_method",
-        client_secret="pi_test123456789012_secret_abc",
+        client_secret="pi_test123456789012_secret_abc",  # pragma: allowlist secret
         metadata={},
     )
     mock.PaymentIntent.create.return_value = pi_mock
@@ -593,7 +593,7 @@ class TestStripeIntegration:
         try:
             _mod._stripe = mock_stripe
             _mod._STRIPE_AVAILABLE = True
-            with patch.dict("os.environ", {"STRIPE_SECRET_KEY": "sk_test_unit"}):  # nosec B105 - test file
+            with patch.dict("os.environ", {"STRIPE_SECRET_KEY": "sk_test_unit"}):  # nosec B105 - test file  # pragma: allowlist secret
                 si = StripeIntegration()
             fn(si, mock_stripe)
         finally:

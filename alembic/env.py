@@ -43,8 +43,7 @@ config = context.config
 db_url = os.getenv("DATABASE_URL")
 if db_url:
     db_url = (
-        db_url
-        .replace("sqlite+aiosqlite:///", "sqlite:///")
+        db_url.replace("sqlite+aiosqlite:///", "sqlite:///")
         .replace("postgresql+asyncpg://", "postgresql://")
         .replace("postgresql+aiopg://", "postgresql://")
         # Heroku/Railway use "postgres://" which SQLAlchemy 1.4+ rejects

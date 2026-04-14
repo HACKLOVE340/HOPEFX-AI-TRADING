@@ -290,11 +290,11 @@ def check_sentiment_scorer() -> ValidationResult:
 
 def check_gold_feeds_configured() -> ValidationResult:
     keys = {
-        "GOLDAPI_IO_KEY": "GoldAPI.io",
-        "METALS_DEV_KEY": "Metals.dev",
-        "METALS_API_KEY": "Metals-API",
-        "METALPRICEAPI_KEY": "MetalpriceAPI",
-        "COMMODITY_PRICE_API_KEY": "CommodityPriceAPI",
+        "GOLDAPI_IO_KEY": "GoldAPI.io",  # pragma: allowlist secret
+        "METALS_DEV_KEY": "Metals.dev",  # pragma: allowlist secret
+        "METALS_API_KEY": "Metals-API",  # pragma: allowlist secret
+        "METALPRICEAPI_KEY": "MetalpriceAPI",  # pragma: allowlist secret
+        "COMMODITY_PRICE_API_KEY": "CommodityPriceAPI",  # pragma: allowlist secret
     }
     configured = [name for env, name in keys.items() if os.getenv(env)]
     # In CI / dev environments without keys, treat as warning not critical failure
@@ -318,11 +318,11 @@ def check_gold_feeds_configured() -> ValidationResult:
 
 def check_news_feeds_configured() -> ValidationResult:
     keys = {
-        "FINNHUB_API_KEY": "Finnhub",
-        "FMP_API_KEY": "FMP",
+        "FINNHUB_API_KEY": "Finnhub",  # pragma: allowlist secret
+        "FMP_API_KEY": "FMP",  # pragma: allowlist secret
         "NEWSDATA_IO_KEY": "NewsData.io",
         "ALPHA_VANTAGE_KEY": "Alpha Vantage",
-        "NEWSAPI_ORG_KEY": "NewsAPI.org",
+        "NEWSAPI_ORG_KEY": "NewsAPI.org",  # pragma: allowlist secret
         "NEWSAPI_AI_KEY": "NewsAPI.ai",
     }
     configured = [name for env, name in keys.items() if os.getenv(env)]

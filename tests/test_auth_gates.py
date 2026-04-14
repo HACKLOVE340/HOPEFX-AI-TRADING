@@ -26,7 +26,7 @@ from fastapi.testclient import TestClient
 
 # ── Minimal secret for test tokens ───────────────────────────────────────────
 # Use the canonical test secret shared across all test modules.
-_SECRET = "test-only-jwt-secret-key-minimum-32-chars!!"
+_SECRET = "test-only-jwt-secret-key-minimum-32-chars!!"  # pragma: allowlist secret
 os.environ.setdefault("SECURITY_JWT_SECRET", _SECRET)
 
 

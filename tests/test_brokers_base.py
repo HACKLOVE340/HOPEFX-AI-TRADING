@@ -6,7 +6,6 @@ Full branch coverage for with_retry, RateLimiter, dataclasses, and BrokerConnect
 
 from __future__ import annotations
 
-import asyncio
 import time
 from datetime import datetime
 from unittest.mock import patch
@@ -117,9 +116,6 @@ class TestWithRetryAsync:
             if len(calls) < 2:
                 raise ValueError("transient")
             return "ok"
-
-        with patch("brokers.base.asyncio.sleep", new_callable=lambda: lambda: asyncio.coroutine(lambda _: None)):
-            pass
 
         # Use real asyncio.sleep with tiny delay
         result = await fn()

@@ -3,10 +3,12 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
-# core/acceleration/gpu_engine.py
+# core/acceleration/__init__.py
 """
-HOPEFX GPU Acceleration Engine
-CUDA-powered inference for sub-millisecond predictions
+core/acceleration — GPU inference engine package.
+
+The GARCH/Monte Carlo risk classes previously co-located here have been
+moved to core/risk/advanced_engine.py (L-6 fix).
 """
 
 from __future__ import annotations

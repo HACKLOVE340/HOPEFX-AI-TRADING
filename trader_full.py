@@ -594,6 +594,34 @@ async def _main() -> None:
 
     logger.info("trader_full starting | env=%s | symbols=%s", cfg.app_env, cfg.symbols)
 
+    # ── LiveTradingGate — all 5 statistical safety checks ────────────────────
+    # Mirrors the gate in hopefx_engine.py.  trader_full.py is a standalone
+    # entry-point and must enforce the same gate independently.
+    if cfg.app_env == "live":
+        try:
+            from core.live_trading_gate import get_gate as _get_gate
+
+            _gate_result = _get_gate().check()
+            if not _gate_result.allowed:
+                logger.critical(
+                    "LiveTradingGate blocked trader_full startup: %s",
+                    _gate_result.reason,
+                )
+                return
+            logger.info("LiveTradingGate passed: %s", _gate_result.reason)
+        except ImportError as _gate_err:
+            logger.critical(
+                "live_trading_gate import failed (%s) — aborting live startup (fail-safe)",
+                _gate_err,
+            )
+            return
+        except Exception as _gate_err:
+            logger.critical(
+                "LiveTradingGate check raised %s — aborting live startup (fail-safe)",
+                _gate_err,
+            )
+            return
+
     # Build execution broker.
     # OANDAStream handles account queries, order placement, and position
     # management via the OANDA v20 REST API.  It is NEVER used for price

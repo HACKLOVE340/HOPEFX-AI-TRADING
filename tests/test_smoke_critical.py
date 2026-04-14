@@ -173,7 +173,7 @@ def test_payments_flutterwave_import():
 def test_payments_flutterwave_client_instantiate():
     from payments.fintech.flutterwave import FlutterwaveClient
 
-    client = FlutterwaveClient(secret_key="test_key_smoke")
+    client = FlutterwaveClient(secret_key="test_key_smoke")  # pragma: allowlist secret
     assert client is not None
 
 
@@ -262,7 +262,7 @@ def test_brokers_oanda_import():
 def test_brokers_oanda_broker_instantiate():
     from brokers.oanda import OandaBroker
 
-    broker = OandaBroker(api_key="test-token", account_id="test-account")
+    broker = OandaBroker(api_key="test-token", account_id="test-account")  # pragma: allowlist secret
     assert broker is not None
 
 

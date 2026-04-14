@@ -29,7 +29,7 @@ class CommodityAPIFeed(GoldFeedBase):
     """CommodityPriceAPI — REST polling adapter."""
 
     name = FeedSource.COMMODITY_API
-    _api_key_env = "COMMODITY_PRICE_API_KEY"
+    _api_key_env = "COMMODITY_PRICE_API_KEY"  # pragma: allowlist secret
     _base_url = _BASE
     _min_interval_s = 60.0
 

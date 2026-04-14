@@ -89,19 +89,19 @@ _REFRESH_ENABLED = os.getenv("SECRETS_REFRESH_ENABLED", "true").lower() != "fals
 
 # Mapping: secret key → env var name (fallback when backend is unavailable)
 _ENV_FALLBACK: dict[str, str] = {
-    "jwt_secret_key": "JWT_SECRET_KEY",  # nosec B105 - env var name string, not a hardcoded secret
+    "jwt_secret_key": "JWT_SECRET_KEY",  # nosec B105 - env var name string, not a hardcoded secret  # pragma: allowlist secret
     "database_url": "DATABASE_URL",
-    "db_password": "DB_PASSWORD",  # nosec B105 - env var name string, not a hardcoded secret
-    "oanda_api_key": "BROKER_OANDA_TOKEN",
-    "sendgrid_api_key": "SENDGRID_API_KEY",
-    "redis_password": "REDIS_PASSWORD",  # nosec B105 - env var name string, not a hardcoded secret
+    "db_password": "DB_PASSWORD",  # nosec B105 - env var name string, not a hardcoded secret  # pragma: allowlist secret
+    "oanda_api_key": "BROKER_OANDA_TOKEN",  # pragma: allowlist secret
+    "sendgrid_api_key": "SENDGRID_API_KEY",  # pragma: allowlist secret
+    "redis_password": "REDIS_PASSWORD",  # nosec B105 - env var name string, not a hardcoded secret  # pragma: allowlist secret
     "redis_url": "REDIS_URL",
-    "crypto_webhook_secret": "CRYPTO_WEBHOOK_SECRET",  # nosec B105 - env var name string, not a hardcoded secret
+    "crypto_webhook_secret": "CRYPTO_WEBHOOK_SECRET",  # nosec B105 - env var name string, not a hardcoded secret  # pragma: allowlist secret
     "sentry_dsn": "SENTRY_DSN",
-    "stripe_secret_key": "STRIPE_SECRET_KEY",  # nosec B105 - env var name string, not a hardcoded secret
-    "stripe_webhook_secret": "STRIPE_WEBHOOK_SECRET",  # nosec B105 - env var name string, not a hardcoded secret
+    "stripe_secret_key": "STRIPE_SECRET_KEY",  # nosec B105 - env var name string, not a hardcoded secret  # pragma: allowlist secret
+    "stripe_webhook_secret": "STRIPE_WEBHOOK_SECRET",  # nosec B105 - env var name string, not a hardcoded secret  # pragma: allowlist secret
     "telegram_bot_token": "TELEGRAM_BOT_TOKEN",  # nosec B105 - env var name string, not a hardcoded secret
-    "openai_api_key": "OPENAI_API_KEY",
+    "openai_api_key": "OPENAI_API_KEY",  # pragma: allowlist secret
 }
 
 

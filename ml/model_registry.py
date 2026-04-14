@@ -289,11 +289,52 @@ class ModelRegistry:
             return False, ("Sharpe gate not passed. Run multi-symbol backtest with N >= 600 trades.")
         return True, (f"Gate passed: acc={acc:.4f}, p={pval:.6f}, sharpe_ok={sharpe_ok}")
 
+    def _pnl_reconciliation_check(self) -> tuple[bool, str]:
+        """
+        Check the P&L reconciliation gate from the persisted snapshot.
+
+        Reads data/pnl_reconciliation.json written by PnLReconciler.reconcile().
+        Blocks promotion when:
+          - No fresh snapshot exists (broker has never been reconciled).
+          - The snapshot shows divergence beyond tolerance.
+          - Fewer than PNL_RECON_MIN_TRADES confirmed fills exist.
+
+        This check is synchronous and reads only from disk — it does not
+        make any broker API calls.  Run ``PnLReconciler.reconcile(broker)``
+        before calling promote() to refresh the snapshot.
+
+        Returns (passed, reason).
+        """
+        try:
+            from ml.pnl_reconciler import get_reconciler
+
+            result = get_reconciler().check_gate()
+            return result.gate_passed, result.reason
+        except Exception as exc:
+            logger.warning("ModelRegistry: P&L reconciliation check failed: %s", exc)
+            return False, f"P&L reconciliation gate unavailable: {exc}"
+
     def promote(self, name: str) -> dict[str, Any]:
         """
         Promote *name* to production state.
 
-        Runs the promotion gate.  On success:
+        Runs two mandatory promotion gates in order.  Both must pass:
+
+        Gate 1 — Statistical quality (``_gate_check``):
+          - OOS accuracy >= REGISTRY_MIN_OOS_ACC (default 0.60)
+          - OOS p-value  <  REGISTRY_MAX_OOS_PVAL (default 0.05)
+          - sharpe_gate_passed == True (when REGISTRY_REQUIRE_SHARPE_GATE)
+
+        Gate 2 — P&L reconciliation (``_pnl_reconciliation_check``):
+          - Reads the persisted snapshot from ``data/pnl_reconciliation.json``
+            written by ``PnLReconciler.reconcile(broker)``.
+          - Blocks when ledger P&L diverges from broker P&L beyond tolerance,
+            when fewer than PNL_RECON_MIN_TRADES fills exist, or when no
+            fresh snapshot is available.
+          - Call ``await PnLReconciler().reconcile(broker)`` before promoting
+            to refresh the snapshot.
+
+        On success:
           - Sets ``state="production"`` and ``promoted_at`` in the manifest.
           - Atomically updates the ``current.pkl`` symlink to point at the
             model's artifact file.
@@ -310,16 +351,23 @@ class ModelRegistry:
         Raises
         ------
         KeyError    : If *name* is not in the registry.
-        RuntimeError: If the promotion gate fails.
+        RuntimeError: If either promotion gate fails.
         """
         manifest = self._load()
         if name not in manifest["versions"]:
             raise KeyError(f"Version '{name}' not found in registry")
 
         entry = manifest["versions"][name]
+
+        # Gate 1: OOS accuracy, p-value, Sharpe
         passed, reason = self._gate_check(entry)
         if not passed:
             raise RuntimeError(f"Promotion gate BLOCKED for '{name}': {reason}")
+
+        # Gate 2: P&L reconciliation — ledger vs broker must agree
+        pnl_passed, pnl_reason = self._pnl_reconciliation_check()
+        if not pnl_passed:
+            raise RuntimeError(f"Promotion gate BLOCKED for '{name}': {pnl_reason}")
 
         # Retire the current production model
         prev_active = manifest.get("active_version")

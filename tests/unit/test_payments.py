@@ -209,7 +209,7 @@ class TestPaymentsWebhook:
     def test_verify_webhook_hmac_valid_signature(self):
         """Valid HMAC signature passes verification."""
 
-        secret = "test-webhook-secret-abc123"
+        secret = "test-webhook-secret-abc123"  # pragma: allowlist secret
         body = b'{"payment_id":"PAY_1","status":"complete"}'
         sig = self._make_signature(secret, body)
 
@@ -226,7 +226,7 @@ class TestPaymentsWebhook:
         """Invalid HMAC signature fails verification."""
         import api.payments as pm
 
-        pm._WEBHOOK_SECRET = "correct-secret"
+        pm._WEBHOOK_SECRET = "correct-secret"  # pragma: allowlist secret
         body = b'{"payment_id":"PAY_1","status":"complete"}'
         bad_sig = "deadbeef" * 8  # wrong signature
 
@@ -237,7 +237,7 @@ class TestPaymentsWebhook:
         """No secret + CRYPTO_WEBHOOK_VERIFY=false in dev returns True (bypass)."""
         import api.payments as pm
 
-        pm._WEBHOOK_SECRET = ""  # nosec B105 - test file
+        pm._WEBHOOK_SECRET = ""  # nosec B105 - test file  # pragma: allowlist secret
         body = b'{"payment_id":"PAY_1"}'
 
         with patch.dict(os.environ, {"APP_ENV": "development", "CRYPTO_WEBHOOK_VERIFY": "false"}):
@@ -249,7 +249,7 @@ class TestPaymentsWebhook:
         """No secret in production mode returns False."""
         import api.payments as pm
 
-        pm._WEBHOOK_SECRET = ""  # nosec B105 - test file
+        pm._WEBHOOK_SECRET = ""  # nosec B105 - test file  # pragma: allowlist secret
         body = b'{"payment_id":"PAY_1"}'
 
         with patch.dict(os.environ, {"APP_ENV": "production"}):

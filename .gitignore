@@ -115,6 +115,9 @@ ml/saved_models/model_checksums.json
 # Runtime-generated data files
 backtest/results/
 data/paper_trading_gate.json
+data/oanda_paper_start.json
+data/heal_manifest.json
+data/regulatory_dlq/
 # registry.json is tracked in git as the seed manifest; updated by ModelRegistry at runtime
 *.h5
 *.pt
@@ -200,8 +203,9 @@ data/lineage/
 data/dukascopy_cache/
 data/macro/*.csv
 -e
-# Admin bootstrap credential file (create_admin.py)
+# Admin bootstrap credential files (create_admin.py, create_superadmin.py)
 admin_password.txt
+superadmin_credentials.txt
 .python-version
 mutants/
 

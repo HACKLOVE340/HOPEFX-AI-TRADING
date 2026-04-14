@@ -29,7 +29,7 @@ class MetalpriceAPIFeed(GoldFeedBase):
     """MetalpriceAPI — REST polling adapter."""
 
     name = FeedSource.METALPRICEAPI
-    _api_key_env = "METALPRICEAPI_KEY"
+    _api_key_env = "METALPRICEAPI_KEY"  # pragma: allowlist secret
     _base_url = _BASE
     _min_interval_s = 60.0  # free tier: 1 req/hour; paid: 1 req/min
 

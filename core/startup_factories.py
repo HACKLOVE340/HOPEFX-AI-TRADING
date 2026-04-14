@@ -1068,6 +1068,18 @@ async def init_wallet(s: Any) -> Any:
 async def init_social(s: Any) -> bool:
     from social import copy_trading_engine, leaderboard_manager, marketplace
 
+    # Inject the live broker so copy trades actually place orders.
+    # init_broker() must have run before init_social() in the startup sequence.
+    broker = getattr(s, "broker", None)
+    if broker is not None:
+        copy_trading_engine.set_broker(broker)
+    else:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "init_social: s.broker is None — copy trading will be in broker_offline mode. "
+            "Ensure init_broker() runs before init_social() in the startup sequence."
+        )
+
     s.copy_trading_engine = copy_trading_engine
     s.marketplace = marketplace
     s.leaderboard_manager = leaderboard_manager

@@ -387,7 +387,7 @@ const AppShell: React.FC = () => {
 // ── Root ──────────────────────────────────────────────────────────────────────
 const App: React.FC = () => (
   <QueryClientProvider client={queryClient}>
-    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <BrowserRouter>
       <ErrorBoundary>
         <Suspense fallback={<PageFallback />}>
           <Routes>

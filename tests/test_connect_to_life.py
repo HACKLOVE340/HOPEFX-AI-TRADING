@@ -137,7 +137,7 @@ class TestReadStatus:
         with patch.dict(
             os.environ,
             {
-                "OANDA_API_KEY": "test",
+                "OANDA_API_KEY": "test",  # pragma: allowlist secret
                 "OANDA_ACCOUNT_ID": "test",
                 "INITIAL_BALANCE": "50000",
             },
@@ -211,7 +211,7 @@ class TestBreachShutdown:
         with patch.dict(
             os.environ,
             {
-                "OANDA_API_KEY": "test",
+                "OANDA_API_KEY": "test",  # pragma: allowlist secret
                 "OANDA_ACCOUNT_ID": "test",
             },
         ):
@@ -259,7 +259,7 @@ class TestCheckpoint:
         with patch.dict(
             os.environ,
             {
-                "OANDA_API_KEY": "test",
+                "OANDA_API_KEY": "test",  # pragma: allowlist secret
                 "OANDA_ACCOUNT_ID": "test",
                 "INITIAL_BALANCE": "100000",
             },
@@ -317,7 +317,7 @@ class TestOnEngineDone:
         with patch.dict(
             os.environ,
             {
-                "OANDA_API_KEY": "test",
+                "OANDA_API_KEY": "test",  # pragma: allowlist secret
                 "OANDA_ACCOUNT_ID": "test",
             },
         ):

@@ -131,8 +131,8 @@ def test_wrong_token_rejected():
     import hashlib
     import hmac
 
-    secret = "correct_secret_key"
-    wrong_secret = "wrong_secret_key"
+    secret = "correct_secret_key"  # pragma: allowlist secret
+    wrong_secret = "wrong_secret_key"  # pragma: allowlist secret
     message = "deactivate"
 
     correct_sig = hmac.new(secret.encode(), message.encode(), hashlib.sha256).hexdigest()

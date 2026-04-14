@@ -121,7 +121,7 @@ class TestInitOANDABroker:
     def _broker(self):
         from brokers import OANDABroker
 
-        return OANDABroker(api_key="test-key", account_id="123", practice=True)
+        return OANDABroker(api_key="test-key", account_id="123", practice=True)  # pragma: allowlist secret
 
     @pytest.mark.asyncio
     async def test_disconnect_no_session(self):

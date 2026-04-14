@@ -91,11 +91,11 @@ check_env("NEWSAPI_ORG_KEY", critical=False)
 logger.info("\n=== 2. Gold price feed sources ===")
 
 gold_keys = {
-    "GOLDAPI_IO_KEY": "GoldAPI.io",
-    "METALS_DEV_KEY": "Metals.dev",
-    "METALS_API_KEY": "Metals-API",
-    "METALPRICEAPI_KEY": "MetalpriceAPI",
-    "COMMODITY_PRICE_API_KEY": "CommodityPriceAPI",
+    "GOLDAPI_IO_KEY": "GoldAPI.io",  # pragma: allowlist secret
+    "METALS_DEV_KEY": "Metals.dev",  # pragma: allowlist secret
+    "METALS_API_KEY": "Metals-API",  # pragma: allowlist secret
+    "METALPRICEAPI_KEY": "MetalpriceAPI",  # pragma: allowlist secret
+    "COMMODITY_PRICE_API_KEY": "CommodityPriceAPI",  # pragma: allowlist secret
 }
 configured_gold = [
     name for var, name in gold_keys.items() if os.getenv(var, "").strip() and not os.getenv(var, "").startswith("YOUR_")
@@ -110,9 +110,9 @@ else:
 logger.info("\n=== 3. NuclearStreamer WebSocket sources ===")
 
 ws_keys = {
-    "FINNHUB_API_KEY": "Finnhub",
-    "TWELVE_API_KEY": "Twelve Data",
-    "POLYGON_API_KEY": "Polygon.io",
+    "FINNHUB_API_KEY": "Finnhub",  # pragma: allowlist secret
+    "TWELVE_API_KEY": "Twelve Data",  # pragma: allowlist secret
+    "POLYGON_API_KEY": "Polygon.io",  # pragma: allowlist secret
 }
 configured_ws = [
     name for var, name in ws_keys.items() if os.getenv(var, "").strip() and not os.getenv(var, "").startswith("YOUR_")

@@ -91,7 +91,7 @@ def _validate_database(errors: list[str]) -> None:
 
     if not db_url and not db_host:
         errors.append(
-            "MISSING  DATABASE_URL or DB_HOST: set DATABASE_URL=postgresql://user:pass@host:5432/db",
+            "MISSING  DATABASE_URL or DB_HOST: set DATABASE_URL=postgresql://user:pass@host:5432/db",  # pragma: allowlist secret
         )
     if not db_url and db_host and not db_pass:
         errors.append(
@@ -106,6 +106,7 @@ def _validate_database(errors: list[str]) -> None:
 def _validate_redis(errors: list[str]) -> None:
     redis_url = _env("REDIS_URL")
     redis_host = _env("REDIS_HOST")
+    redis_password = _env("REDIS_PASSWORD")
 
     if not redis_url:
         if redis_host:
@@ -121,6 +122,15 @@ def _validate_redis(errors: list[str]) -> None:
     elif not redis_url.startswith(("redis://", "rediss://")):
         errors.append(
             f"INVALID  REDIS_URL={redis_url!r}: must start with redis:// or rediss://",
+        )
+
+    # Require a non-empty REDIS_PASSWORD in production.
+    # docker-compose.yml passes --requirepass ${REDIS_PASSWORD:-} which means
+    # an empty value leaves Redis unauthenticated inside the Docker network.
+    if not redis_password:
+        errors.append(
+            "MISSING  REDIS_PASSWORD: Redis runs without authentication in production. "
+            "Set REDIS_PASSWORD to a strong random value (e.g. openssl rand -hex 32).",
         )
 
 

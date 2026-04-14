@@ -495,7 +495,7 @@ class TestNewsProvider:
         from news.providers import NewsProvider
 
         with pytest.raises(TypeError):
-            NewsProvider(api_key="test_key")  # type: ignore[abstract]  # pylint: disable=abstract-class-instantiated
+            NewsProvider(api_key="test_key")  # type: ignore[abstract]  # pylint: disable=abstract-class-instantiated  # pragma: allowlist secret
 
     def test_incomplete_subclass_missing_both_raises_type_error(self):
         """A subclass missing both abstract methods raises TypeError."""
@@ -538,8 +538,8 @@ class TestNewsProvider:
                     symbols=[],
                 )
 
-        provider = ConcreteProvider(api_key="test_key")
-        assert provider.api_key == "test_key"
+        provider = ConcreteProvider(api_key="test_key")  # pragma: allowlist secret
+        assert provider.api_key == "test_key"  # pragma: allowlist secret
 
 
 class TestNewsAPIProvider:
@@ -549,8 +549,8 @@ class TestNewsAPIProvider:
         """Test NewsAPI provider initialization."""
         from news.providers import NewsAPIProvider
 
-        provider = NewsAPIProvider(api_key="test_api_key")
-        assert provider.api_key == "test_api_key"
+        provider = NewsAPIProvider(api_key="test_api_key")  # pragma: allowlist secret
+        assert provider.api_key == "test_api_key"  # pragma: allowlist secret
         assert provider.BASE_URL == "https://newsapi.org/v2"
 
     def test_provider_without_api_key(self):
@@ -558,7 +558,7 @@ class TestNewsAPIProvider:
         from news.providers import NewsAPIProvider
 
         with pytest.raises(ValueError):
-            NewsAPIProvider(api_key="")
+            NewsAPIProvider(api_key="")  # pragma: allowlist secret
 
     @patch("news.providers.requests.get")
     def test_get_news_success(self, mock_get):
@@ -581,7 +581,7 @@ class TestNewsAPIProvider:
         }
         mock_get.return_value = mock_response
 
-        provider = NewsAPIProvider(api_key="test_key")
+        provider = NewsAPIProvider(api_key="test_key")  # pragma: allowlist secret
         articles = provider.get_news(query="gold")
 
         assert len(articles) >= 0  # May be empty if API fails
@@ -846,6 +846,7 @@ class TestGeopoliticalRiskProvider:
     async def test_get_current_events_returns_list(self):
         """get_current_events returns a list."""
         import os
+
         os.environ.setdefault("HOPEFX_CI", "1")
         from news import GeopoliticalRiskProvider
 
@@ -857,6 +858,7 @@ class TestGeopoliticalRiskProvider:
     async def test_get_risk_assessment_returns_assessment(self):
         """get_risk_assessment returns a GeopoliticalRiskAssessment."""
         import os
+
         os.environ.setdefault("HOPEFX_CI", "1")
         from news import GeopoliticalRiskAssessment, GeopoliticalRiskProvider
 
@@ -868,6 +870,7 @@ class TestGeopoliticalRiskProvider:
     async def test_risk_assessment_has_required_fields(self):
         """Risk assessment has all required fields."""
         import os
+
         os.environ.setdefault("HOPEFX_CI", "1")
         from news import GeopoliticalRiskProvider
 
@@ -881,6 +884,7 @@ class TestGeopoliticalRiskProvider:
     async def test_get_gold_trading_signal_structure(self):
         """get_gold_trading_signal returns expected keys."""
         import os
+
         os.environ.setdefault("HOPEFX_CI", "1")
         from news import GeopoliticalRiskProvider
 
@@ -894,6 +898,7 @@ class TestGeopoliticalRiskProvider:
     async def test_gold_trading_signal_direction_valid(self):
         """Signal direction is one of the normalized uppercase values: BUY, SELL, HOLD."""
         import os
+
         os.environ.setdefault("HOPEFX_CI", "1")
         from news import GeopoliticalRiskProvider
 

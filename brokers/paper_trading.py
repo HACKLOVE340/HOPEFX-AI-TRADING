@@ -736,10 +736,20 @@ class PaperTradingBroker(BrokerConnector):
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         """
-        Get simulated market data.
+        Get simulated market data for paper trading and testing.
 
-        Returns simple OHLCV data for testing.
+        Returns synthetic OHLCV bars generated from a seed price.
+        Raises RuntimeError in production (APP_ENV=production) because
+        synthetic bars must never feed the ML predictor in live trading.
         """
+        import os as _os
+
+        if _os.getenv("APP_ENV", "development").lower() == "production":
+            raise RuntimeError(
+                "PaperTradingBroker.get_market_data() must not be called in production. "
+                "Use a real market data source (price engine or CSV files)."
+            )
+
         current_price = self.market_prices.get(symbol, 1000.0)
 
         # Timeframe → seconds mapping for realistic bar timestamps

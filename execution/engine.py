@@ -1053,6 +1053,7 @@ class ExecutionEngine:
         for coro, label in [
             (self._persist_to_redis(request, report), "redis"),
             (self._record_tca(request, report), "tca"),
+            (self._record_paper_clock_fill(request, report), "paper_clock"),
             (self._notify_callbacks(report), "callbacks"),
         ]:
             try:
@@ -1329,6 +1330,31 @@ class ExecutionEngine:
                 )
         except (RuntimeError, AttributeError, TypeError) as exc:
             logger.error("ExecutionEngine: legacy TCA record failed: %s", exc)
+
+    async def _record_paper_clock_fill(
+        self,
+        request: ExecutionRequest,
+        report: ExecutionReport,
+    ) -> None:
+        """Feed every confirmed fill into the OandaPaperClock Sharpe tracker.
+
+        The fractional return is taken from ``report.metadata["realised_pnl"]``
+        divided by notional (fill_price * quantity).  When P&L metadata is
+        absent (e.g. an opening fill with no realised P&L yet) the return is
+        recorded as 0.0 so the fill count still increments.
+
+        This is best-effort — any import or runtime error is logged at DEBUG
+        and must not block the fill path.
+        """
+        try:
+            from brokers.oanda_paper_clock import get_clock
+
+            notional = float(report.average_price) * float(report.filled_quantity)
+            realised_pnl = float((report.metadata or {}).get("realised_pnl", 0.0))
+            trade_return = realised_pnl / notional if notional != 0.0 else 0.0
+            get_clock().record_fill(trade_return=trade_return, symbol=request.symbol)
+        except Exception as exc:
+            logger.debug("ExecutionEngine: paper clock record_fill failed: %s", exc)
 
     async def _notify_callbacks(self, report: ExecutionReport) -> None:
         """Invoke all registered fill callbacks."""

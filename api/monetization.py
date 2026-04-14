@@ -18,7 +18,7 @@ import logging
 from decimal import Decimal
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, EmailStr, Field
 
 from api.auth import TokenPayload, get_current_user, require_role
@@ -892,13 +892,40 @@ async def get_enterprise_stats(user: TokenPayload = Depends(get_current_user)):
 
 
 @router.post("/webhook/stripe")
-async def stripe_webhook(payload: dict[str, Any] = Body(...)):
+async def stripe_webhook(request: Request):
     """
-    Handle Stripe webhooks.
+    Handle Stripe webhooks with signature verification.
 
-    On payment_intent.succeeded, activates the strategy license for the
-    purchase_id stored in the PaymentIntent metadata.
+    Reads the raw request body and verifies the Stripe-Signature header
+    using stripe.Webhook.construct_event() before processing any event.
+    Requests without a valid signature are rejected with HTTP 400.
     """
+    raw_body = await request.body()
+    sig_header = request.headers.get("stripe-signature", "")
+
+    if not sig_header:
+        logger.warning("stripe_webhook: missing Stripe-Signature header — rejecting")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing Stripe-Signature header",
+        )
+
+    if not stripe_integration.verify_webhook_signature(raw_body, sig_header):
+        logger.warning("stripe_webhook: signature verification failed — rejecting")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Webhook signature verification failed",
+        )
+
+    import json as _json
+    try:
+        payload = _json.loads(raw_body)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid JSON body",
+        )
+
     event_type = payload.get("type", "")
     event_data = payload.get("data", {}).get("object", {})
 

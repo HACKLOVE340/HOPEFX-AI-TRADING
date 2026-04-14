@@ -8,12 +8,11 @@ Comprehensive tests for:
   - brokers/ohlcv_store.py    (OHLCVStore)
   - brokers/advanced_orders.py (AdvancedOrderManager)
 """
+
 from __future__ import annotations
 
 import asyncio
-import time
-from datetime import datetime, timezone
-from decimal import Decimal
+from datetime import timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -82,7 +81,7 @@ class TestSlippageModel:
 # PaperTradingBroker
 # ─────────────────────────────────────────────────────────────────────────────
 from brokers.paper_trading import PaperTradingBroker
-from brokers.base import Order, Position, AccountInfo
+from brokers.base import AccountInfo
 
 
 @pytest.fixture
@@ -99,12 +98,12 @@ def broker():
 class TestPaperTradingBrokerConnect:
     def test_connect_sets_connected(self):
         b = PaperTradingBroker(config={"initial_balance": 5000.0, "slippage_model": "zero"}, seed=0)
-        result = asyncio.get_event_loop().run_until_complete(b.connect())
+        result = asyncio.run(b.connect())
         assert result is True
         assert b.connected is True
 
     def test_disconnect_clears_connected(self, broker):
-        result = asyncio.get_event_loop().run_until_complete(broker.disconnect())
+        result = asyncio.run(broker.disconnect())
         assert result is True
         assert broker.connected is False
 
@@ -205,7 +204,7 @@ class TestPaperTradingBrokerPositions:
     def test_close_all_positions(self, broker):
         broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 1.0)
         broker.place_order("EURUSD", OrderSide.BUY, OrderType.MARKET, 1.0)
-        closed = asyncio.get_event_loop().run_until_complete(broker.close_all_positions())
+        closed = asyncio.run(broker.close_all_positions())
         assert closed == 2
         assert len(broker.positions) == 0
 
@@ -283,15 +282,11 @@ class TestPaperTradingBrokerCommission:
 
 class TestPaperTradingBrokerAsync:
     def test_place_market_order_async(self, broker):
-        order = asyncio.get_event_loop().run_until_complete(
-            broker.place_market_order("XAUUSD", "buy", 1.0)
-        )
+        order = asyncio.run(broker.place_market_order("XAUUSD", "buy", 1.0))
         assert order.status == OrderStatus.FILLED
 
     def test_place_market_order_sell_async(self, broker):
-        order = asyncio.get_event_loop().run_until_complete(
-            broker.place_market_order("XAUUSD", "sell", 1.0)
-        )
+        order = asyncio.run(broker.place_market_order("XAUUSD", "sell", 1.0))
         assert order.status == OrderStatus.FILLED
 
     def test_set_spread(self, broker):
@@ -306,14 +301,12 @@ class TestPaperTradingBrokerAsync:
 # ─────────────────────────────────────────────────────────────────────────────
 # brokers/__init__.py — Order, Position, BaseBroker, PaperTradingBroker (init)
 # ─────────────────────────────────────────────────────────────────────────────
-import brokers as brokers_init
 from brokers import (
     Order as InitOrder,
     Position as InitPosition,
     OrderSide as InitOrderSide,
     OrderType as InitOrderType,
     OrderStatus as InitOrderStatus,
-    PaperTradingBroker as InitPaperBroker,
     BaseBroker,
 )
 
@@ -408,6 +401,7 @@ class TestInitPaperBroker:
     def _get_init_paper_broker_class(self):
         """Return the BaseBroker subclass defined in brokers/__init__.py."""
         import brokers as _b
+
         # The __init__.py defines its own PaperTradingBroker as a BaseBroker subclass.
         # After the override, brokers.PaperTradingBroker points to paper_trading module.
         # We need to find the BaseBroker subclass that has _calculate_slippage.
@@ -419,14 +413,14 @@ class TestInitPaperBroker:
 
     def test_connect_sets_connected(self):
         b = PaperTradingBroker(config={"initial_balance": 5000.0, "slippage_model": "zero"}, seed=0)
-        result = asyncio.get_event_loop().run_until_complete(b.connect())
+        result = asyncio.run(b.connect())
         assert result is True
         assert b.connected is True
 
     def test_disconnect_clears_connected(self):
         b = PaperTradingBroker(config={"initial_balance": 5000.0, "slippage_model": "zero"}, seed=0)
-        asyncio.get_event_loop().run_until_complete(b.connect())
-        result = asyncio.get_event_loop().run_until_complete(b.disconnect())
+        asyncio.run(b.connect())
+        result = asyncio.run(b.disconnect())
         assert result is True
         assert b.connected is False
 
@@ -481,9 +475,12 @@ class TestInitOrderDataclass:
 
     def _make_order(self, **kwargs):
         defaults = dict(
-            id="o1", symbol="XAUUSD",
-            side=InitOrderSide.BUY, type=InitOrderType.MARKET,
-            quantity=1.0, status=InitOrderStatus.PENDING,
+            id="o1",
+            symbol="XAUUSD",
+            side=InitOrderSide.BUY,
+            type=InitOrderType.MARKET,
+            quantity=1.0,
+            status=InitOrderStatus.PENDING,
         )
         defaults.update(kwargs)
         return InitOrder(**defaults)
@@ -515,9 +512,12 @@ class TestInitPositionDataclass:
 
     def _make_pos(self, **kwargs):
         defaults = dict(
-            id="p1", symbol="XAUUSD",
-            side=InitOrderSide.BUY, quantity=1.0,
-            entry_price=2000.0, current_price=2000.0,
+            id="p1",
+            symbol="XAUUSD",
+            side=InitOrderSide.BUY,
+            quantity=1.0,
+            entry_price=2000.0,
+            current_price=2000.0,
         )
         defaults.update(kwargs)
         return InitPosition(**defaults)
@@ -558,35 +558,66 @@ class TestBaseBrokerCloseAll:
                 self.closed = []
                 self.cancelled = []
 
-            async def connect(self): pass
-            async def disconnect(self): pass
-            async def get_account_info(self): return {}
-            async def place_market_order(self, s, side, q): return None
+            async def connect(self):
+                pass
+
+            async def disconnect(self):
+                pass
+
+            async def get_account_info(self):
+                return {}
+
+            async def place_market_order(self, s, side, q):
+                return None
+
             async def cancel_order(self, oid):
                 self.cancelled.append(oid)
                 return True
-            async def get_positions(self): return self._positions_to_return
+
+            async def get_positions(self):
+                return self._positions_to_return
+
             async def close_position(self, pid):
                 self.closed.append(pid)
                 return True
-            async def get_pending_orders(self): return self._orders_to_return
+
+            async def get_pending_orders(self):
+                return self._orders_to_return
 
         return ConcreteBroker()
 
     def test_close_all_positions(self):
         b = self._make_concrete_broker()
-        pos1 = InitPosition(id="p1", symbol="X", side=InitOrderSide.BUY, quantity=1.0, entry_price=100.0, current_price=100.0)
-        pos2 = InitPosition(id="p2", symbol="Y", side=InitOrderSide.SELL, quantity=1.0, entry_price=100.0, current_price=100.0)
+        pos1 = InitPosition(
+            id="p1", symbol="X", side=InitOrderSide.BUY, quantity=1.0, entry_price=100.0, current_price=100.0
+        )
+        pos2 = InitPosition(
+            id="p2", symbol="Y", side=InitOrderSide.SELL, quantity=1.0, entry_price=100.0, current_price=100.0
+        )
         b._positions_to_return = [pos1, pos2]
-        closed = asyncio.get_event_loop().run_until_complete(b.close_all_positions())
+        closed = asyncio.run(b.close_all_positions())
         assert set(closed) == {"p1", "p2"}
 
     def test_cancel_all_orders(self):
         b = self._make_concrete_broker()
-        o1 = InitOrder(id="o1", symbol="X", side=InitOrderSide.BUY, type=InitOrderType.MARKET, quantity=1.0, status=InitOrderStatus.PENDING)
-        o2 = InitOrder(id="o2", symbol="Y", side=InitOrderSide.BUY, type=InitOrderType.MARKET, quantity=1.0, status=InitOrderStatus.PENDING)
+        o1 = InitOrder(
+            id="o1",
+            symbol="X",
+            side=InitOrderSide.BUY,
+            type=InitOrderType.MARKET,
+            quantity=1.0,
+            status=InitOrderStatus.PENDING,
+        )
+        o2 = InitOrder(
+            id="o2",
+            symbol="Y",
+            side=InitOrderSide.BUY,
+            type=InitOrderType.MARKET,
+            quantity=1.0,
+            status=InitOrderStatus.PENDING,
+        )
         b._orders_to_return = [o1, o2]
-        cancelled = asyncio.get_event_loop().run_until_complete(b.cancel_all_orders())
+        cancelled = asyncio.run(b.cancel_all_orders())
         assert set(cancelled) == {"o1", "o2"}
 
     def test_close_all_positions_with_failure(self):
@@ -594,19 +625,37 @@ class TestBaseBrokerCloseAll:
             def __init__(self):
                 super().__init__()
                 self._positions_to_return = []
-            async def connect(self): pass
-            async def disconnect(self): pass
-            async def get_account_info(self): return {}
-            async def place_market_order(self, s, side, q): return None
-            async def cancel_order(self, oid): return False
-            async def get_positions(self): return self._positions_to_return
-            async def close_position(self, pid): raise RuntimeError("close failed")
-            async def get_pending_orders(self): return []
+
+            async def connect(self):
+                pass
+
+            async def disconnect(self):
+                pass
+
+            async def get_account_info(self):
+                return {}
+
+            async def place_market_order(self, s, side, q):
+                return None
+
+            async def cancel_order(self, oid):
+                return False
+
+            async def get_positions(self):
+                return self._positions_to_return
+
+            async def close_position(self, pid):
+                raise RuntimeError("close failed")
+
+            async def get_pending_orders(self):
+                return []
 
         b = FailingBroker()
-        pos = InitPosition(id="p1", symbol="X", side=InitOrderSide.BUY, quantity=1.0, entry_price=100.0, current_price=100.0)
+        pos = InitPosition(
+            id="p1", symbol="X", side=InitOrderSide.BUY, quantity=1.0, entry_price=100.0, current_price=100.0
+        )
         b._positions_to_return = [pos]
-        closed = asyncio.get_event_loop().run_until_complete(b.close_all_positions())
+        closed = asyncio.run(b.close_all_positions())
         assert closed == []  # failed, so nothing closed
 
 
@@ -831,7 +880,7 @@ class TestSmartOrderRouter:
             broker_id, decision = await router.route_order({"symbol": "XAUUSD"})
             return broker_id, decision
 
-        broker_id, decision = asyncio.get_event_loop().run_until_complete(run())
+        broker_id, decision = asyncio.run(run())
         assert broker_id == "b1"
         assert "selected_broker" in decision
 
@@ -847,7 +896,7 @@ class TestSmartOrderRouter:
             broker_id, decision = await router.route_order({"symbol": "XAUUSD"})
             return broker_id, decision
 
-        broker_id, decision = asyncio.get_event_loop().run_until_complete(run())
+        broker_id, decision = asyncio.run(run())
         assert broker_id in ("b1", "b2", "b3")
         assert len(decision["alternative_brokers"]) == 2
 
@@ -862,7 +911,7 @@ class TestSmartOrderRouter:
         async def run():
             await router._update_broker_scores()
 
-        asyncio.get_event_loop().run_until_complete(run())
+        asyncio.run(run())
         assert router.scores["flaky"].reliability_score < initial_reliability
 
     def test_execute_with_fallback_success(self):
@@ -880,7 +929,7 @@ class TestSmartOrderRouter:
         async def run():
             return await router.execute_with_fallback({"symbol": "XAUUSD"})
 
-        result = asyncio.get_event_loop().run_until_complete(run())
+        result = asyncio.run(run())
         assert result["status"] == "filled"
 
 
@@ -892,8 +941,6 @@ from brokers.advanced_orders import (
     OrderType as AdvOrderType,
     OrderSide as AdvOrderSide,
     OrderStatus as AdvOrderStatus,
-    TimeInForce,
-    Order as AdvOrder,
     TrailingStopOrder,
     OCOOrder,
     BracketOrder,

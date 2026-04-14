@@ -10,7 +10,7 @@ class TestBrokersInitOANDA:
     def _broker(self):
         from brokers import OANDABroker
 
-        return OANDABroker(api_key="k", account_id="a1", practice=True)
+        return OANDABroker(api_key="k", account_id="a1", practice=True)  # pragma: allowlist secret
 
     def test_init_sets_practice_url(self):
         b = self._broker()
@@ -19,7 +19,7 @@ class TestBrokersInitOANDA:
     def test_init_live_url(self):
         from brokers import OANDABroker
 
-        b = OANDABroker(api_key="k", account_id="a1", practice=False)
+        b = OANDABroker(api_key="k", account_id="a1", practice=False)  # pragma: allowlist secret
         assert "fxtrade" in b.base_url
 
     @pytest.mark.asyncio
@@ -1211,7 +1211,7 @@ class TestOANDAStream:
         from brokers.oanda_stream import OANDAStream
 
         return OANDAStream(
-            api_key="test-key",
+            api_key="test-key",  # pragma: allowlist secret
             account_id="101-001",
             instruments=["XAU_USD"],
             practice=True,
@@ -1224,20 +1224,20 @@ class TestOANDAStream:
     def test_init_live(self):
         from brokers.oanda_stream import OANDAStream
 
-        s = OANDAStream(api_key="k", account_id="a", instruments=[], practice=False)
+        s = OANDAStream(api_key="k", account_id="a", instruments=[], practice=False)  # pragma: allowlist secret
         assert "fxtrade" in s._rest_base
 
     def test_init_missing_credentials(self):
         from brokers.oanda_stream import OANDAStream
 
         with pytest.raises(ValueError):
-            OANDAStream(api_key="", account_id="", instruments=[])
+            OANDAStream(api_key="", account_id="", instruments=[])  # pragma: allowlist secret
 
     def test_init_on_tick_ignored(self):
         from brokers.oanda_stream import OANDAStream
 
         # Should not raise, just log warning
-        s = OANDAStream(api_key="k", account_id="a", instruments=[], on_tick=lambda x: x)
+        s = OANDAStream(api_key="k", account_id="a", instruments=[], on_tick=lambda x: x)  # pragma: allowlist secret
         assert s is not None
 
     @pytest.mark.asyncio
@@ -1299,7 +1299,7 @@ class TestOANDAStream:
         mock_session = MagicMock()
         mock_session.close = AsyncMock()
         with patch("aiohttp.ClientSession", return_value=mock_session):
-            async with OANDAStream(api_key="k", account_id="a", instruments=[]) as s:
+            async with OANDAStream(api_key="k", account_id="a", instruments=[]) as s:  # pragma: allowlist secret
                 assert s._session is not None
 
     @pytest.mark.asyncio
@@ -1421,7 +1421,9 @@ class TestOandaBroker:
     def _make_broker(self):
         from brokers.oanda_broker import OandaBroker
 
-        return OandaBroker({"login": "101-001", "password": "test-token", "server": "practice"})
+        return OandaBroker(
+            {"login": "101-001", "password": "test-token", "server": "practice"}  # pragma: allowlist secret
+        )  # pragma: allowlist secret
 
     def test_init(self):
         b = self._make_broker()
@@ -1584,7 +1586,7 @@ class TestIBKRFIXBridge:
             host="127.0.0.1",
             port=4001,
             username="u",
-            password="p",
+            password="p",  # pragma: allowlist secret
         )
 
     def test_from_env(self):
@@ -1753,7 +1755,12 @@ class TestMT5BridgeReal:
     def _make_bridge(self, tmp_path):
         from brokers.mt5_bridge import MT5Bridge
 
-        return MT5Bridge(server="Demo", login=12345, password="pass", signal_dir=tmp_path / "signals")
+        return MT5Bridge(
+            server="Demo",
+            login=12345,
+            password="pass",  # pragma: allowlist secret
+            signal_dir=tmp_path / "signals",  # pragma: allowlist secret
+        )  # pragma: allowlist secret
 
     def test_init(self, tmp_path):
         b = self._make_bridge(tmp_path)
@@ -1825,7 +1832,7 @@ class TestMT5BridgeReal:
             "os.environ",
             {
                 "MT5_LOGIN": "12345",
-                "MT5_PASSWORD": "pass",
+                "MT5_PASSWORD": "pass",  # pragma: allowlist secret
                 "MT5_SERVER": "Demo",
             },
         ):
@@ -2062,7 +2069,7 @@ class TestMT5BrokerConnector:
     def _make_broker(self):
         from brokers.mt5_broker import MT5Broker
 
-        return MT5Broker({"login": "12345", "password": "pass", "server": "Demo"})
+        return MT5Broker({"login": "12345", "password": "pass", "server": "Demo"})  # pragma: allowlist secret
 
     def test_init(self):
         b = self._make_broker()

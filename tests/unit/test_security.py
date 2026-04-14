@@ -38,7 +38,7 @@ class TestLogSanitizer:
         """Test API key redaction"""
         sanitizer = LogSanitizer()
 
-        message = 'api_key="sk_live_abc123xyz456def789"'
+        message = 'api_key="sk_live_abc123xyz456def789"'  # pragma: allowlist secret
         result = sanitizer.sanitize(message)
 
         assert "abc123xyz456def789" not in result
@@ -48,7 +48,7 @@ class TestLogSanitizer:
         """Test password redaction"""
         sanitizer = LogSanitizer()
 
-        message = 'password = "supersecret123"'
+        message = 'password = "supersecret123"'  # pragma: allowlist secret
         result = sanitizer.sanitize(message)
 
         assert "supersecret123" not in result
@@ -78,10 +78,10 @@ class TestLogSanitizer:
         """Test private key detection"""
         sanitizer = LogSanitizer()
 
-        message = "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg..."
+        message = "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg..."  # pragma: allowlist secret
         result = sanitizer.sanitize(message)
 
-        assert "-----BEGIN PRIVATE KEY-----" not in result
+        assert "-----BEGIN PRIVATE KEY-----" not in result  # pragma: allowlist secret
 
     def test_sanitize_dict(self):
         """Test dictionary sanitization"""
@@ -89,8 +89,8 @@ class TestLogSanitizer:
 
         data = {
             "username": "john",
-            "password": "secret123",  # nosec B105 - test file
-            "api_key": "sk_test_123456",
+            "password": "secret123",  # nosec B105 - test file  # pragma: allowlist secret
+            "api_key": "sk_test_123456",  # pragma: allowlist secret
             "message": "Hello world",
         }
 
@@ -105,7 +105,7 @@ class TestLogSanitizer:
         """Test nested dictionary sanitization"""
         sanitizer = LogSanitizer()
 
-        data = {"credentials": {"api_secret": "verysecret", "token": "mytoken123"}}  # nosec B105 - test file
+        data = {"credentials": {"api_secret": "verysecret", "token": "mytoken123"}}  # nosec B105 - test file  # pragma: allowlist secret
 
         result = sanitizer.sanitize_dict(data)
 
@@ -116,7 +116,7 @@ class TestLogSanitizer:
         """Test that disabled sanitizer passes through"""
         sanitizer = LogSanitizer(enabled=False)
 
-        message = 'password = "secret"'
+        message = 'password = "secret"'  # pragma: allowlist secret
         result = sanitizer.sanitize(message)
 
         assert result == message
@@ -125,7 +125,7 @@ class TestLogSanitizer:
         """Test custom redaction text"""
         sanitizer = LogSanitizer(redaction_text="***HIDDEN***")
 
-        message = 'password = "secret123"'
+        message = 'password = "secret123"'  # pragma: allowlist secret
         result = sanitizer.sanitize(message)
 
         assert "***HIDDEN***" in result
@@ -172,7 +172,7 @@ class TestSecurityAuditor:
             event_type=AuditEventType.CREDENTIAL_ACCESS,
             resource="api_key",
             action="read",
-            details={"password": "supersecret", "api_key": "sk_test_123"},  # nosec B105 - test file
+            details={"password": "supersecret", "api_key": "sk_test_123"},  # nosec B105 - test file  # pragma: allowlist secret
         )
 
         # Details should be sanitized

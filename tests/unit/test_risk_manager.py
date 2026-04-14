@@ -196,7 +196,7 @@ class TestOandaIntegration:
     def mock_oanda(self):
         """Create broker with mocked API"""
         with patch("brokers.oanda.OandaAPI") as mock_api:
-            broker = OandaBroker(api_key="test", account_id="test")
+            broker = OandaBroker(api_key="test", account_id="test")  # pragma: allowlist secret
             broker.api = mock_api.return_value
             yield broker
 

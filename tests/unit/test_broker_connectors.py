@@ -124,14 +124,14 @@ from brokers.prop_firms.topstep import TopstepTraderConnector
 # Shared helpers
 # ---------------------------------------------------------------------------
 
-ALPACA_CONFIG = {"api_key": "test_key", "api_secret": "test_secret", "paper": True}  # nosec B105 - test credential
-BINANCE_CONFIG = {"api_key": "test_key", "api_secret": "test_secret", "testnet": True}  # nosec B105 - test credential
+ALPACA_CONFIG = {"api_key": "test_key", "api_secret": "test_secret", "paper": True}  # nosec B105 - test credential  # pragma: allowlist secret
+BINANCE_CONFIG = {"api_key": "test_key", "api_secret": "test_secret", "testnet": True}  # nosec B105 - test credential  # pragma: allowlist secret
 OANDA_CONFIG = {
-    "api_key": "test_token",
-    "account_id": "test_account",
+    "api_key": "test_token",  # pragma: allowlist secret
+    "account_id": "101-001-12345678-001",  # valid OANDA v20 format for tests
     "environment": "practice",
 }
-MT5_CONFIG = {"server": "Demo-Server", "login": 12345678, "password": "test_pass"}  # nosec B105 - test file
+MT5_CONFIG = {"server": "Demo-Server", "login": 12345678, "password": "test_pass"}  # nosec B105 - test file  # pragma: allowlist secret
 IB_CONFIG = {"host": "127.0.0.1", "port": 7497, "client_id": 1, "paper": True}
 
 
@@ -158,8 +158,8 @@ class TestAlpacaConnector:
 
     def test_initialization_paper(self):
         broker = AlpacaConnector(ALPACA_CONFIG)
-        assert broker.api_key == "test_key"
-        assert broker.api_secret == "test_secret"
+        assert broker.api_key == "test_key"  # pragma: allowlist secret
+        assert broker.api_secret == "test_secret"  # pragma: allowlist secret
         assert broker.paper is True
         assert broker.base_url == AlpacaConnector.PAPER_URL
         assert not broker.connected
@@ -171,7 +171,7 @@ class TestAlpacaConnector:
 
     def test_initialization_missing_credentials_raises(self):
         with pytest.raises(ValueError):
-            AlpacaConnector({"api_key": "key"})
+            AlpacaConnector({"api_key": "key"})  # pragma: allowlist secret
 
     @patch("brokers.alpaca.requests.Session")
     def test_connect_success(self, mock_session_cls):
@@ -438,7 +438,7 @@ class TestBinanceConnector:
 
     def test_initialization_missing_credentials_raises(self):
         with pytest.raises(ValueError):
-            BinanceConnector({"api_key": "key"})
+            BinanceConnector({"api_key": "key"})  # pragma: allowlist secret
 
     @patch("brokers.binance.requests.Session")
     def test_connect_success(self, mock_session_cls):
@@ -658,7 +658,7 @@ class TestOANDAConnector:
         monkeypatch.delenv("OANDA_ACCOUNT_ID", raising=False)
         monkeypatch.delenv("OANDA_API_TOKEN", raising=False)
         with pytest.raises(ValueError):
-            OANDAConnector({"api_key": "token"})
+            OANDAConnector({"api_key": "token"})  # pragma: allowlist secret
 
     @patch("brokers.oanda.requests.Session")
     def test_connect_success(self, mock_session_cls):
@@ -1605,13 +1605,13 @@ class TestFTMOConnector:
     """Tests for FTMOConnector."""
 
     def test_initialization_auto_server(self):
-        cfg = {"login": 12345, "password": "pass", "challenge_type": "demo"}  # nosec B105 - test file
+        cfg = {"login": 12345, "password": "pass", "challenge_type": "demo"}  # nosec B105 - test file  # pragma: allowlist secret
         broker = FTMOConnector(cfg)
         assert "FTMO" in broker.server
         assert broker.challenge_type == "demo"
 
     def test_initialization_live_auto_server(self):
-        cfg = {"login": 12345, "password": "pass", "challenge_type": "live"}  # nosec B105 - test file
+        cfg = {"login": 12345, "password": "pass", "challenge_type": "live"}  # nosec B105 - test file  # pragma: allowlist secret
         broker = FTMOConnector(cfg)
         assert broker.server in FTMOConnector.FTMO_SERVERS["live"]
 
@@ -1621,7 +1621,7 @@ class TestFTMOConnector:
         assert broker.server == "FTMO-Demo2"
 
     def test_get_ftmo_rules(self):
-        cfg = {"login": 12345, "password": "pass", "challenge_type": "demo"}  # nosec B105 - test file
+        cfg = {"login": 12345, "password": "pass", "challenge_type": "demo"}  # nosec B105 - test file  # pragma: allowlist secret
         broker = FTMOConnector(cfg)
         rules = broker.get_ftmo_rules()
         assert "max_daily_loss" in rules
@@ -1629,14 +1629,14 @@ class TestFTMOConnector:
         assert "profit_split" in rules
 
     def test_check_ftmo_compliance_not_connected(self):
-        cfg = {"login": 12345, "password": "pass", "challenge_type": "demo"}  # nosec B105 - test file
+        cfg = {"login": 12345, "password": "pass", "challenge_type": "demo"}  # nosec B105 - test file  # pragma: allowlist secret
         broker = FTMOConnector(cfg)
         # Not connected → get_account_info returns None
         compliance = broker.check_ftmo_compliance()
         assert compliance["compliant"] is False
 
     def test_check_ftmo_compliance_connected(self):
-        cfg = {"login": 12345, "password": "pass", "challenge_type": "demo"}  # nosec B105 - test file
+        cfg = {"login": 12345, "password": "pass", "challenge_type": "demo"}  # nosec B105 - test file # pragma: allowlist secret
         broker = FTMOConnector(cfg)
         broker.connected = True
         _mt5_stub.account_info.return_value = MagicMock(
@@ -1651,7 +1651,7 @@ class TestFTMOConnector:
         assert "equity" in compliance
 
     def test_inherits_mt5_connect(self):
-        cfg = {"login": 12345, "password": "pass", "challenge_type": "demo"}  # nosec B105 - test file
+        cfg = {"login": 12345, "password": "pass", "challenge_type": "demo"}  # nosec B105 - test file  # pragma: allowlist secret
         broker = FTMOConnector(cfg)
         _mt5_stub.initialize.return_value = True
         _mt5_stub.login.return_value = True
@@ -1663,7 +1663,7 @@ class TestMyForexFundsConnector:
     """Tests for MyForexFundsConnector."""
 
     def test_initialization_auto_server(self):
-        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file
+        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file  # pragma: allowlist secret
         broker = MyForexFundsConnector(cfg)
         assert broker.server == "MyForexFunds-Demo"
         assert broker.account_size == 100000
@@ -1671,7 +1671,7 @@ class TestMyForexFundsConnector:
     def test_initialization_explicit_server(self):
         cfg = {
             "login": 12345,
-            "password": "pass",  # nosec B105 - test file
+            "password": "pass",  # nosec B105 - test file  # pragma: allowlist secret
             "server": "MyForexFunds-Live",
             "account_size": 50000,
         }
@@ -1680,7 +1680,7 @@ class TestMyForexFundsConnector:
         assert broker.account_size == 50000
 
     def test_get_myforexfunds_rules(self):
-        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file
+        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file  # pragma: allowlist secret
         broker = MyForexFundsConnector(cfg)
         rules = broker.get_myforexfunds_rules()
         assert "max_daily_loss" in rules
@@ -1688,7 +1688,7 @@ class TestMyForexFundsConnector:
         assert "scaling" in rules
 
     def test_inherits_mt5_methods(self):
-        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file
+        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file  # pragma: allowlist secret
         broker = MyForexFundsConnector(cfg)
         assert hasattr(broker, "place_order")
         assert hasattr(broker, "get_account_info")
@@ -1700,18 +1700,18 @@ class TestThe5ersConnector:
     """Tests for The5ersConnector."""
 
     def test_initialization_auto_server(self):
-        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file
+        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file  # pragma: allowlist secret
         broker = The5ersConnector(cfg)
         assert broker.server == "The5ers-Demo"
         assert broker.program == "high_stakes"
 
     def test_initialization_with_program(self):
-        cfg = {"login": 12345, "password": "pass", "program": "instant_funding"}  # nosec B105 - test file
+        cfg = {"login": 12345, "password": "pass", "program": "instant_funding"}  # nosec B105 - test file  # pragma: allowlist secret
         broker = The5ersConnector(cfg)
         assert broker.program == "instant_funding"
 
     def test_get_the5ers_rules(self):
-        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file
+        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file  # pragma: allowlist secret
         broker = The5ersConnector(cfg)
         rules = broker.get_the5ers_rules()
         assert "profit_split" in rules
@@ -1719,7 +1719,7 @@ class TestThe5ersConnector:
         assert "high_stakes" in rules["programs"]
 
     def test_inherits_mt5_methods(self):
-        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file
+        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file  # pragma: allowlist secret
         broker = The5ersConnector(cfg)
         assert hasattr(broker, "connect")
         assert hasattr(broker, "cancel_order")
@@ -1730,18 +1730,18 @@ class TestTopstepTraderConnector:
     """Tests for TopstepTraderConnector."""
 
     def test_initialization_auto_server(self):
-        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file
+        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file  # pragma: allowlist secret
         broker = TopstepTraderConnector(cfg)
         assert broker.server == "TopstepTrader-Server01"
         assert broker.account_type == "combine"
 
     def test_initialization_funded_type(self):
-        cfg = {"login": 12345, "password": "pass", "account_type": "funded"}  # nosec B105 - test file
+        cfg = {"login": 12345, "password": "pass", "account_type": "funded"}  # nosec B105 - test file  # pragma: allowlist secret
         broker = TopstepTraderConnector(cfg)
         assert broker.account_type == "funded"
 
     def test_get_topstep_rules(self):
-        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file
+        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file  # pragma: allowlist secret
         broker = TopstepTraderConnector(cfg)
         rules = broker.get_topstep_rules()
         assert "max_daily_loss" in rules
@@ -1749,7 +1749,7 @@ class TestTopstepTraderConnector:
         assert "profit_split" in rules
 
     def test_inherits_mt5_connect(self):
-        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file
+        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file  # pragma: allowlist secret
         broker = TopstepTraderConnector(cfg)
         _mt5_stub.initialize.return_value = True
         _mt5_stub.login.return_value = True

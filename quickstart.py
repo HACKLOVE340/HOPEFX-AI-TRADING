@@ -80,7 +80,7 @@ def main():
             key = secrets.token_hex(32)
             salt = secrets.token_hex(16)
             env_content = env_content.replace(
-                "CONFIG_ENCRYPTION_KEY=replace_with_64_char_hex_key_for_development",
+                "CONFIG_ENCRYPTION_KEY=replace_with_64_char_hex_key_for_development",  # pragma: allowlist secret
                 f"CONFIG_ENCRYPTION_KEY={key}"
             )
             env_content = env_content.replace(
