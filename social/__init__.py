@@ -15,7 +15,9 @@ from .marketplace import StrategyMarketplace
 from .performance import PerformanceTracker
 from .profiles import TraderProfileManager as ProfileManager
 
-copy_trading_engine = CopyTradingEngine()
+# broker=None at module load time; injected by core/startup_factories.init_social()
+# after the broker is initialised.  Do not pass a broker here.
+copy_trading_engine = CopyTradingEngine(broker=None)
 marketplace = StrategyMarketplace()
 profile_manager = ProfileManager()
 leaderboard_manager = LeaderboardManager()
