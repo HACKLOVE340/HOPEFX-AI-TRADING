@@ -71,8 +71,16 @@ def _clear_counters(key_hash: str) -> None:
 
 
 @pytest.fixture(autouse=True)
-def isolated_key_store():
-    """Ensure each test starts with a clean key store entry for TEST_KEY."""
+def isolated_key_store(monkeypatch):
+    """Ensure each test starts with a clean key store entry for TEST_KEY.
+
+    Redis is disabled so all tests use the in-process _counters fallback,
+    making counter pre-seeding in tests reliable and deterministic.
+    """
+    import whitelabel.rate_limiting as _rl
+
+    monkeypatch.setattr(_rl, "_get_sync_redis", lambda: None)
+
     key_hash = _register_key()
     _clear_counters(key_hash)
     yield key_hash
