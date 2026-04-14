@@ -901,9 +901,15 @@ schema = strawberry.Schema(
     subscription=Subscription,
 )
 
+# Disable the interactive GraphiQL IDE in production.  The IDE exposes the
+# full schema and all field names without authentication — individual resolvers
+# require a JWT but schema introspection does not.  Set APP_ENV=development
+# (the default) to re-enable it locally.
+_graphql_ide = None if os.getenv("APP_ENV", "development").lower() == "production" else "graphiql"
+
 graphql_router = GraphQLRouter(
     schema,
-    graphql_ide="graphiql",
+    graphql_ide=_graphql_ide,
     subscription_protocols=[
         GRAPHQL_TRANSPORT_WS_PROTOCOL,
         GRAPHQL_WS_PROTOCOL,
