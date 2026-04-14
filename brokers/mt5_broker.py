@@ -215,7 +215,8 @@ class MT5Broker:
                     else:
                         logger.error(
                             "MT5Broker.cancel_all_orders: close ticket=%s failed: %s",
-                            ticket, result.get("comment"),
+                            ticket,
+                            result.get("comment"),
                         )
                         all_ok = False
                 except Exception as exc:
@@ -239,7 +240,8 @@ class MT5Broker:
                     else:
                         logger.error(
                             "MT5Broker.cancel_all_orders: cancel ticket=%s failed: %s",
-                            ticket, result.get("comment"),
+                            ticket,
+                            result.get("comment"),
                         )
                         all_ok = False
                 except Exception as exc:
