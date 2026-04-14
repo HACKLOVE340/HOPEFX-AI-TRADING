@@ -1,19 +1,29 @@
 # monitoring/alertmanager/alertmanager.yml
-# Alertmanager configuration for HopeFX production.
+# Alertmanager production configuration for HopeFX.
 #
-# Routing:
-#   critical → Telegram + email (immediate)
+# Routing summary
+# ---------------
+#   critical → Telegram (immediate) + email + PagerDuty
 #   warning  → email only (5 min grouping)
 #   default  → email (10 min grouping)
 #
-# Required environment variables (set in .env):
+# When real fills flow and a drawdown or P&L reconciliation breach fires,
+# the on-call page goes out via Telegram instantly (group_wait: 0s).
+#
+# Required environment variables (set in .env, never committed):
 #   ALERTMANAGER_TELEGRAM_BOT_TOKEN  — Telegram bot token from @BotFather
-#   ALERTMANAGER_TELEGRAM_CHAT_ID    — Telegram chat/channel ID
+#   ALERTMANAGER_TELEGRAM_CHAT_ID    — Telegram chat/channel ID (integer)
 #   ALERTMANAGER_SMTP_FROM           — sender address
 #   ALERTMANAGER_SMTP_TO             — recipient address
-#   ALERTMANAGER_SMTP_HOST           — SMTP relay host (e.g. smtp.sendgrid.net:587)
+#   ALERTMANAGER_SMTP_HOST           — SMTP relay host:port (e.g. smtp.sendgrid.net:587)
 #   ALERTMANAGER_SMTP_USERNAME       — SMTP auth username
 #   ALERTMANAGER_SMTP_PASSWORD       — SMTP auth password
+#
+# Optional (PagerDuty on-call escalation):
+#   ALERTMANAGER_PAGERDUTY_KEY       — PagerDuty Events API v2 integration key
+#
+# Optional (Slack secondary channel):
+#   ALERTMANAGER_SLACK_WEBHOOK_URL   — Slack incoming webhook URL
 
 global:
   resolve_timeout: 5m
@@ -26,6 +36,11 @@ global:
 templates:
   - '/etc/alertmanager/templates/*.tmpl'
 
+# ── Routing tree ──────────────────────────────────────────────────────────────
+#
+# All alerts enter at the root and are matched top-to-bottom.
+# The first matching route wins.
+
 route:
   group_by: ['alertname', 'severity']
   group_wait: 30s
@@ -34,35 +49,51 @@ route:
   receiver: 'email-default'
 
   routes:
-    # Critical alerts: Telegram + email, no grouping delay
+    # Critical alerts: Telegram + email + PagerDuty, no grouping delay.
+    # Covers: drawdown breach, circuit breaker open, API down,
+    #         P&L reconciliation gate failed, P&L divergence > $5.
     - matchers:
         - severity = critical
       receiver: 'critical'
       group_wait: 0s
+      group_interval: 1m
       repeat_interval: 1h
+      continue: false
 
-    # Warning alerts: email only, 5 min grouping
+    # Warning alerts: email only, 5 min grouping.
+    # Covers: high latency, Redis/DB pressure, P&L divergence $1-$5,
+    #         reconciliation stale.
     - matchers:
         - severity = warning
       receiver: 'email-default'
       group_wait: 5m
+      group_interval: 10m
       repeat_interval: 6h
+      continue: false
+
+# ── Receivers ─────────────────────────────────────────────────────────────────
 
 receivers:
+  # critical: Telegram (immediate on-call page) + email + optional PagerDuty
   - name: 'critical'
     telegram_configs:
       - bot_token: '${ALERTMANAGER_TELEGRAM_BOT_TOKEN:-}'
-        chat_id: '${ALERTMANAGER_TELEGRAM_CHAT_ID:-0}'
+        # chat_id must be an integer — obtain via @userinfobot or the
+        # Telegram Bot API getUpdates endpoint.
+        chat_id: ${ALERTMANAGER_TELEGRAM_CHAT_ID:-0}
         message: |
-          🚨 *HOPEFX CRITICAL ALERT*
-          *Alert:* {{ .GroupLabels.alertname }}
+          HOPEFX CRITICAL ALERT
+          Alert: {{ .GroupLabels.alertname }}
           {{ range .Alerts }}
-          *Summary:* {{ .Annotations.summary }}
-          *Detail:* {{ .Annotations.description }}
-          *Started:* {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}
+          Summary: {{ .Annotations.summary }}
+          Detail: {{ .Annotations.description }}
+          Started: {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}
           {{ end }}
         parse_mode: 'Markdown'
         send_resolved: true
+        tls_config:
+          insecure_skip_verify: false
+
     email_configs:
       - to: '${ALERTMANAGER_SMTP_TO:-}'
         subject: '[CRITICAL] HopeFX: {{ .GroupLabels.alertname }}'
@@ -76,7 +107,21 @@ receivers:
           Started:     {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}
           {{ end }}
         send_resolved: true
+        headers:
+          X-HopeFX-Severity: critical
 
+    # PagerDuty escalation — only active when ALERTMANAGER_PAGERDUTY_KEY is set.
+    pagerduty_configs:
+      - routing_key: '${ALERTMANAGER_PAGERDUTY_KEY:-}'
+        description: '{{ .GroupLabels.alertname }}: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        severity: 'critical'
+        send_resolved: true
+        details:
+          alert: '{{ .GroupLabels.alertname }}'
+          environment: 'production'
+          service: 'hopefx-trading'
+
+  # email-default: warning and default alerts
   - name: 'email-default'
     email_configs:
       - to: '${ALERTMANAGER_SMTP_TO:-}'
@@ -92,12 +137,34 @@ receivers:
           Started:     {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}
           {{ end }}
         send_resolved: true
+        headers:
+          X-HopeFX-Severity: '{{ .CommonLabels.severity }}'
+
+# ── Inhibition rules ──────────────────────────────────────────────────────────
+#
+# Suppress lower-severity alerts when a higher-severity alert is already
+# firing for the same alertname, to reduce noise during outages.
 
 inhibit_rules:
-  # Suppress warning-level alerts when a critical alert is already firing
-  # for the same alertname, to reduce noise during outages.
+  # Suppress warning when critical is firing for the same alert.
   - source_matchers:
       - severity = critical
     target_matchers:
       - severity = warning
     equal: ['alertname']
+
+  # When the API is down, suppress all other alerts — they are likely
+  # caused by the same outage and would create noise.
+  - source_matchers:
+      - alertname = HopeFXAPIDown
+    target_matchers:
+      - severity =~ "warning|critical"
+    equal: []
+
+  # When the circuit breaker is open (trading halted), suppress P&L
+  # divergence warnings — fills cannot be recorded while halted.
+  - source_matchers:
+      - alertname = HopeFXCircuitBreakerOpen
+    target_matchers:
+      - alertname =~ "HopeFXPnLDivergence.*|HopeFXPnLReconciliation.*"
+    equal: []
