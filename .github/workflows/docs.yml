@@ -22,6 +22,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # continue-on-error: the upload-pages-artifact step requires GitHub Pages
     # to be enabled in repo settings (Settings → Pages → Source: GitHub Actions).
     # Until Pages is enabled this step will fail; continue-on-error prevents
@@ -54,6 +55,7 @@ jobs:
     # Only deploy when the build job actually succeeded (not just continued-on-error)
     if: ${{ needs.build.result == 'success' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

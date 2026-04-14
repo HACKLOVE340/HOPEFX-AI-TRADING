@@ -11,6 +11,7 @@ on:
 jobs:
   bandit:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -50,6 +51,7 @@ jobs:
 
   safety:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -95,6 +97,7 @@ jobs:
 
   trivy:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       # security-events: write is required to upload SARIF to the Security tab.
@@ -138,6 +141,7 @@ jobs:
 
   secrets:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:

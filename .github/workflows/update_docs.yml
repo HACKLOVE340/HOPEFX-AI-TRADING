@@ -21,6 +21,7 @@ jobs:
   update-cover:
     name: Regenerate assets/cover.png
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write   # required to commit cover.png back to the repo
 
