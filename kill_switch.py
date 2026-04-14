@@ -216,14 +216,20 @@ class KillSwitch:
         """
         Reset all mutable state to the clean (inactive) baseline.
 
-        **Only call this from test fixtures.**  It bypasses the token check
-        and does NOT write/delete any files — it only resets in-memory state
-        so that tests are isolated from each other.
+        **Only call this from test fixtures.**  It bypasses the token check,
+        resets in-memory state, and clears the Redis distributed latch so
+        that tests are fully isolated from each other.
         """
         self._active = False
         self._reason = ""
         self._activated_at = None
         self._callbacks.clear()
+        # Clear the Redis latch so the next KillSwitch.start() does not
+        # re-activate from a latch written by a previous test.
+        import contextlib
+
+        with contextlib.suppress(Exception):
+            self._clear_redis_latch()
         logger.debug("KillSwitch.reset_for_testing() called")
 
     @property
