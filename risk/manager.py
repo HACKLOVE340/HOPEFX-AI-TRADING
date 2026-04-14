@@ -991,6 +991,7 @@ class RiskManager:
             direction=direction,
             confidence=effective_confidence,
             probability=probability,
+            tick_mid=float(entry_price),
         )
 
         # Temporarily update equity so sizing reflects the supplied balance.
