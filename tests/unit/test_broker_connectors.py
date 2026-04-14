@@ -128,7 +128,7 @@ ALPACA_CONFIG = {"api_key": "test_key", "api_secret": "test_secret", "paper": Tr
 BINANCE_CONFIG = {"api_key": "test_key", "api_secret": "test_secret", "testnet": True}  # nosec B105 - test credential  # pragma: allowlist secret
 OANDA_CONFIG = {
     "api_key": "test_token",  # pragma: allowlist secret
-    "account_id": "test_account",
+    "account_id": "101-001-12345678-001",  # valid OANDA v20 format for tests
     "environment": "practice",
 }
 MT5_CONFIG = {"server": "Demo-Server", "login": 12345678, "password": "test_pass"}  # nosec B105 - test file  # pragma: allowlist secret
