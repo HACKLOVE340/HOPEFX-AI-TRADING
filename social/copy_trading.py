@@ -23,11 +23,30 @@ class CopyRelationship:
     started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
-class CopyTradingEngine:
-    """Manages copy-trading relationships between followers and leaders."""
+import logging
 
-    def __init__(self):
+_logger = logging.getLogger(__name__)
+
+
+class CopyTradingEngine:
+    """
+    Manages copy-trading relationships between followers and leaders.
+
+    broker must be injected via set_broker() (or the constructor) before
+    broadcast_trade() can place real orders.  Without a broker every copy
+    trade is logged as broker_offline — the same safe-fail behaviour as
+    AdvancedCopyTradingEngine.
+    """
+
+    def __init__(self, broker=None, config=None):
         self.relationships: dict[str, CopyRelationship] = {}
+        self.broker = broker
+        self.config = config or {}
+
+    def set_broker(self, broker) -> None:
+        """Inject the live broker after construction (called by startup_factories)."""
+        self.broker = broker
+        _logger.info("CopyTradingEngine: broker injected (%s)", type(broker).__name__)
 
     def _key(self, follower_id: str, leader_id: str) -> str:
         return f"{follower_id}_{leader_id}"
@@ -58,13 +77,79 @@ class CopyTradingEngine:
         return True
 
     def sync_trade(self, trade_id: str, leader_id: str) -> dict[str, str]:
-        """Propagate a leader trade to all active followers. Returns {copy_id: follower_id}."""
+        """Return {copy_id: follower_id} for all active followers of leader_id."""
         result = {}
         for rel in self.relationships.values():
             if rel.leader_id == leader_id and rel.is_active:
                 copy_id = f"COPY_{trade_id}_{rel.follower_id}"
                 result[copy_id] = rel.follower_id
         return result
+
+    def broadcast_trade(
+        self,
+        leader_id: str,
+        symbol: str,
+        direction: str,
+        quantity: float,
+        fill_price: float,
+        fill_id: str,
+    ) -> dict[str, dict]:
+        """
+        Place proportional copy orders for every active follower of leader_id.
+
+        Returns a dict of {follower_id: result} where result has keys:
+          status  — "filled" | "broker_offline" | "error"
+          reason  — human-readable detail
+          order   — broker response (when status == "filled")
+        """
+        results: dict[str, dict] = {}
+
+        active = [r for r in self.relationships.values() if r.leader_id == leader_id and r.is_active]
+        if not active:
+            return results
+
+        if not self.broker:
+            _logger.warning(
+                "CopyTradingEngine.broadcast_trade: broker not injected — "
+                "%d follower(s) will not receive copy of fill %s",
+                len(active),
+                fill_id,
+            )
+            for rel in active:
+                results[rel.follower_id] = {"status": "broker_offline", "reason": "broker not injected"}
+            return results
+
+        for rel in active:
+            copy_qty = round(quantity * rel.copy_ratio, 4)
+            if rel.max_per_trade is not None:
+                copy_qty = min(copy_qty, float(rel.max_per_trade))
+            if copy_qty <= 0:
+                results[rel.follower_id] = {"status": "skipped", "reason": "copy_qty <= 0"}
+                continue
+            try:
+                order_result = self.broker.place_order(
+                    symbol=symbol,
+                    direction=direction,
+                    quantity=copy_qty,
+                    order_type="market",
+                    metadata={
+                        "copy_of_fill": fill_id,
+                        "leader_id": leader_id,
+                        "follower_id": rel.follower_id,
+                    },
+                )
+                results[rel.follower_id] = {"status": "filled", "order": order_result}
+                _logger.info(
+                    "copy_trade: follower=%s leader=%s symbol=%s dir=%s qty=%.4f",
+                    rel.follower_id, leader_id, symbol, direction, copy_qty,
+                )
+            except Exception as exc:
+                _logger.error(
+                    "copy_trade failed for follower=%s: %s", rel.follower_id, exc
+                )
+                results[rel.follower_id] = {"status": "error", "reason": str(exc)}
+
+        return results
 
     def get_active_relationships(self, user_id: str, as_follower: bool = True) -> list[CopyRelationship]:
         out = []
@@ -78,12 +163,6 @@ class CopyTradingEngine:
 
 class RiskLimitExceededError(Exception):
     """Raised when a copy trade would exceed risk limits."""
-
-
-# Patch CopyTradingEngine with the methods tests expect
-def _ct_init_patched(self, config=None):
-    self.relationships = {}
-    self.config = config or {}
 
 
 async def _copy_trade(
@@ -138,6 +217,5 @@ def _calculate_leaderboard(self, traders: list) -> list:
     return scored
 
 
-CopyTradingEngine.__init__ = _ct_init_patched
 CopyTradingEngine.copy_trade = _copy_trade
 CopyTradingEngine.calculate_leaderboard = _calculate_leaderboard
