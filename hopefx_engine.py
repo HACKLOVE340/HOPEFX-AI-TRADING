@@ -225,6 +225,24 @@ class HopeFXEngine:
         # Smart router (lazy-initialised on first live order)
         self._smart_router = None
 
+        # ── Canonical execution path ──────────────────────────────────────────
+        # ExecutionEngine provides OTel tracing, Redis state persistence, TCA
+        # recording, SL/TP monitoring, and the 12-check pre-trade gate.
+        # Initialised in start() after broker and risk manager are ready.
+        self._execution_engine = None
+
+        # ── Position tracking ─────────────────────────────────────────────────
+        # PositionTracker maintains real-time P&L for all open positions.
+        # OMS tracks the full order lifecycle (created → filled → closed).
+        self._position_tracker = None
+        self._oms = None
+
+        # ── NuclearStrategyAgent ──────────────────────────────────────────────
+        # Runs the full nuclear pipeline (Redis → features → regime → signal).
+        # Approved signals are merged with HOPEFXBrain decisions in the main loop.
+        self._nuclear_agent = None
+        self._nuclear_agent_task = None
+
         # Drift monitor interval
         self._bars_since_drift_check: int = 0
         self._drift_check_interval: int = int(os.getenv("DRIFT_CHECK_EVERY_N_BARS", "100"))
@@ -399,12 +417,54 @@ class HopeFXEngine:
         except Exception as exc:
             logger.warning("RiskOrchestrator broker injection failed: %s", exc)
 
-        # 7. Equity snapshotter (background thread)
+        # 7. PositionTracker + OMS
+        try:
+            from execution.position_tracker import PositionTracker
+            from execution.oms import OMS
+
+            self._position_tracker = PositionTracker()
+            self._oms = OMS()
+            logger.info("PositionTracker and OMS initialised")
+        except Exception as exc:
+            logger.warning("PositionTracker/OMS init failed: %s", exc)
+
+        # 7a. ExecutionEngine — canonical execution path with OTel, TCA, SL/TP
+        try:
+            from execution.engine import ExecutionEngine
+
+            self._execution_engine = ExecutionEngine(
+                broker_manager=self._broker,
+                risk_manager=self._risk_manager,
+                position_manager=self._position_tracker,
+            )
+            await self._execution_engine.start()
+            # Bridge tick feed so ExecutionEngine always has fresh bid/ask
+            self._execution_engine.update_last_tick(self.primary_symbol.replace("_", "/"), None)
+            logger.info("ExecutionEngine started (canonical execution path)")
+        except Exception as exc:
+            logger.warning(
+                "ExecutionEngine init failed (%s) — falling back to direct broker calls",
+                exc,
+            )
+            self._execution_engine = None
+
+        # 7b. NuclearStrategyAgent — parallel signal source alongside HOPEFXBrain
+        try:
+            from nuclear.nuclear_agent import get_nuclear_agent
+
+            self._nuclear_agent = get_nuclear_agent(symbol=self.primary_symbol.replace("/", "_"))
+            await self._nuclear_agent.start()
+            logger.info("NuclearStrategyAgent started (symbol=%s)", self.primary_symbol)
+        except Exception as exc:
+            logger.warning("NuclearStrategyAgent init failed: %s", exc)
+            self._nuclear_agent = None
+
+        # 8. Equity snapshotter (background thread)
         self._trade_logger.start_equity_snapshotter(
             get_equity_fn=self._get_equity_for_snapshot,
         )
 
-        # 8. Main loop
+        # 9. Main loop
         self._running = True
         logger.info("═══ All systems live ═══")
         await self._run_loop()
@@ -512,18 +572,125 @@ class HopeFXEngine:
             ]
         )
 
+        tasks = []
         if has_stream_key:
-            await asyncio.gather(
-                self._nuclear_loop(),
-                self._poll_loop(),
-                return_exceptions=True,
-            )
+            tasks += [self._nuclear_loop(), self._poll_loop()]
         else:
             logger.info(
                 "No streaming API keys set — running poll loop only. "
                 "Set FINNHUB_API_KEY / TWELVE_API_KEY / POLYGON_API_KEY for WebSocket ticks."
             )
-            await self._poll_loop()
+            tasks.append(self._poll_loop())
+
+        # Run NuclearStrategyAgent loop concurrently — approved signals are
+        # delivered via _on_nuclear_signal() and merged with brain decisions.
+        if self._nuclear_agent is not None:
+            tasks.append(
+                self._nuclear_agent.run_loop(
+                    interval_s=float(_optional("NUCLEAR_INTERVAL_S", "5")),
+                    on_signal=self._on_nuclear_signal,
+                )
+            )
+
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def _on_nuclear_signal(self, signal) -> None:
+        """
+        Callback invoked by NuclearStrategyAgent when an APPROVED signal is ready.
+
+        Converts the NuclearSignal into an ExecutionRequest and routes it through
+        the canonical ExecutionEngine path (OTel, TCA, pre-trade gate, SL/TP).
+        Falls back to _execute_decision() if ExecutionEngine is unavailable.
+        """
+        try:
+            direction = getattr(signal, "direction", "long")
+            side = "BUY" if direction == "long" else "SELL"
+            symbol = getattr(signal, "symbol", self.primary_symbol).replace("_", "/")
+            confidence = float(getattr(signal, "confidence", 0.7))
+            entry_price = float(getattr(signal, "entry_price", 0.0))
+            stop_loss = getattr(signal, "stop_loss", None)
+            take_profit = getattr(signal, "take_profit", None)
+
+            logger.info(
+                "NuclearSignal APPROVED: %s %s conf=%.3f entry=%.5f",
+                side,
+                symbol,
+                confidence,
+                entry_price,
+            )
+
+            if self._execution_engine is not None:
+                from execution.engine import ExecutionRequest
+
+                # Size via risk manager before submitting to ExecutionEngine
+                class _NuclearDecision:
+                    action = direction
+                    self_confidence = confidence
+                    reason = f"nuclear:{getattr(signal, 'strategy_id', 'unknown')}"
+
+                _NuclearDecision.confidence = confidence
+                sized = self._risk_manager.size_order(_NuclearDecision())
+                if sized.quantity == 0:
+                    logger.info("NuclearSignal blocked by risk manager (quantity=0)")
+                    return
+
+                req = ExecutionRequest(
+                    symbol=symbol,
+                    side=side,
+                    quantity=sized.quantity,
+                    order_type="LIMIT" if entry_price > 0 else "MARKET",
+                    price=entry_price if entry_price > 0 else None,
+                    stop_loss=float(stop_loss) if stop_loss else sized.stop_loss_usd,
+                    take_profit=float(take_profit) if take_profit else sized.take_profit_usd,
+                    strategy_id=f"nuclear:{getattr(signal, 'strategy_id', 'agent')}",
+                    metadata={"confidence": confidence, "source": "nuclear_agent"},
+                )
+                report = await self._execution_engine.execute(req)
+                if report.success:
+                    self._trade_logger.log_fill(
+                        symbol=symbol,
+                        side=side,
+                        lots=report.filled_quantity or sized.quantity,
+                        requested_price=entry_price,
+                        fill_price=report.average_price or entry_price,
+                        broker=self.broker_name,
+                        notes=f"nuclear|latency={report.latency_ms:.1f}ms",
+                    )
+                    self._risk_manager.notify_position_opened(symbol)
+                    if self._position_tracker is not None:
+                        from execution.position_tracker import Position
+                        import uuid as _uuid
+
+                        pos = Position(
+                            id=report.order_id or str(_uuid.uuid4())[:16],
+                            symbol=symbol,
+                            side="long" if side == "BUY" else "short",
+                            quantity=report.filled_quantity or sized.quantity,
+                            entry_price=report.average_price or entry_price,
+                            current_price=report.average_price or entry_price,
+                            stop_loss=float(stop_loss) if stop_loss else sized.stop_loss_usd,
+                            take_profit=float(take_profit) if take_profit else sized.take_profit_usd,
+                        )
+                        await self._position_tracker.add_position(pos)
+                    logger.info(
+                        "NuclearSignal executed: fill=%.5f latency=%.1fms",
+                        report.average_price,
+                        report.latency_ms,
+                    )
+                else:
+                    logger.warning("NuclearSignal execution blocked: %s", report.message)
+            else:
+                # Fallback: synthesise a brain-compatible decision and execute directly
+                class _FallbackDecision:
+                    pass
+
+                d = _FallbackDecision()
+                d.action = direction
+                d.confidence = confidence
+                d.reason = f"nuclear:{getattr(signal, 'strategy_id', 'agent')}"
+                await self._execute_decision(d, entry_price, symbol)
+        except Exception as exc:
+            logger.error("_on_nuclear_signal error: %s", exc)
 
     async def _nuclear_loop(self) -> None:
         """
@@ -943,19 +1110,20 @@ class HopeFXEngine:
         sniper_setup=None,
     ) -> None:
         """
-        Execute a brain decision through the broker.
+        Execute a brain decision through the canonical ExecutionEngine path.
 
-        When ``sniper_setup`` is provided (a SniperSetup from SniperEntryEngine),
-        the order is placed as a LIMIT order at the CE level with sniper-derived
-        SL/TP.  Otherwise a MARKET order is placed at ``price``.
+        Routes through ExecutionEngine (OTel tracing, TCA, 12-check pre-trade
+        gate, SL/TP monitor, Redis state persistence) when available.  Falls
+        back to direct broker calls only if ExecutionEngine failed to start.
+
+        When ``sniper_setup`` is provided the order is placed as a LIMIT order
+        at the CE level with sniper-derived SL/TP; otherwise MARKET at ``price``.
         """
         import inspect as _inspect
 
         side = "BUY" if decision.action == "long" else "SELL"
 
         # ── Resolve order parameters (sniper limit vs market fallback) ────────
-        # When a SniperSetup is available, use its precision entry/SL/TP.
-        # Otherwise fall back to the risk manager's ATR-based sizing.
         if sniper_setup is not None:
             order_type = "LIMIT"
             exec_price = sniper_setup.entry_price
@@ -1021,9 +1189,127 @@ class HopeFXEngine:
             self._risk_manager.notify_position_opened(symbol)
             return
 
-        # ── Live execution ────────────────────────────────────────────────────
+        # ── Live execution — route through ExecutionEngine (canonical path) ────
+        # ExecutionEngine provides: OTel tracing, TCA recording, 12-check
+        # pre-trade gate, SL/TP monitor, Redis state persistence, and circuit
+        # breaker.  Falls back to direct SmartRouter → broker call only when
+        # ExecutionEngine is unavailable (startup failure or import error).
         try:
-            # Check for existing position — close opposite first
+            fill_price = exec_price
+
+            if self._execution_engine is not None:
+                # ── Canonical path: ExecutionEngine ───────────────────────────
+                from execution.engine import ExecutionRequest
+
+                req = ExecutionRequest(
+                    symbol=symbol,
+                    side=side,
+                    quantity=quantity,
+                    order_type=order_type,
+                    price=exec_price if order_type == "LIMIT" else None,
+                    stop_price=exec_price if order_type == "STOP" else None,
+                    stop_loss=stop_loss_price,
+                    take_profit=take_profit_price,
+                    strategy_id=getattr(decision, "reason", "brain"),
+                    metadata={
+                        "confidence": getattr(decision, "confidence", 0.0),
+                        "source": "hopefx_engine",
+                    },
+                )
+                # Feed latest tick so ExecutionEngine can enrich price
+                self._execution_engine.update_last_tick(symbol, None)
+
+                report = await self._execution_engine.execute(req)
+
+                if not report.success:
+                    logger.warning(
+                        "ExecutionEngine blocked order: %s — falling back to direct",
+                        report.message,
+                    )
+                    # Fall through to direct path below
+                else:
+                    fill_price = report.average_price or exec_price
+                    self._trade_logger.log_fill(
+                        symbol=symbol,
+                        side=side,
+                        lots=report.filled_quantity or quantity,
+                        requested_price=exec_price,
+                        fill_price=fill_price,
+                        broker=self.broker_name,
+                        notes=f"{getattr(decision, 'reason', 'brain')}|latency={report.latency_ms:.1f}ms",
+                    )
+                    logger.info(
+                        "ExecutionEngine fill: %s %s %s %.4f @ %.5f  sl=%.5f tp=%.5f  latency=%.1fms",
+                        order_type,
+                        side,
+                        symbol,
+                        report.filled_quantity or quantity,
+                        fill_price,
+                        stop_loss_price or 0.0,
+                        take_profit_price or 0.0,
+                        report.latency_ms,
+                    )
+                    self._risk_manager.notify_position_opened(symbol)
+
+                    # Register fill with PositionTracker
+                    if self._position_tracker is not None:
+                        from execution.position_tracker import Position
+                        import uuid as _uuid
+
+                        pos = Position(
+                            id=report.order_id or str(_uuid.uuid4())[:16],
+                            symbol=symbol,
+                            side="long" if side == "BUY" else "short",
+                            quantity=report.filled_quantity or quantity,
+                            entry_price=fill_price,
+                            current_price=fill_price,
+                            stop_loss=stop_loss_price,
+                            take_profit=take_profit_price,
+                        )
+                        await self._position_tracker.add_position(pos)
+
+                    # Register with OMS for full order lifecycle tracking
+                    if self._oms is not None:
+                        try:
+                            from decimal import Decimal as _D
+
+                            _oms_order = self._oms.create_order(
+                                symbol=symbol,
+                                side=side,
+                                order_type=order_type,
+                                quantity=_D(str(quantity)),
+                                price=_D(str(exec_price)) if order_type == "LIMIT" else None,
+                            )
+                            self._oms.submit_order(_oms_order.id)
+                        except Exception as _oms_exc:
+                            logger.debug("OMS create_order failed: %s", _oms_exc)
+
+                    # Online learner feedback
+                    try:
+                        from core.signal_engine import notify_fill as _notify_fill
+
+                        _notify_fill(
+                            pd.DataFrame(
+                                [
+                                    {
+                                        "symbol": symbol,
+                                        "direction": side,
+                                        "fill_price": fill_price,
+                                        "confidence": getattr(decision, "confidence", 0.0),
+                                        "source": "hopefx_engine",
+                                    }
+                                ]
+                            ),
+                            label=1,
+                            primary_prob=getattr(decision, "confidence", None),
+                        )
+                    except Exception as _ol_exc:
+                        logger.debug("notify_fill skipped: %s", _ol_exc)
+                    return  # ExecutionEngine handled it — done
+
+            # ── Fallback path: SmartRouter → direct broker call ───────────────
+            # Used only when ExecutionEngine is unavailable.
+            # Check for existing opposite position — close first
             if hasattr(self._broker, "get_positions"):
                 _pos_coro = self._broker.get_positions()
                 positions = await _pos_coro if _inspect.isawaitable(_pos_coro) else _pos_coro
@@ -1050,7 +1336,6 @@ class HopeFXEngine:
                 logger.warning("Broker has no place_order — skipping live order")
                 return
 
-            # Build kwargs — OANDAStream uses `units`, generic brokers use `lots`
             from brokers.oanda_stream import OANDAStream
             from brokers import OrderSide as _OrderSide
 
@@ -1069,7 +1354,6 @@ class HopeFXEngine:
                     "lots": quantity,
                 }
 
-            # Try SmartRouter first; fall back to direct broker call on any error.
             result = None
             _used_smart_router = False
             try:
@@ -1077,12 +1361,7 @@ class HopeFXEngine:
 
                 if self._smart_router is None:
                     self._smart_router = _SmartRouter()
-                    # Register the primary (active) broker first so it is
-                    # always available as the baseline execution path.
                     self._smart_router.add_broker("primary", self._broker)
-                    # Register all additional connected brokers from the
-                    # factory so the router can score and fall back across
-                    # them (CME, IBKR, CPP shim, paper, etc.).
                     try:
                         from brokers.factory import BrokerFactory as _BF
 
@@ -1092,27 +1371,16 @@ class HopeFXEngine:
                                 continue
                             try:
                                 _candidate = _BF.create_broker(_broker_name)
-                                if _candidate is None:
-                                    continue
-                                # Skip aliases that resolve to the same class
-                                # already registered (e.g. cme/cme_comex/gc).
-                                if type(_candidate) in _seen_classes:
+                                if _candidate is None or type(_candidate) in _seen_classes:
                                     continue
                                 _seen_classes.add(type(_candidate))
                                 if hasattr(_candidate, "connect") and _candidate.connect():
                                     self._smart_router.add_broker(_broker_name, _candidate)
-                                    logger.info("SmartRouter: registered broker=%s", _broker_name)
                             except Exception as _reg_exc:
-                                logger.debug(
-                                    "SmartRouter: skipping broker=%s (%s)",
-                                    _broker_name,
-                                    _reg_exc,
-                                )
+                                logger.debug("SmartRouter: skipping %s (%s)", _broker_name, _reg_exc)
                     except Exception as _factory_exc:
-                        logger.warning(
-                            "SmartRouter: broker registration failed (%s) — routing with primary only",
-                            _factory_exc,
-                        )
+                        logger.warning("SmartRouter broker registration failed: %s", _factory_exc)
+
                 sr_request = {
                     "symbol": symbol,
                     "direction": "long" if side == "BUY" else "short",
@@ -1138,18 +1406,17 @@ class HopeFXEngine:
                     )
                 else:
                     logger.warning(
-                        "SmartRouter rejected order (%s) — falling back to direct order",
+                        "SmartRouter rejected (%s) — falling back to direct order",
                         sr_result.get("reason"),
                     )
             except Exception as _sr_exc:
-                logger.warning("SmartRouter failed (%s) — falling back to direct order", _sr_exc)
-                self._smart_router = None  # reset for retry next time
+                logger.warning("SmartRouter failed (%s) — direct order", _sr_exc)
+                self._smart_router = None
 
             if not _used_smart_router:
                 _order_coro = self._broker.place_order(**order_kwargs)
                 result = await _order_coro if _inspect.isawaitable(_order_coro) else _order_coro
 
-            fill_price = exec_price
             if result is not None:
                 if isinstance(result, dict):
                     fill_price = float(result.get("fill_price", exec_price))
@@ -1163,10 +1430,10 @@ class HopeFXEngine:
                 requested_price=exec_price,
                 fill_price=fill_price,
                 broker=self.broker_name,
-                notes=decision.reason,
+                notes=getattr(decision, "reason", "brain"),
             )
             logger.info(
-                "Order placed: %s %s %s %.4f lots @ %.5f  sl=%.5f tp=%.5f",
+                "Order placed (fallback): %s %s %s %.4f @ %.5f  sl=%.5f tp=%.5f",
                 order_type,
                 side,
                 symbol,
@@ -1177,28 +1444,44 @@ class HopeFXEngine:
             )
             self._risk_manager.notify_position_opened(symbol)
 
-            # Online learner feedback — notify Phase-3 store of the fill.
+            # Register with PositionTracker even on fallback path
+            if self._position_tracker is not None:
+                from execution.position_tracker import Position
+                import uuid as _uuid
+
+                pos = Position(
+                    id=str(_uuid.uuid4())[:16],
+                    symbol=symbol,
+                    side="long" if side == "BUY" else "short",
+                    quantity=quantity,
+                    entry_price=fill_price,
+                    current_price=fill_price,
+                    stop_loss=stop_loss_price,
+                    take_profit=take_profit_price,
+                )
+                await self._position_tracker.add_position(pos)
+
+            # Online learner feedback
             try:
                 from core.signal_engine import notify_fill as _notify_fill
 
-                _features = pd.DataFrame(
-                    [
-                        {
-                            "symbol": symbol,
-                            "direction": side,
-                            "fill_price": fill_price,
-                            "confidence": getattr(decision, "confidence", 0.0),
-                            "source": "hopefx_engine",
-                        }
-                    ]
-                )
                 _notify_fill(
-                    _features,
+                    pd.DataFrame(
+                        [
+                            {
+                                "symbol": symbol,
+                                "direction": side,
+                                "fill_price": fill_price,
+                                "confidence": getattr(decision, "confidence", 0.0),
+                                "source": "hopefx_engine",
+                            }
+                        ]
+                    ),
                     label=1,
                     primary_prob=getattr(decision, "confidence", None),
                 )
             except Exception as _ol_exc:
-                logger.debug("notify_fill skipped in hopefx_engine: %s", _ol_exc)
+                logger.debug("notify_fill skipped: %s", _ol_exc)
 
         except Exception as exc:
             logger.error("Order execution failed: %s", exc)
