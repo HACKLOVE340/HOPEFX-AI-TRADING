@@ -34,8 +34,18 @@ import {
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const BASE_URL: string =
-  (Constants.expoConfig?.extra?.apiBaseUrl as string) ?? 'http://localhost:8000';
+// BASE_URL must come from app.json extra.apiBaseUrl (set to https://api.hopefx.io
+// for production builds via EAS).  There is no localhost fallback — a missing
+// config value is a build misconfiguration that should fail loudly, not silently
+// point at a developer machine.
+const _configuredUrl = Constants.expoConfig?.extra?.apiBaseUrl as string | undefined;
+if (!_configuredUrl) {
+  throw new Error(
+    '[apiClient] Constants.expoConfig.extra.apiBaseUrl is not set. ' +
+      'Ensure app.json extra.apiBaseUrl is configured for this build target.'
+  );
+}
+const BASE_URL: string = _configuredUrl;
 
 const TIMEOUT_MS = 15_000;
 
