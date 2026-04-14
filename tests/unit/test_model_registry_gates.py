@@ -166,7 +166,11 @@ class TestPromote:
 
     def test_promote_sets_state_production(self, registry, artifact):
         self._register_good(registry, artifact)
-        with patch.object(registry, "_update_symlink"):
+        with (
+            patch.object(registry, "_update_symlink"),
+            patch.object(registry, "_pnl_reconciliation_check",
+                         return_value=(True, "P&L gate passed")),
+        ):
             entry = registry.promote("v1")
         assert entry["state"] == "production"
         assert entry["promoted_at"] is not None
@@ -185,7 +189,11 @@ class TestPromote:
             oos_p_value=0.001,
             sharpe_gate_passed=True,
         )
-        with patch.object(registry, "_update_symlink"):
+        with (
+            patch.object(registry, "_update_symlink"),
+            patch.object(registry, "_pnl_reconciliation_check",
+                         return_value=(True, "P&L gate passed")),
+        ):
             registry.promote("v1")
 
         # Register and promote v2
@@ -196,7 +204,11 @@ class TestPromote:
             oos_p_value=0.001,
             sharpe_gate_passed=True,
         )
-        with patch.object(registry, "_update_symlink"):
+        with (
+            patch.object(registry, "_update_symlink"),
+            patch.object(registry, "_pnl_reconciliation_check",
+                         return_value=(True, "P&L gate passed")),
+        ):
             registry.promote("v2")
 
         versions = registry.list_versions()
@@ -210,6 +222,8 @@ class TestPromote:
 
         with (
             patch.object(registry, "_update_symlink"),
+            patch.object(registry, "_pnl_reconciliation_check",
+                         return_value=(True, "P&L gate passed")),
             patch.dict("sys.modules", {"ml.performance_monitor": MagicMock(get_monitor=mock_get_monitor)}),
         ):
             registry.promote("v1")
@@ -222,6 +236,8 @@ class TestPromote:
 
         with (
             patch.object(registry, "_update_symlink"),
+            patch.object(registry, "_pnl_reconciliation_check",
+                         return_value=(True, "P&L gate passed")),
             patch.dict("sys.modules", {"ml.performance_monitor": MagicMock(get_monitor=mock_get_monitor)}),
         ):
             entry = registry.promote("v1")  # must not raise
@@ -344,7 +360,11 @@ class TestActiveVersion:
             oos_p_value=0.001,
             sharpe_gate_passed=True,
         )
-        with patch.object(registry, "_update_symlink"):
+        with (
+            patch.object(registry, "_update_symlink"),
+            patch.object(registry, "_pnl_reconciliation_check",
+                         return_value=(True, "P&L gate passed")),
+        ):
             registry.promote("v1")
 
         entry = registry.active_version()
@@ -359,7 +379,11 @@ class TestActiveVersion:
             oos_p_value=0.001,
             sharpe_gate_passed=True,
         )
-        with patch.object(registry, "_update_symlink"):
+        with (
+            patch.object(registry, "_update_symlink"),
+            patch.object(registry, "_pnl_reconciliation_check",
+                         return_value=(True, "P&L gate passed")),
+        ):
             registry.promote("v1")
 
         path = registry.active_path()
@@ -462,6 +486,8 @@ class TestBootstrapFromMeta:
 
         with (
             patch.object(registry, "_update_symlink"),
+            patch.object(registry, "_pnl_reconciliation_check",
+                         return_value=(True, "P&L gate passed")),
             patch.dict(
                 "sys.modules", {"ml.performance_monitor": MagicMock(get_monitor=MagicMock(return_value=MagicMock()))}
             ),

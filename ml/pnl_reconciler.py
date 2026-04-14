@@ -354,11 +354,15 @@ class PnLReconciler:
 
     def _save_snapshot(self, result: ReconciliationResult) -> None:
         """Atomically write the reconciliation snapshot."""
-        tmp_fd, tmp_path = tempfile.mkstemp(
-            dir=self._snapshot_path.parent,
-            prefix=".pnl_recon_tmp_",
-            suffix=".json",
-        )
+        try:
+            tmp_fd, tmp_path = tempfile.mkstemp(
+                dir=self._snapshot_path.parent,
+                prefix=".pnl_recon_tmp_",
+                suffix=".json",
+            )
+        except Exception as exc:
+            logger.warning("PnLReconciler: snapshot write failed (mkstemp): %s", exc)
+            return
         try:
             import os as _os
 
