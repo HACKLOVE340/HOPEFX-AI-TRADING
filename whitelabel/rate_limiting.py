@@ -35,7 +35,36 @@ from whitelabel.config import get_tier_config
 logger = logging.getLogger(__name__)
 
 # In-memory counters: key_hash → {window: (count, reset_ts)}
+# In-process fallback counters (used when Redis is unavailable)
 _counters: dict[str, dict[str, list]] = defaultdict(lambda: {"min": [0, 0.0], "day": [0, 0.0]})
+
+
+def _get_sync_redis():
+    try:
+        from cache.redis_pool import get_sync_client
+        return get_sync_client()
+    except Exception:
+        return None
+
+
+def _redis_incr_window(key_hash: str, window: str, window_seconds: int) -> int:
+    """
+    Atomically increment a sliding-window counter in Redis.
+    Returns the new count, or -1 when Redis is unavailable (caller uses fallback).
+    Uses a fixed-window approach: key expires after window_seconds.
+    """
+    r = _get_sync_redis()
+    if not r:
+        return -1
+    try:
+        redis_key = f"wl:rl:{key_hash}:{window}"
+        pipe = r.pipeline()
+        pipe.incr(redis_key)
+        pipe.expire(redis_key, window_seconds)
+        results = pipe.execute()
+        return int(results[0])
+    except Exception:
+        return -1
 
 
 class WhitelabelRateLimitMiddleware(BaseHTTPMiddleware):
@@ -73,48 +102,51 @@ class WhitelabelRateLimitMiddleware(BaseHTTPMiddleware):
         tier_config = get_tier_config(tier_name)
 
         now = time.monotonic()
-        c = _counters[key_hash]
 
-        # Minute window
-        if now - c["min"][1] >= 60.0:
-            c["min"] = [0, now]
-        c["min"][0] += 1
+        # Try Redis-backed atomic counters first; fall back to in-process dict
+        min_count = _redis_incr_window(key_hash, "min", 60)
+        day_count = _redis_incr_window(key_hash, "day", 86400)
 
-        # Day window
-        if now - c["day"][1] >= 86400.0:
-            c["day"] = [0, now]
-        c["day"][0] += 1
+        if min_count == -1 or day_count == -1:
+            # Redis unavailable — use in-process fallback
+            c = _counters[key_hash]
+            if now - c["min"][1] >= 60.0:
+                c["min"] = [0, now]
+            c["min"][0] += 1
+            if now - c["day"][1] >= 86400.0:
+                c["day"] = [0, now]
+            c["day"][0] += 1
+            min_count = c["min"][0]
+            day_count = c["day"][0]
 
-        if c["min"][0] > tier_config.requests_per_minute:
-            retry = int(60 - (now - c["min"][1]))
+        if min_count > tier_config.requests_per_minute:
             return JSONResponse(
                 status_code=429,
                 content={
                     "error": "rate_limit_exceeded",
                     "window": "minute",
                     "limit": tier_config.requests_per_minute,
-                    "retry_after_seconds": retry,
+                    "retry_after_seconds": 60,
                 },
-                headers={"Retry-After": str(retry)},
+                headers={"Retry-After": "60"},
             )
 
-        if c["day"][0] > tier_config.requests_per_day:
-            retry = int(86400 - (now - c["day"][1]))
+        if day_count > tier_config.requests_per_day:
             return JSONResponse(
                 status_code=429,
                 content={
                     "error": "rate_limit_exceeded",
                     "window": "day",
                     "limit": tier_config.requests_per_day,
-                    "retry_after_seconds": retry,
+                    "retry_after_seconds": 86400,
                 },
-                headers={"Retry-After": str(retry)},
+                headers={"Retry-After": "86400"},
             )
 
         # Add rate-limit headers to the response
         response = await call_next(request)
         response.headers["X-RateLimit-Limit-Minute"] = str(tier_config.requests_per_minute)
-        response.headers["X-RateLimit-Remaining-Minute"] = str(max(0, tier_config.requests_per_minute - c["min"][0]))
+        response.headers["X-RateLimit-Remaining-Minute"] = str(max(0, tier_config.requests_per_minute - min_count))
         response.headers["X-RateLimit-Limit-Day"] = str(tier_config.requests_per_day)
-        response.headers["X-RateLimit-Remaining-Day"] = str(max(0, tier_config.requests_per_day - c["day"][0]))
+        response.headers["X-RateLimit-Remaining-Day"] = str(max(0, tier_config.requests_per_day - day_count))
         return response
