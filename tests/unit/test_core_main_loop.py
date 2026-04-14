@@ -79,11 +79,10 @@ def test_verify_model_registry_no_crash_when_import_fails(monkeypatch):
 def test_verify_model_registry_dev_env_non_fatal(monkeypatch):
     monkeypatch.setenv("APP_ENV", "development")
 
-    def _bad_import():
-        raise ImportError("no ml")
-
-    with patch("core.main_loop.ModelRegistry", side_effect=ImportError("no ml"), create=True):
-        _verify_model_registry()  # non-fatal in dev
+    # ModelRegistry is imported inside _verify_model_registry(), so patch
+    # the class in its source module, not in core.main_loop's namespace.
+    with patch("ml.model_registry.ModelRegistry", side_effect=ImportError("no ml")):
+        _verify_model_registry()  # non-fatal in dev — must not raise
 
 
 def test_verify_model_registry_production_exits_on_failure(monkeypatch):
