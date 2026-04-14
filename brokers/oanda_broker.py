@@ -570,7 +570,9 @@ class OandaBroker:
                             data = await resp.json()
                             logger.error(
                                 "OandaBroker.cancel_all_orders: close %s failed (%s): %s",
-                                instrument, resp.status, data.get("errorMessage", ""),
+                                instrument,
+                                resp.status,
+                                data.get("errorMessage", ""),
                             )
                             all_ok = False
                 except Exception as exc:
@@ -591,7 +593,8 @@ class OandaBroker:
                 if not result.get("success"):
                     logger.warning(
                         "OandaBroker.cancel_all_orders: cancel order %s failed: %s",
-                        order_id, result.get("comment"),
+                        order_id,
+                        result.get("comment"),
                     )
                     all_ok = False
         except Exception as exc:
