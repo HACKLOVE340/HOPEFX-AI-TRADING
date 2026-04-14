@@ -800,6 +800,7 @@ class HopeFXEngine:
         # (it is set to the strategy/model ID in the signal pipeline).
         try:
             from social import copy_trading_engine as _cte
+
             if _cte.broker is not None:
                 leader_id = getattr(signal, "user_id", None) or signal.lineage_id or "system"
                 copy_results = _cte.broadcast_trade(
@@ -926,6 +927,7 @@ class HopeFXEngine:
             entry_value = pos["entry_price"] * pos["quantity"] * 100.0
             trade_return = realised_pnl / entry_value if entry_value != 0.0 else 0.0
             from brokers.oanda_paper_clock import get_clock
+
             get_clock().record_fill(trade_return=trade_return, symbol=unwind.symbol)
         except Exception as exc:
             logger.debug("HopeFXEngine: paper clock record_fill failed: %s", exc)

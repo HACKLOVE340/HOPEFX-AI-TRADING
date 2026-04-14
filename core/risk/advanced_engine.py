@@ -176,9 +176,7 @@ class MonteCarloRiskEngine:
                 vol = self.garch_models[col].forecast(len(copula_sims))
                 scaled_returns[col] = copula_sims[col] * vol[: len(copula_sims)]
 
-        portfolio_returns = sum(
-            scaled_returns[col] * weights.get(col, 0) for col in scaled_returns.columns
-        )
+        portfolio_returns = sum(scaled_returns[col] * weights.get(col, 0) for col in scaled_returns.columns)
 
         var_95 = np.percentile(portfolio_returns, 5)
         var_99 = np.percentile(portfolio_returns, 1)
@@ -236,10 +234,7 @@ class RealTimeRiskMonitor:
         """Recalculate risk with current positions."""
         total_value = sum(positions[s] * prices[s] for s in positions)
 
-        weights = {
-            s: float(positions[s] * prices[s] / total_value) if total_value > 0 else 0
-            for s in positions
-        }
+        weights = {s: float(positions[s] * prices[s] / total_value) if total_value > 0 else 0 for s in positions}
 
         self.current_risk = self.risk_engine.calculate_portfolio_risk(weights)
         return self._check_limits()

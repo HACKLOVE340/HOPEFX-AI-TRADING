@@ -76,7 +76,7 @@ def set_state(state) -> None:
 import json as _json
 
 _SHARED_RESULT_TTL = 60 * 60 * 24 * 30  # 30 days
-_MC_CACHE_TTL = 60 * 60               # 1 hour
+_MC_CACHE_TTL = 60 * 60  # 1 hour
 
 # In-process fallback stores
 _ab_tests: dict[str, dict] = {}
@@ -88,6 +88,7 @@ _mc_cache: dict[str, dict] = {}
 def _get_sync_redis():
     try:
         from cache.redis_pool import get_sync_client
+
         return get_sync_client()
     except Exception:
         return None

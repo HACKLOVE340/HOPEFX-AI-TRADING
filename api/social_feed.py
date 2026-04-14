@@ -60,6 +60,7 @@ _opted_in: set = set()  # user_ids who opted into public feed
 def _get_sync_redis():
     try:
         from cache.redis_pool import get_sync_client
+
         return get_sync_client()
     except Exception:
         return None
@@ -70,6 +71,7 @@ def _feed_set(sid: str, item: dict) -> None:
     if r:
         try:
             import time as _time
+
             r.setex(f"social:feed:{sid}", _FEED_TTL, _json.dumps(item))
             r.zadd("social:feed:index", {sid: _time.time()})
             return
@@ -354,9 +356,7 @@ async def feed_status(user: TokenPayload = Depends(get_current_user)):
     opted_in = user.sub in _opted_in
 
     # Count signals this user has published to the feed
-    signal_count = sum(
-        1 for item in _feed_all_public() if item.get("trader_id") == user.sub
-    )
+    signal_count = sum(1 for item in _feed_all_public() if item.get("trader_id") == user.sub)
 
     # Follower count from profile store
     follower_count = 0

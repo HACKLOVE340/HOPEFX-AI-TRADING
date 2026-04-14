@@ -77,7 +77,7 @@ router = APIRouter(tags=["Platform"])
 import json as _json
 
 _REDIS_SESSION_TTL = 60 * 60 * 24 * 30  # 30 days
-_REDIS_AUDIT_MAX = 10_000               # cap audit log list length
+_REDIS_AUDIT_MAX = 10_000  # cap audit log list length
 
 # In-process fallback stores (used when Redis is unavailable)
 _sessions_fallback: dict[str, dict] = {}
@@ -99,17 +99,16 @@ _flag_overrides: dict[str, dict[str, bool]] = {}  # flag_name → {user_id: bool
 def _get_sync_redis():
     """Return a synchronous Redis client or None when unavailable."""
     try:
-        from cache.redis_client import get_redis_client as _grc
-        import asyncio as _asyncio
-        import inspect as _inspect
         # get_redis_client may be async; use sync variant if available
         from cache.redis_pool import get_sync_client
+
         return get_sync_client()
     except Exception:
         return None
 
 
 # ── Session helpers ───────────────────────────────────────────────────────────
+
 
 def _session_set(session_id: str, data: dict) -> None:
     r = _get_sync_redis()
@@ -165,6 +164,7 @@ def _session_delete(session_id: str) -> None:
 
 # ── Audit log helpers ─────────────────────────────────────────────────────────
 
+
 def _audit_append(event: dict) -> None:
     r = _get_sync_redis()
     if r:
@@ -185,10 +185,11 @@ def _audit_list(limit: int = 100, offset: int = 0) -> list[dict]:
             return [_json.loads(x) for x in raws]
         except Exception as _e:
             logger.debug("Redis audit_list failed: %s", _e)
-    return list(reversed(_audit_log_fallback))[offset: offset + limit]
+    return list(reversed(_audit_log_fallback))[offset : offset + limit]
 
 
 # ── API key helpers ───────────────────────────────────────────────────────────
+
 
 def _api_key_set(key_id: str, data: dict) -> None:
     r = _get_sync_redis()
@@ -240,6 +241,7 @@ def _api_key_hash_set(key_hash: str, key_id: str) -> None:
             logger.debug("Redis api_key_hash_set failed: %s", _e)
     _api_key_hashes_fallback[key_hash] = key_id
 
+
 # ── Admin role guard ──────────────────────────────────────────────────────────
 
 _ADMIN_USERS: set = {u.strip() for u in os.getenv("ADMIN_USER_IDS", "admin").split(",") if u.strip()}
@@ -259,7 +261,6 @@ def _require_admin(user: TokenPayload) -> TokenPayload:
             detail="Admin access required",
         )
     return user
-
 
 
 def _client_ip(request: Request) -> str:
