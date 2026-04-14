@@ -54,7 +54,7 @@ from datetime import datetime, timezone
 
 UTC = timezone.utc
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -97,32 +97,16 @@ def _require_admin(user: TokenPayload) -> TokenPayload:
     return user
 
 
-# Seed demo audit log
-def _seed_audit():
-    events = [
-        ("system", "startup", "Application started"),
-        ("user-001", "login", "Login from 192.168.1.1"),
-        ("user-002", "trade.placed", "BUY 0.1 XAU/USD @ 2350.00"),
-        ("user-001", "settings.changed", "Notification channel updated"),
-        ("user-003", "login.failed", "Invalid password attempt"),
-        ("user-002", "withdrawal.requested", "$500 withdrawal initiated"),
-        ("admin", "user.banned", "user-004 banned for ToS violation"),
-        ("user-001", "signal.copied", "Copied signal sig-003 from AlgoTrader_X"),
-    ]
-    for user_id, event_type, detail in events:
-        _audit_log.append(
-            {
-                "event_id": str(uuid.uuid4()),
-                "user_id": user_id,
-                "event_type": event_type,
-                "detail": detail,
-                "ip_address": "127.0.0.1",
-                "created_at": datetime.now(UTC).isoformat(),
-            },
-        )
 
-
-_seed_audit()
+def _client_ip(request: Request) -> str:
+    """Extract the real client IP from X-Forwarded-For or request.client."""
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        # X-Forwarded-For may be a comma-separated list; leftmost is the client
+        return forwarded.split(",")[0].strip()
+    if request.client:
+        return request.client.host
+    return ""
 
 
 def _log_audit(user_id: str, event_type: str, detail: str, ip: str = ""):
@@ -153,6 +137,7 @@ async def list_sessions(user: TokenPayload = Depends(get_current_user)):
 @router.delete("/api/auth/sessions/{session_id}")
 async def revoke_session(
     session_id: str,
+    request: Request,
     user: TokenPayload = Depends(get_current_user),
 ):
     """Revoke a specific session (log out that device)."""
@@ -161,12 +146,12 @@ async def revoke_session(
         raise HTTPException(status_code=404, detail="Session not found")
     session["revoked"] = True
     session["revoked_at"] = datetime.now(UTC).isoformat()
-    _log_audit(user.sub, "session.revoked", f"Session {session_id[:8]} revoked")
+    _log_audit(user.sub, "session.revoked", f"Session {session_id[:8]} revoked", ip=_client_ip(request))
     return {"revoked": True, "session_id": session_id}
 
 
 @router.delete("/api/auth/sessions")
-async def revoke_all_sessions(user: TokenPayload = Depends(get_current_user)):
+async def revoke_all_sessions(request: Request, user: TokenPayload = Depends(get_current_user)):
     """Revoke all sessions for the current user (logout everywhere)."""
     count = 0
     for s in _sessions.values():
@@ -174,7 +159,7 @@ async def revoke_all_sessions(user: TokenPayload = Depends(get_current_user)):
             s["revoked"] = True
             s["revoked_at"] = datetime.now(UTC).isoformat()
             count += 1
-    _log_audit(user.sub, "session.revoke_all", f"All {count} sessions revoked")
+    _log_audit(user.sub, "session.revoke_all", f"All {count} sessions revoked", ip=_client_ip(request))
     return {"revoked": count}
 
 
@@ -248,7 +233,7 @@ async def list_users(
 
 
 @router.post("/api/admin/users/{user_id}/ban")
-async def ban_user(user_id: str, admin: TokenPayload = Depends(get_current_user)):
+async def ban_user(user_id: str, request: Request, admin: TokenPayload = Depends(get_current_user)):
     """Ban a user. Cancels their subscription and blocks login. Admin only."""
     _require_admin(admin)
     users = _get_users_from_subscriptions()
@@ -264,24 +249,24 @@ async def ban_user(user_id: str, admin: TokenPayload = Depends(get_current_user)
             subscription_manager.cancel_subscription(sub_id)
     except Exception as exc:
         logger.warning("ban_user.cancel_subscription failed: %s", exc)
-    _log_audit(admin.sub, "user.banned", f"User {user_id} banned by admin")
+    _log_audit(admin.sub, "user.banned", f"User {user_id} banned by admin", ip=_client_ip(request))
     return {"banned": True, "user_id": user_id}
 
 
 @router.post("/api/admin/users/{user_id}/unban")
-async def unban_user(user_id: str, admin: TokenPayload = Depends(get_current_user)):
+async def unban_user(user_id: str, request: Request, admin: TokenPayload = Depends(get_current_user)):
     """Unban a user. Admin only."""
     _require_admin(admin)
     users = _get_users_from_subscriptions()
     if user_id not in users:
         raise HTTPException(status_code=404, detail="User not found")
     users[user_id]["status"] = "active"
-    _log_audit(admin.sub, "user.unbanned", f"User {user_id} unbanned by admin")
+    _log_audit(admin.sub, "user.unbanned", f"User {user_id} unbanned by admin", ip=_client_ip(request))
     return {"unbanned": True, "user_id": user_id}
 
 
 @router.post("/api/admin/users/{user_id}/reset-password")
-async def reset_password(user_id: str, admin: TokenPayload = Depends(get_current_user)):
+async def reset_password(user_id: str, request: Request, admin: TokenPayload = Depends(get_current_user)):
     """Trigger a password reset email for a user. Admin only."""
     _require_admin(admin)
     try:
@@ -299,7 +284,7 @@ async def reset_password(user_id: str, admin: TokenPayload = Depends(get_current
             )
     except Exception as exc:
         logger.warning("reset_password.email_failed: %s", exc)
-    _log_audit(admin.sub, "user.password_reset", f"Password reset triggered for {user_id}")
+    _log_audit(admin.sub, "user.password_reset", f"Password reset triggered for {user_id}", ip=_client_ip(request))
     return {"reset_triggered": True, "user_id": user_id}
 
 
@@ -341,6 +326,7 @@ async def get_user_trades(
 @router.post("/api/admin/users/{user_id}/impersonate")
 async def impersonate_user(
     user_id: str,
+    request: Request,
     admin: TokenPayload = Depends(get_current_user),
 ):
     """
@@ -351,7 +337,7 @@ async def impersonate_user(
     Admin only. Token expires in 5 minutes.
     """
     _require_admin(admin)
-    _log_audit(admin.sub, "user.impersonated", f"Admin {admin.sub} impersonating {user_id}")
+    _log_audit(admin.sub, "user.impersonated", f"Admin {admin.sub} impersonating {user_id}", ip=_client_ip(request))
 
     try:
         import time
@@ -456,6 +442,7 @@ async def list_api_keys(user: TokenPayload = Depends(get_current_user)):
 @router.post("/api/settings/api-keys", status_code=status.HTTP_201_CREATED)
 async def create_api_key(
     body: CreateApiKeyBody,
+    request: Request,
     user: TokenPayload = Depends(get_current_user),
 ):
     """Create a named API key. Raw key shown once — stored as SHA-256 hash."""
@@ -474,7 +461,7 @@ async def create_api_key(
         "revoked": False,
     }
     _api_key_hashes[key_hash] = key_id
-    _log_audit(user.sub, "api_key.created", f"API key '{body.name}' created")
+    _log_audit(user.sub, "api_key.created", f"API key '{body.name}' created", ip=_client_ip(request))
 
     return {
         "key_id": key_id,
@@ -486,14 +473,14 @@ async def create_api_key(
 
 
 @router.delete("/api/settings/api-keys/{key_id}")
-async def revoke_api_key(key_id: str, user: TokenPayload = Depends(get_current_user)):
+async def revoke_api_key(key_id: str, request: Request, user: TokenPayload = Depends(get_current_user)):
     """Revoke an API key."""
     key = _api_keys.get(key_id)
     if not key or key["user_id"] != user.sub:
         raise HTTPException(status_code=404, detail="API key not found")
     key["revoked"] = True
     key["revoked_at"] = datetime.now(UTC).isoformat()
-    _log_audit(user.sub, "api_key.revoked", f"API key '{key['name']}' revoked")
+    _log_audit(user.sub, "api_key.revoked", f"API key '{key['name']}' revoked", ip=_client_ip(request))
     return {"revoked": True, "key_id": key_id}
 
 
@@ -525,7 +512,7 @@ async def list_feature_flags(admin: TokenPayload = Depends(get_current_user)):
 
 
 @router.post("/api/admin/feature-flags/{flag_name}/enable")
-async def enable_flag(flag_name: str, admin: TokenPayload = Depends(get_current_user)):
+async def enable_flag(flag_name: str, request: Request, admin: TokenPayload = Depends(get_current_user)):
     """Enable a feature flag at runtime (sets env var for this process). Admin only."""
     _require_admin(admin)
     from config.feature_flags import flags as _flags
@@ -535,12 +522,12 @@ async def enable_flag(flag_name: str, admin: TokenPayload = Depends(get_current_
         raise HTTPException(status_code=404, detail=f"Flag '{flag_name}' not found")
     env_var = registry[flag_name].get("env_var", flag_name)
     os.environ[env_var] = "true"
-    _log_audit(admin.sub, "feature_flag.enabled", f"Flag {flag_name} enabled")
+    _log_audit(admin.sub, "feature_flag.enabled", f"Flag {flag_name} enabled", ip=_client_ip(request))
     return {"flag": flag_name, "enabled": True}
 
 
 @router.post("/api/admin/feature-flags/{flag_name}/disable")
-async def disable_flag(flag_name: str, admin: TokenPayload = Depends(get_current_user)):
+async def disable_flag(flag_name: str, request: Request, admin: TokenPayload = Depends(get_current_user)):
     """Disable a feature flag at runtime. Admin only."""
     _require_admin(admin)
     from config.feature_flags import flags as _flags
@@ -550,7 +537,7 @@ async def disable_flag(flag_name: str, admin: TokenPayload = Depends(get_current
         raise HTTPException(status_code=404, detail=f"Flag '{flag_name}' not found")
     env_var = registry[flag_name].get("env_var", flag_name)
     os.environ[env_var] = "false"
-    _log_audit(admin.sub, "feature_flag.disabled", f"Flag {flag_name} disabled")
+    _log_audit(admin.sub, "feature_flag.disabled", f"Flag {flag_name} disabled", ip=_client_ip(request))
     return {"flag": flag_name, "enabled": False}
 
 
@@ -563,6 +550,7 @@ class FlagOverrideBody(BaseModel):
 async def override_flag_for_user(
     flag_name: str,
     body: FlagOverrideBody,
+    request: Request,
     admin: TokenPayload = Depends(get_current_user),
 ):
     """Set a per-user feature flag override (e.g. give beta users early access). Admin only."""
@@ -576,6 +564,7 @@ async def override_flag_for_user(
         admin.sub,
         "feature_flag.override",
         f"Flag {flag_name} overridden to {body.enabled} for user {body.user_id}",
+        ip=_client_ip(request),
     )
     return {"flag": flag_name, "user_id": body.user_id, "enabled": body.enabled}
 
