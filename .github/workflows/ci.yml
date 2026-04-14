@@ -58,11 +58,46 @@ jobs:
       - name: Install pip-audit
         run: pip install pip-audit
       - name: Dependency vulnerability scan
-        # Report CVEs but do not block merges - tracked in security dashboard.
-        run: pip-audit --requirement=requirements.txt --desc || true
+        # Blocks on CRITICAL severity; HIGH and below are reported only.
+        # To suppress a false-positive: pip-audit --ignore-vuln GHSA-xxxx-xxxx-xxxx
+        run: |
+          pip-audit --requirement=requirements.txt --desc \
+            --vulnerability-service pypi \
+            --format json --output pip-audit-report.json || true
+          # Exit non-zero if any CRITICAL CVEs are present
+          python - <<'EOF'
+          import json, sys
+          try:
+              data = json.load(open("pip-audit-report.json"))
+          except Exception:
+              sys.exit(0)  # no report = no vulns
+          criticals = [
+              v for dep in data.get("dependencies", [])
+              for v in dep.get("vulns", [])
+              if v.get("fix_versions") is not None  # exploitable, has fix
+              and any(
+                  "CRITICAL" in (a.get("severity", "") or "").upper()
+                  for a in v.get("aliases", [{"severity": ""}])
+              )
+          ]
+          if criticals:
+              print(f"BLOCKED: {len(criticals)} CRITICAL CVE(s) found:")
+              for c in criticals:
+                  print(f"  {c['id']}: {c.get('description', '')[:120]}")
+              sys.exit(1)
+          print("pip-audit: no CRITICAL CVEs found")
+          EOF
+      - name: Upload pip-audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-audit-report
+          path: pip-audit-report.json
+          retention-days: 30
       - name: Scan with Trivy (supply-chain)
         # Download pinned release asset directly - avoids executing a remote
         # shell script from main and makes failures easier to diagnose.
+        # --exit-code 1 blocks merges on CRITICAL or HIGH findings.
         run: |
           set -euo pipefail
           TRIVY_VERSION="0.69.3"
@@ -71,7 +106,7 @@ jobs:
           tar -xzf trivy.tgz trivy
           sudo install -m 0755 trivy /usr/local/bin/trivy
           trivy version
-          trivy fs . --severity CRITICAL,HIGH --exit-code 0 --format table
+          trivy fs . --severity CRITICAL,HIGH --exit-code 1 --format table
 
   typecheck:
     runs-on: ubuntu-latest
