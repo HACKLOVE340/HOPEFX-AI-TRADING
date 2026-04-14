@@ -42,6 +42,7 @@ _counters: dict[str, dict[str, list]] = defaultdict(lambda: {"min": [0, 0.0], "d
 def _get_sync_redis():
     try:
         from cache.redis_pool import get_sync_client
+
         return get_sync_client()
     except Exception:
         return None

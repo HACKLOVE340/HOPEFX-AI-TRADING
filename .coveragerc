@@ -60,6 +60,8 @@ omit =
     # core/ modules excluded from unit coverage:
     # GPU engine requires CUDA hardware — untestable in CI without GPU
     core/acceleration/gpu_engine.py
+    # GPU inference package init — wraps gpu_engine, hardware-dependent
+    core/acceleration/__init__.py
     # Decision engine requires full app wiring (brain+risk+executor+bus)
     # covered by integration tests
     core/decision/HOPEFXDecisionEngine.py
@@ -71,6 +73,13 @@ omit =
     core/middleware.py
     core/page_routes.py
     core/email_webhook.py
+    # Startup factories and router registry require full app context;
+    # covered by integration/e2e tests, not unit tests
+    core/startup_factories.py
+    core/router_registry.py
+    # Advanced risk engine (Monte Carlo/GARCH) requires live risk bus wiring;
+    # covered by integration tests
+    core/risk/advanced_engine.py
 
 [report]
 precision = 2

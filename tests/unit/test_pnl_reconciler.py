@@ -29,7 +29,6 @@ from __future__ import annotations
 import json
 import pickle
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -42,11 +41,13 @@ UTC = timezone.utc
 
 def _make_reconciler(tmp_path, **kwargs):
     from ml.pnl_reconciler import PnLReconciler
+
     return PnLReconciler(snapshot_path=tmp_path / "pnl_reconciliation.json", **kwargs)
 
 
-def _write_snapshot(tmp_path, gate_passed=True, divergence=0.1, ledger=100.0,
-                    broker=100.1, n_ledger=20, n_broker=20, age_hours=0):
+def _write_snapshot(
+    tmp_path, gate_passed=True, divergence=0.1, ledger=100.0, broker=100.1, n_ledger=20, n_broker=20, age_hours=0
+):
     """Write a synthetic snapshot at a given age."""
     ts = datetime.now(UTC) - timedelta(hours=age_hours)
     data = {
@@ -224,10 +225,12 @@ class TestReconcile:
         r = _make_reconciler(tmp_path, abs_tolerance=1.0, min_trades=2)
 
         broker = MagicMock()
-        broker.get_closed_trades = AsyncMock(return_value=[
-            {"realized_pnl": 10.0},
-            {"realized_pnl": 5.0},
-        ])
+        broker.get_closed_trades = AsyncMock(
+            return_value=[
+                {"realized_pnl": 10.0},
+                {"realized_pnl": 5.0},
+            ]
+        )
 
         # Patch ledger to return matching value
         with patch.object(r, "_collect_ledger_pnl", return_value=(15.0, 2)):
@@ -241,9 +244,11 @@ class TestReconcile:
         r = _make_reconciler(tmp_path, abs_tolerance=1.0, min_trades=2)
 
         broker = MagicMock()
-        broker.get_closed_trades = AsyncMock(return_value=[
-            {"realized_pnl": 100.0},
-        ])
+        broker.get_closed_trades = AsyncMock(
+            return_value=[
+                {"realized_pnl": 100.0},
+            ]
+        )
 
         with patch.object(r, "_collect_ledger_pnl", return_value=(50.0, 5)):
             result = await r.reconcile(broker=broker)
@@ -291,8 +296,7 @@ class TestReconcile:
 class TestCollectLedgerPnl:
     def test_returns_zero_when_position_manager_absent(self, tmp_path):
         r = _make_reconciler(tmp_path)
-        with patch("ml.pnl_reconciler.PnLReconciler._collect_ledger_pnl",
-                   wraps=r._collect_ledger_pnl):
+        with patch("ml.pnl_reconciler.PnLReconciler._collect_ledger_pnl", wraps=r._collect_ledger_pnl):
             # Patch app_state to raise ImportError
             with patch.dict("sys.modules", {"core.app_state": None}):
                 pnl, n = r._collect_ledger_pnl()
@@ -353,10 +357,12 @@ class TestCollectBrokerPnl:
     async def test_uses_get_closed_trades(self, tmp_path):
         r = _make_reconciler(tmp_path)
         broker = MagicMock()
-        broker.get_closed_trades = AsyncMock(return_value=[
-            {"realized_pnl": 5.0},
-            {"realizedPL": 3.0},   # alternate key name
-        ])
+        broker.get_closed_trades = AsyncMock(
+            return_value=[
+                {"realized_pnl": 5.0},
+                {"realizedPL": 3.0},  # alternate key name
+            ]
+        )
         pnl, n = await r._collect_broker_pnl(broker)
         assert pnl == pytest.approx(8.0)
         assert n == 2
@@ -416,6 +422,7 @@ class TestSnapshotStatus:
 class TestReconciliationResult:
     def test_to_dict_contains_all_fields(self, tmp_path):
         from ml.pnl_reconciler import ReconciliationResult
+
         result = ReconciliationResult(
             gate_passed=True,
             ledger_pnl=100.0,
@@ -429,9 +436,19 @@ class TestReconciliationResult:
             reason="test",
         )
         d = result.to_dict()
-        for key in ("gate_passed", "ledger_pnl", "broker_pnl", "divergence",
-                    "rel_divergence", "n_ledger_trades", "n_broker_trades",
-                    "abs_tolerance", "rel_tolerance", "reason", "reconciled_at"):
+        for key in (
+            "gate_passed",
+            "ledger_pnl",
+            "broker_pnl",
+            "divergence",
+            "rel_divergence",
+            "n_ledger_trades",
+            "n_broker_trades",
+            "abs_tolerance",
+            "rel_tolerance",
+            "reason",
+            "reconciled_at",
+        ):
             assert key in d, f"Missing key: {key}"
 
 
@@ -441,8 +458,10 @@ class TestReconciliationResult:
 class TestSingleton:
     def test_returns_same_instance(self):
         import ml.pnl_reconciler as mr
+
         mr._reconciler = None
         from ml.pnl_reconciler import get_reconciler, PnLReconciler
+
         a = get_reconciler()
         b = get_reconciler()
         assert a is b
@@ -450,8 +469,10 @@ class TestSingleton:
 
     def test_creates_on_first_call(self):
         import ml.pnl_reconciler as mr
+
         mr._reconciler = None
         from ml.pnl_reconciler import get_reconciler, PnLReconciler
+
         r = get_reconciler()
         assert isinstance(r, PnLReconciler)
 
@@ -465,6 +486,7 @@ class TestModelRegistryPnLGate:
     @pytest.fixture()
     def registry(self, tmp_path):
         from ml.model_registry import ModelRegistry
+
         return ModelRegistry(registry_path=tmp_path / "registry.json")
 
     @pytest.fixture()
@@ -489,8 +511,9 @@ class TestModelRegistryPnLGate:
 
         # Patch _pnl_reconciliation_check to return failure
         with patch.object(
-            registry, "_pnl_reconciliation_check",
-            return_value=(False, "P&L reconciliation gate BLOCKED: no fresh snapshot")
+            registry,
+            "_pnl_reconciliation_check",
+            return_value=(False, "P&L reconciliation gate BLOCKED: no fresh snapshot"),
         ):
             with pytest.raises(RuntimeError, match="BLOCKED"):
                 registry.promote("v1")
@@ -500,14 +523,11 @@ class TestModelRegistryPnLGate:
         self._register_good(registry, artifact)
 
         with (
-            patch.object(registry, "_pnl_reconciliation_check",
-                         return_value=(True, "P&L reconciliation gate passed")),
+            patch.object(registry, "_pnl_reconciliation_check", return_value=(True, "P&L reconciliation gate passed")),
             patch.object(registry, "_update_symlink"),
-            patch.dict("sys.modules", {
-                "ml.performance_monitor": MagicMock(
-                    get_monitor=MagicMock(return_value=MagicMock())
-                )
-            }),
+            patch.dict(
+                "sys.modules", {"ml.performance_monitor": MagicMock(get_monitor=MagicMock(return_value=MagicMock()))}
+            ),
         ):
             entry = registry.promote("v1")
 
@@ -539,8 +559,10 @@ class TestModelRegistryPnLGate:
         mock_reconciler = MagicMock()
         mock_reconciler.check_gate.return_value = mock_result
 
-        with patch("ml.model_registry.PnLReconciler" if False else "ml.pnl_reconciler.get_reconciler",
-                   return_value=mock_reconciler):
+        with patch(
+            "ml.model_registry.PnLReconciler" if False else "ml.pnl_reconciler.get_reconciler",
+            return_value=mock_reconciler,
+        ):
             passed, reason = registry._pnl_reconciliation_check()
 
         # Result depends on what get_reconciler().check_gate() returns
@@ -549,8 +571,9 @@ class TestModelRegistryPnLGate:
 
     def test_pnl_reconciliation_check_handles_import_error(self, registry):
         """_pnl_reconciliation_check must return (False, msg) on import failure."""
-        with patch("ml.model_registry.ModelRegistry._pnl_reconciliation_check",
-                   wraps=registry._pnl_reconciliation_check):
+        with patch(
+            "ml.model_registry.ModelRegistry._pnl_reconciliation_check", wraps=registry._pnl_reconciliation_check
+        ):
             with patch.dict("sys.modules", {"ml.pnl_reconciler": None}):
                 passed, reason = registry._pnl_reconciliation_check()
 
