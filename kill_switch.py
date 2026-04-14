@@ -474,6 +474,78 @@ class KillSwitch:
         except Exception as _email_exc:
             logger.debug("Risk halt email skipped (non-critical): %s", _email_exc)
 
+        # Cancel all open orders and close all positions at the broker level.
+        # This is a best-effort call — failure is logged but never prevents
+        # the kill switch from activating. Each broker connector implements
+        # its own mass-cancel (IBKR: reqGlobalCancel, OANDA: bulk position
+        # close, MT5: iterate positions/orders).
+        self._broker_cancel_all(reason)
+
+    def _broker_cancel_all(self, reason: str) -> None:
+        """
+        Best-effort broker-level mass cancel on kill switch activation.
+
+        Resolves the active broker from the module registry and calls
+        cancel_all_orders(). Async brokers (OANDA, MT5) are dispatched
+        via asyncio. Failure is logged but never prevents the kill switch
+        from activating — the flag is already set before this is called.
+        """
+        try:
+            # Try to get the active broker from the execution engine registry
+            broker = None
+            try:
+                from execution.engine import get_active_broker
+                broker = get_active_broker()
+            except Exception:
+                pass
+
+            # Fallback: try the smart router's primary broker
+            if broker is None:
+                try:
+                    from execution.smart_router import get_router
+                    router = get_router()
+                    if router is not None:
+                        broker = getattr(router, "_primary_broker", None) or getattr(router, "broker", None)
+                except Exception:
+                    pass
+
+            if broker is None:
+                logger.warning("KillSwitch._broker_cancel_all: no active broker found — skipping broker cancel")
+                return
+
+            broker_name = getattr(broker, "name", type(broker).__name__)
+            logger.warning("KillSwitch._broker_cancel_all: calling cancel_all_orders on %s", broker_name)
+
+            cancel_fn = getattr(broker, "cancel_all_orders", None)
+            if cancel_fn is None:
+                logger.warning("KillSwitch._broker_cancel_all: %s has no cancel_all_orders method", broker_name)
+                return
+
+            import asyncio
+            import inspect
+
+            if inspect.iscoroutinefunction(cancel_fn):
+                # Async broker (OANDA, MT5) — schedule on the running loop or run in new loop
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(cancel_fn())
+                    logger.warning("KillSwitch._broker_cancel_all: async cancel_all_orders scheduled on %s", broker_name)
+                except RuntimeError:
+                    # No running loop — run synchronously in a new loop
+                    asyncio.run(cancel_fn())
+                    logger.warning("KillSwitch._broker_cancel_all: async cancel_all_orders completed on %s", broker_name)
+            else:
+                # Sync broker (IBKR)
+                ok = cancel_fn()
+                logger.warning(
+                    "KillSwitch._broker_cancel_all: cancel_all_orders on %s returned %s",
+                    broker_name, ok,
+                )
+
+        except Exception as exc:
+            # Never let broker cancel failure prevent the kill switch from activating
+            logger.error("KillSwitch._broker_cancel_all: unexpected error: %s", exc)
+
     def _persist_state(self) -> None:
         """
         Write activation state to a JSON file next to the flag file.

@@ -189,6 +189,69 @@ class MT5Broker:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_cancel_order, ticket)
 
+    async def cancel_all_orders(self) -> bool:
+        """
+        Close all open positions and cancel all pending orders.
+
+        Called by the kill switch on activation. Iterates all open
+        positions and pending orders, closing/cancelling each one.
+        """
+        if not self._assert_connected("cancel_all_orders"):
+            return False
+
+        all_ok = True
+
+        # 1. Close all open positions
+        try:
+            positions = await self.get_positions()
+            for pos in positions:
+                ticket = pos.get("ticket")
+                if ticket is None:
+                    continue
+                try:
+                    result = await self.close_position(ticket)
+                    if result.get("success"):
+                        logger.warning("MT5Broker.cancel_all_orders: closed position ticket=%s", ticket)
+                    else:
+                        logger.error(
+                            "MT5Broker.cancel_all_orders: close ticket=%s failed: %s",
+                            ticket, result.get("comment"),
+                        )
+                        all_ok = False
+                except Exception as exc:
+                    logger.error("MT5Broker.cancel_all_orders: close ticket=%s raised: %s", ticket, exc)
+                    all_ok = False
+        except Exception as exc:
+            logger.error("MT5Broker.cancel_all_orders: get_positions failed: %s", exc)
+            all_ok = False
+
+        # 2. Cancel all pending orders
+        try:
+            orders = await self.get_orders()
+            for order in orders:
+                ticket = order.get("ticket")
+                if ticket is None:
+                    continue
+                try:
+                    result = await self.cancel_order(ticket)
+                    if result.get("success"):
+                        logger.warning("MT5Broker.cancel_all_orders: cancelled order ticket=%s", ticket)
+                    else:
+                        logger.error(
+                            "MT5Broker.cancel_all_orders: cancel ticket=%s failed: %s",
+                            ticket, result.get("comment"),
+                        )
+                        all_ok = False
+                except Exception as exc:
+                    logger.error("MT5Broker.cancel_all_orders: cancel ticket=%s raised: %s", ticket, exc)
+                    all_ok = False
+        except Exception as exc:
+            logger.error("MT5Broker.cancel_all_orders: get_orders failed: %s", exc)
+            all_ok = False
+
+        logger.warning("MT5Broker.cancel_all_orders: complete (all_ok=%s)", all_ok)
+        return all_ok
+
     # ── Market data ───────────────────────────────────────────────────────────
 
     async def get_tick(self, symbol: str) -> dict | None:

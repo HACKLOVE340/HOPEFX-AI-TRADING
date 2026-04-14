@@ -581,6 +581,34 @@ class IBKRConnector(BrokerConnector):
             self._capture_sentry(exc)
             return False
 
+    def cancel_all_orders(self) -> bool:
+        """Cancel all open orders and close all positions via reqGlobalCancel."""
+        if not self.connected or not self._ib:
+            logger.error("IBKRConnector.cancel_all_orders: not connected.")
+            return False
+        try:
+            # reqGlobalCancel cancels all open orders for this account at the
+            # broker level — does not depend on the Python process staying alive.
+            self._ib.reqGlobalCancel()
+            logger.warning("IBKRConnector.cancel_all_orders: reqGlobalCancel sent")
+
+            # Also close all open positions at market
+            all_ok = True
+            for pos in self.get_positions():
+                try:
+                    ok = self.close_position(pos.symbol)
+                    if not ok:
+                        all_ok = False
+                        logger.warning("IBKRConnector.cancel_all_orders: close_position(%s) failed", pos.symbol)
+                except Exception as exc:
+                    logger.error("IBKRConnector.cancel_all_orders: close_position(%s) raised: %s", pos.symbol, exc)
+                    all_ok = False
+            return all_ok
+        except Exception as exc:
+            logger.error("IBKRConnector.cancel_all_orders error: %s", exc)
+            self._capture_sentry(exc)
+            return False
+
     # ------------------------------------------------------------------
     # Account info
     # ------------------------------------------------------------------
