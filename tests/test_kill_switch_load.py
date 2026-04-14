@@ -25,7 +25,7 @@ from __future__ import annotations
 import asyncio
 import os
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -284,7 +284,159 @@ class TestStatePersistence:
 
 
 # ===========================================================================
-# 6. File-flag polling activates the switch
+# 6. _broker_cancel_all — broker mass-cancel on activation
+# ===========================================================================
+class TestBrokerCancelAll:
+    """Tests for KillSwitch._broker_cancel_all and its integration with activate."""
+
+    def _make_ks(self, tmp_path: Path):
+        from kill_switch import KillSwitch
+
+        flag = tmp_path / "ks.flag"
+        return KillSwitch(flag_file=flag, deactivation_token="tok")
+
+    def test_no_broker_found_logs_warning(self, tmp_path):
+        """When no broker is registered, _broker_cancel_all logs a warning and returns."""
+        ks = self._make_ks(tmp_path)
+        with (
+            patch("kill_switch.KillSwitch._broker_cancel_all") as mock_cancel,
+        ):
+            mock_cancel.return_value = None
+            ks.activate("test-no-broker")
+        mock_cancel.assert_called_once_with("test-no-broker")
+
+    def test_broker_cancel_all_called_on_activate(self, tmp_path):
+        """activate() must call _broker_cancel_all after setting the flag."""
+        ks = self._make_ks(tmp_path)
+        with (
+            patch.object(ks, "_broker_cancel_all") as mock_cancel,
+            patch.object(ks, "_write_redis_latch"),
+        ):
+            ks.activate("drawdown")
+        mock_cancel.assert_called_once_with("drawdown")
+        assert ks.is_active()
+
+    def test_broker_cancel_all_no_engine_no_router(self, tmp_path):
+        """When both engine and router imports fail, logs warning and returns."""
+        ks = self._make_ks(tmp_path)
+        with patch.dict("sys.modules", {"execution.engine": None, "execution.smart_router": None}):
+            # Should not raise — both imports fail, broker is None
+            ks._broker_cancel_all("test")
+
+    def test_broker_cancel_all_sync_broker(self, tmp_path):
+        """Sync broker's cancel_all_orders() is called directly."""
+        ks = self._make_ks(tmp_path)
+        mock_broker = MagicMock()
+        mock_broker.cancel_all_orders.return_value = True
+        mock_broker.name = "MockSyncBroker"
+
+        def fake_get_active_broker():
+            return mock_broker
+
+        with patch("execution.engine.get_active_broker", fake_get_active_broker, create=True):
+            with patch.dict("sys.modules", {}):
+                import execution.engine as eng
+
+                eng.get_active_broker = fake_get_active_broker
+                ks._broker_cancel_all("test-sync")
+
+        mock_broker.cancel_all_orders.assert_called_once()
+
+    def test_broker_cancel_all_async_broker_running_loop(self, tmp_path):
+        """Async broker's cancel_all_orders() is scheduled as a task when loop is running."""
+        ks = self._make_ks(tmp_path)
+
+        async def fake_cancel():
+            return True
+
+        mock_broker = MagicMock()
+        mock_broker.cancel_all_orders = fake_cancel
+        mock_broker.name = "MockAsyncBroker"
+
+        async def run():
+            import execution.engine as eng
+
+            eng.get_active_broker = lambda: mock_broker
+            ks._broker_cancel_all("test-async-loop")
+            # Give the scheduled task a chance to run
+            await asyncio.sleep(0)
+
+        with patch("execution.engine.get_active_broker", lambda: mock_broker, create=True):
+            asyncio.run(run())
+
+    def test_broker_cancel_all_async_broker_no_loop(self, tmp_path):
+        """Async broker's cancel_all_orders() is run via asyncio.run when no loop is running."""
+        ks = self._make_ks(tmp_path)
+        called = []
+
+        async def fake_cancel():
+            called.append(True)
+            return True
+
+        mock_broker = MagicMock()
+        mock_broker.cancel_all_orders = fake_cancel
+        mock_broker.name = "MockAsyncBrokerNoLoop"
+
+        import execution.engine as eng
+
+        eng.get_active_broker = lambda: mock_broker
+        ks._broker_cancel_all("test-async-no-loop")
+        assert called, "async cancel_all_orders was not called"
+
+    def test_broker_cancel_all_broker_raises(self, tmp_path):
+        """Exception in cancel_all_orders is caught and logged — never propagates."""
+        ks = self._make_ks(tmp_path)
+        mock_broker = MagicMock()
+        mock_broker.cancel_all_orders.side_effect = RuntimeError("broker exploded")
+        mock_broker.name = "BrokenBroker"
+
+        import execution.engine as eng
+
+        eng.get_active_broker = lambda: mock_broker
+        # Must not raise
+        ks._broker_cancel_all("test-broker-raises")
+
+    def test_broker_cancel_all_no_cancel_method(self, tmp_path):
+        """Broker without cancel_all_orders logs warning and returns cleanly."""
+        ks = self._make_ks(tmp_path)
+        mock_broker = MagicMock(spec=[])  # no cancel_all_orders attribute
+        mock_broker.name = "NoCancelBroker"
+
+        import execution.engine as eng
+
+        eng.get_active_broker = lambda: mock_broker
+        # Must not raise
+        ks._broker_cancel_all("test-no-method")
+
+    def test_broker_cancel_all_via_router_fallback(self, tmp_path):
+        """Falls back to smart router's broker when engine has no active broker."""
+        ks = self._make_ks(tmp_path)
+        mock_broker = MagicMock()
+        mock_broker.cancel_all_orders.return_value = True
+        mock_broker.name = "RouterBroker"
+
+        mock_router = MagicMock()
+        mock_router._primary_broker = mock_broker
+
+        import execution.engine as eng
+        import execution.smart_router as sr
+
+        orig_engine = getattr(eng, "get_active_broker", None)
+        orig_router = getattr(sr, "get_router", None)
+        try:
+            eng.get_active_broker = lambda: None
+            sr.get_router = lambda: mock_router
+            ks._broker_cancel_all("test-router-fallback")
+        finally:
+            if orig_engine is not None:
+                eng.get_active_broker = orig_engine
+            if orig_router is not None:
+                sr.get_router = orig_router
+        mock_broker.cancel_all_orders.assert_called_once()
+
+
+# ===========================================================================
+# 7. File-flag polling activates the switch
 # ===========================================================================
 class TestFileFlagPolling:
     @pytest.mark.asyncio
