@@ -1,0 +1,103 @@
+# monitoring/alertmanager/alertmanager.yml
+# Alertmanager configuration for HopeFX production.
+#
+# Routing:
+#   critical → Telegram + email (immediate)
+#   warning  → email only (5 min grouping)
+#   default  → email (10 min grouping)
+#
+# Required environment variables (set in .env):
+#   ALERTMANAGER_TELEGRAM_BOT_TOKEN  — Telegram bot token from @BotFather
+#   ALERTMANAGER_TELEGRAM_CHAT_ID    — Telegram chat/channel ID
+#   ALERTMANAGER_SMTP_FROM           — sender address
+#   ALERTMANAGER_SMTP_TO             — recipient address
+#   ALERTMANAGER_SMTP_HOST           — SMTP relay host (e.g. smtp.sendgrid.net:587)
+#   ALERTMANAGER_SMTP_USERNAME       — SMTP auth username
+#   ALERTMANAGER_SMTP_PASSWORD       — SMTP auth password
+
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: '${ALERTMANAGER_SMTP_HOST:-localhost:587}'
+  smtp_from: '${ALERTMANAGER_SMTP_FROM:-alerts@hopefx.io}'
+  smtp_auth_username: '${ALERTMANAGER_SMTP_USERNAME:-}'
+  smtp_auth_password: '${ALERTMANAGER_SMTP_PASSWORD:-}'
+  smtp_require_tls: true
+
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+route:
+  group_by: ['alertname', 'severity']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: 'email-default'
+
+  routes:
+    # Critical alerts: Telegram + email, no grouping delay
+    - matchers:
+        - severity = critical
+      receiver: 'critical'
+      group_wait: 0s
+      repeat_interval: 1h
+
+    # Warning alerts: email only, 5 min grouping
+    - matchers:
+        - severity = warning
+      receiver: 'email-default'
+      group_wait: 5m
+      repeat_interval: 6h
+
+receivers:
+  - name: 'critical'
+    telegram_configs:
+      - bot_token: '${ALERTMANAGER_TELEGRAM_BOT_TOKEN:-}'
+        chat_id: '${ALERTMANAGER_TELEGRAM_CHAT_ID:-0}'
+        message: |
+          🚨 *HOPEFX CRITICAL ALERT*
+          *Alert:* {{ .GroupLabels.alertname }}
+          {{ range .Alerts }}
+          *Summary:* {{ .Annotations.summary }}
+          *Detail:* {{ .Annotations.description }}
+          *Started:* {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}
+          {{ end }}
+        parse_mode: 'Markdown'
+        send_resolved: true
+    email_configs:
+      - to: '${ALERTMANAGER_SMTP_TO:-}'
+        subject: '[CRITICAL] HopeFX: {{ .GroupLabels.alertname }}'
+        body: |
+          CRITICAL alert fired on HopeFX production.
+
+          {{ range .Alerts }}
+          Alert:       {{ .Labels.alertname }}
+          Summary:     {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Started:     {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}
+          {{ end }}
+        send_resolved: true
+
+  - name: 'email-default'
+    email_configs:
+      - to: '${ALERTMANAGER_SMTP_TO:-}'
+        subject: '[{{ .Status | toUpper }}] HopeFX: {{ .GroupLabels.alertname }}'
+        body: |
+          {{ .Status | toUpper }} alert on HopeFX production.
+
+          {{ range .Alerts }}
+          Alert:       {{ .Labels.alertname }}
+          Severity:    {{ .Labels.severity }}
+          Summary:     {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Started:     {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}
+          {{ end }}
+        send_resolved: true
+
+inhibit_rules:
+  # Suppress warning-level alerts when a critical alert is already firing
+  # for the same alertname, to reduce noise during outages.
+  - source_matchers:
+      - severity = critical
+    target_matchers:
+      - severity = warning
+    equal: ['alertname']
