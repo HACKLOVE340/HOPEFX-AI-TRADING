@@ -1,9 +1,0 @@
-{
-  "started_utc": "2026-03-27T03:34:53.828586+00:00",
-  "target_days": 30,
-  "account_id": "PENDING",
-  "environment": "practice",
-  "live_gate_opens": "2026-04-26T03:34:53.828586+00:00",
-  "requires_real_account": true,
-  "note": "Clock is running but no real OANDA account has connected. Set BROKER_TYPE=oanda, BROKER_OANDA_TOKEN, and BROKER_OANDA_ACCOUNT (format: 101-XXX-XXXXXXXX-XXX), then restart the server. The account_id will be stamped on first successful connection."
-}
