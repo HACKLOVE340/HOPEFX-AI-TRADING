@@ -535,6 +535,17 @@ class TestRealTimeSignalService:
                 "signal_expiry_minutes": 30,
             }
         )
+        # Prevent Redis connection attempts and FCM calls in unit tests.
+        # social_feed._get_sync_redis() hangs for 120s when Redis is absent;
+        # returning None causes it to fall back to the in-process dict store.
+        self._redis_patch = patch("api.social_feed._get_sync_redis", return_value=None)
+        self._fcm_patch = patch.object(self.svc, "_push_fcm_to_all_users", return_value=None)
+        self._redis_patch.start()
+        self._fcm_patch.start()
+
+    def teardown_method(self):
+        self._redis_patch.stop()
+        self._fcm_patch.stop()
 
     def test_initialization(self):
         assert self.svc.active_signals == {}

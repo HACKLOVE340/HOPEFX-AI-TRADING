@@ -918,6 +918,18 @@ class HopeFXEngine:
         except (RuntimeError, AttributeError, TypeError) as exc:
             logger.debug("ShadowTradingEngine.on_live_close error: %s", exc)
 
+        # ── Notify paper trading clock (Sharpe tracker) ───────────────────────
+        # record_fill() expects a fractional return: pnl / entry_value.
+        # entry_value = entry_price * quantity * 100 (same denominator used
+        # to compute realised_pnl above).  Guard against zero entry_price.
+        try:
+            entry_value = pos["entry_price"] * pos["quantity"] * 100.0
+            trade_return = realised_pnl / entry_value if entry_value != 0.0 else 0.0
+            from brokers.oanda_paper_clock import get_clock
+            get_clock().record_fill(trade_return=trade_return, symbol=unwind.symbol)
+        except Exception as exc:
+            logger.debug("HopeFXEngine: paper clock record_fill failed: %s", exc)
+
         # Remove from open positions
         self._open_positions.pop(unwind.symbol, None)
 

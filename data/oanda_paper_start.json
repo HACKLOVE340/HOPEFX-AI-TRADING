@@ -1,8 +1,0 @@
-{
-  "started_utc": "2026-03-27T03:34:53.828586+00:00",
-  "target_days": 30,
-  "account_id": "ACC123",
-  "environment": "practice",
-  "live_gate_opens": "2026-04-26T03:34:53.828586+00:00",
-  "note": "OANDA paper trading clock running since 2026-03-27. Live trading gate opens after 30 days (2026-04-26)."
-}

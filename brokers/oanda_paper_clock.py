@@ -425,6 +425,26 @@ def validate_oanda_account_at_startup() -> dict[str, Any]:
     has_token = bool(os.getenv("BROKER_OANDA_TOKEN", "") or os.getenv("OANDA_API_KEY", ""))
     has_account = bool(os.getenv("BROKER_OANDA_ACCOUNT", "") or os.getenv("OANDA_ACCOUNT_ID", ""))
 
+    # Validate account ID format — reject placeholder values like ACC123
+    # that look like they might be real but are not OANDA v20 format.
+    raw_account_env = os.getenv("BROKER_OANDA_ACCOUNT", "") or os.getenv("OANDA_ACCOUNT_ID", "")
+    if raw_account_env and raw_account_env not in ("PENDING", ""):
+        try:
+            from brokers.oanda import validate_oanda_account_id
+
+            if not validate_oanda_account_id(raw_account_env):
+                warnings.append(
+                    f"OANDA account ID {raw_account_env!r} does not match the required format "
+                    f"101-XXX-XXXXXXXX-XXX. This is not a valid OANDA v20 account ID. "
+                    f"Obtain your real account ID from the OANDA portal."
+                )
+                logger.warning(
+                    "⚠ OANDA account ID %r is not a valid v20 format (101-XXX-XXXXXXXX-XXX).",
+                    raw_account_env[:12],
+                )
+        except Exception as _exc:
+            logger.debug("Account ID format check skipped: %s", _exc)
+
     if pending:
         elapsed = status.get("elapsed_days", 0.0)
         remaining = status.get("remaining_days", float(_TARGET_DAYS))

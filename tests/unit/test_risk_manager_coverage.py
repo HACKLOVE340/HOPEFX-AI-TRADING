@@ -323,10 +323,12 @@ class TestSizeOrderScaling:
         rm_imp = _make_rm(initial_balance=100_000.0, orchestrator=orch)
         assert rm_imp.size_order(_signal()).quantity <= rm_base.size_order(_signal()).quantity
 
-    def test_zero_mid_price_uses_fallback(self):
+    def test_zero_mid_price_blocks_order(self):
+        # tick_mid=0 means no live price available — order must be blocked,
+        # not sized at a hardcoded fallback price.
         rm = _make_rm(initial_balance=100_000.0)
         r = rm.size_order(_signal(tick_mid=0.0))
-        assert r.quantity > 0  # fallback price used
+        assert r.quantity == 0.0
 
 
 # ---------------------------------------------------------------------------
