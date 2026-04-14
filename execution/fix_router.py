@@ -72,11 +72,25 @@ class _OandaFallback:
     """
 
     def __init__(self) -> None:
-        self._api_key = os.environ.get("OANDA_API_KEY", "")
+        # Accept the same three credential names as brokers/factory.py so the
+        # fallback path works regardless of which env var the operator set.
+        self._api_key = (
+            os.environ.get("OANDA_API_KEY")
+            or os.environ.get("BROKER_OANDA_TOKEN")
+            or os.environ.get("OANDA_ACCESS_TOKEN")
+            or ""
+        )
         self._account_id = os.environ.get("OANDA_ACCOUNT_ID", "")
         self._practice = os.environ.get("OANDA_PRACTICE", "true").lower() != "false"
         env_prefix = "practice" if self._practice else "trade"
         self._base_url = f"https://{env_prefix}-api.oanda.com"
+
+        if not self._api_key:
+            logger.warning(
+                "_OandaFallback: no OANDA API key found. "
+                "Set OANDA_API_KEY, BROKER_OANDA_TOKEN, or OANDA_ACCESS_TOKEN. "
+                "Orders via the FIX fallback path will fail."
+            )
 
     async def send(self, symbol: str, direction: str, units: float) -> dict:
         """Place a market order; return fill dict."""
