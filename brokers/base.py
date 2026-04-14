@@ -363,6 +363,44 @@ class BrokerConnector(ABC):
             List of OHLCV dictionaries
         """
 
+    def cancel_all_orders(self) -> bool:
+        """
+        Cancel all open/pending orders and close all positions at market.
+
+        Called by the kill switch on activation. Default implementation
+        iterates get_positions() and calls close_position() for each.
+        Brokers with a native mass-cancel API (IBKR reqGlobalCancel,
+        OANDA bulk close) should override this method.
+
+        Returns True if all cancellations succeeded (or there was nothing
+        to cancel). Returns False if any individual cancel failed.
+        """
+        all_ok = True
+        try:
+            positions = self.get_positions()
+        except Exception as exc:
+            logger.warning("%s.cancel_all_orders: get_positions failed: %s", self.name, exc)
+            return False
+
+        if not positions:
+            logger.info("%s.cancel_all_orders: no open positions", self.name)
+            return True
+
+        for pos in positions:
+            symbol = pos.symbol if hasattr(pos, "symbol") else str(pos)
+            try:
+                ok = self.close_position(symbol)
+                if not ok:
+                    logger.warning("%s.cancel_all_orders: close_position(%s) returned False", self.name, symbol)
+                    all_ok = False
+                else:
+                    logger.info("%s.cancel_all_orders: closed %s", self.name, symbol)
+            except Exception as exc:
+                logger.error("%s.cancel_all_orders: close_position(%s) raised: %s", self.name, symbol, exc)
+                all_ok = False
+
+        return all_ok
+
     def is_connected(self) -> bool:
         """
         Check if connected to broker.

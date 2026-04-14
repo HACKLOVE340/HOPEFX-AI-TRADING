@@ -1,29 +1,26 @@
 {
   "model_file": "advanced_oos.pkl",
-  "trained_at": "2026-04-02T15:10:56.550251+00:00",
+  "trained_at": "2026-04-14T21:30:22.555837+00:00",
   "ci_mode": false,
-  "oos_accuracy": null,
-  "oos_accuracy_se": 0.0109,
-  "oos_f1": null,
-  "oos_auc": 0.6077,
+  "oos_accuracy": 0.6468,
+  "oos_accuracy_se": 0.0174,
+  "oos_f1": 0.6855,
+  "oos_auc": 0.714,
   "oos_p_value": 0.0,
   "oos_significant": true,
-  "oos_n": 2016,
-  "oos_period": "2017-04-12 \u2192 2026-03-18",
-  "train_size": 3694,
-  "feature_count": 193,
+  "oos_n": 756,
+  "oos_period": "2022-03-02 \u2192 2026-04-08",
+  "train_size": 3867,
+  "feature_count": 222,
   "sharpe_gate": {
-    "n_trades": 2016,
+    "n_trades": 756,
     "sharpe": 1.52,
-    "se": 0.0327,
+    "se": 0.0534,
     "credible": true,
     "gate_passed": true,
     "target_n": 600,
     "n_required_for_se_010": 216,
-    "message": "Sharpe gate PASSED: N=2016 >= 600, SE=0.033 <= 0.10"
+    "message": "Sharpe gate PASSED: N=756 >= 600, SE=0.053 <= 0.10"
   },
-  "sharpe_note": "N=2016 OOS bars. Sharpe SE=0.033. Gate PASSED: need N>=600 trades for credible Sharpe. Run multi-symbol backtest (XAU+BTC+ETH) targeting N=600.",
-  "horizon": 5,
-  "validated_at": "2026-04-14T10:18:30.468612+00:00",
-  "note": "Model trained with horizon=5 to match execution engine hold period. Fixes accuracy/P&L disconnect from horizon=1 training."
+  "sharpe_note": "N=756 OOS bars. Sharpe SE=0.053. Gate PASSED: need N>=600 trades for credible Sharpe. Run multi-symbol backtest (XAU+BTC+ETH) targeting N=600."
 }
