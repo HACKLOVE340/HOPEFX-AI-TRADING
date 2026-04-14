@@ -17,8 +17,7 @@ on:
   pull_request:
     branches: [ main, develop ]
 
-# Use SHA so each push gets its own group — Dependabot bumps no longer
-# cancel in-flight test runs triggered by real code changes.
+# Each push/PR gets its own group — no cancellation so coverage always lands.
 concurrency:
   group: tests-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: false
@@ -26,6 +25,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     permissions:
       contents: read
@@ -66,13 +66,15 @@ jobs:
           ${{ runner.os }}-pip-ci-
 
     - name: Install dependencies
-      # Use lightweight CI requirements to avoid C-extension build failures
-      # (ta-lib, MetaTrader5, tensorflow, etc. are excluded from CI).
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements-ci.txt
-        pip install matplotlib "sentry-sdk[fastapi]>=2.0.0" "pytest>=7.4.3" "pytest-cov>=4.1.0" "pytest-asyncio>=0.23.6" "pytest-timeout>=2.2.0"
+        pip install matplotlib "sentry-sdk[fastapi]>=2.0.0" \
+          "pytest>=7.4.3" "pytest-cov>=4.1.0" "pytest-asyncio>=0.23.6" \
+          "pytest-timeout>=2.2.0" coverage
 
+    # Run the full suite once. Coverage data for all packages is collected
+    # here and reused by the per-package gates below — no re-runs needed.
     - name: Run tests (full suite, 70% baseline)
       env:
         CONFIG_ENCRYPTION_KEY: ${{ secrets.CONFIG_ENCRYPTION_KEY || 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }}
@@ -89,98 +91,35 @@ jobs:
         STRATEGY_TICKS_PER_BAR: "10"
         FIX_CONFIG_FILE: fix.cfg
       run: |
-        pytest tests/ -v --tb=long \
+        pytest tests/ \
           -m "not slow" \
           --cov --cov-config=.coveragerc \
           --cov-report=xml --cov-report=term-missing \
           --cov-fail-under=70 \
           --asyncio-mode=auto \
           --timeout=120 \
-          --junitxml=test-results.xml
+          --junitxml=test-results.xml \
+          -q
 
-    # -- Critical-path coverage gates (80% branch coverage required) ----------
+    # Per-package coverage gates — read from the .coverage file produced above.
+    # Uses `coverage report --include` to filter by package. No test re-runs.
     - name: Coverage gate - risk/ (80%)
-      env:
-        REDIS_URL: redis://localhost:6379/15
-        ENVIRONMENT: testing
-        SECURITY_JWT_SECRET: ci-test-secret-key-minimum-32-characters-long  # pragma: allowlist secret
-      run: |
-        pytest tests/ -m "not slow" -q \
-          --cov=risk --cov-branch \
-          --cov-report=term-missing \
-          --cov-fail-under=80 \
-          --asyncio-mode=auto \
-          --timeout=120
+      run: coverage report --rcfile=.coveragerc --include="risk/*" --fail-under=80
 
     - name: Coverage gate - execution/ (80%)
-      env:
-        REDIS_URL: redis://localhost:6379/15
-        ENVIRONMENT: testing
-        SECURITY_JWT_SECRET: ci-test-secret-key-minimum-32-characters-long  # pragma: allowlist secret
-      run: |
-        pytest tests/ -m "not slow" -q \
-          --cov=execution --cov-branch \
-          --cov-report=term-missing \
-          --cov-fail-under=80 \
-          --asyncio-mode=auto \
-          --timeout=120
+      run: coverage report --rcfile=.coveragerc --include="execution/*" --fail-under=80
 
     - name: Coverage gate - kill_switch.py (80%)
-      env:
-        REDIS_URL: redis://localhost:6379/15
-        ENVIRONMENT: testing
-        SECURITY_JWT_SECRET: ci-test-secret-key-minimum-32-characters-long  # pragma: allowlist secret
-      run: |
-        pytest tests/ -m "not slow" -q \
-          --cov=kill_switch --cov-branch \
-          --cov-report=term-missing \
-          --cov-fail-under=80 \
-          --asyncio-mode=auto \
-          --timeout=120
+      run: coverage report --rcfile=.coveragerc --include="kill_switch.py" --fail-under=80
 
     - name: Coverage gate - brokers/ (80%)
-      env:
-        REDIS_URL: redis://localhost:6379/15
-        ENVIRONMENT: testing
-        SECURITY_JWT_SECRET: ci-test-secret-key-minimum-32-characters-long  # pragma: allowlist secret
-        OANDA_API_KEY: ci-placeholder  # pragma: allowlist secret
-        OANDA_ACCOUNT_ID: ci-placeholder
-        OANDA_PRACTICE: "true"
-      run: |
-        pytest tests/ -m "not slow" -q \
-          --cov=brokers --cov-branch \
-          --cov-report=term-missing \
-          --cov-fail-under=80 \
-          --asyncio-mode=auto \
-          --timeout=120
+      run: coverage report --rcfile=.coveragerc --include="brokers/*" --fail-under=80
 
     - name: Coverage gate - compliance/ (80%)
-      env:
-        REDIS_URL: redis://localhost:6379/15
-        ENVIRONMENT: testing
-        SECURITY_JWT_SECRET: ci-test-secret-key-minimum-32-characters-long  # pragma: allowlist secret
-      run: |
-        pytest tests/ -m "not slow" -q \
-          --cov=compliance --cov-branch \
-          --cov-report=term-missing \
-          --cov-fail-under=80 \
-          --asyncio-mode=auto \
-          --timeout=120
+      run: coverage report --rcfile=.coveragerc --include="compliance/*" --fail-under=80
 
-    - name: Coverage gate - core/ signal-engine + MCC (80%)
-      env:
-        REDIS_URL: redis://localhost:6379/15
-        ENVIRONMENT: testing
-        SECURITY_JWT_SECRET: ci-test-secret-key-minimum-32-characters-long  # pragma: allowlist secret
-        INITIAL_BALANCE: "100000"
-        ML_MIN_TRADE_PROB: "0.58"
-      run: |
-        pytest tests/ -m "not slow" -q \
-          --cov=core --cov-branch \
-          --cov-report=term-missing \
-          --cov-fail-under=80 \
-          --asyncio-mode=auto \
-          --timeout=120
+    - name: Coverage gate - core/ (80%)
+      run: coverage report --rcfile=.coveragerc --include="core/*" --fail-under=80
 
     - name: Publish test results
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
@@ -191,7 +130,6 @@ jobs:
         retention-days: 7
 
     - name: Upload coverage to Codecov
-      # Pinned to SHA for supply-chain safety (tag: v5.4.3)
       uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24
       with:
         files: ./coverage.xml
@@ -200,7 +138,6 @@ jobs:
 
     - name: Upload coverage to Qlty
       if: matrix.python-version == '3.11'
-      # Pinned to SHA for supply-chain safety (tag: v2)
       uses: qltysh/qlty-action/coverage@a19242102d17e497f437d7466aa01b528537e899  # v2
       with:
         token: ${{ secrets.QLTY_COVERAGE_TOKEN }}
@@ -217,6 +154,7 @@ jobs:
   coverage-gate:
     name: Coverage gate (>=70%)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: test
     permissions:
       contents: read
@@ -227,44 +165,17 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+      # Download the coverage.xml produced by the test job — no re-run needed.
+      - name: Download coverage artifact
+        uses: actions/download-artifact@v4
         with:
-          python-version: "3.12"
-
-      - name: Cache pip packages
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7  # v5.0.4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements-ci.txt') }}
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-ci.txt
-          pip install matplotlib "sentry-sdk[fastapi]>=2.0.0" "pytest>=7.4.3" "pytest-cov>=4.1.0" "pytest-asyncio>=0.23.6" "pytest-timeout>=2.2.0" coverage
-
-      - name: Run tests and generate coverage report
-        env:
-          CONFIG_ENCRYPTION_KEY: ${{ secrets.CONFIG_ENCRYPTION_KEY || 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }}
-          CONFIG_SALT: ${{ secrets.CONFIG_SALT || 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' }}
-          SECURITY_JWT_SECRET: ${{ secrets.SECURITY_JWT_SECRET || 'ci-test-secret-key-minimum-32-characters-long' }}  # pragma: allowlist secret
-          REDIS_URL: redis://localhost:6379/15
-          ENVIRONMENT: testing
-        run: |
-          pytest tests/ \
-            -m "not slow" \
-            --cov --cov-config=.coveragerc \
-            --cov-report=xml --cov-report=term-missing \
-            --cov-fail-under=70 \
-            --asyncio-mode=auto \
-            --timeout=120 \
-            -q 2>&1 | tee coverage-output.txt || true
+          name: coverage-3.12
+          path: .
 
       - name: Extract coverage percentage
         id: coverage
         run: |
-          TOTAL=$(python -c "
+          TOTAL=$(python3 -c "
           import xml.etree.ElementTree as ET
           try:
               tree = ET.parse('coverage.xml')
@@ -281,7 +192,6 @@ jobs:
 
       - name: Post coverage comment on PR
         if: github.event_name == 'pull_request'
-        # Pinned to SHA for supply-chain safety (tag: v7)
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7
         with:
           script: |
@@ -305,8 +215,8 @@ jobs:
               `![Coverage](https://img.shields.io/badge/coverage-${coverage}%25-${color})`,
               '',
               passed
-                ? `Coverage meets the ${gate}% gate. PASS`
-                : `WARN Coverage is below the ${gate}% gate. Add tests to the modules shown in the \`term-missing\` report above.`,
+                ? `Coverage meets the ${gate}% gate.`
+                : `Coverage is below the ${gate}% gate. Add tests to the modules shown in the term-missing report above.`,
             ].join('\n');
 
             const { data: comments } = await github.rest.issues.listComments({

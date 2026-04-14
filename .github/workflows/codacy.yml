@@ -20,6 +20,7 @@ jobs:
       actions: read
     name: Codacy Security Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # continue-on-error: the Codacy action requires CODACY_PROJECT_TOKEN to be
     # set in repo secrets (Settings → Secrets → Actions).  Until the token is
     # configured the action fails immediately; this prevents that from blocking
@@ -59,6 +60,7 @@ jobs:
   # --------------------------------------------------------------------------
   pr-quality-gate:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     name: PR Quality Gate (ruff + bandit on changed files)

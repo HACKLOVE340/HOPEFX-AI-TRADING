@@ -26,6 +26,7 @@ concurrency:
 jobs:
   pre-commit:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -46,6 +47,7 @@ jobs:
 
   dependency-scan:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -110,6 +112,7 @@ jobs:
 
   typecheck:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -168,6 +171,7 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: read
     strategy:
@@ -218,13 +222,12 @@ jobs:
             ${{ runner.os }}-pip-ci-${{ matrix.python-version }}-
 
       - name: Install dependencies
-        # Use lightweight CI requirements - no C-extensions, no GPU deps.
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-ci.txt
           pip install matplotlib "sentry-sdk[fastapi]>=2.0.0" \
             "pytest>=7.4.3" "pytest-cov>=4.1.0" "pytest-asyncio>=0.23.6" \
-            "pytest-timeout>=2.2.0" bandit
+            "pytest-timeout>=2.2.0" bandit coverage
 
       - name: Run ruff (lint + format check)
         run: |
@@ -232,6 +235,8 @@ jobs:
           ruff check api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/
           ruff format --check api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/
 
+      # Run the full suite once. Coverage data for all packages is collected
+      # here and reused by the per-package gates below — no re-runs needed.
       - name: Run tests with coverage (full suite, 70% baseline)
         env:
           DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx  # pragma: allowlist secret
@@ -251,99 +256,30 @@ jobs:
         run: |
           pytest tests/ \
             -m "not slow" \
-            --cov=auth \
-            --cov=risk \
-            --cov=brokers \
-            --cov=execution \
-            --cov=market_data \
-            --cov=ml \
-            --cov=config \
-            --cov=kill_switch \
-            --cov=compliance \
-            --cov=analytics \
-            --cov=backtesting \
-            --cov-config=.coveragerc \
+            --cov --cov-config=.coveragerc \
             --cov-report=xml \
             --cov-report=term-missing \
             --cov-fail-under=70 \
-            -v \
             --asyncio-mode=auto \
-            --timeout=120
+            --timeout=120 \
+            -q
 
+      # Per-package coverage gates — read from the .coverage file produced above.
+      # Uses `coverage report --include` to filter by package. No test re-runs.
       - name: Coverage gate - risk/ (80% required)
-        env:
-          DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx  # pragma: allowlist secret
-          REDIS_URL: redis://localhost:6379/0
-          ENVIRONMENT: testing
-          SECURITY_JWT_SECRET: "ci-test-secret-key-minimum-32-characters-long"  # pragma: allowlist secret
-        run: |
-          pytest tests/ -m "not slow" -q \
-            --cov=risk --cov-branch \
-            --cov-config=.coveragerc \
-            --cov-report=term-missing \
-            --cov-fail-under=80 \
-            --asyncio-mode=auto \
-            --timeout=120
+        run: coverage report --rcfile=.coveragerc --include="risk/*" --fail-under=80
 
       - name: Coverage gate - execution/ (80% required)
-        env:
-          DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx  # pragma: allowlist secret
-          REDIS_URL: redis://localhost:6379/0
-          ENVIRONMENT: testing
-          SECURITY_JWT_SECRET: "ci-test-secret-key-minimum-32-characters-long"  # pragma: allowlist secret
-        run: |
-          pytest tests/ -m "not slow" -q \
-            --cov=execution --cov-branch \
-            --cov-config=.coveragerc \
-            --cov-report=term-missing \
-            --cov-fail-under=80 \
-            --asyncio-mode=auto \
-            --timeout=120
+        run: coverage report --rcfile=.coveragerc --include="execution/*" --fail-under=80
 
       - name: Coverage gate - kill_switch.py (80% required)
-        env:
-          DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx  # pragma: allowlist secret
-          REDIS_URL: redis://localhost:6379/0
-          ENVIRONMENT: testing
-          SECURITY_JWT_SECRET: "ci-test-secret-key-minimum-32-characters-long"  # pragma: allowlist secret
-        run: |
-          pytest tests/ -m "not slow" -q \
-            --cov=kill_switch --cov-branch \
-            --cov-report=term-missing \
-            --cov-fail-under=80 \
-            --asyncio-mode=auto \
-            --timeout=120
+        run: coverage report --rcfile=.coveragerc --include="kill_switch.py" --fail-under=80
 
       - name: Coverage gate - brokers/ (80% required)
-        env:
-          DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx  # pragma: allowlist secret
-          REDIS_URL: redis://localhost:6379/0
-          ENVIRONMENT: testing
-          SECURITY_JWT_SECRET: "ci-test-secret-key-minimum-32-characters-long"  # pragma: allowlist secret
-          OANDA_API_KEY: ci-placeholder  # pragma: allowlist secret
-          OANDA_ACCOUNT_ID: ci-placeholder
-          OANDA_PRACTICE: "true"
-        run: |
-          pytest tests/ -m "not slow" -q \
-            --cov=brokers --cov-branch \
-            --cov-report=term-missing \
-            --cov-fail-under=80 \
-            --asyncio-mode=auto \
-            --timeout=120
+        run: coverage report --rcfile=.coveragerc --include="brokers/*" --fail-under=80
 
       - name: Coverage gate - compliance/ (80% required)
-        env:
-          DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx  # pragma: allowlist secret
-          REDIS_URL: redis://localhost:6379/0
-          ENVIRONMENT: testing
-          SECURITY_JWT_SECRET: "ci-test-secret-key-minimum-32-characters-long"  # pragma: allowlist secret
-        run: |
-          pytest tests/ -m "not slow" -q \
-            --cov=compliance --cov-branch \
-            --cov-report=term-missing \
-            --cov-fail-under=80 \
-            --asyncio-mode=auto \
-            --timeout=120
+        run: coverage report --rcfile=.coveragerc --include="compliance/*" --fail-under=80
 
       - name: Security scan (bandit)
         run: |
@@ -352,7 +288,6 @@ jobs:
 
       - name: Upload coverage to Qlty
         if: matrix.python-version == '3.11'
-        # Pinned to SHA for supply-chain safety (tag: v2)
         uses: qltysh/qlty-action/coverage@a19242102d17e497f437d7466aa01b528537e899  # v2
         with:
           token: ${{ secrets.QLTY_COVERAGE_TOKEN }}
@@ -360,6 +295,7 @@ jobs:
 
   build-cpp-shim:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -402,6 +338,7 @@ jobs:
 
   frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
     defaults:
@@ -438,6 +375,7 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
     needs: [frontend]
