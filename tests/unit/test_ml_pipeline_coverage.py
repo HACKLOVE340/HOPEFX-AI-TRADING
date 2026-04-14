@@ -604,7 +604,28 @@ class TestModelRegistry:
         reg = self._registry(tmp_path)
         assert reg.active_version() is None
 
-    def test_promote_model(self, tmp_path):
+    def test_promote_model(self, tmp_path, monkeypatch):
+        import json
+        import time
+
+        # Write a fresh PnL reconciliation snapshot so the promotion gate passes
+        snapshot_dir = tmp_path / "data"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        snapshot_path = snapshot_dir / "pnl_reconciliation.json"
+        snapshot_path.write_text(
+            json.dumps(
+                {
+                    "timestamp": time.time(),
+                    "gate_passed": True,
+                    "broker_pnl": 1000.0,
+                    "internal_pnl": 1000.0,
+                    "discrepancy_pct": 0.0,
+                    "trades_checked": 10,
+                }
+            )
+        )
+        monkeypatch.setenv("PNL_RECON_SNAPSHOT_PATH", str(snapshot_path))
+
         reg = self._registry(tmp_path)
         model_file = Path(tmp_path) / "model.joblib"
         model_file.write_bytes(b"dummy")

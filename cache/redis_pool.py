@@ -142,9 +142,13 @@ def get_sync_client() -> Redis:
     global _sync_client
     if _sync_client is not None:
         return _sync_client
+    # Build the pool first (acquires _lock internally), then create the client
+    # under _lock.  Calling get_redis_pool() outside the lock avoids a
+    # re-entrant deadlock: get_redis_pool() also acquires _lock, and
+    # threading.Lock is not re-entrant.
+    pool = get_redis_pool()
     with _lock:
         if _sync_client is None:
-            pool = get_redis_pool()
             _sync_client = Redis(connection_pool=pool)
             logger.debug("Shared sync Redis client created from pool")
     return _sync_client

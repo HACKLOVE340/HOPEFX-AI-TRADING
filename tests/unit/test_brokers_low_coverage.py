@@ -1503,6 +1503,7 @@ def _signal_bridge(tmp_path):
         login=12345678,
         password="pass",  # pragma: allowlist secret
         signal_dir=tmp_path / "signals",
+        force_signal_mode=True,
     )
 
 

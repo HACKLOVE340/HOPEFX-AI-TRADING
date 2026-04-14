@@ -986,12 +986,15 @@ class RiskManager:
         # Use signal_strength as confidence when confidence is at default
         effective_confidence = max(confidence, signal_strength)
 
+        # Accept ``price`` as an alias for ``entry_price`` (legacy callers)
+        effective_entry = float(entry_price) or float(kwargs.pop("price", 0.0))
+
         sig = _MinimalSignal(
             symbol=symbol,
             direction=direction,
             confidence=effective_confidence,
             probability=probability,
-            tick_mid=float(entry_price),
+            tick_mid=effective_entry,
         )
 
         # Temporarily update equity so sizing reflects the supplied balance.

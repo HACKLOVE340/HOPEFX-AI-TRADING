@@ -361,6 +361,7 @@ class TestStartupValidatorProduction:
             "SECURITY_JWT_SECRET": "a" * 48,
             "DATABASE_URL": "postgresql://user:password123@host:5432/db",  # pragma: allowlist secret
             "REDIS_URL": "redis://localhost:6379/0",
+            "REDIS_PASSWORD": "e" * 32,  # pragma: allowlist secret
             "CONFIG_ENCRYPTION_KEY": "b" * 48,
             "HOPEFX_KILL_SWITCH_TOKEN": "c" * 48,
             "BROKER_TYPE": "paper",
