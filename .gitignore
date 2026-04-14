@@ -115,6 +115,9 @@ ml/saved_models/model_checksums.json
 # Runtime-generated data files
 backtest/results/
 data/paper_trading_gate.json
+data/oanda_paper_start.json
+data/heal_manifest.json
+data/regulatory_dlq/
 # registry.json is tracked in git as the seed manifest; updated by ModelRegistry at runtime
 *.h5
 *.pt
