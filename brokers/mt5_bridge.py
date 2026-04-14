@@ -394,6 +394,7 @@ class MT5Bridge:
         timeout_ms: int = 60_000,
         enforcer=None,
         signal_dir: Path = _SIGNAL_DIR,
+        force_signal_mode: bool = False,
     ) -> None:
         self.server = server
         self.login = login
@@ -405,6 +406,10 @@ class MT5Bridge:
         self._connected = False
         self._lock = threading.Lock()
         self._exporter = EX5SignalExporter(signal_dir)
+        # When True, always operate in signal-export mode regardless of whether
+        # the MetaTrader5 package is installed.  Useful for testing and for
+        # Linux/Mac deployments where MT5 is not available.
+        self._force_signal_mode = force_signal_mode or not _MT5_AVAILABLE
 
     @classmethod
     def from_env(cls, enforcer=None) -> MT5Bridge:
@@ -424,7 +429,7 @@ class MT5Bridge:
 
     @_retry(max_attempts=3, base_delay=1.0)
     def connect(self) -> bool:
-        if not _MT5_AVAILABLE:
+        if self._force_signal_mode:
             logger.info("mt5_bridge: MT5 package absent — signal-export mode active")
             self._connected = True
             return True
@@ -458,7 +463,7 @@ class MT5Bridge:
         return True
 
     def disconnect(self) -> None:
-        if _MT5_AVAILABLE and self._connected:
+        if not self._force_signal_mode and self._connected:
             mt5.shutdown()
         self._connected = False
         logger.info("mt5_bridge disconnected")
@@ -493,7 +498,7 @@ class MT5Bridge:
 
         self._enforce(order.symbol)
 
-        if not _MT5_AVAILABLE:
+        if self._force_signal_mode:
             path = self._exporter.export(order)
             return self._exporter.poll_fill(path, timeout_sec=order.timeout_sec)
 
@@ -581,7 +586,7 @@ class MT5Bridge:
         """Poll MT5 until a pending order is filled, rejected, or timeout expires."""
         self._require_connected()
 
-        if not _MT5_AVAILABLE:
+        if self._force_signal_mode:
             raise RuntimeError(
                 "monitor_fill() with a ticket requires direct MT5 mode. "
                 "In signal-export mode, use EX5SignalExporter.poll_fill(path).",
@@ -630,7 +635,7 @@ class MT5Bridge:
         """Close all (or partial) open positions for symbol."""
         self._require_connected()
 
-        if not _MT5_AVAILABLE:
+        if self._force_signal_mode:
             close_order = MT5Order(
                 symbol=symbol,
                 side=OrderSide.SELL,
@@ -706,7 +711,7 @@ class MT5Bridge:
 
     def get_account(self) -> dict[str, Any]:
         self._require_connected()
-        if not _MT5_AVAILABLE:
+        if self._force_signal_mode:
             return {"mode": "signal_export", "connected": True}
         info = mt5.account_info()
         if info is None:
@@ -725,7 +730,7 @@ class MT5Bridge:
 
     def get_position(self, symbol: str) -> dict[str, Any]:
         self._require_connected()
-        if not _MT5_AVAILABLE:
+        if self._force_signal_mode:
             return {}
         positions = mt5.positions_get(symbol=symbol)
         if not positions:
@@ -763,7 +768,7 @@ class MT5Bridge:
         """
         self._require_connected()
 
-        if not _MT5_AVAILABLE:
+        if self._force_signal_mode:
             # Signal-export mode — write MODIFY file for EA
             path = self._exporter.export_modify(
                 ticket=ticket,
@@ -816,7 +821,7 @@ class MT5Bridge:
         """
         self._require_connected()
 
-        if not _MT5_AVAILABLE:
+        if self._force_signal_mode:
             path = self._exporter.export_cancel(ticket=ticket, symbol=symbol)
             logger.info("mt5_bridge.cancel_order (signal): ticket=%d path=%s", ticket, path)
             return True

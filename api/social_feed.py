@@ -221,6 +221,10 @@ def _publish_signal(signal: dict, username: str, trader_id: str) -> dict:
         "created_at": datetime.now(UTC).isoformat(),
     }
     _feed_set(sid, item)
+    # Initialise in-memory reaction and comment stores for this signal so
+    # callers can safely access _reactions[sid] and _comments[sid] immediately.
+    _reactions.setdefault(sid, {})
+    _comments.setdefault(sid, [])
     return item
 
 

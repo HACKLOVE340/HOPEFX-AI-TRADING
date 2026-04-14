@@ -49,6 +49,8 @@ _mt5_stub.POSITION_TYPE_SELL = 1
 _mt5_stub.TRADE_ACTION_DEAL = 1
 _mt5_stub.TRADE_ACTION_PENDING = 5
 _mt5_stub.TRADE_ACTION_REMOVE = 8
+_mt5_stub.TRADE_ACTION_SLTP = 6
+_mt5_stub.history_deals_get = MagicMock(return_value=[])
 _mt5_stub.TRADE_RETCODE_DONE = 10009
 _mt5_stub.ORDER_TIME_GTC = 1
 _mt5_stub.ORDER_FILLING_IOC = 1

@@ -25,8 +25,12 @@ from api.auth import TokenPayload
 
 
 @pytest.fixture(autouse=True)
-def reset_social_feed_state():
+def reset_social_feed_state(monkeypatch):
     import api.social_feed as sf
+
+    # Force in-memory fallback by disabling Redis for all social_feed tests.
+    # This ensures test isolation — Redis state from other tests does not bleed in.
+    monkeypatch.setattr(sf, "_get_sync_redis", lambda: None)
 
     sf._feed_items.clear()
     sf._reactions.clear()

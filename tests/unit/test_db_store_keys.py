@@ -68,6 +68,9 @@ def patch_db_store(db_engine, monkeypatch):
     engine for every call.  Using a factory (not a single shared session)
     avoids cross-thread session state issues while still hitting the same
     StaticPool connection.
+
+    Also patches the Redis pool so tests don't block trying to connect to a
+    real Redis instance.
     """
     import api.db_store as _ds
 
@@ -77,6 +80,12 @@ def patch_db_store(db_engine, monkeypatch):
         return SessionLocal()
 
     monkeypatch.setattr(_ds, "_get_session", _make_session)
+
+    # Prevent social_feed from blocking on Redis connection during tests
+    import cache.redis_pool as _rp
+
+    monkeypatch.setattr(_rp, "get_sync_client", lambda: None)
+    monkeypatch.setattr(_rp, "get_redis_pool", lambda: None)
 
 
 # ---------------------------------------------------------------------------
