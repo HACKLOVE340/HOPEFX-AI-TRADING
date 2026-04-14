@@ -63,3 +63,64 @@ groups:
         annotations:
           summary: "Redis memory usage high"
           description: "Redis using {{ $value | humanizePercentage }} of memory"
+
+  # ---------------------------------------------------------------------------
+  # P&L Reconciliation — fires when ledger and broker P&L diverge or when
+  # the reconciliation gate has not been run before model promotion.
+  # ---------------------------------------------------------------------------
+  - name: hopefx-pnl-reconciliation
+    rules:
+      - alert: HopeFXPnLReconciliationGateFailed
+        # Gate is 0 (failed) and at least one fill has been recorded.
+        # Avoids false-positives during initial startup before any trades.
+        expr: hopefx_pnl_recon_gate_passed == 0 and hopefx_sharpe_n_trades > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "P&L reconciliation gate failed"
+          description: >
+            The P&L reconciliation gate is blocked. Ledger P&L and broker-reported
+            P&L have diverged beyond tolerance, or no fresh reconciliation snapshot
+            exists. Model promotion is blocked until this is resolved.
+            Run: python -m ml.pnl_reconciler --reconcile
+
+      - alert: HopeFXPnLDivergenceHigh
+        # Absolute divergence > $5 USD — escalate before the $1 gate fires.
+        expr: hopefx_pnl_recon_divergence > 5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "P&L divergence between ledger and broker exceeds $5"
+          description: >
+            Absolute P&L divergence is {{ $value | humanize }} USD.
+            Ledger: {{ with query "hopefx_pnl_recon_ledger_total" }}{{ . | first | value | humanize }}{{ end }} USD,
+            Broker: {{ with query "hopefx_pnl_recon_broker_total" }}{{ . | first | value | humanize }}{{ end }} USD.
+            Investigate unrecorded fills in execution/hopefx_engine.py.
+
+      - alert: HopeFXPnLDivergenceWarning
+        # Absolute divergence > $1 USD — warning before critical threshold.
+        expr: hopefx_pnl_recon_divergence > 1 and hopefx_pnl_recon_divergence <= 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P&L divergence between ledger and broker exceeds $1"
+          description: >
+            Absolute P&L divergence is {{ $value | humanize }} USD.
+            Check for slippage discrepancies or partially recorded fills.
+
+      - alert: HopeFXPnLReconciliationStale
+        # Gate metric has not been updated in 25 hours (stale_hours default is 24).
+        # Uses absence detection: if the metric disappears, the reconciler stopped.
+        expr: (time() - hopefx_pnl_recon_gate_passed offset 25h) > 0 or absent(hopefx_pnl_recon_gate_passed)
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P&L reconciliation has not run in over 24 hours"
+          description: >
+            The P&L reconciler has not published metrics in over 24 hours.
+            Ensure the reconciliation background task is running and the broker
+            is connected. Run: python -m ml.pnl_reconciler --reconcile
