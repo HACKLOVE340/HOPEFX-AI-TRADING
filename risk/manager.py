@@ -741,8 +741,18 @@ class RiskManager:
             min(final_notional, equity * _MAX_POSITION_PCT),
         )
 
-        raw_mid = getattr(signal, "tick_mid", 1900.0)
-        mid_price = raw_mid if raw_mid > 0 else 1900.0
+        raw_mid = getattr(signal, "tick_mid", 0.0)
+        if raw_mid <= 0:
+            # No live price available — block the order rather than size at a
+            # stale or hardcoded price.  The execution engine stamps tick_mid
+            # from the data layer before calling size_order(); a zero here means
+            # the price feed is unavailable and the trade must not proceed.
+            logger.warning(
+                "size_order: tick_mid missing or zero for %s — returning zero size",
+                symbol,
+            )
+            return self._zero_sizing(symbol, direction, lineage_id, "tick_mid_unavailable")
+        mid_price = raw_mid
         quantity = final_notional / mid_price
 
         # ── Stop / TP ──────────────────────────────────────────────────────
