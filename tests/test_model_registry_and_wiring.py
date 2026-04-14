@@ -155,7 +155,8 @@ class TestModelRegistryPromotionGate:
 
     def test_promote_passes_all_checks(self, tmp_path):
         reg, pkl = self._reg_with_entry(tmp_path, acc=0.65, pval=0.001, sharpe_ok=True)
-        entry = reg.promote("v_gate")
+        with patch.object(reg, "_pnl_reconciliation_check", return_value=(True, "P&L gate passed")):
+            entry = reg.promote("v_gate")
         assert entry["state"] == "production"
         assert entry["promoted_at"] is not None
         assert reg.active_version()["name"] == "v_gate"
@@ -190,8 +191,9 @@ class TestModelRegistryPromotionGate:
         pkl2 = _tmp_pkl(b"model-2")
         reg.register("v1", pkl1, oos_accuracy=0.62, oos_p_value=0.01, sharpe_gate_passed=True)
         reg.register("v2", pkl2, oos_accuracy=0.65, oos_p_value=0.001, sharpe_gate_passed=True)
-        reg.promote("v1")
-        reg.promote("v2")
+        with patch.object(reg, "_pnl_reconciliation_check", return_value=(True, "P&L gate passed")):
+            reg.promote("v1")
+            reg.promote("v2")
         assert reg.get_version("v1")["state"] == "retired"
         assert reg.get_version("v2")["state"] == "production"
         pkl1.unlink()
@@ -260,7 +262,8 @@ class TestModelRegistryVerify:
         reg = _make_registry(tmp_path)
         pkl = _tmp_pkl(b"production-model")
         reg.register("v_prod", pkl, oos_accuracy=0.65, oos_p_value=0.001, sharpe_gate_passed=True)
-        reg.promote("v_prod")
+        with patch.object(reg, "_pnl_reconciliation_check", return_value=(True, "P&L gate passed")):
+            reg.promote("v_prod")
         ok, _ = reg.verify_active()
         assert ok is True
         pkl.unlink()
@@ -304,7 +307,8 @@ class TestModelRegistryBootstrap:
         pkl = _tmp_pkl(b"promoted-model")
 
         reg = _make_registry(tmp_path)
-        entry = reg.bootstrap_from_meta(meta_path=meta_path, model_path=pkl, name="v_promo", promote=True)
+        with patch.object(reg, "_pnl_reconciliation_check", return_value=(True, "P&L gate passed")):
+            entry = reg.bootstrap_from_meta(meta_path=meta_path, model_path=pkl, name="v_promo", promote=True)
         assert entry["state"] == "production"
         pkl.unlink()
 
@@ -391,7 +395,8 @@ class TestAdvancedPredictorIntegrity:
             oos_p_value=0.001,
             sharpe_gate_passed=True,
         )
-        reg.promote("v_match")
+        with patch.object(reg, "_pnl_reconciliation_check", return_value=(True, "P&L gate passed")):
+            reg.promote("v_match")
         mr._registry = reg
 
         p = self._make_predictor(str(pkl))
@@ -416,7 +421,8 @@ class TestAdvancedPredictorIntegrity:
             oos_p_value=0.001,
             sharpe_gate_passed=True,
         )
-        reg.promote("v_mismatch")
+        with patch.object(reg, "_pnl_reconciliation_check", return_value=(True, "P&L gate passed")):
+            reg.promote("v_mismatch")
 
         # Corrupt the manifest digest
         manifest = json.loads((tmp_path / "registry.json").read_text())
@@ -455,7 +461,8 @@ class TestAdvancedPredictorIntegrity:
             oos_p_value=0.001,
             sharpe_gate_passed=True,
         )
-        reg.promote("v_block")
+        with patch.object(reg, "_pnl_reconciliation_check", return_value=(True, "P&L gate passed")):
+            reg.promote("v_block")
 
         # Corrupt manifest digest so integrity fails
         manifest = json.loads((tmp_path / "registry.json").read_text())
