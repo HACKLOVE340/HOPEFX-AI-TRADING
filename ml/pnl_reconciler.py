@@ -552,9 +552,7 @@ def _patch_oanda_broker() -> None:
                         "close_time": t.get("closeTime", ""),
                         "units": int(t.get("initialUnits", 0)),
                         "open_price": float(t.get("price", 0.0)),
-                        "close_price": float(
-                            (t.get("closingTransactionIDs") and t.get("averageClosePrice")) or 0.0
-                        ),
+                        "close_price": float((t.get("closingTransactionIDs") and t.get("averageClosePrice")) or 0.0),
                     }
                 )
             return result

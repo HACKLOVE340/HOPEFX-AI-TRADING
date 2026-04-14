@@ -18,7 +18,7 @@ import logging
 from decimal import Decimal
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, EmailStr, Field
 
 from api.auth import TokenPayload, get_current_user, require_role
@@ -918,13 +918,14 @@ async def stripe_webhook(request: Request):
         )
 
     import json as _json
+
     try:
         payload = _json.loads(raw_body)
-    except Exception:
+    except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid JSON body",
-        )
+        ) from exc
 
     event_type = payload.get("type", "")
     event_data = payload.get("data", {}).get("object", {})

@@ -465,6 +465,7 @@ class PositionManager:
             entry_value = pos.entry_price * pos.quantity
             trade_return = result.realized_pnl / entry_value if entry_value != 0.0 else 0.0
             from brokers.oanda_paper_clock import get_clock
+
             get_clock().record_fill(trade_return=trade_return, symbol=symbol)
         except Exception as exc:
             logger.debug("PositionManager: paper clock record_fill failed: %s", exc)

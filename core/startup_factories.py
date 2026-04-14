@@ -1075,6 +1075,7 @@ async def init_social(s: Any) -> bool:
         copy_trading_engine.set_broker(broker)
     else:
         import logging as _logging
+
         _logging.getLogger(__name__).warning(
             "init_social: s.broker is None — copy trading will be in broker_offline mode. "
             "Ensure init_broker() runs before init_social() in the startup sequence."
