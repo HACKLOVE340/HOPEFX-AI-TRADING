@@ -16,9 +16,8 @@ calls are made.
 
 from __future__ import annotations
 
-import asyncio
 from datetime import timezone
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 UTC = timezone.utc
@@ -238,9 +237,7 @@ def _make_engine():
     broker = MagicMock()
     broker.place_order = AsyncMock()
     broker.get_account_info = AsyncMock(
-        return_value=MagicMock(
-            balance=100_000.0, equity=100_000.0, margin_used=0.0, margin_available=100_000.0
-        )
+        return_value=MagicMock(balance=100_000.0, equity=100_000.0, margin_used=0.0, margin_available=100_000.0)
     )
 
     risk = MagicMock()

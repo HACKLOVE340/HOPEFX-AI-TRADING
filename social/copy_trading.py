@@ -141,12 +141,14 @@ class CopyTradingEngine:
                 results[rel.follower_id] = {"status": "filled", "order": order_result}
                 _logger.info(
                     "copy_trade: follower=%s leader=%s symbol=%s dir=%s qty=%.4f",
-                    rel.follower_id, leader_id, symbol, direction, copy_qty,
+                    rel.follower_id,
+                    leader_id,
+                    symbol,
+                    direction,
+                    copy_qty,
                 )
             except Exception as exc:
-                _logger.error(
-                    "copy_trade failed for follower=%s: %s", rel.follower_id, exc
-                )
+                _logger.error("copy_trade failed for follower=%s: %s", rel.follower_id, exc)
                 results[rel.follower_id] = {"status": "error", "reason": str(exc)}
 
         return results

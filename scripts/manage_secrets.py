@@ -93,9 +93,7 @@ PLACEHOLDERS = {
 # (case-insensitive).  Short generic words are listed here so that
 # cryptographically-generated tokens that happen to contain them as substrings
 # are not falsely flagged as placeholders.
-_EXACT_PLACEHOLDERS: frozenset[str] = frozenset(
-    {"password", "secret", "token", "key", "changeme"}
-)
+_EXACT_PLACEHOLDERS: frozenset[str] = frozenset({"password", "secret", "token", "key", "changeme"})
 
 # Substring-match placeholders: longer descriptive strings that cannot appear
 # inside a real random token.
