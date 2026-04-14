@@ -26,7 +26,6 @@ Coverage targets
 
 from __future__ import annotations
 
-import asyncio
 import json
 import pickle
 from datetime import datetime, timedelta, timezone
@@ -215,16 +214,13 @@ class TestCheckGate:
 
 
 class TestReconcile:
-    def _run(self, coro):
-        return asyncio.get_event_loop().run_until_complete(coro)
-
-    def test_reconcile_with_no_broker_writes_snapshot(self, tmp_path):
+    async def test_reconcile_with_no_broker_writes_snapshot(self, tmp_path):
         r = _make_reconciler(tmp_path, min_trades=0)
-        result = self._run(r.reconcile(broker=None))
+        result = await r.reconcile(broker=None)
         assert (tmp_path / "pnl_reconciliation.json").exists()
         assert isinstance(result.gate_passed, bool)
 
-    def test_reconcile_uses_broker_get_closed_trades(self, tmp_path):
+    async def test_reconcile_uses_broker_get_closed_trades(self, tmp_path):
         r = _make_reconciler(tmp_path, abs_tolerance=1.0, min_trades=2)
 
         broker = MagicMock()
@@ -235,13 +231,13 @@ class TestReconcile:
 
         # Patch ledger to return matching value
         with patch.object(r, "_collect_ledger_pnl", return_value=(15.0, 2)):
-            result = self._run(r.reconcile(broker=broker))
+            result = await r.reconcile(broker=broker)
 
         assert result.broker_pnl == pytest.approx(15.0)
         assert result.n_broker_trades == 2
         assert result.gate_passed is True
 
-    def test_reconcile_blocks_on_divergence(self, tmp_path):
+    async def test_reconcile_blocks_on_divergence(self, tmp_path):
         r = _make_reconciler(tmp_path, abs_tolerance=1.0, min_trades=2)
 
         broker = MagicMock()
@@ -250,23 +246,23 @@ class TestReconcile:
         ])
 
         with patch.object(r, "_collect_ledger_pnl", return_value=(50.0, 5)):
-            result = self._run(r.reconcile(broker=broker))
+            result = await r.reconcile(broker=broker)
 
         assert result.gate_passed is False
         assert result.divergence == pytest.approx(50.0)
 
-    def test_reconcile_falls_back_to_account_info(self, tmp_path):
+    async def test_reconcile_falls_back_to_account_info(self, tmp_path):
         r = _make_reconciler(tmp_path, min_trades=0)
 
         broker = MagicMock(spec=[])  # no get_closed_trades
         broker.get_account_info = AsyncMock(return_value=MagicMock(realized_pnl=20.0))
 
         with patch.object(r, "_collect_ledger_pnl", return_value=(20.0, 0)):
-            result = self._run(r.reconcile(broker=broker))
+            result = await r.reconcile(broker=broker)
 
         assert result.broker_pnl == pytest.approx(20.0)
 
-    def test_reconcile_publishes_metrics(self, tmp_path):
+    async def test_reconcile_publishes_metrics(self, tmp_path):
         r = _make_reconciler(tmp_path, min_trades=0)
         published = {}
 
@@ -274,18 +270,18 @@ class TestReconcile:
             published["result"] = res
 
         with patch("ml.pnl_reconciler._publish_metrics", side_effect=fake_publish):
-            self._run(r.reconcile(broker=None))
+            await r.reconcile(broker=None)
 
         assert "result" in published
 
-    def test_reconcile_handles_broker_exception(self, tmp_path):
+    async def test_reconcile_handles_broker_exception(self, tmp_path):
         r = _make_reconciler(tmp_path, min_trades=0)
 
         broker = MagicMock()
         broker.get_closed_trades = AsyncMock(side_effect=RuntimeError("connection refused"))
 
         # Should not raise — returns 0 broker P&L
-        result = self._run(r.reconcile(broker=broker))
+        result = await r.reconcile(broker=broker)
         assert result.broker_pnl == pytest.approx(0.0)
 
 
@@ -348,48 +344,45 @@ class TestCollectLedgerPnl:
 
 
 class TestCollectBrokerPnl:
-    def _run(self, coro):
-        return asyncio.get_event_loop().run_until_complete(coro)
-
-    def test_returns_zero_when_broker_is_none(self, tmp_path):
+    async def test_returns_zero_when_broker_is_none(self, tmp_path):
         r = _make_reconciler(tmp_path)
-        pnl, n = self._run(r._collect_broker_pnl(None))
+        pnl, n = await r._collect_broker_pnl(None)
         assert pnl == 0.0
         assert n == 0
 
-    def test_uses_get_closed_trades(self, tmp_path):
+    async def test_uses_get_closed_trades(self, tmp_path):
         r = _make_reconciler(tmp_path)
         broker = MagicMock()
         broker.get_closed_trades = AsyncMock(return_value=[
             {"realized_pnl": 5.0},
             {"realizedPL": 3.0},   # alternate key name
         ])
-        pnl, n = self._run(r._collect_broker_pnl(broker))
+        pnl, n = await r._collect_broker_pnl(broker)
         assert pnl == pytest.approx(8.0)
         assert n == 2
 
-    def test_falls_back_to_account_info_realized_pnl(self, tmp_path):
+    async def test_falls_back_to_account_info_realized_pnl(self, tmp_path):
         r = _make_reconciler(tmp_path)
         broker = MagicMock(spec=["get_account_info"])
         info = MagicMock()
         info.realized_pnl = 42.0
         broker.get_account_info = AsyncMock(return_value=info)
-        pnl, n = self._run(r._collect_broker_pnl(broker))
+        pnl, n = await r._collect_broker_pnl(broker)
         assert pnl == pytest.approx(42.0)
         assert n == -1  # count unknown
 
-    def test_returns_zero_when_get_closed_trades_raises(self, tmp_path):
+    async def test_returns_zero_when_get_closed_trades_raises(self, tmp_path):
         r = _make_reconciler(tmp_path)
         broker = MagicMock()
         broker.get_closed_trades = AsyncMock(side_effect=ConnectionError("timeout"))
-        pnl, n = self._run(r._collect_broker_pnl(broker))
+        pnl, n = await r._collect_broker_pnl(broker)
         assert pnl == 0.0
         assert n == 0
 
-    def test_returns_zero_when_broker_has_no_known_method(self, tmp_path):
+    async def test_returns_zero_when_broker_has_no_known_method(self, tmp_path):
         r = _make_reconciler(tmp_path)
         broker = MagicMock(spec=[])  # no get_closed_trades, no get_account_info
-        pnl, n = self._run(r._collect_broker_pnl(broker))
+        pnl, n = await r._collect_broker_pnl(broker)
         assert pnl == 0.0
         assert n == 0
 
