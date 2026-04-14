@@ -74,6 +74,9 @@ CONDITIONAL_SECRETS: list[tuple[str, str, str]] = [
 ]
 
 # Placeholder values that indicate a secret has NOT been set
+# Substring-match placeholders: if the value *contains* any of these strings
+# (case-insensitive) it is considered unset.  Use only for long, descriptive
+# strings that cannot appear inside a real cryptographic token.
 PLACEHOLDERS = {
     "CHANGE_ME",
     "your_oanda_api_key_here",
@@ -85,6 +88,25 @@ PLACEHOLDERS = {
     "token",
     "key",
 }
+
+# Exact-match placeholders: the entire value must equal one of these words
+# (case-insensitive).  Short generic words are listed here so that
+# cryptographically-generated tokens that happen to contain them as substrings
+# are not falsely flagged as placeholders.
+_EXACT_PLACEHOLDERS: frozenset[str] = frozenset(
+    {"password", "secret", "token", "key", "changeme"}
+)
+
+# Substring-match placeholders: longer descriptive strings that cannot appear
+# inside a real random token.
+_SUBSTRING_PLACEHOLDERS: frozenset[str] = frozenset(
+    {
+        "change_me",
+        "your_oanda_api_key_here",
+        "your_oanda_account_id_here",
+        "your_openai_api_key_here",
+    }
+)
 
 # Patterns that indicate hardcoded secrets in source code
 AUDIT_PATTERNS: list[tuple[str, str]] = [
@@ -174,10 +196,23 @@ def _safe_print(msg: str) -> None:
 
 
 def _is_placeholder(val: str) -> bool:
+    """Return True if *val* looks like an unset placeholder rather than a real secret.
+
+    Two matching strategies are used:
+    - Short generic words ("key", "token", "secret", "password", "changeme") are
+      matched exactly so that cryptographically-generated tokens that happen to
+      contain those substrings are not falsely flagged.
+    - Long descriptive strings (e.g. "CHANGE_ME", "your_oanda_api_key_here") are
+      matched as substrings because they appear as prefixes/infixes in template values.
+    """
     if not val:
         return True
     val_lower = val.lower()
-    return any(p.lower() in val_lower for p in PLACEHOLDERS)
+    # Exact match for short generic words
+    if val_lower in _EXACT_PLACEHOLDERS:
+        return True
+    # Substring match for long descriptive placeholder strings
+    return any(p in val_lower for p in _SUBSTRING_PLACEHOLDERS)
 
 
 # ── commands ──────────────────────────────────────────────────────────────────
