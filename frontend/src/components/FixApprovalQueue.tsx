@@ -47,7 +47,7 @@ export const FixApprovalQueue: React.FC = () => {
   const load = useCallback(async () => {
     try {
       const data = await fetchFixes();
-      setFixes(data);
+      setFixes(Array.isArray(data) ? data : []);
       setError(null);
     } catch (err) {
       setError('Failed to load fix queue');
