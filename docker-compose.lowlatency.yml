@@ -15,8 +15,6 @@
 #   - Mounts /dev/cpu_dma_latency to request low-latency DMA from kernel
 #   - Adds cpp-shim service (C++ execution shim — see execution/cpp_shim/)
 
-version: "3.9"
-
 services:
 
   # ── Trading engine — host network, pinned CPU ─────────────────────────────
