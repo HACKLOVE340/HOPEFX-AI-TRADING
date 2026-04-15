@@ -9,15 +9,42 @@ Configuration Management System
 
 import base64
 import contextlib
-import fcntl
 import hashlib
 import json
 import logging
 import os
+import sys
 import secrets
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+
+# Cross-platform file locking — fcntl is Linux/macOS only.
+if sys.platform == "win32":
+    import msvcrt
+
+    class _FileLock:
+        """Minimal fcntl.flock shim for Windows using msvcrt.locking."""
+
+        LOCK_EX = 1
+        LOCK_SH = 2
+        LOCK_UN = 3
+
+        @staticmethod
+        def flock(f, operation: int) -> None:  # noqa: ARG004
+            # msvcrt.locking operates on byte ranges; for config files the
+            # advisory lock is sufficient — we lock/unlock the first byte.
+            try:
+                if operation in (_FileLock.LOCK_EX, _FileLock.LOCK_SH):
+                    msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+            except OSError:
+                pass  # non-fatal on Windows — best-effort locking
+
+    fcntl = _FileLock()
+else:
+    import fcntl  # type: ignore[no-redef]
 
 try:
     from cryptography.fernet import Fernet
