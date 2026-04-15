@@ -189,43 +189,68 @@ async def _try_direct(
     decode_responses: bool,
     db: int,
 ) -> Any | None:
-    """Attempt direct Redis URL connection. Returns client or None."""
-    try:
-        import ssl
+    """Attempt direct Redis URL connection. Returns client or None.
 
+    TLS notes (redis-py 7.x)
+    ------------------------
+    redis-py 7.x does not accept an ``ssl.SSLContext`` object via the
+    ``ssl=`` kwarg — ``AbstractConnection.__init__`` only knows the
+    individual ``ssl_*`` keyword arguments.  For TLS connections we
+    therefore build a ``ConnectionPool`` explicitly using ``SSLConnection``
+    and the individual cert/key/ca params, rather than passing a context
+    object through ``from_url()``.
+    """
+    try:
         import redis.asyncio as aioredis  # pylint: disable=no-name-in-module
 
         # Enforce TLS policy before connecting.
         redis_url = _enforce_tls(redis_url)
 
-        # Build SSL context for rediss:// connections.
-        ssl_context: ssl.SSLContext | None = None
-        if redis_url.startswith("rediss://"):
-            ssl_context = ssl.create_default_context()
-            if os.getenv("REDIS_TLS_SKIP_VERIFY", "false").lower() == "true":
-                ssl_context.check_hostname = False
-                ssl_context.verify_mode = ssl.CERT_NONE
+        is_tls = redis_url.startswith("rediss://")
+
+        if is_tls:
+            # Build a ConnectionPool with SSLConnection so we can pass the
+            # individual ssl_* params that redis-py 7.x actually accepts.
+            skip_verify = os.getenv("REDIS_TLS_SKIP_VERIFY", "false").lower() == "true"
+            if skip_verify:
                 logger.warning("Redis TLS: certificate verification disabled (REDIS_TLS_SKIP_VERIFY=true)")
+
+            ssl_kwargs: dict = {
+                "ssl_cert_reqs": "none" if skip_verify else "required",
+            }
             ca_cert = os.getenv("REDIS_TLS_CA_CERT", "")
             client_cert = os.getenv("REDIS_TLS_CLIENT_CERT", "")
             client_key = os.getenv("REDIS_TLS_CLIENT_KEY", "")
             if ca_cert:
-                ssl_context.load_verify_locations(ca_cert)
-            if client_cert and client_key:
-                ssl_context.load_cert_chain(client_cert, client_key)
+                ssl_kwargs["ssl_ca_certs"] = ca_cert
+            if client_cert:
+                ssl_kwargs["ssl_certfile"] = client_cert
+            if client_key:
+                ssl_kwargs["ssl_keyfile"] = client_key
 
-        logger.info("Redis: connecting directly via URL (tls=%s)", ssl_context is not None)
-        client = aioredis.from_url(
-            redis_url,
-            decode_responses=decode_responses,
-            db=db,
-            socket_timeout=5.0,
-            socket_connect_timeout=3.0,
-            retry_on_timeout=True,
-            ssl=ssl_context,
-        )
+            pool = aioredis.ConnectionPool.from_url(
+                redis_url,
+                decode_responses=decode_responses,
+                db=db,
+                socket_timeout=5.0,
+                socket_connect_timeout=3.0,
+                **ssl_kwargs,
+            )
+            client = aioredis.Redis(connection_pool=pool)
+        else:
+            # Plaintext connection — from_url() is sufficient.
+            client = aioredis.from_url(
+                redis_url,
+                decode_responses=decode_responses,
+                db=db,
+                socket_timeout=5.0,
+                socket_connect_timeout=3.0,
+                retry_on_timeout=True,
+            )
+
+        logger.info("Redis: connecting directly via URL (tls=%s)", is_tls)
         await client.ping()
-        logger.info("Redis direct connection established (tls=%s)", ssl_context is not None)
+        logger.info("Redis direct connection established (tls=%s)", is_tls)
         return client
     except RuntimeError:
         raise  # re-raise TLS enforcement errors — do not swallow
