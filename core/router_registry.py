@@ -38,6 +38,7 @@ def register_routers(
     # ── Core routers (always on) ──────────────────────────────────────────────
     from api.accounts import router as accounts_router
     from api.admin import router as admin_router
+    from api.analysis import router as analysis_router
     from api.backtesting import _compat_router as backtesting_compat_router
     from api.backtesting import router as backtesting_router
     from api.brain import router as brain_router
@@ -75,6 +76,7 @@ def register_routers(
         auth_router,
         trading_router,
         admin_router,
+        analysis_router,
         monetization_router,
         backtesting_router,
         backtesting_compat_router,
@@ -110,6 +112,7 @@ def register_routers(
         app.include_router(_router)
 
     logger.info("Health router registered (/api/health)")
+    logger.info("Analysis router registered (/api/analysis)")
     logger.info("Tracing router registered (/api/tracing)")
 
     # ── Feature-gated routers ─────────────────────────────────────────────────
