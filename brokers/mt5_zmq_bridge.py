@@ -74,16 +74,17 @@ from datetime import datetime, timezone
 UTC = timezone.utc
 from enum import Enum
 from queue import Empty, Queue
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 # ── optional ZMQ import ───────────────────────────────────────────────────────
 try:
-    import zmq  # type: ignore
+    import zmq  # type: ignore[import-not-found,import-untyped,unused-ignore]
 
     _ZMQ_AVAILABLE = True
 except ImportError:
-    zmq = None  # type: ignore
+    zmq = None
     _ZMQ_AVAILABLE = False
     logger.warning(
         "pyzmq not installed — MT5ZmqBridge will enter DEGRADED state and "
@@ -191,16 +192,16 @@ class MT5ZmqBridge:
         self._stop_event = threading.Event()
 
         # Pending command futures: id → Queue(maxsize=1)
-        self._pending: dict[str, Queue[dict]] = {}
+        self._pending: dict[str, Queue[dict[str, Any]]] = {}
 
         # Tick callbacks registered by callers
         self._tick_callbacks: list[Callable[[TickData], None]] = []
 
         # ZMQ context and sockets (None until start())
-        self._ctx: object | None = None
-        self._push: object | None = None
-        self._pull: object | None = None
-        self._pub: object | None = None
+        self._ctx: Any | None = None
+        self._push: Any | None = None
+        self._pull: Any | None = None
+        self._pub: Any | None = None
         self._recv_thread: threading.Thread | None = None
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
@@ -265,13 +266,13 @@ class MT5ZmqBridge:
         for sock in (self._push, self._pull, self._pub):
             if sock is not None:
                 try:
-                    sock.close(linger=0)  # type: ignore[union-attr]
+                    sock.close(linger=0)
                 except Exception as _exc:
                     logger.debug("Suppressed exception: %s", _exc)
 
         if self._ctx is not None:
             try:
-                self._ctx.term()  # type: ignore[union-attr]
+                self._ctx.term()
             except Exception as _exc:
                 logger.debug("Suppressed exception: %s", _exc)
 
@@ -309,7 +310,7 @@ class MT5ZmqBridge:
             RuntimeError: if bridge is not connected.
         """
         cmd_id = str(uuid.uuid4())
-        payload: dict = {
+        payload: dict[str, Any] = {
             "cmd": "ORDER",
             "id": cmd_id,
             "symbol": symbol,
@@ -336,7 +337,7 @@ class MT5ZmqBridge:
             FillResult.
         """
         cmd_id = str(uuid.uuid4())
-        payload: dict = {"cmd": "CLOSE", "id": cmd_id, "ticket": ticket}
+        payload: dict[str, Any] = {"cmd": "CLOSE", "id": cmd_id, "ticket": ticket}
         if lots is not None:
             payload["lots"] = lots
         return self._send_and_wait(cmd_id, payload, symbol="", side="CLOSE", lots=lots or 0.0)
@@ -349,7 +350,7 @@ class MT5ZmqBridge:
     ) -> FillResult:
         """Modify SL/TP on an open MT5 position."""
         cmd_id = str(uuid.uuid4())
-        payload: dict = {"cmd": "MODIFY", "id": cmd_id, "ticket": ticket}
+        payload: dict[str, Any] = {"cmd": "MODIFY", "id": cmd_id, "ticket": ticket}
         if sl is not None:
             payload["sl"] = sl
         if tp is not None:
@@ -399,7 +400,7 @@ class MT5ZmqBridge:
         )
         try:
             with self._lock:
-                self._pub.send_string(msg)  # type: ignore[union-attr]
+                self._pub.send_string(msg)
         except Exception as exc:
             logger.warning("publish_signal failed: %s", exc)
 
@@ -420,7 +421,7 @@ class MT5ZmqBridge:
     def _send_and_wait(
         self,
         cmd_id: str,
-        payload: dict,
+        payload: dict[str, Any],
         symbol: str,
         side: str,
         lots: float,
@@ -438,14 +439,15 @@ class MT5ZmqBridge:
                 f"MT5ZmqBridge is not connected (status={self._status.value}). Call bridge.start() first."
             )
 
-        q: Queue[dict] = Queue(maxsize=1)
+        q: Queue[dict[str, Any]] = Queue(maxsize=1)
         with self._lock:
             self._pending[cmd_id] = q
 
         try:
             msg = json.dumps(payload)
             with self._lock:
-                self._push.send_string(msg)  # type: ignore[union-attr]
+                assert self._push is not None, "ZMQ push socket not initialised"
+                self._push.send_string(msg)
             self._stats.commands_sent += 1
             logger.debug("→ MT5: %s", msg)
 
@@ -465,7 +467,8 @@ class MT5ZmqBridge:
         logger.debug("MT5ZmqBridge recv loop started")
         while not self._stop_event.is_set():
             try:
-                raw = self._pull.recv_string()  # type: ignore[union-attr]
+                assert self._pull is not None, "ZMQ pull socket not initialised"
+                raw = self._pull.recv_string()
                 logger.debug("← MT5: %s", raw)
                 msg = json.loads(raw)
                 self._dispatch(msg)
@@ -477,7 +480,7 @@ class MT5ZmqBridge:
                     logger.warning("MT5ZmqBridge recv error: %s", exc)
         logger.debug("MT5ZmqBridge recv loop stopped")
 
-    def _dispatch(self, msg: dict) -> None:
+    def _dispatch(self, msg: dict[str, Any]) -> None:
         """Route an incoming MT5 message to the correct handler."""
         msg_type = msg.get("type", "")
         cmd_id = msg.get("id", "")
@@ -516,7 +519,7 @@ class MT5ZmqBridge:
 
     def _parse_response(
         self,
-        resp: dict,
+        resp: dict[str, Any],
         cmd_id: str,
         symbol: str,
         side: str,
