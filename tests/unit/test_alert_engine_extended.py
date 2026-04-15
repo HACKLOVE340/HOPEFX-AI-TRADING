@@ -828,3 +828,135 @@ class TestCreateAlertRouter:
         app.include_router(router)
         routes = [r.path for r in app.routes]
         assert any("alerts" in p for p in routes)
+
+
+class TestAlertEndToEndRouting:
+    """End-to-end alert routing: create → check → handler fired.
+
+    Verifies the full internal path without any external network calls:
+      create_alert() → check_alerts() → _send_notifications() → handler()
+
+    This is the path that Prometheus/Alertmanager sits downstream of —
+    if this chain is broken, no alert reaches any channel.
+    """
+
+    def test_price_above_triggers_handler(self):
+        """PRICE_ABOVE alert fires the registered handler when price breaches threshold."""
+        from notifications.alert_engine import AlertConditionType, AlertEngine
+
+        engine = AlertEngine()
+        received: list = []
+        engine.register_notification_handler(received.append)
+
+        engine.create_alert(
+            name="Gold above 2000",
+            symbol="XAUUSD",
+            condition_type=AlertConditionType.PRICE_ABOVE,
+            threshold=2000.0,
+            cooldown_minutes=0,
+        )
+
+        triggered = engine.check_alerts({"XAUUSD": {"price": 2050.0}})
+
+        assert len(triggered) == 1, "expected exactly one trigger"
+        assert triggered[0].symbol == "XAUUSD"
+        assert triggered[0].trigger_value == 2050.0
+        # Handler must have been called with the same trigger object
+        assert len(received) == 1
+        assert received[0].alert_id == triggered[0].alert_id
+
+    def test_price_below_threshold_does_not_trigger(self):
+        """PRICE_ABOVE alert must not fire when price is below threshold."""
+        from notifications.alert_engine import AlertConditionType, AlertEngine
+
+        engine = AlertEngine()
+        received: list = []
+        engine.register_notification_handler(received.append)
+
+        engine.create_alert(
+            name="Gold above 2000",
+            symbol="XAUUSD",
+            condition_type=AlertConditionType.PRICE_ABOVE,
+            threshold=2000.0,
+            cooldown_minutes=0,
+        )
+
+        triggered = engine.check_alerts({"XAUUSD": {"price": 1950.0}})
+
+        assert triggered == []
+        assert received == []
+
+    def test_multiple_handlers_all_called(self):
+        """All registered handlers receive the trigger when an alert fires."""
+        from notifications.alert_engine import AlertConditionType, AlertEngine
+
+        engine = AlertEngine()
+        bucket_a: list = []
+        bucket_b: list = []
+        engine.register_notification_handler(bucket_a.append)
+        engine.register_notification_handler(bucket_b.append)
+
+        engine.create_alert(
+            name="Gold spike",
+            symbol="XAUUSD",
+            condition_type=AlertConditionType.PRICE_ABOVE,
+            threshold=1900.0,
+            cooldown_minutes=0,
+        )
+
+        engine.check_alerts({"XAUUSD": {"price": 1950.0}})
+
+        assert len(bucket_a) == 1
+        assert len(bucket_b) == 1
+        assert bucket_a[0].alert_id == bucket_b[0].alert_id
+
+    def test_handler_exception_does_not_block_other_handlers(self):
+        """A failing handler must not prevent subsequent handlers from running."""
+        from notifications.alert_engine import AlertConditionType, AlertEngine
+
+        engine = AlertEngine()
+        good_bucket: list = []
+
+        def bad_handler(_trigger):
+            raise RuntimeError("simulated handler failure")
+
+        engine.register_notification_handler(bad_handler)
+        engine.register_notification_handler(good_bucket.append)
+
+        engine.create_alert(
+            name="Fault tolerance test",
+            symbol="XAUUSD",
+            condition_type=AlertConditionType.PRICE_ABOVE,
+            threshold=1000.0,
+            cooldown_minutes=0,
+        )
+
+        # Must not raise even though bad_handler raises
+        engine.check_alerts({"XAUUSD": {"price": 1100.0}})
+
+        assert len(good_bucket) == 1, "good handler must still be called after bad handler raises"
+
+    def test_trigger_contains_expected_fields(self):
+        """AlertTrigger returned by check_alerts has all required fields populated."""
+        from notifications.alert_engine import AlertConditionType, AlertEngine
+
+        engine = AlertEngine()
+        engine.register_notification_handler(lambda _: None)
+
+        alert = engine.create_alert(
+            name="Field check",
+            symbol="EURUSD",
+            condition_type=AlertConditionType.PRICE_ABOVE,
+            threshold=1.10,
+            cooldown_minutes=0,
+        )
+
+        triggered = engine.check_alerts({"EURUSD": {"price": 1.15}})
+
+        assert len(triggered) == 1
+        t = triggered[0]
+        assert t.alert_id == alert.id
+        assert t.symbol == "EURUSD"
+        assert t.trigger_value == 1.15
+        assert t.triggered_at is not None
+        assert t.message != ""
