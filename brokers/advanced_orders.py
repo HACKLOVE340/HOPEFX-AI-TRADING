@@ -95,7 +95,7 @@ class Order:
     child_orders: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "symbol": self.symbol,
@@ -141,7 +141,7 @@ class OCOOrder:
     cancelled_order_id: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "symbol": self.symbol,
@@ -175,7 +175,7 @@ class BracketOrder:
     position_filled: bool = False
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "symbol": self.symbol,
@@ -210,7 +210,7 @@ class ConditionalOrder:
     last_evaluated: datetime | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "order": self.order.to_dict(),
@@ -244,7 +244,7 @@ class ScaledOrder:
     status: OrderStatus = OrderStatus.PENDING
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "symbol": self.symbol,
@@ -271,7 +271,11 @@ class AdvancedOrderManager:
     - Thread-safe operations
     """
 
-    def __init__(self, broker_callback: Callable | None = None, config: dict | None = None):
+    def __init__(
+        self,
+        broker_callback: Callable[..., Any] | None = None,
+        config: dict[str, Any] | None = None,
+    ) -> None:
         """
         Initialize advanced order manager.
 
@@ -279,7 +283,7 @@ class AdvancedOrderManager:
             broker_callback: Callback function to execute orders
             config: Configuration options
         """
-        self.config = config or {}
+        self.config: dict[str, Any] = config or {}
         self.broker_callback = broker_callback
 
         # Order storage
@@ -294,7 +298,7 @@ class AdvancedOrderManager:
         self._lock = Lock()
 
         # Statistics
-        self.stats = {
+        self.stats: dict[str, int] = {
             "total_orders": 0,
             "filled_orders": 0,
             "cancelled_orders": 0,
@@ -314,7 +318,7 @@ class AdvancedOrderManager:
         stop_price: float | None = None,
         time_in_force: TimeInForce = TimeInForce.GTC,
         expires_at: datetime | None = None,
-        metadata: dict | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> Order:
         """Create a basic order."""
         order = Order(
@@ -772,7 +776,8 @@ class AdvancedOrderManager:
                     results.append(current_price < value)
                 elif cond_type == "indicator":
                     # Would need indicator values from market_data
-                    indicator_value = market_data.get(condition.get("name"), 0)
+                    indicator_key = str(condition.get("name") or "")
+                    indicator_value = market_data.get(indicator_key, 0)
                     operator = condition.get("operator", ">")
                     if operator == ">":
                         results.append(indicator_value > value)
@@ -791,7 +796,7 @@ class AdvancedOrderManager:
             # OR
             return any(results) if results else False
 
-    def handle_order_fill(self, order_id: str, fill_price: float, fill_quantity: float):
+    def handle_order_fill(self, order_id: str, fill_price: float, fill_quantity: float) -> None:
         """
         Handle order fill event.
 
@@ -827,7 +832,7 @@ class AdvancedOrderManager:
 
         logger.info("Order filled: %s - %s@%s", order_id, fill_quantity, fill_price)
 
-    def _handle_oco_fill(self, oco_id: str, filled_order_id: str):
+    def _handle_oco_fill(self, oco_id: str, filled_order_id: str) -> None:
         """Handle OCO order fill - cancel the other order."""
         oco = self.oco_orders[oco_id]
 
@@ -842,7 +847,7 @@ class AdvancedOrderManager:
 
         logger.info("OCO triggered: %s - Cancelled %s", oco_id, other_order.id)
 
-    def _handle_bracket_fill(self, bracket_id: str, filled_order_id: str):
+    def _handle_bracket_fill(self, bracket_id: str, filled_order_id: str) -> None:
         """Handle bracket order fill."""
         bracket = self.bracket_orders[bracket_id]
 
