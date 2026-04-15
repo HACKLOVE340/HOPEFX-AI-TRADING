@@ -87,13 +87,16 @@ http {
         add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
 
         # ── Security headers ──────────────────────────────────────────────────
-        add_header X-Frame-Options           "SAMEORIGIN"   always;
-        add_header X-Content-Type-Options    "nosniff"      always;
+        add_header X-Frame-Options           "SAMEORIGIN"    always;
+        add_header X-Content-Type-Options    "nosniff"       always;
         add_header X-XSS-Protection          "1; mode=block" always;
         add_header Referrer-Policy           "strict-origin-when-cross-origin" always;
         add_header Permissions-Policy        "geolocation=(), microphone=(), camera=()" always;
+        # connect-src covers REST (/api/*), both WebSocket endpoints
+        # (/ws/live and /ws/nuclear), and QR code generation (2FA setup).
+        # worker-src blob: is required by lightweight-charts web workers.
         add_header Content-Security-Policy
-            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://api.qrserver.com; connect-src 'self' wss://${HOPEFX_DOMAIN}; font-src 'self';"
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://api.qrserver.com; connect-src 'self' wss://${HOPEFX_DOMAIN} https://api.qrserver.com; font-src 'self'; worker-src 'self' blob:;"
             always;
 
         # ── Auth rate limiting ────────────────────────────────────────────────
@@ -107,14 +110,18 @@ http {
             proxy_set_header   X-Forwarded-Proto $scheme;
         }
 
-        # ── WebSocket proxy ───────────────────────────────────────────────────
+        # ── WebSocket proxy (/ws/live, /ws/nuclear, /ws/*) ───────────────────
+        # Must be declared before /api/ and / so nginx matches the
+        # Upgrade header before the plain HTTP location blocks.
         location /ws/ {
             proxy_pass         http://hopefx_backend;
             proxy_http_version 1.1;
-            proxy_set_header   Upgrade    $http_upgrade;
-            proxy_set_header   Connection "upgrade";
-            proxy_set_header   Host       $host;
-            proxy_set_header   X-Real-IP  $remote_addr;
+            proxy_set_header   Upgrade           $http_upgrade;
+            proxy_set_header   Connection        "upgrade";
+            proxy_set_header   Host              $host;
+            proxy_set_header   X-Real-IP         $remote_addr;
+            proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header   X-Forwarded-Proto $scheme;
             proxy_read_timeout 3600s;
             proxy_send_timeout 3600s;
         }
@@ -143,6 +150,96 @@ http {
             proxy_set_header   X-Forwarded-Proto $scheme;
         }
 
+        # ── Nuclear supervisor + strategy (/nuclear, /nuclear-strategy) ───────
+        # Mounted outside /api/ — must be proxied explicitly.
+        location ~ ^/nuclear(-strategy)? {
+            limit_req zone=api burst=20 nodelay;
+            proxy_pass         http://hopefx_backend;
+            proxy_http_version 1.1;
+            proxy_set_header   Connection        "";
+            proxy_set_header   Host              $host;
+            proxy_set_header   X-Real-IP         $remote_addr;
+            proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header   X-Forwarded-Proto $scheme;
+            proxy_read_timeout 120s;
+        }
+
+        # ── TCA (Transaction Cost Analysis) (/tca) ────────────────────────────
+        location /tca {
+            limit_req zone=api burst=20 nodelay;
+            proxy_pass         http://hopefx_backend;
+            proxy_http_version 1.1;
+            proxy_set_header   Connection        "";
+            proxy_set_header   Host              $host;
+            proxy_set_header   X-Real-IP         $remote_addr;
+            proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header   X-Forwarded-Proto $scheme;
+        }
+
+        # ── KYC / AML (/kyc) ──────────────────────────────────────────────────
+        location /kyc {
+            limit_req zone=api burst=10 nodelay;
+            proxy_pass         http://hopefx_backend;
+            proxy_http_version 1.1;
+            proxy_set_header   Connection        "";
+            proxy_set_header   Host              $host;
+            proxy_set_header   X-Real-IP         $remote_addr;
+            proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header   X-Forwarded-Proto $scheme;
+        }
+
+        # ── Replay backtest (/replay) ─────────────────────────────────────────
+        location /replay {
+            limit_req zone=api burst=5 nodelay;
+            proxy_pass         http://hopefx_backend;
+            proxy_http_version 1.1;
+            proxy_set_header   Connection        "";
+            proxy_set_header   Host              $host;
+            proxy_set_header   X-Real-IP         $remote_addr;
+            proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header   X-Forwarded-Proto $scheme;
+            # Backtests can run for several minutes
+            proxy_read_timeout 300s;
+        }
+
+        # ── Decision engine (/decision) ───────────────────────────────────────
+        location /decision {
+            limit_req zone=api burst=20 nodelay;
+            proxy_pass         http://hopefx_backend;
+            proxy_http_version 1.1;
+            proxy_set_header   Connection        "";
+            proxy_set_header   Host              $host;
+            proxy_set_header   X-Real-IP         $remote_addr;
+            proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header   X-Forwarded-Proto $scheme;
+        }
+
+        # ── GodMode dashboard (/godmode/) ─────────────────────────────────────
+        location /godmode/ {
+            proxy_pass         http://hopefx_backend;
+            proxy_http_version 1.1;
+            proxy_set_header   Connection        "";
+            proxy_set_header   Host              $host;
+            proxy_set_header   X-Real-IP         $remote_addr;
+            proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header   X-Forwarded-Proto $scheme;
+        }
+
+        # ── Prometheus metrics (/metrics) — internal monitoring only ──────────
+        # Blocked from public internet; accessible only from private networks
+        # and localhost (Prometheus scraper runs inside the same Docker network).
+        location /metrics {
+            allow 127.0.0.1;
+            allow 10.0.0.0/8;
+            allow 172.16.0.0/12;
+            allow 192.168.0.0/16;
+            deny  all;
+            proxy_pass         http://hopefx_backend;
+            proxy_http_version 1.1;
+            proxy_set_header   Host $host;
+            access_log off;
+        }
+
         # ── Health check (no rate limit, no auth) ─────────────────────────────
         location /health {
             proxy_pass http://hopefx_backend;
@@ -151,6 +248,8 @@ http {
         }
 
         # ── React SPA — proxy all unmatched routes to FastAPI ─────────────────
+        # FastAPI serves the built React bundle from /static/ and handles
+        # SPA fallback (returns index.html for unknown client-side routes).
         location / {
             proxy_pass         http://hopefx_backend;
             proxy_http_version 1.1;
