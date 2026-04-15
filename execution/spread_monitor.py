@@ -52,7 +52,7 @@ _ABS_LIMIT_USD = float(os.getenv("SPREAD_ABS_LIMIT_USD", "5.0"))
 
 # ── Optional Prometheus ───────────────────────────────────────────────────────
 try:
-    from prometheus_client import Counter, Gauge  # type: ignore[import]
+    from prometheus_client import Counter, Gauge
 
     _spread_spike_counter = Counter(
         "hopefx_spread_spikes_total",
@@ -188,7 +188,7 @@ class SpreadMonitor:
             tick_count=self._tick_counts[symbol],
         )
 
-    def on_tick_obj(self, symbol: str, tick) -> SpreadSnapshot:
+    def on_tick_obj(self, symbol: str, tick: object) -> SpreadSnapshot:
         """
         Convenience wrapper accepting a tick object with ``.bid`` and ``.ask``
         (or ``.mid`` as a fallback for synthetic half-spread estimate).

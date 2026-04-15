@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 
 # Optional Sentry
 try:
-    import sentry_sdk  # type: ignore[import]
+    import sentry_sdk
 
     _SENTRY = True
 except ImportError:
@@ -93,12 +93,12 @@ class _NullSpanCtx:
 _module_tracer: Any = None
 
 
-def _get_module_tracer():
+def _get_module_tracer() -> Any:
     """Return the cached module-level OTel tracer (or _NullSpanCtx factory)."""
     global _module_tracer
     if _module_tracer is None:
         try:
-            from api.tracing import get_tracer as _get_tracer  # type: ignore[import]
+            from api.tracing import get_tracer as _get_tracer
 
             _module_tracer = _get_tracer("hopefx.execution")
         except (ImportError, RuntimeError):
@@ -285,13 +285,13 @@ class ExecutionEngine:
 
     def __init__(
         self,
-        broker_manager,
-        risk_manager,
-        kill_switch=None,
-        redis_client=None,
-        tca_recorder=None,
+        broker_manager: Any,
+        risk_manager: Any,
+        kill_switch: Any = None,
+        redis_client: Any = None,
+        tca_recorder: Any = None,
         max_latency_ms: float = 50.0,
-        position_manager=None,
+        position_manager: Any = None,
     ) -> None:
         self._broker = broker_manager
         self._risk = risk_manager
@@ -325,10 +325,10 @@ class ExecutionEngine:
         self._last_ticks: dict[str, Any] = {}
 
         # SL/TP monitor — started in start(), stopped in stop()
-        self._sltp_monitor = None
+        self._sltp_monitor: Any = None
 
         # Self-trade prevention singleton — lazy-initialised on first order
-        self._stp = None
+        self._stp: Any = None
 
         logger.info(
             "ExecutionEngine initialised | max_latency=%.0fms",
@@ -466,13 +466,14 @@ class ExecutionEngine:
             t0 = time.monotonic()
             self._total_orders += 1
 
-            request = self._enrich_price_from_data_layer(request, t0)
-            if isinstance(request, ExecutionReport):
+            _enriched = self._enrich_price_from_data_layer(request, t0)
+            if isinstance(_enriched, ExecutionReport):
                 try:
-                    _root_span.add_event("data_layer.blocked", {"reason": request.message})
+                    _root_span.add_event("data_layer.blocked", {"reason": _enriched.message})
                 except (TypeError, ValueError, AttributeError) as _span_exc:
                     logger.debug("OTel span error in %s: %s", __name__, _span_exc)
-                return request  # data-layer block
+                return _enriched  # data-layer block
+            request = _enriched
 
             request = self._enrich_price_from_tick_feed(request)
 
@@ -933,10 +934,10 @@ class ExecutionEngine:
             logger.debug("Algo order routing check failed: %s", exc)
         return None
 
-    def _make_algo_broker_fn(self):
+    def _make_algo_broker_fn(self) -> Any:
         """Return an async broker-submit callable for the algo manager."""
 
-        async def _broker_fn(**kwargs):
+        async def _broker_fn(**kwargs: Any) -> Any:
             req = ExecutionRequest(
                 symbol=kwargs["symbol"],
                 side=kwargs["side"],
@@ -1401,7 +1402,7 @@ class ExecutionEngine:
         # Emit to Prometheus histogram for real-time SLA alerting.
         # Lazy-import so prometheus_client is optional (degrades gracefully).
         try:
-            from execution._prom_metrics import EXECUTION_LATENCY_HISTOGRAM  # type: ignore[import]
+            from execution._prom_metrics import EXECUTION_LATENCY_HISTOGRAM
 
             EXECUTION_LATENCY_HISTOGRAM.observe(latency_ms / 1000.0)
         except (ImportError, AttributeError) as _prom_exc:

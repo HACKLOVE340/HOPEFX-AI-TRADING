@@ -52,8 +52,8 @@ class MessageThrottler:
         self.cooldown = cooldown_seconds
 
         # Sliding windows
-        self.second_window: deque = deque()
-        self.minute_window: deque = deque()
+        self.second_window: deque[float] = deque()
+        self.minute_window: deque[float] = deque()
         self.lock = Lock()
 
         self.state = ThrottleState(0, time.time(), ThrottleLevel.NORMAL, None)
@@ -144,7 +144,7 @@ class MessageThrottler:
             return ThrottleLevel.WARNING
         return ThrottleLevel.NORMAL
 
-    def get_status(self) -> dict:
+    def get_status(self) -> dict[str, object]:
         """Get current throttle status"""
         return {
             "level": self.state.level.value,

@@ -22,9 +22,9 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timezone
+from typing import Any, Union
 
 UTC = timezone.utc
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ class RedisStateStore:
     All methods are synchronous; use :class:`AsyncRedisStateStore` for async.
     """
 
-    def __init__(self, redis_client) -> None:
+    def __init__(self, redis_client: Any) -> None:
         self._r = redis_client
 
     # ------------------------------------------------------------------
@@ -170,7 +170,7 @@ class AsyncRedisStateStore:
     Async version of :class:`RedisStateStore` for use with ``redis.asyncio``.
     """
 
-    def __init__(self, redis_client) -> None:
+    def __init__(self, redis_client: Any) -> None:
         self._r = redis_client
 
     async def save_order(self, order: dict[str, Any]) -> None:
@@ -260,7 +260,9 @@ class AsyncRedisStateStore:
         return {"orders": orders, "positions": positions}
 
 
-def create_state_store(redis_client, *, async_client: bool = False):
+def create_state_store(
+    redis_client: Any, *, async_client: bool = False
+) -> Union[AsyncRedisStateStore, RedisStateStore]:
     """
     Factory that returns the appropriate store type.
 
