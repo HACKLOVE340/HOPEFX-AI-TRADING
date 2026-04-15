@@ -16,9 +16,10 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from enum import Enum
+from typing import Any
 
 UTC = timezone.utc
-from enum import Enum
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +90,7 @@ class Order:
             OrderStatus.REJECTED,
         )
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "symbol": self.symbol,
@@ -130,7 +131,7 @@ class Position:
     def total_pnl(self) -> float:
         return self.unrealized_pnl + self.realized_pnl
 
-    def update_price(self, new_price: float):
+    def update_price(self, new_price: float) -> None:
         """Update position with new price"""
         self.current_price = new_price
         self.updated_at = time.time()
@@ -140,7 +141,7 @@ class Position:
         else:
             self.unrealized_pnl = (self.entry_price - new_price) * self.quantity
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "symbol": self.symbol,
@@ -169,10 +170,10 @@ class BaseBroker(abc.ABC):
     not need to be overridden unless the broker offers a native bulk API.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.connected = False
         self._lock = asyncio.Lock()
-        self._session = None
+        self._session: Any = None
         self._connection_lock = asyncio.Lock()
 
     @abc.abstractmethod
@@ -184,7 +185,7 @@ class BaseBroker(abc.ABC):
         """Close the broker connection and release resources."""
 
     @abc.abstractmethod
-    async def get_account_info(self) -> dict:
+    async def get_account_info(self) -> dict[str, Any]:
         """Return account balance, margin, and metadata."""
 
     @abc.abstractmethod
@@ -282,10 +283,10 @@ class PaperTradingBroker(BaseBroker):
         base_currency: str = "USD",
         commission_per_lot: float = 3.5,
         slippage_model: str = "gaussian",
-        session_factory=None,
+        session_factory: Any = None,
         user_id: str = "paper",
         seed: int | None = None,
-    ):
+    ) -> None:
         super().__init__()
 
         self.initial_balance = initial_balance
@@ -312,7 +313,7 @@ class PaperTradingBroker(BaseBroker):
         self._orders: dict[str, Order] = {}
         self._positions: dict[str, Position] = {}
         self._order_history: list[Order] = []
-        self._trade_history: list[dict] = []
+        self._trade_history: list[dict[str, Any]] = []
         self._market_prices: dict[str, float] = {}
 
         self.price_feed = None
@@ -334,19 +335,18 @@ class PaperTradingBroker(BaseBroker):
             commission_per_lot,
         )
 
-    def set_price_feed(self, price_engine):
+    def set_price_feed(self, price_engine: Any) -> None:
         """Inject price feed"""
         self.price_feed = price_engine
         logger.info("Price feed connected to paper broker")
 
-    async def connect(self):
+    async def connect(self) -> None:
         """Connect to simulation"""
         async with self._connection_lock:
             self.connected = True
         logger.info("PaperTradingBroker connected (simulation mode)")
-        return True
 
-    async def disconnect(self):
+    async def disconnect(self) -> None:
         """Disconnect and generate report"""
         async with self._connection_lock:
             self.connected = False
@@ -354,9 +354,8 @@ class PaperTradingBroker(BaseBroker):
         # Generate final report
         report = self._generate_report()
         logger.info("Final Trading Report:\n%s", report)
-        return True
 
-    async def get_account_info(self) -> dict:
+    async def get_account_info(self) -> dict[str, Any]:
         """Get account information with proper locking"""
         async with self._positions_lock, self._account_lock:
             # Calculate equity from positions
@@ -506,7 +505,7 @@ class PaperTradingBroker(BaseBroker):
             return 0.01
         return 0.0001
 
-    async def _update_position(self, order: Order):
+    async def _update_position(self, order: Order) -> None:
         """Update positions based on filled order - THREAD SAFE (caller must hold lock)"""
         if order.status not in (OrderStatus.FILLED, OrderStatus.PARTIAL):
             return
@@ -652,7 +651,7 @@ class PaperTradingBroker(BaseBroker):
         async with self._orders_lock:
             return [o for o in self._orders.values() if o.status == OrderStatus.PENDING]
 
-    def _persist_trade_record(self, record: dict) -> None:
+    def _persist_trade_record(self, record: dict[str, Any]) -> None:
         """Persist a closed trade record to the DB trades table."""
         if not self._session_factory:
             return
@@ -707,12 +706,12 @@ class PaperTradingBroker(BaseBroker):
     # ------------------------------------------------------------------
 
     @property
-    def positions(self) -> dict:
+    def positions(self) -> dict[str, Position]:
         """Sync access to positions dict (keyed by symbol)."""
         return self._positions
 
     @property
-    def orders(self) -> dict:
+    def orders(self) -> dict[str, Order]:
         """Sync access to orders dict."""
         return self._orders
 
@@ -732,9 +731,9 @@ class PaperTradingBroker(BaseBroker):
     def place_order(
         self,
         symbol: str,
-        side,
+        side: Any,
         quantity: float,
-        order_type=None,
+        order_type: Any = None,
         price: float | None = None,
         stop_loss: float | None = None,
         take_profit: float | None = None,
@@ -805,7 +804,7 @@ class PaperTradingBroker(BaseBroker):
 
         return order
 
-    def _compute_trade_stats(self) -> dict:
+    def _compute_trade_stats(self) -> dict[str, Any]:
         """Compute summary statistics from trade history."""
         trades = self._trade_history
         winning = [t for t in trades if t["realized_pnl"] > 0]
@@ -915,17 +914,17 @@ class OANDABroker(BaseBroker):
 
         # Rate limiting
         self._rate_limiter = asyncio.Semaphore(10)
-        self._request_count = 0
-        self._last_request_time = 0
+        self._request_count: int = 0
+        self._last_request_time: float = 0.0
 
         # Caching
         self._positions_cache: dict[str, Position] = {}
-        self._cache_ttl = 5  # 5 seconds
-        self._last_cache_update = 0
+        self._cache_ttl: float = 5.0  # 5 seconds
+        self._last_cache_update: float = 0.0
 
         self._session = None
 
-    async def connect(self):
+    async def connect(self) -> None:
         """Connect to OANDA API with retry"""
         for attempt in range(self.max_retries):
             try:
@@ -957,7 +956,7 @@ class OANDABroker(BaseBroker):
                         )
 
                         self.connected = True
-                        return True
+                        return
                     error_data = await resp.text()
                     raise ConnectionError(
                         f"OANDA error {resp.status}: {error_data}",
@@ -980,9 +979,7 @@ class OANDABroker(BaseBroker):
                         f"Failed to connect after {self.max_retries} attempts",
                     ) from None
 
-        return False
-
-    async def disconnect(self):
+    async def disconnect(self) -> None:
         """Disconnect and cleanup"""
         if self._session:
             await self._session.close()
@@ -992,10 +989,11 @@ class OANDABroker(BaseBroker):
             self.connected = False
 
         logger.info("OANDA disconnected")
-        return True
 
-    async def _make_request(self, method: str, endpoint: str, **kwargs) -> dict:
+    async def _make_request(self, method: str, endpoint: str, **kwargs: Any) -> dict[str, Any]:
         """Make API request with rate limiting and error handling"""
+        if self._session is None:
+            raise ConnectionError("Not connected — call connect() first")
         url = f"{self.base_url}/v3{endpoint}"
 
         async with self._rate_limiter:
@@ -1006,7 +1004,7 @@ class OANDABroker(BaseBroker):
                         self._last_request_time = time.time()
 
                         if resp.status == 200 or resp.status == 201:
-                            return await resp.json()
+                            return dict(await resp.json())
                         if resp.status == 429:  # Rate limited
                             retry_after = int(resp.headers.get("Retry-After", 1))
                             logger.warning("Rate limited, waiting %ss", retry_after)
@@ -1035,7 +1033,7 @@ class OANDABroker(BaseBroker):
 
         raise ConnectionError("Max retries exceeded")
 
-    async def get_account_info(self) -> dict:
+    async def get_account_info(self) -> dict[str, Any]:
         """Get account information"""
         data = await self._make_request("GET", f"/accounts/{self.account_id}")
 
@@ -1211,7 +1209,7 @@ class OANDABroker(BaseBroker):
         return orders
 
 
-def create_broker(broker_type: str, config: dict) -> BaseBroker:
+def create_broker(broker_type: str, config: dict[str, Any]) -> "BaseBroker":
     """Factory function to create appropriate broker"""
     broker_type = broker_type.lower()
 
@@ -1236,15 +1234,20 @@ def create_broker(broker_type: str, config: dict) -> BaseBroker:
     if broker_type == "ccxt":
         from brokers.ccxt_connector import CCXTConnector
 
-        return CCXTConnector(config)
+        connector: BaseBroker = CCXTConnector(config)
+        return connector
     raise ValueError(
         f"Unknown broker type: {broker_type}. Supported: paper, oanda, ccxt",
     )
 
 
-# Override with the dict-config-based PaperTradingBroker that tests expect
+# Override with the dict-config-based PaperTradingBroker that tests expect.
+# Guard against re-definition: only import if the module is available and
+# the name hasn't already been bound to the class defined above.
 try:
-    from brokers.paper_trading import PaperTradingBroker
+    from brokers.paper_trading import PaperTradingBroker as _PTB  # noqa: F401
+
+    PaperTradingBroker = _PTB  # type: ignore[misc]
 except Exception as _exc:
     logger.warning("PaperTradingBroker import failed: %s", _exc)
 
