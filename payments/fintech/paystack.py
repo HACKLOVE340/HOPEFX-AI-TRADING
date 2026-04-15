@@ -19,6 +19,7 @@ import logging
 import os
 from datetime import datetime, timezone
 from decimal import Decimal
+from typing import Any
 
 import requests
 
@@ -76,7 +77,7 @@ class PaystackClient:
         amount: Decimal,
         currency: str = "USD",
         email: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Initialize a Paystack transaction.
 
@@ -115,7 +116,7 @@ class PaystackClient:
             },
         }
 
-        data = self._post("/transaction/initialize", payload)
+        data = self._post_dict("/transaction/initialize", payload)
 
         reference = data["reference"]
         logger.info("Paystack payment initialized: ref=%s user=%s", reference, user_id)
@@ -128,7 +129,7 @@ class PaystackClient:
             "status": "initiated",
         }
 
-    def verify_transaction(self, reference: str) -> dict:
+    def verify_transaction(self, reference: str) -> dict[str, Any]:
         """
         Verify a Paystack transaction by reference.
 
@@ -144,7 +145,7 @@ class PaystackClient:
         dict with at minimum: status, amount (kobo), currency, reference,
         paid_at, customer, metadata.
         """
-        data = self._get(f"/transaction/verify/{reference}")
+        data = self._get_dict(f"/transaction/verify/{reference}")
         logger.info(
             "Paystack transaction verified: ref=%s status=%s",
             reference,
@@ -161,7 +162,7 @@ class PaystackClient:
         account_name: str = "",
         currency: str = "NGN",
         reason: str = "HOPEFX withdrawal",
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Initiate a bank transfer (payout) via Paystack.
 
@@ -193,7 +194,7 @@ class PaystackClient:
             "bank_code": bank_code,
             "currency": currency,
         }
-        recipient_data = self._post("/transferrecipient", recipient_payload)
+        recipient_data = self._post_dict("/transferrecipient", recipient_payload)
         recipient_code = recipient_data["recipient_code"]
 
         # Step 2 — initiate transfer (amount in kobo)
@@ -205,7 +206,7 @@ class PaystackClient:
             "reason": reason,
             "metadata": {"user_id": user_id},
         }
-        transfer_data = self._post("/transfer", transfer_payload)
+        transfer_data = self._post_dict("/transfer", transfer_payload)
 
         logger.info(
             "Paystack transfer initiated: code=%s amount=%s status=%s",
@@ -246,20 +247,20 @@ class PaystackClient:
         ).hexdigest()
         return hmac.compare_digest(expected, signature)
 
-    def list_banks(self, country: str = "nigeria") -> list[dict]:
+    def list_banks(self, country: str = "nigeria") -> list[dict[str, Any]]:
         """
         Return the list of supported banks for the given country.
 
         Calls GET /bank and returns the data array.
         """
-        data = self._get(f"/bank?country={country}&perPage=100")
-        return data if isinstance(data, list) else []
+        return self._get_list(f"/bank?country={country}&perPage=100")
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _post(self, path: str, payload: dict) -> dict:
+    def _post_dict(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """POST to Paystack and return the ``data`` field as a dict."""
         url = f"{_PAYSTACK_BASE}{path}"
         try:
             resp = self._session.post(url, json=payload, timeout=_REQUEST_TIMEOUT)
@@ -267,12 +268,20 @@ class PaystackClient:
         except requests.RequestException as exc:
             raise PaystackError(f"Paystack POST {path} failed: {exc}") from exc
 
-        body = resp.json()
+        body: dict[str, Any] = resp.json()
         if not body.get("status"):
-            raise PaystackError(f"Paystack POST {path} returned status=false: {body.get('message', 'unknown error')}")
-        return body["data"]
+            raise PaystackError(
+                f"Paystack POST {path} returned status=false: {body.get('message', 'unknown error')}"
+            )
+        data = body["data"]
+        if not isinstance(data, dict):
+            raise PaystackError(
+                f"Paystack POST {path}: expected dict in data, got {type(data).__name__}"
+            )
+        return data
 
-    def _get(self, path: str) -> dict | list:
+    def _get_dict(self, path: str) -> dict[str, Any]:
+        """GET from Paystack and return the ``data`` field as a dict."""
         url = f"{_PAYSTACK_BASE}{path}"
         try:
             resp = self._session.get(url, timeout=_REQUEST_TIMEOUT)
@@ -280,10 +289,38 @@ class PaystackClient:
         except requests.RequestException as exc:
             raise PaystackError(f"Paystack GET {path} failed: {exc}") from exc
 
-        body = resp.json()
+        body: dict[str, Any] = resp.json()
         if not body.get("status"):
-            raise PaystackError(f"Paystack GET {path} returned status=false: {body.get('message', 'unknown error')}")
-        return body["data"]
+            raise PaystackError(
+                f"Paystack GET {path} returned status=false: {body.get('message', 'unknown error')}"
+            )
+        data = body["data"]
+        if not isinstance(data, dict):
+            raise PaystackError(
+                f"Paystack GET {path}: expected dict in data, got {type(data).__name__}"
+            )
+        return data
+
+    def _get_list(self, path: str) -> list[dict[str, Any]]:
+        """GET from Paystack and return the ``data`` field as a list."""
+        url = f"{_PAYSTACK_BASE}{path}"
+        try:
+            resp = self._session.get(url, timeout=_REQUEST_TIMEOUT)
+            resp.raise_for_status()
+        except requests.RequestException as exc:
+            raise PaystackError(f"Paystack GET {path} failed: {exc}") from exc
+
+        body: dict[str, Any] = resp.json()
+        if not body.get("status"):
+            raise PaystackError(
+                f"Paystack GET {path} returned status=false: {body.get('message', 'unknown error')}"
+            )
+        data = body["data"]
+        if not isinstance(data, list):
+            raise PaystackError(
+                f"Paystack GET {path}: expected list in data, got {type(data).__name__}"
+            )
+        return data
 
 
 # Module-level singleton — only created when the env var is present so that
