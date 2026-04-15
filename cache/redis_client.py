@@ -53,6 +53,11 @@ _connection_mode: str = "none"  # "cluster" | "sentinel" | "direct" | "none"
 _last_health_check: float = 0.0
 _health_check_interval: float = float(os.getenv("REDIS_HEALTH_INTERVAL", "30"))
 
+# Suppress repeated "no config" / "connection failed" log noise.
+# After the first warning we downgrade subsequent identical messages to DEBUG.
+_no_config_warned: bool = False
+_connect_failed_warned: bool = False
+
 
 def _parse_hosts(hosts_str: str, default_port: int = 6379) -> list[tuple[str, int]]:
     """Parse 'host1:port1,host2:port2' into [(host, port), ...]."""
@@ -76,6 +81,7 @@ async def _try_cluster(
     db: int,  # pylint: disable=unused-argument  # cluster mode ignores db
 ) -> Any | None:
     """Attempt Redis Cluster connection. Returns client or None."""
+    global _connect_failed_warned
     try:
         from redis.asyncio.cluster import ClusterNode, RedisCluster  # pylint: disable=no-name-in-module
 
@@ -94,12 +100,17 @@ async def _try_cluster(
         )
         await client.ping()
         logger.info("Redis Cluster connected (%d startup nodes)", len(startup_nodes))
+        _connect_failed_warned = False  # reset on success
         return client
     except ImportError:
         logger.warning("redis-py cluster support not available — install redis[hiredis]>=4.6")
         return None
     except Exception as exc:
-        logger.error("Redis Cluster connection failed: %s", exc)
+        if not _connect_failed_warned:
+            logger.error("Redis Cluster connection failed: %s", exc)
+            _connect_failed_warned = True
+        else:
+            logger.debug("Redis Cluster connection failed (suppressed repeat): %s", exc)
         return None
 
 
@@ -111,6 +122,7 @@ async def _try_sentinel(
     db: int,
 ) -> tuple[Any | None, Any | None]:
     """Attempt Redis Sentinel connection. Returns (client, sentinel) or (None, None)."""
+    global _connect_failed_warned
     try:
         from redis.asyncio.sentinel import Sentinel  # pylint: disable=no-name-in-module
 
@@ -133,9 +145,14 @@ async def _try_sentinel(
         client = sentinel.master_for(master_name)
         await client.ping()
         logger.info("Redis Sentinel connected (master=%s)", master_name)
+        _connect_failed_warned = False  # reset on success
         return client, sentinel
     except Exception as exc:
-        logger.error("Redis Sentinel connection failed: %s — falling back to direct URL", exc)
+        if not _connect_failed_warned:
+            logger.error("Redis Sentinel connection failed: %s — falling back to direct URL", exc)
+            _connect_failed_warned = True
+        else:
+            logger.debug("Redis Sentinel connection failed (suppressed repeat): %s", exc)
         return None, None
 
 
@@ -251,11 +268,16 @@ async def _try_direct(
         logger.info("Redis: connecting directly via URL (tls=%s)", is_tls)
         await client.ping()
         logger.info("Redis direct connection established (tls=%s)", is_tls)
+        _connect_failed_warned = False  # reset on success
         return client
     except RuntimeError:
         raise  # re-raise TLS enforcement errors — do not swallow
     except Exception as exc:
-        logger.error("Redis direct connection failed: %s", exc)
+        if not _connect_failed_warned:
+            logger.error("Redis direct connection failed: %s", exc)
+            _connect_failed_warned = True
+        else:
+            logger.debug("Redis direct connection failed (suppressed repeat): %s", exc)
         return None
 
 
@@ -291,6 +313,7 @@ async def get_redis(
         if client is not None:
             _redis_instance = client
             _connection_mode = "cluster"
+            _no_config_warned = False
             return _redis_instance
 
     # ── 2. Sentinel mode ──────────────────────────────────────────────────────
@@ -300,6 +323,7 @@ async def get_redis(
             _redis_instance = client
             _sentinel_instance = sentinel
             _connection_mode = "sentinel"
+            _no_config_warned = False
             return _redis_instance
 
     # ── 3. Direct URL mode ────────────────────────────────────────────────────
@@ -308,12 +332,17 @@ async def get_redis(
         if client is not None:
             _redis_instance = client
             _connection_mode = "direct"
+            _no_config_warned = False
             return _redis_instance
 
-    logger.warning(
-        "Redis: no connection configured (REDIS_CLUSTER_HOSTS / "
-        "REDIS_SENTINEL_HOSTS / REDIS_URL) — running in degraded mode"
-    )
+    if not _no_config_warned:
+        logger.warning(
+            "Redis: no connection configured (REDIS_CLUSTER_HOSTS / "
+            "REDIS_SENTINEL_HOSTS / REDIS_URL) — running in degraded mode"
+        )
+        _no_config_warned = True
+    else:
+        logger.debug("Redis: still unconfigured — degraded mode (suppressed repeat)")
     _connection_mode = "none"
     return None
 
@@ -382,9 +411,12 @@ async def get_health() -> dict[str, Any]:
 def reset_redis_client() -> None:
     """Force re-initialisation on next get_redis() call. Used in tests."""
     global _redis_instance, _sentinel_instance, _connection_mode
+    global _no_config_warned, _connect_failed_warned
     _redis_instance = None
     _sentinel_instance = None
     _connection_mode = "none"
+    _no_config_warned = False
+    _connect_failed_warned = False
 
 
 async def get_sentinel() -> Any | None:
