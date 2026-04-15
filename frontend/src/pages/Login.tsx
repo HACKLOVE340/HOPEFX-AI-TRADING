@@ -29,6 +29,10 @@ const Login: React.FC = () => {
     setLoading(true);
     try {
       const res = await authApi.login({ email: email.trim().toLowerCase(), password });
+      // Persist refresh token for silent renewal; access token lives in Zustand
+      if (res.data.refresh_token) {
+        localStorage.setItem('hopefx_refresh_token', res.data.refresh_token);
+      }
       setAuth(res.data.access_token, res.data.user);
       navigate(from, { replace: true });
     } catch (err: unknown) {

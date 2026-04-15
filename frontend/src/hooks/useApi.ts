@@ -22,18 +22,81 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// ── Silent token refresh on 401 ───────────────────────────────────────────────
+// When any request returns 401 we attempt one silent refresh using the stored
+// refresh_token.  On success the new access token is saved and the original
+// request is retried transparently.  On failure (refresh token also expired or
+// revoked) the session is cleared and the user is sent to /login.
+
+let _refreshPromise: Promise<string | null> | null = null;
+
+async function _silentRefresh(): Promise<string | null> {
+  // Deduplicate: if a refresh is already in-flight, wait for it.
+  if (_refreshPromise) return _refreshPromise;
+
+  _refreshPromise = (async () => {
+    const refreshToken = localStorage.getItem('hopefx_refresh_token');
+    if (!refreshToken) return null;
+    try {
+      const res = await axios.post(`${BASE_URL}/auth/refresh`, { refresh_token: refreshToken });
+      const { access_token, refresh_token: newRefresh } = res.data;
+      // Persist new tokens
+      localStorage.setItem('hopefx_access_token',  access_token);
+      localStorage.setItem('hopefx_refresh_token', newRefresh ?? refreshToken);
+      // Update Zustand store so all future requests use the new token
+      const { user } = useStore.getState();
+      if (user) useStore.getState().setAuth(access_token, user);
+      return access_token as string;
+    } catch {
+      return null;
+    } finally {
+      _refreshPromise = null;
+    }
+  })();
+
+  return _refreshPromise;
+}
+
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
-    if (err?.response?.status === 401) useStore.getState().clearAuth();
+  async (err) => {
+    const original = err.config as typeof err.config & { _retried?: boolean };
+    // Only attempt refresh on 401, once per request, and not for auth endpoints
+    // themselves (login/refresh/logout) to avoid infinite loops.
+    const isAuthEndpoint = original?.url?.includes('/auth/login') ||
+                           original?.url?.includes('/auth/refresh') ||
+                           original?.url?.includes('/auth/logout');
+
+    if (err?.response?.status === 401 && !original._retried && !isAuthEndpoint) {
+      original._retried = true;
+      const newToken = await _silentRefresh();
+      if (newToken) {
+        // Retry the original request with the new token
+        original.headers = { ...original.headers, Authorization: `Bearer ${newToken}` };
+        return api(original);
+      }
+      // Refresh failed — clear session and redirect to login
+      useStore.getState().clearAuth();
+    }
+
+    if (err?.response?.status === 401 && !isAuthEndpoint) {
+      useStore.getState().clearAuth();
+    }
+
     return Promise.reject(err);
   },
 );
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
-export interface LoginPayload  { email: string; password: string }
-export interface LoginResponse { access_token: string; token_type: string; user: import('../store').User }
+export interface LoginPayload  { email?: string; username?: string; password: string }
+export interface LoginResponse {
+  access_token:  string;
+  refresh_token: string;
+  token_type:    string;
+  expires_in:    number;
+  user:          import('../store').User;
+}
 
 export const authApi = {
   login:    (payload: LoginPayload)  => api.post<LoginResponse>('/auth/login', payload),
