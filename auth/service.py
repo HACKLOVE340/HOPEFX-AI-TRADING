@@ -688,3 +688,9 @@ class AuthService:
 
         with self._sf() as session:
             return session.query(User).filter_by(email=email.lower().strip()).first()
+
+    def get_user_by_username(self, username: str):
+        from database.user_models import User
+
+        with self._sf() as session:
+            return session.query(User).filter_by(username=username.strip()).first()
