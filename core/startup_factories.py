@@ -1774,7 +1774,7 @@ def build_component_registry(app, feature_flags):
         .register("secrets", F.init_secrets_manager, required=False, deps=["config"])
         .register("database", F.init_database, required=True, deps=["config"])
         .register("cache", F.init_cache, required=False, deps=["config"])
-        .register("hot_standby", F.init_hot_standby, required=False, deps=["cache"])
+        .register("hot_standby", F.init_hot_standby, required=False, deps=["cache", "broker"])
         .register("chaos_controller", F.init_chaos_controller, required=False, deps=["config"])
         # ── Background services ───────────────────────────────────────────────
         .register("data_scheduler", F.init_data_scheduler, required=False, deps=["config"])
@@ -1846,7 +1846,7 @@ def build_component_registry(app, feature_flags):
         )
         # ── Payments / social ─────────────────────────────────────────────────
         .register("wallet_manager", F.init_wallet, required=False, deps=["database"])
-        .register("social", F.init_social, required=False, deps=["config"])
+        .register("social", F.init_social, required=False, deps=["config", "broker"])
         .register(
             "regime_router",
             F.init_regime_router,
@@ -2062,7 +2062,12 @@ async def init_hot_standby(s: Any) -> Any | None:
     try:
         from resilience.hot_standby import HotStandbyReplicator
 
-        redis_client = getattr(s, "cache", None)
+        # HotStandbyReplicator requires an async Redis client (calls await
+        # self._redis.get() / .set() / .setex()).  s.cache is a MarketDataCache
+        # (sync, no .get/.set), so we obtain a dedicated async client here.
+        from cache.redis_client import get_redis as _get_async_redis
+
+        redis_client = await _get_async_redis()
         if redis_client is None:
             logger.warning("init_hot_standby: no Redis client available — hot-standby replication disabled")
             return None
