@@ -11,7 +11,7 @@
  * store is cleared immediately, preventing stale isAuthenticated=true.
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useStore, selectIsAuth } from '../store';
 import { authApi } from '../hooks/useApi';
@@ -46,35 +46,59 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requiredRole }) 
   const clearAuth = useStore((s) => s.clearAuth);
   const location  = useLocation();
 
-  // Track whether we've already synced this session so we don't loop.
-  const synced = useRef(false);
+  // syncing=true while /api/auth/me is in-flight so guards don't render
+  // with a stale cached role before the server response arrives.
+  const synced  = useRef(false);
+  const [syncing, setSyncing] = useState(!synced.current && isAuth && !isTokenExpired(token));
 
   useEffect(() => {
     if (isAuth && isTokenExpired(token)) {
       clearAuth();
+      setSyncing(false);
       return;
     }
     // Fetch fresh user profile once per mount to pick up any role changes
     // that happened server-side since the token was issued / cached.
     if (isAuth && token && !synced.current) {
       synced.current = true;
+      setSyncing(true);
       authApi.me()
         .then((res) => {
           const fresh = res.data;
-          // Only update if something actually changed (avoids unnecessary re-renders)
-          if (fresh && user && (fresh.role !== user.role || fresh.email !== user.email)) {
+          if (fresh && (fresh.role !== user?.role || fresh.email !== user?.email)) {
             setAuth(token, fresh);
           }
         })
         .catch(() => {
           // /me failed (expired / revoked token) — clear session
           clearAuth();
-        });
+        })
+        .finally(() => setSyncing(false));
+    } else {
+      setSyncing(false);
     }
   }, [isAuth, token, user, setAuth, clearAuth]);
 
   if (!isAuth || isTokenExpired(token)) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // Hold rendering until role is confirmed from server — prevents SuperAdminGuard
+  // from seeing a stale cached role and showing "Access Denied" on first load.
+  if (syncing) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', background: '#0f172a',
+      }}>
+        <div style={{
+          width: 32, height: 32, borderRadius: '50%',
+          border: '3px solid #1e293b', borderTopColor: '#3b82f6',
+          animation: 'spin 0.7s linear infinite',
+        }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
   }
 
   if (requiredRole && user) {
