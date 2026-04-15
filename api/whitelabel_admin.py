@@ -44,45 +44,6 @@ router = APIRouter(prefix="/api/whitelabel", tags=["Whitelabel"])
 _manager = WhiteLabelManager()
 
 
-# Seed a couple of demo tenants so the UI has data immediately
-def _seed_demo():
-    if _manager.list_tenants():
-        return
-    t1 = _manager.create_tenant(
-        name="PropFirm Alpha",
-        owner_email="admin@propfirmalpha.com",
-        features=[
-            FeatureFlag.TRADING,
-            FeatureFlag.RISK_MANAGEMENT,
-            FeatureFlag.ANALYTICS,
-        ],
-    )
-    _manager.update_theme(
-        t1.tenant_id,
-        {
-            "primary_color": "#f59e0b",
-            "logo_url": "",
-            "company_name": "PropFirm Alpha",
-        },
-    )
-    t2 = _manager.create_tenant(
-        name="FX Academy",
-        owner_email="admin@fxacademy.io",
-        trial_days=14,
-        features=[FeatureFlag.TRADING, FeatureFlag.BACKTESTING],
-    )
-    _manager.update_theme(
-        t2.tenant_id,
-        {
-            "primary_color": "#8b5cf6",
-            "logo_url": "",
-            "company_name": "FX Academy",
-        },
-    )
-
-
-_seed_demo()
-
 # In-memory API key store: tenant_id → hashed key (shown once at creation)
 _api_keys: dict[str, str] = {}
 
