@@ -624,6 +624,129 @@ class StripeProductionClient:
             "fraud_type": fraud_type,
         }
 
+    # ── Payment method management ─────────────────────────────────────────────
+
+    def list_payment_methods(self, customer_id: str) -> list[dict[str, Any]]:
+        """
+        Return saved payment methods for a Stripe customer.
+
+        Returns a list of dicts with keys:
+            id, brand, last4, exp_month, exp_year, is_default
+        """
+        if not self._stripe_available or not customer_id:
+            return []
+        try:
+            import stripe as _s
+
+            # Fetch the customer to find the default payment method
+            customer = _s.Customer.retrieve(customer_id, expand=["invoice_settings.default_payment_method"])
+            default_pm_id = (
+                customer.get("invoice_settings", {}).get("default_payment_method") or ""
+            )
+            if isinstance(default_pm_id, dict):
+                default_pm_id = default_pm_id.get("id", "")
+
+            pms = _s.PaymentMethod.list(customer=customer_id, type="card")
+            result = []
+            for pm in pms.auto_paging_iter():
+                card = pm.get("card", {})
+                result.append(
+                    {
+                        "id": pm["id"],
+                        "brand": card.get("brand", "unknown"),
+                        "last4": card.get("last4", "****"),
+                        "exp_month": card.get("exp_month", 0),
+                        "exp_year": card.get("exp_year", 0),
+                        "is_default": pm["id"] == default_pm_id,
+                    }
+                )
+            return result
+        except Exception as exc:
+            logger.warning("list_payment_methods failed: %s", exc)
+            return []
+
+    def attach_payment_method(self, customer_id: str, payment_method_id: str) -> dict[str, Any]:
+        """
+        Attach a payment method to a customer and set it as default.
+
+        Returns the normalised payment method dict on success.
+        Raises RuntimeError on failure.
+        """
+        if not self._stripe_available:
+            raise RuntimeError("Stripe SDK not available.")
+        if not customer_id:
+            raise ValueError("customer_id is required.")
+        try:
+            import stripe as _s
+
+            pm = _s.PaymentMethod.attach(payment_method_id, customer=customer_id)
+            # Set as default invoice payment method
+            _s.Customer.modify(
+                customer_id,
+                invoice_settings={"default_payment_method": payment_method_id},
+            )
+            card = pm.get("card", {})
+            return {
+                "id": pm["id"],
+                "brand": card.get("brand", "unknown"),
+                "last4": card.get("last4", "****"),
+                "exp_month": card.get("exp_month", 0),
+                "exp_year": card.get("exp_year", 0),
+                "is_default": True,
+            }
+        except Exception as exc:
+            logger.error("attach_payment_method failed: %s", exc)
+            raise RuntimeError(str(exc)) from exc
+
+    def detach_payment_method(self, payment_method_id: str) -> bool:
+        """
+        Detach (remove) a payment method from its customer.
+
+        Returns True on success, raises RuntimeError on failure.
+        """
+        if not self._stripe_available:
+            raise RuntimeError("Stripe SDK not available.")
+        try:
+            import stripe as _s
+
+            _s.PaymentMethod.detach(payment_method_id)
+            return True
+        except Exception as exc:
+            logger.error("detach_payment_method failed: %s", exc)
+            raise RuntimeError(str(exc)) from exc
+
+    def get_or_create_customer(self, user_id: str, email: str | None = None) -> str:
+        """
+        Return the Stripe customer ID for a user, creating one if needed.
+
+        Stores the mapping in the subscription manager when available.
+        """
+        if not self._stripe_available:
+            raise RuntimeError("Stripe SDK not available.")
+        # Check subscription manager first
+        try:
+            mgr_mod = __import__("monetization.subscription", fromlist=["subscription_manager"])
+            mgr = mgr_mod.subscription_manager
+            sub = mgr.get_user_subscription(user_id)
+            if sub and getattr(sub, "stripe_customer_id", None):
+                return sub.stripe_customer_id
+        except Exception:
+            pass
+
+        import stripe as _s
+
+        # Search for existing customer by metadata
+        existing = _s.Customer.search(query=f'metadata["user_id"]:"{user_id}"', limit=1)
+        if existing.data:
+            return existing.data[0]["id"]
+
+        # Create new customer
+        params: dict[str, Any] = {"metadata": {"user_id": user_id}}
+        if email:
+            params["email"] = email
+        customer = _s.Customer.create(**params)
+        return customer["id"]
+
     def get_config(self) -> dict[str, Any]:
         """Return safe public configuration (no secret keys)."""
         return {

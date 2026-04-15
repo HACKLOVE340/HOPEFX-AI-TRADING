@@ -712,6 +712,96 @@ async def get_affiliate_stats(user=None) -> dict:
         }
 
 
+# ── Payment methods (Stripe saved cards) ─────────────────────────────────────
+
+@router.get("/payment-methods")
+async def list_payment_methods(user: TokenPayload = Depends(get_current_user)):
+    """
+    Return the authenticated user's saved Stripe payment methods.
+
+    Resolves the Stripe customer ID from the subscription manager, then
+    calls the Stripe API to list attached cards.  Returns an empty list
+    when Stripe is not configured or the user has no saved methods.
+    """
+    try:
+        from monetization.stripe_live import get_stripe_client
+
+        client = get_stripe_client()
+        customer_id = client.get_or_create_customer(user.sub, getattr(user, "email", None))
+        methods = client.list_payment_methods(customer_id)
+        return {"methods": methods}
+    except Exception as exc:
+        logger.warning("list_payment_methods: %s", exc)
+        return {"methods": []}
+
+
+class AttachPaymentMethodBody(BaseModel):
+    payment_method_id: str
+
+
+@router.post("/payment-methods", status_code=status.HTTP_201_CREATED)
+async def attach_payment_method(
+    body: AttachPaymentMethodBody,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Attach a Stripe payment method to the authenticated user's customer record
+    and set it as the default invoice payment method.
+
+    The frontend should create the PaymentMethod via Stripe.js and pass the
+    resulting ``pm_xxx`` ID in the request body.
+    """
+    try:
+        from monetization.stripe_live import get_stripe_client
+
+        client = get_stripe_client()
+        customer_id = client.get_or_create_customer(user.sub, getattr(user, "email", None))
+        pm = client.attach_payment_method(customer_id, body.payment_method_id)
+        return {"method": pm}
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("attach_payment_method: %s", exc)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to attach payment method.") from exc
+
+
+@router.delete("/payment-methods/{payment_method_id}", status_code=status.HTTP_200_OK)
+async def detach_payment_method(
+    payment_method_id: str,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Detach (remove) a saved payment method from the authenticated user's
+    Stripe customer record.
+
+    Verifies the payment method belongs to the user before detaching.
+    """
+    try:
+        from monetization.stripe_live import get_stripe_client
+
+        client = get_stripe_client()
+        customer_id = client.get_or_create_customer(user.sub, getattr(user, "email", None))
+
+        # Verify ownership before detaching
+        methods = client.list_payment_methods(customer_id)
+        owned_ids = {m["id"] for m in methods}
+        if payment_method_id not in owned_ids:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Payment method not found or does not belong to this account.",
+            )
+
+        client.detach_payment_method(payment_method_id)
+        return {"removed": payment_method_id}
+    except HTTPException:
+        raise
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("detach_payment_method: %s", exc)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to remove payment method.") from exc
+
+
 @router.get("/transactions")
 async def get_transactions(
     limit: int = 50,
