@@ -49,6 +49,28 @@ _SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", "hopefx-api")
 _EXPORTER = os.getenv("OTEL_EXPORTER", "otlp").lower()
 _SAMPLE_RATE = float(os.getenv("OTEL_SAMPLE_RATE", "1.0"))
 _OTLP_ENDPOINT = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
+_APP_ENV = os.getenv("APP_ENV", "development").lower()
+
+
+def _probe_otlp_endpoint(endpoint: str, timeout: float = 1.5) -> bool:
+    """
+    Return True if the OTLP gRPC endpoint is reachable.
+
+    Uses a raw TCP connect so we don't need grpcio at probe time.
+    In production we skip the probe and always attempt to connect —
+    a missing collector there is a deployment error, not a dev convenience.
+    """
+    import socket
+    import urllib.parse
+
+    parsed = urllib.parse.urlparse(endpoint)
+    host = parsed.hostname or "localhost"
+    port = parsed.port or 4317
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
 
 _tracer_provider = None
 
@@ -141,10 +163,29 @@ def _build_exporter():
             logger.warning("Jaeger exporter not available: %s", exc)
 
     # Default: OTLP gRPC
+    # In non-production environments, probe the endpoint before creating the
+    # exporter.  The gRPC exporter retries indefinitely on connection failure,
+    # flooding logs when no collector is running locally.  If the probe fails
+    # we fall back to a no-op (None) so spans are silently dropped rather than
+    # generating continuous ERROR/WARN noise.  In production we skip the probe
+    # — a missing collector there is a deployment misconfiguration that should
+    # surface as errors.
+    _is_prod = _APP_ENV == "production"
+
     try:
         from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
             OTLPSpanExporter,
         )
+
+        if not _is_prod and not _probe_otlp_endpoint(_OTLP_ENDPOINT):
+            logger.info(
+                "OTel: OTLP collector not reachable at %s — tracing disabled in %s. "
+                "Start a collector (e.g. docker run jaegertracing/all-in-one) or set "
+                "OTEL_EXPORTER=console to see spans locally.",
+                _OTLP_ENDPOINT,
+                _APP_ENV,
+            )
+            return None
 
         logger.info("OTel: OTLPSpanExporter (gRPC) → %s", _OTLP_ENDPOINT)
         return OTLPSpanExporter(endpoint=_OTLP_ENDPOINT, insecure=True)
@@ -158,6 +199,15 @@ def _build_exporter():
         )
 
         http_ep = _OTLP_ENDPOINT.replace(":4317", ":4318") + "/v1/traces"
+
+        if not _is_prod and not _probe_otlp_endpoint(http_ep):
+            logger.info(
+                "OTel: OTLP HTTP collector not reachable at %s — tracing disabled in %s.",
+                http_ep,
+                _APP_ENV,
+            )
+            return None
+
         logger.info("OTel: OTLPSpanExporter (HTTP) → %s", http_ep)
         return OTLPHttp(endpoint=http_ep)
     except ImportError:
