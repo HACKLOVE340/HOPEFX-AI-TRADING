@@ -203,7 +203,7 @@ const WalkForward: React.FC = () => {
         <div>
           <h1 style={s.title}>Walk-Forward Validation</h1>
           <p style={s.subtitle}>
-            {data.strategy} · {data.symbol} · {data.folds.length} folds
+            {data.strategy ?? '—'} · {data.symbol ?? '—'} · {(data.folds ?? []).length} folds
           </p>
         </div>
         <div style={s.searchRow}>
@@ -219,9 +219,9 @@ const WalkForward: React.FC = () => {
 
       {/* Summary metrics */}
       <div style={s.metricsRow}>
-        <MetricCard label="Avg Sharpe"    value={data.avg_sharpe.toFixed(2)}   color="#60a5fa" />
-        <MetricCard label="Avg Accuracy"  value={`${data.avg_accuracy.toFixed(1)}%`} color="#4ade80" />
-        <MetricCard label="Avg Drawdown"  value={`${data.avg_drawdown.toFixed(1)}%`} color="#f87171" />
+        <MetricCard label="Avg Sharpe"    value={(data.avg_sharpe   ?? 0).toFixed(2)}   color="#60a5fa" />
+        <MetricCard label="Avg Accuracy"  value={`${(data.avg_accuracy ?? 0).toFixed(1)}%`} color="#4ade80" />
+        <MetricCard label="Avg Drawdown"  value={`${(data.avg_drawdown ?? 0).toFixed(1)}%`} color="#f87171" />
         <div style={s.metricCard}>
           <div style={s.metricLabel}>Stability Score</div>
           <StabilityBadge score={data.stability_score} />
