@@ -425,24 +425,69 @@ class Query:
         if state and hasattr(state, "broker"):
             try:
                 raw = state.broker.get_trade_history(limit=limit)
-                return [
-                    Trade(
-                        id=str(t.get("id", uuid.uuid4())),
-                        symbol=t.get("symbol", "XAU/USD"),
-                        side=t.get("side", "long"),
-                        lots=float(t.get("lots", 0.01)),
-                        open_price=float(t.get("open_price", 0)),
-                        close_price=float(t.get("close_price", 0)),
-                        pnl=float(t.get("pnl", 0)),
-                        pips=float(t.get("pips", 0)),
-                        opened_at=str(t.get("opened_at", "")),
-                        closed_at=str(t.get("closed_at", "")),
-                        duration_minutes=int(t.get("duration_minutes", 0)),
-                    )
-                    for t in (raw or [])
-                ]
+                if raw:
+                    return [
+                        Trade(
+                            id=str(t.get("id", uuid.uuid4())),
+                            symbol=t.get("symbol", "XAU/USD"),
+                            side=t.get("side", "long"),
+                            lots=float(t.get("lots", 0.01)),
+                            open_price=float(t.get("open_price", 0)),
+                            close_price=float(t.get("close_price", 0)),
+                            pnl=float(t.get("pnl", 0)),
+                            pips=float(t.get("pips", 0)),
+                            opened_at=str(t.get("opened_at", "")),
+                            closed_at=str(t.get("closed_at", "")),
+                            duration_minutes=int(t.get("duration_minutes", 0)),
+                        )
+                        for t in raw
+                    ]
             except (RuntimeError, ValueError, OSError, AttributeError) as exc:
                 logger.debug("Trade history fetch failed: %s", exc)
+
+        # DB fallback: read closed trades from the Trade table
+        try:
+            from app import app_state as _gql_app_state
+            from database.models import Trade as DBTrade, TradeStatus
+
+            sf = getattr(_gql_app_state, "db_session_factory", None)
+            if sf is not None:
+                db = sf()
+                try:
+                    db_trades = (
+                        db.query(DBTrade)
+                        .filter(DBTrade.status == TradeStatus.CLOSED)
+                        .order_by(DBTrade.exit_time.desc())
+                        .limit(limit)
+                        .all()
+                    )
+                    result = []
+                    for t in db_trades:
+                        opened = t.entry_time.isoformat() if t.entry_time else ""
+                        closed = t.exit_time.isoformat() if t.exit_time else ""
+                        dur = 0
+                        if t.entry_time and t.exit_time:
+                            dur = int((t.exit_time - t.entry_time).total_seconds() / 60)
+                        result.append(
+                            Trade(
+                                id=str(t.trade_id or t.id),
+                                symbol=t.symbol,
+                                side=str(t.side or "long"),
+                                lots=float(t.entry_quantity or t.size or 0),
+                                open_price=float(t.entry_price or 0),
+                                close_price=float(t.exit_price or 0),
+                                pnl=float(t.realized_pnl or 0),
+                                pips=0.0,
+                                opened_at=opened,
+                                closed_at=closed,
+                                duration_minutes=dur,
+                            )
+                        )
+                    return result
+                finally:
+                    db.close()
+        except Exception as exc:
+            logger.debug("GraphQL trades DB fallback failed: %s", exc)
         return []
 
     @strawberry.field(description="Recent AI signals")
@@ -579,7 +624,59 @@ class Query:
                     )
             except (RuntimeError, ValueError, OSError, AttributeError) as exc:
                 logger.debug("Performance fetch failed: %s", exc)
-        # No trade history available — return zeros
+        # DB fallback: compute performance from closed Trade rows
+        try:
+            from app import app_state as _gql_perf_state
+            from database.models import Trade as DBTrade, TradeStatus
+
+            sf = getattr(_gql_perf_state, "db_session_factory", None)
+            if sf is not None:
+                db = sf()
+                try:
+                    db_trades = (
+                        db.query(DBTrade)
+                        .filter(DBTrade.status == TradeStatus.CLOSED)
+                        .all()
+                    )
+                    if db_trades:
+                        pnls = [float(t.realized_pnl or 0) for t in db_trades]
+                        wins = [p for p in pnls if p > 0]
+                        losses = [p for p in pnls if p <= 0]
+                        total_pnl = sum(pnls)
+                        win_rate = len(wins) / len(pnls) * 100 if pnls else 0.0
+                        avg_win = sum(wins) / len(wins) if wins else 0.0
+                        avg_loss = sum(losses) / len(losses) if losses else 0.0
+                        gross_profit = sum(wins)
+                        gross_loss = abs(sum(losses))
+                        profit_factor = gross_profit / gross_loss if gross_loss > 0 else 0.0
+                        import statistics as _stats
+                        sharpe = _stats.mean(pnls) / _stats.stdev(pnls) if len(pnls) > 1 else 0.0
+                        cum, peak, max_dd = 0.0, 0.0, 0.0
+                        for p in pnls:
+                            cum += p
+                            peak = max(peak, cum)
+                            max_dd = max(max_dd, peak - cum)
+                        sym_pnl: dict = {}
+                        for t in db_trades:
+                            sym_pnl[t.symbol] = sym_pnl.get(t.symbol, 0.0) + float(t.realized_pnl or 0)
+                        best_sym = max(sym_pnl, key=sym_pnl.get) if sym_pnl else "XAU/USD"
+                        return PerformanceSummary(
+                            total_trades=len(db_trades),
+                            win_rate=round(win_rate, 2),
+                            total_pnl=round(total_pnl, 2),
+                            sharpe_ratio=round(sharpe, 4),
+                            max_drawdown=round(max_dd, 2),
+                            profit_factor=round(profit_factor, 4),
+                            avg_win=round(avg_win, 2),
+                            avg_loss=round(avg_loss, 2),
+                            avg_duration_minutes=0.0,
+                            best_symbol=best_sym,
+                        )
+                finally:
+                    db.close()
+        except Exception as exc:
+            logger.debug("GraphQL performance DB fallback failed: %s", exc)
+
         return PerformanceSummary(
             total_trades=0,
             win_rate=0.0,
