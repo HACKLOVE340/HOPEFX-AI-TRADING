@@ -14,7 +14,7 @@
 			"version": "lts"
 		}
 	},
-	"postCreateCommand": "pip install -q -r requirements-ci.txt && cd frontend && npm install",
+	"postCreateCommand": "pip install -q -r requirements-ci.txt && cd frontend && npm install && npm run build",
 	"forwardPorts": [5173, 8000, 6379],
 	"portsAttributes": {
 		"5173": {
