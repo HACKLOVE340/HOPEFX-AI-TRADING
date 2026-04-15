@@ -6,13 +6,20 @@
 """
 Billing & Growth API
 
-Wires together Tasks 25–29:
+Wires together Tasks 25–29 plus payment-method management:
   Task 25 — POST /api/billing/webhook/stripe           (Stripe billing webhook)
   Task 26 — POST /api/billing/affiliate/generate-link  (referral link generation)
   Task 27 — POST /api/billing/auth/activate-free-tier  (auto-assign FREE on signup)
   Task 28 — POST /api/billing/payments/flutterwave/init    (Flutterwave checkout)
              POST /api/billing/payments/flutterwave/verify  (verify transaction)
   Task 29 — GET  /api/billing/subscription             (current user subscription)
+
+  Wallet:
+    GET    /api/billing/balance                        (account balance)
+    GET    /api/billing/transactions                   (transaction history)
+    GET    /api/billing/payment-methods                (list saved Stripe cards)
+    POST   /api/billing/payment-methods                (attach pm_xxx from Stripe.js)
+    DELETE /api/billing/payment-methods/{pm_id}        (detach saved card)
 """
 
 from __future__ import annotations
