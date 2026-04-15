@@ -21,7 +21,7 @@ import logging
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 logger = logging.getLogger(__name__)
@@ -39,6 +39,26 @@ def _serve_template(name: str, fallback_html: str) -> HTMLResponse:
 
 def register_page_routes(app: FastAPI) -> None:
     """Mount all HTML page routes and the React dashboard on *app*."""
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def favicon():
+        """Return the favicon from dashboard/dist or a minimal 1×1 transparent ICO."""
+        _ico_candidates = [
+            Path(__file__).parent.parent / "dashboard" / "dist" / "favicon.ico",
+            Path(__file__).parent.parent / "static" / "favicon.ico",
+            Path(__file__).parent.parent / "assets" / "favicon.ico",
+        ]
+        for _p in _ico_candidates:
+            if _p.exists():
+                return Response(content=_p.read_bytes(), media_type="image/x-icon")
+        # Minimal 1×1 transparent ICO (46 bytes) — avoids 404 noise in logs
+        _ico_bytes = (
+            b"\x00\x00\x01\x00\x01\x00\x01\x01\x00\x00\x01\x00\x18\x00"
+            b"\x30\x00\x00\x00\x16\x00\x00\x00\x28\x00\x00\x00\x01\x00"
+            b"\x00\x00\x02\x00\x00\x00\x01\x00\x18\x00\x00\x00\x00\x00"
+            b"\x00\x00\x00\x00"
+        )
+        return Response(content=_ico_bytes, media_type="image/x-icon")
 
     @app.get("/admin", response_class=HTMLResponse, tags=["Admin"], include_in_schema=False)
     async def admin_redirect():
