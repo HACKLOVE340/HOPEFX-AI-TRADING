@@ -436,7 +436,76 @@ class TestBrokerCancelAll:
 
 
 # ===========================================================================
-# 7. File-flag polling activates the switch
+# 7. Activation latency SLA
+# ===========================================================================
+class TestActivationLatency:
+    """activate() must set is_active() within 50 ms (in-process path).
+
+    The SLA covers the synchronous flag-set only — Redis latch and file I/O
+    are fire-and-forget and do not block the trading halt.  50 ms is
+    deliberately conservative; the actual path is a single boolean assignment
+    and should complete in microseconds.
+    """
+
+    _SLA_MS = 50  # maximum acceptable latency in milliseconds
+
+    def test_activation_latency_under_sla(self, tmp_path):
+        """activate() → is_active() must complete within SLA."""
+        import time
+
+        from kill_switch import KillSwitch
+
+        ks = KillSwitch(
+            flag_file=tmp_path / "ks.flag",
+            deactivation_token="tok",
+        )
+
+        t0 = time.perf_counter()
+        ks.activate("latency-sla-test")
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+
+        assert ks.is_active(), "kill switch must be active after activate()"
+        assert elapsed_ms < self._SLA_MS, (
+            f"activate() took {elapsed_ms:.2f} ms — exceeds {self._SLA_MS} ms SLA"
+        )
+
+    def test_activation_latency_under_concurrent_load(self, tmp_path):
+        """activate() SLA holds even when 100 threads call it simultaneously."""
+        import time
+        import threading
+
+        from kill_switch import KillSwitch
+
+        ks = KillSwitch(
+            flag_file=tmp_path / "ks.flag",
+            deactivation_token="tok",
+        )
+
+        timings: list[float] = []
+        barrier = threading.Barrier(100)
+
+        def _activate():
+            barrier.wait()  # all threads start at the same instant
+            t0 = time.perf_counter()
+            ks.activate("concurrent-latency-test")
+            timings.append((time.perf_counter() - t0) * 1000)
+
+        threads = [threading.Thread(target=_activate) for _ in range(100)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert ks.is_active()
+        worst_ms = max(timings)
+        assert worst_ms < self._SLA_MS, (
+            f"Worst-case activate() under 100-thread load: {worst_ms:.2f} ms "
+            f"— exceeds {self._SLA_MS} ms SLA"
+        )
+
+
+# ===========================================================================
+# 8. File-flag polling activates the switch
 # ===========================================================================
 class TestFileFlagPolling:
     @pytest.mark.asyncio
