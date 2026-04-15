@@ -640,9 +640,7 @@ class StripeProductionClient:
 
             # Fetch the customer to find the default payment method
             customer = _s.Customer.retrieve(customer_id, expand=["invoice_settings.default_payment_method"])
-            default_pm_id = (
-                customer.get("invoice_settings", {}).get("default_payment_method") or ""
-            )
+            default_pm_id = customer.get("invoice_settings", {}).get("default_payment_method") or ""
             if isinstance(default_pm_id, dict):
                 default_pm_id = default_pm_id.get("id", "")
 

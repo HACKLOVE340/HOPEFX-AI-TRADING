@@ -43,8 +43,10 @@ import importlib.util
 import json
 import logging
 import os
+
 try:
     import resource as _resource_mod  # Linux/macOS only
+
     _RESOURCE_AVAILABLE = True
 except ImportError:
     _resource_mod = None  # type: ignore[assignment]

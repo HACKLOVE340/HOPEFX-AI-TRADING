@@ -31,7 +31,7 @@ if sys.platform == "win32":
         LOCK_UN = 3
 
         @staticmethod
-        def flock(f, operation: int) -> None:  # noqa: ARG004
+        def flock(f, operation: int) -> None:
             # msvcrt.locking operates on byte ranges; for config files the
             # advisory lock is sufficient — we lock/unlock the first byte.
             try:

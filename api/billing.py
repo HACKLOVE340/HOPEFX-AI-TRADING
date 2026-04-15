@@ -721,6 +721,7 @@ async def get_affiliate_stats(user=None) -> dict:
 
 # ── Payment methods (Stripe saved cards) ─────────────────────────────────────
 
+
 @router.get("/payment-methods")
 async def list_payment_methods(user: TokenPayload = Depends(get_current_user)):
     """
@@ -769,7 +770,9 @@ async def attach_payment_method(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
         logger.error("attach_payment_method: %s", exc)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to attach payment method.") from exc
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to attach payment method."
+        ) from exc
 
 
 @router.delete("/payment-methods/{payment_method_id}", status_code=status.HTTP_200_OK)
@@ -806,7 +809,9 @@ async def detach_payment_method(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
         logger.error("detach_payment_method: %s", exc)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to remove payment method.") from exc
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to remove payment method."
+        ) from exc
 
 
 @router.get("/transactions")

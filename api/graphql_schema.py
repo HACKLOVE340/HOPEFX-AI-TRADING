@@ -633,11 +633,7 @@ class Query:
             if sf is not None:
                 db = sf()
                 try:
-                    db_trades = (
-                        db.query(DBTrade)
-                        .filter(DBTrade.status == TradeStatus.CLOSED)
-                        .all()
-                    )
+                    db_trades = db.query(DBTrade).filter(DBTrade.status == TradeStatus.CLOSED).all()
                     if db_trades:
                         pnls = [float(t.realized_pnl or 0) for t in db_trades]
                         wins = [p for p in pnls if p > 0]
@@ -650,6 +646,7 @@ class Query:
                         gross_loss = abs(sum(losses))
                         profit_factor = gross_profit / gross_loss if gross_loss > 0 else 0.0
                         import statistics as _stats
+
                         sharpe = _stats.mean(pnls) / _stats.stdev(pnls) if len(pnls) > 1 else 0.0
                         cum, peak, max_dd = 0.0, 0.0, 0.0
                         for p in pnls:

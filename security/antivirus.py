@@ -487,10 +487,7 @@ rule SuspiciousImport {
                 rel_file = str(fpath.relative_to(PROJECT_ROOT))
 
                 # Skip by full relative path
-                if any(
-                    rel_file == skip or rel_file.replace("\\", "/") == skip
-                    for skip in _skip_rel_paths
-                ):
+                if any(rel_file == skip or rel_file.replace("\\", "/") == skip for skip in _skip_rel_paths):
                     continue
 
                 # Skip if any path segment matches a directory-level skip

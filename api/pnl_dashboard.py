@@ -227,7 +227,7 @@ def _get_db_session():
     return None, None
 
 
-def _pnl_summary_from_db() -> "PnLSummary":
+def _pnl_summary_from_db() -> PnLSummary:
     """
     Compute P&L summary from the DB Trade table when the engine is offline.
     Uses closed trades only. Returns zeroed summary when DB is unavailable.
@@ -252,12 +252,7 @@ def _pnl_summary_from_db() -> "PnLSummary":
     try:
         from database.models import Trade, TradeStatus
 
-        trades = (
-            db.query(Trade)
-            .filter(Trade.status == TradeStatus.CLOSED)
-            .order_by(Trade.exit_time.asc())
-            .all()
-        )
+        trades = db.query(Trade).filter(Trade.status == TradeStatus.CLOSED).order_by(Trade.exit_time.asc()).all()
         if not trades:
             return PnLSummary(
                 equity=0.0,
@@ -293,11 +288,7 @@ def _pnl_summary_from_db() -> "PnLSummary":
         max_dd = _compute_max_drawdown(equity_series)
         cur_dd = _compute_current_drawdown(equity_series)
         last_trade = trades[-1]
-        last_fill_at = (
-            last_trade.exit_time.isoformat()
-            if last_trade.exit_time
-            else None
-        )
+        last_fill_at = last_trade.exit_time.isoformat() if last_trade.exit_time else None
 
         return PnLSummary(
             equity=round(equity, 4),
@@ -407,8 +398,6 @@ async def pnl_summary(
     if engine is None:
         # DB fallback: compute summary from closed Trade rows
         return _pnl_summary_from_db()
-
-    
 
     fills = list(getattr(engine, "_fill_history", []))
     starting = float(getattr(engine, "_starting_equity", 10_000.0))
