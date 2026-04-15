@@ -333,6 +333,7 @@ async def _fetch_yfinance(
             # on the interval and version; handle both cases explicitly.
             try:
                 import pandas as _pd
+
                 if isinstance(ts, _pd.Timestamp):
                     if ts.tzinfo is not None:
                         # tz-aware → convert to UTC then strip tz
