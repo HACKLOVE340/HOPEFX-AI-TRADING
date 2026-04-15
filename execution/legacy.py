@@ -69,8 +69,8 @@ class PaperExecutor:
         self.cash = initial_balance  # free cash
         self.commission_per_lot = commission_per_lot
         self.slippage_model = slippage_model
-        self.positions: dict[str, dict] = {}
-        self.order_history: list = []
+        self.positions: dict[str, dict[str, Any]] = {}
+        self.order_history: list[Any] = []
         self.validator = OrderValidator()
         self.order_counter = 0
         self._last_prices: dict[str, float] = {}  # for equity mark-to-market
@@ -191,7 +191,7 @@ class PaperExecutor:
                     timestamp=timestamp,
                 )
 
-            self.validator.record_trade(validation.risk_pct)
+            self.validator.record_trade(validation.risk_pct or 0.0)
 
         # Determine fill price
         if order.side == "buy":
@@ -428,7 +428,7 @@ class PaperExecutor:
         fill_price = order.price
         return self._execute_market_order(order_id, order, fill_price, 0.0, commission, timestamp)
 
-    def get_position(self, symbol: str) -> dict | None:
+    def get_position(self, symbol: str) -> dict[str, Any] | None:
         """Get current position for symbol."""
         return self.positions.get(symbol)
 
@@ -439,10 +439,10 @@ class PaperExecutor:
             return 0.0
 
         if pos["side"] == "long":
-            return (current_price - pos["entry_price"]) * pos["qty"]
-        return (pos["entry_price"] - current_price) * pos["qty"]
+            return float(current_price - float(pos["entry_price"])) * float(pos["qty"])
+        return float(float(pos["entry_price"]) - current_price) * float(pos["qty"])
 
-    def close_all_positions(self, current_prices: dict[str, float]) -> list:
+    def close_all_positions(self, current_prices: dict[str, float]) -> list[Any]:
         """Close all open positions."""
         results = []
         for symbol in list(self.positions.keys()):
@@ -500,7 +500,7 @@ class SmartOrderRouter:
 
         # Per-broker metrics
         self._latency_ema: dict[str, float] = {}  # ms
-        self._fill_history: dict[str, list] = {}  # deque of 0/1
+        self._fill_history: dict[str, list[int]] = {}  # deque of 0/1
         self._fee_bps: dict[str, float] = {}  # configured fee
         self._spread_bps: dict[str, float] = {}  # configured spread
         self._error_count: dict[str, int] = {}  # consecutive errors
@@ -540,7 +540,7 @@ class SmartOrderRouter:
             + self._weights["spread"] * spread_score
         )
 
-    def _ranked_brokers(self) -> list:
+    def _ranked_brokers(self) -> list[str]:
         """Return broker names sorted by score, excluding temporarily excluded ones."""
         now = time.monotonic()
         available = [name for name in self.brokers if self._excluded_until.get(name, 0.0) <= now]
@@ -568,7 +568,7 @@ class SmartOrderRouter:
                     self._error_count[name],
                 )
 
-    def route_order(self, order: Any, **kwargs) -> ExecutionResult:
+    def route_order(self, order: Any, **kwargs: Any) -> ExecutionResult:
         """
         Route order to the highest-scoring available broker.
         Retries in score order on failure; raises RuntimeError if all fail.
