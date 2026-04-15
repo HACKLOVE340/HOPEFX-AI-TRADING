@@ -17,18 +17,18 @@ interface PublicStats {
   note: string
 }
 
-const MOCK_STATS: PublicStats = {
-  total_trades: 48, win_rate: 0.625, sharpe: 1.52, max_drawdown_pct: 3.2,
-  avg_return_pct: 0.87, start_date: '2026-01-01', note: 'Paper trading — 30-day run in progress',
-}
-
 export default function Profile() {
   const user = useStore(s => s.user)
-  const [stats, setStats] = useState<PublicStats>(MOCK_STATS)
+  const [stats, setStats] = useState<PublicStats | null>(null)
+  const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
-    axios.get('/api/performance/public').then(r => setStats(r.data)).catch(() => {})
+    setLoading(true)
+    axios.get('/api/performance/public')
+      .then(r => setStats(r.data))
+      .catch(() => setStats(null))
+      .finally(() => setLoading(false))
   }, [])
 
   const copyRef = () => {
@@ -85,45 +85,30 @@ export default function Profile() {
         <div className="lg:col-span-2 space-y-4">
           <div className="bg-slate-900 rounded-xl border border-slate-800 p-6">
             <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Trading Performance</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {[
-                { label: 'Total Trades',  value: stats.total_trades.toString(),                              good: stats.total_trades >= 200 },
-                { label: 'Win Rate',      value: stats.win_rate != null ? `${(stats.win_rate*100).toFixed(1)}%` : '—', good: (stats.win_rate ?? 0) >= 0.55 },
-                { label: 'Sharpe Ratio',  value: stats.sharpe != null ? stats.sharpe.toFixed(2) : '—',      good: (stats.sharpe ?? 0) >= 1.5 },
-                { label: 'Max Drawdown',  value: `${stats.max_drawdown_pct.toFixed(1)}%`,                   good: stats.max_drawdown_pct < 5 },
-                { label: 'Avg Return',    value: stats.avg_return_pct != null ? `${stats.avg_return_pct.toFixed(2)}%` : '—', good: (stats.avg_return_pct ?? 0) > 0 },
-                { label: 'Since',         value: stats.start_date,                                          good: true },
-              ].map(({ label, value, good }) => (
-                <div key={label} className="bg-slate-800 rounded-lg p-3">
-                  <div className="text-xs text-slate-500 mb-1">{label}</div>
-                  <div className={`text-lg font-bold ${good ? 'text-slate-100' : 'text-amber-400'}`}>{value}</div>
+            {loading ? (
+              <div className="text-center py-6 text-slate-500 text-sm">Loading performance data…</div>
+            ) : !stats ? (
+              <div className="text-center py-6 text-slate-500 text-sm">No performance data available yet.</div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {[
+                    { label: 'Total Trades',  value: stats.total_trades.toString(),                                          good: stats.total_trades >= 200 },
+                    { label: 'Win Rate',      value: stats.win_rate != null ? `${(stats.win_rate*100).toFixed(1)}%` : '—',   good: (stats.win_rate ?? 0) >= 0.55 },
+                    { label: 'Sharpe Ratio',  value: stats.sharpe != null ? stats.sharpe.toFixed(2) : '—',                  good: (stats.sharpe ?? 0) >= 1.5 },
+                    { label: 'Max Drawdown',  value: `${stats.max_drawdown_pct.toFixed(1)}%`,                               good: stats.max_drawdown_pct < 5 },
+                    { label: 'Avg Return',    value: stats.avg_return_pct != null ? `${stats.avg_return_pct.toFixed(2)}%` : '—', good: (stats.avg_return_pct ?? 0) > 0 },
+                    { label: 'Since',         value: stats.start_date,                                                      good: true },
+                  ].map(({ label, value, good }) => (
+                    <div key={label} className="bg-slate-800 rounded-lg p-3">
+                      <div className="text-xs text-slate-500 mb-1">{label}</div>
+                      <div className={`text-lg font-bold ${good ? 'text-slate-100' : 'text-amber-400'}`}>{value}</div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            {stats.note && (
-              <p className="text-xs text-slate-500 mt-4 italic">{stats.note}</p>
+                {stats.note && <p className="text-xs text-slate-500 mt-4 italic">{stats.note}</p>}
+              </>
             )}
-          </div>
-
-          {/* Activity */}
-          <div className="bg-slate-900 rounded-xl border border-slate-800 p-6">
-            <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Recent Activity</h2>
-            <div className="space-y-3">
-              {[
-                { action: 'Paper trade opened',  detail: 'XAU/USD LONG @ 2,341.20',  time: '2h ago',  color: 'text-green-400' },
-                { action: 'Signal generated',    detail: 'ML confidence: 72.4%',      time: '4h ago',  color: 'text-blue-400' },
-                { action: 'Paper trade closed',  detail: 'XAU/USD +$18.40 (+0.78%)', time: '6h ago',  color: 'text-amber-400' },
-                { action: 'Model retrained',     detail: 'OOS accuracy: 68.0%',       time: '1d ago',  color: 'text-purple-400' },
-              ].map(({ action, detail, time, color }) => (
-                <div key={action + time} className="flex items-center justify-between py-2 border-b border-slate-800/50">
-                  <div>
-                    <div className={`text-sm font-medium ${color}`}>{action}</div>
-                    <div className="text-xs text-slate-500">{detail}</div>
-                  </div>
-                  <span className="text-xs text-slate-600">{time}</span>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
 

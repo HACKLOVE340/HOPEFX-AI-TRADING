@@ -1,73 +1,91 @@
-import { useState } from 'react'
-import { Users, TrendingUp, Star, DollarSign } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Users, TrendingUp, Star, DollarSign, RefreshCw } from 'lucide-react'
+import axios from 'axios'
 
-const LEADERS = [
-  {
-    id: '1',
-    name: 'GoldHunter Pro',
-    return_3m: 45.2,
-    sharpe: 2.1,
-    max_dd: -5.8,
-    followers: 1234,
-    aum: 2500000,
-    fee: 20,
-    win_rate: 68,
-    trades_per_week: 12,
-    avg_trade_duration: '4h 30m',
-  },
-  {
-    id: '2',
-    name: 'XAU Scalper',
-    return_3m: 32.8,
-    sharpe: 1.9,
-    max_dd: -3.2,
-    followers: 892,
-    aum: 1200000,
-    fee: 15,
-    win_rate: 72,
-    trades_per_week: 45,
-    avg_trade_duration: '45m',
-  },
-  {
-    id: '3',
-    name: 'Macro Trend',
-    return_3m: 28.5,
-    sharpe: 1.6,
-    max_dd: -8.1,
-    followers: 567,
-    aum: 890000,
-    fee: 25,
-    win_rate: 58,
-    trades_per_week: 6,
-    avg_trade_duration: '3d 12h',
-  },
-]
+interface Leader {
+  id: string
+  name: string
+  return_3m: number
+  sharpe: number
+  max_dd: number
+  followers: number
+  aum: number
+  fee: number
+  win_rate: number
+  trades_per_week: number
+  avg_trade_duration: string
+}
 
 export function CopyTrading() {
+  const [leaders, setLeaders] = useState<Leader[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [selectedLeader, setSelectedLeader] = useState<string | null>(null)
   const [allocation, setAllocation] = useState(10000)
+  const [copying, setCopying] = useState(false)
+  const [copyMsg, setCopyMsg] = useState<string | null>(null)
+
+  const load = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await axios.get('/api/leaderboard')
+      const data = res.data.leaders ?? res.data ?? []
+      setLeaders(data)
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(detail ?? 'Failed to load leaderboard.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [])
+
+  const startCopying = async () => {
+    if (!selectedLeader) return
+    setCopying(true)
+    setCopyMsg(null)
+    try {
+      await axios.post(`/api/social/copy/${selectedLeader}`, { allocation_usd: allocation })
+      setCopyMsg('Copy trading started successfully.')
+      setSelectedLeader(null)
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setCopyMsg(detail ?? 'Failed to start copy trading.')
+    } finally {
+      setCopying(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Copy Trading Marketplace</h2>
-        <div className="flex gap-2">
-          <select className="bg-slate-800 border border-slate-700 rounded px-3 py-2">
-            <option>All Strategies</option>
-            <option>Scalping</option>
-            <option>Swing Trading</option>
-            <option>Position Trading</option>
-          </select>
-          <select className="bg-slate-800 border border-slate-700 rounded px-3 py-2">
-            <option>Sort by Return</option>
-            <option>Sort by Sharpe</option>
-            <option>Sort by Followers</option>
-          </select>
-        </div>
+        <button onClick={load} disabled={loading}
+          className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm transition-colors">
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
       </div>
 
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-400 text-sm">{error}</div>
+      )}
+      {copyMsg && (
+        <div className={`rounded-xl p-4 text-sm border ${copyMsg.includes('success') ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>{copyMsg}</div>
+      )}
+
+      {loading && (
+        <div className="text-center py-12 text-slate-500">Loading leaderboard…</div>
+      )}
+
+      {!loading && leaders.length === 0 && !error && (
+        <div className="text-center py-12 text-slate-500">No traders on the leaderboard yet.</div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {LEADERS.map((leader) => (
+        {leaders.map((leader) => (
           <div
             key={leader.id}
             className={`bg-slate-900 rounded-lg border p-4 cursor-pointer transition-all ${
@@ -174,8 +192,9 @@ export function CopyTrading() {
           </div>
 
           <div className="flex gap-4">
-            <button className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-3 rounded-lg">
-              Start Copy Trading
+            <button onClick={startCopying} disabled={copying}
+              className="flex-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-bold py-3 rounded-lg">
+              {copying ? 'Starting…' : 'Start Copy Trading'}
             </button>
             <button
               className="px-6 py-3 border border-slate-700 rounded-lg hover:bg-slate-800"
