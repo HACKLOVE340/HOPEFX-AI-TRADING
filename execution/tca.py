@@ -391,7 +391,7 @@ class TCAEngine:
         total_qty = sum(f.quantity for f in fills)
         avg_price = sum(f.price * f.quantity for f in fills) / total_qty if total_qty > 0 else Decimal(0)
         total_commission = sum(f.commission for f in fills)
-        total_slippage = sum(getattr(f, "slippage", None) or Decimal(0) for f in fills)
+        total_slippage: Decimal = sum((f.slippage for f in fills), Decimal(0))
 
         last_fill = fills[-1]
         exec_time_ms = (last_fill.timestamp - order["arrival_time"]).total_seconds() * 1000
@@ -502,15 +502,15 @@ class TCAEngine:
             vwap_data = self._vwap_cache.get(symbol, [])
             relevant = [p for p in vwap_data if start <= p[0] <= end]
             if relevant:
-                total_vol = sum(p[2] for p in relevant)
+                total_vol: Decimal = sum((p[2] for p in relevant), Decimal(0))
                 if total_vol > 0:
-                    return sum(p[1] * p[2] for p in relevant) / total_vol
+                    return sum((p[1] * p[2] for p in relevant), Decimal(0)) / total_vol
 
         elif benchmark == BenchmarkType.TWAP:
             twap_data = self._twap_cache.get(symbol, [])
             relevant = [p for p in twap_data if start <= p[0] <= end]
             if relevant:
-                return sum(p[1] for p in relevant) / Decimal(str(len(relevant)))
+                return sum((p[1] for p in relevant), Decimal(0)) / Decimal(str(len(relevant)))
 
         return Decimal(0)
 

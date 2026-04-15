@@ -61,7 +61,7 @@ class Order:
     avg_fill_price: float = 0.0
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    metadata: dict = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def remaining_qty(self) -> float:
@@ -90,10 +90,10 @@ class AsyncExecutionEngine:
 
     def __init__(
         self,
-        broker_configs: list[dict],
+        broker_configs: list[dict[str, Any]],
         paper_mode: bool = True,
         paper_rng_seed: int | None = 42,
-    ):
+    ) -> None:
         self.broker_configs = broker_configs
         self.paper_mode = paper_mode
         # Per-instance RNG for paper-mode fill simulation; seeded for
@@ -106,12 +106,12 @@ class AsyncExecutionEngine:
         self.orders: dict[str, Order] = {}
         self.order_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self.pending_orders: set[str] = set()
-        self.position_cache: dict[str, dict] = {}
+        self.position_cache: dict[str, dict[str, Any]] = {}
         self._position_cache_time: float = 0.0
 
         # Performance tracking
         self.latency_stats: dict[str, list[float]] = defaultdict(list)
-        self.fill_stats: dict[str, dict] = defaultdict(
+        self.fill_stats: dict[str, dict[str, Any]] = defaultdict(
             lambda: {"count": 0, "avg_slippage": 0.0},
         )
 
@@ -124,14 +124,14 @@ class AsyncExecutionEngine:
         self.last_request_time: dict[str, float] = {}
 
         # Market data
-        self.price_cache: dict[str, dict] = {}  # symbol -> {bid, ask, last_update}
+        self.price_cache: dict[str, dict[str, Any]] = {}  # symbol -> {bid, ask, last_update}
         self.price_lock = asyncio.Lock()
 
         # Tasks
-        self._tasks: set[asyncio.Task] = set()
+        self._tasks: set[asyncio.Task[Any]] = set()
         self._shutdown = False
 
-    async def initialize(self):
+    async def initialize(self) -> None:
         """Initialize connections to all brokers"""
         for config in self.broker_configs:
             name = config["name"]
@@ -275,10 +275,10 @@ class AsyncExecutionEngine:
             await self.submit_order(new_order)
             return True
 
-    async def batch_submit(self, orders: list[Order]) -> list[str]:
+    async def batch_submit(self, orders: list[Order]) -> list[str | BaseException]:
         """Submit multiple orders concurrently"""
         tasks = [self.submit_order(order) for order in orders]
-        return await asyncio.gather(*tasks, return_exceptions=True)
+        return list(await asyncio.gather(*tasks, return_exceptions=True))
 
     async def close_all_positions(self, symbol: str | None = None) -> list[str]:
         """Emergency position flattening"""
@@ -306,9 +306,9 @@ class AsyncExecutionEngine:
         order_ids = await self.batch_submit(orders)
         logger.info("Flattened %s positions", len(orders))
 
-        return [oid for oid in order_ids if not isinstance(oid, Exception)]
+        return [oid for oid in order_ids if isinstance(oid, str)]
 
-    async def get_positions(self) -> list[dict]:
+    async def get_positions(self) -> list[dict[str, Any]]:
         """Get current positions with caching"""
         # Return cached if recent
         if time.time() - self._position_cache_time < 1.0:  # 1 second cache
@@ -329,7 +329,7 @@ class AsyncExecutionEngine:
         self._position_cache_time = time.time()
         return positions
 
-    async def _submit_to_venue(self, order: Order, venue: str):
+    async def _submit_to_venue(self, order: Order, venue: str) -> None:
         """Submit order to specific venue"""
         order.metadata["venue"] = venue
 
@@ -338,7 +338,7 @@ class AsyncExecutionEngine:
         else:
             await self._live_submit(order, venue)
 
-    async def _live_submit(self, order: Order, venue: str):
+    async def _live_submit(self, order: Order, venue: str) -> None:
         """Submit to live broker"""
         broker = self.brokers[venue]
         session = self.sessions[venue]
@@ -359,7 +359,7 @@ class AsyncExecutionEngine:
                 error = await resp.text()
                 raise RuntimeError(f"Submit failed (HTTP {resp.status}): {error}")
 
-    async def _simulate_fill(self, order: Order):
+    async def _simulate_fill(self, order: Order) -> None:
         """Fill simulation for paper trading only — never called in live mode."""
         if not self.paper_mode:
             raise RuntimeError(
@@ -403,7 +403,7 @@ class AsyncExecutionEngine:
 
         # Simulate partial fills for large orders
         remaining = order.quantity
-        fills = []
+        fills: list[Fill] = []
 
         while remaining > 0 and len(fills) < 5:  # Max 5 partial fills
             fill_qty = min(remaining, self._rng.uniform(0.1, 0.5) * order.quantity)
@@ -428,7 +428,7 @@ class AsyncExecutionEngine:
         for fill in fills:
             await self._apply_fill(order, fill)
 
-    async def _delayed_fill_simulation(self, order: Order):
+    async def _delayed_fill_simulation(self, order: Order) -> None:
         """Delayed fill simulation for paper trading only — never called in live mode."""
         if not self.paper_mode:
             raise RuntimeError(
@@ -457,13 +457,13 @@ class AsyncExecutionEngine:
                 order_id=order.id,
                 symbol=order.symbol,
                 quantity=order.quantity,
-                price=order.price,
+                price=order.price if order.price is not None else current,
                 timestamp=datetime.now(UTC),
                 side=order.side,
             )
             await self._apply_fill(order, fill)
 
-    async def _apply_fill(self, order: Order, fill: Fill):
+    async def _apply_fill(self, order: Order, fill: Fill) -> None:
         """Apply fill to order"""
         async with self.order_locks[order.id]:
             order.filled_qty += fill.quantity
@@ -495,7 +495,7 @@ class AsyncExecutionEngine:
                 except (RuntimeError, ValueError, AttributeError) as e:
                     logger.error("Order update callback error: %s", e)
 
-    async def _monitor_fills(self, order: Order):
+    async def _monitor_fills(self, order: Order) -> None:
         """Monitor for fills from live broker"""
         if self.paper_mode:
             return
@@ -512,7 +512,7 @@ class AsyncExecutionEngine:
                 return
 
             try:
-                venue = order.metadata.get("venue")
+                venue = str(order.metadata.get("venue") or "")
                 broker_id = order.metadata.get("broker_id")
 
                 fill_data = await self._rate_limited_request(
@@ -538,7 +538,7 @@ class AsyncExecutionEngine:
 
             await asyncio.sleep(check_interval)
 
-    async def _price_feed_loop(self, venue: str):
+    async def _price_feed_loop(self, venue: str) -> None:
         """Maintain real-time price cache"""
         while not self._shutdown:
             try:
@@ -619,7 +619,7 @@ class AsyncExecutionEngine:
 
                 await asyncio.sleep(1)
 
-    async def _rate_limited_request(self, venue: str, method: str, *args) -> Any:
+    async def _rate_limited_request(self, venue: str, method: str, *args: Any) -> Any:
         """Execute rate-limited request to broker"""
         async with self.rate_limiters[venue]:
             # Enforce minimum interval between requests
@@ -688,7 +688,7 @@ class AsyncExecutionEngine:
 
         return True, ""
 
-    def _format_order(self, order: Order, broker: dict) -> dict:
+    def _format_order(self, order: Order, broker: dict[str, Any]) -> dict[str, Any]:
         """Format order for specific broker API"""
         mapping = {
             OrderType.MARKET: "MKT",
@@ -706,7 +706,7 @@ class AsyncExecutionEngine:
             "tif": order.time_in_force,
         }
 
-    async def get_latency_report(self) -> dict:
+    async def get_latency_report(self) -> dict[str, Any]:
         """Generate latency statistics"""
         return {
             venue: {
@@ -718,7 +718,7 @@ class AsyncExecutionEngine:
             for venue, times in self.latency_stats.items()
         }
 
-    async def shutdown(self):
+    async def shutdown(self) -> None:
         """Graceful shutdown"""
         self._shutdown = True
 

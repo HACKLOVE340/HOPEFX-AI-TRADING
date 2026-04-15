@@ -16,11 +16,14 @@ _log = _logging.getLogger(__name__)
 # ── Legacy compatibility ───────────────────────────────────────────────────────
 from execution.legacy import (  # noqa: F401
     ExecutionResult,
-    Order,
     OrderStatus,
     PaperExecutor,
     SmartOrderRouter,
 )
+try:
+    from validation import Order  # noqa: F401
+except Exception as _e:
+    _log.debug("Order import unavailable: %s", _e)
 
 # ── Core execution engine ──────────────────────────────────────────────────────
 try:
@@ -143,7 +146,7 @@ except Exception as _e:
 
 # ── Prometheus metrics ────────────────────────────────────────────────────────
 try:
-    from execution._prom_metrics import get_metrics  # noqa: F401
+    from execution._prom_metrics import EXECUTION_LATENCY_HISTOGRAM  # noqa: F401
 except Exception as _e:
     _log.debug("PromMetrics unavailable: %s", _e)
 
@@ -154,10 +157,9 @@ except Exception as _e:
     _log.debug("OrderManagementSystem alias unavailable: %s", _e)
 
 try:
-    from execution.tca import TCAEngine as TCARecorder  # noqa: F401
     from execution.tca import MarketImpactModel  # noqa: F401
 except Exception as _e:
-    _log.debug("TCARecorder/MarketImpactModel alias unavailable: %s", _e)
+    _log.debug("MarketImpactModel unavailable: %s", _e)
 
 try:
     from execution.throttler import MessageThrottler as OrderThrottler  # noqa: F401

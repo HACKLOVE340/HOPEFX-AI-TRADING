@@ -37,7 +37,7 @@ class Position:
     stop_loss: float | None = None
     take_profit: float | None = None
 
-    def update_price(self, new_price: float):
+    def update_price(self, new_price: float) -> None:
         """Update position with new price"""
         self.current_price = new_price
         self.updated_at = datetime.now(UTC)
@@ -64,7 +64,7 @@ class PositionTracker:
     Track all positions with real-time P&L updates
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.positions: dict[str, Position] = {}
         self._lock = asyncio.Lock()
         self._price_subscriptions: dict[str, list[str]] = defaultdict(list)
@@ -78,7 +78,7 @@ class PositionTracker:
 
             return True
 
-    async def update_position(self, position_id: str, **updates) -> bool:
+    async def update_position(self, position_id: str, **updates: object) -> bool:
         """Update position fields"""
         async with self._lock:
             if position_id not in self.positions:
@@ -129,7 +129,7 @@ class PositionTracker:
 
             return pos
 
-    async def update_prices(self, symbol: str, price: float):
+    async def update_prices(self, symbol: str, price: float) -> None:
         """Update all positions for a symbol with new price"""
         async with self._lock:
             for pos_id in self._price_subscriptions.get(symbol, []):

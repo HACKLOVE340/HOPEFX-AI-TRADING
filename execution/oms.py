@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 UTC = timezone.utc
 from decimal import Decimal
 from enum import Enum, auto
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,7 @@ class Order:
     child_orders: list[str] = field(default_factory=list)
     strategy_id: str = "unknown"
     tags: list[str] = field(default_factory=list)
-    metadata: dict = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def remaining_quantity(self) -> Decimal:
@@ -90,7 +91,7 @@ class Order:
             return False
 
         # Price checks for limit orders
-        if self.order_type == "LIMIT":
+        if self.order_type == "LIMIT" and self.price is not None:
             if self.side == "BUY" and fill_price > self.price:
                 return False
             if self.side == "SELL" and fill_price < self.price:
@@ -126,19 +127,19 @@ class OrderLifecycleManager:
         OrderStatus.EXPIRED: set(),
     }
 
-    def __init__(self, event_bus=None, broker=None):
+    def __init__(self, event_bus: Any = None, broker: Any = None) -> None:
         self.orders: dict[str, Order] = {}
         self.active_orders: set[str] = set()
-        self.order_history: list[dict] = []
+        self.order_history: list[dict[str, Any]] = []
         self.event_bus = event_bus
         self._broker = broker  # BrokerConnector instance; None = paper/backtest mode
-        self._callbacks: dict[OrderStatus, list[Callable]] = {status: [] for status in OrderStatus}
+        self._callbacks: dict[OrderStatus, list[Callable[..., Any]]] = {status: [] for status in OrderStatus}
 
-    def register_callback(self, status: OrderStatus, callback: Callable):
+    def register_callback(self, status: OrderStatus, callback: Callable[..., Any]) -> None:
         """Register callback for status changes"""
         self._callbacks[status].append(callback)
 
-    def create_order(self, **kwargs) -> Order:
+    def create_order(self, **kwargs: Any) -> Order:
         """Create new order"""
         order = Order(**kwargs)
         self.orders[order.id] = order
@@ -187,7 +188,7 @@ class OrderLifecycleManager:
             _t.add_done_callback(lambda _: None)
         return success
 
-    async def _async_submit(self, order: Order):
+    async def _async_submit(self, order: Order) -> None:
         """Async order submission to broker.
 
         Delegates to the registered broker connector if available.
@@ -265,7 +266,7 @@ class OrderLifecycleManager:
 
         return self._transition(order, OrderStatus.PENDING_CANCEL)
 
-    def expire_orders(self):
+    def expire_orders(self) -> None:
         """Expire GTD and DAY orders"""
         now = datetime.now(UTC)
         for order_id in list(self.active_orders):
@@ -274,7 +275,7 @@ class OrderLifecycleManager:
                 self._transition(order, OrderStatus.EXPIRED)
                 self.active_orders.discard(order_id)
 
-    def _transition(self, order: Order, new_status: OrderStatus, **context) -> bool:
+    def _transition(self, order: Order, new_status: OrderStatus, **context: Any) -> bool:
         """Execute valid state transition"""
         current = order.status
 
@@ -322,7 +323,7 @@ class OrderLifecycleManager:
         logger.info("Order %s: %s -> %s", order.id[:8], current.name, new_status.name)
         return True
 
-    def get_order_book(self, symbol: str) -> dict:
+    def get_order_book(self, symbol: str) -> dict[str, Any]:
         """Get current order book for symbol"""
         buys = []
         sells = []
@@ -380,7 +381,7 @@ class ComplexOrderManager:
 
         return parent_id
 
-    def _cancel_siblings(self, filled_order: Order):
+    def _cancel_siblings(self, filled_order: Order) -> None:
         """Cancel other orders in OCO group"""
         if not filled_order.parent_order_id:
             return
@@ -426,7 +427,7 @@ class ComplexOrderManager:
         tp: Decimal,
         sl: Decimal,
         bracket_id: str,
-    ):
+    ) -> None:
         """Place take profit and stop loss as OCO"""
         # Create TP order
         tp_side = "SELL" if entry.side == "BUY" else "BUY"
@@ -493,7 +494,7 @@ class ComplexOrderManager:
 
         return parent_id
 
-    def _reveal_slice(self, parent_id: str, display_size: Decimal):
+    def _reveal_slice(self, parent_id: str, display_size: Decimal) -> None:
         """Reveal next slice of iceberg"""
         parent = self.oms.orders.get(parent_id)
         if not parent:
@@ -529,7 +530,7 @@ class ComplexOrderManager:
         filled_slice: Order,
         parent_id: str,
         display_size: Decimal,
-    ):
+    ) -> None:
         """Check if we should reveal next iceberg slice"""
         # If slice is fully filled, reveal next
         if filled_slice.filled_quantity >= filled_slice.quantity:
