@@ -193,7 +193,7 @@ class SmartRouter:
 
     def __init__(
         self,
-        lineage_store=None,
+        lineage_store: Any = None,
         algo_manager: AlgoOrderManager | None = None,
         throttler: MessageThrottler | None = None,
     ) -> None:
@@ -232,7 +232,7 @@ class SmartRouter:
 
     # ── Main routing entry point ──────────────────────────────────────────────
 
-    async def route_and_execute(self, order_request: dict) -> dict:
+    async def route_and_execute(self, order_request: dict[str, Any]) -> dict[str, Any]:
         """
         Select optimal broker and execute order.
 
@@ -321,10 +321,10 @@ class SmartRouter:
 
     async def _route_via_algo(
         self,
-        order_request: dict,
+        order_request: dict[str, Any],
         quantity: float,
         direction: str,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Delegate a large order to AlgoOrderManager (TWAP/VWAP/Iceberg).
 
@@ -399,7 +399,7 @@ class SmartRouter:
             "reason": f"large_order_delegated:qty={quantity:.2f}",
         }
 
-    async def _submit_child_order(self, child_order_dict: dict) -> dict:
+    async def _submit_child_order(self, child_order_dict: dict[str, Any]) -> dict[str, Any]:
         """
         Broker submission function wired into AlgoOrderManager.
 
@@ -541,10 +541,10 @@ class SmartRouter:
 
     async def _execute_with_fallback(
         self,
-        order_request: dict,
+        order_request: dict[str, Any],
         ranked: list[tuple[str, float]],
         decision: RoutingDecision,
-    ) -> dict:
+    ) -> dict[str, Any]:
         last_error = "unknown"
         for broker_id, score in ranked:
             t0 = time.monotonic()
@@ -611,7 +611,7 @@ class SmartRouter:
 
     # ── Lineage ───────────────────────────────────────────────────────────────
 
-    def _write_routing_lineage(self, decision: RoutingDecision, order: dict) -> None:
+    def _write_routing_lineage(self, decision: RoutingDecision, order: dict[str, Any]) -> None:
         if self._lineage is None:
             return
         try:

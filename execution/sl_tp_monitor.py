@@ -38,6 +38,7 @@ import contextlib
 import logging
 import os
 from datetime import datetime, timezone
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ _RETRY_DELAY_S = float(os.getenv("SLTP_RETRY_DELAY_S", "1.0"))
 
 # ── Optional Prometheus metrics ───────────────────────────────────────────────
 try:
-    from prometheus_client import Counter  # type: ignore[import]
+    from prometheus_client import Counter
 
     _sltp_closes = Counter(
         "hopefx_sltp_closes_total",
@@ -66,7 +67,7 @@ except Exception:  # nosec B110
 
 # Optional Sentry
 try:
-    import sentry_sdk as _sentry_sdk  # type: ignore[import]
+    import sentry_sdk as _sentry_sdk
 
     _SENTRY = True
 except ImportError:
@@ -76,14 +77,10 @@ except ImportError:
 def _send_alert(subject: str, body: str) -> None:
     """Fire-and-forget Telegram/notification alert (non-blocking)."""
     try:
-        from notifications import get_alert_engine
-
-        engine = get_alert_engine()
-        if engine is None:
-            return
+        from notifications import send_alert as _notify_send_alert
 
         async def _do() -> None:
-            await engine.send_alert("critical", f"🔴 SL/TP MONITOR — {subject}: {body}")
+            await _notify_send_alert("critical", f"🔴 SL/TP MONITOR — {subject}: {body}")
 
         try:
             loop = asyncio.get_running_loop()
@@ -109,9 +106,9 @@ class SLTPMonitor:
 
     def __init__(
         self,
-        position_manager,
-        broker,
-        tick_cache: dict,
+        position_manager: Any,
+        broker: Any,
+        tick_cache: dict[str, Any],
     ) -> None:
         """
         Parameters
@@ -127,7 +124,7 @@ class SLTPMonitor:
         self._pm = position_manager
         self._broker = broker
         self._ticks = tick_cache
-        self._task: asyncio.Task | None = None
+        self._task: asyncio.Task[None] | None = None
         self._running = False
         # Track which positions are currently being closed (avoid duplicate closes)
         self._closing: set[str] = set()
@@ -157,7 +154,7 @@ class SLTPMonitor:
             self._task = None
         logger.info("SLTPMonitor stopped.")
 
-    def _on_task_done(self, fut: asyncio.Future) -> None:
+    def _on_task_done(self, fut: asyncio.Future[None]) -> None:
         if not fut.cancelled() and fut.exception() is not None:
             exc = fut.exception()
             logger.critical("SLTPMonitor task crashed: %s", exc, exc_info=exc)
@@ -219,7 +216,7 @@ class SLTPMonitor:
         return None
 
     @staticmethod
-    def _check_breach(pos, mid: float) -> str | None:
+    def _check_breach(pos: Any, mid: float) -> str | None:
         """
         Return a reason string if *mid* has breached the position's SL or TP,
         otherwise ``None``.
@@ -246,7 +243,7 @@ class SLTPMonitor:
                 return "take_profit"
         return None
 
-    async def _close_position(self, pos, reason: str, trigger_price: float) -> None:
+    async def _close_position(self, pos: Any, reason: str, trigger_price: float) -> None:
         """
         Attempt to close *pos* at market due to *reason* (stop_loss or take_profit).
 

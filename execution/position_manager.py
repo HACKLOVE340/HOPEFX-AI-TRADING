@@ -37,7 +37,7 @@ UTC = timezone.utc
 
 # ── Optional Prometheus metrics ───────────────────────────────────────────────
 try:
-    from prometheus_client import Counter, Gauge, Histogram  # type: ignore[import]
+    from prometheus_client import Counter, Gauge, Histogram
 
     _positions_open_gauge = Gauge(
         "hopefx_positions_open",
@@ -245,7 +245,7 @@ class PositionManager:
 
         if redis_client is not None:
             try:
-                from execution.redis_state import AsyncRedisStateStore  # type: ignore[import]
+                from execution.redis_state import AsyncRedisStateStore
 
                 self._redis_store = AsyncRedisStateStore(redis_client)
             except (ImportError, ConnectionError, RuntimeError) as exc:
@@ -261,7 +261,7 @@ class PositionManager:
         Returns a ``_NullCtx`` no-op when tracing is unavailable.
         """
         try:
-            from api.tracing import get_tracer  # type: ignore[import]
+            from api.tracing import get_tracer
 
             tracer = get_tracer("hopefx.position_manager")
             if tracer is not None:

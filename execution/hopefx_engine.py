@@ -41,12 +41,14 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 try:
-    from enum import StrEnum
+    from enum import StrEnum as _StrEnum
 except ImportError:
-    from enum import Enum
+    from enum import Enum as _Enum
 
-    class StrEnum(str, Enum):  # Python 3.10 compat
+    class _StrEnum(str, _Enum):  # type: ignore[no-redef]  # Python 3.10 compat
         pass
+
+StrEnum = _StrEnum
 
 
 UTC = timezone.utc
@@ -148,12 +150,12 @@ class HopeFXEngine:
 
     def __init__(
         self,
-        orchestrator,
-        smart_router,
-        risk_manager,
-        gatekeeper,
-        lineage_store,
-        ml_inference_fn=None,
+        orchestrator: Any,
+        smart_router: Any,
+        risk_manager: Any,
+        gatekeeper: Any,
+        lineage_store: Any,
+        ml_inference_fn: Any = None,
         intra_trade_monitor: IntraTradeMonitor | None = None,
         post_trade_analyzer: PostTradeAnalyzer | None = None,
         drawdown_tracker: DrawdownTracker | None = None,
@@ -196,10 +198,10 @@ class HopeFXEngine:
         self._reject_count = 0
         self._last_signal_ts: float = 0.0  # monotonic, for cooldown
         self._last_tick_epoch: float = 0.0
-        self._open_positions: dict[str, dict] = {}
+        self._open_positions: dict[str, dict[str, Any]] = {}
         self._fill_history: list[FillRecord] = []
         self._start_time: float | None = None
-        self._loop_task: asyncio.Task | None = None
+        self._loop_task: asyncio.Task[None] | None = None
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -465,7 +467,8 @@ class HopeFXEngine:
         """
         if self._infer is not None:
             try:
-                return self._infer(features)
+                result: tuple[str, float, float] = self._infer(features)
+                return result
             except (RuntimeError, ValueError, AttributeError, TypeError) as exc:
                 logger.error("ML inference error: %s", exc)
                 return "neutral", 0.0, 0.5
@@ -484,7 +487,7 @@ class HopeFXEngine:
 
     # ── Order routing and execution ───────────────────────────────────────────
 
-    async def _route_and_execute(self, signal: ExecutionSignal, sized) -> None:
+    async def _route_and_execute(self, signal: ExecutionSignal, sized: Any) -> None:
         """Route order through SmartRouter and handle fill/rejection."""
         t0 = time.monotonic()
 
@@ -605,8 +608,8 @@ class HopeFXEngine:
     async def _on_fill(
         self,
         signal: ExecutionSignal,
-        order: dict,
-        fill: dict,
+        order: dict[str, Any],
+        fill: dict[str, Any],
         latency_ms: float,
     ) -> None:
         """Handle confirmed fill: lineage, position tracking, orchestrator notify."""
@@ -822,7 +825,7 @@ class HopeFXEngine:
             # Copy trading must never crash the primary fill path
             logger.error("copy_trading.broadcast_trade error (non-fatal): %s", _copy_exc)
 
-    async def _close_position_for_unwind(self, unwind) -> None:
+    async def _close_position_for_unwind(self, unwind: Any) -> None:
         """
         Close a position triggered by IntraTradeMonitor auto-unwind.
 

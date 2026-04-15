@@ -79,6 +79,7 @@ from __future__ import annotations
 import logging
 import os
 from collections import defaultdict, deque
+from typing import Any
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -140,7 +141,7 @@ class TCARecord:
         """Time from signal generation to fill in milliseconds."""
         return (self.fill_time - self.signal_time).total_seconds() * 1000
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "request_id": self.request_id,
             "symbol": self.symbol,
@@ -207,7 +208,7 @@ class TCARecorder:
 
     def __init__(self) -> None:
         # Pending signals: request_id → signal metadata
-        self._pending: dict[str, dict] = {}
+        self._pending: dict[str, dict[str, Any]] = {}
 
         # Completed records: keyed by (broker, symbol) for fast aggregation
         self._records: dict[str, deque[TCARecord]] = defaultdict(lambda: deque(maxlen=TCA_MAX_MEMORY_RECORDS))
@@ -369,7 +370,7 @@ class TCARecorder:
         brokers = {r.broker for r in self._all_records}
         return [r for b in brokers if (r := self.get_report(broker=b, last_n=last_n))]
 
-    def get_recent_records(self, n: int = 100) -> list[dict]:
+    def get_recent_records(self, n: int = 100) -> list[dict[str, Any]]:
         """Return the N most recent TCA records as dicts."""
         records = list(self._all_records)[-n:]
         return [r.to_dict() for r in reversed(records)]
@@ -455,7 +456,7 @@ class TCARecorder:
 
             from cache.redis_client import get_redis
 
-            async def _write():
+            async def _write() -> None:
                 redis = await get_redis()
                 if redis is None:
                     return

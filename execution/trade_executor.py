@@ -39,12 +39,14 @@ import logging
 import os
 import time
 from collections.abc import Callable
+from typing import Any, cast
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 UTC = timezone.utc
 from enum import Enum
 
+from infrastructure.metrics import Counter as MetricCounter
 from infrastructure.metrics import get_metrics_registry
 
 logger = logging.getLogger(__name__)
@@ -100,21 +102,21 @@ class TradeExecutor:
     - Loss-streak detection (STREAK_HALT_LOSSES / STREAK_COOLDOWN_MINUTES)
     """
 
-    def __init__(self, broker, risk_manager, position_tracker):
+    def __init__(self, broker: Any, risk_manager: Any, position_tracker: Any) -> None:
         self.broker = broker
         self.risk_manager = risk_manager
         self.position_tracker = position_tracker
         self.metrics = get_metrics_registry()
 
-        self._pending_orders: dict[str, dict] = {}
-        self._execution_callbacks: list[Callable] = []
+        self._pending_orders: dict[str, dict[str, Any]] = {}
+        self._execution_callbacks: list[Callable[..., Any]] = []
         self._lock = asyncio.Lock()
 
         # ── Streak tracking ───────────────────────────────────────────────────
         self._consecutive_losses: int = 0
         self._streak_halted_until: float | None = None  # monotonic time
 
-    async def execute_signal(self, signal: dict) -> ExecutionResult:
+    async def execute_signal(self, signal: dict[str, Any]) -> ExecutionResult:
         """Execute a trading signal with full validation and risk controls."""
         start_time = asyncio.get_running_loop().time()
 
@@ -158,11 +160,13 @@ class TradeExecutor:
             self.metrics.record_order_latency(latency_ms)
 
             if result.success:
-                self.metrics.get_collector("orders_filled_total").inc(1, {"symbol": symbol, "type": "market"})
+                _c = self.metrics.get_collector("orders_filled_total")
+                if _c is not None:
+                    cast(MetricCounter, _c).inc(1, {"symbol": symbol, "type": "market"})
             else:
-                self.metrics.get_collector("orders_rejected_total").inc(
-                    1, {"symbol": symbol, "reason": result.status.value}
-                )
+                _c2 = self.metrics.get_collector("orders_rejected_total")
+                if _c2 is not None:
+                    cast(MetricCounter, _c2).inc(1, {"symbol": symbol, "reason": result.status.value})
 
             await self._notify_callbacks(result, signal)
             return result
@@ -182,7 +186,7 @@ class TradeExecutor:
                 latency_ms=latency_ms,
             )
 
-    async def _execute_open(self, signal: dict) -> ExecutionResult:
+    async def _execute_open(self, signal: dict[str, Any]) -> ExecutionResult:
         """
         Execute an opening order.
 
@@ -347,7 +351,7 @@ class TradeExecutor:
             message=f"Order {order.status.value}",
         )
 
-    async def _execute_close(self, signal: dict) -> ExecutionResult:
+    async def _execute_close(self, signal: dict[str, Any]) -> ExecutionResult:
         """
         Execute a closing order.
 
@@ -456,7 +460,7 @@ class TradeExecutor:
 
     # ── Risk circuit breakers ─────────────────────────────────────────────────
 
-    def _check_drawdown_circuit_breaker(self) -> tuple:
+    def _check_drawdown_circuit_breaker(self) -> tuple[bool, str]:
         """
         Return (blocked: bool, reason: str) based on current drawdown.
 
@@ -493,7 +497,7 @@ class TradeExecutor:
             except (TimeoutError, RuntimeError, ConnectionError, ValueError) as _exc:
                 logger.debug("Suppressed exception: %s", _exc)
 
-    def _check_streak_circuit_breaker(self) -> tuple:
+    def _check_streak_circuit_breaker(self) -> tuple[bool, str]:
         """
         Return (blocked: bool, reason: str) if a loss-streak cooldown is active.
 
@@ -550,7 +554,7 @@ class TradeExecutor:
                     STREAK_COOLDOWN_MINUTES,
                 )
 
-    def _clamp_size_to_risk_cap(self, signal: dict, size: float) -> float:
+    def _clamp_size_to_risk_cap(self, signal: dict[str, Any], size: float) -> float:
         """
         Clamp position size so that a full stop-loss hit never exceeds
         MAX_RISK_PCT_PER_TRADE of current account equity.
@@ -588,7 +592,7 @@ class TradeExecutor:
                             sl_pct * 100,
                             MAX_RISK_PCT_PER_TRADE * 100,
                         )
-                        return round(max_size, 8)
+                        return float(round(float(max_size), 8))
             # No SL — cap by notional: size × price <= equity × cap
             elif entry_price and entry_price > 0:
                 max_notional = equity * MAX_RISK_PCT_PER_TRADE
@@ -599,7 +603,7 @@ class TradeExecutor:
                         size,
                         max_size_notional,
                     )
-                    return round(max_size_notional, 8)
+                    return float(round(float(max_size_notional), 8))
         except (RuntimeError, ValueError, TypeError, AttributeError) as exc:
             logger.debug("Risk cap calculation failed (non-fatal): %s", exc)
 
@@ -607,11 +611,11 @@ class TradeExecutor:
 
     # ── Callbacks ─────────────────────────────────────────────────────────────
 
-    def register_callback(self, callback: Callable[[ExecutionResult, dict], None]):
+    def register_callback(self, callback: Callable[[ExecutionResult, dict[str, Any]], None]) -> None:
         """Register an execution callback."""
         self._execution_callbacks.append(callback)
 
-    async def _notify_callbacks(self, result: ExecutionResult, signal: dict):
+    async def _notify_callbacks(self, result: ExecutionResult, signal: dict[str, Any]) -> None:
         """Notify all registered callbacks and the InferenceEngine fill hook."""
         for callback in self._execution_callbacks:
             try:
@@ -628,7 +632,7 @@ class TradeExecutor:
         ):
             await self._notify_inference_engine_fill(result, signal)
 
-    async def _notify_inference_engine_fill(self, result: ExecutionResult, signal: dict) -> None:
+    async def _notify_inference_engine_fill(self, result: ExecutionResult, signal: dict[str, Any]) -> None:
         """
         Notify InferenceEngine of a confirmed fill for online learning.
 
@@ -720,7 +724,7 @@ class TradeExecutor:
                     logger.error("Error cancelling order %s: %s", order_id, exc)
         return cancelled
 
-    def get_risk_status(self) -> dict:
+    def get_risk_status(self) -> dict[str, Any]:
         """
         Return current risk circuit-breaker state for monitoring.
 

@@ -508,9 +508,9 @@ class TCAEngine:
 
         elif benchmark == BenchmarkType.TWAP:
             twap_data = self._twap_cache.get(symbol, [])
-            relevant = [p for p in twap_data if start <= p[0] <= end]
-            if relevant:
-                return sum((p[1] for p in relevant), Decimal(0)) / Decimal(str(len(relevant)))
+            twap_relevant = [p for p in twap_data if start <= p[0] <= end]
+            if twap_relevant:
+                return sum((p[1] for p in twap_relevant), Decimal(0)) / Decimal(str(len(twap_relevant)))
 
         return Decimal(0)
 
