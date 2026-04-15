@@ -88,7 +88,7 @@ const CorrelationDashboard: React.FC = () => {
                       <tr key={row}>
                         <td style={{ ...s.mtd, fontWeight:600, color:'#94a3b8', whiteSpace:'nowrap' }}>{row}</td>
                         {corr.symbols.map(col => {
-                          const v = corr.matrix[row][col];
+                          const v = corr.matrix[row]?.[col] ?? 0;
                           return (
                             <td key={col} style={{ ...s.mtd, background: row===col ? '#334155' : `${corrColor(v)}22`, color: corrColor(v), fontWeight: row===col ? 700 : 400 }}>
                               {v.toFixed(2)}
@@ -132,17 +132,17 @@ const CorrelationDashboard: React.FC = () => {
               </div>
               <div style={s.cotRow}>
                 <span style={s.cotLabel}>Net Long</span>
-                <span style={{ fontSize:18, fontWeight:700, color: cot.net_speculator_long > 0 ? '#4ade80' : '#f87171' }}>
-                  {cot.net_speculator_long > 0 ? '+' : ''}{cot.net_speculator_long.toLocaleString()}
+                <span style={{ fontSize:18, fontWeight:700, color: (cot.net_speculator_long ?? 0) > 0 ? '#4ade80' : '#f87171' }}>
+                  {(cot.net_speculator_long ?? 0) > 0 ? '+' : ''}{(cot.net_speculator_long ?? 0).toLocaleString()}
                 </span>
               </div>
               <div style={s.cotRow}>
                 <span style={s.cotLabel}>Long Positions</span>
-                <span style={{ color:'#4ade80' }}>{cot.long_positions.toLocaleString()}</span>
+                <span style={{ color:'#4ade80' }}>{(cot.long_positions ?? 0).toLocaleString()}</span>
               </div>
               <div style={s.cotRow}>
                 <span style={s.cotLabel}>Short Positions</span>
-                <span style={{ color:'#f87171' }}>{cot.short_positions.toLocaleString()}</span>
+                <span style={{ color:'#f87171' }}>{(cot.short_positions ?? 0).toLocaleString()}</span>
               </div>
               {cot.weekly_change !== undefined && (
                 <div style={s.cotRow}>

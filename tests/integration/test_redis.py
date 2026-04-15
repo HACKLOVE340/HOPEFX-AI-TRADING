@@ -128,7 +128,13 @@ class TestRedisPackage:
 
     def test_connection_refused_raises(self) -> None:
         """Connecting to a closed port raises a Redis ConnectionError."""
-        r = redis_lib.Redis(host="localhost", port=19999, socket_connect_timeout=0.2)
+        r = redis_lib.Redis(
+            host="localhost",
+            port=19999,
+            socket_connect_timeout=0.2,
+            retry_on_timeout=False,
+            retry_on_error=[],
+        )
         with pytest.raises((RedisConnectionError, ConnectionError, OSError)):
             r.ping()
 

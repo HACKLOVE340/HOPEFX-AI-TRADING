@@ -109,22 +109,62 @@ vi.mock('../hooks/useApi', () => ({
     export: vi.fn().mockResolvedValue({ data: new Blob() }),
   },
   superadminApi: {
-    overview:      vi.fn().mockResolvedValue({ data: {} }),
-    users:         vi.fn().mockResolvedValue({ data: [] }),
-    systemMetrics: vi.fn().mockResolvedValue({ data: {} }),
-    jobs:          vi.fn().mockResolvedValue({ data: [] }),
-    apiKeyAudit:   vi.fn().mockResolvedValue({ data: [] }),
-    revokeApiKey:  vi.fn().mockResolvedValue({ data: {} }),
+    overview:          vi.fn().mockResolvedValue({ data: {
+      system_health: 'healthy', uptime_pct: 99.9, engine_status: 'running',
+      total_users: 1000, active_users_24h: 50, new_users_7d: 10,
+      revenue_mtd: 50000, revenue_currency: 'USD', total_trades_today: 200,
+      open_positions: 5, active_sessions: 30, ml_model_accuracy: 87.5,
+      signals_generated_today: 120,
+    } }),
+    users:             vi.fn().mockResolvedValue({ data: [] }),
+    systemMetrics:     vi.fn().mockResolvedValue({ data: {} }),
+    jobs:              vi.fn().mockResolvedValue({ data: [] }),
+    apiKeyAudit:       vi.fn().mockResolvedValue({ data: [] }),
+    revokeApiKey:      vi.fn().mockResolvedValue({ data: {} }),
+    infraHealth:       vi.fn().mockResolvedValue({ data: { status: 'ok', services: [] } }),
+    cacheStats:        vi.fn().mockResolvedValue({ data: { hit_rate: 0.95, memory_used: 128 } }),
+    dbStats:           vi.fn().mockResolvedValue({ data: { connections: 5, query_time_ms: 2 } }),
+    queueStats:        vi.fn().mockResolvedValue({ data: { queues: [] } }),
+    flushCache:        vi.fn().mockResolvedValue({ data: {} }),
+    mlStatus:          vi.fn().mockResolvedValue({ data: {} }),
+    mlModels:          vi.fn().mockResolvedValue({ data: [] }),
+    engineStatus:      vi.fn().mockResolvedValue({ data: {} }),
+    revenueStats:      vi.fn().mockResolvedValue({ data: {} }),
+    subscriptionStats: vi.fn().mockResolvedValue({ data: {} }),
+    securityEvents:    vi.fn().mockResolvedValue({ data: [] }),
+    blockedIPs:        vi.fn().mockResolvedValue({ data: [] }),
+    activeSessions:    vi.fn().mockResolvedValue({ data: [] }),
+    logs:              vi.fn().mockResolvedValue({ data: [] }),
+    featureFlags:      vi.fn().mockResolvedValue({ data: [] }),
+    auditLog:          vi.fn().mockResolvedValue({ data: [] }),
+    brokerHealth:      vi.fn().mockResolvedValue({ data: [] }),
+    tcaMetrics:        vi.fn().mockResolvedValue({ data: [] }),
+    kycQueue:          vi.fn().mockResolvedValue({ data: [] }),
+    amlAlerts:         vi.fn().mockResolvedValue({ data: [] }),
+    circuitBreakers:   vi.fn().mockResolvedValue({ data: [] }),
+    varMetrics:        vi.fn().mockResolvedValue({ data: {} }),
+    tenants:           vi.fn().mockResolvedValue({ data: [] }),
   },
   api: {
     defaults: { baseURL: '/api', timeout: 15000, headers: { 'Content-Type': 'application/json' } },
     interceptors: { request: { handlers: [{}], use: vi.fn() }, response: { handlers: [{}], use: vi.fn() } },
     get: vi.fn().mockImplementation((url: string) => {
       if (typeof url === 'string' && url.includes('/advanced/correlation')) {
-        return Promise.resolve({ data: { matrix: {}, symbols: ['XAU/USD', 'EUR/USD'], window: 30 } });
+        return Promise.resolve({ data: {
+          symbols: ['XAU/USD', 'EUR/USD'],
+          matrix: { 'XAU/USD': { 'XAU/USD': 1.0, 'EUR/USD': 0.42 }, 'EUR/USD': { 'XAU/USD': 0.42, 'EUR/USD': 1.0 } },
+          insights: [],
+          window: 30,
+          updated_at: new Date().toISOString(),
+        } });
       }
       if (typeof url === 'string' && url.includes('/advanced/cot')) {
-        return Promise.resolve({ data: { net_positions: {}, change: {} } });
+        return Promise.resolve({ data: {
+          report_date: '2026-01-01', net_speculator_long: 12500,
+          long_positions: 85000, short_positions: 72500,
+          sentiment: 'bullish', sentiment_strength: 'moderate',
+          note: '', weekly_change: 500, source: 'CFTC',
+        } });
       }
       if (typeof url === 'string' && url.includes('/billing/balance')) {
         return Promise.resolve({ data: { balance: 10000, frozen: 0, pending: 0 } });
