@@ -1,8 +1,8 @@
 /**
  * A/B Strategy Testing — dashboard version (Tailwind)
- * Wires to: GET /api/backtesting/ab-test
+ * Wires to: GET /api/advanced/ab-tests  |  POST /api/advanced/ab-test
  */
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { FlaskConical, Play, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import axios from 'axios'
 
@@ -17,11 +17,10 @@ interface StrategyResult {
   winner: boolean
 }
 
-const MOCK: StrategyResult[] = [
-  { name: 'ML Ensemble (XGBoost+LGB+RF)', sharpe: 1.52, win_rate: 62.5, total_trades: 48, max_drawdown: 3.2, avg_return_pct: 0.87, p_value: 0.0000, winner: true },
-  { name: 'MA Crossover (20/50)',          sharpe: 0.71, win_rate: 51.3, total_trades: 124, max_drawdown: 7.8, avg_return_pct: 0.31, p_value: 0.1240, winner: false },
-  { name: 'RSI Mean Reversion',            sharpe: 0.94, win_rate: 55.8, total_trades: 89,  max_drawdown: 5.1, avg_return_pct: 0.52, p_value: 0.0420, winner: false },
-  { name: 'Bollinger Bands',               sharpe: 0.83, win_rate: 53.4, total_trades: 107, max_drawdown: 6.3, avg_return_pct: 0.44, p_value: 0.0810, winner: false },
+const STRATEGIES = [
+  'MovingAverageCrossover', 'RSIStrategy', 'MACDStrategy',
+  'BollingerBands', 'SMCICTStrategy', 'EMAcrossover',
+  'MeanReversion', 'Breakout', 'Stochastic',
 ]
 
 const Delta = ({ a, b, fmt = (v: number) => v.toFixed(2) }: { a: number; b: number; fmt?: (v: number) => string }) => {
@@ -31,25 +30,53 @@ const Delta = ({ a, b, fmt = (v: number) => v.toFixed(2) }: { a: number; b: numb
 }
 
 export default function ABTesting() {
-  const [results, setResults] = useState<StrategyResult[]>(MOCK)
+  const [results, setResults] = useState<StrategyResult[]>([])
   const [loading, setLoading] = useState(false)
-  const [selected, setSelected] = useState<string[]>([MOCK[0].name, MOCK[1].name])
+  const [error, setError] = useState<string | null>(null)
+  const [selected, setSelected] = useState<string[]>([STRATEGIES[0], STRATEGIES[1]])
+
+  // Load existing test results on mount
+  useEffect(() => {
+    axios.get('/api/advanced/ab-tests')
+      .then(r => {
+        const data = r.data.tests ?? r.data ?? []
+        if (Array.isArray(data) && data.length > 0) {
+          const flat: StrategyResult[] = []
+          for (const test of data) {
+            if (test.strategy_a) flat.push({ ...test.strategy_a, p_value: test.p_value ?? 1, winner: test.winner === test.strategy_a?.strategy })
+            if (test.strategy_b) flat.push({ ...test.strategy_b, p_value: test.p_value ?? 1, winner: test.winner === test.strategy_b?.strategy })
+          }
+          if (flat.length > 0) setResults(flat)
+        }
+      })
+      .catch(() => { /* No prior results — start empty */ })
+  }, [])
 
   const run = async () => {
+    if (selected.length < 2) { setError('Select at least 2 strategies to compare.'); return }
     setLoading(true)
+    setError(null)
     try {
-      const res = await axios.post('/api/backtesting/ab-test', { strategies: selected })
-      setResults(res.data.results ?? MOCK)
-    } catch {
-      await new Promise(r => setTimeout(r, 1200))
-      setResults(MOCK)
+      const res = await axios.post('/api/advanced/ab-test', {
+        strategy_a: selected[0],
+        strategy_b: selected[1],
+        symbol: 'XAU/USD',
+        days: 30,
+      })
+      const test = res.data
+      const flat: StrategyResult[] = []
+      if (test.strategy_a) flat.push({ ...test.strategy_a, p_value: test.p_value ?? 1, winner: test.winner === test.strategy_a?.strategy })
+      if (test.strategy_b) flat.push({ ...test.strategy_b, p_value: test.p_value ?? 1, winner: test.winner === test.strategy_b?.strategy })
+      if (flat.length > 0) setResults(flat)
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(detail ?? 'A/B test failed — check server logs.')
     } finally {
       setLoading(false)
     }
   }
 
   const winner = results.find(r => r.winner)
-  const baseline = results.find(r => !r.winner) ?? results[1]
 
   return (
     <div className="space-y-6">
@@ -66,6 +93,33 @@ export default function ABTesting() {
           {loading ? <><span className="w-4 h-4 border-2 border-slate-900/30 border-t-slate-900 rounded-full animate-spin" />Running…</> : <><Play className="w-4 h-4" />Run Test</>}
         </button>
       </div>
+
+      {/* Strategy selector */}
+      <div className="bg-slate-900 rounded-xl border border-slate-800 p-4 flex flex-wrap gap-3 items-center">
+        <span className="text-sm text-slate-400 font-medium">Compare:</span>
+        {STRATEGIES.map(s => (
+          <button key={s} onClick={() => setSelected(prev =>
+            prev.includes(s) ? prev.filter(x => x !== s) : [...prev.slice(-1), s]
+          )}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+              selected.includes(s)
+                ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
+                : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'
+            }`}>
+            {s}
+          </button>
+        ))}
+      </div>
+
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-400 text-sm">{error}</div>
+      )}
+
+      {results.length === 0 && !loading && (
+        <div className="bg-slate-900 rounded-xl border border-slate-800 p-12 text-center text-slate-500">
+          Select strategies above and click <span className="text-amber-400 font-medium">Run Test</span> to compare.
+        </div>
+      )}
 
       {/* Winner banner */}
       {winner && (

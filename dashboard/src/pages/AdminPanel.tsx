@@ -30,21 +30,12 @@ interface ActivityEntry {
   level: 'info' | 'warning' | 'error'
 }
 
-const MOCK_STATS: SystemStats = {
-  total_users: 1, active_sessions: 1, open_positions: 0, signals_today: 12,
-  api_requests_1h: 847, error_rate_pct: 0.12, uptime_hours: 72,
-  db_pool_used: 3, db_pool_max: 20, redis_connected: true,
-  broker_connected: false, ml_model_loaded: true,
+const EMPTY_STATS: SystemStats = {
+  total_users: 0, active_sessions: 0, open_positions: 0, signals_today: 0,
+  api_requests_1h: 0, error_rate_pct: 0, uptime_hours: 0,
+  db_pool_used: 0, db_pool_max: 20, redis_connected: false,
+  broker_connected: false, ml_model_loaded: false,
 }
-
-const MOCK_ACTIVITY: ActivityEntry[] = [
-  { id: '1', timestamp: '2026-05-30 14:32:01', user: 'system',    action: 'ML model retrained — OOS accuracy: 68.0%',    level: 'info' },
-  { id: '2', timestamp: '2026-05-30 14:28:44', user: 'admin',     action: 'Risk limits updated — max_dd=5%',             level: 'info' },
-  { id: '3', timestamp: '2026-05-30 13:55:12', user: 'system',    action: 'OANDA broker disconnected — paper mode active', level: 'warning' },
-  { id: '4', timestamp: '2026-05-30 12:00:00', user: 'system',    action: 'Hourly trainer completed — XAU_USD',          level: 'info' },
-  { id: '5', timestamp: '2026-05-30 11:47:33', user: 'admin',     action: 'Kill switch checked — inactive',              level: 'info' },
-  { id: '6', timestamp: '2026-05-30 10:22:18', user: 'system',    action: 'Sentry alert: model degradation check passed', level: 'info' },
-]
 
 const StatusDot = ({ ok }: { ok: boolean }) => (
   <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${ok ? 'text-green-400' : 'text-red-400'}`}>
@@ -54,22 +45,25 @@ const StatusDot = ({ ok }: { ok: boolean }) => (
 )
 
 export default function AdminPanel() {
-  const [stats, setStats] = useState<SystemStats>(MOCK_STATS)
-  const [activity, setActivity] = useState<ActivityEntry[]>(MOCK_ACTIVITY)
+  const [stats, setStats] = useState<SystemStats>(EMPTY_STATS)
+  const [activity, setActivity] = useState<ActivityEntry[]>([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [killSwitchActive, setKillSwitchActive] = useState(false)
 
   const refresh = async () => {
     setLoading(true)
+    setError(null)
     try {
       const [s, a] = await Promise.all([
         axios.get('/api/admin/stats'),
         axios.get('/api/admin/activity'),
       ])
-      setStats(s.data)
-      setActivity(a.data.entries ?? MOCK_ACTIVITY)
-    } catch {
-      // demo mode
+      setStats(s.data ?? EMPTY_STATS)
+      setActivity(a.data.entries ?? a.data ?? [])
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(detail ?? 'Failed to load admin data.')
     } finally {
       setLoading(false)
     }
@@ -81,8 +75,9 @@ export default function AdminPanel() {
     try {
       await axios.post(`/api/admin/kill-switch/${killSwitchActive ? 'deactivate' : 'activate'}`)
       setKillSwitchActive(k => !k)
-    } catch {
-      setKillSwitchActive(k => !k) // optimistic in demo
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(detail ?? 'Kill switch toggle failed.')
     }
   }
 
@@ -102,6 +97,10 @@ export default function AdminPanel() {
           Refresh
         </button>
       </div>
+
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-400 text-sm">{error}</div>
+      )}
 
       {/* Kill switch */}
       <div className={`rounded-xl border p-4 flex items-center justify-between ${killSwitchActive ? 'bg-red-500/10 border-red-500/30' : 'bg-slate-900 border-slate-800'}`}>
@@ -163,6 +162,9 @@ export default function AdminPanel() {
           <h2 className="text-sm font-semibold text-slate-300">Activity Log</h2>
         </div>
         <div className="divide-y divide-slate-800/50">
+          {activity.length === 0 && (
+            <div className="px-6 py-8 text-center text-slate-500 text-sm">No activity entries yet.</div>
+          )}
           {activity.map(entry => (
             <div key={entry.id} className="flex items-start gap-3 px-6 py-3">
               <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${

@@ -18,11 +18,7 @@ interface Tenant {
   branding: { primary_color: string; logo_url: string }
 }
 
-const MOCK_TENANTS: Tenant[] = [
-  { id: 't1', name: 'AlphaFX Pro',    domain: 'app.alphafx.io',    plan: 'enterprise', users: 142, revenue_usd: 4260, status: 'active',    created_at: '2026-01-15', branding: { primary_color: '#3b82f6', logo_url: '' } },
-  { id: 't2', name: 'TradeNest',      domain: 'tradenest.app',     plan: 'pro',        users: 38,  revenue_usd: 760,  status: 'active',    created_at: '2026-02-20', branding: { primary_color: '#10b981', logo_url: '' } },
-  { id: 't3', name: 'GoldSignals.io', domain: 'goldsignals.io',    plan: 'starter',    users: 12,  revenue_usd: 120,  status: 'trial',     created_at: '2026-05-01', branding: { primary_color: '#f59e0b', logo_url: '' } },
-]
+
 
 const PLAN_COLORS: Record<string, string> = {
   starter:    'bg-slate-500/20 text-slate-400 border-slate-500/30',
@@ -37,32 +33,41 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 export default function WhitelabelAdmin() {
-  const [tenants, setTenants] = useState<Tenant[]>(MOCK_TENANTS)
+  const [tenants, setTenants] = useState<Tenant[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [newName, setNewName] = useState('')
   const [newDomain, setNewDomain] = useState('')
   const [newPlan, setNewPlan] = useState<'starter' | 'pro' | 'enterprise'>('starter')
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
-  useEffect(() => {
-    axios.get('/api/whitelabel/tenants').then(r => setTenants(r.data.tenants ?? MOCK_TENANTS)).catch(() => {})
-  }, [])
+  const load = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const r = await axios.get('/api/whitelabel/tenants')
+      setTenants(r.data.tenants ?? r.data ?? [])
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(detail ?? 'Failed to load tenants.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [])
 
   const addTenant = async () => {
     if (!newName.trim() || !newDomain.trim()) return
-    const t: Tenant = {
-      id: `t${Date.now()}`, name: newName, domain: newDomain, plan: newPlan,
-      users: 0, revenue_usd: 0, status: 'trial',
-      created_at: new Date().toISOString().slice(0, 10),
-      branding: { primary_color: '#3b82f6', logo_url: '' },
-    }
     try {
       const res = await axios.post('/api/whitelabel/tenants', { name: newName, domain: newDomain, plan: newPlan })
-      setTenants(prev => [...prev, res.data.tenant ?? t])
-    } catch {
-      setTenants(prev => [...prev, t])
+      setTenants(prev => [...prev, res.data.tenant ?? res.data])
+      setNewName(''); setNewDomain(''); setShowAdd(false)
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(detail ?? 'Failed to create tenant.')
     }
-    setNewName(''); setNewDomain(''); setShowAdd(false)
   }
 
   const copyApiKey = (id: string) => {
@@ -90,6 +95,9 @@ export default function WhitelabelAdmin() {
           Add Tenant
         </button>
       </div>
+
+      {error && <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-400 text-sm">{error}</div>}
+      {loading && <div className="text-center py-8 text-slate-500 text-sm">Loading tenants…</div>}
 
       {/* Summary */}
       <div className="grid grid-cols-3 gap-4">
