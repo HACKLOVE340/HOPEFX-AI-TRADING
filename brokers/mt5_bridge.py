@@ -42,17 +42,20 @@ from datetime import datetime, timedelta, timezone
 UTC = timezone.utc
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any
+from collections.abc import Callable
+from typing import Any, TypeVar
+
+_F = TypeVar("_F", bound=Callable[..., Any])
 
 logger = logging.getLogger(__name__)
 
 # ── optional MT5 import (Windows-only package) ────────────────────────────────
 try:
-    import MetaTrader5 as mt5  # type: ignore
+    import MetaTrader5 as mt5  # type: ignore[import-not-found,import-untyped,unused-ignore]
 
     _MT5_AVAILABLE = True
 except ImportError:
-    mt5 = None  # type: ignore
+    mt5 = None
     _MT5_AVAILABLE = False
     logger.warning(
         "MetaTrader5 package not available — bridge runs in signal-export mode only. "
@@ -116,7 +119,7 @@ class MT5FillResult:
 # ── retry decorator ───────────────────────────────────────────────────────────
 
 
-def _retry(max_attempts: int = 3, base_delay: float = 0.5):
+def _retry(max_attempts: int = 3, base_delay: float = 0.5) -> Callable[[_F], _F]:
     """Retry with exponential back-off; re-raises last exception on exhaustion.
 
     Uses threading.Event.wait() instead of time.sleep() so the GIL is
@@ -124,8 +127,8 @@ def _retry(max_attempts: int = 3, base_delay: float = 0.5):
     sync method is called from an async run_in_executor context.
     """
 
-    def decorator(fn):
-        def wrapper(*args, **kwargs):
+    def decorator(fn: _F) -> _F:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             delay = base_delay
             last_exc: Exception | None = None
             _wait = threading.Event()
@@ -146,7 +149,7 @@ def _retry(max_attempts: int = 3, base_delay: float = 0.5):
                         delay *= 2
             raise last_exc  # type: ignore[misc]
 
-        return wrapper
+        return wrapper  # type: ignore[return-value]
 
     return decorator
 
@@ -189,7 +192,7 @@ class EX5SignalExporter:
         self.signal_dir.mkdir(parents=True, exist_ok=True)
 
     @staticmethod
-    def _write_json_locked(path: Path, payload: dict) -> None:
+    def _write_json_locked(path: Path, payload: dict[str, Any]) -> None:
         """
         Write JSON to path with cross-platform file locking.
 
@@ -220,7 +223,7 @@ class EX5SignalExporter:
                 tmp.unlink(missing_ok=True)
 
     @staticmethod
-    def _read_json_locked(path: Path) -> dict:
+    def _read_json_locked(path: Path) -> dict[str, Any]:
         """Read JSON from path safely (handles partial writes from EA).
 
         Uses threading.Event-based sleep so this sync helper does not block
@@ -230,7 +233,8 @@ class EX5SignalExporter:
         for attempt in range(3):
             try:
                 text = path.read_text(encoding="utf-8")
-                return json.loads(text)
+                result: dict[str, Any] = json.loads(text)
+                return result
             except json.JSONDecodeError:
                 if attempt < 2:
                     _wait.wait(timeout=0.1)
@@ -392,7 +396,7 @@ class MT5Bridge:
         path: str | None = None,
         portable: bool = False,
         timeout_ms: int = 60_000,
-        enforcer=None,
+        enforcer: Any = None,
         signal_dir: Path = _SIGNAL_DIR,
         force_signal_mode: bool = False,
     ) -> None:
@@ -412,7 +416,7 @@ class MT5Bridge:
         self._force_signal_mode = force_signal_mode or not _MT5_AVAILABLE
 
     @classmethod
-    def from_env(cls, enforcer=None) -> MT5Bridge:
+    def from_env(cls, enforcer: Any = None) -> MT5Bridge:
         """Construct from MT5_LOGIN / MT5_PASSWORD / MT5_SERVER env vars."""
         login_str = os.environ.get("MT5_LOGIN", "")
         if not login_str:
@@ -538,7 +542,7 @@ class MT5Bridge:
             "volume": float(order.volume),
             "type": mt5_type,
             "price": float(price),
-            "sl": float(order.stop_loss),
+            "sl": float(order.stop_loss or 0.0),
             "deviation": order.deviation,
             "magic": order.magic,
             "comment": order.comment,
@@ -871,5 +875,5 @@ class MT5Bridge:
         self.connect()
         return self
 
-    def __exit__(self, *_) -> None:
+    def __exit__(self, *_: Any) -> None:
         self.disconnect()
