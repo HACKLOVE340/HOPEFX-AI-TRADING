@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,7 @@ class OANDAStreamAdapter:
         account_id: str = "",
         instruments: list[str] | None = None,
         practice: bool = True,
-        on_tick: Callable[[dict], None] | None = None,
+        on_tick: Callable[[dict[str, Any]], None] | None = None,
         connect_timeout: float = 30.0,
         reconcile_timeout: float = 10.0,
     ) -> None:
@@ -87,5 +88,5 @@ class OANDAStreamAdapter:
     async def stop(self) -> None:
         raise StreamingForbiddenError("stop")
 
-    async def poll_rest(self) -> list[dict]:
+    async def poll_rest(self) -> list[dict[str, Any]]:
         raise StreamingForbiddenError("poll_rest")

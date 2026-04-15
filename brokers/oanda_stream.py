@@ -156,7 +156,7 @@ class OANDAStream:
         self._session = aiohttp.ClientSession(headers=self._headers)
         return self
 
-    async def __aexit__(self, *_) -> None:
+    async def __aexit__(self, *_: Any) -> None:
         if self._session:
             await self._session.close()
             self._session = None
@@ -191,7 +191,7 @@ class OANDAStream:
 
     # ── Architectural boundary ────────────────────────────────────────────────
 
-    async def stream_prices(self, *_args, **_kwargs) -> None:
+    async def stream_prices(self, *_args: Any, **_kwargs: Any) -> None:
         """
         Raises StreamingForbiddenError unconditionally.
 
@@ -203,6 +203,9 @@ class OANDAStream:
 
     async def get_account_info(self) -> AccountInfo | None:
         """Fetch live account summary."""
+        if self._session is None:
+            logger.error("get_account_info called before connect()")
+            return None
         try:
             url = f"{self._rest_base}/v3/accounts/{self.account_id}/summary"
             async with self._session.get(url, timeout=aiohttp.ClientTimeout(total=_DEFAULT_TIMEOUT)) as r:
@@ -226,11 +229,14 @@ class OANDAStream:
 
     async def get_positions(self) -> list[Position]:
         """Fetch all open positions."""
+        if self._session is None:
+            logger.error("get_positions called before connect()")
+            return []
         try:
             url = f"{self._rest_base}/v3/accounts/{self.account_id}/openPositions"
             async with self._session.get(url, timeout=aiohttp.ClientTimeout(total=_DEFAULT_TIMEOUT)) as r:
                 r.raise_for_status()
-                out: ClassVar[list[Position]] = []
+                out: list[Position] = []
                 for p in (await r.json()).get("positions", []):
                     lu = float(p.get("long", {}).get("units", 0))
                     su = float(p.get("short", {}).get("units", 0))
@@ -265,6 +271,9 @@ class OANDAStream:
 
     async def close_position(self, symbol: str) -> bool:
         """Close all units of a position."""
+        if self._session is None:
+            logger.error("close_position called before connect()")
+            return False
         try:
             url = f"{self._rest_base}/v3/accounts/{self.account_id}/positions/{symbol}/close"
             async with self._session.put(
@@ -307,6 +316,9 @@ class OANDAStream:
         if take_profit:
             body["order"]["takeProfitOnFill"] = {"price": str(take_profit)}
 
+        if self._session is None:
+            logger.error("place_order called before connect()")
+            return None
         try:
             url = f"{self._rest_base}/v3/accounts/{self.account_id}/orders"
             async with self._session.post(
@@ -322,6 +334,9 @@ class OANDAStream:
 
     async def cancel_order(self, order_id: str) -> bool:
         """Cancel a pending order by ID."""
+        if self._session is None:
+            logger.error("cancel_order called before connect()")
+            return False
         try:
             url = f"{self._rest_base}/v3/accounts/{self.account_id}/orders/{order_id}/cancel"
             async with self._session.put(url, timeout=aiohttp.ClientTimeout(total=_DEFAULT_TIMEOUT)) as r:
@@ -333,6 +348,9 @@ class OANDAStream:
 
     async def get_open_orders(self) -> list[Order]:
         """Fetch all pending (open) orders."""
+        if self._session is None:
+            logger.error("get_open_orders called before connect()")
+            return []
         try:
             url = f"{self._rest_base}/v3/accounts/{self.account_id}/pendingOrders"
             async with self._session.get(url, timeout=aiohttp.ClientTimeout(total=_DEFAULT_TIMEOUT)) as r:
@@ -366,13 +384,16 @@ class OANDAStream:
         symbol: str,
         timeframe: str = "H1",
         count: int = 500,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """
         Fetch completed OHLCV candles for strategy warm-up.
 
         This is historical data retrieval, not live streaming.
         For live prices use data_feed.NuclearStreamer.
         """
+        if self._session is None:
+            logger.error("get_candles called before connect()")
+            return []
         gran = _TF_MAP.get(timeframe, timeframe)
         try:
             url = f"{self._rest_base}/v3/instruments/{symbol}/candles"
@@ -402,7 +423,7 @@ class OANDAStream:
 
     def _parse_order_response(
         self,
-        data: dict,
+        data: dict[str, Any],
         symbol: str,
         side: OrderSide,
         qty: float,

@@ -31,6 +31,7 @@ import asyncio
 import logging
 import os
 import uuid as _uuid_mod
+from typing import Any
 
 import aiohttp
 
@@ -81,7 +82,7 @@ class OandaBroker:
         Optional: ``timeout_seconds`` (int, default 10).
     """
 
-    def __init__(self, config: dict) -> None:
+    def __init__(self, config: dict[str, Any]) -> None:
         self._config = config
         self.connected: bool = False
         self._session: aiohttp.ClientSession | None = None
@@ -159,9 +160,9 @@ class OandaBroker:
 
     # ── Account ───────────────────────────────────────────────────────────────
 
-    async def get_account_info(self) -> dict | None:
+    async def get_account_info(self) -> dict[str, Any] | None:
         """Return account summary as a plain dict."""
-        if not self._assert_connected("get_account_info"):
+        if not self._assert_connected("get_account_info") or self._session is None:
             return None
         async with self._session.get(f"{self._base_url}/v3/accounts/{self._account_id}/summary") as resp:
             if resp.status != 200:
@@ -183,9 +184,9 @@ class OandaBroker:
                 "leverage": acct.get("marginRate"),
             }
 
-    async def get_positions(self) -> list[dict]:
+    async def get_positions(self) -> list[dict[str, Any]]:
         """Return all open positions."""
-        if not self._assert_connected("get_positions"):
+        if not self._assert_connected("get_positions") or self._session is None:
             return []
         async with self._session.get(f"{self._base_url}/v3/accounts/{self._account_id}/openPositions") as resp:
             if resp.status != 200:
@@ -207,9 +208,9 @@ class OandaBroker:
                 )
             return positions
 
-    async def get_orders(self) -> list[dict]:
+    async def get_orders(self) -> list[dict[str, Any]]:
         """Return all pending orders."""
-        if not self._assert_connected("get_orders"):
+        if not self._assert_connected("get_orders") or self._session is None:
             return []
         async with self._session.get(f"{self._base_url}/v3/accounts/{self._account_id}/pendingOrders") as resp:
             if resp.status != 200:
@@ -230,7 +231,7 @@ class OandaBroker:
 
     # ── Order execution ───────────────────────────────────────────────────────
 
-    async def place_order(self, order_params: dict) -> dict:
+    async def place_order(self, order_params: dict[str, Any]) -> dict[str, Any]:
         """
         Place a trade order via the OANDA v20 Orders endpoint.
 
@@ -266,7 +267,7 @@ class OandaBroker:
         prevents duplicate fills when the network fails after submission but
         before a response is received.
         """
-        if not self._assert_connected("place_order"):
+        if not self._assert_connected("place_order") or self._session is None:
             return {"success": False, "order_id": None, "comment": "Not connected"}
 
         instrument = order_params.get("instrument", "XAU_USD")
@@ -279,7 +280,7 @@ class OandaBroker:
         # Generate a stable idempotency key for this order attempt.
         client_id = order_params.get("client_id") or str(_uuid_mod.uuid4())
 
-        order_body: dict = {
+        order_body: dict[str, Any] = {
             "type": order_type,
             "instrument": instrument,
             "units": units,
@@ -432,7 +433,7 @@ class OandaBroker:
 
         return {"success": False, "order_id": None, "comment": last_error}
 
-    async def close_trade(self, trade_id: str, units: str | None = "ALL") -> dict:
+    async def close_trade(self, trade_id: str, units: str | None = "ALL") -> dict[str, Any]:
         """
         Close an open trade (full or partial) with exponential-backoff retry.
 
@@ -441,7 +442,7 @@ class OandaBroker:
         trade_id: OANDA trade ID string.
         units: "ALL" for full close, or a numeric string for partial close.
         """
-        if not self._assert_connected("close_trade"):
+        if not self._assert_connected("close_trade") or self._session is None:
             return {"success": False, "comment": "Not connected"}
         payload = {"units": units}
         url = f"{self._base_url}/v3/accounts/{self._account_id}/trades/{trade_id}/close"
@@ -490,9 +491,9 @@ class OandaBroker:
 
         return {"success": False, "comment": last_error}
 
-    async def cancel_order(self, order_id: str) -> dict:
+    async def cancel_order(self, order_id: str) -> dict[str, Any]:
         """Cancel a pending order by ID with exponential-backoff retry."""
-        if not self._assert_connected("cancel_order"):
+        if not self._assert_connected("cancel_order") or self._session is None:
             return {"success": False, "comment": "Not connected"}
         url = f"{self._base_url}/v3/accounts/{self._account_id}/orders/{order_id}/cancel"
 
@@ -540,10 +541,11 @@ class OandaBroker:
         position-close endpoint (PUT /positions/{instrument}/close) for
         each open position, then cancels all pending orders individually.
         """
-        if not self._assert_connected("cancel_all_orders"):
+        if not self._assert_connected("cancel_all_orders") or self._session is None:
             return False
 
         all_ok = True
+        session = self._session  # narrowed — not None past this point
 
         # 1. Close all open positions
         try:
@@ -554,7 +556,7 @@ class OandaBroker:
                     continue
                 long_units = pos.get("long_units", 0)
                 short_units = pos.get("short_units", 0)
-                body: dict = {}
+                body: dict[str, Any] = {}
                 if long_units > 0:
                     body["longUnits"] = "ALL"
                 if short_units < 0:
@@ -563,7 +565,7 @@ class OandaBroker:
                     continue
                 url = f"{self._base_url}/v3/accounts/{self._account_id}/positions/{instrument}/close"
                 try:
-                    async with self._session.put(url, json=body) as resp:
+                    async with session.put(url, json=body) as resp:
                         if resp.status == 200:
                             logger.warning("OandaBroker.cancel_all_orders: closed position %s", instrument)
                         else:
@@ -604,9 +606,9 @@ class OandaBroker:
         logger.warning("OandaBroker.cancel_all_orders: complete (all_ok=%s)", all_ok)
         return all_ok
 
-    async def get_tick(self, instrument: str = "XAU_USD") -> dict | None:
+    async def get_tick(self, instrument: str = "XAU_USD") -> dict[str, Any] | None:
         """Return the latest bid/ask for *instrument*."""
-        if not self._assert_connected("get_tick"):
+        if not self._assert_connected("get_tick") or self._session is None:
             return None
         try:
             async with self._session.get(
@@ -644,7 +646,7 @@ class OandaBroker:
         count: int = 500,
         from_time: str | None = None,
         to_time: str | None = None,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Fetch OHLCV candles from OANDA v3 instruments endpoint.
 
         Parameters
@@ -662,10 +664,10 @@ class OandaBroker:
         list of dicts with keys ``time``, ``open``, ``high``, ``low``,
         ``close``, ``volume``.  Returns an empty list on any error.
         """
-        if not self._assert_connected("get_ohlcv_candles"):
+        if not self._assert_connected("get_ohlcv_candles") or self._session is None:
             return []
 
-        params: dict = {
+        params: dict[str, Any] = {
             "granularity": granularity,
             "price": "M",  # midpoint candles
         }
@@ -720,7 +722,7 @@ class OandaBroker:
             return False
         return True
 
-    def status(self) -> dict:
+    def status(self) -> dict[str, Any]:
         """Return a health snapshot for monitoring."""
         return {
             "broker": "oanda",

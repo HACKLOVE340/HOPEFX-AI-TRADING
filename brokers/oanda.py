@@ -50,10 +50,10 @@ from datetime import datetime, timezone
 UTC = timezone.utc
 from typing import Any
 
-import aiohttp
-import requests
-
 import re
+
+import aiohttp
+import requests  # type: ignore[import-untyped]
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +132,7 @@ class OrderResult:
     broker: str = "oanda"
     latency_ms: float = 0.0
     reject_reason: str = ""
-    raw: dict | None = None
+    raw: dict[str, Any] | None = None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -170,12 +170,12 @@ class OANDABroker:
 
     def __init__(
         self,
-        config: dict | None = None,
+        config: dict[str, Any] | None = None,
         *,
         api_key: str | None = None,
         account_id: str | None = None,
         server: str | None = None,
-        **_kwargs,
+        **_kwargs: Any,
     ) -> None:
         # Accept both dict-style config and keyword-argument style.
         cfg = config or {}
@@ -269,7 +269,7 @@ class OANDABroker:
 
     # ── Order placement ───────────────────────────────────────────────────────
 
-    async def place_order(self, order_request: dict) -> dict:
+    async def place_order(self, order_request: dict[str, Any]) -> dict[str, Any]:
         """
         Place a market or limit order.
 
@@ -337,7 +337,9 @@ class OANDABroker:
 
         return result
 
-    async def _post_order_with_retry(self, payload: dict, client_ref: str) -> dict:
+    async def _post_order_with_retry(self, payload: dict[str, Any], client_ref: str) -> dict[str, Any]:
+        if self._session is None:
+            return {"status": "rejected", "reason": "not_connected", "broker": "oanda"}
         last_error = "unknown"
         for attempt in range(1, _MAX_RETRIES + 1):
             try:
@@ -396,7 +398,7 @@ class OANDABroker:
         }
 
     @staticmethod
-    def _parse_fill(data: dict, client_ref: str) -> dict:
+    def _parse_fill(data: dict[str, Any], client_ref: str) -> dict[str, Any]:
         """Parse OANDA order response into canonical fill dict."""
         # Market order fill
         fill = data.get("orderFillTransaction", {})
@@ -447,7 +449,7 @@ class OANDABroker:
 
     # ── Position queries ──────────────────────────────────────────────────────
 
-    async def get_open_positions(self) -> list[dict]:
+    async def get_open_positions(self) -> list[dict[str, Any]]:
         """Return open positions. Does NOT return price data."""
         if not self.connected or not self._session:
             return []
@@ -473,7 +475,7 @@ class OANDABroker:
             logger.error("OANDABroker get_open_positions: %s", exc)
             return []
 
-    async def close_position(self, symbol: str, direction: str = "all") -> dict:
+    async def close_position(self, symbol: str, direction: str = "all") -> dict[str, Any]:
         """Close an open position by symbol."""
         if not self.connected or not self._session:
             return {"status": "rejected", "reason": "not_connected"}
@@ -513,25 +515,25 @@ class OANDABroker:
 
     # ── FORBIDDEN: market data methods ───────────────────────────────────────
 
-    def get_market_data(self, *args, **kwargs):
+    def get_market_data(self, *args: Any, **kwargs: Any) -> None:
         raise MarketDataForbiddenError("get_market_data")
 
-    async def stream_prices(self, *args, **kwargs):
+    async def stream_prices(self, *args: Any, **kwargs: Any) -> None:
         raise MarketDataForbiddenError("stream_prices")
 
-    async def get_candles(self, *args, **kwargs):
+    async def get_candles(self, *args: Any, **kwargs: Any) -> None:
         raise MarketDataForbiddenError("get_candles")
 
-    async def get_ohlcv(self, *args, **kwargs):
+    async def get_ohlcv(self, *args: Any, **kwargs: Any) -> None:
         raise MarketDataForbiddenError("get_ohlcv")
 
-    async def get_bid_ask(self, *args, **kwargs):
+    async def get_bid_ask(self, *args: Any, **kwargs: Any) -> None:
         raise MarketDataForbiddenError("get_bid_ask")
 
-    async def get_current_price(self, *args, **kwargs):
+    async def get_current_price(self, *args: Any, **kwargs: Any) -> None:
         raise MarketDataForbiddenError("get_current_price")
 
-    async def get_pricing(self, *args, **kwargs):
+    async def get_pricing(self, *args: Any, **kwargs: Any) -> None:
         raise MarketDataForbiddenError("get_pricing")
 
     # ── Diagnostics ───────────────────────────────────────────────────────────

@@ -66,7 +66,7 @@ class OandaPaperClock:
         # Sharpe progress tracker — updated on every confirmed fill
         self._sharpe_tracker = self._init_sharpe_tracker()
 
-    def _init_sharpe_tracker(self):
+    def _init_sharpe_tracker(self) -> Any:
         """Initialise the SharpeProgressTracker, returning a stub on import failure."""
         try:
             from ml.train_advanced import SharpeProgressTracker
@@ -200,7 +200,7 @@ class OandaPaperClock:
         if self._sharpe_tracker is None:
             return {}
 
-        status = self._sharpe_tracker.update(float(trade_return))
+        status: dict[str, Any] = dict(self._sharpe_tracker.update(float(trade_return)))
 
         # ── Prometheus ────────────────────────────────────────────────────────
         try:
@@ -237,7 +237,7 @@ class OandaPaperClock:
                 "available": False,
                 "note": "SharpeProgressTracker not initialised",
             }
-        snap = self._sharpe_tracker.status()
+        snap: dict[str, Any] = dict(self._sharpe_tracker.status())
         snap["available"] = True
         return snap
 
@@ -366,7 +366,7 @@ class OandaPaperClock:
 
     def is_complete(self) -> bool:
         """Return True if the 30-day paper run is complete."""
-        return self.status().get("complete", False)
+        return bool(self.status().get("complete", False))
 
     def elapsed_days(self) -> float:
         """Return elapsed days as a float."""
@@ -417,7 +417,7 @@ def validate_oanda_account_at_startup() -> dict[str, Any]:
     """
     clock = get_clock()
     status = clock.status()
-    warnings: ClassVar[list] = []
+    warnings: list[str] = []
 
     account_id = status.get("account_id") or "PENDING"
     pending = status.get("pending_real_account", False) or account_id == "PENDING"
