@@ -131,18 +131,30 @@ const PerformanceMetrics: React.FC = () => {
     );
   }
 
+  const totalReturn   = perf.total_return_pct  ?? 0;
+  const sharpe        = perf.sharpe_ratio       ?? 0;
+  const sortino       = perf.sortino_ratio      ?? 0;
+  const maxDD         = perf.max_drawdown_pct   ?? 0;
+  const winRate       = perf.win_rate           ?? 0;
+  const profitFactor  = perf.profit_factor      ?? 0;
+  const totalTrades   = perf.total_trades       ?? 0;
+  const avgPnl        = perf.avg_trade_pnl      ?? 0;
+  const bestTrade     = perf.best_trade         ?? 0;
+  const worstTrade    = perf.worst_trade        ?? 0;
+  const cvar          = perf.cvar_95            ?? 0;
+
   const metrics: { label: string; value: string; positive?: boolean | null }[] = [
-    { label: 'Total Return',   value: fmtPct(perf.total_return_pct),  positive: perf.total_return_pct >= 0 ? true : false },
-    { label: 'Sharpe Ratio',   value: fmtRatio(perf.sharpe_ratio),    positive: perf.sharpe_ratio >= 1 ? true : perf.sharpe_ratio < 0 ? false : null },
-    { label: 'Sortino Ratio',  value: fmtRatio(perf.sortino_ratio),   positive: perf.sortino_ratio >= 1 ? true : perf.sortino_ratio < 0 ? false : null },
-    { label: 'Max Drawdown',   value: fmtPct(-Math.abs(perf.max_drawdown_pct)), positive: false },
-    { label: 'Win Rate',       value: fmtPct(perf.win_rate * 100),    positive: perf.win_rate >= 0.5 ? true : false },
-    { label: 'Profit Factor',  value: fmtRatio(perf.profit_factor),   positive: perf.profit_factor >= 1 ? true : false },
-    { label: 'Total Trades',   value: String(perf.total_trades) },
-    { label: 'Avg Trade P&L',  value: `$${perf.avg_trade_pnl.toFixed(2)}`, positive: perf.avg_trade_pnl >= 0 ? true : false },
-    { label: 'Best Trade',     value: `+$${perf.best_trade.toFixed(2)}`,   positive: true },
-    { label: 'Worst Trade',    value: `-$${Math.abs(perf.worst_trade).toFixed(2)}`, positive: false },
-    { label: 'CVaR 95%',       value: `$${perf.cvar_95.toFixed(2)}`,  positive: false },
+    { label: 'Total Return',   value: fmtPct(totalReturn),            positive: totalReturn >= 0 },
+    { label: 'Sharpe Ratio',   value: fmtRatio(sharpe),               positive: sharpe >= 1 ? true : sharpe < 0 ? false : null },
+    { label: 'Sortino Ratio',  value: fmtRatio(sortino),              positive: sortino >= 1 ? true : sortino < 0 ? false : null },
+    { label: 'Max Drawdown',   value: fmtPct(-Math.abs(maxDD)),       positive: false },
+    { label: 'Win Rate',       value: fmtPct(winRate * 100),          positive: winRate >= 0.5 },
+    { label: 'Profit Factor',  value: fmtRatio(profitFactor),         positive: profitFactor >= 1 },
+    { label: 'Total Trades',   value: String(totalTrades) },
+    { label: 'Avg Trade P&L',  value: `$${avgPnl.toFixed(2)}`,        positive: avgPnl >= 0 },
+    { label: 'Best Trade',     value: `+$${bestTrade.toFixed(2)}`,    positive: true },
+    { label: 'Worst Trade',    value: `-$${Math.abs(worstTrade).toFixed(2)}`, positive: false },
+    { label: 'CVaR 95%',       value: `$${cvar.toFixed(2)}`,          positive: false },
   ];
 
   return (
@@ -175,7 +187,8 @@ const TradeHistory: React.FC = () => {
     queryKey: ['trades', 'history'],
     queryFn:  async () => {
       const res = await tradingApi.trades(100);
-      return res.data as TradeRecord[];
+      const raw = res.data as TradeRecord[] | { trades: TradeRecord[] };
+      return Array.isArray(raw) ? raw : (raw?.trades ?? []);
     },
     staleTime:       60_000,
     refetchInterval: 60_000,

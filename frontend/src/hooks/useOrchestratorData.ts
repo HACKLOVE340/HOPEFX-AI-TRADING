@@ -177,7 +177,11 @@ export function usePerformanceSummary() {
   });
 
   useEffect(() => {
-    if (query.data) setPerformanceSummary(query.data);
+    // Only store if the response contains at least one numeric field — guards
+    // against empty-object responses from the API during cold-start.
+    if (query.data && typeof query.data.total_trades === 'number') {
+      setPerformanceSummary(query.data);
+    }
   }, [query.data, setPerformanceSummary]);
 
   return query;
@@ -217,14 +221,16 @@ export function usePositions() {
     queryKey: ['positions'],
     queryFn:  async () => {
       const res = await tradingApi.positions();
-      return res.data as Position[];
+      // Backend may return { positions: [...] } or a bare array
+      const raw = res.data as Position[] | { positions: Position[] };
+      return Array.isArray(raw) ? raw : (raw?.positions ?? []);
     },
     refetchInterval: wsStatus === 'connected' ? false : 10_000,
     staleTime:       5_000,
   });
 
   useEffect(() => {
-    if (query.data) setPositions(query.data);
+    if (Array.isArray(query.data)) setPositions(query.data);
   }, [query.data, setPositions]);
 
   return query;
