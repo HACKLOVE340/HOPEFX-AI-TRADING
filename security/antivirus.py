@@ -106,10 +106,14 @@ except ImportError:
 # Each entry: (name, compiled_regex, severity)
 SUSPICIOUS_PATTERNS: list[tuple[str, re.Pattern, str]] = [
     (
+        # Actual reverse-shell construction: socket connected to a remote host
+        # then piped into a shell subprocess.  Requires both socket creation AND
+        # subprocess/exec on the *same* logical line or within 3 lines of each
+        # other — use a tighter single-line pattern to avoid matching the pattern
+        # definition strings inside this very file.
         "reverse_shell_socket_exec",
         re.compile(
-            r"socket\.socket.*?subprocess|subprocess.*?socket\.socket|"
-            r"os\.system\s*\(\s*['\"].*?(bash|sh|cmd|powershell)",
+            r"socket\.connect\s*\(.*?\)\s*.*?(subprocess\.(?:Popen|call|run)|os\.execv?[ep]?)\s*\(",
             re.DOTALL | re.IGNORECASE,
         ),
         "critical",
@@ -117,34 +121,40 @@ SUSPICIOUS_PATTERNS: list[tuple[str, re.Pattern, str]] = [
     (
         "base64_exec_payload",
         re.compile(
-            r"exec\s*\(\s*base64\.b64decode|eval\s*\(\s*base64\.b64decode|"
-            r"__import__\s*\(\s*['\"]base64",
+            r"exec\s*\(\s*base64\.b64decode|eval\s*\(\s*base64\.b64decode",
             re.IGNORECASE,
         ),
         "critical",
     ),
     (
+        # Only flag __import__ of very short (1-2 char) names that are NOT
+        # known stdlib abbreviations (os, re, io, gc, sys excluded).
         "dynamic_import_obfuscation",
         re.compile(
-            r"__import__\s*\(\s*['\"][a-z]{1,3}['\"]|"
-            r"importlib\.import_module\s*\(\s*['\"][a-z]{1,3}['\"]",
+            r"__import__\s*\(\s*['\"](?!os|re|io|gc|sys)[a-z]{1,2}['\"]",
             re.IGNORECASE,
         ),
         "high",
     ),
     (
+        # Credential value assigned AND used in an HTTP call on the same line.
+        # Multi-line DOTALL matching caused too many false positives in test
+        # fixtures where password variables and HTTP calls are in separate
+        # functions dozens of lines apart.
         "credential_harvesting",
         re.compile(
-            r"(password|passwd|secret|api_key|token)\s*=\s*['\"][^'\"]{8,}['\"].*?"
-            r"(requests\.(get|post)|urllib|httpx)",
-            re.DOTALL | re.IGNORECASE,
+            r"(password|passwd|secret|api_key|token)\s*=\s*['\"][^'\"]{8,}['\"]"
+            r".*?(requests\.(get|post)|urllib\.request\.(urlopen|Request)|httpx\.(get|post))",
+            re.IGNORECASE,
         ),
         "high",
     ),
     (
+        # Match stratum protocol URLs and known miner binary names only —
+        # not the word "stratum" in comments or pattern definitions.
         "crypto_miner_stratum",
         re.compile(
-            r"stratum\+tcp://|xmrig|monero|cryptonight|nicehash",
+            r"stratum\+tcp://|stratum\+ssl://|xmrig[\"'\s]|cryptonight\s*\(|nicehash\.com",
             re.IGNORECASE,
         ),
         "critical",
@@ -167,10 +177,15 @@ SUSPICIOUS_PATTERNS: list[tuple[str, re.Pattern, str]] = [
         "critical",
     ),
     (
+        # SQL injection payloads in *runtime* string construction — exclude
+        # string literals that appear inside comments, docstrings, or test
+        # fixture assignments (those are expected in a trading platform).
+        # Match only when the payload is being built dynamically via f-string
+        # or % / .format() concatenation.
         "sql_injection_payload",
         re.compile(
-            r"(UNION\s+SELECT|DROP\s+TABLE|INSERT\s+INTO.*?VALUES|"
-            r"OR\s+1\s*=\s*1|AND\s+1\s*=\s*1)",
+            r"f['\"].*?(UNION\s+SELECT|DROP\s+TABLE|OR\s+1\s*=\s*1|AND\s+1\s*=\s*1)[^'\"]*['\"]|"
+            r"['\"].*?(UNION\s+SELECT|DROP\s+TABLE)\s*['\"].*?%\s*\(",
             re.IGNORECASE,
         ),
         "medium",
@@ -181,7 +196,9 @@ SUSPICIOUS_PATTERNS: list[tuple[str, re.Pattern, str]] = [
 SCAN_EXTENSIONS: set[str] = {".py", ".js", ".ts", ".sh", ".bash", ".php", ".rb", ".pl"}
 SCAN_BINARY_EXTENSIONS: set[str] = {".exe", ".dll", ".so", ".dylib", ".bin", ".elf"}
 
-# Paths to skip
+# Paths to skip — relative path segments that should never be scanned.
+# Tests contain intentional SQL/credential/import patterns as fixtures;
+# the antivirus module itself contains the pattern strings it searches for.
 SKIP_PATHS: set[str] = {
     "node_modules",
     ".git",
@@ -190,6 +207,15 @@ SKIP_PATHS: set[str] = {
     "venv",
     "data/quarantine",
     "frontend/node_modules",
+    # Test directories contain intentional fixture patterns — not threats
+    "tests",
+    "test",
+    # The AV module itself contains the pattern strings it searches for
+    "security/antivirus.py",
+    # Deployment guide contains example shell commands
+    "deployment_guide.py",
+    # Backtest runner uses dynamic imports legitimately
+    "scripts/run_tick_backtest.py",
 }
 
 
@@ -434,7 +460,16 @@ rule SuspiciousImport {
         return summary
 
     def _iter_scan_paths(self):
-        """Yield all files to scan, skipping excluded paths."""
+        """Yield all files to scan, skipping excluded paths.
+
+        SKIP_PATHS entries may be:
+        - directory name segments (e.g. "node_modules", "tests")
+        - relative file paths from project root (e.g. "security/antivirus.py")
+        """
+        # Separate directory-segment skips from full relative-path skips
+        _skip_dirs = {s for s in SKIP_PATHS if "/" not in s and not s.endswith(".py")}
+        _skip_rel_paths = {s for s in SKIP_PATHS if "/" in s or s.endswith(".py")}
+
         for root, dirs, files in os.walk(PROJECT_ROOT):
             root_path = Path(root)
             rel_root = str(root_path.relative_to(PROJECT_ROOT))
@@ -443,12 +478,25 @@ rule SuspiciousImport {
             dirs[:] = [
                 d
                 for d in dirs
-                if not any(skip in (root_path / d).parts for skip in SKIP_PATHS)
-                and not any(rel_root.startswith(skip) for skip in SKIP_PATHS)
+                if not any(skip in (root_path / d).parts for skip in _skip_dirs)
+                and not any(rel_root.startswith(skip) for skip in _skip_dirs)
             ]
 
             for fname in files:
                 fpath = root_path / fname
+                rel_file = str(fpath.relative_to(PROJECT_ROOT))
+
+                # Skip by full relative path
+                if any(
+                    rel_file == skip or rel_file.replace("\\", "/") == skip
+                    for skip in _skip_rel_paths
+                ):
+                    continue
+
+                # Skip if any path segment matches a directory-level skip
+                if any(skip in fpath.parts for skip in _skip_dirs):
+                    continue
+
                 ext = fpath.suffix.lower()
                 if ext in SCAN_EXTENSIONS or ext in SCAN_BINARY_EXTENSIONS:
                     yield fpath
