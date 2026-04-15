@@ -29,8 +29,7 @@ COPY --from=builder /root/.local /home/hopefx/.local
 ENV PATH=/home/hopefx/.local/bin:$PATH
 
 # Copy application
-COPY --chown=hopefx:hopefx src/ ./src/
-COPY --chown=hopefx:hopefx pyproject.toml .
+COPY --chown=hopefx:hopefx . .
 
 # Switch to non-root
 USER hopefx
@@ -41,4 +40,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 EXPOSE 8000
 
-ENTRYPOINT ["python", "-m", "uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["python", "app.py"]

@@ -1,5 +1,3 @@
-version: "3.9"
-
 # HOPEFX AI Trading — full stack
 # Usage:
 #   cp .env.example .env && docker compose up -d
