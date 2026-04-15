@@ -58,9 +58,11 @@ class _TokenBlacklist:
 
             host = os.getenv("REDIS_HOST", "localhost")
             port = int(os.getenv("REDIS_PORT", "6379"))
+            password = os.getenv("REDIS_PASSWORD") or None
             self._redis = _redis_lib.Redis(
                 host=host,
                 port=port,
+                password=password,
                 socket_connect_timeout=0.5,
                 decode_responses=True,
                 retry_on_error=[],
