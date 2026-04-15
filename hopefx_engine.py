@@ -384,8 +384,8 @@ class HopeFXEngine:
             self._brain.inject(ml_predictor=self._predictor)
             logger.info(
                 "AdvancedPredictor loaded — OOS acc=%.4f  AUC=%.4f",
-                self._predictor.meta.get("oos_accuracy", 0),
-                self._predictor.meta.get("oos_auc", 0),
+                self._predictor.meta.get("oos_accuracy") or 0.0,
+                self._predictor.meta.get("oos_auc") or 0.0,
             )
         except Exception as exc:
             logger.warning("AdvancedPredictor load failed (will degrade): %s", exc)
