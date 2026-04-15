@@ -229,6 +229,15 @@ jobs:
             "pytest>=7.4.3" "pytest-cov>=4.1.0" "pytest-asyncio>=0.23.6" \
             "pytest-timeout>=2.2.0" bandit coverage
 
+      - name: Alembic migration smoke test
+        # Verify all migrations apply cleanly to a fresh schema.
+        # Uses the sync postgresql:// driver (psycopg2-binary) so Alembic's
+        # synchronous engine works without asyncpg.
+        # DB_URL uses the asyncpg prefix for the app; we strip it here.
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/hopefx  # pragma: allowlist secret
+        run: alembic upgrade head
+
       - name: Run ruff (lint + format check)
         run: |
           pip install "ruff>=0.9.0,<0.10.0"
