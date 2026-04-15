@@ -12,6 +12,7 @@ Provides ATR-based, fixed-risk, and Kelly-criterion position sizing.
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Any
 
 
 class PositionSizer:
@@ -44,7 +45,7 @@ class PositionSizer:
 
     def calculate_size(
         self,
-        account,
+        account: Any,
         entry_price: Decimal,
         atr: Decimal | None = None,
         stop_distance: Decimal | None = None,
@@ -63,10 +64,15 @@ class PositionSizer:
         win_rate      : Historical win rate 0-1 (required for 'kelly')
         payoff_ratio  : avg_win / avg_loss (required for 'kelly')
         """
-        equity = getattr(account, "equity", None) or getattr(
+        _equity_raw = getattr(account, "equity", None) or getattr(
             account,
             "balance",
             Decimal(0),
+        )
+        equity: Decimal = (
+            _equity_raw
+            if isinstance(_equity_raw, Decimal)
+            else Decimal(str(_equity_raw))
         )
 
         if self.method == "atr":
