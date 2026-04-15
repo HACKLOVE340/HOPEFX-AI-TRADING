@@ -1,0 +1,9 @@
+{
+  "scanned_files": 752,
+  "new_threats": 0,
+  "total_threats": 0,
+  "scan_duration_s": 55.17,
+  "completed_at": "2026-04-15T20:57:08.921050+00:00",
+  "yara_enabled": false,
+  "clamd_enabled": false
+}
