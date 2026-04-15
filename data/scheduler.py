@@ -112,9 +112,11 @@ _YF_INTERVAL_MAP: dict[str, str] = {
     "M": "1mo",
 }
 
-# yfinance lookback period for each granularity (intraday data has limits)
+# yfinance lookback period for each granularity (intraday data has limits).
+# Yahoo Finance enforces an 8-calendar-day cap on 1m data per request;
+# "5d" keeps us safely inside that window regardless of day-of-week.
 _YF_PERIOD_MAP: dict[str, str] = {
-    "M1": "7d",
+    "M1": "5d",
     "M5": "60d",
     "M15": "60d",
     "M30": "60d",
@@ -284,6 +286,17 @@ async def _fetch_yfinance(
 
         if from_dt is not None:
             end_dt = datetime.now(UTC)
+            # Guard: Yahoo rejects requests where start >= end (can happen for
+            # monthly bars when from_dt falls in the current or a future month).
+            if from_dt >= end_dt:
+                logger.warning(
+                    "yfinance: from_dt %s >= end_dt %s for %s/%s — skipping fetch",
+                    from_dt.strftime("%Y-%m-%d"),
+                    end_dt.strftime("%Y-%m-%d"),
+                    yf_symbol,
+                    interval,
+                )
+                return []
             hist = await loop.run_in_executor(
                 None,
                 lambda: yf.download(
@@ -315,12 +328,21 @@ async def _fetch_yfinance(
     bars: ClassVar[list[dict]] = []
     for ts, row in hist.iterrows():
         try:
-            # Normalise timestamp to ISO format without timezone
-            if hasattr(ts, "tz_convert"):
-                ts_str = ts.tz_convert(None).strftime("%Y-%m-%dT%H:%M:%S")
-            elif hasattr(ts, "strftime"):
-                ts_str = ts.strftime("%Y-%m-%dT%H:%M:%S")
-            else:
+            # Normalise timestamp to a tz-naive ISO string for CSV storage.
+            # yfinance may return tz-aware or tz-naive DatetimeIndex depending
+            # on the interval and version; handle both cases explicitly.
+            try:
+                import pandas as _pd
+                if isinstance(ts, _pd.Timestamp):
+                    if ts.tzinfo is not None:
+                        # tz-aware → convert to UTC then strip tz
+                        ts_str = ts.tz_convert("UTC").tz_localize(None).strftime("%Y-%m-%dT%H:%M:%S")
+                    else:
+                        # already tz-naive
+                        ts_str = ts.strftime("%Y-%m-%dT%H:%M:%S")
+                else:
+                    ts_str = str(ts)[:19]
+            except Exception:
                 ts_str = str(ts)[:19]
 
             bars.append(
