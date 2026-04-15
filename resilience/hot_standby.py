@@ -229,6 +229,13 @@ class HotStandbyReplicator:
 
     async def start(self) -> None:
         """Start replication loops. Resolves role if STANDBY_ROLE=auto."""
+        if self._redis is None:
+            logger.warning(
+                "HotStandbyReplicator: Redis unavailable — replication disabled pod=%s",
+                self._pod_id,
+            )
+            return
+
         self._running = True
 
         if _ROLE_ENV == "auto":
@@ -269,7 +276,7 @@ class HotStandbyReplicator:
 
         Call this before a planned shutdown or rolling restart.
         """
-        if self._role != Role.PRIMARY:
+        if self._role != Role.PRIMARY or self._redis is None:
             return
         try:
             await self._redis.delete(_KEY_LEADER)
@@ -371,6 +378,9 @@ class HotStandbyReplicator:
         """
         while self._running:
             await asyncio.sleep(_HEARTBEAT_INTERVAL_S)
+            if self._redis is None:
+                logger.debug("Standby monitor: Redis unavailable — skipping heartbeat check")
+                continue
             try:
                 raw = await self._redis.get(_KEY_HEARTBEAT)
                 if raw is None:
@@ -416,6 +426,8 @@ class HotStandbyReplicator:
 
         Returns True if this pod is now the leader.
         """
+        if self._redis is None:
+            return False
         try:
             ttl_ms = int(_LEADER_TTL_S * 1000)
             result = await self._redis.set(
@@ -497,6 +509,8 @@ class HotStandbyReplicator:
 
     async def _write_state_snapshot(self) -> None:
         """Atomically write position/equity/fill state to Redis."""
+        if self._redis is None:
+            return
         version = self._stats.state_version + 1
 
         positions_json = json.dumps(self._positions, default=str)
@@ -525,6 +539,8 @@ class HotStandbyReplicator:
 
     async def _restore_state_snapshot(self) -> StateSnapshot | None:
         """Read state snapshot from Redis. Returns None if unavailable."""
+        if self._redis is None:
+            return None
         try:
             pos_raw = await self._redis.get(_KEY_POSITIONS)
             equity_raw = await self._redis.get(_KEY_EQUITY)
