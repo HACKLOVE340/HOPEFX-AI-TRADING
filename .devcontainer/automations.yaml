@@ -1,0 +1,21 @@
+services:
+  backend:
+    name: "FastAPI Backend"
+    description: "HOPEFX AI Trading API server (port 8000)"
+    command: >
+      cd /workspaces/HOPEFX-AI-TRADING &&
+      OTEL_ENABLED=false APP_ENV=development
+      python3 -m uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+    ready-on:
+      http-request:
+        url: http://localhost:8000/health
+        timeout-seconds: 60
+
+  frontend:
+    name: "React Frontend (Vite dev)"
+    description: "Vite dev server with HMR and /api proxy to backend (port 5173)"
+    command: cd /workspaces/HOPEFX-AI-TRADING/frontend && npm run dev
+    ready-on:
+      http-request:
+        url: http://localhost:5173
+        timeout-seconds: 30
