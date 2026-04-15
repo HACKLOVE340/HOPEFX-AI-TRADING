@@ -235,7 +235,7 @@ const Profile: React.FC = () => {
   if (loading) return <div style={s.loading}>Loading profile…</div>;
   if (!profile) return <div style={s.loading}>Profile not found.</div>;
 
-  const rrRatio = profile.avg_loss > 0 ? (profile.avg_win / profile.avg_loss).toFixed(2) : '—';
+  const rrRatio = (profile.avg_loss ?? 0) > 0 ? ((profile.avg_win ?? 0) / (profile.avg_loss ?? 1)).toFixed(2) : '—';
   const memberSince = profile.created_at
     ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
     : '—';
@@ -293,17 +293,17 @@ const Profile: React.FC = () => {
         {/* Follower counts */}
         <div style={s.socialRow}>
           <div style={s.socialStat}>
-            <span style={s.socialNum}>{profile.total_followers.toLocaleString()}</span>
+            <span style={s.socialNum}>{(profile.total_followers ?? 0).toLocaleString()}</span>
             <span style={s.socialLabel}>Followers</span>
           </div>
           <div style={s.socialDivider} />
           <div style={s.socialStat}>
-            <span style={s.socialNum}>{profile.total_following.toLocaleString()}</span>
+            <span style={s.socialNum}>{(profile.total_following ?? 0).toLocaleString()}</span>
             <span style={s.socialLabel}>Following</span>
           </div>
           <div style={s.socialDivider} />
           <div style={s.socialStat}>
-            <span style={s.socialNum}>{profile.total_trades.toLocaleString()}</span>
+            <span style={s.socialNum}>{(profile.total_trades ?? 0).toLocaleString()}</span>
             <span style={s.socialLabel}>Trades</span>
           </div>
         </div>
@@ -311,12 +311,12 @@ const Profile: React.FC = () => {
 
       {/* ── Stats grid ── */}
       <div style={s.statsGrid}>
-        <StatCard label="Win Rate"    value={`${profile.win_rate.toFixed(1)}%`}  color={profile.win_rate >= 50 ? '#4ade80' : '#f87171'} />
-        <StatCard label="Total P&L"   value={fmtUSD(profile.total_pnl)}          color={profile.total_pnl >= 0 ? '#4ade80' : '#f87171'} />
-        <StatCard label="Avg Win"     value={`$${fmt(profile.avg_win)}`}          color="#4ade80" />
-        <StatCard label="Avg Loss"    value={`$${fmt(profile.avg_loss)}`}         color="#f87171" />
-        <StatCard label="R:R Ratio"   value={`1:${rrRatio}`}                      color="#60a5fa" />
-        <StatCard label="Sharpe"      value={profile.sharpe_ratio.toFixed(2)}     color={profile.sharpe_ratio >= 1 ? '#4ade80' : '#facc15'} />
+        <StatCard label="Win Rate"    value={`${(profile.win_rate ?? 0).toFixed(1)}%`}  color={(profile.win_rate ?? 0) >= 50 ? '#4ade80' : '#f87171'} />
+        <StatCard label="Total P&L"   value={fmtUSD(profile.total_pnl ?? 0)}          color={(profile.total_pnl ?? 0) >= 0 ? '#4ade80' : '#f87171'} />
+        <StatCard label="Avg Win"     value={`$${fmt(profile.avg_win ?? 0)}`}          color="#4ade80" />
+        <StatCard label="Avg Loss"    value={`$${fmt(profile.avg_loss ?? 0)}`}         color="#f87171" />
+        <StatCard label="R:R Ratio"   value={`1:${rrRatio}`}                           color="#60a5fa" />
+        <StatCard label="Sharpe"      value={(profile.sharpe_ratio ?? 0).toFixed(2)}   color={(profile.sharpe_ratio ?? 0) >= 1 ? '#4ade80' : '#facc15'} />
       </div>
 
       {/* ── Tabs ── */}
@@ -349,27 +349,27 @@ const Profile: React.FC = () => {
         <div style={s.card}>
           <div style={s.perfRow}>
             <div style={s.perfLabel}>Total Trades</div>
-            <div style={s.perfValue}>{profile.total_trades.toLocaleString()}</div>
+            <div style={s.perfValue}>{(profile.total_trades ?? 0).toLocaleString()}</div>
           </div>
           <div style={s.perfRow}>
             <div style={s.perfLabel}>Win Rate</div>
-            <div style={{ ...s.perfValue, color: profile.win_rate >= 50 ? '#4ade80' : '#f87171' }}>
-              {profile.win_rate.toFixed(1)}%
+            <div style={{ ...s.perfValue, color: (profile.win_rate ?? 0) >= 50 ? '#4ade80' : '#f87171' }}>
+              {(profile.win_rate ?? 0).toFixed(1)}%
             </div>
           </div>
           <div style={s.perfRow}>
             <div style={s.perfLabel}>Total P&L</div>
-            <div style={{ ...s.perfValue, color: profile.total_pnl >= 0 ? '#4ade80' : '#f87171' }}>
-              {fmtUSD(profile.total_pnl)}
+            <div style={{ ...s.perfValue, color: (profile.total_pnl ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>
+              {fmtUSD(profile.total_pnl ?? 0)}
             </div>
           </div>
           <div style={s.perfRow}>
             <div style={s.perfLabel}>Average Win</div>
-            <div style={{ ...s.perfValue, color: '#4ade80' }}>${fmt(profile.avg_win)}</div>
+            <div style={{ ...s.perfValue, color: '#4ade80' }}>${fmt(profile.avg_win ?? 0)}</div>
           </div>
           <div style={s.perfRow}>
             <div style={s.perfLabel}>Average Loss</div>
-            <div style={{ ...s.perfValue, color: '#f87171' }}>${fmt(profile.avg_loss)}</div>
+            <div style={{ ...s.perfValue, color: '#f87171' }}>${fmt(profile.avg_loss ?? 0)}</div>
           </div>
           <div style={s.perfRow}>
             <div style={s.perfLabel}>Risk:Reward</div>
@@ -377,8 +377,8 @@ const Profile: React.FC = () => {
           </div>
           <div style={s.perfRow}>
             <div style={s.perfLabel}>Sharpe Ratio</div>
-            <div style={{ ...s.perfValue, color: profile.sharpe_ratio >= 1 ? '#4ade80' : '#facc15' }}>
-              {profile.sharpe_ratio.toFixed(2)}
+            <div style={{ ...s.perfValue, color: (profile.sharpe_ratio ?? 0) >= 1 ? '#4ade80' : '#facc15' }}>
+              {(profile.sharpe_ratio ?? 0).toFixed(2)}
             </div>
           </div>
         </div>
