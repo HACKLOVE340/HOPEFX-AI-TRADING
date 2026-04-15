@@ -56,10 +56,17 @@ export const tradingApi = {
   placeOrder:     (order: object) => api.post('/trading/orders', order),
   closePosition:  (id: string)    => api.delete(`/trading/positions/${id}`),
   closeAllPositions: ()           => api.delete('/trading/positions'),
-  trades:         (limit = 100)   => api.get('/trading/trades', { params: { limit } }),
-  regime:         ()              => api.get('/trading/regime'),
+  trades:         (params?: { symbol?: string; limit?: number } | number) => {
+    const limit  = typeof params === 'number' ? params : (params?.limit ?? 100);
+    const symbol = typeof params === 'object' ? params?.symbol : undefined;
+    return api.get('/trading/trades', { params: { limit, ...(symbol ? { symbol } : {}) } });
+  },
+  regime:         (symbol?: string) => api.get('/trading/regime', { params: symbol ? { symbol } : {} }),
   brainState:     ()              => api.get('/trading/brain-state'),
   emergencyStop:  ()              => api.post('/trading/emergency-stop'),
+  aiAnalysis:     (payload: { symbol: string; price?: number; timeframe?: string }) =>
+    api.post('/trading/ai-analysis', payload),
+  riskMetrics:    ()              => api.get('/trading/risk'),
 };
 
 // ── Backtesting ───────────────────────────────────────────────────────────────
