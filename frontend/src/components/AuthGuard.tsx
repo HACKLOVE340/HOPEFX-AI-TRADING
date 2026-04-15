@@ -2,14 +2,19 @@
  * AuthGuard — redirects unauthenticated users to /login.
  * Preserves the attempted URL so login can redirect back.
  *
- * Also checks JWT expiry on every render: if the persisted token is already
- * expired the store is cleared immediately, preventing a stale
- * isAuthenticated=true from bypassing the guard after a page reload.
+ * On every mount it fetches /api/auth/me and syncs the user object
+ * (including role) from the server. This ensures a role change (e.g.
+ * admin → superadmin) is reflected immediately without requiring a
+ * logout/login cycle, even when the old role is cached in localStorage.
+ *
+ * Also checks JWT expiry: if the persisted token is already expired the
+ * store is cleared immediately, preventing stale isAuthenticated=true.
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useStore, selectIsAuth } from '../store';
+import { authApi } from '../hooks/useApi';
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -34,17 +39,39 @@ function isTokenExpired(token: string | null): boolean {
 }
 
 export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requiredRole }) => {
-  const isAuth  = useStore(selectIsAuth);
-  const token   = useStore((s) => s.token);
-  const user    = useStore((s) => s.user);
+  const isAuth    = useStore(selectIsAuth);
+  const token     = useStore((s) => s.token);
+  const user      = useStore((s) => s.user);
+  const setAuth   = useStore((s) => s.setAuth);
   const clearAuth = useStore((s) => s.clearAuth);
   const location  = useLocation();
+
+  // Track whether we've already synced this session so we don't loop.
+  const synced = useRef(false);
 
   useEffect(() => {
     if (isAuth && isTokenExpired(token)) {
       clearAuth();
+      return;
     }
-  }, [isAuth, token, clearAuth]);
+    // Fetch fresh user profile once per mount to pick up any role changes
+    // that happened server-side since the token was issued / cached.
+    if (isAuth && token && !synced.current) {
+      synced.current = true;
+      authApi.me()
+        .then((res) => {
+          const fresh = res.data;
+          // Only update if something actually changed (avoids unnecessary re-renders)
+          if (fresh && user && (fresh.role !== user.role || fresh.email !== user.email)) {
+            setAuth(token, fresh);
+          }
+        })
+        .catch(() => {
+          // /me failed (expired / revoked token) — clear session
+          clearAuth();
+        });
+    }
+  }, [isAuth, token, user, setAuth, clearAuth]);
 
   if (!isAuth || isTokenExpired(token)) {
     return <Navigate to="/login" state={{ from: location }} replace />;
