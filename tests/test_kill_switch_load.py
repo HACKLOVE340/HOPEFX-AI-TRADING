@@ -465,9 +465,7 @@ class TestActivationLatency:
         elapsed_ms = (time.perf_counter() - t0) * 1000
 
         assert ks.is_active(), "kill switch must be active after activate()"
-        assert elapsed_ms < self._SLA_MS, (
-            f"activate() took {elapsed_ms:.2f} ms — exceeds {self._SLA_MS} ms SLA"
-        )
+        assert elapsed_ms < self._SLA_MS, f"activate() took {elapsed_ms:.2f} ms — exceeds {self._SLA_MS} ms SLA"
 
     def test_activation_latency_under_concurrent_load(self, tmp_path):
         """activate() SLA holds even when 100 threads call it simultaneously."""
@@ -499,8 +497,7 @@ class TestActivationLatency:
         assert ks.is_active()
         worst_ms = max(timings)
         assert worst_ms < self._SLA_MS, (
-            f"Worst-case activate() under 100-thread load: {worst_ms:.2f} ms "
-            f"— exceeds {self._SLA_MS} ms SLA"
+            f"Worst-case activate() under 100-thread load: {worst_ms:.2f} ms — exceeds {self._SLA_MS} ms SLA"
         )
 
 
