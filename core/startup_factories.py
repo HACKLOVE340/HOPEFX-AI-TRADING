@@ -259,18 +259,33 @@ async def init_database(s: Any) -> Any:
 
     engine = create_engine(conn_str, **engine_kwargs)
     try:
-        from alembic.config import Config as AlembicConfig
-
         from alembic import command as alembic_command
+        from alembic.config import Config as AlembicConfig
+        from alembic.runtime.migration import MigrationContext
 
         alembic_cfg = AlembicConfig("alembic.ini")
         alembic_cfg.set_main_option("sqlalchemy.url", conn_str)
+
+        # Determine current revision before attempting upgrade so we can
+        # distinguish "already at head" (no-op) from a genuine failure.
+        with engine.connect() as _conn:
+            _mctx = MigrationContext.configure(_conn)
+            _current_rev = _mctx.get_current_revision()
+
         alembic_command.upgrade(alembic_cfg, "head")
-        logger.info("Database migrations applied (alembic upgrade head)")
+        logger.info(
+            "Database migrations applied (alembic upgrade head, was=%s)",
+            _current_rev or "none",
+        )
     except Exception as exc:
+        # If the schema already exists (e.g. created by a previous create_all
+        # run before Alembic was introduced) the initial migration will fail
+        # with "table X already exists".  Fall back to create_all with
+        # checkfirst=True so existing tables are left untouched.
         logger.warning("Alembic migration failed (%s), falling back to create_all", exc)
         try:
-            Base.metadata.create_all(engine)
+            Base.metadata.create_all(engine, checkfirst=True)
+            logger.info("Database schema ensured via create_all (checkfirst=True)")
         except Exception as exc2:
             logger.warning("create_all also failed: %s", exc2)
     s.db_engine = engine
