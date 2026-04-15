@@ -79,9 +79,9 @@
     <div class="success-box" id="successBox"></div>
     <form id="loginForm" novalidate>
       <div class="field">
-        <label for="username">Email or Username</label>
-        <input type="text" id="username" name="username"
-               placeholder="admin@hopefx.io" autocomplete="username" required />
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email"
+               placeholder="admin@hopefx.io" autocomplete="email" required />
       </div>
       <div class="field">
         <label for="password">Password</label>
@@ -114,15 +114,15 @@
       e.preventDefault();
       errorBox.classList.remove('visible');
       successBox.classList.remove('visible');
-      const username = document.getElementById('username').value.trim();
+      const email    = document.getElementById('email').value.trim().toLowerCase();
       const password = document.getElementById('password').value;
-      if (!username || !password) { showError('Please enter your email/username and password.'); return; }
+      if (!email || !password) { showError('Please enter your email and password.'); return; }
       setLoading(true);
       try {
         const res  = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password }),
+          body: JSON.stringify({ email, password }),
         });
         let data;
         try { data = await res.json(); } catch { data = {}; }
