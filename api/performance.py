@@ -51,32 +51,112 @@ class PublicPerformance(BaseModel):
 
 def _load_equity_curve() -> list[EquityPoint]:
     """
-    Load equity curve from the paper trading engine if available.
-    Falls back to an empty list — the frontend handles the empty case.
-    """
-    try:
-        from app import app_state
+    Load equity curve from the live engine or DB trade history.
 
-        broker = getattr(app_state, "broker", None)
+    Priority:
+      1. Live HopeFXEngine fill history (most accurate — includes unrealised P&L)
+      2. DB Trade table (persisted closed trades — used when engine is not running)
+      3. Broker equity history (broker-reported snapshots)
+      4. Empty list — frontend handles the empty case gracefully
+    """
+    # ── 1. Live engine fill history ───────────────────────────────────────────
+    try:
+        from app import app_state as _app_state
+
+        engine = getattr(_app_state, "hopefx_engine", None)
+        if engine is not None:
+            fills = list(getattr(engine, "_fill_history", []))
+            if fills:
+                starting = float(getattr(engine, "_starting_equity", 10_000.0))
+                equity = starting
+                points: list[EquityPoint] = []
+                for f in sorted(fills, key=lambda x: x.filled_at):
+                    equity += float(getattr(f, "pnl", 0.0) or 0.0)
+                    ts = f.filled_at.timestamp() if hasattr(f.filled_at, "timestamp") else float(f.filled_at)
+                    points.append(EquityPoint(time=ts, value=round(equity, 4)))
+                if points:
+                    return points
+    except Exception as exc:
+        logger.debug("engine fill history load failed: %s", exc)
+
+    # ── 2. DB Trade table (closed trades) ────────────────────────────────────
+    try:
+        from app import app_state as _app_state_db
+        from database.models import Trade, TradeStatus
+
+        session_factory = getattr(_app_state_db, "db_session_factory", None)
+        if session_factory is not None:
+            db = session_factory()
+            try:
+                trades = (
+                    db.query(Trade)
+                    .filter(Trade.status == TradeStatus.CLOSED, Trade.exit_time.isnot(None))
+                    .order_by(Trade.exit_time.asc())
+                    .all()
+                )
+                if trades:
+                    equity = 10_000.0  # default starting equity
+                    points = []
+                    for t in trades:
+                        equity += float(t.realized_pnl or 0.0)
+                        ts = t.exit_time.timestamp() if hasattr(t.exit_time, "timestamp") else 0.0
+                        points.append(EquityPoint(time=ts, value=round(equity, 4)))
+                    if points:
+                        return points
+            finally:
+                db.close()
+    except Exception as exc:
+        logger.debug("DB trade history load failed: %s", exc)
+
+    # ── 3. Broker equity history ──────────────────────────────────────────────
+    try:
+        from app import app_state as _app_state2
+
+        broker = getattr(_app_state2, "broker", None)
         if broker and hasattr(broker, "get_equity_history"):
             history = broker.get_equity_history()
-            return [EquityPoint(time=float(t), value=float(v)) for t, v in history]
+            if history:
+                return [EquityPoint(time=float(t), value=float(v)) for t, v in history]
     except Exception as exc:
-        logger.debug("equity curve load failed: %s", exc)
+        logger.debug("broker equity history load failed: %s", exc)
+
     return []
+
+
+def _db_trade_count() -> int:
+    """Return the count of closed trades from the DB, or 0 on any error."""
+    try:
+        from app import app_state as _app_state_cnt
+        from database.models import Trade, TradeStatus
+
+        session_factory = getattr(_app_state_cnt, "db_session_factory", None)
+        if session_factory is not None:
+            db = session_factory()
+            try:
+                return db.query(Trade).filter(Trade.status == TradeStatus.CLOSED).count()
+            finally:
+                db.close()
+    except Exception as exc:
+        logger.debug("DB trade count failed: %s", exc)
+    return 0
 
 
 def _compute_public_stats(curve: list[EquityPoint]) -> PublicPerformance:
     """Compute honest public stats from the equity curve."""
     if not curve:
+        db_count = _db_trade_count()
         return PublicPerformance(
-            total_trades=0,
+            total_trades=db_count,
             win_rate=None,
             avg_return_pct=None,
             sharpe=None,
             max_drawdown_pct=0.0,
             start_date="—",
-            note="Paper trading not yet started. Deploy and run for 30+ days.",
+            note=(
+                f"Engine not running. {db_count} closed trades in DB."
+                if db_count > 0
+                else "Paper trading not yet started. Deploy and run for 30+ days."
+            ),
         )
 
     values = [p.value for p in curve]
