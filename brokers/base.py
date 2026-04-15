@@ -25,7 +25,11 @@ logger = logging.getLogger(__name__)
 _F = TypeVar("_F", bound=Callable[..., Any])
 
 
-def with_retry(max_attempts: int = 3, backoff: float = 1.0, exceptions=(Exception,)):
+def with_retry(
+    max_attempts: int = 3,
+    backoff: float = 1.0,
+    exceptions: tuple[type[Exception], ...] = (Exception,),
+) -> Callable[[_F], _F]:
     """
     Decorator: retry a broker call up to *max_attempts* times with exponential
     backoff.  Works on both sync and async callables.
@@ -40,7 +44,7 @@ def with_retry(max_attempts: int = 3, backoff: float = 1.0, exceptions=(Exceptio
         if asyncio.iscoroutinefunction(fn):
 
             @functools.wraps(fn)
-            async def async_wrapper(*args, **kwargs):
+            async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
                 delay = backoff
                 last_exc: Exception = RuntimeError("no attempts made")
                 for attempt in range(1, max_attempts + 1):
@@ -71,7 +75,7 @@ def with_retry(max_attempts: int = 3, backoff: float = 1.0, exceptions=(Exceptio
             return async_wrapper  # type: ignore[return-value]
 
         @functools.wraps(fn)
-        def sync_wrapper(*args, **kwargs):
+        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
             delay = backoff
             last_exc: Exception = RuntimeError("no attempts made")
             for attempt in range(1, max_attempts + 1):
@@ -209,10 +213,10 @@ class AccountInfo:
     positions_count: int
     timestamp: datetime | None = None
 
-    def __getitem__(self, key: str):
+    def __getitem__(self, key: str) -> Any:
         return getattr(self, key)
 
-    def get(self, key: str, default=None):
+    def get(self, key: str, default: Any = None) -> Any:
         return getattr(self, key, default)
 
 
@@ -272,7 +276,7 @@ class BrokerConnector(ABC):
         quantity: float,
         price: float | None = None,
         stop_price: float | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> Order:
         """
         Place an order.
