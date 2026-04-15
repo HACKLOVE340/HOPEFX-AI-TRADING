@@ -145,9 +145,18 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    """Accept either ``email`` or ``username`` — one of the two is required."""
+
+    email: str | None = Field(None, description="User email address")
+    username: str | None = Field(None, description="Username (alternative to email)")
     password: str = Field(..., min_length=1)
     totp_code: str | None = Field(None, min_length=6, max_length=8)
+
+    @property
+    def resolved_email(self) -> str | None:
+        """Return whichever identifier was supplied, normalised to lowercase."""
+        val = self.email or self.username
+        return val.strip().lower() if val else None
 
 
 class RefreshRequest(BaseModel):
@@ -304,14 +313,44 @@ async def resend_verification(body: ForgotPasswordRequest, request: Request):
 
 @router.post("/login")
 async def login(body: LoginRequest, request: Request):
-    """Authenticate and receive access + refresh tokens."""
+    """Authenticate and receive access + refresh tokens.
+
+    Accepts either ``email`` or ``username`` in the request body.
+    When a username is supplied it is resolved to an email before
+    the credential check so the auth service always works with emails.
+    """
+    if not body.email and not body.username:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Either 'email' or 'username' is required.",
+        )
+
     _check_ip_rate_limit(_get_client_ip(request))
     ip = _client_ip(request)
     device = request.headers.get("User-Agent", "")
+
+    identifier = body.resolved_email  # normalised email or username
+
+    # If the identifier is not an email address, resolve username → email.
+    resolved_email = identifier
+    if identifier and "@" not in identifier:
+        try:
+            user_obj = await asyncio.to_thread(_svc().get_user_by_username, identifier)
+            if user_obj:
+                resolved_email = user_obj.email
+            else:
+                # Unknown username — return generic 401 (no user enumeration)
+                raise HTTPException(status_code=401, detail="Invalid credentials")
+        except HTTPException:
+            raise
+        except Exception as _exc:
+            logger.debug("Username lookup failed: %s", _exc)
+            raise HTTPException(status_code=401, detail="Invalid credentials") from _exc
+
     ok, msg, tokens = await asyncio.to_thread(
         functools.partial(
             _svc().login,
-            email=body.email,
+            email=resolved_email,
             password=body.password,
             ip_address=ip,
             device_info=device,
@@ -326,7 +365,7 @@ async def login(body: LoginRequest, request: Request):
         from core.email_service import send_login_alert
 
         user = tokens.get("user", {})
-        send_login_alert(body.email, user.get("username", body.email), ip, device[:80])
+        send_login_alert(resolved_email, user.get("username", resolved_email), ip, device[:80])
     except Exception as _exc:
         logger.debug("Suppressed exception: %s", _exc)
 
