@@ -629,7 +629,7 @@ async def preview_indicator(
         }
     except ValueError as exc:
         logger.warning("evaluate_indicator validation error: %s", exc)
-        raise HTTPException(status_code=400, detail="Invalid formula or symbol") from None
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/api/indicators")
@@ -830,21 +830,35 @@ async def get_cot_gold(user: TokenPayload = Depends(get_current_user)):
         req = urllib.request.Request(url, headers={"Accept": "application/json"})
         with urllib.request.urlopen(req, timeout=5) as resp:  # nosec B310 - hardcoded https:// CFTC public API URL
             data = json.loads(resp.read())
-            if data.get("records"):
-                rec = data["records"][0]["record"]["fields"]
-                net_long = int(rec.get("noncomm_positions_long_all", 0)) - int(
-                    rec.get("noncomm_positions_short_all", 0),
+            records = data.get("records") or []
+            if not records:
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "error": "cftc_no_records",
+                        "message": (
+                            "CFTC API returned no records for gold futures. "
+                            "Data is published weekly — retry after the next report release."
+                        ),
+                    },
                 )
-                return {
-                    "report_date": rec.get("report_date_as_yyyy_mm_dd", ""),
-                    "net_speculator_long": net_long,
-                    "long_positions": int(rec.get("noncomm_positions_long_all", 0)),
-                    "short_positions": int(rec.get("noncomm_positions_short_all", 0)),
-                    "sentiment": "BULLISH" if net_long > 0 else "BEARISH",
-                    "sentiment_strength": "STRONG" if abs(net_long) > 100000 else "MODERATE",
-                    "source": "CFTC",
-                    "note": "Non-commercial (speculator) net positions in COMEX gold futures.",
-                }
+            rec = records[0]["record"]["fields"]
+            net_long = int(rec.get("noncomm_positions_long_all", 0)) - int(
+                rec.get("noncomm_positions_short_all", 0),
+            )
+            return {
+                "report_date": rec.get("report_date_as_yyyy_mm_dd", ""),
+                "net_speculator_long": net_long,
+                "long_positions": int(rec.get("noncomm_positions_long_all", 0)),
+                "short_positions": int(rec.get("noncomm_positions_short_all", 0)),
+                "sentiment": "BULLISH" if net_long > 0 else "BEARISH",
+                "sentiment_strength": "STRONG" if abs(net_long) > 100000 else "MODERATE",
+                "weekly_change": 0,  # requires prior week comparison — not in single-record fetch
+                "source": "CFTC",
+                "note": "Non-commercial (speculator) net positions in COMEX gold futures.",
+            }
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.warning("CFTC API unavailable: %s", exc)
         raise HTTPException(
@@ -974,7 +988,16 @@ async def run_monte_carlo(
             ),
         )
 
-    mc = _run_monte_carlo(win_rate, avg_win, avg_loss, n_trades, capital, req.simulations)
+    mc = _run_monte_carlo(
+        _MonteCarloParams(
+            win_rate=win_rate,
+            avg_win=avg_win,
+            avg_loss=avg_loss,
+            total_trades=n_trades,
+            initial_capital=capital,
+            simulations=req.simulations,
+        )
+    )
     mc["run_id"] = run_id
     mc["computed_at"] = datetime.now(UTC).isoformat()
     _kv_set(f"advanced:mc_cache:{run_id}", mc, ttl=_MC_CACHE_TTL)
