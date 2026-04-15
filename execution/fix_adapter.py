@@ -44,29 +44,29 @@ logger = logging.getLogger(__name__)
 _FIX_BACKEND: str = "none"
 
 try:
-    import quickfix as fix  # type: ignore
-    import quickfix44 as fix44  # type: ignore
+    import quickfix as fix
+    import quickfix44 as fix44
 
     _FIX_BACKEND = "quickfix"
     logger.info("fix_adapter: using quickfix backend")
 except ImportError:
-    fix = None  # type: ignore
-    fix44 = None  # type: ignore
+    fix = None
+    fix44 = None
 
 if _FIX_BACKEND == "none":
     try:
-        import pyfixmsg  # type: ignore
-        from pyfixmsg.lib.message import FixMessage  # type: ignore
+        import pyfixmsg
+        from pyfixmsg.lib.message import FixMessage
 
         _FIX_BACKEND = "pyfixmsg"
         logger.info("fix_adapter: using pyfixmsg backend")
     except ImportError:
-        pyfixmsg = None  # type: ignore
-        FixMessage = None  # type: ignore
+        pyfixmsg = None
+        FixMessage = None
 
 if _FIX_BACKEND == "none":
     try:
-        import simplefix as _simplefix_mod  # type: ignore  # availability check only
+        import simplefix as _simplefix_mod  # availability check only
 
         _FIX_BACKEND = "simplefix"
         del _simplefix_mod
@@ -193,7 +193,7 @@ class CircuitBreaker:
 # _QuickfixApp inherits from fix.Application only when quickfix is available.
 # When the library is absent we use a plain object base so the class can still
 # be defined and imported without raising AttributeError.
-_QuickfixBase = fix.Application if fix is not None else object
+_QuickfixBase: type = fix.Application if fix is not None else object
 
 
 def _get_fix_field(message: Any, field_obj: Any, context: str = "") -> str:
@@ -212,7 +212,7 @@ def _get_fix_field(message: Any, field_obj: Any, context: str = "") -> str:
     """
     try:
         message.getField(field_obj)
-        return field_obj.getString()
+        return str(field_obj.getString())
     except (AttributeError, TypeError, ValueError) as exc:
         if context:
             logger.debug("%s field absent: %s", context, exc)
@@ -241,16 +241,16 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
 
     # --- quickfix callbacks ---
 
-    def onCreate(self, session_id):
+    def onCreate(self, session_id: Any) -> None:
         logger.info("fix.session_created session=%s", session_id)
 
-    def onLogon(self, session_id):
+    def onLogon(self, session_id: Any) -> None:
         logger.info("fix.logon session=%s", session_id)
 
-    def onLogout(self, session_id):
+    def onLogout(self, session_id: Any) -> None:
         logger.info("fix.logout session=%s", session_id)
 
-    def toAdmin(self, message, session_id):
+    def toAdmin(self, message: Any, session_id: Any) -> None:
         """
         Called before every admin message is sent (Logon, Heartbeat, etc.).
 
@@ -289,7 +289,7 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
             text,
         )
 
-    def fromAdmin(self, message, session_id):
+    def fromAdmin(self, message: Any, session_id: Any) -> None:
         """
         Called for every inbound admin message (Logon, Logout, Heartbeat, etc.).
 
@@ -310,7 +310,7 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
         except (AttributeError, ValueError, TypeError) as exc:
             logger.warning("fix.fromAdmin: error processing admin message: %s", exc)
 
-    def toApp(self, message, session_id):
+    def toApp(self, message: Any, session_id: Any) -> None:
         # Record send time for latency measurement.
         # ClOrdID is absent on non-order admin messages — not an error.
         try:
@@ -319,7 +319,7 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
         except (AttributeError, TypeError) as _e:
             logger.debug("fix.toApp: ClOrdID not present in outbound message: %s", _e)
 
-    def fromApp(self, message, session_id):
+    def fromApp(self, message: Any, session_id: Any) -> None:
         msg_type = fix.MsgType()
         message.getHeader().getField(msg_type)
         mt = msg_type.getValue()
@@ -331,7 +331,7 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
 
     # --- Internal ---
 
-    def _extract_exec_report_fields(self, message: Any) -> dict:
+    def _extract_exec_report_fields(self, message: Any) -> dict[str, Any]:
         """
         Extract all required ExecutionReport fields from a quickfix message.
 
@@ -366,7 +366,7 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
             "cum_qty": float(cum_qty_f.getValue()),
         }
 
-    def _handle_exec_report(self, message) -> None:
+    def _handle_exec_report(self, message: Any) -> None:
         cl_ord_id = "<unknown>"
         try:
             fields = self._extract_exec_report_fields(message)
@@ -400,7 +400,7 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
             )
             self._reject_pending(cl_ord_id, exc)
 
-    def _handle_order_cancel_reject(self, message) -> None:
+    def _handle_order_cancel_reject(self, message: Any) -> None:
         """Handle OrderCancelReject (MsgType=9) — broker refused cancel/replace."""
         cl_ord_id = "<unknown>"
         try:
@@ -514,7 +514,7 @@ class FIXAdapter:
         self.circuit_breaker = CircuitBreaker(threshold_ms=latency_threshold_ms)
 
         # Pending order futures: cl_ord_id → asyncio.Future
-        self._pending: dict[str, asyncio.Future] = {}
+        self._pending: dict[str, asyncio.Future[FIXFillReport]] = {}
         self._pending_lock = threading.Lock()
 
         # quickfix objects (set in start())
@@ -788,7 +788,7 @@ class FIXAdapter:
         raw += f"10={checksum:03d}\x01"
         return raw.encode()
 
-    def _pyfixmsg_reader_loop(self, sock) -> None:
+    def _pyfixmsg_reader_loop(self, sock: Any) -> None:
         """
         Read raw FIX bytes from the socket and dispatch ExecutionReports.
 
@@ -910,7 +910,7 @@ class FIXAdapter:
         self.circuit_breaker.check()
 
         loop = asyncio.get_running_loop()
-        future: asyncio.Future = loop.create_future()
+        future: asyncio.Future[FIXFillReport] = loop.create_future()
 
         with self._pending_lock:
             self._pending[order.cl_ord_id] = future
@@ -1015,7 +1015,8 @@ class FIXAdapter:
         raw += f"10={checksum:03d}\x01"
 
         # Record send time for latency measurement (mirrors quickfix path)
-        self._app._send_times[order.cl_ord_id] = time.monotonic() if self._app else 0.0
+        if self._app is not None:
+            self._app._send_times[order.cl_ord_id] = time.monotonic()
 
         try:
             sock.sendall(raw.encode())
@@ -1086,7 +1087,7 @@ class FIXAdapter:
     # SmartOrderRouter integration hook
     # ------------------------------------------------------------------
 
-    def route_hook(self) -> Callable:
+    def route_hook(self) -> Callable[[dict[str, Any]], Any]:
         """
         Returns a coroutine factory compatible with SmartOrderRouter.
 
@@ -1095,7 +1096,7 @@ class FIXAdapter:
             router.add_broker("fix", fix_adapter.route_hook())
         """
 
-        async def _route(order_dict: dict) -> dict:
+        async def _route(order_dict: dict[str, Any]) -> dict[str, Any]:
             fix_order = FIXOrder(
                 symbol=order_dict["symbol"],
                 side=FIXSide.BUY if order_dict.get("side", "BUY") == "BUY" else FIXSide.SELL,

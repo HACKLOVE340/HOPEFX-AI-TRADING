@@ -49,7 +49,7 @@ import logging
 import math
 import os
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 logger = logging.getLogger(__name__)
 
@@ -323,7 +323,7 @@ class FillSimulator:
 
     def simulate_fills_batch(
         self,
-        signals: list[dict],
+        signals: list[dict[str, Any]],
         adv: float,
         volatility_daily: float,
         spread_bps: float = 3.0,

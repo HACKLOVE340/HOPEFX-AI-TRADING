@@ -84,13 +84,16 @@ import os
 import time
 import uuid
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-
-UTC = timezone.utc
 from enum import Enum
 from typing import Any
+
+UTC = timezone.utc
+
+# Type alias for the async broker submission callable
+BrokerSubmitFn = Callable[..., Coroutine[Any, Any, Any]]
 
 import numpy as np
 
@@ -154,14 +157,14 @@ class AlgoOrder(ABC):
         side: str,
         total_quantity: float,
         strategy_id: str = "unknown",
-        broker_submit_fn: Callable | None = None,
+        broker_submit_fn: BrokerSubmitFn | None = None,
     ) -> None:
         self.algo_id = str(uuid.uuid4())[:16]
         self.symbol = symbol
         self.side = side
         self.total_quantity = total_quantity
         self.strategy_id = strategy_id
-        self._broker_submit = broker_submit_fn
+        self._broker_submit: BrokerSubmitFn | None = broker_submit_fn
 
         self.status = AlgoStatus.PENDING
         self.filled_quantity: float = 0.0
@@ -169,7 +172,7 @@ class AlgoOrder(ABC):
         self._fill_prices: list[tuple[float, float]] = []  # (qty, price)
         self._started_at: float | None = None
         self._completed_at: float | None = None
-        self._task: asyncio.Task | None = None
+        self._task: asyncio.Task[AlgoFillReport] | None = None
 
     @property
     def remaining_quantity(self) -> float:
@@ -298,7 +301,7 @@ class TWAPOrder(AlgoOrder):
         duration_seconds: float,
         num_slices: int = 10,
         strategy_id: str = "unknown",
-        broker_submit_fn: Callable | None = None,
+        broker_submit_fn: BrokerSubmitFn | None = None,
     ) -> None:
         super().__init__(symbol, side, total_quantity, strategy_id, broker_submit_fn)
         self.duration_seconds = duration_seconds
@@ -414,7 +417,7 @@ class VWAPOrder(AlgoOrder):
         duration_seconds: float,
         num_slices: int = 20,
         strategy_id: str = "unknown",
-        broker_submit_fn: Callable | None = None,
+        broker_submit_fn: BrokerSubmitFn | None = None,
     ) -> None:
         super().__init__(symbol, side, total_quantity, strategy_id, broker_submit_fn)
         self.duration_seconds = duration_seconds
@@ -530,7 +533,7 @@ class IcebergOrder(AlgoOrder):
         peak_size: float,
         refill_delay_seconds: float = 0.5,
         strategy_id: str = "unknown",
-        broker_submit_fn: Callable | None = None,
+        broker_submit_fn: BrokerSubmitFn | None = None,
     ) -> None:
         super().__init__(symbol, side, total_quantity, strategy_id, broker_submit_fn)
         self.peak_size = max(ALGO_MIN_CHILD_SIZE, peak_size)
@@ -608,13 +611,13 @@ class AlgoOrderManager:
     DEFAULT_TWAP_SLICES: int = int(os.getenv("ALGO_DEFAULT_TWAP_SLICES", "10"))
     DEFAULT_ICEBERG_PEAK: float = float(os.getenv("ALGO_DEFAULT_ICEBERG_PEAK", "5.0"))
 
-    def __init__(self, broker_submit_fn: Callable | None = None) -> None:
-        self._broker_submit = broker_submit_fn
+    def __init__(self, broker_submit_fn: BrokerSubmitFn | None = None) -> None:
+        self._broker_submit: BrokerSubmitFn | None = broker_submit_fn
         self._active: dict[str, AlgoOrder] = {}
         self._completed: dict[str, AlgoFillReport] = {}
-        self._tasks: dict[str, asyncio.Task] = {}
+        self._tasks: dict[str, asyncio.Task[None]] = {}
 
-    def set_broker_submit_fn(self, fn: Callable) -> None:
+    def set_broker_submit_fn(self, fn: BrokerSubmitFn) -> None:
         """Wire in the broker submission function after construction."""
         self._broker_submit = fn
 
@@ -761,7 +764,12 @@ class AlgoOrderManager:
 
     def get_all_active(self) -> dict[str, dict[str, Any]]:
         """Return status for all active algo orders."""
-        return {aid: self.get_status(aid) for aid in self._active}
+        result: dict[str, dict[str, Any]] = {}
+        for aid in self._active:
+            status = self.get_status(aid)
+            if status is not None:
+                result[aid] = status
+        return result
 
     async def _launch(self, order: AlgoOrder) -> str:
         """Launch an algo order in a background task."""

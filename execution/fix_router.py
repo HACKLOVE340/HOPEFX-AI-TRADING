@@ -32,6 +32,7 @@ import logging
 import os
 import time
 from datetime import datetime, timezone
+from typing import Any
 
 UTC = timezone.utc
 
@@ -92,7 +93,7 @@ class _OandaFallback:
                 "Orders via the FIX fallback path will fail."
             )
 
-    async def send(self, symbol: str, direction: str, units: float) -> dict:
+    async def send(self, symbol: str, direction: str, units: float) -> dict[str, Any]:
         """Place a market order; return fill dict."""
         import aiohttp
 
@@ -248,7 +249,7 @@ class FIXRouter:
 
     # ── routing logic ─────────────────────────────────────────────────────────
 
-    async def _route(self, order_request: dict) -> None:
+    async def _route(self, order_request: dict[str, Any]) -> None:
         """
         Route a single order_request.
 
@@ -310,7 +311,7 @@ class FIXRouter:
 
     # ── FIX send ──────────────────────────────────────────────────────────────
 
-    async def _send_fix(self, symbol: str, direction: str, units: float, order_request: dict) -> dict:
+    async def _send_fix(self, symbol: str, direction: str, units: float, order_request: dict[str, Any]) -> dict[str, Any]:
         """
         Format and send a FIX NewOrderSingle; await ExecutionReport.
 
@@ -330,6 +331,8 @@ class FIXRouter:
 
         t0 = time.monotonic()
 
+        if self._adapter is None:
+            raise RuntimeError("FIXRouter._send_fix: FIXAdapter not initialised")
         # FIXAdapter.send_order is async-compatible (returns a coroutine or future)
         report: FIXFillReport = await self._adapter.send_order(fix_order)
 
@@ -360,7 +363,7 @@ class FIXRouter:
 
     # ── fill handler ──────────────────────────────────────────────────────────
 
-    async def _on_fill(self, fill: dict) -> None:
+    async def _on_fill(self, fill: dict[str, Any]) -> None:
         """Publish fill confirmation back to hopefx:order."""
         self._fill_count += 1
         logger.info(
@@ -376,7 +379,7 @@ class FIXRouter:
 
     # ── fill logger ───────────────────────────────────────────────────────────
 
-    def _log_fill(self, report: FIXFillReport, latency_ms: float, order_request: dict) -> None:
+    def _log_fill(self, report: FIXFillReport, latency_ms: float, order_request: dict[str, Any]) -> None:
         """Log fill with slippage calculation."""
         expected_price = float(order_request.get("mid", report.avg_px))
         slippage = abs(report.avg_px - expected_price) if expected_price else 0.0
@@ -400,7 +403,7 @@ class FIXRouter:
 
     # ── metrics ───────────────────────────────────────────────────────────────
 
-    def metrics(self) -> dict:
+    def metrics(self) -> dict[str, Any]:
         return {
             "order_count": self._order_count,
             "fill_count": self._fill_count,

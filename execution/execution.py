@@ -92,20 +92,20 @@ class ExecutionSystem:
     outside this class in production.
     """
 
-    def __init__(self, ml_inference_fn: Callable | None = None) -> None:
+    def __init__(self, ml_inference_fn: Callable[..., Any] | None = None) -> None:
         self._ml_inference_fn = ml_inference_fn
         self._started = False
         self._start_time: float | None = None
 
         # Components — populated in start()
-        self._orchestrator = None
-        self._lineage = None
-        self._risk = None
-        self._gatekeeper = None
-        self._router = None
-        self._engine = None
+        self._orchestrator: Any = None
+        self._lineage: Any = None
+        self._risk: Any = None
+        self._gatekeeper: Any = None
+        self._router: Any = None
+        self._engine: Any = None
         self._brokers: dict[str, Any] = {}
-        self._tasks: list[asyncio.Task] = []
+        self._tasks: list[asyncio.Task[None]] = []
 
     # ── Startup ───────────────────────────────────────────────────────────────
 
@@ -463,7 +463,7 @@ def _build_paper_broker() -> Any:
 # ── notify_fill wiring ────────────────────────────────────────────────────────
 
 
-def _wire_notify_fill(orchestrator) -> None:
+def _wire_notify_fill(orchestrator: Any) -> None:
     """
     Add notify_fill() to the orchestrator if not already present.
 
