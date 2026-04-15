@@ -1,8 +1,11 @@
 /**
- * Wallet & Payments — balance overview, transaction history, subscriptions.
+ * Wallet & Payments — balance overview, transaction history, subscriptions,
+ * and saved payment methods.
  *
- * Wires to: GET /api/payments/balance
- *           GET /api/payments/transactions
+ * Wires to: GET  /api/billing/balance
+ *           GET  /api/billing/transactions
+ *           GET  /api/billing/subscription
+ *           GET  /api/billing/payment-methods
  *           POST /api/payments/deposit
  *           POST /api/payments/withdraw
  */
@@ -27,6 +30,23 @@ interface Transaction {
   status: 'completed' | 'pending' | 'failed';
   date: string;
   method: string;
+}
+
+interface Subscription {
+  tier: string;
+  status: string;
+  renewal_date: string | null;
+  price_monthly: number | null;
+  features: string[];
+}
+
+interface PaymentMethod {
+  id: string;
+  brand: string;
+  last4: string;
+  exp_month: number;
+  exp_year: number;
+  is_default: boolean;
 }
 
 const TYPE_ICON: Record<string, string> = {
@@ -62,6 +82,12 @@ const Wallet: React.FC = () => {
   const [pending, setPending]           = useState(0);
   const [balanceErr, setBalanceErr]     = useState('');
   const [txErr, setTxErr]               = useState('');
+  const [subscription, setSub]          = useState<Subscription | null>(null);
+  const [subLoading, setSubLoading]     = useState(true);
+  const [subErr, setSubErr]             = useState('');
+  const [paymentMethods, setPMs]        = useState<PaymentMethod[]>([]);
+  const [pmLoading, setPmLoading]       = useState(true);
+  const [pmErr, setPmErr]               = useState('');
   const [showDeposit, setShowDeposit]   = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [amount, setAmount]             = useState('');
@@ -69,6 +95,7 @@ const Wallet: React.FC = () => {
   const [msg, setMsg]                   = useState('');
 
   useEffect(() => {
+    // Balance
     api.get<{ balance: number; frozen: number; pending: number }>('/billing/balance')
       .then((r) => {
         setBalance(r.data?.balance ?? 0);
@@ -80,6 +107,8 @@ const Wallet: React.FC = () => {
         console.warn('[Wallet] Failed to load balance:', err);
         setBalanceErr(extractApiError(err, 'Failed to load balance.'));
       });
+
+    // Transactions
     api.get<{ transactions: Transaction[] }>('/billing/transactions')
       .then((r) => { setTxs(r.data?.transactions ?? []); setTxErr(''); })
       .catch((err: unknown) => {
@@ -88,6 +117,30 @@ const Wallet: React.FC = () => {
         setTxs([]);
       })
       .finally(() => setTxLoading(false));
+
+    // Subscription
+    api.get<Subscription>('/billing/subscription')
+      .then((r) => { setSub(r.data ?? null); setSubErr(''); })
+      .catch((err: unknown) => {
+        console.warn('[Wallet] Failed to load subscription:', err);
+        setSubErr(extractApiError(err, 'Failed to load subscription.'));
+        setSub(null);
+      })
+      .finally(() => setSubLoading(false));
+
+    // Payment methods
+    api.get<{ methods: PaymentMethod[] } | PaymentMethod[]>('/billing/payment-methods')
+      .then((r) => {
+        const data = Array.isArray(r.data) ? r.data : (r.data as { methods: PaymentMethod[] }).methods ?? [];
+        setPMs(data);
+        setPmErr('');
+      })
+      .catch((err: unknown) => {
+        console.warn('[Wallet] Failed to load payment methods:', err);
+        setPmErr(extractApiError(err, 'Failed to load payment methods.'));
+        setPMs([]);
+      })
+      .finally(() => setPmLoading(false));
   }, []);
 
   const handleDeposit = async () => {
@@ -234,26 +287,91 @@ const Wallet: React.FC = () => {
       {/* Subscriptions */}
       {tab === 'subscriptions' && (
         <div style={s.subCard}>
-          <div style={s.subRow}>
-            <div>
-              <div style={{ fontWeight: 700, color: '#f1f5f9' }}>Pro Plan</div>
-              <div style={{ fontSize: 13, color: '#64748b' }}>Renews monthly · Next: Feb 14, 2024</div>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 18, fontWeight: 700, color: '#fbbf24' }}>$99/mo</div>
-              <div style={{ fontSize: 11, color: '#4ade80' }}>Active</div>
-            </div>
-          </div>
-          <div style={{ borderTop: '1px solid #334155', paddingTop: 12, marginTop: 12 }}>
-            <button style={s.cancelSubBtn}>Cancel Subscription</button>
-          </div>
+          {subLoading ? (
+            <div style={{ color: '#64748b', fontSize: 14 }}>Loading subscription…</div>
+          ) : subErr ? (
+            <div style={{ color: '#f87171', fontSize: 13 }}>⚠️ {subErr}</div>
+          ) : !subscription ? (
+            <div style={{ color: '#64748b', fontSize: 14 }}>No active subscription.</div>
+          ) : (
+            <>
+              <div style={s.subRow}>
+                <div>
+                  <div style={{ fontWeight: 700, color: '#f1f5f9', textTransform: 'capitalize' }}>
+                    {subscription.tier} Plan
+                  </div>
+                  <div style={{ fontSize: 13, color: '#64748b' }}>
+                    {subscription.renewal_date
+                      ? `Renews monthly · Next: ${subscription.renewal_date}`
+                      : 'No renewal date'}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  {subscription.price_monthly != null && (
+                    <div style={{ fontSize: 18, fontWeight: 700, color: '#fbbf24' }}>
+                      ${subscription.price_monthly}/mo
+                    </div>
+                  )}
+                  <div style={{
+                    fontSize: 11,
+                    color: subscription.status === 'active' ? '#4ade80' : '#fbbf24',
+                    textTransform: 'capitalize',
+                  }}>
+                    {subscription.status}
+                  </div>
+                </div>
+              </div>
+              {subscription.features.length > 0 && (
+                <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {subscription.features.map((f) => (
+                    <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#94a3b8' }}>
+                      <span style={{ color: '#4ade80' }}>✓</span> {f}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{ borderTop: '1px solid #334155', paddingTop: 12, marginTop: 14, display: 'flex', gap: 10 }}>
+                <button style={s.addMethodBtn}>Upgrade Plan</button>
+                {subscription.status === 'active' && (
+                  <button style={s.cancelSubBtn}>Cancel Subscription</button>
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
 
       {/* Payment methods */}
       {tab === 'payment-methods' && (
         <div style={s.subCard}>
-          <div style={{ color: '#64748b', fontSize: 14, marginBottom: 16 }}>No payment methods saved.</div>
+          {pmLoading ? (
+            <div style={{ color: '#64748b', fontSize: 14, marginBottom: 16 }}>Loading payment methods…</div>
+          ) : pmErr ? (
+            <div style={{ color: '#f87171', fontSize: 13, marginBottom: 16 }}>⚠️ {pmErr}</div>
+          ) : paymentMethods.length === 0 ? (
+            <div style={{ color: '#64748b', fontSize: 14, marginBottom: 16 }}>No payment methods saved.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+              {paymentMethods.map((pm) => (
+                <div key={pm.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#0f172a', borderRadius: 8, padding: '12px 16px', border: '1px solid #334155' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 8, background: '#1e3a5f', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>💳</div>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9', textTransform: 'capitalize' }}>
+                        {pm.brand} •••• {pm.last4}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#64748b' }}>Expires {pm.exp_month}/{pm.exp_year}</div>
+                    </div>
+                  </div>
+                  {pm.is_default && (
+                    <span style={{ fontSize: 11, background: 'rgba(74,222,128,0.1)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 4, padding: '2px 8px' }}>
+                      Default
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
           <button style={s.addMethodBtn}>+ Add Payment Method</button>
         </div>
       )}
