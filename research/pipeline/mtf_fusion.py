@@ -408,7 +408,16 @@ class MTFFusionStore:
             if not Path(path).exists():
                 logger.debug("MTFFusionStore: %s CSV not found at %s", label, path)
                 return None
-            df = pd.read_csv(path, parse_dates=["time"])
+            # DataScheduler writes "timestamp"; legacy files may use "time".
+            # Read without parse_dates first to inspect actual column names,
+            # then parse whichever timestamp column is present.
+            df = pd.read_csv(path)
+            ts_col_raw = next(
+                (c for c in df.columns if c.lower() in ("timestamp", "time", "date", "datetime")),
+                None,
+            )
+            if ts_col_raw is not None:
+                df[ts_col_raw] = pd.to_datetime(df[ts_col_raw], utc=False, errors="coerce")
             df = df.rename(columns={"time": "timestamp"}) if "time" in df.columns else df
             # Normalise column names to lowercase
             df.columns = [c.lower() for c in df.columns]
@@ -442,7 +451,11 @@ class MTFFusionStore:
             if self._h4_df is None:
                 raw = yf.download(ticker, period="2y", interval="1h", progress=False, auto_adjust=True)
                 if not raw.empty:
-                    raw.columns = [c.lower() for c in raw.columns]
+                    # yfinance >= 0.2.x returns MultiIndex columns like ('Close', 'GC=F')
+                    if hasattr(raw.columns, "levels"):
+                        raw.columns = [c[0].lower() if isinstance(c, tuple) else c.lower() for c in raw.columns]
+                    else:
+                        raw.columns = [c.lower() for c in raw.columns]
                     raw.index = pd.to_datetime(raw.index, utc=True)
                     # Resample 1h → 4h
                     agg = {
@@ -464,7 +477,11 @@ class MTFFusionStore:
                     auto_adjust=True,
                 )
                 if not raw.empty:
-                    raw.columns = [c.lower() for c in raw.columns]
+                    # yfinance >= 0.2.x returns MultiIndex columns like ('Close', 'GC=F')
+                    if hasattr(raw.columns, "levels"):
+                        raw.columns = [c[0].lower() if isinstance(c, tuple) else c.lower() for c in raw.columns]
+                    else:
+                        raw.columns = [c.lower() for c in raw.columns]
                     raw.index = pd.to_datetime(raw.index, utc=True)
                     self._d1_df = raw.dropna(subset=["close"])
 
