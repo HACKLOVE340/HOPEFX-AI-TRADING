@@ -54,6 +54,12 @@ services:
       BRAIN_HEAL_INTERVAL: ${BRAIN_HEAL_INTERVAL:-1800}
       # Disabled by default — requires PyTorch ~1 GB. Set to "true" in .env to enable.
       BRAIN_SEMANTIC_ENCODER: ${BRAIN_SEMANTIC_ENCODER:-false}
+      # ── CORS / frontend wiring ────────────────────────────────────────────
+      # ALLOWED_ORIGINS must match the domain(s) the React SPA is served from.
+      # In production this is your HTTPS domain; in dev it defaults to localhost.
+      # The middleware will sys.exit(1) at startup if this is wrong in production.
+      APP_BASE_URL: ${APP_BASE_URL:-https://localhost}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://${HOPEFX_DOMAIN:-localhost},https://www.${HOPEFX_DOMAIN:-localhost}}
     depends_on:
       postgres:
         condition: service_healthy
