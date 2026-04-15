@@ -43,7 +43,12 @@ import importlib.util
 import json
 import logging
 import os
-import resource
+try:
+    import resource as _resource_mod  # Linux/macOS only
+    _RESOURCE_AVAILABLE = True
+except ImportError:
+    _resource_mod = None  # type: ignore[assignment]
+    _RESOURCE_AVAILABLE = False
 import subprocess
 import sys
 import tempfile
@@ -483,15 +488,18 @@ def _compile_strategy(code: str) -> tuple[Any | None, str | None]:
         raise
 
     def _apply_resource_limits() -> None:
-        """Called in the child process before exec — sets hard resource limits."""
+        """Called in the child process before exec — sets hard resource limits.
+        No-op on Windows where the resource module is unavailable."""
+        if not _RESOURCE_AVAILABLE or _resource_mod is None:
+            return
         # CPU time: 30 seconds (soft) / 35 seconds (hard)
-        resource.setrlimit(resource.RLIMIT_CPU, (30, 35))
+        _resource_mod.setrlimit(_resource_mod.RLIMIT_CPU, (30, 35))
         # Virtual address space: 512 MiB
-        resource.setrlimit(resource.RLIMIT_AS, (512 * 1024 * 1024, 512 * 1024 * 1024))
+        _resource_mod.setrlimit(_resource_mod.RLIMIT_AS, (512 * 1024 * 1024, 512 * 1024 * 1024))
         # Open file descriptors: 64
-        resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))
+        _resource_mod.setrlimit(_resource_mod.RLIMIT_NOFILE, (64, 64))
         # Max child processes: 0 (no fork/spawn from sandbox)
-        resource.setrlimit(resource.RLIMIT_NPROC, (0, 0))
+        _resource_mod.setrlimit(_resource_mod.RLIMIT_NPROC, (0, 0))
 
     # Stripped environment: no secrets, no broker credentials, no API keys.
     # Only PATH and PYTHONPATH are forwarded so imports resolve correctly.
