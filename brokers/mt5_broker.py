@@ -26,15 +26,16 @@ Usage
 import asyncio
 import logging
 import os
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 try:
-    import MetaTrader5 as _mt5  # type: ignore
+    import MetaTrader5 as _mt5  # type: ignore[import-not-found,import-untyped,unused-ignore]
 
     _MT5_AVAILABLE = True
 except ImportError:
-    _mt5 = None  # type: ignore
+    _mt5 = None
     _MT5_AVAILABLE = False
     logger.warning(
         "MetaTrader5 SDK not installed — MT5Broker will be unavailable. Install with: pip install MetaTrader5"
@@ -80,7 +81,7 @@ class MT5Broker:
         Optional keys: ``terminal_path`` (str), ``timeout_ms`` (int).
     """
 
-    def __init__(self, config: dict) -> None:
+    def __init__(self, config: dict[str, Any]) -> None:
         self._config = config
         self.connected: bool = False
         self._login: int | None = None
@@ -110,21 +111,21 @@ class MT5Broker:
 
     # ── Account ───────────────────────────────────────────────────────────────
 
-    async def get_account_info(self) -> dict | None:
+    async def get_account_info(self) -> dict[str, Any] | None:
         """Return account details as a plain dict, or None if not connected."""
         if not self._assert_connected("get_account_info"):
             return None
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_account_info)
 
-    async def get_positions(self) -> list[dict]:
+    async def get_positions(self) -> list[dict[str, Any]]:
         """Return all open positions as a list of dicts."""
         if not self._assert_connected("get_positions"):
             return []
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_positions)
 
-    async def get_orders(self) -> list[dict]:
+    async def get_orders(self) -> list[dict[str, Any]]:
         """Return all pending orders as a list of dicts."""
         if not self._assert_connected("get_orders"):
             return []
@@ -133,7 +134,7 @@ class MT5Broker:
 
     # ── Order execution ───────────────────────────────────────────────────────
 
-    async def place_order(self, order_params: dict) -> dict:
+    async def place_order(self, order_params: dict[str, Any]) -> dict[str, Any]:
         """
         Send a trade request to MT5.
 
@@ -161,7 +162,7 @@ class MT5Broker:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_place_order, order_params)
 
-    async def close_position(self, ticket: int, volume: float | None = None) -> dict:
+    async def close_position(self, ticket: int, volume: float | None = None) -> dict[str, Any]:
         """
         Close an open position by ticket number.
 
@@ -175,14 +176,14 @@ class MT5Broker:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_close_position, ticket, volume)
 
-    async def modify_position(self, ticket: int, sl: float = 0.0, tp: float = 0.0) -> dict:
+    async def modify_position(self, ticket: int, sl: float = 0.0, tp: float = 0.0) -> dict[str, Any]:
         """Modify the SL/TP of an open position."""
         if not self._assert_connected("modify_position"):
             return {"success": False, "comment": "Not connected"}
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_modify_position, ticket, sl, tp)
 
-    async def cancel_order(self, ticket: int) -> dict:
+    async def cancel_order(self, ticket: int) -> dict[str, Any]:
         """Delete a pending order by ticket number."""
         if not self._assert_connected("cancel_order"):
             return {"success": False, "comment": "Not connected"}
@@ -256,7 +257,7 @@ class MT5Broker:
 
     # ── Market data ───────────────────────────────────────────────────────────
 
-    async def get_tick(self, symbol: str) -> dict | None:
+    async def get_tick(self, symbol: str) -> dict[str, Any] | None:
         """Return the latest bid/ask tick for *symbol*."""
         if not self._assert_connected("get_tick"):
             return None
@@ -285,7 +286,7 @@ class MT5Broker:
             logger.error("MT5Broker: login must be numeric, got: '%s'", login_raw)
             return False
 
-        init_kwargs: dict = {"timeout": timeout_ms}
+        init_kwargs: dict[str, Any] = {"timeout": timeout_ms}
         if terminal_path:
             init_kwargs["path"] = terminal_path
 
@@ -317,7 +318,7 @@ class MT5Broker:
         )
         return True
 
-    def _sync_account_info(self) -> dict | None:
+    def _sync_account_info(self) -> dict[str, Any] | None:
         info = _mt5.account_info()
         if info is None:
             return None
@@ -334,7 +335,7 @@ class MT5Broker:
             "profit": info.profit,
         }
 
-    def _sync_positions(self) -> list[dict]:
+    def _sync_positions(self) -> list[dict[str, Any]]:
         positions = _mt5.positions_get()
         if positions is None:
             return []
@@ -356,7 +357,7 @@ class MT5Broker:
             for p in positions
         ]
 
-    def _sync_orders(self) -> list[dict]:
+    def _sync_orders(self) -> list[dict[str, Any]]:
         orders = _mt5.orders_get()
         if orders is None:
             return []
@@ -376,7 +377,7 @@ class MT5Broker:
             for o in orders
         ]
 
-    def _sync_place_order(self, params: dict) -> dict:
+    def _sync_place_order(self, params: dict[str, Any]) -> dict[str, Any]:
         symbol: str = params.get("symbol", "XAUUSD")
         action_str: str = params.get("action", "buy").lower()
         volume: float = float(params.get("volume", 0.01))
@@ -462,7 +463,7 @@ class MT5Broker:
             "comment": result.comment,
         }
 
-    def _sync_close_position(self, ticket: int, volume: float | None) -> dict:
+    def _sync_close_position(self, ticket: int, volume: float | None) -> dict[str, Any]:
         positions = _mt5.positions_get(ticket=ticket)
         if not positions:
             return {"success": False, "comment": f"Position {ticket} not found"}
@@ -498,7 +499,7 @@ class MT5Broker:
             "comment": result.comment,
         }
 
-    def _sync_modify_position(self, ticket: int, sl: float, tp: float) -> dict:
+    def _sync_modify_position(self, ticket: int, sl: float, tp: float) -> dict[str, Any]:
         request = {
             "action": TRADE_ACTION_SLTP,
             "position": ticket,
@@ -515,7 +516,7 @@ class MT5Broker:
             "comment": result.comment,
         }
 
-    def _sync_cancel_order(self, ticket: int) -> dict:
+    def _sync_cancel_order(self, ticket: int) -> dict[str, Any]:
         request = {"action": TRADE_ACTION_REMOVE, "order": ticket}
         result = _mt5.order_send(request)
         if result is None:
@@ -527,7 +528,7 @@ class MT5Broker:
             "comment": result.comment,
         }
 
-    def _sync_get_tick(self, symbol: str) -> dict | None:
+    def _sync_get_tick(self, symbol: str) -> dict[str, Any] | None:
         tick = _mt5.symbol_info_tick(symbol)
         if tick is None:
             return None
@@ -547,7 +548,7 @@ class MT5Broker:
             return False
         return True
 
-    def status(self) -> dict:
+    def status(self) -> dict[str, Any]:
         """Return a health snapshot for monitoring."""
         return {
             "broker": "mt5",

@@ -170,18 +170,18 @@ class MT5Connector(BrokerConnector):
 
             return False
 
-    def place_order(  # pylint: disable=arguments-differ
+    def place_order(
         self,
         symbol: str,
         side: OrderSide,
-        quantity: float = 0.0,
         order_type: OrderType = OrderType.MARKET,
+        quantity: float = 0.0,
         price: float | None = None,
         stop_price: float | None = None,
         stop_loss: float | None = None,
         take_profit: float | None = None,
-        **kwargs,
-    ) -> Order | None:
+        **kwargs: Any,
+    ) -> Order:
         """
         Place order on MT5.
 
@@ -198,21 +198,16 @@ class MT5Connector(BrokerConnector):
             Order object if successful
         """
         if not self.connected:
-            logger.error("Not connected to MT5")
-            return None
+            raise RuntimeError("Not connected to MT5")
 
         try:
             # Get symbol info
             symbol_info = mt5.symbol_info(symbol)
             if symbol_info is None:
-                logger.error("Symbol %s not found", symbol)
-
-                return None
+                raise ValueError(f"Symbol {symbol} not found")
 
             if not symbol_info.visible and not mt5.symbol_select(symbol, True):
-                logger.error("Failed to select symbol %s", symbol)
-
-                return None
+                raise RuntimeError(f"Failed to select symbol {symbol}")
 
             # Determine order type
             if order_type == OrderType.MARKET:
@@ -222,21 +217,17 @@ class MT5Connector(BrokerConnector):
             elif order_type == OrderType.STOP:
                 mt5_order_type = mt5.ORDER_TYPE_BUY_STOP if side == OrderSide.BUY else mt5.ORDER_TYPE_SELL_STOP
             else:
-                logger.error("Unsupported order type: %s", order_type)
-
-                return None
+                raise ValueError(f"Unsupported order type: {order_type}")
 
             # Get current price for market orders
             if order_type == OrderType.MARKET:
                 tick = mt5.symbol_info_tick(symbol)
                 if tick is None:
-                    logger.error("Failed to get tick for %s", symbol)
-
-                    return None
+                    raise RuntimeError(f"Failed to get tick for {symbol}")
                 price = tick.ask if side == OrderSide.BUY else tick.bid
 
             # Build request
-            request = {
+            request: dict[str, Any] = {
                 "action": mt5.TRADE_ACTION_DEAL if order_type == OrderType.MARKET else mt5.TRADE_ACTION_PENDING,
                 "symbol": symbol,
                 "volume": float(quantity),
@@ -259,9 +250,7 @@ class MT5Connector(BrokerConnector):
             result = mt5.order_send(request)
 
             if result.retcode != mt5.TRADE_RETCODE_DONE:
-                logger.error("Order failed: %s", result.comment)
-
-                return None
+                raise RuntimeError(f"Order failed: {result.comment}")
 
             # Create Order object
             order = Order(
@@ -285,10 +274,11 @@ class MT5Connector(BrokerConnector):
 
             return order
 
+        except (RuntimeError, ValueError):
+            raise
         except Exception as e:
             logger.error("Place order error: %s", e)
-
-            return None
+            raise RuntimeError(f"place_order failed: {e}") from e
 
     def cancel_order(self, order_id: str) -> bool:
         """Cancel pending order."""
@@ -302,7 +292,7 @@ class MT5Connector(BrokerConnector):
             }
 
             result = mt5.order_send(request)
-            return result.retcode == mt5.TRADE_RETCODE_DONE
+            return bool(result.retcode == mt5.TRADE_RETCODE_DONE)
 
         except Exception as e:
             logger.error("Cancel order error: %s", e)
@@ -415,15 +405,15 @@ class MT5Connector(BrokerConnector):
 
             return False
 
-    def get_account_info(self) -> AccountInfo | None:
+    def get_account_info(self) -> AccountInfo:
         """Get account information."""
         if not self.connected:
-            return None
+            raise RuntimeError("Not connected to MT5")
 
         try:
             account = mt5.account_info()
             if account is None:
-                return None
+                raise RuntimeError("mt5.account_info() returned None")
 
             return AccountInfo(
                 balance=account.balance,
@@ -434,17 +424,18 @@ class MT5Connector(BrokerConnector):
                 timestamp=datetime.now(UTC),
             )
 
+        except RuntimeError:
+            raise
         except Exception as e:
             logger.error("Get account info error: %s", e)
-
-            return None
+            raise RuntimeError(f"get_account_info failed: {e}") from e
 
     def get_market_data(  # pylint: disable=arguments-differ
         self,
         symbol: str,
         timeframe: str = "H1",
         limit: int = 100,
-    ) -> list[dict[str, Any]] | None:
+    ) -> list[dict[str, Any]]:
         """
         Get historical market data.
 
@@ -457,7 +448,7 @@ class MT5Connector(BrokerConnector):
             List of candle dictionaries
         """
         if not self.connected:
-            return None
+            return []
 
         try:
             # Map timeframe to MT5 constant
@@ -478,9 +469,9 @@ class MT5Connector(BrokerConnector):
             # Get candles
             rates = mt5.copy_rates_from_pos(symbol, mt5_timeframe, 0, limit)
             if rates is None:
-                return None
+                return []
 
-            candles = []
+            candles: list[dict[str, Any]] = []
             for rate in rates:
                 candles.append(
                     {
@@ -498,7 +489,7 @@ class MT5Connector(BrokerConnector):
         except Exception as e:
             logger.error("Get market data error: %s", e)
 
-            return None
+            return []
 
     def get_symbols(self) -> list[str]:
         """Get all available symbols."""
@@ -515,7 +506,7 @@ class MT5Connector(BrokerConnector):
 
             return []
 
-    def _mt5_order_to_order(self, mt5_order) -> Order:
+    def _mt5_order_to_order(self, mt5_order: Any) -> Order:
         """Convert MT5 order to Order object."""
         return Order(
             id=str(mt5_order.ticket),
