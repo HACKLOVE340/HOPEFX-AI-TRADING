@@ -1,4 +1,7 @@
 groups:
+  # ---------------------------------------------------------------------------
+  # Core API availability
+  # ---------------------------------------------------------------------------
   - name: hopefx-critical
     rules:
       - alert: HopeFXAPIDown
@@ -18,15 +21,6 @@ groups:
         annotations:
           summary: "High error rate detected"
           description: "Error rate is {{ $value }} errors per second"
-
-      - alert: HopeFXCircuitBreakerOpen
-        expr: hopefx_broker_circuit_state == 2
-        for: 0m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Circuit breaker is open"
-          description: "{{ $labels.name }} circuit breaker is open - trading halted"
 
       - alert: HopeFXHighLatency
         expr: histogram_quantile(0.95, rate(hopefx_latency_seconds_bucket[5m])) > 1
@@ -65,14 +59,272 @@ groups:
           description: "Redis using {{ $value | humanizePercentage }} of memory"
 
   # ---------------------------------------------------------------------------
-  # P&L Reconciliation — fires when ledger and broker P&L diverge or when
-  # the reconciliation gate has not been run before model promotion.
+  # Circuit breakers
+  # Metric: hopefx_circuit_breaker_state{breaker="<name>"}
+  #   0 = closed (healthy)
+  #   1 = half_open (probing)
+  #   2 = open (failing — calls rejected)
+  # Metric: hopefx_circuit_breaker_failures_total{breaker="<name>"}
+  # ---------------------------------------------------------------------------
+  - name: hopefx-circuit-breakers
+    rules:
+      # Any circuit breaker opens — immediate page
+      - alert: HopeFXCircuitBreakerOpen
+        expr: hopefx_circuit_breaker_state == 2
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Circuit breaker OPEN: {{ $labels.breaker }}"
+          description: >
+            The {{ $labels.breaker }} circuit breaker has opened after repeated
+            failures. All calls to this service are being rejected immediately.
+            Check service logs and the /api/health/deep endpoint.
+            Breaker will probe again after its configured timeout.
+
+      # Breaker stays open for >5 minutes — escalate
+      - alert: HopeFXCircuitBreakerOpenExtended
+        expr: hopefx_circuit_breaker_state == 2
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Circuit breaker OPEN >5 min: {{ $labels.breaker }}"
+          description: >
+            The {{ $labels.breaker }} circuit breaker has been open for more
+            than 5 minutes. The underlying service has not recovered.
+            Manual intervention may be required.
+
+      # Broker circuit breaker specifically — highest severity
+      - alert: HopeFXBrokerCircuitBreakerOpen
+        expr: hopefx_circuit_breaker_state{breaker="broker"} == 2
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Broker circuit breaker OPEN — order execution halted"
+          description: >
+            The broker circuit breaker is open. No orders can be placed or
+            managed. Check broker connectivity (TWS/Gateway/OANDA) and
+            network. The kill switch may activate automatically.
+
+      # Redis circuit breaker — affects session, pub/sub, kill switch
+      - alert: HopeFXRedisCircuitBreakerOpen
+        expr: hopefx_circuit_breaker_state{breaker="redis"} == 2
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis circuit breaker OPEN — cache and pub/sub unavailable"
+          description: >
+            The Redis circuit breaker is open. Session store, kill switch
+            pub/sub, and rate limiting are degraded. Check Redis connectivity.
+
+      # Database circuit breaker
+      - alert: HopeFXDatabaseCircuitBreakerOpen
+        expr: hopefx_circuit_breaker_state{breaker="database"} == 2
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database circuit breaker OPEN — persistence unavailable"
+          description: >
+            The database circuit breaker is open. Trade records, user data,
+            and audit logs cannot be persisted. Check PostgreSQL connectivity.
+
+      # ML model circuit breaker
+      - alert: HopeFXMLCircuitBreakerOpen
+        expr: hopefx_circuit_breaker_state{breaker="ml_model"} == 2
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ML model circuit breaker OPEN — signals degraded"
+          description: >
+            The ML model circuit breaker is open. Signal generation is
+            degraded or disabled. The system may fall back to rule-based
+            signals if configured. Check ml/saved_models/ and inference logs.
+
+      # Half-open state persisting — service struggling to recover
+      - alert: HopeFXCircuitBreakerHalfOpenStuck
+        expr: hopefx_circuit_breaker_state == 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Circuit breaker stuck in HALF_OPEN: {{ $labels.breaker }}"
+          description: >
+            The {{ $labels.breaker }} circuit breaker has been in HALF_OPEN
+            state for more than 10 minutes, indicating the service is
+            intermittently failing probes. Investigate root cause.
+
+      # Failure rate spike — breaker not yet open but trending toward it
+      - alert: HopeFXCircuitBreakerFailureRateHigh
+        expr: rate(hopefx_circuit_breaker_failures_total[5m]) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Circuit breaker failure rate high: {{ $labels.breaker }}"
+          description: >
+            The {{ $labels.breaker }} circuit breaker is recording
+            {{ $value | humanize }} failures/second over the last 5 minutes.
+            The breaker may open soon if failures continue.
+
+      # Multiple breakers open simultaneously — systemic failure
+      - alert: HopeFXMultipleCircuitBreakersOpen
+        expr: count(hopefx_circuit_breaker_state == 2) >= 2
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Multiple circuit breakers open ({{ $value }} services down)"
+          description: >
+            {{ $value }} circuit breakers are simultaneously open, indicating
+            a systemic failure. The kill switch may activate automatically.
+            Immediate investigation required.
+
+  # ---------------------------------------------------------------------------
+  # Auto-rollback events
+  # Metric: hopefx_rollback_total{service="<name>"}
+  # Metric: hopefx_rollback_strategy_total{strategy="soft|medium|hard|full"}
+  # Metric: hopefx_rollback_trigger_total{trigger="<name>"}
+  # Metric: hopefx_rollback_failed_total
+  # ---------------------------------------------------------------------------
+  - name: hopefx-rollback
+    rules:
+      # Any rollback triggered — always page
+      - alert: HopeFXRollbackTriggered
+        expr: increase(hopefx_rollback_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Auto-rollback triggered on {{ $labels.service }}"
+          description: >
+            An automatic rollback has been triggered on {{ $labels.service }}.
+            {{ $value }} rollback(s) in the last 5 minutes.
+            Check logs/app.log and the rollback audit trail in Redis
+            (key: rollback:history). Investigate the root cause before
+            re-deploying.
+
+      # Hard or full rollback — code reverted, process restarted
+      - alert: HopeFXHardRollbackTriggered
+        expr: increase(hopefx_rollback_strategy_total{strategy=~"hard|full"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HARD/FULL rollback triggered — code reverted"
+          description: >
+            A {{ $labels.strategy }} rollback has been executed. Code changes
+            have been reverted via git and the process has been restarted.
+            Verify the system is stable before re-deploying the failed version.
+
+      # Rollback rate too high — repeated failures
+      - alert: HopeFXRollbackRateHigh
+        expr: rate(hopefx_rollback_total[30m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Rollback rate high — repeated failures detected"
+          description: >
+            More than 3 rollbacks in the last 30 minutes. The system is
+            repeatedly failing and rolling back. This indicates a persistent
+            issue that automated recovery cannot resolve. Manual intervention
+            required.
+
+      # Rollback triggered by circuit breaker open
+      - alert: HopeFXRollbackFromCircuitBreaker
+        expr: increase(hopefx_rollback_trigger_total{trigger="circuit_breaker_open"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Rollback triggered by circuit breaker opening"
+          description: >
+            An automatic rollback was triggered because a circuit breaker
+            opened. This means a service failure caused both the circuit
+            breaker to open AND a rollback to execute. Check which breaker
+            opened and why.
+
+      # Rollback triggered by kill switch
+      - alert: HopeFXRollbackFromKillSwitch
+        expr: increase(hopefx_rollback_trigger_total{trigger="kill_switch_activated"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Rollback triggered by kill switch activation"
+          description: >
+            An automatic rollback was triggered because the kill switch was
+            activated. Trading is halted. Investigate the kill switch reason
+            before deactivating.
+
+      # Rollback triggered by health check failure
+      - alert: HopeFXRollbackFromHealthCheck
+        expr: increase(hopefx_rollback_trigger_total{trigger="health_check_failed"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Rollback triggered by post-deploy health check failure"
+          description: >
+            A post-deploy health check failed and triggered an automatic
+            rollback. The deployment has been reverted. Review the health
+            check output and fix the issue before re-deploying.
+
+      # Rollback failed — system in unknown state
+      - alert: HopeFXRollbackFailed
+        expr: increase(hopefx_rollback_failed_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Auto-rollback FAILED — system in unknown state"
+          description: >
+            An automatic rollback was attempted but failed. The system may
+            be in an inconsistent state. Immediate manual intervention is
+            required. Check logs/app.log for rollback error details.
+
+  # ---------------------------------------------------------------------------
+  # Startup probe
+  # Metric: hopefx_startup_complete (0=not started, 1=complete)
+  # ---------------------------------------------------------------------------
+  - name: hopefx-startup
+    rules:
+      - alert: HopeFXStartupSlow
+        expr: hopefx_startup_complete == 0
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HOPEFX startup taking more than 3 minutes"
+          description: >
+            The application has been starting for more than 3 minutes without
+            completing. Check /api/health/startup for which tasks are pending.
+            This may indicate a slow DB migration, Redis connection issue, or
+            ML model load failure.
+
+      - alert: HopeFXStartupFailed
+        expr: hopefx_startup_complete == 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HOPEFX startup has not completed after 10 minutes"
+          description: >
+            The application startup probe has not returned 200 after 10
+            minutes. The pod is likely stuck. Check container logs and
+            consider restarting the pod.
+
+  # ---------------------------------------------------------------------------
+  # P&L Reconciliation
   # ---------------------------------------------------------------------------
   - name: hopefx-pnl-reconciliation
     rules:
       - alert: HopeFXPnLReconciliationGateFailed
-        # Gate is 0 (failed) and at least one fill has been recorded.
-        # Avoids false-positives during initial startup before any trades.
         expr: hopefx_pnl_recon_gate_passed == 0 and hopefx_sharpe_n_trades > 0
         for: 5m
         labels:
@@ -86,7 +338,6 @@ groups:
             Run: python -m ml.pnl_reconciler --reconcile
 
       - alert: HopeFXPnLDivergenceHigh
-        # Absolute divergence > $5 USD — escalate before the $1 gate fires.
         expr: hopefx_pnl_recon_divergence > 5
         for: 2m
         labels:
@@ -95,12 +346,9 @@ groups:
           summary: "P&L divergence between ledger and broker exceeds $5"
           description: >
             Absolute P&L divergence is {{ $value | humanize }} USD.
-            Ledger: {{ with query "hopefx_pnl_recon_ledger_total" }}{{ . | first | value | humanize }}{{ end }} USD,
-            Broker: {{ with query "hopefx_pnl_recon_broker_total" }}{{ . | first | value | humanize }}{{ end }} USD.
             Investigate unrecorded fills in execution/hopefx_engine.py.
 
       - alert: HopeFXPnLDivergenceWarning
-        # Absolute divergence > $1 USD — warning before critical threshold.
         expr: hopefx_pnl_recon_divergence > 1 and hopefx_pnl_recon_divergence <= 5
         for: 5m
         labels:
@@ -112,8 +360,6 @@ groups:
             Check for slippage discrepancies or partially recorded fills.
 
       - alert: HopeFXPnLReconciliationStale
-        # Gate metric has not been updated in 25 hours (stale_hours default is 24).
-        # Uses absence detection: if the metric disappears, the reconciler stopped.
         expr: (time() - hopefx_pnl_recon_gate_passed offset 25h) > 0 or absent(hopefx_pnl_recon_gate_passed)
         for: 30m
         labels:
