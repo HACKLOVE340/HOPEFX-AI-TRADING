@@ -4,12 +4,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { useStore } from '../store';
 import type { PriceTick, Position, Signal, AccountMetrics } from '../store';
+import * as useApiModule from '../hooks/useApi';
 
 /** Build a minimal valid JWT with exp 1 hour in the future. */
 function makeMockJwt(overrides: Record<string, unknown> = {}): string {
@@ -56,7 +57,13 @@ vi.mock('../hooks/useApi', () => ({
     walkForward: vi.fn().mockResolvedValue({ data: {} }),
     explain:     vi.fn().mockResolvedValue({ data: {} }),
   },
-  authApi: { login: vi.fn(), logout: vi.fn(), me: vi.fn() },
+  // authApi.me must return a resolved Promise — AuthGuard calls .me().then(...)
+  // on every mount to sync the role from the server.
+  authApi: {
+    login:  vi.fn(),
+    logout: vi.fn().mockResolvedValue({ data: {} }),
+    me:     vi.fn().mockResolvedValue({ data: { id: '1', email: 'a@b.com', username: 'trader1', role: 'trader' } }),
+  },
   backtestApi: { run: vi.fn(), results: vi.fn(), list: vi.fn() },
   performanceApi: {
     summary:     vi.fn().mockResolvedValue({ data: {} }),
@@ -323,6 +330,15 @@ describe('store → Dashboard integration', () => {
 // ─── Auth flow integration ────────────────────────────────────────────────────
 
 describe('auth flow integration', () => {
+  // Before each auth test, update authApi.me to echo back whatever user the
+  // test sets in the store. This prevents AuthGuard's role-sync from
+  // overwriting the role the test intentionally configured.
+  beforeEach(() => {
+    vi.mocked(useApiModule.authApi.me).mockImplementation(() =>
+      Promise.resolve({ data: useStore.getState().user ?? { id: '1', email: 'a@b.com', username: 'trader1', role: 'trader' } })
+    );
+  });
+
   it('AuthGuard blocks unauthenticated access', async () => {
     useStore.setState({ ...useStore.getState(), isAuthenticated: false, token: null, user: null });
     const AuthGuard = (await import('../components/AuthGuard')).default;
@@ -350,7 +366,9 @@ describe('auth flow integration', () => {
         </Routes>
       </MemoryRouter>
     );
-    expect(screen.getByText('Secret')).toBeInTheDocument();
+    // AuthGuard shows a spinner while syncing role from /api/auth/me.
+    // Wait for the spinner to resolve before asserting content.
+    await waitFor(() => expect(screen.getByText('Secret')).toBeInTheDocument());
   });
 
   it('clearAuth causes re-render to login', async () => {
@@ -366,7 +384,8 @@ describe('auth flow integration', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('Protected')).toBeInTheDocument();
+    // Wait past the role-sync spinner before asserting
+    await waitFor(() => expect(screen.getByText('Protected')).toBeInTheDocument());
 
     act(() => { useStore.getState().clearAuth(); });
 
