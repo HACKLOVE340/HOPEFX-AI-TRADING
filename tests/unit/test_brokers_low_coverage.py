@@ -1917,15 +1917,15 @@ class TestMT5ConnectorPlaceOrder:
 
     def test_place_order_not_connected(self, mt5_connector):
         conn, mod, mt5 = mt5_connector
-        from brokers.base import OrderSide
+        from brokers.base import OrderSide, OrderType
 
-        result = conn.place_order("XAUUSD", OrderSide.BUY, 0.01)
+        result = conn.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 0.01)
         assert result is None
 
     def test_place_order_market_buy(self, mt5_connector):
         conn, mod, mt5 = mt5_connector
         conn.connected = True
-        from brokers.base import OrderSide
+        from brokers.base import OrderSide, OrderType
 
         sym_info = MagicMock(visible=True)
         mt5.symbol_info.return_value = sym_info
@@ -1933,14 +1933,14 @@ class TestMT5ConnectorPlaceOrder:
         mt5.symbol_info_tick.return_value = tick
         result_obj = MagicMock(retcode=10009, order=1001, volume=0.01, price=1920.0, deal=2001)
         mt5.order_send.return_value = result_obj
-        order = conn.place_order("XAUUSD", OrderSide.BUY, 0.01)
+        order = conn.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 0.01)
         assert order is not None
         assert order.id == "1001"
 
     def test_place_order_market_sell(self, mt5_connector):
         conn, mod, mt5 = mt5_connector
         conn.connected = True
-        from brokers.base import OrderSide
+        from brokers.base import OrderSide, OrderType
 
         sym_info = MagicMock(visible=True)
         mt5.symbol_info.return_value = sym_info
@@ -1948,7 +1948,7 @@ class TestMT5ConnectorPlaceOrder:
         mt5.symbol_info_tick.return_value = tick
         result_obj = MagicMock(retcode=10009, order=1002, volume=0.01, price=1919.5, deal=2002)
         mt5.order_send.return_value = result_obj
-        order = conn.place_order("XAUUSD", OrderSide.SELL, 0.01)
+        order = conn.place_order("XAUUSD", OrderSide.SELL, OrderType.MARKET, 0.01)
         assert order is not None
 
     def test_place_order_limit(self, mt5_connector):
@@ -1960,7 +1960,7 @@ class TestMT5ConnectorPlaceOrder:
         mt5.symbol_info.return_value = sym_info
         result_obj = MagicMock(retcode=10009, order=1003, volume=0.01, price=1900.0, deal=2003)
         mt5.order_send.return_value = result_obj
-        order = conn.place_order("XAUUSD", OrderSide.BUY, 0.01, order_type=OrderType.LIMIT, price=1900.0)
+        order = conn.place_order("XAUUSD", OrderSide.BUY, OrderType.LIMIT, 0.01, price=1900.0)
         assert order is not None
 
     def test_place_order_stop(self, mt5_connector):
@@ -1972,38 +1972,38 @@ class TestMT5ConnectorPlaceOrder:
         mt5.symbol_info.return_value = sym_info
         result_obj = MagicMock(retcode=10009, order=1004, volume=0.01, price=1880.0, deal=2004)
         mt5.order_send.return_value = result_obj
-        order = conn.place_order("XAUUSD", OrderSide.SELL, 0.01, order_type=OrderType.STOP, price=1880.0)
+        order = conn.place_order("XAUUSD", OrderSide.SELL, OrderType.STOP, 0.01, price=1880.0)
         assert order is not None
 
     def test_place_order_symbol_not_found(self, mt5_connector):
         conn, mod, mt5 = mt5_connector
         conn.connected = True
-        from brokers.base import OrderSide
+        from brokers.base import OrderSide, OrderType
 
         mt5.symbol_info.return_value = None
-        result = conn.place_order("INVALID", OrderSide.BUY, 0.01)
+        result = conn.place_order("INVALID", OrderSide.BUY, OrderType.MARKET, 0.01)
         assert result is None
 
     def test_place_order_symbol_select_fails(self, mt5_connector):
         conn, mod, mt5 = mt5_connector
         conn.connected = True
-        from brokers.base import OrderSide
+        from brokers.base import OrderSide, OrderType
 
         sym_info = MagicMock(visible=False)
         mt5.symbol_info.return_value = sym_info
         mt5.symbol_select.return_value = False
-        result = conn.place_order("XAUUSD", OrderSide.BUY, 0.01)
+        result = conn.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 0.01)
         assert result is None
 
     def test_place_order_no_tick(self, mt5_connector):
         conn, mod, mt5 = mt5_connector
         conn.connected = True
-        from brokers.base import OrderSide
+        from brokers.base import OrderSide, OrderType
 
         sym_info = MagicMock(visible=True)
         mt5.symbol_info.return_value = sym_info
         mt5.symbol_info_tick.return_value = None
-        result = conn.place_order("XAUUSD", OrderSide.BUY, 0.01)
+        result = conn.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 0.01)
         assert result is None
 
     def test_place_order_unsupported_type(self, mt5_connector):
@@ -2013,13 +2013,13 @@ class TestMT5ConnectorPlaceOrder:
 
         sym_info = MagicMock(visible=True)
         mt5.symbol_info.return_value = sym_info
-        result = conn.place_order("XAUUSD", OrderSide.BUY, 0.01, order_type=OrderType.STOP_LIMIT)
+        result = conn.place_order("XAUUSD", OrderSide.BUY, OrderType.STOP_LIMIT, 0.01)
         assert result is None
 
     def test_place_order_retcode_not_done(self, mt5_connector):
         conn, mod, mt5 = mt5_connector
         conn.connected = True
-        from brokers.base import OrderSide
+        from brokers.base import OrderSide, OrderType
 
         sym_info = MagicMock(visible=True)
         mt5.symbol_info.return_value = sym_info
@@ -2027,13 +2027,13 @@ class TestMT5ConnectorPlaceOrder:
         mt5.symbol_info_tick.return_value = tick
         result_obj = MagicMock(retcode=10006, comment="Rejected")
         mt5.order_send.return_value = result_obj
-        result = conn.place_order("XAUUSD", OrderSide.BUY, 0.01)
+        result = conn.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 0.01)
         assert result is None
 
     def test_place_order_with_sl_tp(self, mt5_connector):
         conn, mod, mt5 = mt5_connector
         conn.connected = True
-        from brokers.base import OrderSide
+        from brokers.base import OrderSide, OrderType
 
         sym_info = MagicMock(visible=True)
         mt5.symbol_info.return_value = sym_info
@@ -2041,16 +2041,16 @@ class TestMT5ConnectorPlaceOrder:
         mt5.symbol_info_tick.return_value = tick
         result_obj = MagicMock(retcode=10009, order=1005, volume=0.01, price=1920.0, deal=2005)
         mt5.order_send.return_value = result_obj
-        order = conn.place_order("XAUUSD", OrderSide.BUY, 0.01, stop_loss=1880.0, take_profit=1950.0)
+        order = conn.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 0.01, stop_loss=1880.0, take_profit=1950.0)
         assert order is not None
 
     def test_place_order_exception(self, mt5_connector):
         conn, mod, mt5 = mt5_connector
         conn.connected = True
-        from brokers.base import OrderSide
+        from brokers.base import OrderSide, OrderType
 
         mt5.symbol_info.side_effect = Exception("crash")
-        result = conn.place_order("XAUUSD", OrderSide.BUY, 0.01)
+        result = conn.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 0.01)
         assert result is None
 
 

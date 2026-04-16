@@ -181,7 +181,7 @@ class MT5Connector(BrokerConnector):
         stop_loss: float | None = None,
         take_profit: float | None = None,
         **kwargs: Any,
-    ) -> Order:
+    ) -> Order | None:
         """
         Place order on MT5.
 
@@ -198,7 +198,8 @@ class MT5Connector(BrokerConnector):
             Order object if successful
         """
         if not self.connected:
-            raise RuntimeError("Not connected to MT5")
+            logger.warning("place_order called while not connected to MT5")
+            return None
 
         try:
             # Get symbol info
@@ -274,11 +275,9 @@ class MT5Connector(BrokerConnector):
 
             return order
 
-        except (RuntimeError, ValueError):
-            raise
         except Exception as e:
-            logger.error("Place order error: %s", e)
-            raise RuntimeError(f"place_order failed: {e}") from e
+            logger.error("place_order failed for %s: %s", symbol, e)
+            return None
 
     def cancel_order(self, order_id: str) -> bool:
         """Cancel pending order."""
@@ -405,15 +404,17 @@ class MT5Connector(BrokerConnector):
 
             return False
 
-    def get_account_info(self) -> AccountInfo:
+    def get_account_info(self) -> AccountInfo | None:
         """Get account information."""
         if not self.connected:
-            raise RuntimeError("Not connected to MT5")
+            logger.warning("get_account_info called while not connected to MT5")
+            return None
 
         try:
             account = mt5.account_info()
             if account is None:
-                raise RuntimeError("mt5.account_info() returned None")
+                logger.warning("mt5.account_info() returned None")
+                return None
 
             return AccountInfo(
                 balance=account.balance,
@@ -424,18 +425,16 @@ class MT5Connector(BrokerConnector):
                 timestamp=datetime.now(UTC),
             )
 
-        except RuntimeError:
-            raise
         except Exception as e:
-            logger.error("Get account info error: %s", e)
-            raise RuntimeError(f"get_account_info failed: {e}") from e
+            logger.error("get_account_info failed: %s", e)
+            return None
 
     def get_market_data(  # pylint: disable=arguments-differ
         self,
         symbol: str,
         timeframe: str = "H1",
         limit: int = 100,
-    ) -> list[dict[str, Any]]:
+    ) -> list[dict[str, Any]] | None:
         """
         Get historical market data.
 
@@ -448,7 +447,7 @@ class MT5Connector(BrokerConnector):
             List of candle dictionaries
         """
         if not self.connected:
-            return []
+            return None
 
         try:
             # Map timeframe to MT5 constant
@@ -469,7 +468,7 @@ class MT5Connector(BrokerConnector):
             # Get candles
             rates = mt5.copy_rates_from_pos(symbol, mt5_timeframe, 0, limit)
             if rates is None:
-                return []
+                return None
 
             candles: list[dict[str, Any]] = []
             for rate in rates:
@@ -487,9 +486,8 @@ class MT5Connector(BrokerConnector):
             return candles
 
         except Exception as e:
-            logger.error("Get market data error: %s", e)
-
-            return []
+            logger.error("get_market_data failed for %s: %s", symbol, e)
+            return None
 
     def get_symbols(self) -> list[str]:
         """Get all available symbols."""

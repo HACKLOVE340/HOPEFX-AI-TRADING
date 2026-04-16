@@ -979,7 +979,7 @@ class OANDABroker(BaseBroker):
                         f"Failed to connect after {self.max_retries} attempts",
                     ) from None
 
-    async def disconnect(self) -> None:
+    async def disconnect(self) -> bool:
         """Disconnect and cleanup"""
         if self._session:
             await self._session.close()
@@ -989,6 +989,7 @@ class OANDABroker(BaseBroker):
             self.connected = False
 
         logger.info("OANDA disconnected")
+        return True
 
     async def _make_request(self, method: str, endpoint: str, **kwargs: Any) -> dict[str, Any]:
         """Make API request with rate limiting and error handling"""
