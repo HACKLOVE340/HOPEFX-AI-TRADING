@@ -9,6 +9,7 @@ Complete SQLAlchemy models for all entities
 """
 
 import enum
+import json
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -1082,7 +1083,7 @@ if SQLALCHEMY_AVAILABLE:
 
         __tablename__ = "api_keys"
 
-        id = Column(String(36), primary_key=True, default=lambda: str(__import__("uuid").uuid4()))
+        id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
         user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
         name = Column(String(100), nullable=False)
         key_hash = Column(String(64), unique=True, nullable=False)  # SHA-256 of raw key
@@ -1104,7 +1105,7 @@ if SQLALCHEMY_AVAILABLE:
                 "user_id": self.user_id,
                 "name": self.name,
                 "prefix": self.key_prefix,
-                "scopes": __import__("json").loads(self.scopes) if self.scopes else [],
+                "scopes": json.loads(self.scopes) if self.scopes else [],
                 "is_active": self.is_active,
                 "created_at": self.created_at.isoformat() if self.created_at else None,
                 "last_used_at": self.last_used_at.isoformat() if self.last_used_at else None,
@@ -1125,7 +1126,7 @@ if SQLALCHEMY_AVAILABLE:
 
         __tablename__ = "aml_alerts"
 
-        id = Column(String(36), primary_key=True, default=lambda: str(__import__("uuid").uuid4()))
+        id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
         user_id = Column(String(36), nullable=False, index=True)
         username = Column(String(100), nullable=True)
         alert_type = Column(String(50), nullable=False)
@@ -1177,7 +1178,7 @@ if SQLALCHEMY_AVAILABLE:
 
         __tablename__ = "broker_connections"
 
-        id = Column(String(36), primary_key=True, default=lambda: str(__import__("uuid").uuid4()))
+        id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
         broker_name = Column(String(100), nullable=False, index=True)
         broker_type = Column(String(50), nullable=False, default="unknown")  # oanda/ibkr/bybit/etc.
         status = Column(String(20), nullable=False, default="disconnected")  # connected/disconnected/error

@@ -26,10 +26,10 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import timezone
+from datetime import datetime, timezone
+from decimal import Decimal
 
 UTC = timezone.utc
-from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -482,10 +482,8 @@ async def list_payments(
                         "status": c.get("status", "unknown"),
                         "provider": "stripe",
                         "created_at": (
-                            __import__("datetime")
-                            .datetime.fromtimestamp(c["created"], tz=__import__("datetime").timezone.utc)
-                            .isoformat()
-                            if isinstance(c.get("created"), int | float)
+                            datetime.fromtimestamp(c["created"], tz=UTC).isoformat()
+                            if isinstance(c.get("created"), (int, float))
                             else str(c.get("created", ""))
                         ),
                     }
@@ -606,7 +604,7 @@ async def process_refund(
     if payment:
         success = payment_processor.refund_payment(payment_id, reason=reason)
         if not success:
-            raise __import__("fastapi").HTTPException(
+            raise HTTPException(
                 status_code=400,
                 detail=f"Refund failed for payment {payment_id} — check server logs",
             )
@@ -624,7 +622,7 @@ async def process_refund(
         import stripe as _stripe_sdk
 
         get_stripe_client()
-        stripe_key = __import__("os").getenv("STRIPE_SECRET_KEY", "")
+        stripe_key = os.getenv("STRIPE_SECRET_KEY", "")
         if stripe_key:
             _stripe_sdk.api_key = stripe_key
             refund = _stripe_sdk.Refund.create(
