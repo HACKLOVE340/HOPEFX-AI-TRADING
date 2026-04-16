@@ -723,9 +723,8 @@ class StripeProductionClient:
             raise RuntimeError("Stripe SDK not available.")
         # Check subscription manager first
         try:
-            mgr_mod = __import__("monetization.subscription", fromlist=["subscription_manager"])
-            mgr = mgr_mod.subscription_manager
-            sub = mgr.get_user_subscription(user_id)
+            from monetization.subscription import subscription_manager as _sub_mgr
+            sub = _sub_mgr.get_user_subscription(user_id)
             if sub and getattr(sub, "stripe_customer_id", None):
                 return sub.stripe_customer_id
         except Exception:

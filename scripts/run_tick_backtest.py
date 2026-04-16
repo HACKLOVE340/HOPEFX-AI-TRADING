@@ -43,6 +43,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -151,8 +152,8 @@ def run_backtest(
     probs = model.predict_proba(X_vals)[:, 1]
 
     # Signal thresholds
-    threshold_long = float(__import__("os").getenv("SIGNAL_THRESHOLD_LONG", "0.60"))
-    threshold_short = float(__import__("os").getenv("SIGNAL_THRESHOLD_SHORT", "0.40"))
+    threshold_long = float(os.getenv("SIGNAL_THRESHOLD_LONG", "0.60"))
+    threshold_short = float(os.getenv("SIGNAL_THRESHOLD_SHORT", "0.40"))
 
     # Simulate trades with AlmgrenChriss fills
     from execution.market_impact import FillSimulator
