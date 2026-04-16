@@ -30,9 +30,17 @@ Provides endpoints for:
 import asyncio
 import logging
 import os
+import platform
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+# ── Windows asyncio/Redis compatibility ───────────────────────────────────────
+# On Windows, Python 3.8+ defaults to ProactorEventLoop which is incompatible
+# with redis-py's asyncio client (uses SelectorEventLoop internally).
+# Force SelectorEventLoop on Windows so Redis, aiohttp, and uvicorn all work.
+if platform.system() == "Windows":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())  # type: ignore[attr-defined]
 
 # Logger must be defined before any module-level try/except blocks that use it.
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -692,23 +700,30 @@ register_page_routes(app)  # mounts React dashboard LAST
 
 
 def run_server():
-    """Run the API server"""
-    # Default to localhost for security, use 0.0.0.0 only when explicitly set
-    # Set API_HOST=0.0.0.0 in production environment to bind to all interfaces
+    """Run the API server."""
+    # Default to localhost for security; set API_HOST=0.0.0.0 in production.
     host = os.getenv("API_HOST", "127.0.0.1")
     port = int(os.getenv("API_PORT", "8000"))
-    workers = int(os.getenv("API_WORKERS", "4"))
     reload = os.getenv("ENVIRONMENT", "development") == "development"
 
-    logger.info("Starting API server on %s:%s", host, port)
+    # On Windows, uvicorn must use a single worker with SelectorEventLoop.
+    # Multiple workers via fork() are not supported on Windows.
+    if platform.system() == "Windows":
+        workers = 1
+        loop = "asyncio"
+    else:
+        workers = int(os.getenv("API_WORKERS", "4"))
+        loop = "auto"
 
-    logger.info("Workers: %s, Reload: %s", workers, reload)
+    logger.info("Starting API server on %s:%s (workers=%d)", host, port, workers)
 
     uvicorn.run(
         "app:app",
         host=host,
         port=port,
         reload=reload,
+        workers=workers,
+        loop=loop,
         log_level="info",
     )
 
