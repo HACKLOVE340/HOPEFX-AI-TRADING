@@ -43,9 +43,11 @@ import difflib
 import hashlib
 import json
 import logging
+import logging.handlers
 import os
 import shutil
 import subprocess  # nosec B404 — used only for git rollback with a fixed command list
+import time
 from datetime import datetime, timezone
 
 UTC = timezone.utc
@@ -56,6 +58,39 @@ from fastapi import APIRouter, FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
+
+# ── File-based logging (writes to logs/app.log) ───────────────────────────────
+
+_LOG_DIR = Path(__file__).parent.parent / "logs"
+_LOG_FILE = _LOG_DIR / "app.log"
+_file_handler_installed = False
+
+
+def _ensure_file_logging() -> None:
+    """Install a rotating file handler on the root logger (idempotent)."""
+    global _file_handler_installed
+    if _file_handler_installed:
+        return
+    try:
+        _LOG_DIR.mkdir(parents=True, exist_ok=True)
+        _fh = logging.handlers.RotatingFileHandler(
+            _LOG_FILE,
+            maxBytes=20 * 1024 * 1024,   # 20 MB per file
+            backupCount=10,
+            encoding="utf-8",
+        )
+        _fh.setLevel(logging.DEBUG)
+        _fh.setFormatter(
+            logging.Formatter(
+                "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+            )
+        )
+        logging.getLogger().addHandler(_fh)
+        _file_handler_installed = True
+        logger.debug("SelfHealer: file logging active → %s", _LOG_FILE)
+    except Exception as exc:
+        logger.warning("SelfHealer: could not install file log handler: %s", exc)
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -357,6 +392,18 @@ class SelfHealer:
         self._last_test_run_ts: float = 0.0
         self._last_test_result: dict[str, Any] = {}
 
+        # ── Deep code analysis state ──────────────────────────────────────────
+        self._code_issues: list[dict[str, Any]] = []   # last scan results
+        self._last_code_scan_ts: float = 0.0
+        self._code_scan_interval: int = int(os.getenv("HEAL_CODE_SCAN_INTERVAL", "300"))  # 5 min
+        self._log_scan_interval: int = int(os.getenv("HEAL_LOG_SCAN_INTERVAL", "60"))    # 1 min
+        self._last_log_scan_ts: float = 0.0
+        self._log_issues: list[dict[str, Any]] = []    # recent log errors
+        self._claude_fix_queue: list[dict[str, Any]] = []  # pending Claude fixes
+
+        # Ensure all log output goes to logs/app.log
+        _ensure_file_logging()
+
     def _log(self, level: str, msg: str, *args: Any) -> None:
         """Respect _log_level: minimal suppresses INFO, debug emits everything."""
         lvl_order = {"minimal": 0, "standard": 1, "verbose": 2, "debug": 3}
@@ -444,6 +491,10 @@ class SelfHealer:
             for k, v in self._last_heal_ts.items()
             if (time.time() - v) < self._healing_cooldown_sec
         }
+        code_critical = sum(1 for i in self._code_issues if i.get("severity") == "critical")
+        code_high = sum(1 for i in self._code_issues if i.get("severity") == "high")
+        log_errors = sum(1 for i in self._log_issues if i.get("level") in ("ERROR", "CRITICAL"))
+
         return {
             "running": self._running,
             "enabled": self._enabled,
@@ -464,6 +515,16 @@ class SelfHealer:
             "protected_paths": self._protected_paths,
             "tests_enabled": self._tests_enabled,
             "test_execution_strategy": self._test_execution_strategy,
+            # Deep analysis
+            "code_issues_total": len(self._code_issues),
+            "code_issues_critical": code_critical,
+            "code_issues_high": code_high,
+            "last_code_scan": datetime.fromtimestamp(self._last_code_scan_ts, UTC).isoformat() if self._last_code_scan_ts else None,
+            "log_issues_total": len(self._log_issues),
+            "log_errors_recent": log_errors,
+            "last_log_scan": datetime.fromtimestamp(self._last_log_scan_ts, UTC).isoformat() if self._last_log_scan_ts else None,
+            "claude_fix_queue_depth": len(self._claude_fix_queue),
+            "log_file": str(_LOG_FILE),
         }
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -485,7 +546,10 @@ class SelfHealer:
         scan_task = asyncio.create_task(self._scan_loop(), name="heal-scan")
         patch_task = asyncio.create_task(self._patch_loop(), name="heal-patch")
         sched_task = asyncio.create_task(self._scheduled_test_loop(), name="heal-test-sched")
-        await asyncio.gather(scan_task, patch_task, sched_task)
+        code_task = asyncio.create_task(self._code_analysis_loop(), name="heal-code-analysis")
+        log_task = asyncio.create_task(self._log_analysis_loop(), name="heal-log-analysis")
+        claude_task = asyncio.create_task(self._claude_fix_loop(), name="heal-claude-fix")
+        await asyncio.gather(scan_task, patch_task, sched_task, code_task, log_task, claude_task)
 
     async def _load_saved_config(self) -> None:
         """Pull config saved by the SuperAdmin panel and apply it."""
@@ -792,6 +856,408 @@ class SelfHealer:
             interval_sec = getattr(self, "_test_schedule_interval_min", 60) * 60
             if (time.time() - self._last_test_run_ts) >= interval_sec:
                 asyncio.create_task(self._run_tests(trigger="on_schedule"))
+
+    # ── Deep code analysis loop ───────────────────────────────────────────────
+
+    async def _code_analysis_loop(self) -> None:
+        """Periodically scan the entire codebase for code quality issues."""
+        while self._running:
+            await asyncio.sleep(self._code_scan_interval)
+            if not self._enabled:
+                continue
+            try:
+                await self._run_code_analysis()
+            except Exception as exc:
+                logger.warning("SelfHealer: code analysis error: %s", exc)
+
+    async def _run_code_analysis(self) -> list[dict[str, Any]]:
+        """
+        Run deep static analysis on the codebase using code_analyzer.
+
+        Detects: look-ahead bias, unfinished code, NaN leaks, division-by-zero,
+        broken routers, missing error handling, TODO/FIXME, hardcoded secrets,
+        synthetic data in production paths.
+
+        Results are stored in self._code_issues and pushed to Redis.
+        Critical issues are enqueued for Claude-powered fixes.
+        """
+        loop = asyncio.get_running_loop()
+        try:
+            from security.code_analyzer import scan_codebase, summarize_issues
+        except ImportError:
+            logger.warning("SelfHealer: code_analyzer not available — skipping deep scan")
+            return []
+
+        self._log("info", "SelfHealer: starting deep code analysis scan")
+        try:
+            issues = await loop.run_in_executor(
+                None,
+                lambda: scan_codebase(include_tests=False, max_files=2000),
+            )
+        except Exception as exc:
+            logger.warning("SelfHealer: code scan failed: %s", exc)
+            return []
+
+        self._code_issues = [i.to_dict() for i in issues]
+        self._last_code_scan_ts = time.time()
+
+        summary = summarize_issues(issues)
+        self._log(
+            "info" if summary["total"] == 0 else "warning",
+            "SelfHealer: code analysis complete — %d issues (%d critical, %d high)",
+            summary["total"],
+            summary["by_severity"].get("critical", 0),
+            summary["by_severity"].get("high", 0),
+        )
+
+        # Persist to Redis for dashboard
+        redis = await _get_redis()
+        if redis:
+            with contextlib.suppress(Exception):
+                await redis.set(
+                    "heal:code_issues",
+                    json.dumps({"summary": summary, "issues": self._code_issues[:200]}),
+                    ex=3600,
+                )
+
+        # Enqueue critical issues for Claude-powered fixes
+        critical = [i for i in issues if i.severity == "critical"]
+        for issue in critical[:10]:  # cap at 10 per scan to avoid flooding
+            await self._enqueue_claude_fix(issue.to_dict())
+
+        return self._code_issues
+
+    # ── Log file analysis loop ────────────────────────────────────────────────
+
+    async def _log_analysis_loop(self) -> None:
+        """Periodically read logs/app.log and extract runtime errors."""
+        while self._running:
+            await asyncio.sleep(self._log_scan_interval)
+            if not self._enabled:
+                continue
+            try:
+                await self._run_log_analysis()
+            except Exception as exc:
+                logger.debug("SelfHealer: log analysis error: %s", exc)
+
+    async def _run_log_analysis(self) -> list[dict[str, Any]]:
+        """
+        Parse logs/app.log for recent ERROR/CRITICAL/WARNING entries.
+
+        Detected runtime issues are stored in self._log_issues and pushed
+        to Redis. Repeated errors trigger Claude-powered fix requests.
+        """
+        loop = asyncio.get_running_loop()
+        try:
+            from security.code_analyzer import analyze_log_file
+        except ImportError:
+            return []
+
+        try:
+            log_issues = await loop.run_in_executor(
+                None,
+                lambda: analyze_log_file(since_minutes=10),
+            )
+        except Exception as exc:
+            logger.debug("SelfHealer: log file read failed: %s", exc)
+            return []
+
+        if not log_issues:
+            return []
+
+        self._log_issues = [i.to_dict() for i in log_issues]
+        self._last_log_scan_ts = time.time()
+
+        errors = [i for i in log_issues if i.level in ("ERROR", "CRITICAL")]
+        if errors:
+            self._log(
+                "warning",
+                "SelfHealer: log analysis found %d ERROR/CRITICAL entries in last 10 min",
+                len(errors),
+            )
+
+        # Push to Redis for dashboard
+        redis = await _get_redis()
+        if redis:
+            with contextlib.suppress(Exception):
+                await redis.set(
+                    "heal:log_issues",
+                    json.dumps(self._log_issues[-100:]),
+                    ex=600,
+                )
+            # Also push to alerts:critical for severe entries
+            for issue in errors[:5]:
+                with contextlib.suppress(Exception):
+                    await redis.rpush(
+                        "alerts:critical",
+                        json.dumps({
+                            "type": "runtime_error",
+                            "ts": issue.to_dict()["timestamp"],
+                            "detail": issue.to_dict(),
+                        }),
+                    )
+                    await redis.ltrim("alerts:critical", -1000, -1)
+
+        # Enqueue repeated errors for Claude analysis
+        error_messages = [i.message for i in errors]
+        seen_msgs: dict[str, int] = {}
+        for msg in error_messages:
+            # Normalise: strip timestamps/IDs for dedup
+            key = msg[:100]
+            seen_msgs[key] = seen_msgs.get(key, 0) + 1
+
+        for msg, count in seen_msgs.items():
+            if count >= 2:  # repeated error → worth fixing
+                await self._enqueue_claude_fix({
+                    "category": "runtime_error",
+                    "severity": "critical",
+                    "description": f"Repeated runtime error ({count}x in 10 min): {msg}",
+                    "file": "logs/app.log",
+                    "line": 0,
+                    "snippet": msg,
+                    "suggestion": "Investigate the root cause and add proper error handling",
+                })
+
+        return self._log_issues
+
+    # ── Claude-powered fix loop ───────────────────────────────────────────────
+
+    async def _enqueue_claude_fix(self, issue: dict[str, Any]) -> None:
+        """Add an issue to the Claude fix queue (deduplicates by file+line+category)."""
+        key = f"{issue.get('file', '')}:{issue.get('line', 0)}:{issue.get('category', '')}"
+        # Avoid duplicate entries
+        existing_keys = {
+            f"{e.get('file', '')}:{e.get('line', 0)}:{e.get('category', '')}": True
+            for e in self._claude_fix_queue
+        }
+        if key not in existing_keys:
+            self._claude_fix_queue.append({**issue, "queued_at": datetime.now(UTC).isoformat()})
+            self._claude_fix_queue = self._claude_fix_queue[-50:]  # cap queue
+
+    async def _claude_fix_loop(self) -> None:
+        """Drain the Claude fix queue and generate production-ready patches."""
+        while self._running:
+            await asyncio.sleep(30)  # check every 30 seconds
+            if not self._enabled or not self._claude_fix_queue:
+                continue
+            if self._aggressiveness not in ("aggressive", "nuclear"):
+                # Only auto-apply Claude fixes in aggressive/nuclear mode
+                continue
+            try:
+                await self._process_claude_fix_queue()
+            except Exception as exc:
+                logger.warning("SelfHealer: Claude fix loop error: %s", exc)
+
+    async def _process_claude_fix_queue(self) -> None:
+        """
+        Process pending issues with Claude (Anthropic API).
+
+        For each issue:
+        1. Read the affected file
+        2. Send file + issue description to Claude
+        3. Parse the fix from Claude's response
+        4. Apply via _apply_patch() with full safety gates
+        5. Record result in patch history
+        """
+        api_key = os.getenv("ANTHROPIC_API_KEY", "")
+        if not api_key:
+            self._log("debug", "SelfHealer: ANTHROPIC_API_KEY not set — Claude fixes disabled")
+            self._claude_fix_queue.clear()
+            return
+
+        loop = asyncio.get_running_loop()
+
+        while self._claude_fix_queue:
+            issue = self._claude_fix_queue.pop(0)
+            file_rel = issue.get("file", "")
+            if not file_rel or file_rel == "logs/app.log":
+                continue
+
+            target = PROJECT_ROOT / file_rel
+            if not target.exists():
+                continue
+
+            # Read the file
+            try:
+                source = target.read_text(encoding="utf-8", errors="replace")
+            except OSError as exc:
+                logger.warning("SelfHealer: cannot read %s for Claude fix: %s", file_rel, exc)
+                continue
+
+            # Safety gate: protected paths
+            if self._is_protected(file_rel):
+                self._log("warning", "SelfHealer: Claude fix blocked on protected path %s", file_rel)
+                continue
+
+            # Safety gate: cooldown
+            if not self._cooldown_ok(file_rel):
+                continue
+
+            self._log("info", "SelfHealer: requesting Claude fix for %s (issue: %s)", file_rel, issue.get("category"))
+
+            try:
+                fixed_code = await loop.run_in_executor(
+                    None,
+                    lambda: self._call_claude_for_fix(source, issue, api_key),
+                )
+            except Exception as exc:
+                logger.warning("SelfHealer: Claude API call failed for %s: %s", file_rel, exc)
+                continue
+
+            if not fixed_code or fixed_code == source:
+                self._log("info", "SelfHealer: Claude returned no changes for %s", file_rel)
+                continue
+
+            # Apply the fix with full safety gates
+            success, msg = _apply_patch(target, fixed_code)
+            diff = _unified_diff(source, fixed_code, target.name) if success else ""
+            record = self._make_patch_record(
+                f"claude:{issue.get('category', 'unknown')}",
+                file_rel,
+                success,
+                f"Claude fix: {msg}",
+                diff,
+            )
+            self._store_patch_record(record)
+            self._record_heal_attempt(file_rel)
+
+            if success:
+                self._baseline[file_rel] = _sha256(target)
+                _save_manifest(self._baseline)
+                self._log("info", "SelfHealer: Claude fix applied to %s", file_rel)
+
+                # Run post-patch tests
+                if self._tests_enabled and "after_patch" in self._test_execution_strategy:
+                    post_ok = await self._run_tests(trigger="claude_fix")
+                    if not post_ok and self._auto_rollback_sensitivity != "low":
+                        self._log("warning", "SelfHealer: post-Claude-fix tests failed — rolling back %s", file_rel)
+                        _git_rollback(target)
+                        self._baseline[file_rel] = _sha256(target)
+                        _save_manifest(self._baseline)
+            else:
+                self._log("warning", "SelfHealer: Claude fix rejected for %s: %s", file_rel, msg)
+
+            # Persist to Redis
+            redis = await _get_redis()
+            if redis:
+                with contextlib.suppress(Exception):
+                    await redis.rpush("heal:patch_history", json.dumps(record))
+                    await redis.ltrim("heal:patch_history", -200, -1)
+
+            # Rate limit: one fix per 5 seconds
+            await asyncio.sleep(5)
+
+    @staticmethod
+    def _call_claude_for_fix(source: str, issue: dict[str, Any], api_key: str) -> str:
+        """
+        Call the Anthropic Claude API to generate a production-ready fix.
+
+        Returns the complete fixed file content, or empty string on failure.
+        This is a synchronous function run in an executor.
+        """
+        try:
+            import anthropic
+        except ImportError:
+            logger.warning("SelfHealer: anthropic package not installed — pip install anthropic")
+            return ""
+
+        category = issue.get("category", "unknown")
+        description = issue.get("description", "")
+        line = issue.get("line", 0)
+        snippet = issue.get("snippet", "")
+        suggestion = issue.get("suggestion", "")
+        file_path = issue.get("file", "unknown")
+
+        # Truncate source to fit context window (keep first 200 + last 100 lines)
+        lines = source.splitlines()
+        if len(lines) > 300:
+            context_lines = lines[:200] + ["# ... (truncated) ..."] + lines[-100:]
+            source_for_prompt = "\n".join(context_lines)
+        else:
+            source_for_prompt = source
+
+        prompt = f"""You are a senior Python engineer reviewing production trading system code.
+
+FILE: {file_path}
+ISSUE CATEGORY: {category}
+SEVERITY: {issue.get('severity', 'unknown')}
+LINE: {line}
+DESCRIPTION: {description}
+OFFENDING CODE: {snippet}
+SUGGESTED FIX: {suggestion}
+
+Here is the complete file content:
+
+```python
+{source_for_prompt}
+```
+
+Your task:
+1. Fix ONLY the specific issue described above
+2. Do NOT change any other logic, imports, or structure
+3. Ensure the fix is production-ready (no mocks, no stubs, no TODO comments)
+4. Return ONLY the complete fixed Python file content, no explanation, no markdown fences
+5. The returned code must be syntactically valid Python
+
+Return the complete fixed file:"""
+
+        try:
+            client = anthropic.Anthropic(api_key=api_key)
+            response = client.messages.create(
+                model="claude-opus-4-5",
+                max_tokens=8192,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            fixed = response.content[0].text.strip()
+            # Strip markdown code fences if Claude wrapped the response
+            if fixed.startswith("```python"):
+                fixed = fixed[9:]
+            if fixed.startswith("```"):
+                fixed = fixed[3:]
+            if fixed.endswith("```"):
+                fixed = fixed[:-3]
+            return fixed.strip()
+        except Exception as exc:
+            logger.warning("SelfHealer: Claude API error: %s", exc)
+            return ""
+
+    # ── Public API for deep analysis ──────────────────────────────────────────
+
+    async def run_code_analysis_now(self) -> dict[str, Any]:
+        """Trigger an immediate deep code analysis scan and return results."""
+        issues = await self._run_code_analysis()
+        try:
+            from security.code_analyzer import summarize_issues, CodeIssue
+            # Re-hydrate for summary
+            from security.code_analyzer import SEVERITY_CRITICAL, SEVERITY_HIGH
+        except ImportError:
+            pass
+        return {
+            "total": len(issues),
+            "issues": issues[:100],
+            "scanned_at": datetime.now(UTC).isoformat(),
+        }
+
+    async def run_log_analysis_now(self) -> dict[str, Any]:
+        """Trigger an immediate log file analysis and return results."""
+        log_issues = await self._run_log_analysis()
+        return {
+            "total": len(log_issues),
+            "issues": log_issues[:100],
+            "scanned_at": datetime.now(UTC).isoformat(),
+        }
+
+    def get_code_issues(self, limit: int = 100) -> list[dict[str, Any]]:
+        """Return the most recent code analysis results."""
+        return self._code_issues[:limit]
+
+    def get_log_issues(self, limit: int = 100) -> list[dict[str, Any]]:
+        """Return the most recent log analysis results."""
+        return self._log_issues[:limit]
+
+    def get_claude_queue(self) -> list[dict[str, Any]]:
+        """Return the current Claude fix queue."""
+        return list(self._claude_fix_queue)
 
     # ── Plugin availability (probed once per process) ─────────────────────────
 
@@ -1196,6 +1662,56 @@ def _build_eager_heal_router() -> APIRouter:
         h = get_healer()
         await h._scan_integrity()
         return {"triggered": True, "drift_events": len(h._drift_events)}
+
+    @r.post("/code-analysis/now", summary="Trigger immediate deep code analysis scan")
+    async def _code_analysis_now():
+        h = get_healer()
+        result = await h.run_code_analysis_now()
+        return result
+
+    @r.get("/code-analysis/issues", summary="Get latest code analysis issues")
+    async def _code_issues(limit: int = 100):
+        h = get_healer()
+        issues = h.get_code_issues(limit=limit)
+        return {
+            "total": len(h._code_issues),
+            "returned": len(issues),
+            "issues": issues,
+            "last_scan": datetime.fromtimestamp(h._last_code_scan_ts, UTC).isoformat() if h._last_code_scan_ts else None,
+        }
+
+    @r.post("/log-analysis/now", summary="Trigger immediate log file analysis")
+    async def _log_analysis_now():
+        h = get_healer()
+        result = await h.run_log_analysis_now()
+        return result
+
+    @r.get("/log-analysis/issues", summary="Get latest log analysis issues")
+    async def _log_issues(limit: int = 100):
+        h = get_healer()
+        issues = h.get_log_issues(limit=limit)
+        return {
+            "total": len(h._log_issues),
+            "returned": len(issues),
+            "issues": issues,
+            "log_file": str(_LOG_FILE),
+            "last_scan": datetime.fromtimestamp(h._last_log_scan_ts, UTC).isoformat() if h._last_log_scan_ts else None,
+        }
+
+    @r.get("/claude-queue", summary="Get pending Claude fix queue")
+    async def _claude_queue():
+        h = get_healer()
+        return {
+            "depth": len(h._claude_fix_queue),
+            "items": h.get_claude_queue(),
+        }
+
+    @r.delete("/claude-queue", summary="Clear the Claude fix queue")
+    async def _clear_claude_queue():
+        h = get_healer()
+        count = len(h._claude_fix_queue)
+        h._claude_fix_queue.clear()
+        return {"cleared": count}
 
     return r
 

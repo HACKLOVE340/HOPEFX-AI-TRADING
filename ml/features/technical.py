@@ -319,7 +319,7 @@ class TechnicalFeatureEngineer:
             periods = kwargs.get("periods", 5)
             threshold = kwargs.get("threshold", 0.01)  # 1%
 
-            forward_return = close.shift(-periods) / close - 1
+            forward_return = close.shift(-periods) / close - 1  # noqa: lookahead-ok — label creation only, never used as a feature
 
             labels = pd.Series(1, index=df.index)  # HOLD
             labels[forward_return > threshold] = 2  # BUY
@@ -329,7 +329,7 @@ class TechnicalFeatureEngineer:
             # Label based on trend direction
             periods = kwargs.get("periods", 10)
 
-            future_ma = close.shift(-periods).rolling(window=periods).mean()
+            future_ma = close.shift(-periods).rolling(window=periods).mean()  # noqa: lookahead-ok — label creation only
             current_price = close
 
             labels = pd.Series(1, index=df.index)  # HOLD
@@ -344,8 +344,8 @@ class TechnicalFeatureEngineer:
             high_max = df["high"].rolling(window=lookback).max()
             low_min = df["low"].rolling(window=lookback).min()
 
-            future_high = df["high"].shift(-1)
-            future_low = df["low"].shift(-1)
+            future_high = df["high"].shift(-1)  # noqa: lookahead-ok — label creation only
+            future_low = df["low"].shift(-1)    # noqa: lookahead-ok — label creation only
 
             labels = pd.Series(1, index=df.index)  # HOLD
             labels[future_high > high_max * (1 + threshold)] = 2  # BUY (breakout up)

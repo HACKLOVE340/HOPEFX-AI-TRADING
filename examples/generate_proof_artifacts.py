@@ -384,7 +384,7 @@ def add_features(df: pd.DataFrame, macro_df=None) -> pd.DataFrame:
             d[col] = 0.0
 
     # ── Target ────────────────────────────────────────────────────────────────
-    d["target"] = (c.shift(-1) > c).astype(int)
+    d["target"] = (c.shift(-1) > c).astype(int)  # noqa: lookahead-ok — supervised label
 
     return d.dropna()
 
