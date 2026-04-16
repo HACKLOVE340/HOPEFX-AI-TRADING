@@ -60,54 +60,11 @@ def register_page_routes(app: FastAPI) -> None:
         )
         return Response(content=_ico_bytes, media_type="image/x-icon")
 
-    @app.get("/admin", response_class=HTMLResponse, tags=["Admin"], include_in_schema=False)
-    async def admin_redirect():
-        """Redirect /admin to the admin dashboard at /api/admin/."""
-        return HTMLResponse(
-            content='<html><head><meta http-equiv="refresh" content="0;url=/api/admin/"></head>'
-            "<body>Redirecting to admin dashboard…</body></html>",
-            status_code=200,
-        )
-
-    @app.get("/superadmin", response_class=HTMLResponse, tags=["Admin"], include_in_schema=False)
-    async def superadmin_redirect():
-        """Redirect /superadmin to the superadmin control center at /api/superadmin/."""
-        return HTMLResponse(
-            content='<html><head><meta http-equiv="refresh" content="0;url=/api/superadmin/"></head>'
-            "<body>Redirecting to SuperAdmin control center…</body></html>",
-            status_code=200,
-        )
-
-    @app.get("/login", response_class=HTMLResponse, tags=["Auth"], include_in_schema=False)
-    async def login_page():
-        """Serve the login page."""
-        return _serve_template(
-            "login.html",
-            '<html><body><p>Login template missing. <a href="/docs">Use /docs to authenticate.</a></p></body></html>',
-        )
-
-    @app.get("/register", response_class=HTMLResponse, tags=["Auth"], include_in_schema=False)
-    async def register_page():
-        """Redirect /register to the login page (registration is via API)."""
-        return HTMLResponse(
-            content='<html><head><meta http-equiv="refresh" content="0;url=/login"></head>'
-            "<body>Redirecting to login…</body></html>",
-            status_code=200,
-        )
-
-    @app.get(
-        "/dashboard",
-        response_class=HTMLResponse,
-        tags=["Dashboard"],
-        include_in_schema=False,
-    )
-    async def dashboard_redirect():
-        """Redirect /dashboard to the paper-trading dashboard."""
-        return HTMLResponse(
-            content='<html><head><meta http-equiv="refresh" content="0;url=/paper-trading"></head>'
-            "<body>Redirecting…</body></html>",
-            status_code=200,
-        )
+    # NOTE: /login, /register, /dashboard, /admin, /superadmin are intentionally
+    # NOT registered here. The React SPA (mounted below with html=True) serves
+    # index.html for all unmatched paths, which lets React Router handle them.
+    # Adding server-side routes for those paths would intercept the browser
+    # request before React Router runs and break client-side navigation.
 
     @app.get("/pricing", response_class=HTMLResponse, tags=["Monetization"])
     async def pricing_page():
