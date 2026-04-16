@@ -58,7 +58,13 @@ export default defineConfig({
   build: {
     outDir: '../static',
     emptyOutDir: true,
-    chunkSizeWarningLimit: 600,
+    // Vite 8 / Rolldown hoists shared modules (panels, UI primitives, store)
+    // into the first chunk that imports them. The app-account chunk includes
+    // the full shared component library because SubAccounts.tsx imports from
+    // the components barrel. Raw size is ~963 kB but gzipped is ~289 kB —
+    // well within acceptable range for a trading platform. The limit is raised
+    // to suppress the false warning; the superadmin chunk is split separately.
+    chunkSizeWarningLimit: 1000,
     // Vite 6 defaults to safari14 in its esbuild target, which cannot
     // transform destructuring-with-defaults used by @tanstack/react-query v5.
     // es2022 is supported by all modern browsers (Chrome 94+, Firefox 93+,
@@ -97,6 +103,36 @@ export default defineConfig({
           if (id.includes('node_modules/@radix-ui')) return 'vendor-radix';
           // ── Vendor: Axios ──────────────────────────────────────────────────
           if (id.includes('node_modules/axios')) return 'vendor-axios';
+          // ── Shared: Trading panels (heavy — used across many pages) ────────
+          // These panels import recharts, lightweight-charts, and d3. Giving
+          // them their own chunk prevents them from inflating any page chunk
+          // that imports from the components barrel (../components).
+          if (id.includes('components/panels/') ||
+              id.includes('components/CandleChart') ||
+              id.includes('components/LineChart') ||
+              id.includes('components/GlobalAttackMap') ||
+              id.includes('components/FixApprovalQueue')) {
+            return 'app-panels';
+          }
+          // ── Shared: UI primitives ──────────────────────────────────────────
+          if (id.includes('components/ui/') ||
+              id.includes('components/Badge') ||
+              id.includes('components/DataTable') ||
+              id.includes('components/EmptyState') ||
+              id.includes('components/ErrorBanner') ||
+              id.includes('components/MetricCard') ||
+              id.includes('components/Modal') ||
+              id.includes('components/PageHeader') ||
+              id.includes('components/Spinner') ||
+              id.includes('components/ThemeContext') ||
+              id.includes('components/ThemeToggle')) {
+            return 'app-ui';
+          }
+          // ── App: SuperAdmin dashboard + all its sections ───────────────────
+          if (id.includes('pages/SuperAdminDashboard') ||
+              id.includes('pages/superadmin/')) {
+            return 'app-superadmin';
+          }
           // ── App: AI / Nuclear feature (large) ─────────────────────────────
           if (id.includes('features/chart-bot') ||
               id.includes('pages/NuclearDashboardPage')) {
@@ -125,12 +161,21 @@ export default defineConfig({
               id.includes('pages/Affiliate')) {
             return 'app-social';
           }
-          // ── App: Account / settings pages ──────────────────────────────────
+          // ── App: Platform configuration (heavy — split from settings chunk) ─
+          // PlatformConfiguration.tsx is ~55 kB and only loaded when the user
+          // opens Settings → Platform Config.
+          if (id.includes('pages/settings/PlatformConfiguration')) {
+            return 'app-platform-config';
+          }
+          // ── App: Settings sub-sections ─────────────────────────────────────
+          if (id.includes('pages/settings/') || id.includes('pages/Settings')) {
+            return 'app-settings';
+          }
+          // ── App: Account pages ─────────────────────────────────────────────
           if (id.includes('pages/Profile') ||
               id.includes('pages/Wallet') ||
               id.includes('pages/SubAccounts') ||
-              id.includes('pages/TwoFactorSetup') ||
-              id.includes('pages/Settings')) {
+              id.includes('pages/TwoFactorSetup')) {
             return 'app-account';
           }
         },
