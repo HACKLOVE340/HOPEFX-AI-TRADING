@@ -60,7 +60,7 @@ ENV APP_ENV=production
 ENV API_PORT=8000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:${API_PORT}/health || exit 1
+    CMD curl -f http://localhost:${API_PORT}/api/health/live || exit 1
 
 # Run pre-flight checks then start the API server.
 # Set SKIP_TESTS=true or SKIP_MIGRATIONS=true in .env to speed up restarts.

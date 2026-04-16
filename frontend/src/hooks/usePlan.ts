@@ -14,7 +14,7 @@
 
 import { useEffect, useRef } from 'react';
 import { api } from './useApi';
-import { useStore, selectIsAuth } from '../store';
+import { useStore, selectIsAuth, useHasHydrated } from '../store';
 import type { Plan } from '../lib/subscription';
 
 interface BillingResponse {
@@ -30,12 +30,15 @@ function normalisePlan(raw: string | undefined): Plan {
 }
 
 export function usePlan(): void {
-  const isAuth  = useStore(selectIsAuth);
-  const setPlan = useStore((s) => s.setPlan);
-  const warned  = useRef(false);
+  const isAuth   = useStore(selectIsAuth);
+  const hydrated = useHasHydrated();
+  const setPlan  = useStore((s) => s.setPlan);
+  const warned   = useRef(false);
 
   useEffect(() => {
-    if (!isAuth) return;
+    // Wait for localStorage rehydration before reading isAuth — otherwise
+    // this fires with isAuth=false and skips the fetch entirely.
+    if (!hydrated || !isAuth) return;
 
     let cancelled = false;
 
@@ -69,5 +72,5 @@ export function usePlan(): void {
       });
 
     return () => { cancelled = true; };
-  }, [isAuth, setPlan]);
+  }, [hydrated, isAuth, setPlan]);
 }

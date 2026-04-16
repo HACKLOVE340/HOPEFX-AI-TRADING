@@ -35,8 +35,10 @@ export const ROLE_RANK: Record<UserRole, number> = {
 
 /** Features gated by subscription plan */
 export const PLAN_FEATURES: Record<string, Plan> = {
-  // Free
+  // Free — available to all authenticated users
   dashboard:    'free',
+  trade:        'free',   // basic order entry / paper trading terminal
+  portfolio:    'free',   // portfolio overview
   watchlist:    'free',
   calendar:     'free',
   leaderboard:  'free',
@@ -54,7 +56,7 @@ export const PLAN_FEATURES: Record<string, Plan> = {
   wallet:       'starter',
 
   // Pro
-  trading:        'pro',
+  trading:        'pro',   // advanced charting terminal
   'ai-strategy':  'pro',
   'copy-trading': 'pro',
   'prop-firm':    'pro',
