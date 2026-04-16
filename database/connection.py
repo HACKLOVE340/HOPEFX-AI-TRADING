@@ -497,17 +497,59 @@ if SQLALCHEMY_AVAILABLE:
         """
         FastAPI dependency that yields a SQLAlchemy session.
 
+        The database circuit breaker is checked before opening a session.
+        When the DB has been failing repeatedly, the breaker opens and
+        raises immediately rather than blocking on a connection timeout.
+
         Usage::
 
             @router.get("/items")
             def list_items(db: Session = Depends(get_db)):
                 ...
         """
-        db = _get_or_init_manager()._session_factory()
+        # Check DB circuit breaker before attempting a connection
         try:
-            yield db
-        finally:
-            db.close()
+            from resilience.service_circuit_breakers import db_breaker, CircuitBreakerOpenError as _CBOpen
+            if db_breaker.is_open:
+                raise RuntimeError(
+                    "Database circuit breaker is OPEN — service temporarily unavailable. "
+                    f"Retry in {db_breaker._seconds_until_probe():.0f}s."
+                )
+        except ImportError:
+            pass
+
+        try:
+            db = _get_or_init_manager()._session_factory()
+            # Record success with the DB circuit breaker
+            try:
+                from resilience.service_circuit_breakers import db_breaker as _db_cb
+                import asyncio as _asyncio
+                try:
+                    loop = _asyncio.get_event_loop()
+                    if loop.is_running():
+                        _asyncio.ensure_future(_db_cb._on_success())
+                except Exception:  # nosec B110
+                    pass
+            except ImportError:
+                pass
+            try:
+                yield db
+            finally:
+                db.close()
+        except Exception as _db_exc:
+            # Record failure with the DB circuit breaker
+            try:
+                from resilience.service_circuit_breakers import db_breaker as _db_cb
+                import asyncio as _asyncio
+                try:
+                    loop = _asyncio.get_event_loop()
+                    if loop.is_running():
+                        _asyncio.ensure_future(_db_cb._on_failure(_db_exc))
+                except Exception:  # nosec B110
+                    pass
+            except ImportError:
+                pass
+            raise
 
 else:
     # Stubs when SQLAlchemy is not installed (test / CI environments).
