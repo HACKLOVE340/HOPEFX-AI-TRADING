@@ -27,7 +27,7 @@ import SuperAdminGuard from './components/SuperAdminGuard';
 import SubscriptionGate from './components/SubscriptionGate';
 import Sidebar from './components/sidebar/Sidebar';
 import { ThemeToggle } from './components/ThemeToggle';
-import { useStore, selectIsAuth } from './store';
+import { useStore, selectIsAuth, useHasHydrated } from './store';
 import { useWebSocket } from './hooks/useWebSocket';
 import { usePlan } from './hooks/usePlan';
 
@@ -304,10 +304,16 @@ const superAdminOnly = (el: React.ReactNode) => (
 // ── App shell ─────────────────────────────────────────────────────────────────
 const AppShell: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
-  const isAuth = useStore(selectIsAuth);
+  const isAuth   = useStore(selectIsAuth);
+  const hydrated = useHasHydrated();
 
-  useWebSocket(isAuth);
+  useWebSocket(isAuth && hydrated);
   usePlan();
+
+  // Hold the entire shell until localStorage rehydration is complete.
+  // This prevents every child query from firing with token=null and
+  // flooding the server with 401s before the persisted token is available.
+  if (!hydrated) return <PageFallback />;
 
   return (
     <div style={{
