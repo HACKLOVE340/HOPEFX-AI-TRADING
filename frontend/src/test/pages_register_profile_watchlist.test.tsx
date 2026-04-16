@@ -17,9 +17,9 @@ vi.mock('../hooks/useWebSocket', () => ({
 
 vi.mock('../hooks/useApi', () => ({
   authApi: {
-    login:            vi.fn(),
-    logout:           vi.fn(),
-    me:               vi.fn(),
+    login:            vi.fn().mockResolvedValue({ data: { access_token: 'tok', token_type: 'bearer', user: { id: '1', email: 'a@b.com', username: 'trader1', role: 'trader' } } }),
+    logout:           vi.fn().mockResolvedValue({ data: {} }),
+    me:               vi.fn().mockResolvedValue({ data: { id: '1', email: 'a@b.com', username: 'trader1', role: 'trader' } }),
     register:         vi.fn().mockResolvedValue({ data: { access_token: 'tok', user: { id: '1', email: 'a@b.com', username: 'trader1', role: 'trader' } } }),
     activateFreeTier: vi.fn().mockResolvedValue({ data: {} }),
   },
@@ -53,7 +53,7 @@ vi.mock('../hooks/useApi', () => ({
     walkForward: vi.fn().mockResolvedValue({ data: {} }),
     explain:     vi.fn().mockResolvedValue({ data: {} }),
   },
-  backtestApi: { run: vi.fn(), results: vi.fn(), list: vi.fn() },
+  backtestApi: { run: vi.fn().mockResolvedValue({ data: { job_id: 'bt-1', status: 'queued' } }), results: vi.fn().mockResolvedValue({ data: { job_id: 'bt-1', status: 'completed', metrics: { total_return: 0.12, sharpe: 1.4, max_drawdown: 0.08, win_rate: 0.58 }, equity_curve: [] } }), list: vi.fn().mockResolvedValue({ data: { backtests: [] } }) },
   performanceApi: {
     summary:     vi.fn().mockResolvedValue({ data: {} }),
     equity:      vi.fn().mockResolvedValue({ data: [] }),

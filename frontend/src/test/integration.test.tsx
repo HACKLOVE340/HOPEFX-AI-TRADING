@@ -64,7 +64,7 @@ vi.mock('../hooks/useApi', () => ({
     logout: vi.fn().mockResolvedValue({ data: {} }),
     me:     vi.fn().mockResolvedValue({ data: { id: '1', email: 'a@b.com', username: 'trader1', role: 'trader' } }),
   },
-  backtestApi: { run: vi.fn(), results: vi.fn(), list: vi.fn() },
+  backtestApi: { run: vi.fn().mockResolvedValue({ data: { job_id: 'bt-1', status: 'queued' } }), results: vi.fn().mockResolvedValue({ data: { job_id: 'bt-1', status: 'completed', metrics: { total_return: 0.12, sharpe: 1.4, max_drawdown: 0.08, win_rate: 0.58 }, equity_curve: [] } }), list: vi.fn().mockResolvedValue({ data: { backtests: [] } }) },
   performanceApi: {
     summary:     vi.fn().mockResolvedValue({ data: {} }),
     equity:      vi.fn().mockResolvedValue({ data: { curve: [] } }),
