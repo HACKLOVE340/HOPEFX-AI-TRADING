@@ -57,7 +57,9 @@ const fmtCrypto = (amount: number, currency: CryptoOption) => {
 };
 
 function buildQRDataURL(text: string): string {
-  // Returns a placeholder SVG QR — in production use a real QR library
+  // Generates a QR code image via api.qrserver.com (real public service).
+  // To remove the external dependency, replace with a bundled library such as
+  // qrcode.react: `<QRCodeSVG value={text} size={180} />`
   const encoded = encodeURIComponent(text);
   return `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encoded}&bgcolor=1e293b&color=f1f5f9&margin=10`;
 }
