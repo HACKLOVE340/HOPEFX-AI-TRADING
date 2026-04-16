@@ -1,11 +1,14 @@
 /**
  * Login page — JWT authentication with form validation.
+ * Superadmin accounts are redirected to /superadmin after login.
+ * All other roles go to the originally requested page or /dashboard.
  */
 
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useStore } from '../store';
 import { authApi } from '../hooks/useApi';
+import type { UserRole } from '../store';
 
 const Login: React.FC = () => {
   const navigate  = useNavigate();
@@ -17,7 +20,21 @@ const Login: React.FC = () => {
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
 
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? '/dashboard';
+  const requestedFrom = (location.state as { from?: { pathname: string } })?.from?.pathname;
+
+  /** Resolve the post-login destination based on role. */
+  function resolveDestination(role: UserRole): string {
+    // If the user was trying to reach a specific page, honour it —
+    // unless they have no permission (e.g. a non-superadmin hitting /superadmin).
+    if (requestedFrom && requestedFrom !== '/login') {
+      const isSuperAdminRoute = requestedFrom.startsWith('/superadmin');
+      if (!isSuperAdminRoute || role === 'superadmin') return requestedFrom;
+    }
+    // Role-based home page
+    if (role === 'superadmin') return '/superadmin';
+    if (role === 'admin')      return '/admin';
+    return '/dashboard';
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,7 +51,7 @@ const Login: React.FC = () => {
         localStorage.setItem('hopefx_refresh_token', res.data.refresh_token);
       }
       setAuth(res.data.access_token, res.data.user);
-      navigate(from, { replace: true });
+      navigate(resolveDestination(res.data.user.role as UserRole), { replace: true });
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
       setError(msg ?? 'Invalid credentials. Please try again.');
