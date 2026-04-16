@@ -78,6 +78,61 @@ repos:
         # Jupyter notebooks, lock files, markdown docs, and build artifacts are excluded.
         exclude: (\.ipynb$|package-lock\.json$|\.md$|dashboard/dist/)
 
+# ── Local hooks ───────────────────────────────────────────────────────────────
+# These run scripts from the repository itself (no external repo required).
+
+  - repo: local
+    hooks:
+      - id: healer-check
+        name: Self-healer static integrity check
+        language: python
+        entry: python scripts/pre_commit_healer.py
+        types: [python]
+        # Exclude test files, examples, and generated code — the healer only
+        # checks production source files for stubs, TODOs, and mock classes.
+        exclude: >-
+          (?x)^(
+            tests/.*|
+            examples/.*|
+            scripts/.*|
+            alembic/.*|
+            docs/.*|
+            frontend/.*|
+            mobile/.*|
+            mobile-app/.*|
+            dashboard/.*
+          )$
+        # Run on every staged Python file in production packages
+        pass_filenames: true
+
+      - id: coverage-gate
+        name: Per-module coverage gate (≥70%)
+        language: python
+        entry: python scripts/pre_commit_coverage.py
+        types: [python]
+        # Only run on production source files that have corresponding test files.
+        # Excluded: tests, scripts, examples, generated/infra code.
+        exclude: >-
+          (?x)^(
+            tests/.*|
+            examples/.*|
+            scripts/.*|
+            alembic/.*|
+            docs/.*|
+            frontend/.*|
+            mobile/.*|
+            mobile-app/.*|
+            dashboard/.*|
+            grafana/.*|
+            helm/.*|
+            k8s/.*|
+            docker/.*|
+            nginx/.*
+          )$
+        pass_filenames: true
+        # Coverage gate is slower than other hooks — run last
+        stages: [pre-commit]
+
 # pytest belongs in the CI test job, not in pre-commit hooks.
 # Running the full test suite on every commit is too slow and fails in
 # environments where test dependencies are not installed.
