@@ -1208,19 +1208,38 @@ class ExecutionEngine:
             request.price,
         )
 
-        # Run synchronous broker call in thread pool to avoid blocking event loop
+        # Run synchronous broker call in thread pool, protected by the broker
+        # circuit breaker. If the broker has been failing, the breaker opens
+        # and rejects the call immediately rather than blocking for a timeout.
         loop = asyncio.get_running_loop()
-        order = await loop.run_in_executor(
-            None,
-            lambda: self._broker.place_order(
-                symbol=request.symbol,
-                side=side,
-                order_type=order_type,
-                quantity=request.quantity,
-                price=request.price,
-                stop_price=request.stop_price,
-            ),
-        )
+        try:
+            from resilience.service_circuit_breakers import broker_breaker, CircuitBreakerOpenError as _CBOpen
+        except ImportError:
+            broker_breaker = None
+            _CBOpen = None
+
+        async def _place_order_async():
+            return await loop.run_in_executor(
+                None,
+                lambda: self._broker.place_order(
+                    symbol=request.symbol,
+                    side=side,
+                    order_type=order_type,
+                    quantity=request.quantity,
+                    price=request.price,
+                    stop_price=request.stop_price,
+                ),
+            )
+
+        if broker_breaker is not None:
+            try:
+                order = await broker_breaker.call(_place_order_async)
+            except _CBOpen as _cb_err:
+                raise RuntimeError(
+                    f"Broker circuit breaker OPEN — order rejected for {request.symbol}: {_cb_err}"
+                ) from _cb_err
+        else:
+            order = await _place_order_async()
 
         latency_ms = (time.monotonic() - t0) * 1000.0
 
