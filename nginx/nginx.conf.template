@@ -49,8 +49,10 @@ http {
     limit_req_zone $binary_remote_addr zone=api:10m  rate=60r/m;
 
     # ── Upstream ──────────────────────────────────────────────────────────────
+    # Use the Docker Compose service name — 127.0.0.1 inside the nginx
+    # container resolves to nginx itself, not the app container.
     upstream hopefx_backend {
-        server 127.0.0.1:8000;
+        server app:8000;
         keepalive 32;
     }
 
