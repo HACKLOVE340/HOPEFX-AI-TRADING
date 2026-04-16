@@ -14,9 +14,18 @@ Derivation path: m/84'/0'/0'/0/{index}  (BIP84 — P2WPKH, bech32 addresses)
 The master mnemonic is loaded from the BITCOIN_MNEMONIC environment variable.
 In production this secret must be stored in a secrets manager (Vault, AWS
 Secrets Manager, etc.) and injected at runtime — never committed to source.
+
+Withdrawal broadcast priority
+------------------------------
+1. BitGo custody API  (BITGO_ACCESS_TOKEN + BITGO_WALLET_ID set)
+2. Fireblocks custody API  (FIREBLOCKS_API_KEY + FIREBLOCKS_API_SECRET + FIREBLOCKS_VAULT_ACCOUNT_ID set)
+3. Bitcoin Core RPC  (BITCOIN_RPC_URL set, e.g. http://user:pass@localhost:8332)
+4. BlockCypher public API  (BLOCKCYPHER_TOKEN + BITCOIN_WIF_PRIVATE_KEY + BITCOIN_SOURCE_ADDRESS)
+
+At least one of the above must be configured in production.  The application
+raises RuntimeError at withdrawal time if none are available and APP_ENV=production.
 """
 
-import hashlib
 import logging
 import os
 import time
@@ -25,6 +34,7 @@ from datetime import datetime, timezone
 
 UTC = timezone.utc
 from decimal import Decimal
+
 
 try:
     # hdwallet v3+ — BIP39Mnemonic.from_entropy() is the generator
@@ -54,6 +64,332 @@ except ImportError:
 
         def generate_mnemonic(language: str = "english", strength: int = 128) -> str:  # type: ignore[misc]
             raise RuntimeError("Bitcoin features require the 'hdwallet' package. Install it with: pip install hdwallet")
+
+
+# =============================================================================
+# Broadcast backends
+# =============================================================================
+
+
+async def _broadcast_via_bitgo(
+    destination_address: str,
+    amount_btc: Decimal,
+    fee_btc: Decimal,
+) -> str:
+    """
+    Broadcast a withdrawal via the BitGo custody API.
+
+    Required env vars:
+        BITGO_ACCESS_TOKEN  — long-lived API token from BitGo dashboard
+        BITGO_WALLET_ID     — wallet ID (hex string) to send from
+        BITGO_PASSPHRASE    — wallet passphrase for signing (optional if using
+                              BitGo's server-side signing / HSM)
+        BITGO_ENV           — "prod" (default) or "test" for BitGo testnet
+
+    Returns the on-chain txid string.
+    Raises RuntimeError on API error.
+    """
+    import httpx
+
+    token = os.environ["BITGO_ACCESS_TOKEN"]
+    wallet_id = os.environ["BITGO_WALLET_ID"]
+    passphrase = os.getenv("BITGO_PASSPHRASE", "")
+    bitgo_env = os.getenv("BITGO_ENV", "prod")
+
+    base_url = (
+        "https://app.bitgo.com/api/v2"
+        if bitgo_env == "prod"
+        else "https://app.bitgo-test.com/api/v2"
+    )
+
+    # BitGo uses integer satoshis
+    amount_sat = int(amount_btc * Decimal("100000000"))
+    fee_sat = int(fee_btc * Decimal("100000000"))
+
+    payload: dict = {
+        "address": destination_address,
+        "amount": amount_sat,
+        "feeRate": fee_sat,
+        "walletPassphrase": passphrase,
+    }
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(
+            f"{base_url}/btc/wallet/{wallet_id}/sendcoins",
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+        )
+
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"BitGo API error {resp.status_code}: {resp.text[:500]}")
+
+    data = resp.json()
+    txid: str = data.get("txid") or data.get("tx", {}).get("txid", "")
+    if not txid:
+        raise RuntimeError(f"BitGo response missing txid: {data}")
+
+    logger.info("BitGo broadcast succeeded: txid=%s", txid)
+    return txid
+
+
+async def _broadcast_via_fireblocks(
+    destination_address: str,
+    amount_btc: Decimal,
+) -> str:
+    """
+    Broadcast a withdrawal via the Fireblocks custody API.
+
+    Required env vars:
+        FIREBLOCKS_API_KEY          — API key from Fireblocks console
+        FIREBLOCKS_API_SECRET       — path to RSA private key PEM file, OR the
+                                      PEM content itself (newlines as \\n)
+        FIREBLOCKS_VAULT_ACCOUNT_ID — source vault account ID (integer string)
+
+    Returns the Fireblocks transaction ID (prefixed "fireblocks:") until the
+    on-chain txHash is confirmed.  Poll GET /v1/transactions/{id} for the real hash.
+    Raises RuntimeError on API error.
+    """
+    import hashlib as _hashlib
+    import json as _json
+    import time as _time
+
+    import httpx
+
+    try:
+        import jwt as _jwt  # PyJWT
+    except ImportError as exc:
+        raise RuntimeError(
+            "Fireblocks integration requires PyJWT: pip install PyJWT cryptography"
+        ) from exc
+
+    api_key = os.environ["FIREBLOCKS_API_KEY"]
+    secret_raw = os.environ["FIREBLOCKS_API_SECRET"]
+    vault_id = os.environ["FIREBLOCKS_VAULT_ACCOUNT_ID"]
+
+    # Secret may be a file path or inline PEM
+    if os.path.isfile(secret_raw):
+        with open(secret_raw) as f:
+            private_key_pem = f.read()
+    else:
+        private_key_pem = secret_raw.replace("\\n", "\n")
+
+    base_url = os.getenv("FIREBLOCKS_BASE_URL", "https://api.fireblocks.io")
+
+    body = {
+        "assetId": "BTC",
+        "source": {"type": "VAULT_ACCOUNT", "id": vault_id},
+        "destination": {
+            "type": "ONE_TIME_ADDRESS",
+            "oneTimeAddress": {"address": destination_address},
+        },
+        "amount": str(amount_btc),
+        "note": f"HOPEFX withdrawal {datetime.now(UTC).isoformat()}",
+    }
+    body_str = _json.dumps(body)
+    body_hash = _hashlib.sha256(body_str.encode()).hexdigest()
+
+    path = "/v1/transactions"
+    now = int(_time.time())
+    claims = {
+        "uri": path,
+        "nonce": f"{now}-{os.urandom(8).hex()}",
+        "iat": now,
+        "exp": now + 30,
+        "sub": api_key,
+        "bodyHash": body_hash,
+    }
+    token = _jwt.encode(claims, private_key_pem, algorithm="RS256")
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(
+            f"{base_url}{path}",
+            content=body_str,
+            headers={
+                "X-API-Key": api_key,
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+        )
+
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"Fireblocks API error {resp.status_code}: {resp.text[:500]}")
+
+    data = resp.json()
+    fb_id: str = data.get("id", "")
+    # txHash is populated asynchronously; return Fireblocks ID until confirmed
+    txid = data.get("txHash") or f"fireblocks:{fb_id}"
+    logger.info("Fireblocks broadcast submitted: id=%s txHash=%s", fb_id, txid)
+    return txid
+
+
+async def _broadcast_via_bitcoin_rpc(
+    destination_address: str,
+    amount_btc: Decimal,
+) -> str:
+    """
+    Broadcast via a local/remote Bitcoin Core node using JSON-RPC.
+
+    Required env vars:
+        BITCOIN_RPC_URL — full URL including credentials, e.g.
+                          http://rpcuser:rpcpass@localhost:8332
+
+    The wallet must be loaded and have sufficient funds.
+    Returns the txid string.
+    """
+    import httpx
+
+    rpc_url = os.environ["BITCOIN_RPC_URL"]
+
+    payload = {
+        "jsonrpc": "1.0",
+        "id": f"hopefx-{int(time.time_ns())}",
+        "method": "sendtoaddress",
+        "params": [
+            destination_address,
+            float(amount_btc),
+            "",    # comment
+            "",    # comment_to
+            True,  # subtractfeefromamount — fee deducted from the sent amount
+        ],
+    }
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(
+            rpc_url,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+        )
+
+    if resp.status_code != 200:
+        raise RuntimeError(f"Bitcoin RPC HTTP error {resp.status_code}: {resp.text[:500]}")
+
+    data = resp.json()
+    if data.get("error"):
+        raise RuntimeError(f"Bitcoin RPC error: {data['error']}")
+
+    txid: str = data["result"]
+    logger.info("Bitcoin RPC broadcast succeeded: txid=%s", txid)
+    return txid
+
+
+async def _broadcast_via_blockcypher(
+    destination_address: str,
+    amount_btc: Decimal,
+    fee_btc: Decimal,
+    source_address: str,
+    wif_private_key: str,
+) -> str:
+    """
+    Broadcast via BlockCypher's transaction API (non-custodial).
+
+    Requires the WIF-encoded private key for the source address so the
+    transaction can be signed client-side before submission.
+
+    Required env vars:
+        BLOCKCYPHER_TOKEN       — API token (optional but raises rate limits)
+        BITCOIN_WIF_PRIVATE_KEY — WIF-encoded private key for the hot wallet
+        BITCOIN_SOURCE_ADDRESS  — corresponding Bitcoin address
+
+    Returns the txid string.
+    """
+    try:
+        import blockcypher  # type: ignore[import]
+    except ImportError as exc:
+        raise RuntimeError(
+            "BlockCypher integration requires blockcypher-cli: pip install blockcypher"
+        ) from exc
+
+    token = os.getenv("BLOCKCYPHER_TOKEN", "")
+    amount_sat = int(amount_btc * Decimal("100000000"))
+
+    tx = blockcypher.simple_spend(
+        from_privkey=wif_private_key,
+        to_address=destination_address,
+        to_satoshis=amount_sat,
+        change_address=source_address,
+        privkey_is_compressed=True,
+        api_key=token or None,
+        coin_symbol="btc",
+    )
+
+    txid: str = tx.get("tx", {}).get("hash", "")
+    if not txid:
+        raise RuntimeError(f"BlockCypher response missing hash: {tx}")
+
+    logger.info("BlockCypher broadcast succeeded: txid=%s", txid)
+    return txid
+
+
+async def _broadcast_withdrawal(
+    destination_address: str,
+    amount_btc: Decimal,
+    fee_btc: Decimal,
+    source_address: str = "",
+) -> str:
+    """
+    Attempt each broadcast backend in priority order.
+
+    Priority:
+        1. BitGo  (BITGO_ACCESS_TOKEN + BITGO_WALLET_ID)
+        2. Fireblocks  (FIREBLOCKS_API_KEY + FIREBLOCKS_API_SECRET + FIREBLOCKS_VAULT_ACCOUNT_ID)
+        3. Bitcoin Core RPC  (BITCOIN_RPC_URL)
+        4. BlockCypher  (BITCOIN_WIF_PRIVATE_KEY + BITCOIN_SOURCE_ADDRESS)
+
+    Raises RuntimeError if no backend is configured or all fail.
+    """
+    errors: list[str] = []
+
+    # 1. BitGo
+    if os.getenv("BITGO_ACCESS_TOKEN") and os.getenv("BITGO_WALLET_ID"):
+        try:
+            return await _broadcast_via_bitgo(destination_address, amount_btc, fee_btc)
+        except Exception as exc:
+            logger.error("BitGo broadcast failed: %s", exc)
+            errors.append(f"BitGo: {exc}")
+
+    # 2. Fireblocks
+    if (
+        os.getenv("FIREBLOCKS_API_KEY")
+        and os.getenv("FIREBLOCKS_API_SECRET")
+        and os.getenv("FIREBLOCKS_VAULT_ACCOUNT_ID")
+    ):
+        try:
+            return await _broadcast_via_fireblocks(destination_address, amount_btc)
+        except Exception as exc:
+            logger.error("Fireblocks broadcast failed: %s", exc)
+            errors.append(f"Fireblocks: {exc}")
+
+    # 3. Bitcoin Core RPC
+    if os.getenv("BITCOIN_RPC_URL"):
+        try:
+            return await _broadcast_via_bitcoin_rpc(destination_address, amount_btc)
+        except Exception as exc:
+            logger.error("Bitcoin RPC broadcast failed: %s", exc)
+            errors.append(f"Bitcoin RPC: {exc}")
+
+    # 4. BlockCypher (non-custodial; requires hot-wallet WIF key)
+    wif = os.getenv("BITCOIN_WIF_PRIVATE_KEY", "")
+    src = os.getenv("BITCOIN_SOURCE_ADDRESS", source_address)
+    if wif and src:
+        try:
+            return await _broadcast_via_blockcypher(
+                destination_address, amount_btc, fee_btc, src, wif
+            )
+        except Exception as exc:
+            logger.error("BlockCypher broadcast failed: %s", exc)
+            errors.append(f"BlockCypher: {exc}")
+
+    env = os.getenv("APP_ENV", "development").lower()
+    raise RuntimeError(
+        "Bitcoin withdrawal broadcast failed — no backend succeeded. "
+        f"Errors: {'; '.join(errors) or 'none configured'}. "
+        "Set at least one of: BITGO_ACCESS_TOKEN, FIREBLOCKS_API_KEY, "
+        "BITCOIN_RPC_URL, or BITCOIN_WIF_PRIVATE_KEY."
+        + (" (APP_ENV=production)" if env == "production" else "")
+    )
 
 
 logger = logging.getLogger(__name__)
@@ -252,19 +588,17 @@ class BitcoinClient:
         )
         return transaction
 
-    def process_withdrawal(
+    async def process_withdrawal(
         self,
         user_id: str,
         amount: Decimal,
         destination_address: str,
     ) -> dict:
         """
-        Prepare a Bitcoin withdrawal.
+        Broadcast a Bitcoin withdrawal to the network.
 
-        In production this method should broadcast the signed transaction via a
-        Bitcoin node or a custody API (e.g. BitGo, Fireblocks).  The tx_hash
-        returned here is a deterministic placeholder until the broadcast step
-        is wired in.
+        Attempts broadcast backends in priority order:
+            BitGo → Fireblocks → Bitcoin Core RPC → BlockCypher
 
         Args:
             user_id: User ID
@@ -272,7 +606,11 @@ class BitcoinClient:
             destination_address: Recipient bech32 / legacy address
 
         Returns:
-            Withdrawal summary dict
+            Withdrawal summary dict with the real on-chain txid.
+
+        Raises:
+            ValueError: Invalid address or amount too small.
+            RuntimeError: All broadcast backends failed or none configured.
         """
         if not self._validate_address(destination_address):
             raise ValueError(f"Invalid Bitcoin address: {destination_address!r}")
@@ -281,11 +619,32 @@ class BitcoinClient:
         if net_amount <= 0:
             raise ValueError(f"Amount {amount} BTC is too small after network fee {self.NETWORK_FEE} BTC")
 
-        # Deterministic placeholder txid — replace with real broadcast result.
-        tx_hash = hashlib.sha256(f"{user_id}{amount}{destination_address}{time.time_ns()}".encode()).hexdigest()
+        # Determine source address (most recently used deposit address for this user)
+        source_address = ""
+        user_addrs = self.user_addresses.get(user_id, [])
+        if user_addrs:
+            source_address = user_addrs[-1]
+
+        tx_hash = await _broadcast_withdrawal(
+            destination_address=destination_address,
+            amount_btc=net_amount,
+            fee_btc=self.NETWORK_FEE,
+            source_address=source_address,
+        )
+
+        # Record the broadcast transaction
+        transaction = BitcoinTransaction(
+            tx_hash=tx_hash,
+            address=destination_address,
+            amount=amount,
+            confirmations=0,
+            status="broadcasting",
+            created_at=datetime.now(UTC),
+        )
+        self.transactions[tx_hash] = transaction
 
         logger.info(
-            "BTC withdrawal prepared: tx=%s amount=%s BTC to=%s user=%s",
+            "BTC withdrawal broadcast: tx=%s amount=%s BTC to=%s user=%s",
             tx_hash,
             amount,
             destination_address,
