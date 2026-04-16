@@ -172,3 +172,4 @@ coverage>=7.0
 # ── Static analysis ───────────────────────────────────────────────────────────
 # bandit is used by the ci.yml security scan step; previously installed ad-hoc.
 bandit>=1.8.0,<2.0.0
+zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
