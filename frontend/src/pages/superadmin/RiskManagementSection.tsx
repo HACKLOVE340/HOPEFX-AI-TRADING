@@ -2,6 +2,7 @@
 // Circuit breakers, VaR/ES, stress tests, prop firm breach tracking, drawdown tracker
 import React, { useEffect, useState, useCallback } from 'react';
 import { superadminApi } from '../../hooks/useApi';
+import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, StatusBadge, ActionBtn, KpiTile,
   ErrorState, LoadingRows, ConfirmDialog, SAStyles,
@@ -73,6 +74,8 @@ const RiskManagementSection: React.FC = () => {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  // Refresh every 15 s while the tab is active — live operational data.
+  usePolling(load, 15_000);
 
   const resetBreaker = async (name: string) => {
     setBusy(`reset-${name}`); setMsg('');

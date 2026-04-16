@@ -1,6 +1,7 @@
 // superadmin/UsersSection.tsx — full user management with bulk operations
 import React, { useEffect, useState, useCallback } from 'react';
 import { superadminApi } from '../../hooks/useApi';
+import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, StatusBadge, ActionBtn, Input, Select,
   ErrorState, LoadingRows, ConfirmDialog, SAStyles,
@@ -336,6 +337,8 @@ const UsersSection: React.FC = () => {
   }, [search, roleFilter, planFilter, statusFilter, page]);
 
   useEffect(() => { load(); }, [load]);
+  // Refresh every 30 s — configuration and model data changes less frequently.
+  usePolling(load, 30_000);
 
   const allChecked  = users.length > 0 && users.every(u => checkedIds.has(u.user_id));
   const someChecked = !allChecked && users.some(u => checkedIds.has(u.user_id));

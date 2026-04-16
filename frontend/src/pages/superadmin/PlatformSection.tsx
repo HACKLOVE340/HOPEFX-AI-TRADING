@@ -1,6 +1,7 @@
 // superadmin/PlatformSection.tsx — platform config, maintenance, broadcast
 import React, { useEffect, useState, useCallback } from 'react';
 import { superadminApi } from '../../hooks/useApi';
+import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, ActionBtn, Input, Select, Toggle,
   ErrorState, LoadingRows, ConfirmDialog, SAStyles,
@@ -47,6 +48,8 @@ const PlatformSection: React.FC = () => {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  // Refresh every 30 s — configuration and model data changes less frequently.
+  usePolling(load, 30_000);
 
   const save = async () => {
     if (!cfg) return;

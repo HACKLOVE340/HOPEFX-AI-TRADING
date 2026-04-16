@@ -2,6 +2,7 @@
 // Broker health, TCA, execution quality, routing controls
 import React, { useEffect, useState, useCallback } from 'react';
 import { superadminApi } from '../../hooks/useApi';
+import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, StatusBadge, ActionBtn, KpiTile,
   ErrorState, LoadingRows, SAStyles,
@@ -71,6 +72,8 @@ const BrokerManagementSection: React.FC = () => {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  // Refresh every 15 s while the tab is active — live operational data.
+  usePolling(load, 15_000);
 
   const reconnect = async (brokerId: string) => {
     setBusy(`reconnect-${brokerId}`); setMsg('');

@@ -1,6 +1,7 @@
 // superadmin/TradingEngineSection.tsx — engine config, kill switch, metrics
 import React, { useEffect, useState, useCallback } from 'react';
 import { superadminApi } from '../../hooks/useApi';
+import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, StatusBadge, ActionBtn, Input, Select, Toggle,
   KpiTile, ErrorState, LoadingRows, ConfirmDialog, SAStyles,
@@ -71,6 +72,9 @@ const TradingEngineSection: React.FC = () => {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  // Refresh engine status and metrics every 15 s — engine state changes rapidly
+  // (positions open/close, PnL updates, kill-switch triggers).
+  usePolling(load, 15_000);
 
   const save = async () => {
     if (!cfg) return;

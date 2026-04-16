@@ -2,6 +2,7 @@
 // Report list, generate, download, delete — weekly + custom reports
 import React, { useEffect, useState, useCallback } from 'react';
 import { superadminApi } from '../../hooks/useApi';
+import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, StatusBadge, ActionBtn, Select, Input,
   KpiTile, ErrorState, LoadingRows, ConfirmDialog, SAStyles,
@@ -39,6 +40,8 @@ const ReportingSection: React.FC = () => {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  // Refresh every 60 s — compliance and financial data is not real-time.
+  usePolling(load, 60_000);
 
   const generate = async () => {
     setBusy('generate'); setMsg('');

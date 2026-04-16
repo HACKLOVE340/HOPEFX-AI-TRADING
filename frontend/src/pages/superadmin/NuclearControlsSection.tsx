@@ -2,6 +2,7 @@
 // Emergency halt, hedge activation, max-risk override, nuclear log
 import React, { useEffect, useState, useCallback } from 'react';
 import { superadminApi } from '../../hooks/useApi';
+import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, ActionBtn, KpiTile, ErrorState, LoadingRows,
   ConfirmDialog, Input, SAStyles,
@@ -63,6 +64,8 @@ const NuclearControlsSection: React.FC = () => {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  // Refresh every 15 s while the tab is active — live operational data.
+  usePolling(load, 15_000);
 
   const act = async (action: string) => {
     setBusy(action); setMsg('');

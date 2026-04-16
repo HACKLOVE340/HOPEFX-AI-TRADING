@@ -1,6 +1,7 @@
 // superadmin/MLAISection.tsx — ML model management, RL agent control, metrics
 import React, { useEffect, useState, useCallback } from 'react';
 import { superadminApi } from '../../hooks/useApi';
+import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, StatusBadge, ActionBtn, Select,
   ErrorState, LoadingRows, ConfirmDialog, SAStyles, KpiTile,
@@ -83,6 +84,8 @@ const MLAISection: React.FC = () => {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  // Refresh every 30 s — configuration and model data changes less frequently.
+  usePolling(load, 30_000);
 
   const doAction = async (model: string, action: string, version?: string) => {
     setBusy(`${model}-${action}`); setActionMsg('');

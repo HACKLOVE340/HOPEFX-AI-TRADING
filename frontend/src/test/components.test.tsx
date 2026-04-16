@@ -217,7 +217,7 @@ describe('AuthGuard', () => {
   // overwriting the role the test intentionally configured.
   beforeEach(() => {
     vi.mocked(useApiModule.authApi.me).mockImplementation(() =>
-      Promise.resolve({ data: useStore.getState().user ?? { id: '1', email: 'a@b.com', username: 'trader1', role: 'trader' } })
+      Promise.resolve({ data: useStore.getState().user ?? { id: '1', email: 'a@b.com', username: 'trader1', role: 'trader' } }) as never
     );
   });
 
