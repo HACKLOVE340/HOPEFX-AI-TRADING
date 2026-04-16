@@ -1999,6 +1999,15 @@ async def init_self_healer(s: Any, app: Any) -> Any | None:
 
         await _start_healer(app)
         logger.info("SelfHealer started — /api/security/heal/* routes mounted")
+
+        # Start the auto-rollback manager alongside the self-healer
+        try:
+            from resilience.auto_rollback import rollback_manager as _rm
+            await _rm.start()
+            logger.info("AutoRollbackManager started — monitoring %d triggers", len(_rm._triggers))
+        except Exception as _rm_exc:
+            logger.warning("AutoRollbackManager failed to start (non-fatal): %s", _rm_exc)
+
         return getattr(s, "self_healer", None)
     except Exception as exc:
         logger.warning("SelfHealer failed to start (non-fatal): %s", exc)
