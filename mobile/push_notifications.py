@@ -133,7 +133,9 @@ class PushNotificationManager:
         elif self.server_key:
             logger.info("FCM push notifications enabled (legacy server key)")
         else:
-            logger.info(
+            # Debug-level: absence of Firebase credentials is expected in dev/test.
+            # Operators who need FCM will see this in debug logs or the health endpoint.
+            logger.debug(
                 "FCM push notifications disabled — set FIREBASE_SERVER_KEY or "
                 "FIREBASE_CREDENTIALS_JSON in .env to enable real delivery"
             )

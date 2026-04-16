@@ -79,7 +79,7 @@ try:
     YARA_AVAILABLE = True
 except ImportError:
     YARA_AVAILABLE = False
-    logger.info("AV: yara-python not installed — YARA layer disabled (pip install yara-python)")
+    logger.debug("AV: yara-python not installed — YARA layer disabled (pip install yara-python)")
 
 # ── ClamAV ────────────────────────────────────────────────────────────────────
 
@@ -89,7 +89,7 @@ try:
     CLAMD_AVAILABLE = True
 except ImportError:
     CLAMD_AVAILABLE = False
-    logger.info("AV: python-clamd not installed — ClamAV layer disabled (pip install clamd)")
+    logger.debug("AV: python-clamd not installed — ClamAV layer disabled (pip install clamd)")
 
 # ── psutil ────────────────────────────────────────────────────────────────────
 
