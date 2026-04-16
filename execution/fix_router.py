@@ -311,7 +311,9 @@ class FIXRouter:
 
     # ── FIX send ──────────────────────────────────────────────────────────────
 
-    async def _send_fix(self, symbol: str, direction: str, units: float, order_request: dict[str, Any]) -> dict[str, Any]:
+    async def _send_fix(
+        self, symbol: str, direction: str, units: float, order_request: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Format and send a FIX NewOrderSingle; await ExecutionReport.
 

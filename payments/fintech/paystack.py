@@ -270,14 +270,10 @@ class PaystackClient:
 
         body: dict[str, Any] = resp.json()
         if not body.get("status"):
-            raise PaystackError(
-                f"Paystack POST {path} returned status=false: {body.get('message', 'unknown error')}"
-            )
+            raise PaystackError(f"Paystack POST {path} returned status=false: {body.get('message', 'unknown error')}")
         data = body["data"]
         if not isinstance(data, dict):
-            raise PaystackError(
-                f"Paystack POST {path}: expected dict in data, got {type(data).__name__}"
-            )
+            raise PaystackError(f"Paystack POST {path}: expected dict in data, got {type(data).__name__}")
         return data
 
     def _get_dict(self, path: str) -> dict[str, Any]:
@@ -291,14 +287,10 @@ class PaystackClient:
 
         body: dict[str, Any] = resp.json()
         if not body.get("status"):
-            raise PaystackError(
-                f"Paystack GET {path} returned status=false: {body.get('message', 'unknown error')}"
-            )
+            raise PaystackError(f"Paystack GET {path} returned status=false: {body.get('message', 'unknown error')}")
         data = body["data"]
         if not isinstance(data, dict):
-            raise PaystackError(
-                f"Paystack GET {path}: expected dict in data, got {type(data).__name__}"
-            )
+            raise PaystackError(f"Paystack GET {path}: expected dict in data, got {type(data).__name__}")
         return data
 
     def _get_list(self, path: str) -> list[dict[str, Any]]:
@@ -312,14 +304,10 @@ class PaystackClient:
 
         body: dict[str, Any] = resp.json()
         if not body.get("status"):
-            raise PaystackError(
-                f"Paystack GET {path} returned status=false: {body.get('message', 'unknown error')}"
-            )
+            raise PaystackError(f"Paystack GET {path} returned status=false: {body.get('message', 'unknown error')}")
         data = body["data"]
         if not isinstance(data, list):
-            raise PaystackError(
-                f"Paystack GET {path}: expected list in data, got {type(data).__name__}"
-            )
+            raise PaystackError(f"Paystack GET {path}: expected list in data, got {type(data).__name__}")
         return data
 
 

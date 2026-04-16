@@ -54,10 +54,8 @@ import argparse
 import os
 import platform
 import secrets
-import stat
 import sys
 from pathlib import Path
-from typing import Optional
 
 # ---------------------------------------------------------------------------
 # Bootstrap: ensure project root is on sys.path so we can import project
@@ -103,6 +101,7 @@ def _cyan(t: str) -> str:
 # Output helpers — never print secret values
 # ---------------------------------------------------------------------------
 
+
 def _print(msg: str = "") -> None:
     sys.stdout.write(msg + "\n")
     sys.stdout.flush()
@@ -136,6 +135,7 @@ def _info(msg: str) -> None:
 # Input helpers
 # ---------------------------------------------------------------------------
 
+
 def _ask(prompt: str, default: str = "", required: bool = False) -> str:
     """Prompt the operator for a value.  Returns *default* on empty input."""
     suffix = f" [{default}]" if default else ""
@@ -161,6 +161,7 @@ def _ask_secret(prompt: str, env_var: str) -> str:
     could be accidentally logged.  Returns the raw string for .env writing.
     """
     import getpass
+
     marker = _bold("*")
     while True:
         try:
@@ -190,6 +191,7 @@ def _ask_yes_no(prompt: str, default: bool = True) -> bool:
 # Secret generation
 # ---------------------------------------------------------------------------
 
+
 def _gen48() -> str:
     """Generate a 48-byte URL-safe base64 secret (384 bits)."""
     return secrets.token_urlsafe(48)
@@ -214,6 +216,7 @@ def _gen_hex16() -> str:
 # .env writer
 # ---------------------------------------------------------------------------
 
+
 def _write_env(path: Path, lines: list[str]) -> None:
     """Write *lines* to *path* with mode 0o600."""
     content = "\n".join(lines) + "\n"
@@ -229,10 +232,16 @@ def _write_env(path: Path, lines: list[str]) -> None:
 # Placeholder detection (mirrors manage_secrets.py logic)
 # ---------------------------------------------------------------------------
 
-_PLACEHOLDER_SUBSTRINGS = frozenset({
-    "change_me", "your_domain", "your_oanda", "your_openai",
-    "changeme", "placeholder",
-})
+_PLACEHOLDER_SUBSTRINGS = frozenset(
+    {
+        "change_me",
+        "your_domain",
+        "your_oanda",
+        "your_openai",
+        "changeme",
+        "placeholder",
+    }
+)
 
 
 def _is_placeholder(val: str) -> bool:
@@ -246,6 +255,7 @@ def _is_placeholder(val: str) -> bool:
 # Pre-flight checks
 # ---------------------------------------------------------------------------
 
+
 def _preflight() -> None:
     """Abort early on obvious environment problems."""
     if sys.version_info < (3, 10):
@@ -253,11 +263,10 @@ def _preflight() -> None:
         sys.exit(1)
 
     # Refuse to run as root unless explicitly allowed
-    if hasattr(os, "getuid") and os.getuid() == 0:
-        if "--allow-root" not in sys.argv:
-            _err("Running as root is not recommended.")
-            _info("Pass --allow-root to override (not recommended in production).")
-            sys.exit(1)
+    if hasattr(os, "getuid") and os.getuid() == 0 and "--allow-root" not in sys.argv:
+        _err("Running as root is not recommended.")
+        _info("Pass --allow-root to override (not recommended in production).")
+        sys.exit(1)
 
     _ok(f"Python {sys.version.split()[0]}")
 
@@ -265,6 +274,7 @@ def _preflight() -> None:
 # ---------------------------------------------------------------------------
 # Section builders — each returns a list of .env lines
 # ---------------------------------------------------------------------------
+
 
 def _section_app(domain: str) -> list[str]:
     return [
@@ -455,17 +465,20 @@ def _section_features() -> list[str]:
 # Final validation
 # ---------------------------------------------------------------------------
 
+
 def _run_validation() -> bool:
     """Import and run the startup validator against the written .env."""
     try:
         # Reload env from the newly written file
         try:
             from dotenv import load_dotenv
+
             load_dotenv(_ENV_FILE, override=True)
         except ImportError:
             _warn("python-dotenv not installed — skipping env reload before validation.")
 
         from config.startup_validator import validate_environment
+
         validate_environment(strict=False)
         return True
     except SystemExit as exc:
@@ -483,6 +496,7 @@ def _run_validation() -> bool:
 # ---------------------------------------------------------------------------
 # Check-only mode
 # ---------------------------------------------------------------------------
+
 
 def _run_check() -> int:
     """Validate an existing .env without prompting.  Returns exit code."""
@@ -504,6 +518,7 @@ def _run_check() -> int:
 # ---------------------------------------------------------------------------
 # Main wizard
 # ---------------------------------------------------------------------------
+
 
 def _run_wizard(force: bool) -> int:
     _header("HOPEFX AI Trading — Production Setup Wizard")
@@ -727,6 +742,7 @@ def _run_wizard(force: bool) -> int:
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(

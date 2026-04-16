@@ -118,9 +118,10 @@ ignore = [
 # PLW2901: loop-var reassignment is common in test helpers
 # PLR0124: NaN self-comparison idiom used in test assertions
 # B904: raise-from not required in test stubs/mocks
-"tests/**"             = ["S105", "S106", "S107", "S108", "S110", "S112", "S301", "S311", "PLR2004", "SIM105", "SIM117", "SIM222", "PLW2901", "PLR0124", "B904"]
-"tests/unit/**"        = ["S105", "S106", "S107", "S108", "S110", "S112", "S301", "S311", "PLR2004", "SIM105", "SIM117", "SIM222", "PLW2901", "PLR0124", "B904"]
-"tests/integration/**" = ["S105", "S106", "S107", "S108", "S110", "S112", "PLR2004", "SIM105", "SIM117", "SIM222", "PLW2901", "B904"]
+# PLW0108: lambda callbacks are idiomatic in test event-listener patterns
+"tests/**"             = ["S105", "S106", "S107", "S108", "S110", "S112", "S301", "S311", "PLR2004", "SIM105", "SIM117", "SIM222", "PLW2901", "PLR0124", "B904", "PLW0108"]
+"tests/unit/**"        = ["S105", "S106", "S107", "S108", "S110", "S112", "S301", "S311", "PLR2004", "SIM105", "SIM117", "SIM222", "PLW2901", "PLR0124", "B904", "PLW0108"]
+"tests/integration/**" = ["S105", "S106", "S107", "S108", "S110", "S112", "PLR2004", "SIM105", "SIM117", "SIM222", "PLW2901", "B904", "PLW0108"]
 "scripts/**"           = ["E402", "PLR2004"]
 "locust/**"            = ["S311", "PLR2004"]
 "deployment/**"        = ["S105"]

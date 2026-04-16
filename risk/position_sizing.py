@@ -69,11 +69,7 @@ class PositionSizer:
             "balance",
             Decimal(0),
         )
-        equity: Decimal = (
-            _equity_raw
-            if isinstance(_equity_raw, Decimal)
-            else Decimal(str(_equity_raw))
-        )
+        equity: Decimal = _equity_raw if isinstance(_equity_raw, Decimal) else Decimal(str(_equity_raw))
 
         if self.method == "atr":
             size = self._atr_size(equity, entry_price, atr or Decimal(1))

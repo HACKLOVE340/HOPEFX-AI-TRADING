@@ -17,7 +17,7 @@ Prometheus scrape:
 
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Protocol
 
 
 class _HistogramLike(Protocol):
@@ -25,7 +25,7 @@ class _HistogramLike(Protocol):
 
 
 class _NoOpHistogram:
-    def observe(self, amount: float) -> None:  # noqa: D102
+    def observe(self, amount: float) -> None:
         pass
 
 

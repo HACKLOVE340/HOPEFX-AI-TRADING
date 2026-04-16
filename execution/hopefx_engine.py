@@ -48,6 +48,7 @@ except ImportError:
     class _StrEnum(str, _Enum):  # type: ignore[no-redef]  # Python 3.10 compat
         pass
 
+
 StrEnum = _StrEnum
 
 

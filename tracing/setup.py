@@ -72,6 +72,7 @@ def _probe_otlp_endpoint(endpoint: str, timeout: float = 1.5) -> bool:
     except OSError:
         return False
 
+
 _tracer_provider = None
 
 
