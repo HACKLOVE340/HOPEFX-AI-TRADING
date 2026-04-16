@@ -606,7 +606,7 @@ class BrokerManager:
             )
 
     def _record_failure(self, exc: Exception) -> None:
-        """Increment failure counter for active broker and log."""
+        """Increment failure counter for active broker, update circuit breaker, and log."""
         with self._lock:
             name = self._active_name or "unknown"
             self._consecutive_failures[name] = self._consecutive_failures.get(name, 0) + 1
@@ -622,6 +622,13 @@ class BrokerManager:
             tb,
         )
         self._capture_sentry(exc)
+
+        # Propagate failure to the broker circuit breaker (sync-safe)
+        try:
+            from resilience.service_circuit_breakers import broker_breaker as _bb
+            _bb.record_failure(exc)
+        except Exception:  # nosec B110 — circuit breaker is non-fatal
+            pass
 
         # Auto-failover using the ordered failover chain (primary → live secondary → paper)
         if failures >= _MAX_CONSECUTIVE_FAILURES:
@@ -671,7 +678,7 @@ class BrokerManager:
                     )
 
     def _reset_failures(self) -> None:
-        """Reset failure counter for active broker on success."""
+        """Reset failure counter for active broker on success and update circuit breaker."""
         with self._lock:
             name = self._active_name or "unknown"
             if self._consecutive_failures.get(name, 0) > 0:
@@ -682,6 +689,13 @@ class BrokerManager:
                 )
             self._consecutive_failures[name] = 0
             self._last_errors[name] = None
+
+        # Propagate success to the broker circuit breaker (sync-safe)
+        try:
+            from resilience.service_circuit_breakers import broker_breaker as _bb
+            _bb.record_success()
+        except Exception:  # nosec B110 — circuit breaker is non-fatal
+            pass
 
     @staticmethod
     def _capture_sentry(exc: Exception) -> None:
