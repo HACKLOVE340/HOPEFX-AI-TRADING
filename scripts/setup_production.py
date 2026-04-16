@@ -421,7 +421,7 @@ def _section_observability(sentry_dsn: str, grafana_password: str) -> list[str]:
         "# ── Observability ────────────────────────────────────────────────────",
         f"SENTRY_DSN={sentry_dsn}",
         f"GRAFANA_ADMIN_PASSWORD={grafana_password}",
-        "OTEL_SERVICE_NAME=hopefx-trading",
+        "OTEL_SERVICE_NAME=hopefx-trading",  # pragma: allowlist secret
         "OTEL_EXPORTER_OTLP_ENDPOINT=",
     ]
 
