@@ -154,8 +154,55 @@ def register_page_routes(app: FastAPI) -> None:
         logger.warning("Run 'cd frontend && npm run build' to build the main React app")
 
     else:
+        # No built frontend found — serve a helpful placeholder at / that
+        # explains how to build the frontend. The API still works fully.
+        @app.get("/", include_in_schema=False)
+        async def _root_no_frontend():
+            return HTMLResponse(
+                content="""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>HOPEFX — Build Required</title>
+  <style>
+    body{background:#0f172a;color:#f1f5f9;font-family:system-ui,sans-serif;
+         display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
+    .card{background:#1e293b;border:1px solid #334155;border-radius:12px;
+          padding:40px;max-width:520px;text-align:center}
+    h1{color:#3b82f6;margin-bottom:8px}
+    code{background:#0f172a;padding:4px 8px;border-radius:4px;font-size:0.9em;color:#94a3b8}
+    pre{background:#0f172a;padding:16px;border-radius:8px;text-align:left;
+        overflow-x:auto;color:#94a3b8;font-size:0.85em}
+    a{color:#3b82f6;text-decoration:none}
+    a:hover{text-decoration:underline}
+    .badge{display:inline-block;background:#1d4ed8;color:#fff;padding:4px 12px;
+           border-radius:20px;font-size:0.8em;margin-top:8px}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>HOPEFX AI Trading</h1>
+    <span class="badge">Frontend Build Required</span>
+    <p style="color:#94a3b8;margin-top:16px">
+      The React frontend has not been built yet.<br>
+      Run the following command to build it:
+    </p>
+    <pre>cd frontend &amp;&amp; npm install &amp;&amp; npm run build</pre>
+    <p style="color:#94a3b8">Or use the quick-start script:</p>
+    <pre>./start.sh</pre>
+    <p style="margin-top:24px">
+      <a href="/docs">API Documentation →</a>
+      &nbsp;&nbsp;
+      <a href="/health">Health Check →</a>
+    </p>
+  </div>
+</body>
+</html>""",
+                status_code=200,
+            )
+
         logger.warning(
-            "No React build found. Run:\n"
-            "  cd frontend && npm run build   # main app → static/\n"
-            "  cd dashboard && npm run build  # GodMode  → dashboard/dist/"
+            "No React build found — serving placeholder at /. "
+            "Build the frontend with: cd frontend && npm run build"
         )
