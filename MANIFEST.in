@@ -1,0 +1,11 @@
+# MANIFEST.in — controls which extra files are included in the sdist.
+#
+# setuptools auto-includes: README.md, LICENSE, pyproject.toml, setup.py,
+# setup.cfg, and all Python source files.
+#
+# requirements.txt must be explicitly included because setup.py reads it at
+# build time (install_requires) and pyproject.toml references it via
+# [tool.setuptools.dynamic].  Without this line, `python -m build` succeeds
+# for the sdist but then fails with FileNotFoundError when building the wheel
+# from that sdist in an isolated environment.
+include requirements.txt
