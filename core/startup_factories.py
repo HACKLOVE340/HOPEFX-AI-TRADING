@@ -61,7 +61,10 @@ async def init_env(s: Any) -> bool:
     app_env = os.getenv("APP_ENV", "development").lower()
     is_production = app_env == "production"
 
-    if not os.getenv("OPENAI_API_KEY"):
+    # Only warn about OPENAI_API_KEY when it is the active LLM backend.
+    # When LLM_BACKEND=anthropic (the default) the OpenAI key is irrelevant.
+    llm_backend = os.getenv("LLM_BACKEND", "anthropic").lower()
+    if llm_backend == "openai" and not os.getenv("OPENAI_API_KEY"):
         logger.warning(
             "OPENAI_API_KEY not set — /api/chat will return 503 until configured",
         )
@@ -79,9 +82,9 @@ async def init_env(s: Any) -> bool:
         # This is NEVER persisted — restart = new secret = existing tokens invalid.
         ephemeral_jwt = _secrets_mod.token_hex(32)
         os.environ["SECURITY_JWT_SECRET"] = ephemeral_jwt
-        logger.warning(
-            "SECURITY_JWT_SECRET not set — using ephemeral random secret for this session only. "
-            "ALL JWT tokens become INVALID after a process restart (new secret generated each time). "
+        logger.info(
+            "SECURITY_JWT_SECRET not set — using ephemeral random secret for this dev session. "
+            "JWT tokens are invalidated on every restart. "
             "Set SECURITY_JWT_SECRET in .env before deploying to production."
         )
 
@@ -97,8 +100,8 @@ async def init_env(s: Any) -> bool:
         # Generate a cryptographically-random ephemeral key for dev.
         ephemeral_enc = _secrets_mod.token_urlsafe(48)
         os.environ["CONFIG_ENCRYPTION_KEY"] = ephemeral_enc
-        logger.warning(
-            "CONFIG_ENCRYPTION_KEY not set — using ephemeral random key for this session only. "
+        logger.info(
+            "CONFIG_ENCRYPTION_KEY not set — using ephemeral random key for this dev session. "
             "Credentials encrypted in previous sessions cannot be decrypted after restart. "
             "Set CONFIG_ENCRYPTION_KEY in .env before deploying to production."
         )
@@ -232,9 +235,10 @@ async def init_database(s: Any) -> Any:
                 "processes and will corrupt data. Set DATABASE_URL to a "
                 "PostgreSQL connection string before starting with multiple workers."
             )
-        logger.warning(
-            "Database is SQLite (%s). This is only suitable for local development. "
-            "Use PostgreSQL for production or multi-worker deployments.",
+        # SQLite is expected in dev — log at INFO, not WARNING.
+        logger.info(
+            "Database is SQLite (%s) — suitable for local development only. "
+            "Use PostgreSQL for production.",
             conn_str,
         )
     engine_kwargs: ClassVar[dict] = {}
@@ -278,11 +282,11 @@ async def init_database(s: Any) -> Any:
             _current_rev or "none",
         )
     except Exception as exc:
-        # If the schema already exists (e.g. created by a previous create_all
-        # run before Alembic was introduced) the initial migration will fail
-        # with "table X already exists".  Fall back to create_all with
-        # checkfirst=True so existing tables are left untouched.
-        logger.warning("Alembic migration failed (%s), falling back to create_all", exc)
+        # Schema may already exist (e.g. created by a previous create_all run
+        # before Alembic was introduced, or a fresh SQLite dev database).
+        # Fall back to create_all with checkfirst=True so existing tables are
+        # left untouched.  Log at INFO — this is a normal first-run path.
+        logger.info("Alembic migration skipped (%s) — falling back to create_all", exc)
         try:
             Base.metadata.create_all(engine, checkfirst=True)
             logger.info("Database schema ensured via create_all (checkfirst=True)")
