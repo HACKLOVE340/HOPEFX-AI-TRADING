@@ -281,6 +281,42 @@ async def _check_orchestrator() -> ComponentStatus:
         )
 
 
+def _check_ready_sync() -> bool:
+    """
+    Synchronous readiness check for use in non-async contexts (e.g. rollback triggers).
+
+    Uses circuit breaker states as a fast proxy for component health — no I/O,
+    no event loop required.  Returns True when all critical services appear healthy.
+
+    This is intentionally conservative: it returns False (not ready) when any
+    critical circuit breaker is open, even if the underlying service has recovered
+    but the breaker hasn't closed yet.
+    """
+    try:
+        from resilience.service_circuit_breakers import (
+            redis_breaker, db_breaker, broker_breaker, ml_breaker,
+        )
+        # Any open critical breaker → not ready
+        if redis_breaker.is_open:
+            return False
+        if db_breaker.is_open:
+            return False
+        # broker and ml are non-critical for readiness (paper trading can run without them)
+    except Exception:  # nosec B110 — circuit breaker import is non-fatal
+        pass
+
+    # Check kill switch
+    try:
+        from kill_switch import KillSwitch
+        ks = KillSwitch.get_instance()
+        if ks and ks.is_active():
+            return False
+    except Exception:  # nosec B110
+        pass
+
+    return True
+
+
 async def _run_all_checks() -> list[ComponentStatus]:
     """Run all component checks concurrently and return results.
 
@@ -458,7 +494,41 @@ async def prometheus_metrics() -> str:
         "# HELP hopefx_service_healthy 1 if all components are healthy",
         "# TYPE hopefx_service_healthy gauge",
         f'hopefx_service_healthy{{service="{_SERVICE_NAME}"}} {overall_healthy}',
-        "",
     ]
 
+    # Circuit breaker states (0=closed/healthy, 1=half_open, 2=open/unhealthy)
+    try:
+        from resilience.service_circuit_breakers import get_all_breaker_status
+        breaker_statuses = get_all_breaker_status()
+        state_map = {"closed": 0, "half_open": 1, "open": 2}
+        lines += [
+            "",
+            "# HELP hopefx_circuit_breaker_state Circuit breaker state (0=closed, 1=half_open, 2=open)",
+            "# TYPE hopefx_circuit_breaker_state gauge",
+            "# HELP hopefx_circuit_breaker_failures_total Total failures recorded by circuit breaker",
+            "# TYPE hopefx_circuit_breaker_failures_total counter",
+        ]
+        for name, status in breaker_statuses.items():
+            state_val = state_map.get(status.get("state", "closed"), 0)
+            total_failures = status.get("total_failures", 0)
+            lines.append(f'hopefx_circuit_breaker_state{{breaker="{name}"}} {state_val}')
+            lines.append(f'hopefx_circuit_breaker_failures_total{{breaker="{name}"}} {total_failures}')
+    except Exception:  # nosec B110 — circuit breaker metrics are non-fatal
+        pass
+
+    # Auto-rollback status
+    try:
+        from resilience.auto_rollback import rollback_manager as _rm
+        rm_status = _rm.get_status()
+        rollback_count = rm_status.get("total_rollbacks", 0)
+        lines += [
+            "",
+            "# HELP hopefx_rollback_total Total automatic rollbacks triggered",
+            "# TYPE hopefx_rollback_total counter",
+            f'hopefx_rollback_total{{service="{_SERVICE_NAME}"}} {rollback_count}',
+        ]
+    except Exception:  # nosec B110 — rollback metrics are non-fatal
+        pass
+
+    lines.append("")
     return "\n".join(lines)
