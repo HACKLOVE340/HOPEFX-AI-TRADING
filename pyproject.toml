@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hopefx-ai-trading"
-version = "1.0.0"
+version = "11.0.0"
 description = "Advanced AI-powered XAUUSD trading framework with machine learning"
 readme = "README.md"
 authors = [
@@ -25,9 +25,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 keywords = ["trading", "ai", "machine-learning", "xauusd", "forex", "cryptocurrency", "bitcoin"]
-dependencies = [
-    # Core dependencies are read from requirements.txt
-]
+dynamic = ["dependencies"]
 requires-python = ">=3.10"
 
 [project.optional-dependencies]
@@ -54,6 +52,11 @@ Repository = "https://github.com/HACKLOVE340/HOPEFX-AI-TRADING"
 [project.scripts]
 hopefx = "cli:main"
 hopefx-server = "app:run_server"
+
+[tool.setuptools.dynamic]
+# Read runtime dependencies from requirements.txt at build time.
+# This keeps pyproject.toml and setup.py in sync with a single source of truth.
+dependencies = {file = ["requirements.txt"]}
 
 [tool.setuptools.packages.find]
 # Auto-discover all packages at the repo root.
