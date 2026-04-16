@@ -954,6 +954,99 @@ class ConsensusAggregator:
 
 
 # =============================================================================
+# PRODUCTION FACTORY
+# =============================================================================
+
+
+def build_production_aggregator(
+    symbols: list[str] | None = None,
+    consensus_threshold: float = 0.67,
+    redis_url: str | None = None,
+) -> "ConsensusAggregator":
+    """
+    Build a ConsensusAggregator wired with real data providers from env vars.
+
+    Provider priority (highest weight first):
+        1. Polygon.io  — POLYGON_API_KEY
+        2. OANDA       — OANDA_ACCOUNT_ID + OANDA_API_KEY
+        3. Binance     — BINANCE_API_KEY + BINANCE_SECRET
+
+    At least one provider must be configured.  Raises RuntimeError if none
+    are available and APP_ENV=production.
+
+    Args:
+        symbols:             Symbols to subscribe to (default: XAUUSD, EURUSD,
+                             GBPUSD, USDJPY, BTCUSD).
+        consensus_threshold: Fraction of sources that must agree (default 0.67).
+        redis_url:           Optional Redis URL for distributed tick caching.
+
+    Returns:
+        Configured ConsensusAggregator ready to call .start() on.
+    """
+    import os as _os
+
+    _symbols = symbols or ["XAU/USD", "EUR/USD", "GBP/USD", "USD/JPY", "BTC/USD"]
+    aggregator = ConsensusAggregator(
+        consensus_threshold=consensus_threshold,
+        max_sources=5,
+        outlier_threshold=0.001,
+        redis_url=redis_url or _os.getenv("REDIS_URL"),
+    )
+
+    added: list[str] = []
+
+    # 1. Polygon.io
+    polygon_key = _os.getenv("POLYGON_API_KEY", "").strip()
+    if polygon_key:
+        try:
+            aggregator.add_provider(PolygonProvider(polygon_key))
+            added.append("Polygon")
+            logger.info("build_production_aggregator: added PolygonProvider")
+        except Exception as exc:
+            logger.warning("build_production_aggregator: PolygonProvider failed: %s", exc)
+
+    # 2. OANDA
+    oanda_account = _os.getenv("OANDA_ACCOUNT_ID", "").strip()
+    oanda_key = _os.getenv("OANDA_API_KEY", "").strip()
+    if oanda_account and oanda_key:
+        try:
+            aggregator.add_provider(OandaProvider(oanda_account, oanda_key))
+            added.append("OANDA")
+            logger.info("build_production_aggregator: added OandaProvider")
+        except Exception as exc:
+            logger.warning("build_production_aggregator: OandaProvider failed: %s", exc)
+
+    # 3. Binance
+    binance_key = _os.getenv("BINANCE_API_KEY", "").strip()
+    binance_secret = _os.getenv("BINANCE_SECRET", "").strip()
+    if binance_key and binance_secret:
+        try:
+            aggregator.add_provider(BinanceProvider(binance_key, binance_secret))
+            added.append("Binance")
+            logger.info("build_production_aggregator: added BinanceProvider")
+        except Exception as exc:
+            logger.warning("build_production_aggregator: BinanceProvider failed: %s", exc)
+
+    if not added:
+        env = _os.getenv("APP_ENV", "production").lower()
+        msg = (
+            "build_production_aggregator: no data providers configured. "
+            "Set at least one of: POLYGON_API_KEY, OANDA_ACCOUNT_ID+OANDA_API_KEY, "
+            "BINANCE_API_KEY+BINANCE_SECRET."
+        )
+        if env == "production":
+            raise RuntimeError(msg)
+        logger.warning(msg)
+
+    logger.info(
+        "build_production_aggregator: %d provider(s) registered: %s",
+        len(added),
+        ", ".join(added) or "none",
+    )
+    return aggregator
+
+
+# =============================================================================
 # EXAMPLE USAGE & TESTING
 # =============================================================================
 
@@ -983,16 +1076,12 @@ async def run_realtime_test():
     aggregator = ConsensusAggregator(consensus_threshold=0.5, max_sources=5, outlier_threshold=0.001)
 
     # Add synthetic providers for smoke-testing only.
-    # In production, replace with PolygonProvider, OandaProvider, or BinanceProvider.
+    # For production use, call build_production_aggregator() instead — it wires
+    # real providers from POLYGON_API_KEY, OANDA_ACCOUNT_ID/OANDA_API_KEY,
+    # and BINANCE_API_KEY/BINANCE_SECRET automatically.
     logger.info("[2] Adding synthetic test providers (MockProvider)...")
     aggregator.add_provider(MockProvider(volatility=0.0002, drift=0.00001, tick_interval_ms=100))  # pylint: disable=abstract-class-instantiated
-
     aggregator.add_provider(MockProvider(volatility=0.0003, drift=-0.00001, tick_interval_ms=150))  # pylint: disable=abstract-class-instantiated
-
-    # Production providers — configure via env vars:
-    # aggregator.add_provider(PolygonProvider(os.getenv("POLYGON_API_KEY")))
-    # aggregator.add_provider(OandaProvider(os.getenv("OANDA_ACCOUNT_ID"), os.getenv("OANDA_API_KEY")))
-    # aggregator.add_provider(BinanceProvider(os.getenv("BINANCE_API_KEY"), os.getenv("BINANCE_SECRET")))
 
     logger.info(f"    Added {len(aggregator.providers)} providers")
 
