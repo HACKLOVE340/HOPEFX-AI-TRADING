@@ -222,12 +222,10 @@ jobs:
             ${{ runner.os }}-pip-ci-${{ matrix.python-version }}-
 
       - name: Install dependencies
+        # All test/lint tools (pytest, bandit, coverage, etc.) are in requirements-ci.txt.
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-ci.txt
-          pip install matplotlib "sentry-sdk[fastapi]>=2.0.0" \
-            "pytest>=7.4.3" "pytest-cov>=4.1.0" "pytest-asyncio>=0.23.6" \
-            "pytest-timeout>=2.2.0" bandit coverage
 
       - name: Alembic migration smoke test
         # Verify all migrations apply cleanly to a fresh schema.
