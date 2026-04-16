@@ -429,28 +429,52 @@ async def startup_event():
     logger.info("=" * 70)
 
     _registry = _build_component_registry(app, feature_flags)
+    _tasks_done: list[str] = []
+    _tasks_failed: list[str] = []
 
     try:
         await _registry.start_all(app_state)
         _registry.print_table()
         _push_state_to_api_modules(app_state)
+        _tasks_done.append("component_registry")
 
         if getattr(app_state, "alert_engine", None) is not None:
             app.state.alert_engine = app_state.alert_engine
 
         apply_persisted_risk_settings()
+        _tasks_done.append("risk_settings")
+
         _start_data_layer_orchestrator(app_state)
+        _tasks_done.append("data_layer_orchestrator")
+
         _init_kyc_gateway(app_state)
+        _tasks_done.append("kyc_gateway")
+
         await _start_l2_feed(app_state)
+        _tasks_done.append("l2_feed")
+
         _start_sharpe_circuit_breaker(app_state)
+        _tasks_done.append("sharpe_circuit_breaker")
+
         _start_nuclear_price_bridge(app_state)
+        _tasks_done.append("nuclear_price_bridge")
+
         _mount_gateway(app)
+        _tasks_done.append("api_gateway")
 
         app_state.initialized = True
         log_activity("API server ready")
         logger.info("=" * 70)
         logger.info("API SERVER READY")
         logger.info("=" * 70)
+
+        # Mark startup probe as complete so /api/health/startup returns 200
+        try:
+            from api.health import mark_startup_complete as _mark_startup_complete
+            _mark_startup_complete(tasks_done=_tasks_done, tasks_failed=_tasks_failed)
+        except Exception as _hc_err:
+            logger.warning("Could not mark startup complete: %s", _hc_err)
+
     except Exception:
         logger.exception("Startup failed: %s")
         raise

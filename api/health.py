@@ -12,12 +12,16 @@ Endpoints
 ---------
 GET /api/health/live       — liveness probe (always 200 if process is alive)
 GET /api/health/ready      — readiness probe; 503 when any CRITICAL component fails
+GET /api/health/startup    — startup probe; 503 until all init tasks complete
+GET /api/health/deep       — deep health check: DB query, Redis ping, broker ping, ML inference
 GET /api/health/components — full structured JSON: every component's status + latency
 GET /api/health/metrics    — Prometheus-compatible text/plain snapshot
 
 Design invariants
 -----------------
 - ``/ready`` MUST return 503 (not 200) when any CRITICAL component is degraded.
+- ``/startup`` MUST return 503 until the application has fully initialised.
+- ``/deep`` performs real I/O probes against every dependency; never cached.
 - No silent degradation — operational failures surface as HTTP errors.
 - All checks time-bounded at 5 s to avoid blocking Kubernetes probes.
 """
@@ -49,6 +53,42 @@ _SERVICE_NAME: str = os.getenv("OTEL_SERVICE_NAME", "hopefx-trading")
 # BROKER_TYPE=paper is the safe default; live requires explicit opt-in.
 _BROKER_TYPE: str = os.getenv("BROKER_TYPE", "paper").lower()
 _TRADING_MODE: str = "live" if _BROKER_TYPE not in ("paper", "simulation", "demo", "backtest") else "paper"
+
+# ── Startup state ─────────────────────────────────────────────────────────────
+# Set to True by mark_startup_complete() once the lifespan startup handler
+# finishes all initialisation tasks (DB, Redis, broker, ML model).
+# The /startup probe returns 503 until this flag is True.
+_startup_complete: bool = False
+_startup_complete_at: float | None = None
+_startup_tasks_done: list[str] = []
+_startup_tasks_failed: list[str] = []
+
+
+def mark_startup_complete(tasks_done: list[str] | None = None, tasks_failed: list[str] | None = None) -> None:
+    """Called by the lifespan handler once all startup tasks finish.
+
+    Args:
+        tasks_done: Names of startup tasks that completed successfully.
+        tasks_failed: Names of startup tasks that failed (non-fatal).
+    """
+    global _startup_complete, _startup_complete_at, _startup_tasks_done, _startup_tasks_failed
+    _startup_complete = True
+    _startup_complete_at = time.time()
+    _startup_tasks_done = list(tasks_done or [])
+    _startup_tasks_failed = list(tasks_failed or [])
+    logger.info(
+        "Startup probe: marked complete (done=%s, failed=%s)",
+        _startup_tasks_done,
+        _startup_tasks_failed,
+    )
+
+
+def mark_startup_incomplete() -> None:
+    """Reset startup state — used during testing or hot-reload."""
+    global _startup_complete, _startup_complete_at
+    _startup_complete = False
+    _startup_complete_at = None
+
 
 # ── Module-level cached DB engine ─────────────────────────────────────────────
 # Creating a new SQLAlchemy engine on every health check is extremely expensive
@@ -532,3 +572,407 @@ async def prometheus_metrics() -> str:
 
     lines.append("")
     return "\n".join(lines)
+
+
+# ── Startup probe ──────────────────────────────────────────────────────────────
+
+
+class StartupResponse(BaseModel):
+    """Startup probe response."""
+
+    started: bool
+    timestamp: str
+    started_at: str | None = None
+    uptime_seconds: float | None = None
+    tasks_done: list[str]
+    tasks_failed: list[str]
+    service: str
+    version: str
+
+
+@router.get(
+    "/startup",
+    response_model=StartupResponse,
+    summary="Startup probe — 503 until application fully initialised",
+    responses={
+        200: {"description": "Application startup complete"},
+        503: {"description": "Application still initialising"},
+    },
+)
+async def startup_probe() -> Response:
+    """Kubernetes startup probe.
+
+    Returns HTTP 200 once all lifespan startup tasks have completed
+    (DB pool, Redis, broker connection, ML model load).
+    Returns HTTP 503 while the application is still initialising.
+
+    Kubernetes uses this probe to avoid sending traffic before the app is
+    ready to handle requests.  Unlike the readiness probe, this one only
+    fires once — after it succeeds, Kubernetes switches to the liveness
+    and readiness probes.
+
+    Returns:
+        :class:`StartupResponse` JSON.
+        HTTP 503 while initialising, 200 once complete.
+    """
+    now = time.time()
+    started_at_iso: str | None = None
+    uptime: float | None = None
+
+    if _startup_complete and _startup_complete_at is not None:
+        started_at_iso = datetime.fromtimestamp(_startup_complete_at, timezone.utc).isoformat()
+        uptime = round(now - _startup_complete_at, 2)
+
+    body = StartupResponse(
+        started=_startup_complete,
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        started_at=started_at_iso,
+        uptime_seconds=uptime,
+        tasks_done=list(_startup_tasks_done),
+        tasks_failed=list(_startup_tasks_failed),
+        service=_SERVICE_NAME,
+        version=_VERSION,
+    )
+
+    status_code = 200 if _startup_complete else 503
+    return Response(
+        content=body.model_dump_json(),
+        status_code=status_code,
+        media_type="application/json",
+    )
+
+
+# ── Deep health check ──────────────────────────────────────────────────────────
+
+
+class DeepCheckResult(BaseModel):
+    """Result of a single deep health check probe."""
+
+    name: str
+    status: str  # ok | error | skipped
+    latency_ms: float | None = None
+    detail: str = ""
+
+
+class DeepHealthResponse(BaseModel):
+    """Full deep health check response."""
+
+    service: str
+    version: str
+    timestamp: str
+    overall: str  # ok | degraded | error
+    trading_mode: str
+    broker_type: str
+    checks: list[DeepCheckResult]
+    total_latency_ms: float
+
+
+async def _deep_check_redis() -> DeepCheckResult:
+    """Perform a real Redis SET/GET/DEL round-trip to verify read-write health."""
+    t0 = time.perf_counter()
+    try:
+        import redis.asyncio as aioredis  # type: ignore[import]
+
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        client = aioredis.from_url(redis_url, socket_connect_timeout=2, socket_timeout=2)
+        probe_key = "hopefx:health:deep:probe"
+        probe_val = str(time.time())
+        await asyncio.wait_for(client.set(probe_key, probe_val, ex=10), timeout=_CHECK_TIMEOUT_SEC)
+        read_val = await asyncio.wait_for(client.get(probe_key), timeout=_CHECK_TIMEOUT_SEC)
+        await asyncio.wait_for(client.delete(probe_key), timeout=_CHECK_TIMEOUT_SEC)
+        await client.aclose()
+        latency_ms = (time.perf_counter() - t0) * 1000
+        match = read_val is not None and (
+            read_val == probe_val or read_val == probe_val.encode()
+        )
+        return DeepCheckResult(
+            name="redis_rw",
+            status="ok" if match else "error",
+            latency_ms=round(latency_ms, 2),
+            detail="SET/GET/DEL round-trip OK" if match else f"Value mismatch: got {read_val!r}",
+        )
+    except Exception as exc:
+        latency_ms = (time.perf_counter() - t0) * 1000
+        return DeepCheckResult(
+            name="redis_rw",
+            status="error",
+            latency_ms=round(latency_ms, 2),
+            detail=str(exc),
+        )
+
+
+async def _deep_check_database() -> DeepCheckResult:
+    """Execute a real SELECT query and verify the result."""
+    t0 = time.perf_counter()
+    engine, db_url = await _get_db_engine()
+    if engine is None:
+        return DeepCheckResult(
+            name="database_query",
+            status="skipped",
+            detail="DATABASE_URL not configured" if not db_url else "Engine unavailable",
+        )
+    try:
+        from sqlalchemy import text  # type: ignore[import]
+
+        async with engine.connect() as conn:
+            result = await asyncio.wait_for(
+                conn.execute(text("SELECT 1 AS probe")),
+                timeout=_CHECK_TIMEOUT_SEC,
+            )
+            row = result.fetchone()
+        latency_ms = (time.perf_counter() - t0) * 1000
+        ok = row is not None and row[0] == 1
+        return DeepCheckResult(
+            name="database_query",
+            status="ok" if ok else "error",
+            latency_ms=round(latency_ms, 2),
+            detail="SELECT 1 returned 1" if ok else f"Unexpected result: {row}",
+        )
+    except Exception as exc:
+        latency_ms = (time.perf_counter() - t0) * 1000
+        return DeepCheckResult(
+            name="database_query",
+            status="error",
+            latency_ms=round(latency_ms, 2),
+            detail=str(exc),
+        )
+
+
+async def _deep_check_broker() -> DeepCheckResult:
+    """Verify broker connectivity by fetching account info or a price quote."""
+    t0 = time.perf_counter()
+    try:
+        from core.app_state import app_state as _app_state  # type: ignore[import]
+
+        broker = getattr(_app_state, "broker", None)
+        if broker is None:
+            return DeepCheckResult(
+                name="broker_ping",
+                status="skipped",
+                detail="Broker not initialised in app_state",
+            )
+
+        # Try get_account_info first; fall back to is_connected()
+        if hasattr(broker, "get_account_info"):
+            info = await asyncio.wait_for(
+                broker.get_account_info() if asyncio.iscoroutinefunction(broker.get_account_info)
+                else asyncio.get_event_loop().run_in_executor(None, broker.get_account_info),
+                timeout=_CHECK_TIMEOUT_SEC,
+            )
+            latency_ms = (time.perf_counter() - t0) * 1000
+            ok = info is not None
+            return DeepCheckResult(
+                name="broker_ping",
+                status="ok" if ok else "error",
+                latency_ms=round(latency_ms, 2),
+                detail="Account info retrieved" if ok else "get_account_info returned None",
+            )
+        elif hasattr(broker, "is_connected"):
+            connected = broker.is_connected()
+            latency_ms = (time.perf_counter() - t0) * 1000
+            return DeepCheckResult(
+                name="broker_ping",
+                status="ok" if connected else "error",
+                latency_ms=round(latency_ms, 2),
+                detail="Broker connected" if connected else "Broker reports disconnected",
+            )
+        else:
+            return DeepCheckResult(
+                name="broker_ping",
+                status="skipped",
+                detail="Broker has no get_account_info or is_connected method",
+            )
+    except Exception as exc:
+        latency_ms = (time.perf_counter() - t0) * 1000
+        return DeepCheckResult(
+            name="broker_ping",
+            status="error",
+            latency_ms=round(latency_ms, 2),
+            detail=str(exc),
+        )
+
+
+async def _deep_check_ml() -> DeepCheckResult:
+    """Run a real ML inference call with a synthetic tick to verify the model loads."""
+    t0 = time.perf_counter()
+    try:
+        from core.app_state import app_state as _app_state  # type: ignore[import]
+
+        engine = getattr(_app_state, "ml_engine", None) or getattr(_app_state, "inference_engine", None)
+        if engine is None:
+            # Fall back to loading the model artifact directly
+            import os as _os
+            model_path = _os.path.join(
+                _os.path.dirname(_os.path.dirname(__file__)),
+                "ml", "saved_models", "advanced_oos.pkl",
+            )
+            if not _os.path.isfile(model_path):
+                return DeepCheckResult(
+                    name="ml_inference",
+                    status="skipped",
+                    detail=f"ML engine not in app_state and model not found at {model_path}",
+                )
+            import joblib  # type: ignore[import]
+            model = joblib.load(model_path)  # nosec B301
+            latency_ms = (time.perf_counter() - t0) * 1000
+            return DeepCheckResult(
+                name="ml_inference",
+                status="ok",
+                latency_ms=round(latency_ms, 2),
+                detail=f"Model loaded from {model_path} ({type(model).__name__})",
+            )
+
+        # Use the live engine — call predict with a minimal feature vector
+        import numpy as np  # type: ignore[import]
+
+        dummy_features = np.zeros((1, 10), dtype=np.float32)
+        if hasattr(engine, "predict"):
+            pred = engine.predict(dummy_features)
+        elif hasattr(engine, "infer"):
+            pred = engine.infer(dummy_features)
+        else:
+            return DeepCheckResult(
+                name="ml_inference",
+                status="skipped",
+                detail=f"ML engine ({type(engine).__name__}) has no predict/infer method",
+            )
+
+        latency_ms = (time.perf_counter() - t0) * 1000
+        return DeepCheckResult(
+            name="ml_inference",
+            status="ok",
+            latency_ms=round(latency_ms, 2),
+            detail=f"Inference returned {type(pred).__name__}",
+        )
+    except Exception as exc:
+        latency_ms = (time.perf_counter() - t0) * 1000
+        return DeepCheckResult(
+            name="ml_inference",
+            status="error",
+            latency_ms=round(latency_ms, 2),
+            detail=str(exc),
+        )
+
+
+async def _deep_check_circuit_breakers() -> DeepCheckResult:
+    """Report the state of all circuit breakers."""
+    t0 = time.perf_counter()
+    try:
+        from resilience.service_circuit_breakers import get_all_breaker_status  # type: ignore[import]
+
+        status = get_all_breaker_status()
+        open_count = status.get("open_count", 0)
+        latency_ms = (time.perf_counter() - t0) * 1000
+        detail_parts = [
+            f"{name}={info.get('state', 'unknown')}"
+            for name, info in status.get("breakers", {}).items()
+        ]
+        return DeepCheckResult(
+            name="circuit_breakers",
+            status="ok" if open_count == 0 else "error",
+            latency_ms=round(latency_ms, 2),
+            detail=f"open={open_count} — " + ", ".join(detail_parts),
+        )
+    except Exception as exc:
+        latency_ms = (time.perf_counter() - t0) * 1000
+        return DeepCheckResult(
+            name="circuit_breakers",
+            status="error",
+            latency_ms=round(latency_ms, 2),
+            detail=str(exc),
+        )
+
+
+async def _deep_check_kill_switch() -> DeepCheckResult:
+    """Verify kill switch state."""
+    t0 = time.perf_counter()
+    try:
+        from kill_switch import kill_switch as _ks  # type: ignore[import]
+
+        active = _ks.is_active()
+        reason = getattr(_ks, "_reason", "") if active else ""
+        latency_ms = (time.perf_counter() - t0) * 1000
+        return DeepCheckResult(
+            name="kill_switch",
+            status="error" if active else "ok",
+            latency_ms=round(latency_ms, 2),
+            detail=f"ACTIVE: {reason}" if active else "inactive",
+        )
+    except Exception as exc:
+        latency_ms = (time.perf_counter() - t0) * 1000
+        return DeepCheckResult(
+            name="kill_switch",
+            status="error",
+            latency_ms=round(latency_ms, 2),
+            detail=str(exc),
+        )
+
+
+@router.get(
+    "/deep",
+    response_model=DeepHealthResponse,
+    summary="Deep health check — real I/O probes against every dependency",
+    responses={
+        200: {"description": "All deep checks passed"},
+        503: {"description": "One or more deep checks failed"},
+    },
+)
+async def deep_health() -> Response:
+    """Deep health check endpoint.
+
+    Performs real I/O probes against every external dependency:
+    - Redis: SET/GET/DEL round-trip
+    - Database: SELECT 1 query
+    - Broker: account info or connection status
+    - ML model: load artifact or run inference
+    - Circuit breakers: state of all breakers
+    - Kill switch: active/inactive state
+
+    Unlike ``/ready`` (which uses cached component states), this endpoint
+    always performs live I/O.  Use it for post-deploy verification and
+    scheduled deep monitoring — not as a Kubernetes readiness probe.
+
+    Returns:
+        :class:`DeepHealthResponse` JSON.
+        HTTP 503 when any check returns ``error`` status.
+    """
+    t_start = time.perf_counter()
+
+    results = await asyncio.gather(
+        _deep_check_redis(),
+        _deep_check_database(),
+        _deep_check_broker(),
+        _deep_check_ml(),
+        _deep_check_circuit_breakers(),
+        _deep_check_kill_switch(),
+        return_exceptions=True,
+    )
+
+    checks: list[DeepCheckResult] = []
+    for r in results:
+        if isinstance(r, Exception):
+            checks.append(DeepCheckResult(name="unknown", status="error", detail=str(r)))
+        else:
+            checks.append(r)  # type: ignore[arg-type]
+
+    total_latency_ms = round((time.perf_counter() - t_start) * 1000, 2)
+    has_error = any(c.status == "error" for c in checks)
+    overall = "error" if has_error else "ok"
+
+    body = DeepHealthResponse(
+        service=_SERVICE_NAME,
+        version=_VERSION,
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        overall=overall,
+        trading_mode=_TRADING_MODE,
+        broker_type=_BROKER_TYPE,
+        checks=checks,
+        total_latency_ms=total_latency_ms,
+    )
+
+    status_code = 503 if has_error else 200
+    return Response(
+        content=body.model_dump_json(),
+        status_code=status_code,
+        media_type="application/json",
+    )
