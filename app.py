@@ -199,38 +199,60 @@ try:
         app.include_router(create_decision_router(_decision_engine))
         logger.info("Decision engine router registered at /decision")
     else:
-        # Engine not yet initialised (startup not complete) — register a
-        # deferred router that resolves the engine from app_state at request time.
-        from fastapi import APIRouter as _APIRouter
+        # Engine not yet initialised at import time (startup not complete).
+        # Register a deferred router that resolves the engine from app_state
+        # at request time so routes are available immediately and work once
+        # startup completes.  Uses the same TickRequest schema as the real
+        # router so the API contract is identical regardless of init order.
+        from fastapi import APIRouter as _APIRouter, HTTPException as _HTTPException
+        from pydantic import BaseModel as _BaseModel
 
-        _decision_stub = _APIRouter(prefix="/decision", tags=["Decision Engine"])
+        class _TickRequest(_BaseModel):
+            symbol: str = "XAUUSD"
+            close: float
+            open: float
+            high: float
+            low: float
+            volume: float = 0.0
 
-        @_decision_stub.get("/status")
+        _decision_deferred = _APIRouter(prefix="/decision", tags=["Decision Engine"])
+
+        @_decision_deferred.get("/status", summary="Decision engine health and metrics")
         async def _decision_status():
             eng = getattr(_app_state, "decision_engine", None)
             if eng is None:
                 return {"engine": "HOPEFXDecisionEngine", "status": "not_initialised"}
             return eng.status()
 
-        @_decision_stub.post("/tick")
-        async def _decision_tick(payload: dict):
+        @_decision_deferred.post("/tick", summary="Inject a single tick through the decision pipeline")
+        async def _decision_tick(req: _TickRequest):
             eng = getattr(_app_state, "decision_engine", None)
             if eng is None:
-                from fastapi import HTTPException
-
-                raise HTTPException(503, "Decision engine not initialised")
-            result = await eng.process_tick(payload, symbol=payload.get("symbol", "XAUUSD"))
+                raise _HTTPException(503, "Decision engine not initialised")
+            data = {
+                "close": req.close,
+                "open": req.open,
+                "high": req.high,
+                "low": req.low,
+                "volume": req.volume,
+                "prices": [req.close],
+                "highs": [req.high],
+                "lows": [req.low],
+                "volumes": [req.volume],
+            }
+            result = await eng.process_tick(data, symbol=req.symbol)
             return result.to_dict()
 
-        @_decision_stub.post("/reset")
+        @_decision_deferred.post("/reset", summary="Reset engine cycle metrics")
         async def _decision_reset():
             eng = getattr(_app_state, "decision_engine", None)
-            if eng is not None:
-                eng.reset_metrics()
+            if eng is None:
+                raise _HTTPException(503, "Decision engine not initialised")
+            eng.reset_metrics()
             return {"reset": True}
 
-        app.include_router(_decision_stub)
-        logger.info("Decision engine stub router registered at /decision (engine pending init)")
+        app.include_router(_decision_deferred)
+        logger.info("Decision engine deferred router registered at /decision (engine pending init)")
 except Exception as _decision_router_err:
     logger.warning("Decision engine router failed to register: %s", _decision_router_err)
 
