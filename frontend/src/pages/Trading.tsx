@@ -11,7 +11,7 @@ import {
 } from 'lightweight-charts';
 import type { UTCTimestamp } from 'lightweight-charts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useStore } from '../store';
+import { useStore, useHasHydrated, selectIsAuth } from '../store';
 import { tradingApi } from '../hooks/useApi';
 import { usePositions, useAccount, useSignals } from '../hooks/useOrchestratorData';
 import { PositionsTable } from '../components/panels/PositionsTable';
@@ -178,6 +178,9 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
   const volRef       = useRef<ISeriesApi<'Histogram'> | null>(null);
   const maRef        = useRef<ISeriesApi<'Line'> | null>(null);
 
+  const isAuth   = useStore(selectIsAuth);
+  const hydrated = useHasHydrated();
+
   const [chartError, setChartError] = useState<string | null>(null);
   const [loading, setLoading]       = useState(true);
   const [showVolume, setShowVolume] = useState(true);
@@ -217,7 +220,7 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
   }, []);
 
   useEffect(() => {
-    if (!candleRef.current) return;
+    if (!candleRef.current || !hydrated || !isAuth) return;
     setLoading(true); setChartError(null);
     tradingApi.ohlcv(symbol, timeframe, 300)
       .then((r) => {
@@ -249,7 +252,7 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
         setChartError(err?.response?.data?.detail ?? err?.message ?? 'Failed to load chart data');
       })
       .finally(() => setLoading(false));
-  }, [symbol, timeframe]);
+  }, [symbol, timeframe, hydrated, isAuth]);
 
   useEffect(() => {
     if (!tick || !candleRef.current) return;
@@ -318,6 +321,9 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
 // ── TradeHistoryPanel ─────────────────────────────────────────────────────────
 
 function TradeHistoryPanel({ symbol }: { symbol: string }) {
+  const isAuth   = useStore(selectIsAuth);
+  const hydrated = useHasHydrated();
+
   const { data, isLoading, isError } = useQuery<ClosedTrade[]>({
     queryKey: ['trades', symbol],
     queryFn: async () => {
@@ -325,8 +331,9 @@ function TradeHistoryPanel({ symbol }: { symbol: string }) {
       const raw = r.data as ClosedTrade[] | { trades?: ClosedTrade[] };
       return Array.isArray(raw) ? raw : (raw.trades ?? []);
     },
+    enabled:         hydrated && isAuth,
     refetchInterval: 30_000,
-    staleTime: 15_000,
+    staleTime:       15_000,
   });
 
   if (isLoading) return <div className="p-4"><PanelSkeleton rows={5} /></div>;
@@ -442,14 +449,18 @@ function SignalsSummaryPanel({ symbol }: { symbol: string }) {
 // ── MarketRegimePanel ─────────────────────────────────────────────────────────
 
 function MarketRegimePanel({ symbol }: { symbol: string }) {
+  const isAuth   = useStore(selectIsAuth);
+  const hydrated = useHasHydrated();
+
   const { data, isLoading } = useQuery<MarketRegime>({
     queryKey: ['regime', symbol],
     queryFn: async () => {
       const r = await tradingApi.regime(apiSym(symbol));
       return r.data as MarketRegime;
     },
+    enabled:         hydrated && isAuth,
     refetchInterval: 30_000,
-    staleTime: 15_000,
+    staleTime:       15_000,
   });
 
   const { data: brain } = useQuery<BrainState>({
@@ -458,8 +469,9 @@ function MarketRegimePanel({ symbol }: { symbol: string }) {
       const r = await tradingApi.brainState();
       return r.data as BrainState;
     },
+    enabled:         hydrated && isAuth,
     refetchInterval: 15_000,
-    staleTime: 7_500,
+    staleTime:       7_500,
   });
 
   const regimeColor = (r?: string) => {
