@@ -81,6 +81,12 @@ def mark_startup_complete(tasks_done: list[str] | None = None, tasks_failed: lis
         _startup_tasks_done,
         _startup_tasks_failed,
     )
+    # Publish to Prometheus so the hopefx_startup_complete alert rule fires
+    try:
+        from resilience.auto_rollback import _STARTUP_COMPLETE  # type: ignore[import]
+        _STARTUP_COMPLETE.set(1)
+    except Exception:  # nosec B110 — non-fatal
+        pass
 
 
 def mark_startup_incomplete() -> None:
