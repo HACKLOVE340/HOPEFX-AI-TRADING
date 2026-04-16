@@ -61,6 +61,13 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+def _acled_date_range(days: int = 7) -> str:
+    """Return ACLED date range string 'YYYY-MM-DD|YYYY-MM-DD' for the past N days."""
+    end = datetime.now(UTC)
+    start = end - timedelta(days=days)
+    return f"{start.strftime('%Y-%m-%d')}|{end.strftime('%Y-%m-%d')}"
+
+
 class GeopoliticalEventType(Enum):
     """Types of geopolitical events"""
 
@@ -506,31 +513,84 @@ class GeopoliticalRiskProvider:
 
     async def _fetch_events_from_source(self) -> list[GeopoliticalEvent]:
         """
-        Fetch live events from the World Monitor API using aiohttp (non-blocking).
+        Fetch live geopolitical events using a tiered source strategy:
 
-        Calls the World Monitor GeoJSON endpoint for each configured data layer
-        and maps each feature to a GeopoliticalEvent.  The endpoint returns
-        FeatureCollection GeoJSON; each feature carries at minimum:
-            properties.title       — event headline
-            properties.description — detail text (may be empty)
-            properties.date        — ISO-8601 timestamp
-            properties.severity    — string severity label
-            properties.countries   — comma-separated country list (optional)
-            geometry.coordinates   — [lon, lat] (optional)
+        1. World Monitor self-hosted API — only attempted when WORLDMONITOR_API_KEY
+           is set (or api_endpoint is overridden), because worldmonitor.app is an
+           open-source project that must be self-hosted; it is not a public service.
+        2. GDELT 2.0 Doc API — free, no key required.
+        3. ACLED API — free for research; requires ACLED_API_KEY + ACLED_EMAIL.
+        4. ReliefWeb API — free, no key required.
+        5. In-memory cache from the previous successful fetch.
+        6. Empty list (graceful degradation) — a single WARNING is emitted, not
+           one per layer, so logs stay readable.
 
-        Configuration keys (passed via __init__ config dict):
-            api_endpoint   : base URL, default "https://worldmonitor.app"
-            api_key        : Bearer token (env var WORLDMONITOR_API_KEY)
-            time_range     : lookback window, default "7d"
-            request_timeout: HTTP timeout in seconds, default 15
-
-        Raises RuntimeError in APP_ENV=production when the API is unreachable
-        and no cached events are available.
+        Configuration keys (passed via __init__ config dict or env vars):
+            api_endpoint    : World Monitor base URL (default "https://worldmonitor.app")
+            api_key         : World Monitor Bearer token (env WORLDMONITOR_API_KEY)
+            time_range      : lookback window, default "7d"
+            request_timeout : HTTP timeout in seconds, default 15
         """
         api_key = self.config.get("api_key") or os.getenv("WORLDMONITOR_API_KEY", "")
         timeout_s = int(self.config.get("request_timeout", 15))
-        _is_production = os.getenv("APP_ENV", "production").lower() == "production"
+        _is_production = os.getenv("APP_ENV", "development").lower() == "production"
 
+        # ── 1. World Monitor (self-hosted) — only when explicitly configured ──
+        # worldmonitor.app is not a public API; attempting it without a key or a
+        # custom endpoint just produces DNS failures and noisy log spam.
+        custom_endpoint = self.config.get("api_endpoint", "")
+        wm_enabled = bool(api_key or (custom_endpoint and custom_endpoint != "https://worldmonitor.app"))
+
+        if wm_enabled:
+            events = await self._fetch_from_worldmonitor(api_key, timeout_s)
+            if events:
+                logger.info("Fetched %d geopolitical events from World Monitor", len(events))
+                return events
+
+        # ── 2. GDELT fallback (always attempted — free, no key) ───────────────
+        gdelt_events = await self._fetch_events_from_gdelt()
+        if gdelt_events:
+            logger.info("Fetched %d geopolitical events from GDELT", len(gdelt_events))
+            return gdelt_events
+
+        # ── 3. ACLED fallback (requires ACLED_API_KEY + ACLED_EMAIL) ──────────
+        acled_events = await self._fetch_events_from_acled(timeout_s)
+        if acled_events:
+            logger.info("Fetched %d geopolitical events from ACLED", len(acled_events))
+            return acled_events
+
+        # ── 4. ReliefWeb fallback (free, no key) ──────────────────────────────
+        reliefweb_events = await self._fetch_events_from_reliefweb(timeout_s)
+        if reliefweb_events:
+            logger.info("Fetched %d geopolitical events from ReliefWeb", len(reliefweb_events))
+            return reliefweb_events
+
+        # ── 5. Serve stale cache ───────────────────────────────────────────────
+        cached = self._cache.get("events", [])
+        if cached:
+            logger.warning(
+                "All geopolitical sources unavailable — serving %d cached events",
+                len(cached),
+            )
+            return cached
+
+        # ── 6. Graceful degradation ────────────────────────────────────────────
+        if _is_production:
+            raise RuntimeError(
+                "All geopolitical data sources unreachable and cache is empty. "
+                "Configure WORLDMONITOR_API_KEY (self-hosted) or ensure outbound "
+                "HTTPS access to api.gdeltproject.org / api.acleddata.com / api.reliefweb.int."
+            )
+        logger.warning(
+            "All geopolitical data sources unavailable and cache empty — "
+            "returning no events. Set WORLDMONITOR_API_KEY or ensure outbound HTTPS access."
+        )
+        return []
+
+    async def _fetch_from_worldmonitor(
+        self, api_key: str, timeout_s: int
+    ) -> list[GeopoliticalEvent]:
+        """Fetch from a self-hosted World Monitor instance."""
         headers: dict[str, str] = {"Accept": "application/json"}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
@@ -539,59 +599,35 @@ class GeopoliticalRiskProvider:
         events: list[GeopoliticalEvent] = []
         fetch_errors: list[str] = []
 
-        async with aiohttp.ClientSession(headers=headers, timeout=timeout) as session:
-            for layer in self.data_layers:
-                url = f"{self.base_url}/api/v1/events?layer={layer}&range={self.time_range}&format=geojson"
-                try:
-                    async with session.get(url) as resp:
-                        if resp.status >= 400:
-                            msg = f"layer={layer} HTTP {resp.status}"
-                            logger.warning("World Monitor fetch error: %s", msg)
-                            fetch_errors.append(msg)
-                            continue
-                        data = await resp.json(content_type=None)
-                        layer_events = self._parse_geojson_features(data.get("features", []), layer)
-                        events.extend(layer_events)
-                        logger.debug(
-                            "World Monitor layer=%s returned %d features",
-                            layer,
-                            len(layer_events),
-                        )
-                except aiohttp.ClientError as exc:
-                    msg = f"layer={layer} network error: {exc}"
-                    logger.warning("World Monitor fetch error: %s", msg)
-                    fetch_errors.append(msg)
+        try:
+            async with aiohttp.ClientSession(headers=headers, timeout=timeout) as session:
+                for layer in self.data_layers:
+                    url = (
+                        f"{self.base_url}/api/v1/events"
+                        f"?layer={layer}&range={self.time_range}&format=geojson"
+                    )
+                    try:
+                        async with session.get(url) as resp:
+                            if resp.status >= 400:
+                                fetch_errors.append(f"layer={layer} HTTP {resp.status}")
+                                continue
+                            data = await resp.json(content_type=None)
+                            layer_events = self._parse_geojson_features(
+                                data.get("features", []), layer
+                            )
+                            events.extend(layer_events)
+                    except aiohttp.ClientError as exc:
+                        fetch_errors.append(f"layer={layer}: {exc}")
+        except Exception as exc:
+            logger.debug("World Monitor session error: %s", exc)
+            return []
 
-        if not events and fetch_errors:
-            cached = self._cache.get("events", [])
-            if cached:
-                logger.warning(
-                    "World Monitor unreachable (%d errors) — serving %d cached events",
-                    len(fetch_errors),
-                    len(cached),
-                )
-                return cached
-            # Secondary fallback: GDELT GKG (free, no API key required)
-            gdelt_events = await self._fetch_events_from_gdelt()
-            if gdelt_events:
-                logger.info(
-                    "World Monitor unavailable — using %d events from GDELT fallback",
-                    len(gdelt_events),
-                )
-                return gdelt_events
-
-            if _is_production:
-                raise RuntimeError(
-                    f"World Monitor API unreachable and no cached events available. "
-                    f"Errors: {'; '.join(fetch_errors)}. "
-                    f"Set WORLDMONITOR_API_KEY and ensure network access to {self.base_url}."
-                )
-            logger.error(
-                "World Monitor unreachable and cache empty — returning no events. Errors: %s",
+        if fetch_errors:
+            logger.debug(
+                "World Monitor: %d layer(s) failed: %s",
+                len(fetch_errors),
                 "; ".join(fetch_errors),
             )
-
-        logger.info("Fetched %d geopolitical events from World Monitor", len(events))
         return events
 
     async def _fetch_events_from_gdelt(self) -> list[GeopoliticalEvent]:
@@ -643,7 +679,121 @@ class GeopoliticalRiskProvider:
             logger.debug("GDELT returned %d articles", len(events))
             return events
         except Exception as exc:
-            logger.warning("GDELT fallback fetch failed: %s", exc)
+            logger.debug("GDELT fallback fetch failed: %s", exc)
+            return []
+
+    async def _fetch_events_from_acled(self, timeout_s: int = 15) -> list[GeopoliticalEvent]:
+        """
+        Fetch conflict events from the ACLED API (Armed Conflict Location & Event Data).
+
+        Free for research/non-commercial use. Requires ACLED_API_KEY and ACLED_EMAIL
+        environment variables. Returns empty list when credentials are absent.
+
+        Reference: https://apidocs.acleddata.com/
+        """
+        api_key = os.getenv("ACLED_API_KEY", "")
+        email = os.getenv("ACLED_EMAIL", "")
+        if not api_key or not email:
+            return []
+
+        url = (
+            "https://api.acleddata.com/acled/read"
+            f"?key={api_key}&email={email}"
+            "&limit=25&fields=event_date|event_type|country|location|notes|fatalities"
+            "&event_date_where=BETWEEN"
+            f"&event_date={_acled_date_range()}"
+        )
+        try:
+            timeout = aiohttp.ClientTimeout(total=timeout_s)
+            async with aiohttp.ClientSession(timeout=timeout) as session, session.get(url) as resp:
+                resp.raise_for_status()
+                data = await resp.json(content_type=None)
+
+            events: list[GeopoliticalEvent] = []
+            for row in data.get("data", []):
+                title = f"{row.get('event_type', 'Event')} in {row.get('location', row.get('country', 'Unknown'))}"
+                notes = row.get("notes", "")
+                country = row.get("country", "")
+                raw_date = row.get("event_date", "")
+                try:
+                    ts = datetime.strptime(raw_date, "%Y-%m-%d").replace(tzinfo=UTC)
+                except (ValueError, TypeError):
+                    ts = datetime.now(UTC)
+
+                fatalities = int(row.get("fatalities", 0) or 0)
+                severity = (
+                    RiskSeverity.CRITICAL if fatalities > 100
+                    else RiskSeverity.HIGH if fatalities > 10
+                    else RiskSeverity.MEDIUM if fatalities > 0
+                    else RiskSeverity.LOW
+                )
+
+                events.append(GeopoliticalEvent(
+                    event_type=GeopoliticalEventType.CONFLICT,
+                    title=title,
+                    description=notes[:500] if notes else "",
+                    severity=severity,
+                    region=country,
+                    countries=[country] if country else [],
+                    timestamp=ts,
+                    source="ACLED",
+                ))
+            logger.debug("ACLED returned %d events", len(events))
+            return events
+        except Exception as exc:
+            logger.debug("ACLED fallback fetch failed: %s", exc)
+            return []
+
+    async def _fetch_events_from_reliefweb(self, timeout_s: int = 15) -> list[GeopoliticalEvent]:
+        """
+        Fetch crisis/disaster events from the ReliefWeb API (UN OCHA).
+
+        Free, no API key required.
+
+        Reference: https://apidocs.reliefweb.int/
+        """
+        url = (
+            "https://api.reliefweb.int/v1/reports"
+            "?appname=hopefx-trading"
+            "&filter[field]=theme.name&filter[value][]=Conflict and Violence"
+            "&filter[value][]=Disaster Management"
+            "&limit=25&fields[include][]=title&fields[include][]=date"
+            "&fields[include][]=country&fields[include][]=body-html"
+            "&sort[]=date:desc"
+        )
+        try:
+            timeout = aiohttp.ClientTimeout(total=timeout_s)
+            async with aiohttp.ClientSession(timeout=timeout) as session, session.get(url) as resp:
+                resp.raise_for_status()
+                data = await resp.json(content_type=None)
+
+            events: list[GeopoliticalEvent] = []
+            for item in data.get("data", []):
+                fields = item.get("fields", {})
+                title = fields.get("title", "Untitled")
+                raw_date = (fields.get("date") or {}).get("created", "")
+                countries_raw = fields.get("country", [])
+                country_names = [c.get("name", "") for c in countries_raw if isinstance(c, dict)]
+
+                try:
+                    ts = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
+                except (ValueError, TypeError, AttributeError):
+                    ts = datetime.now(UTC)
+
+                events.append(GeopoliticalEvent(
+                    event_type=GeopoliticalEventType.POLITICAL_UNREST,
+                    title=title,
+                    description="",
+                    severity=RiskSeverity.MEDIUM,
+                    region=", ".join(country_names) if country_names else "Global",
+                    countries=country_names,
+                    timestamp=ts,
+                    source="ReliefWeb",
+                ))
+            logger.debug("ReliefWeb returned %d events", len(events))
+            return events
+        except Exception as exc:
+            logger.debug("ReliefWeb fallback fetch failed: %s", exc)
             return []
 
     # ── Severity / type mapping helpers ──────────────────────────────────────
