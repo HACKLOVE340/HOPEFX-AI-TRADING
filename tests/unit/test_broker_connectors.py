@@ -935,7 +935,7 @@ class TestMT5Connector:
 
         broker = MT5Connector(MT5_CONFIG)
         broker.connected = True
-        order = broker.place_order("XAUUSD", OrderSide.BUY, 0.1)
+        order = broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 0.1)
 
         assert order is not None
         assert order.id == "111"
@@ -943,13 +943,13 @@ class TestMT5Connector:
 
     def test_place_order_not_connected(self):
         broker = MT5Connector(MT5_CONFIG)
-        assert broker.place_order("XAUUSD", OrderSide.BUY, 0.1) is None
+        assert broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 0.1) is None
 
     def test_place_order_symbol_not_found(self):
         _mt5_stub.symbol_info.return_value = None
         broker = MT5Connector(MT5_CONFIG)
         broker.connected = True
-        assert broker.place_order("INVALID", OrderSide.BUY, 0.1) is None
+        assert broker.place_order("INVALID", OrderSide.BUY, OrderType.MARKET, 0.1) is None
 
     def test_place_order_failed_retcode(self):
         mock_result = MagicMock()
@@ -967,7 +967,7 @@ class TestMT5Connector:
 
         broker = MT5Connector(MT5_CONFIG)
         broker.connected = True
-        assert broker.place_order("XAUUSD", OrderSide.BUY, 0.1) is None
+        assert broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 0.1) is None
 
     def test_cancel_order(self):
         mock_result = MagicMock()

@@ -233,12 +233,13 @@ class OANDABroker:
             self._session = None
             return False
 
-    async def disconnect(self) -> None:
+    async def disconnect(self) -> bool:
         if self._session:
             await self._session.close()
             self._session = None
         self.connected = False
         logger.info("OANDABroker: disconnected")
+        return True
 
     # ── Account info ──────────────────────────────────────────────────────────
 
