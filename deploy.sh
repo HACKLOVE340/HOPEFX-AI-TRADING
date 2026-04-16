@@ -153,11 +153,11 @@ AUTH_RATE_LIMIT_REQUESTS=10
 AUTH_RATE_LIMIT_WINDOW_SECONDS=60
 
 # Database (PostgreSQL via docker compose)
-DATABASE_URL=postgresql+asyncpg://hopefx:${DB_PASSWORD}@db:5432/hopefx
+DATABASE_URL=postgresql+asyncpg://hopefx:${DB_PASSWORD}@postgres:5432/hopefx
 POSTGRES_USER=hopefx
 POSTGRES_PASSWORD=${DB_PASSWORD}
 POSTGRES_DB=hopefx
-DB_HOST=db
+DB_HOST=postgres
 DB_PASSWORD=${DB_PASSWORD}
 
 # Redis
@@ -203,7 +203,12 @@ success ".env written (permissions: 600)"
 
 # ── Configure Nginx ───────────────────────────────────────────────────────────
 info "Configuring Nginx..."
-sed "s/YOUR_DOMAIN/${DOMAIN}/g" "$APP_DIR/nginx/nginx.conf" \
+# Use nginx.conf.template with envsubst — nginx.conf does not exist.
+# Also override the upstream to 127.0.0.1:8000 for host-nginx mode
+# (the Docker app container exposes port 8000 on the host loopback).
+HOPEFX_DOMAIN="${DOMAIN}" envsubst '${HOPEFX_DOMAIN}' \
+  < "$APP_DIR/nginx/nginx.conf.template" \
+  | sed 's|server app:8000|server 127.0.0.1:8000|g' \
   > /etc/nginx/nginx.conf
 
 # Temporarily serve HTTP only so Certbot can complete the ACME challenge
@@ -236,7 +241,9 @@ certbot certonly --webroot \
 
 # ── Install full Nginx config with SSL ────────────────────────────────────────
 if [[ -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ]]; then
-  sed "s/YOUR_DOMAIN/${DOMAIN}/g" "$APP_DIR/nginx/nginx.conf" \
+  HOPEFX_DOMAIN="${DOMAIN}" envsubst '${HOPEFX_DOMAIN}' \
+    < "$APP_DIR/nginx/nginx.conf.template" \
+    | sed 's|server app:8000|server 127.0.0.1:8000|g' \
     > /etc/nginx/nginx.conf
   nginx -t && systemctl reload nginx
   success "Nginx SSL config loaded"
@@ -254,8 +261,11 @@ info "Building Docker image and starting services..."
 cd "$APP_DIR"
 docker compose pull --quiet
 docker compose build --no-cache
-docker compose up -d
-success "Docker services started"
+# Exclude the containerised nginx service — host nginx (installed above)
+# handles SSL termination and proxies to the app container on port 8000.
+# Running both would cause a port 80/443 bind conflict.
+docker compose up -d --scale nginx=0 $(docker compose config --services | grep -v '^nginx$' | tr '\n' ' ')
+success "Docker services started (host nginx handles SSL — container nginx excluded)"
 
 # ── Seed admin user ───────────────────────────────────────────────────────────
 info "Seeding admin user..."
