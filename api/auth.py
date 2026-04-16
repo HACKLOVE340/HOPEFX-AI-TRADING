@@ -34,10 +34,13 @@ _bearer = HTTPBearer(auto_error=True)
 try:
     from auth.router import router  # re-exported for callers doing `from api.auth import router`
 except Exception as _router_import_err:  # pragma: no cover
-    from fastapi import APIRouter as _APIRouter
-
-    router = _APIRouter(prefix="/api/auth", tags=["Authentication"])
-    logger.warning("auth.router unavailable, using empty fallback router: %s", _router_import_err)
+    # Do NOT silently substitute an empty router — a broken auth.router would
+    # cause all auth endpoints to disappear at startup with no visible error.
+    # Raise immediately so the misconfiguration is caught at process start.
+    raise ImportError(
+        f"Failed to import auth.router — all auth endpoints would be lost. "
+        f"Fix the underlying error before starting the server: {_router_import_err}"
+    ) from _router_import_err
 
 __all__ = ["TokenPayload", "get_current_user", "require_role", "router"]
 
