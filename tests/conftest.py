@@ -356,6 +356,27 @@ def temp_dir():
         yield d
 
 
+@pytest.fixture(autouse=True)
+def _reset_circuit_breakers():
+    """
+    Reset all service circuit breakers to CLOSED state before every test.
+
+    Circuit breakers are module-level singletons. Without this fixture a test
+    that triggers broker/Redis/DB failures would leave the breaker OPEN and
+    cause unrelated tests to fail with 'circuit breaker OPEN' errors.
+    """
+    try:
+        from resilience.service_circuit_breakers import (
+            redis_breaker, broker_breaker, ml_breaker, db_breaker,
+        )
+        for breaker in (redis_breaker, broker_breaker, ml_breaker, db_breaker):
+            breaker.force_close()
+    except Exception:  # nosec B110 — non-fatal if module unavailable
+        pass
+    yield
+    # No teardown needed — next test's setup will reset again
+
+
 @pytest.fixture
 def mock_strategy():
     """

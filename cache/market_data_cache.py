@@ -306,7 +306,26 @@ class MarketDataCache:
         raise ConnectionError(f"Could not connect to Redis at {self.host}:{self.port}")
 
     def _get_redis(self) -> Redis | None:
-        """Get or create Redis connection with retry"""
+        """
+        Get or create Redis connection with retry and circuit breaker protection.
+
+        When the redis_breaker is OPEN (repeated failures detected), returns
+        None immediately so the caller falls back to the in-memory cache
+        without hammering a down Redis instance.
+        """
+        # Fast-fail when the circuit breaker is open
+        try:
+            from resilience.service_circuit_breakers import redis_breaker as _rb
+            if _rb.is_open:
+                self._using_fallback = True
+                logger.debug(
+                    "MarketDataCache: Redis circuit breaker OPEN — using in-memory fallback. "
+                    "Retry in %.0fs.", _rb._seconds_until_probe()
+                )
+                return None
+        except Exception:  # nosec B110 — circuit breaker is non-fatal
+            pass
+
         if self._connection_failed and not self.enable_fallback:
             return None
 
@@ -314,9 +333,21 @@ class MarketDataCache:
             try:
                 self._redis_client.ping()
                 self._using_fallback = False
+                # Record success so the breaker can transition HALF_OPEN → CLOSED
+                try:
+                    from resilience.service_circuit_breakers import redis_breaker as _rb
+                    _rb.record_success()
+                except Exception:  # nosec B110
+                    pass
                 return self._redis_client
             except Exception as _exc:
-                logger.debug("Suppressed exception: %s", _exc)  # Connection lost, will retry
+                logger.debug("Redis ping failed, will retry: %s", _exc)
+                # Record failure in circuit breaker
+                try:
+                    from resilience.service_circuit_breakers import redis_breaker as _rb
+                    _rb.record_failure(_exc)
+                except Exception:  # nosec B110
+                    pass
 
         # Try to connect
         for attempt in range(self.max_retries):
@@ -341,10 +372,23 @@ class MarketDataCache:
                 if attempt > 0:
                     logger.info("Redis reconnected after %s attempts", attempt)
 
+                # Record successful reconnect
+                try:
+                    from resilience.service_circuit_breakers import redis_breaker as _rb
+                    _rb.record_success()
+                except Exception:  # nosec B110
+                    pass
+
                 return client
 
             except Exception as e:
                 logger.warning("Redis connection attempt %s failed: %s", attempt + 1, e)
+                # Record each failed attempt in the circuit breaker
+                try:
+                    from resilience.service_circuit_breakers import redis_breaker as _rb
+                    _rb.record_failure(e)
+                except Exception:  # nosec B110
+                    pass
 
                 if attempt < self.max_retries - 1:
                     time.sleep(self.retry_delay * (2**attempt))

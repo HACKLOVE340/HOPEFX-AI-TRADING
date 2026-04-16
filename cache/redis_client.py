@@ -290,10 +290,23 @@ async def get_redis(
     """
     Return a connected Redis client (Cluster → Sentinel → direct fallback chain).
 
-    Returns None if no Redis is configured or all connection attempts fail,
-    so callers can degrade gracefully without crashing.
+    Returns None if no Redis is configured, all connection attempts fail, or
+    the redis_breaker circuit is OPEN (repeated failures detected).
+    Callers degrade gracefully without crashing.
     """
     global _redis_instance, _sentinel_instance, _connection_mode, _no_config_warned
+
+    # Fast-fail when the circuit breaker is open — don't attempt reconnect
+    try:
+        from resilience.service_circuit_breakers import redis_breaker as _rb
+        if _rb.is_open:
+            logger.debug(
+                "get_redis: Redis circuit breaker OPEN — returning None. "
+                "Retry in %.0fs.", _rb._seconds_until_probe()
+            )
+            return None
+    except Exception:  # nosec B110 — circuit breaker is non-fatal
+        pass
 
     if _redis_instance is not None:
         # Periodic health check — reconnect if stale
@@ -354,11 +367,23 @@ async def _ping_or_reset() -> None:
     _last_health_check = time.monotonic()
     try:
         await _redis_instance.ping()
+        # Record success so the breaker can transition HALF_OPEN → CLOSED
+        try:
+            from resilience.service_circuit_breakers import redis_breaker as _rb
+            _rb.record_success()
+        except Exception:  # nosec B110
+            pass
     except Exception as exc:
         logger.warning("Redis health check failed (%s) — will reconnect on next call", exc)
         _redis_instance = None
         _sentinel_instance = None
         _connection_mode = "none"
+        # Record failure in circuit breaker
+        try:
+            from resilience.service_circuit_breakers import redis_breaker as _rb
+            _rb.record_failure(exc)
+        except Exception:  # nosec B110
+            pass
 
 
 async def get_health() -> dict[str, Any]:

@@ -386,7 +386,10 @@ redis_breaker = ServiceCircuitBreaker(BreakerConfig(
 
 broker_breaker = ServiceCircuitBreaker(BreakerConfig(
     name="broker",
-    failure_threshold=3,       # open after 3 consecutive broker failures
+    # Threshold matches BrokerManager._MAX_CONSECUTIVE_FAILURES (5) so the
+    # breaker opens only after the manager's own failover chain is exhausted.
+    # Opening earlier would block failover attempts and prevent recovery.
+    failure_threshold=5,
     success_threshold=3,       # require 3 successes to close (conservative)
     timeout_seconds=60.0,      # probe after 60s
     half_open_max_calls=1,     # only 1 probe call (real money at stake)
