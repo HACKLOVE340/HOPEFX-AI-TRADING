@@ -23,6 +23,22 @@ set -a
 [ -f .env ] && source .env
 set +a
 
+# ── Frontend build — auto-build if static/index.html is missing ──────────────
+# The static/ directory is gitignored (build artifact). Build it automatically
+# on first run so the server can serve the React SPA without a manual step.
+if [ ! -f "static/index.html" ]; then
+    echo "[INFO] Frontend not built — running 'npm run build' in frontend/..."
+    if command -v npm >/dev/null 2>&1 && [ -f "frontend/package.json" ]; then
+        (cd frontend && npm install --silent && npm run build) \
+            && echo "[INFO] Frontend built successfully → static/" \
+            || echo "[WARN] Frontend build failed — API will still start, but / will show no UI"
+    else
+        echo "[WARN] npm not found or frontend/package.json missing — skipping frontend build"
+    fi
+else
+    echo "[INFO] Frontend already built (static/index.html exists)"
+fi
+
 # ── Environment defaults ─────────────────────────────────────────────────────
 export APP_ENV="${APP_ENV:-development}"
 export API_HOST="${API_HOST:-0.0.0.0}"
