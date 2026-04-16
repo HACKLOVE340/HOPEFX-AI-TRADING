@@ -223,11 +223,19 @@ def _validate_llm_backend(errors: list[str]) -> None:
     api_key = _env(env_name)
 
     if not api_key:
-        logger.warning(
-            "HOPEFXBrain: %s not set — brain will use stub responses (no real attack analysis). Get a key at %s",
-            env_name,
-            url,
-        )
+        # In production this is a meaningful gap; in dev the brain degrades
+        # gracefully to stub responses so it is informational only.
+        if _is_dev():
+            logger.info(
+                "HOPEFXBrain: %s not set — brain will use stub responses. Set it to enable real AI analysis.",
+                env_name,
+            )
+        else:
+            logger.warning(
+                "HOPEFXBrain: %s not set — brain will use stub responses (no real attack analysis). Get a key at %s",
+                env_name,
+                url,
+            )
     elif api_key.startswith("CHANGE_ME"):
         errors.append(f"INSECURE {env_name}: placeholder value detected — replace with a real key from {url}")
 
@@ -308,6 +316,36 @@ def _validate_ibkr_port(errors: list[str]) -> None:
         )
 
 
+def _validate_stripe(errors: list[str]) -> None:
+    """Warn when STRIPE_SECRET_KEY is absent; error on placeholder values."""
+    key = _env("STRIPE_SECRET_KEY")
+    webhook = _env("STRIPE_WEBHOOK_SECRET")
+
+    if not key:
+        if _is_dev():
+            logger.info(
+                "STRIPE_SECRET_KEY not set — Stripe payments disabled. "
+                "Set to sk_test_... (test) or sk_live_... (production) to enable."
+            )
+        else:
+            logger.warning(
+                "STRIPE_SECRET_KEY not set — Stripe payment endpoints will raise "
+                "until configured. Set to sk_live_... for production."
+            )
+    elif key.startswith("CHANGE_ME"):
+        errors.append("INSECURE STRIPE_SECRET_KEY: placeholder value — replace with a real Stripe key.")
+    elif not key.startswith(("sk_live_", "sk_test_")):
+        errors.append(
+            f"INVALID  STRIPE_SECRET_KEY: expected sk_live_... or sk_test_... prefix, got {key[:12]!r}..."
+        )
+
+    if not webhook and not _is_dev():
+        logger.warning(
+            "STRIPE_WEBHOOK_SECRET not set — webhook signature verification will reject all events. "
+            "Set to whsec_... from your Stripe dashboard."
+        )
+
+
 def _validate_cors_wildcard(errors: list[str]) -> None:
     allowed_origins = _env("ALLOWED_ORIGINS")
     origins = [o.strip() for o in allowed_origins.split(",") if o.strip()]
@@ -351,6 +389,7 @@ def validate_environment(*, strict: bool = True) -> None:
 
     _validate_broker(errors, dev_mode)
     _validate_llm_backend(errors)
+    _validate_stripe(errors)
     _validate_optional_vars(errors)
 
     if not errors:
