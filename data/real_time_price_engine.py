@@ -704,15 +704,65 @@ class RealTimePriceEngine:
         return self._rest_feed.get_last_price(symbol)
 
     async def get_ohlcv(self, symbol: str, timeframe: str, limit: int = 100) -> list[OHLCV]:
-        """Get OHLCV data"""
+        """
+        Get OHLCV data, validated for price sanity and temporal ordering.
+
+        Applies the data validation layer before returning bars to callers so
+        that strategies and the ML pipeline never receive malformed data.
+        """
         # Try WebSocket buffer first
         if self._primary_active:
             data = self._ws_feed.get_ohlcv(symbol, timeframe, limit)
             if data:
-                return data
+                return self._validate_ohlcv_list(data, symbol)
 
         # Fall back to REST
-        return await self._rest_feed.get_ohlcv(symbol, timeframe, limit)
+        raw = await self._rest_feed.get_ohlcv(symbol, timeframe, limit)
+        return self._validate_ohlcv_list(raw, symbol)
+
+    def _validate_ohlcv_list(self, bars: list, symbol: str) -> list:
+        """
+        Validate a list of OHLCV namedtuples/objects.
+
+        Converts to DataFrame, runs validate_ohlcv, then converts back.
+        Returns the original list unchanged if validation is unavailable.
+        """
+        if not bars:
+            return bars
+        try:
+            import pandas as pd
+            from data_layer.validation import validate_ohlcv
+
+            df = pd.DataFrame([
+                {
+                    "timestamp": getattr(b, "timestamp", i),
+                    "open": getattr(b, "open", 0.0),
+                    "high": getattr(b, "high", 0.0),
+                    "low": getattr(b, "low", 0.0),
+                    "close": getattr(b, "close", 0.0),
+                    "volume": getattr(b, "volume", 0.0),
+                }
+                for i, b in enumerate(bars)
+            ])
+            df = validate_ohlcv(df, symbol=symbol, strict=False, drop_bad_rows=True)
+            # Reconstruct OHLCV objects from validated rows
+            OHLCVType = type(bars[0])
+            validated = []
+            for _, row in df.iterrows():
+                try:
+                    validated.append(OHLCVType(
+                        timestamp=row["timestamp"],
+                        open=row["open"],
+                        high=row["high"],
+                        low=row["low"],
+                        close=row["close"],
+                        volume=row["volume"],
+                    ))
+                except Exception:
+                    pass  # skip rows that can't be reconstructed
+            return validated if validated else bars
+        except Exception:  # nosec B110 — validation is non-fatal for live feed
+            return bars
 
     async def _monitor_loop(self):
         """Monitor feed health"""

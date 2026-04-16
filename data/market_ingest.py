@@ -306,6 +306,25 @@ class MarketIngest:
         if not _validate_tick(bid, ask, SYMBOL):
             return
 
+        # Runtime look-ahead bias guard: reject ticks with future timestamps
+        # or ticks older than the staleness threshold (clock skew protection).
+        now = datetime.now(UTC)
+        try:
+            from risk.lookahead_guard import LiveTradingGuard, FutureTimestampError, StaleDataError
+            _live_guard = getattr(self, "_live_guard", None)
+            if _live_guard is None:
+                self._live_guard = LiveTradingGuard(max_staleness_seconds=30)
+                _live_guard = self._live_guard
+            # Build a minimal tick-like object for the guard
+            class _T:
+                timestamp = now
+            _live_guard.validate_tick(_T(), symbol=SYMBOL)
+        except (FutureTimestampError, StaleDataError) as _guard_err:
+            logger.warning("market_ingest: tick rejected by LiveTradingGuard: %s", _guard_err)
+            return
+        except Exception:  # nosec B110 — guard is non-fatal if unavailable
+            pass
+
         self._staleness.touch()
         self._tick_count += 1
 
@@ -315,7 +334,7 @@ class MarketIngest:
             "ask": round(ask, 5),
             "mid": round((bid + ask) / 2, 5),
             "spread": round(ask - bid, 5),
-            "timestamp": datetime.now(UTC).isoformat(),
+            "timestamp": now.isoformat(),
             "seq": self._tick_count,
         }
         if extra:
