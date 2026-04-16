@@ -1246,7 +1246,7 @@ def create_broker(broker_type: str, config: dict[str, Any]) -> "BaseBroker":
 # Guard against re-definition: only import if the module is available and
 # the name hasn't already been bound to the class defined above.
 try:
-    from brokers.paper_trading import PaperTradingBroker as _PTB  # noqa: F401
+    from brokers.paper_trading import PaperTradingBroker as _PTB
 
     PaperTradingBroker = _PTB  # type: ignore[misc]
 except Exception as _exc:

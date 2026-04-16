@@ -61,7 +61,7 @@ def _generate_env() -> bool:
     jwt_secret = secrets.token_urlsafe(48)
     enc_key = secrets.token_urlsafe(48)
     config_salt = secrets.token_hex(16)
-    admin_password = secrets.token_urlsafe(16)   # 22-char URL-safe random password
+    admin_password = secrets.token_urlsafe(16)  # 22-char URL-safe random password
     trader_password = secrets.token_urlsafe(16)  # 22-char URL-safe random password
 
     content = f"""\
@@ -139,10 +139,7 @@ def _seed_admin() -> str:
 
     admin_password = os.environ.get(_ADMIN_PASSWORD_KEY, "").strip()
     if not admin_password:
-        raise RuntimeError(
-            f"{_ADMIN_PASSWORD_KEY} not found in environment. "
-            "Run bootstrap_dev.py to regenerate .env."
-        )
+        raise RuntimeError(f"{_ADMIN_PASSWORD_KEY} not found in environment. Run bootstrap_dev.py to regenerate .env.")
 
     import uuid
 
@@ -187,10 +184,7 @@ def _seed_trader() -> str:
 
     trader_password = os.environ.get(_TRADER_PASSWORD_KEY, "").strip()
     if not trader_password:
-        raise RuntimeError(
-            f"{_TRADER_PASSWORD_KEY} not found in environment. "
-            "Run bootstrap_dev.py to regenerate .env."
-        )
+        raise RuntimeError(f"{_TRADER_PASSWORD_KEY} not found in environment. Run bootstrap_dev.py to regenerate .env.")
 
     import uuid
 
@@ -240,7 +234,7 @@ def bootstrap(verbose: bool = True) -> None:
             logger.info("  ✅  Superadmin user seeded")
             logger.info(f"      Email    : {DEFAULT_ADMIN_EMAIL}")
             logger.info(f"      Username : {DEFAULT_ADMIN_USERNAME}")
-            logger.info(f"      Role     : superadmin")
+            logger.info("      Role     : superadmin")
             # Direct users to the .env file — never echo the password value.
             sys.stdout.write(f"      Password : see {ENV_PATH} ({_ADMIN_PASSWORD_KEY})\n")
     except Exception as exc:  # pylint: disable=broad-exception-caught
@@ -253,7 +247,7 @@ def bootstrap(verbose: bool = True) -> None:
             logger.info("  ✅  Trader user seeded")
             logger.info(f"      Email    : {DEFAULT_TRADER_EMAIL}")
             logger.info(f"      Username : {DEFAULT_TRADER_USERNAME}")
-            logger.info(f"      Role     : trader")
+            logger.info("      Role     : trader")
             sys.stdout.write(f"      Password : see {ENV_PATH} ({_TRADER_PASSWORD_KEY})\n")
             logger.info("─" * 58)
             logger.info("  Start the server:  python app.py")

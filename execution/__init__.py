@@ -20,6 +20,7 @@ from execution.legacy import (  # noqa: F401
     PaperExecutor,
     SmartOrderRouter,
 )
+
 try:
     from validation import Order  # noqa: F401
 except Exception as _e:
@@ -76,7 +77,7 @@ except Exception as _e:
     _log.debug("TCAEngine unavailable: %s", _e)
 
 try:
-    from execution.tca_recorder import TCARecorder
+    from execution.tca_recorder import TCARecorder as TCARecorder
 except Exception as _e:
     _log.debug("TCARecorder unavailable: %s", _e)
 
