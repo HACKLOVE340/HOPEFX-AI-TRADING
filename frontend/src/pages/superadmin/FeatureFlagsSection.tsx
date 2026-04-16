@@ -1,6 +1,7 @@
 // superadmin/FeatureFlagsSection.tsx — global feature flags + per-user overrides
 import React, { useEffect, useState, useCallback } from 'react';
 import { superadminApi } from '../../hooks/useApi';
+import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, ActionBtn, Input, Toggle,
   ErrorState, LoadingRows, SAStyles,
@@ -31,6 +32,8 @@ const FeatureFlagsSection: React.FC = () => {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  // Refresh every 60 s — compliance and financial data is not real-time.
+  usePolling(load, 60_000);
 
   const toggleFlag = async (name: string, enabled: boolean) => {
     setBusy(name); setMsg('');

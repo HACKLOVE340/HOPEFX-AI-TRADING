@@ -1,6 +1,7 @@
 // superadmin/SecuritySection.tsx — security events, blocked IPs, active sessions
 import React, { useEffect, useState, useCallback } from 'react';
 import { superadminApi } from '../../hooks/useApi';
+import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, SeverityBadge, ActionBtn, Input, Select,
   ErrorState, LoadingRows, ConfirmDialog, SAStyles, KpiTile,
@@ -55,6 +56,8 @@ const SecuritySection: React.FC = () => {
   }, [sevFilter]);
 
   useEffect(() => { load(); }, [load]);
+  // Refresh every 15 s while the tab is active — live operational data.
+  usePolling(load, 15_000);
 
   const blockIP = async () => {
     if (!newIP) return;

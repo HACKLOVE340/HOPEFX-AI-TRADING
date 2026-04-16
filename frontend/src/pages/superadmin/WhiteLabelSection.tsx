@@ -2,6 +2,7 @@
 // Tenant management, branding, per-tenant feature flags, usage/billing
 import React, { useEffect, useState, useCallback } from 'react';
 import { superadminApi } from '../../hooks/useApi';
+import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, StatusBadge, ActionBtn, Input, Select,
   KpiTile, ErrorState, LoadingRows, ConfirmDialog, SAStyles,
@@ -355,6 +356,8 @@ const WhiteLabelSection: React.FC = () => {
   }, [search]);
 
   useEffect(() => { load(); }, [load]);
+  // Refresh every 60 s — compliance and financial data is not real-time.
+  usePolling(load, 60_000);
 
   const activeCount  = tenants.filter(t => t.status === 'active').length;
   const trialCount   = tenants.filter(t => t.status === 'trial').length;

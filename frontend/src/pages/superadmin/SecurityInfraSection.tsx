@@ -2,6 +2,7 @@
 // SelfHealer integrity monitor, Antivirus scanner, HSM Vault key management
 import React, { useEffect, useState, useCallback } from 'react';
 import { superadminApi } from '../../hooks/useApi';
+import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, ActionBtn, KpiTile, ErrorState, LoadingRows,
   ConfirmDialog, SAStyles,
@@ -90,6 +91,8 @@ const SecurityInfraSection: React.FC = () => {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  // Refresh every 30 s — configuration and model data changes less frequently.
+  usePolling(load, 30_000);
 
   // Lazy-load threat intel when tab selected
   useEffect(() => {

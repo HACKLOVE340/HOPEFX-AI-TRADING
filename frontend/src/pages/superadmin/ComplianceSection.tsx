@@ -2,6 +2,7 @@
 // KYC queue, AML alerts, sanctions screening, regulatory reporting
 import React, { useEffect, useState, useCallback } from 'react';
 import { superadminApi } from '../../hooks/useApi';
+import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, StatusBadge, SeverityBadge, ActionBtn, Select, Input,
   KpiTile, ErrorState, LoadingRows, ConfirmDialog, SAStyles,
@@ -88,6 +89,8 @@ const ComplianceSection: React.FC = () => {
   }, [consentUserId]);
 
   useEffect(() => { load(); }, [load]);
+  // Refresh every 60 s — compliance and financial data is not real-time.
+  usePolling(load, 60_000);
   useEffect(() => { if (tab === 'consent') loadConsent(); }, [tab, loadConsent]);
 
   const kycAction = async (userId: string, action: 'approve' | 'reject', reason?: string) => {

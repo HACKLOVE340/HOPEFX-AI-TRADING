@@ -2,6 +2,7 @@
 // Rate limit rules, live stats, violation log
 import React, { useEffect, useState, useCallback } from 'react';
 import { superadminApi } from '../../hooks/useApi';
+import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, ActionBtn, Select, Input, Toggle,
   KpiTile, ErrorState, LoadingRows, ConfirmDialog, SAStyles,
@@ -56,6 +57,8 @@ const RateLimitingSection: React.FC = () => {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  // Refresh every 30 s — configuration and model data changes less frequently.
+  usePolling(load, 30_000);
 
   const toggleRule = async (rule: RateLimitRule) => {
     setBusy(rule.rule_id); setMsg('');

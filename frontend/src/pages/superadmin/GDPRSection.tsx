@@ -2,6 +2,7 @@
 // Data subject requests, erasure, consent log, retention policies
 import React, { useEffect, useState, useCallback } from 'react';
 import { superadminApi } from '../../hooks/useApi';
+import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, StatusBadge, ActionBtn, Select, Input,
   KpiTile, ErrorState, LoadingRows, ConfirmDialog, SAStyles,
@@ -63,6 +64,8 @@ const GDPRSection: React.FC = () => {
   }, [statusFilter, typeFilter]);
 
   useEffect(() => { load(); }, [load]);
+  // Refresh every 60 s — compliance and financial data is not real-time.
+  usePolling(load, 60_000);
 
   // Load consent log lazily when tab selected
   useEffect(() => {

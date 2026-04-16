@@ -2,6 +2,7 @@
 //   chargebacks, tax reports, reconciliation, affiliates
 import React, { useEffect, useState, useCallback } from 'react';
 import { superadminApi } from '../../hooks/useApi';
+import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, ActionBtn, Select, Input, StatusBadge,
   KpiTile, ErrorState, LoadingRows, ConfirmDialog, SAStyles,
@@ -117,6 +118,8 @@ const ChargebacksPanel: React.FC = () => {
   }, [statusFilter]);
 
   useEffect(() => { load(); }, [load]);
+  // Refresh every 60 s — compliance and financial data is not real-time.
+  usePolling(load, 60_000);
 
   const update = async (id: string, status: string) => {
     setBusy(id);
@@ -222,6 +225,8 @@ const TaxReportsPanel: React.FC = () => {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  // Refresh every 60 s — compliance and financial data is not real-time.
+  usePolling(load, 60_000);
 
   const markStatus = async (id: string, status: string) => {
     setBusy(id);
@@ -339,6 +344,8 @@ const ReconciliationPanel: React.FC = () => {
   }, [provider]);
 
   useEffect(() => { load(); }, [load]);
+  // Refresh every 60 s — compliance and financial data is not real-time.
+  usePolling(load, 60_000);
 
   const runRecon = async () => {
     setRunBusy(true);
@@ -452,6 +459,8 @@ const AffiliatePanel: React.FC = () => {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  // Refresh every 60 s — compliance and financial data is not real-time.
+  usePolling(load, 60_000);
 
   if (loading) return <SectionCard title="Affiliate Programme" icon="🤝" accent="#22c55e"><LoadingRows rows={4} /></SectionCard>;
   if (error)   return <SectionCard title="Affiliate Programme" icon="🤝" accent="#22c55e"><ErrorState message={error} onRetry={load} /></SectionCard>;
