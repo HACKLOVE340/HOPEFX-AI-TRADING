@@ -151,8 +151,7 @@ def _initialize_provider() -> None:
                 logger.info("OTel OTLP HTTP exporter configured → %s", _OTLP_ENDPOINT)
             else:
                 logger.warning(
-                    "OTLP endpoint set but no exporter available — "
-                    "install opentelemetry-exporter-otlp-proto-http"
+                    "OTLP endpoint set but no exporter available — install opentelemetry-exporter-otlp-proto-http"
                 )
         except Exception as exc:
             logger.warning("Failed to configure OTLP exporter: %s", exc)
