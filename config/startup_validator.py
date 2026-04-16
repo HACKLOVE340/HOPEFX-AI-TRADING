@@ -249,12 +249,21 @@ def _validate_crypto_webhook_secret(errors: list[str]) -> None:
 
 def _validate_argocd_webhook(errors: list[str]) -> None:
     argocd_webhook = _env("ARGOCD_ROLLBACK_WEBHOOK")
+
+    # Only warn when running in production with a live broker.
+    # In dev mode or paper trading the ArgoCD webhook is not expected to be
+    # configured, so emitting the warning would be noise on every startup.
+    broker_type = (_env("BROKER_TYPE") or "paper").lower()
+    is_live_broker = broker_type not in ("paper", "")
+
     if not argocd_webhook:
-        logger.warning(
-            "HOPEFXBrain: ARGOCD_ROLLBACK_WEBHOOK not set — nuclear lockdown "
-            "will block IPs and set Redis flag but cannot trigger auto-rollback. "
-            "Set to: https://<argocd-server>/api/v1/applications/hopefx/sync"
-        )
+        if not _is_dev() and is_live_broker:
+            logger.warning(
+                "HOPEFXBrain: ARGOCD_ROLLBACK_WEBHOOK not set — nuclear lockdown "
+                "will block IPs and set Redis flag but cannot trigger auto-rollback. "
+                "Set to: https://<argocd-server>/api/v1/applications/hopefx/sync"
+            )
+        # Dev mode or paper trading: silently skip — ArgoCD is not expected.
     elif not argocd_webhook.startswith("https://"):
         errors.append(f"INVALID  ARGOCD_ROLLBACK_WEBHOOK={argocd_webhook[:60]!r}: must be an https:// URL")
 
