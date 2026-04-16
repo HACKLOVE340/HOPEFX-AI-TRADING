@@ -6,7 +6,7 @@
 
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useStore } from '../store';
+import { useStore, useHasHydrated, selectIsAuth } from '../store';
 import { dataLayerApi, performanceApi, tradingApi, signalsApi } from '../lib/api';
 import type {
   OrchestratorHealth,
@@ -26,6 +26,8 @@ import type {
 export function useOrchestratorHealth() {
   const setOrchestratorHealth = useStore((s) => s.setOrchestratorHealth);
   const setQualityReport      = useStore((s) => s.setQualityReport);
+  const isAuth                = useStore(selectIsAuth);
+  const hydrated              = useHasHydrated();
 
   const query = useQuery<OrchestratorHealth>({
     queryKey: ['orchestrator', 'health'],
@@ -33,6 +35,7 @@ export function useOrchestratorHealth() {
       const res = await dataLayerApi.health();
       return res.data;
     },
+    enabled:         hydrated && isAuth,
     refetchInterval: 10_000,
     staleTime:       5_000,
   });
@@ -53,6 +56,8 @@ export function useOrchestratorHealth() {
 
 export function useMicrostructure(symbol = 'XAU_USD') {
   const setMicrostructure = useStore((s) => s.setMicrostructure);
+  const isAuth            = useStore(selectIsAuth);
+  const hydrated          = useHasHydrated();
 
   const query = useQuery<{ snapshot: MicrostructureSnapshot | null; features: Record<string, number> }>({
     queryKey: ['microstructure', symbol],
@@ -60,6 +65,7 @@ export function useMicrostructure(symbol = 'XAU_USD') {
       const res = await dataLayerApi.microstructure(symbol);
       return res.data as { snapshot: MicrostructureSnapshot | null; features: Record<string, number> };
     },
+    enabled:         hydrated && isAuth,
     refetchInterval: 3_000,
     staleTime:       1_500,
   });
@@ -77,6 +83,8 @@ export function useMicrostructure(symbol = 'XAU_USD') {
 
 export function useSentiment() {
   const setSentiment = useStore((s) => s.setSentiment);
+  const isAuth       = useStore(selectIsAuth);
+  const hydrated     = useHasHydrated();
 
   const query = useQuery<SentimentResponse>({
     queryKey: ['sentiment'],
@@ -84,6 +92,7 @@ export function useSentiment() {
       const res = await dataLayerApi.sentiment();
       return res.data;
     },
+    enabled:         hydrated && isAuth,
     refetchInterval: 30_000,
     staleTime:       15_000,
   });
@@ -99,6 +108,8 @@ export function useSentiment() {
 
 export function useMacro() {
   const setMacro = useStore((s) => s.setMacro);
+  const isAuth   = useStore(selectIsAuth);
+  const hydrated = useHasHydrated();
 
   const query = useQuery<MacroResponse>({
     queryKey: ['macro'],
@@ -106,6 +117,7 @@ export function useMacro() {
       const res = await dataLayerApi.macro();
       return res.data;
     },
+    enabled:         hydrated && isAuth,
     refetchInterval: 60_000,
     staleTime:       30_000,
   });
@@ -121,6 +133,8 @@ export function useMacro() {
 
 export function useQualityReport(symbol = 'XAU_USD') {
   const setQualityReport = useStore((s) => s.setQualityReport);
+  const isAuth           = useStore(selectIsAuth);
+  const hydrated         = useHasHydrated();
 
   const query = useQuery<QualityReport>({
     queryKey: ['quality', symbol],
@@ -128,6 +142,7 @@ export function useQualityReport(symbol = 'XAU_USD') {
       const res = await dataLayerApi.quality(symbol);
       return res.data;
     },
+    enabled:         hydrated && isAuth,
     refetchInterval: 15_000,
     staleTime:       7_500,
   });
@@ -143,6 +158,8 @@ export function useQualityReport(symbol = 'XAU_USD') {
 
 export function useEquityCurve() {
   const setEquityCurve = useStore((s) => s.setEquityCurve);
+  const isAuth         = useStore(selectIsAuth);
+  const hydrated       = useHasHydrated();
 
   const query = useQuery<EquityPoint[]>({
     queryKey: ['performance', 'equity-curve'],
@@ -150,6 +167,7 @@ export function useEquityCurve() {
       const res = await performanceApi.equityCurve();
       return res.data;
     },
+    enabled:         hydrated && isAuth,
     refetchInterval: 30_000,
     staleTime:       15_000,
   });
@@ -165,6 +183,8 @@ export function useEquityCurve() {
 
 export function usePerformanceSummary() {
   const setPerformanceSummary = useStore((s) => s.setPerformanceSummary);
+  const isAuth                = useStore(selectIsAuth);
+  const hydrated              = useHasHydrated();
 
   const query = useQuery<PerformanceSummary>({
     queryKey: ['performance', 'summary'],
@@ -172,6 +192,7 @@ export function usePerformanceSummary() {
       const res = await performanceApi.summary();
       return res.data;
     },
+    enabled:         hydrated && isAuth,
     refetchInterval: 30_000,
     staleTime:       15_000,
   });
@@ -192,6 +213,8 @@ export function usePerformanceSummary() {
 export function useAccount() {
   const setAccount = useStore((s) => s.setAccount);
   const wsStatus   = useStore((s) => s.wsStatus);
+  const isAuth     = useStore(selectIsAuth);
+  const hydrated   = useHasHydrated();
 
   const query = useQuery<AccountMetrics>({
     queryKey: ['account'],
@@ -199,6 +222,7 @@ export function useAccount() {
       const res = await tradingApi.account();
       return res.data as AccountMetrics;
     },
+    enabled:         hydrated && isAuth,
     // Only poll when WS is not connected
     refetchInterval: wsStatus === 'connected' ? false : 10_000,
     staleTime:       5_000,
@@ -216,6 +240,8 @@ export function useAccount() {
 export function usePositions() {
   const setPositions = useStore((s) => s.setPositions);
   const wsStatus     = useStore((s) => s.wsStatus);
+  const isAuth       = useStore(selectIsAuth);
+  const hydrated     = useHasHydrated();
 
   const query = useQuery<Position[]>({
     queryKey: ['positions'],
@@ -225,6 +251,7 @@ export function usePositions() {
       const raw = res.data as Position[] | { positions: Position[] };
       return Array.isArray(raw) ? raw : (raw?.positions ?? []);
     },
+    enabled:         hydrated && isAuth,
     refetchInterval: wsStatus === 'connected' ? false : 10_000,
     staleTime:       5_000,
   });
@@ -242,6 +269,8 @@ export function usePositions() {
 export function useSignals() {
   const setSignals = useStore((s) => s.setSignals);
   const wsStatus   = useStore((s) => s.wsStatus);
+  const isAuth     = useStore(selectIsAuth);
+  const hydrated   = useHasHydrated();
 
   const query = useQuery<Signal[]>({
     queryKey: ['signals', 'active'],
@@ -251,6 +280,7 @@ export function useSignals() {
       const raw = res.data as Signal[] | { signals: Signal[]; count: number };
       return Array.isArray(raw) ? raw : (raw.signals ?? []);
     },
+    enabled:         hydrated && isAuth,
     refetchInterval: wsStatus === 'connected' ? false : 15_000,
     staleTime:       7_500,
   });
@@ -265,12 +295,16 @@ export function useSignals() {
 // ── Active signals with analytics (used by signal panels) ────────────────────
 
 export function useSignalSummary() {
+  const isAuth   = useStore(selectIsAuth);
+  const hydrated = useHasHydrated();
+
   return useQuery({
     queryKey: ['signals', 'summary'],
     queryFn:  async () => {
       const res = await signalsApi.summary();
       return res.data;
     },
+    enabled:         hydrated && isAuth,
     refetchInterval: 30_000,
     staleTime:       15_000,
   });

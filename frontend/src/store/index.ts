@@ -142,6 +142,20 @@ const MAX_SIGNALS      = 50;
 
 // ─── Store implementation ─────────────────────────────────────────────────────
 
+// ─── Hydration gate ───────────────────────────────────────────────────────────
+// Zustand persist rehydrates asynchronously from localStorage. Any hook that
+// reads `token` before rehydration completes will see null and fire unauthenticated
+// requests. This flag is set to true inside onRehydrateStorage so consumers can
+// wait before firing authenticated queries.
+
+let _hasHydrated = false;
+
+export function getHasHydrated(): boolean {
+  return _hasHydrated;
+}
+
+// ─── Store implementation ─────────────────────────────────────────────────────
+
 export const useStore = create<AppStore>()(
   devtools(
     persist(
@@ -293,6 +307,11 @@ export const useStore = create<AppStore>()(
           user:            state.user,
           isAuthenticated: state.isAuthenticated,
         }),
+        onRehydrateStorage: () => () => {
+          // Called once localStorage rehydration is complete.
+          // Any hook reading token/isAuthenticated after this point is safe.
+          _hasHydrated = true;
+        },
       },
     ),
     { name: 'HopeFX' },
@@ -322,3 +341,23 @@ export const selectKillSwitch         = (s: AppStore) => s.account?.kill_switch 
 export const selectDataQualityScore   = (s: AppStore) =>
   s.orchestratorHealth?.quality_score ?? null;
 export const selectPlan               = (s: AppStore) => s.plan;
+
+// ─── Hydration hook ───────────────────────────────────────────────────────────
+// Use this in any component/hook that must wait for localStorage rehydration
+// before firing authenticated API requests.
+//
+//   const hydrated = useHasHydrated();
+//   const query = useQuery({ ..., enabled: hydrated && isAuth });
+
+import { useSyncExternalStore } from 'react';
+
+export function useHasHydrated(): boolean {
+  return useSyncExternalStore(
+    // subscribe: re-render when the store changes (covers the rehydration moment)
+    useStore.subscribe,
+    // getSnapshot: return the hydration flag
+    () => _hasHydrated,
+    // getServerSnapshot: SSR — treat as hydrated
+    () => true,
+  );
+}
