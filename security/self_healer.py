@@ -1168,36 +1168,86 @@ class SelfHealer:
         suggestion = issue.get("suggestion", "")
         file_path = issue.get("file", "unknown")
 
-        # Truncate source to fit context window (keep first 200 + last 100 lines)
+        # Truncate source to fit context window (keep first 250 + last 150 lines around issue)
         lines = source.splitlines()
-        if len(lines) > 300:
-            context_lines = lines[:200] + ["# ... (truncated) ..."] + lines[-100:]
+        if len(lines) > 400:
+            # Keep lines around the issue for context
+            issue_line = max(0, line - 1)
+            start = max(0, issue_line - 50)
+            end = min(len(lines), issue_line + 100)
+            context_lines = (
+                lines[:50]
+                + (["# ... (truncated) ..."] if start > 50 else [])
+                + lines[start:end]
+                + (["# ... (truncated) ..."] if end < len(lines) - 50 else [])
+                + lines[-50:]
+            )
             source_for_prompt = "\n".join(context_lines)
         else:
             source_for_prompt = source
 
-        prompt = f"""You are a senior Python engineer reviewing production trading system code.
+        # Category-specific guidance for Claude
+        _category_guidance: dict[str, str] = {
+            "lookahead_bias": (
+                "CRITICAL: Look-ahead bias corrupts backtests and live trading by using future data. "
+                "Replace shift(-N) with shift(+N) to use past data. Never use negative shifts in "
+                "feature engineering, signal generation, or any ML pipeline."
+            ),
+            "nan_leak": (
+                "NaN values propagate silently through calculations, producing incorrect signals. "
+                "Add .dropna() before aggregations, or use .fillna(0) / np.nan_to_num() to handle "
+                "NaN explicitly. Ensure the fix does not introduce data leakage."
+            ),
+            "division_by_zero": (
+                "Division by zero crashes the process. Add a guard: use max(denominator, epsilon) "
+                "where epsilon is a small positive float (e.g. 1e-8), or check denominator != 0 "
+                "before dividing. Use np.where() for vectorised operations."
+            ),
+            "unfinished_code": (
+                "Implement the function fully. No pass, no ..., no TODO, no raise NotImplementedError. "
+                "The implementation must be production-ready and handle all edge cases."
+            ),
+            "hardcoded_secret": (
+                "Move the credential to an environment variable. Use os.getenv('VAR_NAME') or "
+                "python-dotenv. Never commit secrets to source control."
+            ),
+            "synthetic_data": (
+                "Replace mock/synthetic/dummy data with a real data source. "
+                "If the real source is unavailable, raise a clear RuntimeError rather than "
+                "silently returning fake data that could corrupt trading decisions."
+            ),
+            "broken_router": (
+                "Register the router in core/router_registry.py using _include_router_deduped(). "
+                "Ensure the import is correct and the router prefix does not conflict."
+            ),
+            "swallowed_exception": (
+                "Log the exception with logger.exception() or logger.error() and either re-raise "
+                "or return a safe default. Never silently discard exceptions in trading code."
+            ),
+        }
+        extra_guidance = _category_guidance.get(category, "")
 
-FILE: {file_path}
+        prompt = f"""FILE: {file_path}
 ISSUE CATEGORY: {category}
 SEVERITY: {issue.get('severity', 'unknown')}
 LINE: {line}
 DESCRIPTION: {description}
 OFFENDING CODE: {snippet}
 SUGGESTED FIX: {suggestion}
+{f'ADDITIONAL GUIDANCE: {extra_guidance}' if extra_guidance else ''}
 
-Here is the complete file content:
+Complete file content:
 
 ```python
 {source_for_prompt}
 ```
 
-Your task:
-1. Fix ONLY the specific issue described above
-2. Do NOT change any other logic, imports, or structure
-3. Ensure the fix is production-ready (no mocks, no stubs, no TODO comments)
-4. Return ONLY the complete fixed Python file content, no explanation, no markdown fences
-5. The returned code must be syntactically valid Python
+Rules:
+1. Fix ONLY the specific issue described above — do not refactor unrelated code
+2. No mocks, no stubs, no TODO comments, no pass-only bodies, no synthetic data
+3. All error paths must log with logger.exception() or logger.error()
+4. Return ONLY the complete fixed Python file — no explanation, no markdown fences
+5. The returned code must be syntactically valid Python and importable
 
 Return the complete fixed file:"""
 
@@ -1205,15 +1255,21 @@ Return the complete fixed file:"""
             client = anthropic.Anthropic(api_key=api_key)
             response = client.messages.create(
                 model="claude-opus-4-5",
-                max_tokens=8192,
+                max_tokens=16384,
+                system=(
+                    "You are an expert Python engineer specialising in production-grade "
+                    "financial trading systems. You write clean, robust, fully-implemented "
+                    "code with no stubs, no TODO comments, no mock data, and no pass-only "
+                    "function bodies. Every fix you produce must be immediately deployable."
+                ),
                 messages=[{"role": "user", "content": prompt}],
             )
             fixed = response.content[0].text.strip()
             # Strip markdown code fences if Claude wrapped the response
-            if fixed.startswith("```python"):
-                fixed = fixed[9:]
-            if fixed.startswith("```"):
-                fixed = fixed[3:]
+            for fence in ("```python\n", "```py\n", "```\n"):
+                if fixed.startswith(fence):
+                    fixed = fixed[len(fence):]
+                    break
             if fixed.endswith("```"):
                 fixed = fixed[:-3]
             return fixed.strip()
@@ -1258,6 +1314,41 @@ Return the complete fixed file:"""
     def get_claude_queue(self) -> list[dict[str, Any]]:
         """Return the current Claude fix queue."""
         return list(self._claude_fix_queue)
+
+    def get_issues_by_category(self, category: str, limit: int = 50) -> list[dict[str, Any]]:
+        """Return code issues filtered by category (e.g. 'nan_leak', 'broken_router')."""
+        return [i for i in self._code_issues if i.get("category") == category][:limit]
+
+    def get_broken_routers(self) -> list[dict[str, Any]]:
+        """Return all detected broken (unregistered) routers."""
+        return self.get_issues_by_category("broken_router")
+
+    def get_nan_leaks(self) -> list[dict[str, Any]]:
+        """Return all detected NaN leak risks."""
+        return self.get_issues_by_category("nan_leak")
+
+    def get_lookahead_issues(self) -> list[dict[str, Any]]:
+        """Return all detected look-ahead bias issues."""
+        return self.get_issues_by_category("lookahead_bias")
+
+    async def force_claude_fix(self, file_path: str, category: str, description: str) -> dict[str, Any]:
+        """
+        Manually enqueue a specific file for Claude-powered fix.
+
+        Useful for triggering fixes from the admin dashboard or API.
+        Returns the enqueued issue dict.
+        """
+        issue = {
+            "file": file_path,
+            "category": category,
+            "severity": "high",
+            "description": description,
+            "line": 0,
+            "snippet": "",
+            "suggestion": "Apply a production-ready fix for the described issue.",
+        }
+        await self._enqueue_claude_fix(issue)
+        return issue
 
     # ── Plugin availability (probed once per process) ─────────────────────────
 
