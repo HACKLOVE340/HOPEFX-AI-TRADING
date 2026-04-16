@@ -804,6 +804,30 @@ class InferenceEngine:
             _PROM.fallback_total.labels(symbol=sym_label, reason="feature_drift").inc()
             return base_result
 
+        # Step 3c: Look-ahead bias guard — validate that the latest feature
+        # timestamp is not in the future relative to the decision timestamp.
+        # This catches data pipeline bugs where future bars leak into features.
+        try:
+            from risk.lookahead_guard import feature_guard as _fg, LookAheadBiasError as _LABError
+            if hasattr(ohlcv.index, "max") and len(ohlcv) > 0:
+                latest_feature_ts = ohlcv.index.max()
+                decision_ts = pd.Timestamp.now(tz="UTC")
+                _fg.validate(
+                    features_ts=latest_feature_ts,
+                    decision_ts=decision_ts,
+                    context=f"inference:{sym_label}",
+                )
+        except Exception as _lag_exc:
+            # Re-raise LookAheadBiasError — critical data integrity violation.
+            # Swallow other guard failures (e.g. timezone mismatch) gracefully.
+            try:
+                from risk.lookahead_guard import LookAheadBiasError as _LABCheck
+                if isinstance(_lag_exc, _LABCheck):
+                    raise
+            except ImportError:
+                pass
+            logger.debug("InferenceEngine: look-ahead guard check skipped: %s", _lag_exc)
+
         # Step 4: Model prediction
         predictor = self._get_predictor()
         raw_prob = 0.5
