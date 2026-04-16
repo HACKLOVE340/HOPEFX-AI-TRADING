@@ -361,7 +361,11 @@ class BacktestEngine:
 
     def run(self, start_date: datetime, end_date: datetime) -> PerformanceMetrics:
         """
-        Run backtest over date range
+        Run backtest over date range.
+
+        The look-ahead bias guard is active throughout: any attempt by the
+        strategy to access future bars or use future-dated features raises
+        LookAheadBiasError immediately, preventing silent result corruption.
         """
         if self.strategy is None:
             raise ValueError("Strategy not set. Call set_strategy() first.")
@@ -381,6 +385,13 @@ class BacktestEngine:
         self.max_drawdown = 0.0
         self.max_drawdown_duration = 0
 
+        # Initialise look-ahead bias guard for this backtest run
+        try:
+            from risk.lookahead_guard import FeatureTimestampGuard
+            _feat_guard = FeatureTimestampGuard(strict=True)
+        except ImportError:
+            _feat_guard = None
+
         # Get data iterator
         data_iterator = self.data_handler.get_data(start_date, end_date, self.symbols)
 
@@ -397,15 +408,24 @@ class BacktestEngine:
             # Record equity
             self._record_equity(timestamp)
 
-            # Call strategy
-            signals = self.strategy(
-                timestamp=timestamp,
-                symbol=symbol,
-                tick=tick,
-                positions=self.positions,
-                capital=self.capital,
-                history=self.equity_history,
-            )
+            # Call strategy — wrap in no_lookahead_context to block shift(-N)
+            # inside feature computation called by the strategy
+            try:
+                from risk.lookahead_guard import no_lookahead_context
+                _ctx = no_lookahead_context(f"backtest:{symbol}")
+            except ImportError:
+                from contextlib import nullcontext
+                _ctx = nullcontext()
+
+            with _ctx:
+                signals = self.strategy(
+                    timestamp=timestamp,
+                    symbol=symbol,
+                    tick=tick,
+                    positions=self.positions,
+                    capital=self.capital,
+                    history=self.equity_history,
+                )
 
             # Execute signals
             if signals:

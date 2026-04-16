@@ -396,7 +396,22 @@ class ExecutionEngine:
         on every order — reducing execution latency by 20–80ms.
 
         Also feeds the spread monitor to maintain a rolling reference baseline.
+        Validates the tick through the LiveTradingGuard to reject future-dated
+        or stale ticks before they can influence order pricing.
         """
+        # Live trading guard: reject future-dated or stale ticks
+        try:
+            from risk.lookahead_guard import live_guard, FutureTimestampError, StaleDataError
+            live_guard.validate_tick(tick, symbol=symbol)
+        except (FutureTimestampError, StaleDataError) as _guard_err:
+            logger.warning(
+                "ExecutionEngine: tick rejected by LiveTradingGuard for %s: %s",
+                symbol, _guard_err,
+            )
+            return  # Do not update last tick with invalid data
+        except Exception:  # nosec B110 — guard is non-fatal if unavailable
+            pass
+
         self._last_ticks[symbol] = tick
         # Feed spread monitor for real-time spike detection
         try:
