@@ -288,6 +288,61 @@ class ServiceCircuitBreaker:
         elapsed = time.time() - self._last_failure_time
         return max(0.0, self.config.timeout_seconds - elapsed)
 
+    def record_success(self) -> None:
+        """
+        Synchronous success recorder — safe to call from non-async contexts.
+
+        Updates failure/success counters and transitions HALF_OPEN → CLOSED
+        when the success threshold is reached.  Does not acquire the asyncio
+        lock (not needed for simple counter updates in CPython's GIL).
+        """
+        self._failure_count = 0
+        if self._state == CircuitState.HALF_OPEN:
+            self._success_count += 1
+            if self._success_count >= self.config.success_threshold:
+                self._state = CircuitState.CLOSED
+                self._success_count = 0
+                self._last_state_change = time.time()
+                logger.info("CircuitBreaker [%s]: HALF_OPEN → CLOSED (sync)", self.name)
+        elif self._state == CircuitState.CLOSED:
+            self._success_count += 1
+
+    def record_failure(self, exc: Exception) -> None:
+        """
+        Synchronous failure recorder — safe to call from non-async contexts.
+
+        Updates failure counters and transitions CLOSED → OPEN when the
+        failure threshold is reached.  Publishes a Redis alert on open.
+        """
+        self._failure_count += 1
+        self._total_failures += 1
+        self._last_failure_time = time.time()
+        self._success_count = 0
+
+        if self._state == CircuitState.HALF_OPEN:
+            self._state = CircuitState.OPEN
+            self._last_state_change = time.time()
+            logger.warning(
+                "CircuitBreaker [%s]: HALF_OPEN → OPEN (sync) — %s: %s",
+                self.name, type(exc).__name__, exc,
+            )
+            self._publish_open_alert()
+        elif self._state == CircuitState.CLOSED:
+            if self._failure_count >= self.config.failure_threshold:
+                self._state = CircuitState.OPEN
+                self._last_state_change = time.time()
+                logger.warning(
+                    "CircuitBreaker [%s]: CLOSED → OPEN (sync) after %d failures — %s: %s",
+                    self.name, self._failure_count, type(exc).__name__, exc,
+                )
+                self._publish_open_alert()
+            else:
+                logger.warning(
+                    "CircuitBreaker [%s]: failure #%d/%d (sync) — %s: %s",
+                    self.name, self._failure_count, self.config.failure_threshold,
+                    type(exc).__name__, exc,
+                )
+
     def force_close(self) -> None:
         """Manually close the circuit (admin action)."""
         self._state = CircuitState.CLOSED

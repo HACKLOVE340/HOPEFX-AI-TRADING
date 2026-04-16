@@ -835,40 +835,25 @@ class InferenceEngine:
 
         if predictor is not None and predictor.is_available:
             try:
-                # Wrap prediction in the ML circuit breaker so repeated model
-                # failures open the breaker and return neutral immediately
-                # rather than blocking on every call.
+                # predict_proba is synchronous — call directly.
+                # Circuit breaker state is updated via the sync record_* helpers
+                # so this path is safe in both async and sync contexts.
+                raw_prob = predictor.predict_proba(ohlcv, macro_df=macro_df, symbol=symbol)
+                model_version = predictor.version
+                # Record success in ML circuit breaker (sync-safe)
                 try:
                     from resilience.service_circuit_breakers import ml_breaker as _ml_cb
-                    from resilience.service_circuit_breakers import CircuitBreakerOpenError as _CBOpen
-
-                    async def _predict_async():
-                        import asyncio as _asyncio
-                        loop = _asyncio.get_event_loop()
-                        return await loop.run_in_executor(
-                            None,
-                            lambda: predictor.predict_proba(ohlcv, macro_df=macro_df, symbol=symbol),
-                        )
-
-                    import asyncio as _asyncio
-                    if _asyncio.get_event_loop().is_running():
-                        raw_prob = predictor.predict_proba(ohlcv, macro_df=macro_df, symbol=symbol)
-                    else:
-                        raw_prob = predictor.predict_proba(ohlcv, macro_df=macro_df, symbol=symbol)
-                    model_version = predictor.version
-                except ImportError:
-                    raw_prob = predictor.predict_proba(ohlcv, macro_df=macro_df, symbol=symbol)
-                    model_version = predictor.version
+                    _ml_cb.record_success()
+                except Exception:  # nosec B110 — circuit breaker is non-fatal
+                    pass
             except Exception as exc:
                 logger.warning("Predictor failed: %s", exc)
                 self._fallback_count += 1
-                # Record failure in ML circuit breaker
+                # Record failure in ML circuit breaker (sync-safe)
                 try:
                     from resilience.service_circuit_breakers import ml_breaker as _ml_cb
-                    import asyncio as _asyncio
-                    if _asyncio.get_event_loop().is_running():
-                        _asyncio.ensure_future(_ml_cb._on_failure(exc))
-                except Exception:  # nosec B110
+                    _ml_cb.record_failure(exc)
+                except Exception:  # nosec B110 — circuit breaker is non-fatal
                     pass
 
         # Step 5: Online learner blend
