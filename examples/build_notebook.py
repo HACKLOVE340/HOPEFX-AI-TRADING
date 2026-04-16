@@ -153,7 +153,7 @@ def add_features(df):
     d["close_vs_sma20"]  = (d["close"] - sma20) / sma20
     d["close_vs_sma50"]  = (d["close"] - d["close"].rolling(50).mean()) / d["close"].rolling(50).mean()
     d["vol_ratio"]       = d["volume"] / d["volume"].rolling(20).mean()
-    d["target"]          = (d["close"].shift(-1) > d["close"]).astype(int)
+    d["target"]          = (d["close"].shift(-1) > d["close"]).astype(int)  # noqa: lookahead-ok — supervised label
     return d.dropna()
 
 FEATURES = [
