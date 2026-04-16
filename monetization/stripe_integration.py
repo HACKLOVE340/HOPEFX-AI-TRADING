@@ -224,9 +224,12 @@ class StripeIntegration:
         self.webhook_secret = webhook_secret or os.getenv("STRIPE_WEBHOOK_SECRET", "")
 
         if not _STRIPE_AVAILABLE:
-            logger.warning("stripe SDK not installed — run: pip install stripe")
+            logger.info("stripe SDK not installed — run: pip install stripe to enable payments")
         elif not self.api_key:
-            logger.warning("STRIPE_SECRET_KEY not set — Stripe operations will raise until configured.")
+            # Startup validator (config.startup_validator) owns the user-facing
+            # warning for missing STRIPE_SECRET_KEY. Log at DEBUG here to avoid
+            # duplicate noise on every import.
+            logger.debug("STRIPE_SECRET_KEY not set — Stripe operations will raise until configured.")
         else:
             _stripe.api_key = self.api_key
             # Log only the key mode (test/live), never the key value itself.
