@@ -176,21 +176,32 @@ async def _fetch_yfinance(
     timeframe: str,
     since_ms: int,
 ) -> pd.DataFrame | None:
-    """Fetch OHLCV from Yahoo Finance via yfinance. Returns DataFrame or None."""
+    """Fetch OHLCV from Yahoo Finance via yfinance. Returns DataFrame or None.
+
+    Gold futures (GC=F) are the front-month CME contract. yfinance may emit
+    a "possibly delisted" warning when the front-month rolls; we suppress that
+    noise and fall back to the continuous contract (GC=F → ^GOLD → IAU) so
+    callers always receive data when available.
+    """
     try:
+        import warnings as _warnings
+
         import yfinance as yf
     except ImportError:
         logger.debug("yfinance not installed — skipping Yahoo Finance source")
         return None
 
-    # Map ccxt symbol to yfinance ticker
-    _ticker_map = {
-        "XAU/USDT": "GC=F",  # Gold futures
-        "XAU/USD": "GC=F",
-        "BTC/USDT": "BTC-USD",
-        "ETH/USDT": "ETH-USD",
+    # Map ccxt symbol to yfinance ticker with ordered fallbacks.
+    # GC=F is the CME front-month gold futures contract; it rolls quarterly
+    # and yfinance may briefly return empty data during the roll window.
+    # GLD (SPDR Gold ETF) is used as a reliable fallback.
+    _ticker_map: dict[str, list[str]] = {
+        "XAU/USDT": ["GC=F", "GLD"],
+        "XAU/USD":  ["GC=F", "GLD"],
+        "BTC/USDT": ["BTC-USD"],
+        "ETH/USDT": ["ETH-USD"],
     }
-    ticker = _ticker_map.get(symbol, symbol.replace("/", "-"))
+    tickers = _ticker_map.get(symbol, [symbol.replace("/", "-")])
 
     # Map ccxt timeframe to yfinance interval
     _interval_map = {
@@ -202,34 +213,68 @@ async def _fetch_yfinance(
     }
     interval = _interval_map.get(timeframe, "1h")
 
-    try:
-        since_dt = datetime.fromtimestamp(since_ms / 1000, tz=UTC)
-        # yfinance is synchronous — run in executor
-        loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(
-            None,
-            lambda: yf.download(
-                ticker,
-                start=since_dt,
-                interval=interval,
-                progress=False,
-                auto_adjust=True,
-            ),
-        )
-        if data is None or data.empty:
-            return None
+    since_dt = datetime.fromtimestamp(since_ms / 1000, tz=UTC)
+    loop = asyncio.get_running_loop()
 
-        df = data[["Open", "High", "Low", "Close", "Volume"]].copy()
-        df.columns = ["open", "high", "low", "close", "volume"]
-        # Convert DatetimeIndex to Unix ms
-        df.index = (df.index.astype(np.int64) // 10**6).astype(int)
-        df.index.name = "timestamp"
-        df = df.sort_index()
-        logger.info("yfinance: fetched %d bars for %s (%s)", len(df), ticker, symbol)
-        return df
-    except Exception as exc:
-        logger.warning("yfinance fetch failed for %s: %s", symbol, exc)
-        return None
+    for ticker in tickers:
+        try:
+            # yfinance is synchronous — run in executor.
+            # Suppress the "possibly delisted" UserWarning that yfinance emits
+            # when a futures contract rolls or temporarily has no data.
+            def _download() -> "pd.DataFrame":
+                with _warnings.catch_warnings():
+                    _warnings.filterwarnings(
+                        "ignore",
+                        message=".*possibly delisted.*",
+                        category=UserWarning,
+                    )
+                    _warnings.filterwarnings(
+                        "ignore",
+                        message=".*No price data found.*",
+                        category=UserWarning,
+                    )
+                    return yf.download(
+                        ticker,
+                        start=since_dt,
+                        interval=interval,
+                        progress=False,
+                        auto_adjust=True,
+                    )
+
+            data = await loop.run_in_executor(None, _download)
+            if data is None or data.empty:
+                logger.debug("yfinance: no data for %s (%s) — trying next fallback", ticker, symbol)
+                continue
+
+            # yfinance ≥0.2.x may return a MultiIndex (Price, Ticker) — flatten.
+            if isinstance(data.columns, pd.MultiIndex):
+                data.columns = [col[0] for col in data.columns]
+
+            # Normalise column names to lowercase
+            data.columns = [c.lower() for c in data.columns]
+
+            required = {"open", "high", "low", "close", "volume"}
+            if not required.issubset(set(data.columns)):
+                logger.debug("yfinance: missing columns for %s: %s", ticker, data.columns.tolist())
+                continue
+
+            df = data[["open", "high", "low", "close", "volume"]].copy()
+            # Convert DatetimeIndex to Unix ms
+            df.index = (df.index.astype(np.int64) // 10**6).astype(int)
+            df.index.name = "timestamp"
+            df = df.sort_index()
+            # Drop rows with NaN close prices
+            df = df.dropna(subset=["close"])
+            if df.empty:
+                continue
+            logger.info("yfinance: fetched %d bars for %s via %s", len(df), symbol, ticker)
+            return df
+        except Exception as exc:
+            logger.debug("yfinance fetch failed for %s (%s): %s", ticker, symbol, exc)
+            continue
+
+    logger.warning("yfinance: all tickers exhausted for %s — no data returned", symbol)
+    return None
 
 
 async def _fetch_alpha_vantage(

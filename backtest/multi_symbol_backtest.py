@@ -113,18 +113,49 @@ def fetch_ohlcv(ticker: str, years: int, smoke: bool = False) -> pd.DataFrame:
             logger.debug("Suppressed exception: %s", _exc)
 
     try:
+        import warnings as _warnings
+
         import yfinance as yf
 
         end = datetime.now(UTC)
         start = end - timedelta(days=years * 365)
-        df = yf.download(
-            ticker,
-            start=start,
-            end=end,
-            interval="1d",
-            auto_adjust=True,
-            progress=False,
-        )
+
+        # Suppress yfinance "possibly delisted" UserWarning that fires during
+        # CME gold futures (GC=F) quarterly roll windows.
+        with _warnings.catch_warnings():
+            _warnings.filterwarnings(
+                "ignore",
+                message=".*possibly delisted.*",
+                category=UserWarning,
+            )
+            _warnings.filterwarnings(
+                "ignore",
+                message=".*No price data found.*",
+                category=UserWarning,
+            )
+            df = yf.download(
+                ticker,
+                start=start,
+                end=end,
+                interval="1d",
+                auto_adjust=True,
+                progress=False,
+            )
+
+        # GC=F may be empty during roll — fall back to GLD (SPDR Gold ETF)
+        if df.empty and ticker == "GC=F":
+            logger.info("GC=F returned no data (roll window?) — falling back to GLD")
+            with _warnings.catch_warnings():
+                _warnings.filterwarnings("ignore", category=UserWarning)
+                df = yf.download(
+                    "GLD",
+                    start=start,
+                    end=end,
+                    interval="1d",
+                    auto_adjust=True,
+                    progress=False,
+                )
+
         if df.empty:
             raise ValueError(f"No data returned for {ticker}")
 
