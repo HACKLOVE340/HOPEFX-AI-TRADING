@@ -115,7 +115,7 @@ class AttributeRequest(BaseModel):
     positions: dict[str, float] = Field(
         ...,
         description="Symbol -> dollar value (positive=long, negative=short)",
-        example={"XAU_USD": 50000.0, "BTC_USD": -10000.0},
+        json_schema_extra={"example": {"XAU_USD": 50000.0, "BTC_USD": -10000.0}},
     )
     total_pnl: float = Field(
         default=0.0,

@@ -654,27 +654,10 @@ _register_health_routes(app, app_state, kill_switch)
 
 # /metrics is registered by setup_prometheus_monitoring(app) above — no duplicate here.
 
-# ── API root ──────────────────────────────────────────────────────────────────
-
-
-@app.get("/", tags=["System"])
-async def root():
-    """API root — returns basic service information."""
-    return {
-        "application": "HOPEFX AI Trading API",
-        "version": "2.0.0",
-        "docs": "/docs",
-        "redoc": "/redoc",
-        "health": "/health",
-        "status": "/status",
-        "paper_trading": "/paper-trading",
-        "stream_dashboard": "/stream",
-        "pricing": "/pricing",
-        "admin_dashboard": "/admin",
-        "component_map": "/api/trading/component-map",
-        "monetization_api": "/api/monetization",
-    }
-
+# ── Error handler ─────────────────────────────────────────────────────────────
+# NOTE: GET / is registered by core/page_routes.py (serves the React SPA).
+# GET /status is registered by api/status.py (system status page).
+# Do not add duplicate registrations here.
 
 # Error handler
 @app.exception_handler(Exception)
