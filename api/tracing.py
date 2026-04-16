@@ -64,13 +64,10 @@ except ImportError:
     _PROPAGATOR_AVAILABLE = False
     propagate = None  # type: ignore[assignment]
 
-try:
-    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-
-    _OTLP_GRPC_AVAILABLE = True
-except ImportError:
-    _OTLP_GRPC_AVAILABLE = False
-
+# gRPC exporter intentionally excluded: the grpcio C extension raises SIGBUS
+# (signal 7) on some platforms/containers, which kills the process and cannot
+# be caught by Python's try/except.  The HTTP exporter is functionally
+# equivalent and does not carry this risk.
 try:
     from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
         OTLPSpanExporter as OTLPHTTPSpanExporter,
@@ -148,16 +145,15 @@ def _initialize_provider() -> None:
 
     if _OTLP_ENDPOINT:
         try:
-            if _OTLP_GRPC_AVAILABLE:
-                exporter = OTLPSpanExporter(endpoint=_OTLP_ENDPOINT)
-                provider.add_span_processor(BatchSpanProcessor(exporter))
-                logger.info("OTel OTLP gRPC exporter configured → %s", _OTLP_ENDPOINT)
-            elif _OTLP_HTTP_AVAILABLE:
+            if _OTLP_HTTP_AVAILABLE:
                 exporter = OTLPHTTPSpanExporter(endpoint=_OTLP_ENDPOINT)
                 provider.add_span_processor(BatchSpanProcessor(exporter))
                 logger.info("OTel OTLP HTTP exporter configured → %s", _OTLP_ENDPOINT)
             else:
-                logger.warning("OTLP endpoint set but no exporter available — install opentelemetry-exporter-otlp")
+                logger.warning(
+                    "OTLP endpoint set but no exporter available — "
+                    "install opentelemetry-exporter-otlp-proto-http"
+                )
         except Exception as exc:
             logger.warning("Failed to configure OTLP exporter: %s", exc)
 
@@ -401,7 +397,7 @@ async def get_tracing_config() -> TracingConfig:
     Returns:
         :class:`TracingConfig` with endpoint, service name, sampling rate, and status.
     """
-    otlp_available = _OTLP_GRPC_AVAILABLE or _OTLP_HTTP_AVAILABLE
+    otlp_available = _OTLP_HTTP_AVAILABLE
 
     if not _OTEL_AVAILABLE:
         status = "disabled"
