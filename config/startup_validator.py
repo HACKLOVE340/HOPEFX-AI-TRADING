@@ -226,7 +226,7 @@ def _validate_llm_backend(errors: list[str]) -> None:
         # In production this is a meaningful gap; in dev the brain degrades
         # gracefully to stub responses so it is informational only.
         if _is_dev():
-            logger.info(
+            logger.debug(
                 "HOPEFXBrain: %s not set — brain will use stub responses. Set it to enable real AI analysis.",
                 env_name,
             )
@@ -323,7 +323,7 @@ def _validate_stripe(errors: list[str]) -> None:
 
     if not key:
         if _is_dev():
-            logger.info(
+            logger.debug(
                 "STRIPE_SECRET_KEY not set — Stripe payments disabled. "
                 "Set to sk_test_... (test) or sk_live_... (production) to enable."
             )
@@ -394,7 +394,7 @@ def validate_environment(*, strict: bool = True) -> None:
 
     if not errors:
         n_optional = sum(1 for v in ("SENTRY_DSN", "MOBILE_CORS_ORIGINS", "IBKR_PORT") if _env(v))
-        logger.info(
+        logger.debug(
             "Startup validation passed (mode=%s, %d optional vars checked).",
             "production" if not dev_mode else "development",
             n_optional,
