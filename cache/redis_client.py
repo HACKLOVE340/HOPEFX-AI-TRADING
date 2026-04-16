@@ -217,6 +217,7 @@ async def _try_direct(
     and the individual cert/key/ca params, rather than passing a context
     object through ``from_url()``.
     """
+    global _connect_failed_warned
     try:
         import redis.asyncio as aioredis  # pylint: disable=no-name-in-module
 
@@ -292,7 +293,7 @@ async def get_redis(
     Returns None if no Redis is configured or all connection attempts fail,
     so callers can degrade gracefully without crashing.
     """
-    global _redis_instance, _sentinel_instance, _connection_mode
+    global _redis_instance, _sentinel_instance, _connection_mode, _no_config_warned
 
     if _redis_instance is not None:
         # Periodic health check — reconnect if stale
