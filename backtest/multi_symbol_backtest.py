@@ -60,8 +60,17 @@ from typing import ClassVar
 import numpy as np
 import pandas as pd
 
-warnings.filterwarnings("ignore")
+# Suppress yfinance "possibly delisted" / "No price data found" noise.
+# GC=F (CME gold futures) emits these during quarterly roll windows.
+# The fallback chain (GC=F → GLD) handles missing data transparently.
+warnings.filterwarnings("ignore", message=".*possibly delisted.*", category=UserWarning)
+warnings.filterwarnings("ignore", message=".*No price data found.*", category=UserWarning)
+warnings.filterwarnings("ignore", message=".*Period.*not supported.*", category=UserWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logging.getLogger("yfinance").setLevel(logging.ERROR)
+logging.getLogger("yfinance.base").setLevel(logging.ERROR)
+logging.getLogger("yfinance.utils").setLevel(logging.ERROR)
 logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).parent.parent
@@ -113,64 +122,27 @@ def fetch_ohlcv(ticker: str, years: int, smoke: bool = False) -> pd.DataFrame:
             logger.debug("Suppressed exception: %s", _exc)
 
     try:
-        import warnings as _warnings
-
-        import yfinance as yf
+        from utils.yfinance_compat import safe_download
 
         end = datetime.now(UTC)
         start = end - timedelta(days=years * 365)
 
-        # Suppress yfinance "possibly delisted" UserWarning that fires during
-        # CME gold futures (GC=F) quarterly roll windows.
-        with _warnings.catch_warnings():
-            _warnings.filterwarnings(
-                "ignore",
-                message=".*possibly delisted.*",
-                category=UserWarning,
-            )
-            _warnings.filterwarnings(
-                "ignore",
-                message=".*No price data found.*",
-                category=UserWarning,
-            )
-            df = yf.download(
-                ticker,
-                start=start,
-                end=end,
-                interval="1d",
-                auto_adjust=True,
-                progress=False,
-            )
-
-        # GC=F may be empty during roll — fall back to GLD (SPDR Gold ETF)
-        if df.empty and ticker == "GC=F":
-            logger.info("GC=F returned no data (roll window?) — falling back to GLD")
-            with _warnings.catch_warnings():
-                _warnings.filterwarnings("ignore", category=UserWarning)
-                df = yf.download(
-                    "GLD",
-                    start=start,
-                    end=end,
-                    interval="1d",
-                    auto_adjust=True,
-                    progress=False,
-                )
+        df = safe_download(
+            ticker,
+            start=start.strftime("%Y-%m-%d"),
+            end=end.strftime("%Y-%m-%d"),
+            interval="1d",
+        )
 
         if df.empty:
-            raise ValueError(f"No data returned for {ticker}")
-
-        # yfinance ≥0.2.x returns a MultiIndex (Price, Ticker) — flatten it.
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = [col[0].lower() for col in df.columns]
-        else:
-            df.columns = [c.lower() for c in df.columns]
+            raise ValueError(f"No data returned for {ticker} (including fallbacks)")
 
         df.index = pd.to_datetime(df.index, utc=True)
         # Cache for next run
         try:
             df.to_csv(cache_path)
         except Exception as _exc:
-            logger.debug("Suppressed exception: %s", _exc)
+            logger.debug("Cache write failed: %s", _exc)
         logger.info("Downloaded %s: %d bars", ticker, len(df))
         return df
     except Exception as exc:
