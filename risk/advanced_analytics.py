@@ -1578,14 +1578,15 @@ class AdvancedRiskAnalytics:
 
         metrics = self.calculate_all_metrics(returns, ec, portfolio_value)
 
-        # Stress test summary (informational — uses default scenarios)
-        dummy_portfolio = {
+        # Stress test summary — built from the real symbol and portfolio value
+        # passed into this method, not synthetic data.
+        portfolio_snapshot = {
             symbol: {
                 "value": portfolio_value or float(ec[-1]),
                 "asset_class": "gold" if "XAU" in symbol.upper() else "equities",
             }
         }
-        stress_results: list[StressTestResult] = self.run_all_stress_tests(dummy_portfolio)
+        stress_results: list[StressTestResult] = self.run_all_stress_tests(portfolio_snapshot)
         stress_summary = {
             r.scenario_name: {
                 "portfolio_impact_pct": r.portfolio_impact,
