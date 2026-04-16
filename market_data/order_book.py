@@ -758,12 +758,12 @@ class MockL2Feed:
     """
 
     def __init__(self) -> None:
-        _env = os.getenv("APP_ENV", "production").lower()
-        if _env in ("production", "staging"):
-            raise RuntimeError(
-                f"MockL2Feed cannot be used in {_env} (APP_ENV={_env}). "
-                "Set L2_PROVIDER=multi and configure POLYGON_API_KEY."
-            )
+        from utils.production_guard import assert_not_production
+        assert_not_production(
+            "MockL2Feed",
+            replacement="MultiSourceL2Feed with L2_PROVIDER=multi",
+            extra="Set L2_PROVIDER=multi and configure POLYGON_API_KEY.",
+        )
         self._books: dict[str, OrderBook] = {}
         self._tasks: dict[str, asyncio.Task] = {}
         self._running = False

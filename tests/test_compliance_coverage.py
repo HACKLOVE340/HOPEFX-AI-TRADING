@@ -915,7 +915,7 @@ class TestOnfidoProvider:
 class TestMockKYCProvider:
     def test_raises_in_production(self):
         with patch.dict(os.environ, {"APP_ENV": "production"}):
-            with pytest.raises(RuntimeError, match="MockKYCProvider must not be used"):
+            with pytest.raises(RuntimeError, match="MockKYCProvider cannot be used in production"):
                 MockKYCProvider()
 
     def test_raises_in_staging(self):

@@ -601,14 +601,12 @@ class MockProvider(DataProvider):
         drift: float = 0.0,
         tick_interval_ms: float = 100,
     ):
-        import os as _os
-
-        if _os.getenv("APP_ENV", "production").lower() == "production":
-            raise RuntimeError(
-                "MockProvider cannot be used in production (APP_ENV=production). "
-                "Configure a real data provider: PolygonProvider, OandaProvider, "
-                "or BinanceProvider."
-            )
+        from utils.production_guard import assert_not_production
+        assert_not_production(
+            "MockProvider",
+            replacement="PolygonProvider, OandaProvider, or BinanceProvider",
+            extra="Configure a real data provider with valid API credentials.",
+        )
         super().__init__("mock", priority=10, weight=0.1)
         self.volatility = volatility
         self.drift = drift

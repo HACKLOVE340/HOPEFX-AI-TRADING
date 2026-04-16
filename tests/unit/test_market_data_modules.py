@@ -1780,7 +1780,7 @@ class TestOrderBookAdditional:
         from market_data.order_book import MockL2Feed
 
         monkeypatch.setenv("APP_ENV", "production")
-        with pytest.raises(RuntimeError, match="MockL2Feed cannot be used"):
+        with pytest.raises(RuntimeError, match="MockL2Feed cannot be used in production"):
             MockL2Feed()
 
     def test_mock_l2_feed_allowed_in_development(self, monkeypatch):

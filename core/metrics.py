@@ -106,6 +106,15 @@ if _PROM_AVAILABLE:
         "1 when the Sharpe credibility gate has passed, 0 otherwise",
     )
 else:
+    import os as _os
+    _app_env = _os.getenv("APP_ENV", "development").lower()
+    if _app_env in ("production", "staging"):
+        logger.warning(
+            "prometheus_client is not installed — Prometheus metrics are DISABLED. "
+            "Install with: pip install prometheus-client>=0.19.0. "
+            "All metric calls will be no-ops. This is a production observability gap."
+        )
+
     # Stub objects so callers don't need to guard every call
     class _Stub:
         def labels(self, **_):
