@@ -67,6 +67,13 @@ class DataHandler:
                 # Clean data
                 df = self._clean_data(df)
 
+                # Deep validation: price sanity + temporal ordering + future leakage
+                try:
+                    from data_layer.validation import validate_ohlcv
+                    df = validate_ohlcv(df, symbol=symbol, strict=False, drop_bad_rows=True)
+                except Exception as _val_err:
+                    logger.warning("DataHandler: validation warning for %s: %s", symbol, _val_err)
+
                 self.data[symbol] = df
                 logger.info("Loaded %s bars for %s", len(df), symbol)
 

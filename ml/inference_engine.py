@@ -742,6 +742,24 @@ class InferenceEngine:
             _PROM.fallback_total.labels(symbol=sym_label, reason="feature_build_failed").inc()
             return base_result
 
+        # Step 3-validation: Block NaN/Inf/label-leakage in feature matrix
+        # before it reaches the model. A NaN in features causes silent
+        # prediction errors that are harder to detect than an explicit failure.
+        try:
+            from data_layer.validation import validate_features as _vf
+            X = _vf(X, strict=True, label_col="y")
+        except Exception as _val_exc:
+            logger.warning(
+                "InferenceEngine: feature validation failed for %s: %s — returning neutral",
+                sym_label, _val_exc,
+            )
+            base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
+            base_result["fallback"] = True
+            base_result["validation_error"] = str(_val_exc)
+            self._fallback_count += 1
+            _PROM.fallback_total.labels(symbol=sym_label, reason="feature_validation_failed").inc()
+            return base_result
+
         # Step 3a: Stale model detection
         # Check whether the model file is older than MODEL_MAX_AGE_DAYS.
         # STALE_MODEL_BLOCK=true (default): raise RuntimeError — the pre-trade
