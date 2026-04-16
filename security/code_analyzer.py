@@ -86,6 +86,30 @@ _SECRET_RE = re.compile(
 # TODO / FIXME / HACK / XXX markers
 _TODO_RE = re.compile(r"""#\s*(TODO|FIXME|HACK|XXX)\b""", re.IGNORECASE)
 
+# NaN leak patterns — operations that silently propagate NaN without guards
+# e.g. df['col'].mean() without dropna(), or np.log(x) without checking x > 0
+_NAN_LEAK_RE = re.compile(
+    r"""(?x)
+    \.mean\(\)|\.std\(\)|\.var\(\)|\.sum\(\)|\.cumsum\(\)|\.cumprod\(\)
+    |np\.log\(|np\.sqrt\(|np\.exp\(
+    |pd\.concat\(|\.merge\(|\.join\(
+    """,
+)
+_NAN_GUARD_RE = re.compile(
+    r"""dropna\(|fillna\(|isnan\(|notna\(|notnull\(|np\.nan_to_num\(|\.replace\(.*np\.nan"""
+)
+
+# Division by zero risk — dividing by a variable without a zero-check nearby
+_DIV_ZERO_RE = re.compile(r"""(?<![=!<>])/(?![/=])""")  # bare / operator
+_DIV_SAFE_RE = re.compile(r"""if.*==\s*0|if.*!=\s*0|max\(.*,\s*1\)|np\.where|try:|except""")
+
+# Broken router patterns — router defined but never registered
+_ROUTER_DEF_RE = re.compile(r"""^router\s*=\s*APIRouter\(|^_router\s*=\s*APIRouter\(""")
+
+# Missing error handling — async functions with no try/except
+_ASYNC_DEF_RE = re.compile(r"""^async\s+def\s+\w+""")
+_TRY_RE = re.compile(r"""^\s+try:""")
+
 # Bare raise without exception
 _BARE_RAISE_RE = re.compile(r"""^\s*raise\s*$""")
 
@@ -353,6 +377,63 @@ def _analyze_file_regex(path: Path) -> list[CodeIssue]:
                 description="Bare 'except:' catches all exceptions including SystemExit",
                 snippet=line.strip(),
                 suggestion="Use 'except Exception:' or a more specific exception type",
+            ))
+
+        # NaN leak — numeric aggregation without a NaN guard in the surrounding context
+        if _NAN_LEAK_RE.search(line) and not is_test:
+            # Check a window of ±5 lines for a NaN guard
+            window_start = max(0, i - 6)
+            window_end = min(len(lines), i + 5)
+            window = "\n".join(lines[window_start:window_end])
+            if not _NAN_GUARD_RE.search(window):
+                issues.append(CodeIssue(
+                    file=rel, line=i, category="nan_leak",
+                    severity=SEVERITY_HIGH,
+                    description=(
+                        f"Numeric operation without NaN guard: {line.strip()[:80]}\n"
+                        "NaN values propagate silently and corrupt downstream calculations."
+                    ),
+                    snippet=line.strip(),
+                    suggestion=(
+                        "Add .dropna() before aggregation, or .fillna(0) / np.nan_to_num() "
+                        "to handle NaN explicitly before this operation."
+                    ),
+                ))
+
+    # ── Broken router detection (file-level) ─────────────────────────────────
+    # A router defined in a module but never referenced in router_registry.py
+    # or app.py is a dead endpoint — silently unreachable.
+    has_router_def = any(_ROUTER_DEF_RE.search(ln) for ln in lines)
+    if has_router_def and not is_test:
+        # Check if this file is imported by the registry
+        registry_path = PROJECT_ROOT / "core" / "router_registry.py"
+        app_path = PROJECT_ROOT / "app.py"
+        module_name = rel.replace("/", ".").replace(".py", "")
+        short_name = Path(rel).stem  # e.g. "billing" from "api/billing.py"
+
+        registered = False
+        for reg_file in (registry_path, app_path):
+            if reg_file.exists():
+                reg_text = reg_file.read_text(encoding="utf-8", errors="replace")
+                if module_name in reg_text or short_name in reg_text or rel in reg_text:
+                    registered = True
+                    break
+
+        if not registered:
+            issues.append(CodeIssue(
+                file=rel, line=1, category="broken_router",
+                severity=SEVERITY_HIGH,
+                description=(
+                    f"Router defined in {rel} but not found in core/router_registry.py or app.py. "
+                    "This router's endpoints are unreachable."
+                ),
+                snippet=next(
+                    (ln.strip() for ln in lines if _ROUTER_DEF_RE.search(ln)), ""
+                ),
+                suggestion=(
+                    "Import this router in core/router_registry.py and call "
+                    "_include_router_deduped(app, router) to register its endpoints."
+                ),
             ))
 
     return issues
