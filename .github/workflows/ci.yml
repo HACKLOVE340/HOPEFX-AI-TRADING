@@ -58,7 +58,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install pip-audit
-        run: pip install pip-audit
+        run: pip install --retries 5 --timeout 60 pip-audit
       - name: Dependency vulnerability scan
         # Blocks on CRITICAL severity; HIGH and below are reported only.
         # To suppress a false-positive: pip-audit --ignore-vuln GHSA-xxxx-xxxx-xxxx
@@ -135,10 +135,11 @@ jobs:
 
       - name: Install dependencies
         # Use CI requirements - avoids C-extension build failures (quickfix, numba, etc.)
+        # --retries 5 --timeout 60: guard against transient PyPI connection timeouts.
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-ci.txt
-          pip install mypy pandas-stubs types-redis types-pyyaml
+          python -m pip install --upgrade --retries 5 --timeout 60 pip
+          pip install --retries 5 --timeout 60 -r requirements-ci.txt
+          pip install --retries 5 --timeout 60 mypy pandas-stubs types-redis types-pyyaml
 
       # Strict gate: only the two files already fully typed.
       # --follow-imports=silent: check only these two files strictly;
@@ -223,9 +224,10 @@ jobs:
 
       - name: Install dependencies
         # All test/lint tools (pytest, bandit, coverage, etc.) are in requirements-ci.txt.
+        # --retries 5 --timeout 60: guard against transient PyPI connection timeouts.
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-ci.txt
+          python -m pip install --upgrade --retries 5 --timeout 60 pip
+          pip install --retries 5 --timeout 60 -r requirements-ci.txt
 
       - name: Alembic migration smoke test
         # Verify all migrations apply cleanly to a fresh schema.
@@ -238,7 +240,7 @@ jobs:
 
       - name: Run ruff (lint + format check)
         run: |
-          pip install "ruff>=0.9.0,<0.10.0"
+          pip install --retries 5 --timeout 60 "ruff>=0.9.0,<0.10.0"
           ruff check api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/
           ruff format --check api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/
 
