@@ -74,15 +74,26 @@ def _probe_otlp_endpoint(endpoint: str, timeout: float = 1.5) -> bool:
 
 
 _tracer_provider = None
+# Idempotency guard — tracks which instrumentors have already been applied.
+# Prevents duplicate instrumentation on uvicorn hot-reload or multiple imports.
+_instrumented: set[str] = set()
 
 
 def setup_tracing(app=None) -> bool:
     """
     Configure OpenTelemetry and instrument the FastAPI app.
 
+    Idempotent — safe to call multiple times (e.g. on uvicorn hot-reload).
     Returns True if tracing was successfully configured.
     """
     global _tracer_provider
+
+    # Already configured — only re-instrument the new app instance if provided.
+    if _tracer_provider is not None:
+        if app is not None and "fastapi" not in _instrumented:
+            _instrument_fastapi(app)
+        logger.debug("OTel: setup_tracing called again — already configured, skipping re-init")
+        return True
 
     if not _ENABLED:
         logger.info("OpenTelemetry tracing disabled (OTEL_ENABLED=false)")
@@ -221,10 +232,15 @@ def _build_exporter():
 
 
 def _instrument_fastapi(app) -> None:
+    key = "fastapi"
+    if key in _instrumented:
+        logger.debug("OTel: FastAPI already instrumented — skipping")
+        return
     try:
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
         FastAPIInstrumentor.instrument_app(app, excluded_urls="/health,/metrics,/favicon.ico")
+        _instrumented.add(key)
         logger.info("OTel: FastAPI instrumented")
     except ImportError:
         logger.debug("OTel: FastAPI instrumentation not available")
@@ -233,11 +249,21 @@ def _instrument_fastapi(app) -> None:
 
 
 def _instrument_sqlalchemy() -> None:
+    key = "sqlalchemy"
+    if key in _instrumented:
+        logger.debug("OTel: SQLAlchemy already instrumented — skipping")
+        return
     try:
         from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 
-        SQLAlchemyInstrumentor().instrument()
-        logger.info("OTel: SQLAlchemy instrumented")
+        instr = SQLAlchemyInstrumentor()
+        if not instr.is_instrumented_by_opentelemetry:
+            instr.instrument()
+            _instrumented.add(key)
+            logger.info("OTel: SQLAlchemy instrumented")
+        else:
+            _instrumented.add(key)
+            logger.debug("OTel: SQLAlchemy already instrumented by opentelemetry")
     except ImportError:
         logger.debug("OTel: SQLAlchemy instrumentation not available")
     except Exception as exc:
@@ -245,11 +271,21 @@ def _instrument_sqlalchemy() -> None:
 
 
 def _instrument_redis() -> None:
+    key = "redis"
+    if key in _instrumented:
+        logger.debug("OTel: Redis already instrumented — skipping")
+        return
     try:
         from opentelemetry.instrumentation.redis import RedisInstrumentor
 
-        RedisInstrumentor().instrument()
-        logger.info("OTel: Redis instrumented")
+        instr = RedisInstrumentor()
+        if not instr.is_instrumented_by_opentelemetry:
+            instr.instrument()
+            _instrumented.add(key)
+            logger.info("OTel: Redis instrumented")
+        else:
+            _instrumented.add(key)
+            logger.debug("OTel: Redis already instrumented by opentelemetry")
     except ImportError:
         logger.debug("OTel: Redis instrumentation not available")
     except Exception as exc:
@@ -257,13 +293,23 @@ def _instrument_redis() -> None:
 
 
 def _instrument_aiohttp() -> None:
+    key = "aiohttp"
+    if key in _instrumented:
+        logger.debug("OTel: aiohttp already instrumented — skipping")
+        return
     try:
         from opentelemetry.instrumentation.aiohttp_client import (
             AioHttpClientInstrumentor,
         )
 
-        AioHttpClientInstrumentor().instrument()
-        logger.info("OTel: aiohttp client instrumented")
+        instr = AioHttpClientInstrumentor()
+        if not instr.is_instrumented_by_opentelemetry:
+            instr.instrument()
+            _instrumented.add(key)
+            logger.info("OTel: aiohttp client instrumented")
+        else:
+            _instrumented.add(key)
+            logger.debug("OTel: aiohttp already instrumented by opentelemetry")
     except ImportError:
         logger.debug("OTel: aiohttp instrumentation not available")
     except Exception as exc:

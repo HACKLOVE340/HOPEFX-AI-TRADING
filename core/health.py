@@ -132,9 +132,9 @@ def register_health_routes(app: FastAPI, app_state: Any, kill_switch: Any) -> No
             components=components,
         )
 
-    @app.get("/status", response_model=StatusResponse, tags=["System"])
+    @app.get("/api/system/status", response_model=StatusResponse, tags=["System"], include_in_schema=False)
     async def get_status():
-        """System status — returns component availability summary."""
+        """System status — returns component availability summary (JSON)."""
         cache_connected = False
         if app_state.cache is not None:
             try:
