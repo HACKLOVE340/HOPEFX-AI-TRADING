@@ -1973,6 +1973,15 @@ def build_component_registry(app, feature_flags):
             required=False,
             deps=["config"],
         )
+        # auto_rollback monitors circuit breakers, error rates, and health
+        # checks; triggers soft/medium/hard/full rollback when thresholds are
+        # exceeded.  Depends on broker and cache so it can observe their state.
+        .register(
+            "auto_rollback",
+            F.init_auto_rollback,
+            required=False,
+            deps=["broker", "cache"],
+        )
     )
 
     return registry
@@ -1999,18 +2008,56 @@ async def init_self_healer(s: Any, app: Any) -> Any | None:
 
         await _start_healer(app)
         logger.info("SelfHealer started — /api/security/heal/* routes mounted")
-
-        # Start the auto-rollback manager alongside the self-healer
-        try:
-            from resilience.auto_rollback import rollback_manager as _rm
-            await _rm.start()
-            logger.info("AutoRollbackManager started — monitoring %d triggers", len(_rm._triggers))
-        except Exception as _rm_exc:
-            logger.warning("AutoRollbackManager failed to start (non-fatal): %s", _rm_exc)
-
         return getattr(s, "self_healer", None)
     except Exception as exc:
         logger.warning("SelfHealer failed to start (non-fatal): %s", exc)
+        return None
+
+
+async def init_auto_rollback(s: Any) -> Any | None:
+    """
+    Start the AutoRollbackManager as an independent component.
+
+    Monitors circuit breaker states, error rates, and health check results.
+    Triggers soft/medium/hard/full rollback when configured thresholds are
+    exceeded.  Runs as a background asyncio task — non-fatal if unavailable.
+
+    Registered after 'broker' and 'cache' so it can observe their state from
+    the first monitoring cycle.
+    """
+    try:
+        from resilience.auto_rollback import rollback_manager as _rm
+
+        # Register a health-check trigger that fires when the readiness probe
+        # returns degraded — this catches DB/Redis/ML failures not covered by
+        # the circuit breakers alone.
+        from resilience.auto_rollback import RollbackTrigger, RollbackStrategy
+
+        def _health_degraded() -> bool:
+            """Return True when the /api/health/ready probe would return 503."""
+            try:
+                from api.health import _check_ready_sync
+                return not _check_ready_sync()
+            except Exception:
+                return False
+
+        _rm.register_trigger(RollbackTrigger(
+            name="health_ready_degraded",
+            condition=_health_degraded,
+            strategy=RollbackStrategy.SOFT,
+            description="Readiness probe degraded — disable affected feature flags",
+            cooldown_seconds=300,  # at most once every 5 minutes
+        ))
+
+        await _rm.start()
+        s.auto_rollback = _rm
+        logger.info(
+            "AutoRollbackManager started — monitoring %d triggers",
+            len(_rm._triggers),
+        )
+        return _rm
+    except Exception as exc:
+        logger.warning("AutoRollbackManager failed to start (non-fatal): %s", exc)
         return None
 
 
