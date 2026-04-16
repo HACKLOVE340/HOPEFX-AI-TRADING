@@ -4,21 +4,27 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import React from 'react';
 import { useStore } from '../store';
 import AuthGuard from '../components/AuthGuard';
+import * as useApiModule from '../hooks/useApi';
 
 // Must be at module top level — vi.mock calls are hoisted by Vitest before
 // any test code runs, so placing them inside describe() causes a warning.
 vi.mock('../hooks/useApi', () => ({
   authApi: {
     login:            vi.fn(),
-    logout:           vi.fn(),
-    me:               vi.fn(),
+    logout:           vi.fn().mockResolvedValue({ data: {} }),
+    // AuthGuard calls authApi.me().then(...) on mount to sync the role from
+    // the server. The mock must return a resolved Promise — not undefined —
+    // otherwise .then() throws "Cannot read properties of undefined".
+    // The resolved value is updated in beforeEach to echo the current store
+    // user so role-sync never overwrites the role the test intentionally set.
+    me:               vi.fn().mockResolvedValue({ data: { id: '1', email: 'a@b.com', username: 'trader1', role: 'trader' } }),
     register:         vi.fn(),
-    activateFreeTier: vi.fn(),
+    activateFreeTier: vi.fn().mockResolvedValue({ data: { tier: 'free' } }),
   },
   tradingApi: {
     positions:         vi.fn().mockResolvedValue({ data: { positions: [] } }),
@@ -206,6 +212,15 @@ beforeEach(() => {
 // ─── AuthGuard ────────────────────────────────────────────────────────────────
 
 describe('AuthGuard', () => {
+  // Before each AuthGuard test, update authApi.me to echo back whatever user
+  // the test sets in the store. This prevents AuthGuard's role-sync from
+  // overwriting the role the test intentionally configured.
+  beforeEach(() => {
+    vi.mocked(useApiModule.authApi.me).mockImplementation(() =>
+      Promise.resolve({ data: useStore.getState().user ?? { id: '1', email: 'a@b.com', username: 'trader1', role: 'trader' } })
+    );
+  });
+
   it('redirects to /login when not authenticated', () => {
     renderWithRouter(
       <Routes>
@@ -217,7 +232,11 @@ describe('AuthGuard', () => {
     expect(screen.queryByText('Protected')).not.toBeInTheDocument();
   });
 
-  it('renders children when authenticated', () => {
+  // AuthGuard shows a spinner while syncing role from /api/auth/me on mount.
+  // All tests that assert on authenticated content must use waitFor to wait
+  // past the spinner before asserting.
+
+  it('renders children when authenticated', async () => {
     useStore.getState().setAuth(makeMockJwt(), mockUser);
     renderWithRouter(
       <Routes>
@@ -225,10 +244,10 @@ describe('AuthGuard', () => {
         <Route path="/login" element={<div>Login Page</div>} />
       </Routes>
     );
-    expect(screen.getByText('Protected Content')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Protected Content')).toBeInTheDocument());
   });
 
-  it('does not show login page when authenticated', () => {
+  it('does not show login page when authenticated', async () => {
     useStore.getState().setAuth(makeMockJwt(), mockUser);
     renderWithRouter(
       <Routes>
@@ -236,10 +255,10 @@ describe('AuthGuard', () => {
         <Route path="/login" element={<div>Login Page</div>} />
       </Routes>
     );
-    expect(screen.queryByText('Login Page')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Login Page')).not.toBeInTheDocument());
   });
 
-  it('shows access denied for insufficient role', () => {
+  it('shows access denied for insufficient role', async () => {
     useStore.getState().setAuth(makeMockJwt(), mockUser); // trader role
     renderWithRouter(
       <Routes>
@@ -247,11 +266,11 @@ describe('AuthGuard', () => {
         <Route path="/login" element={<div>Login</div>} />
       </Routes>
     );
-    expect(screen.getByText('Access Denied')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Access Denied')).toBeInTheDocument());
     expect(screen.queryByText('Admin Only')).not.toBeInTheDocument();
   });
 
-  it('allows access when role is sufficient', () => {
+  it('allows access when role is sufficient', async () => {
     useStore.getState().setAuth(makeMockJwt(), { ...mockUser, role: 'admin' });
     renderWithRouter(
       <Routes>
@@ -259,10 +278,10 @@ describe('AuthGuard', () => {
         <Route path="/login" element={<div>Login</div>} />
       </Routes>
     );
-    expect(screen.getByText('Admin Content')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Admin Content')).toBeInTheDocument());
   });
 
-  it('superadmin can access admin-required routes', () => {
+  it('superadmin can access admin-required routes', async () => {
     useStore.getState().setAuth(makeMockJwt(), { ...mockUser, role: 'superadmin' });
     renderWithRouter(
       <Routes>
@@ -270,10 +289,10 @@ describe('AuthGuard', () => {
         <Route path="/login" element={<div>Login</div>} />
       </Routes>
     );
-    expect(screen.getByText('Admin Content')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Admin Content')).toBeInTheDocument());
   });
 
-  it('user role cannot access trader-required routes', () => {
+  it('user role cannot access trader-required routes', async () => {
     useStore.getState().setAuth(makeMockJwt(), { ...mockUser, role: 'user' });
     renderWithRouter(
       <Routes>
@@ -281,10 +300,10 @@ describe('AuthGuard', () => {
         <Route path="/login" element={<div>Login</div>} />
       </Routes>
     );
-    expect(screen.getByText('Access Denied')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Access Denied')).toBeInTheDocument());
   });
 
-  it('trader can access trader-required routes', () => {
+  it('trader can access trader-required routes', async () => {
     useStore.getState().setAuth(makeMockJwt(), { ...mockUser, role: 'trader' });
     renderWithRouter(
       <Routes>
@@ -292,10 +311,10 @@ describe('AuthGuard', () => {
         <Route path="/login" element={<div>Login</div>} />
       </Routes>
     );
-    expect(screen.getByText('Trader Content')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Trader Content')).toBeInTheDocument());
   });
 
-  it('renders multiple children', () => {
+  it('renders multiple children', async () => {
     useStore.getState().setAuth(makeMockJwt(), mockUser);
     renderWithRouter(
       <Routes>
@@ -308,11 +327,11 @@ describe('AuthGuard', () => {
         <Route path="/login" element={<div>Login</div>} />
       </Routes>
     );
-    expect(screen.getByText('Child 1')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Child 1')).toBeInTheDocument());
     expect(screen.getByText('Child 2')).toBeInTheDocument();
   });
 
-  it('access denied message mentions required role', () => {
+  it('access denied message mentions required role', async () => {
     useStore.getState().setAuth(makeMockJwt(), { ...mockUser, role: 'user' });
     renderWithRouter(
       <Routes>
@@ -320,10 +339,10 @@ describe('AuthGuard', () => {
         <Route path="/login" element={<div>Login</div>} />
       </Routes>
     );
-    expect(screen.getByText(/superadmin/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/superadmin/i)).toBeInTheDocument());
   });
 
-  it('no requiredRole allows any authenticated user', () => {
+  it('no requiredRole allows any authenticated user', async () => {
     useStore.getState().setAuth(makeMockJwt(), { ...mockUser, role: 'user' });
     renderWithRouter(
       <Routes>
@@ -331,7 +350,7 @@ describe('AuthGuard', () => {
         <Route path="/login" element={<div>Login</div>} />
       </Routes>
     );
-    expect(screen.getByText('Open Content')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Open Content')).toBeInTheDocument());
   });
 
   it('redirects expired token to /login', () => {
