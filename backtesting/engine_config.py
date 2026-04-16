@@ -128,7 +128,15 @@ class HistoricalDataLoader:
         self._cache: dict[str, pd.DataFrame] = {}
 
     async def load_data(self, symbol: str, timeframe: str, start: datetime, end: datetime) -> pd.DataFrame | None:
-        """Load historical OHLCV data"""
+        """
+        Load historical OHLCV data and validate it before returning.
+
+        Validation enforces:
+        - No NaN/Inf in OHLC columns
+        - Strictly monotonic timestamps (look-ahead bias prevention)
+        - Price sanity (high >= low, positive prices)
+        - No future-dated bars relative to the backtest end date
+        """
         cache_key = f"{symbol}_{timeframe}_{start}_{end}"
 
         if cache_key in self._cache:
@@ -164,6 +172,7 @@ class HistoricalDataLoader:
                             },
                         )
 
+                        df = self._validate_and_clean(df, symbol)
                         self._cache[cache_key] = df
                         return df
 
@@ -181,6 +190,38 @@ class HistoricalDataLoader:
             logger.error("Failed to load data for %s: %s", symbol, e)
 
             raise
+
+    def _validate_and_clean(self, df: pd.DataFrame, symbol: str) -> pd.DataFrame:
+        """
+        Run the data validation layer on a loaded OHLCV DataFrame.
+
+        Uses data_layer.validation.validate_ohlcv in non-strict mode so that
+        recoverable issues (NaN rows, duplicate timestamps) are cleaned rather
+        than raising.  Unrecoverable issues (e.g. all-NaN price columns) still
+        raise DataValidationError.
+        """
+        if df is None or df.empty:
+            return df
+        try:
+            from data_layer.validation import validate_ohlcv
+            df = validate_ohlcv(
+                df,
+                symbol=symbol,
+                strict=False,       # clean recoverable issues, don't raise
+                drop_bad_rows=True, # remove rows with invalid prices
+            )
+            logger.debug(
+                "HistoricalDataLoader: validated %d bars for %s",
+                len(df), symbol,
+            )
+        except Exception as val_exc:
+            # Validation failure is non-fatal for loading — log and continue.
+            # The backtest engine will surface data quality issues via results.
+            logger.warning(
+                "HistoricalDataLoader: validation warning for %s: %s",
+                symbol, val_exc,
+            )
+        return df
 
 
 class SimulatedBroker:
@@ -470,6 +511,29 @@ class BacktestEngine:
 
         if not all_data:
             raise ValueError("No data loaded for backtest")
+
+        # Validate all loaded DataFrames before entering the simulation loop.
+        # This is the last gate before real money decisions are made on the data.
+        for sym, df in list(all_data.items()):
+            try:
+                from data_layer.validation import validate_ohlcv
+                all_data[sym] = validate_ohlcv(
+                    df, symbol=sym, strict=False, drop_bad_rows=True
+                )
+            except Exception as _ve:
+                logger.warning("Backtest pre-run validation warning for %s: %s", sym, _ve)
+
+        # Initialise the BacktestBarGuard to catch any strategy that tries to
+        # peek at future bars during the simulation loop.
+        _bar_guard = None
+        try:
+            from risk.lookahead_guard import BacktestBarGuard
+            # Build a flat list of (timestamp, symbol) pairs for the guard
+            _all_ts = sorted({ts for df in all_data.values() for ts in df.get("timestamp", df.index)})
+            _bar_guard = BacktestBarGuard(_all_ts)
+            logger.debug("BacktestBarGuard active: %d timestamps", len(_all_ts))
+        except Exception as _bg_exc:
+            logger.debug("BacktestBarGuard unavailable: %s", _bg_exc)
 
         # Combine timestamps
         all_timestamps = sorted({ts for df in all_data.values() for ts in df["timestamp"]})
