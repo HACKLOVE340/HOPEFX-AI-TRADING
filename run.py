@@ -49,10 +49,17 @@ import contextlib
 import json
 import logging
 import os
+import platform
 import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+# ── Windows asyncio/Redis compatibility ───────────────────────────────────────
+# ProactorEventLoop (Windows default in Python 3.8+) is incompatible with
+# redis-py asyncio and aiohttp. Force SelectorEventLoop on Windows.
+if platform.system() == "Windows":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())  # type: ignore[attr-defined]
 
 # ── logging setup (overridden by --log flag after arg parse) ──────────────────
 logging.basicConfig(
