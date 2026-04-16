@@ -48,6 +48,7 @@ pandas>=2.1.0
 numpy>=1.26.0
 requests>=2.32.4  # CVE-2024-47081, CVE-2024-35195, CVE-2026-25645: use latest available
 aiohttp>=3.12.15  # CVE-2025-69223/69224/69225/69226/69227/69228/69229/69230/53643: fixed in 3.12.x
+certifi>=2024.2.2  # up-to-date CA bundle for SSL verification in aiohttp/httpx
 vaderSentiment>=3.3.2
 textblob>=0.18.0,<1.0.0          # secondary sentiment scorer (news/sentiment.py)
 openai>=1.0.0

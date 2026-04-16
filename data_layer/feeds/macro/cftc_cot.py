@@ -57,12 +57,25 @@ import asyncio
 import io
 import logging
 import os
+import ssl
 import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import aiohttp
 import pandas as pd
+
+try:
+    import certifi as _certifi
+
+    def _ssl_context() -> ssl.SSLContext:
+        """Return an SSLContext loaded with certifi's CA bundle."""
+        ctx = ssl.create_default_context(cafile=_certifi.where())
+        return ctx
+
+except ImportError:  # certifi not installed — fall back to system CAs
+    def _ssl_context() -> ssl.SSLContext:  # type: ignore[misc]
+        return ssl.create_default_context()
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +127,11 @@ class CFTCCOTFeed:
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession(timeout=_HTTP_TIMEOUT)
+            connector = aiohttp.TCPConnector(ssl=_ssl_context())
+            self._session = aiohttp.ClientSession(
+                timeout=_HTTP_TIMEOUT,
+                connector=connector,
+            )
         return self._session
 
     async def close(self) -> None:
