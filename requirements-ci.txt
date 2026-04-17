@@ -14,7 +14,7 @@
 # Used by .github/workflows/ci.yml and .github/workflows/tests.yml.
 
 # ── Build toolchain (CVE-2023-5752, CVE-2025-8869, CVE-2026-1703, CVE-2026-24049) ──
-pip>=25.3
+pip>=26.0.1  # CVE-2026-1703 fixed in 26.0+
 wheel>=0.46.2
 
 # ── Web framework ─────────────────────────────────────────────────────────────
