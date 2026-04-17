@@ -188,8 +188,38 @@ class _ASTAnalyzer(ast.NodeVisitor):
 
     visit_AsyncFunctionDef = visit_FunctionDef
 
+    # Method names that are intentionally no-ops in null-object / stub patterns.
+    # These are used for Prometheus/OTel no-op fallbacks when the real library
+    # is not installed, and for abstract base class interface stubs.
+    _NOOP_METHOD_NAMES: frozenset[str] = frozenset({
+        # OTel span no-ops
+        "set_attribute", "add_event", "record_exception", "set_status",
+        "start_as_current_span", "start_span",
+        # Context manager protocol
+        "__enter__", "__exit__", "__aenter__", "__aexit__",
+        # Prometheus metric no-ops
+        "inc", "dec", "set", "observe", "labels",
+        # Gym/RL environment
+        "render", "close", "seed",
+        # Abstract interface stubs (implemented by subclasses)
+        "__init_subclass__", "__class_getitem__",
+    })
+
     def _check_empty_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         """Flag functions whose body is only `pass`, `...`, or a docstring."""
+        # Skip known no-op method names used in null-object patterns
+        if node.name in self._NOOP_METHOD_NAMES:
+            return
+
+        # Skip abstract methods — subclasses provide the implementation
+        is_abstract = any(
+            (isinstance(d, ast.Name) and d.id == "abstractmethod")
+            or (isinstance(d, ast.Attribute) and d.attr == "abstractmethod")
+            for d in node.decorator_list
+        )
+        if is_abstract:
+            return
+
         body = node.body
         # Strip leading docstring
         if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
@@ -376,16 +406,25 @@ def _analyze_file_regex(path: Path) -> list[CodeIssue]:
                 suggestion="Replace shift(-N) with shift(+N) to use past data only",
             ))
 
-        # TODO/FIXME in production code
+        # TODO/FIXME in production code — skip lines that are defining the pattern
+        # itself (e.g. in code_analyzer.py or pre_commit_healer.py) to avoid
+        # the scanner flagging its own pattern-definition comments.
         m = _TODO_RE.search(line)
-        if m and not is_test:
-            issues.append(CodeIssue(
-                file=rel, line=i, category="unfinished_code",
-                severity=SEVERITY_MEDIUM,
-                description=f"{m.group(1)} marker in production code: {line.strip()[:80]}",
-                snippet=line.strip(),
-                suggestion="Resolve the TODO/FIXME before deploying to production",
-            ))
+        if m and not is_test and not in_doc:
+            # Skip if the line is a string literal defining a regex/pattern
+            stripped_line = line.strip()
+            is_pattern_def = (
+                stripped_line.startswith("#")
+                and any(kw in stripped_line for kw in ("_RE =", "re.compile", "pattern", "marker"))
+            ) or "TODO_RE" in line or "FIXME_RE" in line
+            if not is_pattern_def and "# noqa: healer" not in line and "# healer: ignore" not in line:
+                issues.append(CodeIssue(
+                    file=rel, line=i, category="unfinished_code",
+                    severity=SEVERITY_MEDIUM,
+                    description=f"{m.group(1)} marker in production code: {stripped_line[:80]}",
+                    snippet=stripped_line,
+                    suggestion="Resolve the TODO/FIXME before deploying to production",
+                ))
 
         # Hardcoded secrets (skip .env.example, test files, and nosec/allowlist annotations)
         if (

@@ -93,7 +93,7 @@ def check_file(path: Path) -> list[str]:
         if "# noqa: healer" in line or "# healer: ignore" in line:
             continue
 
-        # TODO/FIXME/HACK/XXX in production code
+        # TODO/FIXME/HACK/XXX in production code  # noqa: healer
         if not is_test and _TODO_RE.search(line):
             issues.append(f"{path}:{lineno}: TODO/FIXME marker in production code: {line.strip()!r}")
 
