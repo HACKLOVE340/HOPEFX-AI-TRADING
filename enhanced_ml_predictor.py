@@ -304,95 +304,102 @@ class AdvancedFeatureEngineer:
 
         # Volatility features (multiple timeframes)
         for w in self.windows:
-            # Realized volatility
-            features[f"volatility_{w}"] = features["returns"].rolling(w).std() * np.sqrt(252)
+            # Realized volatility — min_periods avoids all-NaN leading rows
+            features[f"volatility_{w}"] = features["returns"].rolling(w, min_periods=2).std().fillna(0.0) * np.sqrt(252)
 
             # Parkinson volatility (using high-low)
             if "high" in df.columns and "low" in df.columns:
-                log_hl = np.log(df["high"] / df["low"])
-                features[f"parkinson_vol_{w}"] = np.sqrt(log_hl.rolling(w).mean() / (4 * np.log(2)))
+                high_safe = df["high"].clip(lower=1e-10)
+                low_safe = df["low"].clip(lower=1e-10)
+                log_hl = np.log(high_safe / low_safe).fillna(0.0)
+                pk_raw = log_hl.rolling(w, min_periods=1).mean() / (4 * np.log(2))
+                features[f"parkinson_vol_{w}"] = np.sqrt(pk_raw.clip(lower=0.0))
 
             # Garman-Klass volatility (open-high-low-close)
-            # The inner term can be negative when low/open is far from 1, so
-            # clip to 0 before sqrt to avoid NaN propagation.
             if all(c in df.columns for c in ["open", "high", "low"]):
-                log_ho = np.log(df["high"] / df["open"])
-                log_lo = np.log(df["low"] / df["open"])
+                open_safe = df["open"].clip(lower=1e-10)
+                high_safe = df["high"].clip(lower=1e-10)
+                low_safe = df["low"].clip(lower=1e-10)
+                log_ho = np.log(high_safe / open_safe).fillna(0.0)
+                log_lo = np.log(low_safe / open_safe).fillna(0.0)
                 gk_inner = (0.5 * log_ho**2 - (2 * np.log(2) - 1) * log_lo**2).clip(lower=0)
-                features[f"garman_klass_{w}"] = np.sqrt(gk_inner).rolling(w).mean()
+                features[f"garman_klass_{w}"] = np.sqrt(gk_inner).rolling(w, min_periods=1).mean()
 
         # Technical indicators
         for w in self.windows:
-            # Moving averages and ratios
-            features[f"ma_{w}"] = df["close"].rolling(w).mean()
-            features[f"ma_ratio_{w}"] = df["close"] / features[f"ma_{w}"]
-            features[f"dist_to_ma_{w}"] = (df["close"] - features[f"ma_{w}"]) / features[f"ma_{w}"]
+            # Moving averages and ratios — min_periods=1 avoids leading NaN
+            features[f"ma_{w}"] = df["close"].rolling(w, min_periods=1).mean()
+            features[f"ma_ratio_{w}"] = (df["close"] / features[f"ma_{w}"].replace(0, np.nan)).fillna(1.0)
+            features[f"dist_to_ma_{w}"] = ((df["close"] - features[f"ma_{w}"]) / features[f"ma_{w}"].replace(0, np.nan)).fillna(0.0)
 
             # Exponential moving average
-            features[f"ema_{w}"] = df["close"].ewm(span=w, adjust=False).mean()
+            features[f"ema_{w}"] = df["close"].ewm(span=w, adjust=False, min_periods=1).mean()
 
             # Bollinger Bands
-            rolling_std = df["close"].rolling(w).std()
+            rolling_std = df["close"].rolling(w, min_periods=2).std().fillna(0.0)
             features[f"bb_upper_{w}"] = features[f"ma_{w}"] + 2 * rolling_std
             features[f"bb_lower_{w}"] = features[f"ma_{w}"] - 2 * rolling_std
-            features[f"bb_position_{w}"] = (df["close"] - features[f"bb_lower_{w}"]) / (
-                features[f"bb_upper_{w}"] - features[f"bb_lower_{w}"]
-            )
+            bb_range = (features[f"bb_upper_{w}"] - features[f"bb_lower_{w}"]).replace(0, np.nan)
+            features[f"bb_position_{w}"] = ((df["close"] - features[f"bb_lower_{w}"]) / bb_range).fillna(0.5)
 
             # RSI
             delta = df["close"].diff()
-            gain = delta.where(delta > 0, 0).rolling(w).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(w).mean()
-            rs = gain / loss
-            features[f"rsi_{w}"] = 100 - (100 / (1 + rs))
+            gain = delta.where(delta > 0, 0).rolling(w, min_periods=1).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(w, min_periods=1).mean()
+            rs = gain / (loss + 1e-10)
+            features[f"rsi_{w}"] = (100 - (100 / (1 + rs))).fillna(50.0)
 
             # MACD
-            ema_fast = df["close"].ewm(span=w // 2).mean()
-            ema_slow = df["close"].ewm(span=w).mean()
+            ema_fast = df["close"].ewm(span=w // 2, min_periods=1).mean()
+            ema_slow = df["close"].ewm(span=w, min_periods=1).mean()
             features[f"macd_{w}"] = ema_fast - ema_slow
-            features[f"macd_signal_{w}"] = features[f"macd_{w}"].ewm(span=w // 3).mean()
+            features[f"macd_signal_{w}"] = features[f"macd_{w}"].ewm(span=w // 3, min_periods=1).mean()
             features[f"macd_hist_{w}"] = features[f"macd_{w}"] - features[f"macd_signal_{w}"]
 
             # Stochastic
-            low_min = df["low"].rolling(w).min()
-            high_max = df["high"].rolling(w).max()
-            features[f"stoch_k_{w}"] = 100 * (df["close"] - low_min) / (high_max - low_min)
-            features[f"stoch_d_{w}"] = features[f"stoch_k_{w}"].rolling(3).mean()
+            low_min = df["low"].rolling(w, min_periods=1).min()
+            high_max = df["high"].rolling(w, min_periods=1).max()
+            hl_range = (high_max - low_min).replace(0, np.nan)
+            features[f"stoch_k_{w}"] = (100 * (df["close"] - low_min) / hl_range).fillna(50.0)
+            features[f"stoch_d_{w}"] = features[f"stoch_k_{w}"].rolling(3, min_periods=1).mean()
 
             # Williams %R
-            features[f"williams_r_{w}"] = -100 * (high_max - df["close"]) / (high_max - low_min)
+            features[f"williams_r_{w}"] = (-100 * (high_max - df["close"]) / hl_range).fillna(-50.0)
 
             # CCI (Commodity Channel Index)
             tp = (df["high"] + df["low"] + df["close"]) / 3
-            features[f"cci_{w}"] = (tp - tp.rolling(w).mean()) / (0.015 * tp.rolling(w).std())
+            tp_mean = tp.rolling(w, min_periods=1).mean()
+            tp_std = tp.rolling(w, min_periods=1).std().fillna(0.0)
+            features[f"cci_{w}"] = ((tp - tp_mean) / (0.015 * tp_std + 1e-10)).fillna(0.0)
 
             # ATR (Average True Range)
             tr1 = df["high"] - df["low"]
             tr2 = abs(df["high"] - df["close"].shift())
             tr3 = abs(df["low"] - df["close"].shift())
             tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-            features[f"atr_{w}"] = tr.rolling(w).mean()
-            features[f"atr_ratio_{w}"] = features[f"atr_{w}"] / df["close"]
+            features[f"atr_{w}"] = tr.rolling(w, min_periods=1).mean()
+            features[f"atr_ratio_{w}"] = (features[f"atr_{w}"] / df["close"].replace(0, np.nan)).fillna(0.0)
 
         # Volume features
         if "volume" in df.columns:
-            features["volume_ma"] = df["volume"].rolling(20).mean()
-            features["volume_std"] = df["volume"].rolling(20).std()
-            features["volume_ratio"] = df["volume"] / features["volume_ma"]
-            features["volume_zscore"] = (df["volume"] - features["volume_ma"]) / features["volume_std"]
+            features["volume_ma"] = df["volume"].rolling(20, min_periods=1).mean()
+            features["volume_std"] = df["volume"].rolling(20, min_periods=2).std().fillna(0.0)
+            features["volume_ratio"] = (df["volume"] / features["volume_ma"].replace(0, np.nan)).fillna(1.0)
+            features["volume_zscore"] = ((df["volume"] - features["volume_ma"]) / (features["volume_std"] + 1e-10)).fillna(0.0)
 
             # Volume-weighted price metrics
-            features["vwma_20"] = (df["close"] * df["volume"]).rolling(20).sum() / df["volume"].rolling(20).sum()
-            features["vwma_ratio"] = df["close"] / features["vwma_20"]
+            vol_sum = df["volume"].rolling(20, min_periods=1).sum().replace(0, np.nan)
+            features["vwma_20"] = ((df["close"] * df["volume"]).rolling(20, min_periods=1).sum() / vol_sum).fillna(df["close"])
+            features["vwma_ratio"] = (df["close"] / features["vwma_20"].replace(0, np.nan)).fillna(1.0)
 
             # OBV (On-Balance Volume)
-            features["obv"] = (np.sign(df["close"].diff()) * df["volume"]).cumsum()
-            features["obv_ma"] = features["obv"].rolling(20).mean()
+            features["obv"] = (np.sign(df["close"].diff()) * df["volume"]).fillna(0.0).cumsum()
+            features["obv_ma"] = features["obv"].rolling(20, min_periods=1).mean()
 
             # Money Flow
             typical_price = (df["high"] + df["low"] + df["close"]) / 3
             money_flow = typical_price * df["volume"]
-            features["mfi"] = money_flow.rolling(14).sum()  # Simplified MFI
+            features["mfi"] = money_flow.rolling(14, min_periods=1).sum()  # Simplified MFI
 
         # Price action features
         features["body"] = (df["close"] - df["open"]) / df["open"]
@@ -408,14 +415,16 @@ class AdvancedFeatureEngineer:
 
         # Trend strength
         for w in [20, 50, 100]:
-            features[f"trend_strength_{w}"] = (df["close"] - df["close"].shift(w)) / (
-                df["close"].rolling(w).std() * np.sqrt(w)
-            )
+            roll_std = df["close"].rolling(w, min_periods=2).std().fillna(0.0)
+            denom = (roll_std * np.sqrt(w)).replace(0, np.nan)
+            features[f"trend_strength_{w}"] = ((df["close"] - df["close"].shift(w)) / denom).fillna(0.0)
 
         # Mean reversion features
         for w in [20, 50]:
-            features[f"zscore_{w}"] = (df["close"] - df["close"].rolling(w).mean()) / df["close"].rolling(w).std()
-            features[f"zscore_mean_{w}"] = features[f"zscore_{w}"].rolling(w).mean()
+            roll_mean = df["close"].rolling(w, min_periods=1).mean()
+            roll_std = df["close"].rolling(w, min_periods=2).std().fillna(0.0)
+            features[f"zscore_{w}"] = ((df["close"] - roll_mean) / (roll_std + 1e-10)).fillna(0.0)
+            features[f"zscore_mean_{w}"] = features[f"zscore_{w}"].rolling(w, min_periods=1).mean()
 
         # Autocorrelation features
         for lag in [1, 2, 3, 5, 10]:
@@ -979,7 +988,7 @@ class DeepLearningModel:
         confidence = float(max(direction_probs))
 
         # Uncertainty decomposition
-        epistemic = float(stats["direction"]["std"].mean())  # Model uncertainty
+        epistemic = float(np.nan_to_num(stats["direction"]["std"].mean(), nan=0.0))  # Model uncertainty
         aleatoric = float(stats["volatility"]["mean"][0][0])  # Data noise
 
         inference_time = (datetime.now(UTC) - start_time).total_seconds() * 1000
@@ -1217,12 +1226,14 @@ class EnsemblePredictor:
             return
 
         # Softmax weighting: exp(score) / sum(exp(scores))
-        # Subtract max for numerical stability
+        # Subtract max for numerical stability; guard against NaN scores
         names = list(scores.keys())
         vals = np.array([scores[n] for n in names], dtype=float)
+        vals = np.nan_to_num(vals, nan=0.0)
         vals -= vals.max()
         exp_vals = np.exp(vals)
-        softmax_weights = exp_vals / exp_vals.sum()
+        exp_sum = exp_vals.sum()
+        softmax_weights = exp_vals / exp_sum if exp_sum > 0 else np.ones(len(vals)) / len(vals)
 
         self.weights = {name: float(w) for name, w in zip(names, softmax_weights, strict=False)}
         logger.info("Optimized weights (softmax over val accuracy): %s", self.weights)
