@@ -355,7 +355,7 @@ async def _check_db_migrations() -> ComponentStatus:
         from alembic.config import Config as AlembicConfig  # type: ignore[import]
         from alembic.runtime.migration import MigrationContext  # type: ignore[import]
         from alembic.script import ScriptDirectory  # type: ignore[import]
-        from sqlalchemy import create_engine, text  # type: ignore[import]
+        from sqlalchemy import create_engine  # type: ignore[import]
 
         db_url = os.getenv("DATABASE_URL", "sqlite:///hopefx.db")
         # Normalise async drivers to sync for Alembic
