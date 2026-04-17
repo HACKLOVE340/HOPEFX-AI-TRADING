@@ -534,8 +534,8 @@ class MobileAPIServer:
         @self.app.post("/api/v2/trades/{trade_id}/close", tags=["Trading"])
         async def close_trade(
             trade_id: str,
+            background_tasks: BackgroundTasks,
             user_id: str = Depends(self._verify_token),
-            background_tasks: BackgroundTasks | None = None,
         ):
             """Close specific trade"""
 
