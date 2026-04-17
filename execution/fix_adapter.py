@@ -535,15 +535,15 @@ class FIXAdapter:
     # Credential validation
     # ------------------------------------------------------------------
 
-    _PLACEHOLDER_VALUES = frozenset(
+    _PLACEHOLDER_VALUES = frozenset(  # noqa: healer
         {
             "CLIENT",
             "BROKER",
             "HOPEFX",
-            "CHANGE_ME",
-            "<CHANGE_ME_YOUR_SENDER_COMP_ID>",
-            "<CHANGE_ME_BROKER_TARGET_COMP_ID>",
-            "<CHANGE_ME_BROKER_FIX_HOST>",
+            "CHANGE_ME",  # noqa: healer
+            "<CHANGE_ME_YOUR_SENDER_COMP_ID>",  # noqa: healer
+            "<CHANGE_ME_BROKER_TARGET_COMP_ID>",  # noqa: healer
+            "<CHANGE_ME_BROKER_FIX_HOST>",  # noqa: healer
             "",
         }
     )

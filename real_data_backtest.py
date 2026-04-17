@@ -368,7 +368,7 @@ def walk_forward_backtest(
     test_start_capital = float(train_equity["equity"].iloc[-1])
     test_equity, test_pnls = run_backtest(test_df, test_start_capital)
 
-    full_equity = pd.concat([train_equity, test_equity]).fillna(method="ffill").fillna(0.0)
+    full_equity = pd.concat([train_equity, test_equity]).ffill().fillna(0.0)
 
     # Trade-level Sharpe (primary — corrected)
     train_sharpe, train_se = trade_level_sharpe(train_pnls)

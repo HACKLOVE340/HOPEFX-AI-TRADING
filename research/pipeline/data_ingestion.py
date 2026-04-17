@@ -311,7 +311,7 @@ def fetch_intraday(
         logger.warning("No intraday data for %s @ %s", ticker, interval)
         return pd.DataFrame()
 
-    df = pd.concat(chunks).fillna(method="ffill").fillna(0.0)
+    df = pd.concat(chunks).ffill().fillna(0.0)
     df = _flatten_columns(df)
     df.index = pd.to_datetime(df.index, utc=True)
     df = df[~df.index.duplicated(keep="last")].sort_index()

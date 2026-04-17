@@ -112,7 +112,7 @@ def download_data(
             except Exception as exc:
                 logger.warning("Chunk %s→%s failed: %s", cursor.date(), chunk_end.date(), exc)
             cursor = chunk_end
-        data = pd.concat(chunks).fillna(method="ffill").fillna(0.0) if chunks else pd.DataFrame()
+        data = pd.concat(chunks).ffill().fillna(0.0) if chunks else pd.DataFrame()
     else:
         data = yf.download(
             symbol,
