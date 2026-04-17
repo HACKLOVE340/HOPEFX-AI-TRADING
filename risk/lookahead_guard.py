@@ -232,7 +232,7 @@ def no_lookahead_context(label: str = "") -> Generator[None, None, None]:
     Usage::
 
         with no_lookahead_context("feature_engineering"):
-            features = compute_features(df)  # shift(-N) raises here
+            features = compute_features(df)  # shift(-N) raises here  # noqa: lookahead-ok
 
         # Label creation is allowed outside the guard:
         labels = df["close"].shift(-1) > df["close"]

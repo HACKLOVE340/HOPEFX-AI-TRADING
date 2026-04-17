@@ -312,6 +312,39 @@ def _analyze_file_ast(path: Path) -> list[CodeIssue]:
     return analyzer.issues
 
 
+def _build_docstring_lines(lines: list[str]) -> set[int]:
+    """Return the set of 1-based line numbers that are inside triple-quoted strings.
+
+    This prevents the regex scanner from flagging code examples in docstrings
+    (e.g. shift(-1) in a docstring showing what NOT to do).
+    """
+    in_docstring = False
+    fence: str = ""
+    docstring_lines: set[int] = set()
+    for i, raw in enumerate(lines, start=1):
+        stripped = raw.strip()
+        if not in_docstring:
+            # Detect opening triple-quote (may open and close on same line)
+            for q in ('"""', "'''"):
+                if q in stripped:
+                    count = stripped.count(q)
+                    if count >= 2:
+                        # Opens and closes on same line — mark and move on
+                        docstring_lines.add(i)
+                        break
+                    else:
+                        in_docstring = True
+                        fence = q
+                        docstring_lines.add(i)
+                        break
+        else:
+            docstring_lines.add(i)
+            if fence in stripped:
+                in_docstring = False
+                fence = ""
+    return docstring_lines
+
+
 def _analyze_file_regex(path: Path) -> list[CodeIssue]:
     """Run regex-based analysis on a single file."""
     rel = _rel(path)
@@ -319,10 +352,22 @@ def _analyze_file_regex(path: Path) -> list[CodeIssue]:
     issues: list[CodeIssue] = []
     is_test = "/test" in rel or rel.startswith("test")
 
+    # Pre-compute which lines are inside docstrings so we don't flag examples
+    docstring_lines = _build_docstring_lines(lines)
+
     for i, line in enumerate(lines, start=1):
+        # Skip lines inside docstrings — they may contain intentional examples
+        in_doc = i in docstring_lines
+
         # Look-ahead bias (regex catches string-based column access too)
         # Suppress when annotated with "# noqa: lookahead-ok" (intentional label creation)
-        if _LOOKAHEAD_RE.search(line) and "# noqa" not in line and "nosec" not in line and "lookahead-ok" not in line:
+        if (
+            not in_doc
+            and _LOOKAHEAD_RE.search(line)
+            and "# noqa" not in line
+            and "nosec" not in line
+            and "lookahead-ok" not in line
+        ):
             issues.append(CodeIssue(
                 file=rel, line=i, category="lookahead_bias",
                 severity=SEVERITY_CRITICAL,
@@ -401,21 +446,38 @@ def _analyze_file_regex(path: Path) -> list[CodeIssue]:
                 ))
 
     # ── Broken router detection (file-level) ─────────────────────────────────
-    # A router defined in a module but never referenced in router_registry.py
-    # or app.py is a dead endpoint — silently unreachable.
+    # A router defined in a module but never referenced in router_registry.py,
+    # app.py, or a package __init__.py (via include_router) is a dead endpoint.
     has_router_def = any(_ROUTER_DEF_RE.search(ln) for ln in lines)
     if has_router_def and not is_test:
-        # Check if this file is imported by the registry
+        # Check if this file is imported by the registry, app, or a parent package
         registry_path = PROJECT_ROOT / "core" / "router_registry.py"
         app_path = PROJECT_ROOT / "app.py"
         module_name = rel.replace("/", ".").replace(".py", "")
         short_name = Path(rel).stem  # e.g. "billing" from "api/billing.py"
+        # For package __init__.py files, also check the package directory name
+        # e.g. "api/superadmin/__init__.py" → package_name = "superadmin"
+        package_name = Path(rel).parent.name if short_name == "__init__" else ""
+
+        # Also check the package __init__.py — sub-routers are often included
+        # via router.include_router() in the parent package rather than directly
+        # in router_registry.py (e.g. api/superadmin/*.py → api/superadmin/__init__.py)
+        parent_init = (PROJECT_ROOT / rel).parent / "__init__.py"
 
         registered = False
-        for reg_file in (registry_path, app_path):
+        check_files = [registry_path, app_path]
+        if parent_init.exists() and parent_init != (PROJECT_ROOT / rel):
+            check_files.append(parent_init)
+
+        for reg_file in check_files:
             if reg_file.exists():
                 reg_text = reg_file.read_text(encoding="utf-8", errors="replace")
-                if module_name in reg_text or short_name in reg_text or rel in reg_text:
+                if (
+                    module_name in reg_text
+                    or rel in reg_text
+                    or (short_name != "__init__" and short_name in reg_text)
+                    or (package_name and package_name in reg_text)
+                ):
                     registered = True
                     break
 
@@ -424,15 +486,16 @@ def _analyze_file_regex(path: Path) -> list[CodeIssue]:
                 file=rel, line=1, category="broken_router",
                 severity=SEVERITY_HIGH,
                 description=(
-                    f"Router defined in {rel} but not found in core/router_registry.py or app.py. "
-                    "This router's endpoints are unreachable."
+                    f"Router defined in {rel} but not found in core/router_registry.py, "
+                    "app.py, or the package __init__.py. This router's endpoints are unreachable."
                 ),
                 snippet=next(
                     (ln.strip() for ln in lines if _ROUTER_DEF_RE.search(ln)), ""
                 ),
                 suggestion=(
                     "Import this router in core/router_registry.py and call "
-                    "_include_router_deduped(app, router) to register its endpoints."
+                    "_include_router_deduped(app, router), or include it via "
+                    "router.include_router() in the package __init__.py."
                 ),
             ))
 
