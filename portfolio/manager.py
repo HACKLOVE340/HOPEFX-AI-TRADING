@@ -105,8 +105,8 @@ class PortfolioManager:
             # iterative clipping (guaranteed to converge in ≤ n iterations).
             w = self._project_simplex_bounded(raw, max_weight)
 
-            port_ret = float(np.dot(w, mu))
-            port_vol = float(np.sqrt(max(w @ cov @ w, 0.0)))
+            port_ret = float(np.nan_to_num(np.dot(w, mu), nan=0.0))
+            port_vol = float(np.sqrt(max(float(np.nan_to_num(w @ cov @ w, nan=0.0)), 0.0)))
             if port_vol == 0:
                 continue
             sharpe = port_ret / port_vol
