@@ -5,7 +5,7 @@
  * No synthetic/random data is used.
  */
 import { useEffect, useRef, useState } from 'react'
-import { createChart, IChartApi, AreaData, Time } from 'lightweight-charts'
+import { createChart, IChartApi, AreaData, Time, AreaSeries } from 'lightweight-charts'
 
 interface EquityPoint {
   time: number
@@ -39,7 +39,7 @@ export function EquityChart() {
       },
     })
 
-    const series = chart.addAreaSeries({
+    const series = chart.addSeries(AreaSeries, {
       lineColor: '#f59e0b',
       topColor: 'rgba(245, 158, 11, 0.4)',
       bottomColor: 'rgba(245, 158, 11, 0.0)',

@@ -6,7 +6,7 @@
  * No synthetic/random data is used.
  */
 import { useEffect, useRef, useState } from 'react'
-import { createChart, IChartApi, AreaData, Time } from 'lightweight-charts'
+import { createChart, IChartApi, AreaData, Time, AreaSeries } from 'lightweight-charts'
 
 interface DrawdownPoint {
   time: number
@@ -39,7 +39,7 @@ export function DrawdownChart() {
       },
     })
 
-    const series = chart.addAreaSeries({
+    const series = chart.addSeries(AreaSeries, {
       lineColor: '#ef4444',
       topColor: 'rgba(239, 68, 68, 0.0)',
       bottomColor: 'rgba(239, 68, 68, 0.4)',

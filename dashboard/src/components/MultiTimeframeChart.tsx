@@ -11,6 +11,7 @@ import {
   ISeriesApi,
   CrosshairMode,
   Time,
+  CandlestickSeries,
 } from 'lightweight-charts'
 
 const TIMEFRAMES = [
@@ -92,7 +93,7 @@ export function MultiTimeframeChart({ symbol = 'XAUUSD' }: { symbol?: string }) 
         width: el.clientWidth,
         height: 220,
       })
-      const s = chart.addCandlestickSeries(CANDLE_OPTS)
+      const s = chart.addSeries(CandlestickSeries, CANDLE_OPTS)
       charts.push(chart)
       series.push(s)
 
