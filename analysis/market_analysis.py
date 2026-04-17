@@ -246,8 +246,8 @@ class MarketRegimeDetector:
         tr2 = abs(high - close.shift(1))
         tr3 = abs(low - close.shift(1))
 
-        true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-        atr = true_range.rolling(window=self.atr_period, min_periods=1).mean()
+        true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1).fillna(0.0)
+        atr = true_range.rolling(window=self.atr_period, min_periods=1).mean().fillna(0.0)
 
         return atr
 
@@ -297,9 +297,9 @@ class MarketRegimeDetector:
         close = prices["close"]
 
         # Multiple MA periods
-        sma_short = close.rolling(10, min_periods=1).mean()
-        sma_medium = close.rolling(20, min_periods=1).mean()
-        sma_long = close.rolling(50, min_periods=1).mean()
+        sma_short = close.rolling(10, min_periods=1).mean().fillna(close)
+        sma_medium = close.rolling(20, min_periods=1).mean().fillna(close)
+        sma_long = close.rolling(50, min_periods=1).mean().fillna(close)
 
         current_price = close.iloc[-1]
         sma_s = sma_short.iloc[-1]
@@ -339,7 +339,7 @@ class MarketRegimeDetector:
             return "unknown"
 
         volume = prices["volume"]
-        avg_volume = volume.rolling(20, min_periods=1).mean()
+        avg_volume = volume.rolling(20, min_periods=1).mean().fillna(volume)
         current_volume = volume.iloc[-1]
         avg_vol = avg_volume.iloc[-1]
 
@@ -580,9 +580,9 @@ class MultiTimeframeAnalyzer:
         close = data["close"]
 
         # Calculate trend
-        sma_fast = close.rolling(10, min_periods=1).mean()
-        sma_slow = close.rolling(20, min_periods=1).mean()
-        sma_50 = close.rolling(50, min_periods=1).mean()
+        sma_fast = close.rolling(10, min_periods=1).mean().fillna(close)
+        sma_slow = close.rolling(20, min_periods=1).mean().fillna(close)
+        sma_50 = close.rolling(50, min_periods=1).mean().fillna(close)
 
         current_price = close.iloc[-1]
 
@@ -619,7 +619,7 @@ class MultiTimeframeAnalyzer:
 
         # Volume trend
         if "volume" in data.columns:
-            vol_sma = data["volume"].rolling(20, min_periods=1).mean()
+            vol_sma = data["volume"].rolling(20, min_periods=1).mean().fillna(data["volume"])
             volume_trend = "increasing" if data["volume"].iloc[-1] > vol_sma.iloc[-1] else "decreasing"
         else:
             volume_trend = "unknown"

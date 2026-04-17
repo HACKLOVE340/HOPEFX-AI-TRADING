@@ -67,8 +67,8 @@ class MultiTimeframeAnalyzer:
     def _analyze_single_timeframe(self, df: pd.DataFrame) -> dict:
         """Analyze single timeframe."""
         # Calculate indicators
-        sma_20 = df["close"].rolling(20).mean().iloc[-1]
-        sma_50 = df["close"].rolling(50).mean().iloc[-1]
+        sma_20 = df["close"].rolling(20, min_periods=1).mean().fillna(df["close"]).iloc[-1]
+        sma_50 = df["close"].rolling(50, min_periods=1).mean().fillna(df["close"]).iloc[-1]
         rsi = self._calculate_rsi(df["close"], 14)
 
         signal = "neutral"
@@ -86,9 +86,9 @@ class MultiTimeframeAnalyzer:
     def _calculate_rsi(self, prices: pd.Series, period: int = 14) -> float:
         """Calculate RSI."""
         delta = prices.diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-        rs = gain / loss
+        gain = (delta.where(delta > 0, 0)).rolling(window=period, min_periods=1).mean().fillna(0.0)
+        loss = (-delta.where(delta < 0, 0)).rolling(window=period, min_periods=1).mean().fillna(0.0)
+        rs = gain / loss.replace(0, 1e-9)
         return float(100 - (100 / (1 + rs)).iloc[-1])
 
     def _aggregate_indicators(self, signals: dict) -> dict:

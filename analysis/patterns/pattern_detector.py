@@ -273,6 +273,8 @@ class AdvancedPatternDetector:
 
                 # Linear regression: slope, intercept, r²
                 def _linreg(x: np.ndarray, y: np.ndarray):
+                    x = np.nan_to_num(x, nan=0.0)
+                    y = np.nan_to_num(y, nan=0.0)
                     if len(x) < 2:
                         return 0.0, float(y.mean()), 0.0
                     xm, ym = x.mean(), y.mean()
@@ -407,6 +409,8 @@ class AdvancedPatternDetector:
                     continue
 
                 def _linreg(x: np.ndarray, y: np.ndarray):
+                    x = np.nan_to_num(x, nan=0.0)
+                    y = np.nan_to_num(y, nan=0.0)
                     if len(x) < 2:
                         return 0.0, float(y.mean()), 0.0
                     xm, ym = x.mean(), y.mean()
