@@ -44,7 +44,7 @@ def _include_router_deduped(app: FastAPI, router: Any, **kwargs: Any) -> None:
     for route in router.routes:
         if not isinstance(route, _APIRoute):
             continue
-        for method in (route.methods or {"GET"}):
+        for method in route.methods or {"GET"}:
             key = (method.upper(), route.path)
             if key in _registered_routes:
                 skipped += 1
@@ -92,7 +92,7 @@ def _include_router_deduped(app: FastAPI, router: Any, **kwargs: Any) -> None:
     # Record all routes now on the app
     for route in app.routes:
         if isinstance(route, _APIRoute):
-            for method in (route.methods or {"GET"}):
+            for method in route.methods or {"GET"}:
                 _registered_routes.add((method.upper(), route.path))
 
 

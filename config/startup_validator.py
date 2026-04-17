@@ -335,9 +335,7 @@ def _validate_stripe(errors: list[str]) -> None:
     elif key.startswith("CHANGE_ME"):
         errors.append("INSECURE STRIPE_SECRET_KEY: placeholder value — replace with a real Stripe key.")
     elif not key.startswith(("sk_live_", "sk_test_")):
-        errors.append(
-            f"INVALID  STRIPE_SECRET_KEY: expected sk_live_... or sk_test_... prefix, got {key[:12]!r}..."
-        )
+        errors.append(f"INVALID  STRIPE_SECRET_KEY: expected sk_live_... or sk_test_... prefix, got {key[:12]!r}...")
 
     if not webhook and not _is_dev():
         logger.warning(

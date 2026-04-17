@@ -585,7 +585,8 @@ def train_final_model(
             gamma=0.05,
             reg_alpha=0.1,
             reg_lambda=1.5,
-            scale_pos_weight=float(np.nan_to_num((y_train == 0).sum(), nan=1.0)) / max(float(np.nan_to_num((y_train == 1).sum(), nan=0.0)), 1),
+            scale_pos_weight=float(np.nan_to_num((y_train == 0).sum(), nan=1.0))
+            / max(float(np.nan_to_num((y_train == 1).sum(), nan=0.0)), 1),
             eval_metric="logloss",
             random_state=42,
             n_jobs=1,
@@ -692,7 +693,7 @@ def _sharpe_se(n_trades: int, sr_est: float = 1.52) -> float:
     """
     if n_trades < 2:
         return float("inf")
-    return float(np.sqrt(max((1 + 0.5 * float(np.nan_to_num(sr_est, nan=0.0))**2) / max(n_trades, 1), 0.0)))
+    return float(np.sqrt(max((1 + 0.5 * float(np.nan_to_num(sr_est, nan=0.0)) ** 2) / max(n_trades, 1), 0.0)))
 
 
 def sharpe_gate_check(n_trades: int, sharpe: float = 1.52, target_n: int = 600) -> dict:
@@ -912,7 +913,8 @@ def oos_eval_advanced(
         gamma=0.05,
         reg_alpha=0.1,
         reg_lambda=1.5,
-        scale_pos_weight=float(np.nan_to_num((y_train == 0).sum(), nan=1.0)) / max(float(np.nan_to_num((y_train == 1).sum(), nan=0.0)), 1),
+        scale_pos_weight=float(np.nan_to_num((y_train == 0).sum(), nan=1.0))
+        / max(float(np.nan_to_num((y_train == 1).sum(), nan=0.0)), 1),
         eval_metric="logloss",
         random_state=42,
         n_jobs=1,

@@ -14,15 +14,13 @@
 			"version": "lts"
 		},
 		// C++ build toolchain for execution/cpp_shim.
-		// cmake + libzmq3-dev installed via the apt feature so privileges
-		// are handled correctly before postCreateCommand runs.
-		"ghcr.io/devcontainers/features/apt-packages:1": {
-			"packages": "cmake,libzmq3-dev,pkg-config,ninja-build"
-		}
+		// cmake + libzmq3-dev installed via postCreateCommand (apt-packages
+		// feature requires GHCR auth that is unavailable in some environments).
+		"ghcr.io/devcontainers/features/common-utils:2": {}
 	},
 	// postCreateCommand runs after the container is fully initialised.
 	// pip install first, then frontend build — both are non-fatal if slow.
-	"postCreateCommand": "pip install -q -r requirements-ci.txt && cd frontend && npm install && npm run build",
+	"postCreateCommand": "apt-get update -qq && apt-get install -y --no-install-recommends cmake libzmq3-dev pkg-config ninja-build && pip install -q -r requirements-ci.txt && cd frontend && npm install && npm run build",
 	"forwardPorts": [5173, 8000, 6379],
 	"portsAttributes": {
 		"5173": {

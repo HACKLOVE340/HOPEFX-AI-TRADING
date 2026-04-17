@@ -231,7 +231,9 @@ class FeatureEngineer:
         feats["mom_20"] = c / c.shift(20) - 1
 
         # Target: 1 if next bar close > current close
-        feats["y"] = (c.shift(-1) > c).astype(int)  # noqa: lookahead-ok — supervised label, never used as input feature
+        feats["y"] = (c.shift(-1) > c).astype(
+            int
+        )  # supervised label — intentional lookahead, never used as input feature
 
         # ── NO LOOK-AHEAD: shift all features forward by 1 ───────────────────
         # After shift, feats.iloc[t] contains features computed from data

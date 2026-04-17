@@ -92,11 +92,12 @@ class EWCRegularizer:
             return torch.tensor(0.0)
 
         import torch as _torch_ewc
+
         loss = _torch_ewc.tensor(0.0)
         for name, param in model.named_parameters():
             if name in self.fisher_dict:
                 diff = param - self.optimal_params[name]
-                _raw = (self.fisher_dict[name] * diff ** 2).sum()
+                _raw = (self.fisher_dict[name] * diff**2).sum()
                 term = _torch_ewc.nan_to_num(_raw, nan=0.0)
                 loss = loss + term
 
@@ -437,7 +438,9 @@ class SklearnOnlineLearner:
             # Log returns (last 20 bars)
             if "close" in bars.columns:
                 closes = bars["close"].values.astype(float)
-                log_ret = np.nan_to_num(np.diff(np.log(np.maximum(closes, 1e-9))), nan=0.0, posinf=0.0, neginf=0.0)[-20:]
+                log_ret = np.nan_to_num(np.diff(np.log(np.maximum(closes, 1e-9))), nan=0.0, posinf=0.0, neginf=0.0)[
+                    -20:
+                ]
                 vol = float(np.nan_to_num(np.std(log_ret), nan=0.0)) if len(log_ret) > 1 else 0.0
                 flat = np.concatenate([flat, log_ret, [vol]])
 

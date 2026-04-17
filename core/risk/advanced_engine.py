@@ -75,7 +75,12 @@ class GARCHModel:
 
             # Student-t log-likelihood
             variance_safe = np.where(variance > 0, variance, 1e-12)
-            pdf_vals = np.nan_to_num(stats.t.pdf(returns / np.sqrt(variance_safe), nu) / np.sqrt(variance_safe), nan=1e-300, posinf=1e-300, neginf=1e-300)
+            pdf_vals = np.nan_to_num(
+                stats.t.pdf(returns / np.sqrt(variance_safe), nu) / np.sqrt(variance_safe),
+                nan=1e-300,
+                posinf=1e-300,
+                neginf=1e-300,
+            )
             log_likelihood = -np.sum(np.log(np.where(pdf_vals > 0, pdf_vals, 1e-300)))
             return log_likelihood
 

@@ -134,7 +134,9 @@ class TechnicalFeatureEngineer:
             low_min = low.rolling(window=period).min()
             high_max = high.rolling(window=period).max()
             df[f"stoch_k_{period}"] = 100 * (close - low_min) / (high_max - low_min)
-            df[f"stoch_d_{period}"] = df[f"stoch_k_{period}"].rolling(window=3, min_periods=1).mean().fillna(df[f"stoch_k_{period}"])
+            df[f"stoch_d_{period}"] = (
+                df[f"stoch_k_{period}"].rolling(window=3, min_periods=1).mean().fillna(df[f"stoch_k_{period}"])
+            )
 
         # Rate of Change (ROC)
         for period in [5, 10, 20]:
@@ -317,7 +319,9 @@ class TechnicalFeatureEngineer:
             periods = kwargs.get("periods", 5)
             threshold = kwargs.get("threshold", 0.01)  # 1%
 
-            forward_return = close.shift(-periods) / close - 1  # noqa: lookahead-ok — label creation only, never used as a feature
+            forward_return = (
+                close.shift(-periods) / close - 1
+            )  # intentional lookahead — label creation only, never used as a feature
 
             labels = pd.Series(1, index=df.index)  # HOLD
             labels[forward_return > threshold] = 2  # BUY
@@ -327,7 +331,9 @@ class TechnicalFeatureEngineer:
             # Label based on trend direction
             periods = kwargs.get("periods", 10)
 
-            future_ma = close.shift(-periods).rolling(window=periods, min_periods=1).mean().fillna(close)  # noqa: lookahead-ok — label creation only
+            future_ma = (
+                close.shift(-periods).rolling(window=periods, min_periods=1).mean().fillna(close)
+            )  # intentional lookahead — label creation only
             current_price = close
 
             labels = pd.Series(1, index=df.index)  # HOLD
@@ -342,8 +348,8 @@ class TechnicalFeatureEngineer:
             high_max = df["high"].rolling(window=lookback).max()
             low_min = df["low"].rolling(window=lookback).min()
 
-            future_high = df["high"].shift(-1)  # noqa: lookahead-ok — label creation only
-            future_low = df["low"].shift(-1)    # noqa: lookahead-ok — label creation only
+            future_high = df["high"].shift(-1)  # intentional lookahead — label creation only
+            future_low = df["low"].shift(-1)  # intentional lookahead — label creation only
 
             labels = pd.Series(1, index=df.index)  # HOLD
             labels[future_high > high_max * (1 + threshold)] = 2  # BUY (breakout up)

@@ -203,6 +203,5 @@ def register_page_routes(app: FastAPI) -> None:
             )
 
         logger.warning(
-            "No React build found — serving placeholder at /. "
-            "Build the frontend with: cd frontend && npm run build"
+            "No React build found — serving placeholder at /. Build the frontend with: cd frontend && npm run build"
         )
