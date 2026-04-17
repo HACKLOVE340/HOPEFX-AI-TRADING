@@ -78,8 +78,7 @@ def _backup_postgres(database_url: str, backup_dir: Path) -> Path:
     with gzip.open(out_path, "wb") as gz:
         result = subprocess.run(  # nosec B603 — args are constructed from env, not user input
             cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             env=env,
             check=False,
         )
