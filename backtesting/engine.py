@@ -685,8 +685,8 @@ class BacktestEngine:
         annualized_return = (1 + total_return) ** (1 / years) - 1 if years > 0 else 0
 
         # Daily returns for volatility
-        equity_df["daily_return"] = equity_df["total_equity"].pct_change()
-        volatility = equity_df["daily_return"].std() * np.sqrt(252)  # Annualized
+        equity_df["daily_return"] = equity_df["total_equity"].pct_change().fillna(0.0)
+        volatility = float(np.nan_to_num(equity_df["daily_return"].std(), nan=0.0)) * np.sqrt(252)  # Annualized
 
         # Risk-adjusted metrics
         risk_free_rate = 0.02  # Assume 2%
@@ -695,7 +695,7 @@ class BacktestEngine:
 
         # Sortino (downside deviation only)
         downside_returns = equity_df["daily_return"][equity_df["daily_return"] < 0]
-        downside_dev = downside_returns.std() * np.sqrt(252) if len(downside_returns) > 0 else 0
+        downside_dev = float(np.nan_to_num(downside_returns.std(), nan=0.0)) * np.sqrt(252) if len(downside_returns) > 0 else 0
         sortino_ratio = excess_return / downside_dev if downside_dev > 0 else 0
 
         # Calmar (return / max drawdown)
@@ -729,9 +729,8 @@ class BacktestEngine:
         equity_curve = equity_df["total_equity"]
         rolling_max = equity_curve.expanding().max()
         drawdown_series = (equity_curve - rolling_max) / rolling_max
-        avg_drawdown = (
-            drawdown_series[drawdown_series < 0].mean() if len(drawdown_series[drawdown_series < 0]) > 0 else 0
-        )
+        neg_dd = drawdown_series[drawdown_series < 0]
+        avg_drawdown = float(np.nan_to_num(neg_dd.mean(), nan=0.0)) if len(neg_dd) > 0 else 0
 
         return PerformanceMetrics(
             total_return=total_return,

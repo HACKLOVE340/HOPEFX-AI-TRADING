@@ -358,9 +358,10 @@ class HyperoptEngine:
             return 0.0
 
         if self.metric == "sharpe_ratio":
-            mean_r = np.mean(period_returns)
-            std_r = np.std(period_returns)
-            return float(mean_r / std_r * np.sqrt(252)) if std_r > 0 else 0.0
+            safe_r = np.nan_to_num(np.array(period_returns, dtype=float), nan=0.0)
+            mean_r = np.mean(safe_r)
+            std_r = np.std(safe_r)
+            return float(mean_r / max(std_r, 1e-9) * np.sqrt(252)) if std_r > 0 else 0.0
 
         if self.metric == "calmar_ratio":
             peak = np.maximum.accumulate(equity)
