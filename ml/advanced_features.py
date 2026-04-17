@@ -686,14 +686,15 @@ def build_advanced_features(
 
 def _atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
     h, l, c = df["high"], df["low"], df["close"]
-    tr = pd.concat(
+    _tr_raw = pd.concat(
         [
             h - l,
             (h - c.shift(1)).abs(),
             (l - c.shift(1)).abs(),
         ],
         axis=1,
-    ).fillna(0.0).max(axis=1)
+    ).max(axis=1)
+    tr = _tr_raw.fillna(0.0)
     return tr.ewm(span=period, adjust=False).mean().fillna(0.0)
 
 

@@ -96,8 +96,9 @@ class EWCRegularizer:
         for name, param in model.named_parameters():
             if name in self.fisher_dict:
                 diff = param - self.optimal_params[name]
-                term = (self.fisher_dict[name] * diff ** 2).sum()
-                loss = loss + _torch_ewc.nan_to_num(term, nan=0.0)
+                _term_raw = (self.fisher_dict[name] * diff ** 2).sum()
+                term = _torch_ewc.nan_to_num(_term_raw, nan=0.0)
+                loss = loss + term
 
         return self.lambda_ewc * loss
 
