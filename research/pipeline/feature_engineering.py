@@ -53,16 +53,16 @@ logger = logging.getLogger(__name__)
 
 
 def _ema(series: pd.Series, span: int) -> pd.Series:
-    return series.ewm(span=span, adjust=False).mean()
+    return series.dropna().ewm(span=span, adjust=False).mean()
 
 
 def _sma(series: pd.Series, window: int) -> pd.Series:
-    return series.rolling(window).mean()
+    return series.dropna().rolling(window).mean()
 
 
 def _true_range(df: pd.DataFrame) -> pd.Series:
     h, l, c = df["high"], df["low"], df["close"]
-    tr = pd.concat([h - l, (h - c.shift()).abs(), (l - c.shift()).abs()], axis=1).max(axis=1)
+    tr = pd.concat([h - l, (h - c.shift()).abs(), (l - c.shift()).abs()], axis=1).fillna(0.0).max(axis=1)
     return tr
 
 
@@ -147,8 +147,8 @@ def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     d["ichimoku_diff"] = tenkan - kijun
     senkou_a = ((tenkan + kijun) / 2).shift(26)
     senkou_b = ((h.rolling(52).max() + l.rolling(52).min()) / 2).shift(26)
-    d["ichimoku_cloud_top"] = pd.concat([senkou_a, senkou_b], axis=1).max(axis=1)
-    d["ichimoku_cloud_bot"] = pd.concat([senkou_a, senkou_b], axis=1).min(axis=1)
+    d["ichimoku_cloud_top"] = pd.concat([senkou_a, senkou_b], axis=1).fillna(0.0).max(axis=1)
+    d["ichimoku_cloud_bot"] = pd.concat([senkou_a, senkou_b], axis=1).fillna(0.0).min(axis=1)
     d["ichimoku_above_cloud"] = (c > d["ichimoku_cloud_top"]).astype(int)
 
     # ── Moving average crossovers ─────────────────────────────────────────────
@@ -173,7 +173,7 @@ def add_lag_features(df: pd.DataFrame, periods: list[int] = LAG_PERIODS) -> pd.D
 
     for p in periods:
         d[f"ret_{p}"] = c.pct_change(p)
-        d[f"log_ret_{p}"] = np.log(c / c.shift(p))
+        d[f"log_ret_{p}"] = np.nan_to_num(np.log((c / c.shift(p)).replace(0, np.nan)), nan=0.0)
         d[f"close_lag_{p}"] = c.shift(p)
 
     if "volume" in d.columns:
@@ -193,7 +193,8 @@ ROLLING_WINDOWS = [5, 10, 20, 50, 100]
 
 def add_rolling_stats(df: pd.DataFrame, windows: list[int] = ROLLING_WINDOWS) -> pd.DataFrame:
     d = df.copy()
-    log_ret = np.log(d["close"] / d["close"].shift(1))
+    _close_safe = d["close"].replace(0, np.nan).dropna()
+    log_ret = np.log(_close_safe / _close_safe.shift(1)).fillna(0.0)
 
     for w in windows:
         d[f"roll_mean_{w}"] = log_ret.rolling(w).mean()
@@ -299,7 +300,8 @@ def add_candlestick_features(df: pd.DataFrame) -> pd.DataFrame:
 
 def add_volatility_regime(df: pd.DataFrame) -> pd.DataFrame:
     d = df.copy()
-    log_ret = np.log(d["close"] / d["close"].shift(1))
+    _c_safe = d["close"].replace(0, np.nan).dropna()
+    log_ret = np.log(_c_safe / _c_safe.shift(1)).fillna(0.0)
 
     # GARCH-proxy: squared returns
     d["sq_ret"] = log_ret**2
@@ -609,7 +611,8 @@ def add_regime_context(df: pd.DataFrame) -> pd.DataFrame:
     d["trend_dir"] = np.where(di_plus > di_minus, 1, np.where(di_minus > di_plus, -1, 0))
 
     # Volatility regime (3-class: low / medium / high)
-    log_ret = np.log(c / c.shift(1))
+    _c_reg = c.replace(0, np.nan).dropna()
+    log_ret = np.log(_c_reg / _c_reg.shift(1)).fillna(0.0)
     rv20 = log_ret.rolling(20).std() * np.sqrt(252)
     q33 = rv20.rolling(252, min_periods=60).quantile(0.33)
     q67 = rv20.rolling(252, min_periods=60).quantile(0.67)
@@ -748,7 +751,8 @@ def add_targets(
     target_bin      : 1=up, 0=down/flat       (binary classification)
     """
     d = df.copy()
-    fwd_ret = np.log(d["close"].shift(-horizon) / d["close"])
+    _c_fwd = d["close"].replace(0, np.nan)
+    fwd_ret = np.log(_c_fwd.shift(-horizon) / _c_fwd).fillna(0.0)  # lookahead-ok — supervised label
     d["target_ret"] = fwd_ret
 
     d["target_dir"] = 0

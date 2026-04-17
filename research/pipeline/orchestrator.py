@@ -113,9 +113,11 @@ class PipelineConfig:
 
 def _sharpe(returns: np.ndarray, periods_per_year: int = 252) -> float:
     """Annualised Sharpe ratio of a return series."""
-    if returns.std() == 0:
+    returns = np.nan_to_num(returns, nan=0.0)
+    std = returns.std()
+    if std == 0:
         return 0.0
-    return float(returns.mean() / returns.std() * np.sqrt(periods_per_year))
+    return float(returns.mean() / std * np.sqrt(periods_per_year))
 
 
 def _max_drawdown(equity: np.ndarray) -> float:
@@ -168,7 +170,7 @@ def evaluate_predictions(
         report["strategy_sharpe"] = _sharpe(strat_ret, periods_per_year)
         report["strategy_max_drawdown"] = _max_drawdown(equity)
         report["strategy_total_return"] = float(equity[-1] - 1) if len(equity) > 0 else 0.0
-        report["hit_rate"] = float((strat_ret > 0).mean())
+        report["hit_rate"] = float(np.nan_to_num((strat_ret > 0).mean(), nan=0.0))
 
     return report
 
@@ -399,7 +401,7 @@ class PipelineOrchestrator:
         )
         # Rebuild y_train for augmented rows (use majority label of rare regime)
         rare_mask = regime_labels == (cfg.n_regimes - 1)
-        rare_label = int(np.round(y_train[rare_mask].mean())) if rare_mask.any() else 0
+        rare_label = int(np.round(float(np.nan_to_num(y_train[rare_mask].mean(), nan=0.0)))) if rare_mask.any() else 0
         n_new = len(X_aug) - len(X_train)
         y_aug = np.concatenate([y_train, np.full(n_new, rare_label)])
         X_aug_df = pd.DataFrame(X_aug, columns=X_train.columns)
@@ -540,7 +542,7 @@ class PipelineOrchestrator:
         if cfg.use_anomaly_weighting:
             self.anomaly_weighter = self._fit_anomaly_weighter(X_train_df)
             sample_weights = self.anomaly_weighter.sample_weights(X_train_df)
-            n_anomalies = int(self.anomaly_weighter.flag(X_train_df).sum())
+            n_anomalies = int(np.nan_to_num(self.anomaly_weighter.flag(X_train_df).sum(), nan=0))
             logger.info("Anomaly weighting: %d anomalous bars down-weighted", n_anomalies)
 
         # 5c. Synthetic augmentation (optional — slow)

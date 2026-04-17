@@ -203,7 +203,10 @@ import numpy as np
 def calculate_sharpe_ratio(returns, risk_free_rate=0.02):
     '''Calculate Sharpe Ratio'''
     excess_returns = returns - risk_free_rate/252
-    return np.sqrt(252) * excess_returns.mean() / excess_returns.std()
+    std = excess_returns.dropna().std()
+    if std == 0:
+        return 0.0
+    return float(np.sqrt(252) * excess_returns.dropna().mean() / std)
 
 def calculate_max_drawdown(equity_curve):
     '''Calculate Maximum Drawdown'''
@@ -263,12 +266,12 @@ def create_features(df):
     features = pd.DataFrame()
 
     # Price-based features
-    features['returns'] = df['close'].pct_change(fill_method=None)
-    features['volatility'] = features['returns'].rolling(20).std()
+    features['returns'] = df['close'].pct_change(fill_method=None).fillna(0.0)
+    features['volatility'] = features['returns'].dropna().rolling(20).std()
 
     # Moving averages
-    features['sma_10'] = df['close'].rolling(10).mean()
-    features['sma_50'] = df['close'].rolling(50).mean()
+    features['sma_10'] = df['close'].dropna().rolling(10).mean()
+    features['sma_50'] = df['close'].dropna().rolling(50).mean()
     features['sma_ratio'] = features['sma_10'] / features['sma_50']
 
     # Volume features
@@ -678,7 +681,7 @@ def calculate_sharpe_ratio(returns, risk_free_rate=0.02):
     """
     import numpy as np
 
-    r = np.asarray(returns, dtype=float)
+    r = np.nan_to_num(np.asarray(returns, dtype=float), nan=0.0)
     excess = r - risk_free_rate / 252
     std = excess.std()
     if std == 0:
@@ -719,10 +722,10 @@ def create_features(df):
     import pandas as pd
 
     features = pd.DataFrame(index=df.index)
-    features["returns"] = df["close"].pct_change(fill_method=None)
-    features["volatility"] = features["returns"].rolling(20).std()
-    features["sma_10"] = df["close"].rolling(10).mean()
-    features["sma_50"] = df["close"].rolling(50).mean()
+    features["returns"] = df["close"].pct_change(fill_method=None).fillna(0.0)
+    features["volatility"] = features["returns"].dropna().rolling(20).std()
+    features["sma_10"] = df["close"].dropna().rolling(10).mean()
+    features["sma_50"] = df["close"].dropna().rolling(50).mean()
     features["sma_ratio"] = features["sma_10"] / features["sma_50"]
     if "volume" in df.columns:
         features["volume_ma"] = df["volume"].rolling(20).mean()

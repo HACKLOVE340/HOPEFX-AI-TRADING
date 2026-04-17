@@ -139,7 +139,7 @@ def _flatten_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 def _add_vwap(df: pd.DataFrame) -> pd.DataFrame:
     """Intraday VWAP (resets each session). Falls back to typical price for daily."""
-    if "volume" not in df.columns or df["volume"].sum() == 0:
+    if "volume" not in df.columns or float(np.nan_to_num(df["volume"].sum(), nan=0.0)) == 0:
         df["vwap"] = (df["high"] + df["low"] + df["close"]) / 3
         return df
 
@@ -311,7 +311,7 @@ def fetch_intraday(
         logger.warning("No intraday data for %s @ %s", ticker, interval)
         return pd.DataFrame()
 
-    df = pd.concat(chunks)
+    df = pd.concat(chunks).fillna(method="ffill").fillna(0.0)
     df = _flatten_columns(df)
     df.index = pd.to_datetime(df.index, utc=True)
     df = df[~df.index.duplicated(keep="last")].sort_index()

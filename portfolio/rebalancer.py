@@ -193,7 +193,7 @@ class CorrelationTracker:
         result = {}
         for sid, ret in self._returns.items():
             if len(ret) >= self.min_periods:
-                ewm_mean = float(ret.ewm(span=self.ewm_span).mean().iloc[-1])
+                ewm_mean = float(np.nan_to_num(ret.dropna().ewm(span=self.ewm_span).mean().iloc[-1], nan=0.0))
                 result[sid] = ewm_mean * 252
             else:
                 result[sid] = 0.0
@@ -270,14 +270,14 @@ class BookOptimiser:
                         corr_caps[j] = min(corr_caps[j], cap)
 
         def neg_sharpe(w: np.ndarray) -> float:
-            port_ret = float(np.dot(w, expected_returns))
-            port_var = float(w @ cov_matrix @ w)
+            port_ret = float(np.nan_to_num(np.dot(w, expected_returns), nan=0.0))
+            port_var = float(np.nan_to_num(w @ cov_matrix @ w, nan=0.0))
             port_vol = np.sqrt(max(port_var, 1e-12))
             return -(port_ret - self.risk_free_rate / 252) / port_vol
 
         def neg_sharpe_grad(w: np.ndarray) -> np.ndarray:
-            port_ret = float(np.dot(w, expected_returns))
-            port_var = float(w @ cov_matrix @ w)
+            port_ret = float(np.nan_to_num(np.dot(w, expected_returns), nan=0.0))
+            port_var = float(np.nan_to_num(w @ cov_matrix @ w, nan=0.0))
             port_vol = np.sqrt(max(port_var, 1e-12))
             excess_ret = port_ret - self.risk_free_rate / 252
             d_ret = expected_returns
@@ -599,7 +599,7 @@ class DynamicRebalancer:
 
         # ── Compute portfolio stats ───────────────────────────────────────────
         w_arr = weights_arr
-        port_var = float(w_arr @ cov_matrix @ w_arr)
+        port_var = float(np.nan_to_num(w_arr @ cov_matrix @ w_arr, nan=0.0))
         port_vol = float(np.sqrt(max(port_var, 0.0)) * np.sqrt(252))
         port_ret = float(np.dot(w_arr, mu))
         sharpe = (port_ret - self._optimiser.risk_free_rate) / port_vol if port_vol > 0 else 0.0

@@ -441,7 +441,8 @@ class ItosConeEngine:
         if len(closes) < 2:
             return 0.0, 0.15, 0  # fallback: 15% vol, zero drift
 
-        log_returns = np.diff(np.log(closes))
+        closes_safe = np.where(np.nan_to_num(closes, nan=1e-9) > 0, closes, 1e-9)
+        log_returns = np.diff(np.log(closes_safe))
         n = len(log_returns)
 
         if n < 2:

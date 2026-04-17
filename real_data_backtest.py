@@ -156,7 +156,7 @@ def compute_atr(df: pd.DataFrame, period: int = ATR_PERIOD) -> pd.Series:
     tr = pd.concat(
         [high - low, (high - prev_close).abs(), (low - prev_close).abs()],
         axis=1,
-    ).max(axis=1)
+    ).fillna(0.0).max(axis=1)
 
     return tr.ewm(span=period, adjust=False).mean()
 
@@ -177,8 +177,8 @@ def generate_signals(df: pd.DataFrame) -> pd.DataFrame:
     """
     df = df.copy()
     df["atr"] = compute_atr(df)
-    df["sma20"] = df["close"].rolling(20).mean()
-    df["sma50"] = df["close"].rolling(50).mean()
+    df["sma20"] = df["close"].dropna().rolling(20).mean()
+    df["sma50"] = df["close"].dropna().rolling(50).mean()
 
     # RSI(14)
     delta = df["close"].diff()
@@ -368,7 +368,7 @@ def walk_forward_backtest(
     test_start_capital = float(train_equity["equity"].iloc[-1])
     test_equity, test_pnls = run_backtest(test_df, test_start_capital)
 
-    full_equity = pd.concat([train_equity, test_equity])
+    full_equity = pd.concat([train_equity, test_equity]).fillna(method="ffill").fillna(0.0)
 
     # Trade-level Sharpe (primary — corrected)
     train_sharpe, train_se = trade_level_sharpe(train_pnls)
