@@ -52,7 +52,7 @@ jobs:
         persist-credentials: false
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -121,7 +121,7 @@ jobs:
       run: coverage report --rcfile=.coveragerc --include="core/*" --fail-under=80
 
     - name: Publish test results
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.4.3
       if: always()
       with:
         name: test-results-${{ matrix.python-version }}
@@ -143,7 +143,7 @@ jobs:
         files: coverage.xml
 
     - name: Upload coverage artifact
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.4.3
       if: always()
       with:
         name: coverage-${{ matrix.python-version }}
@@ -166,7 +166,7 @@ jobs:
 
       # Download the coverage.xml produced by the test job — no re-run needed.
       - name: Download coverage artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
         with:
           name: coverage-3.12
           path: .
