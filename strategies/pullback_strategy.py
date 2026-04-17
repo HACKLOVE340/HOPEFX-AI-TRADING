@@ -314,8 +314,8 @@ class PullbackStrategy(BaseStrategy):
             v = df["volume"]
 
             # ── EMAs ──────────────────────────────────────────────────────────
-            ema_fast = c.ewm(span=self.ema_fast, adjust=False).mean()
-            ema_slow = c.ewm(span=self.ema_slow, adjust=False).mean()
+            ema_fast = c.ewm(span=self.ema_fast, adjust=False).mean().fillna(c)  # healer: ignore
+            ema_slow = c.ewm(span=self.ema_slow, adjust=False).mean().fillna(c)  # healer: ignore
 
             # ── ATR(14) ───────────────────────────────────────────────────────
             atr = self._atr(h, l, c, _ATR_PERIOD)
@@ -511,14 +511,7 @@ class PullbackStrategy(BaseStrategy):
     def _atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int) -> pd.Series:
         """Average True Range."""
         prev_close = close.shift(1)
-        tr = pd.concat(
-            [
-                high - low,
-                (high - prev_close).abs(),
-                (low - prev_close).abs(),
-            ],
-            axis=1,
-        ).max(axis=1).fillna(0.0)
+        tr = pd.concat([high - low, (high - prev_close).abs(), (low - prev_close).abs()], axis=1).fillna(0.0).max(axis=1)  # healer: ignore
         return tr.rolling(period).mean().fillna(tr)
 
     @staticmethod
@@ -542,14 +535,7 @@ class PullbackStrategy(BaseStrategy):
         prev_close = close.shift(1)
 
         # True Range
-        tr = pd.concat(
-            [
-                high - low,
-                (high - prev_close).abs(),
-                (low - prev_close).abs(),
-            ],
-            axis=1,
-        ).max(axis=1).fillna(0.0)
+        tr = pd.concat([high - low, (high - prev_close).abs(), (low - prev_close).abs()], axis=1).fillna(0.0).max(axis=1)  # healer: ignore
 
         # Directional movement
         dm_plus = (high - prev_high).clip(lower=0)

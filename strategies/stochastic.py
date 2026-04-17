@@ -14,7 +14,6 @@ from datetime import datetime, timezone
 UTC = timezone.utc
 from typing import Any
 
-import numpy as np
 import pandas as pd
 
 from strategies.base import BaseStrategy

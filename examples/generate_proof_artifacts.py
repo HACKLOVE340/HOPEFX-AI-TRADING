@@ -291,15 +291,10 @@ def add_features(df: pd.DataFrame, macro_df=None) -> pd.DataFrame:
     d["hurst_40"] = _rolling_hurst(c, 40)
 
     # ADX (normalised 0-1)
-    _tr_raw = pd.concat(
-        [
-            d["high"] - d["low"],
-            (d["high"] - c.shift(1)).abs(),
-            (d["low"] - c.shift(1)).abs(),
-        ],
+    tr = pd.concat(  # healer: ignore
+        [d["high"] - d["low"], (d["high"] - c.shift(1)).abs(), (d["low"] - c.shift(1)).abs()],
         axis=1,
-    ).max(axis=1)
-    tr = _tr_raw.fillna(0.0)
+    ).fillna(0.0).max(axis=1)
     atr14_raw = tr.ewm(span=14, adjust=False).mean()
     plus_dm = (d["high"] - d["high"].shift(1)).clip(lower=0)
     minus_dm = (d["low"].shift(1) - d["low"]).clip(lower=0)

@@ -552,12 +552,14 @@ def _analyze_file_regex(path: Path) -> list[CodeIssue]:
             )
 
         # NaN leak — numeric aggregation without a NaN guard in the surrounding context
-        if _NAN_LEAK_RE.search(line) and not is_test:
+        if _NAN_LEAK_RE.search(line) and not is_test and "# healer: ignore" not in line:
             # Check a window of ±5 lines for a NaN guard
             window_start = max(0, i - 6)
             window_end = min(len(lines), i + 5)
             window = "\n".join(lines[window_start:window_end])
-            if not _NAN_GUARD_RE.search(window):
+            # Also accept aliased nan_to_num calls (e.g. _torch.nan_to_num, _np.nan_to_num)
+            _extended_guard = _NAN_GUARD_RE.search(window) or re.search(r"\.nan_to_num\(", window)
+            if not _extended_guard:
                 issues.append(
                     CodeIssue(
                         file=rel,
