@@ -106,7 +106,7 @@ repos:
         pass_filenames: true
 
       - id: coverage-gate
-        name: Per-module coverage gate (≥70%)
+        name: Per-module coverage gate (≥80%)
         language: python
         entry: python scripts/pre_commit_coverage.py
         types: [python]
