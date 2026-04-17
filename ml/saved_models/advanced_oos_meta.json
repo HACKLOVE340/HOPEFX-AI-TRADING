@@ -25,5 +25,7 @@
   "sharpe_note": "N=756 OOS bars. Sharpe SE=0.053. Gate PASSED: need N>=600 trades for credible Sharpe. Run multi-symbol backtest (XAU+BTC+ETH) targeting N=600.",
   "horizon": 5,
   "validated_at": "2026-04-14T22:29:14.020696+00:00",
-  "note": "Model trained with horizon=5 to match execution engine hold period. Fixes accuracy/P&L disconnect from horizon=1 training."
+  "note": "Model trained with horizon=5 to match execution engine hold period. Fixes accuracy/P&L disconnect from horizon=1 training.",
+  "oos_accuracy_note": "oos_accuracy is null because this model was trained with --years 2 --oos-years 0 (only 2 years of data, no held-out OOS split). The OOS AUC (0.714) and Sharpe gate (PASSED, N=756) are from the walk-forward CV folds. To populate oos_accuracy, retrain with: python ml/train_advanced.py --years 50 --oos-years 4 --stacking",
+  "oos_f1_note": "null for same reason as oos_accuracy \u2014 no held-out OOS split in this training run."
 }
