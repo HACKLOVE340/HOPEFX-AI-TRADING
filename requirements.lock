@@ -712,7 +712,7 @@ starlette==0.52.1
     #   fastapi
 statsmodels==0.14.6
     # via -r requirements.txt
-strawberry-graphql[fastapi]==0.314.0
+strawberry-graphql[fastapi]==0.314.3
     # via -r requirements.txt
 stripe==15.0.1
     # via -r requirements.txt
