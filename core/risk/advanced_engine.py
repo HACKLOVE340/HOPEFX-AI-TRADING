@@ -74,9 +74,9 @@ class GARCHModel:
                 variance[t] = omega + alpha * returns[t - 1] ** 2 + beta * variance[t - 1]
 
             # Student-t log-likelihood
-            log_likelihood = -np.sum(
-                np.log(stats.t.pdf(returns / np.sqrt(variance), nu) / np.sqrt(variance)),
-            )
+            variance_safe = np.where(variance > 0, variance, 1e-12)
+            pdf_vals = np.nan_to_num(stats.t.pdf(returns / np.sqrt(variance_safe), nu) / np.sqrt(variance_safe), nan=1e-300, posinf=1e-300, neginf=1e-300)
+            log_likelihood = -np.sum(np.log(np.where(pdf_vals > 0, pdf_vals, 1e-300)))
             return log_likelihood
 
         result = minimize(
@@ -100,7 +100,7 @@ class GARCHModel:
             else:
                 forecasts[h] = self.omega + (self.alpha + self.beta) * forecasts[h - 1]
 
-        return np.sqrt(forecasts)
+        return np.sqrt(np.nan_to_num(forecasts, nan=0.0, posinf=0.0))
 
     def simulate(self, n_sims: int = 10000, horizon: int = 5) -> np.ndarray:
         """Simulate future paths."""
@@ -109,7 +109,8 @@ class GARCHModel:
 
         for t in range(horizon):
             variance = self.omega + self.alpha * simulated[:, t - 1] ** 2 + self.beta * variance
-            simulated[:, t] = np.sqrt(variance) * stats.t.rvs(self.nu, size=n_sims)
+            variance = np.nan_to_num(variance, nan=0.0, posinf=0.0)
+            simulated[:, t] = np.sqrt(np.maximum(variance, 0.0)) * stats.t.rvs(self.nu, size=n_sims)
 
         return simulated
 
@@ -177,15 +178,16 @@ class MonteCarloRiskEngine:
                 scaled_returns[col] = copula_sims[col] * vol[: len(copula_sims)]
 
         portfolio_returns = sum(scaled_returns[col] * weights.get(col, 0) for col in scaled_returns.columns)
+        portfolio_returns = portfolio_returns.fillna(0.0)
 
         var_95 = np.percentile(portfolio_returns, 5)
         var_99 = np.percentile(portfolio_returns, 1)
-        cvar_95 = portfolio_returns[portfolio_returns <= var_95].mean()
-        cvar_99 = portfolio_returns[portfolio_returns <= var_99].mean()
+        cvar_95 = float(np.nan_to_num(portfolio_returns[portfolio_returns <= var_95].mean(), nan=0.0))
+        cvar_99 = float(np.nan_to_num(portfolio_returns[portfolio_returns <= var_99].mean(), nan=0.0))
 
-        cumulative = (1 + portfolio_returns).cumprod()
+        cumulative = (1 + portfolio_returns).cumprod().fillna(1.0)
         running_max = np.maximum.accumulate(cumulative)
-        drawdown = (cumulative - running_max) / running_max
+        drawdown = (cumulative - running_max) / np.where(running_max != 0, running_max, 1.0)
 
         return RiskMetrics(
             var_95=float(var_95),

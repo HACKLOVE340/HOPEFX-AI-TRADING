@@ -524,7 +524,9 @@ class HOPEFXBrain:
         lows_arr = np.array(lows)
 
         # Calculate returns
-        returns = np.diff(closes_arr) / closes_arr[:-1]
+        closes_arr = np.nan_to_num(closes_arr, nan=0.0)
+        denom = np.where(closes_arr[:-1] != 0, closes_arr[:-1], 1.0)
+        returns = np.diff(closes_arr) / denom
 
         # Volatility (annualized)
         _annualized_vol = np.std(returns) * np.sqrt(252 * 24)

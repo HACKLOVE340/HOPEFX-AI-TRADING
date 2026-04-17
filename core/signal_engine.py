@@ -617,7 +617,7 @@ def _predict_basic(
         "ret_1": closes.pct_change(1).iloc[-1] if len(closes) > 1 else 0,
         "ret_5": closes.pct_change(5).iloc[-1] if len(closes) > 5 else 0,
         "ret_20": closes.pct_change(20).iloc[-1] if len(closes) > 20 else 0,
-        "vol_20": (closes.pct_change().rolling(20).std().iloc[-1] if len(closes) > 20 else 0),
+        "vol_20": float(np.nan_to_num(closes.dropna().pct_change().rolling(20).std().iloc[-1], nan=0.0)) if len(closes) > 20 else 0,
     }
     X = pd.DataFrame([feat])
 
@@ -1045,7 +1045,9 @@ def _estimate_annualised_volatility(data: dict[str, Any] | None, entry: float) -
         prices = (data or {}).get("prices", [entry])
         if len(prices) < _MIN_PRICES_FOR_VOL:
             return _GOLD_VOL_BASELINE
-        log_returns = np.diff(np.log(np.array(prices[-21:], dtype=float)))
+        p_arr = np.nan_to_num(np.array(prices[-21:], dtype=float), nan=0.0)
+        p_arr = np.where(p_arr > 0, p_arr, 1e-9)
+        log_returns = np.diff(np.log(p_arr))
         return float(np.std(log_returns)) * (252**0.5)
     except Exception as _exc:
         logger.debug("_estimate_current_vol: numpy calculation failed: %s", _exc)
