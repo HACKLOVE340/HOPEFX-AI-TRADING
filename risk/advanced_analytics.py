@@ -332,7 +332,7 @@ class AdvancedRiskAnalytics:
                     RuntimeWarning,
                     stacklevel=3,
                 )
-                var_scaled = var_percentile * np.sqrt(time_horizon)
+                var_scaled = var_percentile * np.sqrt(max(time_horizon, 0.0))
                 scaling_approximate = True
                 scaling_note = (
                     f"sqrt(t) fallback used: only {len(returns)} bars available for "
@@ -438,7 +438,7 @@ class AdvancedRiskAnalytics:
             # This is more accurate than scaling the 1-day VaR by sqrt(t)
             # because it correctly scales the mean component linearly.
             mean_t = mean_return * time_horizon
-            std_t = std_return * np.sqrt(time_horizon)
+            std_t = std_return * np.sqrt(max(time_horizon, 0.0))
             var_scaled = -(mean_t + z_score * std_t)
 
         # Convert to dollar value if portfolio value provided
@@ -705,8 +705,8 @@ class AdvancedRiskAnalytics:
         for i in range(1, len(returns)):
             ewma_var[i] = decay * ewma_var[i - 1] + (1 - decay) * returns[i] ** 2
 
-        current_vol = np.sqrt(ewma_var[-1])
-        hist_vol = np.sqrt(np.mean(ewma_var))
+        current_vol = np.sqrt(max(float(ewma_var[-1]), 0.0))
+        hist_vol = np.sqrt(max(float(np.mean(ewma_var)), 0.0))
 
         if hist_vol == 0:
             return self.calculate_var_historical(
@@ -1205,7 +1205,10 @@ class AdvancedRiskAnalytics:
         excess_returns = arr - self.risk_free_rate / periods_per_year
         if np.std(arr) == 0:
             return 0.0
-        return float(np.sqrt(periods_per_year) * np.mean(excess_returns) / np.std(arr))
+        std_arr = float(np.std(arr))
+        if std_arr == 0:
+            return 0.0
+        return float(np.sqrt(periods_per_year) * np.nan_to_num(np.mean(excess_returns), nan=0.0) / std_arr)
 
     def calculate_sortino_ratio(
         self,
@@ -1330,7 +1333,8 @@ class AdvancedRiskAnalytics:
                 sigma2[t] = omega + alpha * arr[t - 1] ** 2 + beta * sigma2[t - 1]
                 if sigma2[t] <= 0:
                     return 1e10
-            ll = -0.5 * np.sum(np.log(sigma2) + arr**2 / sigma2)
+            sigma2_safe = np.maximum(sigma2, 1e-12)
+            ll = -0.5 * np.sum(np.log(sigma2_safe) + arr**2 / sigma2_safe)
             return -ll
 
         # Initial guess: small omega, typical alpha/beta for FX/gold
@@ -1355,7 +1359,7 @@ class AdvancedRiskAnalytics:
         # ── h-step ahead variance forecast (sum of conditional variances) ────
         sigma2_forecast = self._garch_hstep_variance(sigma2_t, omega, alpha, beta, time_horizon)
 
-        sigma_forecast = float(np.sqrt(sigma2_forecast))
+        sigma_forecast = float(np.sqrt(max(sigma2_forecast, 0.0)))
         alpha_level = 1.0 - confidence_level
         z = float(_stats.norm.ppf(alpha_level))
         mu_h = float(np.mean(arr)) * time_horizon
@@ -1452,7 +1456,7 @@ class AdvancedRiskAnalytics:
             "calmar_ratio": calmar,
             "total_return": float(ec[-1] / ec[0]) - 1.0,
             "annual_return": float(np.mean(returns) * 252),
-            "annual_volatility": float(np.std(returns) * np.sqrt(252)),
+            "annual_volatility": float(np.nan_to_num(np.std(returns), nan=0.0) * np.sqrt(252)),
             "positive_days": float(np.mean(returns > 0)),
             "recovery_rate": drawdown.recovery_rate,
         }

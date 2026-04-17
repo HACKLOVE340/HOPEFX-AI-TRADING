@@ -247,7 +247,7 @@ class MarketRegimeDetector:
         tr3 = abs(low - close.shift(1))
 
         true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-        atr = true_range.rolling(window=self.atr_period).mean()
+        atr = true_range.rolling(window=self.atr_period, min_periods=1).mean()
 
         return atr
 
@@ -271,8 +271,9 @@ class MarketRegimeDetector:
         tr = self._calculate_atr(prices) * period  # Approximation
 
         # Calculate DI
-        plus_di = 100 * (plus_dm.rolling(period).sum() / tr)
-        minus_di = 100 * (minus_dm.rolling(period).sum() / tr)
+        tr_safe = tr.replace(0, np.nan)
+        plus_di = (100 * plus_dm.rolling(period, min_periods=1).sum() / tr_safe).fillna(0.0)
+        minus_di = (100 * minus_dm.rolling(period, min_periods=1).sum() / tr_safe).fillna(0.0)
 
         # Calculate DX and ADX
         dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di + 1e-8)
@@ -296,9 +297,9 @@ class MarketRegimeDetector:
         close = prices["close"]
 
         # Multiple MA periods
-        sma_short = close.rolling(10).mean()
-        sma_medium = close.rolling(20).mean()
-        sma_long = close.rolling(50).mean()
+        sma_short = close.rolling(10, min_periods=1).mean()
+        sma_medium = close.rolling(20, min_periods=1).mean()
+        sma_long = close.rolling(50, min_periods=1).mean()
 
         current_price = close.iloc[-1]
         sma_s = sma_short.iloc[-1]
@@ -338,7 +339,7 @@ class MarketRegimeDetector:
             return "unknown"
 
         volume = prices["volume"]
-        avg_volume = volume.rolling(20).mean()
+        avg_volume = volume.rolling(20, min_periods=1).mean()
         current_volume = volume.iloc[-1]
         avg_vol = avg_volume.iloc[-1]
 
@@ -579,9 +580,9 @@ class MultiTimeframeAnalyzer:
         close = data["close"]
 
         # Calculate trend
-        sma_fast = close.rolling(10).mean()
-        sma_slow = close.rolling(20).mean()
-        sma_50 = close.rolling(50).mean()
+        sma_fast = close.rolling(10, min_periods=1).mean()
+        sma_slow = close.rolling(20, min_periods=1).mean()
+        sma_50 = close.rolling(50, min_periods=1).mean()
 
         current_price = close.iloc[-1]
 
@@ -618,7 +619,7 @@ class MultiTimeframeAnalyzer:
 
         # Volume trend
         if "volume" in data.columns:
-            vol_sma = data["volume"].rolling(20).mean()
+            vol_sma = data["volume"].rolling(20, min_periods=1).mean()
             volume_trend = "increasing" if data["volume"].iloc[-1] > vol_sma.iloc[-1] else "decreasing"
         else:
             volume_trend = "unknown"
