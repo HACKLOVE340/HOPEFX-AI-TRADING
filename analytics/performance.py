@@ -312,7 +312,7 @@ class PerformanceAnalytics:
         # Daily metrics
         period_returns = self._get_period_returns(start_date)
         avg_daily = np.mean(period_returns) if period_returns else 0
-        volatility = float(np.std(period_returns) * np.sqrt(252)) if period_returns else 0.0
+        volatility = float(np.std(np.nan_to_num(period_returns, nan=0.0)) * np.sqrt(252)) if period_returns else 0.0
         best_day = max(period_returns) if period_returns else 0
         worst_day = min(period_returns) if period_returns else 0
 
@@ -579,7 +579,7 @@ class PerformanceAnalytics:
 
         # Annualize (assuming ~252 trading days)
         daily_rf = self.risk_free_rate / 252
-        return float(np.sqrt(252) * (mean_return - daily_rf) / std_return)
+        return float(np.sqrt(252) * (mean_return - daily_rf) / max(std_return, 1e-9))
 
     def _calculate_sortino_ratio(self, trades: list[TradeRecord]) -> float:
         """Calculate Sortino ratio for trades."""
@@ -597,7 +597,7 @@ class PerformanceAnalytics:
             return 0.0
 
         daily_rf = self.risk_free_rate / 252
-        return float(np.sqrt(252) * (np.mean(returns) - daily_rf) / downside_std)
+        return float(np.sqrt(252) * (np.mean(np.nan_to_num(returns, nan=0.0)) - daily_rf) / max(downside_std, 1e-9))
 
     def _calculate_max_drawdown(self, period: MetricPeriod) -> tuple[float, float]:
         """Calculate max drawdown for period."""

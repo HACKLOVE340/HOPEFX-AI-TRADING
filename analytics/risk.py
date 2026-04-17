@@ -53,11 +53,13 @@ class RiskAnalyzer:
 
     def risk_attribution(self, portfolio_weights: np.ndarray, covariance_matrix: np.ndarray) -> dict:
         """Calculate risk attribution"""
-        portfolio_variance = portfolio_weights.T @ covariance_matrix @ portfolio_weights
-        marginal_risk = covariance_matrix @ portfolio_weights
+        w_safe = np.nan_to_num(portfolio_weights, nan=0.0)
+        cov_safe = np.nan_to_num(covariance_matrix, nan=0.0)
+        portfolio_variance = float(w_safe.T @ cov_safe @ w_safe)
+        marginal_risk = cov_safe @ w_safe
 
         return {
-            "total_risk": float(np.sqrt(portfolio_variance)),
+            "total_risk": float(np.sqrt(max(portfolio_variance, 0.0))),
             "marginal_risk": marginal_risk.tolist(),
             "component_risk": (portfolio_weights * marginal_risk).tolist(),
         }

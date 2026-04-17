@@ -346,7 +346,7 @@ class PortfolioAnalytics:
 
         # Sortino ratio (downside deviation)
         downside_returns = portfolio_returns[portfolio_returns < 0]
-        downside_std = downside_returns.std() * np.sqrt(252) if len(downside_returns) > 1 else 0.0
+        downside_std = float(np.nan_to_num(downside_returns.std(), nan=0.0)) * np.sqrt(252) if len(downside_returns) > 1 else 0.0
         sortino = (annualized_return - self.risk_free_rate) / downside_std if downside_std > 0 else 0
 
         # Maximum drawdown
@@ -801,10 +801,10 @@ class PortfolioOptimizer:
             rf_annual = self.risk_free_rate
 
             def neg_sharpe(weights: np.ndarray) -> float:
-                port_ret = float(np.dot(weights, mu))
-                port_var = float(weights @ cov @ weights)
+                port_ret = float(np.dot(np.nan_to_num(weights, nan=0.0), np.nan_to_num(mu, nan=0.0)))
+                port_var = float(np.nan_to_num(weights, nan=0.0) @ np.nan_to_num(cov, nan=0.0) @ np.nan_to_num(weights, nan=0.0))
                 port_vol = np.sqrt(max(port_var, 1e-12))
-                return -(port_ret - rf_annual) / port_vol
+                return -(port_ret - rf_annual) / max(port_vol, 1e-9)
 
             constraints = [{"type": "eq", "fun": lambda ww: np.sum(ww) - 1.0}]
             bounds = [(0.0, 1.0)] * n
@@ -948,10 +948,11 @@ def _pa_optimize(
     else:  # max_sharpe
 
         def neg_sharpe(ww: np.ndarray) -> float:
-            port_ret = float(np.dot(ww, mu))
-            port_var = float(ww @ C @ ww)
+            ww_safe = np.nan_to_num(ww, nan=0.0)
+            port_ret = float(np.dot(ww_safe, np.nan_to_num(mu, nan=0.0)))
+            port_var = float(ww_safe @ np.nan_to_num(C, nan=0.0) @ ww_safe)
             port_vol = np.sqrt(max(port_var, 1e-12))
-            return -(port_ret - risk_free_rate) / port_vol
+            return -(port_ret - risk_free_rate) / max(port_vol, 1e-9)
 
         res = _minimize(
             neg_sharpe,
