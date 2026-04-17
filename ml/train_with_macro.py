@@ -242,6 +242,10 @@ def walk_forward_eval(
         X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
         y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
 
+        import numpy as _np_twm
+        _n_neg = float(_np_twm.nan_to_num((y_train == 0).sum(), nan=1.0))
+        _n_pos = float(_np_twm.nan_to_num((y_train == 1).sum(), nan=0.0))
+        _spw = _n_neg / max(_n_pos, 1.0)
         if model_type == "xgb":
             model = xgb.XGBClassifier(
                 n_estimators=300,
@@ -253,7 +257,7 @@ def walk_forward_eval(
                 gamma=0.1,
                 reg_alpha=0.1,
                 reg_lambda=1.0,
-                scale_pos_weight=float(__import__("numpy").nan_to_num((y_train == 0).sum(), nan=1.0)) / max(float(__import__("numpy").nan_to_num((y_train == 1).sum(), nan=0.0)), 1),
+                scale_pos_weight=_spw,
                 eval_metric="logloss",
                 random_state=42,
                 n_jobs=-1,
@@ -341,6 +345,10 @@ def train_final_model(
     X_train, X_test = X.iloc[:split], X.iloc[split:]
     y_train, y_test = y.iloc[:split], y.iloc[split:]
 
+    import numpy as _np_twm2
+    _n_neg2 = float(_np_twm2.nan_to_num((y_train == 0).sum(), nan=1.0))
+    _n_pos2 = float(_np_twm2.nan_to_num((y_train == 1).sum(), nan=0.0))
+    _spw2 = _n_neg2 / max(_n_pos2, 1.0)
     if model_type == "xgb":
         model = xgb.XGBClassifier(
             n_estimators=500,
@@ -352,7 +360,7 @@ def train_final_model(
             gamma=0.1,
             reg_alpha=0.1,
             reg_lambda=1.0,
-            scale_pos_weight=float(__import__("numpy").nan_to_num((y_train == 0).sum(), nan=1.0)) / max(float(__import__("numpy").nan_to_num((y_train == 1).sum(), nan=0.0)), 1),
+            scale_pos_weight=_spw2,
             eval_metric="logloss",
             random_state=42,
             n_jobs=-1,
@@ -439,6 +447,10 @@ def oos_eval(
         roc_auc_score,
     )
 
+    import numpy as _np_twm3
+    _n_neg3 = float(_np_twm3.nan_to_num((y_train == 0).sum(), nan=1.0))
+    _n_pos3 = float(_np_twm3.nan_to_num((y_train == 1).sum(), nan=0.0))
+    _spw3 = _n_neg3 / max(_n_pos3, 1.0)
     if model_type == "xgb":
         model = xgb.XGBClassifier(
             n_estimators=500,
@@ -450,7 +462,7 @@ def oos_eval(
             gamma=0.1,
             reg_alpha=0.1,
             reg_lambda=1.0,
-            scale_pos_weight=float(__import__("numpy").nan_to_num((y_train == 0).sum(), nan=1.0)) / max(float(__import__("numpy").nan_to_num((y_train == 1).sum(), nan=0.0)), 1),
+            scale_pos_weight=_spw3,
             eval_metric="logloss",
             random_state=42,
             n_jobs=-1,

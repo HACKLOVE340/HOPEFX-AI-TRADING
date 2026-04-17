@@ -191,7 +191,7 @@ class MarketDataValidator:
         issues = []
 
         # Check for NaN values
-        nan_pct = data.isnull().sum().sum() / (len(data) * len(data.columns))
+        nan_pct = float(np.nan_to_num(data.isnull().sum().sum() / max(len(data) * len(data.columns), 1), nan=0.0))
         if nan_pct > 0.05:  # More than 5% NaN
             issues.append(
                 {

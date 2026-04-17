@@ -693,7 +693,7 @@ def _atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
             (l - c.shift(1)).abs(),
         ],
         axis=1,
-    ).max(axis=1).fillna(0.0)
+    ).fillna(0.0).max(axis=1)
     return tr.ewm(span=period, adjust=False).mean().fillna(0.0)
 
 

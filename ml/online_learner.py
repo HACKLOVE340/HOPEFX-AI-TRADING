@@ -91,11 +91,13 @@ class EWCRegularizer:
         if not self.fisher_dict:
             return torch.tensor(0.0)
 
-        loss = 0
+        import torch as _torch_ewc
+        loss = _torch_ewc.tensor(0.0)
         for name, param in model.named_parameters():
             if name in self.fisher_dict:
                 diff = param - self.optimal_params[name]
-                loss += (self.fisher_dict[name] * diff ** 2).sum()
+                term = (self.fisher_dict[name] * diff ** 2).sum()
+                loss = loss + _torch_ewc.nan_to_num(term, nan=0.0)
 
         return self.lambda_ewc * loss
 
