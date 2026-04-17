@@ -1229,8 +1229,8 @@ class AdvancedRiskAnalytics:
         if len(downside_returns) == 0 or np.std(downside_returns) == 0:
             return float("inf") if float(np.mean(excess_returns)) > 0 else 0.0
 
-        downside_std = np.std(downside_returns)
-        return float(np.sqrt(periods_per_year) * np.mean(excess_returns) / downside_std)
+        downside_std = float(np.nan_to_num(np.std(downside_returns), nan=1e-9))
+        return float(np.nan_to_num(np.sqrt(periods_per_year) * np.mean(excess_returns) / max(downside_std, 1e-9), nan=0.0))
 
     def calculate_calmar_ratio(
         self,
