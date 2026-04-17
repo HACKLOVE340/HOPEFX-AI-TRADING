@@ -644,10 +644,13 @@ class RobustPredictor:
         # ── Price-based features (lagged) ─────────────────────────────────────
         for lag in [1, 2, 5, 10, 20]:
             features[f"return_lag_{lag}"] = X["close"].pct_change(lag).shift(1)
-            features[f"volatility_{lag}"] = X["close"].pct_change(fill_method=None).rolling(lag).std().shift(1)
+            mp = min(2, lag)
+            features[f"volatility_{lag}"] = X["close"].pct_change(fill_method=None).rolling(lag, min_periods=mp).std().fillna(0.0).shift(1)
 
         # ── Technical indicators (past data only) ─────────────────────────────
-        features["sma_ratio"] = (X["close"].rolling(10).mean() / X["close"].rolling(30).mean()).shift(1)
+        sma10 = X["close"].rolling(10, min_periods=1).mean()
+        sma30 = X["close"].rolling(30, min_periods=1).mean()
+        features["sma_ratio"] = (sma10 / sma30.replace(0, np.nan)).fillna(1.0).shift(1)
         features["rsi"] = self._calculate_rsi(X["close"], 14).shift(1)
 
         # ATR (14-bar)
@@ -660,19 +663,20 @@ class RobustPredictor:
                 ],
                 axis=1,
             ).max(axis=1)
-            features["atr_14"] = tr.rolling(14).mean().shift(1)
-            features["atr_ratio"] = features["atr_14"] / X["close"].rolling(14).mean().shift(1)
+            features["atr_14"] = tr.rolling(14, min_periods=1).mean().shift(1)
+            close_ma14 = X["close"].rolling(14, min_periods=1).mean().shift(1).replace(0, np.nan)
+            features["atr_ratio"] = (features["atr_14"] / close_ma14).fillna(0.0)
 
         # Bollinger band position
-        roll_mean = X["close"].rolling(20).mean()
-        roll_std = X["close"].rolling(20).std()
+        roll_mean = X["close"].rolling(20, min_periods=1).mean()
+        roll_std = X["close"].rolling(20, min_periods=2).std().fillna(0.0)
         features["bb_position"] = ((X["close"] - roll_mean) / (roll_std + 1e-9)).shift(1)
 
         # MACD signal
-        ema12 = X["close"].ewm(span=12, adjust=False).mean()
-        ema26 = X["close"].ewm(span=26, adjust=False).mean()
+        ema12 = X["close"].ewm(span=12, adjust=False, min_periods=1).mean()
+        ema26 = X["close"].ewm(span=26, adjust=False, min_periods=1).mean()
         macd = ema12 - ema26
-        features["macd_signal"] = (macd - macd.ewm(span=9, adjust=False).mean()).shift(1)
+        features["macd_signal"] = (macd - macd.ewm(span=9, adjust=False, min_periods=1).mean()).shift(1)
 
         # Hurst exponent proxy (rolling R/S over 40 bars)
         def _rolling_hurst(prices: pd.Series, window: int = 40) -> pd.Series:
@@ -687,7 +691,7 @@ class RobustPredictor:
                     dev = np.cumsum(sub - mean)
                     r = np.max(dev) - np.min(dev)
                     s = np.std(sub, ddof=1)
-                    if s > 0:
+                    if s > 0 and r > 0:
                         rs_vals.append(np.log(r / s))
                 if len(rs_vals) < 2:
                     return 0.5
@@ -702,15 +706,16 @@ class RobustPredictor:
         if all(c in X.columns for c in ["high", "low", "close"]):
             plus_dm = (X["high"] - X["high"].shift(1)).clip(lower=0)
             minus_dm = (X["low"].shift(1) - X["low"]).clip(lower=0)
-            tr_smooth = tr.rolling(14).mean()
-            plus_di = 100 * plus_dm.rolling(14).mean() / (tr_smooth + 1e-9)
-            minus_di = 100 * minus_dm.rolling(14).mean() / (tr_smooth + 1e-9)
+            tr_smooth = tr.rolling(14, min_periods=1).mean()
+            plus_di = 100 * plus_dm.rolling(14, min_periods=1).mean() / (tr_smooth + 1e-9)
+            minus_di = 100 * minus_dm.rolling(14, min_periods=1).mean() / (tr_smooth + 1e-9)
             dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di + 1e-9)
-            features["regime_trend_str"] = (dx.rolling(14).mean() / 100.0).shift(1)
+            features["regime_trend_str"] = (dx.rolling(14, min_periods=1).mean() / 100.0).shift(1)
 
         # ── Volume features ───────────────────────────────────────────────────
         if "volume" in X.columns:
-            features["volume_sma_ratio"] = (X["volume"] / X["volume"].rolling(20).mean()).shift(1)
+            vol_ma = X["volume"].rolling(20, min_periods=1).mean().replace(0, np.nan)
+            features["volume_sma_ratio"] = (X["volume"] / vol_ma).fillna(1.0).shift(1)
 
         # ── Time features ─────────────────────────────────────────────────────
         if hasattr(X.index, "hour"):
@@ -874,10 +879,10 @@ class RobustPredictor:
     def _calculate_rsi(self, prices: pd.Series, period: int = 14) -> pd.Series:
         """Calculate RSI without lookahead bias"""
         delta = prices.diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-        rs = gain / loss
-        return 100 - (100 / (1 + rs))
+        gain = (delta.where(delta > 0, 0)).rolling(window=period, min_periods=1).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=period, min_periods=1).mean()
+        rs = gain / (loss + 1e-10)
+        return (100 - (100 / (1 + rs))).fillna(50.0)
 
     def should_retrain(self, recent_performance: list[float]) -> bool:
         """Determine if model needs retraining based on performance decay"""
@@ -1005,7 +1010,7 @@ class RegimeDetector:
     def detect(self, X: pd.DataFrame) -> np.ndarray:
         """Detect regime for each time point"""
         returns = X["close"].pct_change(fill_method=None)
-        volatility = returns.rolling(self.lookback).std()
+        volatility = returns.rolling(self.lookback, min_periods=2).std().fillna(0.0)
         trend = X["close"].rolling(self.lookback).apply(lambda x: np.polyfit(range(len(x)), x, 1)[0])
 
         regimes = []
@@ -1134,8 +1139,8 @@ class DriftDetector:
             detected=bool(p_value < self._p_threshold),
             statistic=float(stat),
             p_value=float(p_value),
-            window_mean=float(window_arr.mean()),
-            reference_mean=float(self._reference.mean()),
+            window_mean=float(np.nan_to_num(window_arr.mean(), nan=0.0)),
+            reference_mean=float(np.nan_to_num(self._reference.mean(), nan=0.0)),
             window_size=len(window_arr),
             reference_size=len(self._reference),
         )
