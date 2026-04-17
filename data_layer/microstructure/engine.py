@@ -209,8 +209,10 @@ class MicrostructureEngine:
 
             # Delta divergence: price direction vs cumulative delta direction
             if len(ticks) >= 20:
-                price_dir = np.sign(mids[-1] - mids[-20])
-                delta_dir = np.sign(deltas[-20:].sum())
+                mids_arr = np.nan_to_num(np.asarray(mids), nan=0.0)
+                deltas_arr = np.nan_to_num(np.asarray(deltas), nan=0.0)
+                price_dir = np.sign(mids_arr[-1] - mids_arr[-20])
+                delta_dir = np.sign(deltas_arr[-20:].sum())
                 delta_divergence = float(price_dir != delta_dir and price_dir != 0)
             else:
                 delta_divergence = 0.0

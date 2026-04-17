@@ -253,7 +253,7 @@ class DataQualityEngine:
         state.spreads.append(tick.spread)
 
         if len(state.mids) >= 20:
-            arr = np.array(list(state.mids))
+            arr = np.nan_to_num(np.array(list(state.mids)), nan=0.0)
             mean = arr[:-1].mean()
             std = arr[:-1].std() + 1e-9
             z = abs((tick.mid - mean) / std)
@@ -272,14 +272,14 @@ class DataQualityEngine:
         # ── 7. Multivariate anomaly (Mahalanobis) — when enough history ────
         if len(state.mids) >= 50 and len(state.spreads) >= 50:
             try:
-                mids_arr = np.array(list(state.mids)[-50:])
-                spreads_arr = np.array(list(state.spreads)[-50:])
+                mids_arr = np.nan_to_num(np.array(list(state.mids)[-50:]), nan=0.0)
+                spreads_arr = np.nan_to_num(np.array(list(state.spreads)[-50:]), nan=0.0)
                 X = np.column_stack([mids_arr, spreads_arr])
                 mu = X[:-1].mean(axis=0)
                 cov = np.cov(X[:-1].T) + np.eye(2) * 1e-9
-                diff = np.array([tick.mid, tick.spread]) - mu
+                diff = np.nan_to_num(np.array([tick.mid, tick.spread]) - mu, nan=0.0)
                 inv_cov = np.linalg.inv(cov)
-                mahal = float(np.sqrt(diff @ inv_cov @ diff))
+                mahal = float(np.nan_to_num(np.sqrt(diff @ inv_cov @ diff), nan=0.0))
                 if mahal > 6.0:  # ~3-sigma in 2D
                     state.anomaly_count += 1
                     state.update_confidence(-0.02)

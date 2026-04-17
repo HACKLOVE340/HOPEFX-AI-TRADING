@@ -254,7 +254,7 @@ class NormalizationPipeline:
         required = {"open", "high", "low", "close", "log_return"}
         if not required.issubset(df.columns):
             return False
-        valid_count = int(df.get("ohlcv_valid", pd.Series([1] * len(df))).sum())
+        valid_count = int(df.get("ohlcv_valid", pd.Series([1] * len(df))).fillna(0).sum())
         return valid_count >= min_bars * 0.8  # 80% valid bars required
 
     def normalize_bar(
@@ -296,7 +296,7 @@ class NormalizationPipeline:
         out["log_volume"] = float(np.log1p(max(v, 0.0)))
 
         # log_return
-        lr = float(np.log(c / prev_close)) if prev_close and prev_close > 0.0 and c > 0.0 else 0.0
+        lr = float(np.nan_to_num(np.log(c / prev_close), nan=0.0)) if prev_close and prev_close > 0.0 and c > 0.0 else 0.0
         out["log_return"] = lr
 
         # gap_flag: absolute log return > 0.5%

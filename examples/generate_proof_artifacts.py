@@ -127,7 +127,7 @@ def generate_xauusd_synthetic(start="2019-01-02", n_days=1260, seed=42) -> pd.Da
     price = 1280.0
     rows = []
     for date in dates:
-        gbm = (mu - 0.5 * sigma**2) * dt + sigma * np.sqrt(dt) * rng.standard_normal()
+        gbm = np.nan_to_num((mu - 0.5 * sigma**2) * dt + sigma * np.sqrt(max(dt, 0.0)) * rng.standard_normal(), nan=0.0)
         ou = theta * (long_run - price) * dt
         price *= np.exp(gbm)
         price += ou
@@ -199,7 +199,7 @@ def _atr(df, period):
     hl = df["high"] - df["low"]
     hpc = (df["high"] - df["close"].shift()).abs()
     lpc = (df["low"] - df["close"].shift()).abs()
-    tr = pd.concat([hl, hpc, lpc], axis=1).max(axis=1)
+    tr = pd.concat([hl, hpc, lpc], axis=1).fillna(0.0).max(axis=1)
     return tr.ewm(alpha=1 / period, adjust=False).mean()
 
 
@@ -298,7 +298,7 @@ def add_features(df: pd.DataFrame, macro_df=None) -> pd.DataFrame:
             (d["low"] - c.shift(1)).abs(),
         ],
         axis=1,
-    ).max(axis=1)
+    ).fillna(0.0).max(axis=1)
     atr14_raw = tr.ewm(span=14, adjust=False).mean()
     plus_dm = (d["high"] - d["high"].shift(1)).clip(lower=0)
     minus_dm = (d["low"].shift(1) - d["low"]).clip(lower=0)
@@ -420,7 +420,7 @@ try:
         except Exception as _exc:
             logger.error(f"  Macro series fetch failed: {_exc} — skipping")
     if _frames:
-        macro_df = pd.concat(_frames.values(), axis=1).ffill()
+        macro_df = pd.concat(_frames.values(), axis=1).ffill().fillna(0.0)
         logger.info(f"  Macro data: {len(macro_df)} bars, {len(macro_df.columns)} series")
     else:
         logger.info("  No macro data fetched — proceeding without")
@@ -577,16 +577,13 @@ eq_values = [e[1] for e in equity_curve]
 
 n_trades = len(trades_df)
 if n_trades > 0:
-    wins = (trades_df["net_pnl"] > 0).sum()
+    wins = int(np.nan_to_num((trades_df["net_pnl"] > 0).sum(), nan=0))
     win_rate = wins / n_trades
-    avg_win = trades_df.loc[trades_df["net_pnl"] > 0, "net_pnl"].mean() if wins > 0 else 0
-    avg_loss = trades_df.loc[trades_df["net_pnl"] <= 0, "net_pnl"].mean() if (n_trades - wins) > 0 else 0
-    profit_factor = (
-        trades_df.loc[trades_df["net_pnl"] > 0, "net_pnl"].sum()
-        / abs(trades_df.loc[trades_df["net_pnl"] <= 0, "net_pnl"].sum())
-        if abs(trades_df.loc[trades_df["net_pnl"] <= 0, "net_pnl"].sum()) > 0
-        else float("inf")
-    )
+    avg_win = float(np.nan_to_num(trades_df.loc[trades_df["net_pnl"] > 0, "net_pnl"].mean(), nan=0.0)) if wins > 0 else 0
+    avg_loss = float(np.nan_to_num(trades_df.loc[trades_df["net_pnl"] <= 0, "net_pnl"].mean(), nan=0.0)) if (n_trades - wins) > 0 else 0
+    _loss_sum = float(np.nan_to_num(abs(trades_df.loc[trades_df["net_pnl"] <= 0, "net_pnl"].sum()), nan=0.0))
+    _win_sum = float(np.nan_to_num(trades_df.loc[trades_df["net_pnl"] > 0, "net_pnl"].sum(), nan=0.0))
+    profit_factor = (_win_sum / _loss_sum) if _loss_sum > 0 else float("inf")
     total_return = (equity - INITIAL_CAPITAL) / INITIAL_CAPITAL
 
     # Max drawdown
@@ -608,14 +605,14 @@ if n_trades > 0:
     exit_dates_dt = pd.to_datetime(trades_df["exit_date"])
     hold_days_arr = (exit_dates_dt - entry_dates_dt).dt.days.clip(lower=1)
     avg_hold_days = float(hold_days_arr.mean()) if len(hold_days_arr) > 0 else 1.0
-    pnl_arr = trades_df["net_pnl"].values
+    pnl_arr = np.nan_to_num(trades_df["net_pnl"].values, nan=0.0)
     pnl_std = float(np.std(pnl_arr, ddof=1))
     if pnl_std > 0 and avg_hold_days > 0:
-        sharpe = float(np.mean(pnl_arr) / pnl_std * np.sqrt(252.0 / avg_hold_days))
+        sharpe = float(np.nan_to_num(np.mean(pnl_arr) / pnl_std * np.sqrt(252.0 / avg_hold_days), nan=0.0))
     else:
         sharpe = 0.0
     # Sharpe SE at current estimate
-    sharpe_se = float(np.sqrt((1 + 0.5 * sharpe**2) / max(n_trades, 2)))
+    sharpe_se = float(np.nan_to_num(np.sqrt((1 + 0.5 * sharpe**2) / max(n_trades, 2)), nan=0.0))
 
     # Calmar
     calmar = (total_return / abs(max_dd)) if max_dd != 0 else 0.0

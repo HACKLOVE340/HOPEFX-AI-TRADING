@@ -295,7 +295,7 @@ class DukascopyFetcher:
         if not frames:
             return pd.DataFrame()
 
-        combined = pd.concat(frames).sort_index()
+        combined = pd.concat(frames).sort_index().fillna(method="ffill").fillna(0.0)
         # Filter to exact range
         combined = combined[
             (combined.index >= pd.Timestamp(start, tz="UTC")) & (combined.index <= pd.Timestamp(end, tz="UTC"))

@@ -343,7 +343,7 @@ def validate_features(
     # Future-dated index
     if isinstance(X.index, pd.DatetimeIndex):
         now_ts = pd.Timestamp.now(tz=UTC)
-        future_count = int((X.index > now_ts).sum())
+        future_count = int(np.nan_to_num((X.index > now_ts).sum(), nan=0))
         if future_count > 0:
             errors.append(
                 f"{future_count} rows have future timestamps in the feature index — "
