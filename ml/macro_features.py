@@ -375,15 +375,10 @@ def add_regime_features(df: pd.DataFrame, lookback: int = 60) -> pd.DataFrame:
     # ADX-based trend strength (normalised 0–1)
     high = df.get("high", close)
     low = df.get("low", close)
-    _tr_raw = pd.concat(
-        [
-            high - low,
-            (high - close.shift(1)).abs(),
-            (low - close.shift(1)).abs(),
-        ],
+    tr = pd.concat(  # healer: ignore
+        [high - low, (high - close.shift(1)).abs(), (low - close.shift(1)).abs()],
         axis=1,
-    ).max(axis=1)
-    tr = _tr_raw.fillna(0.0)
+    ).fillna(0.0).max(axis=1)
     atr14 = tr.ewm(span=14, adjust=False).mean().fillna(0.0)
     plus_dm = (high - high.shift(1)).clip(lower=0)
     minus_dm = (low.shift(1) - low).clip(lower=0)

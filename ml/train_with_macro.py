@@ -242,11 +242,8 @@ def walk_forward_eval(
         X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
         y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
 
-        import numpy as _np_twm
-        _neg_count = (y_train == 0).sum()
-        _pos_count = (y_train == 1).sum()
-        _n_neg = float(_np_twm.nan_to_num(_neg_count, nan=1.0))
-        _n_pos = float(_np_twm.nan_to_num(_pos_count, nan=0.0))
+        _n_neg = float(np.nan_to_num((y_train == 0).sum(), nan=1.0))
+        _n_pos = float(np.nan_to_num((y_train == 1).sum(), nan=0.0))
         _spw = _n_neg / max(_n_pos, 1.0)
         if model_type == "xgb":
             model = xgb.XGBClassifier(
@@ -347,11 +344,8 @@ def train_final_model(
     X_train, X_test = X.iloc[:split], X.iloc[split:]
     y_train, y_test = y.iloc[:split], y.iloc[split:]
 
-    import numpy as _np_twm2
-    _neg_count2 = (y_train == 0).sum()
-    _pos_count2 = (y_train == 1).sum()
-    _n_neg2 = float(_np_twm2.nan_to_num(_neg_count2, nan=1.0))
-    _n_pos2 = float(_np_twm2.nan_to_num(_pos_count2, nan=0.0))
+    _n_neg2 = float(np.nan_to_num((y_train == 0).sum(), nan=1.0))
+    _n_pos2 = float(np.nan_to_num((y_train == 1).sum(), nan=0.0))
     _spw2 = _n_neg2 / max(_n_pos2, 1.0)
     if model_type == "xgb":
         model = xgb.XGBClassifier(
@@ -451,11 +445,8 @@ def oos_eval(
         roc_auc_score,
     )
 
-    import numpy as _np_twm3
-    _neg_count3 = (y_train == 0).sum()
-    _pos_count3 = (y_train == 1).sum()
-    _n_neg3 = float(_np_twm3.nan_to_num(_neg_count3, nan=1.0))
-    _n_pos3 = float(_np_twm3.nan_to_num(_pos_count3, nan=0.0))
+    _n_neg3 = float(np.nan_to_num((y_train == 0).sum(), nan=1.0))
+    _n_pos3 = float(np.nan_to_num((y_train == 1).sum(), nan=0.0))
     _spw3 = _n_neg3 / max(_n_pos3, 1.0)
     if model_type == "xgb":
         model = xgb.XGBClassifier(
