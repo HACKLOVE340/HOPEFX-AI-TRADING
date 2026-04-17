@@ -39,7 +39,7 @@ if sys.platform == "win32":
                     msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
                 else:
                     msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
-            except OSError:
+            except OSError:  # nosec B110 — non-fatal on Windows; best-effort locking
                 pass  # non-fatal on Windows — best-effort locking
 
     fcntl = _FileLock()

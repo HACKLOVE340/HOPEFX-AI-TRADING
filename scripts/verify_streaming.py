@@ -47,7 +47,7 @@ try:
     from dotenv import load_dotenv
 
     load_dotenv(ROOT / ".env", override=False)
-except ImportError:
+except ImportError:  # nosec B110 — dotenv is optional; env vars may already be set
     pass
 
 OK = "✅"

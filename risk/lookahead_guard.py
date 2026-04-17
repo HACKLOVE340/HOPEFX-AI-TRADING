@@ -58,6 +58,7 @@ logger = logging.getLogger(__name__)
 
 # ── Exceptions ────────────────────────────────────────────────────────────────
 
+
 class LookAheadBiasError(RuntimeError):
     """Raised when future data is accessed during backtesting or live trading."""
 
@@ -72,6 +73,7 @@ class FutureTimestampError(RuntimeError):
 
 # ── Feature timestamp guard ───────────────────────────────────────────────────
 
+
 @dataclass
 class FeatureTimestampGuard:
     """
@@ -82,7 +84,7 @@ class FeatureTimestampGuard:
     """
 
     violations: list[dict[str, Any]] = field(default_factory=list)
-    strict: bool = True   # True = raise; False = log and continue
+    strict: bool = True  # True = raise; False = log and continue
 
     def validate(
         self,
@@ -137,6 +139,7 @@ class FeatureTimestampGuard:
 
 
 # ── Backtest bar guard ────────────────────────────────────────────────────────
+
 
 class BacktestBarGuard:
     """
@@ -207,10 +210,7 @@ class BacktestBarGuard:
         Raises LookAheadBiasError if end > current_index + 1.
         """
         if end - 1 > self._current_index:
-            msg = (
-                f"Look-ahead bias: slice [{start}:{end}] accesses future bars "
-                f"(current={self._current_index})"
-            )
+            msg = f"Look-ahead bias: slice [{start}:{end}] accesses future bars (current={self._current_index})"
             if self._strict:
                 raise LookAheadBiasError(msg)
             logger.warning("BacktestBarGuard (non-strict): %s", msg)
@@ -221,6 +221,7 @@ class BacktestBarGuard:
 
 
 # ── DataFrame shift guard (context manager) ───────────────────────────────────
+
 
 @contextmanager
 def no_lookahead_context(label: str = "") -> Generator[None, None, None]:
@@ -275,6 +276,7 @@ def no_lookahead_context(label: str = "") -> Generator[None, None, None]:
 
 # ── Live trading guard ────────────────────────────────────────────────────────
 
+
 @dataclass
 class LiveTradingGuard:
     """
@@ -293,7 +295,7 @@ class LiveTradingGuard:
     """
 
     max_staleness_seconds: float = 30.0
-    max_future_seconds: float = 2.0   # allow 2s clock skew
+    max_future_seconds: float = 2.0  # allow 2s clock skew
     strict: bool = True
     violations: list[dict[str, Any]] = field(default_factory=list)
 
@@ -348,6 +350,7 @@ class LiveTradingGuard:
         price = _extract_price(tick)
         if price is not None:
             import math
+
             if math.isnan(price) or math.isinf(price):
                 msg = f"Invalid price (NaN/Inf) in tick{' for ' + symbol if symbol else ''}"
                 self._record_violation("invalid_price", symbol, msg, ts or now)
@@ -362,13 +365,15 @@ class LiveTradingGuard:
                 logger.warning(msg)
 
     def _record_violation(self, kind: str, symbol: str, msg: str, ts: float) -> None:
-        self.violations.append({
-            "kind": kind,
-            "symbol": symbol,
-            "message": msg,
-            "tick_ts": _fmt(ts),
-            "detected_at": datetime.now(UTC).isoformat(),
-        })
+        self.violations.append(
+            {
+                "kind": kind,
+                "symbol": symbol,
+                "message": msg,
+                "tick_ts": _fmt(ts),
+                "detected_at": datetime.now(UTC).isoformat(),
+            }
+        )
         self.violations = self.violations[-500:]
         logger.warning("LiveTradingGuard [%s]: %s", kind, msg)
 
@@ -380,6 +385,7 @@ class LiveTradingGuard:
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _to_epoch(ts: datetime | float | int) -> float:
     if isinstance(ts, datetime):
@@ -407,7 +413,7 @@ def _extract_tick_ts(tick: Any) -> float | None:
                 if f > 4_102_444_800:
                     f /= 1000.0
                 return f
-            except (TypeError, ValueError):
+            except (TypeError, ValueError):  # nosec B110 — try next attribute on conversion failure
                 pass
     return None
 
@@ -419,7 +425,7 @@ def _extract_price(tick: Any) -> float | None:
         if val is not None:
             try:
                 return float(val)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError):  # nosec B110 — try next attribute on conversion failure
                 pass
     # Try bid/ask midpoint
     bid = tick.get("bid") if isinstance(tick, dict) else getattr(tick, "bid", None)
@@ -427,7 +433,7 @@ def _extract_price(tick: Any) -> float | None:
     if bid is not None and ask is not None:
         try:
             return (float(bid) + float(ask)) / 2.0
-        except (TypeError, ValueError):
+        except (TypeError, ValueError):  # nosec B110 — bid/ask unavailable; caller handles None
             pass
     return None
 

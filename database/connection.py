@@ -510,12 +510,13 @@ if SQLALCHEMY_AVAILABLE:
         # Check DB circuit breaker before attempting a connection
         try:
             from resilience.service_circuit_breakers import db_breaker
+
             if db_breaker.is_open:
                 raise RuntimeError(
                     "Database circuit breaker is OPEN — service temporarily unavailable. "
                     f"Retry in {db_breaker._seconds_until_probe():.0f}s."
                 )
-        except ImportError:
+        except ImportError:  # nosec B110 — circuit breaker is optional; proceed without it
             pass
 
         try:
@@ -523,6 +524,7 @@ if SQLALCHEMY_AVAILABLE:
             # Record success with the DB circuit breaker (sync-safe)
             try:
                 from resilience.service_circuit_breakers import db_breaker as _db_cb
+
                 _db_cb.record_success()
             except Exception:  # nosec B110 — circuit breaker is non-fatal
                 pass
@@ -534,6 +536,7 @@ if SQLALCHEMY_AVAILABLE:
             # Record failure with the DB circuit breaker (sync-safe)
             try:
                 from resilience.service_circuit_breakers import db_breaker as _db_cb
+
                 _db_cb.record_failure(_db_exc)
             except Exception:  # nosec B110 — circuit breaker is non-fatal
                 pass

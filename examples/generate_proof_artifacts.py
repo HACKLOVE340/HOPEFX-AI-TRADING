@@ -699,7 +699,7 @@ if n_trades > 0:
 # ── 6. Equity curve plot ──────────────────────────────────────────────────────
 
 fig, axes = plt.subplots(3, 1, figsize=(12, 10), gridspec_kw={"height_ratios": [3, 1, 1]})
-_data_tag = "Real GC=F Data" if _USING_REAL_DATA else "⚠ SYNTHETIC DATA — NOT real market data"
+_data_tag = "Real GC=F Data" if _USING_REAL_DATA else "⚠ SYNTHETIC DATA — NOT real market data"  # healer: ignore — chart label only
 fig.suptitle(
     f"HOPEFX · XAUUSD RandomForest Strategy · Backtest Results\n"
     f"({_data_tag}, {_actual_years}Y, {_data_start} – {_data_end})",

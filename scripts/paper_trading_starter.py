@@ -55,7 +55,7 @@ try:
     from dotenv import load_dotenv
 
     load_dotenv()
-except ImportError:
+except ImportError:  # nosec B110 — dotenv is optional; env vars may already be set
     pass  # dotenv optional; env vars may already be set
 
 # ── logging ───────────────────────────────────────────────────────────────────

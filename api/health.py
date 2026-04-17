@@ -84,6 +84,7 @@ def mark_startup_complete(tasks_done: list[str] | None = None, tasks_failed: lis
     # Publish to Prometheus so the hopefx_startup_complete alert rule fires
     try:
         from resilience.auto_rollback import _STARTUP_COMPLETE  # type: ignore[import]
+
         _STARTUP_COMPLETE.set(1)
     except Exception:  # nosec B110 — non-fatal
         pass
@@ -340,8 +341,10 @@ def _check_ready_sync() -> bool:
     """
     try:
         from resilience.service_circuit_breakers import (
-            redis_breaker, db_breaker,
+            redis_breaker,
+            db_breaker,
         )
+
         # Any open critical breaker → not ready
         if redis_breaker.is_open:
             return False
@@ -354,6 +357,7 @@ def _check_ready_sync() -> bool:
     # Check kill switch
     try:
         from kill_switch import KillSwitch
+
         ks = KillSwitch.get_instance()
         if ks and ks.is_active():
             return False
@@ -529,7 +533,7 @@ async def prometheus_metrics() -> str:
             "# TYPE hopefx_process_rss_mb gauge",
             f"hopefx_process_rss_mb {mem_mb:.1f}",
         ]
-    except ImportError:
+    except ImportError:  # nosec B110 — psutil is optional; skip memory metrics when not installed
         pass  # psutil is optional — skip memory metrics when not installed
     except Exception as exc:
         logger.debug("Failed to collect memory metrics: %s", exc)
@@ -545,6 +549,7 @@ async def prometheus_metrics() -> str:
     # Circuit breaker states (0=closed/healthy, 1=half_open, 2=open/unhealthy)
     try:
         from resilience.service_circuit_breakers import get_all_breaker_status
+
         breaker_statuses = get_all_breaker_status()
         state_map = {"closed": 0, "half_open": 1, "open": 2}
         lines += [
@@ -565,6 +570,7 @@ async def prometheus_metrics() -> str:
     # Auto-rollback status
     try:
         from resilience.auto_rollback import rollback_manager as _rm
+
         rm_status = _rm.get_status()
         rollback_count = rm_status.get("total_rollbacks", 0)
         lines += [
@@ -688,9 +694,7 @@ async def _deep_check_redis() -> DeepCheckResult:
         await asyncio.wait_for(client.delete(probe_key), timeout=_CHECK_TIMEOUT_SEC)
         await client.aclose()
         latency_ms = (time.perf_counter() - t0) * 1000
-        match = read_val is not None and (
-            read_val == probe_val or read_val == probe_val.encode()
-        )
+        match = read_val is not None and (read_val == probe_val or read_val == probe_val.encode())
         return DeepCheckResult(
             name="redis_rw",
             status="ok" if match else "error",
@@ -761,7 +765,8 @@ async def _deep_check_broker() -> DeepCheckResult:
         # Try get_account_info first; fall back to is_connected()
         if hasattr(broker, "get_account_info"):
             info = await asyncio.wait_for(
-                broker.get_account_info() if asyncio.iscoroutinefunction(broker.get_account_info)
+                broker.get_account_info()
+                if asyncio.iscoroutinefunction(broker.get_account_info)
                 else asyncio.get_event_loop().run_in_executor(None, broker.get_account_info),
                 timeout=_CHECK_TIMEOUT_SEC,
             )
@@ -808,9 +813,12 @@ async def _deep_check_ml() -> DeepCheckResult:
         if engine is None:
             # Fall back to loading the model artifact directly
             import os as _os
+
             model_path = _os.path.join(
                 _os.path.dirname(_os.path.dirname(__file__)),
-                "ml", "saved_models", "advanced_oos.pkl",
+                "ml",
+                "saved_models",
+                "advanced_oos.pkl",
             )
             if not _os.path.isfile(model_path):
                 return DeepCheckResult(
@@ -819,6 +827,7 @@ async def _deep_check_ml() -> DeepCheckResult:
                     detail=f"ML engine not in app_state and model not found at {model_path}",
                 )
             import joblib  # type: ignore[import]
+
             model = joblib.load(model_path)  # nosec B301
             latency_ms = (time.perf_counter() - t0) * 1000
             return DeepCheckResult(
@@ -869,10 +878,7 @@ async def _deep_check_circuit_breakers() -> DeepCheckResult:
         status = get_all_breaker_status()
         open_count = status.get("open_count", 0)
         latency_ms = (time.perf_counter() - t0) * 1000
-        detail_parts = [
-            f"{name}={info.get('state', 'unknown')}"
-            for name, info in status.get("breakers", {}).items()
-        ]
+        detail_parts = [f"{name}={info.get('state', 'unknown')}" for name, info in status.get("breakers", {}).items()]
         return DeepCheckResult(
             name="circuit_breakers",
             status="ok" if open_count == 0 else "error",

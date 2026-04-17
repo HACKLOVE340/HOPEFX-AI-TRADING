@@ -149,7 +149,7 @@ class SLTPMonitor:
             self._task.cancel()
             try:  # noqa: SIM105 — contextlib.suppress is not async-compatible
                 await self._task
-            except (asyncio.CancelledError, Exception):
+            except (asyncio.CancelledError, Exception):  # nosec B110 — task cancellation cleanup; non-fatal
                 pass
             self._task = None
         logger.info("SLTPMonitor stopped.")

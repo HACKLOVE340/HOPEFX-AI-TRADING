@@ -41,22 +41,24 @@ _THRESHOLD = int(os.getenv("COVERAGE_THRESHOLD", "80"))
 _SKIP = os.getenv("SKIP_COVERAGE_GATE", "0").strip() == "1"
 
 # Modules excluded from coverage gate (generated code, migrations, examples)
-_EXCLUDED_PATTERNS = frozenset({
-    "alembic/",
-    "migrations/",
-    "examples/",
-    "scripts/",
-    "docs/",
-    "frontend/",
-    "mobile/",
-    "mobile-app/",
-    "dashboard/",
-    "grafana/",
-    "helm/",
-    "k8s/",
-    "docker/",
-    "nginx/",
-})
+_EXCLUDED_PATTERNS = frozenset(
+    {
+        "alembic/",
+        "migrations/",
+        "examples/",
+        "scripts/",
+        "docs/",
+        "frontend/",
+        "mobile/",
+        "mobile-app/",
+        "dashboard/",
+        "grafana/",
+        "helm/",
+        "k8s/",
+        "docker/",
+        "nginx/",
+    }
+)
 
 
 def _is_excluded(path: Path) -> bool:
@@ -98,7 +100,9 @@ def _run_coverage(module_path: Path, test_path: Path) -> tuple[float | None, str
     module_dotted = str(module_path).replace("/", ".").replace("\\", ".").removesuffix(".py")
 
     cmd = [
-        sys.executable, "-m", "pytest",
+        sys.executable,
+        "-m",
+        "pytest",
         str(test_path),
         f"--cov={module_dotted}",
         "--cov-report=term-missing:skip-covered",
@@ -128,7 +132,7 @@ def _run_coverage(module_path: Path, test_path: Path) -> tuple[float | None, str
                 if parts and parts[-1].endswith("%"):
                     try:
                         return float(parts[-1].rstrip("%")), output
-                    except ValueError:
+                    except ValueError:  # nosec B110 — malformed coverage line; try next line
                         pass
 
         return None, output
@@ -179,18 +183,13 @@ def main(argv: list[str]) -> int:
             continue
 
         if coverage_pct < _THRESHOLD:
-            failures.append(
-                f"{path}: coverage {coverage_pct:.0f}% < {_THRESHOLD}% threshold "
-                f"(test: {test_file})"
-            )
+            failures.append(f"{path}: coverage {coverage_pct:.0f}% < {_THRESHOLD}% threshold (test: {test_file})")
             print(
                 f"pre_commit_coverage: FAIL {path}: {coverage_pct:.0f}% < {_THRESHOLD}%",
                 file=sys.stderr,
             )
         else:
-            print(
-                f"pre_commit_coverage: OK   {path}: {coverage_pct:.0f}% >= {_THRESHOLD}%"
-            )
+            print(f"pre_commit_coverage: OK   {path}: {coverage_pct:.0f}% >= {_THRESHOLD}%")
 
     if not checked:
         return 0

@@ -810,7 +810,7 @@ async def close_position(
             try:
                 _loop = _asyncio.get_running_loop()
                 _loop.create_task(_orch.event_bus.publish(_event))
-            except RuntimeError:
+            except RuntimeError:  # nosec B110 — no running loop in sync context; publish is non-fatal
                 pass
     except Exception as _pc_exc:
         logger.debug("POSITION_CLOSED event publish skipped: %s", _pc_exc)
@@ -1732,5 +1732,3 @@ async def run_stress_test(
     except Exception:
         _logger.exception("Stress test failed: %s")
         raise HTTPException(status_code=500, detail="Stress test failed — check server logs") from None
-
-
