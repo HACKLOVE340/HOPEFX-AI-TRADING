@@ -51,8 +51,10 @@ email-validator>=2.1.0,<3.0.0
 # ── Data & numerics ───────────────────────────────────────────────────────────
 pandas>=2.1.0
 numpy>=1.26.0
-requests>=2.32.4
-aiohttp>=3.12.15
+requests>=2.33.1  # CVE-2026-25645 fixed in 2.33.0+
+aiohttp>=3.13.5  # CVE-2025-69223..69230, CVE-2026-22815..34520 fixed in 3.13.x
+certifi>=2026.2.25  # CVE-2024-39689 fixed in 2024.7.4+; use latest CA bundle
+curl-cffi>=0.15.0  # CVE-2026-33752: SSRF via redirect — transitive dep of yfinance
 vaderSentiment>=3.3.2
 textblob>=0.18.0,<1.0.0
 openai>=1.0.0
@@ -61,7 +63,6 @@ tqdm>=4.67.0
 rich>=13.0.0
 httpx>=0.26.0
 yfinance>=0.2.36
-curl-cffi>=0.15.0
 
 # ── Machine learning ──────────────────────────────────────────────────────────
 scikit-learn>=1.6.0
@@ -94,7 +95,7 @@ msgpack>=1.0.0
 lz4>=4.0.0
 # fernet removed: all production code uses `from cryptography.fernet import Fernet`
 # (cryptography>=46.0.7 above). The standalone fernet package is never imported.
-pillow>=11.3.0
+pillow>=12.2.0  # CVE-2026-25990, CVE-2026-40192 fixed in 12.x
 aiofiles>=23.0.0
 psutil>=5.9.0
 circuitbreaker>=2.0.0
@@ -121,7 +122,7 @@ ta>=0.11.0
 simplefix>=1.0.1
 
 # ── GraphQL ───────────────────────────────────────────────────────────────────
-strawberry-graphql[fastapi]>=0.270.0
+strawberry-graphql[fastapi]>=0.314.3  # CVE-2026-35523, CVE-2026-35526 fixed in 0.314.x
 
 # ── Rate limiting ─────────────────────────────────────────────────────────────
 slowapi>=0.1.9
