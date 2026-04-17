@@ -83,7 +83,7 @@ def _align_to_daily(htf: pd.DataFrame, daily_dates: pd.DatetimeIndex) -> pd.Data
 
 
 def _ema(s: pd.Series, n: int) -> pd.Series:
-    return s.ewm(span=n, adjust=False).mean()
+    return s.ewm(span=n, adjust=False).mean().fillna(s)
 
 
 def _rsi(s: pd.Series, n: int = 14) -> pd.Series:

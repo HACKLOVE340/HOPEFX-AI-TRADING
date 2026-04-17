@@ -131,7 +131,10 @@ class FeatureEngineer:
 
         # ── Stationary price-based features ──────────────────────────────────
         data["returns"] = data[target_col].pct_change(fill_method=None)
-        data["log_returns"] = np.log(data[target_col] / data[target_col].shift(1))
+        data["log_returns"] = np.nan_to_num(
+            np.log(data[target_col].clip(lower=1e-9) / data[target_col].shift(1).clip(lower=1e-9)),
+            nan=0.0, posinf=0.0, neginf=0.0,
+        )
 
         # Lag features: return lags only (stationary).
         # close_lag_N removed — raw price levels are non-stationary over 50 years
@@ -293,12 +296,12 @@ class FeatureEngineer:
         gain = delta.where(delta > 0, 0)
         loss = -delta.where(delta < 0, 0)
 
-        avg_gain = gain.ewm(alpha=1 / period, adjust=False).mean()
-        avg_loss = loss.ewm(alpha=1 / period, adjust=False).mean()
+        avg_gain = gain.ewm(alpha=1 / period, adjust=False).mean().fillna(0.0)
+        avg_loss = loss.ewm(alpha=1 / period, adjust=False).mean().fillna(0.0)
 
-        rs = avg_gain / avg_loss
+        rs = avg_gain / avg_loss.replace(0, 1e-9)
         rsi = 100 - (100 / (1 + rs))
-        return rsi
+        return rsi.fillna(50.0)
 
     @staticmethod
     def _calculate_atr(data: pd.DataFrame, period: int = 14) -> pd.Series:
@@ -311,8 +314,8 @@ class FeatureEngineer:
         tr2 = abs(high - close.shift(1))
         tr3 = abs(low - close.shift(1))
 
-        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-        atr = tr.ewm(alpha=1 / period, adjust=False).mean()
+        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1).fillna(0.0)
+        atr = tr.ewm(alpha=1 / period, adjust=False).mean().fillna(0.0)
         return atr
 
     @staticmethod
@@ -535,7 +538,7 @@ class LSTMModel:
         predictions = self.predict(X_test)
 
         mse = mean_squared_error(y_test, predictions)
-        rmse = np.sqrt(mse)
+        rmse = np.sqrt(max(float(__import__("numpy").nan_to_num(mse, nan=0.0)), 0.0))
         mae = mean_absolute_error(y_test, predictions)
         r2 = r2_score(y_test, predictions)
 
@@ -618,10 +621,10 @@ class XGBoostModel:
         # class receives proportionally higher gradient weight.
         if self.model_type == "classifier":
             y_arr = np.asarray(y_train)
-            neg = int((y_arr == 0).sum())
-            pos = int((y_arr == 1).sum())
+            neg = int(np.nan_to_num((y_arr == 0).sum(), nan=0))
+            pos = int(np.nan_to_num((y_arr == 1).sum(), nan=0))
             if pos > 0 and neg > 0:
-                self.model.set_params(scale_pos_weight=neg / pos)
+                self.model.set_params(scale_pos_weight=neg / max(pos, 1))
 
         eval_set = [(X_train, y_train)]
         if X_val is not None and y_val is not None:
@@ -749,7 +752,7 @@ class XGBoostModel:
             }
         # Regression metrics
         mse = mean_squared_error(y_test, predictions)
-        rmse = np.sqrt(mse)
+        rmse = np.sqrt(max(float(__import__("numpy").nan_to_num(mse, nan=0.0)), 0.0))
         mae = mean_absolute_error(y_test, predictions)
         r2 = r2_score(y_test, predictions)
 
@@ -908,7 +911,7 @@ class RandomForestModel:
                 "confusion_matrix": cm.tolist(),
             }
         mse = mean_squared_error(y_test, predictions)
-        rmse = np.sqrt(mse)
+        rmse = np.sqrt(max(float(__import__("numpy").nan_to_num(mse, nan=0.0)), 0.0))
         mae = mean_absolute_error(y_test, predictions)
         r2 = r2_score(y_test, predictions)
 

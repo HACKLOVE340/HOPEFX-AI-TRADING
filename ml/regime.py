@@ -173,8 +173,8 @@ class RegimeDetector:
         covars = self.hmm.covars_
 
         for i, (mean, cov) in enumerate(zip(means, covars, strict=False)):
-            ret_mean = mean[0]
-            vol = np.sqrt(cov[0, 0])
+            ret_mean = float(np.nan_to_num(mean[0], nan=0.0))
+            vol = np.sqrt(max(float(np.nan_to_num(cov[0, 0], nan=0.0)), 0.0))
 
             # Classify based on return mean and volatility
             if ret_mean > 0.001 and vol < 0.3:
@@ -214,7 +214,7 @@ class RegimeDetector:
             stats[regime.name] = {
                 "current_duration": duration,
                 "mean_return": float(self.hmm.means_[state][0]),
-                "volatility": float(np.sqrt(self.hmm.covars_[state][0, 0])),
+                "volatility": float(np.sqrt(max(float(np.nan_to_num(self.hmm.covars_[state][0, 0], nan=0.0)), 0.0))),
                 "transition_probs": self.hmm.transmat_[state].tolist(),
             }
 

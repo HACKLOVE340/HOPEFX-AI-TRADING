@@ -693,8 +693,8 @@ def _atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
             (l - c.shift(1)).abs(),
         ],
         axis=1,
-    ).max(axis=1)
-    return tr.ewm(span=period, adjust=False).mean()
+    ).max(axis=1).fillna(0.0)
+    return tr.ewm(span=period, adjust=False).mean().fillna(0.0)
 
 
 def _zscore(s: pd.Series, w: int) -> pd.Series:
@@ -730,8 +730,8 @@ def _rolling_hurst(series: pd.Series, window: int = 40) -> pd.Series:
                     rs_vals.append(np.mean(rs_chunk))
             if len(rs_vals) < 2:
                 return 0.5
-            log_lags = np.log(list(lags)[: len(rs_vals)])
-            log_rs = np.log(rs_vals)
+            log_lags = np.log(np.maximum(list(lags)[: len(rs_vals)], 1e-9))
+            log_rs = np.log(np.maximum(np.nan_to_num(rs_vals, nan=1e-9), 1e-9))
             h = np.polyfit(log_lags, log_rs, 1)[0]
             return float(np.clip(h, 0.0, 1.0))
         except Exception:  # nosec B110 — numerical fallback for Hurst exponent

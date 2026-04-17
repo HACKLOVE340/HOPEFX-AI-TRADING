@@ -166,8 +166,8 @@ class AdvancedFeatureEngineer:
 
         # Moving averages — min_periods=1 ensures no leading NaN rows
         for period in [5, 10, 20, 50, 200]:
-            df[f"sma_{period}"] = df["close"].rolling(period, min_periods=1).mean()
-            df[f"ema_{period}"] = df["close"].ewm(span=period, min_periods=1).mean()
+            df[f"sma_{period}"] = df["close"].rolling(period, min_periods=1).mean().fillna(df["close"])
+            df[f"ema_{period}"] = df["close"].ewm(span=period, min_periods=1).mean().fillna(df["close"])
 
         # Price vs MA
         df["price_sma_20_ratio"] = df["close"] / (df["sma_20"] + 1e-10)
@@ -225,7 +225,7 @@ class AdvancedFeatureEngineer:
 
         # Volume SMA — min_periods=1 avoids leading NaN
         for period in [5, 20]:
-            df[f"volume_sma_{period}"] = df["volume"].rolling(period, min_periods=1).mean()
+            df[f"volume_sma_{period}"] = df["volume"].rolling(period, min_periods=1).mean().fillna(df["volume"])
 
         # Volume ratio
         df["volume_ratio"] = df["volume"] / (df["volume_sma_20"] + 1e-10)
@@ -256,7 +256,7 @@ class AdvancedFeatureEngineer:
         lower_shadow = np.minimum(df["close"], df["open"]) - df["low"]
 
         # Hammer/Hanging Man
-        body_mean = body.rolling(20, min_periods=1).mean()
+        body_mean = body.rolling(20, min_periods=1).mean().fillna(body)
         df["hammer_score"] = (lower_shadow > 2 * upper_shadow).astype(int) * (body < body_mean).astype(int)
 
         # Doji
@@ -359,11 +359,11 @@ class AdvancedFeatureEngineer:
         prices: pd.Series,
     ) -> tuple[pd.Series, pd.Series, pd.Series]:
         """Calculate MACD"""
-        ema12 = prices.ewm(span=12, min_periods=1).mean()
-        ema26 = prices.ewm(span=26, min_periods=1).mean()
+        ema12 = prices.ewm(span=12, min_periods=1).mean().fillna(prices)
+        ema26 = prices.ewm(span=26, min_periods=1).mean().fillna(prices)
 
         macd = ema12 - ema26
-        signal = macd.ewm(span=9, min_periods=1).mean()
+        signal = macd.ewm(span=9, min_periods=1).mean().fillna(0.0)
         hist = macd - signal
 
         return macd, signal, hist
@@ -378,7 +378,7 @@ class AdvancedFeatureEngineer:
         high_max = df["high"].rolling(period).max()
 
         k = 100 * ((df["close"] - low_min) / (high_max - low_min + 1e-10))
-        d = k.rolling(3, min_periods=1).mean()
+        d = k.rolling(3, min_periods=1).mean().fillna(k)
 
         return k, d
 
@@ -437,7 +437,7 @@ class AdvancedFeatureEngineer:
             probs = counts / len(returns)
             probs = probs[probs > 0]
 
-            entropy = -np.sum(probs * np.log(probs + 1e-10))
+            entropy = -np.sum(np.nan_to_num(probs * np.log(probs + 1e-10), nan=0.0))
             return entropy
         except (ValueError, FloatingPointError):
             return 0
@@ -459,11 +459,12 @@ class AdvancedFeatureEngineer:
 
             _, counts = np.unique(orderings, return_counts=True)
             probs = counts / len(orderings)
-            entropy = -np.sum(probs * np.log(probs + 1e-10))
+            entropy = -np.sum(np.nan_to_num(probs * np.log(probs + 1e-10), nan=0.0))
 
             import math as _math
 
-            return entropy / np.log(_math.factorial(order))
+            denom = np.log(max(_math.factorial(order), 1))
+            return entropy / max(denom, 1e-9)
         except (ValueError, FloatingPointError):
             return 0
 
@@ -493,7 +494,7 @@ class AdvancedFeatureEngineer:
             std_dev = np.std(returns, ddof=1)
 
             if std_dev > 0 and range_val > 0 and len(returns) > 1:
-                hurst = np.log(range_val / std_dev) / np.log(len(returns))
+                hurst = np.nan_to_num(np.log(range_val / max(std_dev, 1e-9)) / np.log(max(len(returns), 2)), nan=0.5)
                 return float(np.clip(hurst, 0.0, 1.0))
 
             return 0.5
@@ -521,7 +522,7 @@ class AdvancedFeatureEngineer:
             coeffs = np.polyfit(x, cumulative, 1)
             trend = np.polyval(coeffs, x)
 
-            fluctuation = float(np.sqrt(np.mean((cumulative - trend) ** 2)))
+            fluctuation = float(np.sqrt(max(float(np.nan_to_num(np.mean((cumulative - trend) ** 2), nan=0.0)), 0.0)))
             # Normalise to a bounded [0,1] range via tanh
             return float(np.tanh(fluctuation))
         except (ValueError, FloatingPointError, np.linalg.LinAlgError):
@@ -767,14 +768,14 @@ class AdvancedFeatureEngineer:
 
         # Short-window MAs
         for p in [5, 10, 20]:
-            out[f"sma_{p}"] = out["close"].rolling(p, min_periods=1).mean()
-            out[f"ema_{p}"] = out["close"].ewm(span=p, min_periods=1).mean()
+            out[f"sma_{p}"] = out["close"].rolling(p, min_periods=1).mean().fillna(out["close"])
+            out[f"ema_{p}"] = out["close"].ewm(span=p, min_periods=1).mean().fillna(out["close"])
 
         out["price_sma_20_ratio"] = out["close"] / (out["sma_20"] + 1e-10)
 
         # Volatility
-        out["volatility_10d"] = out["returns"].rolling(10, min_periods=2).std()
-        out["volatility_20d"] = out["returns"].rolling(20, min_periods=2).std()
+        out["volatility_10d"] = out["returns"].rolling(10, min_periods=2).std().fillna(0.0)
+        out["volatility_20d"] = out["returns"].rolling(20, min_periods=2).std().fillna(0.0)
         out["tr"] = np.maximum(
             out["high"] - out["low"],
             np.maximum(
@@ -782,7 +783,7 @@ class AdvancedFeatureEngineer:
                 abs(out["low"] - out["close"].shift()),
             ),
         )
-        out["atr_14"] = out["tr"].rolling(14, min_periods=1).mean()
+        out["atr_14"] = out["tr"].rolling(14, min_periods=1).mean().fillna(0.0)
 
         # Momentum
         out["rsi_14"] = self._calculate_rsi(out["close"], 14)
@@ -830,9 +831,9 @@ class AdvancedFeatureEngineer:
         # Append new bar to window
         new_row = pd.DataFrame([new_bar])
         if not isinstance(window.index, pd.DatetimeIndex):
-            combined = pd.concat([window, new_row], ignore_index=True)
+            combined = pd.concat([window, new_row], ignore_index=True).fillna(method="ffill").fillna(0.0)
         else:
-            combined = pd.concat([window, new_row])
+            combined = pd.concat([window, new_row]).fillna(method="ffill").fillna(0.0)
 
         # Compute a minimal feature set suitable for live inference.
         # We bypass engineer_features (which calls dropna and requires 200+ bars)

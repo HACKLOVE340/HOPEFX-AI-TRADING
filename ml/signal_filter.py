@@ -543,9 +543,9 @@ class SignalFilter:
                 closes = np.array(ohlcv["close"].values[-50:], dtype=float)
                 if len(closes) >= 20:
                     hurst = self._hurst_exponent(closes)
-                    log_ret = np.diff(np.log(closes))
-                    rv_14 = float(np.std(log_ret[-14:])) if len(log_ret) >= 14 else 0.0
-                    rv_90 = float(np.std(log_ret)) if len(log_ret) >= 20 else rv_14
+                    log_ret = np.nan_to_num(np.diff(np.log(np.maximum(closes, 1e-9))), nan=0.0, posinf=0.0, neginf=0.0)
+                    rv_14 = float(np.nan_to_num(np.std(log_ret[-14:]), nan=0.0)) if len(log_ret) >= 14 else 0.0
+                    rv_90 = float(np.nan_to_num(np.std(log_ret), nan=0.0)) if len(log_ret) >= 20 else rv_14
                     if rv_90 > 0 and rv_14 > 2.0 * rv_90:
                         return "HIGH_VOL"
                     if hurst < 0.45:
@@ -708,12 +708,12 @@ class SignalFilter:
                 )
 
             # Realised vol: 14-bar rolling std of log returns
-            log_ret = np.diff(np.log(closes))
+            log_ret = np.nan_to_num(np.diff(np.log(np.maximum(closes, 1e-9))), nan=0.0, posinf=0.0, neginf=0.0)
             if len(log_ret) < 14:
                 return FilterResult(passed=True, confidence=confidence, regime="unknown")
 
-            rv_14 = float(np.std(log_ret[-14:]))
-            rv_90 = float(np.std(log_ret[-90:])) if len(log_ret) >= 90 else rv_14
+            rv_14 = float(np.nan_to_num(np.std(log_ret[-14:]), nan=0.0))
+            rv_90 = float(np.nan_to_num(np.std(log_ret[-90:]), nan=0.0)) if len(log_ret) >= 90 else rv_14
 
             # HIGH_VOL: current vol > 2× long-run vol
             if rv_90 > 0 and rv_14 > 2.0 * rv_90:
@@ -834,10 +834,10 @@ class SignalFilter:
                 r = np.max(dev) - np.min(dev)
                 s = np.std(sub, ddof=1)
                 if s > 0:
-                    rs_vals.append(np.log(r / s))
+                    rs_vals.append(float(np.nan_to_num(np.log(max(r / max(s, 1e-9), 1e-9)), nan=0.0)))
             if len(rs_vals) < 3:
                 return 0.5
-            log_lags = np.log(list(lags[: len(rs_vals)]))
+            log_lags = np.log(np.maximum(list(lags[: len(rs_vals)]), 1e-9))
             hurst = float(np.polyfit(log_lags, rs_vals, 1)[0])
             return max(0.0, min(1.0, hurst))
         except (ValueError, FloatingPointError):

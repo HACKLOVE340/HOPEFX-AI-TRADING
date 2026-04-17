@@ -85,17 +85,17 @@ class TechnicalFeatureEngineer:
         # than the window size, which prevents all rows from being NaN-dropped on
         # small datasets (e.g. sma_200 with n<200).
         for period in [5, 10, 20, 50, 100, 200]:
-            df[f"sma_{period}"] = close.rolling(window=period, min_periods=1).mean()
+            df[f"sma_{period}"] = close.rolling(window=period, min_periods=1).mean().fillna(close)
 
         # Exponential Moving Averages (including 12 and 26 for MACD crossover)
         for period in [5, 10, 12, 20, 26, 50, 100]:
-            df[f"ema_{period}"] = close.ewm(span=period, adjust=False, min_periods=1).mean()
+            df[f"ema_{period}"] = close.ewm(span=period, adjust=False, min_periods=1).mean().fillna(close)
 
         # MACD
-        exp1 = close.ewm(span=12, adjust=False, min_periods=1).mean()
-        exp2 = close.ewm(span=26, adjust=False, min_periods=1).mean()
+        exp1 = close.ewm(span=12, adjust=False, min_periods=1).mean().fillna(close)
+        exp2 = close.ewm(span=26, adjust=False, min_periods=1).mean().fillna(close)
         df["macd"] = exp1 - exp2
-        df["macd_signal"] = df["macd"].ewm(span=9, adjust=False, min_periods=1).mean()
+        df["macd_signal"] = df["macd"].ewm(span=9, adjust=False, min_periods=1).mean().fillna(0.0)
         df["macd_hist"] = df["macd"] - df["macd_signal"]
 
         # Price relative to MAs
@@ -134,7 +134,7 @@ class TechnicalFeatureEngineer:
             low_min = low.rolling(window=period).min()
             high_max = high.rolling(window=period).max()
             df[f"stoch_k_{period}"] = 100 * (close - low_min) / (high_max - low_min)
-            df[f"stoch_d_{period}"] = df[f"stoch_k_{period}"].rolling(window=3, min_periods=1).mean()
+            df[f"stoch_d_{period}"] = df[f"stoch_k_{period}"].rolling(window=3, min_periods=1).mean().fillna(df[f"stoch_k_{period}"])
 
         # Rate of Change (ROC)
         for period in [5, 10, 20]:
@@ -177,8 +177,8 @@ class TechnicalFeatureEngineer:
             high_low = high - low
             high_close = np.abs(high - close.shift())
             low_close = np.abs(low - close.shift())
-            true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-            df[f"atr_{period}"] = true_range.rolling(window=period, min_periods=1).mean()
+            true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1).fillna(0.0)
+            df[f"atr_{period}"] = true_range.rolling(window=period, min_periods=1).mean().fillna(0.0)
 
         # Historical Volatility
         close_safe = close.clip(lower=1e-10)
@@ -327,7 +327,7 @@ class TechnicalFeatureEngineer:
             # Label based on trend direction
             periods = kwargs.get("periods", 10)
 
-            future_ma = close.shift(-periods).rolling(window=periods).mean()  # noqa: lookahead-ok — label creation only
+            future_ma = close.shift(-periods).rolling(window=periods, min_periods=1).mean().fillna(close)  # noqa: lookahead-ok — label creation only
             current_price = close
 
             labels = pd.Series(1, index=df.index)  # HOLD

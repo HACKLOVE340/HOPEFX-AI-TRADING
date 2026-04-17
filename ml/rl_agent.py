@@ -468,7 +468,8 @@ class RLAgent:
         eq = np.array(equity_curve, dtype=float)
         ret = np.diff(eq) / (eq[:-1] + 1e-9)
 
-        sharpe = float(np.mean(ret) / (np.std(ret) + 1e-9) * np.sqrt(252 * 24))
+        ret_safe = np.nan_to_num(ret, nan=0.0)
+        sharpe = float(np.mean(ret_safe) / max(float(np.std(ret_safe)), 1e-9) * np.sqrt(252 * 24))
         total_return = float((eq[-1] - eq[0]) / eq[0])
         peak = np.maximum.accumulate(eq)
         max_dd = float(np.min((eq - peak) / (peak + 1e-9)))

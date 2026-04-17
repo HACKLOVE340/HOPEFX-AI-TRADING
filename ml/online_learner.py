@@ -94,7 +94,8 @@ class EWCRegularizer:
         loss = 0
         for name, param in model.named_parameters():
             if name in self.fisher_dict:
-                loss += (self.fisher_dict[name] * (param - self.optimal_params[name]) ** 2).sum()
+                diff = param - self.optimal_params[name]
+                loss += (self.fisher_dict[name] * diff ** 2).sum()
 
         return self.lambda_ewc * loss
 
@@ -278,10 +279,13 @@ class EnsemblePredictor:
         Poor performers get reduced weight.
         """
         # Softmax weighting based on performance
-        exp_perf = np.exp(
-            [recent_performance.get(i, 0) for i in range(len(self.models))],
+        raw = np.nan_to_num(
+            np.array([recent_performance.get(i, 0) for i in range(len(self.models))], dtype=float),
+            nan=0.0,
         )
-        self.weights = (exp_perf / exp_perf.sum()).tolist()
+        exp_perf = np.exp(np.clip(raw, -50, 50))
+        total = exp_perf.sum()
+        self.weights = (exp_perf / max(total, 1e-9)).tolist()
 
     def add_model(self, model: nn.Module, initial_weight: float = 0.1):
         """Add new model to ensemble (for continual expansion)"""
@@ -430,8 +434,8 @@ class SklearnOnlineLearner:
             # Log returns (last 20 bars)
             if "close" in bars.columns:
                 closes = bars["close"].values.astype(float)
-                log_ret = np.diff(np.log(np.maximum(closes, 1e-9)))[-20:]
-                vol = float(np.std(log_ret)) if len(log_ret) > 1 else 0.0
+                log_ret = np.nan_to_num(np.diff(np.log(np.maximum(closes, 1e-9))), nan=0.0, posinf=0.0, neginf=0.0)[-20:]
+                vol = float(np.nan_to_num(np.std(log_ret), nan=0.0)) if len(log_ret) > 1 else 0.0
                 flat = np.concatenate([flat, log_ret, [vol]])
 
             # Data layer features (4 scalars from orchestrator)

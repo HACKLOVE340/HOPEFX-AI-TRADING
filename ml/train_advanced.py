@@ -585,7 +585,7 @@ def train_final_model(
             gamma=0.05,
             reg_alpha=0.1,
             reg_lambda=1.5,
-            scale_pos_weight=float((y_train == 0).sum()) / max((y_train == 1).sum(), 1),
+            scale_pos_weight=float(np.nan_to_num((y_train == 0).sum(), nan=1.0)) / max(float(np.nan_to_num((y_train == 1).sum(), nan=0.0)), 1),
             eval_metric="logloss",
             random_state=42,
             n_jobs=1,
@@ -692,7 +692,7 @@ def _sharpe_se(n_trades: int, sr_est: float = 1.52) -> float:
     """
     if n_trades < 2:
         return float("inf")
-    return float(np.sqrt((1 + 0.5 * sr_est**2) / n_trades))
+    return float(np.sqrt(max((1 + 0.5 * float(np.nan_to_num(sr_est, nan=0.0))**2) / max(n_trades, 1), 0.0)))
 
 
 def sharpe_gate_check(n_trades: int, sharpe: float = 1.52, target_n: int = 600) -> dict:
@@ -817,7 +817,7 @@ class SharpeProgressTracker:
         std_r = float(arr.std(ddof=1))
 
         ann_return = mean_r * self._annualise
-        ann_vol = std_r * np.sqrt(self._annualise)
+        ann_vol = float(np.nan_to_num(std_r, nan=0.0)) * np.sqrt(max(self._annualise, 1e-9))
         sharpe = (ann_return / ann_vol) if ann_vol > 1e-12 else 0.0
         se = _sharpe_se(n, sr_est=sharpe if sharpe > 0 else 1.52)
 
@@ -912,7 +912,7 @@ def oos_eval_advanced(
         gamma=0.05,
         reg_alpha=0.1,
         reg_lambda=1.5,
-        scale_pos_weight=float((y_train == 0).sum()) / max((y_train == 1).sum(), 1),
+        scale_pos_weight=float(np.nan_to_num((y_train == 0).sum(), nan=1.0)) / max(float(np.nan_to_num((y_train == 1).sum(), nan=0.0)), 1),
         eval_metric="logloss",
         random_state=42,
         n_jobs=1,
@@ -936,7 +936,7 @@ def oos_eval_advanced(
     p_value = float(binom_result.pvalue)
 
     # Accuracy SE: sqrt(p*(1-p)/n) — 95% CI half-width
-    acc_se = float(np.sqrt(acc * (1 - acc) / max(n, 1)))
+    acc_se = float(np.sqrt(max(float(np.nan_to_num(acc * (1 - acc), nan=0.0)) / max(n, 1), 0.0)))
 
     logger.info(
         "OOS advanced  acc=%.3f±%.3f  f1=%.3f  auc=%.3f  n=%d  k=%d  p=%.4f  significant=%s",

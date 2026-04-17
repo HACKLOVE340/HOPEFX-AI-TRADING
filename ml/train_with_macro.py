@@ -213,7 +213,7 @@ def _compute_fold_sharpe(
     if std == 0.0:
         return 0.0
 
-    sharpe = mu / std
+    sharpe = float(np.nan_to_num(mu, nan=0.0)) / max(float(np.nan_to_num(std, nan=0.0)), 1e-9)
     if annualise:
         sharpe *= np.sqrt(252)  # daily bars → annualised
     return float(np.clip(sharpe, -10.0, 10.0))
@@ -253,7 +253,7 @@ def walk_forward_eval(
                 gamma=0.1,
                 reg_alpha=0.1,
                 reg_lambda=1.0,
-                scale_pos_weight=float((y_train == 0).sum()) / max((y_train == 1).sum(), 1),
+                scale_pos_weight=float(__import__("numpy").nan_to_num((y_train == 0).sum(), nan=1.0)) / max(float(__import__("numpy").nan_to_num((y_train == 1).sum(), nan=0.0)), 1),
                 eval_metric="logloss",
                 random_state=42,
                 n_jobs=-1,
@@ -352,7 +352,7 @@ def train_final_model(
             gamma=0.1,
             reg_alpha=0.1,
             reg_lambda=1.0,
-            scale_pos_weight=float((y_train == 0).sum()) / max((y_train == 1).sum(), 1),
+            scale_pos_weight=float(__import__("numpy").nan_to_num((y_train == 0).sum(), nan=1.0)) / max(float(__import__("numpy").nan_to_num((y_train == 1).sum(), nan=0.0)), 1),
             eval_metric="logloss",
             random_state=42,
             n_jobs=-1,
@@ -450,7 +450,7 @@ def oos_eval(
             gamma=0.1,
             reg_alpha=0.1,
             reg_lambda=1.0,
-            scale_pos_weight=float((y_train == 0).sum()) / max((y_train == 1).sum(), 1),
+            scale_pos_weight=float(__import__("numpy").nan_to_num((y_train == 0).sum(), nan=1.0)) / max(float(__import__("numpy").nan_to_num((y_train == 1).sum(), nan=0.0)), 1),
             eval_metric="logloss",
             random_state=42,
             n_jobs=-1,
@@ -474,7 +474,7 @@ def oos_eval(
     k = round(acc * n)
 
     # Accuracy SE: sqrt(p*(1-p)/n)
-    acc_se = float(np.sqrt(acc * (1 - acc) / max(n, 1)))
+    acc_se = float(np.sqrt(max(float(np.nan_to_num(acc * (1 - acc), nan=0.0)) / max(n, 1), 0.0)))
 
     # AUC
     try:

@@ -196,10 +196,10 @@ class FeatureEngineer:
         feats["rsi_14"] = self._rsi(c, 14)
 
         # MACD signal
-        ema12 = c.ewm(span=12, adjust=False, min_periods=1).mean()
-        ema26 = c.ewm(span=26, adjust=False, min_periods=1).mean()
+        ema12 = c.ewm(span=12, adjust=False, min_periods=1).mean().fillna(c)
+        ema26 = c.ewm(span=26, adjust=False, min_periods=1).mean().fillna(c)
         macd = ema12 - ema26
-        signal = macd.ewm(span=9, adjust=False, min_periods=1).mean()
+        signal = macd.ewm(span=9, adjust=False, min_periods=1).mean().fillna(0.0)
         feats["macd_hist"] = (macd - signal) / (c + 1e-10)
 
         # Bollinger band position
