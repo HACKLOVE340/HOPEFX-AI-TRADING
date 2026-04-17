@@ -180,7 +180,7 @@ def _synthetic_ohlcv_smoke(ticker: str) -> pd.DataFrame:
     rng = np.random.default_rng(abs(hash(ticker)) % 2**31)
     base = 1800.0 if "GC" in ticker else (40000.0 if "BTC" in ticker else 2500.0)
     returns = rng.standard_normal(n) * 0.015
-    close = base * np.exp(np.cumsum(returns))
+    close = base * np.exp(np.clip(np.cumsum(returns), -50, 50))
     idx = pd.date_range(end=datetime.now(UTC).date(), periods=n, freq="B", tz="UTC")
     return pd.DataFrame(
         {
@@ -337,13 +337,13 @@ def backtest_symbol(
     if n_trades == 0:
         return {"symbol": display_name, "n_trades": 0, "sharpe": 0.0, "accuracy": 0.5}
 
-    pnls = np.array([t["pnl_pct"] for t in trades])
-    raw_pnls = np.array([t.get("raw_pnl_pct", t["pnl_pct"]) for t in trades])
-    tc_costs = np.array([t.get("tc_pct", 0.0) for t in trades])
+    pnls = np.nan_to_num(np.array([t["pnl_pct"] for t in trades], dtype=float), nan=0.0)
+    raw_pnls = np.nan_to_num(np.array([t.get("raw_pnl_pct", t["pnl_pct"]) for t in trades], dtype=float), nan=0.0)
+    tc_costs = np.nan_to_num(np.array([t.get("tc_pct", 0.0) for t in trades], dtype=float), nan=0.0)
     wins = (pnls > 0).sum()
     win_rate = wins / n_trades
-    mean_pnl = pnls.mean()
-    std_pnl = pnls.std(ddof=1) if n_trades > 1 else 1e-6
+    mean_pnl = float(pnls.mean())
+    std_pnl = float(pnls.std(ddof=1)) if n_trades > 1 else 1e-6
     sharpe = float(mean_pnl / std_pnl * np.sqrt(252)) if std_pnl > 0 else 0.0
     max_dd = _max_drawdown(pnls)
 
@@ -521,6 +521,7 @@ def _sharpe_stats(pnls: np.ndarray, n_total: int, target_n: int) -> dict:
             "n_required_for_se_010": 0,
             "message": "No trades.",
         }
+    pnls = np.nan_to_num(pnls, nan=0.0)
     mean_pnl = float(pnls.mean())
     std_pnl = float(pnls.std(ddof=1)) if len(pnls) > 1 else 1e-6
     sharpe = mean_pnl / std_pnl * np.sqrt(252) if std_pnl > 0 else 0.0
