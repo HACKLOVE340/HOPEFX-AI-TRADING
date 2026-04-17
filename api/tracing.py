@@ -140,6 +140,7 @@ def _initialize_provider() -> None:
     # Reuse it rather than creating a second one.
     try:
         from tracing.setup import _tracer_provider as _setup_provider  # type: ignore[attr-defined]
+
         if _setup_provider is not None:
             _provider_initialized = True
             logger.debug("api/tracing: deferred to tracing/setup.py provider — skipping duplicate init")

@@ -237,8 +237,7 @@ async def init_database(s: Any) -> Any:
             )
         # SQLite is expected in dev — log at INFO, not WARNING.
         logger.info(
-            "Database is SQLite (%s) — suitable for local development only. "
-            "Use PostgreSQL for production.",
+            "Database is SQLite (%s) — suitable for local development only. Use PostgreSQL for production.",
             conn_str,
         )
     engine_kwargs: ClassVar[dict] = {}
@@ -2037,17 +2036,20 @@ async def init_auto_rollback(s: Any) -> Any | None:
             """Return True when the /api/health/ready probe would return 503."""
             try:
                 from api.health import _check_ready_sync
+
                 return not _check_ready_sync()
             except Exception:
                 return False
 
-        _rm.register_trigger(RollbackTrigger(
-            name="health_ready_degraded",
-            condition=_health_degraded,
-            strategy=RollbackStrategy.SOFT,
-            description="Readiness probe degraded — disable affected feature flags",
-            cooldown_seconds=300,  # at most once every 5 minutes
-        ))
+        _rm.register_trigger(
+            RollbackTrigger(
+                name="health_ready_degraded",
+                condition=_health_degraded,
+                strategy=RollbackStrategy.SOFT,
+                description="Readiness probe degraded — disable affected feature flags",
+                cooldown_seconds=300,  # at most once every 5 minutes
+            )
+        )
 
         await _rm.start()
         s.auto_rollback = _rm

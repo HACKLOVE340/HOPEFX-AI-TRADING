@@ -483,7 +483,7 @@ async def list_payments(
                         "provider": "stripe",
                         "created_at": (
                             datetime.fromtimestamp(c["created"], tz=UTC).isoformat()
-                            if isinstance(c.get("created"), (int, float))
+                            if isinstance(c.get("created"), int | float)
                             else str(c.get("created", ""))
                         ),
                     }

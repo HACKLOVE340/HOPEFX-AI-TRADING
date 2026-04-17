@@ -125,7 +125,11 @@ class BreakoutStrategy(BaseStrategy):
             current_volume = market_data["volume"].iloc[-1] if "volume" in market_data else 0
 
             # Average volume for confirmation
-            avg_volume = float(np.nan_to_num(market_data["volume"].tail(self.lookback_period).mean(), nan=0.0)) if "volume" in market_data else 0.0
+            avg_volume = (
+                float(np.nan_to_num(market_data["volume"].tail(self.lookback_period).mean(), nan=0.0))
+                if "volume" in market_data
+                else 0.0
+            )
             high_volume = current_volume > avg_volume * 1.2 if avg_volume > 0 else False
 
             # Calculate ATR for volatility

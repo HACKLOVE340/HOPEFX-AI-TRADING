@@ -511,7 +511,9 @@ class PullbackStrategy(BaseStrategy):
     def _atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int) -> pd.Series:
         """Average True Range."""
         prev_close = close.shift(1)
-        tr = pd.concat([high - low, (high - prev_close).abs(), (low - prev_close).abs()], axis=1).fillna(0.0).max(axis=1)  # healer: ignore
+        tr = (
+            pd.concat([high - low, (high - prev_close).abs(), (low - prev_close).abs()], axis=1).fillna(0.0).max(axis=1)
+        )  # healer: ignore
         return tr.rolling(period).mean().fillna(tr)
 
     @staticmethod
@@ -535,7 +537,9 @@ class PullbackStrategy(BaseStrategy):
         prev_close = close.shift(1)
 
         # True Range
-        tr = pd.concat([high - low, (high - prev_close).abs(), (low - prev_close).abs()], axis=1).fillna(0.0).max(axis=1)  # healer: ignore
+        tr = (
+            pd.concat([high - low, (high - prev_close).abs(), (low - prev_close).abs()], axis=1).fillna(0.0).max(axis=1)
+        )  # healer: ignore
 
         # Directional movement
         dm_plus = (high - prev_high).clip(lower=0)

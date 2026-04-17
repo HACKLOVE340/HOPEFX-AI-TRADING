@@ -133,7 +133,9 @@ class FeatureEngineer:
         data["returns"] = data[target_col].pct_change(fill_method=None)
         data["log_returns"] = np.nan_to_num(
             np.log(data[target_col].clip(lower=1e-9) / data[target_col].shift(1).clip(lower=1e-9)),
-            nan=0.0, posinf=0.0, neginf=0.0,
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
         )
 
         # Lag features: return lags only (stationary).

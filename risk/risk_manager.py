@@ -43,6 +43,7 @@ class RiskManager(_BaseRiskManager):
         # Best-effort propagation to the app-level kill switch
         try:
             import sys
+
             app = sys.modules.get("app") or sys.modules.get("run")
             ks = getattr(app, "kill_switch", None)
             if ks is not None and callable(getattr(ks, "activate", None)):

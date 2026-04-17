@@ -645,7 +645,9 @@ class RobustPredictor:
         for lag in [1, 2, 5, 10, 20]:
             features[f"return_lag_{lag}"] = X["close"].pct_change(lag).shift(1)
             mp = min(2, lag)
-            features[f"volatility_{lag}"] = X["close"].pct_change(fill_method=None).rolling(lag, min_periods=mp).std().fillna(0.0).shift(1)
+            features[f"volatility_{lag}"] = (
+                X["close"].pct_change(fill_method=None).rolling(lag, min_periods=mp).std().fillna(0.0).shift(1)
+            )
 
         # ── Technical indicators (past data only) ─────────────────────────────
         sma10 = X["close"].rolling(10, min_periods=1).mean()

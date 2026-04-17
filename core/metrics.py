@@ -107,6 +107,7 @@ if _PROM_AVAILABLE:
     )
 else:
     import os as _os
+
     _app_env = _os.getenv("APP_ENV", "development").lower()
     if _app_env in ("production", "staging"):
         logger.warning(

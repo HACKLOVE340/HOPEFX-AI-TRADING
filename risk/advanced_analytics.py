@@ -421,8 +421,8 @@ class AdvancedRiskAnalytics:
                     _jb_exc,
                 )
 
-        mean_return = np.mean(returns)
-        std_return = np.std(returns)
+        mean_return: float = float(np.mean(returns))
+        std_return: float = float(np.std(returns))
 
         # Z-score for confidence level
         z_score = stats.norm.ppf(1 - confidence_level)
@@ -503,8 +503,8 @@ class AdvancedRiskAnalytics:
         confidence_level = confidence_level or self.var_confidence
         num_simulations = num_simulations or self.mc_simulations
 
-        mean_return = np.mean(returns)
-        std_return = np.std(returns)
+        mean_return: float = float(np.mean(returns))
+        std_return: float = float(np.std(returns))
 
         # Use a local Generator seeded from OS entropy so we do not corrupt the
         # global numpy RNG state. Reproducibility is not required for Monte Carlo VaR.
@@ -1230,7 +1230,9 @@ class AdvancedRiskAnalytics:
             return float("inf") if float(np.mean(excess_returns)) > 0 else 0.0
 
         downside_std = float(np.nan_to_num(np.std(downside_returns), nan=1e-9))
-        return float(np.nan_to_num(np.sqrt(periods_per_year) * np.mean(excess_returns) / max(downside_std, 1e-9), nan=0.0))
+        return float(
+            np.nan_to_num(np.sqrt(periods_per_year) * np.mean(excess_returns) / max(downside_std, 1e-9), nan=0.0)
+        )
 
     def calculate_calmar_ratio(
         self,

@@ -153,7 +153,11 @@ class BollingerBandsStrategy(BaseStrategy):
             percent_b = (current_price - current_lower) / band_width
 
             # Calculate band squeeze (volatility)
-            avg_std = float(np.nan_to_num(std.rolling(window=50).mean().iloc[-1], nan=current_std)) if len(std) >= 50 else current_std
+            avg_std = (
+                float(np.nan_to_num(std.rolling(window=50).mean().iloc[-1], nan=current_std))
+                if len(std) >= 50
+                else current_std
+            )
             is_squeeze = current_std < avg_std * 0.75 if avg_std > 0 else False
 
             signal_type = "HOLD"
