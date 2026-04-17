@@ -459,10 +459,10 @@ def add_regime_interactions(df: pd.DataFrame) -> pd.DataFrame:
     d["ri_rsi_oversold"] = (d["ri_rsi_14"] < 30).astype(int)
 
     # MACD
-    ema12 = c.ewm(span=12, adjust=False).mean()
-    ema26 = c.ewm(span=26, adjust=False).mean()
+    ema12 = c.ewm(span=12, adjust=False, min_periods=1).mean()
+    ema26 = c.ewm(span=26, adjust=False, min_periods=1).mean()
     macd = ema12 - ema26
-    signal_line = macd.ewm(span=9, adjust=False).mean()
+    signal_line = macd.ewm(span=9, adjust=False, min_periods=1).mean()
     d["ri_macd"] = macd
     d["ri_macd_signal"] = signal_line
     d["ri_macd_hist"] = macd - signal_line
