@@ -571,8 +571,9 @@ class PerformanceAnalytics:
         if not returns:
             return 0.0
 
-        mean_return = np.mean(returns)
-        std_return = np.std(returns)
+        ret_arr = np.nan_to_num(np.array(returns, dtype=float), nan=0.0)
+        mean_return = float(np.mean(ret_arr))
+        std_return = float(np.std(ret_arr))
 
         if std_return == 0:
             return 0.0
