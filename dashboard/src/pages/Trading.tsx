@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { createChart, IChartApi, ISeriesApi, CandlestickData } from 'lightweight-charts'
+import { createChart, IChartApi, ISeriesApi, CandlestickData, CandlestickSeries } from 'lightweight-charts'
 import { useStore } from '../store/useStore'
 import { OrderPanel } from '../components/OrderPanel'
 import { PositionTable } from '../components/PositionTable'
@@ -45,7 +45,7 @@ export function Trading() {
       timeScale: { borderColor: '#334155' },
     })
 
-    const series = chart.addCandlestickSeries({
+    const series = chart.addSeries(CandlestickSeries, {
       upColor: '#22c55e',
       downColor: '#ef4444',
       borderUpColor: '#22c55e',
