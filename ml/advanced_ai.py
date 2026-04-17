@@ -310,7 +310,7 @@ class PPORLAgent:
                 self._model.policy.obs_to_tensor(obs.reshape(1, -1))[0],
             ).item(),
         )
-        confidence = float(1 / (1 + np.exp(-value)))
+        confidence = float(1 / (1 + np.exp(-float(np.nan_to_num(value, nan=0.0, posinf=50.0, neginf=-50.0)))))
         return int(action) - 1, confidence  # map {0,1,2} → {-1,0,1}
 
     # ------------------------------------------------------------------

@@ -119,7 +119,7 @@ class BaseMLModel(ABC):
         # For regression tasks
         if len(y_test.shape) == 1 or y_test.shape[1] == 1:
             metrics["mse"] = mean_squared_error(y_test, predictions)
-            metrics["rmse"] = np.sqrt(metrics["mse"])
+            metrics["rmse"] = np.sqrt(max(float(np.nan_to_num(metrics["mse"], nan=0.0)), 0.0))
             metrics["mae"] = mean_absolute_error(y_test, predictions)
             metrics["r2"] = r2_score(y_test, predictions)
 

@@ -524,7 +524,7 @@ class RobustPredictor:
             if mask.sum() == 0:
                 bin_stats.append({"lo": lo, "hi": hi, "n": 0, "precision": np.nan})
                 continue
-            precision = float(oos_outcomes[mask].mean())
+            precision = float(np.nan_to_num(oos_outcomes[mask].mean(), nan=0.0))
             bin_stats.append(
                 {"lo": lo, "hi": hi, "n": int(mask.sum()), "precision": precision},
             )
@@ -676,7 +676,7 @@ class RobustPredictor:
         ema12 = X["close"].ewm(span=12, adjust=False, min_periods=1).mean()
         ema26 = X["close"].ewm(span=26, adjust=False, min_periods=1).mean()
         macd = ema12 - ema26
-        features["macd_signal"] = (macd - macd.ewm(span=9, adjust=False, min_periods=1).mean()).shift(1)
+        features["macd_signal"] = (macd - macd.ewm(span=9, adjust=False, min_periods=1).mean().fillna(0.0)).shift(1)
 
         # Hurst exponent proxy (rolling R/S over 40 bars)
         def _rolling_hurst(prices: pd.Series, window: int = 40) -> pd.Series:
@@ -692,10 +692,10 @@ class RobustPredictor:
                     r = np.max(dev) - np.min(dev)
                     s = np.std(sub, ddof=1)
                     if s > 0 and r > 0:
-                        rs_vals.append(np.log(r / s))
+                        rs_vals.append(float(np.nan_to_num(np.log(max(r / max(s, 1e-9), 1e-9)), nan=0.0)))
                 if len(rs_vals) < 2:
                     return 0.5
-                log_lags = np.log(list(lags[: len(rs_vals)]))
+                log_lags = np.log(np.maximum(list(lags[: len(rs_vals)]), 1e-9))
                 return float(np.clip(np.polyfit(log_lags, rs_vals, 1)[0], 0.0, 1.0))
 
             return prices.rolling(window).apply(_hurst, raw=True)
@@ -706,9 +706,9 @@ class RobustPredictor:
         if all(c in X.columns for c in ["high", "low", "close"]):
             plus_dm = (X["high"] - X["high"].shift(1)).clip(lower=0)
             minus_dm = (X["low"].shift(1) - X["low"]).clip(lower=0)
-            tr_smooth = tr.rolling(14, min_periods=1).mean()
-            plus_di = 100 * plus_dm.rolling(14, min_periods=1).mean() / (tr_smooth + 1e-9)
-            minus_di = 100 * minus_dm.rolling(14, min_periods=1).mean() / (tr_smooth + 1e-9)
+            tr_smooth = tr.rolling(14, min_periods=1).mean().fillna(0.0)
+            plus_di = 100 * plus_dm.rolling(14, min_periods=1).mean().fillna(0.0) / (tr_smooth + 1e-9)
+            minus_di = 100 * minus_dm.rolling(14, min_periods=1).mean().fillna(0.0) / (tr_smooth + 1e-9)
             dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di + 1e-9)
             features["regime_trend_str"] = (dx.rolling(14, min_periods=1).mean() / 100.0).shift(1)
 

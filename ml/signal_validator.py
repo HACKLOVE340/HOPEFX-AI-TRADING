@@ -404,7 +404,8 @@ def _compute_psi(
     ref_pct = ref_counts / max(len(reference), 1) + epsilon
     cur_pct = cur_counts / max(len(current), 1) + epsilon
 
-    psi = float(np.sum((cur_pct - ref_pct) * np.log(cur_pct / ref_pct)))
+    ratio = np.where(ref_pct > 0, cur_pct / np.maximum(ref_pct, 1e-10), 1.0)
+    psi = float(np.nan_to_num(np.sum((cur_pct - ref_pct) * np.log(np.maximum(ratio, 1e-10))), nan=0.0))
     return max(0.0, psi)
 
 

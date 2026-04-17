@@ -206,9 +206,9 @@ def is_parabolic_bubble_regime(
 
         # ── Condition 2: extreme vol spike + post-bubble drawdown ─────────────
         if len(closes) >= 14:
-            log_ret = np.diff(np.log(np.maximum(closes, 1e-9)))
-            rv14 = float(np.std(log_ret[-14:])) if len(log_ret) >= 14 else 0.0
-            rv90 = float(np.std(log_ret[-90:])) if len(log_ret) >= 90 else rv14
+            log_ret = np.nan_to_num(np.diff(np.log(np.maximum(closes, 1e-9))), nan=0.0, posinf=0.0, neginf=0.0)
+            rv14 = float(np.nan_to_num(np.std(log_ret[-14:]), nan=0.0)) if len(log_ret) >= 14 else 0.0
+            rv90 = float(np.nan_to_num(np.std(log_ret[-90:]), nan=0.0)) if len(log_ret) >= 90 else rv14
             peak = float(np.max(closes[-window:]))
             drawdown = (peak - last) / peak if peak > 0 else 0.0
             if rv90 > 0 and rv14 > _PARABOLIC_RV_RATIO * rv90 and drawdown >= _PARABOLIC_DRAWDOWN_PCT:
@@ -381,10 +381,10 @@ def add_regime_features(
             r = np.max(dev) - np.min(dev)
             s = np.std(sub, ddof=1)
             if s > 0:
-                rs_vals.append(np.log(r / s))
+                rs_vals.append(float(np.nan_to_num(np.log(max(r / max(s, 1e-9), 1e-9)), nan=0.0)))
         if len(rs_vals) < 2:
             return 0.5
-        log_lags = np.log(list(lags[: len(rs_vals)]))
+        log_lags = np.log(np.maximum(list(lags[: len(rs_vals)]), 1e-9))
         return float(np.clip(np.polyfit(log_lags, rs_vals, 1)[0], 0.0, 1.0))
 
     X["regime_hurst"] = (
@@ -402,14 +402,14 @@ def add_regime_features(
                 (low - close.shift(1)).abs(),
             ],
             axis=1,
-        ).max(axis=1)
+        ).max(axis=1).fillna(0.0)
         plus_dm = (high - high.shift(1)).clip(lower=0)
         minus_dm = (low.shift(1) - low).clip(lower=0)
-        tr_s = tr.rolling(adx_window).mean()
-        plus_di = 100 * plus_dm.rolling(adx_window).mean() / (tr_s + 1e-9)
-        minus_di = 100 * minus_dm.rolling(adx_window).mean() / (tr_s + 1e-9)
+        tr_s = tr.rolling(adx_window, min_periods=1).mean().fillna(0.0)
+        plus_di = 100 * plus_dm.rolling(adx_window, min_periods=1).mean().fillna(0.0) / (tr_s + 1e-9)
+        minus_di = 100 * minus_dm.rolling(adx_window, min_periods=1).mean().fillna(0.0) / (tr_s + 1e-9)
         dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di + 1e-9)
-        X["regime_trend_str"] = (dx.rolling(adx_window).mean() / 100.0).shift(1)
+        X["regime_trend_str"] = (dx.rolling(adx_window, min_periods=1).mean().fillna(0.0) / 100.0).shift(1)
     else:
         # Fallback: use rolling slope of close as trend proxy
         def _slope(x: np.ndarray) -> float:
@@ -943,7 +943,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
         labels = detect_regime_labels(X, self.hurst_col, self.adx_col)
         total = max(len(labels), 1)
         for regime_id, regime_name in REGIME_NAMES.items():
-            frac = float((labels == regime_id).sum()) / total
+            frac = float(np.nan_to_num((labels == regime_id).sum(), nan=0.0)) / total
             _PROM.regime_distribution.labels(regime=regime_name).set(frac)
             _PROM.predict_total.labels(symbol=symbol, regime=regime_name).inc(amount=int((labels == regime_id).sum()))
 

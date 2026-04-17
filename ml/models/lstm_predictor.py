@@ -306,8 +306,8 @@ class LSTMPredictor:
             results["actuals"].extend(y_test.flatten())
 
             # Calculate metrics
-            mae = np.mean(np.abs(preds - y_test))
-            rmse = np.sqrt(np.mean((preds - y_test) ** 2))
+            mae = float(np.nan_to_num(np.mean(np.abs(preds - y_test)), nan=0.0))
+            rmse = np.sqrt(max(float(np.nan_to_num(np.mean((preds - y_test) ** 2), nan=0.0)), 0.0))
             results["mae"].append(mae)
             results["rmse"].append(rmse)
 

@@ -145,7 +145,7 @@ def fetch_macro_history(
         logger.warning("No macro data fetched — all macro features will be zero")
         return pd.DataFrame()
 
-    df = pd.concat(frames.values(), axis=1)
+    df = pd.concat(frames.values(), axis=1).fillna(method="ffill")
     # Forward-fill only: never bfill (would inject future data into past bars)
     df = df.ffill()
     logger.info(
@@ -369,7 +369,7 @@ def add_regime_features(df: pd.DataFrame, lookback: int = 60) -> pd.DataFrame:
     ret = close.pct_change(fill_method=None)
 
     # Trend direction vs 50-day SMA
-    sma50 = close.rolling(50).mean()
+    sma50 = close.rolling(50, min_periods=1).mean().fillna(close)
     df["regime_trend"] = np.where(close > sma50, 1, np.where(close < sma50, -1, 0))
 
     # ADX-based trend strength (normalised 0–1)
@@ -382,8 +382,8 @@ def add_regime_features(df: pd.DataFrame, lookback: int = 60) -> pd.DataFrame:
             (low - close.shift(1)).abs(),
         ],
         axis=1,
-    ).max(axis=1)
-    atr14 = tr.ewm(span=14, adjust=False).mean()
+    ).max(axis=1).fillna(0.0)
+    atr14 = tr.ewm(span=14, adjust=False).mean().fillna(0.0)
     plus_dm = (high - high.shift(1)).clip(lower=0)
     minus_dm = (low.shift(1) - low).clip(lower=0)
     plus_dm = plus_dm.where(plus_dm > minus_dm, 0.0)
@@ -465,8 +465,8 @@ def _rolling_hurst(series: pd.Series, window: int = 40) -> pd.Series:
                     rs_vals.append(np.mean(rs_chunk))
             if len(rs_vals) < 2:
                 return 0.5
-            log_lags = np.log(list(lags)[: len(rs_vals)])
-            log_rs = np.log(rs_vals)
+            log_lags = np.log(np.maximum(list(lags)[: len(rs_vals)], 1e-9))
+            log_rs = np.log(np.maximum(np.nan_to_num(rs_vals, nan=1e-9), 1e-9))
             h = np.polyfit(log_lags, log_rs, 1)[0]
             return float(np.clip(h, 0.0, 1.0))
         except Exception:  # nosec B110 — numerical fallback for Hurst exponent

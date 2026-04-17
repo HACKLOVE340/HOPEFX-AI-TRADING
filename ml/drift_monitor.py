@@ -88,7 +88,8 @@ def _psi(
     expected_pct = (expected_hist / len(expected)).clip(min=eps)
     actual_pct = (actual_hist / len(actual)).clip(min=eps)
 
-    psi_value = float(np.sum((actual_pct - expected_pct) * np.log(actual_pct / expected_pct)))
+    ratio = np.where(expected_pct > 0, actual_pct / np.maximum(expected_pct, 1e-10), 1.0)
+    psi_value = float(np.nan_to_num(np.sum((actual_pct - expected_pct) * np.log(np.maximum(ratio, 1e-10))), nan=0.0))
     return round(psi_value, 6)
 
 

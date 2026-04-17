@@ -183,8 +183,8 @@ def _rolling_hfd(series: pd.Series, window: int, k_max: int) -> pd.Series:
             if lm_cnt:
                 lk.append(lm_sum / lm_cnt)
         if len(lk) >= 2:
-            log_k = np.log(np.arange(1, len(lk) + 1))
-            log_lk = np.log(np.array(lk) + 1e-10)
+            log_k = np.log(np.maximum(np.arange(1, len(lk) + 1), 1e-9))
+            log_lk = np.log(np.nan_to_num(np.array(lk), nan=0.0) + 1e-10)
             with contextlib.suppress(Exception):
                 out[wi + window - 1] = float(np.polyfit(log_k, log_lk, 1)[0])
     return pd.Series(out, index=series.index)
@@ -228,7 +228,7 @@ def _rolling_dfa(series: pd.Series, window: int) -> pd.Series:
         # Residual = y - t*(t·y)/(t·t) - mean(y - t*(t·y)/(t·t))
         # Simplified: project out the linear component
         t_norm = t - t.mean()
-        t_sq = (t_norm**2).sum()
+        t_sq = float(np.nan_to_num((t_norm**2).sum(), nan=0.0))
 
         # Collect all segments across all windows: shape (n_win * segs, s)
         seg_list = []
@@ -243,7 +243,7 @@ def _rolling_dfa(series: pd.Series, window: int) -> pd.Series:
             residual = seg_c - slope * t_norm[np.newaxis, :]
         else:
             residual = seg_c
-        rms_all = np.sqrt((residual**2).mean(axis=1))  # (n_win*segs,)
+        rms_all = np.sqrt(np.maximum(np.nan_to_num((residual**2).mean(axis=1), nan=0.0), 0.0))  # (n_win*segs,)
 
         # Average RMS per window
         rms_per_win = rms_all.reshape(segs, n_win).mean(axis=0)  # (n_win,)
@@ -254,14 +254,15 @@ def _rolling_dfa(series: pd.Series, window: int) -> pd.Series:
     if len(valid_scales) < 2:
         return pd.Series(out, index=series.index)
 
-    log_s = np.log(np.array([s for s, _ in valid_scales], dtype=float))
+    s_arr = np.maximum(np.array([s for s, _ in valid_scales], dtype=float), 1e-9)
+    log_s = np.log(s_arr)
     f_mat = np.stack([fv for _, fv in valid_scales], axis=0)  # (n_valid, n_win)
-    log_f = np.log(f_mat + 1e-10)
+    log_f = np.log(np.maximum(np.nan_to_num(f_mat, nan=0.0), 1e-10))
 
     # Vectorized polyfit: slope = (n * Σxy - Σx*Σy) / (n * Σx² - (Σx)²)
     ns = len(log_s)
     sx = log_s.sum()
-    sx2 = (log_s**2).sum()
+    sx2 = float(np.nan_to_num((log_s**2).sum(), nan=0.0))
     sy = log_f.sum(axis=0)
     sxy = (log_s[:, np.newaxis] * log_f).sum(axis=0)
     denom = ns * sx2 - sx**2
@@ -290,7 +291,7 @@ def _rolling_lyapunov(series: pd.Series, window: int) -> pd.Series:
             diffs = np.abs(x[i + 1 :] - x[i])
             pos = diffs[diffs > 0]
             if len(pos):
-                divs.append(np.log(pos.min() + 1e-10))
+                divs.append(float(np.nan_to_num(np.log(max(float(pos.min()), 0.0) + 1e-10), nan=0.0)))
         out[wi + window - 1] = float(np.mean(divs)) if divs else 0.0
     return pd.Series(out, index=series.index)
 
@@ -316,8 +317,8 @@ def _rolling_apen(series: pd.Series, window: int, m: int, r_factor: float) -> pd
         # Chebyshev distance: max over m_ dimensions
         diff = np.abs(tmpl[:, np.newaxis, :] - tmpl[np.newaxis, :, :])  # (nm, nm, m_)
         cheb = diff.max(axis=2)  # (nm, nm)
-        count = (cheb <= r).sum()
-        return float(np.log(count / max(nm * nm, 1) + 1e-10))
+        count = int((cheb <= r).sum())
+        return float(np.nan_to_num(np.log(count / max(nm * nm, 1) + 1e-10), nan=0.0))
 
     for wi in range(n_win):
         x = mat[wi]
@@ -355,7 +356,7 @@ def _rolling_perm_entropy(series: pd.Series, window: int, order: int) -> pd.Seri
         counts = np.bincount(keys)
         counts = counts[counts > 0]
         p = counts / counts.sum()
-        ent = -float(np.sum(p * np.log(p + 1e-10)))
+        ent = -float(np.nan_to_num(np.sum(p * np.log(p + 1e-10)), nan=0.0))
         out[wi + window - 1] = ent / max_ent if max_ent > 0 else 0.0
     return pd.Series(out, index=series.index)
 
@@ -377,8 +378,8 @@ def _rolling_recurrence(series: pd.Series, window: int, eps_factor: float) -> pd
             continue
         # Vectorized pairwise distance
         dist = np.abs(x[:, np.newaxis] - x[np.newaxis, :])
-        count = (dist < eps).sum() - window  # subtract diagonal
-        out[wi + window - 1] = float(count / max(window * (window - 1), 1))
+        count = int((dist < eps).sum()) - window  # subtract diagonal
+        out[wi + window - 1] = float(max(count, 0) / max(window * (window - 1), 1))
     return pd.Series(out, index=series.index)
 
 
@@ -426,10 +427,10 @@ def _rolling_corr_dim(series: pd.Series, window: int) -> pd.Series:
         for eps in eps_vals:
             if eps == 0:
                 continue
-            c_vals.append((dist < eps).sum() / max(window * (window - 1), 1))
+            c_vals.append(int((dist < eps).sum()) / max(window * (window - 1), 1))
         if len(c_vals) >= 2:
-            log_eps = np.log(eps_vals[: len(c_vals)] + 1e-10)
-            log_c = np.log(np.array(c_vals) + 1e-10)
+            log_eps = np.log(np.maximum(eps_vals[: len(c_vals)], 1e-10))
+            log_c = np.log(np.maximum(np.nan_to_num(np.array(c_vals), nan=0.0), 1e-10))
             with contextlib.suppress(Exception):
                 out[wi + window - 1] = float(np.polyfit(log_eps, log_c, 1)[0])
     return pd.Series(out, index=series.index)
@@ -459,10 +460,10 @@ def add_regime_interactions(df: pd.DataFrame) -> pd.DataFrame:
     d["ri_rsi_oversold"] = (d["ri_rsi_14"] < 30).astype(int)
 
     # MACD
-    ema12 = c.ewm(span=12, adjust=False, min_periods=1).mean()
-    ema26 = c.ewm(span=26, adjust=False, min_periods=1).mean()
+    ema12 = c.ewm(span=12, adjust=False, min_periods=1).mean().fillna(c)
+    ema26 = c.ewm(span=26, adjust=False, min_periods=1).mean().fillna(c)
     macd = ema12 - ema26
-    signal_line = macd.ewm(span=9, adjust=False, min_periods=1).mean()
+    signal_line = macd.ewm(span=9, adjust=False, min_periods=1).mean().fillna(0.0)
     d["ri_macd"] = macd
     d["ri_macd_signal"] = signal_line
     d["ri_macd_hist"] = macd - signal_line
