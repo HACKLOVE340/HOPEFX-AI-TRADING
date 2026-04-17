@@ -302,6 +302,99 @@ async def _check_ml_model() -> ComponentStatus:
         )
 
 
+async def _check_broker() -> ComponentStatus:
+    """Check whether the active broker is connected and responsive."""
+    t0 = time.perf_counter()
+    try:
+        from core.app_state import app_state as _app_state  # type: ignore[import]
+
+        broker = getattr(_app_state, "broker", None)
+        if broker is None:
+            return ComponentStatus(
+                name="broker",
+                status="degraded",
+                critical=False,
+                latency_ms=round((time.perf_counter() - t0) * 1000, 2),
+                detail="No broker initialised — paper trading or startup incomplete",
+            )
+        # Use is_connected() if available, else check a balance/ping call
+        if hasattr(broker, "is_connected"):
+            connected = broker.is_connected()
+        elif hasattr(broker, "get_account_balance"):
+            try:
+                await asyncio.wait_for(broker.get_account_balance(), timeout=_CHECK_TIMEOUT_SEC)
+                connected = True
+            except Exception:
+                connected = False
+        else:
+            connected = True  # assume connected if no check method
+
+        broker_name = type(broker).__name__
+        latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+        return ComponentStatus(
+            name="broker",
+            status="healthy" if connected else "down",
+            critical=False,  # paper fallback keeps the app alive
+            latency_ms=latency_ms,
+            detail=f"{broker_name}: {'connected' if connected else 'disconnected'}",
+        )
+    except Exception as exc:
+        return ComponentStatus(
+            name="broker",
+            status="unknown",
+            critical=False,
+            latency_ms=round((time.perf_counter() - t0) * 1000, 2),
+            detail=str(exc),
+        )
+
+
+async def _check_db_migrations() -> ComponentStatus:
+    """Verify the database schema is at the latest Alembic revision."""
+    t0 = time.perf_counter()
+    try:
+        from alembic.config import Config as AlembicConfig  # type: ignore[import]
+        from alembic.runtime.migration import MigrationContext  # type: ignore[import]
+        from alembic.script import ScriptDirectory  # type: ignore[import]
+        from sqlalchemy import create_engine, text  # type: ignore[import]
+
+        db_url = os.getenv("DATABASE_URL", "sqlite:///hopefx.db")
+        # Normalise async drivers to sync for Alembic
+        db_url = (
+            db_url.replace("sqlite+aiosqlite:///", "sqlite:///")
+            .replace("postgresql+asyncpg://", "postgresql://")
+            .replace("postgresql+aiopg://", "postgresql://")
+            .replace("postgres://", "postgresql://", 1)
+        )
+        alembic_cfg = AlembicConfig("alembic.ini")
+        alembic_cfg.set_main_option("sqlalchemy.url", db_url)
+        script = ScriptDirectory.from_config(alembic_cfg)
+        head_rev = script.get_current_head()
+
+        engine = create_engine(db_url, poolclass=None)  # type: ignore[call-arg]
+        with engine.connect() as conn:
+            mctx = MigrationContext.configure(conn)
+            current_rev = mctx.get_current_revision()
+        engine.dispose()
+
+        latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+        at_head = current_rev == head_rev
+        return ComponentStatus(
+            name="db_migrations",
+            status="healthy" if at_head else "degraded",
+            critical=False,  # degraded schema is a warning, not a hard failure
+            latency_ms=latency_ms,
+            detail=f"current={current_rev or 'none'} head={head_rev or 'none'}",
+        )
+    except Exception as exc:
+        return ComponentStatus(
+            name="db_migrations",
+            status="unknown",
+            critical=False,
+            latency_ms=round((time.perf_counter() - t0) * 1000, 2),
+            detail=str(exc),
+        )
+
+
 async def _check_orchestrator() -> ComponentStatus:
     """Check whether the data-layer orchestrator has been started."""
     t0 = time.perf_counter()
@@ -379,10 +472,12 @@ async def _run_all_checks() -> list[ComponentStatus]:
         _check_kill_switch(),
         _check_ml_model(),
         _check_orchestrator(),
+        _check_broker(),
+        _check_db_migrations(),
         return_exceptions=True,
     )
     statuses: list[ComponentStatus] = []
-    names = ["redis", "database", "kill_switch", "ml_model", "orchestrator"]
+    names = ["redis", "database", "kill_switch", "ml_model", "orchestrator", "broker", "db_migrations"]
     for i, result in enumerate(results):
         if isinstance(result, Exception):
             statuses.append(
