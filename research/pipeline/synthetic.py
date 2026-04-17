@@ -195,7 +195,8 @@ def _gradient_penalty(D, real_h, fake_h, c, device, lam=10.0):
         retain_graph=True,
     )[0]
     import torch as _torch_syn
-    gp = _torch_syn.nan_to_num(((grads.norm(2, dim=(1, 2)) - 1) ** 2).mean(), nan=0.0)
+    _gp_raw = ((grads.norm(2, dim=(1, 2)) - 1) ** 2).mean()
+    gp = _torch_syn.nan_to_num(_gp_raw, nan=0.0)
     return lam * gp
 
 
@@ -350,7 +351,8 @@ class RegimeSynthesizer:
             z = torch.randn(len(idx), self.seq_len, self.noise_dim, device=self.device)
             h_fake = self.G(z, c_b)
             import torch as _torch_syn2
-            g_loss = -_torch_syn2.nan_to_num(self.D(h_fake, c_b).mean(), nan=0.0)
+            _g_raw = self.D(h_fake, c_b).mean()
+            g_loss = -_torch_syn2.nan_to_num(_g_raw, nan=0.0)
             opt_g.zero_grad()
             g_loss.backward()
             opt_g.step()
