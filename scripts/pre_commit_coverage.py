@@ -9,7 +9,7 @@ Pre-commit hook: coverage gate for changed Python modules.
 
 For each staged Python file that has a corresponding test file, runs pytest
 with coverage and fails if the module's line coverage drops below
-COVERAGE_THRESHOLD (default 70%).
+COVERAGE_THRESHOLD (default 80%).
 
 Designed to be fast: only tests the modules that changed in this commit,
 not the entire test suite.
@@ -21,7 +21,7 @@ Exit codes
 
 Environment variables
 ---------------------
-COVERAGE_THRESHOLD   : minimum line coverage % (default: 70)
+COVERAGE_THRESHOLD   : minimum line coverage % (default: 80)
 SKIP_COVERAGE_GATE   : set to "1" to skip this hook (emergency bypass)
 CI_FAST              : set to "1" to use reduced estimators (faster CI)
 
@@ -37,7 +37,7 @@ import subprocess  # nosec B404 — pytest subprocess, fixed args
 import sys
 from pathlib import Path
 
-_THRESHOLD = int(os.getenv("COVERAGE_THRESHOLD", "70"))
+_THRESHOLD = int(os.getenv("COVERAGE_THRESHOLD", "80"))
 _SKIP = os.getenv("SKIP_COVERAGE_GATE", "0").strip() == "1"
 
 # Modules excluded from coverage gate (generated code, migrations, examples)
