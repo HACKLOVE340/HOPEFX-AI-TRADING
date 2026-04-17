@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 UTC = timezone.utc
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from strategies.base import BaseStrategy
@@ -79,10 +80,11 @@ class StochasticStrategy(BaseStrategy):
         lowest_low = low.rolling(window=self.k_period).min()
         highest_high = high.rolling(window=self.k_period).max()
 
-        k_percent = 100 * ((close - lowest_low) / (highest_high - lowest_low))
+        denom = (highest_high - lowest_low).replace(0, float("nan"))
+        k_percent = (100 * ((close - lowest_low) / denom)).fillna(50.0)
 
         # Calculate %D (SMA of %K)
-        d_percent = k_percent.rolling(window=self.d_period).mean()
+        d_percent = k_percent.rolling(window=self.d_period).mean().fillna(k_percent)
 
         return k_percent, d_percent
 

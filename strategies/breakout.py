@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 UTC = timezone.utc
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from strategies.base import BaseStrategy
@@ -89,10 +90,10 @@ class BreakoutStrategy(BaseStrategy):
         tr2 = abs(high - close.shift())
         tr3 = abs(low - close.shift())
 
-        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-        atr = tr.rolling(window=period).mean()
+        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1).fillna(0.0)
+        atr = tr.rolling(window=period).mean().fillna(tr)
 
-        return atr.iloc[-1]
+        return float(np.nan_to_num(atr.iloc[-1], nan=0.0))
 
     def generate_signal(self, analysis: pd.DataFrame) -> dict[str, Any]:  # type: ignore[override]
         market_data = analysis
@@ -124,7 +125,7 @@ class BreakoutStrategy(BaseStrategy):
             current_volume = market_data["volume"].iloc[-1] if "volume" in market_data else 0
 
             # Average volume for confirmation
-            avg_volume = market_data["volume"].tail(self.lookback_period).mean() if "volume" in market_data else 0
+            avg_volume = float(np.nan_to_num(market_data["volume"].tail(self.lookback_period).mean(), nan=0.0)) if "volume" in market_data else 0.0
             high_volume = current_volume > avg_volume * 1.2 if avg_volume > 0 else False
 
             # Calculate ATR for volatility

@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 UTC = timezone.utc
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from strategies.base import BaseStrategy, Signal, SignalType, StrategyConfig
@@ -118,17 +119,17 @@ class MACDStrategy(BaseStrategy):
             Tuple of (macd_line, signal_line, histogram)
         """
         # Calculate EMAs
-        ema_fast = prices.ewm(span=self.fast_period, adjust=False).mean()
-        ema_slow = prices.ewm(span=self.slow_period, adjust=False).mean()
+        ema_fast = prices.ewm(span=self.fast_period, adjust=False).mean().fillna(prices)
+        ema_slow = prices.ewm(span=self.slow_period, adjust=False).mean().fillna(prices)
 
         # MACD line
-        macd_line = ema_fast - ema_slow
+        macd_line = (ema_fast - ema_slow).fillna(0.0)
 
         # Signal line
-        signal_line = macd_line.ewm(span=self.signal_period, adjust=False).mean()
+        signal_line = macd_line.ewm(span=self.signal_period, adjust=False).mean().fillna(0.0)
 
         # Histogram
-        histogram = macd_line - signal_line
+        histogram = (macd_line - signal_line).fillna(0.0)
 
         return macd_line, signal_line, histogram
 

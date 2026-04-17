@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 UTC = timezone.utc
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from strategies.base import BaseStrategy
@@ -73,20 +74,20 @@ class EMAcrossoverStrategy(BaseStrategy):
             close = market_data["close"]
 
             # Calculate EMAs
-            fast_ema = close.ewm(span=self.fast_period, adjust=False).mean()
-            slow_ema = close.ewm(span=self.slow_period, adjust=False).mean()
+            fast_ema = close.ewm(span=self.fast_period, adjust=False).mean().fillna(close)
+            slow_ema = close.ewm(span=self.slow_period, adjust=False).mean().fillna(close)
 
             # Current values
-            current_fast = fast_ema.iloc[-1]
-            current_slow = slow_ema.iloc[-1]
-            current_price = close.iloc[-1]
+            current_fast = float(np.nan_to_num(fast_ema.iloc[-1], nan=0.0))
+            current_slow = float(np.nan_to_num(slow_ema.iloc[-1], nan=0.0))
+            current_price = float(np.nan_to_num(close.iloc[-1], nan=0.0))
 
             # Previous values
-            prev_fast = fast_ema.iloc[-2]
-            prev_slow = slow_ema.iloc[-2]
+            prev_fast = float(np.nan_to_num(fast_ema.iloc[-2], nan=current_fast))
+            prev_slow = float(np.nan_to_num(slow_ema.iloc[-2], nan=current_slow))
 
             # Calculate distance between EMAs (normalized)
-            ema_diff = abs(current_fast - current_slow) / current_price
+            ema_diff = abs(current_fast - current_slow) / current_price if current_price != 0 else 0.0
 
             signal_type = "HOLD"
             confidence = 0.0

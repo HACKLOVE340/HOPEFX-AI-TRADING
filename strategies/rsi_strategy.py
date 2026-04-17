@@ -113,11 +113,11 @@ class RSIStrategy(BaseStrategy):
             Series of RSI values
         """
         delta = prices.diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=self.period).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=self.period).mean()
+        gain = (delta.where(delta > 0, 0)).rolling(window=self.period).mean().fillna(0.0)
+        loss = (-delta.where(delta < 0, 0)).rolling(window=self.period).mean().fillna(0.0)
 
-        rs = gain / loss
-        rsi = 100 - (100 / (1 + rs))
+        rs = gain / loss.replace(0, float("nan"))
+        rsi = (100 - (100 / (1 + rs))).fillna(50.0)
         return rsi
 
     def _generate_dict_signal(self, market_data: pd.DataFrame) -> dict[str, Any]:
