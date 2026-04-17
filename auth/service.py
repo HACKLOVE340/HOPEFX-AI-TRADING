@@ -118,6 +118,14 @@ MAX_LOGIN_ATTEMPTS = int(os.getenv("MAX_LOGIN_ATTEMPTS", "5"))
 LOCKOUT_MINUTES = int(os.getenv("LOCKOUT_MINUTES", "15"))
 ALGORITHM = "HS256"
 
+# When False (default in development), new accounts are auto-verified and the
+# email-verification gate is skipped at login.  Set to True in production so
+# users must click the verification link before they can log in.
+_REQUIRE_EMAIL_VERIFICATION: bool = os.getenv(
+    "REQUIRE_EMAIL_VERIFICATION",
+    "true" if os.getenv("APP_ENV", "development").lower() == "production" else "false",
+).lower() in ("1", "true", "yes")
+
 
 def _get_secret() -> str:
     s = os.getenv("SECURITY_JWT_SECRET")
@@ -264,6 +272,9 @@ class AuthService:
             if session.query(User).filter_by(username=username).first():
                 return False, "Username already taken", None
 
+            # When email verification is disabled (dev/test), auto-verify the
+            # account so users can log in immediately after registration.
+            auto_verify = not _REQUIRE_EMAIL_VERIFICATION
             verify_token = secrets.token_urlsafe(32)
             user = User(
                 id=str(uuid.uuid4()),
@@ -271,14 +282,16 @@ class AuthService:
                 username=username,
                 hashed_password=hash_password(password),
                 role=role,
-                status=UserStatus.PENDING_VERIFICATION.value,
-                is_email_verified=False,
-                email_verify_token=_hash_token(verify_token),
-                email_verify_expires=_now() + timedelta(hours=24),
+                status=UserStatus.ACTIVE.value if auto_verify else UserStatus.PENDING_VERIFICATION.value,
+                is_email_verified=auto_verify,
+                email_verify_token=None if auto_verify else _hash_token(verify_token),
+                email_verify_expires=None if auto_verify else _now() + timedelta(hours=24),
             )
             session.add(user)
             session.commit()
-            logger.info("User registered: %s", email)
+            logger.info("User registered: %s (auto_verified=%s)", email, auto_verify)
+            if auto_verify:
+                return (True, "Registration successful.", None)
             return (
                 True,
                 "Registration successful. Check your email to verify.",
@@ -402,7 +415,7 @@ class AuthService:
                 _record(False, "wrong_password")
                 return False, "Invalid credentials", None
 
-            if not user.is_email_verified:
+            if _REQUIRE_EMAIL_VERIFICATION and not user.is_email_verified:
                 _record(False, "email_not_verified")
                 return False, "Please verify your email before logging in.", None
 

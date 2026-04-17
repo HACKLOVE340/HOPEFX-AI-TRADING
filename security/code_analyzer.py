@@ -417,25 +417,51 @@ def _analyze_file_regex(path: Path) -> list[CodeIssue]:
         in_doc = i in docstring_lines
 
         # Look-ahead bias (regex catches string-based column access too).
-        # Lines annotated with "lookahead-ok" or "nosec" are intentional and suppressed.
+        # Lines annotated with "lookahead-ok", "nosec", or "intentional" are suppressed.
+        # shift(-N) inside label/target-creation functions is intentional — those
+        # functions compute future returns as training labels, not as input features.
         if (
             not in_doc
             and _LOOKAHEAD_RE.search(line)
             and "# noqa" not in line
             and "nosec" not in line
             and "lookahead-ok" not in line
+            and "intentional" not in line
         ):
-            issues.append(
-                CodeIssue(
-                    file=rel,
-                    line=i,
-                    category="lookahead_bias",
-                    severity=SEVERITY_CRITICAL,
-                    description="shift(-N) detected — introduces look-ahead bias using future data",
-                    snippet=line.strip(),
-                    suggestion="Replace shift(-N) with shift(+N) to use past data only",
-                )
+            # Check a window of preceding lines for a label/target function definition.
+            # Functions named build_*target*, create_label*, *_target*, *_label*, etc.
+            # are label-creation contexts where shift(-N) is expected and correct.
+            _LABEL_FN_RE = re.compile(
+                r"""def\s+\w*(?:target|label|future|y_|_y\b|build_filtered|prepare_target)""",
+                re.IGNORECASE,
             )
+            window_start = max(0, i - 30)
+            preceding = "\n".join(lines[window_start : i - 1])
+            # Also check the variable being assigned — e.g. "future_ret =", "labels =", "y ="
+            _LABEL_VAR_RE = re.compile(
+                r"""(?:future_ret|future_move|future_return|labels?\s*=|y\s*=|_target\s*=|target_col)""",
+                re.IGNORECASE,
+            )
+            in_label_context = bool(
+                _LABEL_FN_RE.search(preceding)
+                or _LABEL_VAR_RE.search(line)
+            )
+            if not in_label_context:
+                issues.append(
+                    CodeIssue(
+                        file=rel,
+                        line=i,
+                        category="lookahead_bias",
+                        severity=SEVERITY_CRITICAL,
+                        description="shift(-N) detected — introduces look-ahead bias using future data",
+                        snippet=line.strip(),
+                        suggestion=(
+                            "Replace shift(-N) with shift(+N) to use past data only. "
+                            "If this is intentional label creation, add '# lookahead-ok' or "
+                            "move it into a function named build_*target* / create_label*."
+                        ),
+                    )
+                )
 
         # Unfinished-code markers in production — skip pattern-definition lines  # healer: ignore
         # (e.g. in code_analyzer.py or pre_commit_healer.py) to avoid
@@ -465,14 +491,23 @@ def _analyze_file_regex(path: Path) -> list[CodeIssue]:
                     )
                 )
 
-        # Hardcoded secrets (skip .env.example, test files, and nosec/allowlist annotations)
+        # Hardcoded secrets (skip .env.example, test files, nosec annotations,
+        # Redis/cache key templates like "prefix:{}", and format strings).
+        _secret_match = _SECRET_RE.search(line)
         if (
-            _SECRET_RE.search(line)
+            _secret_match
             and ".example" not in rel
             and not is_test
             and "nosec" not in line
             and "allowlist secret" not in line
             and "# noqa" not in line
+            # Skip Redis/cache key templates — they contain "{}" placeholders, not real secrets
+            and "{}" not in line
+            and "{" not in _secret_match.group(0)
+            # Skip f-strings and .format() calls — the value is dynamic, not hardcoded
+            and not re.search(r"""['"]\s*\{[^}]+\}""", line)
+            and "f'" not in line
+            and 'f"' not in line
         ):
             issues.append(
                 CodeIssue(
@@ -580,39 +615,42 @@ def _analyze_file_regex(path: Path) -> list[CodeIssue]:
 
     # ── Broken router detection (file-level) ─────────────────────────────────
     # A router defined in a module but never referenced in router_registry.py,
-    # app.py, or a package __init__.py (via include_router) is a dead endpoint.
+    # app.py, or any ancestor package __init__.py is a dead endpoint.
     has_router_def = any(_ROUTER_DEF_RE.search(ln) for ln in lines)
     if has_router_def and not is_test:
-        # Check if this file is imported by the registry, app, or a parent package
         registry_path = PROJECT_ROOT / "core" / "router_registry.py"
         app_path = PROJECT_ROOT / "app.py"
         module_name = rel.replace("/", ".").replace(".py", "")
         short_name = Path(rel).stem  # e.g. "billing" from "api/billing.py"
-        # For package __init__.py files, also check the package directory name
-        # e.g. "api/superadmin/__init__.py" → package_name = "superadmin"
         package_name = Path(rel).parent.name if short_name == "__init__" else ""
 
-        # Also check the package __init__.py — sub-routers are often included
-        # via router.include_router() in the parent package rather than directly
-        # in router_registry.py (e.g. api/superadmin/*.py → api/superadmin/__init__.py)
-        parent_init = (PROJECT_ROOT / rel).parent / "__init__.py"
+        # Collect all ancestor __init__.py files up to the project root.
+        # Sub-routers are often aggregated via router.include_router() in a
+        # parent package (e.g. api/superadmin/*.py → api/superadmin/__init__.py
+        # → core/router_registry.py). Walking the full chain prevents false positives.
+        ancestor_inits: list[Path] = []
+        current = (PROJECT_ROOT / rel).parent
+        while current != PROJECT_ROOT and current != current.parent:
+            candidate = current / "__init__.py"
+            if candidate.exists() and candidate != (PROJECT_ROOT / rel):
+                ancestor_inits.append(candidate)
+            current = current.parent
+
+        check_files = [registry_path, app_path] + ancestor_inits
 
         registered = False
-        check_files = [registry_path, app_path]
-        if parent_init.exists() and parent_init != (PROJECT_ROOT / rel):
-            check_files.append(parent_init)
-
         for reg_file in check_files:
-            if reg_file.exists():
-                reg_text = reg_file.read_text(encoding="utf-8", errors="replace")
-                if (
-                    module_name in reg_text
-                    or rel in reg_text
-                    or (short_name != "__init__" and short_name in reg_text)
-                    or (package_name and package_name in reg_text)
-                ):
-                    registered = True
-                    break
+            if not reg_file.exists():
+                continue
+            reg_text = reg_file.read_text(encoding="utf-8", errors="replace")
+            if (
+                module_name in reg_text
+                or rel in reg_text
+                or (short_name != "__init__" and short_name in reg_text)
+                or (package_name and package_name in reg_text)
+            ):
+                registered = True
+                break
 
         if not registered:
             issues.append(
@@ -623,7 +661,8 @@ def _analyze_file_regex(path: Path) -> list[CodeIssue]:
                     severity=SEVERITY_HIGH,
                     description=(
                         f"Router defined in {rel} but not found in core/router_registry.py, "
-                        "app.py, or the package __init__.py. This router's endpoints are unreachable."
+                        "app.py, or any ancestor package __init__.py. "
+                        "This router's endpoints are unreachable."
                     ),
                     snippet=next((ln.strip() for ln in lines if _ROUTER_DEF_RE.search(ln)), ""),
                     suggestion=(

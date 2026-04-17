@@ -100,6 +100,9 @@ REDIS_URL=redis://localhost:6379/0
 # ── Broker (paper trading — no real credentials needed) ──────────────────────
 BROKER_TYPE=paper
 
+# ── Auth (dev: skip email verification so users can log in immediately) ───────
+REQUIRE_EMAIL_VERIFICATION=false
+
 # ── Sentry (disabled in dev) ──────────────────────────────────────────────────
 # SENTRY_DSN=
 """

@@ -83,10 +83,8 @@ const Register: React.FC = () => {
         console.warn('[Register] Auto-login after registration failed:', loginErr);
       }
 
-      setSuccess(
-        'Account created! Check your email to verify your address, then sign in.'
-      );
-      setTimeout(() => navigate('/login'), 3000);
+      setSuccess('Account created! Redirecting to login…');
+      setTimeout(() => navigate('/login'), 2000);
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })
         ?.response?.data?.detail;

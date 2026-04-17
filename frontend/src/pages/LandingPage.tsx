@@ -147,7 +147,6 @@ const NAV_LINKS = [
   ['#features', 'Features'],
   ['#how-it-works', 'How it works'],
   ['#pricing', 'Pricing'],
-  ['/docs/', 'Docs'],
   ['/status', 'Status'],
 ] as const;
 
@@ -886,7 +885,7 @@ function Footer() {
           {/* Product */}
           <div>
             <p className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4">Product</p>
-            {[['#features', 'Features'], ['#pricing', 'Pricing'], ['/marketplace', 'Marketplace'], ['/docs/', 'Documentation']].map(([h, l]) => (
+            {[['#features', 'Features'], ['#pricing', 'Pricing'], ['/marketplace', 'Marketplace']].map(([h, l]) => (
               <a key={l} href={h} className="block text-sm text-slate-500 hover:text-slate-300 transition-colors mb-2.5">{l}</a>
             ))}
           </div>
@@ -894,7 +893,7 @@ function Footer() {
           {/* Company */}
           <div>
             <p className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4">Company</p>
-            {[['/affiliate', 'Affiliate program'], ['/status', 'System status'], ['/security', 'Security']].map(([h, l]) => (
+            {[['/affiliate', 'Affiliate program'], ['/status', 'System status']].map(([h, l]) => (
               <a key={l} href={h} className="block text-sm text-slate-500 hover:text-slate-300 transition-colors mb-2.5">{l}</a>
             ))}
           </div>
@@ -902,9 +901,9 @@ function Footer() {
           {/* Support */}
           <div>
             <p className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4">Support</p>
-            {[['/docs/FAQ.md', 'FAQ'], ['/docs/API.md', 'API reference'], ['mailto:support@hopefx.io', 'Contact']].map(([h, l]) => (
+            {[['mailto:support@hopefx.io', 'Contact support']].map(([h, l]) => (
               <a key={l} href={h} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-300 transition-colors mb-2.5">
-                {l} {h.startsWith('http') || h.startsWith('mailto') ? <ExternalLink size={10} /> : null}
+                {l} <ExternalLink size={10} />
               </a>
             ))}
           </div>
