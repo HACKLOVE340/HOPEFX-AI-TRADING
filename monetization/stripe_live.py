@@ -727,7 +727,7 @@ class StripeProductionClient:
             sub = _sub_mgr.get_user_subscription(user_id)
             if sub and getattr(sub, "stripe_customer_id", None):
                 return sub.stripe_customer_id
-        except Exception:
+        except Exception:  # nosec B110 — subscription manager is optional; fall through to Stripe API lookup
             pass
 
         import stripe as _s

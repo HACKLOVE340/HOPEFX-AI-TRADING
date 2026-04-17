@@ -51,7 +51,7 @@ try:
 except ImportError:
     _resource_mod = None  # type: ignore[assignment]
     _RESOURCE_AVAILABLE = False
-import subprocess
+import subprocess  # nosec B404 — used only for sandboxed LLM code execution with fixed args
 import sys
 import tempfile
 import textwrap
