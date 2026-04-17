@@ -291,14 +291,14 @@ def dry_run(args: argparse.Namespace) -> None:
 
         logger.info("Feature matrix: %d rows × %d columns", *X.shape)
         logger.info("Class balance: %s", y.value_counts().to_dict())
-        logger.info("NaN count: %d", X.isna().sum().sum())
-
         import numpy as np
+        nan_count = int(np.nan_to_num(X.isna().sum().sum(), nan=0))
+        logger.info("NaN count: %d", nan_count)
 
-        inf_count = int(np.isinf(X.values).sum())
+        inf_count = int(np.nan_to_num(np.isinf(X.values).sum(), nan=0))
         logger.info("Inf count: %d", inf_count)
 
-        if X.isna().sum().sum() > 0 or inf_count > 0:
+        if nan_count > 0 or inf_count > 0:
             logger.warning("Feature matrix has NaN/Inf values — check feature builder")
         else:
             logger.info("Feature matrix is clean (no NaN/Inf)")

@@ -259,7 +259,8 @@ def compute_var(
         raise ValueError(f"confidence must be in (0,1), got {confidence}")
 
     # NOTE: sqrt(t) scaling is a known approximation. For h>1 use calculate_var_multiday.
-    scale = np.sqrt(horizon_days)
+    returns = np.nan_to_num(returns, nan=0.0)
+    scale = np.sqrt(max(horizon_days, 0.0))
     alpha = 1 - confidence
 
     # Historical simulation
@@ -380,6 +381,7 @@ def simulate_slippage(
     # Model as normal with std = vol_daily * sqrt(execution_time_fraction)
     # Assume execution takes ~1 minute = 1/390 of trading day
     execution_fraction = 1.0 / 390.0
+    vol_daily = float(np.nan_to_num(vol_daily, nan=0.0))
     timing_vol_bps = vol_daily * np.sqrt(execution_fraction) * 10_000.0
     timing_slippage = rng.normal(0, timing_vol_bps, n_simulations)
 
@@ -518,14 +520,14 @@ def compute_sharpe(
             passes_gate=False,
         )
 
-    sr = mean_excess / std_excess
+    sr = float(np.nan_to_num(mean_excess / std_excess, nan=0.0))
     sr_annualised = float(sr * np.sqrt(periods_per_year))
 
     # Standard error (Lo 2002)
-    se = float(np.sqrt((1 + 0.5 * sr**2) / n) * np.sqrt(periods_per_year))
+    se = float(np.nan_to_num(np.sqrt((1 + 0.5 * sr**2) / n) * np.sqrt(periods_per_year), nan=0.0))
 
     ann_return = float(mean_excess * periods_per_year)
-    ann_vol = float(std_excess * np.sqrt(periods_per_year))
+    ann_vol = float(np.nan_to_num(std_excess * np.sqrt(periods_per_year), nan=0.0))
 
     passes = (sr_annualised >= sharpe_target) and (se <= se_target)
 
@@ -843,10 +845,10 @@ def calculate_var_ewma(
     for r in returns:
         sigma2 = lambda_ * sigma2 + (1 - lambda_) * float(r) ** 2
 
-    ewma_vol_daily = float(np.sqrt(sigma2))
+    ewma_vol_daily = float(np.sqrt(max(float(np.nan_to_num(sigma2, nan=0.0)), 0.0)))
 
     # Scale to horizon: sqrt(h) * daily_vol (valid for EWMA under stationarity)
-    ewma_vol_scaled = ewma_vol_daily * np.sqrt(horizon_days)
+    ewma_vol_scaled = ewma_vol_daily * np.sqrt(max(horizon_days, 0.0))
 
     alpha = 1 - confidence
     z = float(stats.norm.ppf(alpha))
@@ -888,7 +890,8 @@ def _garch11_loglik(
             return 1e10
 
     # Gaussian log-likelihood
-    ll = -0.5 * np.sum(np.log(sigma2) + returns**2 / sigma2)
+    sigma2_safe = np.maximum(np.nan_to_num(sigma2, nan=1e-12), 1e-12)
+    ll = -0.5 * np.sum(np.log(sigma2_safe) + returns**2 / sigma2_safe)
     return -ll  # return negative for minimisation
 
 
@@ -961,11 +964,11 @@ def calculate_var_garch(
             sigma2_i = long_run_var + persistence * (sigma2_i - long_run_var)
             sigma2_i = max(sigma2_i, 1e-10)
 
-    sigma_forecast = float(np.sqrt(sigma2_forecast))
+    sigma_forecast = float(np.sqrt(max(float(np.nan_to_num(sigma2_forecast, nan=0.0)), 0.0)))
 
     alpha_level = 1 - confidence
     z = float(stats.norm.ppf(alpha_level))
-    mu_h = float(np.mean(returns)) * horizon_days
+    mu_h = float(np.nan_to_num(np.mean(returns), nan=0.0)) * horizon_days
     var_garch = float(-(mu_h + z * sigma_forecast))
 
     return GARCHVaRResult(

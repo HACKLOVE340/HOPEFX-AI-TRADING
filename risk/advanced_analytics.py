@@ -332,6 +332,7 @@ class AdvancedRiskAnalytics:
                     RuntimeWarning,
                     stacklevel=3,
                 )
+                var_percentile = float(np.nan_to_num(var_percentile, nan=0.0))
                 var_scaled = var_percentile * np.sqrt(max(time_horizon, 0.0))
                 scaling_approximate = True
                 scaling_note = (
@@ -437,6 +438,8 @@ class AdvancedRiskAnalytics:
             # Under normality: mu_t = mu*t, sigma_t = sigma*sqrt(t).
             # This is more accurate than scaling the 1-day VaR by sqrt(t)
             # because it correctly scales the mean component linearly.
+            mean_return = float(np.nan_to_num(mean_return, nan=0.0))
+            std_return = float(np.nan_to_num(std_return, nan=0.0))
             mean_t = mean_return * time_horizon
             std_t = std_return * np.sqrt(max(time_horizon, 0.0))
             var_scaled = -(mean_t + z_score * std_t)
@@ -529,9 +532,11 @@ class AdvancedRiskAnalytics:
                     RuntimeWarning,
                     stacklevel=2,
                 )
+            mean_return = float(np.nan_to_num(mean_return, nan=0.0))
+            std_return = float(np.nan_to_num(std_return, nan=0.0))
             simulated_returns = rng.normal(
                 mean_return * time_horizon,
-                std_return * np.sqrt(time_horizon),
+                std_return * np.sqrt(max(time_horizon, 0.0)),
                 num_simulations,
             )
             scaling_approximate = True
@@ -626,8 +631,8 @@ class AdvancedRiskAnalytics:
                     RuntimeWarning,
                     stacklevel=2,
                 )
-                var_1d = np.percentile(returns, (1 - confidence_level) * 100)
-                var_scaled = var_1d * np.sqrt(time_horizon)
+                var_1d = float(np.nan_to_num(np.percentile(returns, (1 - confidence_level) * 100), nan=0.0))
+                var_scaled = var_1d * np.sqrt(max(time_horizon, 0.0))
                 val = abs(var_scaled * portfolio_value) if portfolio_value else abs(var_scaled)
                 return VaRResult(
                     var_value=val,
@@ -705,6 +710,7 @@ class AdvancedRiskAnalytics:
         for i in range(1, len(returns)):
             ewma_var[i] = decay * ewma_var[i - 1] + (1 - decay) * returns[i] ** 2
 
+        ewma_var = np.nan_to_num(ewma_var, nan=0.0)
         current_vol = np.sqrt(max(float(ewma_var[-1]), 0.0))
         hist_vol = np.sqrt(max(float(np.mean(ewma_var)), 0.0))
 
@@ -746,8 +752,8 @@ class AdvancedRiskAnalytics:
                     RuntimeWarning,
                     stacklevel=2,
                 )
-                var_1d = np.percentile(scaled_returns, (1 - confidence_level) * 100)
-                var_scaled = var_1d * np.sqrt(time_horizon)
+                var_1d = float(np.nan_to_num(np.percentile(scaled_returns, (1 - confidence_level) * 100), nan=0.0))
+                var_scaled = var_1d * np.sqrt(max(time_horizon, 0.0))
                 scaling_approximate = True
                 scaling_note = (
                     f"sqrt(t) fallback: only {len(scaled_returns)} bars for "
@@ -875,8 +881,8 @@ class AdvancedRiskAnalytics:
         num_simulations = num_simulations or self.mc_simulations
 
         # Daily parameters
-        daily_return = expected_return / 252
-        daily_vol = volatility / np.sqrt(252)
+        daily_return = float(np.nan_to_num(expected_return / 252, nan=0.0))
+        daily_vol = float(np.nan_to_num(volatility / np.sqrt(252), nan=0.0))
 
         # Generate random walks — use local RNG to avoid mutating global state
         rng = np.random.default_rng(42)
@@ -946,8 +952,8 @@ class AdvancedRiskAnalytics:
             correlations = np.eye(n_assets)
 
         # Daily parameters
-        daily_returns = returns / 252
-        daily_vols = vols / np.sqrt(252)
+        daily_returns = np.nan_to_num(returns / 252, nan=0.0)
+        daily_vols = np.nan_to_num(vols / np.sqrt(252), nan=0.0)
 
         # Cholesky decomposition for correlated random variables
         L = np.linalg.cholesky(correlations)
@@ -1216,6 +1222,7 @@ class AdvancedRiskAnalytics:
         periods_per_year: int = 252,
     ) -> float:
         """Calculate annualized Sortino ratio (using downside deviation)."""
+        returns = np.nan_to_num(returns, nan=0.0)
         excess_returns = returns - self.risk_free_rate / periods_per_year
         downside_returns = returns[returns < 0]
 
@@ -1333,7 +1340,7 @@ class AdvancedRiskAnalytics:
                 sigma2[t] = omega + alpha * arr[t - 1] ** 2 + beta * sigma2[t - 1]
                 if sigma2[t] <= 0:
                     return 1e10
-            sigma2_safe = np.maximum(sigma2, 1e-12)
+            sigma2_safe = np.maximum(np.nan_to_num(sigma2, nan=1e-12), 1e-12)
             ll = -0.5 * np.sum(np.log(sigma2_safe) + arr**2 / sigma2_safe)
             return -ll
 
@@ -1359,7 +1366,7 @@ class AdvancedRiskAnalytics:
         # ── h-step ahead variance forecast (sum of conditional variances) ────
         sigma2_forecast = self._garch_hstep_variance(sigma2_t, omega, alpha, beta, time_horizon)
 
-        sigma_forecast = float(np.sqrt(max(sigma2_forecast, 0.0)))
+        sigma_forecast = float(np.sqrt(max(float(np.nan_to_num(sigma2_forecast, nan=0.0)), 0.0)))
         alpha_level = 1.0 - confidence_level
         z = float(_stats.norm.ppf(alpha_level))
         mu_h = float(np.mean(arr)) * time_horizon

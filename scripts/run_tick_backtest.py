@@ -182,7 +182,8 @@ def run_backtest(
     y_vals = y_clean.values if hasattr(y_clean, "values") else y_clean
 
     adv = float(np.mean(volumes_aligned[volumes_aligned > 0])) if np.any(volumes_aligned > 0) else 50_000.0
-    vol_daily = float(np.std(np.diff(np.log(closes_aligned + 1e-9)))) * np.sqrt(24)
+    _log_ret = np.nan_to_num(np.diff(np.log(closes_aligned + 1e-9)), nan=0.0)
+    vol_daily = float(np.std(_log_ret)) * np.sqrt(24)
 
     for i, (prob, _actual) in enumerate(zip(probs, y_vals, strict=False)):
         price = float(closes_aligned[i])
@@ -261,7 +262,7 @@ def run_backtest(
 
     # Sharpe (annualised from H1 bars)
     if len(pnls) > 1:
-        pnl_arr = np.array(pnls)
+        pnl_arr = np.nan_to_num(np.array(pnls), nan=0.0)
         sharpe = float(np.mean(pnl_arr) / (np.std(pnl_arr) + 1e-9) * np.sqrt(24 * 252))
     else:
         sharpe = 0.0

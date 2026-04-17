@@ -112,7 +112,7 @@ def download_data(
             except Exception as exc:
                 logger.warning("Chunk %s→%s failed: %s", cursor.date(), chunk_end.date(), exc)
             cursor = chunk_end
-        data = pd.concat(chunks) if chunks else pd.DataFrame()
+        data = pd.concat(chunks).fillna(method="ffill").fillna(0.0) if chunks else pd.DataFrame()
     else:
         data = yf.download(
             symbol,
@@ -142,18 +142,19 @@ def download_data(
 
 def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-    df["ema9"] = df["Close"].ewm(span=9, adjust=False).mean()
-    df["ema21"] = df["Close"].ewm(span=21, adjust=False).mean()
+    _close = df["Close"].dropna()
+    df["ema9"] = _close.ewm(span=9, adjust=False).mean()
+    df["ema21"] = _close.ewm(span=21, adjust=False).mean()
 
     # ATR(14)
     hl = df["High"] - df["Low"]
     hc = (df["High"] - df["Close"].shift(1)).abs()
     lc = (df["Low"] - df["Close"].shift(1)).abs()
-    tr = pd.concat([hl, hc, lc], axis=1).max(axis=1)
+    tr = pd.concat([hl, hc, lc], axis=1).fillna(0.0).max(axis=1)
     df["atr14"] = tr.ewm(span=14, adjust=False).mean()
 
     # Volume average (20-bar)
-    df["vol_avg20"] = df["Volume"].rolling(20).mean()
+    df["vol_avg20"] = df["Volume"].dropna().rolling(20).mean()
 
     # EMA crossover: +1 BUY, -1 SELL
     df["cross"] = 0
@@ -262,14 +263,14 @@ def run_backtest(
     if trades_df.empty:
         return trades_df, {}
 
-    wins = trades_df["win"].sum()
+    wins = int(np.nan_to_num(trades_df["win"].sum(), nan=0))
     total = len(trades_df)
     win_rate = wins / total if total > 0 else 0
 
     # Sharpe on daily P&L
     try:
-        daily_pnl = trades_df.set_index("exit_time")["pnl_usd"].resample("D").sum()
-        sharpe = (daily_pnl.mean() / daily_pnl.std() * (252**0.5)) if daily_pnl.std() > 0 else 0.0
+        daily_pnl = trades_df.set_index("exit_time")["pnl_usd"].resample("D").sum().fillna(0.0)
+        sharpe = float(np.nan_to_num(daily_pnl.mean() / daily_pnl.std() * (252**0.5), nan=0.0)) if daily_pnl.std() > 0 else 0.0
     except Exception:
         sharpe = 0.0
 
@@ -281,7 +282,7 @@ def run_backtest(
         "total_bars": len(df),
         "total_trades": total,
         "win_rate_pct": round(win_rate * 100, 2),
-        "total_pnl_usd": round(trades_df["pnl_usd"].sum(), 2),
+        "total_pnl_usd": round(float(np.nan_to_num(trades_df["pnl_usd"].sum(), nan=0.0)), 2),
         "max_drawdown_pct": round(max_dd * 100, 4),
         "sharpe_ratio": round(float(sharpe), 4),
         "final_balance": round(balance, 2),
