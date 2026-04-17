@@ -362,6 +362,183 @@ def register_routers(
     except Exception as _sec_err:
         logger.warning("Security dashboard router not registered: %s", _sec_err)
 
+    # ── Market data streaming (/api/stream) ───────────────────────────────────
+    if feature_flags.MARKET_DATA_STREAMING:
+        try:
+            from data.streaming import router as streaming_router
+
+            _include_router_deduped(app, streaming_router)
+            logger.info("Market data streaming router registered (/api/stream)")
+        except Exception as _stream_err:
+            logger.warning("Market data streaming router not registered: %s", _stream_err)
+    else:
+        logger.debug("MARKET_DATA_STREAMING disabled — set FEATURE_MARKET_DATA_STREAMING=true to enable")
+
+    # ── Depth of Market (/api/dom) ────────────────────────────────────────────
+    if feature_flags.DEPTH_OF_MARKET:
+        try:
+            from data.depth_of_market import router as dom_router
+
+            _include_router_deduped(app, dom_router)
+            logger.info("Depth of Market router registered (/api/dom)")
+        except Exception as _dom_err:
+            logger.warning("Depth of Market router not registered: %s", _dom_err)
+    else:
+        logger.debug("DEPTH_OF_MARKET disabled — set FEATURE_DEPTH_OF_MARKET=true to enable")
+
+    # ── Time & Sales (/api/timesales) ─────────────────────────────────────────
+    if feature_flags.TIME_AND_SALES:
+        try:
+            from data.time_and_sales import router as timesales_router
+
+            _include_router_deduped(app, timesales_router)
+            logger.info("Time & Sales router registered (/api/timesales)")
+        except Exception as _ts_err:
+            logger.warning("Time & Sales router not registered: %s", _ts_err)
+    else:
+        logger.debug("TIME_AND_SALES disabled — set FEATURE_TIME_AND_SALES=true to enable")
+
+    # ── Order Flow Analysis (/api/orderflow) ──────────────────────────────────
+    if feature_flags.ORDER_FLOW_ANALYSIS:
+        try:
+            from analysis.order_flow import router as orderflow_router
+
+            _include_router_deduped(app, orderflow_router)
+            logger.info("Order Flow router registered (/api/orderflow)")
+        except Exception as _of_err:
+            logger.warning("Order Flow router not registered: %s", _of_err)
+    else:
+        logger.debug("ORDER_FLOW_ANALYSIS disabled — set FEATURE_ORDER_FLOW_ANALYSIS=true to enable")
+
+    # ── Order Flow Dashboard (/api/dashboard) ─────────────────────────────────
+    if feature_flags.ORDER_FLOW_DASHBOARD:
+        try:
+            from analysis.order_flow_dashboard import router as of_dashboard_router
+
+            _include_router_deduped(app, of_dashboard_router)
+            logger.info("Order Flow Dashboard router registered (/api/dashboard)")
+        except Exception as _ofd_err:
+            logger.warning("Order Flow Dashboard router not registered: %s", _ofd_err)
+    else:
+        logger.debug("ORDER_FLOW_DASHBOARD disabled — set FEATURE_ORDER_FLOW_DASHBOARD=true to enable")
+
+    # ── Market Scanner (/api/scanner) ─────────────────────────────────────────
+    if feature_flags.MARKET_SCANNER:
+        try:
+            from analysis.market_scanner import router as scanner_router
+
+            _include_router_deduped(app, scanner_router)
+            logger.info("Market Scanner router registered (/api/scanner)")
+        except Exception as _scan_err:
+            logger.warning("Market Scanner router not registered: %s", _scan_err)
+    else:
+        logger.debug("MARKET_SCANNER disabled — set FEATURE_MARKET_SCANNER=true to enable")
+
+    # ── Portfolio Strategy Allocator (/api/portfolio/allocator) ───────────────
+    try:
+        from portfolio.strategy_allocator import router as allocator_router
+
+        _include_router_deduped(app, allocator_router)
+        logger.info("Portfolio allocator router registered (/api/portfolio/allocator)")
+    except Exception as _alloc_err:
+        logger.warning("Portfolio allocator router not registered: %s", _alloc_err)
+
+    # ── Research module (/api/research) ───────────────────────────────────────
+    if feature_flags.RESEARCH_MODULE:
+        try:
+            from research import router as research_router
+
+            _include_router_deduped(app, research_router)
+            logger.info("Research router registered (/api/research)")
+        except Exception as _res_err:
+            logger.warning("Research router not registered: %s", _res_err)
+    else:
+        logger.debug("RESEARCH_MODULE disabled — set FEATURE_RESEARCH=true to enable")
+
+    # ── No-Code Strategy Builder (/api/nocode) ────────────────────────────────
+    if feature_flags.NOCODE_BUILDER:
+        try:
+            from nocode.router import router as nocode_router
+
+            _include_router_deduped(app, nocode_router)
+            logger.info("No-Code builder router registered (/api/nocode)")
+        except Exception as _nc_err:
+            logger.warning("No-Code builder router not registered: %s", _nc_err)
+    else:
+        logger.debug("NOCODE_BUILDER disabled — set FEATURE_NOCODE=true to enable")
+
+    # ── Teams (/api/teams) ────────────────────────────────────────────────────
+    if feature_flags.TEAMS_MODULE:
+        try:
+            from teams import router as teams_router
+
+            _include_router_deduped(app, teams_router)
+            logger.info("Teams router registered (/api/teams)")
+        except Exception as _teams_err:
+            logger.warning("Teams router not registered: %s", _teams_err)
+    else:
+        logger.debug("TEAMS_MODULE disabled — set FEATURE_TEAMS=true to enable")
+
+    # ── Replay Engine (/api/replay) ───────────────────────────────────────────
+    if feature_flags.REPLAY_ENGINE:
+        try:
+            from replay.router import router as replay_router
+
+            _include_router_deduped(app, replay_router)
+            logger.info("Replay engine router registered (/api/replay)")
+        except Exception as _replay_err:
+            logger.warning("Replay engine router not registered: %s", _replay_err)
+    else:
+        logger.debug("REPLAY_ENGINE disabled — set FEATURE_REPLAY=true to enable")
+
+    # ── Notifications / Alert Engine (/api/alerts) ────────────────────────────
+    if feature_flags.PUSH_NOTIFICATIONS:
+        try:
+            from notifications.alert_engine import router as notifications_router
+
+            _include_router_deduped(app, notifications_router)
+            logger.info("Notifications/alert engine router registered (/api/alerts)")
+        except Exception as _notif_err:
+            logger.warning("Notifications router not registered: %s", _notif_err)
+    else:
+        logger.debug("PUSH_NOTIFICATIONS disabled — set FEATURE_PUSH_NOTIFICATIONS=true to enable")
+
+    # ── Transparency Reports (/api/transparency) ──────────────────────────────
+    if feature_flags.TRANSPARENCY_REPORTS:
+        try:
+            from transparency.router import router as transparency_router
+
+            _include_router_deduped(app, transparency_router)
+            logger.info("Transparency router registered (/api/transparency)")
+        except Exception as _trans_err:
+            logger.warning("Transparency router not registered: %s", _trans_err)
+    else:
+        logger.debug("TRANSPARENCY_REPORTS disabled — set FEATURE_TRANSPARENCY=true to enable")
+
+    # ── Explainability (/api/explainability) ──────────────────────────────────
+    if feature_flags.EXPLAINABILITY:
+        try:
+            from explainability.router import router as explainability_router
+
+            _include_router_deduped(app, explainability_router)
+            logger.info("Explainability router registered (/api/explainability)")
+        except Exception as _expl_err:
+            logger.warning("Explainability router not registered: %s", _expl_err)
+    else:
+        logger.debug("EXPLAINABILITY disabled — set FEATURE_EXPLAINABILITY=true to enable")
+
+    # ── Mobile API v2 (/mobile) ───────────────────────────────────────────────
+    if feature_flags.MOBILE_API:
+        try:
+            from mobile.api_v2 import router as mobile_v2_router
+
+            _include_router_deduped(app, mobile_v2_router)
+            logger.info("Mobile API v2 router registered (/mobile)")
+        except Exception as _mob_err:
+            logger.warning("Mobile API v2 router not registered: %s", _mob_err)
+    else:
+        logger.debug("MOBILE_API disabled — set FEATURE_MOBILE_API=true to enable")
+
     # ── Live WebSocket ────────────────────────────────────────────────────────
     try:
         from api.ws_live import router as ws_live_router
