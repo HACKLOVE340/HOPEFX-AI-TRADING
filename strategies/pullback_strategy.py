@@ -518,7 +518,7 @@ class PullbackStrategy(BaseStrategy):
                 (low - prev_close).abs(),
             ],
             axis=1,
-        ).max(axis=1)
+        ).max(axis=1).fillna(0.0)
         return tr.rolling(period).mean().fillna(tr)
 
     @staticmethod
@@ -549,7 +549,7 @@ class PullbackStrategy(BaseStrategy):
                 (low - prev_close).abs(),
             ],
             axis=1,
-        ).max(axis=1)
+        ).max(axis=1).fillna(0.0)
 
         # Directional movement
         dm_plus = (high - prev_high).clip(lower=0)

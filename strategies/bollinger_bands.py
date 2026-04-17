@@ -13,6 +13,8 @@ and potential reversals.
 import logging
 from datetime import datetime, timezone
 
+import numpy as np
+
 UTC = timezone.utc
 from typing import Any
 
@@ -57,19 +59,19 @@ class BollingerBandsStrategy(BaseStrategy):
             return {"upper": None, "lower": None, "sma": None, "price": None}
         series = pd.Series(prices) if not isinstance(prices, pd.Series) else prices
         sma = series.rolling(window=self.period).mean()
-        std = series.rolling(window=self.period).std()
+        std = series.rolling(window=self.period).std().fillna(0.0)
         upper = sma + std * self.std_dev
         lower = sma - std * self.std_dev
-        price = float(series.iloc[-1])
-        prev_price = float(series.iloc[-2]) if len(series) > 1 else price
+        price = float(np.nan_to_num(series.iloc[-1], nan=0.0))
+        prev_price = float(np.nan_to_num(series.iloc[-2], nan=price)) if len(series) > 1 else price
         return {
-            "upper": float(upper.iloc[-1]) if not upper.empty else None,
-            "lower": float(lower.iloc[-1]) if not lower.empty else None,
-            "sma": float(sma.iloc[-1]) if not sma.empty else None,
+            "upper": float(np.nan_to_num(upper.iloc[-1], nan=0.0)) if not upper.empty else None,
+            "lower": float(np.nan_to_num(lower.iloc[-1], nan=0.0)) if not lower.empty else None,
+            "sma": float(np.nan_to_num(sma.iloc[-1], nan=0.0)) if not sma.empty else None,
             "price": price,
             "prev_price": prev_price,
-            "prev_upper": float(upper.iloc[-2]) if len(upper) > 1 else None,
-            "prev_lower": float(lower.iloc[-2]) if len(lower) > 1 else None,
+            "prev_upper": float(np.nan_to_num(upper.iloc[-2], nan=0.0)) if len(upper) > 1 else None,
+            "prev_lower": float(np.nan_to_num(lower.iloc[-2], nan=0.0)) if len(lower) > 1 else None,
         }
 
     def generate_signal(self, analysis):  # type: ignore[override]
@@ -127,7 +129,7 @@ class BollingerBandsStrategy(BaseStrategy):
 
             # Calculate Bollinger Bands
             sma = close.rolling(window=self.period).mean()
-            std = close.rolling(window=self.period).std()
+            std = close.rolling(window=self.period).std().fillna(0.0)
             upper_band = sma + (std * self.std_dev)
             lower_band = sma - (std * self.std_dev)
 
@@ -151,8 +153,8 @@ class BollingerBandsStrategy(BaseStrategy):
             percent_b = (current_price - current_lower) / band_width
 
             # Calculate band squeeze (volatility)
-            avg_std = std.rolling(window=50).mean().iloc[-1] if len(std) >= 50 else current_std
-            is_squeeze = current_std < avg_std * 0.75 if not pd.isna(avg_std) else False
+            avg_std = float(np.nan_to_num(std.rolling(window=50).mean().iloc[-1], nan=current_std)) if len(std) >= 50 else current_std
+            is_squeeze = current_std < avg_std * 0.75 if avg_std > 0 else False
 
             signal_type = "HOLD"
             confidence = 0.0

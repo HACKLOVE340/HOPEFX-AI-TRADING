@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 UTC = timezone.utc
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from strategies.base import BaseStrategy
@@ -74,17 +75,17 @@ class MeanReversionStrategy(BaseStrategy):
 
             # Calculate Bollinger Bands
             close = market_data["close"]
-            sma = close.rolling(window=self.period).mean()
-            std = close.rolling(window=self.period).std()
+            sma = close.rolling(window=self.period).mean().fillna(close)
+            std = close.rolling(window=self.period).std().fillna(0.0)
 
             upper_band = sma + (std * self.std_dev)
             lower_band = sma - (std * self.std_dev)
 
             # Current values
-            current_price = close.iloc[-1]
-            current_sma = sma.iloc[-1]
-            current_upper = upper_band.iloc[-1]
-            current_lower = lower_band.iloc[-1]
+            current_price = float(np.nan_to_num(close.iloc[-1], nan=0.0))
+            current_sma = float(np.nan_to_num(sma.iloc[-1], nan=current_price))
+            current_upper = float(np.nan_to_num(upper_band.iloc[-1], nan=current_price))
+            current_lower = float(np.nan_to_num(lower_band.iloc[-1], nan=current_price))
 
             # Calculate distance from bands (normalized)
             band_width = current_upper - current_lower

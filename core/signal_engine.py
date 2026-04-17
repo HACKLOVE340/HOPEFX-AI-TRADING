@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 UTC = timezone.utc
 from typing import Any, Optional
 
+import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
