@@ -503,7 +503,7 @@ class TransactionCostModel:
                 maxfev=5000,
             )
             eta_fit, gamma_fit, beta_fit = popt
-            perr = np.sqrt(np.diag(pcov))
+            perr = np.sqrt(np.abs(np.diag(pcov)))  # abs guards negative diag from ill-conditioned fits
 
             # Goodness of fit
             y_pred = _model((x_arr, s_arr), *popt)
@@ -833,7 +833,7 @@ class MarketMicrostructureAnalyzer:
         # Calculate return if possible
         if len(self.ticks) > 1:
             prev_tick = self.ticks[-2]
-            if prev_tick.mid > 0:
+            if prev_tick.mid > 0 and tick.mid > 0:
                 ret = np.log(tick.mid / prev_tick.mid)
                 self.returns.append(ret)
 
@@ -876,7 +876,7 @@ class MarketMicrostructureAnalyzer:
         price_changes = [t.mid for t in recent_ticks]
         if len(price_changes) > 1:
             cov = np.cov(price_changes[:-1], price_changes[1:])[0, 1]
-            self.effective_spread = 2 * np.sqrt(-cov) if cov < 0 else 0
+            self.effective_spread = 2 * np.sqrt(max(-cov, 0.0)) if cov < 0 else 0
 
         # Realized spread vs quoted spread
         quoted_spreads = [t.spread_bps for t in recent_ticks]
@@ -909,7 +909,7 @@ class MarketMicrostructureAnalyzer:
         self._extract_regime_features()
 
         # Rule-based classification (ML could be added)
-        volatility = np.sqrt(self.realized_variance) if self.realized_variance > 0 else 0
+        volatility = np.sqrt(max(self.realized_variance, 0.0)) if self.realized_variance > 0 else 0
 
         # Trend detection via Hurst
         self._calculate_hurst()
@@ -966,8 +966,12 @@ class MarketMicrostructureAnalyzer:
             self.hurst_exponent = 0.5
             return
 
+        tau_arr = np.array(tau, dtype=float)
+        if not np.all(tau_arr > 0):
+            self.hurst_exponent = 0.5
+            return
         log_lags = np.log(list(lags))
-        log_tau = np.log(tau)
+        log_tau = np.log(tau_arr)
 
         try:
             slope = np.polyfit(log_lags, log_tau, 1)[0]
@@ -1027,7 +1031,7 @@ class MarketMicrostructureAnalyzer:
         rec["regime"] = self.current_regime.name
         rec["confidence"] = self.regime_confidence
         rec["toxicity"] = self.order_flow_toxicity
-        rec["realized_vol"] = np.sqrt(self.realized_variance) if self.realized_variance > 0 else 0
+        rec["realized_vol"] = np.sqrt(max(self.realized_variance, 0.0)) if self.realized_variance > 0 else 0
 
         return rec
 
@@ -1040,7 +1044,7 @@ class MarketMicrostructureAnalyzer:
                 "history": [(r.name, c) for r, c in self.regime_history],
             },
             "volatility": {
-                "realized": np.sqrt(self.realized_variance),
+                "realized": np.sqrt(max(self.realized_variance, 0.0)),
                 "skewness": self.realized_skewness,
                 "kurtosis": self.realized_kurtosis,
             },
@@ -2319,7 +2323,9 @@ def generate_test_data(n_ticks: int = 10000, symbol: str = "XAUUSD") -> list[Tic
     for i in range(1, n_ticks):
         returns[i] *= 1 + abs(returns[i - 1]) * 5
 
-    prices = base_price * np.exp(np.cumsum(returns))
+    cum_returns = np.cumsum(returns)
+    cum_returns = np.clip(cum_returns, -50, 50)  # prevent overflow in exp
+    prices = base_price * np.exp(cum_returns)
 
     # Uniform random spread — not microstructure-realistic
     spreads = rng.uniform(0.02, 0.08, n_ticks)  # 2-8 pips for gold
