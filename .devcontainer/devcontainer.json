@@ -5,22 +5,16 @@
 	// and ensures behaviour parity between local dev and Docker.
 	"image": "mcr.microsoft.com/devcontainers/python:3.10-bullseye",
 	"features": {
-		// Redis — required for EventBus pub/sub between strategy engine,
-		// gatekeeper, and FIX router. Without it all tests fall back to
-		// in-memory mode and pub/sub integration is untested locally.
-		"ghcr.io/itsmechlark/features/redis-server:1": {},
 		// Node.js LTS — required for the React/Vite frontend build toolchain.
 		"ghcr.io/devcontainers/features/node:1": {
-			"version": "lts"
+			"version": "20"
 		},
 		// C++ build toolchain for execution/cpp_shim.
-		// cmake + libzmq3-dev installed via postCreateCommand (apt-packages
-		// feature requires GHCR auth that is unavailable in some environments).
 		"ghcr.io/devcontainers/features/common-utils:2": {}
 	},
+	// Redis is installed via apt (more reliable than third-party features).
 	// postCreateCommand runs after the container is fully initialised.
-	// pip install first, then frontend build — both are non-fatal if slow.
-	"postCreateCommand": "apt-get update -qq && apt-get install -y --no-install-recommends cmake libzmq3-dev pkg-config ninja-build && pip install -q -r requirements-ci.txt && cd frontend && npm install && npm run build",
+	"postCreateCommand": "apt-get update -qq && apt-get install -y --no-install-recommends redis-server cmake libzmq3-dev pkg-config ninja-build && pip install -q -r requirements-ci.txt && cd frontend && npm install",
 	"forwardPorts": [5173, 8000, 6379],
 	"portsAttributes": {
 		"5173": {
