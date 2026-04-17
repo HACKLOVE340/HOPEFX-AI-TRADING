@@ -126,10 +126,27 @@ class _NoOpTracer:
 
 
 def _initialize_provider() -> None:
-    """Lazily initialise the OpenTelemetry TracerProvider."""
+    """Lazily initialise the OpenTelemetry TracerProvider.
+
+    Defers to tracing/setup.py if it has already configured a provider —
+    prevents duplicate TracerProvider registration and double instrumentation
+    of FastAPI/SQLAlchemy/Redis when both modules are imported at startup.
+    """
     global _provider_initialized
     if _provider_initialized:
         return
+
+    # If tracing/setup.py already ran setup_tracing(), its provider is live.
+    # Reuse it rather than creating a second one.
+    try:
+        from tracing.setup import _tracer_provider as _setup_provider  # type: ignore[attr-defined]
+        if _setup_provider is not None:
+            _provider_initialized = True
+            logger.debug("api/tracing: deferred to tracing/setup.py provider — skipping duplicate init")
+            return
+    except Exception:  # nosec B110 — tracing/setup.py may not be importable
+        pass
+
     _provider_initialized = True
 
     if not _OTEL_AVAILABLE:

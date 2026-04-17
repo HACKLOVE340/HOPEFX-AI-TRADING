@@ -13,6 +13,15 @@ try:
 except ImportError:
     ...  # nosec B110
 
+# Suppress yfinance "possibly delisted" / GC=F roll-window warnings globally.
+# Must run before any yfinance import so the warning filters are in place.
+try:
+    from utils.yfinance_compat import suppress_yfinance_warnings as _suppress_yf
+
+    _suppress_yf()
+except Exception:  # nosec B110 — non-fatal; yfinance may not be installed
+    pass
+
 """
 HOPEFX AI Trading Framework - API Server
 
