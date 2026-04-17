@@ -276,11 +276,12 @@ async def rebuild_baseline(
 ) -> dict:
     """Rebuild the SelfHealer integrity baseline from current file state."""
     _log_superadmin_action(user, "auto_healing_baseline_rebuild")
+    actor = getattr(user, "sub", None) or getattr(user, "email", "superadmin")
     try:
         from security.self_healer import get_healer
 
-        result = await get_healer().rebuild_baseline()
-        return {"ok": True, **result}
+        result = await get_healer().rebuild_baseline(actor=actor)
+        return result
     except Exception as exc:
         logger.warning("auto_healing baseline rebuild: %s", exc)
         try:
@@ -437,6 +438,24 @@ async def get_pending_approval(
     except Exception as exc:
         logger.debug("auto_healing pending_approval: %s", exc)
     return {"patches": []}
+
+
+@router.get("/auto-healing/audit-log")
+async def get_audit_log(
+    limit: int = 100,
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    """Return the healer audit log (baseline rebuilds, manual actions)."""
+    try:
+        from cache.redis_client import get_redis_client
+
+        rc = get_redis_client()
+        if rc:
+            raw = rc.lrange("heal:audit_log", -limit, -1)
+            return {"entries": [json.loads(r) for r in raw]}
+    except Exception as exc:
+        logger.debug("auto_healing audit_log: %s", exc)
+    return {"entries": []}
 
 
 @router.post("/auto-healing/approve/{patch_index}")

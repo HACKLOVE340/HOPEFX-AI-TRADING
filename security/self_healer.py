@@ -37,14 +37,17 @@ called with the app instance.
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import contextlib
 import difflib
 import hashlib
+import hmac
 import json
 import logging
 import logging.handlers
 import os
+import re
 import shutil
 import subprocess  # nosec B404 — used only for git rollback with a fixed command list
 import time
@@ -75,7 +78,7 @@ def _ensure_file_logging() -> None:
         _LOG_DIR.mkdir(parents=True, exist_ok=True)
         _fh = logging.handlers.RotatingFileHandler(
             _LOG_FILE,
-            maxBytes=20 * 1024 * 1024,   # 20 MB per file
+            maxBytes=20 * 1024 * 1024,  # 20 MB per file
             backupCount=10,
             encoding="utf-8",
         )
@@ -91,6 +94,7 @@ def _ensure_file_logging() -> None:
         logger.debug("SelfHealer: file logging active → %s", _LOG_FILE)
     except Exception as exc:
         logger.warning("SelfHealer: could not install file log handler: %s", exc)
+
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -125,6 +129,50 @@ RUNTIME_PATHS: set[str] = {
     "logs/",
     ".git/",
 }
+
+# ── Patch signing (HMAC-SHA256) ───────────────────────────────────────────────
+# Patches written to fixes:approved must be signed with this key so that a
+# compromised Redis instance cannot inject arbitrary code.  Set
+# HEAL_PATCH_SIGNING_KEY in the environment (min 32 bytes recommended).
+# If unset, signing is skipped and a warning is emitted on every drain cycle.
+_PATCH_SIGNING_KEY: bytes = os.getenv("HEAL_PATCH_SIGNING_KEY", "").encode()
+
+# Dangerous AST node types / call patterns that must never appear in a patch.
+# This is a defence-in-depth check on top of the compile() gate.
+_DANGEROUS_CALLS: frozenset[str] = frozenset(
+    {
+        "exec",
+        "eval",
+        "compile",
+        "__import__",
+        "subprocess",
+        "os.system",
+        "os.popen",
+        "open",  # file writes inside patches are suspicious
+        "socket",
+        "urllib",
+        "requests",
+        "httpx",
+    }
+)
+_DANGEROUS_ATTRS: frozenset[str] = frozenset(
+    {
+        "system",
+        "popen",
+        "execve",
+        "execvp",
+        "spawn",
+        "Popen",
+        "call",
+        "check_call",
+        "check_output",
+        "run",
+    }
+)
+
+# Baseline rebuild rate-limit: at most once per N seconds per process lifetime.
+_BASELINE_REBUILD_INTERVAL: int = int(os.getenv("HEAL_BASELINE_REBUILD_INTERVAL", "300"))
+_last_baseline_rebuild_ts: float = 0.0
 
 
 # ── Redis helper ──────────────────────────────────────────────────────────────
@@ -236,6 +284,7 @@ def _quarantine(path: Path) -> Path:
 def _git_rollback(path: Path) -> bool:
     """Revert a single file to its last committed state via git checkout."""
     import re as _re
+
     try:
         rel = str(path.relative_to(PROJECT_ROOT))
         # Validate path is a safe relative file path before passing to subprocess
@@ -262,6 +311,97 @@ def _git_rollback(path: Path) -> bool:
 # ── Import smoke-test ─────────────────────────────────────────────────────────
 
 
+# ── Patch signing helpers ─────────────────────────────────────────────────────
+
+
+def _sign_patch(payload: str) -> str:
+    """Return HMAC-SHA256 hex digest of *payload* using the signing key."""
+    return hmac.new(_PATCH_SIGNING_KEY, payload.encode(), hashlib.sha256).hexdigest()
+
+
+def _verify_patch_signature(raw: str, sig: str) -> bool:
+    """Return True if *sig* matches the HMAC of *raw*."""
+    expected = _sign_patch(raw)
+    return hmac.compare_digest(expected, sig)
+
+
+def _patch_entry_is_trusted(raw: str, fix: dict[str, Any]) -> bool:
+    """
+    Return True if the patch entry passes the trust check.
+
+    When HEAL_PATCH_SIGNING_KEY is set, the entry must carry a matching
+    ``_sig`` field.  Without a key, all entries are accepted but a warning
+    is logged so operators know signing is disabled.
+    """
+    if not _PATCH_SIGNING_KEY:
+        logger.warning(
+            "SelfHealer: HEAL_PATCH_SIGNING_KEY not set — patch queue trust "
+            "verification disabled.  Set this env var to prevent Redis injection."
+        )
+        return True
+    sig = fix.get("_sig", "")
+    if not sig:
+        logger.warning("SelfHealer: patch entry has no _sig field — rejecting")
+        return False
+    if not _verify_patch_signature(raw, sig):
+        logger.error("SelfHealer: patch signature mismatch — possible Redis injection, rejecting")
+        return False
+    return True
+
+
+# ── Deep patch validator ──────────────────────────────────────────────────────
+
+
+def _patch_is_safe(new_code: str, target_path: Path) -> tuple[bool, str]:
+    """
+    Validate patch content beyond a simple compile() check.
+
+    Checks:
+    1. AST parses without error (catches more than compile() alone).
+    2. No dangerous built-in calls (exec, eval, subprocess, socket, …).
+    3. No path-traversal strings targeting sensitive files.
+    4. Patch does not shrink the file by more than 50 % (guards against
+       wholesale deletion of safety logic).
+
+    Returns (ok, reason).
+    """
+    # 1. AST parse
+    try:
+        tree = ast.parse(new_code, filename=str(target_path))
+    except SyntaxError as exc:
+        return False, f"AST parse failed: {exc}"
+
+    # 2. Dangerous call/attribute scan
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            # Direct calls: exec(...), eval(...)
+            if isinstance(node.func, ast.Name) and node.func.id in _DANGEROUS_CALLS:
+                return False, f"Dangerous call detected: {node.func.id}()"
+            # Attribute calls: subprocess.Popen(...), os.system(...)
+            if isinstance(node.func, ast.Attribute):
+                if node.func.attr in _DANGEROUS_ATTRS:
+                    return False, f"Dangerous attribute call: .{node.func.attr}()"
+                if isinstance(node.func.value, ast.Name) and node.func.value.id in _DANGEROUS_CALLS:
+                    return False, f"Dangerous module call: {node.func.value.id}.{node.func.attr}()"
+
+    # 3. Path-traversal / sensitive file references in string literals
+    _sensitive_re = re.compile(r"(?i)(\.env|secrets?[/\\]|id_rsa|\.pem|\.key|/etc/passwd|/etc/shadow)")
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and _sensitive_re.search(node.value):
+            return False, f"Sensitive path reference in patch: {node.value[:60]!r}"
+
+    # 4. Wholesale-deletion guard — patch must not be < 50 % of original size
+    if target_path.exists():
+        original_size = target_path.stat().st_size
+        if original_size > 200 and len(new_code.encode()) < original_size * 0.5:
+            return False, (
+                f"Patch shrinks file by more than 50 % "
+                f"({len(new_code.encode())} bytes vs {original_size} original) — rejected"
+            )
+
+    return True, "ok"
+
+
 def _import_ok(path: Path) -> bool:
     """Return True if the Python file compiles without syntax errors."""
     try:
@@ -272,7 +412,7 @@ def _import_ok(path: Path) -> bool:
     except SyntaxError as exc:
         logger.warning("SelfHealer: syntax error in %s: %s", path, exc)
         return False
-    except Exception:
+    except Exception:  # nosec B110 — any other read/compile error → treat as unsafe
         return False
 
 
@@ -293,6 +433,12 @@ def _apply_patch(target_path: Path, new_code: str) -> tuple[bool, str]:
 
     if not target_path.exists():
         return False, f"Target file not found: {target_path}"
+
+    # Deep safety validation before touching disk
+    safe, reason = _patch_is_safe(new_code, target_path)
+    if not safe:
+        logger.warning("SelfHealer: patch safety check failed for %s: %s", target_path, reason)
+        return False, f"Safety check failed: {reason}"
 
     # Quarantine original
     _quarantine(target_path)
@@ -398,12 +544,12 @@ class SelfHealer:
         self._last_test_result: dict[str, Any] = {}
 
         # ── Deep code analysis state ──────────────────────────────────────────
-        self._code_issues: list[dict[str, Any]] = []   # last scan results
+        self._code_issues: list[dict[str, Any]] = []  # last scan results
         self._last_code_scan_ts: float = 0.0
         self._code_scan_interval: int = int(os.getenv("HEAL_CODE_SCAN_INTERVAL", "300"))  # 5 min
-        self._log_scan_interval: int = int(os.getenv("HEAL_LOG_SCAN_INTERVAL", "60"))    # 1 min
+        self._log_scan_interval: int = int(os.getenv("HEAL_LOG_SCAN_INTERVAL", "60"))  # 1 min
         self._last_log_scan_ts: float = 0.0
-        self._log_issues: list[dict[str, Any]] = []    # recent log errors
+        self._log_issues: list[dict[str, Any]] = []  # recent log errors
         self._claude_fix_queue: list[dict[str, Any]] = []  # pending Claude fixes
 
         # Ensure all log output goes to logs/app.log
@@ -524,10 +670,14 @@ class SelfHealer:
             "code_issues_total": len(self._code_issues),
             "code_issues_critical": code_critical,
             "code_issues_high": code_high,
-            "last_code_scan": datetime.fromtimestamp(self._last_code_scan_ts, UTC).isoformat() if self._last_code_scan_ts else None,
+            "last_code_scan": datetime.fromtimestamp(self._last_code_scan_ts, UTC).isoformat()
+            if self._last_code_scan_ts
+            else None,
             "log_issues_total": len(self._log_issues),
             "log_errors_recent": log_errors,
-            "last_log_scan": datetime.fromtimestamp(self._last_log_scan_ts, UTC).isoformat() if self._last_log_scan_ts else None,
+            "last_log_scan": datetime.fromtimestamp(self._last_log_scan_ts, UTC).isoformat()
+            if self._last_log_scan_ts
+            else None,
             "claude_fix_queue_depth": len(self._claude_fix_queue),
             "log_file": str(_LOG_FILE),
         }
@@ -718,6 +868,13 @@ class SelfHealer:
             try:
                 fix: dict[str, Any] = json.loads(raw)
             except json.JSONDecodeError:
+                continue
+
+            # ── Trust gate: verify HMAC signature ────────────────────────
+            if not _patch_entry_is_trusted(raw, fix):
+                self._log("error", "SelfHealer: untrusted patch entry rejected — possible Redis injection")
+                with contextlib.suppress(Exception):
+                    await redis.lrem("fixes:approved", 1, raw)
                 continue
 
             endpoint = fix.get("endpoint", "")
@@ -995,11 +1152,13 @@ class SelfHealer:
                 with contextlib.suppress(Exception):
                     await redis.rpush(
                         "alerts:critical",
-                        json.dumps({
-                            "type": "runtime_error",
-                            "ts": issue.to_dict()["timestamp"],
-                            "detail": issue.to_dict(),
-                        }),
+                        json.dumps(
+                            {
+                                "type": "runtime_error",
+                                "ts": issue.to_dict()["timestamp"],
+                                "detail": issue.to_dict(),
+                            }
+                        ),
                     )
                     await redis.ltrim("alerts:critical", -1000, -1)
 
@@ -1013,15 +1172,17 @@ class SelfHealer:
 
         for msg, count in seen_msgs.items():
             if count >= 2:  # repeated error → worth fixing
-                await self._enqueue_claude_fix({
-                    "category": "runtime_error",
-                    "severity": "critical",
-                    "description": f"Repeated runtime error ({count}x in 10 min): {msg}",
-                    "file": "logs/app.log",
-                    "line": 0,
-                    "snippet": msg,
-                    "suggestion": "Investigate the root cause and add proper error handling",
-                })
+                await self._enqueue_claude_fix(
+                    {
+                        "category": "runtime_error",
+                        "severity": "critical",
+                        "description": f"Repeated runtime error ({count}x in 10 min): {msg}",
+                        "file": "logs/app.log",
+                        "line": 0,
+                        "snippet": msg,
+                        "suggestion": "Investigate the root cause and add proper error handling",
+                    }
+                )
 
         return self._log_issues
 
@@ -1032,8 +1193,7 @@ class SelfHealer:
         key = f"{issue.get('file', '')}:{issue.get('line', 0)}:{issue.get('category', '')}"
         # Avoid duplicate entries
         existing_keys = {
-            f"{e.get('file', '')}:{e.get('line', 0)}:{e.get('category', '')}": True
-            for e in self._claude_fix_queue
+            f"{e.get('file', '')}:{e.get('line', 0)}:{e.get('category', '')}": True for e in self._claude_fix_queue
         }
         if key not in existing_keys:
             self._claude_fix_queue.append({**issue, "queued_at": datetime.now(UTC).isoformat()})
@@ -1234,12 +1394,12 @@ class SelfHealer:
 
         prompt = f"""FILE: {file_path}
 ISSUE CATEGORY: {category}
-SEVERITY: {issue.get('severity', 'unknown')}
+SEVERITY: {issue.get("severity", "unknown")}
 LINE: {line}
 DESCRIPTION: {description}
 OFFENDING CODE: {snippet}
 SUGGESTED FIX: {suggestion}
-{f'ADDITIONAL GUIDANCE: {extra_guidance}' if extra_guidance else ''}
+{f"ADDITIONAL GUIDANCE: {extra_guidance}" if extra_guidance else ""}
 
 Complete file content:
 
@@ -1275,7 +1435,7 @@ Return the complete fixed file:"""
             # Strip markdown code fences if Claude wrapped the response
             for fence in ("```python\n", "```py\n", "```\n"):
                 if fixed.startswith(fence):
-                    fixed = fixed[len(fence):]
+                    fixed = fixed[len(fence) :]
                     break
             if fixed.endswith("```"):
                 fixed = fixed[:-3]
@@ -1285,15 +1445,17 @@ Return the complete fixed file:"""
             # Fallback: try the shared llm_wrapper (may use OpenAI if configured)
             try:
                 import asyncio as _asyncio
+
                 loop = _asyncio.new_event_loop()
                 try:
                     from security.llm_wrapper import call_llm as _call_llm
+
                     fixed = loop.run_until_complete(_call_llm(prompt))
                 finally:
                     loop.close()
                 for fence in ("```python\n", "```py\n", "```\n"):
                     if fixed.startswith(fence):
-                        fixed = fixed[len(fence):]
+                        fixed = fixed[len(fence) :]
                         break
                 if fixed.endswith("```"):
                     fixed = fixed[:-3]
@@ -1573,16 +1735,61 @@ Return the complete fixed file:"""
 
     # ── Baseline management ───────────────────────────────────────────────────
 
-    async def rebuild_baseline(self) -> dict[str, Any]:
-        """Force-rebuild the baseline from current file state."""
+    async def rebuild_baseline(self, actor: str = "system") -> dict[str, Any]:
+        """
+        Force-rebuild the integrity baseline from current file state.
+
+        Rate-limited to once per HEAL_BASELINE_REBUILD_INTERVAL seconds to
+        prevent an attacker with a compromised superadmin token from repeatedly
+        rebuilding the baseline after injecting malicious files.  Every rebuild
+        is written to the audit log in Redis.
+        """
+        global _last_baseline_rebuild_ts
+        now = time.time()
+        elapsed = now - _last_baseline_rebuild_ts
+        if elapsed < _BASELINE_REBUILD_INTERVAL:
+            wait = int(_BASELINE_REBUILD_INTERVAL - elapsed)
+            self._log(
+                "warning",
+                "SelfHealer: baseline rebuild rate-limited — next allowed in %ds (actor=%s)",
+                wait,
+                actor,
+            )
+            return {
+                "ok": False,
+                "error": f"Rate-limited: retry in {wait}s",
+                "rebuilt_at": datetime.now(UTC).isoformat(),
+            }
+
         self._baseline = _build_manifest()
         _save_manifest(self._baseline)
+        _last_baseline_rebuild_ts = now
+        rebuilt_at = datetime.now(UTC).isoformat()
+
         redis = await _get_redis()
         if redis:
             with contextlib.suppress(Exception):
                 await redis.set("heal:manifest", json.dumps(self._baseline))
-        self._log("info", "SelfHealer: baseline rebuilt — %d files", len(self._baseline))
-        return {"files": len(self._baseline), "rebuilt_at": datetime.now(UTC).isoformat()}
+            # Audit trail — every rebuild is recorded with actor and timestamp
+            with contextlib.suppress(Exception):
+                audit_entry = json.dumps(
+                    {
+                        "event": "baseline_rebuild",
+                        "actor": actor,
+                        "files": len(self._baseline),
+                        "ts": rebuilt_at,
+                    }
+                )
+                await redis.rpush("heal:audit_log", audit_entry)
+                await redis.ltrim("heal:audit_log", -500, -1)
+
+        self._log(
+            "info",
+            "SelfHealer: baseline rebuilt by %s — %d files tracked",
+            actor,
+            len(self._baseline),
+        )
+        return {"ok": True, "files": len(self._baseline), "rebuilt_at": rebuilt_at}
 
     async def run_tests_now(self, trigger: str = "manual") -> dict[str, Any]:
         """Trigger a test run immediately and return the result."""
@@ -1737,17 +1944,25 @@ def _build_eager_heal_router() -> APIRouter:
 
     def _require_auth(request: _Request) -> None:
         """Verify Bearer JWT token on the eager heal router endpoints."""
+        from fastapi import HTTPException as _HTTPEx
+
         try:
             from auth.jwt_handler import verify_token as _verify
+
             token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
             if not token:
-                from fastapi import HTTPException as _HTTPEx
                 raise _HTTPEx(status_code=401, detail="Authentication required")
             _verify(token)
-        except Exception:
-            # Auth failures are non-fatal on the eager router — the live healer
-            # router enforces auth strictly once startup completes.
-            pass  # nosec B110
+        except _HTTPEx:
+            # Re-raise HTTP 401/403 so FastAPI returns the correct status code.
+            raise
+        except ImportError:  # nosec B110 — jwt_handler not yet available during early startup
+            # During early startup before auth module is loaded, allow through.
+            # The live healer router (mounted later) enforces auth strictly.
+            logger.warning("SelfHealer eager router: jwt_handler unavailable, auth skipped")
+        except Exception as exc:
+            # Any other verification failure (malformed token, expired, etc.) → 401.
+            raise _HTTPEx(status_code=401, detail="Authentication failed") from exc
 
     @r.get("/status")
     async def _status():
@@ -1797,7 +2012,9 @@ def _build_eager_heal_router() -> APIRouter:
             "total": len(h._code_issues),
             "returned": len(issues),
             "issues": issues,
-            "last_scan": datetime.fromtimestamp(h._last_code_scan_ts, UTC).isoformat() if h._last_code_scan_ts else None,
+            "last_scan": datetime.fromtimestamp(h._last_code_scan_ts, UTC).isoformat()
+            if h._last_code_scan_ts
+            else None,
         }
 
     @r.post("/log-analysis/now", summary="Trigger immediate log file analysis")

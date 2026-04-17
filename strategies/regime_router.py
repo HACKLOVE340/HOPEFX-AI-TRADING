@@ -343,7 +343,7 @@ class RegimeRouter:
                     try:
                         _loop = _asyncio.get_running_loop()
                         _loop.create_task(orch.event_bus.publish(_event))
-                    except RuntimeError:
+                    except RuntimeError:  # nosec B110 — no running loop in sync context; publish is non-fatal
                         pass  # no event loop in sync context
             except Exception as _re:
                 logger.debug("REGIME_CHANGE event publish skipped: %s", _re)

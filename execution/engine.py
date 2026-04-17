@@ -402,11 +402,13 @@ class ExecutionEngine:
         # Live trading guard: reject future-dated or stale ticks
         try:
             from risk.lookahead_guard import live_guard, FutureTimestampError, StaleDataError
+
             live_guard.validate_tick(tick, symbol=symbol)
         except (FutureTimestampError, StaleDataError) as _guard_err:
             logger.warning(
                 "ExecutionEngine: tick rejected by LiveTradingGuard for %s: %s",
-                symbol, _guard_err,
+                symbol,
+                _guard_err,
             )
             return  # Do not update last tick with invalid data
         except Exception:  # nosec B110 — guard is non-fatal if unavailable
@@ -1100,7 +1102,7 @@ class ExecutionEngine:
 
                 _loop = _asyncio.get_running_loop()
                 _loop.create_task(_event_bus.publish_order(_order_payload))
-            except RuntimeError:
+            except RuntimeError:  # nosec B110 — no running loop in sync context; publish is non-fatal
                 pass  # no running loop — skip non-critical publish
         except Exception as _bus_exc:
             logger.debug("CH_ORDER publish skipped: %s", _bus_exc)

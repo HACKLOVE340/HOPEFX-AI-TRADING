@@ -747,11 +747,13 @@ class InferenceEngine:
         # prediction errors that are harder to detect than an explicit failure.
         try:
             from data_layer.validation import validate_features as _vf
+
             X = _vf(X, strict=True, label_col="y")
         except Exception as _val_exc:
             logger.warning(
                 "InferenceEngine: feature validation failed for %s: %s — returning neutral",
-                sym_label, _val_exc,
+                sym_label,
+                _val_exc,
             )
             base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
             base_result["fallback"] = True
@@ -809,6 +811,7 @@ class InferenceEngine:
         # This catches data pipeline bugs where future bars leak into features.
         try:
             from risk.lookahead_guard import feature_guard as _fg
+
             if hasattr(ohlcv.index, "max") and len(ohlcv) > 0:
                 latest_feature_ts = ohlcv.index.max()
                 decision_ts = pd.Timestamp.now(tz="UTC")
@@ -822,9 +825,10 @@ class InferenceEngine:
             # Swallow other guard failures (e.g. timezone mismatch) gracefully.
             try:
                 from risk.lookahead_guard import LookAheadBiasError as _LABCheck
+
                 if isinstance(_lag_exc, _LABCheck):
                     raise
-            except ImportError:
+            except ImportError:  # nosec B110 — lookahead guard is optional; skip check
                 pass
             logger.debug("InferenceEngine: look-ahead guard check skipped: %s", _lag_exc)
 
@@ -843,6 +847,7 @@ class InferenceEngine:
                 # Record success in ML circuit breaker (sync-safe)
                 try:
                     from resilience.service_circuit_breakers import ml_breaker as _ml_cb
+
                     _ml_cb.record_success()
                 except Exception:  # nosec B110 — circuit breaker is non-fatal
                     pass
@@ -852,6 +857,7 @@ class InferenceEngine:
                 # Record failure in ML circuit breaker (sync-safe)
                 try:
                     from resilience.service_circuit_breakers import ml_breaker as _ml_cb
+
                     _ml_cb.record_failure(exc)
                 except Exception:  # nosec B110 — circuit breaker is non-fatal
                     pass

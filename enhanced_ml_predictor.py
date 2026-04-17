@@ -330,7 +330,9 @@ class AdvancedFeatureEngineer:
             # Moving averages and ratios — min_periods=1 avoids leading NaN
             features[f"ma_{w}"] = df["close"].rolling(w, min_periods=1).mean()
             features[f"ma_ratio_{w}"] = (df["close"] / features[f"ma_{w}"].replace(0, np.nan)).fillna(1.0)
-            features[f"dist_to_ma_{w}"] = ((df["close"] - features[f"ma_{w}"]) / features[f"ma_{w}"].replace(0, np.nan)).fillna(0.0)
+            features[f"dist_to_ma_{w}"] = (
+                (df["close"] - features[f"ma_{w}"]) / features[f"ma_{w}"].replace(0, np.nan)
+            ).fillna(0.0)
 
             # Exponential moving average
             features[f"ema_{w}"] = df["close"].ewm(span=w, adjust=False, min_periods=1).mean()
@@ -385,11 +387,15 @@ class AdvancedFeatureEngineer:
             features["volume_ma"] = df["volume"].rolling(20, min_periods=1).mean()
             features["volume_std"] = df["volume"].rolling(20, min_periods=2).std().fillna(0.0)
             features["volume_ratio"] = (df["volume"] / features["volume_ma"].replace(0, np.nan)).fillna(1.0)
-            features["volume_zscore"] = ((df["volume"] - features["volume_ma"]) / (features["volume_std"] + 1e-10)).fillna(0.0)
+            features["volume_zscore"] = (
+                (df["volume"] - features["volume_ma"]) / (features["volume_std"] + 1e-10)
+            ).fillna(0.0)
 
             # Volume-weighted price metrics
             vol_sum = df["volume"].rolling(20, min_periods=1).sum().replace(0, np.nan)
-            features["vwma_20"] = ((df["close"] * df["volume"]).rolling(20, min_periods=1).sum() / vol_sum).fillna(df["close"])
+            features["vwma_20"] = ((df["close"] * df["volume"]).rolling(20, min_periods=1).sum() / vol_sum).fillna(
+                df["close"]
+            )
             features["vwma_ratio"] = (df["close"] / features["vwma_20"].replace(0, np.nan)).fillna(1.0)
 
             # OBV (On-Balance Volume)
@@ -1979,7 +1985,7 @@ def run_ml_test():
 
     if _os.getenv("APP_ENV", "production").lower() == "production":
         raise RuntimeError(
-            "run_ml_test() uses synthetic data and cannot run in production. "
+            "run_ml_test() uses synthetic data and cannot run in production. "  # healer: ignore — guards against production use
             "Set APP_ENV=development or APP_ENV=test to use this function."
         )
     logger.info("=" * 80)

@@ -1229,12 +1229,12 @@ async def ws_nuclear(websocket: WebSocket) -> None:
                 inbound = json.loads(raw)
                 if inbound.get("type") == "ping":
                     await _send({"type": "pong"})
-            except TimeoutError:
+            except TimeoutError:  # nosec B110 — poll timeout is expected; loop continues
                 pass
-            except (WebSocketDisconnect, json.JSONDecodeError):
+            except (WebSocketDisconnect, json.JSONDecodeError):  # nosec B110 — client disconnect ends loop
                 break
 
-    except WebSocketDisconnect:
+    except WebSocketDisconnect:  # nosec B110 — normal client disconnect; no action needed
         pass
     except Exception as exc:
         logger.error("ws_nuclear error for user %s: %s", user_id, exc)

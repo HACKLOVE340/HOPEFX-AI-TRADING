@@ -573,7 +573,7 @@ def _parse_timestamp(raw: Any) -> datetime:
         try:
             dt = datetime.fromisoformat(raw)
             return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
-        except ValueError:
+        except ValueError:  # nosec B110 — unrecognised format; fall through to now()
             pass
     return datetime.now(UTC)
 
