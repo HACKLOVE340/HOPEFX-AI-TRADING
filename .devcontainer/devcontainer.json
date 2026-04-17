@@ -12,13 +12,16 @@
 		// Node.js LTS — required for the React/Vite frontend build toolchain.
 		"ghcr.io/devcontainers/features/node:1": {
 			"version": "lts"
+		},
+		// C++ build toolchain for execution/cpp_shim.
+		// cmake + libzmq3-dev installed via the apt feature so privileges
+		// are handled correctly before postCreateCommand runs.
+		"ghcr.io/devcontainers/features/apt-packages:1": {
+			"packages": "cmake,libzmq3-dev,pkg-config,ninja-build"
 		}
 	},
-	// Install C++ build toolchain for execution/cpp_shim (cmake + libzmq3-dev).
-	// After the container starts, build the shim with:
-	//   cd execution/cpp_shim && make
-	// Then enable it in .env: CPP_SHIM_ENABLED=true
-	"onCreateCommand": "sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends cmake libzmq3-dev pkg-config",
+	// postCreateCommand runs after the container is fully initialised.
+	// pip install first, then frontend build — both are non-fatal if slow.
 	"postCreateCommand": "pip install -q -r requirements-ci.txt && cd frontend && npm install && npm run build",
 	"forwardPorts": [5173, 8000, 6379],
 	"portsAttributes": {
