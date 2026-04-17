@@ -201,16 +201,22 @@ async def _fetch_yfinance(
     timeframe: str,
     since_ms: int,
 ) -> pd.DataFrame | None:
-    """Fetch OHLCV from Yahoo Finance via yfinance. Returns DataFrame or None."""
+    """Fetch OHLCV from Yahoo Finance via yfinance with GC=F fallback.
+
+    Uses utils.yfinance_compat.safe_download which handles the quarterly
+    CME gold futures roll window (GC=F → GLD fallback) and suppresses
+    'possibly delisted' warnings automatically.
+    """
     try:
-        import yfinance as yf
+        from utils.yfinance_compat import safe_download
     except ImportError:
         logger.debug("yfinance not installed — skipping Yahoo Finance source")
         return None
 
-    # Map ccxt symbol to yfinance ticker
+    # Map ccxt symbol to primary yfinance ticker.
+    # safe_download() handles GC=F → GLD fallback automatically.
     _ticker_map = {
-        "XAU/USDT": "GC=F",  # Gold futures
+        "XAU/USDT": "GC=F",  # Gold futures (safe_download falls back to GLD)
         "XAU/USD": "GC=F",
         "BTC/USDT": "BTC-USD",
         "ETH/USDT": "ETH-USD",
@@ -229,28 +235,34 @@ async def _fetch_yfinance(
 
     try:
         since_dt = datetime.fromtimestamp(since_ms / 1000, tz=UTC)
-        # yfinance is synchronous — run in executor
+        # safe_download is synchronous — run in executor to avoid blocking the event loop
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(
             None,
-            lambda: yf.download(
+            lambda: safe_download(
                 ticker,
-                start=since_dt,
+                start=since_dt.strftime("%Y-%m-%d"),
                 interval=interval,
-                progress=False,
                 auto_adjust=True,
+                progress=False,
             ),
         )
         if data is None or data.empty:
+            logger.warning("yfinance: no data for %s (symbol=%s)", ticker, symbol)
             return None
 
-        df = data[["Open", "High", "Low", "Close", "Volume"]].copy()
-        df.columns = ["open", "high", "low", "close", "volume"]
+        # Ensure lowercase column names (safe_download normalises these)
+        required = {"open", "high", "low", "close", "volume"}
+        if not required.issubset(set(data.columns)):
+            logger.debug("yfinance: missing columns for %s: %s", ticker, data.columns.tolist())
+            return None
+
+        df = data[["open", "high", "low", "close", "volume"]].copy()
         # Convert DatetimeIndex to Unix ms
         df.index = (df.index.astype(np.int64) // 10**6).astype(int)
         df.index.name = "timestamp"
         df = df.sort_index()
-        logger.info("yfinance: fetched %d bars for %s (%s)", len(df), ticker, symbol)
+        logger.info("yfinance: fetched %d bars for %s via %s", len(df), symbol, ticker)
         return df
     except Exception as exc:
         logger.warning("yfinance fetch failed for %s: %s", symbol, exc)

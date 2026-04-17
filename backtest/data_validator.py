@@ -78,12 +78,19 @@ logger = logging.getLogger(__name__)
 # through both Python's warnings module and its own logger when GC=F (CME
 # gold futures front-month) rolls quarterly. Suppress both channels so the
 # terminal stays clean; the fallback chain (GC=F → GLD) handles missing data.
-warnings.filterwarnings("ignore", message=".*possibly delisted.*", category=UserWarning)
-warnings.filterwarnings("ignore", message=".*No price data found.*", category=UserWarning)
-warnings.filterwarnings("ignore", message=".*Period.*not supported.*", category=UserWarning)
-logging.getLogger("yfinance").setLevel(logging.ERROR)
-logging.getLogger("yfinance.base").setLevel(logging.ERROR)
-logging.getLogger("yfinance.utils").setLevel(logging.ERROR)
+# Delegate to the canonical suppressor in utils/yfinance_compat so all
+# suppression logic lives in one place.
+try:
+    from utils.yfinance_compat import suppress_yfinance_warnings as _suppress_yf
+    _suppress_yf()
+except Exception:  # nosec B110 — yfinance may not be installed
+    # Fallback: apply suppressions directly
+    warnings.filterwarnings("ignore", message=".*possibly delisted.*", category=UserWarning)
+    warnings.filterwarnings("ignore", message=".*No price data found.*", category=UserWarning)
+    warnings.filterwarnings("ignore", message=".*Period.*not supported.*", category=UserWarning)
+    logging.getLogger("yfinance").setLevel(logging.ERROR)
+    logging.getLogger("yfinance.base").setLevel(logging.ERROR)
+    logging.getLogger("yfinance.utils").setLevel(logging.ERROR)
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 MIN_SOURCES: int = int(os.getenv("BACKTEST_MIN_SOURCES", "2"))
