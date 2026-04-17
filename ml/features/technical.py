@@ -89,13 +89,13 @@ class TechnicalFeatureEngineer:
 
         # Exponential Moving Averages (including 12 and 26 for MACD crossover)
         for period in [5, 10, 12, 20, 26, 50, 100]:
-            df[f"ema_{period}"] = close.ewm(span=period, adjust=False).mean()
+            df[f"ema_{period}"] = close.ewm(span=period, adjust=False, min_periods=1).mean()
 
         # MACD
-        exp1 = close.ewm(span=12, adjust=False).mean()
-        exp2 = close.ewm(span=26, adjust=False).mean()
+        exp1 = close.ewm(span=12, adjust=False, min_periods=1).mean()
+        exp2 = close.ewm(span=26, adjust=False, min_periods=1).mean()
         df["macd"] = exp1 - exp2
-        df["macd_signal"] = df["macd"].ewm(span=9, adjust=False).mean()
+        df["macd_signal"] = df["macd"].ewm(span=9, adjust=False, min_periods=1).mean()
         df["macd_hist"] = df["macd"] - df["macd_signal"]
 
         # Price relative to MAs
@@ -134,7 +134,7 @@ class TechnicalFeatureEngineer:
             low_min = low.rolling(window=period).min()
             high_max = high.rolling(window=period).max()
             df[f"stoch_k_{period}"] = 100 * (close - low_min) / (high_max - low_min)
-            df[f"stoch_d_{period}"] = df[f"stoch_k_{period}"].rolling(window=3).mean()
+            df[f"stoch_d_{period}"] = df[f"stoch_k_{period}"].rolling(window=3, min_periods=1).mean()
 
         # Rate of Change (ROC)
         for period in [5, 10, 20]:
@@ -160,8 +160,8 @@ class TechnicalFeatureEngineer:
 
         # Bollinger Bands
         for period in [20, 50]:
-            sma = close.rolling(window=period).mean()
-            std = close.rolling(window=period).std()
+            sma = close.rolling(window=period, min_periods=1).mean()
+            std = close.rolling(window=period, min_periods=2).std().fillna(0.0)
             df[f"bb_upper_{period}"] = sma + (std * 2)
             df[f"bb_lower_{period}"] = sma - (std * 2)
             df[f"bb_width_{period}"] = (df[f"bb_upper_{period}"] - df[f"bb_lower_{period}"]) / sma
@@ -177,17 +177,14 @@ class TechnicalFeatureEngineer:
             high_low = high - low
             high_close = np.abs(high - close.shift())
             low_close = np.abs(low - close.shift())
-            true_range = pd.concat([high_low, high_close, low_close], axis=1).max(
-                axis=1,
-            )
-            df[f"atr_{period}"] = true_range.rolling(window=period).mean()
+            true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+            df[f"atr_{period}"] = true_range.rolling(window=period, min_periods=1).mean()
 
         # Historical Volatility
+        close_safe = close.clip(lower=1e-10)
         for period in [10, 20, 30]:
-            returns = np.log(close / close.shift())
-            df[f"volatility_{period}"] = returns.rolling(window=period).std() * np.sqrt(
-                252,
-            )
+            returns = np.log(close_safe / close_safe.shift()).fillna(0.0)
+            df[f"volatility_{period}"] = returns.rolling(window=period, min_periods=2).std().fillna(0.0) * np.sqrt(252)
 
         return df
 
@@ -266,14 +263,15 @@ class TechnicalFeatureEngineer:
         df["returns_10"] = close.pct_change(10)
         df["returns_20"] = close.pct_change(20)
 
-        # Log returns
-        df["log_returns_1"] = np.log(close / close.shift())
-        df["log_returns_5"] = np.log(close / close.shift(5))
+        # Log returns — guard against zero/negative prices
+        close_safe = close.clip(lower=1e-10)
+        df["log_returns_1"] = np.log(close_safe / close_safe.shift()).fillna(0.0)
+        df["log_returns_5"] = np.log(close_safe / close_safe.shift(5)).fillna(0.0)
 
         # Rolling statistics
         for period in [10, 20]:
-            df[f"mean_{period}"] = close.rolling(window=period).mean()
-            df[f"std_{period}"] = close.rolling(window=period).std()
+            df[f"mean_{period}"] = close.rolling(window=period, min_periods=1).mean()
+            df[f"std_{period}"] = close.rolling(window=period, min_periods=2).std().fillna(0.0)
             df[f"skew_{period}"] = close.rolling(window=period).skew()
             df[f"kurt_{period}"] = close.rolling(window=period).kurt()
 

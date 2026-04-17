@@ -182,28 +182,29 @@ class FeatureEngineer:
         feats["ret_10"] = c.pct_change(10)
         feats["ret_20"] = c.pct_change(20)
 
-        # Log returns
-        feats["log_ret_1"] = np.log(c / c.shift(1))
-        feats["log_ret_5"] = np.log(c / c.shift(5))
+        # Log returns — guard against zero/negative prices
+        c_safe = c.clip(lower=1e-10)
+        feats["log_ret_1"] = np.log(c_safe / c_safe.shift(1)).fillna(0.0)
+        feats["log_ret_5"] = np.log(c_safe / c_safe.shift(5)).fillna(0.0)
 
         # Volatility (rolling std of log returns)
-        feats["vol_5"] = feats["log_ret_1"].rolling(5).std()
-        feats["vol_20"] = feats["log_ret_1"].rolling(20).std()
+        feats["vol_5"] = feats["log_ret_1"].rolling(5, min_periods=2).std().fillna(0.0)
+        feats["vol_20"] = feats["log_ret_1"].rolling(20, min_periods=2).std().fillna(0.0)
         feats["vol_ratio"] = feats["vol_5"] / (feats["vol_20"] + 1e-10)
 
         # RSI (14)
         feats["rsi_14"] = self._rsi(c, 14)
 
         # MACD signal
-        ema12 = c.ewm(span=12, adjust=False).mean()
-        ema26 = c.ewm(span=26, adjust=False).mean()
+        ema12 = c.ewm(span=12, adjust=False, min_periods=1).mean()
+        ema26 = c.ewm(span=26, adjust=False, min_periods=1).mean()
         macd = ema12 - ema26
-        signal = macd.ewm(span=9, adjust=False).mean()
+        signal = macd.ewm(span=9, adjust=False, min_periods=1).mean()
         feats["macd_hist"] = (macd - signal) / (c + 1e-10)
 
         # Bollinger band position
-        sma20 = c.rolling(20).mean()
-        std20 = c.rolling(20).std()
+        sma20 = c.rolling(20, min_periods=1).mean()
+        std20 = c.rolling(20, min_periods=2).std().fillna(0.0)
         feats["bb_pos"] = (c - sma20) / (2 * std20 + 1e-10)
 
         # ATR normalised
@@ -215,11 +216,11 @@ class FeatureEngineer:
             ],
             axis=1,
         ).max(axis=1)
-        feats["atr_norm"] = tr.rolling(14).mean() / (c + 1e-10)
+        feats["atr_norm"] = tr.rolling(14, min_periods=1).mean() / (c + 1e-10)
 
         # Volume z-score
-        vol_mean = v.rolling(20).mean()
-        vol_std = v.rolling(20).std()
+        vol_mean = v.rolling(20, min_periods=1).mean()
+        vol_std = v.rolling(20, min_periods=2).std().fillna(0.0)
         feats["vol_zscore"] = (v - vol_mean) / (vol_std + 1e-10)
 
         # Price position in range
@@ -247,10 +248,10 @@ class FeatureEngineer:
     @staticmethod
     def _rsi(series: pd.Series, period: int = 14) -> pd.Series:
         delta = series.diff()
-        gain = delta.clip(lower=0).rolling(period).mean()
-        loss = (-delta.clip(upper=0)).rolling(period).mean()
+        gain = delta.clip(lower=0).rolling(period, min_periods=1).mean()
+        loss = (-delta.clip(upper=0)).rolling(period, min_periods=1).mean()
         rs = gain / (loss + 1e-10)
-        return 100 - (100 / (1 + rs))
+        return (100 - (100 / (1 + rs))).fillna(50.0)
 
 
 # ---------------------------------------------------------------------------
@@ -578,7 +579,7 @@ class MLPipeline:
             "MLPipeline: features computed | rows=%d features=%d class_balance=%.3f",
             len(feats),
             len(feature_cols),
-            y.mean(),
+            float(y.mean()) if len(y) > 0 else 0.0,
         )
 
         # ── 2. Stationarity tests ─────────────────────────────────────────────
