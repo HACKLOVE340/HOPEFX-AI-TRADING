@@ -24,44 +24,53 @@ The legacy directory is kept as a compatibility shim and must not receive new co
 | File | Purpose |
 |------|---------|
 | `app.py` | FastAPI application factory, startup/shutdown lifecycle |
-| `core/orchestrator.py` | Single `MarketDataOrchestrator` — all price data flows through here |
-| `brain/strategy_brain.py` | 5-phase signal pipeline: MTF fusion → ML → regime → routing → confidence |
+| `hopefx_engine.py` | Standalone trading engine entry point (NuclearStreamer → Brain → Risk → Broker) |
+| `data_layer/orchestrator.py` | `MarketDataOrchestrator` — all price data, microstructure, and ML features flow through here |
+| `strategies/strategy_brain.py` | 5-phase signal pipeline: MTF fusion → ML → regime → routing → confidence |
+| `core/decision/HOPEFXDecisionEngine.py` | Central 5-phase decision pipeline: Signal → ML Enrichment → Risk Gate → Execution → Post-Trade |
+| `core/startup_factories.py` | Component factory functions wired into FastAPI startup sequence |
 | `ml/inference_engine.py` | Live inference: feature build → stale check → drift check → predict |
-| `ml/train_advanced.py` | Offline training: XGBoost + LightGBM + RF stacking, 8-fold walk-forward CV |
-| `risk/risk_manager.py` | Pre-trade gate, VaR, kill switch, prop firm enforcement |
-| `execution/order_manager.py` | OMS: 9 order states, GTC/IOC/FOK/GTD/DAY, OCO/bracket |
-| `api/router.py` | FastAPI router aggregator — mounts all sub-routers |
+| `ml/train_advanced.py` | Offline training: XGBoost + LightGBM + RF + ET stacking, walk-forward CV |
+| `risk/manager.py` | Pre-trade gate, GARCH VaR, CVaR, Kelly sizing, kill switch, prop firm enforcement |
+| `execution/oms.py` | OMS: 9 order states, GTC/IOC/FOK/GTD/DAY, OCO/bracket |
+| `execution/smart_router.py` | Microstructure-aware broker routing with OFI alignment and circuit breakers |
+| `api/server.py` | FastAPI router aggregator — mounts all sub-routers |
 
 ---
 
 ## ML Model Facts
 
-These are the actual values from `ml/saved_models/advanced_oos_meta.json`.
-Do not use the README figures — they were from an earlier run.
+Source of truth: `ml/saved_models/advanced_oos_meta.json` (trained 2026-04-14).
 
-| Metric | Value |
-|--------|-------|
-| OOS accuracy | **59.92%** |
-| OOS F1 | 0.6885 |
-| OOS AUC | 0.6077 |
-| p-value | 0.0000 |
-| OOS bars (N) | 2,016 |
-| Sharpe | 1.52 |
-| Features | 222 (262 after MTF upgrade — requires retraining) |
-| Horizon | 5 bars |
-| Trained | 2026-04-02 |
+| Metric | Value | Notes |
+|--------|-------|-------|
+| OOS accuracy | **null** | Trained with `--years 2 --oos-years 0`; no held-out OOS split. See `oos_accuracy_note` in meta.json. Retrain with `--years 50 --oos-years 4 --stacking` to populate. |
+| OOS AUC | **0.714** | From walk-forward CV folds (756 bars, 2022-03-02 → 2026-04-08) |
+| p-value | 0.0000 | One-sided binomial H0: accuracy ≤ 0.5 |
+| OOS bars (N) | 756 | |
+| Sharpe | 1.52 | SE=0.053; gate PASSED (N=756 ≥ 600, SE ≤ 0.10) |
+| Features | 193 | Stationary-tested (ADF + KPSS) |
+| Horizon | 5 bars | Matches execution engine hold period |
+| Trained | 2026-04-14 | `advanced_oos.pkl` (3.5 MB) |
+
+**Nuclear RL model** (`ml/rl_models/nuclear_decision_ppo.zip`, 449 KB):
+Trained via `ml/train_rl_nuclear.py`. Powers `brain/nuclear_supervisor.py`.
+7-dim observation → 4 actions (NORMAL / PAUSE / HEDGE / NUCLEAR).
 
 ---
 
-## Confirmed Gaps (not yet implemented)
+## Component Status
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| LSTM / Transformer / TCN weights | ❌ Not trained | Architecture in `research/pipeline/models_deep.py`; no `.pt` file |
-| PPO RL agent (live trading) | ❌ Not trained | `ml/saved_models/rl/` is empty |
-| TimeGAN synthetic data | ❌ Never run | `research/pipeline/synthetic.py` exists; no output |
-| C++ shim binary | ❌ Not compiled | Source in `execution/cpp_shim/`; run `make` to build |
-| Live broker credentials | ❌ Not set | `BROKER_TYPE=paper` by default |
+| XGBoost stacking ensemble | ✅ Trained & deployed | `ml/saved_models/advanced_oos.pkl` — active production model |
+| Nuclear PPO RL agent | ✅ Trained | `ml/rl_models/nuclear_decision_ppo.zip` — powers nuclear supervisor |
+| LSTM / Transformer / TCN / Hybrid | ⚙️ Architecture complete, weights not trained | Full PyTorch implementation in `research/pipeline/models_deep.py`. Train with `DeepPredictor.fit()`, save to `ml/saved_models/lstm_signal.pt`, enable with `LSTM_SIGNAL_ENABLED=true LSTM_SIGNAL_WEIGHT=0.3` |
+| PPO RL agent (live forex trading) | ⚙️ Architecture complete, weights not trained | Full SB3 PPO implementation in `ml/rl_agent.py` with `ForexTradingEnv`. Train with `RLAgentTrainer`. Saves to `ml/saved_models/rl/hopefx_ppo.zip` |
+| TimeGAN synthetic data | ⚙️ Architecture complete, never run | Full WGAN-GP implementation in `research/pipeline/synthetic.py`. Run `RegimeSynthesizer.fit()` on rare-regime bars to generate augmentation data |
+| C++ execution shim | ⚙️ Source complete, not compiled | ZMQ + FIX 4.4, CPU affinity, SO_BUSY_POLL in `execution/cpp_shim/hopefx_shim.cpp`. Build: `apt-get install -y cmake libzmq3-dev && cd execution/cpp_shim && make`. Enable: `CPP_SHIM_ENABLED=true` |
+| Live broker credentials | ❌ Not configured | `BROKER_TYPE=paper` by default. Set `BROKER_TYPE=oanda` + `OANDA_API_KEY` + `OANDA_ACCOUNT_ID` to go live |
+| OOS accuracy (full retrain) | ❌ Not yet run | Current model trained on 2 years only. Run `python ml/train_advanced.py --years 50 --oos-years 4 --stacking` for production-grade OOS accuracy figure |
 
 ---
 
@@ -99,4 +108,4 @@ Do not use the README figures — they were from an earlier run.
 
 ---
 
-*Last updated: 2026-04-09 (v1.18)*
+*Last updated: 2026-04-17 (v1.19 — corrected ML model facts, component status, and key entry points)*
