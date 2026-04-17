@@ -415,8 +415,8 @@ class _RollingCorrelation:
                 a1 = np.array(list(h1)[-n:], dtype=float)
                 a2 = np.array(list(h2)[-n:], dtype=float)
                 # Pearson correlation of log-returns for stationarity
-                r1 = np.diff(np.log(np.clip(a1, 1e-9, None)))
-                r2 = np.diff(np.log(np.clip(a2, 1e-9, None)))
+                r1 = np.nan_to_num(np.diff(np.log(np.clip(a1, 1e-9, None))), nan=0.0)
+                r2 = np.nan_to_num(np.diff(np.log(np.clip(a2, 1e-9, None))), nan=0.0)
                 if r1.std() == 0 or r2.std() == 0:
                     return 0.0
                 return float(np.corrcoef(r1, r2)[0, 1])

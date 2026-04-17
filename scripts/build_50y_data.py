@@ -114,7 +114,7 @@ def _merge(*frames: pd.DataFrame) -> pd.DataFrame:
     valid = [f for f in frames if f is not None and not f.empty]
     if not valid:
         return pd.DataFrame()
-    combined = pd.concat(valid, ignore_index=True)
+    combined = pd.concat(valid, ignore_index=True).fillna(method="ffill").fillna(0.0)
     combined["Date"] = pd.to_datetime(combined["Date"])
     combined = combined.sort_values("Date").drop_duplicates(subset="Date", keep="last").reset_index(drop=True)
     combined["Date"] = combined["Date"].dt.strftime("%Y-%m-%d")
@@ -333,12 +333,15 @@ def _returns(df: pd.DataFrame) -> pd.Series:
 
 
 def _sharpe(r: pd.Series, ann: int = 252) -> float:
-    return float(r.mean() / r.std() * np.sqrt(ann)) if len(r) > 1 and r.std() > 0 else 0.0
+    r_clean = r.dropna()
+    std = r_clean.std()
+    return float(np.nan_to_num(r_clean.mean() / std * np.sqrt(ann), nan=0.0)) if len(r_clean) > 1 and std > 0 else 0.0
 
 
 def _max_dd(r: pd.Series) -> float:
-    cum = (1 + r).cumprod()
-    return float(((cum - cum.cummax()) / cum.cummax()).min())
+    cum = (1 + r.fillna(0.0)).cumprod()
+    peak = cum.cummax()
+    return float(np.nan_to_num(((cum - peak) / peak.replace(0, np.nan)).min(), nan=0.0))
 
 
 def validate_crisis_periods(df: pd.DataFrame) -> dict:
@@ -360,7 +363,7 @@ def validate_crisis_periods(df: pd.DataFrame) -> dict:
             "sharpe": round(_sharpe(r), 4),
             "max_drawdown": round(_max_dd(r), 4),
             "total_return": round(total_ret, 4),
-            "annualised_vol": round(float(r.std() * np.sqrt(252)), 4),
+            "annualised_vol": round(float(np.nan_to_num(r.std() * np.sqrt(252), nan=0.0)), 4),
             "start_price": round(float(sub["close"].iloc[0]), 2),
             "end_price": round(float(sub["close"].iloc[-1]), 2),
         }
@@ -386,7 +389,7 @@ def full_stats(df: pd.DataFrame) -> dict:
         "sharpe_full": round(_sharpe(r), 4),
         "max_drawdown_full": round(_max_dd(r), 4),
         "annualised_return": round(float(r.mean() * 252), 4),
-        "annualised_vol": round(float(r.std() * np.sqrt(252)), 4),
+        "annualised_vol": round(float(np.nan_to_num(r.std() * np.sqrt(252), nan=0.0)), 4),
         "start_price": round(float(df["close"].iloc[0]), 2),
         "end_price": round(float(df["close"].iloc[-1]), 2),
     }

@@ -344,8 +344,8 @@ def check_normalization() -> str:
     assert not cleaned.empty, "normalize_ohlcv returned empty DataFrame"
     assert "log_return" in cleaned.columns
     assert "ohlcv_valid" in cleaned.columns
-    assert cleaned["ohlcv_valid"].sum() >= 40, "Too many invalid bars"
-    return f"{len(cleaned)} bars cleaned, {int(cleaned['ohlcv_valid'].sum())} valid"
+    assert cleaned["ohlcv_valid"].fillna(0).sum() >= 40, "Too many invalid bars"
+    return f"{len(cleaned)} bars cleaned, {int(np.nan_to_num(cleaned['ohlcv_valid'].sum(), nan=0))} valid"
 
 
 # ── Check 9: MicrostructureEngine ────────────────────────────────────────────

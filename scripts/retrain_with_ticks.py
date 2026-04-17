@@ -136,8 +136,9 @@ def compute_tick_features(h1_ohlcv: pd.DataFrame) -> pd.DataFrame:
     # On H1 bars: positive close-to-open = buying pressure
     bar_ret = df["close"] - df["open"]
     df["dl_volume_delta"] = np.sign(bar_ret) * vol
-    df["dl_volume_delta_z20"] = (df["dl_volume_delta"] - df["dl_volume_delta"].rolling(20).mean()) / (
-        df["dl_volume_delta"].rolling(20).std() + 1e-9
+    _vd = df["dl_volume_delta"].fillna(0.0)
+    df["dl_volume_delta_z20"] = (_vd - _vd.rolling(20).mean()) / (
+        _vd.rolling(20).std() + 1e-9
     )
 
     # Tick count proxy (bar range / typical spread)
@@ -152,7 +153,8 @@ def compute_tick_features(h1_ohlcv: pd.DataFrame) -> pd.DataFrame:
     df["dl_depth_imbalance"] = (lower_wick - upper_wick) / total_wick  # +1=all buying, -1=all selling
 
     # Spread z-score (bar range relative to 20-bar mean)
-    df["dl_spread_z20"] = (spread_proxy - spread_proxy.rolling(20).mean()) / (spread_proxy.rolling(20).std() + 1e-9)
+    _sp = spread_proxy.fillna(0.0)
+    df["dl_spread_z20"] = (_sp - _sp.rolling(20).mean()) / (_sp.rolling(20).std() + 1e-9)
 
     tick_cols = [
         "dl_vwap",

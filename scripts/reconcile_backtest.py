@@ -167,7 +167,7 @@ def _atr(df: pd.DataFrame, period: int) -> pd.Series:
             (df["low"] - df["close"].shift()).abs(),
         ],
         axis=1,
-    ).max(axis=1)
+    ).fillna(0.0).max(axis=1)
     return tr.rolling(period).mean()
 
 
@@ -273,7 +273,7 @@ def generate_signals(
 
     n_buy = buy_mask.sum()
     n_sell = sell_mask.sum()
-    n_abstain = (~tradeable).sum()
+    n_abstain = int(np.nan_to_num((~tradeable).sum(), nan=0))
     logger.info(
         "Signals: %d BUY, %d SELL, %d abstain (%.1f%% of bars)",
         n_buy,

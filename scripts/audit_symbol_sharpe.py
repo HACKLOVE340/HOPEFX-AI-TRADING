@@ -111,7 +111,8 @@ def compute_psi(
     ref_pct = (ref_counts + eps) / (len(reference) + eps * n_bins)
     cmp_pct = (cmp_counts + eps) / (len(comparison) + eps * n_bins)
 
-    psi = float(np.sum((cmp_pct - ref_pct) * np.log(cmp_pct / ref_pct)))
+    ratio = np.where(ref_pct > 0, cmp_pct / ref_pct, 1.0)
+    psi = float(np.nan_to_num(np.sum((cmp_pct - ref_pct) * np.log(ratio)), nan=0.0))
     return round(psi, 6)
 
 
