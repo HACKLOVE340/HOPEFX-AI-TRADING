@@ -1,2 +1,19 @@
-# GitHub Actions CI/CD workflow for testing and deployment
-# ... YAML configuration ...
+# CI/CD entry point reference
+# All active GitHub Actions workflows live in .github/workflows/
+#
+# Workflows:
+#   ci.yml              — lint, typecheck, tests (Python 3.11/3.12), E2E, C++ shim build
+#   tests.yml           — full test suite with coverage gates (70% baseline, 80% per package)
+#   security-scan.yml   — bandit, safety/pip-audit, Trivy, TruffleHog (weekly + on push)
+#   release.yml         — versioned release automation
+#   retrain.yml         — scheduled ML model retraining
+#   codacy.yml          — Codacy static analysis
+#   codeql.yml          — GitHub CodeQL SAST
+#   fortify.yml         — Fortify SAST
+#   docs.yml            — documentation build and publish
+#   lockfile.yml        — dependency lockfile update automation
+#   static.yml          — static asset pipeline
+#   summary.yml         — PR summary generation
+#   update_docs.yml     — automated docs update on release
+#   webpack.yml         — frontend bundle build
+#   python-package-conda.yml — conda package build
