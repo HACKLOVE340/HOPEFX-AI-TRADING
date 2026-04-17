@@ -166,7 +166,7 @@ class BacktestEngine:
         eq = np.array(equity, dtype=float)
         total_return = (eq[-1] - eq[0]) / eq[0]
 
-        daily_ret = np.diff(eq) / eq[:-1]
+        daily_ret = np.nan_to_num(np.diff(eq) / np.where(eq[:-1] != 0, eq[:-1], 1e-9), nan=0.0)
         sharpe = float(np.mean(daily_ret) / np.std(daily_ret) * np.sqrt(252)) if np.std(daily_ret) > 0 else 0.0
 
         roll_max = np.maximum.accumulate(eq)

@@ -390,7 +390,7 @@ class SimulatedBroker:
                     bar_range_pct = (bar_high - bar_low) / price
                     # Approximate daily vol: bar range / sqrt(bars_per_day)
                     bars_per_day = getattr(self.config, "bars_per_day", 24.0)
-                    vol_daily = bar_range_pct / np.sqrt(bars_per_day)
+                    vol_daily = bar_range_pct / np.sqrt(max(bars_per_day, 1e-9))
                 else:
                     vol_daily = 0.012  # 1.2% default (gold ~1%)
 
@@ -897,7 +897,7 @@ class BacktestEngine:
         # Sharpe.  Flat no-trade bars inflate the bar-level Sharpe by
         # suppressing the denominator (std of returns).  The corrected
         # Sharpe is computed at trade level below.
-        ann_factor = np.sqrt(252.0 * self.config.bars_per_day)
+        ann_factor = np.sqrt(252.0 * max(self.config.bars_per_day, 1e-9))
         bar_returns = np.array([])
         if len(equity_values) > 1:
             eq_arr = np.array(equity_values, dtype=float)
@@ -917,9 +917,10 @@ class BacktestEngine:
             avg_hold_bars = n_bars / max(total_trades, 1)
             avg_hold_days = avg_hold_bars / self.config.bars_per_day
             trade_ann_factor = np.sqrt(252.0 / max(avg_hold_days, 0.04))
-            sharpe = float(np.mean(trade_pnls) / np.std(trade_pnls, ddof=1) * trade_ann_factor)
+            trade_pnls_safe = np.nan_to_num(trade_pnls, nan=0.0)
+            sharpe = float(np.mean(trade_pnls_safe) / max(float(np.std(trade_pnls_safe, ddof=1)), 1e-9) * trade_ann_factor)
             # Sharpe standard error: 1/sqrt(2*(N-1)) for iid returns
-            sharpe_se = float(1.0 / np.sqrt(2.0 * (len(trade_pnls) - 1)))
+            sharpe_se = float(1.0 / np.sqrt(max(2.0 * (len(trade_pnls) - 1), 1e-9)))
 
         # ── Sortino (bar-level — acceptable for downside deviation) ───
         sortino = 0.0
@@ -985,7 +986,7 @@ class BacktestEngine:
                 mean_r = float(np.mean(trade_returns_arr))
                 std_r = float(np.std(trade_returns_arr, ddof=1))
                 if std_r > 0:
-                    t_stat = mean_r / (std_r / np.sqrt(sample_size))
+                    t_stat = mean_r / (std_r / np.sqrt(max(sample_size, 1)))
 
         # ── Monte Carlo bootstrap (production-grade) ──────────────────
         # Uses analytics.monte_carlo for bootstrap resampling with

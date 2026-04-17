@@ -503,7 +503,7 @@ class TransactionCostModel:
                 maxfev=5000,
             )
             eta_fit, gamma_fit, beta_fit = popt
-            perr = np.sqrt(np.abs(np.diag(pcov)))  # abs guards negative diag from ill-conditioned fits
+            perr = np.sqrt(np.abs(np.nan_to_num(np.diag(pcov), nan=0.0)))  # abs guards negative diag from ill-conditioned fits
 
             # Goodness of fit
             y_pred = _model((x_arr, s_arr), *popt)
@@ -834,7 +834,7 @@ class MarketMicrostructureAnalyzer:
         if len(self.ticks) > 1:
             prev_tick = self.ticks[-2]
             if prev_tick.mid > 0 and tick.mid > 0:
-                ret = np.log(tick.mid / prev_tick.mid)
+                ret = float(np.nan_to_num(np.log(tick.mid / prev_tick.mid), nan=0.0, posinf=0.0, neginf=0.0))
                 self.returns.append(ret)
 
         # Update trade flow if available
@@ -875,7 +875,7 @@ class MarketMicrostructureAnalyzer:
         # Effective spread (Roll measure)
         price_changes = [t.mid for t in recent_ticks]
         if len(price_changes) > 1:
-            cov = np.cov(price_changes[:-1], price_changes[1:])[0, 1]
+            cov = float(np.nan_to_num(np.cov(price_changes[:-1], price_changes[1:])[0, 1], nan=0.0))
             self.effective_spread = 2 * np.sqrt(max(-cov, 0.0)) if cov < 0 else 0
 
         # Realized spread vs quoted spread
@@ -909,7 +909,7 @@ class MarketMicrostructureAnalyzer:
         self._extract_regime_features()
 
         # Rule-based classification (ML could be added)
-        volatility = np.sqrt(max(self.realized_variance, 0.0)) if self.realized_variance > 0 else 0
+        volatility = np.sqrt(max(float(np.nan_to_num(self.realized_variance, nan=0.0)), 0.0)) if self.realized_variance > 0 else 0
 
         # Trend detection via Hurst
         self._calculate_hurst()
@@ -943,7 +943,7 @@ class MarketMicrostructureAnalyzer:
     def _extract_regime_features(self) -> dict[str, float]:
         """Extract features for regime classification"""
         return {
-            "realized_vol": np.sqrt(self.realized_variance),
+            "realized_vol": np.sqrt(max(float(np.nan_to_num(self.realized_variance, nan=0.0)), 0.0)),
             "skewness": self.realized_skewness,
             "kurtosis": self.realized_kurtosis,
             "spread": self.effective_spread,
@@ -970,8 +970,9 @@ class MarketMicrostructureAnalyzer:
         if not np.all(tau_arr > 0):
             self.hurst_exponent = 0.5
             return
-        log_lags = np.log(list(lags))
-        log_tau = np.log(tau_arr)
+        lags_arr = np.nan_to_num(np.array(list(lags), dtype=float), nan=1.0)
+        log_lags = np.log(np.where(lags_arr > 0, lags_arr, 1e-9))
+        log_tau = np.log(np.where(tau_arr > 0, tau_arr, 1e-9))
 
         try:
             slope = np.polyfit(log_lags, log_tau, 1)[0]
@@ -1031,7 +1032,7 @@ class MarketMicrostructureAnalyzer:
         rec["regime"] = self.current_regime.name
         rec["confidence"] = self.regime_confidence
         rec["toxicity"] = self.order_flow_toxicity
-        rec["realized_vol"] = np.sqrt(max(self.realized_variance, 0.0)) if self.realized_variance > 0 else 0
+        rec["realized_vol"] = np.sqrt(max(float(np.nan_to_num(self.realized_variance, nan=0.0)), 0.0)) if self.realized_variance > 0 else 0
 
         return rec
 
@@ -1044,7 +1045,7 @@ class MarketMicrostructureAnalyzer:
                 "history": [(r.name, c) for r, c in self.regime_history],
             },
             "volatility": {
-                "realized": np.sqrt(max(self.realized_variance, 0.0)),
+                "realized": np.sqrt(max(float(np.nan_to_num(self.realized_variance, nan=0.0)), 0.0)),
                 "skewness": self.realized_skewness,
                 "kurtosis": self.realized_kurtosis,
             },
@@ -1585,10 +1586,11 @@ def _build_risk_metrics(
 
     All ratio metrics use the annualisation factor _ANNUAL_BARS (minute bars).
     """
-    eq_std = float(np.std(equity_returns)) if len(equity_returns) > 1 else 0.0
-    eq_mean = float(np.mean(equity_returns)) if len(equity_returns) > 1 else 0.0
-    sharpe = (eq_mean / eq_std * np.sqrt(_ANNUAL_BARS)) if eq_std > 0 else 0.0
-    annual_vol = eq_std * np.sqrt(_ANNUAL_BARS) if len(equity_returns) > 1 else 0.0
+    eq_safe = np.nan_to_num(np.array(equity_returns, dtype=float), nan=0.0)
+    eq_std = float(np.std(eq_safe)) if len(eq_safe) > 1 else 0.0
+    eq_mean = float(np.mean(eq_safe)) if len(eq_safe) > 1 else 0.0
+    sharpe = (eq_mean / max(eq_std, 1e-9) * np.sqrt(_ANNUAL_BARS)) if eq_std > 0 else 0.0
+    annual_vol = eq_std * np.sqrt(_ANNUAL_BARS) if len(eq_safe) > 1 else 0.0
 
     ret_arr = np.array(returns)
     var_95 = float(np.percentile(ret_arr, 5)) if len(returns) > 10 else 0.0
@@ -2323,7 +2325,7 @@ def generate_test_data(n_ticks: int = 10000, symbol: str = "XAUUSD") -> list[Tic
     for i in range(1, n_ticks):
         returns[i] *= 1 + abs(returns[i - 1]) * 5
 
-    cum_returns = np.cumsum(returns)
+    cum_returns = np.cumsum(np.nan_to_num(returns, nan=0.0))
     cum_returns = np.clip(cum_returns, -50, 50)  # prevent overflow in exp
     prices = base_price * np.exp(cum_returns)
 

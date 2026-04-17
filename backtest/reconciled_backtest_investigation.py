@@ -92,12 +92,12 @@ def _sharpe(pnls: list[float], cost: float = 0.0) -> float:
     if len(pnls) < 2:
         return 0.0
     net = [p - cost for p in pnls]
-    arr = np.array(net, dtype=float)
+    arr = np.nan_to_num(np.array(net, dtype=float), nan=0.0)
     std = arr.std()
     if std == 0:
         return 0.0
     # Annualise: daily bars, ~252 trading days
-    return float((arr.mean() / std) * np.sqrt(252))
+    return float((arr.mean() / max(std, 1e-9)) * np.sqrt(252))
 
 
 def _win_rate(pnls: list[float], cost: float = 0.0) -> float:

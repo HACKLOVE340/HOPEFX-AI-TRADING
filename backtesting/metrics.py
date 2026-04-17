@@ -123,7 +123,7 @@ class PerformanceMetrics:
 
         excess_returns = returns - (self.risk_free_rate / 252)  # Daily risk-free rate
 
-        return np.sqrt(252) * (excess_returns.mean() / returns.std())
+        return float(np.sqrt(252) * (excess_returns.mean() / max(float(np.nan_to_num(returns.std(), nan=0.0)), 1e-9)))
 
     def calculate_sortino_ratio(self) -> float:
         """Calculate Sortino ratio (downside deviation)."""
@@ -138,7 +138,7 @@ class PerformanceMetrics:
 
         excess_returns = returns - (self.risk_free_rate / 252)
 
-        return np.sqrt(252) * (excess_returns.mean() / downside_returns.std())
+        return float(np.sqrt(252) * (excess_returns.mean() / max(float(np.nan_to_num(downside_returns.std(), nan=0.0)), 1e-9)))
 
     def calculate_max_drawdown(self) -> float:
         """Calculate maximum drawdown percentage."""
@@ -198,8 +198,8 @@ class PerformanceMetrics:
         if self.trade_history.empty:
             return 0.0
 
-        gross_profit = self.trade_history[self.trade_history["pnl"] > 0]["pnl"].sum()
-        gross_loss = abs(self.trade_history[self.trade_history["pnl"] < 0]["pnl"].sum())
+        gross_profit = float(np.nan_to_num(self.trade_history[self.trade_history["pnl"] > 0]["pnl"].sum(), nan=0.0))
+        gross_loss = abs(float(np.nan_to_num(self.trade_history[self.trade_history["pnl"] < 0]["pnl"].sum(), nan=0.0)))
 
         if gross_loss == 0:
             return float("inf") if gross_profit > 0 else 0.0
@@ -243,5 +243,5 @@ class PerformanceMetrics:
                 durations = pd.to_datetime(self.trade_history["exit_time"]) - pd.to_datetime(
                     self.trade_history["entry_time"]
                 )
-                return float(durations.dt.total_seconds().mean() / 86400)
+                return float(np.nan_to_num(durations.dt.total_seconds().mean(), nan=0.0) / 86400)
         return 0.0

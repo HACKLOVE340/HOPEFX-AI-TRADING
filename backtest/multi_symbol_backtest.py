@@ -183,7 +183,7 @@ def _synthetic_ohlcv_smoke(ticker: str) -> pd.DataFrame:
     rng = np.random.default_rng(abs(hash(ticker)) % 2**31)
     base = 1800.0 if "GC" in ticker else (40000.0 if "BTC" in ticker else 2500.0)
     returns = rng.standard_normal(n) * 0.015
-    close = base * np.exp(np.clip(np.cumsum(returns), -50, 50))
+    close = base * np.exp(np.clip(np.cumsum(np.nan_to_num(returns, nan=0.0)), -50, 50))
     idx = pd.date_range(end=datetime.now(UTC).date(), periods=n, freq="B", tz="UTC")
     return pd.DataFrame(
         {
@@ -282,7 +282,7 @@ def backtest_symbol(
         subsample=0.8,
         colsample_bytree=0.8,
         min_child_weight=3,
-        scale_pos_weight=float((y_train == 0).sum()) / max((y_train == 1).sum(), 1),
+        scale_pos_weight=float(np.nan_to_num((y_train == 0).sum(), nan=1.0)) / max(float(np.nan_to_num((y_train == 1).sum(), nan=0.0)), 1),
         eval_metric="logloss",
         random_state=42,
         n_jobs=1,
@@ -352,7 +352,7 @@ def backtest_symbol(
 
     # Transaction cost summary for this symbol
     mean_tc = float(tc_costs.mean()) if len(tc_costs) > 0 else 0.0
-    raw_sharpe = float(raw_pnls.mean() / (raw_pnls.std(ddof=1) or 1e-6) * np.sqrt(252))
+    raw_sharpe = float(np.nan_to_num(raw_pnls, nan=0.0).mean() / max(float(np.nan_to_num(raw_pnls, nan=0.0).std(ddof=1)) if len(raw_pnls) > 1 else 1e-6, 1e-6) * np.sqrt(252))
 
     # Classification metrics
     acc = accuracy_score(y_oos, (proba >= 0.5).astype(int))
