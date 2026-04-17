@@ -225,7 +225,8 @@ class BacktestEngine:
 
         # Calculate Sharpe (simplified, assuming 252 trading days)
         if len(equity_values) > 1:
-            daily_returns = np.diff(equity_values) / equity_values[:-1]
+            eq_arr = np.nan_to_num(np.array(equity_values, dtype=float), nan=0.0)
+            daily_returns = np.diff(eq_arr) / np.where(eq_arr[:-1] != 0, eq_arr[:-1], 1.0)
             sharpe = np.mean(daily_returns) / (np.std(daily_returns) + 1e-10) * np.sqrt(252)
         else:
             sharpe = 0

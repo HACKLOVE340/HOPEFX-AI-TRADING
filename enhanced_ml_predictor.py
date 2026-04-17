@@ -354,8 +354,8 @@ class AdvancedFeatureEngineer:
             # MACD
             ema_fast = df["close"].ewm(span=w // 2, min_periods=1).mean()
             ema_slow = df["close"].ewm(span=w, min_periods=1).mean()
-            features[f"macd_{w}"] = ema_fast - ema_slow
-            features[f"macd_signal_{w}"] = features[f"macd_{w}"].ewm(span=w // 3, min_periods=1).mean()
+            features[f"macd_{w}"] = (ema_fast - ema_slow).fillna(0.0)
+            features[f"macd_signal_{w}"] = features[f"macd_{w}"].fillna(0.0).ewm(span=w // 3, min_periods=1).mean()
             features[f"macd_hist_{w}"] = features[f"macd_{w}"] - features[f"macd_signal_{w}"]
 
             # Stochastic
@@ -405,7 +405,7 @@ class AdvancedFeatureEngineer:
             # Money Flow
             typical_price = (df["high"] + df["low"] + df["close"]) / 3
             money_flow = typical_price * df["volume"]
-            features["mfi"] = money_flow.rolling(14, min_periods=1).sum()  # Simplified MFI
+            features["mfi"] = money_flow.fillna(0.0).rolling(14, min_periods=1).sum()  # Simplified MFI
 
         # Price action features
         features["body"] = (df["close"] - df["open"]) / df["open"]

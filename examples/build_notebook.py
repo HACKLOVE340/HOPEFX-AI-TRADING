@@ -143,11 +143,11 @@ def add_features(df):
     hl  = d["high"] - d["low"]
     hpc = (d["high"] - d["close"].shift()).abs()
     lpc = (d["low"]  - d["close"].shift()).abs()
-    d["atr_14"]  = pd.concat([hl, hpc, lpc], axis=1).max(axis=1).rolling(14).mean()
-    sma20 = d["close"].rolling(20).mean()
-    d["bb_width"] = (d["close"].rolling(20).std() * 4) / sma20
-    ema12 = d["close"].ewm(span=12, adjust=False).mean()
-    ema26 = d["close"].ewm(span=26, adjust=False).mean()
+    d["atr_14"]  = pd.concat([hl, hpc, lpc], axis=1).fillna(0.0).max(axis=1).rolling(14).mean()
+    sma20 = d["close"].dropna().rolling(20).mean()
+    d["bb_width"] = (d["close"].rolling(20).std() * 4) / sma20.replace(0, np.nan)
+    ema12 = d["close"].dropna().ewm(span=12, adjust=False).mean()
+    ema26 = d["close"].dropna().ewm(span=26, adjust=False).mean()
     macd  = ema12 - ema26
     d["macd_hist"]       = macd - macd.ewm(span=9, adjust=False).mean()
     d["close_vs_sma20"]  = (d["close"] - sma20) / sma20
@@ -162,7 +162,7 @@ FEATURES = [
     "close_vs_sma20","close_vs_sma50","vol_ratio",
 ]
 dff = add_features(df)
-logger.info(f"Feature matrix: {dff[FEATURES].shape}  |  up-days: {dff['target'].mean():.1%}")""",
+logger.info(f"Feature matrix: {dff[FEATURES].shape}  |  up-days: {dff['target'].dropna().mean():.1%}")""",
         [stdout(f"Feature matrix: ({len(df) - 50}, 17)  |  up-days: 48.0%\n")],
     )
 )

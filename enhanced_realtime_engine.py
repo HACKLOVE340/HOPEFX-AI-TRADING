@@ -647,8 +647,8 @@ class MockProvider(DataProvider):
 
                 # Geometric Brownian Motion
                 dt = self.tick_interval
-                noise = np.random.normal(0, self.volatility * np.sqrt(dt))
-                new_price = base_price * np.exp(self.drift * dt + noise)
+                noise = np.nan_to_num(np.random.normal(0, self.volatility * np.sqrt(max(dt, 0.0))), nan=0.0)
+                new_price = base_price * np.exp(np.nan_to_num(self.drift * dt + noise, nan=0.0))
                 self.prices[symbol] = new_price
 
                 # Realistic spread based on volatility
