@@ -1,15 +1,21 @@
 services:
+  redis:
+    name: "Redis"
+    description: "Redis 7 — EventBus pub/sub and session cache"
+    command: redis-server --daemonize no --loglevel warning
+
   backend:
     name: "FastAPI Backend"
     description: "HOPEFX AI Trading API server (port 8000)"
     command: >
       cd /workspaces/HOPEFX-AI-TRADING &&
+      [ -f .env ] || python3 scripts/bootstrap_dev.py &&
       OTEL_ENABLED=false APP_ENV=development
       python3 -m uvicorn app:app --host 0.0.0.0 --port 8000 --reload
     ready-on:
       http-request:
         url: http://localhost:8000/health
-        timeout-seconds: 60
+        timeout-seconds: 90
 
   frontend:
     name: "React Frontend (Vite dev)"
@@ -19,3 +25,16 @@ services:
       http-request:
         url: http://localhost:5173
         timeout-seconds: 30
+
+tasks:
+  bootstrap:
+    name: "Bootstrap dev environment"
+    description: "Generate .env if missing, create the dev database, and print seed credentials"
+    command: >
+      cd /workspaces/HOPEFX-AI-TRADING &&
+      python3 scripts/bootstrap_dev.py &&
+      echo "" &&
+      echo "Seed accounts (passwords are in .env):" &&
+      echo "  superadmin  superadmin@hopefx.io  $(grep BOOTSTRAP_SUPERADMIN_PASSWORD .env | cut -d= -f2)" &&
+      echo "  admin       admin@hopefx.io        $(grep BOOTSTRAP_ADMIN_PASSWORD .env | cut -d= -f2)" &&
+      echo "  trader      trader@hopefx.io       $(grep BOOTSTRAP_TRADER_PASSWORD .env | cut -d= -f2)"
