@@ -1252,9 +1252,11 @@ Rules:
 Return the complete fixed file:"""
 
         try:
+            # Prefer the env-configured model; fall back to claude-opus-4-5
+            model = os.getenv("ANTHROPIC_MODEL", "claude-opus-4-5")
             client = anthropic.Anthropic(api_key=api_key)
             response = client.messages.create(
-                model="claude-opus-4-5",
+                model=model,
                 max_tokens=16384,
                 system=(
                     "You are an expert Python engineer specialising in production-grade "
@@ -1274,8 +1276,26 @@ Return the complete fixed file:"""
                 fixed = fixed[:-3]
             return fixed.strip()
         except Exception as exc:
-            logger.warning("SelfHealer: Claude API error: %s", exc)
-            return ""
+            logger.warning("SelfHealer: Claude API error: %s — trying llm_wrapper fallback", exc)
+            # Fallback: try the shared llm_wrapper (may use OpenAI if configured)
+            try:
+                import asyncio as _asyncio
+                loop = _asyncio.new_event_loop()
+                try:
+                    from security.llm_wrapper import call_llm as _call_llm
+                    fixed = loop.run_until_complete(_call_llm(prompt))
+                finally:
+                    loop.close()
+                for fence in ("```python\n", "```py\n", "```\n"):
+                    if fixed.startswith(fence):
+                        fixed = fixed[len(fence):]
+                        break
+                if fixed.endswith("```"):
+                    fixed = fixed[:-3]
+                return fixed.strip()
+            except Exception as fallback_exc:
+                logger.warning("SelfHealer: llm_wrapper fallback also failed: %s", fallback_exc)
+                return ""
 
     # ── Public API for deep analysis ──────────────────────────────────────────
 
