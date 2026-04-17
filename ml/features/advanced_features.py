@@ -88,7 +88,9 @@ class AdvancedFeatureEngineer:
         """Add price-based features"""
 
         df["returns"] = df["close"].pct_change(fill_method=None)
-        df["log_returns"] = np.log(df["close"] / df["close"].shift(1))
+        # Guard against zero/negative close prices before log
+        close_safe = df["close"].clip(lower=1e-10)
+        df["log_returns"] = np.log(close_safe / close_safe.shift(1)).fillna(0.0)
 
         # Price position in range
         df["high_low_ratio"] = (df["close"] - df["low"]) / (df["high"] - df["low"] + 1e-10)
@@ -119,18 +121,24 @@ class AdvancedFeatureEngineer:
     def _add_volatility_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add volatility features"""
 
-        # Historical volatility
+        # Historical volatility — min_periods avoids all-NaN leading rows
         for period in [10, 20, 60]:
-            df[f"volatility_{period}d"] = df["returns"].rolling(period).std()
+            df[f"volatility_{period}d"] = df["returns"].rolling(period, min_periods=2).std()
 
-        # Parkinson volatility
-        hl_ratio = np.log(df["high"] / df["low"])
-        df["parkinson_vol"] = np.sqrt(np.mean(hl_ratio**2) / (4 * np.log(2)))
+        # Parkinson volatility — guard against zero/negative high-low
+        high_safe = df["high"].clip(lower=1e-10)
+        low_safe = df["low"].clip(lower=1e-10)
+        hl_ratio = np.log(high_safe / low_safe).fillna(0.0)
+        parkinson_raw = np.sqrt((hl_ratio**2).rolling(20, min_periods=2).mean() / (4 * np.log(2)))
+        df["parkinson_vol"] = parkinson_raw.fillna(0.0)
 
         # Garman-Klass volatility
-        hl = np.log(df["high"] / df["low"])
-        co = np.log(df["close"] / df["open"])
-        df["garman_klass_vol"] = np.sqrt(0.5 * hl**2 - (2 * np.log(2) - 1) * co**2)
+        hl = np.log(high_safe / low_safe).fillna(0.0)
+        open_safe = df["open"].clip(lower=1e-10)
+        close_safe = df["close"].clip(lower=1e-10)
+        co = np.log(close_safe / open_safe).fillna(0.0)
+        gk_raw = 0.5 * hl**2 - (2 * np.log(2) - 1) * co**2
+        df["garman_klass_vol"] = np.sqrt(gk_raw.clip(lower=0.0))
 
         # True Range & ATR
         df["tr"] = np.maximum(
@@ -142,23 +150,24 @@ class AdvancedFeatureEngineer:
         )
 
         for period in [14, 20]:
-            df[f"atr_{period}"] = df["tr"].rolling(period).mean()
+            df[f"atr_{period}"] = df["tr"].rolling(period, min_periods=1).mean()
 
         # Volatility of volatility
-        df["vol_of_vol"] = df["volatility_20d"].rolling(20).std()
+        df["vol_of_vol"] = df["volatility_20d"].rolling(20, min_periods=2).std().fillna(0.0)
 
-        # Normalized volatility
-        df["vol_normalized"] = df["volatility_20d"] / df["volatility_20d"].rolling(60).mean()
+        # Normalized volatility — guard against zero rolling mean
+        vol_60_mean = df["volatility_20d"].rolling(60, min_periods=10).mean()
+        df["vol_normalized"] = (df["volatility_20d"] / vol_60_mean.replace(0, np.nan)).fillna(1.0)
 
         return df
 
     def _add_trend_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add trend features"""
 
-        # Moving averages
+        # Moving averages — min_periods=1 ensures no leading NaN rows
         for period in [5, 10, 20, 50, 200]:
-            df[f"sma_{period}"] = df["close"].rolling(period).mean()
-            df[f"ema_{period}"] = df["close"].ewm(span=period).mean()
+            df[f"sma_{period}"] = df["close"].rolling(period, min_periods=1).mean()
+            df[f"ema_{period}"] = df["close"].ewm(span=period, min_periods=1).mean()
 
         # Price vs MA
         df["price_sma_20_ratio"] = df["close"] / (df["sma_20"] + 1e-10)
@@ -214,9 +223,9 @@ class AdvancedFeatureEngineer:
     def _add_volume_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add volume features"""
 
-        # Volume SMA
+        # Volume SMA — min_periods=1 avoids leading NaN
         for period in [5, 20]:
-            df[f"volume_sma_{period}"] = df["volume"].rolling(period).mean()
+            df[f"volume_sma_{period}"] = df["volume"].rolling(period, min_periods=1).mean()
 
         # Volume ratio
         df["volume_ratio"] = df["volume"] / (df["volume_sma_20"] + 1e-10)
@@ -235,7 +244,7 @@ class AdvancedFeatureEngineer:
         df["ad"] = (hlc_ratio / (df["high"] - df["low"] + 1e-10)) * df["volume"]
 
         # Volume-price trend
-        df["vpt"] = df["ad"].cumsum()
+        df["vpt"] = df["ad"].fillna(0.0).cumsum()
 
         return df
 
@@ -247,9 +256,8 @@ class AdvancedFeatureEngineer:
         lower_shadow = np.minimum(df["close"], df["open"]) - df["low"]
 
         # Hammer/Hanging Man
-        df["hammer_score"] = (lower_shadow > 2 * upper_shadow).astype(int) * (body < body.rolling(20).mean()).astype(
-            int
-        )
+        body_mean = body.rolling(20, min_periods=1).mean()
+        df["hammer_score"] = (lower_shadow > 2 * upper_shadow).astype(int) * (body < body_mean).astype(int)
 
         # Doji
         df["doji_score"] = (body < 0.1 * (df["high"] - df["low"])).astype(int)
@@ -286,7 +294,8 @@ class AdvancedFeatureEngineer:
 
         # VWAP (Volume Weighted Average Price)
         typical_price = (df["high"] + df["low"] + df["close"]) / 3
-        df["vwap"] = (typical_price * df["volume"]).rolling(20).sum() / df["volume"].rolling(20).sum()
+        vol_sum = df["volume"].rolling(20, min_periods=1).sum().replace(0, np.nan)
+        df["vwap"] = ((typical_price * df["volume"]).rolling(20, min_periods=1).sum() / vol_sum).fillna(typical_price)
 
         # Distance from VWAP
         df["price_vwap_dist"] = (df["close"] - df["vwap"]) / df["vwap"] * 100
@@ -322,7 +331,7 @@ class AdvancedFeatureEngineer:
 
         # Volatility regime
         vol_20 = df["volatility_20d"]
-        vol_ma = vol_20.rolling(60).mean()
+        vol_ma = vol_20.rolling(60, min_periods=10).mean().fillna(vol_20)
         df["vol_regime"] = (vol_20 > vol_ma).astype(int)
 
         # Trend regime
@@ -338,23 +347,23 @@ class AdvancedFeatureEngineer:
     def _calculate_rsi(self, prices: pd.Series, period: int = 14) -> pd.Series:
         """Calculate RSI"""
         delta = prices.diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+        gain = (delta.where(delta > 0, 0)).rolling(window=period, min_periods=1).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=period, min_periods=1).mean()
 
         rs = gain / (loss + 1e-10)
         rsi = 100 - (100 / (1 + rs))
-        return rsi
+        return rsi.fillna(50.0)  # neutral RSI when insufficient data
 
     def _calculate_macd(
         self,
         prices: pd.Series,
     ) -> tuple[pd.Series, pd.Series, pd.Series]:
         """Calculate MACD"""
-        ema12 = prices.ewm(span=12).mean()
-        ema26 = prices.ewm(span=26).mean()
+        ema12 = prices.ewm(span=12, min_periods=1).mean()
+        ema26 = prices.ewm(span=26, min_periods=1).mean()
 
         macd = ema12 - ema26
-        signal = macd.ewm(span=9).mean()
+        signal = macd.ewm(span=9, min_periods=1).mean()
         hist = macd - signal
 
         return macd, signal, hist
@@ -369,7 +378,7 @@ class AdvancedFeatureEngineer:
         high_max = df["high"].rolling(period).max()
 
         k = 100 * ((df["close"] - low_min) / (high_max - low_min + 1e-10))
-        d = k.rolling(3).mean()
+        d = k.rolling(3, min_periods=1).mean()
 
         return k, d
 
@@ -389,29 +398,29 @@ class AdvancedFeatureEngineer:
         positive_flow = money_flow.where(typical_price > typical_price.shift(), 0)
         negative_flow = money_flow.where(typical_price < typical_price.shift(), 0)
 
-        positive_sum = positive_flow.rolling(period).sum()
-        negative_sum = negative_flow.rolling(period).sum()
+        positive_sum = positive_flow.rolling(period, min_periods=1).sum()
+        negative_sum = negative_flow.rolling(period, min_periods=1).sum()
 
         mfi = 100 - (100 / (1 + (positive_sum / (negative_sum + 1e-10))))
-        return mfi
+        return mfi.fillna(50.0)  # neutral MFI when insufficient data
 
     def _calculate_cci(self, df: pd.DataFrame, period: int = 20) -> pd.Series:
         """Calculate CCI"""
         typical_price = (df["high"] + df["low"] + df["close"]) / 3
-        sma = typical_price.rolling(period).mean()
-        mad = typical_price.rolling(period).apply(
+        sma = typical_price.rolling(period, min_periods=1).mean()
+        mad = typical_price.rolling(period, min_periods=1).apply(
             lambda x: np.mean(np.abs(x - x.mean())),
         )
 
         cci = (typical_price - sma) / (0.015 * mad + 1e-10)
-        return cci
+        return cci.fillna(0.0)
 
     def _calculate_trend_strength(self, df: pd.DataFrame) -> pd.Series:
         """Calculate trend strength"""
-        sma20 = df["close"].rolling(20).mean()
-        sma50 = df["close"].rolling(50).mean()
+        sma20 = df["close"].rolling(20, min_periods=1).mean()
+        sma50 = df["close"].rolling(50, min_periods=1).mean()
 
-        strength = abs(sma20 - sma50) / sma20 * 100
+        strength = (abs(sma20 - sma50) / sma20.replace(0, np.nan) * 100).fillna(0.0)
         return strength
 
     def _calculate_entropy(self, prices: np.ndarray, base: int = 2) -> float:
@@ -747,7 +756,8 @@ class AdvancedFeatureEngineer:
 
         # Returns
         out["returns"] = out["close"].pct_change(fill_method=None)
-        out["log_returns"] = np.log(out["close"] / out["close"].shift(1))
+        close_safe = out["close"].clip(lower=1e-10)
+        out["log_returns"] = np.log(close_safe / close_safe.shift(1)).fillna(0.0)
 
         # Price position
         rng = out["high"] - out["low"]
