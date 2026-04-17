@@ -538,7 +538,7 @@ class LSTMModel:
         predictions = self.predict(X_test)
 
         mse = mean_squared_error(y_test, predictions)
-        rmse = np.sqrt(max(float(__import__("numpy").nan_to_num(mse, nan=0.0)), 0.0))
+        rmse = np.sqrt(max(float(np.nan_to_num(mse, nan=0.0)), 0.0))
         mae = mean_absolute_error(y_test, predictions)
         r2 = r2_score(y_test, predictions)
 
@@ -752,7 +752,7 @@ class XGBoostModel:
             }
         # Regression metrics
         mse = mean_squared_error(y_test, predictions)
-        rmse = np.sqrt(max(float(__import__("numpy").nan_to_num(mse, nan=0.0)), 0.0))
+        rmse = np.sqrt(max(float(np.nan_to_num(mse, nan=0.0)), 0.0))
         mae = mean_absolute_error(y_test, predictions)
         r2 = r2_score(y_test, predictions)
 
@@ -911,7 +911,7 @@ class RandomForestModel:
                 "confusion_matrix": cm.tolist(),
             }
         mse = mean_squared_error(y_test, predictions)
-        rmse = np.sqrt(max(float(__import__("numpy").nan_to_num(mse, nan=0.0)), 0.0))
+        rmse = np.sqrt(max(float(np.nan_to_num(mse, nan=0.0)), 0.0))
         mae = mean_absolute_error(y_test, predictions)
         r2 = r2_score(y_test, predictions)
 

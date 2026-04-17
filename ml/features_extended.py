@@ -378,7 +378,7 @@ def _rolling_recurrence(series: pd.Series, window: int, eps_factor: float) -> pd
             continue
         # Vectorized pairwise distance
         dist = np.abs(x[:, np.newaxis] - x[np.newaxis, :])
-        count = int((dist < eps).sum()) - window  # subtract diagonal
+        count = int(np.nan_to_num((dist < eps).sum(), nan=0)) - window  # subtract diagonal
         out[wi + window - 1] = float(max(count, 0) / max(window * (window - 1), 1))
     return pd.Series(out, index=series.index)
 

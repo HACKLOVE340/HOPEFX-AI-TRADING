@@ -402,7 +402,7 @@ def add_regime_features(
                 (low - close.shift(1)).abs(),
             ],
             axis=1,
-        ).max(axis=1).fillna(0.0)
+        ).fillna(0.0).max(axis=1)
         plus_dm = (high - high.shift(1)).clip(lower=0)
         minus_dm = (low.shift(1) - low).clip(lower=0)
         tr_s = tr.rolling(adx_window, min_periods=1).mean().fillna(0.0)
