@@ -112,6 +112,7 @@ def _run_coverage(module_path: Path, test_path: Path) -> tuple[float | None, str
     try:
         result = subprocess.run(  # nosec B603 — fixed args, no shell
             cmd,
+            check=False,
             capture_output=True,
             text=True,
             timeout=60,

@@ -541,7 +541,7 @@ async def list_payments(
 
     # ── Period filter ─────────────────────────────────────────────────────────
     if period:
-        from datetime import datetime, timezone, timedelta
+        from datetime import timedelta
 
         now = datetime.now(timezone.utc)
         cutoffs = {

@@ -210,7 +210,7 @@ def main(argv: list[str]) -> int:
     all_issues: list[str] = []
     for arg in argv:
         path = Path(arg)
-        if not path.suffix == ".py":
+        if path.suffix != ".py":
             continue
         if not path.exists():
             continue

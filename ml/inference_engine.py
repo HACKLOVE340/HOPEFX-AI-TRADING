@@ -808,7 +808,7 @@ class InferenceEngine:
         # timestamp is not in the future relative to the decision timestamp.
         # This catches data pipeline bugs where future bars leak into features.
         try:
-            from risk.lookahead_guard import feature_guard as _fg, LookAheadBiasError as _LABError
+            from risk.lookahead_guard import feature_guard as _fg
             if hasattr(ohlcv.index, "max") and len(ohlcv) > 0:
                 latest_feature_ts = ohlcv.index.max()
                 decision_ts = pd.Timestamp.now(tz="UTC")

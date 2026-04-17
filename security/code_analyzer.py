@@ -26,9 +26,8 @@ from __future__ import annotations
 
 import ast
 import logging
-import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -265,18 +264,22 @@ class _ASTAnalyzer(ast.NodeVisitor):
         ):
             arg = node.args[0]
             # shift(-N) where N > 0
-            if isinstance(arg, ast.UnaryOp) and isinstance(arg.op, ast.USub):
-                if isinstance(arg.operand, ast.Constant) and isinstance(arg.operand.value, (int, float)):
-                    # Check for suppression comment on the same line
-                    line_text = self.lines[node.lineno - 1] if 1 <= node.lineno <= len(self.lines) else ""
-                    if "lookahead-ok" not in line_text and "# noqa" not in line_text:
-                        self._add(
-                            node.lineno,
-                            "lookahead_bias",
-                            SEVERITY_CRITICAL,
-                            f"shift(-{arg.operand.value}) introduces look-ahead bias — uses future data",
-                            "Use shift(+N) to lag data, never shift(-N) in feature engineering",
-                        )
+            if (
+                isinstance(arg, ast.UnaryOp)
+                and isinstance(arg.op, ast.USub)
+                and isinstance(arg.operand, ast.Constant)
+                and isinstance(arg.operand.value, (int, float))
+            ):
+                # Check for suppression comment on the same line
+                line_text = self.lines[node.lineno - 1] if 1 <= node.lineno <= len(self.lines) else ""
+                if "lookahead-ok" not in line_text and "# noqa" not in line_text:
+                    self._add(
+                        node.lineno,
+                        "lookahead_bias",
+                        SEVERITY_CRITICAL,
+                        f"shift(-{arg.operand.value}) introduces look-ahead bias — uses future data",
+                        "Use shift(+N) to lag data, never shift(-N) in feature engineering",
+                    )
         self.generic_visit(node)
 
     def visit_ExceptHandler(self, node: ast.ExceptHandler) -> None:
@@ -303,15 +306,14 @@ class _ASTAnalyzer(ast.NodeVisitor):
 
     def visit_BinOp(self, node: ast.BinOp) -> None:
         """Detect potential division by zero (literal zero denominator)."""
-        if isinstance(node.op, ast.Div):
-            if isinstance(node.right, ast.Constant) and node.right.value == 0:
-                self._add(
-                    node.lineno,
-                    "division_by_zero",
-                    SEVERITY_CRITICAL,
-                    "Literal division by zero detected",
-                    "Remove the division or add a zero-check guard",
-                )
+        if isinstance(node.op, ast.Div) and isinstance(node.right, ast.Constant) and node.right.value == 0:
+            self._add(
+                node.lineno,
+                "division_by_zero",
+                SEVERITY_CRITICAL,
+                "Literal division by zero detected",
+                "Remove the division or add a zero-check guard",
+            )
         self.generic_visit(node)
 
 
@@ -680,9 +682,8 @@ def scan_codebase(
         rel = _rel(py_file)
 
         # Optionally skip test files
-        if not include_tests:
-            if any(rel.startswith(p) or f"/{p}" in rel for p in _TEST_PREFIXES):
-                continue
+        if not include_tests and any(rel.startswith(p) or f"/{p}" in rel for p in _TEST_PREFIXES):
+            continue
 
         scanned += 1
         all_issues.extend(_analyze_file_ast(py_file))

@@ -509,7 +509,7 @@ if SQLALCHEMY_AVAILABLE:
         """
         # Check DB circuit breaker before attempting a connection
         try:
-            from resilience.service_circuit_breakers import db_breaker, CircuitBreakerOpenError as _CBOpen
+            from resilience.service_circuit_breakers import db_breaker
             if db_breaker.is_open:
                 raise RuntimeError(
                     "Database circuit breaker is OPEN — service temporarily unavailable. "

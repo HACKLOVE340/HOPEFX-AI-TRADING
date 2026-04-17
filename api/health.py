@@ -340,7 +340,7 @@ def _check_ready_sync() -> bool:
     """
     try:
         from resilience.service_circuit_breakers import (
-            redis_breaker, db_breaker, broker_breaker, ml_breaker,
+            redis_breaker, db_breaker,
         )
         # Any open critical breaker → not ready
         if redis_breaker.is_open:

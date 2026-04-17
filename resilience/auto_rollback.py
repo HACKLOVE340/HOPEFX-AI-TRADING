@@ -63,6 +63,9 @@ logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).parent.parent
 ROLLBACK_HISTORY_PATH = PROJECT_ROOT / "data" / "rollback_history.json"
 
+# Threshold for repeated runtime errors that trigger rollback consideration
+_REPEATED_ERROR_THRESHOLD = 3
+
 # ── Prometheus metrics ────────────────────────────────────────────────────────
 # Lazily initialised so the module can be imported without prometheus_client.
 # All metrics use the hopefx_ namespace to match alert rule expressions.
@@ -288,12 +291,12 @@ class AutoRollbackManager:
 
     @staticmethod
     def _repeated_runtime_errors() -> bool:
-        """Return True if there are 3+ ERROR entries in the last 5 minutes."""
+        """Return True if there are _REPEATED_ERROR_THRESHOLD+ ERROR entries in the last 5 minutes."""
         try:
             from security.code_analyzer import analyze_log_file
             issues = analyze_log_file(since_minutes=5)
             errors = [i for i in issues if i.level in ("ERROR", "CRITICAL")]
-            return len(errors) >= 3
+            return len(errors) >= _REPEATED_ERROR_THRESHOLD
         except Exception:
             return False
 

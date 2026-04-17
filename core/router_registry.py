@@ -22,7 +22,6 @@ import logging
 from typing import Any
 
 from fastapi import FastAPI
-from fastapi.routing import APIRoute
 
 logger = logging.getLogger(__name__)
 
