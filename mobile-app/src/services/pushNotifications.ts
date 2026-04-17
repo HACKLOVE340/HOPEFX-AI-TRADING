@@ -317,6 +317,38 @@ class PushNotificationService {
     });
   }
 
+  /**
+   * Returns the current push permission status ('granted' | 'denied' | 'undetermined').
+   */
+  async getPermissionStatus(): Promise<string> {
+    const { status } = await Notifications.getPermissionsAsync();
+    return status;
+  }
+
+  /**
+   * Request push permission and register the device token with the backend.
+   * Returns the Expo push token string, or null if permission was denied.
+   */
+  async registerForPushNotificationsAsync(): Promise<string | null> {
+    return this.register();
+  }
+
+  /**
+   * Schedule an immediate local notification (convenience wrapper for useNotifications hook).
+   */
+  async scheduleLocalNotification(
+    title: string,
+    body: string,
+    data: Record<string, unknown> = {}
+  ): Promise<string> {
+    return this.scheduleLocal({
+      title,
+      body,
+      type: String(data.type ?? 'general'),
+      data,
+    });
+  }
+
   async clearBadge(): Promise<void> {
     await Notifications.setBadgeCountAsync(0);
   }

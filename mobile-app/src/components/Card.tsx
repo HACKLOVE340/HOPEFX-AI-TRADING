@@ -1,11 +1,11 @@
 // HOPEFX-AI-TRADING — AGPL-3.0
 import React from 'react';
-import { View, StyleSheet, ViewStyle } from 'react-native';
+import { View, StyleSheet, ViewStyle, StyleProp } from 'react-native';
 import { COLORS, RADIUS, SPACING, SHADOW } from '../utils/theme';
 
 interface Props {
   children: React.ReactNode;
-  style?: ViewStyle | ViewStyle[];
+  style?: StyleProp<ViewStyle>;
   elevated?: boolean;
   accent?: boolean;
   danger?: boolean;

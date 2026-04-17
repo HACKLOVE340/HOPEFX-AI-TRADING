@@ -317,6 +317,11 @@ export type MainTabParamList = {
   Settings: undefined;
 };
 
+export type PortfolioStackParamList = {
+  PortfolioHome: undefined;
+  Performance: undefined;
+};
+
 export type TradingStackParamList = {
   TradingHome: undefined;
   PlaceOrder: { symbol: string; side?: OrderSide };

@@ -22,6 +22,7 @@ export interface PerformanceSummary {
   avg_loss: number;
   profit_factor: number | null;
   sharpe_ratio: number | null;
+  sortino_ratio: number | null;
   max_drawdown_pct: number;
   best_trade: number;
   worst_trade: number;
@@ -40,6 +41,7 @@ const EMPTY_SUMMARY: PerformanceSummary = {
   avg_loss: 0,
   profit_factor: null,
   sharpe_ratio: null,
+  sortino_ratio: null,
   max_drawdown_pct: 0,
   best_trade: 0,
   worst_trade: 0,
@@ -75,6 +77,7 @@ export function usePerformance(period: PerformancePeriod = '30d') {
         avg_loss: Number(p.avg_loss ?? 0),
         profit_factor: p.profit_factor != null ? Number(p.profit_factor) : null,
         sharpe_ratio: p.sharpe_ratio != null ? Number(p.sharpe_ratio) : null,
+        sortino_ratio: p.sortino_ratio != null ? Number(p.sortino_ratio) : null,
         max_drawdown_pct: Number(p.max_drawdown_pct ?? 0),
         best_trade: Number(p.best_trade ?? 0),
         worst_trade: Number(p.worst_trade ?? 0),
