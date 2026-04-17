@@ -580,7 +580,7 @@ class PerformanceAnalytics:
 
         # Annualize (assuming ~252 trading days)
         daily_rf = self.risk_free_rate / 252
-        return float(np.sqrt(252) * (mean_return - daily_rf) / max(std_return, 1e-9))
+        return float(np.nan_to_num(np.sqrt(252) * (mean_return - daily_rf) / max(std_return, 1e-9), nan=0.0))
 
     def _calculate_sortino_ratio(self, trades: list[TradeRecord]) -> float:
         """Calculate Sortino ratio for trades."""
