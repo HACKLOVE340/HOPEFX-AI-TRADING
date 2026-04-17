@@ -233,8 +233,9 @@ class GPUFeatureEngine:
         # Simple feature set: returns, rolling mean, rolling std
         window = min(20, len(returns))
         rolling_mean = np.convolve(returns, np.ones(window) / window, mode="valid")
-        rolling_std = np.array(
-            [returns[i : i + window].std() for i in range(len(returns) - window + 1)],
+        rolling_std = np.nan_to_num(
+            np.array([returns[i : i + window].std() for i in range(len(returns) - window + 1)]),
+            nan=0.0,
         )
         min_len = min(len(returns), len(rolling_mean), len(rolling_std))
         return np.column_stack(
