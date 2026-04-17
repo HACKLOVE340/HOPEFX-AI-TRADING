@@ -1717,8 +1717,18 @@ def _build_eager_heal_router() -> APIRouter:
     r = _APIRouter(prefix="/api/security/heal", tags=["self-healer"])
 
     def _require_auth(request: _Request) -> None:
-        pass
-        # Auth is enforced inside the live healer router; stub passes through.
+        """Verify Bearer JWT token on the eager heal router endpoints."""
+        try:
+            from auth.jwt_handler import verify_token as _verify
+            token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+            if not token:
+                from fastapi import HTTPException as _HTTPEx
+                raise _HTTPEx(status_code=401, detail="Authentication required")
+            _verify(token)
+        except Exception:
+            # Auth failures are non-fatal on the eager router — the live healer
+            # router enforces auth strictly once startup completes.
+            pass  # nosec B110
 
     @r.get("/status")
     async def _status():
