@@ -324,13 +324,14 @@ class PortfolioOptimizer:
         returns_matrix = np.array([self.returns_history[sym][-min_len:] for sym in symbols])
 
         # Calculate expected returns and covariance
-        expected_returns = np.mean(returns_matrix, axis=1)
-        cov_matrix = np.cov(returns_matrix)
+        returns_matrix_clean = np.nan_to_num(returns_matrix, nan=0.0)
+        expected_returns = np.mean(returns_matrix_clean, axis=1)
+        cov_matrix = np.nan_to_num(np.cov(returns_matrix_clean), nan=0.0)
 
         # Optimization: maximize Sharpe with volatility constraint
         def negative_sharpe(weights):
             port_return = np.dot(weights, expected_returns)
-            port_vol = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
+            port_vol = np.sqrt(max(np.dot(weights.T, np.dot(cov_matrix, weights)), 0.0))
 
             if port_vol > self.target_volatility / np.sqrt(252):
                 return 0  # Penalty

@@ -119,9 +119,9 @@ class DriftDetector:
         """
         # Use log-loss as the error signal
         eps = 1e-7
-        y_prob = np.clip(y_prob, eps, 1 - eps)
+        y_prob = np.clip(np.nan_to_num(y_prob, nan=0.5), eps, 1 - eps)
         errors = -(y_true * np.log(y_prob) + (1 - y_true) * np.log(1 - y_prob))
-        mean_error = float(errors.mean())
+        mean_error = float(np.nan_to_num(errors.mean(), nan=0.0))
         self._error_history.append(mean_error)
 
         # Update running mean with forgetting
@@ -236,7 +236,7 @@ class ADWINDriftDetector:
 
             # Hoeffding bound for the cut-point
             m = 1.0 / (1.0 / n0 + 1.0 / n1)
-            epsilon_cut = np.sqrt(np.log(2.0 / self.delta) / (2.0 * m))
+            epsilon_cut = float(np.nan_to_num(np.sqrt(np.log(2.0 / self.delta) / (2.0 * m)), nan=0.0))
 
             if abs(mu0 - mu1) >= epsilon_cut:
                 self.drift_count += 1
@@ -628,7 +628,7 @@ class OnlineEnsemble:
 
         # Update blend weights based on recent accuracy
         xgb_prob = self.xgb.predict_proba(X)
-        xgb_acc = float(((xgb_prob > 0.5).astype(int) == y).mean())
+        xgb_acc = float(np.nan_to_num(((xgb_prob > 0.5).astype(int) == y).mean(), nan=0.0))
         self._xgb_acc_ema = (1 - self.ema_alpha) * self._xgb_acc_ema + self.ema_alpha * xgb_acc
 
         total = self._xgb_acc_ema + self._deep_acc_ema
@@ -797,8 +797,8 @@ class OnlineLearnerStore:
                 # ADWIN (log-loss error)
                 if self._adwin_detector is not None and not drift:
                     eps = 1e-7
-                    p = float(np.clip(online_prob, eps, 1 - eps))
-                    logloss = -(label * np.log(p) + (1 - label) * np.log(1 - p))
+                    p = float(np.clip(np.nan_to_num(online_prob, nan=0.5), eps, 1 - eps))
+                    logloss = float(np.nan_to_num(-(label * np.log(p) + (1 - label) * np.log(1 - p)), nan=0.0))
                     drift = self._adwin_detector.update(logloss)
 
                 # Adaptive weight update

@@ -84,8 +84,9 @@ def _compute_features(df) -> np.ndarray | None:
         atr = ta.volatility.AverageTrueRange(h, l, c, window=14).average_true_range().iloc[-1]
 
         # ── volume ────────────────────────────────────────────────────────────
-        vol_mean = v.rolling(20).mean().iloc[-1]
-        vol_std = v.rolling(20).std().iloc[-1] + 1e-9
+        v_clean = v.dropna()
+        vol_mean = float(np.nan_to_num(v_clean.rolling(20).mean().iloc[-1], nan=0.0))
+        vol_std = float(np.nan_to_num(v_clean.rolling(20).std().iloc[-1], nan=0.0)) + 1e-9
         vol_z = (v.iloc[-1] - vol_mean) / vol_std
 
         # ── price returns ─────────────────────────────────────────────────────

@@ -254,8 +254,8 @@ def _compute_from_records(records: list[dict], n_levels: int = 10) -> pd.DataFra
         obi10 = _obi(bid_v[:10], ask_v[:10])
 
         # Depth
-        bid_depth5 = bid_v[:5].sum()
-        ask_depth5 = ask_v[:5].sum()
+        bid_depth5 = float(np.nan_to_num(bid_v[:5].sum(), nan=0.0))
+        ask_depth5 = float(np.nan_to_num(ask_v[:5].sum(), nan=0.0))
         depth_ratio = bid_depth5 / ask_depth5 if ask_depth5 > 0 else np.nan
 
         # Weighted mid

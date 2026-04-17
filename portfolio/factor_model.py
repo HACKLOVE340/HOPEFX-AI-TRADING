@@ -368,7 +368,7 @@ class FactorModel:
         ss_tot = float(np.sum((y - np.mean(y)) ** 2))
         r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
 
-        residuals = y - y_pred
+        residuals = np.nan_to_num(y - y_pred, nan=0.0)
         residual_vol = float(np.std(residuals) * np.sqrt(252))
 
         betas = {name: float(model.coef_[i]) for i, name in enumerate(FACTOR_NAMES)}
@@ -487,9 +487,9 @@ class FactorAttributionEngine:
             for i, fname in enumerate(FACTOR_NAMES):
                 beta_port[i] += weight * exposure.betas.get(fname, 0.0)
 
-        cov_matrix = factor_cov.loc[FACTOR_NAMES, FACTOR_NAMES].values
+        cov_matrix = factor_cov.loc[FACTOR_NAMES, FACTOR_NAMES].fillna(0.0).values
         # Factor variance contribution: beta_k^2 * sigma_k^2 (diagonal approx)
-        factor_vols = np.sqrt(np.diag(cov_matrix)) * np.sqrt(252)
+        factor_vols = np.sqrt(np.nan_to_num(np.diag(cov_matrix), nan=0.0)) * np.sqrt(252)
         z95 = 1.645
 
         return {

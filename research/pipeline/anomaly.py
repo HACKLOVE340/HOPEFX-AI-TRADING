@@ -60,6 +60,7 @@ logger = logging.getLogger(__name__)
 
 def _sigmoid(x: np.ndarray, k: float = 5.0) -> np.ndarray:
     """Numerically stable sigmoid."""
+    x = np.nan_to_num(x, nan=0.0)
     return np.where(
         x >= 0,
         1.0 / (1.0 + np.exp(-k * x)),
@@ -147,7 +148,7 @@ class AnomalyWeighter:
                 self._lof = None
 
         self._fitted = True
-        n_anomalies = int((if_scores < self._threshold).sum())
+        n_anomalies = int(np.nan_to_num((if_scores < self._threshold).sum(), nan=0))
         logger.info(
             "AnomalyWeighter fitted: %d/%d bars flagged (%.1f%%) [IF%s]",
             n_anomalies,

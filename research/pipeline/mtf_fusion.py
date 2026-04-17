@@ -109,9 +109,10 @@ def _compute_daily_regime(daily: pd.DataFrame) -> pd.DataFrame:
     c = d["close"]
 
     # Moving averages
-    sma20 = c.rolling(20).mean()
-    sma50 = c.rolling(50).mean()
-    sma200 = c.rolling(200).mean()
+    c_clean = c.dropna()
+    sma20 = c_clean.rolling(20).mean()
+    sma50 = c_clean.rolling(50).mean()
+    sma200 = c_clean.rolling(200).mean()
 
     d["d_trend_20"] = np.where(c > sma20, 1, -1)
     d["d_trend_50"] = np.where(c > sma50, 1, -1)
@@ -119,7 +120,8 @@ def _compute_daily_regime(daily: pd.DataFrame) -> pd.DataFrame:
     d["d_ma_align"] = ((d["d_trend_20"] == 1) & (d["d_trend_50"] == 1) & (d["d_trend_200"] == 1)).astype(int)
 
     # Volatility regime
-    log_ret = np.log(c / c.shift(1))
+    _c_safe = c.replace(0, np.nan).dropna()
+    log_ret = np.log(_c_safe / _c_safe.shift(1)).fillna(0.0)
     rv20 = log_ret.rolling(20).std() * np.sqrt(252)
     d["d_realvol_20"] = rv20
     d["d_high_vol"] = (rv20 > rv20.rolling(252, min_periods=60).quantile(0.75)).astype(int)
@@ -167,10 +169,12 @@ def _compute_hourly_regime(hourly: pd.DataFrame) -> pd.DataFrame:
     d = hourly.copy()
     c = d["close"]
 
-    sma20h = c.rolling(20).mean()
+    c_h_clean = c.dropna()
+    sma20h = c_h_clean.rolling(20).mean()
     d["h_trend_20"] = np.where(c > sma20h, 1, -1)
 
-    log_ret = np.log(c / c.shift(1))
+    _c_h_safe = c.replace(0, np.nan).dropna()
+    log_ret = np.log(_c_h_safe / _c_h_safe.shift(1)).fillna(0.0)
     d["h_realvol_20"] = log_ret.rolling(20).std() * np.sqrt(252 * 6.5)  # ~6.5 trading hours/day
 
     delta = c.diff()
@@ -523,13 +527,13 @@ class MTFFusionStore:
                         self._h4_df = new_row
                     # Avoid duplicate timestamps
                     elif new_row.index[0] not in self._h4_df.index:
-                        self._h4_df = pd.concat([self._h4_df, new_row]).sort_index()
+                        self._h4_df = pd.concat([self._h4_df, new_row]).sort_index().fillna(method="ffill").fillna(0.0)
                         if len(self._h4_df) > self.MAX_H4_BARS:
                             self._h4_df = self._h4_df.iloc[-self.MAX_H4_BARS :]
                 elif self._d1_df is None:
                     self._d1_df = new_row
                 elif new_row.index[0] not in self._d1_df.index:
-                    self._d1_df = pd.concat([self._d1_df, new_row]).sort_index()
+                    self._d1_df = pd.concat([self._d1_df, new_row]).sort_index().fillna(method="ffill").fillna(0.0)
                     if len(self._d1_df) > self.MAX_D1_BARS:
                         self._d1_df = self._d1_df.iloc[-self.MAX_D1_BARS :]
 

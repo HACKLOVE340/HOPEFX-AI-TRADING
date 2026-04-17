@@ -86,7 +86,9 @@ class PortfolioManager:
             mu = returns.mean()
             returns.std()
             port_ret = sum(w[a] * mu[a] for a in assets)
-            port_vol = float(np.sqrt(np.dot(list(w.values()), np.dot(returns.cov().values, list(w.values())))))
+            _cov_eq = np.nan_to_num(returns.cov().values, nan=0.0)
+            _wv_eq = np.array(list(w.values()))
+            port_vol = float(np.sqrt(max(np.dot(_wv_eq, np.dot(_cov_eq, _wv_eq)), 0.0)))
             sharpe = port_ret / port_vol if port_vol > 0 else 0.0
             return {"weights": w, "expected_sharpe": sharpe}
 
@@ -94,8 +96,8 @@ class PortfolioManager:
         best_sharpe = -np.inf
         best_weights: dict[str, float] = {}
         rng = np.random.default_rng(42)
-        cov = returns.cov().values
-        mu = returns.mean().values
+        cov = np.nan_to_num(returns.cov().values, nan=0.0)
+        mu = np.nan_to_num(returns.mean().values, nan=0.0)
 
         for _ in range(10_000):
             raw = rng.random(n)
@@ -104,7 +106,7 @@ class PortfolioManager:
             w = self._project_simplex_bounded(raw, max_weight)
 
             port_ret = float(np.dot(w, mu))
-            port_vol = float(np.sqrt(w @ cov @ w))
+            port_vol = float(np.sqrt(max(w @ cov @ w, 0.0)))
             if port_vol == 0:
                 continue
             sharpe = port_ret / port_vol
@@ -140,7 +142,7 @@ class PortfolioManager:
             over = w > max_w
             if not over.any():
                 break
-            excess = (w[over] - max_w).sum()
+            excess = float(np.nan_to_num((w[over] - max_w).sum(), nan=0.0))
             w[over] = max_w
             free = ~over
             if free.any():
