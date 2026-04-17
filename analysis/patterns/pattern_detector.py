@@ -278,14 +278,14 @@ class AdvancedPatternDetector:
                     if len(x) < 2:
                         return 0.0, float(y.mean()), 0.0
                     xm, ym = x.mean(), y.mean()
-                    denom = ((x - xm) ** 2).sum()
+                    denom = float(np.nan_to_num(((x - xm) ** 2).sum(), nan=0.0))
                     if denom == 0:
                         return 0.0, ym, 0.0
-                    slope = ((x - xm) * (y - ym)).sum() / denom
+                    slope = float(np.nan_to_num(((x - xm) * (y - ym)).sum() / denom, nan=0.0))
                     intercept = ym - slope * xm
                     y_pred = slope * x + intercept
-                    ss_res = ((y - y_pred) ** 2).sum()
-                    ss_tot = ((y - ym) ** 2).sum()
+                    ss_res = float(np.nan_to_num(((y - y_pred) ** 2).sum(), nan=0.0))
+                    ss_tot = float(np.nan_to_num(((y - ym) ** 2).sum(), nan=0.0))
                     r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
                     return slope, intercept, max(0.0, r2)
 
@@ -414,14 +414,14 @@ class AdvancedPatternDetector:
                     if len(x) < 2:
                         return 0.0, float(y.mean()), 0.0
                     xm, ym = x.mean(), y.mean()
-                    denom = ((x - xm) ** 2).sum()
+                    denom = float(np.nan_to_num(((x - xm) ** 2).sum(), nan=0.0))
                     if denom == 0:
                         return 0.0, ym, 0.0
-                    slope = ((x - xm) * (y - ym)).sum() / denom
+                    slope = float(np.nan_to_num(((x - xm) * (y - ym)).sum() / denom, nan=0.0))
                     intercept = ym - slope * xm
                     y_pred = slope * x + intercept
-                    ss_res = ((y - y_pred) ** 2).sum()
-                    ss_tot = ((y - ym) ** 2).sum()
+                    ss_res = float(np.nan_to_num(((y - y_pred) ** 2).sum(), nan=0.0))
+                    ss_tot = float(np.nan_to_num(((y - ym) ** 2).sum(), nan=0.0))
                     r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
                     return slope, intercept, max(0.0, r2)
 

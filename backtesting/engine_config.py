@@ -390,6 +390,7 @@ class SimulatedBroker:
                     bar_range_pct = (bar_high - bar_low) / price
                     # Approximate daily vol: bar range / sqrt(bars_per_day)
                     bars_per_day = getattr(self.config, "bars_per_day", 24.0)
+                    bar_range_pct = float(np.nan_to_num(bar_range_pct, nan=0.0))
                     vol_daily = bar_range_pct / np.sqrt(max(bars_per_day, 1e-9))
                 else:
                     vol_daily = 0.012  # 1.2% default (gold ~1%)
@@ -900,8 +901,8 @@ class BacktestEngine:
         ann_factor = np.sqrt(252.0 * max(self.config.bars_per_day, 1e-9))
         bar_returns = np.array([])
         if len(equity_values) > 1:
-            eq_arr = np.array(equity_values, dtype=float)
-            bar_returns = np.diff(eq_arr) / eq_arr[:-1]
+            eq_arr = np.nan_to_num(np.array(equity_values, dtype=float), nan=0.0)
+            bar_returns = np.diff(eq_arr) / np.where(eq_arr[:-1] != 0, eq_arr[:-1], 1.0)
 
         # ── Trade-level Sharpe (primary — corrected method) ───────────
         # mean(net_pnl) / std(net_pnl) * sqrt(252 / avg_hold_days)
@@ -983,6 +984,7 @@ class BacktestEngine:
                 is_significant = bool(p_val < 0.05)
             else:
                 # Manual t-statistic
+                trade_returns_arr = np.nan_to_num(trade_returns_arr, nan=0.0)
                 mean_r = float(np.mean(trade_returns_arr))
                 std_r = float(np.std(trade_returns_arr, ddof=1))
                 if std_r > 0:
