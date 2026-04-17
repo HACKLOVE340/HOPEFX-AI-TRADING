@@ -749,7 +749,7 @@ class RealTimePriceEngine:
             OHLCVType = type(bars[0])
             validated = []
             for _, row in df.iterrows():
-                try:
+                with contextlib.suppress(Exception):  # skip rows that can't be reconstructed
                     validated.append(OHLCVType(
                         timestamp=row["timestamp"],
                         open=row["open"],
@@ -758,8 +758,6 @@ class RealTimePriceEngine:
                         close=row["close"],
                         volume=row["volume"],
                     ))
-                except Exception:
-                    pass  # skip rows that can't be reconstructed
             return validated if validated else bars
         except Exception:  # nosec B110 — validation is non-fatal for live feed
             return bars

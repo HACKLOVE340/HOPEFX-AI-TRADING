@@ -1302,12 +1302,6 @@ Return the complete fixed file:"""
     async def run_code_analysis_now(self) -> dict[str, Any]:
         """Trigger an immediate deep code analysis scan and return results."""
         issues = await self._run_code_analysis()
-        try:
-            from security.code_analyzer import summarize_issues, CodeIssue
-            # Re-hydrate for summary
-            from security.code_analyzer import SEVERITY_CRITICAL, SEVERITY_HIGH
-        except ImportError:
-            pass
         return {
             "total": len(issues),
             "issues": issues[:100],

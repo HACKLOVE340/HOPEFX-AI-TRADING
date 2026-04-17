@@ -45,9 +45,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from enum import Enum, auto
+from enum import Enum
 from typing import Any, Callable
 
 UTC = timezone.utc
@@ -206,9 +206,8 @@ class ServiceCircuitBreaker:
             if self._state == CircuitState.HALF_OPEN:
                 # Any failure in half-open → back to open
                 await self._set_state(CircuitState.OPEN)
-            elif self._state == CircuitState.CLOSED:
-                if self._failure_count >= self.config.failure_threshold:
-                    await self._set_state(CircuitState.OPEN)
+            elif self._state == CircuitState.CLOSED and self._failure_count >= self.config.failure_threshold:
+                await self._set_state(CircuitState.OPEN)
 
             logger.warning(
                 "CircuitBreaker [%s]: failure #%d — %s: %s",
