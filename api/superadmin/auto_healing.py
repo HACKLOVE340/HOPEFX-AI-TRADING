@@ -186,7 +186,7 @@ async def get_auto_healing_status(
             raw = rc.get("security:self_healer:status")
             if raw:
                 return json.loads(raw)
-    except Exception:
+    except Exception:  # nosec B110 — Redis is optional; return safe default below
         pass
 
     return {
@@ -305,7 +305,7 @@ async def get_drift_history(
 
         events = get_healer()._drift_events[-limit:]
         return {"events": events, "total": len(get_healer()._drift_events)}
-    except Exception:
+    except Exception:  # nosec B110 — healer may not be running; fall through to Redis
         pass
     # Redis fallback
     try:
@@ -333,7 +333,7 @@ async def get_patch_history(
 
         patches = get_healer()._patch_history[-limit:]
         return {"patches": patches, "total": len(get_healer()._patch_history)}
-    except Exception:
+    except Exception:  # nosec B110 — healer may not be running; fall through to Redis
         pass
     try:
         from cache.redis_client import get_redis_client

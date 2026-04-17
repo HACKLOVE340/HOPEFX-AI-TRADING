@@ -493,16 +493,21 @@ class AutoRollbackManager:
                     e["path"] for e in h._drift_events[-10:]
                     if e.get("type") == "modified"
                 ]
-            except Exception:
+            except Exception:  # nosec B110 — healer may not be running; target_files stays empty
                 pass
 
         if not target_files:
             result.actions_taken.append("No target files for hard rollback — medium rollback only")
             return
 
+        import re as _re
         for rel_path in target_files:
+            # Validate path is a safe relative file path before passing to subprocess
+            if not _re.fullmatch(r"[A-Za-z0-9_./ \-]+", str(rel_path)):
+                result.errors.append(f"Unsafe path rejected for git checkout: {rel_path!r}")
+                continue
             try:
-                proc = subprocess.run(  # nosec B603,B607
+                proc = subprocess.run(  # nosec B603 B607
                     ["git", "checkout", "--", rel_path],
                     cwd=str(PROJECT_ROOT),
                     capture_output=True,
@@ -537,8 +542,9 @@ class AutoRollbackManager:
         await self._rollback_hard(result, [])
 
         try:
-            # Find last tag
-            proc = subprocess.run(  # nosec B603,B607
+            import re as _re
+            # Find last tag — fixed args, no user input
+            proc = subprocess.run(  # nosec B603 B607
                 ["git", "describe", "--tags", "--abbrev=0"],
                 cwd=str(PROJECT_ROOT),
                 capture_output=True,
@@ -551,8 +557,13 @@ class AutoRollbackManager:
                 result.errors.append("No git tags found — cannot perform full rollback")
                 return
 
+            # Validate tag against safe pattern before passing to subprocess
+            if not _re.fullmatch(r"[A-Za-z0-9._/\-]+", last_tag):
+                result.errors.append(f"Unsafe git tag value rejected: {last_tag!r}")
+                return
+
             # Reset to last tag (soft reset — keeps working tree changes staged)
-            proc2 = subprocess.run(  # nosec B603,B607
+            proc2 = subprocess.run(  # nosec B603 B607
                 ["git", "reset", "--soft", last_tag],
                 cwd=str(PROJECT_ROOT),
                 capture_output=True,

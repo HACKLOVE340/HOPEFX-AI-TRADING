@@ -222,7 +222,7 @@ def _get_db_session():
         sf = getattr(_app_state_pnl, "db_session_factory", None)
         if sf is not None:
             return sf(), sf
-    except Exception:
+    except Exception:  # nosec B110 — app_state may not be initialised yet; caller handles None
         pass
     return None, None
 

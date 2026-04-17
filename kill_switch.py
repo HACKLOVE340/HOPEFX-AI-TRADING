@@ -503,7 +503,7 @@ class KillSwitch:
                 from execution.engine import get_active_broker
 
                 broker = get_active_broker()
-            except Exception:
+            except Exception:  # nosec B110 — execution engine may not be initialised; try fallback
                 pass
 
             # Fallback: try the smart router's primary broker
@@ -514,7 +514,7 @@ class KillSwitch:
                     router = get_router()
                     if router is not None:
                         broker = getattr(router, "_primary_broker", None) or getattr(router, "broker", None)
-                except Exception:
+                except Exception:  # nosec B110 — smart router may not be initialised; logged below
                     pass
 
             if broker is None:

@@ -104,7 +104,7 @@ def _kv_set(key: str, data: dict, ttl: int | None = None) -> None:
             else:
                 r.set(key, raw)
             return
-        except Exception:
+        except Exception:  # nosec B110 — Redis cache is optional; failure is non-fatal
             pass
 
 
@@ -114,7 +114,7 @@ def _kv_get(key: str) -> dict | None:
         try:
             raw = r.get(key)
             return _json.loads(raw) if raw else None
-        except Exception:
+        except Exception:  # nosec B110 — Redis cache is optional; failure is non-fatal
             pass
     return None
 
@@ -125,7 +125,7 @@ def _kv_del(key: str) -> None:
         try:
             r.delete(key)
             return
-        except Exception:
+        except Exception:  # nosec B110 — Redis cache is optional; failure is non-fatal
             pass
 
 
@@ -140,7 +140,7 @@ def _kv_scan(pattern: str) -> list[dict]:
                 if raw:
                     result.append(_json.loads(raw))
             return result
-        except Exception:
+        except Exception:  # nosec B110 — Redis cache is optional; failure is non-fatal
             pass
     return []
 

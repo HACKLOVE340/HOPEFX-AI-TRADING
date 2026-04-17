@@ -235,9 +235,14 @@ def _quarantine(path: Path) -> Path:
 
 def _git_rollback(path: Path) -> bool:
     """Revert a single file to its last committed state via git checkout."""
+    import re as _re
     try:
         rel = str(path.relative_to(PROJECT_ROOT))
-        result = subprocess.run(  # nosec B603,B607
+        # Validate path is a safe relative file path before passing to subprocess
+        if not _re.fullmatch(r"[A-Za-z0-9_./ \-]+", rel):
+            logger.warning("SelfHealer: unsafe path rejected for git rollback: %r", rel)
+            return False
+        result = subprocess.run(  # nosec B603 B607
             ["git", "checkout", "--", rel],
             cwd=str(PROJECT_ROOT),
             capture_output=True,
@@ -1535,7 +1540,7 @@ Return the complete fixed file:"""
             from security.test_scanner import record_test_run
 
             record_test_run(passed, failed, status)
-        except Exception:
+        except Exception:  # nosec B110 — test_scanner is optional telemetry; failure is non-fatal
             pass
 
     # ── Endpoint → file resolver ──────────────────────────────────────────────
