@@ -293,7 +293,7 @@ class CFTCCOTFeed:
             logger.warning("COT: no data downloaded — MacroStore not updated")
             return {}
 
-        combined = pd.concat(all_frames, ignore_index=True).fillna(method="ffill").fillna(0.0)
+        combined = pd.concat(all_frames, ignore_index=True).ffill().fillna(0.0)
         series_dict = self._compute_series(combined)
 
         self._inject_into_macro_store(series_dict)

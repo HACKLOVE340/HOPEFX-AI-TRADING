@@ -114,7 +114,7 @@ def _merge(*frames: pd.DataFrame) -> pd.DataFrame:
     valid = [f for f in frames if f is not None and not f.empty]
     if not valid:
         return pd.DataFrame()
-    combined = pd.concat(valid, ignore_index=True).fillna(method="ffill").fillna(0.0)
+    combined = pd.concat(valid, ignore_index=True).ffill().fillna(0.0)
     combined["Date"] = pd.to_datetime(combined["Date"])
     combined = combined.sort_values("Date").drop_duplicates(subset="Date", keep="last").reset_index(drop=True)
     combined["Date"] = combined["Date"].dt.strftime("%Y-%m-%d")

@@ -527,13 +527,13 @@ class MTFFusionStore:
                         self._h4_df = new_row
                     # Avoid duplicate timestamps
                     elif new_row.index[0] not in self._h4_df.index:
-                        self._h4_df = pd.concat([self._h4_df, new_row]).sort_index().fillna(method="ffill").fillna(0.0)
+                        self._h4_df = pd.concat([self._h4_df, new_row]).sort_index().ffill().fillna(0.0)
                         if len(self._h4_df) > self.MAX_H4_BARS:
                             self._h4_df = self._h4_df.iloc[-self.MAX_H4_BARS :]
                 elif self._d1_df is None:
                     self._d1_df = new_row
                 elif new_row.index[0] not in self._d1_df.index:
-                    self._d1_df = pd.concat([self._d1_df, new_row]).sort_index().fillna(method="ffill").fillna(0.0)
+                    self._d1_df = pd.concat([self._d1_df, new_row]).sort_index().ffill().fillna(0.0)
                     if len(self._d1_df) > self.MAX_D1_BARS:
                         self._d1_df = self._d1_df.iloc[-self.MAX_D1_BARS :]
 

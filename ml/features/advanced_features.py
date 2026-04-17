@@ -831,9 +831,9 @@ class AdvancedFeatureEngineer:
         # Append new bar to window
         new_row = pd.DataFrame([new_bar])
         if not isinstance(window.index, pd.DatetimeIndex):
-            combined = pd.concat([window, new_row], ignore_index=True).fillna(method="ffill").fillna(0.0)
+            combined = pd.concat([window, new_row], ignore_index=True).ffill().fillna(0.0)
         else:
-            combined = pd.concat([window, new_row]).fillna(method="ffill").fillna(0.0)
+            combined = pd.concat([window, new_row]).ffill().fillna(0.0)
 
         # Compute a minimal feature set suitable for live inference.
         # We bypass engineer_features (which calls dropna and requires 200+ bars)

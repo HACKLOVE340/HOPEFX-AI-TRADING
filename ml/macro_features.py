@@ -145,7 +145,7 @@ def fetch_macro_history(
         logger.warning("No macro data fetched — all macro features will be zero")
         return pd.DataFrame()
 
-    df = pd.concat(frames.values(), axis=1).fillna(method="ffill")
+    df = pd.concat(frames.values(), axis=1).ffill()
     # Forward-fill only: never bfill (would inject future data into past bars)
     df = df.ffill()
     logger.info(

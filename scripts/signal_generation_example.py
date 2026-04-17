@@ -64,7 +64,7 @@ def test_edge_cases(data):
         return
     if data.isnull().values.any():
         logger.info("NaN values found in data. Handling NaN...")
-        data.fillna(method="ffill", inplace=True)
+        data.ffill(inplace=True)
     # Simulating stale ticks is more context-dependent.
 
 
