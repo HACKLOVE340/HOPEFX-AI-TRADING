@@ -16,6 +16,8 @@ const DEFAULT_PREFS: NotificationPrefs = {
   price_alerts: true,
   daily_summary: true,
   risk_warnings: true,
+  kill_switch: true,
+  news_impact: true,
 };
 
 export function useNotifications() {

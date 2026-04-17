@@ -361,12 +361,6 @@ export const apiClient = {
     return res.data;
   },
 
-  // ── Push tokens ───────────────────────────────────────────────────────────
-
-  async registerPushToken(payload: import('../types').PushToken): Promise<void> {
-    await _axios.post('/api/notifications/push-token', payload);
-  },
-
   // ── Raw access ─────────────────────────────────────────────────────────────
 
   get<T>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
