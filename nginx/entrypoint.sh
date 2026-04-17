@@ -10,6 +10,7 @@ set -e
 
 # Replace ${HOPEFX_DOMAIN} placeholders in the template and write to the
 # active nginx config location.
+# shellcheck disable=SC2016  # single quotes intentional: envsubst variable list, not shell expansion
 envsubst '${HOPEFX_DOMAIN}' \
   < /etc/nginx/nginx.conf.template \
   > /etc/nginx/nginx.conf
