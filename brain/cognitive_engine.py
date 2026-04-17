@@ -55,6 +55,7 @@ class CognitiveEngine:
             "uptrend", "downtrend", or "sideways"
         """
         close = self.data["close"] if "close" in self.data.columns else self.data.iloc[:, 3]
+        close = close.dropna()
         ema_short = close.ewm(span=short_window, adjust=False).mean()
         ema_long = close.ewm(span=long_window, adjust=False).mean()
 
@@ -105,6 +106,7 @@ class CognitiveEngine:
             Band-width ratio (higher → more volatile).
         """
         close = self.data["close"] if "close" in self.data.columns else self.data.iloc[:, 3]
+        close = close.dropna()
         rolling_mean = close.rolling(period).mean()
         rolling_std = close.rolling(period).std()
         upper = rolling_mean + 2 * rolling_std

@@ -227,7 +227,9 @@ class GPUFeatureEngine:
         """Compute technical features from a price array."""
         if len(prices) < 2:
             return prices
-        returns = np.diff(prices) / prices[:-1]
+        prices_clean = np.nan_to_num(np.asarray(prices, dtype=float), nan=0.0)
+        denom = np.where(prices_clean[:-1] != 0, prices_clean[:-1], 1.0)
+        returns = np.diff(prices_clean) / denom
         # Simple feature set: returns, rolling mean, rolling std
         window = min(20, len(returns))
         rolling_mean = np.convolve(returns, np.ones(window) / window, mode="valid")

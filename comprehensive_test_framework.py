@@ -78,7 +78,7 @@ class TestDataGenerator:
         """Generate synthetic OHLCV data"""
         np.random.seed(42)
 
-        returns = np.random.normal(trend, volatility, n)
+        returns = np.nan_to_num(np.random.normal(trend, volatility, n), nan=0.0)
         prices = start_price * np.exp(np.cumsum(returns))
 
         # Generate OHLC from close
@@ -101,7 +101,7 @@ class TestDataGenerator:
         """Generate synthetic tick data"""
         np.random.seed(42)
 
-        returns = np.random.normal(0, 0.0002, n)
+        returns = np.nan_to_num(np.random.normal(0, 0.0002, n), nan=0.0)
         prices = base_price * np.exp(np.cumsum(returns))
 
         ticks = []

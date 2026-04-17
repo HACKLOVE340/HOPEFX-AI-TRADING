@@ -626,7 +626,7 @@ def _run_backtest(
         last_price = float(candles[-1]["close"])
         balance += position * (last_price - entry_price)
 
-    eq = np.array(equity_curve, dtype=float)
+    eq = np.nan_to_num(np.array(equity_curve, dtype=float), nan=0.0)
     ret = np.diff(eq) / (eq[:-1] + 1e-9)
 
     sharpe = float(np.mean(ret) / (np.std(ret) + 1e-9) * np.sqrt(252 * 24))

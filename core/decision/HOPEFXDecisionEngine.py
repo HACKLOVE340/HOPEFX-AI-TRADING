@@ -622,7 +622,9 @@ class HOPEFXDecisionEngine:
             prices = data.get("prices", [entry])
             if len(prices) < 2:
                 return 0.15
-            returns = np.diff(prices) / np.array(prices[:-1])
+            p_arr = np.nan_to_num(np.array(prices, dtype=float), nan=0.0)
+            denom = np.where(p_arr[:-1] != 0, p_arr[:-1], 1.0)
+            returns = np.diff(p_arr) / denom
             return float(np.std(returns) * np.sqrt(252))
 
     # ── Status and metrics ────────────────────────────────────────────────────
