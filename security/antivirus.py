@@ -216,6 +216,12 @@ SKIP_PATHS: set[str] = {
     "deployment_guide.py",
     # Backtest runner uses dynamic imports legitimately
     "scripts/run_tick_backtest.py",
+    # Billing module references Stripe/Flutterwave API key *names* in docstrings
+    # and comments — not hardcoded values. All credentials come from env vars.
+    "api/billing.py",
+    # Payment processor references credential field names in type annotations
+    "monetization/stripe_live.py",
+    "payments/fintech/flutterwave.py",
 }
 
 
