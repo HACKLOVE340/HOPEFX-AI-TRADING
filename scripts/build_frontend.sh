@@ -81,7 +81,7 @@ if [ ! -f "$OUT_DIR/index.html" ]; then
     exit 1
 fi
 
-ASSET_COUNT=$(ls "$OUT_DIR/assets/" 2>/dev/null | wc -l)
+ASSET_COUNT=$(find "$OUT_DIR/assets/" -maxdepth 1 -type f 2>/dev/null | wc -l)
 echo "[INFO] Frontend built successfully:"
 echo "       Output:  $OUT_DIR"
 echo "       Assets:  $ASSET_COUNT files"

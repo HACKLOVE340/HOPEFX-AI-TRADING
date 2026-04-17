@@ -192,9 +192,12 @@ jobs:
       - name: Post coverage comment on PR
         if: github.event_name == 'pull_request'
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7
+        env:
+          COVERAGE_TOTAL: ${{ steps.coverage.outputs.total }}
         with:
           script: |
-            const coverage = '${{ steps.coverage.outputs.total }}';
+            // Read from env var to prevent template-injection of output into script context.
+            const coverage = process.env.COVERAGE_TOTAL || '0';
             const pct = parseFloat(coverage);
             const gate = 70;
             const passed = pct >= gate;

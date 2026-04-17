@@ -226,6 +226,7 @@ info "Configuring Nginx..."
 # Use nginx.conf.template with envsubst — nginx.conf does not exist.
 # Also override the upstream to 127.0.0.1:8000 for host-nginx mode
 # (the Docker app container exposes port 8000 on the host loopback).
+# shellcheck disable=SC2016  # single quotes intentional: envsubst variable list, not shell expansion
 HOPEFX_DOMAIN="${DOMAIN}" envsubst '${HOPEFX_DOMAIN}' \
   < "$APP_DIR/nginx/nginx.conf.template" \
   | sed 's|server app:8000|server 127.0.0.1:8000|g' \
@@ -261,6 +262,7 @@ certbot certonly --webroot \
 
 # ── Install full Nginx config with SSL ────────────────────────────────────────
 if [[ -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ]]; then
+  # shellcheck disable=SC2016  # single quotes intentional: envsubst variable list, not shell expansion
   HOPEFX_DOMAIN="${DOMAIN}" envsubst '${HOPEFX_DOMAIN}' \
     < "$APP_DIR/nginx/nginx.conf.template" \
     | sed 's|server app:8000|server 127.0.0.1:8000|g' \
@@ -284,7 +286,9 @@ docker compose build --no-cache
 # Exclude the containerised nginx service — host nginx (installed above)
 # handles SSL termination and proxies to the app container on port 8000.
 # Running both would cause a port 80/443 bind conflict.
-docker compose up -d --scale nginx=0 $(docker compose config --services | grep -v '^nginx$' | tr '\n' ' ')
+# Build service list excluding nginx, then pass as array to avoid word-splitting issues
+mapfile -t _SERVICES < <(docker compose config --services | grep -v '^nginx$')
+docker compose up -d --scale nginx=0 "${_SERVICES[@]}"
 success "Docker services started (host nginx handles SSL — container nginx excluded)"
 
 # ── Seed superadmin user ──────────────────────────────────────────────────────

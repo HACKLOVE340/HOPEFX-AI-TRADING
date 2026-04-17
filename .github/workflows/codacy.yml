@@ -104,14 +104,20 @@ jobs:
 
       - name: ruff — no new lint errors
         if: steps.changed.outputs.files != ''
+        # Route through env var to prevent template-injection of filenames into shell.
+        env:
+          CHANGED_FILES: ${{ steps.changed.outputs.files }}
         # Hard failure: ruff is already clean; any error here is a regression.
-        run: ruff check ${{ steps.changed.outputs.files }}
+        run: ruff check $CHANGED_FILES
 
       - name: bandit — no new HIGH/CRITICAL security issues
         if: steps.changed.outputs.files != ''
+        # Route through env var to prevent template-injection of filenames into shell.
+        env:
+          CHANGED_FILES: ${{ steps.changed.outputs.files }}
         # Hard failure on HIGH+ findings in changed files.
         run: |
-          bandit ${{ steps.changed.outputs.files }} \
+          bandit $CHANGED_FILES \
             --severity-level high \
             --confidence-level medium \
             -q
