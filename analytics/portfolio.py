@@ -113,11 +113,12 @@ class PortfolioAnalytics:
         if self.returns_data is None:
             raise ValueError("No returns data loaded")
 
-        returns = self.returns_data.mean() * 252  # Annualized
-        cov_matrix = self.returns_data.cov() * 252  # Annualized
+        returns = self.returns_data.dropna().mean() * 252  # Annualized
+        cov_matrix = self.returns_data.dropna().cov() * 252  # Annualized
 
         portfolio_return = np.dot(weights, returns)
-        portfolio_volatility = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
+        port_var = float(np.dot(weights.T, np.dot(cov_matrix, weights)))
+        portfolio_volatility = np.sqrt(max(port_var, 1e-12))
         sharpe_ratio = (portfolio_return - self.risk_free_rate) / portfolio_volatility
 
         return portfolio_return, portfolio_volatility, sharpe_ratio
@@ -236,8 +237,8 @@ class PortfolioAnalytics:
 
         # Build the true efficient frontier via SLSQP:
         # sweep target returns from min to max and solve min-variance at each.
-        cov = self.returns_data.cov().values * 252
-        mu = self.returns_data.mean().values * 252
+        cov = self.returns_data.dropna().cov().values * 252
+        mu = self.returns_data.dropna().mean().values * 252
         mu_min, mu_max = float(mu.min()), float(mu.max())
         target_returns = np.linspace(mu_min, mu_max, n_portfolios)
 
@@ -332,8 +333,8 @@ class PortfolioAnalytics:
         if self.returns_data is None:
             raise ValueError("No returns data loaded")
 
-        # Portfolio returns series
-        portfolio_returns = (self.returns_data * weights).sum(axis=1)
+        # Portfolio returns series — drop NaN before any calculation
+        portfolio_returns = (self.returns_data * weights).sum(axis=1).dropna()
 
         # Basic metrics
         total_return = (1 + portfolio_returns).prod() - 1
@@ -345,30 +346,36 @@ class PortfolioAnalytics:
 
         # Sortino ratio (downside deviation)
         downside_returns = portfolio_returns[portfolio_returns < 0]
-        downside_std = downside_returns.std() * np.sqrt(252) if len(downside_returns) > 0 else 0
+        downside_std = downside_returns.std() * np.sqrt(252) if len(downside_returns) > 1 else 0.0
         sortino = (annualized_return - self.risk_free_rate) / downside_std if downside_std > 0 else 0
 
         # Maximum drawdown
         cumulative = (1 + portfolio_returns).cumprod()
         rolling_max = cumulative.expanding().max()
-        drawdown = (cumulative - rolling_max) / rolling_max
+        drawdown = (cumulative - rolling_max) / rolling_max.replace(0, np.nan)
         max_drawdown = drawdown.min()
 
         # Calmar ratio
         calmar = annualized_return / abs(max_drawdown) if max_drawdown != 0 else 0
 
         # VaR (Value at Risk) - 95% confidence
-        var_95 = np.percentile(portfolio_returns, 5)
+        var_95 = np.percentile(portfolio_returns, 5) if len(portfolio_returns) > 0 else 0.0
 
         # CVaR (Conditional VaR)
-        cvar_95 = portfolio_returns[portfolio_returns <= var_95].mean()
+        tail = portfolio_returns[portfolio_returns <= var_95]
+        cvar_95 = float(tail.mean()) if len(tail) > 0 else float(var_95)
 
         # Beta (market correlation) - assumes first asset is market
         if len(self.assets) > 1:
-            market_returns = self.returns_data.iloc[:, 0]
-            covariance = np.cov(portfolio_returns, market_returns)[0][1]
-            market_variance = market_returns.var()
-            beta = covariance / market_variance if market_variance > 0 else 1.0
+            market_returns = self.returns_data.iloc[:, 0].dropna()
+            aligned = portfolio_returns.align(market_returns, join="inner")[0]
+            market_aligned = portfolio_returns.align(market_returns, join="inner")[1]
+            market_variance = float(market_aligned.var())
+            if market_variance > 0 and len(aligned) > 1:
+                covariance = float(np.cov(aligned.values, market_aligned.values)[0][1])
+                beta = covariance / market_variance
+            else:
+                beta = 1.0
         else:
             beta = 1.0
 
@@ -376,8 +383,8 @@ class PortfolioAnalytics:
         treynor = (annualized_return - self.risk_free_rate) / beta if beta != 0 else 0
 
         # Information ratio (vs equal weight benchmark)
-        benchmark_returns = self.returns_data.mean(axis=1)
-        active_returns = portfolio_returns - benchmark_returns
+        benchmark_returns = self.returns_data.mean(axis=1).dropna()
+        active_returns = (portfolio_returns - benchmark_returns).dropna()
         tracking_error = active_returns.std() * np.sqrt(252)
         information_ratio = active_returns.mean() * 252 / tracking_error if tracking_error > 0 else 0
 
@@ -605,10 +612,10 @@ class RiskAnalyzer:
 
     def calculate_drawdown_series(self) -> pd.DataFrame:
         """Calculate drawdown series for each asset"""
-        cumulative = (1 + self.returns_data).cumprod()
+        cumulative = (1 + self.returns_data.fillna(0.0)).cumprod()
         rolling_max = cumulative.expanding().max()
-        drawdown = (cumulative - rolling_max) / rolling_max
-        return drawdown
+        drawdown = (cumulative - rolling_max) / rolling_max.replace(0, np.nan)
+        return drawdown.fillna(0.0)
 
     def plot_drawdowns(self, save_path: str | None = None):
         """Plot drawdown chart"""
@@ -640,11 +647,11 @@ class RiskAnalyzer:
     ) -> pd.DataFrame:
         """Calculate rolling risk metrics"""
         if metric == "sharpe":
-            rolling_returns = self.returns_data.rolling(window).mean() * 252
-            rolling_std = self.returns_data.rolling(window).std() * np.sqrt(252)
-            result = rolling_returns / rolling_std
+            rolling_returns = self.returns_data.rolling(window, min_periods=2).mean() * 252
+            rolling_std = self.returns_data.rolling(window, min_periods=2).std() * np.sqrt(252)
+            result = (rolling_returns / rolling_std.replace(0, np.nan)).fillna(0.0)
         elif metric == "volatility":
-            result = self.returns_data.rolling(window).std() * np.sqrt(252)
+            result = self.returns_data.rolling(window, min_periods=2).std() * np.sqrt(252)
         elif metric == "var":
             result = self.returns_data.rolling(window).quantile(0.05)
         else:
@@ -666,20 +673,21 @@ class RiskAnalyzer:
 
         for scenario_name, shock in scenarios.items():
             # Apply shock to all assets
-            shocked_returns = self.returns_data + shock
+            shocked_returns = self.returns_data.fillna(0.0) + shock
 
             # Calculate metrics under stress
             total_return = (1 + shocked_returns).prod() - 1
             volatility = shocked_returns.std() * np.sqrt(252)
-            max_dd = ((1 + shocked_returns).cumprod() - (1 + shocked_returns).cumprod().expanding().max()).min()
+            cum = (1 + shocked_returns).cumprod()
+            max_dd = ((cum - cum.expanding().max()) / cum.expanding().max().replace(0, np.nan)).min()
 
             results.append(
                 {
                     "scenario": scenario_name,
                     "shock": shock,
-                    "total_return": total_return.mean(),
-                    "volatility": volatility.mean(),
-                    "max_drawdown": max_dd.mean(),
+                    "total_return": float(total_return.mean()),
+                    "volatility": float(volatility.mean()),
+                    "max_drawdown": float(max_dd.mean()),
                 }
             )
 
@@ -813,10 +821,12 @@ class PortfolioOptimizer:
             )
             if res.success:
                 w = np.maximum(res.x, 0.0)
-                w = w / w.sum() if w.sum() > 0 else w0
+                w_sum = w.sum()
+                w = w / w_sum if w_sum > 0 else w0
             else:
                 w = w0
 
+        w = np.nan_to_num(w, nan=1.0 / len(w))
         port_ret = float(np.mean(returns @ w) * 252)
         port_vol = float(np.std(returns @ w) * (252**0.5))
         sharpe = (port_ret - self.risk_free_rate) / (port_vol + 1e-9)
@@ -869,7 +879,7 @@ class PortfolioOptimizer:
                 options={"ftol": 1e-9, "maxiter": 500},
             )
             w = res.x if res.success else w0
-            w = np.maximum(w, 0.0)
+            w = np.nan_to_num(np.maximum(w, 0.0), nan=0.0)
             s = w.sum()
             w = w / s if s > 0 else w0
             port_ret = float(np.mean(returns @ w) * 252)
@@ -932,7 +942,7 @@ def _pa_optimize(
             constraints=constraints,
             options={"ftol": 1e-10, "maxiter": 1000},
         )
-        w = np.maximum(res.x, 0.0) if res.success else w0
+        w = np.nan_to_num(np.maximum(res.x, 0.0), nan=0.0) if res.success else w0
         s = w.sum()
         w = w / s if s > 0 else w0
     else:  # max_sharpe
@@ -951,7 +961,7 @@ def _pa_optimize(
             constraints=constraints,
             options={"ftol": 1e-10, "maxiter": 1000},
         )
-        w = np.maximum(res.x, 0.0) if res.success else w0
+        w = np.nan_to_num(np.maximum(res.x, 0.0), nan=0.0) if res.success else w0
         s = w.sum()
         w = w / s if s > 0 else w0
 
