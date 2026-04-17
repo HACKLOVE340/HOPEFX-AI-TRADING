@@ -260,7 +260,7 @@ def bootstrap(verbose: bool = True) -> None:
             logger.info(f"      Email    : {DEFAULT_SUPERADMIN_EMAIL}")
             logger.info(f"      Username : {DEFAULT_SUPERADMIN_USERNAME}")
             logger.info("      Role     : superadmin  →  redirects to /superadmin after login")
-            sys.stdout.write(f"      Password : see {ENV_PATH} ({_SUPERADMIN_PASSWORD_KEY})\n")
+            logger.info("      Password : see %s (%s)", ENV_PATH, _SUPERADMIN_PASSWORD_KEY)
     except Exception as exc:  # pylint: disable=broad-exception-caught
         if verbose:
             logger.warning(f"  ⚠️  Superadmin seed skipped: {exc}")
@@ -273,7 +273,7 @@ def bootstrap(verbose: bool = True) -> None:
             logger.info(f"      Email    : {DEFAULT_ADMIN_EMAIL}")
             logger.info(f"      Username : {DEFAULT_ADMIN_USERNAME}")
             logger.info("      Role     : admin  →  redirects to /admin after login")
-            sys.stdout.write(f"      Password : see {ENV_PATH} ({_ADMIN_PASSWORD_KEY})\n")
+            logger.info("      Password : see %s (%s)", ENV_PATH, _ADMIN_PASSWORD_KEY)
     except Exception as exc:  # pylint: disable=broad-exception-caught
         if verbose:
             logger.warning(f"  ⚠️  Admin seed skipped: {exc}")
@@ -286,7 +286,7 @@ def bootstrap(verbose: bool = True) -> None:
             logger.info(f"      Email    : {DEFAULT_TRADER_EMAIL}")
             logger.info(f"      Username : {DEFAULT_TRADER_USERNAME}")
             logger.info("      Role     : trader  →  redirects to /dashboard after login")
-            sys.stdout.write(f"      Password : see {ENV_PATH} ({_TRADER_PASSWORD_KEY})\n")
+            logger.info("      Password : see %s (%s)", ENV_PATH, _TRADER_PASSWORD_KEY)
     except Exception as exc:  # pylint: disable=broad-exception-caught
         if verbose:
             logger.warning(f"  ⚠️  Trader seed skipped: {exc}")
