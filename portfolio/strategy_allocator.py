@@ -541,12 +541,14 @@ class StrategyAllocator:
 
 def _require_auth(request: Request) -> dict[str, Any]:
     try:
-        from auth.jwt_handler import verify_token
+        from auth.jwt import decode_access_token
 
         token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         if not token:
             raise HTTPException(status_code=401, detail="Authentication required")
-        return verify_token(token)
+        # decode_access_token returns the full payload dict and raises
+        # jwt.InvalidTokenError on any failure — no second argument needed.
+        return decode_access_token(token)
     except HTTPException:
         raise
     except Exception as exc:

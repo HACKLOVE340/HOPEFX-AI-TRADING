@@ -732,6 +732,155 @@ async def place_order(
     return await _record_fill(order, result, user.sub)
 
 
+@router.get("/orders", summary="List open and recent orders")
+async def get_orders(
+    user: TokenPayload = Depends(get_current_user),
+    status_filter: str | None = Query(None, alias="status", description="Filter by order status (open, filled, cancelled)"),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+):
+    """
+    Return open and recent orders for the authenticated user.
+
+    Reads from the broker's order list when available; falls back to the
+    trade history DB for filled orders when the broker is not connected.
+
+    Query params:
+      status  — filter by order status: open | filled | cancelled (optional)
+      limit   — max rows (1–500, default 50)
+      offset  — pagination offset
+    """
+    orders: list[dict] = []
+
+    # 1. Live orders from broker
+    broker = getattr(app_state, "broker", None) if app_state else None
+    if broker is not None:
+        try:
+            raw_orders = []
+            if hasattr(broker, "get_orders"):
+                raw_orders = broker.get_orders() or []
+            elif hasattr(broker, "get_open_orders"):
+                raw_orders = broker.get_open_orders() or []
+
+            for o in raw_orders:
+                o_dict = o.__dict__ if hasattr(o, "__dict__") else (o if isinstance(o, dict) else {})
+                order_status = str(o_dict.get("status", "open")).lower()
+                if status_filter and order_status != status_filter.lower():
+                    continue
+                orders.append({
+                    "order_id": str(o_dict.get("order_id") or o_dict.get("id", "")),
+                    "symbol": str(o_dict.get("symbol", "")),
+                    "side": str(o_dict.get("side", "")),
+                    "order_type": str(o_dict.get("order_type") or o_dict.get("type", "market")),
+                    "quantity": float(o_dict.get("quantity") or o_dict.get("units", 0)),
+                    "price": float(o_dict.get("price") or o_dict.get("limit_price") or 0),
+                    "status": order_status,
+                    "created_at": str(o_dict.get("created_at") or o_dict.get("time", "")),
+                    "filled_at": str(o_dict.get("filled_at") or o_dict.get("fill_time") or ""),
+                })
+        except Exception as exc:
+            logger.debug("GET /orders broker fetch failed: %s", exc)
+
+    # 2. Filled orders from trade DB when broker unavailable or no open orders
+    if not orders:
+        trades = _query_trades(user.sub, None, limit, offset)
+        for t in trades:
+            t_dict = _trade_to_dict(t)
+            order_status = "filled"
+            if status_filter and order_status != status_filter.lower():
+                continue
+            orders.append({
+                "order_id": t_dict["trade_id"],
+                "symbol": t_dict["symbol"],
+                "side": t_dict["side"],
+                "order_type": "market",
+                "quantity": t_dict["quantity"],
+                "price": t_dict["entry_price"],
+                "status": order_status,
+                "created_at": t_dict["entry_time"],
+                "filled_at": t_dict["entry_time"],
+            })
+
+    page = orders[offset: offset + limit]
+    return {"orders": page, "count": len(page), "total": len(orders), "offset": offset, "limit": limit}
+
+
+@router.get("/history", summary="Trade history (alias for /trades)")
+async def get_history(
+    user: TokenPayload = Depends(get_current_user),
+    symbol: str | None = Query(None, max_length=20),
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+):
+    """
+    Return paginated trade history for the authenticated user.
+
+    Alias for ``GET /api/trading/trades`` — provided for frontend compatibility.
+
+    Query params:
+      symbol  — filter by symbol (optional)
+      limit   — max rows (1–1000, default 100)
+      offset  — pagination offset
+    """
+    trades = _query_trades(user.sub, symbol, limit, offset)
+    return {
+        "trades": [_trade_to_dict(t) for t in trades],
+        "count": len(trades),
+        "offset": offset,
+        "limit": limit,
+    }
+
+
+@router.get("/balance", summary="Account balance (alias for /account)")
+async def get_balance(user: TokenPayload = Depends(get_current_user)):
+    """
+    Return the authenticated user's account balance and equity.
+
+    Alias for ``GET /api/trading/account`` — provided for frontend compatibility.
+    Returns a simplified subset: balance, equity, margin_used, margin_available,
+    daily_pnl, currency.
+    """
+    broker = getattr(app_state, "broker", None) if app_state else None
+    if broker is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Broker not available",
+        )
+    raw = await _broker_call("get_account_info")
+
+    def _f(obj, *keys, default=0.0):
+        for k in keys:
+            v = getattr(obj, k, None) if not isinstance(obj, dict) else obj.get(k)
+            if v is not None:
+                try:
+                    return float(v)
+                except (TypeError, ValueError):
+                    pass
+        return default
+
+    def _s(obj, *keys, default=""):
+        for k in keys:
+            v = getattr(obj, k, None) if not isinstance(obj, dict) else obj.get(k)
+            if v is not None:
+                return str(v)
+        return default
+
+    balance = _f(raw, "balance", "nav", "net_liquidation")
+    equity = _f(raw, "equity", "balance", "nav") or balance
+    margin_used = _f(raw, "margin_used", "margin", "used_margin")
+    margin_avail = _f(raw, "margin_available", "free_margin", "available_margin") or (equity - margin_used)
+    daily_pnl = _f(raw, "daily_pnl", "day_pnl", "realized_pnl")
+
+    return {
+        "balance": round(balance, 2),
+        "equity": round(equity, 2),
+        "margin_used": round(margin_used, 2),
+        "margin_available": round(margin_avail, 2),
+        "daily_pnl": round(daily_pnl, 2),
+        "currency": _s(raw, "currency", "base_currency", default="USD"),
+    }
+
+
 @router.get("/positions", response_model=list[PositionResponse])
 async def get_positions(
     user: TokenPayload = Depends(get_current_user),

@@ -63,6 +63,51 @@ def _get_flutterwave():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# GET /api/billing/plans — available subscription plans
+# ─────────────────────────────────────────────────────────────────────────────
+
+_PLANS = [
+    {
+        "id": "free",
+        "name": "Free",
+        "price_usd_monthly": 0,
+        "price_usd_annual": 0,
+        "features": ["paper_trading"],
+        "limits": {"signals_per_day": 5, "backtests_per_month": 3, "live_accounts": 0},
+    },
+    {
+        "id": "professional",
+        "name": "Professional",
+        "price_usd_monthly": 49,
+        "price_usd_annual": 470,
+        "features": ["paper_trading", "live_trading", "ai_signals", "backtesting"],
+        "limits": {"signals_per_day": 100, "backtests_per_month": 50, "live_accounts": 3},
+    },
+    {
+        "id": "enterprise",
+        "name": "Enterprise",
+        "price_usd_monthly": 199,
+        "price_usd_annual": 1990,
+        "features": [
+            "paper_trading",
+            "live_trading",
+            "ai_signals",
+            "backtesting",
+            "api_access",
+            "white_label",
+        ],
+        "limits": {"signals_per_day": -1, "backtests_per_month": -1, "live_accounts": -1},
+    },
+]
+
+
+@router.get("/plans", summary="List available subscription plans")
+async def get_plans():
+    """Return all available subscription plans with pricing and feature details."""
+    return {"plans": _PLANS}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Task 29 — GET /api/billing/subscription
 # ─────────────────────────────────────────────────────────────────────────────
 

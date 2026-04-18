@@ -691,12 +691,12 @@ def _returns_from_closes(closes: list[float]) -> list[float]:
 
 
 async def _collect_series_from_engine(pe: Any, sym_list: list[str], window: int) -> dict[str, list[float]]:
-    """Fetch return series from the price engine for each symbol."""
+    """Fetch return series for each symbol via price engine → CSV → yfinance."""
     import asyncio
 
     series: dict[str, list[float]] = {}
 
-    # 1. Price engine
+    # ── 1. Price engine ───────────────────────────────────────────────────────
     pe = getattr(app_state, "price_engine", None) if app_state else None
     if pe is not None:
         for sym in sym_list:
@@ -715,40 +715,113 @@ async def _collect_series_from_engine(pe: Any, sym_list: list[str], window: int)
                         for bar in ohlcv
                     ]
                     returns = [
-                        (closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes)) if closes[i - 1] > 0
+                        (closes[i] - closes[i - 1]) / closes[i - 1]
+                        for i in range(1, len(closes))
+                        if closes[i - 1] > 0
                     ]
                     if returns:
                         series[sym] = returns
             except Exception as exc:
                 logger.debug("correlation: price_engine miss for %s: %s", sym, exc)
 
+    # ── 2. Local CSV files ────────────────────────────────────────────────────
     data_dir = pathlib.Path(__file__).parent.parent / "data"
     for sym in sym_list:
         if sym in series:
             continue
         sym_key = sym.upper().replace("/", "_").replace("-", "_")
+        sym_compact = sym_key.replace("_", "")
         candidates = [
             data_dir / f"{sym_key}_D1.csv",
             data_dir / f"{sym_key}_H1.csv",
-            data_dir / f"{sym_key.replace('_', '')}_H1.csv",
+            data_dir / f"{sym_key}_H4.csv",
+            data_dir / f"{sym_key}_D.csv",
+            data_dir / f"{sym_compact}_D1.csv",
+            data_dir / f"{sym_compact}_H1.csv",
+            data_dir / f"{sym_compact}_2Y.csv",
+            data_dir / f"{sym_compact}_5Y.csv",
         ]
         for csv_path in candidates:
-            if csv_path.exists():
+            if not csv_path.exists():
+                continue
+            try:
+                import csv as _csv
+
+                closes: list[float] = []
+                with open(csv_path, newline="") as fh:
+                    reader = _csv.DictReader(fh)
+                    # Accept "close" or "Close" column
+                    for row in reader:
+                        val = row.get("close") or row.get("Close")
+                        if val is not None:
+                            try:
+                                closes.append(float(val))
+                            except ValueError:
+                                pass
+                closes = closes[-(window + 5):]
+                returns = [
+                    (closes[i] - closes[i - 1]) / closes[i - 1]
+                    for i in range(1, len(closes))
+                    if closes[i - 1] > 0
+                ]
+                if len(returns) >= 5:
+                    series[sym] = returns
+                    logger.debug("correlation: loaded %s from %s (%d bars)", sym, csv_path.name, len(returns))
+                    break
+            except Exception as exc:
+                logger.debug("correlation CSV miss for %s (%s): %s", sym, csv_path.name, exc)
+
+    # ── 3. yfinance fallback for symbols still missing ────────────────────────
+    missing = [s for s in sym_list if s not in series]
+    if missing:
+        # Map internal symbol names to yfinance tickers
+        _YF_MAP: dict[str, str] = {
+            "XAU_USD": "GC=F",
+            "XAUUSD": "GC=F",
+            "EUR_USD": "EURUSD=X",
+            "EURUSD": "EURUSD=X",
+            "GBP_USD": "GBPUSD=X",
+            "GBPUSD": "GBPUSD=X",
+            "USD_JPY": "JPY=X",
+            "USDJPY": "JPY=X",
+            "BTC_USD": "BTC-USD",
+            "BTCUSD": "BTC-USD",
+            "USD_CHF": "CHF=X",
+            "USDCHF": "CHF=X",
+            "AUD_USD": "AUDUSD=X",
+            "AUDUSD": "AUDUSD=X",
+            "NZD_USD": "NZDUSD=X",
+            "NZDUSD": "NZDUSD=X",
+            "USD_CAD": "CAD=X",
+            "USDCAD": "CAD=X",
+        }
+        try:
+            import yfinance as _yf
+
+            for sym in missing:
+                ticker = _YF_MAP.get(sym.upper(), sym.replace("_", "") + "=X")
                 try:
-                    import pandas as _pd
-
-                    df = _pd.read_csv(csv_path, usecols=["close"]).tail(window + 5)
-                    closes = df["close"].tolist()
-                    returns = [
-                        (closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes)) if closes[i - 1] > 0
-                    ]
-                    if len(returns) >= 5:
-                        series[sym] = returns
-                        break
+                    df = _yf.download(ticker, period="6mo", interval="1d", progress=False, auto_adjust=True)
+                    if df is not None and not df.empty and "Close" in df.columns:
+                        closes = df["Close"].dropna().tolist()
+                        closes = closes[-(window + 5):]
+                        returns = [
+                            (closes[i] - closes[i - 1]) / closes[i - 1]
+                            for i in range(1, len(closes))
+                            if closes[i - 1] > 0
+                        ]
+                        if len(returns) >= 5:
+                            series[sym] = returns
+                            logger.debug(
+                                "correlation: yfinance loaded %s (%s) — %d bars",
+                                sym, ticker, len(returns),
+                            )
                 except Exception as exc:
-                    logger.debug("correlation CSV miss for %s: %s", sym, exc)
+                    logger.debug("correlation: yfinance miss for %s (%s): %s", sym, ticker, exc)
+        except ImportError:
+            logger.debug("correlation: yfinance not installed — skipping remote fallback")
 
-    # Require at least 2 symbols with real data
+    # ── Require at least 2 symbols with real data ─────────────────────────────
     if len(series) < 2:
         raise HTTPException(
             status_code=503,
@@ -757,7 +830,8 @@ async def _collect_series_from_engine(pe: Any, sym_list: list[str], window: int)
                 "message": (
                     "Correlation matrix requires real OHLCV history for at least 2 symbols. "
                     f"Found data for: {list(series.keys()) or 'none'}. "
-                    "Connect a broker or add CSV files to data/ to enable this feature."
+                    "Connect a broker, add CSV files to data/, or install yfinance "
+                    "(pip install yfinance) to enable this feature."
                 ),
                 "symbols_with_data": list(series.keys()),
                 "symbols_requested": sym_list,

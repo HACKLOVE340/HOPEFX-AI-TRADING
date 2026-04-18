@@ -266,8 +266,20 @@ def create_news_router():
                 else ("bullish" if score > 0 else "bearish" if score < 0 else "neutral"),
             }
         except Exception as exc:
-            logger.error("Sentiment analysis error for %s: %s", symbol, exc)
-            raise HTTPException(status_code=500, detail="Sentiment unavailable — check server logs") from None
+            logger.warning(
+                "Sentiment analysis unavailable for %s: %s — returning neutral fallback",
+                symbol,
+                exc,
+            )
+            return {
+                "symbol": symbol.upper(),
+                "sentiment_score": 0.0,
+                "label": "neutral",
+                "note": (
+                    "Sentiment engine unavailable; install textblob or vaderSentiment "
+                    "for live scores."
+                ),
+            }
 
     return news_router
 

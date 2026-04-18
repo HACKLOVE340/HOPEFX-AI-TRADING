@@ -817,9 +817,45 @@ def _build_module_app() -> "FastAPI":
 # Module-level FastAPI application instance (used by uvicorn / tests)
 app: FastAPI = _build_module_app()
 
-# Convenience APIRouter that mounts all mobile routes under /mobile prefix.
-# Useful when embedding the mobile API inside the main app.py.
+# ---------------------------------------------------------------------------
+# Convenience APIRouter — populated from the MobileAPIServer.app routes so
+# that include_router(router) in core/router_registry.py works correctly.
+#
+# MobileAPIServer registers all routes on its own FastAPI sub-app instance.
+# We copy those routes onto an APIRouter so the main app can include them
+# under the /mobile prefix without a separate ASGI mount (which would hide
+# them from the main app's OpenAPI schema and auth middleware).
+# ---------------------------------------------------------------------------
 router = _APIRouter(prefix="/mobile", tags=["Mobile"])
+
+try:
+    from fastapi.routing import APIRoute as _APIRoute
+
+    for _route in app.routes:
+        if isinstance(_route, _APIRoute):
+            # Strip the leading /mobile prefix if already present so we don't
+            # double-prefix when the router is included with prefix="/mobile".
+            _path = _route.path
+            if _path.startswith("/mobile"):
+                _path = _path[len("/mobile"):]
+            router.add_api_route(
+                path=_path,
+                endpoint=_route.endpoint,
+                methods=list(_route.methods or ["GET"]),
+                response_model=_route.response_model,
+                status_code=_route.status_code,
+                tags=_route.tags or ["Mobile"],
+                summary=_route.summary,
+                description=_route.description,
+                include_in_schema=_route.include_in_schema,
+            )
+except Exception as _router_copy_err:
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "mobile.api_v2: could not copy routes onto APIRouter — "
+        "mobile v2 endpoints may be unavailable: %s",
+        _router_copy_err,
+    )
 
 
 # ============ USAGE ============

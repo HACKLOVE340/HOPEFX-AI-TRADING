@@ -531,12 +531,23 @@ def register_routers(
         logger.debug("EXPLAINABILITY disabled — set FEATURE_EXPLAINABILITY=true to enable")
 
     # ── Mobile API v2 (/mobile) ───────────────────────────────────────────────
+    # Strategy: include_router for REST routes (visible in OpenAPI schema) +
+    # app.mount for the full sub-app so WebSocket routes are also reachable.
     if feature_flags.MOBILE_API:
         try:
+            from mobile.api_v2 import app as mobile_v2_app
             from mobile.api_v2 import router as mobile_v2_router
 
+            # REST routes — included so they appear in the main OpenAPI schema
+            # and pass through the main app's auth/rate-limit middleware.
             _include_router_deduped(app, mobile_v2_router)
-            logger.info("Mobile API v2 router registered (/mobile)")
+
+            # Sub-app mount — required for WebSocket routes (/mobile/api/v2/ws/*)
+            # which cannot be expressed as APIRoute objects on an APIRouter.
+            # Mounted at /mobile so paths like /mobile/api/v2/ws/quotes work.
+            app.mount("/mobile", mobile_v2_app)
+
+            logger.info("Mobile API v2 registered: REST routes via include_router + WebSocket via mount(/mobile)")
         except Exception as _mob_err:
             logger.warning("Mobile API v2 router not registered: %s", _mob_err)
     else:
