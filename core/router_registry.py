@@ -284,7 +284,7 @@ def register_routers(
         from api.tca import router as tca_router
 
         _include_router_deduped(app, tca_router)
-        logger.info("TCA router registered (/tca)")
+        logger.info("TCA router registered (/api/tca)")
     except Exception as _tca_err:
         logger.warning("TCA router not registered: %s", _tca_err)
 

@@ -27,7 +27,7 @@ from api.auth import TokenPayload, get_current_user, require_role
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/tca", tags=["tca"])
+router = APIRouter(prefix="/api/tca", tags=["tca"])
 
 
 def _require_auth(request: Request) -> dict[str, Any]:

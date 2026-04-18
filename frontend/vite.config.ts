@@ -39,10 +39,8 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
-      '/tca': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
+      // NOTE: /tca is mounted at /api/tca in the backend (prefix="/api/tca").
+      // All TCA requests go through the '/api' proxy above — no separate entry needed.
       '/kyc': {
         target: 'http://localhost:8000',
         changeOrigin: true,
