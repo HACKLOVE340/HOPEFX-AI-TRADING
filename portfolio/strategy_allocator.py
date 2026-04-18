@@ -319,6 +319,31 @@ class MeanVarianceOptimiser:
 # ── Strategy Allocator ────────────────────────────────────────────────────────
 
 
+# ── Request models (module-level so Pydantic v2 can resolve forward refs) ─────
+
+
+class PodIn(BaseModel):
+    name: str
+    oos_sharpe: float
+    oos_n: int
+    oos_se: float
+    factor_exposures: dict[str, float] = {}
+    description: str = ""
+
+
+class MetricsIn(BaseModel):
+    name: str
+    oos_sharpe: float
+    oos_n: int
+    oos_se: float
+    factor_exposures: dict[str, float] | None = None
+
+
+class ReturnIn(BaseModel):
+    name: str
+    daily_return: float
+
+
 class StrategyAllocator:
     """
     Barra-aware multi-strategy pod allocator.
@@ -435,25 +460,6 @@ class StrategyAllocator:
     def _build_router(self) -> APIRouter:
         router = APIRouter(prefix="/api/portfolio/allocator", tags=["strategy-allocator"])
         alloc = self
-
-        class PodIn(BaseModel):
-            name: str
-            oos_sharpe: float
-            oos_n: int
-            oos_se: float
-            factor_exposures: dict[str, float] = {}
-            description: str = ""
-
-        class MetricsIn(BaseModel):
-            name: str
-            oos_sharpe: float
-            oos_n: int
-            oos_se: float
-            factor_exposures: dict[str, float] | None = None
-
-        class ReturnIn(BaseModel):
-            name: str
-            daily_return: float
 
         @router.get("/pods")
         async def list_pods(request: Request):

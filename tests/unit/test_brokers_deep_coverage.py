@@ -1091,10 +1091,26 @@ class TestCMEComexConnector:
         assert c is not None
 
     def test_connect_paper_fallback(self):
-        c = self._make_connector()
+        from brokers.cme_comex import CMEComexConnector
+
+        # Disable IBKR fallback so connect() doesn't block waiting for TWS
+        c = CMEComexConnector(
+            {
+                "fix_host": "127.0.0.1",
+                "fix_port": 9876,
+                "sender_id": "TEST",
+                "target_id": "CME",
+                "username": "u",
+                "password": "p",
+                "account": "ACC1",
+            },
+            ibkr_fallback=False,
+            paper_fallback=True,
+        )
         # Without FIX/IBKR, should fall back to paper
         result = c.connect()
         assert isinstance(result, bool)
+        assert result is True  # paper_fallback=True guarantees connected
 
     def test_disconnect(self):
         c = self._make_connector()

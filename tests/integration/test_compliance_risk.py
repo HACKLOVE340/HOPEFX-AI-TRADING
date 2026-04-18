@@ -139,10 +139,10 @@ class TestAuthGates:
         ("GET", "/api/settings/integrations"),
         ("GET", "/api/settings/accessibility"),
         ("GET", "/api/settings/api-keys"),
-        ("GET", "/tca/report"),
-        ("GET", "/tca/records"),
-        ("GET", "/tca/alerts"),
-        ("GET", "/tca/stats"),
+        ("GET", "/api/tca/report"),
+        ("GET", "/api/tca/records"),
+        ("GET", "/api/tca/alerts"),
+        ("GET", "/api/tca/stats"),
         ("GET", "/api/chaos/results"),
         ("GET", "/api/chaos/status"),
         ("GET", "/api/monetization/pricing"),
@@ -174,7 +174,7 @@ class TestRoleEnforcement:
         ("GET", "/api/admin/settings/system"),
         ("POST", "/api/admin/backup/trigger"),
         ("POST", "/api/admin/kill-switch/global"),
-        ("DELETE", "/tca/records"),
+        ("DELETE", "/api/tca/records"),
         ("POST", "/api/chaos/run"),
         ("POST", "/api/chaos/mutation/run"),
         ("GET", "/api/monetization/marketplace/submissions/pending"),
@@ -359,27 +359,27 @@ class TestKycEndpoints:
 @pytest.mark.integration
 class TestTcaEndpoints:
     def test_report_requires_auth(self, client: TestClient) -> None:
-        assert client.get("/tca/report").status_code == 401
+        assert client.get("/api/tca/report").status_code == 401
 
     def test_report_with_auth(self, client: TestClient) -> None:
-        resp = client.get("/tca/report", headers=_user_headers())
+        resp = client.get("/api/tca/report", headers=_user_headers())
         assert resp.status_code in (200, 503)
 
     def test_records_requires_auth(self, client: TestClient) -> None:
-        assert client.get("/tca/records").status_code == 401
+        assert client.get("/api/tca/records").status_code == 401
 
     def test_alerts_requires_auth(self, client: TestClient) -> None:
-        assert client.get("/tca/alerts").status_code == 401
+        assert client.get("/api/tca/alerts").status_code == 401
 
     def test_stats_requires_auth(self, client: TestClient) -> None:
-        assert client.get("/tca/stats").status_code == 401
+        assert client.get("/api/tca/stats").status_code == 401
 
     def test_flush_requires_admin(self, client: TestClient) -> None:
-        assert client.delete("/tca/records").status_code == 401
-        assert client.delete("/tca/records", headers=_user_headers()).status_code in (403, 422)
+        assert client.delete("/api/tca/records").status_code == 401
+        assert client.delete("/api/tca/records", headers=_user_headers()).status_code in (403, 422)
 
     def test_flush_succeeds_for_admin(self, client: TestClient) -> None:
-        resp = client.delete("/tca/records", headers=_admin_headers())
+        resp = client.delete("/api/tca/records", headers=_admin_headers())
         assert resp.status_code in (200, 503)
 
 

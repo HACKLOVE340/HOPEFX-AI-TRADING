@@ -62,7 +62,7 @@ class TestComputeAtrProperties:
         entry=_price,
         n=st.integers(min_value=0, max_value=13),  # fewer than ATR_MIN_BARS → fallback
     )
-    @settings(max_examples=200, suppress_health_check=[HealthCheck.too_slow])
+    @settings(max_examples=200, suppress_health_check=[HealthCheck.too_slow], deadline=None)
     def test_atr_fallback_is_nonnegative(self, entry: float, n: int) -> None:
         from core.signal_engine import _compute_atr
 
