@@ -188,7 +188,7 @@ def register_routers(
     logger.info("Health router registered (/api/health)")
     logger.info("Analysis router registered (/api/analysis)")
     logger.info("Tracing router registered (/api/tracing)")
-    logger.info("Pages router registered (/login, /register, /security, /marketplace, /affiliate, /docs/*)")
+    logger.info("Pages router registered (/login, /register, /about, /privacy, /terms, /security, /marketplace, /affiliate, /docs/*)")
 
     # ── Feature-gated routers ─────────────────────────────────────────────────
     if feature_flags.TWO_FACTOR_AUTH:

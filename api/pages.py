@@ -80,6 +80,26 @@ async def affiliate_page():
     return HTMLResponse(content=_read("affiliate.html"))
 
 
+# ── Legal / company pages ─────────────────────────────────────────────────────
+
+@router.get("/about", response_class=HTMLResponse, include_in_schema=False)
+async def about_page():
+    """About HOPEFX — mission, technology, and team."""
+    return HTMLResponse(content=_read("about.html"))
+
+
+@router.get("/privacy", response_class=HTMLResponse, include_in_schema=False)
+async def privacy_page():
+    """Privacy Policy — data collection, use, and user rights."""
+    return HTMLResponse(content=_read("privacy.html"))
+
+
+@router.get("/terms", response_class=HTMLResponse, include_in_schema=False)
+async def terms_page():
+    """Terms of Service — rules governing use of the platform."""
+    return HTMLResponse(content=_read("terms.html"))
+
+
 # ── Documentation pages ───────────────────────────────────────────────────────
 
 @router.get("/docs/FAQ.md", response_class=HTMLResponse, include_in_schema=False)
