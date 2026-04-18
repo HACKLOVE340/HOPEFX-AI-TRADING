@@ -317,11 +317,12 @@ async def _fetch_yfinance(
                 )
                 from_dt = earliest_allowed
 
-            # Guard: Yahoo rejects requests where start >= end (can happen for
-            # weekly/monthly bars when from_dt falls in the current period).
+            # Guard: Yahoo rejects requests where start >= end. This is expected
+            # for weekly/monthly bars when the last stored bar is the current
+            # incomplete period — not an error, just nothing new to fetch yet.
             if from_dt >= end_dt:
-                logger.warning(
-                    "yfinance: from_dt %s >= end_dt %s for %s/%s — skipping fetch",
+                logger.debug(
+                    "yfinance: from_dt %s >= end_dt %s for %s/%s — already current, skipping fetch",
                     from_dt.strftime("%Y-%m-%d"),
                     end_dt.strftime("%Y-%m-%d"),
                     yf_symbol,
