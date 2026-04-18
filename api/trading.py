@@ -1274,11 +1274,11 @@ def _register_strategy_crud(r: Any) -> None:
     from fastapi import HTTPException
 
     @r.get("/strategies")
-    def list_strategies():
+    def list_strategies(user: TokenPayload = Depends(get_current_user)):
         return list(_strategy_store.values())
 
     @r.post("/strategies", status_code=201)
-    def create_strategy(req: StrategyCreateRequest):
+    def create_strategy(req: StrategyCreateRequest, user: TokenPayload = Depends(require_role("trader"))):
         _KNOWN = {
             "ma_crossover",
             "rsi",
@@ -1309,14 +1309,14 @@ def _register_strategy_crud(r: Any) -> None:
         return record
 
     @r.get("/strategies/{strategy_id}")
-    def get_strategy(strategy_id: str):
+    def get_strategy(strategy_id: str, user: TokenPayload = Depends(get_current_user)):
         key = _resolve(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
         return _strategy_store[key]
 
     @r.delete("/strategies/{strategy_id}")
-    def delete_strategy(strategy_id: str):
+    def delete_strategy(strategy_id: str, user: TokenPayload = Depends(require_role("admin"))):
         key = _resolve(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
@@ -1324,7 +1324,7 @@ def _register_strategy_crud(r: Any) -> None:
         return {"status": "deleted"}
 
     @r.post("/strategies/{strategy_id}/start")
-    def start_strategy(strategy_id: str):
+    def start_strategy(strategy_id: str, user: TokenPayload = Depends(require_role("trader"))):
         key = _resolve_strategy_key(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
@@ -1332,7 +1332,7 @@ def _register_strategy_crud(r: Any) -> None:
         return {"status": "started", "strategy_id": strategy_id}
 
     @r.post("/strategies/{strategy_id}/stop")
-    def stop_strategy(strategy_id: str):
+    def stop_strategy(strategy_id: str, user: TokenPayload = Depends(require_role("trader"))):
         key = _resolve_strategy_key(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
@@ -1346,7 +1346,7 @@ def _register_risk_performance_routes(r: Any) -> None:
     import math as _math
 
     @r.post("/position-size")
-    def calculate_position_size(req: PositionSizeRequest):
+    def calculate_position_size(req: PositionSizeRequest, user: TokenPayload = Depends(get_current_user)):
         risk_per_unit = (
             (req.entry_price - req.stop_loss_price)
             if (req.stop_loss_price and req.stop_loss_price < req.entry_price)
@@ -1372,7 +1372,7 @@ def _register_risk_performance_routes(r: Any) -> None:
         )
 
     @r.get("/risk-metrics")
-    def get_risk_metrics():
+    def get_risk_metrics(user: TokenPayload = Depends(get_current_user)):
         try:
             broker = getattr(app_state, "broker", None)
             if broker is None:
@@ -1402,7 +1402,7 @@ def _register_risk_performance_routes(r: Any) -> None:
             return {"daily_pnl": 0.0, "max_drawdown": 0.0, "open_positions": 0, "margin_used": 0.0, "risk_score": 0.0}
 
     @r.get("/performance/summary")
-    def get_performance_summary():
+    def get_performance_summary(user: TokenPayload = Depends(get_current_user)):
         try:
             broker = getattr(app_state, "broker", None)
             equity_history = broker.get_equity_history() if (broker and hasattr(broker, "get_equity_history")) else []
@@ -1458,7 +1458,7 @@ def _register_risk_performance_routes(r: Any) -> None:
             }
 
     @r.get("/performance/{strategy_id}")
-    def get_strategy_performance(strategy_id: str):
+    def get_strategy_performance(strategy_id: str, user: TokenPayload = Depends(get_current_user)):
         key = _resolve(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
@@ -1495,9 +1495,11 @@ except Exception:
 
 
 @router.get("/risk", response_model=None, summary="Risk metrics (alias for /risk-metrics)")
-async def get_risk_alias():
+async def get_risk_alias(user: TokenPayload = Depends(get_current_user)):
     """
     Alias for ``GET /api/trading/risk-metrics``.
+
+    Requires: any authenticated user.
 
     Returns daily PnL, max drawdown, open position count, margin used, and
     a composite risk score.  Delegates to the same implementation used by
@@ -1625,10 +1627,12 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
 
 
 @router.get("/regime", response_model=None, summary="Current market regime and active strategy")
-async def get_regime_status():
+async def get_regime_status(user: TokenPayload = Depends(get_current_user)):
     """
     Return the current detected market regime, confidence score, and the
     strategy selected by the RegimeRouter for that regime.
+
+    Requires: any authenticated user.
 
     Also returns recent regime transition history and per-regime backtest
     performance from the manifest (if available).
@@ -1676,8 +1680,11 @@ async def get_regime_status():
 
 
 @router.get("/regime/history", response_model=None, summary="Recent regime transition history")
-async def get_regime_history(limit: int = 20):
-    """Return the last N regime transitions with timestamps."""
+async def get_regime_history(
+    limit: int = 20,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Return the last N regime transitions with timestamps. Requires: any authenticated user."""
     try:
         from app import app_state
 
@@ -1703,9 +1710,12 @@ async def run_stress_test(
     equity: float = 100000.0,
     leverage: float = 1.0,
     max_loss_pct: float = 0.20,
+    user: TokenPayload = Depends(get_current_user),
 ):
     """
     Apply historical and hypothetical stress scenarios to a position.
+
+    Requires: any authenticated user.
 
     Returns scenario-by-scenario P&L impact and a gate pass/fail result.
     Scenarios include COVID crash (-12.5%), 2022 rate shock (-20%),
