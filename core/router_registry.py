@@ -225,10 +225,13 @@ def register_routers(
 
     if feature_flags.ADVANCED_TRADING:
         from api.advanced_trading import _adv_router as advanced_compat_router
+        from api.advanced_trading import public_router as advanced_public_router
         from api.advanced_trading import router as advanced_router
 
         _include_router_deduped(app, advanced_router)
         _include_router_deduped(app, advanced_compat_router)
+        # public_router carries no auth dependency — shared backtest view
+        _include_router_deduped(app, advanced_public_router)
         logger.info("Advanced trading router registered (/api/advanced)")
     else:
         logger.debug("ADVANCED_TRADING disabled — set FEATURE_ADVANCED_TRADING=true to enable")

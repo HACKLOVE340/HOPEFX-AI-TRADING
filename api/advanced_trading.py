@@ -51,7 +51,16 @@ from pydantic import BaseModel, Field
 from api.auth import TokenPayload, get_current_user
 
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["Advanced Trading"])
+# Router-level auth dependency: every endpoint on this router requires a valid
+# JWT by default.  Public endpoints (e.g. shared backtest view) are registered
+# on public_router which carries no auth dependency.
+router = APIRouter(
+    tags=["Advanced Trading"],
+    dependencies=[Depends(get_current_user)],
+)
+
+# Public router — no auth required.  Mount alongside router in app.py.
+public_router = APIRouter(tags=["Advanced Trading (public)"])
 
 # ── App state (injected at startup) ──────────────────────────────────────────
 app_state = None
@@ -295,13 +304,13 @@ async def share_backtest(run_id: str, user: TokenPayload = Depends(get_current_u
     }
 
 
-@router.get("/api/backtesting/shared/{slug}")
+@public_router.get("/api/backtesting/shared/{slug}")
 async def get_shared_backtest(slug: str):
-    """Public endpoint — no auth required."""
+    """Public endpoint — no auth required (intentionally unauthenticated)."""
     result = _kv_get(f"advanced:shared_result:{slug}") or _shared_results.get(slug)
     if not result:
         raise HTTPException(status_code=404, detail="Shared backtest not found")
-    # Strip internal fields
+    # Strip internal fields before returning to anonymous callers
     public = {k: v for k, v in result.items() if k not in ("shared_by",)}
     return public
 
@@ -1098,7 +1107,11 @@ async def get_monte_carlo(run_id: str, user: TokenPayload = Depends(get_current_
 # /api/advanced/cot-sentiment and /api/advanced/ab-tests/*.
 # These aliases forward to the canonical handlers without duplicating logic.
 
-_adv_router = APIRouter(prefix="/api/advanced", tags=["Advanced Trading"])
+_adv_router = APIRouter(
+    prefix="/api/advanced",
+    tags=["Advanced Trading"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 @_adv_router.get("/correlation", include_in_schema=False)
