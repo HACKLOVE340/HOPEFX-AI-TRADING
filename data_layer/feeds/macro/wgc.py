@@ -281,6 +281,9 @@ class WGCFeed:
         _CACHE_DIR.mkdir(parents=True, exist_ok=True)
         self._last_fetch: datetime | None = None
         self._cached_series: dict[str, pd.Series] = {}
+        # Suppress repeated "offline" warnings — log once per provider lifetime
+        self._warned_demand_offline: bool = False
+        self._warned_etf_offline: bool = False
 
     # ── HTTP ──────────────────────────────────────────────────────────────────
 
@@ -307,12 +310,12 @@ class WGCFeed:
             ):
                 if resp.status == 200:
                     return await resp.text(encoding="utf-8", errors="replace")
-                logger.warning("WGC fetch %s returned HTTP %d", url, resp.status)
+                logger.debug("WGC fetch %s returned HTTP %d", url, resp.status)
                 return None
         except ImportError:
             ...  # nosec B110
         except Exception as exc:
-            logger.warning("WGC aiohttp fetch failed for %s: %s", url, exc)
+            logger.debug("WGC aiohttp fetch failed for %s: %s", url, exc)
 
         # Fallback: requests in thread executor
         try:
@@ -332,12 +335,12 @@ class WGCFeed:
                 )
                 if r.status_code == 200:
                     return r.text
-                logger.warning("WGC requests fetch %s returned HTTP %d", url, r.status_code)
+                logger.debug("WGC requests fetch %s returned HTTP %d", url, r.status_code)
                 return None
 
             return await loop.run_in_executor(None, _sync_get)
         except Exception as exc:
-            logger.warning("WGC requests fetch failed for %s: %s", url, exc)
+            logger.debug("WGC requests fetch failed for %s: %s", url, exc)
             return None
 
     # ── Cache ─────────────────────────────────────────────────────────────────
@@ -387,15 +390,21 @@ class WGCFeed:
             if not text.strip().startswith("<!"):
                 self._write_cache(_DEMAND_CACHE_FILE, text)
                 return _csv_to_series(text, _DEMAND_COL_VARIANTS)
-            logger.warning(
-                "WGC demand URL returned HTML — WGC may require browser session. Place a manually downloaded CSV at %s",
-                self._cache_path(_DEMAND_CACHE_FILE),
-            )
+            if not self._warned_demand_offline:
+                logger.warning(
+                    "WGC demand URL returned HTML — www.gold.org may require a browser session. "
+                    "Place a manually downloaded CSV at %s",
+                    self._cache_path(_DEMAND_CACHE_FILE),
+                )
+                self._warned_demand_offline = True
         else:
-            logger.warning(
-                "WGC demand fetch returned no usable data. Place a manually downloaded CSV at %s",
-                self._cache_path(_DEMAND_CACHE_FILE),
-            )
+            if not self._warned_demand_offline:
+                logger.warning(
+                    "WGC demand fetch returned no usable data — www.gold.org unreachable or returned no CSV. "
+                    "Place a manually downloaded CSV at %s",
+                    self._cache_path(_DEMAND_CACHE_FILE),
+                )
+                self._warned_demand_offline = True
 
         return {}
 
@@ -415,16 +424,21 @@ class WGCFeed:
             if not text.strip().startswith("<!"):
                 self._write_cache(_ETF_CACHE_FILE, text)
                 return _csv_to_series(text, _ETF_COL_VARIANTS)
-            logger.warning(
-                "WGC ETF flow URL returned HTML — WGC may require browser session. "
-                "Place a manually downloaded CSV at %s",
-                self._cache_path(_ETF_CACHE_FILE),
-            )
+            if not self._warned_etf_offline:
+                logger.warning(
+                    "WGC ETF flow URL returned HTML — www.gold.org may require a browser session. "
+                    "Place a manually downloaded CSV at %s",
+                    self._cache_path(_ETF_CACHE_FILE),
+                )
+                self._warned_etf_offline = True
         else:
-            logger.warning(
-                "WGC ETF flow fetch returned no usable data. Place a manually downloaded CSV at %s",
-                self._cache_path(_ETF_CACHE_FILE),
-            )
+            if not self._warned_etf_offline:
+                logger.warning(
+                    "WGC ETF flow fetch returned no usable data — www.gold.org unreachable or returned no CSV. "
+                    "Place a manually downloaded CSV at %s",
+                    self._cache_path(_ETF_CACHE_FILE),
+                )
+                self._warned_etf_offline = True
 
         return {}
 

@@ -77,6 +77,8 @@ class MacroStoreBridge:
         self._last_refresh: datetime | None = None
         self._series_loaded: int = 0
         self._wgc_series_loaded: int = 0
+        # Suppress repeated "WGC returned no series" warnings
+        self._wgc_offline_warned: bool = False
 
         # Prometheus
         self._prom_series_count = None
@@ -200,10 +202,12 @@ class MacroStoreBridge:
                     injected,
                 )
             else:
-                logger.warning(
-                    "MacroStoreBridge: WGC returned no series — place CSV files in %s or check WGC_CACHE_DIR",
-                    "data/wgc_cache",
-                )
+                if not self._wgc_offline_warned:
+                    logger.warning(
+                        "MacroStoreBridge: WGC returned no series — "
+                        "place CSV files in data/wgc_cache or ensure outbound HTTPS access to www.gold.org",
+                    )
+                    self._wgc_offline_warned = True
         except Exception as exc:
             logger.warning("MacroStoreBridge._load_wgc_into_store error: %s", exc)
 
