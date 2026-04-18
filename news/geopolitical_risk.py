@@ -582,15 +582,18 @@ class GeopoliticalRiskProvider:
         if _is_production:
             raise RuntimeError(
                 "All geopolitical data sources unreachable and cache is empty. "
-                "Configure WORLDMONITOR_API_KEY (self-hosted) or ensure outbound "
-                "HTTPS access to api.gdeltproject.org / api.acleddata.com / api.reliefweb.int."
+                "Ensure outbound HTTPS access to api.gdeltproject.org, "
+                "api.acleddata.com, or api.reliefweb.int. "
+                "World Monitor (self-hosted): https://worldmonitor.app/"
             )
         # Warn once — subsequent identical failures are downgraded to DEBUG so
         # the log is not flooded every poll interval.
         if not self._all_sources_warned:
             logger.warning(
                 "All geopolitical data sources unavailable and cache empty — "
-                "returning no events. Set WORLDMONITOR_API_KEY or ensure outbound HTTPS access."
+                "returning no events. Ensure outbound HTTPS access to "
+                "api.gdeltproject.org, api.acleddata.com, or api.reliefweb.int. "
+                "World Monitor: https://worldmonitor.app/"
             )
             self._all_sources_warned = True
         else:
