@@ -35,6 +35,8 @@ import { usePlan } from './hooks/usePlan';
 const LandingPage             = React.lazy(() => import('./pages/LandingPage'));
 const Login                   = React.lazy(() => import('./pages/Login'));
 const Register                = React.lazy(() => import('./pages/Register'));
+const ForgotPassword          = React.lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword           = React.lazy(() => import('./pages/ResetPassword'));
 const Onboarding              = React.lazy(() => import('./pages/Onboarding'));
 const NotFound                = React.lazy(() => import('./pages/NotFound'));
 const TermsAndRiskDisclosure  = React.lazy(() => import('./pages/TermsAndRiskDisclosure'));
@@ -403,6 +405,8 @@ const App: React.FC = () => (
             <Route path="/landing"         element={<LandingPage />} />
             <Route path="/login"           element={<Login />} />
             <Route path="/register"        element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password"  element={<ResetPassword />} />
             <Route path="/onboarding"      element={<Onboarding />} />
             {/* Public legal pages — no auth required */}
             <Route path="/terms"           element={<TermsAndRiskDisclosure />} />

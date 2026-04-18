@@ -106,6 +106,12 @@ export const authApi = {
     api.post('/auth/register', payload),
   activateFreeTier: (userId: string, refCode?: string) =>
     api.post('/auth/activate-free-tier', { user_id: userId, ref_code: refCode }),
+  /** Request a password reset email. Always returns 200 (prevents enumeration). */
+  forgotPassword: (email: string) =>
+    api.post('/auth/forgot-password', { email }),
+  /** Set a new password using the token from the reset email. */
+  resetPassword: (token: string, new_password: string) =>
+    api.post('/auth/reset-password', { token, new_password }),
 };
 
 // ── Trading ───────────────────────────────────────────────────────────────────
