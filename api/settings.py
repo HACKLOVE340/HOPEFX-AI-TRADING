@@ -44,8 +44,10 @@ import os
 from typing import Any
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, field_validator
+
+from api.auth import TokenPayload, get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -254,10 +256,14 @@ def _db_load(user_id: str) -> dict | None:
 
 
 @router.post("/api/settings/notifications", summary="Save notification settings")
-async def save_notification_settings(body: NotificationSettings, request: Request):
+async def save_notification_settings(
+    body: NotificationSettings,
+    request: Request,
+    user: TokenPayload = Depends(get_current_user),
+):
     """Persist notification channel configuration for the authenticated user."""
     data = body.model_dump()
-    user_id = _get_user_id(request)
+    user_id = user.sub
 
     saved_to_db = _db_save(user_id, data)
     if not saved_to_db:
@@ -269,9 +275,12 @@ async def save_notification_settings(body: NotificationSettings, request: Reques
 
 
 @router.get("/api/settings/notifications", summary="Get notification settings")
-async def get_notification_settings(request: Request):
+async def get_notification_settings(
+    request: Request,
+    user: TokenPayload = Depends(get_current_user),
+):
     """Return the current notification configuration for the authenticated user."""
-    user_id = _get_user_id(request)
+    user_id = user.sub
 
     db_data = _db_load(user_id)
     if db_data:
@@ -285,8 +294,11 @@ async def get_notification_settings(request: Request):
 
 
 @router.post("/api/notifications/test", summary="Send a test notification")
-async def test_notification(body: TestNotificationRequest):
-    """Send a test message to the specified channel to verify connectivity."""
+async def test_notification(
+    body: TestNotificationRequest,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Send a test message to the specified channel to verify connectivity. Requires auth."""
     channel = body.channel.lower()
     cfg = body.settings
 
