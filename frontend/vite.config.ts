@@ -51,11 +51,8 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
-      // News & geopolitical intelligence endpoints
-      '/news': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
+      // NOTE: /api/news/* is already covered by the '/api' proxy above.
+      // The news router is mounted at prefix="/api/news" in the backend.
       // NOTE: do NOT proxy '/status' — that path is handled by the React
       // StatusPage component. Only /api/status/* goes to the backend.
     },
