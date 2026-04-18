@@ -166,7 +166,7 @@ class CFTCCOTFeed:
             return self._filter_gold(df)
 
         except Exception as exc:
-            logger.warning("COT: download failed for year %d: %s", year, exc)
+            logger.debug("COT: download failed for year %d: %s", year, exc)
             return pd.DataFrame()
 
     def _filter_gold(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -266,6 +266,22 @@ class CFTCCOTFeed:
             except Exception as exc:
                 logger.warning("COT: CSV save failed for %s: %s", name, exc)
 
+    def _load_from_cache(self) -> dict[str, pd.Series]:
+        """Load previously saved COT series from local CSV files in _CACHE_DIR."""
+        result: dict[str, pd.Series] = {}
+        for name in ("cot_net_spec", "cot_net_spec_pct", "cot_comm_net", "cot_open_interest"):
+            path = _CACHE_DIR / f"{name}.csv"
+            if not path.exists():
+                continue
+            try:
+                df = pd.read_csv(path, parse_dates=["date"])
+                series = df.set_index("date")["value"].rename(name)
+                result[name] = series
+                logger.debug("COT: loaded %s from cache (%d obs)", name, len(series))
+            except Exception as exc:
+                logger.debug("COT: cache load failed for %s: %s", name, exc)
+        return result
+
     # ── Public API ────────────────────────────────────────────────────────────
 
     async def fetch_and_inject(self, years: int | None = None) -> dict[str, int]:
@@ -283,15 +299,35 @@ class CFTCCOTFeed:
         n_years = years or _HISTORY_YEARS
         current_year = datetime.now(UTC).year
         all_frames: list[pd.DataFrame] = []
+        failed_years: list[int] = []
 
         for yr in range(current_year - n_years + 1, current_year + 1):
             df = await self._download_year(yr)
             if not df.empty:
                 all_frames.append(df)
+            else:
+                failed_years.append(yr)
 
-        if not all_frames:
-            logger.warning("COT: no data downloaded — MacroStore not updated")
+        if failed_years and not all_frames:
+            # All years failed — try loading from local CSV cache before giving up
+            cached = self._load_from_cache()
+            if cached:
+                logger.warning(
+                    "COT: CFTC unreachable (years %s) — loaded %d series from local cache.",
+                    failed_years,
+                    len(cached),
+                )
+                self._inject_into_macro_store(cached)
+                return {k: len(v) for k, v in cached.items()}
+            logger.warning(
+                "COT: CFTC unreachable (years %s) and no local cache — MacroStore not updated. "
+                "Place cached CSVs in %s or ensure outbound HTTPS access to www.cftc.gov.",
+                failed_years,
+                _CACHE_DIR,
+            )
             return {}
+        elif failed_years:
+            logger.debug("COT: %d year(s) unavailable: %s", len(failed_years), failed_years)
 
         combined = pd.concat(all_frames, ignore_index=True).ffill().fillna(0.0)
         series_dict = self._compute_series(combined)
