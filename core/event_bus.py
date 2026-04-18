@@ -317,14 +317,31 @@ class EventBus:
     # ── connection ────────────────────────────────────────────────────────────
 
     async def connect(self) -> None:
-        """Open Redis connection; activate local fallback on failure."""
+        """Open Redis connection; activate local fallback on failure.
+
+        Safe to call multiple times — subsequent calls while already connected
+        are no-ops. If already in degraded mode, re-attempts the connection
+        silently and only logs if the state changes.
+        """
+        if self._redis is not None and not self._degraded:
+            # Already connected — skip redundant connect attempt
+            return
         try:
             self._redis = _make_redis()
             await self._redis.ping()
+            if self._degraded:
+                logger.info("EventBus reconnected to Redis — exiting local fallback mode.")
+            else:
+                logger.info("EventBus connected to Redis.")
             self._degraded = False
-            logger.info("EventBus connected to Redis.")
         except Exception as exc:
-            logger.warning("EventBus: Redis unavailable (%s) — local fallback active.", exc)
+            if not self._degraded:
+                # Log the warning only on the first failure, not on every
+                # repeated connect() call while Redis remains unavailable.
+                logger.warning(
+                    "EventBus: Redis unavailable (%s) — local fallback active.",
+                    exc,
+                )
             self._degraded = True
 
     async def close(self) -> None:
