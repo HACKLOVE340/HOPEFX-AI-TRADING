@@ -37,6 +37,7 @@ const Login                   = React.lazy(() => import('./pages/Login'));
 const Register                = React.lazy(() => import('./pages/Register'));
 const ForgotPassword          = React.lazy(() => import('./pages/ForgotPassword'));
 const ResetPassword           = React.lazy(() => import('./pages/ResetPassword'));
+const PrivacyPolicy           = React.lazy(() => import('./pages/PrivacyPolicy'));
 const Onboarding              = React.lazy(() => import('./pages/Onboarding'));
 const NotFound                = React.lazy(() => import('./pages/NotFound'));
 const TermsAndRiskDisclosure  = React.lazy(() => import('./pages/TermsAndRiskDisclosure'));
@@ -411,7 +412,7 @@ const App: React.FC = () => (
             {/* Public legal pages — no auth required */}
             <Route path="/terms"           element={<TermsAndRiskDisclosure />} />
             <Route path="/risk-disclosure" element={<TermsAndRiskDisclosure />} />
-            <Route path="/privacy"         element={<TermsAndRiskDisclosure />} />
+            <Route path="/privacy"         element={<PrivacyPolicy />} />
             <Route path="/*"               element={<AppShell />} />
           </Routes>
         </Suspense>
