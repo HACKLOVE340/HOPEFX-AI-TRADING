@@ -132,6 +132,10 @@ class BrokerFactory:
         try:
             from brokers.cpp_shim_connector import CPPShimConnector
 
+            # Register the class so it can be looked up by name, but
+            # instantiation is gated by _check_latency_opt_gate() in
+            # execution/execution.py. The factory only registers; it does
+            # not enforce the phase gate (that is the execution layer's job).
             cls._brokers["cpp_shim"] = CPPShimConnector
             cls._brokers["shim"] = CPPShimConnector
         except Exception as exc:

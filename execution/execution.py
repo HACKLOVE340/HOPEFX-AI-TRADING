@@ -83,6 +83,84 @@ _CPP_SHIM_ENABLED = os.getenv("CPP_SHIM_ENABLED", "false").lower() == "true"
 _HEALTH_INTERVAL = float(os.getenv("HEALTH_INTERVAL_S", "30"))
 _LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
+# ── Operational phase gate ────────────────────────────────────────────────────
+# The C++ FIX shim is a latency-optimisation tool. It must NOT be enabled
+# until the system has completed:
+#   Phase 1 — paper trading (≥500 fills, ≥30 days)
+#   Phase 2 — live trading validation (≥100 live fills, positive P&L)
+#
+# Correct order: validate edge → paper trade → live trade → optimise latency
+#
+# Set LATENCY_OPT_PHASE_UNLOCKED=true ONLY after live trading is validated.
+# Without this flag, CPP_SHIM_ENABLED=true is silently ignored and a warning
+# is logged. This prevents the V30 mistake of building latency optimisation
+# before the first trade.
+_LATENCY_OPT_UNLOCKED = os.getenv("LATENCY_OPT_PHASE_UNLOCKED", "false").lower() == "true"
+
+# Minimum live fills required before latency optimisation is permitted.
+_LATENCY_OPT_MIN_LIVE_FILLS = int(os.getenv("LATENCY_OPT_MIN_LIVE_FILLS", "100"))
+
+
+def _check_latency_opt_gate() -> bool:
+    """
+    Return True if the C++ shim / latency optimisation phase is unlocked.
+
+    Gate conditions (all must be met):
+      1. LATENCY_OPT_PHASE_UNLOCKED=true in environment
+      2. Paper trading gate: ≥500 fills recorded in paper_trading_gate.json
+      3. Live fills: LIVE_FILL_COUNT env var ≥ LATENCY_OPT_MIN_LIVE_FILLS
+
+    If any condition fails, logs a clear message explaining what is missing
+    and returns False. The shim is silently skipped — no crash.
+    """
+    if not _LATENCY_OPT_UNLOCKED:
+        logger.warning(
+            "C++ shim / latency optimisation BLOCKED: "
+            "LATENCY_OPT_PHASE_UNLOCKED is not set. "
+            "Required order: paper trade (≥500 fills, ≥30 days) → "
+            "live trade (≥%d fills) → set LATENCY_OPT_PHASE_UNLOCKED=true. "
+            "This prevents optimising latency before the first trade.",
+            _LATENCY_OPT_MIN_LIVE_FILLS,
+        )
+        return False
+
+    # Check paper trading gate
+    try:
+        from research.pipeline.paper_trading_gate import PaperTradingGate
+
+        gate = PaperTradingGate()
+        fill_count = gate._state.get("fill_count", 0)
+        if fill_count < 500:
+            logger.warning(
+                "C++ shim BLOCKED: paper trading gate not met. "
+                "fill_count=%d < 500 required. "
+                "Complete paper trading phase before enabling latency optimisation.",
+                fill_count,
+            )
+            return False
+    except Exception as exc:
+        logger.warning("C++ shim gate: could not read paper trading state (%s) — blocking shim", exc)
+        return False
+
+    # Check live fill count
+    live_fills = int(os.getenv("LIVE_FILL_COUNT", "0"))
+    if live_fills < _LATENCY_OPT_MIN_LIVE_FILLS:
+        logger.warning(
+            "C++ shim BLOCKED: live fill count %d < %d required. "
+            "Complete live trading validation before enabling latency optimisation.",
+            live_fills,
+            _LATENCY_OPT_MIN_LIVE_FILLS,
+        )
+        return False
+
+    logger.info(
+        "C++ shim / latency optimisation UNLOCKED "
+        "(paper_fills≥500, live_fills=%d≥%d, LATENCY_OPT_PHASE_UNLOCKED=true)",
+        live_fills,
+        _LATENCY_OPT_MIN_LIVE_FILLS,
+    )
+    return True
+
 
 class ExecutionSystem:
     """
@@ -237,11 +315,19 @@ class ExecutionSystem:
                 connected_count += 1
 
         # ── C++ execution shim (enabled via CPP_SHIM_ENABLED=true) ────────
+        # Phase gate: shim is a latency optimisation — only allowed after
+        # paper trading AND live trading are validated. See _check_latency_opt_gate().
         if _CPP_SHIM_ENABLED or _BROKER_PRIMARY in ("cpp_shim", "shim"):
-            shim = await _connect_cpp_shim()
-            if shim:
-                self._brokers["cpp_shim"] = shim
-                connected_count += 1
+            if _check_latency_opt_gate():
+                shim = await _connect_cpp_shim()
+                if shim:
+                    self._brokers["cpp_shim"] = shim
+                    connected_count += 1
+            else:
+                logger.warning(
+                    "CPP_SHIM_ENABLED=true but latency optimisation phase gate "
+                    "is not met — shim skipped. Falling through to standard broker."
+                )
 
         if connected_count == 0:
             logger.warning("No brokers connected — running in paper/simulation mode")

@@ -36,10 +36,26 @@ Output binary: `build/hopefx_shim`
 make run
 ```
 
+## Operational Phase Gate
+
+**The shim is a latency optimisation. It must not be enabled before the first trade.**
+
+Required order:
+1. **Validate edge** — OOS accuracy ≥ 59.9%, Sharpe gate passed
+2. **Paper trade** — ≥ 500 fills, ≥ 30 calendar days via OANDA practice API
+3. **Live trade** — ≥ 100 live fills, positive P&L
+4. **Optimise latency** — only now enable the C++ shim
+
+Without completing steps 1–3, `CPP_SHIM_ENABLED=true` is silently ignored
+and a warning is logged. The gate is enforced in `execution/execution.py`.
+
 ## Enable in .env
 
 ```
+# Step 1-3 must be complete before setting these:
 CPP_SHIM_ENABLED=true
+LATENCY_OPT_PHASE_UNLOCKED=true   # set only after live trading validated
+LIVE_FILL_COUNT=100               # updated by execution engine after each live fill
 CPP_SHIM_ZMQ_CMD_ADDR=tcp://127.0.0.1:6555
 CPP_SHIM_ZMQ_RESP_ADDR=tcp://127.0.0.1:6556
 ```
