@@ -123,6 +123,16 @@
         .catch(() => clearTokens());
     }
 
+    // Fetch CSRF token once on page load and store it for form submission.
+    // The token is echoed back as X-CSRF-Token on every state-changing request.
+    let _csrfToken = '';
+    (async () => {
+      try {
+        const r = await fetch('/api/auth/csrf-token', { credentials: 'same-origin' });
+        if (r.ok) { const d = await r.json(); _csrfToken = d.csrf_token || ''; }
+      } catch { /* non-fatal — CSRF header will be empty, server will reject */ }
+    })();
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       errorBox.classList.remove('visible');
@@ -134,7 +144,8 @@
       try {
         const res  = await fetch('/api/auth/login', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken },
+          credentials: 'same-origin',
           body: JSON.stringify({ email, password }),
         });
         let data;

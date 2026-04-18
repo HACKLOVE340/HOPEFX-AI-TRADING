@@ -147,6 +147,15 @@
       strengthFill.style.background = colors[score - 1] || '#2d3748';
     });
 
+    // Fetch CSRF token once on page load and store it for form submission.
+    let _csrfToken = '';
+    (async () => {
+      try {
+        const r = await fetch('/api/auth/csrf-token', { credentials: 'same-origin' });
+        if (r.ok) { const d = await r.json(); _csrfToken = d.csrf_token || ''; }
+      } catch { /* non-fatal */ }
+    })();
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       errorBox.classList.remove('visible');
@@ -167,7 +176,8 @@
       try {
         const res  = await fetch('/api/auth/register', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken },
+          credentials: 'same-origin',
           body: JSON.stringify({ email, password, first_name: firstName, last_name: lastName }),
         });
         let data;

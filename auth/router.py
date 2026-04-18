@@ -28,10 +28,11 @@ import asyncio
 import functools
 import logging
 import os
+import secrets
 import time
 from collections import defaultdict
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field
 
@@ -549,6 +550,43 @@ async def get_me(user_id: str = Depends(_get_current_user_id)):
         "created_at": user.created_at.isoformat() if user.created_at else None,
         "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
     }
+
+
+# ── CSRF token endpoint ───────────────────────────────────────────────────────
+# Issues a short-lived CSRF token as a cookie (SameSite=Strict, not HttpOnly
+# so JavaScript can read it) and returns it in the JSON body.
+# State-changing requests must echo the token back in the X-CSRF-Token header.
+# The CSRF middleware in app.py validates the header against the cookie.
+
+_CSRF_COOKIE_NAME = "hopefx_csrf"
+_CSRF_HEADER_NAME = "X-CSRF-Token"
+_CSRF_TOKEN_BYTES = 32
+_CSRF_COOKIE_MAX_AGE = 3600  # 1 hour
+
+
+@router.get("/csrf-token")
+async def get_csrf_token(response: Response) -> dict:
+    """
+    Issue a CSRF token.
+
+    Sets a ``hopefx_csrf`` cookie (SameSite=Strict, Secure in production)
+    and returns the token in the JSON body so the client can include it as
+    the ``X-CSRF-Token`` header on all state-changing requests.
+
+    Call this once on page load before submitting any form.
+    """
+    token = secrets.token_hex(_CSRF_TOKEN_BYTES)
+    secure = os.getenv("ENVIRONMENT", "development").lower() in ("production", "staging")
+    response.set_cookie(
+        key=_CSRF_COOKIE_NAME,
+        value=token,
+        max_age=_CSRF_COOKIE_MAX_AGE,
+        httponly=False,   # JS must be able to read it to set the header
+        samesite="strict",
+        secure=secure,
+        path="/",
+    )
+    return {"csrf_token": token}
 
 
 class _FreeTierBody(BaseModel):

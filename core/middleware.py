@@ -22,6 +22,9 @@ from typing import ClassVar
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
@@ -214,13 +217,113 @@ def setup_metrics_middleware(app: FastAPI) -> None:
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 
+# ── CSRF middleware ───────────────────────────────────────────────────────────
+
+# Cookie and header names must match auth/router.py get_csrf_token()
+_CSRF_COOKIE = "hopefx_csrf"
+_CSRF_HEADER = "X-CSRF-Token"
+
+# Paths exempt from CSRF validation (public endpoints, token issuance, webhooks)
+_CSRF_EXEMPT_PREFIXES: tuple[str, ...] = (
+    "/api/auth/csrf-token",   # token issuance — no token yet
+    "/api/auth/login",        # pre-auth — no session cookie yet
+    "/api/auth/register",     # pre-auth
+    "/api/auth/refresh",      # uses refresh token, not session
+    "/api/auth/forgot-password",
+    "/api/auth/reset-password",
+    "/api/auth/verify-email",
+    "/api/email/webhook",     # SendGrid webhook — uses HMAC signature
+    "/api/health",            # health checks
+    "/ws",                    # WebSocket — uses JWT auth
+    "/metrics",               # Prometheus scrape
+)
+
+# Methods that mutate state and require CSRF validation
+_CSRF_PROTECTED_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+# Disable CSRF in test/CI environments where no browser is involved
+_CSRF_ENABLED: bool = os.getenv("CSRF_PROTECTION", "true").lower() == "true"
+
+
+class CSRFMiddleware(BaseHTTPMiddleware):
+    """
+    Double-submit cookie CSRF protection.
+
+    On every state-changing request (POST/PUT/PATCH/DELETE) that is not
+    exempt, validates that:
+      1. The ``hopefx_csrf`` cookie is present.
+      2. The ``X-CSRF-Token`` request header matches the cookie value.
+
+    The token is issued by GET /api/auth/csrf-token and stored as a
+    SameSite=Strict cookie.  JavaScript reads the cookie and echoes it
+    back as a header — cross-origin requests cannot do this because
+    SameSite=Strict prevents the cookie from being sent cross-origin.
+
+    Set CSRF_PROTECTION=false to disable in dev/test environments.
+    """
+
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        if not _CSRF_ENABLED:
+            return await call_next(request)
+
+        if request.method not in _CSRF_PROTECTED_METHODS:
+            return await call_next(request)
+
+        path = request.url.path
+        if any(path.startswith(prefix) for prefix in _CSRF_EXEMPT_PREFIXES):
+            return await call_next(request)
+
+        cookie_token = request.cookies.get(_CSRF_COOKIE, "")
+        header_token = request.headers.get(_CSRF_HEADER, "")
+
+        if not cookie_token or not header_token:
+            logger.warning(
+                "CSRF validation failed — missing token: path=%s method=%s "
+                "cookie_present=%s header_present=%s",
+                path,
+                request.method,
+                bool(cookie_token),
+                bool(header_token),
+            )
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "CSRF token missing. Fetch a token from GET /api/auth/csrf-token."},
+            )
+
+        # Constant-time comparison to prevent timing attacks
+        import hmac as _hmac
+        if not _hmac.compare_digest(cookie_token, header_token):
+            logger.warning(
+                "CSRF validation failed — token mismatch: path=%s method=%s ip=%s",
+                path,
+                request.method,
+                request.client.host if request.client else "unknown",
+            )
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "CSRF token invalid."},
+            )
+
+        return await call_next(request)
+
+
+def setup_csrf_middleware(app: FastAPI) -> None:
+    """Add CSRF double-submit cookie middleware."""
+    if _CSRF_ENABLED:
+        app.add_middleware(CSRFMiddleware)
+        logger.info("CSRF middleware enabled (cookie=%s header=%s)", _CSRF_COOKIE, _CSRF_HEADER)
+    else:
+        logger.warning("CSRF protection DISABLED (CSRF_PROTECTION=false)")
+
+
 def register_all(app: FastAPI) -> None:
     """Register all middleware on *app* in the correct order.
 
     Order matters — Starlette applies middleware in reverse registration order
     (last registered = outermost = first to process the request).
-    We want: metrics → security headers → CORS (outermost).
+    We want: CSRF → metrics → security headers → CORS (outermost).
     """
-    setup_metrics_middleware(app)  # innermost — runs after routing
-    setup_security_headers(app)  # middle
+    setup_csrf_middleware(app)   # innermost — validates before routing
+    setup_metrics_middleware(app)
+    setup_security_headers(app)
     setup_cors(app)  # outermost — handles preflight first
