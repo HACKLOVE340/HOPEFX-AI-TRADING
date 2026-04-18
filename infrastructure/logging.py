@@ -178,7 +178,9 @@ class AsyncLogHandler(logging.Handler):
             except queue.Empty:
                 continue
             except Exception as e:
-                logger.error(f"Error processing log: {e}", file=sys.stderr)
+                # Can't use logger here — we're inside the log handler itself.
+                # Write directly to stderr to avoid infinite recursion.
+                print(f"AsyncLogHandler: error processing log record: {e}", file=sys.stderr)
 
     def get_stats(self) -> dict:
         """Get handler statistics"""
@@ -258,7 +260,7 @@ class HOPEFXLogger:
         # Console handler
         if enable_console:
             console_handler = logging.StreamHandler(sys.stdout)
-            if json_format and JSON_LOGGER_AVAILABLE:
+            if json_format:
                 console_handler.setFormatter(StructuredLogFormatter())
             else:
                 console_handler.setFormatter(
