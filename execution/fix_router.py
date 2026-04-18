@@ -59,6 +59,11 @@ FIX_PASSWORD: str = os.environ.get("FIX_PASSWORD", "")
 DEFAULT_UNITS: float = float(os.environ.get("FIX_DEFAULT_UNITS", "1000"))
 LATENCY_WARN_MS: float = float(os.environ.get("FIX_LATENCY_WARN_MS", "50"))
 
+# Paper trading mode: when PAPER_TRADING=true, route all orders through
+# PaperTradingBroker instead of FIX/OANDA. This is the required first step
+# before any live execution.
+_PAPER_MODE: bool = os.environ.get("PAPER_TRADING", "false").lower() == "true"
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # OANDA REST fallback sender
@@ -159,6 +164,7 @@ class FIXRouter:
     def __init__(self) -> None:
         self._adapter: FIXAdapter | None = None
         self._fallback = _OandaFallback()
+        self._paper_broker: Any | None = None
         self._fix_available: bool = False
         self._halted: bool = False
         self._running: bool = False
@@ -166,15 +172,21 @@ class FIXRouter:
         self._fill_count: int = 0
         self._reject_count: int = 0
 
+        if _PAPER_MODE:
+            self._paper_broker = self._init_paper_broker()
+
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
     async def start(self) -> None:
         """Initialise FIX adapter and begin consuming order events."""
         self._running = True
         self._fix_available = self._init_fix()
+        fallback_label = "paper_trading" if _PAPER_MODE else "oanda_rest"
         logger.info(
-            "FIXRouter starting — fix_available=%s fallback=oanda_rest",
+            "FIXRouter starting — fix_available=%s paper_mode=%s fallback=%s",
             self._fix_available,
+            _PAPER_MODE,
+            fallback_label,
         )
         # Listen for kill/breach events in background
         _t = asyncio.create_task(self._breach_listener())
@@ -196,6 +208,54 @@ class FIXRouter:
             self._fill_count,
             self._reject_count,
         )
+
+    def _init_paper_broker(self) -> Any | None:
+        """
+        Instantiate and connect PaperTradingBroker for paper mode.
+
+        Returns the broker on success, None on failure (non-fatal — the
+        OANDA REST fallback will be used instead).
+        """
+        try:
+            from brokers.paper_trading import PaperTradingBroker
+
+            broker = PaperTradingBroker(
+                config={
+                    "initial_balance": float(os.environ.get("PAPER_INITIAL_BALANCE", "10000")),
+                    "slippage_model": os.environ.get("PAPER_SLIPPAGE_MODEL", "gaussian"),
+                }
+            )
+            # connect() is async; schedule it — the broker is usable immediately
+            # because PaperTradingBroker.connect() only sets self.connected=True.
+            import asyncio
+
+            asyncio.get_event_loop().run_until_complete(broker.connect())
+            logger.info(
+                "FIXRouter: PaperTradingBroker initialised (balance=%.2f slippage=%s)",
+                broker.initial_balance,
+                os.environ.get("PAPER_SLIPPAGE_MODEL", "gaussian"),
+            )
+            return broker
+        except RuntimeError:
+            # No running event loop yet — connect() will be called lazily on first order
+            try:
+                from brokers.paper_trading import PaperTradingBroker
+
+                broker = PaperTradingBroker(
+                    config={
+                        "initial_balance": float(os.environ.get("PAPER_INITIAL_BALANCE", "10000")),
+                        "slippage_model": os.environ.get("PAPER_SLIPPAGE_MODEL", "gaussian"),
+                    }
+                )
+                broker.connected = True  # paper broker is always "connected"
+                logger.info("FIXRouter: PaperTradingBroker initialised (deferred connect).")
+                return broker
+            except Exception as exc:
+                logger.warning("FIXRouter: PaperTradingBroker init failed (%s) — will use OANDA REST.", exc)
+                return None
+        except Exception as exc:
+            logger.warning("FIXRouter: PaperTradingBroker init failed (%s) — will use OANDA REST.", exc)
+            return None
 
     def _init_fix(self) -> bool:
         """Start FIXAdapter; return True on success."""
@@ -275,8 +335,23 @@ class FIXRouter:
             units,
         )
 
-        # Attempt FIX first
-        if self._fix_available and self._adapter:
+        # ── Paper trading path (highest priority when PAPER_TRADING=true) ──────
+        if _PAPER_MODE:
+            if self._paper_broker is not None:
+                try:
+                    fill = await self._send_paper(symbol, direction, units, order_request)
+                    await self._on_fill(fill)
+                    return
+                except (RuntimeError, ValueError, ConnectionError) as exc:
+                    logger.warning(
+                        "FIXRouter: paper broker send failed (%s) — falling back to OANDA REST.",
+                        exc,
+                    )
+            else:
+                logger.warning("FIXRouter: PAPER_TRADING=true but broker not initialised — using OANDA REST.")
+
+        # ── FIX path (live / non-paper) ───────────────────────────────────────
+        if not _PAPER_MODE and self._fix_available and self._adapter:
             cb = self._adapter.circuit_breaker
             if not cb.is_open:
                 try:
@@ -291,7 +366,7 @@ class FIXRouter:
             else:
                 logger.warning("FIXRouter: FIX circuit-breaker OPEN — using OANDA REST fallback.")
 
-        # OANDA REST fallback
+        # ── OANDA REST fallback ───────────────────────────────────────────────
         try:
             fill = await self._fallback.send(symbol, direction, units)
             await self._on_fill(fill)
@@ -363,6 +438,81 @@ class FIXRouter:
             "timestamp": datetime.now(UTC).isoformat(),
         }
 
+    # ── paper send ────────────────────────────────────────────────────────────
+
+    async def _send_paper(
+        self, symbol: str, direction: str, units: float, order_request: dict[str, Any]
+    ) -> dict[str, Any]:
+        """
+        Route an order through PaperTradingBroker and return a normalised fill dict.
+
+        Updates the broker's market price from the order_request mid price (if
+        present) so fills reflect the current signal price rather than the
+        broker's stale fallback table.
+        """
+        from brokers.base import OrderSide, OrderType
+
+        broker = self._paper_broker
+        if broker is None:
+            raise RuntimeError("PaperTradingBroker not initialised")
+
+        # Normalise symbol: XAU/USD → XAUUSD for the paper broker's price table
+        paper_symbol = symbol.replace("/", "")
+
+        # Inject the current mid price from the signal so fills are realistic
+        mid_price = float(order_request.get("mid", 0.0))
+        if mid_price > 0 and hasattr(broker, "update_market_price"):
+            broker.update_market_price(paper_symbol, mid_price)
+
+        t0 = time.monotonic()
+        side = OrderSide.BUY if direction == "BUY" else OrderSide.SELL
+
+        # PaperTradingBroker.place_order is synchronous — run in executor to
+        # avoid blocking the event loop during slippage calculation.
+        loop = asyncio.get_event_loop()
+        order = await loop.run_in_executor(
+            None,
+            lambda: broker.place_order(
+                symbol=paper_symbol,
+                side=side,
+                order_type=OrderType.MARKET,
+                quantity=units,
+            ),
+        )
+
+        latency_ms = (time.monotonic() - t0) * 1000
+        if latency_ms > LATENCY_WARN_MS:
+            logger.warning(
+                "FIXRouter[paper]: high latency %.1f ms for %s %s",
+                latency_ms,
+                direction,
+                symbol,
+            )
+
+        fill_price = getattr(order, "average_price", mid_price) or mid_price
+
+        # Record fill in the paper trading clock for Sharpe tracking
+        try:
+            from brokers.oanda_paper_clock import get_clock
+
+            if mid_price > 0:
+                trade_return = (fill_price - mid_price) / mid_price * (1 if direction == "BUY" else -1)
+                get_clock().record_fill(trade_return=trade_return, symbol=symbol)
+        except Exception as _exc:
+            logger.debug("FIXRouter[paper]: clock record_fill skipped: %s", _exc)
+
+        return {
+            "type": "fill_confirmation",
+            "source": "paper_trading",
+            "order_id": getattr(order, "id", ""),
+            "symbol": symbol,
+            "direction": direction,
+            "units": getattr(order, "filled_quantity", units),
+            "price": fill_price,
+            "latency_ms": round(latency_ms, 2),
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
+
     # ── fill handler ──────────────────────────────────────────────────────────
 
     async def _on_fill(self, fill: dict[str, Any]) -> None:
@@ -412,4 +562,6 @@ class FIXRouter:
             "reject_count": self._reject_count,
             "halted": self._halted,
             "fix_available": self._fix_available,
+            "paper_mode": _PAPER_MODE,
+            "paper_broker_ready": self._paper_broker is not None,
         }
