@@ -497,6 +497,25 @@ async def _run_all_checks() -> list[ComponentStatus]:
 
 
 @router.get(
+    "",
+    summary="Health summary — redirects to /api/health/ready",
+    include_in_schema=False,
+)
+@router.get(
+    "/",
+    summary="Health summary — redirects to /api/health/ready",
+    include_in_schema=False,
+)
+async def health_root() -> dict[str, Any]:
+    """
+    Root health endpoint.  Returns the same payload as /api/health/ready
+    so that generic health-check tools hitting /api/health get a useful response.
+    """
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/api/health/ready", status_code=302)
+
+
+@router.get(
     "/live",
     summary="Liveness probe — always 200 if process is alive",
 )
