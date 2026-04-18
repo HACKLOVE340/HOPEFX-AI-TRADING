@@ -174,6 +174,7 @@ class RollbackTrigger:
     target_files: list[str] = field(default_factory=list)
     cooldown_seconds: float = 300.0
     enabled: bool = True
+    description: str = ""
     _last_triggered: float = field(default=0.0, repr=False)
 
     def should_trigger(self) -> bool:
