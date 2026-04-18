@@ -30,10 +30,11 @@ if not exist ".env" (
     )
 )
 
-:: ── Load .env into environment ────────────────────────────────────────────────
-for /f "usebackq tokens=1,* delims==" %%A in (`findstr /v "^#" .env`) do (
-    set "%%A=%%B"
-)
+:: ── Environment defaults (do NOT parse .env here — security risk) ────────────
+:: Secrets in .env are loaded by python-dotenv inside the application at startup.
+:: Parsing .env in a batch loop exposes all secrets as process environment variables
+:: visible to every child process and in process listings.
+:: Only set non-secret defaults that are safe to expose at the OS level.
 
 :: ── Install dependencies if uvicorn is missing ────────────────────────────────
 python -c "import uvicorn" >nul 2>&1
