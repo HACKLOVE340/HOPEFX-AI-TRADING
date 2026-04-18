@@ -974,3 +974,7 @@ def get_alert_engine() -> AlertEngine:
     if _alert_engine is None:
         _alert_engine = AlertEngine()
     return _alert_engine
+
+
+# Module-level router — imported by core.router_registry
+router = create_alert_router(get_alert_engine())

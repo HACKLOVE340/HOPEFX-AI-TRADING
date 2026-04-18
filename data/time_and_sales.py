@@ -609,3 +609,7 @@ def get_time_and_sales_service() -> TimeAndSalesService:
     if _time_and_sales_service is None:
         _time_and_sales_service = TimeAndSalesService()
     return _time_and_sales_service
+
+
+# Module-level router — imported by core.router_registry
+router = create_time_and_sales_router(get_time_and_sales_service())

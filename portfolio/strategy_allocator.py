@@ -565,3 +565,7 @@ def get_allocator() -> StrategyAllocator:
     if _allocator_instance is None:
         _allocator_instance = StrategyAllocator()
     return _allocator_instance
+
+
+# Module-level router — imported by core.router_registry
+router = get_allocator()._build_router()

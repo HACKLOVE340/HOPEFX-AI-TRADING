@@ -576,3 +576,6 @@ def get_streaming_service() -> StreamingService:
 
 # Compatibility alias
 DataStreamingService = StreamingService
+
+# Module-level router — imported by core.router_registry
+router = create_streaming_router(get_streaming_service())

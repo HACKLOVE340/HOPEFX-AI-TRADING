@@ -963,3 +963,7 @@ def get_market_scanner() -> MarketScanner:
     if _market_scanner is None:
         _market_scanner = MarketScanner()
     return _market_scanner
+
+
+# Module-level router — imported by core.router_registry
+router = create_scanner_router(get_market_scanner())

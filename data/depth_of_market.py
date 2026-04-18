@@ -751,3 +751,7 @@ def get_dom_service() -> DepthOfMarketService:
     if _dom_service is None:
         _dom_service = DepthOfMarketService()
     return _dom_service
+
+
+# Module-level router — imported by core.router_registry
+router = create_dom_router(get_dom_service())
