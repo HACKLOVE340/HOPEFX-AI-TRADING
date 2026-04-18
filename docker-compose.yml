@@ -71,7 +71,9 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ./ml/saved_models:/app/ml/saved_models
+      # Read-only: the API only loads models, never writes them.
+      # Run scripts/retrain.sh on the host (or a dedicated retrain container) to update models.
+      - ./ml/saved_models:/app/ml/saved_models:ro
       - trading_state:/app/state
     # Resource limits — prevent API from starving the trading engine on a 2-core VPS.
     # 2 GB is the minimum for the full ML stack (InferenceEngine + LightGBM + XGBoost).
@@ -151,7 +153,8 @@ services:
       app:
         condition: service_healthy
     volumes:
-      - ./ml/saved_models:/app/ml/saved_models
+      # Read-only: the trading engine only loads models for inference, never writes them.
+      - ./ml/saved_models:/app/ml/saved_models:ro
       - trading_state:/app/state
       - fix_store:/app/fix_store
       - fix_logs:/app/fix_logs
