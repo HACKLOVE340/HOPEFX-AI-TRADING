@@ -116,6 +116,12 @@ jobs:
         env:
           PYTHONPATH: .
 
+      - name: Verify model integrity (ml/verify_model.py)
+        env:
+          PYTHONPATH: .
+          ML_CI_MODE: "true"
+        run: python -m ml.verify_model
+
       - name: Upload smoke artefacts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
@@ -193,8 +199,11 @@ jobs:
         env:
           PYTHONPATH: .
 
-      - name: Validate training artefacts
+      - name: Validate training artefacts (legacy check)
         run: python scripts/retrain_horizon5.py --verify-only
+
+      - name: Verify model integrity (ml/verify_model.py)
+        run: python -m ml.verify_model
         env:
           PYTHONPATH: .
 

@@ -244,6 +244,15 @@ jobs:
           ruff check api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/
           ruff format --check api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/
 
+      # Verify model integrity before running the full test suite.
+      # Fails fast if the saved model is missing, corrupt, or fails the
+      # Sharpe gate — prevents test noise from a broken ML stack.
+      - name: Verify ML model integrity (ml/verify_model.py)
+        env:
+          ENVIRONMENT: testing
+          ML_CI_MODE: "true"
+        run: python -m ml.verify_model
+
       # Run the full suite once. Coverage data for all packages is collected
       # here and reused by the per-package gates below — no re-runs needed.
       - name: Run tests with coverage (full suite, 70% baseline)
