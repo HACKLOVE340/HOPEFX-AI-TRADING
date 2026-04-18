@@ -1887,12 +1887,14 @@ Return the complete fixed file:"""
 
 def _require_auth(request: Request) -> dict[str, Any]:
     try:
-        from auth.jwt_handler import verify_token
+        from auth.jwt import decode_access_token
 
         token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         if not token:
             raise HTTPException(status_code=401, detail="Authentication required")
-        return verify_token(token)
+        # decode_access_token(token) returns the full payload dict and raises
+        # jwt.InvalidTokenError on any failure — no second argument needed.
+        return decode_access_token(token)
     except HTTPException:
         raise
     except Exception as exc:
@@ -1947,19 +1949,20 @@ def _build_eager_heal_router() -> APIRouter:
         from fastapi import HTTPException as _HTTPEx
 
         try:
-            from auth.jwt_handler import verify_token as _verify
+            from auth.jwt import decode_access_token as _decode
 
             token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
             if not token:
                 raise _HTTPEx(status_code=401, detail="Authentication required")
-            _verify(token)
+            # decode_access_token raises jwt.InvalidTokenError on any failure.
+            _decode(token)
         except _HTTPEx:
             # Re-raise HTTP 401/403 so FastAPI returns the correct status code.
             raise
-        except ImportError:  # nosec B110 — jwt_handler not yet available during early startup
+        except ImportError:  # nosec B110 — auth module not yet available during early startup
             # During early startup before auth module is loaded, allow through.
             # The live healer router (mounted later) enforces auth strictly.
-            logger.warning("SelfHealer eager router: jwt_handler unavailable, auth skipped")
+            logger.warning("SelfHealer eager router: auth.jwt unavailable, auth skipped")
         except Exception as exc:
             # Any other verification failure (malformed token, expired, etc.) → 401.
             raise _HTTPEx(status_code=401, detail="Authentication failed") from exc

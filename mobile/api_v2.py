@@ -334,7 +334,10 @@ class MobileAPIServer:
 
             try:
                 payload = jwt.decode(refresh_token, self.jwt_secret, algorithms=["HS256"])
-                user_id = payload["user_id"]
+                # Accept "sub" (standard) or legacy "user_id" claim
+                user_id = payload.get("sub") or payload.get("user_id")
+                if not user_id:
+                    raise HTTPException(status_code=401, detail="Invalid refresh token: missing sub")
 
                 new_access_token = self._generate_token(user_id, expires_hours=24)
                 new_refresh_token = self._generate_token(user_id, expires_hours=7 * 24)
@@ -745,41 +748,40 @@ class MobileAPIServer:
                 await limiter.release(client_ip)
 
     def _generate_token(self, user_id: str, expires_hours: int = 24) -> str:
-        """Generate JWT token"""
-
+        """Generate a JWT token using the standard 'sub' claim for the user id."""
         payload = {
-            "user_id": user_id,
+            "sub": user_id,
             "exp": datetime.now(UTC) + timedelta(hours=expires_hours),
             "iat": datetime.now(UTC),
         }
-
-        token = jwt.encode(payload, self.jwt_secret, algorithm="HS256")
-        return token
+        return jwt.encode(payload, self.jwt_secret, algorithm="HS256")
 
     async def _verify_token(self, authorization: str = Header(...)) -> str:
-        """Verify JWT token and return user_id"""
-
+        """Verify JWT Bearer token and return the user id (sub claim)."""
+        parts = authorization.split()
+        if len(parts) != 2 or parts[0].lower() != "bearer":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid auth scheme — expected 'Bearer <token>'",
+            )
+        token = parts[1]
         try:
-            parts = authorization.split()
-
-            if len(parts) != 2 or parts[0] != "Bearer":
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid auth scheme",
-                )
-
-            token = parts[1]
             payload = jwt.decode(token, self.jwt_secret, algorithms=["HS256"])
-            return payload["user_id"]
-
         except jwt.ExpiredSignatureError:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired") from None
         except jwt.DecodeError:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from None
-        except Exception as e:
-            logger.error("Token verification failed: %s", e)
+        except Exception as exc:
+            logger.error("Token verification failed: %s", exc)
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication failed") from exc
 
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication failed") from e
+        # Tokens use the standard "sub" claim (not "user_id").
+        # Also accept "user_id" as a legacy fallback for tokens issued by older
+        # versions of the mobile server that used a non-standard claim name.
+        user_id = payload.get("sub") or payload.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing sub claim")
+        return str(user_id)
 
     def run(self, reload: bool = False):
         """Run the API server"""
