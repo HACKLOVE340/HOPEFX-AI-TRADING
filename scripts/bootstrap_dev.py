@@ -122,8 +122,8 @@ REQUIRE_EMAIL_VERIFICATION=false
     ENV_PATH.write_text(content, encoding="utf-8")
     try:
         ENV_PATH.chmod(0o600)
-    except (NotImplementedError, OSError):
-        pass  # Windows — file permissions not supported, skip silently
+    except (NotImplementedError, OSError):  # noqa: swallowed-exception — Windows chmod is a no-op
+        pass
     return True
 
 

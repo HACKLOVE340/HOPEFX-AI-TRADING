@@ -854,7 +854,7 @@ async def get_balance(user: TokenPayload = Depends(get_current_user)):
             if v is not None:
                 try:
                     return float(v)
-                except (TypeError, ValueError):
+                except (TypeError, ValueError):  # noqa: swallowed-exception — try next key on cast failure
                     pass
         return default
 

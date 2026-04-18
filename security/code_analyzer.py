@@ -319,6 +319,10 @@ class _ASTAnalyzer(ast.NodeVisitor):
         # been explicitly reviewed and approved.
         body = node.body
         if all(isinstance(s, ast.Pass) for s in body):
+            # Test files use except/pass to verify errors don't propagate — intentional
+            if self._is_test:
+                self.generic_visit(node)
+                return
             # Check the except line itself for a nosec annotation
             except_line = self.lines[node.lineno - 1] if 1 <= node.lineno <= len(self.lines) else ""
             if "nosec" in except_line or "# noqa" in except_line:

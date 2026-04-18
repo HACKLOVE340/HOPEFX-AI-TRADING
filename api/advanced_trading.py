@@ -756,7 +756,7 @@ async def _collect_series_from_engine(pe: Any, sym_list: list[str], window: int)
                         if val is not None:
                             try:
                                 closes.append(float(val))
-                            except ValueError:
+                            except ValueError:  # noqa: swallowed-exception — skip non-numeric rows
                                 pass
                 closes = closes[-(window + 5):]
                 returns = [
