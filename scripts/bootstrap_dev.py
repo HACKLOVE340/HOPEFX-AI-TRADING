@@ -100,6 +100,11 @@ CONFIG_SALT={config_salt}
 DATABASE_URL=sqlite:///{_DB_URL_PATH}
 
 # ── Redis (optional in dev — app degrades gracefully without it) ──────────────
+# Without Redis: token revocation (logout) uses in-memory fallback.
+# Revoked tokens are forgotten on server restart — acceptable for dev.
+# For production/VPS: install Redis and set REDIS_URL to your Redis instance.
+#   Windows: https://github.com/microsoftarchive/redis/releases
+#   Linux:   sudo apt install redis-server && sudo systemctl enable redis
 REDIS_URL=redis://localhost:6379/0
 
 # ── Broker (paper trading — no real credentials needed) ──────────────────────

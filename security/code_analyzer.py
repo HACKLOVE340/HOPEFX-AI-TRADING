@@ -159,6 +159,7 @@ class _ASTAnalyzer(ast.NodeVisitor):
         self.rel_path = rel_path
         self.lines = lines
         self.issues: list[CodeIssue] = []
+        self._is_test = "/test" in rel_path or rel_path.startswith("test") or "conftest" in rel_path
 
     def _snippet(self, lineno: int) -> str:
         if 1 <= lineno <= len(self.lines):
@@ -227,6 +228,9 @@ class _ASTAnalyzer(ast.NodeVisitor):
 
     def _check_empty_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         """Flag functions whose body is only `pass`, `...`, or a docstring."""
+        # Test files use empty-body stubs as mock/null objects — not unfinished code
+        if self._is_test:
+            return
         # Skip known no-op method names used in null-object patterns
         if node.name in self._NOOP_METHOD_NAMES:
             return

@@ -387,7 +387,10 @@
   </div>
 </div>
 
+<script src="/auth.js"></script>
 <script>
+requireAuth();
+
 const MODULE_LABELS = {
   config: 'Config', database: 'Database', cache: 'Cache',
   strategies: 'Strategies', risk: 'Risk', brokers: 'Brokers',
@@ -706,7 +709,7 @@ function connectWS() {
       setWSStatus(true);
       appendWSMessage('Connected to ' + url);
       // Authenticate with stored token if available
-      const token = localStorage.getItem('hopefx_token');
+      const token = getAccessToken();
       if (token) _ws.send(JSON.stringify({action: 'auth', token}));
       // Subscribe to key channels
       ['trades:XAUUSD', 'signals:all', 'alerts'].forEach(ch =>

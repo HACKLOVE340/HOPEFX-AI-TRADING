@@ -25,7 +25,7 @@ import logging
 from pathlib import Path
 
 from fastapi import APIRouter
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +44,14 @@ def _read(name: str) -> str:
             f"<html><body><h1>HOPEFX</h1>"
             f"<p>Page template '{name}' not found.</p></body></html>"
         )
+
+
+# ── Shared JS assets ─────────────────────────────────────────────────────────
+
+@router.get("/auth.js", include_in_schema=False)
+async def auth_js():
+    """Shared auth helpers (token storage, silent refresh, authFetch)."""
+    return FileResponse(_TEMPLATES / "auth.js", media_type="application/javascript")
 
 
 # ── Auth pages ────────────────────────────────────────────────────────────────
