@@ -716,12 +716,28 @@ def create_websocket_router(manager: WebSocketManager):
 
     router = APIRouter(tags=["WebSocket"])
 
+    # JWT auth timeout for the legacy /ws endpoint (seconds)
+    _WS_AUTH_TIMEOUT: float = float(__import__("os").getenv("WS_AUTH_TIMEOUT", "10"))
+    _WS_AUTH_REQUIRED: bool = __import__("os").getenv("WS_AUTH_REQUIRED", "true").lower() == "true"
+
+    def _ws_validate_token(token: str) -> dict | None:
+        """Validate a Bearer JWT for the legacy /ws endpoint.
+
+        Returns the decoded payload dict on success, None on failure.
+        """
+        token = token.removeprefix("Bearer ").strip()
+        try:
+            from auth.jwt import decode_access_token  # type: ignore[import]
+            return decode_access_token(token)
+        except Exception as exc:
+            logger.debug("/ws JWT validation failed: %s", exc)
+            return None
+
     @router.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):
-        """Main WebSocket endpoint.
+        """Legacy WebSocket endpoint with JWT authentication.
 
         .. deprecated::
-            The ``/ws`` endpoint is the legacy unauthenticated WebSocket channel.
             New clients should connect to ``/ws/live`` (api/ws_live.py) which
             provides JWT authentication, rate-limiting, and heartbeat support.
 
@@ -729,8 +745,19 @@ def create_websocket_router(manager: WebSocketManager):
             and include the ``Authorization: Bearer <token>`` header or send an
             ``{"type":"auth","token":"..."}`` message within 10 seconds of connecting.
 
-            The ``/ws`` endpoint will be removed in a future release.
+        Authentication flow
+        -------------------
+        1. Server sends ``{"type": "auth_required"}``.
+        2. Client sends ``{"type": "auth", "token": "Bearer <jwt>"}`` within
+           ``WS_AUTH_TIMEOUT`` seconds (default 10).
+        3. On success: server sends ``{"type": "auth_ok"}`` and admits the connection.
+        4. On failure or timeout: server sends ``{"type": "auth_failed"}`` and
+           closes with code 4001.
+
+        Set ``WS_AUTH_REQUIRED=false`` to bypass auth in dev/demo environments.
         """
+        import asyncio as _asyncio
+
         from rate_limiting.websocket_limiter import get_client_ip, get_ws_limiter
 
         limiter = get_ws_limiter()
@@ -748,6 +775,67 @@ def create_websocket_router(manager: WebSocketManager):
             return
 
         await websocket.accept()
+
+        # ── JWT authentication handshake ──────────────────────────────────────
+        user_id: str = "anonymous"
+
+        if _WS_AUTH_REQUIRED:
+            try:
+                await websocket.send_text(json.dumps({"type": "auth_required"}))
+            except Exception:
+                await limiter.release(client_ip)
+                return
+
+            try:
+                raw = await _asyncio.wait_for(
+                    websocket.receive_text(), timeout=_WS_AUTH_TIMEOUT
+                )
+            except _asyncio.TimeoutError:
+                logger.warning("/ws auth timeout for %s — closing", client_ip)
+                try:
+                    await websocket.send_text(
+                        json.dumps({"type": "auth_failed", "reason": "auth_timeout"})
+                    )
+                    await websocket.close(code=4001)
+                except Exception:
+                    pass
+                await limiter.release(client_ip)
+                return
+
+            try:
+                msg = json.loads(raw)
+            except (json.JSONDecodeError, ValueError):
+                msg = {}
+
+            token = msg.get("token", "") if msg.get("type") == "auth" else ""
+            payload = _ws_validate_token(token) if token else None
+
+            if payload is None:
+                logger.warning("/ws auth failed for %s — invalid token", client_ip)
+                try:
+                    await websocket.send_text(
+                        json.dumps({"type": "auth_failed", "reason": "invalid_token"})
+                    )
+                    await websocket.close(code=4001)
+                except Exception:
+                    pass
+                await limiter.release(client_ip)
+                return
+
+            user_id = str(payload.get("sub", payload.get("user_id", "unknown")))
+            try:
+                await websocket.send_text(
+                    json.dumps({"type": "auth_ok", "user_id": user_id})
+                )
+            except Exception:
+                await limiter.release(client_ip)
+                return
+
+            logger.info("/ws authenticated user=%s ip=%s", user_id, client_ip)
+        else:
+            logger.debug("/ws auth bypassed (WS_AUTH_REQUIRED=false) ip=%s", client_ip)
+
+        # ── Admit to connection pool ──────────────────────────────────────────
         connection_id = manager.register_connection(websocket)
 
         try:
@@ -757,6 +845,7 @@ def create_websocket_router(manager: WebSocketManager):
                     {
                         "event": "connected",
                         "connection_id": connection_id,
+                        "user_id": user_id,
                         "timestamp": datetime.now(UTC).isoformat(),
                     },
                 ),
@@ -774,7 +863,6 @@ def create_websocket_router(manager: WebSocketManager):
             manager.unregister_connection(connection_id)
         except Exception as e:
             logger.error("WebSocket error: %s", e)
-
             manager.unregister_connection(connection_id)
         finally:
             await limiter.release(client_ip)
