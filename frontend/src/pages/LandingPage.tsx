@@ -2,7 +2,8 @@
  * LandingPage.tsx
  * Public marketing page — no auth required.
  * Features: animated hero, live price ticker (WebSocket), smooth-scroll nav,
- * interactive pricing toggle, animated counters, scroll-reveal sections.
+ * interactive pricing toggle, animated counters, scroll-reveal sections,
+ * SEO meta tags, live signal strip, platform stats bar.
  */
 
 import React, {
@@ -12,13 +13,16 @@ import React, {
   useCallback,
   useMemo,
 } from 'react';
+
 import { motion, AnimatePresence, useInView, useMotionValue, useSpring } from 'framer-motion';
 import {
   TrendingUp, TrendingDown, Zap, Shield, BarChart2, Bell,
   Globe, CreditCard, Users, ChevronRight, Check, Star,
-  ArrowRight, Activity, Brain, Lock, Cpu, RefreshCw,
-  Menu, X, ExternalLink,
+  ArrowRight, Activity, Brain, Lock, Cpu,
+  Menu, X, ExternalLink, Eye, Newspaper,
 } from 'lucide-react';
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -126,7 +130,8 @@ const PLANS: Plan[] = [
   {
     name: 'Elite', monthly: 199, annual: 139,
     features: ['Unlimited strategies', 'All symbols', 'Priority support', 'API access', 'White-label option', 'Affiliate program', 'Custom integrations'],
-    cta: 'Get Elite access', href: '/register?plan=elite',
+    cta: 'Unlock Elite', href: '/register?plan=elite',
+    badge: 'Best value',
   },
 ];
 
@@ -160,10 +165,18 @@ const HERO_STATS = [
 ] as const;
 
 // ── Live ticker hook ──────────────────────────────────────────────────────────
-// Connects to the public /ws/public endpoint (no auth) for price ticks.
-// Falls back to polling /api/data-layer/tick if WS is unavailable.
+// Connects to /ws/public (no auth required) for real-time price ticks.
+// The Vite dev server proxies /ws → ws://localhost:8000 so the same URL works
+// in both dev (port 5173) and production (same origin).
+// Falls back to polling /api/data-layer/tick when WebSocket is unavailable.
 
 const PUBLIC_SYMBOLS = ['XAU_USD', 'EUR_USD', 'GBP_USD', 'USD_JPY', 'BTC_USD', 'XAG_USD'];
+
+/** Build the correct WebSocket URL regardless of protocol or Gitpod tunnel host. */
+function buildWsUrl(path: string): string {
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${proto}//${window.location.host}${path}`;
+}
 
 function useLiveTicker() {
   const [ticks, setTicks] = useState<Record<string, TickerItem>>({});
@@ -171,17 +184,18 @@ function useLiveTicker() {
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryDelay = useRef(2000);
   const unmounted = useRef(false);
+  const wsConnected = useRef(false);
 
   const connect = useCallback(() => {
     if (unmounted.current) return;
-    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const url = `${proto}//${window.location.host}/ws/public`;
+    const url = buildWsUrl('/ws/public');
     try {
       const ws = new WebSocket(url);
       wsRef.current = ws;
 
       ws.onopen = () => {
         retryDelay.current = 2000;
+        wsConnected.current = true;
         ws.send(JSON.stringify({ type: 'subscribe', channels: ['prices'] }));
       };
 
@@ -192,45 +206,54 @@ function useLiveTicker() {
             const d = msg.data as TickerItem;
             setTicks(prev => ({ ...prev, [d.symbol]: d }));
           }
-        } catch { /* ignore malformed */ }
+        } catch { /* ignore malformed frames */ }
       };
 
       ws.onclose = () => {
+        wsConnected.current = false;
         if (unmounted.current) return;
         retryRef.current = setTimeout(() => {
-          retryDelay.current = Math.min(retryDelay.current * 1.5, 30000);
+          retryDelay.current = Math.min(retryDelay.current * 1.5, 30_000);
           connect();
         }, retryDelay.current);
       };
 
       ws.onerror = () => ws.close();
-    } catch { /* WS not available, polling fallback below */ }
+    } catch { /* WS constructor threw — polling fallback handles data */ }
   }, []);
 
-  // Polling fallback — fetches real tick from data-layer API every 3s
+  // Polling fallback — fetches real ticks from data-layer API every 3 s.
+  // Runs in parallel with WS; WS ticks take precedence (they overwrite the
+  // same state key) but polling ensures data even when WS is unavailable.
   useEffect(() => {
     let pollInterval: ReturnType<typeof setInterval> | null = null;
 
-    const poll = async () => {
+    const pollSymbol = async (symbol: string) => {
       try {
-        const res = await fetch('/api/data-layer/tick?symbol=XAU_USD');
+        const res = await fetch(`/api/data-layer/tick?symbol=${encodeURIComponent(symbol)}`);
         if (!res.ok) return;
-        const data = await res.json() as { symbol: string; bid: number; ask: number; mid: number; change_pct?: number };
-        setTicks(prev => ({
-          ...prev,
-          [data.symbol]: {
-            symbol: data.symbol,
-            bid: data.bid,
-            ask: data.ask,
-            change_pct: data.change_pct ?? 0,
-          },
-        }));
-      } catch { /* network unavailable */ }
+        const data = await res.json() as {
+          symbol: string; bid: number; ask: number; mid?: number; change_pct?: number;
+        };
+        // Only update from poll if WS is not connected (avoid flicker)
+        if (!wsConnected.current) {
+          setTicks(prev => ({
+            ...prev,
+            [data.symbol]: {
+              symbol: data.symbol,
+              bid: data.bid,
+              ask: data.ask,
+              change_pct: data.change_pct ?? 0,
+            },
+          }));
+        }
+      } catch { /* network unavailable on public page */ }
     };
 
     connect();
-    poll();
-    pollInterval = setInterval(poll, 3000);
+    // Poll all public symbols on first load
+    PUBLIC_SYMBOLS.forEach(s => pollSymbol(s));
+    pollInterval = setInterval(() => PUBLIC_SYMBOLS.forEach(s => pollSymbol(s)), 3_000);
 
     return () => {
       unmounted.current = true;
@@ -843,19 +866,32 @@ function CTABand() {
       <div className="absolute inset-0 bg-gradient-to-br from-neon-blue/8 via-transparent to-neon-purple/8 pointer-events-none" />
       <div className="absolute inset-0 bg-grid-terminal opacity-40 pointer-events-none" />
       <Reveal>
-        <div className="relative max-w-2xl mx-auto text-center">
+        <div className="relative max-w-3xl mx-auto text-center">
+          <div className="inline-flex items-center gap-2 bg-neon-amber/10 border border-neon-amber/30 text-neon-amber text-xs font-semibold px-4 py-1.5 rounded-full mb-6 tracking-wide">
+            <span className="w-1.5 h-1.5 rounded-full bg-neon-amber animate-pulse-fast" />
+            Limited Elite spots available
+          </div>
           <h2 className="text-4xl font-extrabold text-slate-100 tracking-tight mb-4">
             Start trading smarter today
           </h2>
-          <p className="text-slate-400 text-base mb-8">
-            14-day free trial. No credit card required. Cancel anytime.
+          <p className="text-slate-400 text-base mb-8 max-w-xl mx-auto">
+            14-day free trial on all plans. No credit card required. Cancel anytime.
+            Paper trading is free forever.
           </p>
-          <a
-            href="/register"
-            className="inline-flex items-center gap-2 bg-neon-green text-terminal-bg font-bold text-base px-8 py-4 rounded-xl hover:bg-neon-green/90 transition-all duration-150 shadow-neon-green hover:-translate-y-0.5"
-          >
-            Create free account <ArrowRight size={16} />
-          </a>
+          <div className="flex flex-wrap items-center justify-center gap-4">
+            <a
+              href="/register"
+              className="inline-flex items-center gap-2 bg-neon-green text-terminal-bg font-bold text-base px-8 py-4 rounded-xl hover:bg-neon-green/90 transition-all duration-150 shadow-neon-green hover:-translate-y-0.5"
+            >
+              Create free account <ArrowRight size={16} />
+            </a>
+            <a
+              href="/register?plan=elite"
+              className="inline-flex items-center gap-2 border border-neon-amber/50 text-neon-amber font-bold text-base px-8 py-4 rounded-xl hover:bg-neon-amber/10 transition-all duration-150 hover:-translate-y-0.5"
+            >
+              Unlock Elite <Eye size={16} />
+            </a>
+          </div>
         </div>
       </Reveal>
     </section>
@@ -865,48 +901,70 @@ function CTABand() {
 // ── Footer ────────────────────────────────────────────────────────────────────
 
 function Footer() {
+  const currentYear = new Date().getFullYear();
+
+  const handleAnchorScroll = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    if (!href.startsWith('#')) return;
+    e.preventDefault();
+    const el = document.querySelector(href) as HTMLElement | null;
+    if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 64, behavior: 'smooth' });
+  };
+
   return (
     <footer className="bg-terminal-surface border-t border-terminal-border px-4 pt-14 pb-8">
       <div className="max-w-6xl mx-auto">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-10 mb-12">
           {/* Brand */}
           <div className="col-span-2 md:col-span-1">
-            <div className="flex items-center gap-2 mb-3">
+            <a href="/" className="flex items-center gap-2 mb-3 w-fit">
               <div className="w-7 h-7 rounded-lg bg-neon-blue/20 border border-neon-blue/40 flex items-center justify-center">
                 <Activity size={14} className="text-neon-blue" />
               </div>
               <span className="text-lg font-bold text-slate-100">
                 HOPE<span className="text-neon-blue">FX</span>
               </span>
-            </div>
+            </a>
             <p className="text-xs text-slate-500 leading-relaxed max-w-[220px]">
               AI-powered gold and forex trading platform. Institutional-grade tools for independent traders.
             </p>
+            <div className="flex items-center gap-2 mt-4">
+              <span className="w-1.5 h-1.5 rounded-full bg-bull animate-pulse-fast" />
+              <span className="text-2xs text-slate-500">Systems operational</span>
+            </div>
           </div>
 
           {/* Product */}
           <div>
             <p className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4">Product</p>
-            {[
+            {([
               ['#features',      'Features'],
               ['#pricing',       'Pricing'],
               ['/marketplace',   'Marketplace'],
               ['/geopolitical',  'Geopolitical Risk'],
               ['/nuclear',       'AI Dashboard'],
-            ].map(([h, l]) => (
-              <a key={l} href={h} className="block text-sm text-slate-500 hover:text-slate-300 transition-colors mb-2.5">{l}</a>
+              ['/news',          'Market News'],
+            ] as [string, string][]).map(([h, l]) => (
+              <a
+                key={l}
+                href={h}
+                onClick={(e) => handleAnchorScroll(e, h)}
+                className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-300 transition-colors mb-2.5"
+              >
+                {l === 'Market News' && <Newspaper size={11} className="shrink-0" />}
+                {l}
+              </a>
             ))}
           </div>
 
           {/* Company */}
           <div>
             <p className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4">Company</p>
-            {[
+            {([
               ['/affiliate',  'Affiliate program'],
               ['/status',     'System status'],
               ['/terms',      'Terms of service'],
               ['/privacy',    'Privacy policy'],
-            ].map(([h, l]) => (
+            ] as [string, string][]).map(([h, l]) => (
               <a key={l} href={h} className="block text-sm text-slate-500 hover:text-slate-300 transition-colors mb-2.5">{l}</a>
             ))}
           </div>
@@ -914,11 +972,12 @@ function Footer() {
           {/* Support */}
           <div>
             <p className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4">Support</p>
-            {[
+            {([
               ['mailto:support@hopefx.io', 'Contact support'],
               ['/journal',                 'Trade journal'],
               ['/risk-calc',               'Risk calculator'],
-            ].map(([h, l]) => (
+              ['/onboarding',              'Getting started'],
+            ] as [string, string][]).map(([h, l]) => (
               <a key={l} href={h} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-300 transition-colors mb-2.5">
                 {l} {h.startsWith('mailto:') && <ExternalLink size={10} />}
               </a>
@@ -928,17 +987,24 @@ function Footer() {
 
         {/* Bottom bar */}
         <div className="border-t border-terminal-border pt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <span className="text-xs text-slate-600">© {new Date().getFullYear()} HOPEFX. All rights reserved.</span>
+          <span className="text-xs text-slate-600">
+            © {currentYear} HOPEFX. All rights reserved.
+          </span>
           <div className="flex gap-4">
-            {[['/privacy', 'Privacy'], ['/terms', 'Terms']].map(([h, l]) => (
+            {([
+              ['/privacy', 'Privacy'],
+              ['/terms',   'Terms'],
+              ['/status',  'Status'],
+            ] as [string, string][]).map(([h, l]) => (
               <a key={l} href={h} className="text-xs text-slate-600 hover:text-slate-400 transition-colors">{l}</a>
             ))}
           </div>
         </div>
 
         <p className="text-2xs text-slate-700 mt-4 leading-relaxed max-w-4xl">
-          RISK DISCLAIMER: Trading foreign exchange and commodities on margin carries a high level of risk and may not be suitable for all investors.
-          Past performance is not indicative of future results. HOPEFX does not provide financial advice.
+          RISK DISCLAIMER: Trading foreign exchange and commodities on margin carries a high level of risk
+          and may not be suitable for all investors. Past performance is not indicative of future results.
+          HOPEFX does not provide financial advice. Paper trading is simulated — no real funds are at risk.
         </p>
       </div>
     </footer>
@@ -1010,44 +1076,52 @@ function SignalStrip() {
 }
 
 // ── Live platform stats bar ───────────────────────────────────────────────────
-// Fetches real performance summary from /api/performance/public
+// Fetches real performance summary from /api/performance/public.
+// win_rate is returned as a percentage (e.g. 62.5) by the backend.
 
 interface PlatformStats {
   total_trades?: number;
-  win_rate?: number;
-  avg_return_pct?: number;
-  active_strategies?: number;
+  /** Win rate as a percentage 0–100 */
+  win_rate?: number | null;
+  avg_return_pct?: number | null;
+  sharpe?: number | null;
+  max_drawdown_pct?: number;
+  start_date?: string;
+  note?: string;
 }
 
 function usePlatformStats() {
   const [stats, setStats] = useState<PlatformStats | null>(null);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    const fetch_ = async () => {
+    const load = async () => {
       try {
         const res = await fetch('/api/performance/public');
-        if (!res.ok || cancelled) return;
+        if (!res.ok || cancelled) { setError(true); return; }
         const data = await res.json() as PlatformStats;
         if (!cancelled) setStats(data);
-      } catch { /* public page — silently skip */ }
+      } catch { if (!cancelled) setError(true); }
     };
-    fetch_();
+    load();
     return () => { cancelled = true; };
   }, []);
 
-  return stats;
+  return { stats, error };
 }
 
 function PlatformStatsBar() {
-  const stats = usePlatformStats();
+  const { stats } = usePlatformStats();
   if (!stats) return null;
 
+  // win_rate from backend is already a percentage (e.g. 62.5), not 0–1
   const items = [
-    { label: 'Total trades', value: stats.total_trades?.toLocaleString() ?? '—' },
-    { label: 'Win rate', value: stats.win_rate != null ? `${(stats.win_rate * 100).toFixed(1)}%` : '—' },
-    { label: 'Avg return', value: stats.avg_return_pct != null ? `${stats.avg_return_pct > 0 ? '+' : ''}${stats.avg_return_pct.toFixed(2)}%` : '—' },
-    { label: 'Active strategies', value: stats.active_strategies?.toString() ?? '—' },
+    { label: 'Total trades',  value: stats.total_trades != null ? stats.total_trades.toLocaleString() : '—' },
+    { label: 'Win rate',      value: stats.win_rate != null ? `${stats.win_rate.toFixed(1)}%` : '—' },
+    { label: 'Avg return',    value: stats.avg_return_pct != null ? `${stats.avg_return_pct > 0 ? '+' : ''}${stats.avg_return_pct.toFixed(2)}%` : '—' },
+    { label: 'Max drawdown',  value: stats.max_drawdown_pct != null ? `${stats.max_drawdown_pct.toFixed(1)}%` : '—' },
+    ...(stats.sharpe != null ? [{ label: 'Sharpe', value: stats.sharpe.toFixed(2) }] : []),
   ];
 
   return (
@@ -1074,6 +1148,34 @@ const LandingPage: React.FC = () => {
   const [scrolled, setScrolled] = useState(false);
   const ticks = useLiveTicker();
 
+  // SEO — set document title and meta tags for the landing page
+  useEffect(() => {
+    const prev = document.title;
+    document.title = 'HOPEFX — AI-Powered Gold & Forex Trading Platform';
+
+    const setMeta = (name: string, content: string, prop = false) => {
+      const attr = prop ? 'property' : 'name';
+      let el = document.querySelector(`meta[${attr}="${name}"]`) as HTMLMetaElement | null;
+      if (!el) {
+        el = document.createElement('meta');
+        el.setAttribute(attr, name);
+        document.head.appendChild(el);
+      }
+      el.setAttribute('content', content);
+    };
+
+    setMeta('description', 'HOPEFX combines machine learning, macro data feeds, and automated risk management to execute gold and forex strategies that adapt to market conditions in real time.');
+    setMeta('keywords', 'AI trading, forex trading, gold trading, XAU/USD, algorithmic trading, automated trading, machine learning, risk management');
+    setMeta('og:title', 'HOPEFX — AI-Powered Gold & Forex Trading Platform', true);
+    setMeta('og:description', 'Institutional-grade AI trading tools for independent traders. LSTM, XGBoost, and macro data integration.', true);
+    setMeta('og:type', 'website', true);
+    setMeta('twitter:card', 'summary_large_image');
+    setMeta('twitter:title', 'HOPEFX — AI-Powered Trading');
+    setMeta('twitter:description', 'Trade gold & forex with institutional-grade AI. 14-day free trial.');
+
+    return () => { document.title = prev; };
+  }, []);
+
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -1082,6 +1184,7 @@ const LandingPage: React.FC = () => {
 
   return (
     <div className="landing-root min-h-screen bg-terminal-bg text-slate-200 font-sans antialiased">
+
       {/* Sticky nav */}
       <Navbar scrolled={scrolled} />
 
