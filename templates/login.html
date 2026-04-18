@@ -104,10 +104,45 @@
     function showSuccess(msg) { successBox.textContent=msg; successBox.classList.add('visible'); errorBox.classList.remove('visible'); }
     function setLoading(on)   { submitBtn.disabled=on; submitBtn.innerHTML=on?'<span class="spinner"></span>Logging in…':'Log in'; }
 
-    // Skip login if already authenticated
-    if (localStorage.getItem('hopefx_access_token')) {
+    // Decode JWT payload (no signature verification — server validates on every request)
+    function decodeJwtRole(token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+        return payload.role || 'user';
+      } catch { return 'user'; }
+    }
+
+    // Role-based redirect: superadmin → /api/superadmin/, admin → /api/admin/, others → /paper-trading
+    function roleRedirect(token, explicitNext) {
+      if (explicitNext) { window.location.replace(explicitNext); return; }
+      const role = decodeJwtRole(token);
+      if (role === 'superadmin') { window.location.replace('/api/superadmin/'); return; }
+      if (role === 'admin')      { window.location.replace('/api/admin/');      return; }
+      window.location.replace('/paper-trading');
+    }
+
+    // Skip login if already authenticated — but verify the token is still valid first
+    const existingToken = localStorage.getItem('hopefx_access_token');
+    if (existingToken) {
       const params = new URLSearchParams(window.location.search);
-      window.location.replace(params.get('next') || '/paper-trading');
+      // Quick server-side check: if the token is rejected (401), clear it and stay on login
+      fetch('/api/auth/me', { headers: { Authorization: 'Bearer ' + existingToken } })
+        .then(r => {
+          if (r.ok) {
+            roleRedirect(existingToken, params.get('next'));
+          } else {
+            // Token is invalid/expired — clear stale credentials and let user log in fresh
+            localStorage.removeItem('hopefx_access_token');
+            localStorage.removeItem('hopefx_refresh_token');
+            localStorage.removeItem('hopefx_user');
+          }
+        })
+        .catch(() => {
+          // Network error — clear token and let user retry
+          localStorage.removeItem('hopefx_access_token');
+          localStorage.removeItem('hopefx_refresh_token');
+          localStorage.removeItem('hopefx_user');
+        });
     }
 
     form.addEventListener('submit', async (e) => {
@@ -132,7 +167,7 @@
           localStorage.setItem('hopefx_user',          JSON.stringify(data.user || {}));
           showSuccess('Login successful — redirecting…');
           const params = new URLSearchParams(window.location.search);
-          setTimeout(() => window.location.replace(params.get('next') || '/paper-trading'), 400);
+          setTimeout(() => roleRedirect(data.access_token, params.get('next')), 400);
         } else {
           showError(data.detail || data.message || 'Invalid credentials.');
           setLoading(false);
