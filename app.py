@@ -51,9 +51,52 @@ from pathlib import Path
 if platform.system() == "Windows":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())  # type: ignore[attr-defined]
 
-# Logger must be defined before any module-level try/except blocks that use it.
+# ── Logging setup ─────────────────────────────────────────────────────────────
+# Bootstrap with basicConfig first so any import-time log calls have a handler.
+# HOPEFXLogger.setup() then replaces it with the full production configuration
+# (JSON formatting, rotating file handlers, async queue, optional Graylog).
+#
+# Env vars:
+#   LOG_LEVEL          — DEBUG / INFO / WARNING / ERROR (default: INFO)
+#   LOG_DIR            — directory for log files (default: logs)
+#   LOG_JSON           — true/false — JSON structured output (default: false in dev, true in prod)
+#   LOG_ASYNC          — true/false — async queue handler (default: true)
+#   LOG_GRAYLOG_HOST   — Graylog GELF UDP host (optional)
+#   LOG_GRAYLOG_PORT   — Graylog GELF UDP port (default: 12201)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+try:
+    from infrastructure.logging import HOPEFXLogger as _HOPEFXLogger
+
+    _log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+    _log_dir = os.getenv("LOG_DIR", "logs")
+    _app_env_for_log = os.getenv("APP_ENV", "development").lower()
+    # Default JSON on in production, off in development (plain text is easier to read locally)
+    _log_json = os.getenv("LOG_JSON", "true" if _app_env_for_log == "production" else "false").lower() == "true"
+    _log_async = os.getenv("LOG_ASYNC", "true").lower() == "true"
+    _graylog_host = os.getenv("LOG_GRAYLOG_HOST") or None
+    _graylog_port = int(os.getenv("LOG_GRAYLOG_PORT", "12201"))
+
+    _HOPEFXLogger().setup(
+        level=_log_level,
+        log_dir=_log_dir,
+        app_name="hopefx",
+        json_format=_log_json,
+        async_mode=_log_async,
+        enable_console=True,
+        enable_graylog=bool(_graylog_host),
+        graylog_host=_graylog_host,
+        graylog_port=_graylog_port,
+    )
+    logger = logging.getLogger(__name__)
+    logger.info(
+        "Logging initialised: level=%s json=%s async=%s dir=%s",
+        _log_level, _log_json, _log_async, _log_dir,
+    )
+except Exception as _log_setup_err:
+    # Non-fatal — basicConfig fallback remains active
+    logging.getLogger(__name__).warning("HOPEFXLogger setup failed (using basicConfig fallback): %s", _log_setup_err)
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, status
