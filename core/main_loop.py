@@ -231,11 +231,22 @@ def _validate_startup_env() -> None:
 
     Logs a WARNING for each missing optional var and exits with a clear
     error message if any hard-required var is absent or the model is corrupt.
+
+    When PAPER_TRADING=true the OANDA credentials are optional — the paper
+    broker runs without them (offline mode with internal price table).
     """
+    _paper_mode = os.environ.get("PAPER_TRADING", "false").lower() == "true"
+
     hard_required = [
         ("OANDA_API_KEY", "OANDA v20 API key — get from https://www.oanda.com/"),
         ("OANDA_ACCOUNT_ID", "OANDA account ID — found in your OANDA dashboard"),
     ]
+
+    # In paper mode OANDA credentials are optional — the paper broker runs
+    # without them using its internal price table.
+    if _paper_mode:
+        hard_required = []
+        logger.info("MainLoop: PAPER_TRADING=true — OANDA credentials are optional.")
     soft_required = [
         ("REDIS_URL", "Redis event bus URL (default: redis://localhost:6379/0)"),
         (

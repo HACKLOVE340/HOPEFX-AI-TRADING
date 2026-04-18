@@ -263,7 +263,16 @@ def _print_plan(args: argparse.Namespace, prop_cfg: dict) -> None:
 
 def _get_pipeline(mode: str) -> list[str]:
     """Return the list of sub-systems that will start for a given mode."""
-    if mode in ("paper", "live"):
+    _paper_env = os.environ.get("PAPER_TRADING", "false").lower() == "true"
+    if mode == "paper" or _paper_env:
+        return [
+            "OandaPricePoll (REST tick source, offline fallback to price table)",
+            "TickSignalEngine (EMA crossover — fast/slow)",
+            "FIXRouter (PAPER_TRADING=true → PaperTradingBroker)",
+            "FillRecorder (OandaPaperClock + PaperTradingGate)",
+            "EventBus (Redis pub/sub, local fallback)",
+        ]
+    if mode == "live":
         return [
             "EventBus (Redis pub/sub)",
             "FaultGuard (circuit breaker + heartbeat)",
@@ -287,13 +296,17 @@ def _get_pipeline(mode: str) -> list[str]:
 
 async def _run_trading(args: argparse.Namespace) -> None:
     """
-    Start the full trading pipeline via HopeFXEngine.
+    Start the full trading pipeline.
 
-    HopeFXEngine wires:
-      HOPEFXBrain (ML + regime + strategy) → RiskManager → Broker
-      TradeLogger (CSV + Prometheus) → HeartbeatService (Telegram)
+    Routing
+    -------
+    - PAPER_TRADING=true  → PaperRunner (paper_runner.py)
+      Full paper loop: tick poll → EMA signal → FIXRouter(paper) → fills.
+      No OANDA credentials required; runs offline with internal price table.
 
-    Falls back to core.main_loop.MainLoop if HopeFXEngine is unavailable.
+    - Otherwise → HopeFXEngine (hopefx_engine.py)
+      Full ML pipeline: HOPEFXBrain → RiskManager → Broker.
+      Falls back to core.main_loop.MainLoop if HopeFXEngine is unavailable.
     """
     logger.info(
         "Starting trading pipeline — broker=%s mode=%s config=%s",
@@ -302,6 +315,19 @@ async def _run_trading(args: argparse.Namespace) -> None:
         args.config,
     )
 
+    # ── Paper trading path ────────────────────────────────────────────────────
+    _paper_mode = os.environ.get("PAPER_TRADING", "false").lower() == "true"
+    if _paper_mode or args.broker == "paper":
+        # Ensure the env var is set so FIXRouter picks up paper mode
+        os.environ["PAPER_TRADING"] = "true"
+        logger.info("run.py: PAPER_TRADING=true — starting PaperRunner")
+        from execution.paper_runner import PaperRunner
+
+        runner = PaperRunner()
+        await runner.run()
+        return
+
+    # ── Live / HopeFXEngine path ──────────────────────────────────────────────
     try:
         import signal as _signal
 
