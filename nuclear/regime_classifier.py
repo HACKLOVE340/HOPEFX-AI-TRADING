@@ -46,6 +46,7 @@ Usage
 from __future__ import annotations
 
 import logging
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -185,7 +186,7 @@ class RegimeClassifier:
         self._crisis_vix = crisis_vix_threshold
         self._high_vol_vix = high_vol_vix_threshold
         self._adx_trend = adx_trend_threshold
-        self._history: list[RegimeResult] = []
+        self._history: deque[RegimeResult] = deque(maxlen=500)
 
     # ── Public API ────────────────────────────────────────────────────────────
 

@@ -44,6 +44,7 @@ import json
 import logging
 import os
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -136,7 +137,7 @@ class RiskOrchestrator:
         self._hedge_positions: list[HedgePosition] = []
         self._trading_allowed: bool = True
         self._lock = asyncio.Lock()
-        self._history: list[dict[str, Any]] = []  # last 200 risk events
+        self._history: deque[dict[str, Any]] = deque(maxlen=200)  # last 200 risk events
         self._state_file: Path = Path(state_file) if state_file is not None else self._DEFAULT_STATE_FILE
 
         # Restore hedge positions from the previous process so we know which

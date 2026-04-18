@@ -18,6 +18,7 @@ import logging
 import os
 import re
 import secrets
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -244,7 +245,8 @@ class SecurityAuditor:
             audit_log_path: Path to the audit log file
         """
         self.enabled = enabled
-        self._events: list[AuditEvent] = []
+        # Bounded ring buffer — prevents unbounded memory growth in long-running processes
+        self._events: deque[AuditEvent] = deque(maxlen=10_000)
         self._log_sanitizer = LogSanitizer()
 
         if log_to_file:

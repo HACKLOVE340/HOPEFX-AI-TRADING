@@ -57,6 +57,7 @@ import json
 import logging
 import os
 import uuid
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -233,7 +234,8 @@ class RegulatoryReporter:
 
     def __init__(self) -> None:
         self._dlq = DeadLetterQueue()
-        self._records: list[ReportRecord] = []
+        # Bounded ring buffer — keeps the last 10 000 submitted records in memory
+        self._records: deque[ReportRecord] = deque(maxlen=10_000)
 
     async def submit(self, trade: dict[str, Any]) -> ReportRecord:
         """

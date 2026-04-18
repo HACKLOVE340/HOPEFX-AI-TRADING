@@ -43,6 +43,7 @@ import importlib.util
 import json
 import logging
 import os
+from collections import deque
 
 try:
     import resource as _resource_mod  # Linux/macOS only
@@ -702,7 +703,10 @@ class LLMAgent:
         self.max_iterations = max_iterations
         self.target_sharpe = target_sharpe
         self.candle_fetcher = candle_fetcher
-        self._history: list[dict[str, str]] = []
+        # Bounded deque: system prompt + up to _CHAT_MAX_HISTORY_TURNS*2 messages
+        # maxlen = 1 (system) + turns*2 (user+assistant pairs)
+        _max_msgs = 1 + _CHAT_MAX_HISTORY_TURNS * 2
+        self._history: deque[dict[str, str]] = deque(maxlen=_max_msgs)
         self._enable_rag = enable_rag
         self._vector_store = None  # lazy-initialised on first chat call
 
@@ -829,15 +833,12 @@ class LLMAgent:
         """
         # Initialise with the trading-assistant system prompt (not strategy prompt)
         if not self._history:
-            self._history = [{"role": "system", "content": _CHAT_SYSTEM_PROMPT}]
+            self._history.append({"role": "system", "content": _CHAT_SYSTEM_PROMPT})
         elif self._history[0].get("content") == _SYSTEM_PROMPT:
             # Upgrade old sessions that were seeded with the strategy prompt
+            # Replace in-place: rotate out old system msg, prepend new one
             self._history[0] = {"role": "system", "content": _CHAT_SYSTEM_PROMPT}
-
-        # ── History trimming — keep system prompt + last N turns ──────────────
-        max_msgs = 1 + _CHAT_MAX_HISTORY_TURNS * 2  # system + (user+assistant)*N
-        if len(self._history) > max_msgs:
-            self._history = [self._history[0], *self._history[-(max_msgs - 1) :]]
+        # No manual trim needed — deque(maxlen=...) evicts oldest entries automatically
 
         # ── Live market context injection ─────────────────────────────────────
         live_context = self._build_live_context()

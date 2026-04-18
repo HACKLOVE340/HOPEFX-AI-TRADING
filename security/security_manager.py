@@ -13,6 +13,7 @@ Security Management
 
 import hashlib
 import hmac
+from collections import deque
 import logging
 import os
 import secrets
@@ -31,10 +32,15 @@ _CSRF_TOKEN_TTL: int = int(os.getenv("CSRF_TOKEN_TTL", "3600"))
 class SecurityManager:
     """Manage security measures"""
 
+    # Maximum timestamps kept per user in the rate-limit window.
+    # Caps memory when many users make requests simultaneously.
+    _MAX_LOG_PER_USER: int = 1000
+
     def __init__(self, rate_limit_requests: int = 100, rate_limit_window: int = 3600):
         self.rate_limit_requests = rate_limit_requests
         self.rate_limit_window = rate_limit_window  # seconds
-        self.request_log: dict[str, list] = {}
+        # deque(maxlen) bounds memory: oldest timestamps are evicted automatically
+        self.request_log: dict[str, deque] = {}
         # CSRF token store: user_id → (token_hex, issued_at_monotonic)
         self._csrf_store: dict[str, tuple[str, float]] = {}
         self._csrf_lock = threading.Lock()
@@ -79,18 +85,19 @@ class SecurityManager:
         now = datetime.now(UTC)
 
         if user_id not in self.request_log:
-            self.request_log[user_id] = []
+            self.request_log[user_id] = deque(maxlen=self._MAX_LOG_PER_USER)
 
-        # Remove old requests
+        # Remove old requests (deque is already bounded; also prune by time)
         cutoff = now - timedelta(seconds=self.rate_limit_window)
-        self.request_log[user_id] = [req_time for req_time in self.request_log[user_id] if req_time > cutoff]
+        log = self.request_log[user_id]
+        while log and log[0] <= cutoff:
+            log.popleft()
 
-        if len(self.request_log[user_id]) >= self.rate_limit_requests:
+        if len(log) >= self.rate_limit_requests:
             logger.warning("Rate limit exceeded for %s", user_id)
-
             return False
 
-        self.request_log[user_id].append(now)
+        log.append(now)
         return True
 
     def generate_csrf_token(self, user_id: str) -> str:
