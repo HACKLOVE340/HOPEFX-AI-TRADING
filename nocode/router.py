@@ -120,3 +120,18 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
         }
 
     return router
+
+
+# Module-level router — imported by core.router_registry
+_nocode_builder_instance = None
+
+
+def _get_nocode_builder():
+    global _nocode_builder_instance
+    if _nocode_builder_instance is None:
+        _nocode_builder_instance = NoCodeStrategyBuilder()
+    return _nocode_builder_instance
+
+
+router = create_nocode_router(_get_nocode_builder())
+
