@@ -172,101 +172,242 @@ class OandaPricePoll:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Signal engine — EMA crossover on live ticks
+# OHLCV buffer — accumulates ticks into 1-minute bars for InferenceEngine
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Minimum bars required before InferenceEngine will produce a non-neutral signal
+_OHLCV_MIN_BARS: int = int(os.environ.get("PAPER_OHLCV_MIN_BARS", "100"))
+# Bar period in seconds (default 60 s = 1-minute bars)
+_BAR_PERIOD_S: float = float(os.environ.get("PAPER_BAR_PERIOD_S", "60"))
+# Maximum bars to keep in the rolling window (memory cap)
+_OHLCV_MAX_BARS: int = int(os.environ.get("PAPER_OHLCV_MAX_BARS", "500"))
+
+
+class OHLCVBuffer:
+    """
+    Accumulates streaming mid-price ticks into fixed-period OHLCV bars.
+
+    Each bar covers ``_BAR_PERIOD_S`` seconds.  Volume is approximated as
+    the tick count within the bar (no real volume data from REST polling).
+    The buffer is capped at ``_OHLCV_MAX_BARS`` bars to bound memory.
+
+    Call ``on_tick(mid, ts)`` for every price update.
+    Call ``dataframe()`` to get the current OHLCV DataFrame for inference.
+    Call ``bar_count`` to check whether the warm-up period is complete.
+    """
+
+    def __init__(self) -> None:
+        # Completed bars stored as (open, high, low, close, volume, timestamp)
+        self._bars: list[tuple[float, float, float, float, int, float]] = []
+        # Current open bar
+        self._bar_open: float | None = None
+        self._bar_high: float = 0.0
+        self._bar_low: float = float("inf")
+        self._bar_close: float = 0.0
+        self._bar_volume: int = 0
+        self._bar_start_ts: float = 0.0
+        self._tick_count: int = 0
+
+    def on_tick(self, mid: float, ts: float | None = None) -> bool:
+        """
+        Ingest a tick.  Returns True when a new bar is completed.
+
+        Parameters
+        ----------
+        mid : Mid price for this tick.
+        ts  : Unix timestamp (seconds).  Defaults to ``time.time()``.
+        """
+        if ts is None:
+            ts = time.time()
+
+        self._tick_count += 1
+
+        if self._bar_open is None:
+            # Start the first bar
+            self._bar_open = mid
+            self._bar_high = mid
+            self._bar_low = mid
+            self._bar_close = mid
+            self._bar_volume = 1
+            self._bar_start_ts = ts
+            return False
+
+        # Update current bar
+        self._bar_high = max(self._bar_high, mid)
+        self._bar_low = min(self._bar_low, mid)
+        self._bar_close = mid
+        self._bar_volume += 1
+
+        # Check if the bar period has elapsed
+        if ts - self._bar_start_ts >= _BAR_PERIOD_S:
+            self._bars.append((
+                self._bar_open,
+                self._bar_high,
+                self._bar_low,
+                self._bar_close,
+                self._bar_volume,
+                self._bar_start_ts,
+            ))
+            # Cap buffer length
+            if len(self._bars) > _OHLCV_MAX_BARS:
+                self._bars = self._bars[-_OHLCV_MAX_BARS:]
+            # Open next bar
+            self._bar_open = mid
+            self._bar_high = mid
+            self._bar_low = mid
+            self._bar_close = mid
+            self._bar_volume = 1
+            self._bar_start_ts = ts
+            return True
+
+        return False
+
+    @property
+    def bar_count(self) -> int:
+        """Number of completed bars in the buffer."""
+        return len(self._bars)
+
+    @property
+    def tick_count(self) -> int:
+        """Total ticks ingested."""
+        return self._tick_count
+
+    def dataframe(self) -> "Any":
+        """
+        Return a pandas DataFrame of completed bars with columns:
+        open, high, low, close, volume, timestamp.
+
+        Returns an empty DataFrame when no bars are complete yet.
+        """
+        import pandas as pd
+
+        if not self._bars:
+            return pd.DataFrame(columns=["open", "high", "low", "close", "volume", "timestamp"])
+
+        rows = [
+            {"open": o, "high": h, "low": lo, "close": c, "volume": v, "timestamp": ts}
+            for o, h, lo, c, v, ts in self._bars
+        ]
+        df = pd.DataFrame(rows)
+        df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s", utc=True)
+        df = df.set_index("timestamp")
+        return df
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# InferenceEngine signal adapter — wraps ml.inference_engine for the tick loop
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class TickSignalEngine:
+class InferenceSignalAdapter:
     """
-    Lightweight EMA crossover signal engine that runs on streaming ticks.
+    Bridges the tick-based paper runner loop to the ML InferenceEngine.
 
-    Maintains two exponential moving averages (fast / slow) updated on every
-    tick.  Emits a BUY signal when fast crosses above slow, SELL when it
-    crosses below.  Confidence is proportional to the normalised spread
-    between the two EMAs.
+    Maintains an OHLCVBuffer and calls InferenceEngine.predict() once per
+    completed bar (not on every tick) to avoid redundant inference.  Signals
+    are only emitted when confidence exceeds ``threshold``.
 
-    This is a real implementation — no mocks, no synthetic data.  The EMAs
-    are seeded from the first tick and converge within ~fast_period ticks.
-
-    Parameters
-    ----------
-    fast_period : EMA half-life in ticks (default 12)
-    slow_period : EMA half-life in ticks (default 26)
-    threshold   : Minimum confidence to emit a signal (default 0.55)
+    The InferenceEngine is loaded lazily on first bar completion so startup
+    is not blocked by model deserialization.
     """
 
-    def __init__(
-        self,
-        symbol: str,
-        fast_period: int = 12,
-        slow_period: int = 26,
-        threshold: float = _SIGNAL_THRESHOLD,
-    ) -> None:
+    def __init__(self, symbol: str, threshold: float = _SIGNAL_THRESHOLD) -> None:
         self._symbol = symbol
-        self._fast_k = 2.0 / (fast_period + 1)
-        self._slow_k = 2.0 / (slow_period + 1)
         self._threshold = threshold
-        self._fast_ema: float | None = None
-        self._slow_ema: float | None = None
-        self._prev_fast: float | None = None
-        self._prev_slow: float | None = None
-        self._tick_count: int = 0
+        self._buffer = OHLCVBuffer()
+        self._engine: Any = None
+        self._last_direction: str = "neutral"
+        self._signal_count: int = 0
 
-    def on_tick(self, mid: float) -> dict[str, Any] | None:
+    def _get_engine(self) -> Any:
+        """Lazy-load the InferenceEngine singleton."""
+        if self._engine is None:
+            try:
+                from ml.inference_engine import get_inference_engine
+
+                self._engine = get_inference_engine()
+                logger.info(
+                    "InferenceSignalAdapter: InferenceEngine loaded for %s", self._symbol
+                )
+            except Exception as exc:
+                logger.warning(
+                    "InferenceSignalAdapter: InferenceEngine unavailable (%s) — "
+                    "signals will be neutral until model loads",
+                    exc,
+                )
+        return self._engine
+
+    def on_tick(self, mid: float, ts: float | None = None) -> dict[str, Any] | None:
         """
-        Update EMAs and return a signal dict if a crossover is detected.
+        Ingest a tick.  Returns a signal dict when a new bar completes AND
+        the InferenceEngine produces a non-neutral signal above threshold.
 
-        Returns None when no actionable signal exists (including during the
-        warm-up period before both EMAs are initialised).
+        Returns None on every tick that does not complete a bar, or when the
+        engine returns neutral / below-threshold confidence.
         """
-        self._tick_count += 1
+        bar_completed = self._buffer.on_tick(mid, ts)
 
-        if self._fast_ema is None:
-            # Seed both EMAs with the first price
-            self._fast_ema = mid
-            self._slow_ema = mid
+        if not bar_completed:
             return None
 
-        self._prev_fast = self._fast_ema
-        self._prev_slow = self._slow_ema
-
-        self._fast_ema = mid * self._fast_k + self._fast_ema * (1 - self._fast_k)
-        self._slow_ema = mid * self._slow_k + self._slow_ema * (1 - self._slow_k)
-
-        # Detect crossover
-        spread = self._fast_ema - self._slow_ema
-        prev_spread = self._prev_fast - self._prev_slow
-
-        # No crossover yet
-        if (spread >= 0) == (prev_spread >= 0):
+        if self._buffer.bar_count < _OHLCV_MIN_BARS:
+            logger.debug(
+                "InferenceSignalAdapter: warming up — %d/%d bars",
+                self._buffer.bar_count,
+                _OHLCV_MIN_BARS,
+            )
             return None
 
-        direction = "BUY" if spread > 0 else "SELL"
-
-        # Confidence: normalised absolute spread relative to price
-        confidence = min(1.0, abs(spread) / mid * 1000)
-        if confidence < self._threshold:
+        engine = self._get_engine()
+        if engine is None:
             return None
+
+        ohlcv_df = self._buffer.dataframe()
+        try:
+            result = engine.predict(ohlcv_df, symbol=self._symbol.replace("/", "_"))
+        except Exception as exc:
+            logger.warning("InferenceSignalAdapter: predict error: %s", exc)
+            return None
+
+        direction_raw = result.get("direction", "neutral")
+        confidence = float(result.get("confidence", 0.0))
+
+        if direction_raw == "neutral" or confidence < self._threshold:
+            return None
+
+        # Map InferenceEngine direction ("long"/"short") to order direction
+        direction = "BUY" if direction_raw == "long" else "SELL"
+
+        self._last_direction = direction
+        self._signal_count += 1
 
         return {
             "type": "signal",
             "symbol": self._symbol,
             "direction": direction,
             "confidence": round(confidence, 4),
-            "fast_ema": round(self._fast_ema, 5),
-            "slow_ema": round(self._slow_ema, 5),
+            "probability": round(float(result.get("probability", 0.5)), 4),
+            "model_version": result.get("model_version", "unknown"),
+            "bars_used": result.get("bars_used", self._buffer.bar_count),
             "mid": round(mid, 5),
-            "tick_count": self._tick_count,
+            "tick_count": self._buffer.tick_count,
+            "bar_count": self._buffer.bar_count,
+            "latency_ms": round(float(result.get("latency_ms", 0.0)), 2),
+            "fallback": result.get("fallback", False),
             "timestamp": datetime.now(UTC).isoformat(),
         }
 
     def status(self) -> dict[str, Any]:
         return {
             "symbol": self._symbol,
-            "tick_count": self._tick_count,
-            "fast_ema": self._fast_ema,
-            "slow_ema": self._slow_ema,
+            "tick_count": self._buffer.tick_count,
+            "bar_count": self._buffer.bar_count,
+            "min_bars": _OHLCV_MIN_BARS,
+            "warmed_up": self._buffer.bar_count >= _OHLCV_MIN_BARS,
+            "last_direction": self._last_direction,
+            "signal_count": self._signal_count,
             "threshold": self._threshold,
+            "engine_loaded": self._engine is not None,
         }
 
 
@@ -387,14 +528,15 @@ class PaperRunner:
       2. Resets the paper clock if no stamp exists.
       3. Starts FIXRouter (paper mode).
       4. Starts FillRecorder.
-      5. Polls OANDA REST for ticks, runs TickSignalEngine, publishes
-         order_request events to hopefx:order.
+      5. Polls OANDA REST for ticks, accumulates OHLCV bars, runs
+         InferenceEngine (ml/inference_engine.py) for signal generation,
+         and publishes order_request events to hopefx:order.
       6. Shuts down cleanly on SIGINT/SIGTERM or when _MAX_FILLS is reached.
     """
 
     def __init__(self) -> None:
         self._stop_event = asyncio.Event()
-        self._signal_engine = TickSignalEngine(symbol=_SYMBOL)
+        self._signal_engine = InferenceSignalAdapter(symbol=_SYMBOL)
         self._fill_recorder = FillRecorder()
         self._router: Any = None
         self._tasks: list[asyncio.Task] = []
@@ -413,11 +555,14 @@ class PaperRunner:
 
         self._t_start = time.monotonic()
         logger.info(
-            "PaperRunner starting — symbol=%s units=%.0f threshold=%.2f max_fills=%d",
+            "PaperRunner starting — symbol=%s units=%.0f threshold=%.2f "
+            "max_fills=%d bar_period=%.0fs min_bars=%d engine=InferenceEngine",
             _SYMBOL,
             _ORDER_UNITS,
             _SIGNAL_THRESHOLD,
             _MAX_FILLS,
+            _BAR_PERIOD_S,
+            _OHLCV_MIN_BARS,
         )
 
         # Start FIXRouter in background
@@ -469,6 +614,7 @@ class PaperRunner:
                     continue
 
                 mid = tick["mid"]
+                now_ts = time.time()
 
                 # Publish tick to event bus so other subscribers can use it
                 await bus.publish_tick(
@@ -477,13 +623,13 @@ class PaperRunner:
                         "bid": tick.get("bid", mid),
                         "ask": tick.get("ask", mid),
                         "mid": mid,
-                        "timestamp": time.time(),
+                        "timestamp": now_ts,
                         "source": "oanda_rest_poll",
                     }
                 )
 
-                # Run signal engine
-                signal_dict = self._signal_engine.on_tick(mid)
+                # Run InferenceEngine signal adapter (returns signal only on bar completion)
+                signal_dict = self._signal_engine.on_tick(mid, ts=now_ts)
                 if signal_dict is not None:
                     # Publish signal for observability
                     await bus.publish_signal(signal_dict)
@@ -557,6 +703,7 @@ class PaperRunner:
         elapsed = time.monotonic() - self._t_start
         summary = self._fill_recorder.summary()
         router_metrics = self._router.metrics() if self._router else {}
+        engine_status = self._signal_engine.status()
 
         logger.info(
             "PaperRunner session complete.\n"
@@ -564,13 +711,19 @@ class PaperRunner:
             "  fills         : %d\n"
             "  orders        : %d\n"
             "  rejects       : %d\n"
-            "  signal_ticks  : %d\n"
+            "  ticks         : %d\n"
+            "  bars          : %d\n"
+            "  signals       : %d\n"
+            "  engine_loaded : %s\n"
             "  paper_mode    : %s",
             elapsed,
             summary["fill_count"],
             router_metrics.get("order_count", 0),
             router_metrics.get("reject_count", 0),
-            self._signal_engine._tick_count,
+            engine_status.get("tick_count", 0),
+            engine_status.get("bar_count", 0),
+            engine_status.get("signal_count", 0),
+            engine_status.get("engine_loaded", False),
             router_metrics.get("paper_mode", True),
         )
 
