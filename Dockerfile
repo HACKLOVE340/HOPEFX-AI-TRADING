@@ -36,7 +36,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Python dependencies (cached unless requirements.txt changes)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+    # Verify critical runtime deps are present — fail the build if missing
+    && python -c "import uvicorn; import aiohttp; print('uvicorn', uvicorn.__version__, '| aiohttp', aiohttp.__version__)"
 
 # Copy application source
 COPY . .

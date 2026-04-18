@@ -82,11 +82,14 @@ ok "All required env vars present"
 
 # ── 4. Python dependencies ────────────────────────────────────────────────────
 echo "[ 4/8 ] Python dependencies"
-if ! python3 -c "import fastapi, sqlalchemy, alembic, uvicorn, redis, jwt" 2>/dev/null; then
+if ! python3 -c "import fastapi, sqlalchemy, alembic, uvicorn, redis, jwt, aiohttp" 2>/dev/null; then
     warn "Some dependencies missing — installing from requirements.txt"
     pip install -r requirements.txt --quiet || fail "pip install failed"
 fi
-ok "Core dependencies available"
+# Hard-fail if uvicorn or aiohttp are still missing after install attempt
+python3 -c "import uvicorn" 2>/dev/null || fail "uvicorn not installed — run: pip install 'uvicorn[standard]>=0.27.0'"
+python3 -c "import aiohttp" 2>/dev/null || fail "aiohttp not installed — run: pip install 'aiohttp>=3.13.5'"
+ok "Core dependencies available (uvicorn + aiohttp confirmed)"
 
 # ── 5. Database connectivity + migrations ────────────────────────────────────
 echo "[ 5/8 ] Database"
