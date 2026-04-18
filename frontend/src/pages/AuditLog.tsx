@@ -1,8 +1,8 @@
 /**
  * AuditLog — browse, filter, and export the platform audit trail.
  *
- * Backend: GET /api/superadmin/audit?page=&limit=&user_id=&event_type=
- *          GET /api/superadmin/audit/export  (CSV download)
+ * Backend: GET /api/admin/audit-log?page=&limit=&user_id=&event_type=
+ *          GET /api/admin/audit-log/export  (CSV download)
  *
  * Access: admin role only (enforced by AuthGuard + backend).
  */
@@ -155,7 +155,7 @@ const AuditLog: React.FC = () => {
       if (uid.trim())   params.set('user_id', uid.trim());
       if (etype.trim()) params.set('event_type', etype.trim());
 
-      const res = await api.get<AuditResponse>(`/superadmin/audit?${params}`);
+      const res = await api.get<AuditResponse>(`/admin/audit-log?${params}`);
       setEvents(res.data.events);
       setTotal(res.data.total);
       setPage(res.data.page);
@@ -181,7 +181,7 @@ const AuditLog: React.FC = () => {
   const handleExport = async () => {
     setExporting(true);
     try {
-      const res = await api.get('/superadmin/audit/export', { responseType: 'blob' });
+      const res = await api.get('/admin/audit-log/export', { responseType: 'blob' });
       const url = URL.createObjectURL(res.data as Blob);
       const a   = document.createElement('a');
       a.href    = url;
