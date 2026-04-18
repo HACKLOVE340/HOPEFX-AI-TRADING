@@ -28,6 +28,7 @@ import NuclearExplainPanel       from './NuclearExplainPanel';
 import NuclearEquityPanel        from './NuclearEquityPanel';
 import NuclearAlertOverlay       from './NuclearAlertOverlay';
 import NuclearMobileView         from './NuclearMobileView';
+import GeopoliticalPanel         from './GeopoliticalPanel';
 import { useStore }              from '../../../store';
 
 // ─── Responsive breakpoint hook ───────────────────────────────────────────────
@@ -147,6 +148,10 @@ const NuclearDashboard = memo(() => {
         <div style={s.chartRow}>
           <NuclearCandleChart />
           {showExplainPanel && <NuclearExplainPanel />}
+          {/* Geopolitical intelligence sidebar — always visible on desktop */}
+          <div style={s.geoSidebar}>
+            <GeopoliticalPanel />
+          </div>
         </div>
 
         {/* Equity curve bottom panel */}
@@ -204,5 +209,12 @@ const s: Record<string, React.CSSProperties> = {
   },
   chartRow: {
     flex: 1, display: 'flex', minHeight: 0,
+  },
+  geoSidebar: {
+    width: 260,
+    flexShrink: 0,
+    overflowY: 'auto',
+    borderLeft: '1px solid #1a2e4a',
+    background: 'rgba(6,13,24,0.97)',
   },
 };

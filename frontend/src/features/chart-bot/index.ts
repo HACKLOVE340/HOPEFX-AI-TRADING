@@ -16,6 +16,9 @@ export { default as AIChartBot }         from './components/AIChartBot';
 export { default as RiskHeatmap }        from './components/RiskHeatmap';
 export { default as SignalFeed }         from './components/SignalFeed';
 
+// ── Geopolitical intelligence panel ──────────────────────────────────────────
+export { default as GeopoliticalPanel }         from './components/GeopoliticalPanel';
+
 // ── Nuclear dashboard (new) ───────────────────────────────────────────────────
 export { default as NuclearDashboard }          from './components/NuclearDashboard';
 export { default as NuclearCandleChart }        from './components/NuclearCandleChart';

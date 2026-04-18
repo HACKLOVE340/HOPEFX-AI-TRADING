@@ -205,18 +205,87 @@ export async function closePosition(positionId: string): Promise<void> {
   await api.delete(`/trading/positions/${positionId}`);
 }
 
+// ─── Geopolitical Intelligence (/api/news) ────────────────────────────────────
+
+export interface GeopoliticalSignal {
+  symbol: string;
+  direction: 'BUY' | 'SELL' | 'HOLD';
+  strength: number;
+  confidence: number;
+  risk_score: number;
+  gold_outlook: string;
+  active_conflicts: number;
+  key_regions: string[];
+  recommendations: string[];
+  timestamp: string;
+}
+
+export interface GeopoliticalEvent {
+  event_type: string;
+  severity: string;
+  title: string;
+  description: string;
+  region: string;
+  countries: string[];
+  timestamp: string;
+  source: string;
+  confidence: number;
+  gold_impact: string | null;
+  risk_score: number;
+}
+
+export interface GeopoliticalAssessment {
+  global_risk_score: number;
+  gold_outlook: string;
+  active_conflicts: number;
+  sanctions_count: number;
+  hotspots: number;
+  high_risk_regions: string[];
+  key_events: GeopoliticalEvent[];
+  trading_recommendations: string[];
+  timestamp: string;
+}
+
+export async function fetchGeopoliticalSignal(): Promise<GeopoliticalSignal> {
+  const res = await api.get<GeopoliticalSignal>('/news/geopolitical/signal');
+  return res.data;
+}
+
+export async function fetchGeopoliticalEvents(forceRefresh = false): Promise<GeopoliticalEvent[]> {
+  const res = await api.get<{ events: GeopoliticalEvent[]; count: number }>(
+    `/news/geopolitical/events${forceRefresh ? '?force_refresh=true' : ''}`
+  );
+  return res.data.events ?? [];
+}
+
+export async function fetchGeopoliticalAssessment(): Promise<GeopoliticalAssessment> {
+  const res = await api.get<GeopoliticalAssessment>('/news/geopolitical/assessment');
+  return res.data;
+}
+
+export async function fetchNewsSentiment(symbol: string): Promise<{ symbol: string; sentiment_score: number; label: string }> {
+  const res = await api.get<{ symbol: string; sentiment_score: number; label: string }>(
+    `/news/sentiment/${encodeURIComponent(symbol)}`
+  );
+  return res.data;
+}
+
 // ─── Query Keys ───────────────────────────────────────────────────────────────
 // Centralised key factory for TanStack Query cache management
 
 export const queryKeys = {
-  ohlcv:        (symbol: string, tf: string) => ['ohlcv', symbol, tf] as const,
-  signals:      (symbol: string)             => ['signals', symbol] as const,
-  sentiment:    (symbol: string)             => ['sentiment', symbol] as const,
-  news:         (symbol: string)             => ['news', symbol] as const,
-  risk:         ()                           => ['risk'] as const,
-  levels:       (symbol: string)             => ['levels', symbol] as const,
-  trendlines:   (symbol: string)             => ['trendlines', symbol] as const,
-  patterns:     (symbol: string)             => ['patterns', symbol] as const,
-  equityCurve:  (days: number)               => ['equity-curve', days] as const,
-  microstructure:(symbol: string)            => ['microstructure', symbol] as const,
+  ohlcv:              (symbol: string, tf: string) => ['ohlcv', symbol, tf] as const,
+  signals:            (symbol: string)             => ['signals', symbol] as const,
+  sentiment:          (symbol: string)             => ['sentiment', symbol] as const,
+  news:               (symbol: string)             => ['news', symbol] as const,
+  risk:               ()                           => ['risk'] as const,
+  levels:             (symbol: string)             => ['levels', symbol] as const,
+  trendlines:         (symbol: string)             => ['trendlines', symbol] as const,
+  patterns:           (symbol: string)             => ['patterns', symbol] as const,
+  equityCurve:        (days: number)               => ['equity-curve', days] as const,
+  microstructure:     (symbol: string)             => ['microstructure', symbol] as const,
+  geoSignal:          ()                           => ['geo-signal'] as const,
+  geoEvents:          ()                           => ['geo-events'] as const,
+  geoAssessment:      ()                           => ['geo-assessment'] as const,
+  newsSentiment:      (symbol: string)             => ['news-sentiment', symbol] as const,
 };

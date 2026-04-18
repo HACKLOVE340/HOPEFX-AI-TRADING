@@ -51,7 +51,8 @@ const StatusPage       = React.lazy(() => import('./pages/StatusPage'));
 // ── Trading ───────────────────────────────────────────────────────────────────
 const ChartDashboard   = React.lazy(() =>
   import('./features/chart-bot').then(m => ({ default: m.ChartDashboard })));
-const NuclearDashboard = React.lazy(() => import('./pages/NuclearDashboardPage'));
+const NuclearDashboard      = React.lazy(() => import('./pages/NuclearDashboardPage'));
+const GeopoliticalRiskPage  = React.lazy(() => import('./pages/GeopoliticalRiskPage'));
 const TradeJournal     = React.lazy(() => import('./pages/TradeJournal'));
 const PropFirmTracker  = React.lazy(() => import('./pages/PropFirmTracker'));
 const CopyTrading      = React.lazy(() => import('./pages/CopyTrading'));
@@ -342,6 +343,7 @@ const AppShell: React.FC = () => {
             {/* Trading */}
             <Route path="/trading"      element={wrap(gated('trading',      <ChartDashboard />))} />
             <Route path="/nuclear"      element={wrap(gated('nuclear',      <NuclearDashboard />))} />
+            <Route path="/geopolitical" element={wrap(gated('geopolitical', <GeopoliticalRiskPage />))} />
             <Route path="/journal"      element={wrap(gated('journal',      <TradeJournal />))} />
             <Route path="/prop-firm"    element={wrap(gated('prop-firm',    <PropFirmTracker />))} />
             <Route path="/copy-trading" element={wrap(gated('copy-trading', <CopyTrading />))} />
