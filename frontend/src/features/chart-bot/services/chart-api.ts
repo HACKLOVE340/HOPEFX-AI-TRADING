@@ -247,25 +247,25 @@ export interface GeopoliticalAssessment {
 }
 
 export async function fetchGeopoliticalSignal(): Promise<GeopoliticalSignal> {
-  const res = await api.get<GeopoliticalSignal>('/api/news/geopolitical/signal');
+  const res = await api.get<GeopoliticalSignal>('/news/geopolitical/signal');
   return res.data;
 }
 
 export async function fetchGeopoliticalEvents(forceRefresh = false): Promise<GeopoliticalEvent[]> {
   const res = await api.get<{ events: GeopoliticalEvent[]; count: number }>(
-    `/api/news/geopolitical/events${forceRefresh ? '?force_refresh=true' : ''}`
+    `/news/geopolitical/events${forceRefresh ? '?force_refresh=true' : ''}`
   );
   return res.data.events ?? [];
 }
 
 export async function fetchGeopoliticalAssessment(): Promise<GeopoliticalAssessment> {
-  const res = await api.get<GeopoliticalAssessment>('/api/news/geopolitical/assessment');
+  const res = await api.get<GeopoliticalAssessment>('/news/geopolitical/assessment');
   return res.data;
 }
 
 export async function fetchNewsSentiment(symbol: string): Promise<{ symbol: string; sentiment_score: number; label: string }> {
   const res = await api.get<{ symbol: string; sentiment_score: number; label: string }>(
-    `/api/news/sentiment/${encodeURIComponent(symbol)}`
+    `/news/sentiment/${encodeURIComponent(symbol)}`
   );
   return res.data;
 }
