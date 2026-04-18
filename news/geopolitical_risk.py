@@ -370,6 +370,10 @@ class GeopoliticalRiskProvider:
         self._poll_task: asyncio.Task | None = None
         self._running: bool = False
 
+        # Suppress repeated "all sources unavailable" warnings — log once per
+        # provider lifetime, then downgrade to DEBUG to keep logs readable.
+        self._all_sources_warned: bool = False
+
         logger.info("GeopoliticalRiskProvider initialized with layers: %s", self.data_layers)
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -581,10 +585,18 @@ class GeopoliticalRiskProvider:
                 "Configure WORLDMONITOR_API_KEY (self-hosted) or ensure outbound "
                 "HTTPS access to api.gdeltproject.org / api.acleddata.com / api.reliefweb.int."
             )
-        logger.warning(
-            "All geopolitical data sources unavailable and cache empty — "
-            "returning no events. Set WORLDMONITOR_API_KEY or ensure outbound HTTPS access."
-        )
+        # Warn once — subsequent identical failures are downgraded to DEBUG so
+        # the log is not flooded every poll interval.
+        if not self._all_sources_warned:
+            logger.warning(
+                "All geopolitical data sources unavailable and cache empty — "
+                "returning no events. Set WORLDMONITOR_API_KEY or ensure outbound HTTPS access."
+            )
+            self._all_sources_warned = True
+        else:
+            logger.debug(
+                "All geopolitical data sources still unavailable (suppressed repeat warning)."
+            )
         return []
 
     async def _fetch_from_worldmonitor(
@@ -811,7 +823,7 @@ class GeopoliticalRiskProvider:
     def _parse_geojson_features(self, features: list[dict], layer: str) -> list[GeopoliticalEvent]:
         """Convert World Monitor GeoJSON features to GeopoliticalEvent objects."""
         event_type = self.LAYER_MAPPING.get(layer, GeopoliticalEventType.HOTSPOT)
-        parsed: list[GeopoliticalEvent] = field(default_factory=list)
+        parsed: list[GeopoliticalEvent] = []
 
         for feat in features:
             try:

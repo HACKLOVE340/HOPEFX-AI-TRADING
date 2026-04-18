@@ -124,7 +124,7 @@ def create_news_router():
         """
         try:
             provider = _get_risk_provider()
-            signal = provider.get_gold_trading_signal()
+            signal = await provider.get_gold_trading_signal()
             # Normalize direction to uppercase for consistent API contract
             if "direction" in signal and isinstance(signal["direction"], str):
                 signal = dict(signal)
@@ -148,7 +148,7 @@ def create_news_router():
         """
         try:
             provider = _get_risk_provider()
-            events = provider.get_current_events(force_refresh=force_refresh)
+            events = await provider.get_current_events(force_refresh=force_refresh)
             return {
                 "events": [e.to_dict() for e in events],
                 "count": len(events),
@@ -165,7 +165,7 @@ def create_news_router():
         """
         try:
             provider = _get_risk_provider()
-            assessment = provider.get_risk_assessment()
+            assessment = await provider.get_risk_assessment()
             return assessment.to_dict()
         except Exception as exc:
             logger.error("Risk assessment error: %s", exc)
