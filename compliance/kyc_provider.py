@@ -128,6 +128,8 @@ class KYCProvider(ABC):
 
 # ── Sumsub provider ───────────────────────────────────────────────────────────
 
+_sumsub_creds_warned: bool = False  # warn once per process, not per instantiation
+
 
 class SumsubProvider(KYCProvider):
     """
@@ -139,10 +141,16 @@ class SumsubProvider(KYCProvider):
     BASE_URL = os.getenv("SUMSUB_BASE_URL", "https://api.sumsub.com")
 
     def __init__(self) -> None:
+        global _sumsub_creds_warned
         self._app_token = os.getenv("SUMSUB_APP_TOKEN", "")
         self._secret = os.getenv("SUMSUB_SECRET_KEY", "")
         if not self._app_token or not self._secret:
-            logger.warning("Sumsub: SUMSUB_APP_TOKEN or SUMSUB_SECRET_KEY not set")
+            if not _sumsub_creds_warned:
+                logger.warning(
+                    "Sumsub: SUMSUB_APP_TOKEN or SUMSUB_SECRET_KEY not set — "
+                    "KYC verification will be unavailable until credentials are configured"
+                )
+                _sumsub_creds_warned = True
 
     def _sign(self, ts: int, method: str, path: str, body: bytes = b"") -> str:
         """Generate HMAC-SHA256 signature for Sumsub API requests."""
@@ -256,6 +264,8 @@ class SumsubProvider(KYCProvider):
 
 # ── Onfido provider ───────────────────────────────────────────────────────────
 
+_onfido_creds_warned: bool = False
+
 
 class OnfidoProvider(KYCProvider):
     """
@@ -267,10 +277,15 @@ class OnfidoProvider(KYCProvider):
     BASE_URL = "https://api.onfido.com/v3.6"
 
     def __init__(self) -> None:
+        global _onfido_creds_warned
         self._api_token = os.getenv("ONFIDO_API_TOKEN", "")
         self._workflow_id = os.getenv("ONFIDO_WORKFLOW_ID", "")
-        if not self._api_token:
-            logger.warning("Onfido: ONFIDO_API_TOKEN not set")
+        if not self._api_token and not _onfido_creds_warned:
+            logger.warning(
+                "Onfido: ONFIDO_API_TOKEN not set — "
+                "Onfido KYC verification will be unavailable until credentials are configured"
+            )
+            _onfido_creds_warned = True
 
     def _headers(self) -> dict[str, str]:
         return {
