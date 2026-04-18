@@ -539,6 +539,17 @@ def register_routers(
     else:
         logger.debug("MOBILE_API disabled — set FEATURE_MOBILE_API=true to enable")
 
+    # ── News & Geopolitical Intelligence (/api/news) ─────────────────────────
+    try:
+        from news import create_news_router as _create_news_router
+
+        _news_router = _create_news_router()
+        if _news_router is not None:
+            _include_router_deduped(app, _news_router)
+            logger.info("News & Geopolitical router registered (/api/news)")
+    except Exception as _news_err:
+        logger.warning("News router not registered: %s", _news_err)
+
     # ── Live WebSocket ────────────────────────────────────────────────────────
     try:
         from api.ws_live import router as ws_live_router
