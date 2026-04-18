@@ -142,3 +142,16 @@ def create_replay_router(engine: "ChartReplayEngine"):
 ReplayEngine = ChartReplayEngine
 
 # Module exports
+
+# Module-level router — imported by core.router_registry
+_replay_engine_instance = None
+
+
+def _get_replay_engine():
+    global _replay_engine_instance
+    if _replay_engine_instance is None:
+        _replay_engine_instance = ChartReplayEngine()
+    return _replay_engine_instance
+
+
+router = create_replay_router(_get_replay_engine())

@@ -744,4 +744,18 @@ __all__ = [
     "calculate_sharpe_ratio",
     "create_features",
     "create_research_router",
+    "router",
 ]
+
+# Module-level router — imported by core.router_registry
+_research_engine_instance = None
+
+
+def _get_research_engine():
+    global _research_engine_instance
+    if _research_engine_instance is None:
+        _research_engine_instance = ResearchNotebookEngine()
+    return _research_engine_instance
+
+
+router = create_research_router(_get_research_engine())

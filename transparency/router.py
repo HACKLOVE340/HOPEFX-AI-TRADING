@@ -110,3 +110,16 @@ def create_transparency_router(engine: "ExecutionTransparencyEngine"):
 
 
 # Module exports
+
+# Module-level router — imported by core.router_registry
+_transparency_engine_instance = None
+
+
+def _get_transparency_engine():
+    global _transparency_engine_instance
+    if _transparency_engine_instance is None:
+        _transparency_engine_instance = ExecutionTransparencyEngine()
+    return _transparency_engine_instance
+
+
+router = create_transparency_router(_get_transparency_engine())

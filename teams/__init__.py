@@ -837,4 +837,18 @@ __all__ = [
     "TeamMember",
     "UserRole",
     "create_teams_router",
+    "router",
 ]
+
+# Module-level router — imported by core.router_registry
+_teams_manager_instance = None
+
+
+def _get_teams_manager():
+    global _teams_manager_instance
+    if _teams_manager_instance is None:
+        _teams_manager_instance = TeamManager()
+    return _teams_manager_instance
+
+
+router = create_teams_router(_get_teams_manager())

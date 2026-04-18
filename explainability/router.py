@@ -100,3 +100,16 @@ def create_explainability_router(explainer: "AIExplainer"):
 
 
 # Module exports
+
+# Module-level router — imported by core.router_registry
+_explainer_instance = None
+
+
+def _get_explainer():
+    global _explainer_instance
+    if _explainer_instance is None:
+        _explainer_instance = AIExplainer()
+    return _explainer_instance
+
+
+router = create_explainability_router(_get_explainer())
