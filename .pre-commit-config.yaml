@@ -133,6 +133,14 @@ repos:
         # Coverage gate is slower than other hooks — run last
         stages: [pre-commit]
 
+      - id: check-secrets
+        name: Block plaintext credentials
+        language: script
+        entry: scripts/check_secrets.sh
+        types: [yaml]
+        pass_filenames: false
+        stages: [pre-commit]
+
 # pytest belongs in the CI test job, not in pre-commit hooks.
 # Running the full test suite on every commit is too slow and fails in
 # environments where test dependencies are not installed.

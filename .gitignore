@@ -218,3 +218,32 @@ data/audit/
 # Playwright test artifacts
 frontend/test-results/
 frontend/playwright-report/
+
+# ── Credential / secret files — never commit ─────────────────────────────────
+# Any file matching these patterns contains real credentials.
+# Use .env.example or *.example for templates.
+*.local.yaml
+*.local.yml
+*.local.env
+*.secrets
+*.secret
+*_credentials.json
+*_credentials.yaml
+*_credentials.yml
+broker_config.local.*
+brokers.local.yaml
+fix.cfg.local
+oanda.local.*
+ibkr.local.*
+mt5.local.*
+alpaca.local.*
+binance.local.*
+
+# Docker compose overrides with real credentials
+docker-compose.override.yml
+docker-compose.local.yml
+docker-compose.prod.yml
+
+# Paper trading state (contains account snapshots)
+paper_trading_state.json
+paper_run_*.json

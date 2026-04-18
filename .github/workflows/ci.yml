@@ -250,8 +250,8 @@ jobs:
         env:
           DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx  # pragma: allowlist secret
           REDIS_URL: redis://localhost:6379/0
-          CONFIG_ENCRYPTION_KEY: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-          CONFIG_SALT: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          CONFIG_ENCRYPTION_KEY: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"  # pragma: allowlist secret
+          CONFIG_SALT: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"  # pragma: allowlist secret
           SECURITY_JWT_SECRET: "ci-test-secret-key-minimum-32-characters-long"  # pragma: allowlist secret
           ENVIRONMENT: testing
           OANDA_API_KEY: ci-placeholder  # pragma: allowlist secret
