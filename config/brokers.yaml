@@ -55,3 +55,103 @@ brokers:
     host: "127.0.0.1"
     # client_id must be unique per simultaneous connection.
     client_id: 1
+
+  # ── Alpaca Markets ─────────────────────────────────────────────────────────
+  # US stocks, ETFs, and crypto. Paper trading available at paper-api.alpaca.markets.
+  # Get API keys at: https://app.alpaca.markets/paper/dashboard/overview
+
+  alpaca_paper:
+    type: "alpaca"
+    api_key: "${ALPACA_API_KEY:your_alpaca_api_key}"
+    api_secret: "${ALPACA_API_SECRET:your_alpaca_api_secret}"  # pragma: allowlist secret
+    paper: true
+
+  alpaca_live:
+    type: "alpaca"
+    api_key: "${ALPACA_LIVE_API_KEY:your_alpaca_live_api_key}"
+    api_secret: "${ALPACA_LIVE_API_SECRET:your_alpaca_live_api_secret}"  # pragma: allowlist secret
+    paper: false
+
+  # ── Binance ────────────────────────────────────────────────────────────────
+  # Crypto spot and futures. Testnet available.
+  # Get API keys at: https://www.binance.com/en/my/settings/api-management
+
+  binance_testnet:
+    type: "binance"
+    api_key: "${BINANCE_API_KEY:your_binance_api_key}"
+    api_secret: "${BINANCE_API_SECRET:your_binance_api_secret}"  # pragma: allowlist secret
+    testnet: true
+
+  binance_live:
+    type: "binance"
+    api_key: "${BINANCE_LIVE_API_KEY:your_binance_live_api_key}"
+    api_secret: "${BINANCE_LIVE_API_SECRET:your_binance_live_api_secret}"  # pragma: allowlist secret
+    testnet: false
+
+  # ── ByBit ──────────────────────────────────────────────────────────────────
+  # Crypto derivatives and spot. Testnet available.
+  # Get API keys at: https://www.bybit.com/app/user/api-management
+
+  bybit_testnet:
+    type: "bybit"
+    api_key: "${BYBIT_API_KEY:your_bybit_api_key}"
+    api_secret: "${BYBIT_API_SECRET:your_bybit_api_secret}"  # pragma: allowlist secret
+    testnet: true
+    market_type: "linear"  # linear (USDT perp) | inverse | spot
+
+  bybit_live:
+    type: "bybit"
+    api_key: "${BYBIT_LIVE_API_KEY:your_bybit_live_api_key}"
+    api_secret: "${BYBIT_LIVE_API_SECRET:your_bybit_live_api_secret}"  # pragma: allowlist secret
+    testnet: false
+    market_type: "linear"
+
+  # ── CCXT Universal (any of 50+ exchanges) ─────────────────────────────────
+  # Supported exchanges: okx, kraken, coinbase, gate, bitget, huobi, kucoin,
+  # mexc, phemex, deribit, bitmex, ftx, and many more.
+  # Full list: python -c "import ccxt; print(ccxt.exchanges)"
+  # Get API keys from your chosen exchange's API management page.
+
+  ccxt_okx:
+    type: "ccxt"
+    exchange: "okx"
+    api_key: "${OKX_API_KEY:your_okx_api_key}"
+    api_secret: "${OKX_API_SECRET:your_okx_api_secret}"  # pragma: allowlist secret
+    password: "${OKX_PASSPHRASE:your_okx_passphrase}"  # pragma: allowlist secret
+    sandbox: true
+    options:
+      defaultType: "swap"  # spot | swap (perp) | future | option
+
+  ccxt_kraken:
+    type: "ccxt"
+    exchange: "kraken"
+    api_key: "${KRAKEN_API_KEY:your_kraken_api_key}"
+    api_secret: "${KRAKEN_API_SECRET:your_kraken_api_secret}"  # pragma: allowlist secret
+    sandbox: false
+    options:
+      defaultType: "spot"
+
+  ccxt_coinbase:
+    type: "ccxt"
+    exchange: "coinbase"
+    api_key: "${COINBASE_API_KEY:your_coinbase_api_key}"
+    api_secret: "${COINBASE_API_SECRET:your_coinbase_api_secret}"  # pragma: allowlist secret
+    sandbox: true
+    options:
+      defaultType: "spot"
+
+  # ── Paper trading (always available, no credentials required) ─────────────
+  # Use for strategy validation before connecting any real broker.
+  # This is the required first step before live trading.
+
+  paper:
+    type: "paper"
+    initial_balance: "${PAPER_INITIAL_BALANCE:100000}"
+    currency: "USD"
+    # Realistic spread simulation per symbol (half-spread in price units)
+    spreads:
+      XAUUSD: 0.30
+      EURUSD: 0.00010
+      GBPUSD: 0.00012
+      BTCUSD: 5.0
+      ETHUSD: 0.50

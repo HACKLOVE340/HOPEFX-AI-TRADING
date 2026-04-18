@@ -209,28 +209,35 @@ class BrokerFactory:
         """
         Instantiate a broker using credentials from ``config/brokers.yaml``.
 
-        This is the preferred entry point for the new typed broker classes
-        (MT5Broker, OandaBroker, IBKRBroker).  The existing ``create_broker``
-        classmethod continues to work for the legacy connector registry.
+        Supported broker types (``type`` key in YAML profile):
+          mt5      — MetaTrader 5 (any MT5-connected broker)
+          oanda    — OANDA v20 REST (practice or live)
+          ibkr     — Interactive Brokers TWS/Gateway
+          alpaca   — Alpaca Markets (US stocks, crypto)
+          binance  — Binance spot/futures
+          bybit    — ByBit spot/futures
+          ccxt     — Any ccxt-supported exchange (50+ exchanges)
+                     Requires ``exchange`` key in the profile config.
+          paper    — Paper trading (no real money, always available)
 
         Parameters
         ----------
         name:
-            Key in the ``brokers`` section of the YAML file (e.g. ``prop_mt5``).
+            Key in the ``brokers`` section of the YAML file (e.g. ``oanda_practice``).
             Falls back to the ``default`` key, then to the ``BROKER`` env var.
         config_path:
             Path to the YAML config file (relative to CWD or absolute).
 
         Returns
         -------
-        MT5Broker | OandaBroker | IBKRBroker instance, or None on failure.
+        BrokerConnector instance, or None on failure.
         """
         cfg = cls._load_yaml_config(config_path)
         if cfg is None:
             return None
 
         brokers_section: dict = cfg.get("brokers", {})
-        resolved_name = name or os.getenv("BROKER") or brokers_section.get("default", "prop_mt5")
+        resolved_name = name or os.getenv("BROKER") or brokers_section.get("default", "paper")
 
         broker_cfg = brokers_section.get(resolved_name)
         if broker_cfg is None:
@@ -263,8 +270,51 @@ class BrokerFactory:
                 logger.info("Creating IBKRBroker for profile '%s'", resolved_name)
                 return IBKRBroker(broker_cfg)
 
+            if broker_type == "alpaca":
+                from brokers.alpaca import AlpacaConnector
+
+                logger.info("Creating AlpacaConnector for profile '%s'", resolved_name)
+                return AlpacaConnector(broker_cfg)
+
+            if broker_type == "binance":
+                from brokers.binance import BinanceConnector
+
+                logger.info("Creating BinanceConnector for profile '%s'", resolved_name)
+                return BinanceConnector(broker_cfg)
+
+            if broker_type == "bybit":
+                from brokers.bybit_connector import ByBitConnector
+
+                logger.info("Creating ByBitConnector for profile '%s'", resolved_name)
+                return ByBitConnector(broker_cfg)
+
+            if broker_type == "ccxt":
+                from brokers.ccxt_connector import CCXTConnector
+
+                exchange = broker_cfg.get("exchange", "")
+                if not exchange:
+                    logger.error(
+                        "CCXT profile '%s' missing required 'exchange' key. "
+                        "Set exchange: binance (or okx, kraken, coinbase, etc.)",
+                        resolved_name,
+                    )
+                    return None
+                logger.info(
+                    "Creating CCXTConnector for profile '%s' (exchange=%s)",
+                    resolved_name,
+                    exchange,
+                )
+                return CCXTConnector(broker_cfg)
+
+            if broker_type == "paper":
+                from brokers.paper_trading import PaperTradingBroker
+
+                logger.info("Creating PaperTradingBroker for profile '%s'", resolved_name)
+                return PaperTradingBroker(broker_cfg)
+
             logger.error(
-                "Unsupported broker type '%s' for profile '%s'. Supported: mt5, oanda, ibkr",
+                "Unsupported broker type '%s' for profile '%s'. "
+                "Supported: mt5, oanda, ibkr, alpaca, binance, bybit, ccxt, paper",
                 broker_type,
                 resolved_name,
             )
@@ -272,11 +322,40 @@ class BrokerFactory:
 
         except ImportError as exc:
             logger.error(
-                "Cannot import broker class for type '%s': %s. Ensure the required SDK is installed.",
+                "Cannot import broker class for type '%s': %s. "
+                "Ensure the required SDK is installed.",
                 broker_type,
                 exc,
             )
             return None
+
+    @classmethod
+    def list_available(cls) -> dict[str, dict]:
+        """
+        Return a dict of all registered broker names with availability status.
+
+        Probes each broker class for import availability. Does not attempt
+        to connect — just checks that the class can be imported.
+
+        Returns
+        -------
+        dict mapping broker name → {"class": str, "available": bool, "error": str|None}
+        """
+        cls._ensure_registered()
+        result: dict[str, dict] = {}
+        seen_classes: set[str] = set()
+        for name, broker_class in cls._brokers.items():
+            class_name = broker_class.__name__
+            if class_name in seen_classes:
+                # Skip aliases — only report the canonical name
+                continue
+            seen_classes.add(class_name)
+            result[name] = {
+                "class": class_name,
+                "available": True,
+                "error": None,
+            }
+        return result
 
     @staticmethod
     def _load_yaml_config(path: str) -> dict | None:
