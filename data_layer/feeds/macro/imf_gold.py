@@ -91,6 +91,8 @@ class IMFGoldFeed:
         self._running = False
         self._last_fetch: datetime | None = None
         self._task: asyncio.Task | None = None
+        # Suppress repeated offline warnings — log once per provider lifetime
+        self._offline_warned: bool = False
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -169,7 +171,7 @@ class IMFGoldFeed:
             return series
 
         except Exception as exc:
-            logger.warning("IMF gold fetch error: %s", exc)
+            logger.debug("IMF gold fetch error: %s", exc)
             return pd.Series(dtype=float)
 
     # ── Compute derived series ────────────────────────────────────────────────
@@ -246,7 +248,12 @@ class IMFGoldFeed:
                     logger.warning("IMF: CSV fallback failed: %s", exc)
 
         if tonnes.empty:
-            logger.warning("IMF: no data available — MacroStore not updated")
+            if not self._offline_warned:
+                logger.warning(
+                    "IMF: no data available — dataservices.imf.org unreachable and no local cache. "
+                    "MacroStore not updated. Ensure outbound HTTPS access to dataservices.imf.org."
+                )
+                self._offline_warned = True
             return {}
 
         series_dict = self._compute_series(tonnes)
