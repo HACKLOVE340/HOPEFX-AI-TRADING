@@ -138,8 +138,8 @@ class GoldFeedManager:
         self._running = True
         configured = [(src, feed) for src, feed in self._feeds.items() if feed.is_configured]
         if not configured:
-            logger.error(
-                "GoldFeedManager: NO gold feed API keys configured. "
+            logger.warning(
+                "GoldFeedManager: no gold feed API keys configured — live gold prices unavailable. "
                 "Set at least one of: GOLDAPI_IO_KEY, METALS_DEV_KEY, "
                 "METALS_API_KEY, METALPRICEAPI_KEY, COMMODITY_PRICE_API_KEY"
             )
