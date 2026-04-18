@@ -4,6 +4,7 @@
 """SuperAdmin audit sub-router."""
 
 import logging
+import math
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
@@ -21,7 +22,10 @@ router = APIRouter()
 
 @router.get("/audit")
 async def get_audit_log(
-    limit: int = Query(100, ge=1, le=500),
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=500),
+    user_id: str | None = Query(None),
+    event_type: str | None = Query(None),
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     try:
@@ -30,7 +34,15 @@ async def get_audit_log(
 
         db = SessionLocal()
         try:
-            rows = db.query(AuditLogEntry).order_by(AuditLogEntry.created_at.desc()).limit(limit).all()
+            q = db.query(AuditLogEntry).order_by(AuditLogEntry.created_at.desc())
+            if user_id:
+                q = q.filter(AuditLogEntry.user_id == user_id)
+            if event_type:
+                q = q.filter(AuditLogEntry.event_type.ilike(f"%{event_type}%"))
+            total = q.count()
+            offset = (page - 1) * limit
+            rows = q.offset(offset).limit(limit).all()
+            pages = max(1, math.ceil(total / limit))
             return {
                 "events": [
                     {
@@ -42,13 +54,16 @@ async def get_audit_log(
                         "created_at": _iso(r.created_at),
                     }
                     for r in rows
-                ]
+                ],
+                "total": total,
+                "page": page,
+                "pages": pages,
             }
         finally:
             db.close()
     except Exception as exc:
         logger.debug("audit_log: %s", exc)
-        return {"events": []}
+        return {"events": [], "total": 0, "page": 1, "pages": 1}
 
 
 @router.get("/audit/export")
@@ -56,7 +71,7 @@ async def export_audit_log(user: TokenPayload = Depends(_require_superadmin)):
     import csv
     import io
 
-    result = await get_audit_log(limit=500, user=user)
+    result = await get_audit_log(page=1, limit=500, user=user)
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=["event_id", "user_id", "event_type", "detail", "ip_address", "created_at"])
     writer.writeheader()
