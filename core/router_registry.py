@@ -120,6 +120,7 @@ def register_routers(
     from api.explain import router as explain_router
     from api.health import router as health_router
     from api.landing import router as landing_router
+    from api.pages import router as pages_router
     from api.macro import router as macro_router
     from api.ml import router as ml_router
     from api.mobile import router as mobile_router
@@ -180,12 +181,14 @@ def register_routers(
         portfolio_router,
         health_router,
         tracing_router,
+        pages_router,
     ]:
         _include_router_deduped(app, _router)
 
     logger.info("Health router registered (/api/health)")
     logger.info("Analysis router registered (/api/analysis)")
     logger.info("Tracing router registered (/api/tracing)")
+    logger.info("Pages router registered (/login, /register, /security, /marketplace, /affiliate, /docs/*)")
 
     # ── Feature-gated routers ─────────────────────────────────────────────────
     if feature_flags.TWO_FACTOR_AUTH:
