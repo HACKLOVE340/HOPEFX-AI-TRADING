@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HOPEFX — API Reference</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0a0e1a 0%, #1a1f2e 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #e0e6ed;
+    }
+    nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 40px; border-bottom: 1px solid #2d3748;
+      background: rgba(10,14,26,0.8); backdrop-filter: blur(8px);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .nav-logo { font-size: 20px; font-weight: 700; color: #00d4ff; letter-spacing: 1px; text-decoration: none; }
+    .nav-links { display: flex; gap: 24px; }
+    .nav-links a { color: #8892b0; text-decoration: none; font-size: 14px; transition: color 0.2s; }
+    .nav-links a:hover, .nav-links a.active { color: #00d4ff; }
+    .layout { display: flex; max-width: 1200px; margin: 0 auto; padding: 48px 24px; gap: 40px; }
+    .sidebar { width: 220px; flex-shrink: 0; }
+    .sidebar h3 { font-size: 12px; font-weight: 600; color: #4a5568; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+    .sidebar a { display: block; font-size: 13px; color: #8892b0; text-decoration: none; padding: 6px 0 6px 12px; border-left: 2px solid transparent; transition: all 0.2s; }
+    .sidebar a:hover, .sidebar a.active { color: #00d4ff; border-left-color: #00d4ff; }
+    .content { flex: 1; min-width: 0; }
+    h1 { font-size: 32px; font-weight: 700; margin-bottom: 8px; }
+    .lead { font-size: 16px; color: #8892b0; margin-bottom: 40px; line-height: 1.6; }
+    h2 { font-size: 22px; font-weight: 700; color: #00d4ff; margin: 48px 0 16px; padding-bottom: 10px; border-bottom: 1px solid #2d3748; }
+    h3 { font-size: 16px; font-weight: 600; color: #e0e6ed; margin: 24px 0 10px; }
+    p, li { font-size: 14px; color: #a0aec0; line-height: 1.7; margin-bottom: 8px; }
+    ul { padding-left: 20px; margin-bottom: 12px; }
+    code { background: #0f1419; padding: 2px 7px; border-radius: 4px; font-size: 13px; color: #00d4ff; font-family: "SF Mono", "Fira Code", monospace; }
+    pre {
+      background: #0f1419; border: 1px solid #2d3748; border-radius: 8px;
+      padding: 20px; overflow-x: auto; margin: 12px 0 20px;
+    }
+    pre code { background: none; padding: 0; color: #e0e6ed; font-size: 13px; line-height: 1.6; }
+    .method {
+      display: inline-block; padding: 3px 9px; border-radius: 4px;
+      font-size: 12px; font-weight: 700; margin-right: 8px; font-family: monospace;
+    }
+    .get    { background: rgba(0,200,83,0.15);  color: #00c853; border: 1px solid rgba(0,200,83,0.3); }
+    .post   { background: rgba(0,212,255,0.15); color: #00d4ff; border: 1px solid rgba(0,212,255,0.3); }
+    .delete { background: rgba(255,83,112,0.15);color: #ff5370; border: 1px solid rgba(255,83,112,0.3); }
+    .put    { background: rgba(255,179,0,0.15); color: #ffb300; border: 1px solid rgba(255,179,0,0.3); }
+    .endpoint { background: #1a1f2e; border: 1px solid #2d3748; border-radius: 8px; padding: 16px 20px; margin-bottom: 12px; }
+    .endpoint-path { font-family: monospace; font-size: 14px; color: #e0e6ed; }
+    .endpoint-desc { font-size: 13px; color: #8892b0; margin-top: 6px; }
+    .note { background: rgba(0,212,255,0.08); border-left: 3px solid #00d4ff; padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 16px 0; font-size: 14px; color: #a0aec0; }
+    footer { text-align: center; padding: 32px; color: #4a5568; font-size: 13px; border-top: 1px solid #2d3748; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a class="nav-logo" href="/">HOPEFX</a>
+    <div class="nav-links">
+      <a href="/docs/FAQ.md">FAQ</a>
+      <a href="/docs/API.md" class="active">API Docs</a>
+      <a href="/docs/MOBILE_GUIDE.md">Mobile</a>
+      <a href="/docs">Swagger UI</a>
+      <a href="/login">Login</a>
+    </div>
+  </nav>
+
+  <div class="layout">
+    <div class="sidebar">
+      <h3>Documentation</h3>
+      <a href="/docs/FAQ.md">FAQ</a>
+      <a href="/docs/API.md" class="active">API Reference</a>
+      <a href="/docs/MOBILE_GUIDE.md">Mobile Guide</a>
+      <a href="/docs">Swagger UI</a>
+      <a href="/security">Security</a>
+    </div>
+
+    <div class="content">
+      <h1>API Reference</h1>
+      <p class="lead">
+        The HOPEFX REST API is built on FastAPI. All endpoints return JSON.
+        Interactive documentation is available at <a href="/docs" style="color:#00d4ff">/docs</a> (Swagger UI)
+        and <a href="/redoc" style="color:#00d4ff">/redoc</a> (ReDoc).
+      </p>
+
+      <h2>Authentication</h2>
+      <p>All protected endpoints require a Bearer JWT token in the <code>Authorization</code> header:</p>
+      <pre><code>Authorization: Bearer &lt;access_token&gt;</code></pre>
+
+      <h3>Obtain a Token</h3>
+      <div class="endpoint">
+        <span class="method post">POST</span>
+        <span class="endpoint-path">/api/auth/login</span>
+        <div class="endpoint-desc">Returns <code>access_token</code> and <code>refresh_token</code>.</div>
+      </div>
+      <pre><code>{
+  "email": "user@example.com",
+  "password": "your_password"
+}</code></pre>
+      <p>Response:</p>
+      <pre><code>{
+  "access_token": "eyJ...",
+  "refresh_token": "eyJ...",
+  "token_type": "bearer",
+  "user": { "id": 1, "email": "user@example.com", "role": "trader" }
+}</code></pre>
+
+      <h3>Refresh Token</h3>
+      <div class="endpoint">
+        <span class="method post">POST</span>
+        <span class="endpoint-path">/api/auth/refresh</span>
+        <div class="endpoint-desc">Exchange a refresh token for a new access token.</div>
+      </div>
+
+      <h3>Register</h3>
+      <div class="endpoint">
+        <span class="method post">POST</span>
+        <span class="endpoint-path">/api/auth/register</span>
+        <div class="endpoint-desc">Create a new user account.</div>
+      </div>
+      <pre><code>{
+  "email": "user@example.com",
+  "password": "StrongPass123!",
+  "first_name": "Jane",
+  "last_name": "Doe"
+}</code></pre>
+
+      <h2>Trading</h2>
+
+      <div class="endpoint">
+        <span class="method get">GET</span>
+        <span class="endpoint-path">/api/trading/account</span>
+        <div class="endpoint-desc">Current account balance, equity, margin, and open P&amp;L.</div>
+      </div>
+      <div class="endpoint">
+        <span class="method get">GET</span>
+        <span class="endpoint-path">/api/trading/positions</span>
+        <div class="endpoint-desc">All open positions with entry price, size, and unrealised P&amp;L.</div>
+      </div>
+      <div class="endpoint">
+        <span class="method post">POST</span>
+        <span class="endpoint-path">/api/trading/order</span>
+        <div class="endpoint-desc">Place a market or limit order.</div>
+      </div>
+      <pre><code>{
+  "symbol": "XAUUSD",
+  "side": "buy",
+  "units": 1000,
+  "order_type": "market",
+  "stop_loss": 2300.00,
+  "take_profit": 2380.00
+}</code></pre>
+      <div class="endpoint">
+        <span class="method delete">DELETE</span>
+        <span class="endpoint-path">/api/trading/position/{trade_id}</span>
+        <div class="endpoint-desc">Close a specific position by trade ID.</div>
+      </div>
+      <div class="endpoint">
+        <span class="method get">GET</span>
+        <span class="endpoint-path">/api/trading/price/{symbol}</span>
+        <div class="endpoint-desc">Current bid/ask price for a symbol.</div>
+      </div>
+
+      <h2>Signals</h2>
+
+      <div class="endpoint">
+        <span class="method get">GET</span>
+        <span class="endpoint-path">/api/signals/latest</span>
+        <div class="endpoint-desc">Latest AI-generated trading signal with confidence and regime.</div>
+      </div>
+      <div class="endpoint">
+        <span class="method get">GET</span>
+        <span class="endpoint-path">/api/signals/history</span>
+        <div class="endpoint-desc">Historical signals with outcomes. Query params: <code>limit</code>, <code>symbol</code>.</div>
+      </div>
+
+      <h2>Risk</h2>
+
+      <div class="endpoint">
+        <span class="method get">GET</span>
+        <span class="endpoint-path">/api/risk/metrics</span>
+        <div class="endpoint-desc">Current risk metrics: VaR, CVaR, drawdown, Sharpe ratio.</div>
+      </div>
+      <div class="endpoint">
+        <span class="method post">POST</span>
+        <span class="endpoint-path">/api/kill-switch/activate</span>
+        <div class="endpoint-desc">Immediately halt all trading. Propagates to all pods.</div>
+      </div>
+      <div class="endpoint">
+        <span class="method post">POST</span>
+        <span class="endpoint-path">/api/kill-switch/deactivate</span>
+        <div class="endpoint-desc">Re-enable trading after kill switch activation.</div>
+      </div>
+
+      <h2>Health</h2>
+
+      <div class="endpoint">
+        <span class="method get">GET</span>
+        <span class="endpoint-path">/api/health</span>
+        <div class="endpoint-desc">Overall system health. Returns 200 when all critical components are up.</div>
+      </div>
+      <div class="endpoint">
+        <span class="method get">GET</span>
+        <span class="endpoint-path">/api/health/startup</span>
+        <div class="endpoint-desc">Kubernetes startup probe. Returns 200 once startup is complete.</div>
+      </div>
+      <div class="endpoint">
+        <span class="method get">GET</span>
+        <span class="endpoint-path">/api/health/ready</span>
+        <div class="endpoint-desc">Kubernetes readiness probe.</div>
+      </div>
+
+      <h2>WebSocket</h2>
+
+      <div class="note">WebSocket connections require the access token as a query parameter: <code>?token=&lt;access_token&gt;</code></div>
+
+      <div class="endpoint">
+        <span class="method get">WS</span>
+        <span class="endpoint-path">/ws/live</span>
+        <div class="endpoint-desc">Real-time price ticks, signals, and position updates.</div>
+      </div>
+      <div class="endpoint">
+        <span class="method get">WS</span>
+        <span class="endpoint-path">/ws/nuclear</span>
+        <div class="endpoint-desc">Nuclear dashboard chart engine stream.</div>
+      </div>
+
+      <h2>Rate Limits</h2>
+      <ul>
+        <li>Auth endpoints: <strong>10 requests / 60 seconds</strong> per IP</li>
+        <li>Trading endpoints: <strong>60 requests / minute</strong> per user</li>
+        <li>Signal endpoints: <strong>120 requests / minute</strong> per user</li>
+        <li>Exceeded limits return <code>HTTP 429 Too Many Requests</code></li>
+      </ul>
+
+      <h2>Error Codes</h2>
+      <ul>
+        <li><code>400</code> — Bad request / validation error</li>
+        <li><code>401</code> — Missing or invalid token</li>
+        <li><code>403</code> — Insufficient permissions</li>
+        <li><code>404</code> — Resource not found</li>
+        <li><code>429</code> — Rate limit exceeded</li>
+        <li><code>503</code> — Service temporarily unavailable (broker offline, kill switch active)</li>
+      </ul>
+    </div>
+  </div>
+
+  <footer>
+    &copy; 2025-2026 HOPEFX AI Trading. All rights reserved.
+    &nbsp;·&nbsp; <a href="/docs" style="color:#00d4ff;text-decoration:none;">Swagger UI</a>
+    &nbsp;·&nbsp; <a href="/docs/FAQ.md" style="color:#00d4ff;text-decoration:none;">FAQ</a>
+  </footer>
+</body>
+</html>

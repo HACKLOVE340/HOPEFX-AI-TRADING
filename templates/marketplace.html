@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HOPEFX — Strategy Marketplace</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0a0e1a 0%, #1a1f2e 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #e0e6ed;
+    }
+    nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 40px; border-bottom: 1px solid #2d3748;
+      background: rgba(10,14,26,0.8); backdrop-filter: blur(8px);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .nav-logo { font-size: 20px; font-weight: 700; color: #00d4ff; letter-spacing: 1px; text-decoration: none; }
+    .nav-links { display: flex; gap: 24px; align-items: center; }
+    .nav-links a { color: #8892b0; text-decoration: none; font-size: 14px; transition: color 0.2s; }
+    .nav-links a:hover { color: #00d4ff; }
+    .btn-nav {
+      padding: 8px 18px; background: #00d4ff; color: #0a0e1a;
+      border-radius: 6px; font-weight: 600; font-size: 13px; text-decoration: none;
+      transition: background 0.2s;
+    }
+    .btn-nav:hover { background: #00b8d9; color: #0a0e1a; }
+    .hero { text-align: center; padding: 72px 24px 48px; }
+    .hero h1 { font-size: 42px; font-weight: 700; color: #e0e6ed; margin-bottom: 14px; }
+    .hero h1 span { color: #00d4ff; }
+    .hero p { font-size: 17px; color: #8892b0; max-width: 560px; margin: 0 auto 32px; line-height: 1.6; }
+    .search-bar {
+      display: flex; max-width: 520px; margin: 0 auto;
+      background: #1a1f2e; border: 1px solid #2d3748; border-radius: 8px; overflow: hidden;
+    }
+    .search-bar input {
+      flex: 1; padding: 12px 16px; background: transparent; border: none;
+      color: #e0e6ed; font-size: 14px; outline: none;
+    }
+    .search-bar button {
+      padding: 12px 20px; background: #00d4ff; color: #0a0e1a;
+      border: none; font-weight: 600; font-size: 14px; cursor: pointer;
+    }
+    .filters { display: flex; justify-content: center; gap: 10px; padding: 24px; flex-wrap: wrap; }
+    .filter-btn {
+      padding: 7px 16px; border-radius: 20px; font-size: 13px; cursor: pointer;
+      border: 1px solid #2d3748; background: transparent; color: #8892b0;
+      transition: all 0.2s;
+    }
+    .filter-btn.active, .filter-btn:hover { border-color: #00d4ff; color: #00d4ff; background: rgba(0,212,255,0.08); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; max-width: 1200px; margin: 0 auto; padding: 0 24px 60px; }
+    .card {
+      background: #1a1f2e; border: 1px solid #2d3748; border-radius: 12px;
+      padding: 24px; transition: border-color 0.2s, transform 0.2s;
+    }
+    .card:hover { border-color: #00d4ff; transform: translateY(-2px); }
+    .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+    .card-title { font-size: 16px; font-weight: 600; color: #e0e6ed; }
+    .card-badge {
+      padding: 3px 9px; border-radius: 4px; font-size: 11px; font-weight: 600;
+    }
+    .badge-free { background: rgba(0,200,83,0.15); color: #00c853; border: 1px solid rgba(0,200,83,0.3); }
+    .badge-pro  { background: rgba(0,212,255,0.15); color: #00d4ff; border: 1px solid rgba(0,212,255,0.3); }
+    .badge-elite{ background: rgba(255,179,0,0.15); color: #ffb300; border: 1px solid rgba(255,179,0,0.3); }
+    .card-desc { font-size: 13px; color: #8892b0; line-height: 1.5; margin-bottom: 16px; }
+    .card-stats { display: flex; gap: 16px; margin-bottom: 16px; }
+    .stat { text-align: center; }
+    .stat-val { font-size: 18px; font-weight: 700; color: #00d4ff; }
+    .stat-lbl { font-size: 11px; color: #4a5568; margin-top: 2px; }
+    .stat-val.green { color: #00c853; }
+    .stat-val.yellow { color: #ffb300; }
+    .card-footer { display: flex; justify-content: space-between; align-items: center; }
+    .author { font-size: 12px; color: #4a5568; }
+    .btn-use {
+      padding: 8px 16px; background: #00d4ff; color: #0a0e1a;
+      border: none; border-radius: 6px; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: background 0.2s; text-decoration: none;
+    }
+    .btn-use:hover { background: #00b8d9; }
+    .btn-use.locked { background: #2d3748; color: #8892b0; cursor: default; }
+    .loading { text-align: center; padding: 60px; color: #8892b0; }
+    .spinner {
+      display: inline-block; width: 32px; height: 32px;
+      border: 3px solid #2d3748; border-top-color: #00d4ff;
+      border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    footer { text-align: center; padding: 32px; color: #4a5568; font-size: 13px; border-top: 1px solid #2d3748; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a class="nav-logo" href="/">HOPEFX</a>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/security">Security</a>
+      <a href="/affiliate">Affiliate</a>
+      <a href="/docs/FAQ.md">FAQ</a>
+      <a href="/login">Login</a>
+      <a class="btn-nav" href="/register">Get Started</a>
+    </div>
+  </nav>
+
+  <div class="hero">
+    <h1>Strategy <span>Marketplace</span></h1>
+    <p>Browse, deploy, and share AI-powered trading strategies for XAUUSD and major forex pairs.</p>
+    <div class="search-bar">
+      <input type="text" id="searchInput" placeholder="Search strategies…" />
+      <button onclick="filterCards()">Search</button>
+    </div>
+  </div>
+
+  <div class="filters">
+    <button class="filter-btn active" onclick="setFilter('all', this)">All</button>
+    <button class="filter-btn" onclick="setFilter('free', this)">Free</button>
+    <button class="filter-btn" onclick="setFilter('pro', this)">Pro</button>
+    <button class="filter-btn" onclick="setFilter('elite', this)">Elite</button>
+    <button class="filter-btn" onclick="setFilter('scalping', this)">Scalping</button>
+    <button class="filter-btn" onclick="setFilter('swing', this)">Swing</button>
+    <button class="filter-btn" onclick="setFilter('macro', this)">Macro</button>
+  </div>
+
+  <div class="grid" id="strategyGrid">
+    <div class="loading"><div class="spinner"></div><br>Loading strategies…</div>
+  </div>
+
+  <footer>
+    &copy; 2025-2026 HOPEFX AI Trading. All rights reserved.
+    &nbsp;·&nbsp; <a href="/security" style="color:#00d4ff;text-decoration:none;">Security</a>
+    &nbsp;·&nbsp; <a href="/affiliate" style="color:#00d4ff;text-decoration:none;">Affiliate</a>
+  </footer>
+
+  <script>
+    const STRATEGIES = [
+      {
+        id: 'nuclear-scalper', title: 'Nuclear Scalper', tier: 'elite',
+        desc: 'High-frequency XAUUSD scalping using order-flow imbalance, cumulative delta, and ML regime detection.',
+        winRate: '68%', sharpe: '2.4', drawdown: '4.2%', tag: 'scalping',
+        author: 'HOPEFX Core', locked: true,
+      },
+      {
+        id: 'macro-gold', title: 'Macro Gold Trend', tier: 'pro',
+        desc: 'Combines COT positioning, DXY correlation, and geopolitical risk scores to trade multi-day gold trends.',
+        winRate: '61%', sharpe: '1.9', drawdown: '6.8%', tag: 'macro',
+        author: 'HOPEFX Core', locked: true,
+      },
+      {
+        id: 'sniper-entry', title: 'Sniper Entry Engine', tier: 'pro',
+        desc: 'Precision entry timing using support/resistance confluence, volume profile, and LSTM signal confirmation.',
+        winRate: '64%', sharpe: '2.1', drawdown: '5.1%', tag: 'swing',
+        author: 'HOPEFX Core', locked: true,
+      },
+      {
+        id: 'basic-ma', title: 'Moving Average Cross', tier: 'free',
+        desc: 'Classic EMA 20/50 crossover with ATR-based stop-loss and take-profit. Good baseline for backtesting.',
+        winRate: '52%', sharpe: '1.1', drawdown: '9.3%', tag: 'swing',
+        author: 'Community', locked: false,
+      },
+      {
+        id: 'rsi-reversal', title: 'RSI Mean Reversion', tier: 'free',
+        desc: 'Fades extreme RSI readings on H1 XAUUSD with dynamic position sizing based on ATR volatility.',
+        winRate: '55%', sharpe: '1.3', drawdown: '7.6%', tag: 'scalping',
+        author: 'Community', locked: false,
+      },
+      {
+        id: 'institutional-flow', title: 'Institutional Flow', tier: 'elite',
+        desc: 'Tracks large-lot order flow, dark pool prints, and block trades to front-run institutional moves.',
+        winRate: '71%', sharpe: '2.8', drawdown: '3.9%', tag: 'macro',
+        author: 'HOPEFX Core', locked: true,
+      },
+    ];
+
+    let activeFilter = 'all';
+    let searchQuery  = '';
+
+    function setFilter(f, btn) {
+      activeFilter = f;
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderCards();
+    }
+
+    function filterCards() {
+      searchQuery = document.getElementById('searchInput').value.toLowerCase();
+      renderCards();
+    }
+
+    document.getElementById('searchInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') filterCards();
+    });
+
+    function renderCards() {
+      const grid = document.getElementById('strategyGrid');
+      const filtered = STRATEGIES.filter(s => {
+        const matchFilter = activeFilter === 'all' || s.tier === activeFilter || s.tag === activeFilter;
+        const matchSearch = !searchQuery || s.title.toLowerCase().includes(searchQuery) || s.desc.toLowerCase().includes(searchQuery);
+        return matchFilter && matchSearch;
+      });
+
+      if (!filtered.length) {
+        grid.innerHTML = '<div class="loading" style="grid-column:1/-1">No strategies match your search.</div>';
+        return;
+      }
+
+      grid.innerHTML = filtered.map(s => `
+        <div class="card" data-tier="${s.tier}" data-tag="${s.tag}">
+          <div class="card-header">
+            <div class="card-title">${s.title}</div>
+            <span class="card-badge badge-${s.tier}">${s.tier.toUpperCase()}</span>
+          </div>
+          <p class="card-desc">${s.desc}</p>
+          <div class="card-stats">
+            <div class="stat"><div class="stat-val green">${s.winRate}</div><div class="stat-lbl">Win Rate</div></div>
+            <div class="stat"><div class="stat-val">${s.sharpe}</div><div class="stat-lbl">Sharpe</div></div>
+            <div class="stat"><div class="stat-val yellow">${s.drawdown}</div><div class="stat-lbl">Max DD</div></div>
+          </div>
+          <div class="card-footer">
+            <span class="author">by ${s.author}</span>
+            ${s.locked
+              ? '<a class="btn-use locked" href="/register">Unlock</a>'
+              : '<a class="btn-use" href="/login?next=/paper-trading">Deploy</a>'}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    renderCards();
+  </script>
+</body>
+</html>

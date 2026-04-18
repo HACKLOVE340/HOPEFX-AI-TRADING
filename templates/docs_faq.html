@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HOPEFX — FAQ</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0a0e1a 0%, #1a1f2e 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #e0e6ed;
+    }
+    nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 40px; border-bottom: 1px solid #2d3748;
+      background: rgba(10,14,26,0.8); backdrop-filter: blur(8px);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .nav-logo { font-size: 20px; font-weight: 700; color: #00d4ff; letter-spacing: 1px; text-decoration: none; }
+    .nav-links { display: flex; gap: 24px; }
+    .nav-links a { color: #8892b0; text-decoration: none; font-size: 14px; transition: color 0.2s; }
+    .nav-links a:hover { color: #00d4ff; }
+    .layout { display: flex; max-width: 1100px; margin: 0 auto; padding: 48px 24px; gap: 40px; }
+    .sidebar { width: 220px; flex-shrink: 0; }
+    .sidebar h3 { font-size: 12px; font-weight: 600; color: #4a5568; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+    .sidebar a { display: block; font-size: 13px; color: #8892b0; text-decoration: none; padding: 6px 0; border-left: 2px solid transparent; padding-left: 12px; transition: all 0.2s; }
+    .sidebar a:hover, .sidebar a.active { color: #00d4ff; border-left-color: #00d4ff; }
+    .content { flex: 1; min-width: 0; }
+    .content h1 { font-size: 32px; font-weight: 700; color: #e0e6ed; margin-bottom: 8px; }
+    .content .lead { font-size: 16px; color: #8892b0; margin-bottom: 40px; line-height: 1.6; }
+    .section-title { font-size: 18px; font-weight: 600; color: #00d4ff; margin: 36px 0 16px; padding-bottom: 8px; border-bottom: 1px solid #2d3748; }
+    .faq-item { margin-bottom: 4px; }
+    .faq-q {
+      width: 100%; text-align: left; padding: 14px 16px; background: #1a1f2e;
+      border: 1px solid #2d3748; border-radius: 8px; color: #e0e6ed;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      display: flex; justify-content: space-between; align-items: center;
+      transition: border-color 0.2s; margin-bottom: 2px;
+    }
+    .faq-q:hover { border-color: #00d4ff; color: #00d4ff; }
+    .faq-a {
+      font-size: 14px; color: #a0aec0; line-height: 1.7;
+      padding: 0 16px; max-height: 0; overflow: hidden;
+      transition: max-height 0.3s ease, padding 0.3s;
+      background: rgba(26,31,46,0.5); border-radius: 0 0 8px 8px;
+    }
+    .faq-a.open { max-height: 400px; padding: 14px 16px; }
+    .faq-a code { background: #0f1419; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #00d4ff; }
+    footer { text-align: center; padding: 32px; color: #4a5568; font-size: 13px; border-top: 1px solid #2d3748; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a class="nav-logo" href="/">HOPEFX</a>
+    <div class="nav-links">
+      <a href="/docs/FAQ.md" class="active">FAQ</a>
+      <a href="/docs/API.md">API Docs</a>
+      <a href="/docs/MOBILE_GUIDE.md">Mobile</a>
+      <a href="/marketplace">Marketplace</a>
+      <a href="/login">Login</a>
+    </div>
+  </nav>
+
+  <div class="layout">
+    <div class="sidebar">
+      <h3>Documentation</h3>
+      <a href="/docs/FAQ.md" class="active">FAQ</a>
+      <a href="/docs/API.md">API Reference</a>
+      <a href="/docs/MOBILE_GUIDE.md">Mobile Guide</a>
+      <a href="/docs">Swagger UI</a>
+      <a href="/security">Security</a>
+      <a href="/marketplace">Marketplace</a>
+      <a href="/affiliate">Affiliate</a>
+    </div>
+
+    <div class="content">
+      <h1>Frequently Asked Questions</h1>
+      <p class="lead">Answers to the most common questions about HOPEFX AI Trading.</p>
+
+      <div class="section-title">Getting Started</div>
+
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggle(this)">What is HOPEFX? <span>+</span></button>
+        <div class="faq-a">HOPEFX is an AI-powered trading platform specialising in XAUUSD (Gold/USD) and major forex pairs. It combines machine learning signal generation, real-time order flow analysis, macro data feeds, and automated risk management in a single platform.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggle(this)">How do I create an account? <span>+</span></button>
+        <div class="faq-a">Visit <a href="/register" style="color:#00d4ff">/register</a>, enter your name, email, and a strong password. You will receive a verification email — click the link to activate your account, then log in at <a href="/login" style="color:#00d4ff">/login</a>.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggle(this)">Is there a free trial? <span>+</span></button>
+        <div class="faq-a">Yes. All new accounts start with a 14-day free trial of the Pro plan. No credit card required. After the trial, you can continue on the free tier or upgrade.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggle(this)">What instruments are supported? <span>+</span></button>
+        <div class="faq-a">The platform is optimised for XAUUSD (Gold/USD). Additional instruments including EURUSD, GBPUSD, USDJPY, and major commodities are available on Pro and Elite plans.</div>
+      </div>
+
+      <div class="section-title">Trading &amp; Signals</div>
+
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggle(this)">How are AI signals generated? <span>+</span></button>
+        <div class="faq-a">Signals are produced by an ensemble of models: LSTM for price sequence patterns, gradient boosting for feature-based regime detection, and a neural network trained on order flow imbalance. Signals are fused with macro data (COT, DXY, geopolitical risk) before being passed through a pre-trade risk gate.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggle(this)">What is paper trading? <span>+</span></button>
+        <div class="faq-a">Paper trading simulates real trades using live market prices without risking real money. It is the default mode for all new accounts. Switch to live trading only after connecting a broker and passing the risk assessment.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggle(this)">How does the kill switch work? <span>+</span></button>
+        <div class="faq-a">The kill switch immediately halts all new orders and optionally closes open positions. It can be triggered manually from the dashboard, via the API (<code>POST /api/kill-switch/activate</code>), or automatically by the risk engine when drawdown or loss limits are breached. It propagates across all server pods via Redis pub/sub.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggle(this)">Which brokers are supported? <span>+</span></button>
+        <div class="faq-a">OANDA (practice and live), Interactive Brokers (IBKR), and a built-in paper trading engine. Additional broker connectors (cTrader, MT4/MT5 bridge) are available on Elite plans.</div>
+      </div>
+
+      <div class="section-title">Account &amp; Billing</div>
+
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggle(this)">How do I reset my password? <span>+</span></button>
+        <div class="faq-a">Go to <a href="/login" style="color:#00d4ff">/login</a> and click "Forgot password". Enter your email and you will receive a reset link valid for 1 hour.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggle(this)">How do I enable two-factor authentication? <span>+</span></button>
+        <div class="faq-a">Log in, go to Account Settings → Security → Enable 2FA. Scan the QR code with any TOTP app (Google Authenticator, Authy, 1Password). Save your backup codes in a safe place.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggle(this)">Can I cancel my subscription? <span>+</span></button>
+        <div class="faq-a">Yes. Cancel any time from Account Settings → Billing. Your access continues until the end of the current billing period. No cancellation fees.</div>
+      </div>
+
+      <div class="section-title">Technical</div>
+
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggle(this)">Where is the API documentation? <span>+</span></button>
+        <div class="faq-a">Interactive Swagger UI is available at <a href="/docs" style="color:#00d4ff">/docs</a>. A full reference guide is at <a href="/docs/API.md" style="color:#00d4ff">/docs/API.md</a>. All endpoints require a Bearer JWT token obtained from <code>POST /api/auth/login</code>.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggle(this)">Is there a mobile app? <span>+</span></button>
+        <div class="faq-a">The web platform is fully responsive and works on mobile browsers. A dedicated mobile guide is available at <a href="/docs/MOBILE_GUIDE.md" style="color:#00d4ff">/docs/MOBILE_GUIDE.md</a>. Native iOS and Android apps are on the roadmap.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggle(this)">What are the system requirements? <span>+</span></button>
+        <div class="faq-a">Any modern browser (Chrome 90+, Firefox 88+, Safari 14+, Edge 90+). For the API: Python 3.11+, FastAPI, PostgreSQL 14+, Redis 7+. See the README for full deployment requirements.</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    &copy; 2025-2026 HOPEFX AI Trading. All rights reserved.
+    &nbsp;·&nbsp; <a href="/security" style="color:#00d4ff;text-decoration:none;">Security</a>
+    &nbsp;·&nbsp; <a href="/docs/API.md" style="color:#00d4ff;text-decoration:none;">API Docs</a>
+  </footer>
+
+  <script>
+    function toggle(btn) {
+      const a = btn.nextElementSibling;
+      const s = btn.querySelector('span');
+      const open = a.classList.contains('open');
+      document.querySelectorAll('.faq-a').forEach(x => x.classList.remove('open'));
+      document.querySelectorAll('.faq-q span').forEach(x => x.textContent = '+');
+      if (!open) { a.classList.add('open'); s.textContent = '−'; }
+    }
+  </script>
+</body>
+</html>

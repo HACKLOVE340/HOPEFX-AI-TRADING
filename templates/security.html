@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HOPEFX — Security</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0a0e1a 0%, #1a1f2e 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #e0e6ed;
+    }
+    nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 40px; border-bottom: 1px solid #2d3748;
+      background: rgba(10,14,26,0.8); backdrop-filter: blur(8px);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .nav-logo { font-size: 20px; font-weight: 700; color: #00d4ff; letter-spacing: 1px; text-decoration: none; }
+    .nav-links { display: flex; gap: 24px; }
+    .nav-links a { color: #8892b0; text-decoration: none; font-size: 14px; transition: color 0.2s; }
+    .nav-links a:hover { color: #00d4ff; }
+    .container { max-width: 900px; margin: 0 auto; padding: 60px 24px; }
+    h1 { font-size: 36px; font-weight: 700; color: #00d4ff; margin-bottom: 12px; }
+    .subtitle { font-size: 16px; color: #8892b0; margin-bottom: 48px; line-height: 1.6; }
+    .section { margin-bottom: 48px; }
+    .section h2 { font-size: 20px; font-weight: 600; color: #e0e6ed; margin-bottom: 16px;
+      padding-bottom: 10px; border-bottom: 1px solid #2d3748; }
+    .section p, .section li { font-size: 15px; color: #a0aec0; line-height: 1.7; margin-bottom: 10px; }
+    .section ul { padding-left: 20px; }
+    .section li { margin-bottom: 8px; }
+    .badge {
+      display: inline-block; padding: 4px 10px; border-radius: 4px;
+      font-size: 12px; font-weight: 600; margin-right: 8px; margin-bottom: 8px;
+    }
+    .badge-green  { background: rgba(0,200,83,0.15);  color: #00c853; border: 1px solid rgba(0,200,83,0.3); }
+    .badge-blue   { background: rgba(0,212,255,0.15); color: #00d4ff; border: 1px solid rgba(0,212,255,0.3); }
+    .badge-yellow { background: rgba(255,179,0,0.15); color: #ffb300; border: 1px solid rgba(255,179,0,0.3); }
+    .card {
+      background: #1a1f2e; border: 1px solid #2d3748; border-radius: 10px;
+      padding: 24px; margin-bottom: 16px;
+    }
+    .card h3 { font-size: 16px; font-weight: 600; color: #e0e6ed; margin-bottom: 8px; }
+    .card p  { font-size: 14px; color: #8892b0; line-height: 1.6; }
+    .contact-box {
+      background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.25);
+      border-radius: 10px; padding: 24px; text-align: center;
+    }
+    .contact-box p { color: #a0aec0; margin-bottom: 12px; }
+    .contact-box a { color: #00d4ff; font-weight: 600; text-decoration: none; }
+    footer { text-align: center; padding: 32px; color: #4a5568; font-size: 13px; border-top: 1px solid #2d3748; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a class="nav-logo" href="/">HOPEFX</a>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/marketplace">Marketplace</a>
+      <a href="/docs/FAQ.md">FAQ</a>
+      <a href="/login">Login</a>
+      <a href="/register">Register</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <h1>Security &amp; Privacy</h1>
+    <p class="subtitle">
+      HOPEFX is built with security-first principles. Every layer of the platform —
+      from authentication to data storage — is designed to protect your account and trading data.
+    </p>
+
+    <div class="section">
+      <h2>Certifications &amp; Standards</h2>
+      <span class="badge badge-green">AES-256 Encryption</span>
+      <span class="badge badge-blue">JWT + Refresh Tokens</span>
+      <span class="badge badge-blue">TOTP 2FA</span>
+      <span class="badge badge-yellow">Rate Limiting</span>
+      <span class="badge badge-green">HTTPS / TLS 1.3</span>
+      <span class="badge badge-blue">CORS Policy</span>
+      <span class="badge badge-green">SQL Injection Prevention</span>
+      <span class="badge badge-yellow">OWASP Top 10 Mitigations</span>
+    </div>
+
+    <div class="section">
+      <h2>Authentication</h2>
+      <div class="card">
+        <h3>JWT Access &amp; Refresh Tokens</h3>
+        <p>Short-lived access tokens (15 min) paired with rotating refresh tokens. All tokens are signed with HS256 and validated on every request.</p>
+      </div>
+      <div class="card">
+        <h3>Two-Factor Authentication (2FA)</h3>
+        <p>TOTP-based 2FA via any authenticator app (Google Authenticator, Authy, etc.). Enabled per-user from account settings. Backup codes are provided at setup.</p>
+      </div>
+      <div class="card">
+        <h3>Rate Limiting</h3>
+        <p>Authentication endpoints are limited to 10 requests per 60 seconds per IP. Trading endpoints are limited to 60 requests per minute per user. Violations return HTTP 429.</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Data Protection</h2>
+      <ul>
+        <li>All passwords are hashed with bcrypt (cost factor 12) — plaintext passwords are never stored.</li>
+        <li>Database connections use TLS. Sensitive fields are encrypted at rest with AES-256.</li>
+        <li>API keys and broker credentials are stored in environment variables or a secrets manager — never in source code or the database.</li>
+        <li>Audit logs record every privileged action with timestamp, user ID, and IP address.</li>
+        <li>Session tokens are invalidated on logout and password change.</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h2>Infrastructure</h2>
+      <ul>
+        <li>All traffic is served over HTTPS with TLS 1.2+ enforced. HTTP is redirected to HTTPS.</li>
+        <li>Security headers: <code>Strict-Transport-Security</code>, <code>X-Content-Type-Options</code>, <code>X-Frame-Options</code>, <code>Content-Security-Policy</code>.</li>
+        <li>Redis connections support TLS and password authentication.</li>
+        <li>Docker images are scanned for vulnerabilities via Snyk and CodeQL on every push.</li>
+        <li>Dependency updates are automated via Dependabot with weekly security patches.</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h2>Kill Switch &amp; Risk Controls</h2>
+      <p>
+        The platform includes a hardware-level kill switch that immediately halts all trading activity
+        and closes open positions when triggered. It propagates across all pods via Redis pub/sub,
+        ensuring no orders are placed during a security incident or system anomaly.
+      </p>
+    </div>
+
+    <div class="section">
+      <h2>Responsible Disclosure</h2>
+      <div class="contact-box">
+        <p>Found a security vulnerability? Please report it responsibly.</p>
+        <p>Email: <a href="mailto:security@hopefx.io">security@hopefx.io</a></p>
+        <p style="margin-top:8px; font-size:13px; color:#4a5568;">
+          We aim to acknowledge reports within 48 hours and resolve critical issues within 7 days.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    &copy; 2025-2026 HOPEFX AI Trading. All rights reserved.
+    &nbsp;·&nbsp; <a href="/login" style="color:#00d4ff;text-decoration:none;">Login</a>
+    &nbsp;·&nbsp; <a href="/register" style="color:#00d4ff;text-decoration:none;">Register</a>
+  </footer>
+</body>
+</html>

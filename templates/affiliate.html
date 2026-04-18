@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HOPEFX — Affiliate Program</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0a0e1a 0%, #1a1f2e 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #e0e6ed;
+    }
+    nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 40px; border-bottom: 1px solid #2d3748;
+      background: rgba(10,14,26,0.8); backdrop-filter: blur(8px);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .nav-logo { font-size: 20px; font-weight: 700; color: #00d4ff; letter-spacing: 1px; text-decoration: none; }
+    .nav-links { display: flex; gap: 24px; align-items: center; }
+    .nav-links a { color: #8892b0; text-decoration: none; font-size: 14px; transition: color 0.2s; }
+    .nav-links a:hover { color: #00d4ff; }
+    .btn-nav {
+      padding: 8px 18px; background: #00d4ff; color: #0a0e1a;
+      border-radius: 6px; font-weight: 600; font-size: 13px; text-decoration: none;
+    }
+    .btn-nav:hover { background: #00b8d9; color: #0a0e1a; }
+    .hero { text-align: center; padding: 80px 24px 60px; }
+    .hero h1 { font-size: 44px; font-weight: 700; margin-bottom: 16px; }
+    .hero h1 span { color: #00d4ff; }
+    .hero p { font-size: 18px; color: #8892b0; max-width: 580px; margin: 0 auto 36px; line-height: 1.6; }
+    .cta-row { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    .btn-primary {
+      padding: 14px 32px; background: #00d4ff; color: #0a0e1a;
+      border: none; border-radius: 8px; font-size: 16px; font-weight: 700;
+      cursor: pointer; text-decoration: none; transition: background 0.2s;
+    }
+    .btn-primary:hover { background: #00b8d9; }
+    .btn-outline {
+      padding: 14px 32px; background: transparent; color: #00d4ff;
+      border: 2px solid #00d4ff; border-radius: 8px; font-size: 16px; font-weight: 700;
+      cursor: pointer; text-decoration: none; transition: all 0.2s;
+    }
+    .btn-outline:hover { background: rgba(0,212,255,0.1); }
+    .stats-row { display: flex; justify-content: center; gap: 48px; padding: 48px 24px; flex-wrap: wrap; }
+    .stat { text-align: center; }
+    .stat-val { font-size: 40px; font-weight: 700; color: #00d4ff; }
+    .stat-lbl { font-size: 14px; color: #8892b0; margin-top: 4px; }
+    .section { max-width: 1100px; margin: 0 auto; padding: 0 24px 72px; }
+    .section h2 { font-size: 28px; font-weight: 700; text-align: center; margin-bottom: 40px; }
+    .tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+    .tier-card {
+      background: #1a1f2e; border: 1px solid #2d3748; border-radius: 12px;
+      padding: 28px; text-align: center; transition: border-color 0.2s;
+    }
+    .tier-card:hover { border-color: #00d4ff; }
+    .tier-card.featured { border-color: #00d4ff; background: rgba(0,212,255,0.05); }
+    .tier-icon { font-size: 36px; margin-bottom: 12px; }
+    .tier-name { font-size: 18px; font-weight: 700; color: #e0e6ed; margin-bottom: 6px; }
+    .tier-commission { font-size: 36px; font-weight: 700; color: #00d4ff; margin-bottom: 8px; }
+    .tier-req { font-size: 13px; color: #8892b0; margin-bottom: 16px; }
+    .tier-perks { list-style: none; text-align: left; }
+    .tier-perks li { font-size: 13px; color: #a0aec0; padding: 5px 0; border-bottom: 1px solid #2d3748; }
+    .tier-perks li:last-child { border: none; }
+    .tier-perks li::before { content: "✓ "; color: #00c853; font-weight: 700; }
+    .how-it-works { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px; }
+    .step { text-align: center; padding: 24px; }
+    .step-num { width: 48px; height: 48px; border-radius: 50%; background: rgba(0,212,255,0.15);
+      border: 2px solid #00d4ff; display: flex; align-items: center; justify-content: center;
+      font-size: 20px; font-weight: 700; color: #00d4ff; margin: 0 auto 16px; }
+    .step h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+    .step p  { font-size: 13px; color: #8892b0; line-height: 1.5; }
+    .faq-list { max-width: 720px; margin: 0 auto; }
+    .faq-item { border-bottom: 1px solid #2d3748; }
+    .faq-q {
+      width: 100%; text-align: left; padding: 18px 0; background: none; border: none;
+      color: #e0e6ed; font-size: 15px; font-weight: 600; cursor: pointer;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .faq-q:hover { color: #00d4ff; }
+    .faq-a { font-size: 14px; color: #8892b0; line-height: 1.6; padding-bottom: 16px; display: none; }
+    .faq-a.open { display: block; }
+    .signup-box {
+      background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.25);
+      border-radius: 12px; padding: 48px; text-align: center; max-width: 600px; margin: 0 auto;
+    }
+    .signup-box h2 { font-size: 26px; font-weight: 700; margin-bottom: 12px; }
+    .signup-box p  { color: #8892b0; margin-bottom: 24px; }
+    footer { text-align: center; padding: 32px; color: #4a5568; font-size: 13px; border-top: 1px solid #2d3748; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a class="nav-logo" href="/">HOPEFX</a>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/marketplace">Marketplace</a>
+      <a href="/security">Security</a>
+      <a href="/docs/FAQ.md">FAQ</a>
+      <a href="/login">Login</a>
+      <a class="btn-nav" href="/register">Get Started</a>
+    </div>
+  </nav>
+
+  <div class="hero">
+    <h1>Earn with <span>HOPEFX</span></h1>
+    <p>Refer traders to the most advanced AI trading platform and earn recurring commissions on every subscription.</p>
+    <div class="cta-row">
+      <a class="btn-primary" href="/register">Join the Program</a>
+      <a class="btn-outline" href="#how-it-works">How It Works</a>
+    </div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat"><div class="stat-val">30%</div><div class="stat-lbl">Max Commission</div></div>
+    <div class="stat"><div class="stat-val">90d</div><div class="stat-lbl">Cookie Duration</div></div>
+    <div class="stat"><div class="stat-val">$50</div><div class="stat-lbl">Min. Payout</div></div>
+    <div class="stat"><div class="stat-val">Monthly</div><div class="stat-lbl">Payment Cycle</div></div>
+  </div>
+
+  <div class="section">
+    <h2>Commission Tiers</h2>
+    <div class="tiers">
+      <div class="tier-card">
+        <div class="tier-icon">🌱</div>
+        <div class="tier-name">Starter</div>
+        <div class="tier-commission">15%</div>
+        <div class="tier-req">0–4 active referrals</div>
+        <ul class="tier-perks">
+          <li>Recurring monthly commission</li>
+          <li>90-day cookie window</li>
+          <li>Real-time dashboard</li>
+          <li>Custom referral link</li>
+        </ul>
+      </div>
+      <div class="tier-card featured">
+        <div class="tier-icon">⚡</div>
+        <div class="tier-name">Growth</div>
+        <div class="tier-commission">22%</div>
+        <div class="tier-req">5–19 active referrals</div>
+        <ul class="tier-perks">
+          <li>Everything in Starter</li>
+          <li>Priority support</li>
+          <li>Co-marketing materials</li>
+          <li>Monthly performance report</li>
+        </ul>
+      </div>
+      <div class="tier-card">
+        <div class="tier-icon">🏆</div>
+        <div class="tier-name">Elite</div>
+        <div class="tier-commission">30%</div>
+        <div class="tier-req">20+ active referrals</div>
+        <ul class="tier-perks">
+          <li>Everything in Growth</li>
+          <li>Dedicated account manager</li>
+          <li>Custom landing pages</li>
+          <li>Early feature access</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section" id="how-it-works">
+    <h2>How It Works</h2>
+    <div class="how-it-works">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h3>Sign Up</h3>
+        <p>Create a free HOPEFX account and apply for the affiliate program from your dashboard.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h3>Share Your Link</h3>
+        <p>Get a unique referral link and share it on your blog, YouTube, social media, or trading community.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h3>Earn Commissions</h3>
+        <p>Earn a percentage of every subscription payment made by traders you refer — for the lifetime of their account.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <h3>Get Paid</h3>
+        <p>Receive monthly payouts via bank transfer or crypto once your balance reaches $50.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Frequently Asked Questions</h2>
+    <div class="faq-list">
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          When do I get paid? <span>+</span>
+        </button>
+        <div class="faq-a">Commissions are paid monthly, on the 15th of each month, for the previous month's earnings. Minimum payout is $50.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          How long does the cookie last? <span>+</span>
+        </button>
+        <div class="faq-a">Your referral cookie lasts 90 days. If a user signs up within 90 days of clicking your link, you earn the commission.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          Can I refer myself? <span>+</span>
+        </button>
+        <div class="faq-a">No. Self-referrals are not permitted and will result in account termination. Commissions are only paid for genuine new users.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          What payment methods are supported? <span>+</span>
+        </button>
+        <div class="faq-a">We support bank wire transfer (SWIFT/SEPA), PayPal, and USDC/USDT on major networks.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          Is there a limit on earnings? <span>+</span>
+        </button>
+        <div class="faq-a">No cap. The more active subscribers you refer, the more you earn. Elite affiliates have earned over $10,000/month.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="signup-box">
+      <h2>Ready to Start Earning?</h2>
+      <p>Join hundreds of affiliates already earning with HOPEFX. No upfront cost, no minimum traffic requirement.</p>
+      <a class="btn-primary" href="/register">Create Free Account</a>
+    </div>
+  </div>
+
+  <footer>
+    &copy; 2025-2026 HOPEFX AI Trading. All rights reserved.
+    &nbsp;·&nbsp; <a href="/security" style="color:#00d4ff;text-decoration:none;">Security</a>
+    &nbsp;·&nbsp; <a href="/marketplace" style="color:#00d4ff;text-decoration:none;">Marketplace</a>
+  </footer>
+
+  <script>
+    function toggleFaq(btn) {
+      const answer = btn.nextElementSibling;
+      const icon   = btn.querySelector('span');
+      const isOpen = answer.classList.contains('open');
+      document.querySelectorAll('.faq-a').forEach(a => a.classList.remove('open'));
+      document.querySelectorAll('.faq-q span').forEach(s => s.textContent = '+');
+      if (!isOpen) { answer.classList.add('open'); icon.textContent = '−'; }
+    }
+  </script>
+</body>
+</html>
