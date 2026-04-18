@@ -8,9 +8,7 @@
 		// Node.js LTS — required for the React/Vite frontend build toolchain.
 		"ghcr.io/devcontainers/features/node:1": {
 			"version": "20"
-		},
-		// C++ build toolchain for execution/cpp_shim.
-		"ghcr.io/devcontainers/features/common-utils:2": {}
+		}
 	},
 	// Redis is installed via apt (more reliable than third-party features).
 	// postCreateCommand runs after the container is fully initialised.
