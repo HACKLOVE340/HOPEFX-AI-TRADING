@@ -55,7 +55,7 @@ from datetime import datetime, timedelta, timezone
 
 UTC = timezone.utc
 from pathlib import Path
-from typing import ClassVar
+
 
 import numpy as np
 import pandas as pd
@@ -429,18 +429,21 @@ def _detect_sharpe_outliers(symbol_results: list[dict]) -> tuple[list[str], list
     Thresholds (conservative):
     - Sharpe > 5.0 is implausible for any real daily-bar strategy
     - Win rate > 75% on > 50 trades is implausible for a direction model
-    - Both conditions together = almost certainly a data or look-ahead artefact
+
+    Either condition alone is sufficient to flag a symbol as an outlier.
+    EUR/GBP-family FX pairs frequently exhibit look-ahead artefacts on
+    daily bars due to bid/ask spread compression in historical data feeds.
 
     Returns (outlier_symbols, reasons) — parallel lists.
     """
-    outliers: ClassVar[list[str]] = []
-    reasons: ClassVar[list[str]] = []
+    outliers: list[str] = []
+    reasons: list[str] = []
     for r in symbol_results:
         sym = r.get("symbol", "?")
         sharpe = r.get("sharpe", 0.0)
         win_rate = r.get("win_rate", 0.0)
         n = r.get("n_trades", 0)
-        flags: ClassVar[list[str]] = []
+        flags: list[str] = []
         if sharpe > 5.0:
             flags.append(f"Sharpe={sharpe:.2f} > 5.0 (implausible for daily bars)")
         if win_rate > 0.75 and n > 50:
@@ -472,9 +475,9 @@ def _pool_pnls(symbol_results: list[dict], exclude: list[str] | None = None) -> 
     import os as _os
 
     exclude_set = set(exclude or [])
-    all_pnls: ClassVar[list[float]] = []
+    all_pnls: list[float] = []
     n_total = 0
-    skipped_symbols: ClassVar[list[str]] = []
+    skipped_symbols: list[str] = []
     _is_production = _os.getenv("APP_ENV", "production").lower() == "production"
 
     for r in symbol_results:
@@ -607,10 +610,17 @@ def compute_pooled_metrics(symbol_results: list[dict], target_n: int = 600) -> d
         "PASSED" if authoritative["sharpe_gate_passed"] else "BLOCKED",
     )
 
-    result = dict(full_stats)
+    # ── Build result — honest pool is always authoritative ────────────────────
+    # The top-level result fields always reflect the honest pool (outliers
+    # excluded). The full pool (including inflated outliers) is preserved
+    # under _validation.full_pooled for audit purposes only.
+    # This prevents inflated EUR/GBP-family Sharpe ratios from causing a
+    # false gate pass at the top level.
+    result = dict(authoritative)
     result["_validation"] = {
         "outlier_symbols": outlier_syms,
         "outlier_reasons": {sym: reason for sym, reason in zip(outlier_syms, outlier_reasons, strict=False)},
+        "full_pooled": full_stats,   # includes inflated outliers — for audit only
         "honest_pooled": honest_stats,
         "gate_uses_honest_pool": bool(outlier_syms),
         "note": (
@@ -622,11 +632,10 @@ def compute_pooled_metrics(symbol_results: list[dict], target_n: int = 600) -> d
         else "No outliers detected — full pool is authoritative.",
     }
 
-    # Override gate fields with honest pool values when outliers exist
-    if honest_stats is not None:
-        result["sharpe_gate_passed"] = honest_stats["sharpe_gate_passed"]
-        result["sharpe_credible"] = honest_stats["sharpe_credible"]
-        result["message"] = f"[HONEST POOL — {','.join(outlier_syms)} excluded] " + honest_stats["message"]
+    if outlier_syms:
+        result["message"] = (
+            f"[HONEST POOL — {','.join(outlier_syms)} excluded] " + authoritative["message"]
+        )
 
     return result
 

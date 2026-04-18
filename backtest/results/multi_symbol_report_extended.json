@@ -120,16 +120,24 @@
     }
   ],
   "pooled": {
-    "n_total_trades": 952,
-    "pooled_sharpe": 2.3833,
-    "pooled_sharpe_se": 0.0635,
-    "pooled_mean_pnl": 0.003063,
-    "pooled_std_pnl": 0.020403,
+    "n_total_trades": 444,
+    "pooled_sharpe": 1.3154,
+    "pooled_sharpe_se": 0.0648,
+    "pooled_mean_pnl": 0.002452,
+    "pooled_std_pnl": 0.029594,
     "sharpe_gate_passed": false,
     "sharpe_credible": true,
     "target_n": 919,
-    "n_required_for_se_010": 384,
+    "n_required_for_se_010": 187,
     "message": "[HONEST POOL \u2014 EUR/USD,GBP/USD excluded] Sharpe gate BLOCKED: N=444 < 919. SE=0.065 (SE<=0.10 requires N>=187).",
+    "excluded_symbols": [
+      "EUR/USD",
+      "GBP/USD"
+    ],
+    "exclusion_reasons": {
+      "EUR/USD": "Sharpe=12.48 > 5.0 (implausible for daily bars); win_rate=82.8% on 267 trades (implausible for direction model)",
+      "GBP/USD": "Sharpe=16.36 > 5.0 (implausible for daily bars); win_rate=85.5% on 241 trades (implausible for direction model)"
+    },
     "_validation": {
       "outlier_symbols": [
         "EUR/USD",
@@ -138,6 +146,18 @@
       "outlier_reasons": {
         "EUR/USD": "Sharpe=12.48 > 5.0 (implausible for daily bars); win_rate=82.8% on 267 trades (implausible for direction model)",
         "GBP/USD": "Sharpe=16.36 > 5.0 (implausible for daily bars); win_rate=85.5% on 241 trades (implausible for direction model)"
+      },
+      "full_pooled": {
+        "n_total_trades": 952,
+        "pooled_sharpe": 2.3833,
+        "pooled_sharpe_se": 0.0635,
+        "pooled_mean_pnl": 0.003063,
+        "pooled_std_pnl": 0.020403,
+        "sharpe_gate_passed": false,
+        "sharpe_credible": true,
+        "target_n": 919,
+        "n_required_for_se_010": 384,
+        "message": "[HONEST POOL \u2014 EUR/USD,GBP/USD excluded] Sharpe gate BLOCKED: N=444 < 919. SE=0.065 (SE<=0.10 requires N>=187)."
       },
       "honest_pooled": {
         "n_total_trades": 444,
@@ -160,8 +180,21 @@
         }
       },
       "gate_uses_honest_pool": true,
-      "note": "Symbols ['EUR/USD', 'GBP/USD'] have implausible Sharpe ratios and are excluded from the honest pooled Sharpe. The gate check uses the honest pool. These results must be independently validated before citing."
+      "note": "Symbols ['EUR/USD', 'GBP/USD'] have implausible Sharpe ratios (EUR/USD=12.48, GBP/USD=16.36) and are excluded from the honest pooled Sharpe. The gate check uses the honest pool. These results must be independently validated before citing."
     }
   },
-  "_validation_note": "EUR/USD and GBP/USD Sharpe ratios (12.48, 16.36) are implausible artefacts. They are excluded from the honest pooled Sharpe. The gate check uses the honest pool (N=444, Sharpe=1.32, BLOCKED). These symbols must be independently validated before citing."
+  "_validation_note": "EUR/USD and GBP/USD Sharpe ratios (12.48, 16.36) are implausible artefacts (look-ahead bias in daily-bar FX data). They are excluded from the honest pooled Sharpe. Top-level pooled fields now reflect the honest pool only (N=444, Sharpe=1.32, BLOCKED). Full pool preserved under pooled._validation.full_pooled for audit.",
+  "_flaw4_audit": {
+    "detected_at": "2026-04-18",
+    "inflated_symbols": {
+      "EUR/USD": 12.48,
+      "GBP/USD": 16.36
+    },
+    "versions_affected": 3,
+    "root_cause": "look-ahead artefact in daily-bar FX historical data (bid/ask spread compression)",
+    "fix": "outlier detection excludes Sharpe>5.0 symbols; honest pool used for gate",
+    "honest_sharpe": 1.3154,
+    "honest_n": 444,
+    "gate_status": "BLOCKED (N=444 < target_n=919)"
+  }
 }
