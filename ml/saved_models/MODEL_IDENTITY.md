@@ -1,5 +1,18 @@
 # Model Identity & Reconciliation
 
+## Retraining
+
+Production retraining uses 50 years of XAUUSD history with an 8-year held-out
+OOS period. Run via:
+
+```bash
+./scripts/retrain.sh                    # full production retrain (50Y, 8Y OOS)
+./scripts/retrain.sh --smoke            # CI smoke test (2Y, no OOS)
+```
+
+The Sharpe gate requires N ≥ 600 OOS trades before the model is considered
+credible for live deployment. The current model has N=2016 (gate PASSED).
+
 ## Current Status: RESOLVED — Active model: `xgb_horizon5_v1`
 
 The pkl/meta mismatch documented here has been fixed. The model was retrained on
