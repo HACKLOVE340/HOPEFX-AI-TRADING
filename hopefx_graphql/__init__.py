@@ -4,7 +4,10 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 """
-graphql — GraphQL schema definitions.
+hopefx_graphql — GraphQL schema definitions.
+
+Renamed from graphql/ to hopefx_graphql/ to avoid shadowing the graphql-core
+library (which strawberry-graphql depends on).
 
 The primary GraphQL router is in api/graphql_schema.py (Strawberry).
 This package contains supplementary schema utilities.

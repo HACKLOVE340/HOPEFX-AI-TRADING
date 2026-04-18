@@ -6,10 +6,10 @@
 """
 Compatibility shim — real schema is in api/graphql_schema.py.
 
-The graphql/ directory name shadows graphql-core when imported directly,
-so the schema was moved to api/graphql_schema.py. This file re-exports
-for any code that still imports from graphql.schema.
+This package was renamed from graphql/ to hopefx_graphql/ to stop shadowing
+graphql-core. Any code that previously imported from graphql.schema should
+import from api.graphql_schema instead.
 """
-# Do NOT import strawberry here — this module is loaded as part of the
-# graphql package namespace which conflicts with graphql-core.
+# Do NOT import strawberry here — importing strawberry triggers graphql-core
+# imports and must happen after the package rename is in effect.
 # Import from api.graphql_schema instead.
