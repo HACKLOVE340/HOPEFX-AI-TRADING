@@ -930,3 +930,7 @@ def get_order_flow_analyzer() -> OrderFlowAnalyzer:
     if _order_flow_analyzer is None:
         _order_flow_analyzer = OrderFlowAnalyzer()
     return _order_flow_analyzer
+
+
+# Module-level router — imported by core.router_registry
+router = create_order_flow_router(get_order_flow_analyzer())

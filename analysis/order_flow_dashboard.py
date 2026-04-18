@@ -589,3 +589,7 @@ def get_order_flow_dashboard() -> OrderFlowDashboard:
     if _dashboard is None:
         _dashboard = create_dashboard()
     return _dashboard
+
+
+# Module-level router — imported by core.router_registry
+router = create_dashboard_router(get_order_flow_dashboard())
