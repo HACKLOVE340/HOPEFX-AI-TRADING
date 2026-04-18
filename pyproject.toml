@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel>=0.46.2"]  # CVE-2026-24049 fixed in 0.46.2
+requires = ["setuptools>=61.0", "wheel>=0.46.2", "pip>=26.0.1"]  # wheel: CVE-2026-24049; pip: CVE-2026-1703, CVE-2025-8869
 build-backend = "setuptools.build_meta"
 
 [project]
