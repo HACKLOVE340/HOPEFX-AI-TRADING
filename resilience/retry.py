@@ -34,6 +34,7 @@ Design
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import functools
 import logging
 import random
@@ -110,19 +111,15 @@ class RetryPolicy:
                     loop = asyncio.get_event_loop()
                     result = await loop.run_in_executor(None, functools.partial(func, *args, **kwargs))
                 if self.on_success:
-                    try:
+                    with contextlib.suppress(Exception):  # nosec B110
                         self.on_success(attempt, result)
-                    except Exception:  # nosec B110
-                        pass
                 return result
             except Exception as exc:
                 last_exc = exc
                 if not self._should_retry(exc) or attempt == self.max_attempts:
                     if self.on_failure:
-                        try:
+                        with contextlib.suppress(Exception):  # nosec B110
                             self.on_failure(attempt, exc)
-                        except Exception:  # nosec B110
-                            pass
                     raise
                 delay = self._compute_delay(attempt)
                 logger.warning(
@@ -130,10 +127,8 @@ class RetryPolicy:
                     attempt, self.max_attempts, type(exc).__name__, exc, delay,
                 )
                 if self.on_retry:
-                    try:
+                    with contextlib.suppress(Exception):  # nosec B110
                         self.on_retry(attempt, exc, delay)
-                    except Exception:  # nosec B110
-                        pass
                 await asyncio.sleep(delay)
         # Should never reach here, but satisfy type checker
         raise last_exc  # type: ignore[misc]
@@ -149,19 +144,15 @@ class RetryPolicy:
             try:
                 result = func(*args, **kwargs)
                 if self.on_success:
-                    try:
+                    with contextlib.suppress(Exception):  # nosec B110
                         self.on_success(attempt, result)
-                    except Exception:  # nosec B110
-                        pass
                 return result
             except Exception as exc:
                 last_exc = exc
                 if not self._should_retry(exc) or attempt == self.max_attempts:
                     if self.on_failure:
-                        try:
+                        with contextlib.suppress(Exception):  # nosec B110
                             self.on_failure(attempt, exc)
-                        except Exception:  # nosec B110
-                            pass
                     raise
                 delay = self._compute_delay(attempt)
                 logger.warning(
@@ -169,10 +160,8 @@ class RetryPolicy:
                     attempt, self.max_attempts, type(exc).__name__, exc, delay,
                 )
                 if self.on_retry:
-                    try:
+                    with contextlib.suppress(Exception):  # nosec B110
                         self.on_retry(attempt, exc, delay)
-                    except Exception:  # nosec B110
-                        pass
                 time.sleep(delay)
         raise last_exc  # type: ignore[misc]
 

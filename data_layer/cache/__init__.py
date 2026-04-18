@@ -26,7 +26,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from data_layer.cache.redis_store import DataLayerRedisStore  # noqa: F401
+    from data_layer.cache.redis_store import DataLayerRedisStore
 except Exception as _exc:
     logger.debug("data_layer.cache: DataLayerRedisStore unavailable: %s", _exc)
     DataLayerRedisStore = None  # type: ignore[assignment,misc]

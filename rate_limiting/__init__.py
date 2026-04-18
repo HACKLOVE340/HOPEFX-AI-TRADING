@@ -19,13 +19,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from rate_limiting.websocket_limiter import WebSocketRateLimiter  # noqa: F401
+    from rate_limiting.websocket_limiter import WebSocketRateLimiter
 except Exception as _exc:
     logger.debug("rate_limiting.websocket_limiter unavailable: %s", _exc)
     WebSocketRateLimiter = None  # type: ignore[assignment,misc]
 
 try:
-    from rate_limiting.advanced import AdvancedRateLimiter  # noqa: F401
+    from rate_limiting.advanced import AdvancedRateLimiter
 except Exception as _exc:
     logger.debug("rate_limiting.advanced unavailable: %s", _exc)
     AdvancedRateLimiter = None  # type: ignore[assignment,misc]

@@ -144,13 +144,12 @@ class SumsubProvider(KYCProvider):
         global _sumsub_creds_warned
         self._app_token = os.getenv("SUMSUB_APP_TOKEN", "")
         self._secret = os.getenv("SUMSUB_SECRET_KEY", "")
-        if not self._app_token or not self._secret:
-            if not _sumsub_creds_warned:
-                logger.warning(
-                    "Sumsub: SUMSUB_APP_TOKEN or SUMSUB_SECRET_KEY not set — "
-                    "KYC verification will be unavailable until credentials are configured"
-                )
-                _sumsub_creds_warned = True
+        if (not self._app_token or not self._secret) and not _sumsub_creds_warned:
+            logger.warning(
+                "Sumsub: SUMSUB_APP_TOKEN or SUMSUB_SECRET_KEY not set — "
+                "KYC verification will be unavailable until credentials are configured"
+            )
+            _sumsub_creds_warned = True
 
     def _sign(self, ts: int, method: str, path: str, body: bytes = b"") -> str:
         """Generate HMAC-SHA256 signature for Sumsub API requests."""

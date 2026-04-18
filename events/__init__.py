@@ -18,13 +18,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from events.event_store import EventStore  # noqa: F401
+    from events.event_store import EventStore
 except Exception as _exc:
     logger.debug("events.event_store unavailable: %s", _exc)
     EventStore = None  # type: ignore[assignment,misc]
 
 try:
-    from events.typed_events import DomainEvent  # noqa: F401
+    from events.typed_events import DomainEvent
 except Exception as _exc:
     logger.debug("events.typed_events unavailable: %s", _exc)
     DomainEvent = None  # type: ignore[assignment,misc]

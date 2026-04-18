@@ -12,7 +12,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from src.backtest.routes.backtest import router  # noqa: F401
+    from src.backtest.routes.backtest import router
 except Exception as _exc:
     logger.debug("src.backtest.routes.backtest unavailable: %s", _exc)
     router = None  # type: ignore[assignment]

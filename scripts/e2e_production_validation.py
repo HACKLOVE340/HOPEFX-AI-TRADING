@@ -177,14 +177,14 @@ def check_imports() -> str:
 def check_orchestrator() -> str:
     from data_layer.orchestrator import orchestrator
 
-    assert orchestrator is not None
+    assert orchestrator is not None  # nosec B101 — validation script, assert is intentional
     # Test all call signatures
     f1 = orchestrator.get_ml_features()
     f2 = orchestrator.get_ml_features(symbol="XAU_USD")
     f3 = orchestrator.get_ml_features(as_of=datetime.now(UTC), symbol="XAU_USD")
-    assert isinstance(f1, dict), "get_ml_features() must return dict"
-    assert len(f1) >= 20, f"Expected >=20 features, got {len(f1)}"
-    assert len(f1) == len(f2) == len(f3), "All call signatures must return same count"
+    assert isinstance(f1, dict), "get_ml_features() must return dict"  # nosec B101 — validation script, assert is intentional
+    assert len(f1) >= 20, f"Expected >=20 features, got {len(f1)}"  # nosec B101 — validation script, assert is intentional
+    assert len(f1) == len(f2) == len(f3), "All call signatures must return same count"  # nosec B101 — validation script, assert is intentional
     h = orchestrator.health()
     required_keys = {
         "started",
@@ -200,7 +200,7 @@ def check_orchestrator() -> str:
         "replay",
     }
     missing = required_keys - set(h.keys())
-    assert not missing, f"health() missing keys: {missing}"
+    assert not missing, f"health() missing keys: {missing}"  # nosec B101 — validation script, assert is intentional
     return f"{len(f1)} features, {len(h)} health keys"
 
 
@@ -227,7 +227,7 @@ def check_single_entry_point() -> str:
     for name, comp in components.items():
         if name == "_gold_feed":
             continue  # None before start() — OK
-        assert comp is not None, f"orchestrator.{name} is None"
+        assert comp is not None, f"orchestrator.{name} is None"  # nosec B101 — validation script, assert is intentional
     return f"{len(components) - 1} components accessible via orchestrator"
 
 
@@ -243,9 +243,9 @@ def check_redis() -> str:
     r.ping()
     r.setex("hopefx:e2e:test", 5, "ok")
     val = r.get("hopefx:e2e:test")
-    assert val == "ok", f"Redis get returned {val!r}"
+    assert val == "ok", f"Redis get returned {val!r}"  # nosec B101 — validation script, assert is intentional
     ttl = r.ttl("hopefx:e2e:test")
-    assert ttl > 0, f"TTL should be positive, got {ttl}"
+    assert ttl > 0, f"TTL should be positive, got {ttl}"  # nosec B101 — validation script, assert is intentional
     r.delete("hopefx:e2e:test")
     return f"connected to {url}"
 
@@ -272,7 +272,7 @@ def check_lineage() -> str:
     store.record_tick(tick)
     store.flush()
     stats = store.stats()
-    assert stats["total_records"] >= 0
+    assert stats["total_records"] >= 0  # nosec B101 — validation script, assert is intentional
     return f"total_records={stats['total_records']}"
 
 
@@ -296,7 +296,7 @@ def check_dqe() -> str:
         quality=TickQuality.GOOD,
     )
     validated = dqe.validate_tick(good, received_at=time.time())
-    assert validated.quality != TickQuality.REJECTED, "Good tick should not be rejected"
+    assert validated.quality != TickQuality.REJECTED, "Good tick should not be rejected"  # nosec B101 — validation script, assert is intentional
 
     # Inverted spread — must be rejected
     bad = GoldTick(
@@ -309,10 +309,10 @@ def check_dqe() -> str:
         quality=TickQuality.GOOD,
     )
     rejected = dqe.validate_tick(bad, received_at=time.time())
-    assert rejected.quality == TickQuality.REJECTED, "Inverted spread must be rejected"
+    assert rejected.quality == TickQuality.REJECTED, "Inverted spread must be rejected"  # nosec B101 — validation script, assert is intentional
 
     health = dqe.get_source_health()
-    assert isinstance(health, dict)
+    assert isinstance(health, dict)  # nosec B101 — validation script, assert is intentional
     return "good tick accepted, inverted spread rejected"
 
 
@@ -341,10 +341,10 @@ def check_normalization() -> str:
         index=idx,
     )
     cleaned = norm.normalize_ohlcv(df)
-    assert not cleaned.empty, "normalize_ohlcv returned empty DataFrame"
-    assert "log_return" in cleaned.columns
-    assert "ohlcv_valid" in cleaned.columns
-    assert cleaned["ohlcv_valid"].fillna(0).sum() >= 40, "Too many invalid bars"
+    assert not cleaned.empty, "normalize_ohlcv returned empty DataFrame"  # nosec B101 — validation script, assert is intentional
+    assert "log_return" in cleaned.columns  # nosec B101 — validation script, assert is intentional
+    assert "ohlcv_valid" in cleaned.columns  # nosec B101 — validation script, assert is intentional
+    assert cleaned["ohlcv_valid"].fillna(0).sum() >= 40, "Too many invalid bars"  # nosec B101 — validation script, assert is intentional
     return f"{len(cleaned)} bars cleaned, {int(np.nan_to_num(cleaned['ohlcv_valid'].sum(), nan=0))} valid"
 
 
@@ -373,11 +373,11 @@ def check_microstructure() -> str:
         micro.on_tick(tick)
 
     features = micro.get_ml_features()
-    assert len(features) >= 16, f"Expected >=16 features, got {len(features)}"
-    assert "micro_spread" in features
-    assert "micro_ofi" in features
-    assert "micro_kyles_lambda" in features
-    assert "micro_tick_count" in features
+    assert len(features) >= 16, f"Expected >=16 features, got {len(features)}"  # nosec B101 — validation script, assert is intentional
+    assert "micro_spread" in features  # nosec B101 — validation script, assert is intentional
+    assert "micro_ofi" in features  # nosec B101 — validation script, assert is intentional
+    assert "micro_kyles_lambda" in features  # nosec B101 — validation script, assert is intentional
+    assert "micro_tick_count" in features  # nosec B101 — validation script, assert is intentional
     return f"{len(features)} features computed"
 
 
@@ -401,8 +401,8 @@ def check_sentiment_scorer() -> str:
         fetched_at=datetime.now(UTC),
     )
     scored = scorer.score(article)
-    assert scored.gold_relevance > 0.3, f"Gold relevance too low: {scored.gold_relevance}"
-    assert -1.0 <= scored.sentiment_score <= 1.0
+    assert scored.gold_relevance > 0.3, f"Gold relevance too low: {scored.gold_relevance}"  # nosec B101 — validation script, assert is intentional
+    assert -1.0 <= scored.sentiment_score <= 1.0  # nosec B101 — validation script, assert is intentional
     return (
         f"relevance={scored.gold_relevance:.2f} sentiment={scored.sentiment_score:.2f} label={scored.sentiment_label}"
     )
@@ -426,9 +426,9 @@ def check_calendar() -> str:
         "macro_is_blackout",
     }
     missing = expected - set(features.keys())
-    assert not missing, f"Missing calendar features: {missing}"
-    assert 0.0 <= features["macro_impact_score_now"] <= 1.0
-    assert isinstance(cal.is_blackout_window(), bool)
+    assert not missing, f"Missing calendar features: {missing}"  # nosec B101 — validation script, assert is intentional
+    assert 0.0 <= features["macro_impact_score_now"] <= 1.0  # nosec B101 — validation script, assert is intentional
+    assert isinstance(cal.is_blackout_window(), bool)  # nosec B101 — validation script, assert is intentional
     return f"{len(features)} features, blackout={cal.is_blackout_window()}"
 
 
@@ -443,7 +443,7 @@ def check_macro_bridge() -> str:
     bridge._load_csv_fallback()
     features = bridge.get_ml_features()
     non_zero = sum(1 for v in features.values() if v != 0.0)
-    assert non_zero > 0, "All macro features are zero — CSV fallback failed"
+    assert non_zero > 0, "All macro features are zero — CSV fallback failed"  # nosec B101 — validation script, assert is intentional
     return f"{len(features)} features, {non_zero} non-zero"
 
 
@@ -458,11 +458,11 @@ def check_replay() -> str:
     # Verify URL construction uses 0-based months (Dukascopy quirk)
     dt = datetime(2024, 3, 15, tzinfo=UTC)
     url = fetcher._build_url("XAUUSD", dt)
-    assert "/2024/02/" in url, f"Month should be 0-based (02 for March), got: {url}"
+    assert "/2024/02/" in url, f"Month should be 0-based (02 for March), got: {url}"  # nosec B101 — validation script, assert is intentional
     # Timeframe aliases
     for alias, expected in [("H1", 60), ("M5", 5), ("D1", 1440), ("4h", 240)]:
         result = _parse_timeframe(alias)
-        assert result == expected, f"_parse_timeframe({alias!r}) = {result}, expected {expected}"
+        assert result == expected, f"_parse_timeframe({alias!r}) = {result}, expected {expected}"  # nosec B101 — validation script, assert is intentional
     return "URL format OK, 4 timeframe aliases verified"
 
 
@@ -474,14 +474,14 @@ def check_inference() -> str:
     from ml.inference_engine import InferenceEngine
 
     engine = InferenceEngine()
-    assert hasattr(engine, "get_data_layer_tick"), "get_data_layer_tick missing"
-    assert hasattr(engine, "get_data_layer_features"), "get_data_layer_features missing"
-    assert hasattr(engine, "_get_data_layer_nudge"), "_get_data_layer_nudge missing"
+    assert hasattr(engine, "get_data_layer_tick"), "get_data_layer_tick missing"  # nosec B101 — validation script, assert is intentional
+    assert hasattr(engine, "get_data_layer_features"), "get_data_layer_features missing"  # nosec B101 — validation script, assert is intentional
+    assert hasattr(engine, "_get_data_layer_nudge"), "_get_data_layer_nudge missing"  # nosec B101 — validation script, assert is intentional
     # Verify no direct sub-module imports remain
     with Path("ml/inference_engine.py").open(encoding="utf-8") as _fh:
         src = _fh.read()
-    assert "from data_layer.feeds.macro.store_bridge" not in src
-    assert "from data_layer.lineage.store" not in src
+    assert "from data_layer.feeds.macro.store_bridge" not in src  # nosec B101 — validation script, assert is intentional
+    assert "from data_layer.lineage.store" not in src  # nosec B101 — validation script, assert is intentional
     return "InferenceEngine OK, no forbidden imports"
 
 
@@ -496,18 +496,18 @@ def check_risk() -> str:
 
     rm = RiskManager(orchestrator=orchestrator, lineage_store=orchestrator._lineage)
     # RiskManager stores orchestrator as _orch (see risk/manager.py)
-    assert hasattr(rm, "_orch"), "RiskManager missing _orch (orchestrator reference)"
-    assert rm._orch is orchestrator, "RiskManager._orch must be the orchestrator singleton"
-    assert hasattr(rm, "_lineage"), "RiskManager missing _lineage"
+    assert hasattr(rm, "_orch"), "RiskManager missing _orch (orchestrator reference)"  # nosec B101 — validation script, assert is intentional
+    assert rm._orch is orchestrator, "RiskManager._orch must be the orchestrator singleton"  # nosec B101 — validation script, assert is intentional
+    assert hasattr(rm, "_lineage"), "RiskManager missing _lineage"  # nosec B101 — validation script, assert is intentional
 
-    assert gatekeeper is not None
+    assert gatekeeper is not None  # nosec B101 — validation script, assert is intentional
     # Gatekeeper stores orchestrator as _orch (see risk/gatekeeper.py)
-    assert hasattr(gatekeeper, "_orch"), "Gatekeeper missing _orch (orchestrator reference)"
+    assert hasattr(gatekeeper, "_orch"), "Gatekeeper missing _orch (orchestrator reference)"  # nosec B101 — validation script, assert is intentional
 
     # Verify no direct sub-module imports in gatekeeper
     with Path("risk/gatekeeper.py").open(encoding="utf-8") as _fh:
         src = _fh.read()
-    assert "from data_layer.lineage.store" not in src
+    assert "from data_layer.lineage.store" not in src  # nosec B101 — validation script, assert is intentional
     return "RiskManager + Gatekeeper wired, no forbidden imports"
 
 
@@ -518,7 +518,7 @@ def check_risk() -> str:
 def check_execution() -> str:
     with Path("execution/execution.py").open(encoding="utf-8") as _fh:
         src = _fh.read()
-    assert "from data_layer.lineage.store" not in src
+    assert "from data_layer.lineage.store" not in src  # nosec B101 — validation script, assert is intentional
     return "execution.execution OK, no forbidden imports"
 
 
@@ -539,7 +539,7 @@ def check_api() -> str:
         "from data_layer.feeds.macro.store_bridge",
     ]
     for f in forbidden:
-        assert f not in src, f"Forbidden import found: {f}"
+        assert f not in src, f"Forbidden import found: {f}"  # nosec B101 — validation script, assert is intentional
     return f"api.data_layer OK, {len(forbidden)} forbidden patterns absent"
 
 
@@ -550,7 +550,7 @@ def check_api() -> str:
 def check_hopefx_engine() -> str:
     import hopefx_engine
 
-    assert hasattr(hopefx_engine, "HopeFXEngine")
+    assert hasattr(hopefx_engine, "HopeFXEngine")  # nosec B101 — validation script, assert is intentional
     return "HopeFXEngine importable"
 
 
@@ -562,7 +562,7 @@ def check_kill_switch() -> str:
     from kill_switch import kill_switch
 
     active = kill_switch.is_active()
-    assert isinstance(active, bool), "is_active() must return bool"
+    assert isinstance(active, bool), "is_active() must return bool"  # nosec B101 — validation script, assert is intentional
     if active:
         raise AssertionError(
             f"Kill switch is ACTIVE at startup (reason={kill_switch.reason!r}). Deactivate before live trading."
@@ -614,8 +614,8 @@ def check_forward_test_no_mocks() -> str:
         "random.gauss(",
     ]
     found = [f for f in forbidden if f in src]
-    assert not found, f"Mock classes still present: {found}"
-    assert "DukascopyFetcher" in src or "MarketReplayEngine" in src, "forward_test.py must use real Dukascopy replay"
+    assert not found, f"Mock classes still present: {found}"  # nosec B101 — validation script, assert is intentional
+    assert "DukascopyFetcher" in src or "MarketReplayEngine" in src, "forward_test.py must use real Dukascopy replay"  # nosec B101 — validation script, assert is intentional
     return "No mock data, uses real Dukascopy replay"
 
 
@@ -626,8 +626,8 @@ def check_forward_test_no_mocks() -> str:
 def check_order_flow_no_mocks() -> str:
     with Path("examples/order_flow_example.py").open(encoding="utf-8") as _fh:
         src = _fh.read()
-    assert "MockDataSource" not in src, "MockDataSource still present"
-    assert "orchestrator" in src or "MarketReplayEngine" in src, "Must use real orchestrator or replay engine"
+    assert "MockDataSource" not in src, "MockDataSource still present"  # nosec B101 — validation script, assert is intentional
+    assert "orchestrator" in src or "MarketReplayEngine" in src, "Must use real orchestrator or replay engine"  # nosec B101 — validation script, assert is intentional
     return "No MockDataSource, uses real data sources"
 
 

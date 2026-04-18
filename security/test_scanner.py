@@ -283,8 +283,8 @@ def get_test_index(force_rescan: bool = False) -> dict[str, Any]:
                 raw = rc.get(_REDIS_KEY)
                 if raw:
                     return json.loads(raw)
-        except Exception:
-            pass
+        except Exception as _exc:  # nosec B110 — falls back to disk cache below
+            logger.debug("test_scanner: Redis index unavailable: %s", _exc)
         # Fall back to disk
         cached = _load_cached_index()
         if cached:
@@ -309,8 +309,8 @@ def _enrich_with_run_stats(index: dict[str, Any]) -> dict[str, Any]:
                 index["last_run"] = run.get("ts")
                 index["last_run_passed"] = run.get("passed")
                 index["last_run_failed"] = run.get("failed")
-    except Exception:
-        pass
+    except Exception as _exc:  # nosec B110 — run stats are non-critical enrichment
+        logger.debug("test_scanner: could not load run stats from Redis: %s", _exc)
     return index
 
 

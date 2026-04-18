@@ -27,13 +27,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from data_layer.feeds.gold.manager import GoldFeedManager  # noqa: F401
+    from data_layer.feeds.gold.manager import GoldFeedManager
 except Exception as _exc:
     logger.debug("data_layer.feeds.gold: GoldFeedManager unavailable: %s", _exc)
     GoldFeedManager = None  # type: ignore[assignment,misc]
 
 try:
-    from data_layer.feeds.gold.base import GoldFeedBase  # noqa: F401
+    from data_layer.feeds.gold.base import GoldFeedBase
 except Exception as _exc:
     logger.debug("data_layer.feeds.gold: GoldFeedBase unavailable: %s", _exc)
     GoldFeedBase = None  # type: ignore[assignment,misc]

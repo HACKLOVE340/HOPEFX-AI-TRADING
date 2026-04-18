@@ -446,7 +446,7 @@ class MT5ZmqBridge:
         try:
             msg = json.dumps(payload)
             with self._lock:
-                assert self._push is not None, "ZMQ push socket not initialised"
+                assert self._push is not None, "ZMQ push socket not initialised"  # nosec B101 — validation script, assert is intentional
                 self._push.send_string(msg)
             self._stats.commands_sent += 1
             logger.debug("→ MT5: %s", msg)
@@ -467,7 +467,7 @@ class MT5ZmqBridge:
         logger.debug("MT5ZmqBridge recv loop started")
         while not self._stop_event.is_set():
             try:
-                assert self._pull is not None, "ZMQ pull socket not initialised"
+                assert self._pull is not None, "ZMQ pull socket not initialised"  # nosec B101 — validation script, assert is intentional
                 raw = self._pull.recv_string()
                 logger.debug("← MT5: %s", raw)
                 msg = json.loads(raw)

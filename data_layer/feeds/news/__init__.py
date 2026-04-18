@@ -27,37 +27,37 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from data_layer.feeds.news.base import NewsBaseFeed  # noqa: F401
+    from data_layer.feeds.news.base import NewsBaseFeed
 except Exception as _exc:
     logger.debug("data_layer.feeds.news: NewsBaseFeed unavailable: %s", _exc)
     NewsBaseFeed = None  # type: ignore[assignment,misc]
 
 try:
-    from data_layer.feeds.news.finnhub import FinnhubNewsFeed  # noqa: F401
+    from data_layer.feeds.news.finnhub import FinnhubNewsFeed
 except Exception as _exc:
     logger.debug("data_layer.feeds.news: FinnhubNewsFeed unavailable: %s", _exc)
     FinnhubNewsFeed = None  # type: ignore[assignment,misc]
 
 try:
-    from data_layer.feeds.news.fmp import FMPNewsFeed  # noqa: F401
+    from data_layer.feeds.news.fmp import FMPNewsFeed
 except Exception as _exc:
     logger.debug("data_layer.feeds.news: FMPNewsFeed unavailable: %s", _exc)
     FMPNewsFeed = None  # type: ignore[assignment,misc]
 
 try:
-    from data_layer.feeds.news.newsdata import NewsDataFeed  # noqa: F401
+    from data_layer.feeds.news.newsdata import NewsDataFeed
 except Exception as _exc:
     logger.debug("data_layer.feeds.news: NewsDataFeed unavailable: %s", _exc)
     NewsDataFeed = None  # type: ignore[assignment,misc]
 
 try:
-    from data_layer.feeds.news.alpha_vantage import AlphaVantageNewsFeed  # noqa: F401
+    from data_layer.feeds.news.alpha_vantage import AlphaVantageNewsFeed
 except Exception as _exc:
     logger.debug("data_layer.feeds.news: AlphaVantageNewsFeed unavailable: %s", _exc)
     AlphaVantageNewsFeed = None  # type: ignore[assignment,misc]
 
 try:
-    from data_layer.feeds.news.newsapi import NewsAPIFeed  # noqa: F401
+    from data_layer.feeds.news.newsapi import NewsAPIFeed
 except Exception as _exc:
     logger.debug("data_layer.feeds.news: NewsAPIFeed unavailable: %s", _exc)
     NewsAPIFeed = None  # type: ignore[assignment,misc]

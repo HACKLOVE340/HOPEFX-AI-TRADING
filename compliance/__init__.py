@@ -19,22 +19,22 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from compliance.kyc_provider import KYCGateway, get_kyc_gateway, init_kyc_gateway  # noqa: F401
+    from compliance.kyc_provider import KYCGateway, get_kyc_gateway, init_kyc_gateway
 except Exception as _exc:
     logger.debug("compliance.kyc_provider unavailable: %s", _exc)
 
 try:
-    from compliance.aml import AMLEngine  # noqa: F401
+    from compliance.aml import AMLEngine
 except Exception as _exc:
     logger.debug("compliance.aml unavailable: %s", _exc)
 
 try:
-    from compliance.auditor import ComplianceAuditor  # noqa: F401
+    from compliance.auditor import ComplianceAuditor
 except Exception as _exc:
     logger.debug("compliance.auditor unavailable: %s", _exc)
 
 try:
-    from compliance.regulatory_reporter import RegulatoryReporter  # noqa: F401
+    from compliance.regulatory_reporter import RegulatoryReporter
 except Exception as _exc:
     logger.debug("compliance.regulatory_reporter unavailable: %s", _exc)
 

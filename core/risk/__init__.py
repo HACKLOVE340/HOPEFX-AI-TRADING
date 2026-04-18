@@ -73,7 +73,7 @@ class GARCHModel:
                 posinf=1e-300,
                 neginf=1e-300,
             )
-            log_likelihood = -np.sum(np.log(np.where(pdf_vals > 0, pdf_vals, 1e-300)))
+            log_likelihood = -np.sum(np.log(np.where(pdf_vals > 0, pdf_vals, 1e-300)))  # healer: ignore — pdf_vals guarded by np.nan_to_num + np.where above
             return log_likelihood
 
         result = minimize(

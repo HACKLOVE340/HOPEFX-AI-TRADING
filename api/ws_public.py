@@ -84,8 +84,8 @@ async def _get_price_tick(symbol: str) -> dict | None:
                 "change_pct": round(change_pct, 4),
                 "timestamp": datetime.now(UTC).isoformat(),
             }
-    except Exception:
-        pass
+    except Exception as _exc:  # nosec B110 — fallback to Redis cache below
+        logger.debug("ws_public: live tick unavailable for %s: %s", symbol, _exc)
 
     # Redis cache fallback
     try:
@@ -109,8 +109,8 @@ async def _get_price_tick(symbol: str) -> dict | None:
                     "change_pct": round(change_pct, 4),
                     "timestamp": datetime.now(UTC).isoformat(),
                 }
-    except Exception:
-        pass
+    except Exception as _exc:  # nosec B110 — returns None, caller skips symbol
+        logger.debug("ws_public: Redis tick unavailable for %s: %s", symbol, _exc)
 
     return None
 
@@ -173,11 +173,11 @@ async def ws_public(ws: WebSocket) -> None:
                     await ws.send_json({"type": "pong"})
                 # subscribe messages are accepted but ignored — we always
                 # broadcast all public symbols
-            except (json.JSONDecodeError, Exception):
-                pass
+            except (json.JSONDecodeError, Exception) as _exc:
+                logger.debug("ws/public: ignoring malformed client message: %s", _exc)
 
     except WebSocketDisconnect:
-        pass
+        logger.debug("ws/public: client disconnected normally")
     except Exception as exc:
         logger.debug("ws/public: connection error: %s", exc)
     finally:

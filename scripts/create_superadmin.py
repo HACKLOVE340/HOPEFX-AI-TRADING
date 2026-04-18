@@ -212,10 +212,10 @@ def main():
     try:
         token = _generate_token(result["user_id"])
         token_line = f"  Bearer Token : {token}"  # nosec B105 — display string, not a credential
-        token_note = "  (valid 15 min — use in Authorization: Bearer <token> header or Swagger UI)"
+        token_note = "  (valid 15 min — use in Authorization: Bearer <token> header or Swagger UI)"  # nosec B105 — instructional text, not a secret
     except Exception:
-        token_line = "  Bearer Token : (JWT secret not set — run app.py to generate)"  # nosec B105
-        token_note = ""
+        token_line = "  Bearer Token : (JWT secret not set — run app.py to generate)"  # nosec B105 — display string, not a credential
+        token_note = ""  # nosec B105 — empty string, not a credential
 
     # ── Save credentials to restricted file ───────────────────────────────────
     pw_file = ROOT / "superadmin_credentials.txt"

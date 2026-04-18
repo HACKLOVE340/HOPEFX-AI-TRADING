@@ -201,13 +201,12 @@ class MacroStoreBridge:
                     "MacroStoreBridge: WGC injected %d series into MacroStore",
                     injected,
                 )
-            else:
-                if not self._wgc_offline_warned:
-                    logger.warning(
-                        "MacroStoreBridge: WGC returned no series — "
-                        "place CSV files in data/wgc_cache or ensure outbound HTTPS access to www.gold.org",
-                    )
-                    self._wgc_offline_warned = True
+            elif not self._wgc_offline_warned:
+                logger.warning(
+                    "MacroStoreBridge: WGC returned no series — "
+                    "place CSV files in data/wgc_cache or ensure outbound HTTPS access to www.gold.org",
+                )
+                self._wgc_offline_warned = True
         except Exception as exc:
             logger.warning("MacroStoreBridge._load_wgc_into_store error: %s", exc)
 

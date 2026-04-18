@@ -16,7 +16,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from health.health_check_service import HealthCheckService  # noqa: F401
+    from health.health_check_service import HealthCheckService
 except Exception as _exc:
     logger.debug("health.health_check_service unavailable: %s", _exc)
     HealthCheckService = None  # type: ignore[assignment,misc]

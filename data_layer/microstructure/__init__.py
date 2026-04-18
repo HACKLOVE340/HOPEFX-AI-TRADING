@@ -27,7 +27,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from data_layer.microstructure.engine import MicrostructureEngine  # noqa: F401
+    from data_layer.microstructure.engine import MicrostructureEngine
 except Exception as _exc:
     logger.debug("data_layer.microstructure: MicrostructureEngine unavailable: %s", _exc)
     MicrostructureEngine = None  # type: ignore[assignment,misc]

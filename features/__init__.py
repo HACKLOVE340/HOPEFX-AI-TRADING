@@ -20,7 +20,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from features.flags import FeatureFlags, FeatureStatus, flags  # noqa: F401
+    from features.flags import FeatureFlags, FeatureStatus, flags
 except Exception as _exc:
     logger.debug("features.flags unavailable: %s", _exc)
 

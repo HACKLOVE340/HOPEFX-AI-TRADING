@@ -144,11 +144,10 @@ def verify() -> list[str]:
         # horizon must match
         meta_horizon = meta.get("horizon")
         reg_horizon = entry.get("horizon")
-        if meta_horizon is not None and reg_horizon is not None:
-            if meta_horizon != reg_horizon:
-                failures.append(
-                    f"horizon mismatch: meta={meta_horizon}, registry={reg_horizon}"
-                )
+        if meta_horizon is not None and reg_horizon is not None and meta_horizon != reg_horizon:
+            failures.append(
+                f"horizon mismatch: meta={meta_horizon}, registry={reg_horizon}"
+            )
 
         # sha256 in meta must match registry
         meta_sha = meta.get("sha256")

@@ -28,7 +28,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from infrastructure.metrics import (  # noqa: F401
+    from infrastructure.metrics import (
         Counter,
         Gauge,
         Histogram,
@@ -42,13 +42,13 @@ except Exception as _exc:
     get_metrics_registry = None  # type: ignore[assignment]
 
 try:
-    from infrastructure.health import HealthChecker  # noqa: F401
+    from infrastructure.health import HealthChecker
 except Exception as _exc:
     logger.debug("infrastructure.health unavailable: %s", _exc)
     HealthChecker = None  # type: ignore[assignment,misc]
 
 try:
-    from infrastructure.logging import StructuredLogger, get_logger  # noqa: F401
+    from infrastructure.logging import StructuredLogger, get_logger
 except Exception as _exc:
     logger.debug("infrastructure.logging unavailable: %s", _exc)
     StructuredLogger = None  # type: ignore[assignment,misc]

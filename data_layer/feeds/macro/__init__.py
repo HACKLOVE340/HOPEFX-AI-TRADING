@@ -29,37 +29,37 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from data_layer.feeds.macro.store_bridge import MacroStoreBridge  # noqa: F401
+    from data_layer.feeds.macro.store_bridge import MacroStoreBridge
 except Exception as _exc:
     logger.debug("data_layer.feeds.macro: MacroStoreBridge unavailable: %s", _exc)
     MacroStoreBridge = None  # type: ignore[assignment,misc]
 
 try:
-    from data_layer.feeds.macro.fred import FREDFeed  # noqa: F401
+    from data_layer.feeds.macro.fred import FREDFeed
 except Exception as _exc:
     logger.debug("data_layer.feeds.macro: FREDFeed unavailable: %s", _exc)
     FREDFeed = None  # type: ignore[assignment,misc]
 
 try:
-    from data_layer.feeds.macro.wgc import WGCFeed  # noqa: F401
+    from data_layer.feeds.macro.wgc import WGCFeed
 except Exception as _exc:
     logger.debug("data_layer.feeds.macro: WGCFeed unavailable: %s", _exc)
     WGCFeed = None  # type: ignore[assignment,misc]
 
 try:
-    from data_layer.feeds.macro.cftc_cot import CFTCCOTFeed  # noqa: F401
+    from data_layer.feeds.macro.cftc_cot import CFTCCOTFeed
 except Exception as _exc:
     logger.debug("data_layer.feeds.macro: CFTCCOTFeed unavailable: %s", _exc)
     CFTCCOTFeed = None  # type: ignore[assignment,misc]
 
 try:
-    from data_layer.feeds.macro.imf_gold import IMFGoldFeed  # noqa: F401
+    from data_layer.feeds.macro.imf_gold import IMFGoldFeed
 except Exception as _exc:
     logger.debug("data_layer.feeds.macro: IMFGoldFeed unavailable: %s", _exc)
     IMFGoldFeed = None  # type: ignore[assignment,misc]
 
 try:
-    from data_layer.feeds.macro.yahoo_macro import YahooMacroFeed  # noqa: F401
+    from data_layer.feeds.macro.yahoo_macro import YahooMacroFeed
 except Exception as _exc:
     logger.debug("data_layer.feeds.macro: YahooMacroFeed unavailable: %s", _exc)
     YahooMacroFeed = None  # type: ignore[assignment,misc]

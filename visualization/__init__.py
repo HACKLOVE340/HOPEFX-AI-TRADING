@@ -18,13 +18,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from visualization.charts import ChartGenerator  # noqa: F401
+    from visualization.charts import ChartGenerator
 except Exception as _exc:
     logger.debug("visualization.charts unavailable: %s", _exc)
     ChartGenerator = None  # type: ignore[assignment,misc]
 
 try:
-    from visualization.dashboard import DashboardServer  # noqa: F401
+    from visualization.dashboard import DashboardServer
 except Exception as _exc:
     logger.debug("visualization.dashboard unavailable: %s", _exc)
     DashboardServer = None  # type: ignore[assignment,misc]

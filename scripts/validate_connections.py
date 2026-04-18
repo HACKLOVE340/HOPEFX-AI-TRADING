@@ -116,11 +116,11 @@ def check_jwt():
     from auth.jwt import create_access_token, verify_token
 
     token = create_access_token({"sub": "test@hopefx.io", "type": "access"})
-    assert token, "Token is empty"
+    assert token, "Token is empty"  # nosec B101 — validation script, assert is intentional
     # verify_token raises credentials_exception on failure
     exc = HTTPException(status_code=401, detail="bad")
     sub = verify_token(token, exc)
-    assert sub == "test@hopefx.io", f"sub mismatch: {sub}"
+    assert sub == "test@hopefx.io", f"sub mismatch: {sub}"  # nosec B101 — validation script, assert is intentional
     return f"JWT sign/verify OK (sub={sub})"
 
 

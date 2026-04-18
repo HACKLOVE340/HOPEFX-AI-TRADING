@@ -26,7 +26,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from tracing.setup import get_tracer, setup_tracing  # noqa: F401
+    from tracing.setup import get_tracer, setup_tracing
 except Exception as _exc:
     logger.debug("tracing.setup unavailable: %s", _exc)
     get_tracer = None  # type: ignore[assignment]

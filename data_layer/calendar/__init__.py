@@ -28,7 +28,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from data_layer.calendar.engine import MacroCalendarEngine  # noqa: F401
+    from data_layer.calendar.engine import MacroCalendarEngine
 except Exception as _exc:
     logger.debug("data_layer.calendar: MacroCalendarEngine unavailable: %s", _exc)
     MacroCalendarEngine = None  # type: ignore[assignment,misc]

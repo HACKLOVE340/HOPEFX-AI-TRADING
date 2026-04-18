@@ -17,8 +17,7 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -84,7 +83,7 @@ class TestRetryPolicyAsync:
         from resilience.retry import RetryPolicy
         on_retry = MagicMock()
         policy = RetryPolicy(max_attempts=3, base_delay=0.0, jitter=False, on_retry=on_retry)
-        func = AsyncMock(side_effect=[IOError("e"), IOError("e"), "done"])
+        func = AsyncMock(side_effect=[OSError("e"), OSError("e"), "done"])
         await policy.execute(func)
         assert on_retry.call_count == 2
 
@@ -199,7 +198,7 @@ class TestRetryDecorator:
             nonlocal call_count
             call_count += 1
             if call_count < 3:
-                raise IOError("not yet")
+                raise OSError("not yet")
             return "done"
 
         result = await flaky()

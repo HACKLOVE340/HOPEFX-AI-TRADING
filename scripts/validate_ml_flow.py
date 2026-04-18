@@ -263,9 +263,9 @@ def stage_data_loading() -> str:
         raise ValueError(f"Insufficient rows: {len(df)} (need ≥ 200)")
 
     # Sanity checks on price data
-    assert (df["high"] >= df["low"]).all(), "high < low detected"
-    assert (df["close"] > 0).all(), "non-positive close prices"
-    assert df.index.is_monotonic_increasing, "timestamps not monotonic"
+    assert (df["high"] >= df["low"]).all(), "high < low detected"  # nosec B101 — validation script, assert is intentional
+    assert (df["close"] > 0).all(), "non-positive close prices"  # nosec B101 — validation script, assert is intentional
+    assert df.index.is_monotonic_increasing, "timestamps not monotonic"  # nosec B101 — validation script, assert is intentional
 
     ctx.ohlcv_df = df
     return (
@@ -612,7 +612,7 @@ def stage_kill_switch_gate() -> str:
 
         # Activate the kill switch
         ks.activate("validation_test")
-        assert ks.is_active(), "KillSwitch.activate() did not set active state"
+        assert ks.is_active(), "KillSwitch.activate() did not set active state"  # nosec B101 — validation script, assert is intentional
 
         # Brain should return hold when kill switch is active
         brain = HOPEFXBrain()
@@ -627,7 +627,7 @@ def stage_kill_switch_gate() -> str:
 
         # Deactivate and verify brain can act again
         ks.deactivate("test-token")  # nosec B106 - test token in kill switch validation, not a real credential
-        assert not ks.is_active(), "KillSwitch.deactivate() did not clear active state"
+        assert not ks.is_active(), "KillSwitch.deactivate() did not clear active state"  # nosec B101 — validation script, assert is intentional
 
     return "kill_switch activated → brain returned hold  |  deactivated → brain unblocked"
 

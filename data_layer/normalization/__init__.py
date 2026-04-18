@@ -28,7 +28,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from data_layer.normalization.pipeline import NormalizationPipeline  # noqa: F401
+    from data_layer.normalization.pipeline import NormalizationPipeline
 except Exception as _exc:
     logger.debug("data_layer.normalization: NormalizationPipeline unavailable: %s", _exc)
     NormalizationPipeline = None  # type: ignore[assignment,misc]

@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 logger = logging.getLogger(__name__)
 try:
-    from audit.logger import AuditLogger, get_audit_logger  # noqa: F401
+    from audit.logger import AuditLogger, get_audit_logger
 except Exception as _exc:
     logger.debug("audit.logger unavailable: %s", _exc)
     AuditLogger = None  # type: ignore[assignment,misc]

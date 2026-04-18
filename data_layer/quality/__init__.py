@@ -28,7 +28,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from data_layer.quality.engine import DataQualityEngine  # noqa: F401
+    from data_layer.quality.engine import DataQualityEngine
 except Exception as _exc:
     logger.debug("data_layer.quality: DataQualityEngine unavailable: %s", _exc)
     DataQualityEngine = None  # type: ignore[assignment,misc]

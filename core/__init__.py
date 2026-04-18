@@ -33,17 +33,17 @@ logger = logging.getLogger(__name__)
 # Re-export the most commonly used singletons so callers can do:
 #   from core import app_state, bus
 try:
-    from core.app_state import app_state  # noqa: F401
+    from core.app_state import app_state
 except Exception as _exc:
     logger.debug("core: app_state unavailable: %s", _exc)
 
 try:
-    from core.event_bus import bus  # noqa: F401
+    from core.event_bus import bus
 except Exception as _exc:
     logger.debug("core: event_bus unavailable: %s", _exc)
 
 try:
-    from core.exceptions import (  # noqa: F401
+    from core.exceptions import (
         AuthenticationError,
         CircuitBreakerError,
         DataValidationError,

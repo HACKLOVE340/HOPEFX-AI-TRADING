@@ -23,7 +23,7 @@ import logging
 import os
 import re
 import shutil
-import subprocess
+import subprocess  # nosec B404 — used only for pg_dump with a fixed arg list, no shell=True
 import time
 from pathlib import Path
 from urllib.parse import urlparse
@@ -127,8 +127,8 @@ def run_backup(database_url: str | None = None) -> Path:
         try:
             from database.connection import _db_manager  # type: ignore[attr-defined]
             database_url = str(_db_manager.url) if _db_manager else None
-        except Exception:
-            pass
+        except Exception as _exc:  # nosec B110 — falls back to DATABASE_URL env var below
+            logger.debug("backup: could not read db_manager URL: %s", _exc)
 
     if not database_url:
         database_url = os.getenv("DATABASE_URL", "")

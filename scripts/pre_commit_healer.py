@@ -89,11 +89,11 @@ def check_file(path: Path) -> list[str]:
 
     # ── Line-level checks ─────────────────────────────────────────────────────
     for lineno, line in enumerate(lines, 1):
-        # Allow per-line suppression with: # noqa: healer
+        # Allow per-line suppression via healer: ignore or noqa:healer tag
         if "# noqa: healer" in line or "# healer: ignore" in line:
             continue
 
-        # TODO/FIXME/HACK/XXX in production code  # noqa: healer
+        # TODO/FIXME/HACK/XXX in production code  # healer: ignore
         if not is_test and _TODO_RE.search(line):
             issues.append(f"{path}:{lineno}: TODO/FIXME marker in production code: {line.strip()!r}")
 

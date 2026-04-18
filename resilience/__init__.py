@@ -22,20 +22,20 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from resilience.auto_rollback import AutoRollbackManager, rollback_manager  # noqa: F401
+    from resilience.auto_rollback import AutoRollbackManager, rollback_manager
 except Exception as _exc:
     logger.debug("resilience.auto_rollback unavailable: %s", _exc)
     AutoRollbackManager = None  # type: ignore[assignment,misc]
     rollback_manager = None  # type: ignore[assignment]
 
 try:
-    from resilience.hot_standby import HotStandbyReplicator  # noqa: F401
+    from resilience.hot_standby import HotStandbyReplicator
 except Exception as _exc:
     logger.debug("resilience.hot_standby unavailable: %s", _exc)
     HotStandbyReplicator = None  # type: ignore[assignment,misc]
 
 try:
-    from resilience.service_circuit_breakers import (  # noqa: F401
+    from resilience.service_circuit_breakers import (
         ServiceCircuitBreaker,
         get_all_breaker_status,
         redis_breaker,
@@ -51,13 +51,13 @@ except Exception as _exc:
     ServiceCircuitBreakers = None  # type: ignore[assignment,misc]
 
 try:
-    from resilience.circuit_breaker import CircuitBreaker  # noqa: F401
+    from resilience.circuit_breaker import CircuitBreaker
 except Exception as _exc:
     logger.debug("resilience.circuit_breaker unavailable: %s", _exc)
     CircuitBreaker = None  # type: ignore[assignment,misc]
 
 try:
-    from resilience.retry import (  # noqa: F401
+    from resilience.retry import (
         RetryPolicy,
         retry,
         redis_retry,

@@ -25,7 +25,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from websocket.manager import WebSocketManager, get_ws_manager  # noqa: F401
+    from websocket.manager import WebSocketManager, get_ws_manager
 except Exception as _exc:
     logger.debug("websocket.manager unavailable: %s", _exc)
     WebSocketManager = None  # type: ignore[assignment,misc]

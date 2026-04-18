@@ -20,8 +20,7 @@ Covers:
 from __future__ import annotations
 
 import asyncio
-import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -59,7 +58,7 @@ class TestStateTransitions:
 
     @pytest.mark.asyncio
     async def test_opens_after_failure_threshold(self):
-        from resilience.service_circuit_breakers import CircuitState, CircuitBreakerOpenError
+        from resilience.service_circuit_breakers import CircuitState
         breaker = _make_breaker(failure_threshold=3)
 
         async def fail():
@@ -74,7 +73,7 @@ class TestStateTransitions:
 
     @pytest.mark.asyncio
     async def test_open_rejects_calls(self):
-        from resilience.service_circuit_breakers import CircuitState, CircuitBreakerOpenError
+        from resilience.service_circuit_breakers import CircuitBreakerOpenError
         breaker = _make_breaker(failure_threshold=1)
 
         async def fail():
@@ -89,7 +88,6 @@ class TestStateTransitions:
 
     @pytest.mark.asyncio
     async def test_transitions_to_half_open_after_timeout(self):
-        from resilience.service_circuit_breakers import CircuitState
         breaker = _make_breaker(failure_threshold=1, timeout_seconds=0.01)
 
         async def fail():
@@ -180,8 +178,7 @@ class TestSyncRecordMethods:
         breaker.record_failure(RuntimeError("e"))
         assert breaker.state == CircuitState.OPEN
         # Manually set to half-open to test sync path
-        from resilience.service_circuit_breakers import CircuitState as CS
-        breaker._state = CS.HALF_OPEN
+        breaker._state = CircuitState.HALF_OPEN
         breaker.record_success()
         breaker.record_success()
         assert breaker.state == CircuitState.CLOSED
@@ -286,15 +283,6 @@ class TestResilienceInit:
             ServiceCircuitBreakers,
             RetryPolicy,
             retry,
-            redis_retry,
-            broker_retry,
-            http_retry,
-            db_retry,
-            redis_breaker,
-            broker_breaker,
-            ml_breaker,
-            db_breaker,
-            get_all_breaker_status,
         )
         assert ServiceCircuitBreaker is not None
         assert ServiceCircuitBreakers is ServiceCircuitBreaker

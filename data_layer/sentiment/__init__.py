@@ -32,13 +32,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from data_layer.sentiment.engine import NewsSentimentEngine  # noqa: F401
+    from data_layer.sentiment.engine import NewsSentimentEngine
 except Exception as _exc:
     logger.debug("data_layer.sentiment: NewsSentimentEngine unavailable: %s", _exc)
     NewsSentimentEngine = None  # type: ignore[assignment,misc]
 
 try:
-    from data_layer.sentiment.scorer import GoldSentimentScorer  # noqa: F401
+    from data_layer.sentiment.scorer import GoldSentimentScorer
 except Exception as _exc:
     logger.debug("data_layer.sentiment: GoldSentimentScorer unavailable: %s", _exc)
     GoldSentimentScorer = None  # type: ignore[assignment,misc]

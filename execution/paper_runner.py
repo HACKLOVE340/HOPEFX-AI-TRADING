@@ -64,6 +64,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+import contextlib
 
 UTC = timezone.utc
 
@@ -119,7 +120,7 @@ class OandaPricePoll:
         self._base_url = f"https://{env_prefix}.oanda.com"
         self._session: Any = None
 
-    async def __aenter__(self) -> "OandaPricePoll":
+    async def __aenter__(self) -> OandaPricePoll:
         if self._api_key:
             try:
                 import aiohttp
@@ -336,10 +337,7 @@ class FillRecorder:
         direction = fill.get("direction", "BUY")
 
         # Fractional return: positive for profitable fills
-        if mid > 0 and price > 0:
-            trade_return = (price - mid) / mid * (1 if direction == "BUY" else -1)
-        else:
-            trade_return = 0.0
+        trade_return = (price - mid) / mid * (1 if direction == "BUY" else -1) if mid > 0 and price > 0 else 0.0
 
         symbol = fill.get("symbol", _SYMBOL)
 
@@ -553,10 +551,8 @@ class PaperRunner:
         for task in self._tasks:
             if not task.done():
                 task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError, Exception):
                     await task
-                except (asyncio.CancelledError, Exception):
-                    pass
 
         elapsed = time.monotonic() - self._t_start
         summary = self._fill_recorder.summary()
@@ -640,11 +636,8 @@ async def _async_main() -> None:
         loop.call_soon_threadsafe(runner._stop_event.set)
 
     for sig in (signal.SIGINT, signal.SIGTERM):
-        try:
+        with contextlib.suppress(NotImplementedError, RuntimeError):
             loop.add_signal_handler(sig, _handle_signal, sig)
-        except (NotImplementedError, RuntimeError):
-            # Windows / environments without signal support
-            pass
 
     await runner.run()
 

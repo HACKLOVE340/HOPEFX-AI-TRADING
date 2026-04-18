@@ -348,8 +348,8 @@ class TechnicalFeatureEngineer:
             high_max = df["high"].rolling(window=lookback).max()
             low_min = df["low"].rolling(window=lookback).min()
 
-            future_high = df["high"].shift(-1)  # intentional lookahead — label creation only
-            future_low = df["low"].shift(-1)  # intentional lookahead — label creation only
+            future_high = df["high"].shift(-1)  # lookahead-ok — label creation only, never an input feature
+            future_low = df["low"].shift(-1)  # lookahead-ok — label creation only, never an input feature
 
             labels = pd.Series(1, index=df.index)  # HOLD
             labels[future_high > high_max * (1 + threshold)] = 2  # BUY (breakout up)

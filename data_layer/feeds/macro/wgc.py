@@ -397,14 +397,13 @@ class WGCFeed:
                     self._cache_path(_DEMAND_CACHE_FILE),
                 )
                 self._warned_demand_offline = True
-        else:
-            if not self._warned_demand_offline:
-                logger.warning(
-                    "WGC demand fetch returned no usable data — www.gold.org unreachable or returned no CSV. "
-                    "Place a manually downloaded CSV at %s",
-                    self._cache_path(_DEMAND_CACHE_FILE),
-                )
-                self._warned_demand_offline = True
+        elif not self._warned_demand_offline:
+            logger.warning(
+                "WGC demand fetch returned no usable data — www.gold.org unreachable or returned no CSV. "
+                "Place a manually downloaded CSV at %s",
+                self._cache_path(_DEMAND_CACHE_FILE),
+            )
+            self._warned_demand_offline = True
 
         return {}
 
@@ -431,14 +430,13 @@ class WGCFeed:
                     self._cache_path(_ETF_CACHE_FILE),
                 )
                 self._warned_etf_offline = True
-        else:
-            if not self._warned_etf_offline:
-                logger.warning(
-                    "WGC ETF flow fetch returned no usable data — www.gold.org unreachable or returned no CSV. "
-                    "Place a manually downloaded CSV at %s",
-                    self._cache_path(_ETF_CACHE_FILE),
-                )
-                self._warned_etf_offline = True
+        elif not self._warned_etf_offline:
+            logger.warning(
+                "WGC ETF flow fetch returned no usable data — www.gold.org unreachable or returned no CSV. "
+                "Place a manually downloaded CSV at %s",
+                self._cache_path(_ETF_CACHE_FILE),
+            )
+            self._warned_etf_offline = True
 
         return {}
 

@@ -29,13 +29,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from data_layer.replay.engine import MarketReplayEngine  # noqa: F401
+    from data_layer.replay.engine import MarketReplayEngine
 except Exception as _exc:
     logger.debug("data_layer.replay: MarketReplayEngine unavailable: %s", _exc)
     MarketReplayEngine = None  # type: ignore[assignment,misc]
 
 try:
-    from data_layer.replay.dukascopy import DukascopyFetcher  # noqa: F401
+    from data_layer.replay.dukascopy import DukascopyFetcher
 except Exception as _exc:
     logger.debug("data_layer.replay: DukascopyFetcher unavailable: %s", _exc)
     DukascopyFetcher = None  # type: ignore[assignment,misc]

@@ -16,8 +16,8 @@ Covers:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import timezone
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -156,7 +156,6 @@ class TestFallbackChain:
     @pytest.mark.asyncio
     async def test_gdelt_fallback_used_when_wm_unavailable(self):
         """GDELT events are returned when WorldMonitor is not configured."""
-        from news.geopolitical_risk import GeopoliticalEvent, GeopoliticalEventType, RiskSeverity
         provider = _make_provider()
         gdelt_event = _make_event(source="GDELT")
 

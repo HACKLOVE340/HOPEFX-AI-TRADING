@@ -26,26 +26,26 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from market_data.order_book import OrderBookFeed, get_order_book_feed  # noqa: F401
+    from market_data.order_book import OrderBookFeed, get_order_book_feed
 except Exception as _exc:
     logger.debug("market_data.order_book unavailable: %s", _exc)
     OrderBookFeed = None  # type: ignore[assignment,misc]
     get_order_book_feed = None  # type: ignore[assignment]
 
 try:
-    from market_data.ibkr_feed import IBKRFeed  # noqa: F401
+    from market_data.ibkr_feed import IBKRFeed
 except Exception as _exc:
     logger.debug("market_data.ibkr_feed unavailable: %s", _exc)
     IBKRFeed = None  # type: ignore[assignment,misc]
 
 try:
-    from market_data.mt5_live_feed import MT5LiveFeed  # noqa: F401
+    from market_data.mt5_live_feed import MT5LiveFeed
 except Exception as _exc:
     logger.debug("market_data.mt5_live_feed unavailable: %s", _exc)
     MT5LiveFeed = None  # type: ignore[assignment,misc]
 
 try:
-    from market_data.validation import MarketDataValidator  # noqa: F401
+    from market_data.validation import MarketDataValidator
 except Exception as _exc:
     logger.debug("market_data.validation unavailable: %s", _exc)
     MarketDataValidator = None  # type: ignore[assignment,misc]

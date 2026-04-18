@@ -17,12 +17,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from deployment.helm_chart import HelmChartGenerator  # noqa: F401
+    from deployment.helm_chart import HelmChartGenerator
 except Exception as _exc:
     logger.debug("deployment.helm_chart unavailable: %s", _exc)
 
 try:
-    from deployment.challenge_launch import ChallengeLauncher  # noqa: F401
+    from deployment.challenge_launch import ChallengeLauncher
 except Exception as _exc:
     logger.debug("deployment.challenge_launch unavailable: %s", _exc)
 

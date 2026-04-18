@@ -24,7 +24,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from api.security.fixes import router as fixes_router  # noqa: F401
+    from api.security.fixes import router as fixes_router
 except Exception as _exc:  # pragma: no cover
     logger.warning("api.security.fixes router unavailable: %s", _exc)
     fixes_router = None  # type: ignore[assignment]

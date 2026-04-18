@@ -27,7 +27,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from data_layer.lineage.store import DataLineageStore  # noqa: F401
+    from data_layer.lineage.store import DataLineageStore
 except Exception as _exc:
     logger.debug("data_layer.lineage: DataLineageStore unavailable: %s", _exc)
     DataLineageStore = None  # type: ignore[assignment,misc]

@@ -232,7 +232,6 @@ class ChartGenerator:
             return {"type": "plotly", "figure": fig, "html": fig.to_html(full_html=False)}
         except ImportError:
             import matplotlib.pyplot as plt
-            import numpy as np
 
             fig, ax = plt.subplots(figsize=(8, max(4, len(strategies) * 0.5)))
             im = ax.imshow(z, aspect="auto", cmap="RdYlGn")
