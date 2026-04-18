@@ -24,9 +24,9 @@ except Exception as _exc:
     ChartGenerator = None  # type: ignore[assignment,misc]
 
 try:
-    from visualization.dashboard import DashboardRenderer  # noqa: F401
+    from visualization.dashboard import DashboardServer  # noqa: F401
 except Exception as _exc:
     logger.debug("visualization.dashboard unavailable: %s", _exc)
-    DashboardRenderer = None  # type: ignore[assignment,misc]
+    DashboardServer = None  # type: ignore[assignment,misc]
 
-__all__ = ["ChartGenerator", "DashboardRenderer"]
+__all__ = ["ChartGenerator", "DashboardServer"]
