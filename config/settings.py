@@ -47,6 +47,22 @@ class RedisSettings(BaseSettings):
     socket_connect_timeout: float = 5.0
     health_check_interval: int = 30
     max_connections: int = 100
+    # TLS enforcement — IS_FORCE_TLS (canonical) or REDIS_FORCE_TLS (alias)
+    force_tls: bool = Field(default=False, alias="REDIS_FORCE_TLS")
+    tls_skip_verify: bool = Field(default=False, alias="REDIS_TLS_SKIP_VERIFY")
+    tls_ca_cert: str = Field(default="", alias="REDIS_TLS_CA_CERT")
+    tls_client_cert: str = Field(default="", alias="REDIS_TLS_CLIENT_CERT")
+    tls_client_key: str = Field(default="", alias="REDIS_TLS_CLIENT_KEY")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _resolve_is_force_tls(cls, values: Any) -> Any:
+        """IS_FORCE_TLS overrides REDIS_FORCE_TLS when set."""
+        if isinstance(values, dict):
+            is_force = os.getenv("IS_FORCE_TLS", "").lower()
+            if is_force == "true":
+                values["REDIS_FORCE_TLS"] = True
+        return values
 
 
 class BrokerSettings(BaseSettings):
@@ -123,6 +139,48 @@ class SecuritySettings(BaseSettings):
         return v
 
 
+class NewsSettings(BaseSettings):
+    """News and geopolitical data source configuration."""
+
+    model_config = SettingsConfigDict(env_prefix="NEWS_")
+
+    # World Monitor — primary geopolitical data source
+    worldmonitor_api_key: str = Field(default="", alias="WORLDMONITOR_API_KEY")
+    worldmonitor_url: str = Field(
+        default="https://worldmonitor.app",
+        alias="WORLDMONITOR_URL",
+    )
+    worldmonitor_timeout: int = 30
+
+    # GDELT — free fallback (no key required)
+    gdelt_enabled: bool = True
+    gdelt_timeout: int = 15
+
+    # ACLED — conflict data (free academic key)
+    acled_api_key: str = Field(default="", alias="ACLED_API_KEY")
+    acled_email: str = Field(default="", alias="ACLED_EMAIL")
+    acled_enabled: bool = True
+    acled_timeout: int = 15
+
+    # ReliefWeb — humanitarian data (no key required)
+    reliefweb_enabled: bool = True
+    reliefweb_timeout: int = 15
+
+    # Cache TTL for geopolitical events
+    geo_cache_ttl_seconds: int = 300
+
+    @model_validator(mode="before")
+    @classmethod
+    def _resolve_aliases(cls, values: Any) -> Any:
+        """Pull top-level env vars that don't carry the NEWS_ prefix."""
+        if isinstance(values, dict):
+            for alias in ("WORLDMONITOR_API_KEY", "WORLDMONITOR_URL", "ACLED_API_KEY", "ACLED_EMAIL"):
+                env_val = os.getenv(alias, "")
+                if env_val and alias not in values:
+                    values[alias] = env_val
+        return values
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -141,6 +199,11 @@ class Settings(BaseSettings):
     ml: MLSettings = Field(default_factory=MLSettings)
     risk: RiskSettings = Field(default_factory=RiskSettings)
     security: SecuritySettings = Field(default_factory=SecuritySettings)
+    news: NewsSettings = Field(default_factory=NewsSettings)
+
+    # TLS flags at top level (mirrors redis sub-settings for convenience)
+    is_force_tls: bool = Field(default=False, alias="IS_FORCE_TLS")
+    redis_force_tls: bool = Field(default=False, alias="REDIS_FORCE_TLS")
 
     # Paths
     data_dir: Path = Path("./data")

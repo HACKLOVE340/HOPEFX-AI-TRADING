@@ -175,7 +175,11 @@ def _enforce_tls(redis_url: str) -> str:
     where the Redis server uses a self-signed certificate.
     """
     app_env = os.getenv("APP_ENV", "development").lower()
-    force_tls = os.getenv("REDIS_FORCE_TLS", "false").lower() == "true"
+    # IS_FORCE_TLS is the canonical env var (user-facing); REDIS_FORCE_TLS is
+    # the legacy alias.  IS_FORCE_TLS takes precedence when both are set.
+    _is_force = os.getenv("IS_FORCE_TLS", "").lower()
+    _redis_force = os.getenv("REDIS_FORCE_TLS", "false").lower()
+    force_tls = (_is_force == "true") or (_redis_force == "true")
     is_plaintext = redis_url.startswith("redis://")
 
     if not is_plaintext:

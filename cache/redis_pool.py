@@ -67,7 +67,22 @@ except ImportError:  # pragma: no cover
 # Configuration
 # ---------------------------------------------------------------------------
 
-_REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+def _resolve_redis_url() -> str:
+    """
+    Resolve the Redis URL, applying TLS enforcement when IS_FORCE_TLS or
+    REDIS_FORCE_TLS is set.  IS_FORCE_TLS takes precedence.
+    """
+    url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    _is_force = os.getenv("IS_FORCE_TLS", "").lower()
+    _redis_force = os.getenv("REDIS_FORCE_TLS", "false").lower()
+    force_tls = (_is_force == "true") or (_redis_force == "true")
+    if force_tls and url.startswith("redis://"):
+        url = "rediss://" + url[len("redis://"):]
+        logger.info("Redis pool: IS_FORCE_TLS/REDIS_FORCE_TLS=true — upgraded URL to rediss://")
+    return url
+
+
+_REDIS_URL: str = _resolve_redis_url()
 _MAX_CONNECTIONS: int = int(os.getenv("REDIS_MAX_CONNECTIONS", "50"))
 _SOCKET_TIMEOUT: float = float(os.getenv("REDIS_SOCKET_TIMEOUT", "5"))
 _SOCKET_CONNECT_TIMEOUT: float = float(os.getenv("REDIS_SOCKET_CONNECT_TIMEOUT", "3"))
