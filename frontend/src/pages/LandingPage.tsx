@@ -126,7 +126,7 @@ const PLANS: Plan[] = [
   {
     name: 'Elite', monthly: 199, annual: 139,
     features: ['Unlimited strategies', 'All symbols', 'Priority support', 'API access', 'White-label option', 'Affiliate program', 'Custom integrations'],
-    cta: 'Contact sales', href: '/register?plan=elite',
+    cta: 'Get Elite access', href: '/register?plan=elite',
   },
 ];
 
@@ -144,10 +144,12 @@ const TESTIMONIALS: Testimonial[] = [
 ];
 
 const NAV_LINKS = [
-  ['#features', 'Features'],
+  ['#features',     'Features'],
   ['#how-it-works', 'How it works'],
-  ['#pricing', 'Pricing'],
-  ['/status', 'Status'],
+  ['#pricing',      'Pricing'],
+  ['/marketplace',  'Marketplace'],
+  ['/geopolitical', 'Geo Risk'],
+  ['/status',       'Status'],
 ] as const;
 
 const HERO_STATS = [
@@ -885,7 +887,13 @@ function Footer() {
           {/* Product */}
           <div>
             <p className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4">Product</p>
-            {[['#features', 'Features'], ['#pricing', 'Pricing'], ['/marketplace', 'Marketplace']].map(([h, l]) => (
+            {[
+              ['#features',      'Features'],
+              ['#pricing',       'Pricing'],
+              ['/marketplace',   'Marketplace'],
+              ['/geopolitical',  'Geopolitical Risk'],
+              ['/nuclear',       'AI Dashboard'],
+            ].map(([h, l]) => (
               <a key={l} href={h} className="block text-sm text-slate-500 hover:text-slate-300 transition-colors mb-2.5">{l}</a>
             ))}
           </div>
@@ -893,7 +901,12 @@ function Footer() {
           {/* Company */}
           <div>
             <p className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4">Company</p>
-            {[['/affiliate', 'Affiliate program'], ['/status', 'System status']].map(([h, l]) => (
+            {[
+              ['/affiliate',  'Affiliate program'],
+              ['/status',     'System status'],
+              ['/terms',      'Terms of service'],
+              ['/privacy',    'Privacy policy'],
+            ].map(([h, l]) => (
               <a key={l} href={h} className="block text-sm text-slate-500 hover:text-slate-300 transition-colors mb-2.5">{l}</a>
             ))}
           </div>
@@ -901,9 +914,13 @@ function Footer() {
           {/* Support */}
           <div>
             <p className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4">Support</p>
-            {[['mailto:support@hopefx.io', 'Contact support']].map(([h, l]) => (
+            {[
+              ['mailto:support@hopefx.io', 'Contact support'],
+              ['/journal',                 'Trade journal'],
+              ['/risk-calc',               'Risk calculator'],
+            ].map(([h, l]) => (
               <a key={l} href={h} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-300 transition-colors mb-2.5">
-                {l} <ExternalLink size={10} />
+                {l} {h.startsWith('mailto:') && <ExternalLink size={10} />}
               </a>
             ))}
           </div>
@@ -911,7 +928,7 @@ function Footer() {
 
         {/* Bottom bar */}
         <div className="border-t border-terminal-border pt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <span className="text-xs text-slate-600">© 2024 HOPEFX. All rights reserved.</span>
+          <span className="text-xs text-slate-600">© {new Date().getFullYear()} HOPEFX. All rights reserved.</span>
           <div className="flex gap-4">
             {[['/privacy', 'Privacy'], ['/terms', 'Terms']].map(([h, l]) => (
               <a key={l} href={h} className="text-xs text-slate-600 hover:text-slate-400 transition-colors">{l}</a>
