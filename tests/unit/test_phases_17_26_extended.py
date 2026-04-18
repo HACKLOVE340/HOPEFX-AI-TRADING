@@ -166,7 +166,7 @@ class TestChartReplayExtended:
         assert cb in engine.callbacks.get("on_bar", [])
 
     def test_callback_error_does_not_propagate(self, engine, session):
-        engine.register_callback("on_trade", lambda *a: 1 / 0)  # Will raise
+        engine.register_callback("on_trade", lambda *a: 1 / 0)  # noqa: division-by-zero — intentional error to test callback isolation
         # Should not crash
         trade = engine.place_practice_order("BUY", 1.0, session_id=session.session_id)
         assert trade is not None

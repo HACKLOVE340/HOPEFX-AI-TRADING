@@ -27,6 +27,7 @@ Safe to run multiple times — skips steps that are already done.
 from __future__ import annotations
 
 import os
+import platform
 import secrets
 import sys
 from pathlib import Path
@@ -40,6 +41,10 @@ sys.path.insert(0, str(ROOT))
 
 ENV_PATH = ROOT / ".env"
 DB_PATH = ROOT / "hopefx.db"
+
+# SQLite URL must use forward slashes on all platforms.
+# On Windows, Path gives backslashes — convert explicitly.
+_DB_URL_PATH = DB_PATH.as_posix() if platform.system() == "Windows" else str(DB_PATH)
 
 # ── Default dev credentials ───────────────────────────────────────────────────
 # superadmin — full platform control (ML, billing, infrastructure, kill switch)
@@ -92,7 +97,7 @@ CONFIG_SALT={config_salt}
 {_TRADER_PASSWORD_KEY}={trader_password}
 
 # ── Database (SQLite for dev) ─────────────────────────────────────────────────
-DATABASE_URL=sqlite:///{DB_PATH}
+DATABASE_URL=sqlite:///{_DB_URL_PATH}
 
 # ── Redis (optional in dev — app degrades gracefully without it) ──────────────
 REDIS_URL=redis://localhost:6379/0
@@ -106,22 +111,21 @@ REQUIRE_EMAIL_VERIFICATION=false
 # ── Sentry (disabled in dev) ──────────────────────────────────────────────────
 # SENTRY_DSN=
 """
-    # Write with mode 0o600 so the generated secrets are not world-readable.
-    # os.open with O_CREAT|O_WRONLY|O_TRUNC and mode=0o600 creates the file
-    # with restricted permissions atomically — no world-readable window.
-    # The file is gitignored and never committed to source control.
-    fd = os.open(str(ENV_PATH), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    # Write .env — use plain open() for cross-platform compatibility.
+    # On Unix, restrict permissions after writing. On Windows, os.chmod
+    # is a no-op for most permission bits so we skip it silently.
+    ENV_PATH.write_text(content, encoding="utf-8")
     try:
-        os.write(fd, content.encode("utf-8"))
-    finally:
-        os.close(fd)
+        ENV_PATH.chmod(0o600)
+    except (NotImplementedError, OSError):
+        pass  # Windows — file permissions not supported, skip silently
     return True
 
 
 def _load_env() -> None:
     """Load .env into os.environ (idempotent). Sets fallback secrets for seeding."""
     os.environ.setdefault("APP_ENV", "development")
-    os.environ.setdefault("DATABASE_URL", f"sqlite:///{DB_PATH}")
+    os.environ.setdefault("DATABASE_URL", f"sqlite:///{_DB_URL_PATH}")
     try:
         from dotenv import load_dotenv
 
