@@ -14,7 +14,7 @@ Verifies that:
   3.  PostgreSQL engine created with pool_size/max_overflow
   4.  All 10 critical API routers have correct /api/* prefixes
   5.  No router uses wildcard CORS with credentials
-  6.  Startup validator: CHANGE_ME placeholder rejected in all modes
+  6.  Startup validator: CHANGE_ME placeholder rejected in all modes  # healer: ignore
   7.  Startup validator: short secret (<32 chars) rejected
   8.  Startup validator: production mode requires REDIS_URL not REDIS_HOST
   9.  MacroStore singleton is importable and functional
@@ -135,10 +135,10 @@ def test_auth_router_prefix(monkeypatch):
 # ── 6-8. Startup validator edge cases ────────────────────────────────────────
 
 
-def test_change_me_placeholder_rejected_in_dev(monkeypatch):
-    """CHANGE_ME placeholder rejected even in development mode."""
+def test_change_me_placeholder_rejected_in_dev(monkeypatch):  # healer: ignore
+    """CHANGE_ME placeholder rejected even in development mode."""  # healer: ignore
     monkeypatch.setenv("APP_ENV", "development")
-    monkeypatch.setenv("SECURITY_JWT_SECRET", "CHANGE_ME_generate_a_random_48_char_secret")
+    monkeypatch.setenv("SECURITY_JWT_SECRET", "CHANGE_ME_generate_a_random_48_char_secret")  # healer: ignore
 
     from config.startup_validator import StartupValidationError, validate_environment
 

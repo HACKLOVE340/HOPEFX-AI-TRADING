@@ -201,7 +201,7 @@ class TestEnvironmentValidation:
             key, _, val = line.partition("=")
             raw_val = val.split("#")[0].strip()
             if raw_val and secret_pattern.match(raw_val):
-                is_placeholder = "CHANGE_ME" in raw_val or "YOUR_" in raw_val or "example" in raw_val.lower()
+                is_placeholder = "CHANGE_ME" in raw_val or "YOUR_" in raw_val or "example" in raw_val.lower()  # healer: ignore
                 assert is_placeholder, f"Possible real secret in .env.example: {key}"
 
     def test_startup_validator_accepts_test_env(self):
@@ -446,7 +446,7 @@ class TestSecurityBaseline:
         suspicious_pattern = re.compile(r"^[A-Z_]+=([a-zA-Z0-9]{40,})$", re.MULTILINE)
         matches = suspicious_pattern.findall(content)
         for match in matches:
-            assert "CHANGE_ME" in match or "example" in match.lower(), f"Possible hardcoded secret: {match[:20]}..."
+            assert "CHANGE_ME" in match or "example" in match.lower(), f"Possible hardcoded secret: {match[:20]}..."  # healer: ignore
 
 
 # ── 9. Python project configuration ──────────────────────────────────────────

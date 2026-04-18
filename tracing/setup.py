@@ -382,10 +382,10 @@ class _NoOpTracer:
             pass
 
         def record_exception(self, *a, **kw):
-            pass
+            pass  # healer: ignore — intentional no-op in _NoOpTracer._Span
 
         def set_status(self, *a, **kw):
-            pass
+            pass  # healer: ignore — intentional no-op in _NoOpTracer._Span
 
         def __enter__(self):
             return self

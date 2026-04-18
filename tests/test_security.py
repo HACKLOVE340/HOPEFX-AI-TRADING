@@ -37,7 +37,7 @@ class TestAuthRoutesDeleted:
             pytest.skip("auth/jwt.py not found")
         content = jwt_path.read_text()
         # The file may have a default for dev, but must warn and not silently use it
-        assert "your_secret_key" not in content, "auth/jwt.py contains literal 'your_secret_key'"
+        assert "your_secret_key" not in content, "auth/jwt.py contains literal 'your_secret_key'"  # healer: ignore
         assert "fakehashedsecret" not in content, "auth/jwt.py contains 'fakehashedsecret' backdoor"
 
 

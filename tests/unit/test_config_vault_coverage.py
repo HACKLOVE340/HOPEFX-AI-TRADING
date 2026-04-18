@@ -319,7 +319,7 @@ class TestStartupValidatorJWT:
 
             validate_environment_or_raise()
 
-    def test_change_me_jwt_raises(self):
+    def test_change_me_jwt_raises(self):  # healer: ignore
         from config.startup_validator import StartupValidationError
 
         with (
@@ -328,7 +328,7 @@ class TestStartupValidatorJWT:
                 {
                     "APP_ENV": "development",
                     "BROKER_TYPE": "paper",
-                    "SECURITY_JWT_SECRET": "CHANGE_ME_this_is_a_placeholder_value_here",  # pragma: allowlist secret
+                    "SECURITY_JWT_SECRET": "CHANGE_ME_this_is_a_placeholder_value_here",  # pragma: allowlist secret  # healer: ignore
                 },
                 clear=True,
             ),
@@ -556,10 +556,10 @@ class TestStartupValidatorProduction:
 
                 validate_environment_or_raise()
 
-    def test_change_me_llm_key_raises(self):
+    def test_change_me_llm_key_raises(self):  # healer: ignore
         from config.startup_validator import StartupValidationError
 
-        env = self._prod_env({"ANTHROPIC_API_KEY": "CHANGE_ME_replace_with_real_key"})
+        env = self._prod_env({"ANTHROPIC_API_KEY": "CHANGE_ME_replace_with_real_key"})  # healer: ignore
         with patch.dict(os.environ, env, clear=True), pytest.raises(StartupValidationError, match="INSECURE"):
             from config.startup_validator import validate_environment_or_raise
 

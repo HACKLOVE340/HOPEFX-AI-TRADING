@@ -87,7 +87,7 @@ def check_required_env_vars() -> None:
         val = os.environ.get(key, "")
         if not val:
             _err(f"{key} not set — {desc}")
-        elif "CHANGE_ME" in val or "your_" in val.lower():
+        elif "CHANGE_ME" in val or "your_" in val.lower():  # healer: ignore
             _err(f"{key} still contains placeholder value")
         else:
             _good(f"{key} set")
@@ -352,7 +352,7 @@ def check_env_file() -> None:
                 continue
             key, _, val = line.partition("=")
             val = val.strip().strip('"').strip("'")
-            if any(marker in val for marker in ("CHANGE_ME", "CHANGEME", "your_", "<", "TODO")):
+            if any(marker in val for marker in ("CHANGE_ME", "CHANGEME", "your_", "<", "TODO")):  # healer: ignore
                 placeholders.append(f"  line {lineno}: {key.strip()}")
 
     if placeholders:

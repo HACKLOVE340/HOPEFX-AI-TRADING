@@ -583,7 +583,7 @@ class BinanceProvider(DataProvider):
             await self.ws.close()
 
 
-class MockProvider(DataProvider):
+class MockProvider(DataProvider):  # healer: ignore — assert_not_production() guard in __init__
     """
     Synthetic GBM tick generator — FOR TESTING AND DEVELOPMENT ONLY.
 

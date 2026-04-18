@@ -101,7 +101,7 @@ def test_validate_production_rejects_other_placeholders(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("SECURITY_JWT_SECRET", "a" * 32)
     monkeypatch.setenv("CONFIG_ENCRYPTION_KEY", "b" * 32)
-    monkeypatch.setenv("HOPEFX_KILL_SWITCH_TOKEN", "CHANGE_ME_generate_64_char_hex_token")
+    monkeypatch.setenv("HOPEFX_KILL_SWITCH_TOKEN", "CHANGE_ME_generate_64_char_hex_token")  # healer: ignore
     result = validate_environment()
     assert any("HOPEFX_KILL_SWITCH_TOKEN" in e for e in result.errors)
 

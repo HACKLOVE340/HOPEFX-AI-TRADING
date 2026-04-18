@@ -78,11 +78,11 @@ CONDITIONAL_SECRETS: list[tuple[str, str, str]] = [
 # (case-insensitive) it is considered unset.  Use only for long, descriptive
 # strings that cannot appear inside a real cryptographic token.
 PLACEHOLDERS = {
-    "CHANGE_ME",
+    "CHANGE_ME",  # healer: ignore
     "your_oanda_api_key_here",
     "your_oanda_account_id_here",
     "your_openai_api_key_here",
-    "changeme",
+    "changeme",  # healer: ignore
     "password",
     "secret",
     "token",
@@ -93,13 +93,13 @@ PLACEHOLDERS = {
 # (case-insensitive).  Short generic words are listed here so that
 # cryptographically-generated tokens that happen to contain them as substrings
 # are not falsely flagged as placeholders.
-_EXACT_PLACEHOLDERS: frozenset[str] = frozenset({"password", "secret", "token", "key", "changeme"})
+_EXACT_PLACEHOLDERS: frozenset[str] = frozenset({"password", "secret", "token", "key", "changeme"})  # healer: ignore
 
 # Substring-match placeholders: longer descriptive strings that cannot appear
 # inside a real random token.
 _SUBSTRING_PLACEHOLDERS: frozenset[str] = frozenset(
     {
-        "change_me",
+        "change_me",  # healer: ignore
         "your_oanda_api_key_here",
         "your_oanda_account_id_here",
         "your_openai_api_key_here",
@@ -197,10 +197,10 @@ def _is_placeholder(val: str) -> bool:
     """Return True if *val* looks like an unset placeholder rather than a real secret.
 
     Two matching strategies are used:
-    - Short generic words ("key", "token", "secret", "password", "changeme") are
+    - Short generic words ("key", "token", "secret", "password", "changeme") are  # healer: ignore
       matched exactly so that cryptographically-generated tokens that happen to
       contain those substrings are not falsely flagged.
-    - Long descriptive strings (e.g. "CHANGE_ME", "your_oanda_api_key_here") are
+    - Long descriptive strings (e.g. "CHANGE_ME", "your_oanda_api_key_here") are  # healer: ignore
       matched as substrings because they appear as prefixes/infixes in template values.
     """
     if not val:

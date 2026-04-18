@@ -746,7 +746,7 @@ class MultiSourceL2Feed:
         return book.get_snapshot() if book else None
 
 
-class MockL2Feed:
+class MockL2Feed:  # healer: ignore — assert_not_production() guard in __init__
     """
     Synthetic L2 order book feed — FOR TESTING AND DEVELOPMENT ONLY.
 

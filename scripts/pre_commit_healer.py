@@ -11,7 +11,7 @@ Detects production code quality issues that the self-healer would flag:
   1. Bare `pass` in non-trivial function/method bodies (not in except/abstract)
   2. TODO / FIXME / HACK / XXX markers in production paths
   3. raise NotImplementedError in non-abstract methods
-  4. Hardcoded placeholder values (CHANGE_ME, your_api_key, etc.)
+  4. Hardcoded placeholder values (CHANGE_ME, your_api_key, etc.)  # healer: ignore
   5. Mock/stub class definitions outside test files
 
 Exit codes
@@ -42,7 +42,7 @@ _PLACEHOLDER_RE = re.compile(
     # - <YOUR_*>: angle-bracket template tokens
     # - INSERT_HERE: explicit insertion marker
     # NOT matched: PLACEHOLDER, PENDING (too common in legitimate prose)
-    r"(CHANGE_ME|CHANGEME|your_api_key|your_secret|<YOUR_[A-Z_]+>|INSERT_HERE)",
+    r"(CHANGE_ME|CHANGEME|your_api_key|your_secret|<YOUR_[A-Z_]+>|INSERT_HERE)",  # healer: ignore
     re.IGNORECASE,
 )
 _MOCK_CLASS_RE = re.compile(r"^class\s+(Mock|Fake|Stub|Dummy)\w*\s*[:(]", re.MULTILINE)
@@ -118,6 +118,9 @@ def check_file(path: Path) -> list[str]:
     if not is_test and _MOCK_CLASS_RE.search(source):
         for m in _MOCK_CLASS_RE.finditer(source):
             lineno = source[: m.start()].count("\n") + 1
+            matched_line = lines[lineno - 1] if lineno <= len(lines) else ""
+            if "# healer: ignore" in matched_line or "# noqa: healer" in matched_line:
+                continue
             issues.append(
                 f"{path}:{lineno}: mock/stub class definition in production code: {m.group().strip()!r}. "
                 "Add a production guard (assert_not_production) or move to tests/."
@@ -137,8 +140,8 @@ def check_file(path: Path) -> list[str]:
     _NULL_CLASS_NAMES = frozenset({
         "_Noop", "_Stub", "_NullCtx", "_NullSpanCtx", "_FakeModule",
         "_NullTxn", "_NoopTxn", "_C",
-        # OTel no-op span/tracer
-        "_NoOpSpan", "_NoOpTracer", "_NoopSpan", "_NoopTracer",
+        # OTel no-op span/tracer (including inner _Span classes)
+        "_NoOpSpan", "_NoOpTracer", "_NoopSpan", "_NoopTracer", "_Span",
         # Prometheus no-op histogram/counter
         "_NoOpHistogram", "_NoOpCounter", "_NoOpGauge",
         # Generic null-object patterns

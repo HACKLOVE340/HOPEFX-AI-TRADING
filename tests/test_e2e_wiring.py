@@ -94,9 +94,9 @@ class TestStartupValidator:
         assert "REDIS_URL" in msg
 
     def test_placeholder_jwt_secret_rejected(self, monkeypatch):
-        """CHANGE_ME placeholder must be rejected even if long enough."""
+        """CHANGE_ME placeholder must be rejected even if long enough."""  # healer: ignore
         monkeypatch.setenv("APP_ENV", "development")
-        monkeypatch.setenv("SECURITY_JWT_SECRET", "CHANGE_ME_generate_a_random_48_char_secret")
+        monkeypatch.setenv("SECURITY_JWT_SECRET", "CHANGE_ME_generate_a_random_48_char_secret")  # healer: ignore
 
         from config.startup_validator import (
             StartupValidationError,
@@ -105,7 +105,7 @@ class TestStartupValidator:
 
         with pytest.raises(StartupValidationError) as exc_info:
             validate_environment(strict=False)
-        assert "CHANGE_ME" in str(exc_info.value) or "placeholder" in str(exc_info.value).lower()
+        assert "CHANGE_ME" in str(exc_info.value) or "placeholder" in str(exc_info.value).lower()  # healer: ignore
 
     def test_jwt_secret_key_alias_accepted(self, monkeypatch):
         """JWT_SECRET_KEY is an accepted alias for SECURITY_JWT_SECRET."""

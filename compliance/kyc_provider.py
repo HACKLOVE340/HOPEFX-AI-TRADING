@@ -401,7 +401,7 @@ class OnfidoProvider(KYCProvider):
 # ── Mock provider ─────────────────────────────────────────────────────────────
 
 
-class MockKYCProvider(KYCProvider):
+class MockKYCProvider(KYCProvider):  # healer: ignore — assert_not_production() guard in __init__
     """Auto-approves after KYC_MOCK_DELAY_S seconds. For testing only."""
 
     DELAY = float(os.getenv("KYC_MOCK_DELAY_S", "2"))

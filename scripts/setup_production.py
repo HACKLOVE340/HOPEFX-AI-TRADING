@@ -234,11 +234,11 @@ def _write_env(path: Path, lines: list[str]) -> None:
 
 _PLACEHOLDER_SUBSTRINGS = frozenset(
     {
-        "change_me",
+        "change_me",  # healer: ignore
         "your_domain",
         "your_oanda",
         "your_openai",
-        "changeme",
+        "changeme",  # healer: ignore
         "placeholder",
     }
 )

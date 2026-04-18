@@ -50,8 +50,8 @@ def test_generate_token32_length():
     assert len(val) >= 40
 
 
-def test_is_placeholder_detects_change_me():
-    assert _is_placeholder("CHANGE_ME_generate_a_random_48_char_secret")
+def test_is_placeholder_detects_change_me():  # healer: ignore
+    assert _is_placeholder("CHANGE_ME_generate_a_random_48_char_secret")  # healer: ignore
 
 
 def test_is_placeholder_detects_empty():
@@ -142,7 +142,7 @@ def test_validate_passes_when_all_set(tmp_path, monkeypatch):
 
 def test_validate_fails_when_placeholder(tmp_path, monkeypatch):
     env_file = tmp_path / ".env"
-    env_file.write_text("SECURITY_JWT_SECRET=CHANGE_ME_generate_a_random_48_char_secret\n")  # pragma: allowlist secret
+    env_file.write_text("SECURITY_JWT_SECRET=CHANGE_ME_generate_a_random_48_char_secret\n")  # pragma: allowlist secret  # healer: ignore
     monkeypatch.setattr("scripts.manage_secrets.ENV_FILE", env_file)
 
     rc = cmd_validate(_FakeArgs())
