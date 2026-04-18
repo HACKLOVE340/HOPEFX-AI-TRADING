@@ -797,8 +797,8 @@ def create_websocket_router(manager: WebSocketManager):
                         json.dumps({"type": "auth_failed", "reason": "auth_timeout"})
                     )
                     await websocket.close(code=4001)
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logger.debug("/ws auth_timeout teardown error (socket already closed): %s", _exc)
                 await limiter.release(client_ip)
                 return
 
@@ -817,8 +817,8 @@ def create_websocket_router(manager: WebSocketManager):
                         json.dumps({"type": "auth_failed", "reason": "invalid_token"})
                     )
                     await websocket.close(code=4001)
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logger.debug("/ws invalid_token teardown error (socket already closed): %s", _exc)
                 await limiter.release(client_ip)
                 return
 
