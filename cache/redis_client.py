@@ -57,6 +57,8 @@ _health_check_interval: float = float(os.getenv("REDIS_HEALTH_INTERVAL", "30"))
 # After the first warning we downgrade subsequent identical messages to DEBUG.
 _no_config_warned: bool = False
 _connect_failed_warned: bool = False
+# Emit the plaintext-TLS dev warning only once per process to avoid log flood.
+_tls_warning_emitted: bool = False
 
 
 def _parse_hosts(hosts_str: str, default_port: int = 6379) -> list[tuple[str, int]]:
@@ -193,11 +195,16 @@ def _enforce_tls(redis_url: str) -> str:
             "to auto-upgrade. This check prevents credentials from being sent in plaintext."
         )
 
-    logger.warning(
-        "Redis: plaintext redis:// connection in %s environment. "
-        "Use rediss:// in production or set REDIS_FORCE_TLS=true.",
-        app_env,
-    )
+    # Warn once per process — repeated per-connection warnings flood the log
+    # in development where many connections are created on startup.
+    global _tls_warning_emitted
+    if not _tls_warning_emitted:
+        logger.warning(
+            "Redis: plaintext redis:// connection in %s environment. "
+            "Use rediss:// in production or set REDIS_FORCE_TLS=true.",
+            app_env,
+        )
+        _tls_warning_emitted = True
     return redis_url
 
 

@@ -99,14 +99,15 @@ TIMEFRAME_SECONDS: dict[str, int] = {
     "M": 2_592_000,  # ~30 days
 }
 
-# yfinance interval mapping for each OANDA granularity
+# yfinance interval mapping for each OANDA granularity.
+# H4 is not a valid yfinance interval — use 1h and let consumers resample.
 _YF_INTERVAL_MAP: dict[str, str] = {
     "M1": "1m",
     "M5": "5m",
     "M15": "15m",
     "M30": "30m",
     "H1": "1h",
-    "H4": "4h",
+    "H4": "1h",   # yfinance has no 4h interval; fetch 1h bars instead
     "D": "1d",
     "W": "1wk",
     "M": "1mo",
@@ -125,6 +126,19 @@ _YF_PERIOD_MAP: dict[str, str] = {
     "D": "max",
     "W": "max",
     "M": "max",
+}
+
+# Maximum lookback in calendar days that Yahoo Finance allows per interval.
+# Requests with a start date older than this are clamped to avoid API errors.
+_YF_MAX_LOOKBACK_DAYS: dict[str, int] = {
+    "1m": 7,      # Yahoo hard limit: 8 calendar days; use 7 to be safe
+    "5m": 60,
+    "15m": 60,
+    "30m": 60,
+    "1h": 730,
+    "1d": 36500,  # effectively unlimited
+    "1wk": 36500,
+    "1mo": 36500,
 }
 
 # yfinance symbol map
@@ -286,8 +300,25 @@ async def _fetch_yfinance(
 
         if from_dt is not None:
             end_dt = datetime.now(UTC)
+
+            # Clamp from_dt to the maximum lookback Yahoo allows for this interval.
+            # Without this, a 1m request with a start date >8 days ago returns an
+            # error: "Only 8 days worth of 1m granularity data are allowed per request."
+            max_days = _YF_MAX_LOOKBACK_DAYS.get(interval, 60)
+            earliest_allowed = end_dt - timedelta(days=max_days)
+            if from_dt < earliest_allowed:
+                logger.debug(
+                    "yfinance: clamping from_dt %s → %s for %s/%s (max %d days)",
+                    from_dt.strftime("%Y-%m-%d"),
+                    earliest_allowed.strftime("%Y-%m-%d"),
+                    yf_symbol,
+                    interval,
+                    max_days,
+                )
+                from_dt = earliest_allowed
+
             # Guard: Yahoo rejects requests where start >= end (can happen for
-            # monthly bars when from_dt falls in the current or a future month).
+            # weekly/monthly bars when from_dt falls in the current period).
             if from_dt >= end_dt:
                 logger.warning(
                     "yfinance: from_dt %s >= end_dt %s for %s/%s — skipping fetch",
@@ -297,12 +328,16 @@ async def _fetch_yfinance(
                     interval,
                 )
                 return []
+
+            # Capture loop-local copies for the lambda closures below.
+            _start = from_dt.strftime("%Y-%m-%d")
+            _end = end_dt.strftime("%Y-%m-%d")
             hist = await loop.run_in_executor(
                 None,
                 lambda: yf.download(
                     yf_symbol,
-                    start=from_dt.strftime("%Y-%m-%d"),
-                    end=end_dt.strftime("%Y-%m-%d"),
+                    start=_start,
+                    end=_end,
                     interval=interval,
                     progress=False,
                     auto_adjust=True,
