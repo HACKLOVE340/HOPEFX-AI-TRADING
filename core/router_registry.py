@@ -550,6 +550,15 @@ def register_routers(
     except Exception as _news_err:
         logger.warning("News router not registered: %s", _news_err)
 
+    # ── Public WebSocket (no auth — landing page ticker) ──────────────────────
+    try:
+        from api.ws_public import router as ws_public_router
+
+        _include_router_deduped(app, ws_public_router)
+        logger.info("Public WebSocket router registered (/ws/public)")
+    except Exception as _ws_pub_err:
+        logger.warning("Public WebSocket router not registered: %s", _ws_pub_err)
+
     # ── Live WebSocket ────────────────────────────────────────────────────────
     try:
         from api.ws_live import router as ws_live_router
