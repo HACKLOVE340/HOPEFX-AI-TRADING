@@ -17,6 +17,11 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       REDIS_HOST: redis
       REDIS_PORT: "6379"
+      # TLS enforcement — auto-upgrades redis:// → rediss:// at runtime.
+      # In production, set REDIS_URL=rediss://... in .env instead.
+      IS_FORCE_TLS: ${IS_FORCE_TLS:-true}
+      REDIS_FORCE_TLS: ${REDIS_FORCE_TLS:-true}
+      APP_ENV: ${APP_ENV:-production}
       API_HOST: "0.0.0.0"
       API_PORT: "8000"
       # ── HOPEFXBrain — sourced from .env (set these before docker compose up) ──
@@ -100,6 +105,9 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       REDIS_HOST: redis
       REDIS_PORT: "6379"
+      IS_FORCE_TLS: ${IS_FORCE_TLS:-true}
+      REDIS_FORCE_TLS: ${REDIS_FORCE_TLS:-true}
+      APP_ENV: ${APP_ENV:-production}
       # Safety: paper trading by default — set OANDA_PRACTICE=false in .env for live
       OANDA_PRACTICE: ${OANDA_PRACTICE:-true}
       # ── HOPEFXBrain — same vars as app service ────────────────────────────

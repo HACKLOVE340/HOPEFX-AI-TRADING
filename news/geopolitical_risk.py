@@ -1470,7 +1470,7 @@ class WorldMonitorAPIClient:
         if region:
             params["region"] = region
 
-        data = self._get_cached_or_fetch("conflicts", params)
+        data = await self._get_cached_or_fetch("conflicts", params)
 
         if data and isinstance(data, dict):
             return data.get("events", data.get("data", []))
