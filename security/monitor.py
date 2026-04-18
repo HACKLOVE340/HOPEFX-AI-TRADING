@@ -13,6 +13,7 @@ in-memory ring buffer so the API never hard-fails.
 from __future__ import annotations
 
 import logging
+import threading
 from collections import deque
 from datetime import datetime, timezone
 from typing import Any
@@ -75,17 +76,20 @@ class SecurityMonitor:
         return _total_count
 
 
-# Singleton
+# Singleton — lock guards against race conditions on multi-threaded startup
 _monitor_instance: SecurityMonitor | None = None
+_monitor_lock = threading.Lock()
 
 
 def get_security_monitor() -> SecurityMonitor:
-    """Return the singleton :class:`SecurityMonitor` instance.
+    """Return the singleton :class:`SecurityMonitor` instance (thread-safe).
 
     Returns:
         Shared SecurityMonitor (created on first call).
     """
     global _monitor_instance  # pylint: disable=global-statement
     if _monitor_instance is None:
-        _monitor_instance = SecurityMonitor()
+        with _monitor_lock:
+            if _monitor_instance is None:
+                _monitor_instance = SecurityMonitor()
     return _monitor_instance

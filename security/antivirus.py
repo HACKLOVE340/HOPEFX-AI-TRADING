@@ -53,6 +53,7 @@ import logging
 import math
 import os
 import re
+import threading
 import time
 from datetime import datetime, timezone
 
@@ -788,12 +789,15 @@ def _require_admin(request: Request) -> dict[str, Any]:
 # ── Module-level singleton ────────────────────────────────────────────────────
 
 _scanner_instance: AntivirusScanner | None = None
+_scanner_lock = threading.Lock()
 
 
 def get_scanner() -> AntivirusScanner:
-    global _scanner_instance
+    global _scanner_instance  # pylint: disable=global-statement
     if _scanner_instance is None:
-        _scanner_instance = AntivirusScanner()
+        with _scanner_lock:
+            if _scanner_instance is None:
+                _scanner_instance = AntivirusScanner()
     return _scanner_instance
 
 

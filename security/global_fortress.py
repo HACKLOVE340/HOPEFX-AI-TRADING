@@ -34,6 +34,7 @@ import asyncio
 import json
 import logging
 import os
+import threading
 import time
 from datetime import datetime, timezone
 
@@ -77,55 +78,69 @@ LLM_FIX_PROMPT = (
 # ── Redis client (lazy init) ──────────────────────────────────────────────────
 
 _redis_client: Any | None = None
+_redis_lock: asyncio.Lock | None = None  # created lazily inside the event loop
+
+
+def _get_redis_lock() -> asyncio.Lock:
+    """Return (or create) the asyncio.Lock for Redis init — must be called from a running loop."""
+    global _redis_lock  # pylint: disable=global-statement
+    if _redis_lock is None:
+        _redis_lock = asyncio.Lock()
+    return _redis_lock
 
 
 async def _get_redis() -> Any:
-    """Return Sentinel-aware Redis client (lazy init)."""
-    global _redis_client
+    """Return Sentinel-aware Redis client (lazy init, coroutine-safe)."""
+    global _redis_client  # pylint: disable=global-statement
     if _redis_client is None:
-        try:
-            from cache.redis_client import get_redis as _get_redis_client
+        async with _get_redis_lock():
+            if _redis_client is None:
+                try:
+                    from cache.redis_client import get_redis as _get_redis_client
 
-            _redis_client = await _get_redis_client()
-        except ImportError:
-            # Fallback: direct URL
-            try:
-                import redis.asyncio as aioredis  # pylint: disable=no-name-in-module
+                    _redis_client = await _get_redis_client()
+                except ImportError:
+                    # Fallback: direct URL
+                    try:
+                        import redis.asyncio as aioredis  # pylint: disable=no-name-in-module
 
-                _redis_client = aioredis.from_url(REDIS_URL, decode_responses=True)
-            except Exception as exc:
-                logger.warning("Redis unavailable for HOPEFXBrain: %s", exc)
+                        _redis_client = aioredis.from_url(REDIS_URL, decode_responses=True)
+                    except Exception as exc:
+                        logger.warning("Redis unavailable for HOPEFXBrain: %s", exc)
     return _redis_client
 
 
 # ── RL agent (lazy load) ──────────────────────────────────────────────────────
 
 _rl_agent: Any | None = None
+_rl_agent_lock = threading.Lock()
 
 
 def _get_rl_agent() -> Any | None:
-    global _rl_agent
+    global _rl_agent  # pylint: disable=global-statement
     if _rl_agent is None:
-        try:
-            from stable_baselines3 import PPO
+        with _rl_agent_lock:
+            if _rl_agent is None:
+                try:
+                    from stable_baselines3 import PPO
 
-            model_path = os.path.join(
-                Path(__file__).parent,
-                "..",
-                "ml",
-                "rl_models",
-                "nuclear_decision_ppo.zip",
-            )
-            if Path(model_path).exists():
-                _rl_agent = PPO.load(model_path)
-                logger.info("HOPEFXBrain: RL agent loaded from %s", model_path)
-            else:
-                logger.warning(
-                    "HOPEFXBrain: RL model not found at %s — using rule-based fallback",
-                    model_path,
-                )
-        except Exception as exc:
-            logger.warning("HOPEFXBrain: RL agent load failed: %s", exc)
+                    model_path = os.path.join(
+                        Path(__file__).parent,
+                        "..",
+                        "ml",
+                        "rl_models",
+                        "nuclear_decision_ppo.zip",
+                    )
+                    if Path(model_path).exists():
+                        _rl_agent = PPO.load(model_path)
+                        logger.info("HOPEFXBrain: RL agent loaded from %s", model_path)
+                    else:
+                        logger.warning(
+                            "HOPEFXBrain: RL model not found at %s — using rule-based fallback",
+                            model_path,
+                        )
+                except Exception as exc:
+                    logger.warning("HOPEFXBrain: RL agent load failed: %s", exc)
     return _rl_agent
 
 
@@ -137,39 +152,42 @@ def _get_rl_agent() -> Any | None:
 
 _ENCODER_ENABLED: bool = os.getenv("BRAIN_SEMANTIC_ENCODER", "false").lower() == "true"
 _encoder: Any | None = None
+_encoder_lock = threading.Lock()
 
 
 def _get_encoder() -> Any | None:
     """
-    Lazy-load SentenceTransformer.
+    Lazy-load SentenceTransformer (thread-safe singleton).
 
     Skipped unless BRAIN_SEMANTIC_ENCODER=true.  On first load, logs a
     one-time warning about the ~90 MB model download (PyTorch itself is
     ~1 GB and must already be installed — sentence-transformers does not
     pull it automatically when torch is absent).
     """
-    global _encoder
+    global _encoder  # pylint: disable=global-statement
     if not _ENCODER_ENABLED:
         return None
     if _encoder is None:
-        try:
-            from sentence_transformers import SentenceTransformer
+        with _encoder_lock:
+            if _encoder is None:
+                try:
+                    from sentence_transformers import SentenceTransformer
 
-            logger.info(
-                "HOPEFXBrain: loading SentenceTransformer (all-MiniLM-L6-v2, ~90 MB). "
-                "Requires PyTorch — set BRAIN_SEMANTIC_ENCODER=false on CPU-only nodes "
-                "to skip this entirely."
-            )
-            _encoder = SentenceTransformer("all-MiniLM-L6-v2")
-            logger.info("HOPEFXBrain: SentenceTransformer ready")
-        except ImportError:
-            logger.warning(
-                "HOPEFXBrain: sentence-transformers not installed. "
-                "Install with: pip install sentence-transformers "
-                "Or set BRAIN_SEMANTIC_ENCODER=false to suppress this warning."
-            )
-        except Exception as exc:
-            logger.warning("HOPEFXBrain: SentenceTransformer load failed: %s", exc)
+                    logger.info(
+                        "HOPEFXBrain: loading SentenceTransformer (all-MiniLM-L6-v2, ~90 MB). "
+                        "Requires PyTorch — set BRAIN_SEMANTIC_ENCODER=false on CPU-only nodes "
+                        "to skip this entirely."
+                    )
+                    _encoder = SentenceTransformer("all-MiniLM-L6-v2")
+                    logger.info("HOPEFXBrain: SentenceTransformer ready")
+                except ImportError:
+                    logger.warning(
+                        "HOPEFXBrain: sentence-transformers not installed. "
+                        "Install with: pip install sentence-transformers "
+                        "Or set BRAIN_SEMANTIC_ENCODER=false to suppress this warning."
+                    )
+                except Exception as exc:
+                    logger.warning("HOPEFXBrain: SentenceTransformer load failed: %s", exc)
     return _encoder
 
 
@@ -726,6 +744,15 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
 # ── Public entry point ────────────────────────────────────────────────────────
 
 _brain_instance: HOPEFXBrain | None = None
+_brain_lock: asyncio.Lock | None = None  # created lazily inside the event loop
+
+
+def _get_brain_lock() -> asyncio.Lock:
+    """Return (or create) the asyncio.Lock for brain init — must be called from a running loop."""
+    global _brain_lock  # pylint: disable=global-statement
+    if _brain_lock is None:
+        _brain_lock = asyncio.Lock()
+    return _brain_lock
 
 
 async def start_brain(app: FastAPI) -> HOPEFXBrain:
@@ -738,31 +765,36 @@ async def start_brain(app: FastAPI) -> HOPEFXBrain:
         _t = asyncio.create_task(start_brain(app))
         _t.add_done_callback(lambda _: None)
     """
-    global _brain_instance
+    global _brain_instance  # pylint: disable=global-statement
     if _brain_instance is not None:
         logger.warning("HOPEFXBrain already started — skipping duplicate start")
         return _brain_instance
 
-    brain = HOPEFXBrain(app)
-    _brain_instance = brain
+    async with _get_brain_lock():
+        if _brain_instance is not None:
+            # Another coroutine initialised it while we waited for the lock
+            return _brain_instance
 
-    # The eager security_router registered by router_registry.py already
-    # covers /api/security/* and delegates to get_brain() at request time.
-    # No need to mount a second router here.
-    logger.info("HOPEFXBrain: live instance ready — /api/security/* served via security_router")
+        brain = HOPEFXBrain(app)
+        _brain_instance = brain
 
-    # Pre-load RL agent in background so first prediction is not delayed
-    asyncio.get_running_loop().run_in_executor(None, _get_rl_agent)
-    # Encoder is opt-in (BRAIN_SEMANTIC_ENCODER=true) — only pre-load when enabled
-    if _ENCODER_ENABLED:
-        asyncio.get_running_loop().run_in_executor(None, _get_encoder)
+        # The eager security_router registered by router_registry.py already
+        # covers /api/security/* and delegates to get_brain() at request time.
+        # No need to mount a second router here.
+        logger.info("HOPEFXBrain: live instance ready — /api/security/* served via security_router")
 
-    # Start the eternal loop
-    _t = asyncio.create_task(brain.monitor_24_7(), name="hopefx-brain-24-7")
-    _t.add_done_callback(lambda _: None)
-    logger.info("HOPEFXBrain: 24/7 monitor task created")
+        # Pre-load RL agent in background so first prediction is not delayed
+        asyncio.get_running_loop().run_in_executor(None, _get_rl_agent)
+        # Encoder is opt-in (BRAIN_SEMANTIC_ENCODER=true) — only pre-load when enabled
+        if _ENCODER_ENABLED:
+            asyncio.get_running_loop().run_in_executor(None, _get_encoder)
 
-    return brain
+        # Start the eternal loop
+        _t = asyncio.create_task(brain.monitor_24_7(), name="hopefx-brain-24-7")
+        _t.add_done_callback(lambda _: None)
+        logger.info("HOPEFXBrain: 24/7 monitor task created")
+
+        return brain
 
 
 def get_brain() -> HOPEFXBrain | None:

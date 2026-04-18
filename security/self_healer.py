@@ -50,6 +50,7 @@ import os
 import re
 import shutil
 import subprocess  # nosec B404 — used only for git rollback with a fixed command list
+import threading
 import time
 from datetime import datetime, timezone
 
@@ -1913,12 +1914,15 @@ def _require_admin(request: Request) -> dict[str, Any]:
 # ── Module-level singleton ────────────────────────────────────────────────────
 
 _healer_instance: SelfHealer | None = None
+_healer_lock = threading.Lock()
 
 
 def get_healer() -> SelfHealer:
-    global _healer_instance
+    global _healer_instance  # pylint: disable=global-statement
     if _healer_instance is None:
-        _healer_instance = SelfHealer()
+        with _healer_lock:
+            if _healer_instance is None:
+                _healer_instance = SelfHealer()
     return _healer_instance
 
 

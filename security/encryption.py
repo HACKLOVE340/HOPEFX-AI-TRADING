@@ -13,6 +13,7 @@ import hashlib
 import logging
 import os
 import secrets
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -319,22 +320,28 @@ def verify_password(password: str, key: str, salt: str) -> bool:
     return new_key == key
 
 
-# Global instances
+# Global instances — locks guard against race conditions on multi-threaded startup
 _vault: SecureVault | None = None
+_vault_lock = threading.Lock()
 _credential_manager: APICredentialManager | None = None
+_credential_manager_lock = threading.Lock()
 
 
 def get_vault() -> SecureVault:
-    """Get global secure vault"""
-    global _vault
+    """Get global secure vault (thread-safe singleton)."""
+    global _vault  # pylint: disable=global-statement
     if _vault is None:
-        _vault = SecureVault()
+        with _vault_lock:
+            if _vault is None:
+                _vault = SecureVault()
     return _vault
 
 
 def get_credential_manager() -> APICredentialManager:
-    """Get global credential manager"""
-    global _credential_manager
+    """Get global credential manager (thread-safe singleton)."""
+    global _credential_manager  # pylint: disable=global-statement
     if _credential_manager is None:
-        _credential_manager = APICredentialManager(get_vault())
+        with _credential_manager_lock:
+            if _credential_manager is None:
+                _credential_manager = APICredentialManager(get_vault())
     return _credential_manager

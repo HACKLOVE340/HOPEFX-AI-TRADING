@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from datetime import datetime, timezone
 from typing import Any
 
@@ -95,17 +96,20 @@ class LockdownManager:
         }
 
 
-# Singleton
+# Singleton — lock guards against race conditions on multi-threaded startup
 _lockdown_instance: LockdownManager | None = None
+_lockdown_lock = threading.Lock()
 
 
 def get_lockdown_manager() -> LockdownManager:
-    """Return the singleton :class:`LockdownManager` instance.
+    """Return the singleton :class:`LockdownManager` instance (thread-safe).
 
     Returns:
         Shared LockdownManager (created on first call).
     """
     global _lockdown_instance  # pylint: disable=global-statement
     if _lockdown_instance is None:
-        _lockdown_instance = LockdownManager()
+        with _lockdown_lock:
+            if _lockdown_instance is None:
+                _lockdown_instance = LockdownManager()
     return _lockdown_instance
