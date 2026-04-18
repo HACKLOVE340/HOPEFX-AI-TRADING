@@ -32,8 +32,10 @@ from datetime import datetime, timezone
 UTC = timezone.utc
 from typing import Any
 
-from fastapi import APIRouter, Body, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+
+from api.auth import TokenPayload, get_current_user, require_role
 
 logger = logging.getLogger(__name__)
 
@@ -197,7 +199,7 @@ async def macro_refresh():
 
 
 @router.get("/features", summary="Macro features for ML inference")
-async def macro_features():
+async def macro_features(user: TokenPayload = Depends(get_current_user)):
     """
     Return macro values as a flat dict of floats ready to merge into
     the ML feature matrix.  All keys are prefixed with 'macro_'.
@@ -233,7 +235,7 @@ async def macro_features():
 
 
 @router.get("/store", summary="MacroStore snapshot — all loaded series with latest values")
-async def macro_store_snapshot():
+async def macro_store_snapshot(user: TokenPayload = Depends(get_current_user)):
     """
     Return the current state of the in-memory MacroStore: which series are
     loaded, their latest values, and observation counts.
@@ -260,7 +262,10 @@ class MacroUpdateRequest(BaseModel):
 
 
 @router.post("/store/update", summary="Upsert a macro observation into MacroStore")
-async def macro_store_update(req: MacroUpdateRequest = Body(...)):
+async def macro_store_update(
+    req: MacroUpdateRequest = Body(...),
+    user: TokenPayload = Depends(require_role("admin")),
+):
     """
     Upsert a single macro observation into the in-memory MacroStore.
 
