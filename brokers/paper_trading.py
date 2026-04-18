@@ -320,7 +320,7 @@ class PaperTradingBroker(BrokerConnector):
         """Connect to paper trading broker and restore persisted state."""
         self.connected = True
         logger.info("Connected to %s (Paper Trading)", self.name)
-        logger.info("Initial balance: $%,.2f", self.initial_balance)
+        logger.info("Initial balance: $%.2f", self.initial_balance)
         # Restore orders and positions persisted from the previous session.
         if self._redis_state is not None:
             self._restore_state_from_redis()

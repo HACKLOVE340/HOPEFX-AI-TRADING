@@ -200,48 +200,93 @@ async def _check_redis() -> ComponentStatus:
         )
     except Exception as exc:
         latency_ms = (time.perf_counter() - t0) * 1000
+        # Redis is critical in production; in development the EventBus falls back
+        # to an in-process queue so a missing Redis is non-fatal.
+        _is_prod = os.getenv("APP_ENV", "development").lower() == "production"
         return ComponentStatus(
             name="redis",
             status="down",
-            critical=True,
+            critical=_is_prod,
             latency_ms=round(latency_ms, 2),
             detail=str(exc),
         )
 
 
 async def _check_database() -> ComponentStatus:
-    """Ping the relational database via the module-level cached SQLAlchemy engine."""
+    """Ping the relational database.
+
+    Tries the async engine first (production PostgreSQL path).
+    Falls back to the sync engine from app_state (SQLite dev path) when
+    the async driver (aiosqlite) is not installed.
+    """
     t0 = time.perf_counter()
     engine, db_url = await _get_db_engine()
-    if engine is None:
-        return ComponentStatus(
-            name="database",
-            status="unknown",
-            critical=True,
-            detail="DATABASE_URL not set" if not db_url else "Engine creation failed — check logs",
-        )
-    try:
-        from sqlalchemy import text  # type: ignore[import]
 
-        async with engine.connect() as conn:
-            await asyncio.wait_for(conn.execute(text("SELECT 1")), timeout=_CHECK_TIMEOUT_SEC)
-        latency_ms = (time.perf_counter() - t0) * 1000
-        return ComponentStatus(
-            name="database",
-            status="healthy",
-            critical=True,
-            latency_ms=round(latency_ms, 2),
-            detail="SELECT 1 OK",
-        )
-    except Exception as exc:
-        latency_ms = (time.perf_counter() - t0) * 1000
-        return ComponentStatus(
-            name="database",
-            status="down",
-            critical=True,
-            latency_ms=round(latency_ms, 2),
-            detail=str(exc),
-        )
+    # ── Async engine path (PostgreSQL / aiosqlite) ────────────────────────────
+    if engine is not None:
+        try:
+            from sqlalchemy import text  # type: ignore[import]
+
+            async with engine.connect() as conn:
+                await asyncio.wait_for(conn.execute(text("SELECT 1")), timeout=_CHECK_TIMEOUT_SEC)
+            latency_ms = (time.perf_counter() - t0) * 1000
+            return ComponentStatus(
+                name="database",
+                status="healthy",
+                critical=True,
+                latency_ms=round(latency_ms, 2),
+                detail="SELECT 1 OK",
+            )
+        except Exception as exc:
+            latency_ms = (time.perf_counter() - t0) * 1000
+            return ComponentStatus(
+                name="database",
+                status="down",
+                critical=True,
+                latency_ms=round(latency_ms, 2),
+                detail=str(exc),
+            )
+
+    # ── Sync engine fallback (SQLite dev — no aiosqlite required) ────────────
+    if db_url:
+        try:
+            from core.app_state import app_state as _app_state
+            from sqlalchemy import text as _text
+
+            sync_engine = getattr(_app_state, "db_engine", None)
+            if sync_engine is not None:
+                loop = asyncio.get_event_loop()
+                def _ping() -> None:
+                    with sync_engine.connect() as conn:
+                        conn.execute(_text("SELECT 1"))
+                await asyncio.wait_for(
+                    loop.run_in_executor(None, _ping),
+                    timeout=_CHECK_TIMEOUT_SEC,
+                )
+                latency_ms = (time.perf_counter() - t0) * 1000
+                return ComponentStatus(
+                    name="database",
+                    status="healthy",
+                    critical=True,
+                    latency_ms=round(latency_ms, 2),
+                    detail="SELECT 1 OK (sync engine)",
+                )
+        except Exception as exc:
+            latency_ms = (time.perf_counter() - t0) * 1000
+            return ComponentStatus(
+                name="database",
+                status="down",
+                critical=True,
+                latency_ms=round(latency_ms, 2),
+                detail=str(exc),
+            )
+
+    return ComponentStatus(
+        name="database",
+        status="unknown",
+        critical=True,
+        detail="DATABASE_URL not set" if not db_url else "Engine creation failed — check logs",
+    )
 
 
 async def _check_kill_switch() -> ComponentStatus:
@@ -403,10 +448,14 @@ async def _check_orchestrator() -> ComponentStatus:
 
         started = getattr(orchestrator, "_started", False)
         latency_ms = (time.perf_counter() - t0) * 1000
+        # Orchestrator is critical only in production when it has not started.
+        # In development, "not started" (degraded) is non-critical — data-layer
+        # feeds are inactive but the API itself is healthy.
+        _is_prod = os.getenv("APP_ENV", "development").lower() == "production"
         return ComponentStatus(
             name="orchestrator",
             status="healthy" if started else "degraded",
-            critical=True,
+            critical=_is_prod and (not started),
             latency_ms=round(latency_ms, 2),
             detail="started" if started else "not started — call orchestrator.start()",
         )
@@ -415,7 +464,7 @@ async def _check_orchestrator() -> ComponentStatus:
         return ComponentStatus(
             name="orchestrator",
             status="unknown",
-            critical=True,
+            critical=False,
             latency_ms=round(latency_ms, 2),
             detail=str(exc),
         )
