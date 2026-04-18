@@ -35,9 +35,19 @@ except Exception as _exc:
     HotStandbyReplicator = None  # type: ignore[assignment,misc]
 
 try:
-    from resilience.service_circuit_breakers import ServiceCircuitBreakers  # noqa: F401
+    from resilience.service_circuit_breakers import (  # noqa: F401
+        ServiceCircuitBreaker,
+        get_all_breaker_status,
+        redis_breaker,
+        broker_breaker,
+        ml_breaker,
+        db_breaker,
+    )
+    # Alias for backwards-compat with any code that imported ServiceCircuitBreakers
+    ServiceCircuitBreakers = ServiceCircuitBreaker  # type: ignore[assignment]
 except Exception as _exc:
     logger.debug("resilience.service_circuit_breakers unavailable: %s", _exc)
+    ServiceCircuitBreaker = None  # type: ignore[assignment,misc]
     ServiceCircuitBreakers = None  # type: ignore[assignment,misc]
 
 try:
@@ -46,10 +56,36 @@ except Exception as _exc:
     logger.debug("resilience.circuit_breaker unavailable: %s", _exc)
     CircuitBreaker = None  # type: ignore[assignment,misc]
 
+try:
+    from resilience.retry import (  # noqa: F401
+        RetryPolicy,
+        retry,
+        redis_retry,
+        broker_retry,
+        http_retry,
+        db_retry,
+    )
+except Exception as _exc:
+    logger.debug("resilience.retry unavailable: %s", _exc)
+    RetryPolicy = None  # type: ignore[assignment,misc]
+    retry = None  # type: ignore[assignment]
+
 __all__ = [
     "AutoRollbackManager",
     "CircuitBreaker",
     "HotStandbyReplicator",
+    "RetryPolicy",
+    "ServiceCircuitBreaker",
     "ServiceCircuitBreakers",
+    "broker_retry",
+    "broker_breaker",
+    "db_breaker",
+    "db_retry",
+    "get_all_breaker_status",
+    "http_retry",
+    "ml_breaker",
+    "redis_breaker",
+    "redis_retry",
+    "retry",
     "rollback_manager",
 ]
