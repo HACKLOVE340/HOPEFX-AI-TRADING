@@ -19,10 +19,9 @@ from hmmlearn.hmm import GaussianHMM
 from sklearn.mixture import GaussianMixture
 
 try:
-    from src.features.engineer import FeatureVector
+    from ml.signal_features import FeatureVector
 except ImportError:
-    # Fallback when src/ package is not present — FeatureVector is only used
-    # as a type hint in this module; a plain dict is accepted at runtime.
+    # Fallback — FeatureVector is only used as a type hint; dict is accepted at runtime.
     FeatureVector = dict  # type: ignore[assignment,misc]
 
 logger = structlog.get_logger()

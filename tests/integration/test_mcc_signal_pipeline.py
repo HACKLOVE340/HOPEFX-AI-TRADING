@@ -314,22 +314,33 @@ class TestMCCRiskGate:
 class TestGetBrokerManager:
     """Tests for the get_broker_manager() factory accessor."""
 
+    @staticmethod
+    def _get_app_state_module():
+        """Return the core.app_state *module* (not the instance exported by core.__init__)."""
+        import importlib
+        return importlib.import_module("core.app_state")
+
     def test_returns_none_when_no_app_state(self):
         from core.startup_factories import get_broker_manager
+        from unittest.mock import MagicMock
 
-        with patch("core.app_state.app_state") as mock_state:
-            mock_state.broker = None
+        _mod = self._get_app_state_module()
+        mock_state = MagicMock()
+        mock_state.broker = None
+        with patch.object(_mod, "app_state", mock_state):
             result = get_broker_manager()
         assert result is None
 
     def test_returns_manager_when_broker_present(self):
         from core.startup_factories import get_broker_manager
+        from unittest.mock import MagicMock
 
+        _mod = self._get_app_state_module()
         broker = _make_paper_broker()
-
-        with patch("core.app_state.app_state") as mock_state:
-            mock_state.broker = broker
-            mock_state._mcc_broker_manager = None  # no cache
+        mock_state = MagicMock()
+        mock_state.broker = broker
+        mock_state._mcc_broker_manager = None
+        with patch.object(_mod, "app_state", mock_state):
             result = get_broker_manager()
 
         assert result is not None
@@ -337,16 +348,19 @@ class TestGetBrokerManager:
     def test_caches_manager_for_same_broker(self):
         from core.startup_factories import get_broker_manager
         from brokers.manager import BrokerManager
+        from unittest.mock import MagicMock
 
+        _mod = self._get_app_state_module()
         broker = _make_paper_broker()
         cached_mgr = BrokerManager(primary_broker_name="test_broker")
         cached_mgr.register("test_broker", broker)
         cached_mgr.set_active("test_broker")
         cached_mgr._mcc_broker_ref = broker  # mark as cached for same broker
 
-        with patch("core.app_state.app_state") as mock_state:
-            mock_state.broker = broker
-            mock_state._mcc_broker_manager = cached_mgr
+        mock_state = MagicMock()
+        mock_state.broker = broker
+        mock_state._mcc_broker_manager = cached_mgr
+        with patch.object(_mod, "app_state", mock_state):
             result1 = get_broker_manager()
             result2 = get_broker_manager()
 
