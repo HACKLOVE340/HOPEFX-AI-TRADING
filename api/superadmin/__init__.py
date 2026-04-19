@@ -65,6 +65,7 @@ from .feature_flags import router as _feature_flags_router
 from .audit import router as _audit_router
 from .infrastructure import router as _infrastructure_router
 from .auto_healing import router as _auto_healing_router
+from .diagnostics import router as _diagnostics_router
 
 router = APIRouter(prefix="/api/superadmin", tags=["SuperAdmin"])
 
@@ -96,3 +97,4 @@ router.include_router(_feature_flags_router)
 router.include_router(_audit_router)
 router.include_router(_infrastructure_router)
 router.include_router(_auto_healing_router)
+router.include_router(_diagnostics_router)
