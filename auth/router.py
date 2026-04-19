@@ -168,7 +168,10 @@ class RefreshRequest(BaseModel):
 
 
 class LogoutRequest(BaseModel):
-    refresh_token: str
+    # refresh_token is optional — the frontend may not have it available in all
+    # code paths (e.g. SSO flows, cookie-only sessions).  When omitted only the
+    # access token is blacklisted; the refresh token will expire naturally.
+    refresh_token: str | None = None
     access_token: str | None = None  # if provided, immediately blacklisted
 
 

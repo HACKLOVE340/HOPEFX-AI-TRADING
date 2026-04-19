@@ -222,7 +222,10 @@ export interface LoginResponse {
 
 export const authApi = {
   login:    (payload: LoginPayload)  => api.post<LoginResponse>('/auth/login', payload),
-  logout:   ()                       => api.post('/auth/logout'),
+  logout:   () => {
+    const refreshToken = localStorage.getItem('hopefx_refresh_token');
+    return api.post('/auth/logout', refreshToken ? { refresh_token: refreshToken } : {});
+  },
   me:       ()                       => api.get<import('../store').User>('/auth/me'),
   register: (payload: { email: string; username: string; password: string }) =>
     api.post('/auth/register', payload),
