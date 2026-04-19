@@ -71,18 +71,18 @@ router = APIRouter(prefix="/api/superadmin", tags=["SuperAdmin"])
 
 @router.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def superadmin_dashboard(user: TokenPayload = Depends(_require_superadmin)) -> HTMLResponse:
-    """SuperAdmin master control center UI. Requires: role = superadmin."""
+    """SuperAdmin master control center UI. Requires: role = superadmin.
+
+    Called by the React SPA (SuperAdminDashboard.tsx) via fetch() with an
+    Authorization: Bearer header. Browser navigation to /superadmin is handled
+    by the React Router — the SPA serves index.html for that path.
+    """
     path = _TEMPLATES_DIR / "admin" / "superadmin.html"
     if path.exists():
         return HTMLResponse(content=path.read_text(encoding="utf-8"))
-    return HTMLResponse(
-        content="""<!DOCTYPE html><html><head><title>SuperAdmin</title></head>
-<body style="background:#0d1117;color:#e6edf3;font-family:sans-serif;padding:40px;">
-<h1>SuperAdmin Control Center</h1>
-<p style="color:#f85149;">Template not found: templates/admin/superadmin.html</p>
-<a href="/api/admin/" style="color:#58a6ff;">← Back to Admin</a>
-</body></html>"""
-    )
+    # Fallback: redirect to the React SPA which renders SuperAdminDashboard
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/superadmin", status_code=302)  # type: ignore[return-value]
 
 
 router.include_router(_overview_router)

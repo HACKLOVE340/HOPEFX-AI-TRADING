@@ -316,12 +316,16 @@ async def resend_verification(body: ForgotPasswordRequest, request: Request):
 
 
 @router.post("/login")
-async def login(body: LoginRequest, request: Request):
+async def login(body: LoginRequest, request: Request, response: Response):
     """Authenticate and receive access + refresh tokens.
 
     Accepts either ``email`` or ``username`` in the request body.
     When a username is supplied it is resolved to an email before
     the credential check so the auth service always works with emails.
+
+    On success, also sets a ``hopefx_access_token`` cookie (not HttpOnly so
+    the React SPA can read it) so that browser navigation to protected pages
+    (e.g. /superadmin) works without JS injecting the Authorization header.
     """
     if not body.email and not body.username:
         raise HTTPException(
@@ -373,11 +377,30 @@ async def login(body: LoginRequest, request: Request):
     except Exception as _exc:
         logger.debug("Suppressed exception: %s", _exc)
 
+    # Set access token as a cookie so browser navigation to protected pages
+    # (e.g. /superadmin) works without JS injecting the Authorization header.
+    # Not HttpOnly — the React SPA reads it to populate the auth store on
+    # page refresh. Secure flag is set in production/staging only.
+    access_token = tokens.get("access_token", "")
+    if access_token:
+        _secure = os.getenv("ENVIRONMENT", "development").lower() in ("production", "staging")
+        # Access tokens are short-lived (15 min); match cookie max_age to that.
+        _max_age = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15")) * 60
+        response.set_cookie(
+            key="hopefx_access_token",
+            value=access_token,
+            max_age=_max_age,
+            httponly=False,   # React SPA must be able to read it
+            samesite="strict",
+            secure=_secure,
+            path="/",
+        )
+
     return tokens
 
 
 @router.post("/refresh")
-async def refresh(body: RefreshRequest, request: Request):
+async def refresh(body: RefreshRequest, request: Request, response: Response):
     """Rotate refresh token. Returns new access + refresh token pair."""
     _check_ip_rate_limit(_get_client_ip(request))
     ok, msg, tokens = await asyncio.to_thread(
@@ -385,18 +408,34 @@ async def refresh(body: RefreshRequest, request: Request):
     )
     if not ok:
         raise HTTPException(status_code=401, detail=msg)
+    # Rotate the access token cookie to match the new token
+    new_access = tokens.get("access_token", "")
+    if new_access:
+        _secure = os.getenv("ENVIRONMENT", "development").lower() in ("production", "staging")
+        _max_age = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15")) * 60
+        response.set_cookie(
+            key="hopefx_access_token",
+            value=new_access,
+            max_age=_max_age,
+            httponly=False,
+            samesite="strict",
+            secure=_secure,
+            path="/",
+        )
     return tokens
 
 
 @router.post("/logout")
 async def logout(
     body: LogoutRequest,
+    response: Response,
     credentials: HTTPAuthorizationCredentials = Depends(_bearer),
 ):
     """Revoke the current session and blacklist the access token."""
-    # Use the bearer token from the Authorization header if not explicitly provided
     access_token = body.access_token or (credentials.credentials if credentials else None)
     await asyncio.to_thread(functools.partial(_svc().logout, body.refresh_token, access_token=access_token))
+    # Clear the access token cookie set on login
+    response.delete_cookie(key="hopefx_access_token", path="/", samesite="strict")
     return {"message": "Logged out successfully"}
 
 

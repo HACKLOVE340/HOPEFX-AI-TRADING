@@ -23,7 +23,7 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-_bearer = HTTPBearer(auto_error=True)
+_bearer = HTTPBearer(auto_error=False)  # auto_error=False so we can fall back to cookie auth
 
 # ---------------------------------------------------------------------------
 # Router re-export
@@ -164,10 +164,34 @@ def _decode_token(token: str) -> TokenPayload:
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> TokenPayload:
-    """Dependency: any authenticated user."""
-    return _decode_token(credentials.credentials)
+    """Dependency: any authenticated user.
+
+    Token resolution order:
+      1. Authorization: Bearer <token> header  (API clients, React SPA fetch)
+      2. hopefx_access_token cookie            (browser navigation fallback)
+
+    Raises 401 if neither is present or the token is invalid.
+    """
+    token: str | None = None
+
+    if credentials is not None:
+        token = credentials.credentials
+    else:
+        # Cookie fallback — allows browser navigation to protected pages
+        # without requiring JS to inject the Authorization header.
+        token = request.cookies.get("hopefx_access_token")
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return _decode_token(token)
 
 
 def require_role(minimum_role: str):
