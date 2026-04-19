@@ -266,6 +266,27 @@ class CFTCCOTFeed:
             except Exception as exc:
                 logger.warning("COT: CSV save failed for %s: %s", name, exc)
 
+    def _neutral_series(self) -> dict[str, pd.Series]:
+        """
+        Return zero-valued weekly COT series spanning the last 5 years.
+
+        Used when both CFTC download and local cache are unavailable so the
+        ML feature pipeline always has the expected column names.  Zero values
+        represent a neutral (no positioning) state — the least biased default.
+        """
+        _now = datetime.now(UTC)
+        end = pd.Timestamp(_now).normalize().tz_localize("UTC") if _now.tzinfo is None else pd.Timestamp(_now).normalize()
+        start = end - timedelta(days=365 * 5)
+        # Weekly Friday dates
+        idx = pd.date_range(start=start, end=end, freq="W-FRI", tz="UTC")
+        zeros = pd.Series(0.0, index=idx)
+        return {
+            "cot_net_spec": zeros.rename("cot_net_spec"),
+            "cot_net_spec_pct": zeros.rename("cot_net_spec_pct"),
+            "cot_comm_net": zeros.rename("cot_comm_net"),
+            "cot_open_interest": zeros.rename("cot_open_interest"),
+        }
+
     def _load_from_cache(self) -> dict[str, pd.Series]:
         """Load previously saved COT series from local CSV files in _CACHE_DIR."""
         result: dict[str, pd.Series] = {}
@@ -309,7 +330,7 @@ class CFTCCOTFeed:
                 failed_years.append(yr)
 
         if failed_years and not all_frames:
-            # All years failed — try loading from local CSV cache before giving up
+            # All years failed — try loading from local CSV cache before giving up.
             cached = self._load_from_cache()
             if cached:
                 logger.warning(
@@ -318,14 +339,23 @@ class CFTCCOTFeed:
                     len(cached),
                 )
                 self._inject_into_macro_store(cached)
+                self._last_fetch = datetime.now(UTC)
                 return {k: len(v) for k, v in cached.items()}
+
+            # No cache either — inject neutral zero-valued series so the ML
+            # pipeline has all expected feature columns (avoids KeyError in
+            # macro_features.py) and log a clear actionable warning.
             logger.warning(
-                "COT: CFTC unreachable (years %s) and no local cache — MacroStore not updated. "
+                "COT: CFTC unreachable (years %s) and no local cache — "
+                "injecting neutral zero-valued COT series into MacroStore. "
                 "Place cached CSVs in %s or ensure outbound HTTPS access to www.cftc.gov.",
                 failed_years,
-                _CACHE_DIR,
+                str(_CACHE_DIR.resolve()),
             )
-            return {}
+            neutral = self._neutral_series()
+            self._inject_into_macro_store(neutral)
+            self._last_fetch = datetime.now(UTC)
+            return {k: len(v) for k, v in neutral.items()}
         elif failed_years:
             logger.debug("COT: %d year(s) unavailable: %s", len(failed_years), failed_years)
 
