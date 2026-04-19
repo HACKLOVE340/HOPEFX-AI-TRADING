@@ -449,6 +449,69 @@ def _seed_trader() -> str:
     return password
 
 
+def build_frontend(verbose: bool = True) -> bool:
+    """Build the React frontend into static/ if not already built.
+
+    Idempotent — skips the build when static/index.html already exists.
+    Returns True if the build ran (or was already present), False on failure.
+    """
+    import shutil
+    import subprocess
+
+    static_index = ROOT / "static" / "index.html"
+    frontend_dir = ROOT / "frontend"
+
+    if static_index.exists():
+        if verbose:
+            logger.info("  Frontend already built  ->  static/")
+        return True
+
+    if not (frontend_dir / "package.json").exists():
+        if verbose:
+            logger.warning("  frontend/package.json not found — skipping frontend build")
+        return False
+
+    npm = shutil.which("npm")
+    if not npm:
+        if verbose:
+            logger.warning("  npm not found — skipping frontend build (install Node.js 20+)")
+        return False
+
+    if verbose:
+        logger.info("  Building frontend (npm install && npm run build)...")
+
+    try:
+        # Install deps only if node_modules is absent or package-lock changed
+        node_modules = frontend_dir / "node_modules"
+        if not node_modules.exists():
+            subprocess.run(
+                [npm, "install", "--silent"],
+                cwd=str(frontend_dir),
+                check=True,
+                timeout=300,
+            )
+
+        subprocess.run(
+            [npm, "run", "build"],
+            cwd=str(frontend_dir),
+            check=True,
+            timeout=300,
+        )
+
+        if verbose:
+            logger.info("  Frontend built  ->  static/")
+        return True
+
+    except subprocess.CalledProcessError as exc:
+        if verbose:
+            logger.warning("  Frontend build failed (non-fatal): %s", exc)
+        return False
+    except subprocess.TimeoutExpired:
+        if verbose:
+            logger.warning("  Frontend build timed out after 5 minutes")
+        return False
+
+
 def bootstrap(verbose: bool = True) -> None:
     created = _generate_env()
 
@@ -473,6 +536,8 @@ def bootstrap(verbose: bool = True) -> None:
         except Exception as exc:  # pylint: disable=broad-exception-caught
             if verbose:
                 logger.warning(f"  {label} seed skipped: {exc}")
+
+    build_frontend(verbose=verbose)
 
     if verbose:
         logger.info("-" * 62)

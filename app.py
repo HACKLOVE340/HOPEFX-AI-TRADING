@@ -394,6 +394,26 @@ async def lifespan(_app: FastAPI):
     # Re-validate environment on every startup/restart (catches config drift on
     # hot-reload or container restart without a full process exit).
     validate_environment(strict=True)
+
+    # Build the React frontend in the background if static/index.html is absent.
+    # Runs as a fire-and-forget thread so the API starts immediately without
+    # waiting for npm. The SPA placeholder page is served until the build finishes.
+    _static_index = Path(__file__).parent / "static" / "index.html"
+    if not _static_index.exists():
+        import threading
+        def _bg_build():
+            try:
+                from scripts.bootstrap_dev import build_frontend
+                build_frontend(verbose=True)
+                # Re-mount the SPA now that static/index.html exists
+                from core.page_routes import register_page_routes as _rpr
+                _rpr(_app)
+                logger.info("Frontend build complete — SPA mounted at /")
+            except Exception as _be:
+                logger.warning("Background frontend build failed: %s", _be)
+        threading.Thread(target=_bg_build, daemon=True, name="frontend-build").start()
+        logger.info("Frontend not built — starting background build (API available immediately)")
+
     # Task 40: Sentry error tracking
     init_sentry()
     # Task 38: Redis-backed rate limiting
