@@ -88,6 +88,14 @@ class User(Base):
     # KYC
     kyc_status = Column(String(20), default="unverified")  # unverified/pending/approved/rejected
 
+    # Subscription plan — free/starter/professional/enterprise
+    # Updated by the billing layer on plan change; read by the superadmin users API.
+    plan = Column(String(30), nullable=False, default="free")
+
+    # User's country (ISO 3166-1 alpha-2, e.g. "US", "GB").
+    # Populated at registration or KYC; nullable until provided.
+    country = Column(String(2), nullable=True)
+
     # Metadata
     created_at = Column(DateTime, default=_utcnow, nullable=False)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)

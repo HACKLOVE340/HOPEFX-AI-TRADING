@@ -1,0 +1,56 @@
+# HOPEFX-AI-TRADING
+# Copyright (c) 2025-2026
+# Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
+# All modifications must be shared under the same license.
+# No commercial use without explicit permission.
+"""add plan and country columns to users
+
+Revision ID: g1h2i3j4k5l6
+Revises: f1a2b3c4d5e6
+Create Date: 2026-04-19 00:00:00.000000
+
+Adds two columns to the ``users`` table:
+
+- ``plan`` (VARCHAR 30, NOT NULL, default 'free') — subscription tier set by
+  the billing layer.  Existing rows are back-filled to 'free'.
+- ``country`` (CHAR 2, nullable) — ISO 3166-1 alpha-2 country code populated
+  at registration or KYC.  Existing rows default to NULL.
+
+These columns replace the hardcoded stubs in the superadmin users API
+(``plan: "free"``, ``country: None``) with real, queryable data.
+"""
+
+from typing import Sequence
+
+import sqlalchemy as sa
+from alembic import op
+
+# revision identifiers, used by Alembic.
+revision: str = "g1h2i3j4k5l6"  # pragma: allowlist secret
+down_revision: str | Sequence[str] | None = "f1a2b3c4d5e6"  # pragma: allowlist secret
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    # Add ``plan`` with a server-side default so existing rows are back-filled
+    # without a full table scan in application code.
+    op.add_column(
+        "users",
+        sa.Column(
+            "plan",
+            sa.String(30),
+            nullable=False,
+            server_default="free",
+        ),
+    )
+    # Add ``country`` as nullable — we cannot infer it for existing accounts.
+    op.add_column(
+        "users",
+        sa.Column("country", sa.String(2), nullable=True),
+    )
+
+
+def downgrade() -> None:
+    op.drop_column("users", "country")
+    op.drop_column("users", "plan")

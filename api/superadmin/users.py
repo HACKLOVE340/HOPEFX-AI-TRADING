@@ -8,6 +8,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
+from sqlalchemy import cast, func, Integer as SAInteger
 
 from api.auth import TokenPayload
 
@@ -23,6 +24,67 @@ from ._shared import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _user_stats(db, user_id: str) -> dict:
+    """Return real trade count and revenue for a user.
+
+    Join path: users.id (str) → accounts.user_id (int, cast) → trades.account_id.
+    Revenue is the sum of wallet deposits (WalletTransaction.amount where
+    transaction_type='deposit') which is the authoritative revenue figure
+    available without a broker connection.  Trade P&L (Trade.total_pnl) is
+    summed separately and returned as realized_pnl.
+    """
+    from database.models import Account, Trade, WalletTransaction
+
+    # Accounts belonging to this user (cast str UUID → int for the FK join)
+    try:
+        uid_int = int(user_id)
+    except (ValueError, TypeError):
+        uid_int = None
+
+    total_trades = 0
+    revenue_generated = 0.0
+
+    if uid_int is not None:
+        # Count all trades across all accounts owned by this user
+        account_ids = [
+            row[0]
+            for row in db.query(Account.id).filter(Account.user_id == uid_int).all()
+        ]
+        if account_ids:
+            total_trades = (
+                db.query(func.count(Trade.id))
+                .filter(Trade.account_id.in_(account_ids))
+                .scalar()
+                or 0
+            )
+            revenue_generated = (
+                db.query(func.coalesce(func.sum(Trade.total_pnl), 0.0))
+                .filter(Trade.account_id.in_(account_ids))
+                .scalar()
+                or 0.0
+            )
+
+    # Wallet deposits as an additional revenue signal (user_id is String here)
+    wallet_deposits = (
+        db.query(func.coalesce(func.sum(WalletTransaction.amount), 0.0))
+        .filter(
+            WalletTransaction.user_id == user_id,
+            WalletTransaction.transaction_type == "deposit",
+            WalletTransaction.status == "completed",
+        )
+        .scalar()
+        or 0.0
+    )
+
+    return {
+        "total_trades": int(total_trades),
+        # Revenue = realised P&L + confirmed deposits (gross inflow)
+        "revenue_generated": round(float(revenue_generated) + float(wallet_deposits), 2),
+    }
 
 router = APIRouter()
 
@@ -51,27 +113,31 @@ async def list_users(
                 q = q.filter((User.username.ilike(like)) | (User.email.ilike(like)))
             if role:
                 q = q.filter(User.role == role)
+            if plan:
+                q = q.filter(User.plan == plan)
             if status:
                 q = q.filter(User.status == status)
             total = q.count()
             rows = q.order_by(User.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
-            users = [
-                {
-                    "user_id": u.id,
-                    "username": u.username,
-                    "email": u.email,
-                    "role": u.role,
-                    "plan": "free",
-                    "status": u.status,
-                    "total_trades": 0,
-                    "created_at": _iso(u.created_at),
-                    "last_login": _iso(u.last_login_at),
-                    "two_fa_enabled": bool(u.totp_enabled),
-                    "country": None,
-                    "revenue_generated": 0.0,
-                }
-                for u in rows
-            ]
+            users = []
+            for u in rows:
+                stats = _user_stats(db, u.id)
+                users.append(
+                    {
+                        "user_id": u.id,
+                        "username": u.username,
+                        "email": u.email,
+                        "role": u.role,
+                        "plan": u.plan,
+                        "status": u.status,
+                        "total_trades": stats["total_trades"],
+                        "created_at": _iso(u.created_at),
+                        "last_login": _iso(u.last_login_at),
+                        "two_fa_enabled": bool(u.totp_enabled),
+                        "country": u.country,
+                        "revenue_generated": stats["revenue_generated"],
+                    }
+                )
             return {"users": users, "total": total, "page": page, "page_size": page_size}
         finally:
             db.close()
@@ -91,19 +157,20 @@ async def get_user(user_id: str, user: TokenPayload = Depends(_require_superadmi
             u = db.query(User).filter_by(id=user_id).first()
             if not u:
                 raise HTTPException(status_code=404, detail="User not found")
+            stats = _user_stats(db, u.id)
             return {
                 "user_id": u.id,
                 "username": u.username,
                 "email": u.email,
                 "role": u.role,
-                "plan": "free",
+                "plan": u.plan,
                 "status": u.status,
-                "total_trades": 0,
+                "total_trades": stats["total_trades"],
                 "created_at": _iso(u.created_at),
                 "last_login": _iso(u.last_login_at),
                 "two_fa_enabled": bool(u.totp_enabled),
-                "country": None,
-                "revenue_generated": 0.0,
+                "country": u.country,
+                "revenue_generated": stats["revenue_generated"],
             }
         finally:
             db.close()
@@ -203,8 +270,38 @@ async def set_user_role(
 async def set_user_plan(
     user_id: str, body: SetPlanBody, user: TokenPayload = Depends(_require_superadmin)
 ) -> dict[str, Any]:
-    _log_superadmin_action(user, "set_plan", f"{user_id}: {body.plan}")
-    return {"ok": True, "plan": body.plan, "note": "Plan change queued — billing layer will apply on next sync"}
+    """Persist a plan change immediately on the User row.
+
+    Valid plans: free, starter, professional, enterprise.
+    The billing layer reads ``User.plan`` on the next sync cycle; writing it
+    here ensures the superadmin dashboard reflects the change instantly.
+    """
+    valid_plans = {"free", "starter", "professional", "enterprise"}
+    if body.plan not in valid_plans:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid plan. Must be one of: {sorted(valid_plans)}",
+        )
+    try:
+        from database.connection import SessionLocal
+        from database.user_models import User
+
+        db = SessionLocal()
+        try:
+            u = db.query(User).filter_by(id=user_id).first()
+            if not u:
+                raise HTTPException(status_code=404, detail="User not found")
+            old_plan = u.plan
+            u.plan = body.plan
+            db.commit()
+            _log_superadmin_action(user, "set_plan", f"{user_id}: {old_plan} → {body.plan}")
+            return {"ok": True, "plan": body.plan}
+        finally:
+            db.close()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post("/users/{user_id}/ban")
@@ -259,9 +356,20 @@ async def unban_user(user_id: str, user: TokenPayload = Depends(_require_superad
 
 @router.post("/users/{user_id}/reset-password")
 async def reset_user_password(user_id: str, user: TokenPayload = Depends(_require_superadmin)) -> dict[str, Any]:
+    """Generate a temporary password and store it using the canonical hash scheme.
+
+    Uses ``auth.jwt.hash_password`` (BLAKE2b pre-hash + bcrypt, cost 12) — the
+    same function used at registration and in ``AuthService.login`` — so the
+    temporary password verifies correctly at the next login attempt.
+
+    Previously this endpoint called ``passlib.CryptContext.hash`` directly,
+    which bypasses the BLAKE2b pre-hash step and produces a hash that
+    ``auth.jwt.verify_password`` can never match.
+    """
     try:
         import secrets
 
+        from auth.jwt import hash_password
         from database.connection import SessionLocal
         from database.user_models import User
 
@@ -271,10 +379,9 @@ async def reset_user_password(user_id: str, user: TokenPayload = Depends(_requir
             if not u:
                 raise HTTPException(status_code=404, detail="User not found")
             temp_pw = secrets.token_urlsafe(16)
-            from passlib.context import CryptContext
-
-            ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
-            u.hashed_password = ctx.hash(temp_pw)
+            # hash_password applies BLAKE2b pre-hash then bcrypt (cost 12),
+            # matching the scheme used at registration and login verification.
+            u.hashed_password = hash_password(temp_pw)
             db.commit()
             _log_superadmin_action(user, "reset_password", user_id)
             return {"ok": True, "temp_password": temp_pw, "note": "Share securely — valid until user changes it"}
@@ -288,13 +395,19 @@ async def reset_user_password(user_id: str, user: TokenPayload = Depends(_requir
 
 @router.post("/users/{user_id}/impersonate")
 async def impersonate_user(user_id: str, user: TokenPayload = Depends(_require_superadmin)) -> dict[str, Any]:
-    """Issue a short-lived impersonation token for the target user."""
+    """Issue a short-lived impersonation token for the target user.
+
+    The token is structurally identical to a normal access token (same claims,
+    same ``type``/``jti`` fields) so that ``decode_access_token()`` accepts it
+    and it can be revoked via the standard blacklist on logout.
+    """
     try:
-        import os
         import time as _time
+        import uuid as _uuid
 
         import jwt as pyjwt
 
+        from auth.jwt import _get_secret
         from database.connection import SessionLocal
         from database.user_models import User
 
@@ -305,21 +418,32 @@ async def impersonate_user(user_id: str, user: TokenPayload = Depends(_require_s
                 raise HTTPException(status_code=404, detail="User not found")
             if u.role == "superadmin":
                 raise HTTPException(status_code=403, detail="Cannot impersonate another superadmin")
-            secret = os.getenv("SECURITY_JWT_SECRET", "")
-            if not secret:
-                raise HTTPException(status_code=500, detail="JWT secret not configured")
+
+            secret = _get_secret()
+            now = int(_time.time())
+            # 1-hour impersonation window — shorter than the normal 60-min access
+            # token so the window is bounded even if the superadmin forgets to log out.
+            expires_in = 3600
+            jti = str(_uuid.uuid4())
+
             payload = {
+                # Standard JWT claims
                 "sub": u.id,
+                "exp": now + expires_in,
+                "iat": now,
+                "jti": jti,
+                # HOPEFX access-token discriminator — required by decode_access_token()
+                "type": "access",
+                # User identity claims
                 "username": u.username,
                 "email": u.email,
                 "role": u.role,
+                # Audit trail — who initiated the impersonation
                 "impersonated_by": user.sub,
-                "exp": int(_time.time()) + 3600,
-                "iat": int(_time.time()),
             }
             token = pyjwt.encode(payload, secret, algorithm="HS256")
-            _log_superadmin_action(user, "impersonate", f"target={user_id}")
-            return {"access_token": token, "token_type": "bearer", "expires_in": 3600}
+            _log_superadmin_action(user, "impersonate", f"target={user_id} jti={jti}")
+            return {"access_token": token, "token_type": "bearer", "expires_in": expires_in}  # nosec B105
         finally:
             db.close()
     except HTTPException:
@@ -439,16 +563,25 @@ async def bulk_export_users(body: BulkUserBody, user: TokenPayload = Depends(_re
         rows = q.order_by(User.created_at.desc()).all()
         buf = io.StringIO()
         writer = csv.writer(buf)
-        writer.writerow(["user_id", "username", "email", "role", "status", "totp_enabled", "created_at", "last_login"])
+        writer.writerow([
+            "user_id", "username", "email", "role", "plan", "status",
+            "country", "totp_enabled", "total_trades", "revenue_generated",
+            "created_at", "last_login",
+        ])
         for u in rows:
+            stats = _user_stats(db, u.id)
             writer.writerow(
                 [
                     u.id,
                     u.username,
                     u.email,
                     u.role,
+                    u.plan,
                     u.status,
+                    u.country or "",
                     bool(u.totp_enabled),
+                    stats["total_trades"],
+                    stats["revenue_generated"],
                     _iso(u.created_at),
                     _iso(u.last_login_at),
                 ]
