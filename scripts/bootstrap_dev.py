@@ -219,6 +219,16 @@ NEWSAPI_ORG_KEY=
 NEWSAPI_AI_KEY=
 REFINITIV_API_KEY=
 REFINITIV_API_SECRET=
+# World Monitor — open-source geopolitical map dashboard (https://worldmonitor.app)
+# GitHub: https://github.com/koala73/worldmonitor
+#
+# World Monitor is URL-based, not API-key-based. The backend builds deep-link
+# URLs to the public instance automatically — no key or URL is needed for dev.
+#
+# WORLDMONITOR_API_URL: set ONLY if you are running a self-hosted instance.
+#   Leave blank to use the public https://worldmonitor.app (default).
+# WORLDMONITOR_API_KEY: set ONLY if your self-hosted instance has auth enabled.
+#   Leave blank for the public instance — it requires no authentication.
 WORLDMONITOR_API_URL=
 WORLDMONITOR_API_KEY=
 EXCHANGE_RATE_API_KEY=

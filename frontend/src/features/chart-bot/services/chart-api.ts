@@ -270,6 +270,18 @@ export async function fetchNewsSentiment(symbol: string): Promise<{ symbol: stri
   return res.data;
 }
 
+// World Monitor returns curated deep-link URLs — no API key required.
+// The backend builds these from WorldMonitorIntegration.get_gold_relevant_views().
+export interface WorldMonitorViews {
+  gold_relevant_views: Record<string, string>;
+  base_url: string;
+}
+
+export async function fetchWorldMonitorViews(): Promise<WorldMonitorViews> {
+  const res = await api.get<WorldMonitorViews>('/news/geopolitical/world-monitor');
+  return res.data;
+}
+
 // ─── Query Keys ───────────────────────────────────────────────────────────────
 // Centralised key factory for TanStack Query cache management
 
@@ -287,5 +299,6 @@ export const queryKeys = {
   geoSignal:          ()                           => ['geo-signal'] as const,
   geoEvents:          ()                           => ['geo-events'] as const,
   geoAssessment:      ()                           => ['geo-assessment'] as const,
+  geoWorldMonitor:    ()                           => ['geo-world-monitor'] as const,
   newsSentiment:      (symbol: string)             => ['news-sentiment', symbol] as const,
 };
