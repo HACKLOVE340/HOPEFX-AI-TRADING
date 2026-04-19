@@ -1905,3 +1905,265 @@ async def run_stress_test(
     except Exception:
         _logger.exception("Stress test failed: %s")
         raise HTTPException(status_code=500, detail="Stress test failed — check server logs") from None
+
+
+# ── Chart-bot endpoints ───────────────────────────────────────────────────────
+# These endpoints are called by frontend/src/features/chart-bot/services/chart-api.ts
+# and provide technical analysis data for the interactive chart overlay.
+
+
+def _ohlcv_to_df(ohlcv_list: list):
+    """Convert a list of OHLCV namedtuples/dicts to a pandas DataFrame."""
+    try:
+        import pandas as pd
+
+        if not ohlcv_list:
+            return None
+        rows = []
+        for bar in ohlcv_list:
+            if hasattr(bar, "_asdict"):
+                rows.append(bar._asdict())
+            elif hasattr(bar, "__dict__"):
+                rows.append(bar.__dict__)
+            else:
+                rows.append(dict(bar))
+        df = pd.DataFrame(rows)
+        # Normalise column names to lowercase
+        df.columns = [c.lower() for c in df.columns]
+        return df
+    except Exception as exc:
+        logger.debug("_ohlcv_to_df failed: %s", exc)
+        return None
+
+
+async def _get_ohlcv_for_symbol(symbol: str, timeframe: str = "1h", limit: int = 200) -> list:
+    """Fetch OHLCV bars from the price engine for a given symbol."""
+    try:
+        from app import app_state
+
+        if app_state and app_state.price_engine:
+            return await app_state.price_engine.get_ohlcv(symbol, timeframe, limit)
+    except Exception as exc:
+        logger.debug("Price engine OHLCV fetch failed for %s: %s", symbol, exc)
+    return []
+
+
+def _normalise_symbol(symbol: str) -> str:
+    """Convert XAU/USD → XAU_USD for the price engine."""
+    return symbol.replace("/", "_").upper()
+
+
+@router.get("/levels", response_model=None, summary="Support and resistance levels for a symbol")
+async def get_levels(
+    symbol: str = Query(..., description="Trading symbol, e.g. XAU/USD"),
+    timeframe: str = Query("1h", description="OHLCV timeframe"),
+    limit: int = Query(200, ge=20, le=1000),
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Detect support and resistance levels using swing-high/low analysis.
+
+    Returns levels grouped by type (support, resistance, pivot) with
+    strength scores and touch counts.
+    """
+    norm = _normalise_symbol(symbol)
+    ohlcv = await _get_ohlcv_for_symbol(norm, timeframe, limit)
+    df = _ohlcv_to_df(ohlcv)
+
+    if df is None or df.empty:
+        return {"levels": [], "symbol": symbol, "note": "Insufficient OHLCV data"}
+
+    try:
+        from analysis.patterns.support_resistance import SupportResistanceDetector
+
+        detector = SupportResistanceDetector()
+        current_price = float(df["close"].iloc[-1]) if "close" in df.columns else None
+        result = detector.detect_levels(df, current_price=current_price)
+
+        levels = []
+        for level_type, level_list in result.items():
+            for lvl in level_list:
+                entry = {
+                    "type": level_type,
+                    "price": float(getattr(lvl, "price", 0)),
+                    "strength": float(getattr(lvl, "strength", 0)),
+                    "touches": int(getattr(lvl, "touches", 0)),
+                    "label": getattr(lvl, "label", level_type),
+                }
+                levels.append(entry)
+
+        levels.sort(key=lambda x: x["strength"], reverse=True)
+        return {"levels": levels, "symbol": symbol, "count": len(levels)}
+    except Exception as exc:
+        logger.warning("Support/resistance detection failed for %s: %s", symbol, exc)
+        return {"levels": [], "symbol": symbol, "error": "Detection unavailable"}
+
+
+@router.get("/trendlines", response_model=None, summary="Trendlines for a symbol")
+async def get_trendlines(
+    symbol: str = Query(..., description="Trading symbol, e.g. XAU/USD"),
+    timeframe: str = Query("1h", description="OHLCV timeframe"),
+    limit: int = Query(200, ge=20, le=1000),
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Detect trendlines (ascending/descending channels and wedges) from OHLCV data.
+
+    Uses the AdvancedPatternDetector to identify trend-based patterns and
+    returns them in a format suitable for chart overlay rendering.
+    """
+    norm = _normalise_symbol(symbol)
+    ohlcv = await _get_ohlcv_for_symbol(norm, timeframe, limit)
+    df = _ohlcv_to_df(ohlcv)
+
+    if df is None or df.empty:
+        return {"trendlines": [], "symbol": symbol, "note": "Insufficient OHLCV data"}
+
+    try:
+        from analysis.patterns.advanced_patterns import AdvancedPatternDetector
+
+        detector = AdvancedPatternDetector()
+        patterns = detector.detect_all_patterns(df, min_confidence=0.5)
+
+        trendline_types = {"ascending_channel", "descending_channel", "wedge", "rising_wedge", "falling_wedge", "channel"}
+        trendlines = []
+        for p in patterns:
+            ptype = str(getattr(p, "pattern_type", "")).lower()
+            if any(t in ptype for t in trendline_types):
+                trendlines.append({
+                    "type": ptype,
+                    "direction": str(getattr(p, "direction", "neutral")).lower(),
+                    "confidence": float(getattr(p, "confidence", 0)),
+                    "start_index": int(getattr(p, "start_index", 0)),
+                    "end_index": int(getattr(p, "end_index", 0)),
+                    "support_slope": float(getattr(p, "support_slope", 0) or 0),
+                    "resistance_slope": float(getattr(p, "resistance_slope", 0) or 0),
+                    "target_price": float(getattr(p, "target_price", 0) or 0),
+                    "stop_loss": float(getattr(p, "stop_loss", 0) or 0),
+                })
+
+        return {"trendlines": trendlines, "symbol": symbol, "count": len(trendlines)}
+    except Exception as exc:
+        logger.warning("Trendline detection failed for %s: %s", symbol, exc)
+        return {"trendlines": [], "symbol": symbol, "error": "Detection unavailable"}
+
+
+@router.get("/patterns", response_model=None, summary="Chart patterns for a symbol")
+async def get_chart_patterns(
+    symbol: str = Query(..., description="Trading symbol, e.g. XAU/USD"),
+    timeframe: str = Query("1h", description="OHLCV timeframe"),
+    limit: int = Query(200, ge=20, le=1000),
+    min_confidence: float = Query(0.5, ge=0.0, le=1.0),
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Detect chart patterns (H&S, double top/bottom, triangles, flags, wedges).
+
+    Returns patterns sorted by confidence descending, with entry/target/stop
+    price levels for each detected pattern.
+    """
+    norm = _normalise_symbol(symbol)
+    ohlcv = await _get_ohlcv_for_symbol(norm, timeframe, limit)
+    df = _ohlcv_to_df(ohlcv)
+
+    if df is None or df.empty:
+        return {"patterns": [], "symbol": symbol, "note": "Insufficient OHLCV data"}
+
+    try:
+        from analysis.patterns.chart_patterns import ChartPatternDetector
+
+        detector = ChartPatternDetector()
+        raw_patterns = detector.detect_patterns(df, min_confidence=min_confidence)
+
+        patterns = []
+        for p in raw_patterns:
+            patterns.append({
+                "pattern_type": str(getattr(p, "pattern_type", "")),
+                "direction": str(getattr(p, "direction", "neutral")),
+                "confidence": float(getattr(p, "confidence", 0)),
+                "entry_price": float(getattr(p, "entry_price", 0) or 0),
+                "target_price": float(getattr(p, "target_price", 0) or 0),
+                "stop_loss": float(getattr(p, "stop_loss", 0) or 0),
+                "start_index": int(getattr(p, "start_index", 0)),
+                "end_index": int(getattr(p, "end_index", 0)),
+                "description": str(getattr(p, "description", "")),
+            })
+
+        return {"patterns": patterns, "symbol": symbol, "count": len(patterns)}
+    except Exception as exc:
+        logger.warning("Chart pattern detection failed for %s: %s", symbol, exc)
+        return {"patterns": [], "symbol": symbol, "error": "Detection unavailable"}
+
+
+@router.get("/equity-curve", response_model=None, summary="Equity curve data points")
+async def get_equity_curve_alias(
+    days: int = Query(90, ge=1, le=365),
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Return equity curve data points for the given number of days.
+
+    Delegates to /api/performance/equity-curve — this alias exists so the
+    chart-bot frontend can use a consistent /api/trading/* base path.
+    """
+    try:
+        from api.performance import get_equity_curve as _get_equity_curve
+
+        return await _get_equity_curve(days=days, user=user)
+    except Exception as exc:
+        logger.warning("equity-curve alias failed: %s", exc)
+        # Return empty curve rather than 503 so the chart renders without crashing
+        return {"data": [], "days": days}
+
+
+@router.get("/microstructure", response_model=None, summary="Market microstructure snapshot")
+async def get_microstructure_alias(
+    symbol: str = Query(..., description="Trading symbol, e.g. XAU/USD"),
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Return market microstructure data (spread, order flow, VWAP) for a symbol.
+
+    Delegates to the data-layer microstructure endpoint when available.
+    """
+    try:
+        from data_layer.microstructure import get_microstructure_snapshot
+
+        norm = _normalise_symbol(symbol)
+        snap = await get_microstructure_snapshot(norm)
+        return snap
+    except Exception:
+        pass
+
+    # Fallback: build from price engine tick data
+    try:
+        from app import app_state
+
+        if app_state and app_state.price_engine:
+            norm = _normalise_symbol(symbol)
+            tick = app_state.price_engine.get_latest_tick(norm) if hasattr(app_state.price_engine, "get_latest_tick") else None
+            if tick:
+                spread = float(getattr(tick, "ask", 0) - getattr(tick, "bid", 0))
+                mid = (float(getattr(tick, "ask", 0)) + float(getattr(tick, "bid", 0))) / 2
+                return {
+                    "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+                    "spread": spread,
+                    "spreadPct": spread / mid if mid else 0,
+                    "bidDepth": 0,
+                    "askDepth": 0,
+                    "orderFlowImbalance": 0,
+                    "tradePressure": 50,
+                    "tickDirection": "flat",
+                    "vwap": mid,
+                    "twap": mid,
+                    "marketImpact": 0,
+                }
+    except Exception as exc:
+        logger.debug("Microstructure fallback failed: %s", exc)
+
+    return {
+        "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+        "spread": 0, "spreadPct": 0, "bidDepth": 0, "askDepth": 0,
+        "orderFlowImbalance": 0, "tradePressure": 50, "tickDirection": "flat",
+        "vwap": 0, "twap": 0, "marketImpact": 0,
+    }

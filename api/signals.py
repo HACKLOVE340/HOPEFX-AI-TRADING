@@ -1100,6 +1100,106 @@ def _register_distribution_routes(
         )
 
 
+def _register_signal_alias_routes(router) -> None:
+    """
+    Register /api/signals/sentiment and /api/signals/news alias endpoints.
+
+    These are called by the chart-bot frontend and delegate to the news API
+    for real sentiment and news data.
+    """
+    try:
+        from fastapi import Depends, Query
+        from api.auth import TokenPayload, get_current_user
+    except ImportError:
+        return
+
+    @router.get("/sentiment", response_model=None, summary="Market sentiment for a symbol")
+    async def get_signal_sentiment(
+        symbol: str = Query("XAUUSD", description="Symbol, e.g. XAUUSD"),
+        user: TokenPayload = Depends(get_current_user),
+    ):
+        """
+        Return aggregated sentiment score for a symbol.
+
+        Delegates to /api/news/sentiment/{symbol} when available, then falls
+        back to the data-layer sentiment endpoint.
+        """
+        try:
+            from api.news import get_sentiment_for_symbol
+            result = await get_sentiment_for_symbol(symbol)
+            return {
+                "score": float(result.get("sentiment_score", 0)),
+                "label": result.get("label", "neutral"),
+                "confidence": float(result.get("confidence", 0.5)),
+                "sources": int(result.get("sources", 0)),
+                "goldSpecificScore": float(result.get("gold_score", 0)),
+                "usdScore": float(result.get("usd_score", 0)),
+                "geopoliticalScore": float(result.get("geopolitical_score", 0)),
+                "updatedAt": result.get("updated_at", None),
+            }
+        except Exception:
+            pass
+
+        try:
+            from data_layer.sentiment import get_sentiment
+            result = await get_sentiment(symbol)
+            return result
+        except Exception:
+            pass
+
+        from datetime import datetime, timezone
+        return {
+            "score": 0.0,
+            "label": "neutral",
+            "confidence": 0.5,
+            "sources": 0,
+            "goldSpecificScore": 0.0,
+            "usdScore": 0.0,
+            "geopoliticalScore": 0.0,
+            "updatedAt": int(datetime.now(timezone.utc).timestamp() * 1000),
+        }
+
+    @router.get("/news", response_model=None, summary="Recent news items for a symbol")
+    async def get_signal_news(
+        symbol: str = Query("XAUUSD", description="Symbol, e.g. XAUUSD"),
+        limit: int = Query(15, ge=1, le=100),
+        user: TokenPayload = Depends(get_current_user),
+    ):
+        """
+        Return recent news items relevant to a symbol.
+
+        Delegates to the geopolitical news events endpoint and filters/formats
+        results for the chart-bot news panel.
+        """
+        try:
+            from api.news import get_news_for_symbol
+            items = await get_news_for_symbol(symbol, limit=limit)
+            return {"items": items, "count": len(items)}
+        except Exception:
+            pass
+
+        try:
+            from news.news_aggregator import get_latest_news
+            raw = get_latest_news(symbol=symbol, limit=limit)
+            items = [
+                {
+                    "id": str(getattr(n, "id", i)),
+                    "headline": getattr(n, "headline", getattr(n, "title", "")),
+                    "source": getattr(n, "source", ""),
+                    "url": getattr(n, "url", ""),
+                    "sentiment": float(getattr(n, "sentiment_score", 0)),
+                    "publishedAt": str(getattr(n, "published_at", "")),
+                    "impact": "medium",
+                }
+                for i, n in enumerate(raw or [])
+            ]
+            return {"items": items, "count": len(items)}
+        except Exception:
+            pass
+
+        return {"items": [], "count": 0}
+
+
 def create_signals_router():
     """Build and return a FastAPI APIRouter with all signal endpoints."""
     try:
@@ -1111,4 +1211,5 @@ def create_signals_router():
     signals_router = APIRouter(prefix="/api/signals", tags=["Signals"])
     _register_signal_read_routes(signals_router)
     _register_signal_write_routes(signals_router)
+    _register_signal_alias_routes(signals_router)
     return signals_router
