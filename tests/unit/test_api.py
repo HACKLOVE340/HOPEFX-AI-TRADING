@@ -39,11 +39,55 @@ from api.trading import (
 )
 
 
-def _make_trading_client() -> TestClient:
-    """Create a TestClient for the trading router."""
+import os as _os_top
+import time as _time_top
+import jwt as _jwt_top
+
+_os_top.environ.setdefault("APP_ENV", "test")
+_os_top.environ.setdefault("SECURITY_JWT_SECRET", "unit-test-trading-secret-key-32chars!!")
+_os_top.environ.setdefault("CSRF_PROTECTION", "false")
+
+
+def _trading_token() -> str:
+    secret = _os_top.environ.get("SECURITY_JWT_SECRET", "unit-test-trading-secret-key-32chars!!")
+    return _jwt_top.encode(
+        {"sub": "test-trader", "role": "admin", "exp": int(_time_top.time()) + 3600},
+        secret,
+        algorithm="HS256",
+    )
+
+
+class _TradingClient:
+    """Thin wrapper that injects a trader Bearer token on every request."""
+
+    def __init__(self, inner: "TestClient"):
+        self._inner = inner
+
+    def _headers(self) -> dict:
+        return {"Authorization": f"Bearer {_trading_token()}"}
+
+    def get(self, url, **kw):
+        kw.setdefault("headers", {}).update(self._headers())
+        return self._inner.get(url, **kw)
+
+    def post(self, url, **kw):
+        kw.setdefault("headers", {}).update(self._headers())
+        return self._inner.post(url, **kw)
+
+    def put(self, url, **kw):
+        kw.setdefault("headers", {}).update(self._headers())
+        return self._inner.put(url, **kw)
+
+    def delete(self, url, **kw):
+        kw.setdefault("headers", {}).update(self._headers())
+        return self._inner.delete(url, **kw)
+
+
+def _make_trading_client() -> "_TradingClient":
+    """Create a TestClient for the trading router with a real trader JWT."""
     app = FastAPI()
     app.include_router(trading_router)
-    return TestClient(app)
+    return _TradingClient(TestClient(app))
 
 
 @pytest.mark.unit

@@ -310,7 +310,7 @@ class RegimeClassifier:
 
     def history(self, n: int = 20) -> list[dict[str, Any]]:
         """Return the last n regime results."""
-        return [r.to_dict() for r in self._history[-n:]]
+        return [r.to_dict() for r in list(self._history)[-n:]]
 
     # ── Internal classifiers ──────────────────────────────────────────────────
 
