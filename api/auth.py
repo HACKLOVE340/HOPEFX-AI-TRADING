@@ -60,26 +60,43 @@ MAX_ORDER_QUANTITY = float(os.getenv("MAX_ORDER_QUANTITY", "100.0"))
 
 
 class TokenPayload(BaseModel):
-    sub: str  # user_id
+    """Decoded JWT access-token claims.
+
+    All fields written by ``AuthService._create_access_token()`` are declared
+    here so downstream dependencies can access them without ``getattr`` fallbacks.
+    Pydantic ignores extra claims, so adding new JWT fields does not break
+    existing tokens.
+    """
+
+    sub: str                    # user_id (UUID string)
     role: str = "user"
     exp: int | None = None
     iat: int | None = None
+    jti: str | None = None      # JWT ID — used for blacklist revocation on logout
+    type: str | None = None     # "access" discriminator checked by _decode_token
+    email: str | None = None
+    username: str | None = None
 
 
 def _get_jwt_secret() -> str:
-    secret = os.getenv("SECURITY_JWT_SECRET") or os.getenv("JWT_SECRET")
-    if not secret:
-        raise RuntimeError(
-            "SECURITY_JWT_SECRET environment variable is not set. "
-            'Generate one with: python -c "import secrets; logger.info(secrets.token_hex(32))"',
-        )
-    if len(secret) < 32:
-        raise RuntimeError("SECURITY_JWT_SECRET must be at least 32 characters")
-    return secret
+    """Return the JWT signing secret.
+
+    Delegates to ``auth.jwt._get_secret()`` — the single source of truth for
+    secret loading, validation, and env-var fallback order
+    (SECURITY_JWT_SECRET → JWT_SECRET_KEY).
+
+    Previously this function read SECURITY_JWT_SECRET → JWT_SECRET, which
+    differs from auth.jwt._load_secret()'s fallback (JWT_SECRET_KEY not
+    JWT_SECRET). That mismatch meant tokens signed via one path could fail
+    verification on the other when only the alias was set.
+    """
+    from auth.jwt import _get_secret as _jwt_get_secret
+
+    return _jwt_get_secret()
 
 
 def _decode_token(token: str) -> TokenPayload:
-    """Decode and validate a JWT bearer token, checking the revocation blacklist."""
+    """Decode and validate a JWT bearer token, checking type claim and revocation blacklist."""
     try:
         secret = _get_jwt_secret()
         payload = jwt.decode(
@@ -88,6 +105,11 @@ def _decode_token(token: str) -> TokenPayload:
             algorithms=["HS256"],
             options={"require": ["sub", "exp"]},
         )
+
+        # Enforce access-token type — reject refresh tokens used as access tokens.
+        # Consistent with auth.jwt.decode_access_token().
+        if payload.get("type") != "access":
+            raise jwt.InvalidTokenError("Not an access token")
 
         # Check access-token blacklist (populated on logout)
         jti = payload.get("jti")

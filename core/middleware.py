@@ -126,6 +126,9 @@ def setup_cors(app: FastAPI) -> None:
             "Content-Type",
             "X-Request-ID",
             "X-Webhook-Signature",
+            # Required for CSRF double-submit cookie pattern — must be listed here
+            # or the browser will block the preflight for all state-changing requests.
+            "X-CSRF-Token",
         ],
         expose_headers=["X-Request-ID"],
     )

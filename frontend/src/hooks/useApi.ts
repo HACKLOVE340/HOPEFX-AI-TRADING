@@ -157,6 +157,14 @@ async function _silentRefresh(): Promise<string | null> {
   return _refreshPromise;
 }
 
+/** Redirect to /login, preserving the current path so AuthGuard can restore it. */
+function _redirectToLogin(): void {
+  const current = window.location.pathname + window.location.search;
+  // Avoid redirect loops — don't redirect if already on /login or /register.
+  if (current.startsWith('/login') || current.startsWith('/register')) return;
+  window.location.replace(`/login?next=${encodeURIComponent(current)}`);
+}
+
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
@@ -175,12 +183,14 @@ api.interceptors.response.use(
         original.headers = { ...original.headers, Authorization: `Bearer ${newToken}` };
         return api(original);
       }
-      // Refresh failed — clear session and redirect to login
+      // Refresh failed — clear session and send user to login immediately.
       useStore.getState().clearAuth();
+      _redirectToLogin();
     }
 
     if (err?.response?.status === 401 && !isAuthEndpoint) {
       useStore.getState().clearAuth();
+      _redirectToLogin();
     }
 
     return Promise.reject(err);

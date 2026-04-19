@@ -31,6 +31,9 @@ import os
 import secrets
 import time
 from collections import defaultdict
+from datetime import datetime, timezone
+
+UTC = timezone.utc
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -409,7 +412,7 @@ async def logout_all(user_id: str = Depends(_get_current_user_id)):
 
 @router.get("/sessions")
 async def list_sessions(user_id: str = Depends(_get_current_user_id)):
-    """Return all active sessions for the current user."""
+    """Return all active (non-revoked, non-expired) sessions for the current user."""
     sessions: list[dict] = []
     try:
         from database.connection import SessionLocal
@@ -417,22 +420,33 @@ async def list_sessions(user_id: str = Depends(_get_current_user_id)):
 
         db = SessionLocal()
         try:
-            rows = db.query(UserSession).filter_by(user_id=user_id, is_active=True).all()
+            now = datetime.now(UTC)
+            rows = (
+                db.query(UserSession)
+                .filter(
+                    UserSession.user_id == user_id,
+                    UserSession.is_revoked == False,  # noqa: E712
+                    UserSession.expires_at > now,
+                )
+                .order_by(UserSession.created_at.desc())
+                .all()
+            )
             sessions = [
                 {
                     "session_id": s.id,
-                    "ip_address": getattr(s, "ip_address", None),
-                    "user_agent": getattr(s, "user_agent", None),
+                    "ip_address": s.ip_address,
+                    "device_info": s.device_info,
                     "created_at": s.created_at.isoformat() if s.created_at else None,
-                    "last_used_at": s.last_used_at.isoformat() if getattr(s, "last_used_at", None) else None,
-                    "is_current": False,
+                    "expires_at": s.expires_at.isoformat() if s.expires_at else None,
+                    "revoked_at": s.revoked_at.isoformat() if s.revoked_at else None,
+                    "is_revoked": s.is_revoked,
                 }
                 for s in rows
             ]
         finally:
             db.close()
     except Exception as exc:
-        logger.debug("list_sessions: %s", exc)
+        logger.warning("list_sessions error: %s", exc)
     return {"sessions": sessions}
 
 
@@ -447,7 +461,8 @@ async def revoke_session(session_id: str, user_id: str = Depends(_get_current_us
         try:
             s = db.query(UserSession).filter_by(id=session_id, user_id=user_id).first()
             if s:
-                s.is_active = False
+                s.is_revoked = True
+                s.revoked_at = datetime.now(UTC)
                 db.commit()
         finally:
             db.close()
