@@ -386,8 +386,15 @@ const AppShell: React.FC = () => {
             {/* Superadmin-only */}
             <Route path="/superadmin"   element={wrap(superAdminOnly(<SuperAdminDashboard />))} />
 
-            {/* Fallback — redirect any unmatched route to /dashboard */}
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            {/* Fallback — authenticated users go to /dashboard, others to /login */}
+            <Route
+              path="*"
+              element={
+                isAuth
+                  ? <Navigate to="/dashboard" replace />
+                  : <Navigate to="/login" replace />
+              }
+            />
           </Routes>
         </Suspense>
       </main>
