@@ -79,8 +79,10 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/checkout',     label: 'Upgrade Plan',   icon: '💳', group: 'account',   plan: 'free',    featureKey: 'settings'     },
   { path: '/settings',     label: 'Settings',       icon: '⚙️', group: 'account',   plan: 'free',    featureKey: 'settings'     },
 
-  // ── Admin (admin/superadmin only) ─────────────────────────────────────────
-  { path: '/superadmin',   label: 'Admin Panel',    icon: '🔧', group: 'admin',      adminOnly: true },
+  // ── Admin (admin + superadmin) ────────────────────────────────────────────
+  // These routes are guarded by AdminGuard (role >= admin).
+  // /superadmin is intentionally NOT listed here — SuperAdminGuard blocks
+  // admin-role users from that route.
   { path: '/audit',        label: 'Audit Log',      icon: '🔍', group: 'admin',      adminOnly: true },
   { path: '/security',     label: 'Security Ops',   icon: '🛡️', group: 'admin',      adminOnly: true },
   { path: '/auto-heal',    label: 'Auto-Heal',      icon: '🩺', group: 'admin',      adminOnly: true },

@@ -99,10 +99,8 @@ const Login: React.FC = () => {
     }
 
     // Default landing page per role.
-    // /admin is a <Navigate to="/superadmin"> in App.tsx — admins must NOT be
-    // sent there or SuperAdminGuard will block them with "Access Denied".
     if (role === 'superadmin') return '/superadmin';
-    if (role === 'admin')      return '/dashboard';
+    if (role === 'admin')      return '/audit';      // admin landing — AdminGuard protected
     return '/dashboard';
   }
 
