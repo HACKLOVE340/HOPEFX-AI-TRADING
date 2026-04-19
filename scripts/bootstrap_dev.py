@@ -352,8 +352,11 @@ HOPEFX_KILL_SWITCH=0
     ENV_PATH.write_text(content, encoding="utf-8")
     try:
         ENV_PATH.chmod(0o600)
-    except (NotImplementedError, OSError):
-        pass
+    except (NotImplementedError, OSError) as exc:
+        # chmod is not supported on Windows (NotImplementedError) and may fail
+        # on some network filesystems (OSError). The file is still written; the
+        # permission restriction is best-effort on non-POSIX systems.
+        logger.debug(".env chmod(0o600) skipped: %s", exc)
     return True
 
 

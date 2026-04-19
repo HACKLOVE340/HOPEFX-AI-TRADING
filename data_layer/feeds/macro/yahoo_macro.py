@@ -99,7 +99,7 @@ class YahooMacroFeed:
             from utils.yfinance_compat import suppress_yfinance_warnings
             suppress_yfinance_warnings()
         except ImportError:
-            pass
+            logger.debug("utils.yfinance_compat not available — yfinance warnings unsuppressed")
 
         start = (datetime.now(UTC) - timedelta(days=365 * years)).strftime("%Y-%m-%d")
         results: dict[str, pd.Series] = {}
