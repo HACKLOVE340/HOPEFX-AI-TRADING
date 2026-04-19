@@ -52,7 +52,7 @@ def _get_jwt_secret() -> str:
 
 def _mint_token(role: str = "user", sub: str = "test-user", exp_offset: int = 3600) -> str:
     return jwt.encode(
-        {"sub": sub, "role": role, "exp": int(time.time()) + exp_offset},
+        {"sub": sub, "role": role, "type": "access", "exp": int(time.time()) + exp_offset},
         _get_jwt_secret(),
         algorithm="HS256",
     )
@@ -146,7 +146,7 @@ class TestAuthEndpoints:
 
     def test_expired_token_returns_401(self, client):
         expired = jwt.encode(
-            {"sub": "test-user", "role": "user", "exp": int(time.time()) - 3600},
+            {"sub": "test-user", "role": "user", "type": "access", "exp": int(time.time()) - 3600},
             _get_jwt_secret(),
             algorithm="HS256",
         )
@@ -563,7 +563,7 @@ class TestRoleBasedAccess:
 
     def test_superadmin_token_accepted(self, client):
         token = jwt.encode(
-            {"sub": "superadmin", "role": "superadmin", "exp": int(time.time()) + 3600},
+            {"sub": "superadmin", "role": "superadmin", "type": "access", "exp": int(time.time()) + 3600},
             _get_jwt_secret(),
             algorithm="HS256",
         )

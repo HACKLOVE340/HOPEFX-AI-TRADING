@@ -176,6 +176,12 @@ export const useStore = create<AppStore>()(
             localStorage.removeItem('hopefx_access_token');
             localStorage.removeItem('hopefx_refresh_token');
           } catch { /* ignore */ }
+          // Invalidate the in-memory CSRF cache so the next request fetches a
+          // fresh token rather than sending a stale one the server has expired.
+          // Dynamic import avoids a circular dependency (store ↔ useApi).
+          import('../hooks/useApi').then(({ resetCsrfCache }) => {
+            resetCsrfCache();
+          }).catch(() => { /* ignore — safe to skip in test/SSR contexts */ });
           set({ token: null, user: null, isAuthenticated: false, plan: 'free' }, false, 'auth/clearAuth');
         },
 

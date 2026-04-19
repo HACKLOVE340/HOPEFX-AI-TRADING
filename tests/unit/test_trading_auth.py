@@ -96,6 +96,7 @@ def _make_token(role: str = "trader", expired: bool = False, sub: str = "user-12
     payload = {
         "sub": sub,
         "role": role,
+        "type": "access",
         "iat": now,
         "exp": now - 10 if expired else now + 3600,
     }

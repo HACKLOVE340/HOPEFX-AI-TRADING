@@ -166,7 +166,7 @@ class MobileAPIServer:
         cache_service=None,
         rate_limiter=None,
     ) -> None:
-        resolved_secret = jwt_secret or os.getenv("SECURITY_JWT_SECRET") or os.getenv("JWT_SECRET")
+        resolved_secret = jwt_secret or os.getenv("SECURITY_JWT_SECRET") or os.getenv("JWT_SECRET_KEY")
         if not resolved_secret or len(resolved_secret) < 32:
             raise ValueError(
                 "jwt_secret must be >= 32 characters. "
@@ -242,6 +242,23 @@ class MobileAPIServer:
         user_id = payload.get("sub")
         if not user_id:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing sub claim")
+
+        # Check access-token blacklist (populated on logout) — same check as api/auth.py.
+        if expected_type == "access":
+            jti = payload.get("jti")
+            if jti:
+                try:
+                    from auth.service import is_access_token_revoked
+                    if is_access_token_revoked(jti):
+                        raise HTTPException(
+                            status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="Token has been revoked",
+                        )
+                except HTTPException:
+                    raise
+                except Exception as _exc:
+                    logger.warning("Token blacklist check failed: %s", _exc)
+
         return user_id
 
     async def _verify_token(self, authorization: str = Header(...)) -> str:

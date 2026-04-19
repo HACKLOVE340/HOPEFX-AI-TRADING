@@ -36,7 +36,7 @@ _SECRET = _TEST_SECRET
 def _make_token(sub: str = "user-int-001", role: str = "trader") -> str:
     now = int(time.time())
     return jwt.encode(
-        {"sub": sub, "role": role, "iat": now, "exp": now + 3600},
+        {"sub": sub, "role": role, "type": "access", "iat": now, "exp": now + 3600},
         _SECRET,
         algorithm="HS256",
     )

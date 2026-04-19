@@ -508,20 +508,24 @@ async def impersonate_user(
 
     try:
         import time
+        import uuid
 
         import jwt as _jwt
 
-        jwt_secret = os.getenv("SECURITY_JWT_SECRET", "")
-        if not jwt_secret:
-            raise ValueError("SECURITY_JWT_SECRET not set")
+        from auth.jwt import _get_secret as _jwt_get_secret
+
+        jti = str(uuid.uuid4())
+        now = int(time.time())
         payload = {
             "sub": user_id,
+            "type": "access",
             "impersonated_by": admin.sub,
-            "exp": int(time.time()) + 300,  # 5 minutes
-            "iat": int(time.time()),
+            "jti": jti,
+            "exp": now + 300,  # 5-minute impersonation window
+            "iat": now,
             "scope": "impersonation",
         }
-        token = _jwt.encode(payload, jwt_secret, algorithm="HS256")
+        token = _jwt.encode(payload, _jwt_get_secret(), algorithm="HS256")
         return {
             "impersonation_token": token,
             "user_id": user_id,

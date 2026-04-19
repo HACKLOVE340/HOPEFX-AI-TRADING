@@ -73,6 +73,18 @@ export async function getCsrfToken(): Promise<string | null> {
   return _getCsrfToken();
 }
 
+/**
+ * Immediately invalidate the in-memory CSRF token cache.
+ * Call this on logout so the next request fetches a fresh token rather than
+ * sending a stale one that the server has already invalidated.
+ * The cookie self-heals via _getCsrfToken()'s cookie-absent check, but
+ * explicit reset avoids a window where the stale in-memory value is used.
+ */
+export function resetCsrfCache(): void {
+  _csrfToken     = null;
+  _csrfFetchedAt = 0;
+}
+
 async function _getCsrfToken(): Promise<string | null> {
   const cookieVal = _readCsrfCookie();
 

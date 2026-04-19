@@ -562,6 +562,7 @@ async def get_me(user_id: str = Depends(_get_current_user_id)):
         "is_email_verified": user.is_email_verified,
         "kyc_status": user.kyc_status,
         "totp_enabled": user.totp_enabled,
+        "plan": getattr(user, "plan", "free"),
         "created_at": user.created_at.isoformat() if user.created_at else None,
         "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
     }

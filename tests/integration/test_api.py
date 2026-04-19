@@ -47,7 +47,7 @@ def _admin_token() -> str:
     """Mint a short-lived admin JWT for integration tests."""
     secret = os.environ.get("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
     return jwt.encode(
-        {"sub": "test-admin", "role": "admin", "exp": int(time.time()) + 3600},
+        {"sub": "test-admin", "role": "admin", "type": "access", "exp": int(time.time()) + 3600},
         secret,
         algorithm="HS256",
     )

@@ -175,7 +175,7 @@ class MobileAPIServer:
         rate_limiter=None,
     ):
         """Initialize mobile API"""
-        resolved_secret = jwt_secret or _os.getenv("SECURITY_JWT_SECRET") or _os.getenv("JWT_SECRET")
+        resolved_secret = jwt_secret or _os.getenv("SECURITY_JWT_SECRET") or _os.getenv("JWT_SECRET_KEY")
         if not resolved_secret or len(resolved_secret) < 32:
             raise ValueError(
                 "jwt_secret must be >= 32 characters. "
@@ -775,12 +775,32 @@ class MobileAPIServer:
             logger.error("Token verification failed: %s", exc)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication failed") from exc
 
+        # Enforce access-token type claim.
+        if payload.get("type") != "access":
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an access token")
+
         # Tokens use the standard "sub" claim (not "user_id").
         # Also accept "user_id" as a legacy fallback for tokens issued by older
         # versions of the mobile server that used a non-standard claim name.
         user_id = payload.get("sub") or payload.get("user_id")
         if not user_id:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing sub claim")
+
+        # Check access-token blacklist (populated on logout) — same check as api/auth.py.
+        jti = payload.get("jti")
+        if jti:
+            try:
+                from auth.service import is_access_token_revoked
+                if is_access_token_revoked(jti):
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Token has been revoked",
+                    )
+            except HTTPException:
+                raise
+            except Exception as _exc:
+                logger.warning("Token blacklist check failed: %s", _exc)
+
         return str(user_id)
 
     def run(self, reload: bool = False):
@@ -807,10 +827,10 @@ from fastapi import APIRouter as _APIRouter
 
 
 def _build_module_app() -> "FastAPI":
-    _secret = _os.getenv("SECURITY_JWT_SECRET", "").strip() or _os.getenv("JWT_SECRET", "").strip()
+    _secret = _os.getenv("SECURITY_JWT_SECRET", "").strip() or _os.getenv("JWT_SECRET_KEY", "").strip()
     if not _secret or len(_secret) < 32:
         raise RuntimeError(
-            "SECURITY_JWT_SECRET (or JWT_SECRET) must be set to at least 32 characters. "
+            "SECURITY_JWT_SECRET (or JWT_SECRET_KEY) must be set to at least 32 characters. "
             "Set it in your .env file or environment before starting the server."
         )
     return MobileAPIServer(jwt_secret=_secret).app

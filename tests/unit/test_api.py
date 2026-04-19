@@ -273,7 +273,7 @@ def _admin_token() -> str:
     # Do NOT overwrite the env var here; just use whatever is current.
     secret = _os.environ.get("SECURITY_JWT_SECRET", "unit-test-admin-secret-key-32chars!!")
     return _jwt.encode(
-        {"sub": "test-admin", "role": "admin", "exp": int(_time.time()) + 3600},
+        {"sub": "test-admin", "role": "admin", "type": "access", "exp": int(_time.time()) + 3600},
         secret,
         algorithm="HS256",
     )

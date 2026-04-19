@@ -72,6 +72,7 @@ def _mint(sub: str = "u1", role: str = "user", exp_offset: int = 3600, jti: str 
     payload: dict[str, Any] = {
         "sub": sub,
         "role": role,
+        "type": "access",
         "exp": int(time.time()) + exp_offset,
         "iat": int(time.time()),
     }
