@@ -175,7 +175,10 @@ function requireAuth() {
 function roleRedirect(token, explicitNext) {
   if (explicitNext) { window.location.replace(explicitNext); return; }
   const role = tokenRole(token);
-  if (role === 'superadmin') { window.location.replace('/api/superadmin/'); return; }
-  if (role === 'admin')      { window.location.replace('/api/admin/');      return; }
-  window.location.replace('/paper-trading');
+  // superadmin and admin both land on /dashboard (the React app).
+  // superadmin gets the SuperAdmin dashboard link in the sidebar.
+  // /api/superadmin/ is a backend API route, not a frontend page.
+  if (role === 'superadmin') { window.location.replace('/superadmin'); return; }
+  if (role === 'admin')      { window.location.replace('/dashboard');  return; }
+  window.location.replace('/dashboard');
 }
