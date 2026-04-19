@@ -65,7 +65,7 @@ def _build_csp(allowed_origins: list[str]) -> str:
         f"img-src 'self' data: https://api.qrserver.com; "
         f"font-src 'self'; "
         f"connect-src {connect_src}; "
-        f"frame-ancestors 'none'; "
+        f"frame-ancestors 'self' https://*.gitpod.dev https://*.gitpod.io; "
         f"base-uri 'self'; "
         f"form-action 'self';"
     )
@@ -160,7 +160,7 @@ def setup_security_headers(app: FastAPI) -> None:
 
     _STATIC_HEADERS: dict[str, str] = {
         "X-Content-Type-Options": "nosniff",
-        "X-Frame-Options": "DENY",
+        "X-Frame-Options": "SAMEORIGIN",
         "X-XSS-Protection": "1; mode=block",
         "Referrer-Policy": "strict-origin-when-cross-origin",
         "Permissions-Policy": "geolocation=(), microphone=(), camera=()",

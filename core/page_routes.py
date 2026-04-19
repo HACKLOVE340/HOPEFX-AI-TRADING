@@ -134,19 +134,23 @@ def register_page_routes(app: FastAPI) -> None:
     if _frontend_dist.exists() and (_frontend_dist / "index.html").exists():
         _index_html = (_frontend_dist / "index.html").read_text(encoding="utf-8")
 
-        # Catch-all: serve index.html for all non-API, non-asset paths so
-        # React Router can handle client-side routes like /dashboard, /superadmin.
-        # Must be registered BEFORE StaticFiles mount (first match wins in FastAPI).
+        # Mount /assets explicitly so JS/CSS bundles are served by StaticFiles.
+        # This must come before the catch-all route registration.
+        _assets_dir = _frontend_dist / "assets"
+        if _assets_dir.exists():
+            app.mount(
+                "/assets",
+                StaticFiles(directory=str(_assets_dir)),
+                name="frontend_assets",
+            )
+
+        # Catch-all: serve index.html for every non-API path so React Router
+        # handles client-side routes (/login, /dashboard, /superadmin, etc.).
         @app.get("/{full_path:path}", include_in_schema=False)
         async def _spa_fallback(full_path: str):
-            # Let StaticFiles handle real asset requests (js, css, images, etc.)
-            asset_exts = (".js", ".css", ".png", ".jpg", ".svg", ".ico", ".woff", ".woff2", ".ttf", ".map")
-            if any(full_path.endswith(ext) for ext in asset_exts):
-                from fastapi import HTTPException
-                raise HTTPException(status_code=404)
             return HTMLResponse(content=_index_html, status_code=200)
 
-        # Primary: serve the main React app at /
+        # Mount / last — handles bare / requests
         app.mount(
             "/",
             StaticFiles(directory=str(_frontend_dist), html=True),
