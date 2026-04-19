@@ -93,6 +93,12 @@ _shared_results: dict[str, dict] = {}
 _indicators: dict[str, dict] = {}
 _mc_cache: dict[str, dict] = {}
 
+# COT data cache — persists last successful CFTC API response so the endpoint
+# returns stale-but-valid data when the API is temporarily unreachable.
+_cot_cache: dict | None = None
+_cot_cache_key = "advanced:cot_cache"
+_COT_CACHE_TTL = 60 * 60 * 24 * 7  # 7 days (CFTC publishes weekly)
+
 
 def _get_sync_redis():
     try:
@@ -832,20 +838,22 @@ async def _collect_series_from_engine(pe: Any, sym_list: list[str], window: int)
 
     # ── Require at least 2 symbols with real data ─────────────────────────────
     if len(series) < 2:
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error": "insufficient_data",
-                "message": (
-                    "Correlation matrix requires real OHLCV history for at least 2 symbols. "
-                    f"Found data for: {list(series.keys()) or 'none'}. "
-                    "Connect a broker, add CSV files to data/, or install yfinance "
-                    "(pip install yfinance) to enable this feature."
-                ),
-                "symbols_with_data": list(series.keys()),
-                "symbols_requested": sym_list,
-            },
-        )
+        # Return an empty matrix instead of 503 so the frontend renders without
+        # crashing.  The UI should show a "no data" state rather than an error.
+        return {
+            "symbols": [],
+            "symbols_missing_data": sym_list,
+            "window": window,
+            "matrix": {},
+            "insights": [],
+            "updated_at": datetime.now(UTC).isoformat(),
+            "note": (
+                "Correlation matrix requires OHLCV history for at least 2 symbols. "
+                f"Found data for: {list(series.keys()) or 'none'}. "
+                "Connect a broker, add CSV files to data/, or install yfinance "
+                "(pip install yfinance) to enable this feature."
+            ),
+        }
 
     min_len = min(len(v) for v in series.values())
     for sym in series:
@@ -902,58 +910,94 @@ async def get_correlation_matrix(
 async def get_cot_gold(user: TokenPayload = Depends(get_current_user)):
     """
     Return CFTC Commitment of Traders data for gold (COMEX).
-    Fetches from CFTC public API. Returns HTTP 503 when the API is unreachable.
+
+    Fetches from the CFTC public API and caches the result for 7 days (the
+    publication cadence).  When the API is unreachable the last cached response
+    is returned with a ``stale=true`` flag rather than a 503.
     """
+    global _cot_cache
+
+    def _build_result(rec: dict, stale: bool = False) -> dict:
+        net_long = int(rec.get("noncomm_positions_long_all", 0)) - int(
+            rec.get("noncomm_positions_short_all", 0),
+        )
+        result = {
+            "report_date": rec.get("report_date_as_yyyy_mm_dd", ""),
+            "net_speculator_long": net_long,
+            "long_positions": int(rec.get("noncomm_positions_long_all", 0)),
+            "short_positions": int(rec.get("noncomm_positions_short_all", 0)),
+            "sentiment": "BULLISH" if net_long > 0 else "BEARISH",
+            "sentiment_strength": "STRONG" if abs(net_long) > 100000 else "MODERATE",
+            "weekly_change": 0,
+            "source": "CFTC",
+            "note": "Non-commercial (speculator) net positions in COMEX gold futures.",
+            "stale": stale,
+        }
+        return result
+
+    def _read_cache() -> dict | None:
+        """Try Redis first, then in-process fallback."""
+        try:
+            r = _get_sync_redis()
+            if r:
+                raw = r.get(_cot_cache_key)
+                if raw:
+                    return _json.loads(raw)
+        except Exception:
+            pass
+        return _cot_cache
+
+    def _write_cache(data: dict) -> None:
+        global _cot_cache
+        _cot_cache = data
+        try:
+            r = _get_sync_redis()
+            if r:
+                r.setex(_cot_cache_key, _COT_CACHE_TTL, _json.dumps(data))
+        except Exception:
+            pass
+
     try:
         import json
         import urllib.request
 
         # CFTC public data API — gold futures (COMEX, code 088691)
-        url = "https://publicreporting.cftc.gov/api/explore/dataset/com_disagg_txt_2024/records/?where=cftc_commodity_code%3D%22088691%22&limit=1&sort=-report_date_as_yyyy_mm_dd"
+        url = (
+            "https://publicreporting.cftc.gov/api/explore/dataset/com_disagg_txt_2024/records/"
+            "?where=cftc_commodity_code%3D%22088691%22&limit=1&sort=-report_date_as_yyyy_mm_dd"
+        )
         req = urllib.request.Request(url, headers={"Accept": "application/json"})
-        with urllib.request.urlopen(req, timeout=5) as resp:  # nosec B310 - hardcoded https:// CFTC public API URL
+        with urllib.request.urlopen(req, timeout=5) as resp:  # nosec B310
             data = json.loads(resp.read())
             records = data.get("records") or []
             if not records:
-                raise HTTPException(
-                    status_code=503,
-                    detail={
-                        "error": "cftc_no_records",
-                        "message": (
-                            "CFTC API returned no records for gold futures. "
-                            "Data is published weekly — retry after the next report release."
-                        ),
-                    },
-                )
+                # No records — fall through to cache
+                raise ValueError("CFTC API returned no records")
             rec = records[0]["record"]["fields"]
-            net_long = int(rec.get("noncomm_positions_long_all", 0)) - int(
-                rec.get("noncomm_positions_short_all", 0),
-            )
-            return {
-                "report_date": rec.get("report_date_as_yyyy_mm_dd", ""),
-                "net_speculator_long": net_long,
-                "long_positions": int(rec.get("noncomm_positions_long_all", 0)),
-                "short_positions": int(rec.get("noncomm_positions_short_all", 0)),
-                "sentiment": "BULLISH" if net_long > 0 else "BEARISH",
-                "sentiment_strength": "STRONG" if abs(net_long) > 100000 else "MODERATE",
-                "weekly_change": 0,  # requires prior week comparison — not in single-record fetch
-                "source": "CFTC",
-                "note": "Non-commercial (speculator) net positions in COMEX gold futures.",
-            }
+            result = _build_result(rec, stale=False)
+            _write_cache(rec)
+            return result
     except HTTPException:
         raise
     except Exception as exc:
         logger.warning("CFTC API unavailable: %s", exc)
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error": "cftc_unavailable",
-                "message": (
-                    "CFTC public API is currently unreachable. "
-                    "Data is published weekly — retry after the next report release."
-                ),
-            },
-        ) from exc
+        cached = _read_cache()
+        if cached:
+            return _build_result(cached, stale=True)
+        # No cache and API down — return a neutral placeholder so the UI renders
+        return {
+            "report_date": "",
+            "net_speculator_long": 0,
+            "long_positions": 0,
+            "short_positions": 0,
+            "sentiment": "NEUTRAL",
+            "sentiment_strength": "UNKNOWN",
+            "weekly_change": 0,
+            "source": "CFTC",
+            "note": "CFTC API temporarily unavailable. Data is published weekly.",
+            "stale": True,
+            "unavailable": True,
+        }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
