@@ -2,6 +2,11 @@
  * SuperAdminGuard.tsx
  * Blocks everyone except superadmin from accessing superadmin-only pages.
  * Admins see a specific "insufficient privilege" message.
+ *
+ * Must be rendered inside AuthGuard, which fetches /api/auth/me to confirm
+ * the server-side role before rendering children. While user is null (role
+ * not yet confirmed from the server) we show a loading spinner rather than
+ * "Access Denied" to avoid a false rejection during the auth sync window.
  */
 
 import React from 'react';
@@ -17,9 +22,27 @@ const SuperAdminGuard: React.FC<Props> = ({ children }) => {
   const user     = useStore(selectUser);
   const navigate = useNavigate();
 
-  if (user && isSuperAdmin(user.role)) return <>{children}</>;
+  // user is null while AuthGuard is still syncing the role from /api/auth/me.
+  // Render a spinner instead of "Access Denied" to avoid a false rejection.
+  if (!user) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', background: '#0f172a',
+      }}>
+        <div style={{
+          width: 32, height: 32, borderRadius: '50%',
+          border: '3px solid #1e293b', borderTopColor: '#3b82f6',
+          animation: 'spin 0.7s linear infinite',
+        }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
 
-  const isAdminUser = user ? isAdmin(user.role) : false;
+  if (isSuperAdmin(user.role)) return <>{children}</>;
+
+  const isAdminUser = isAdmin(user.role);
 
   return (
     <div style={{
