@@ -71,11 +71,12 @@ _risk_provider: GeopoliticalRiskProvider | None = None
 
 
 def _get_risk_provider() -> GeopoliticalRiskProvider:
-    """Return (or create) the module-level GeopoliticalRiskProvider singleton."""
-    global _risk_provider
-    if _risk_provider is None:
-        _risk_provider = GeopoliticalRiskProvider()
-    return _risk_provider
+    """Return the module-level GeopoliticalRiskProvider singleton.
+
+    Delegates to get_geopolitical_provider() so all callers share one instance
+    and _all_sources_warned fires only once per process.
+    """
+    return get_geopolitical_provider()
 
 
 # ---------------------------------------------------------------------------
