@@ -1234,19 +1234,33 @@ _TRADE_CSV_FIELDS = [
 
 
 def _query_trades(user_id: str, symbol: str | None, limit: int, offset: int) -> list:
-    """Fetch trades from DB for the given user."""
+    """Fetch trades from DB for the given user.
+
+    Queries by Trade.user_id directly (preferred path).  Falls back to joining
+    through Account when a trade was created before the user_id column existed.
+    """
     try:
         from app import app_state as _state
-        from database.models import Trade
+        from database.models import Account, Trade
 
         if not _state or not _state.db_session_factory:
             return []
         with _state.db_session_factory() as session:  # pylint: disable=not-callable
-            q = session.query(Trade).filter(Trade.user_id == user_id)
+            # Primary: trades with user_id set directly
+            q_direct = session.query(Trade).filter(Trade.user_id == user_id)
+            # Fallback: trades linked via Account.user_id (legacy rows)
+            q_via_account = (
+                session.query(Trade)
+                .join(Account, Trade.account_id == Account.id)
+                .filter(Account.user_id == int(user_id) if str(user_id).isdigit() else Account.user_id == user_id)
+                .filter(Trade.user_id.is_(None))
+            )
+            from sqlalchemy import union_all
+            combined = q_direct.union(q_via_account)
             if symbol:
-                q = q.filter(Trade.symbol == symbol.upper())
-            q = q.order_by(Trade.entry_time.desc()).offset(offset).limit(limit)
-            return q.all()
+                combined = combined.filter(Trade.symbol == symbol.upper())
+            combined = combined.order_by(Trade.entry_time.desc()).offset(offset).limit(limit)
+            return combined.all()
     except Exception as exc:
         logger.warning("Trade history DB query failed: %s", exc)
         return []
