@@ -49,7 +49,9 @@ _CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 _HISTORY_YEARS = int(os.getenv("YAHOO_MACRO_HISTORY_YEARS", "10"))
 
-# Yahoo tickers → MacroStore series name
+# Yahoo tickers → MacroStore series name.
+# Primary ticker is the first element; fallbacks are tried in order when the
+# primary returns empty data (e.g. CL=F during CME quarterly roll windows).
 _YAHOO_SERIES: dict[str, str] = {
     "^GSPC": "spx",
     "GLD": "gold_etf",
@@ -57,6 +59,16 @@ _YAHOO_SERIES: dict[str, str] = {
     "CL=F": "oil",
     "CNY=X": "usdcny",
     "DX-Y.NYB": "dxy_yahoo",  # DXY cross-check against FRED DTWEXBGS
+}
+
+# Per-ticker fallback chains for tickers that go stale during roll windows.
+# Keys are primary tickers; values are ordered lists of fallback tickers.
+_TICKER_FALLBACKS: dict[str, list[str]] = {
+    # CL=F (WTI crude front-month) is periodically delisted during CME rolls.
+    # USO (US Oil Fund ETF) and BNO (Brent Oil ETF) are always available.
+    "CL=F": ["USO", "BNO"],
+    # HG=F (copper front-month) can also roll; use CPER ETF as fallback.
+    "HG=F": ["CPER"],
 }
 
 
@@ -85,27 +97,78 @@ class YahooMacroFeed:
         results: dict[str, pd.Series] = {}
 
         for ticker, name in _YAHOO_SERIES.items():
-            try:
-                df = yf.download(ticker, start=start, progress=False, auto_adjust=True)
-                if df.empty:
-                    logger.warning("Yahoo: no data for %s (%s)", ticker, name)
-                    continue
-                close = df["Close"].squeeze()
-                if isinstance(close, pd.DataFrame):
-                    close = close.iloc[:, 0]
-                close.index = pd.to_datetime(close.index, utc=True)
-                close = close.sort_index().dropna()
-                results[name] = close
-                logger.info(
-                    "Yahoo: fetched %s (%s) — %d obs, latest=%.4f on %s",
+            # Build the full candidate list: primary ticker + any fallbacks.
+            candidates = [ticker] + _TICKER_FALLBACKS.get(ticker, [])
+            fetched = False
+            for candidate in candidates:
+                try:
+                    df = yf.download(candidate, start=start, progress=False, auto_adjust=True)
+                    if df is None or (hasattr(df, "empty") and df.empty):
+                        if candidate == ticker:
+                            logger.warning(
+                                "Yahoo: no data for %s (%s) — trying fallbacks %s",
+                                ticker,
+                                name,
+                                _TICKER_FALLBACKS.get(ticker, []),
+                            )
+                        else:
+                            logger.debug("Yahoo: fallback %s also empty for %s", candidate, name)
+                        continue
+                    close = df["Close"].squeeze()
+                    if isinstance(close, pd.DataFrame):
+                        close = close.iloc[:, 0]
+                    close.index = pd.to_datetime(close.index, utc=True)
+                    close = close.sort_index().dropna()
+                    if close.empty:
+                        continue
+                    results[name] = close
+                    if candidate != ticker:
+                        logger.info(
+                            "Yahoo: fetched %s via fallback %s (%s) — %d obs, latest=%.4f on %s",
+                            name,
+                            candidate,
+                            ticker,
+                            len(close),
+                            float(close.iloc[-1]),
+                            close.index[-1].date().isoformat(),
+                        )
+                    else:
+                        logger.info(
+                            "Yahoo: fetched %s (%s) — %d obs, latest=%.4f on %s",
+                            name,
+                            ticker,
+                            len(close),
+                            float(close.iloc[-1]),
+                            close.index[-1].date().isoformat(),
+                        )
+                    fetched = True
+                    break
+                except Exception as exc:
+                    logger.debug("Yahoo: fetch failed for %s (%s): %s", candidate, name, exc)
+
+            if not fetched:
+                # Try CSV cache before giving up entirely.
+                cache_path = _CACHE_DIR / f"{name}_daily.csv"
+                if cache_path.exists():
+                    try:
+                        df_cache = pd.read_csv(cache_path, parse_dates=["date"])
+                        df_cache["date"] = pd.to_datetime(df_cache["date"], utc=True)
+                        cached_series = df_cache.set_index("date")["value"].sort_index()
+                        if not cached_series.empty:
+                            results[name] = cached_series
+                            logger.info(
+                                "Yahoo: loaded %s from CSV cache (%d obs) — all live sources unavailable",
+                                name,
+                                len(cached_series),
+                            )
+                            continue
+                    except Exception as exc:
+                        logger.debug("Yahoo: CSV cache load failed for %s: %s", name, exc)
+                logger.warning(
+                    "Yahoo: no data for %s (tried %s) — series will be absent from MacroStore",
                     name,
-                    ticker,
-                    len(close),
-                    float(close.iloc[-1]),
-                    close.index[-1].date().isoformat(),
+                    candidates,
                 )
-            except Exception as exc:
-                logger.warning("Yahoo: fetch failed for %s (%s): %s", ticker, name, exc)
 
         return results
 
