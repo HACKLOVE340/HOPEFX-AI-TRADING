@@ -9,17 +9,14 @@ api/pages.py
 HTML page routes for the frontend.
 
 Routes served:
+  GET /login              — login page
+  GET /register           — registration page
   GET /security           — security & privacy page
   GET /marketplace        — strategy marketplace
   GET /affiliate          — affiliate programme
   GET /docs/FAQ.md        — FAQ documentation
   GET /docs/API.md        — API reference documentation
   GET /docs/MOBILE_GUIDE.md — mobile usage guide
-
-NOTE: /login and /register are intentionally NOT registered here.
-The React SPA (mounted in core/page_routes.py) handles those routes
-via React Router. Server-side routes for those paths would intercept
-the browser request before React loads and break client-side navigation.
 """
 
 from __future__ import annotations
@@ -55,6 +52,20 @@ def _read(name: str) -> str:
 async def auth_js():
     """Shared auth helpers (token storage, silent refresh, authFetch)."""
     return FileResponse(_TEMPLATES / "auth.js", media_type="application/javascript")
+
+
+# ── Auth pages ────────────────────────────────────────────────────────────────
+
+@router.get("/login", response_class=HTMLResponse, include_in_schema=False)
+async def login_page():
+    """Login page — unauthenticated users are directed here."""
+    return HTMLResponse(content=_read("login.html"))
+
+
+@router.get("/register", response_class=HTMLResponse, include_in_schema=False)
+async def register_page():
+    """Account registration page."""
+    return HTMLResponse(content=_read("register.html"))
 
 
 # ── Info pages ────────────────────────────────────────────────────────────────

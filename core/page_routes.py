@@ -132,25 +132,6 @@ def register_page_routes(app: FastAPI) -> None:
     _dashboard_dist = _root / "dashboard" / "dist"  # legacy dashboard build
 
     if _frontend_dist.exists() and (_frontend_dist / "index.html").exists():
-        _index_html = (_frontend_dist / "index.html").read_text(encoding="utf-8")
-
-        # Mount /assets explicitly so JS/CSS bundles are served by StaticFiles.
-        # This must come before the catch-all route registration.
-        _assets_dir = _frontend_dist / "assets"
-        if _assets_dir.exists():
-            app.mount(
-                "/assets",
-                StaticFiles(directory=str(_assets_dir)),
-                name="frontend_assets",
-            )
-
-        # Catch-all: serve index.html for every non-API path so React Router
-        # handles client-side routes (/login, /dashboard, /superadmin, etc.).
-        @app.get("/{full_path:path}", include_in_schema=False)
-        async def _spa_fallback(full_path: str):
-            return HTMLResponse(content=_index_html, status_code=200)
-
-        # Mount / last — handles bare / requests
         app.mount(
             "/",
             StaticFiles(directory=str(_frontend_dist), html=True),

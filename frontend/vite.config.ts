@@ -1,33 +1,10 @@
 /// <reference types="vitest" />
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import fs from 'fs';
-
-/**
- * Strips `crossorigin` attributes from the built index.html.
- * All assets are same-origin so crossorigin is unnecessary and causes
- * "Importing a module script failed" errors behind reverse proxies
- * (e.g. Gitpod preview tunnel) that don't forward CORS headers for
- * static files.
- */
-function removeCrossorigin(): Plugin {
-  return {
-    name: 'remove-crossorigin',
-    closeBundle() {
-      const htmlPath = path.resolve(__dirname, '../static/index.html');
-      if (!fs.existsSync(htmlPath)) return;
-      const original = fs.readFileSync(htmlPath, 'utf-8');
-      const patched  = original.replace(/ crossorigin(?:="[^"]*")?/g, '');
-      if (patched !== original) {
-        fs.writeFileSync(htmlPath, patched, 'utf-8');
-      }
-    },
-  };
-}
 
 export default defineConfig({
-  plugins: [react(), removeCrossorigin()],
+  plugins: [react()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
