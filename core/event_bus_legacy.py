@@ -20,8 +20,14 @@ from datetime import datetime, timezone
 UTC = timezone.utc
 from pathlib import Path
 
-import lz4.frame
-import msgpack
+try:
+    import lz4.frame
+    import msgpack
+    _COMPRESSION_AVAILABLE = True
+except ImportError:
+    lz4 = None  # type: ignore[assignment]
+    msgpack = None  # type: ignore[assignment]
+    _COMPRESSION_AVAILABLE = False
 
 
 @dataclass
@@ -49,18 +55,25 @@ class DomainEvent:
             "COMPOSITE_SIGNAL": 10,
             "HEARTBEAT": 11,
         }
-        packed = msgpack.packb(data, use_bin_type=True)
-        compressed = lz4.frame.compress(packed)
+        if _COMPRESSION_AVAILABLE:
+            packed = msgpack.packb(data, use_bin_type=True)
+            payload = lz4.frame.compress(packed)
+        else:
+            import json as _json
+            payload = _json.dumps(data).encode()
         return cls(
             timestamp=int(datetime.now(UTC).timestamp() * 1e9),
             event_type=type_codes.get(event_type, 99),
             source=source,
-            payload=compressed,
+            payload=payload,
             priority=priority,
         )
 
     def decode(self) -> dict:
-        return msgpack.unpackb(lz4.frame.decompress(self.payload), raw=False)
+        if _COMPRESSION_AVAILABLE:
+            return msgpack.unpackb(lz4.frame.decompress(self.payload), raw=False)
+        import json as _json
+        return _json.loads(self.payload.decode())
 
 
 class MemoryMappedEventStore:

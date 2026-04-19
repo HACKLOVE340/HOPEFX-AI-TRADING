@@ -20,7 +20,12 @@ except ImportError:
     except ImportError:
         from typing import Any as Self  # type: ignore[assignment]  # fallback
 
-import keyring
+try:
+    import keyring
+    _KEYRING_AVAILABLE = True
+except ImportError:
+    keyring = None  # type: ignore[assignment]
+    _KEYRING_AVAILABLE = False
 from cryptography.fernet import Fernet, InvalidToken
 from passlib.context import CryptContext
 

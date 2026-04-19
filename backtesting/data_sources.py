@@ -27,9 +27,9 @@ logger = logging.getLogger(__name__)
 
 try:
     import yfinance as yf
-
     YFINANCE_AVAILABLE = True
 except ImportError:
+    yf = None  # type: ignore[assignment]
     YFINANCE_AVAILABLE = False
     logger.warning("yfinance not installed. Yahoo Finance source unavailable.")
 

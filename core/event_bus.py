@@ -43,7 +43,12 @@ UTC = timezone.utc
 from pathlib import Path
 from typing import Any
 
-import redis.asyncio as aioredis  # redis-py >= 4.2  # pylint: disable=no-name-in-module
+try:
+    import redis.asyncio as aioredis  # redis-py >= 4.2  # pylint: disable=no-name-in-module
+    _REDIS_ASYNCIO_AVAILABLE = True
+except (ImportError, AttributeError):
+    aioredis = None  # type: ignore[assignment]
+    _REDIS_ASYNCIO_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 

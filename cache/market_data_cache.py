@@ -9,6 +9,8 @@ Market Data Cache Module - PRODUCTION VERSION
 Fixed: Thread safety, proper Redis connection management, circuit breaker
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
