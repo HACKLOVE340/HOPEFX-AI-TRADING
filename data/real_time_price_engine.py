@@ -425,21 +425,43 @@ class RESTPriceFeed(PriceFeedBase):
         )
 
         try:
-            data = await self._rate_limited_request(url)
+            raw = await self._rate_limited_request(url)
 
-            # Parse response (Coinbase format: [time, low, high, open, close, volume])
+            # Coinbase Exchange (legacy) returns a bare list:
+            #   [[time, low, high, open, close, volume], ...]
+            # Coinbase Advanced Trade API returns a dict:
+            #   {"candles": [{"start": ..., "low": ..., ...}, ...]}
+            if isinstance(raw, dict):
+                candles_raw = raw.get("candles", [])
+            else:
+                candles_raw = raw  # already a list
+
             ohlcv_list = []
-            for candle in reversed(data):  # Reverse to chronological order
-                ohlcv_list.append(
-                    OHLCV(
-                        timestamp=candle[0],
-                        low=float(candle[1]),
-                        high=float(candle[2]),
-                        open=float(candle[3]),
-                        close=float(candle[4]),
-                        volume=float(candle[5]),
+            for candle in reversed(candles_raw):  # newest-first → reverse to chronological
+                if isinstance(candle, dict):
+                    # Advanced Trade format
+                    ohlcv_list.append(
+                        OHLCV(
+                            timestamp=int(candle.get("start", candle.get("time", 0))),
+                            low=float(candle.get("low", 0)),
+                            high=float(candle.get("high", 0)),
+                            open=float(candle.get("open", 0)),
+                            close=float(candle.get("close", 0)),
+                            volume=float(candle.get("volume", 0)),
+                        )
                     )
-                )
+                else:
+                    # Legacy Exchange format: [time, low, high, open, close, volume]
+                    ohlcv_list.append(
+                        OHLCV(
+                            timestamp=candle[0],
+                            low=float(candle[1]),
+                            high=float(candle[2]),
+                            open=float(candle[3]),
+                            close=float(candle[4]),
+                            volume=float(candle[5]),
+                        )
+                    )
 
             # Cache result
             self._cache[cache_key] = (time.time(), ohlcv_list)
