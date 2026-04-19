@@ -435,18 +435,35 @@ class TestCodeAnalyzerExtended:
     def test_check_cookie_security_detects_missing_httponly(self):
         import tempfile
         from security.code_analyzer import check_cookie_auth_security
+        content = (
+            "def login(response):\n"
+            "    response.set_cookie(\n"
+            "        key='session',\n"
+            "        value='abc123',\n"
+            "        secure=True,\n"
+            "    )\n"
+        )
         with tempfile.TemporaryDirectory(prefix="hopefx_diag_") as d:
             f = Path(d) / "auth.py"
-            f.write_text("def login(response):\n    response.set_cookie('session', value='abc123', secure=True)\n")
+            f.write_text(content)
             issues = check_cookie_auth_security(f)
         assert any(i.category == "cookie_security" for i in issues)
 
     def test_check_cookie_security_ok_with_httponly(self):
         import tempfile
         from security.code_analyzer import check_cookie_auth_security
+        content = (
+            "def login(response):\n"
+            "    response.set_cookie(\n"
+            "        key='session',\n"
+            "        value='abc123',\n"
+            "        httponly=True,\n"
+            "        samesite='lax',\n"
+            "    )\n"
+        )
         with tempfile.TemporaryDirectory(prefix="hopefx_diag_") as d:
             f = Path(d) / "auth.py"
-            f.write_text("def login(response):\n    response.set_cookie('session', value='abc123', httponly=True, samesite='lax')\n")
+            f.write_text(content)
             issues = check_cookie_auth_security(f)
         assert not any(i.category == "cookie_security" for i in issues)
 

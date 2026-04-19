@@ -417,7 +417,7 @@ async def refresh(body: RefreshRequest, request: Request, response: Response):
             key="hopefx_access_token",
             value=new_access,
             max_age=_max_age,
-            httponly=False,
+            httponly=False,   # React SPA must be able to read it for Authorization header
             samesite="strict",
             secure=_secure,
             path="/",

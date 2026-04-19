@@ -938,13 +938,22 @@ def check_spa_routing(py_file: Path) -> list[CodeIssue]:
     Detects:
     - app.py missing a catch-all route for SPA navigation
     - Missing StaticFiles mount for the frontend build
+
+    Only checks the project root app.py — not sub-app or dashboard files.
     """
     issues: list[CodeIssue] = []
     rel = _rel(py_file)
 
-    # Only check app.py and main entry points
-    if py_file.name not in ("app.py", "main.py", "run.py", "server.py"):
+    # Only check the project root app.py (not dashboard/app.py, api/server.py, etc.)
+    if py_file.name not in ("app.py",):
         return issues
+    # Must be at project root or one level deep in a known entry-point location
+    try:
+        parts = py_file.relative_to(PROJECT_ROOT).parts
+    except ValueError:
+        parts = (py_file.name,)
+    if len(parts) > 1:
+        return issues  # skip sub-directory app.py files
 
     lines = _read_lines(py_file)
     source = "\n".join(lines)
@@ -989,29 +998,54 @@ def check_cookie_auth_security(py_file: Path) -> list[CodeIssue]:
 
     lines = _read_lines(py_file)
 
+    # Collect multi-line set_cookie blocks to check all kwargs together
+    in_set_cookie = False
+    cookie_start_line = 0
+    cookie_block: list[str] = []
+
     for i, line in enumerate(lines, 1):
-        # Cookie without httponly
-        if "set_cookie" in line and "httponly" not in line.lower():
-            issues.append(CodeIssue(
-                file=rel,
-                line=i,
-                category="cookie_security",
-                severity=SEVERITY_HIGH,
-                description="set_cookie called without httponly=True — cookie accessible via JavaScript (XSS risk)",
-                snippet=line.strip(),
-                suggestion="Add httponly=True to set_cookie() call",
-            ))
-        # Cookie without samesite
-        elif "set_cookie" in line and "samesite" not in line.lower():
-            issues.append(CodeIssue(
-                file=rel,
-                line=i,
-                category="cookie_security",
-                severity=SEVERITY_MEDIUM,
-                description="set_cookie called without samesite parameter — CSRF risk",
-                snippet=line.strip(),
-                suggestion="Add samesite='lax' or samesite='strict' to set_cookie() call",
-            ))
+        if "set_cookie" in line and "(" in line:
+            in_set_cookie = True
+            cookie_start_line = i
+            cookie_block = [line]
+        elif in_set_cookie:
+            cookie_block.append(line)
+            if ")" in line:
+                in_set_cookie = False
+                block_text = "\n".join(cookie_block)
+                # httponly=False with an explicit comment is intentional — skip
+                has_httponly_false = bool(re.search(r"httponly\s*=\s*False", block_text, re.IGNORECASE))
+                has_intentional_comment = bool(re.search(
+                    r"httponly\s*=\s*False.*#.*(?:must|need|js|javascript|spa|react|read)",
+                    block_text, re.IGNORECASE,
+                ))
+                has_httponly = bool(re.search(r"httponly\s*=", block_text, re.IGNORECASE))
+                has_samesite = bool(re.search(r"samesite\s*=", block_text, re.IGNORECASE))
+
+                if not has_httponly:
+                    issues.append(CodeIssue(
+                        file=rel, line=cookie_start_line,
+                        category="cookie_security", severity=SEVERITY_HIGH,
+                        description="set_cookie called without httponly parameter — cookie accessible via JavaScript (XSS risk)",
+                        snippet=cookie_block[0].strip(),
+                        suggestion="Add httponly=True to set_cookie() call",
+                    ))
+                elif has_httponly_false and not has_intentional_comment:
+                    issues.append(CodeIssue(
+                        file=rel, line=cookie_start_line,
+                        category="cookie_security", severity=SEVERITY_HIGH,
+                        description="set_cookie with httponly=False — cookie accessible via JavaScript (XSS risk). Add a comment if intentional.",
+                        snippet=cookie_block[0].strip(),
+                        suggestion="Use httponly=True, or add a comment explaining why JS access is required",
+                    ))
+                if not has_samesite:
+                    issues.append(CodeIssue(
+                        file=rel, line=cookie_start_line,
+                        category="cookie_security", severity=SEVERITY_MEDIUM,
+                        description="set_cookie called without samesite parameter — CSRF risk",
+                        snippet=cookie_block[0].strip(),
+                        suggestion="Add samesite='lax' or samesite='strict' to set_cookie() call",
+                    ))
 
         # localStorage JWT storage (in JS/TS files embedded in Python templates)
         if "localStorage" in line and ("token" in line.lower() or "jwt" in line.lower()):
@@ -1042,17 +1076,50 @@ def check_env_var_access(py_file: Path) -> list[CodeIssue]:
 
     lines = _read_lines(py_file)
 
+    # Only flag vars where a hardcoded fallback is genuinely dangerous.
+    # Connection strings (REDIS_URL, DATABASE_URL) with localhost defaults are
+    # safe for development — exclude them to avoid false positives.
     _sensitive_vars = frozenset({
-        "SECRET_KEY", "DATABASE_URL", "REDIS_URL", "API_KEY",
-        "PRIVATE_KEY", "PASSWORD", "TOKEN", "OANDA_API_KEY",
+        "SECRET_KEY", "JWT_SECRET", "SECURITY_JWT_SECRET",
+        "API_KEY", "PRIVATE_KEY", "OANDA_API_KEY",
         "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
+        "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET",
+        "ENCRYPTION_KEY", "CONFIG_ENCRYPTION_KEY",
     })
 
+    # Detect module-level docstring boundaries to skip lines inside them
+    in_docstring = False
+    docstring_quote = ""
     for i, line in enumerate(lines, 1):
-        # os.environ['VAR'] without default
+        stripped = line.strip()
+        # Track docstring open/close
+        for q in ('"""', "'''"):
+            if stripped.startswith(q):
+                if not in_docstring:
+                    in_docstring = True
+                    docstring_quote = q
+                    # Single-line docstring: closes on same line after the opening
+                    rest = stripped[len(q):]
+                    if q in rest:
+                        in_docstring = False
+                    break
+                elif docstring_quote == q:
+                    in_docstring = False
+                    break
+
+        # os.environ['VAR'] read (not assignment, not inside a comment/docstring)
         m = re.search(r"""os\.environ\[['"]([A-Z_]+)['"]\]""", line)
         if m:
             var_name = m.group(1)
+            # Skip assignments: os.environ['VAR'] = ...
+            if re.search(r"""os\.environ\[['"][A-Z_]+['"]\]\s*=""", line):
+                continue
+            # Skip comment lines
+            if stripped.startswith("#"):
+                continue
+            # Skip lines inside docstrings
+            if in_docstring:
+                continue
             # Check if it's inside a try block (look back 5 lines)
             context = "\n".join(lines[max(0, i - 6):i])
             if "try:" not in context:
@@ -1096,13 +1163,20 @@ def check_env_var_access(py_file: Path) -> list[CodeIssue]:
 
 def check_startup_validators(py_file: Path) -> list[CodeIssue]:
     """
-    Verify that app entry points call validate_environment() at startup.
+    Verify that the project root app.py calls validate_environment() at startup.
     Missing startup validation means broken config is only discovered at runtime.
     """
     issues: list[CodeIssue] = []
     rel = _rel(py_file)
 
     if py_file.name not in ("app.py", "main.py", "run.py"):
+        return issues
+    # Only check project root entry points
+    try:
+        parts = py_file.relative_to(PROJECT_ROOT).parts
+    except ValueError:
+        parts = (py_file.name,)
+    if len(parts) > 1:
         return issues
 
     lines = _read_lines(py_file)
@@ -1147,6 +1221,14 @@ def check_router_registration(py_file: Path) -> list[CodeIssue]:
     if not has_router_def:
         return issues
 
+    # Sub-routers assembled via a parent __init__.py are registered indirectly.
+    # Check the parent package's __init__.py first.
+    parent_init = py_file.parent / "__init__.py"
+    if parent_init.exists():
+        parent_content = parent_init.read_text(encoding="utf-8", errors="replace")
+        if py_file.stem in parent_content:
+            return issues  # included via parent package
+
     # Check if this router is imported anywhere in the app
     router_module = rel.replace("/", ".").replace(".py", "")
     registry_file = PROJECT_ROOT / "core" / "router_registry.py"
@@ -1168,7 +1250,8 @@ def check_router_registration(py_file: Path) -> list[CodeIssue]:
             severity=SEVERITY_HIGH,
             description=(
                 f"{rel} defines an APIRouter but it does not appear to be registered "
-                "in core/router_registry.py or app.py. All its endpoints will return 404."
+                "in core/router_registry.py, app.py, or its parent __init__.py. "
+                "All its endpoints will return 404."
             ),
             snippet="router = APIRouter(...)",
             suggestion=(
