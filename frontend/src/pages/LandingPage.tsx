@@ -130,7 +130,7 @@ const PLANS: Plan[] = [
   {
     name: 'Elite', monthly: 199, annual: 139,
     features: ['Unlimited strategies', 'All symbols', 'Priority support', 'API access', 'White-label option', 'Affiliate program', 'Custom integrations'],
-    cta: 'Unlock Elite', href: '/register?plan=elite',
+    cta: 'Contact sales', href: '/register?plan=elite',
     badge: 'Best value',
   },
 ];
@@ -155,6 +155,7 @@ const NAV_LINKS = [
   ['/marketplace',  'Marketplace'],
   ['/geopolitical', 'Geo Risk'],
   ['/status',       'Status'],
+  ['/docs',         'Docs'],
 ] as const;
 
 const HERO_STATS = [
@@ -992,7 +993,6 @@ function Footer() {
           </span>
           <div className="flex gap-4">
             {([
-              ['/privacy', 'Privacy'],
               ['/terms',   'Terms'],
               ['/status',  'Status'],
             ] as [string, string][]).map(([h, l]) => (

@@ -149,7 +149,7 @@ const Register: React.FC = () => {
   }, []);
 
   const validate = (): string | null => {
-    if (!email.trim())       return 'Email address is required.';
+    if (!email.trim())       return 'Email is required.';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Please enter a valid email address.';
     if (!username.trim())    return 'Username is required.';
     if (username.length < 3) return 'Username must be at least 3 characters.';
@@ -162,11 +162,22 @@ const Register: React.FC = () => {
     return null;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const validationError = validate();
     if (validationError) { setError(validationError); return; }
     setError('');
+    void _doRegister();
+  };
+
+  const handleButtonClick = () => {
+    const err = validate();
+    if (err) { setError(err); return; }
+    setError('');
+    void _doRegister();
+  };
+
+  const _doRegister = async () => {
     setLoading(true);
     try {
       await authApi.register({
@@ -343,7 +354,12 @@ const Register: React.FC = () => {
               </div>
             )}
 
-            <button type="submit" style={{ ...s.btn, opacity: loading ? 0.7 : 1 }} disabled={loading}>
+            <button
+              type="button"
+              onClick={handleButtonClick}
+              style={{ ...s.btn, opacity: loading ? 0.7 : 1 }}
+              disabled={loading}
+            >
               {loading
                 ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Creating account…</>
                 : 'Create Account'

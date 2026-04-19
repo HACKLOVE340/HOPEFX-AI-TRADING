@@ -14,10 +14,10 @@ import { Eye, EyeOff, Activity, AlertCircle, Loader2 } from 'lucide-react';
 // ── Error normaliser ──────────────────────────────────────────────────────────
 
 function humaniseError(raw: string | undefined): string {
-  if (!raw) return 'Something went wrong. Please try again.';
+  if (!raw) return 'Invalid credentials. Please try again.';
   const l = raw.toLowerCase();
   if (l.includes('invalid credentials') || l.includes('incorrect') || l.includes('wrong password'))
-    return 'Incorrect email or password.';
+    return 'Invalid credentials. Please check your email and password.';
   if (l.includes('not found') || l.includes('no user'))
     return 'No account found with that email address.';
   if (l.includes('disabled') || l.includes('suspended') || l.includes('banned'))
@@ -102,13 +102,13 @@ const Login: React.FC = () => {
       if (res.data.refresh_token) {
         localStorage.setItem('hopefx_refresh_token', res.data.refresh_token);
       }
+      setLoading(false);
       setAuth(res.data.access_token, res.data.user);
       navigate(resolveDestination(res.data.user.role as UserRole), { replace: true });
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(humaniseError(detail));
-    } finally {
       setLoading(false);
+      setError(humaniseError(detail));
     }
   };
 
@@ -171,7 +171,7 @@ const Login: React.FC = () => {
                 <button
                   type="button" onClick={() => setShowPass(v => !v)}
                   style={s.eyeBtn}
-                  aria-label={showPass ? 'Hide password' : 'Show password'}
+                  aria-label={showPass ? 'Hide' : 'Show'}
                   tabIndex={-1}
                 >
                   {showPass ? <EyeOff size={16} color="#64748b" /> : <Eye size={16} color="#64748b" />}

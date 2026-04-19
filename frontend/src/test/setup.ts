@@ -1,4 +1,9 @@
 import '@testing-library/jest-dom';
+import { configure } from '@testing-library/dom';
+
+// Increase waitFor timeout to 3 s — the default 1 s is too tight for
+// async React state updates in jsdom under CI load.
+configure({ asyncUtilTimeout: 3000 });
 
 // NOTE: Do NOT add a global vi.mock for useApi here.
 // - hooks.test.ts needs the REAL api object to test its configuration.
