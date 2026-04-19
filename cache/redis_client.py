@@ -199,11 +199,10 @@ def _enforce_tls(redis_url: str) -> str:
             "to auto-upgrade. This check prevents credentials from being sent in plaintext."
         )
 
-    # Warn once per process — repeated per-connection warnings flood the log
-    # in development where many connections are created on startup.
+    # Log once per process at DEBUG in dev — it's expected and not actionable.
     global _tls_warning_emitted
     if not _tls_warning_emitted:
-        logger.warning(
+        logger.debug(
             "Redis: plaintext redis:// connection in %s environment. "
             "Use rediss:// in production or set REDIS_FORCE_TLS=true.",
             app_env,
