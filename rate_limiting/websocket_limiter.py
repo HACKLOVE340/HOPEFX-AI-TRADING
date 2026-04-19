@@ -73,8 +73,11 @@ from collections import defaultdict, deque
 logger = logging.getLogger(__name__)
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-_MAX_CONNS_PER_IP = int(os.getenv("WS_MAX_CONNECTIONS_PER_IP", "10"))
-_MAX_CONNS_PER_MINUTE = int(os.getenv("WS_MAX_CONNECTIONS_PER_MINUTE", "20"))
+# Default raised from 10 → 50: a single browser session can legitimately open
+# multiple sockets (main /ws/live + chart-bot orchestrator + nuclear dashboard).
+# The old limit of 10 was hit immediately in multi-tab or multi-panel layouts.
+_MAX_CONNS_PER_IP = int(os.getenv("WS_MAX_CONNECTIONS_PER_IP", "50"))
+_MAX_CONNS_PER_MINUTE = int(os.getenv("WS_MAX_CONNECTIONS_PER_MINUTE", "60"))
 _RATE_WINDOW_S = int(os.getenv("WS_RATE_WINDOW_SECONDS", "60"))
 
 # Redis key prefixes

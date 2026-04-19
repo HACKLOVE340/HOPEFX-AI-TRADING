@@ -16,13 +16,14 @@
  * └─────────────────────────────────────────────────────────────────┘
  *
  * Data wiring:
- *   - useWebSocket() → Zustand (prices, positions, signals, account)
+ *   - WebSocket is managed globally in App.tsx — do NOT call useWebSocket here.
  *   - useBootstrapData() → TanStack Query → Zustand (all orchestrator data)
  */
 
 import React, { Suspense } from 'react';
-import { useWebSocket } from '../hooks/useWebSocket';
 import { useBootstrapData } from '../hooks/useOrchestratorData';
+// useWebSocket is intentionally NOT imported here — the global connection is
+// managed in App.tsx to prevent duplicate sockets per page navigation.
 import { useStore } from '../store';
 import { PanelErrorBoundary } from '../components/ui/PanelErrorBoundary';
 import { PanelSkeleton, ChartSkeleton, TickerSkeleton } from '../components/ui/Skeleton';
@@ -43,9 +44,7 @@ const LiveSignalFeed      = React.lazy(() => import('../components/panels/LiveSi
 // ── Dashboard inner ───────────────────────────────────────────────────────────
 
 function DashboardInner() {
-  // Connect WebSocket
-  useWebSocket(true);
-
+  // WebSocket is managed globally in App.tsx — no duplicate connection here.
   // Bootstrap all REST data
   useBootstrapData();
 
