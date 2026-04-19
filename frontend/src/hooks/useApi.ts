@@ -1,6 +1,6 @@
 /**
  * hooks/useApi.ts
- * Single axios instance with JWT injection and 401 auto-logout.
+ * Single axios instance with JWT injection, CSRF double-submit, and 401 auto-logout.
  * All API modules import from here. lib/api.ts re-exports this file.
  */
 
@@ -16,9 +16,105 @@ export const api: AxiosInstance = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-api.interceptors.request.use((config) => {
+// ── CSRF token management ─────────────────────────────────────────────────────
+// The backend issues a CSRF token via GET /api/auth/csrf-token, setting a
+// SameSite=Strict cookie (hopefx_csrf) and returning the value in the body.
+// Every state-changing request must echo the token back as X-CSRF-Token.
+// We cache the token in memory and refresh it when it expires (1 hour TTL).
+
+const CSRF_HEADER   = 'X-CSRF-Token';
+const CSRF_COOKIE   = 'hopefx_csrf';
+const CSRF_TTL_MS   = 55 * 60 * 1000; // 55 min — refresh before the 1-hour server TTL
+
+let _csrfToken: string | null = null;
+let _csrfFetchedAt  = 0;
+let _csrfFetchPromise: Promise<string | null> | null = null;
+
+/** Read the hopefx_csrf cookie value set by the server. */
+function _readCsrfCookie(): string | null {
+  const match = document.cookie
+    .split(';')
+    .map((c) => c.trim())
+    .find((c) => c.startsWith(`${CSRF_COOKIE}=`));
+  return match ? decodeURIComponent(match.slice(CSRF_COOKIE.length + 1)) : null;
+}
+
+/** Fetch a fresh CSRF token from the server. Deduplicates concurrent calls. */
+async function _fetchCsrfToken(): Promise<string | null> {
+  if (_csrfFetchPromise) return _csrfFetchPromise;
+
+  _csrfFetchPromise = (async () => {
+    try {
+      // Use a bare axios call — not the intercepted `api` instance — to avoid
+      // a circular dependency where the interceptor waits on itself.
+      const res = await axios.get<{ csrf_token: string }>(`${BASE_URL}/auth/csrf-token`, {
+        withCredentials: true,
+      });
+      const token = res.data?.csrf_token ?? _readCsrfCookie();
+      if (token) {
+        _csrfToken     = token;
+        _csrfFetchedAt = Date.now();
+      }
+      return _csrfToken;
+    } catch {
+      // Fall back to reading the cookie directly (server may have set it already).
+      _csrfToken = _readCsrfCookie();
+      return _csrfToken;
+    } finally {
+      _csrfFetchPromise = null;
+    }
+  })();
+
+  return _csrfFetchPromise;
+}
+
+/** Return a valid CSRF token, fetching one if the cache is stale or empty. */
+async function _getCsrfToken(): Promise<string | null> {
+  const cookieVal = _readCsrfCookie();
+
+  // If the cookie was cleared (e.g. after logout) reset the in-memory cache.
+  if (!cookieVal) {
+    _csrfToken    = null;
+    _csrfFetchedAt = 0;
+  }
+
+  if (_csrfToken && cookieVal === _csrfToken && Date.now() - _csrfFetchedAt < CSRF_TTL_MS) {
+    return _csrfToken;
+  }
+
+  return _fetchCsrfToken();
+}
+
+// Methods that require CSRF validation (mirrors core/middleware.py).
+const CSRF_PROTECTED_METHODS = new Set(['post', 'put', 'patch', 'delete']);
+
+// Paths exempt from CSRF (mirrors _CSRF_EXEMPT_PREFIXES in core/middleware.py).
+const CSRF_EXEMPT_PREFIXES = [
+  '/auth/csrf-token',
+  '/auth/login',
+  '/auth/register',
+  '/auth/refresh',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+  '/auth/verify-email',
+  '/email/webhook',
+  '/health',
+];
+
+api.interceptors.request.use(async (config) => {
   const token = useStore.getState().token;
   if (token) config.headers.Authorization = `Bearer ${token}`;
+
+  // Inject CSRF header on state-changing requests to non-exempt paths.
+  const method  = (config.method ?? '').toLowerCase();
+  const url     = config.url ?? '';
+  const isExempt = CSRF_EXEMPT_PREFIXES.some((p) => url.startsWith(p));
+
+  if (CSRF_PROTECTED_METHODS.has(method) && !isExempt) {
+    const csrfToken = await _getCsrfToken();
+    if (csrfToken) config.headers[CSRF_HEADER] = csrfToken;
+  }
+
   return config;
 });
 
