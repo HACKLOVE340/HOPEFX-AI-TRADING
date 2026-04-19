@@ -64,7 +64,7 @@ def _get_access_token_expire_minutes() -> int:
     Evaluated at call time so tests can override the env var without
     reloading the module (which would mutate shared module state).
     """
-    return int(os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES") or os.environ.get("JWT_EXPIRE_MINUTES") or "15")
+    return int(os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES") or os.environ.get("JWT_EXPIRE_MINUTES") or "60")
 
 
 # Module-level alias for code that reads auth.jwt.ACCESS_TOKEN_EXPIRE_MINUTES

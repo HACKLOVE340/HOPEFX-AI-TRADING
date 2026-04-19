@@ -519,9 +519,11 @@ class GeopoliticalRiskProvider:
         """
         Fetch live geopolitical events using a tiered source strategy:
 
-        1. World Monitor self-hosted API — only attempted when WORLDMONITOR_API_KEY
-           is set (or api_endpoint is overridden), because worldmonitor.app is an
-           open-source project that must be self-hosted; it is not a public service.
+        1. World Monitor REST API — always attempted first; free, no key required
+           for web access. Covers ACLED conflicts, UCDP violence, CII risk scores,
+           and Cloudflare internet outages. Override base URL with WORLDMONITOR_API_URL
+           when running a self-hosted instance.
+           Reference: https://worldmonitor.app/docs/api-reference
         2. GDELT 2.0 Doc API — free, no key required.
         3. ACLED API — free for research; requires ACLED_API_KEY + ACLED_EMAIL.
         4. ReliefWeb API — free, no key required.
@@ -531,29 +533,25 @@ class GeopoliticalRiskProvider:
 
         Configuration keys (passed via __init__ config dict or env vars):
             api_endpoint    : World Monitor base URL (default "https://worldmonitor.app")
-            api_key         : World Monitor Bearer token (env WORLDMONITOR_API_KEY)
             time_range      : lookback window, default "7d"
             request_timeout : HTTP timeout in seconds, default 15
         """
-        api_key = self.config.get("api_key") or os.getenv("WORLDMONITOR_API_KEY", "")
+        # Honour kill-switch: ENABLE_GEOPOLITICAL_RISK=false disables all fetching
+        # and returns an empty list silently.  Useful when outbound HTTPS to the
+        # data sources is blocked or the feature is not needed.
+        if os.getenv("ENABLE_GEOPOLITICAL_RISK", "true").lower() in ("false", "0", "no"):
+            return []
+
         timeout_s = int(self.config.get("request_timeout", 15))
         _is_production = os.getenv("APP_ENV", "development").lower() == "production"
 
-        # ── 1. World Monitor (self-hosted) — only when explicitly configured ──
-        # worldmonitor.app is not a public API; attempting it without a key or a
-        # custom endpoint just produces DNS failures and noisy log spam.
-        # WORLDMONITOR_API_URL env var overrides the config dict api_endpoint.
-        custom_endpoint = (
-            os.getenv("WORLDMONITOR_API_URL", "")
-            or self.config.get("api_endpoint", "")
-        )
-        wm_enabled = bool(api_key or (custom_endpoint and custom_endpoint != "https://worldmonitor.app"))
-
-        if wm_enabled:
-            events = await self._fetch_from_worldmonitor(api_key, timeout_s)
-            if events:
-                logger.info("Fetched %d geopolitical events from World Monitor", len(events))
-                return events
+        # ── 1. World Monitor public REST API (no key required) ───────────────
+        # Always attempted first — free, no authentication needed for web access.
+        # WORLDMONITOR_API_URL can override the base URL for self-hosted instances.
+        events = await self._fetch_from_worldmonitor(timeout_s)
+        if events:
+            logger.info("Fetched %d geopolitical events from World Monitor", len(events))
+            return events
 
         # ── 2. GDELT fallback (always attempted — free, no key) ───────────────
         gdelt_events = await self._fetch_events_from_gdelt()
@@ -603,46 +601,197 @@ class GeopoliticalRiskProvider:
         return []
 
     async def _fetch_from_worldmonitor(
-        self, api_key: str, timeout_s: int
+        self, timeout_s: int
     ) -> list[GeopoliticalEvent]:
-        """Fetch from a self-hosted World Monitor instance."""
-        headers: dict[str, str] = {"Accept": "application/json"}
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
+        """Fetch geopolitical events from the World Monitor public REST API.
 
+        World Monitor exposes a typed REST API at https://worldmonitor.app.
+        No API key is required for web access — the WORLDMONITOR_API_KEY is
+        only used by the desktop app's cloud-fallback gate and is irrelevant
+        for server-side requests.
+
+        Endpoints used (all free, no auth):
+          GET /api/conflict/v1/list-acled-events   — ACLED armed conflict events
+          GET /api/conflict/v1/list-ucdp-events    — UCDP georeferenced violence
+          GET /api/intelligence/v1/get-risk-scores — CII composite risk scores
+          GET /api/infrastructure/v1/list-internet-outages — Cloudflare outages
+
+        Reference: https://worldmonitor.app/docs/api-reference
+        """
+        base = self.base_url.rstrip("/")
         timeout = aiohttp.ClientTimeout(total=timeout_s)
+        headers = {"Accept": "application/json", "User-Agent": "HOPEFX-AI-Trading/1.0"}
+
+        # Time window: last 7 days in Unix epoch milliseconds
+        _now_ms = int(datetime.now(UTC).timestamp() * 1000)
+        _week_ms = _now_ms - 7 * 24 * 3600 * 1000
+
         events: list[GeopoliticalEvent] = []
-        fetch_errors: list[str] = []
 
         try:
             async with aiohttp.ClientSession(headers=headers, timeout=timeout) as session:
-                for layer in self.data_layers:
-                    url = (
-                        f"{self.base_url}/api/v1/events"
-                        f"?layer={layer}&range={self.time_range}&format=geojson"
-                    )
-                    try:
-                        async with session.get(url) as resp:
-                            if resp.status >= 400:
-                                fetch_errors.append(f"layer={layer} HTTP {resp.status}")
-                                continue
+
+                # ── 1. ACLED conflict events ──────────────────────────────────
+                try:
+                    url = f"{base}/api/conflict/v1/list-acled-events"
+                    async with session.get(url, params={"start": str(_week_ms), "page_size": 50}) as resp:
+                        if resp.status < 400:
                             data = await resp.json(content_type=None)
-                            layer_events = self._parse_geojson_features(
-                                data.get("features", []), layer
-                            )
-                            events.extend(layer_events)
-                    except aiohttp.ClientError as exc:
-                        fetch_errors.append(f"layer={layer}: {exc}")
+                            for row in data.get("events", []):
+                                country = row.get("country", "")
+                                loc = row.get("location") or {}
+                                fatalities = int(row.get("fatalities") or 0)
+                                severity = (
+                                    RiskSeverity.CRITICAL if fatalities > 100
+                                    else RiskSeverity.HIGH if fatalities > 10
+                                    else RiskSeverity.MEDIUM if fatalities > 0
+                                    else RiskSeverity.LOW
+                                )
+                                ts_ms = row.get("occurredAt")
+                                ts = (
+                                    datetime.fromtimestamp(ts_ms / 1000, tz=UTC)
+                                    if ts_ms else datetime.now(UTC)
+                                )
+                                coords: tuple[float, float] | None = None
+                                if loc.get("latitude") is not None:
+                                    coords = (float(loc["latitude"]), float(loc["longitude"]))
+                                events.append(GeopoliticalEvent(
+                                    event_type=GeopoliticalEventType.CONFLICT,
+                                    severity=severity,
+                                    title=row.get("eventType", "Armed conflict"),
+                                    description=f"{row.get('actors', [])} — {row.get('source', '')}",
+                                    region=row.get("admin1", country) or "Global",
+                                    countries=[country] if country else [],
+                                    coordinates=coords,
+                                    timestamp=ts,
+                                    source="worldmonitor/acled",
+                                    confidence=0.9,
+                                ))
+                        else:
+                            logger.debug("World Monitor ACLED HTTP %s", resp.status)
+                except aiohttp.ClientError as exc:
+                    logger.debug("World Monitor ACLED fetch failed: %s", exc)
+
+                # ── 2. UCDP violence events ───────────────────────────────────
+                try:
+                    url = f"{base}/api/conflict/v1/list-ucdp-events"
+                    async with session.get(url, params={"start": str(_week_ms), "page_size": 50}) as resp:
+                        if resp.status < 400:
+                            data = await resp.json(content_type=None)
+                            for row in data.get("events", []):
+                                country = row.get("country", "")
+                                loc = row.get("location") or {}
+                                deaths = int(row.get("deathsBest") or 0)
+                                severity = (
+                                    RiskSeverity.CRITICAL if deaths > 100
+                                    else RiskSeverity.HIGH if deaths > 10
+                                    else RiskSeverity.MEDIUM if deaths > 0
+                                    else RiskSeverity.LOW
+                                )
+                                ts_ms = row.get("dateStart")
+                                ts = (
+                                    datetime.fromtimestamp(ts_ms / 1000, tz=UTC)
+                                    if ts_ms else datetime.now(UTC)
+                                )
+                                coords = None
+                                if loc.get("latitude") is not None:
+                                    coords = (float(loc["latitude"]), float(loc["longitude"]))
+                                vtype = row.get("violenceType", "")
+                                events.append(GeopoliticalEvent(
+                                    event_type=GeopoliticalEventType.CONFLICT,
+                                    severity=severity,
+                                    title=f"{vtype} conflict: {row.get('sideA', '')} vs {row.get('sideB', '')}",
+                                    description=row.get("sourceOriginal", ""),
+                                    region=country or "Global",
+                                    countries=[country] if country else [],
+                                    coordinates=coords,
+                                    timestamp=ts,
+                                    source="worldmonitor/ucdp",
+                                    confidence=0.85,
+                                ))
+                        else:
+                            logger.debug("World Monitor UCDP HTTP %s", resp.status)
+                except aiohttp.ClientError as exc:
+                    logger.debug("World Monitor UCDP fetch failed: %s", exc)
+
+                # ── 3. Composite risk scores (CII) ────────────────────────────
+                try:
+                    url = f"{base}/api/intelligence/v1/get-risk-scores"
+                    async with session.get(url) as resp:
+                        if resp.status < 400:
+                            data = await resp.json(content_type=None)
+                            for risk in data.get("strategicRisks", []):
+                                score = float(risk.get("score") or 0)
+                                level = risk.get("level", "").lower()
+                                severity = (
+                                    RiskSeverity.CRITICAL if score >= 80
+                                    else RiskSeverity.HIGH if level == "severity_level_high" or score >= 60
+                                    else RiskSeverity.MEDIUM if level == "severity_level_medium" or score >= 40
+                                    else RiskSeverity.LOW
+                                )
+                                region = risk.get("region", "Global")
+                                factors = risk.get("factors", [])
+                                events.append(GeopoliticalEvent(
+                                    event_type=GeopoliticalEventType.POLITICAL_UNREST,
+                                    severity=severity,
+                                    title=f"Strategic risk: {region}",
+                                    description=", ".join(factors),
+                                    region=region,
+                                    countries=[region],
+                                    timestamp=datetime.now(UTC),
+                                    source="worldmonitor/cii",
+                                    confidence=0.8,
+                                    risk_score=score,
+                                ))
+                        else:
+                            logger.debug("World Monitor risk-scores HTTP %s", resp.status)
+                except aiohttp.ClientError as exc:
+                    logger.debug("World Monitor risk-scores fetch failed: %s", exc)
+
+                # ── 4. Internet / infrastructure outages ──────────────────────
+                try:
+                    url = f"{base}/api/infrastructure/v1/list-internet-outages"
+                    async with session.get(url, params={"start": str(_week_ms), "page_size": 25}) as resp:
+                        if resp.status < 400:
+                            data = await resp.json(content_type=None)
+                            for row in data.get("outages", []):
+                                sev_raw = row.get("severity", "").lower()
+                                severity = (
+                                    RiskSeverity.CRITICAL if "total" in sev_raw
+                                    else RiskSeverity.HIGH if "major" in sev_raw
+                                    else RiskSeverity.MEDIUM
+                                )
+                                ts_ms = row.get("detectedAt")
+                                ts = (
+                                    datetime.fromtimestamp(ts_ms / 1000, tz=UTC)
+                                    if ts_ms else datetime.now(UTC)
+                                )
+                                country = row.get("country", "")
+                                loc = row.get("location") or {}
+                                coords = None
+                                if loc.get("latitude") is not None:
+                                    coords = (float(loc["latitude"]), float(loc["longitude"]))
+                                events.append(GeopoliticalEvent(
+                                    event_type=GeopoliticalEventType.INFRASTRUCTURE_OUTAGE,
+                                    severity=severity,
+                                    title=row.get("title", "Internet outage"),
+                                    description=row.get("description", ""),
+                                    region=row.get("region", country) or "Global",
+                                    countries=[country] if country else [],
+                                    coordinates=coords,
+                                    timestamp=ts,
+                                    source="worldmonitor/outages",
+                                    confidence=0.75,
+                                ))
+                        else:
+                            logger.debug("World Monitor outages HTTP %s", resp.status)
+                except aiohttp.ClientError as exc:
+                    logger.debug("World Monitor outages fetch failed: %s", exc)
+
         except Exception as exc:
             logger.debug("World Monitor session error: %s", exc)
             return []
 
-        if fetch_errors:
-            logger.debug(
-                "World Monitor: %d layer(s) failed: %s",
-                len(fetch_errors),
-                "; ".join(fetch_errors),
-            )
         return events
 
     async def _fetch_events_from_gdelt(self) -> list[GeopoliticalEvent]:
@@ -1334,20 +1483,18 @@ class WorldMonitorAPIClient:
     4. Set self_hosted_url in config
     """
 
-    # World Monitor API endpoints (Vercel Edge Functions)
+    # World Monitor REST API endpoints.
+    # Base: https://worldmonitor.app  (no key required for web access)
+    # Reference: https://worldmonitor.app/docs/api-reference
     API_ENDPOINTS = {
-        "conflicts": "/api/acled",  # Armed conflict events
-        "country_intel": "/api/country-intel",  # Country risk & sanctions
-        "fires": "/api/firms-fires",  # Satellite fire detection
-        "flights": "/api/opensky",  # Military flight tracking
-        "theater": "/api/theater-posture",  # Military force posture
-        "news": "/api/gdelt-doc",  # Global news intelligence
-        "outages": "/api/cloudflare-outages",  # Internet outages
-        "earthquakes": "/api/usgs",  # Earthquake data
-        "weather": "/api/weather-alerts",  # Severe weather
-        "pipelines": "/api/pipelines",  # Energy infrastructure
-        "cables": "/api/cables",  # Undersea cables
-        "nuclear": "/api/nuclear-sites",  # Nuclear facilities
+        "conflicts": "/api/conflict/v1/list-acled-events",
+        "ucdp": "/api/conflict/v1/list-ucdp-events",
+        "risk_scores": "/api/intelligence/v1/get-risk-scores",
+        "outages": "/api/infrastructure/v1/list-internet-outages",
+        "ddos": "/api/infrastructure/v1/list-internet-ddos-attacks",
+        "cable_health": "/api/infrastructure/v1/get-cable-health",
+        "disease_outbreaks": "/api/health/v1/list-disease-outbreaks",
+        "cyber_threats": "/api/cyber/v1/list-cyber-threats",
     }
 
     # Layer weights for gold trading (higher = more gold-relevant)
@@ -1384,7 +1531,6 @@ class WorldMonitorAPIClient:
         # Use self-hosted URL if provided, otherwise use public instance
         self.base_url = self.config.get("self_hosted_url", self.config.get("base_url", "https://worldmonitor.app"))
 
-        self.api_key = self.config.get("api_key")
         self.timeout = self.config.get("timeout", 30)
 
         # Configurable layers
@@ -1414,9 +1560,10 @@ class WorldMonitorAPIClient:
             JSON response or None if failed
         """
         url = f"{self.base_url}{endpoint}"
+        # No API key required — World Monitor's public web API is open.
+        # The WORLDMONITOR_API_KEY is only used by the desktop app's
+        # cloud-fallback gate and is not applicable for server-side requests.
         headers = {"Accept": "application/json", "User-Agent": "HOPEFX-AI-Trading/1.0"}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
 
         try:
             timeout = aiohttp.ClientTimeout(total=self.timeout)

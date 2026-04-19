@@ -112,7 +112,7 @@ def is_access_token_revoked(jti: str) -> bool:
 
 
 # ── Constants ────────────────────────────────────────────────────────────────
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 MAX_LOGIN_ATTEMPTS = int(os.getenv("MAX_LOGIN_ATTEMPTS", "5"))
 LOCKOUT_MINUTES = int(os.getenv("LOCKOUT_MINUTES", "15"))

@@ -70,11 +70,16 @@ def register_page_routes(app: FastAPI) -> None:
         )
         return Response(content=_ico_bytes, media_type="image/x-icon")
 
-    # NOTE: /login, /register, /dashboard, /admin, /superadmin are intentionally
-    # NOT registered here. The React SPA (mounted below with html=True) serves
-    # index.html for all unmatched paths, which lets React Router handle them.
-    # Adding server-side routes for those paths would intercept the browser
-    # request before React Router runs and break client-side navigation.
+    # NOTE: /login, /register, /dashboard, /admin are intentionally NOT registered
+    # here. The React SPA (mounted below with html=True) serves index.html for all
+    # unmatched paths, which lets React Router handle them.
+    # /superadmin is a server-side redirect to /api/superadmin/ because the actual
+    # UI is served by the FastAPI superadmin router, not the React SPA.
+
+    @app.get("/superadmin", include_in_schema=False)
+    async def superadmin_redirect():
+        """Redirect bare /superadmin to the API-served superadmin dashboard."""
+        return RedirectResponse(url="/api/superadmin/", status_code=301)
 
     @app.get("/pricing", response_class=HTMLResponse, tags=["Monetization"])
     async def pricing_page():

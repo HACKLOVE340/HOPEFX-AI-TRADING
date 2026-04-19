@@ -144,17 +144,12 @@ class NewsSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="NEWS_")
 
-    # World Monitor — open-source geopolitical map dashboard (https://worldmonitor.app)
+    # World Monitor — open-source geopolitical intelligence dashboard
+    # Public API: https://worldmonitor.app/docs/api-reference
     # GitHub: https://github.com/koala73/worldmonitor
     #
-    # World Monitor is URL-based, not API-key-based. The backend builds deep-link
-    # URLs to it via WorldMonitorIntegration — no key is needed for the public instance.
-    #
-    # WORLDMONITOR_API_URL: only set when running a self-hosted instance.
-    #   Leave blank to use the public https://worldmonitor.app.
-    # WORLDMONITOR_API_KEY: only required when your self-hosted instance has
-    #   authentication enabled. Leave blank for the public instance.
-    worldmonitor_api_key: str = Field(default="", alias="WORLDMONITOR_API_KEY")
+    # The public REST API requires no authentication for web access.
+    # WORLDMONITOR_API_URL: override only when running a self-hosted instance.
     worldmonitor_api_url: str = Field(
         default="https://worldmonitor.app",
         alias="WORLDMONITOR_API_URL",
@@ -183,7 +178,7 @@ class NewsSettings(BaseSettings):
     def _resolve_aliases(cls, values: Any) -> Any:
         """Pull top-level env vars that don't carry the NEWS_ prefix."""
         if isinstance(values, dict):
-            for alias in ("WORLDMONITOR_API_KEY", "WORLDMONITOR_API_URL", "ACLED_API_KEY", "ACLED_EMAIL"):
+            for alias in ("WORLDMONITOR_API_URL", "ACLED_API_KEY", "ACLED_EMAIL"):
                 env_val = os.getenv(alias, "")
                 if env_val and alias not in values:
                     values[alias] = env_val
