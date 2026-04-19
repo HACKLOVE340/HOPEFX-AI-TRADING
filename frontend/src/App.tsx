@@ -311,6 +311,13 @@ const AppShell: React.FC = () => {
   const isAuth   = useStore(selectIsAuth);
   const hydrated = useHasHydrated();
 
+  // Prefetch CSRF token on mount so it's ready before any POST/PUT/DELETE fires.
+  React.useEffect(() => {
+    import('./hooks/useApi').then(({ getCsrfToken }) => {
+      getCsrfToken().catch(() => {/* non-fatal — middleware will retry */});
+    });
+  }, []);
+
   useWebSocket(isAuth && hydrated);
   usePlan();
 

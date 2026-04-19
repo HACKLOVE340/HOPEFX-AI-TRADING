@@ -69,6 +69,10 @@ async function _fetchCsrfToken(): Promise<string | null> {
 }
 
 /** Return a valid CSRF token, fetching one if the cache is stale or empty. */
+export async function getCsrfToken(): Promise<string | null> {
+  return _getCsrfToken();
+}
+
 async function _getCsrfToken(): Promise<string | null> {
   const cookieVal = _readCsrfCookie();
 
