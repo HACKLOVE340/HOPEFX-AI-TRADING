@@ -19,6 +19,7 @@ Inspired by top platforms: TradingView, cTrader, MT5
 import asyncio
 import json
 import logging
+import os
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -717,8 +718,8 @@ def create_websocket_router(manager: WebSocketManager):
     router = APIRouter(tags=["WebSocket"])
 
     # JWT auth timeout for the legacy /ws endpoint (seconds)
-    _WS_AUTH_TIMEOUT: float = float(__import__("os").getenv("WS_AUTH_TIMEOUT", "10"))
-    _WS_AUTH_REQUIRED: bool = __import__("os").getenv("WS_AUTH_REQUIRED", "true").lower() == "true"
+    _WS_AUTH_TIMEOUT: float = float(os.getenv("WS_AUTH_TIMEOUT", "10"))
+    _WS_AUTH_REQUIRED: bool = os.getenv("WS_AUTH_REQUIRED", "true").lower() == "true"
 
     def _ws_validate_token(token: str) -> dict | None:
         """Validate a Bearer JWT for the legacy /ws endpoint.
