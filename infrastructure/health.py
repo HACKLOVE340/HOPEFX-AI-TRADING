@@ -260,7 +260,8 @@ class HealthChecker:
 
     async def _check_database(self) -> HealthCheck:
         """Check database connectivity"""
-        if not self.app or not self.app.db_engine:
+        s = _resolve_app_state(self.app)
+        if not s or not getattr(s, "db_engine", None):
             return HealthCheck(
                 name="database",
                 status=HealthStatus.UNKNOWN,
@@ -270,18 +271,19 @@ class HealthChecker:
 
         try:
             start = time.time()
-            # Simple connectivity check
             from sqlalchemy import text
 
-            with self.app.db_engine.connect() as conn:
+            with s.db_engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
 
+            db_type = getattr(getattr(s, "config", None), "database", None)
+            db_type = getattr(db_type, "db_type", "unknown") if db_type else "unknown"
             return HealthCheck(
                 name="database",
                 status=HealthStatus.HEALTHY,
                 response_time_ms=(time.time() - start) * 1000,
                 message="Database connection OK",
-                details={"type": self.app.config.database.db_type},
+                details={"type": db_type},
             )
         except Exception as e:
             return HealthCheck(
@@ -293,7 +295,8 @@ class HealthChecker:
 
     async def _check_cache(self) -> HealthCheck:
         """Check Redis/cache connectivity"""
-        if not self.app or not self.app.cache:
+        s = _resolve_app_state(self.app)
+        if not s or not getattr(s, "cache", None):
             return HealthCheck(
                 name="cache",
                 status=HealthStatus.UNKNOWN,
@@ -303,7 +306,7 @@ class HealthChecker:
 
         try:
             start = time.time()
-            healthy = await self.app.cache.health_check_async()
+            healthy = await s.cache.health_check_async()
 
             if healthy:
                 return HealthCheck(
@@ -311,7 +314,7 @@ class HealthChecker:
                     status=HealthStatus.HEALTHY,
                     response_time_ms=(time.time() - start) * 1000,
                     message="Cache connection OK",
-                    details={"using_fallback": getattr(self.app.cache, "_using_fallback", False)},
+                    details={"using_fallback": getattr(s.cache, "_using_fallback", False)},
                 )
             return HealthCheck(
                 name="cache",
@@ -329,7 +332,8 @@ class HealthChecker:
 
     async def _check_broker(self) -> HealthCheck:
         """Check broker connectivity"""
-        if not self.app or not self.app.broker:
+        s = _resolve_app_state(self.app)
+        if not s or not getattr(s, "broker", None):
             return HealthCheck(
                 name="broker",
                 status=HealthStatus.UNKNOWN,
@@ -340,7 +344,7 @@ class HealthChecker:
         try:
             start = time.time()
 
-            if not self.app.broker.connected:
+            if not s.broker.connected:
                 return HealthCheck(
                     name="broker",
                     status=HealthStatus.UNHEALTHY,
@@ -348,8 +352,19 @@ class HealthChecker:
                     message="Broker disconnected",
                 )
 
-            # Try to get account info
-            account = await asyncio.wait_for(self.app.broker.get_account_info(), timeout=5.0)
+            # get_account_info may be sync or async depending on broker impl
+            _info = s.broker.get_account_info()
+            if asyncio.iscoroutine(_info):
+                account_obj = await asyncio.wait_for(_info, timeout=5.0)
+            else:
+                account_obj = _info
+            # Normalise: AccountInfo dataclass or plain dict
+            if hasattr(account_obj, "__dict__"):
+                account = account_obj.__dict__
+            elif isinstance(account_obj, dict):
+                account = account_obj
+            else:
+                account = {}
 
             return HealthCheck(
                 name="broker",
@@ -357,7 +372,7 @@ class HealthChecker:
                 response_time_ms=(time.time() - start) * 1000,
                 message="Broker connection OK",
                 details={
-                    "equity": account.get("equity", 0),
+                    "equity": account.get("equity", account.get("balance", 0)),
                     "open_positions": account.get("open_positions", 0),
                 },
             )
@@ -371,7 +386,8 @@ class HealthChecker:
 
     async def _check_price_feed(self) -> HealthCheck:
         """Check price feed health"""
-        if not self.app or not self.app.price_engine:
+        s = _resolve_app_state(self.app)
+        if not s or not getattr(s, "price_engine", None):
             return HealthCheck(
                 name="price_feed",
                 status=HealthStatus.UNKNOWN,
@@ -380,7 +396,7 @@ class HealthChecker:
             )
 
         try:
-            engine = self.app.price_engine
+            engine = s.price_engine
 
             if not engine.active:
                 return HealthCheck(
@@ -390,13 +406,12 @@ class HealthChecker:
                     message="Price engine inactive",
                 )
 
-            # Check data staleness
             stale_symbols = []
             current_time = time.time()
 
             for symbol in getattr(engine, "symbols", []):
                 tick = engine.get_last_price(symbol)
-                if tick and (current_time - tick.timestamp) > 300:  # 5 min stale
+                if tick and (current_time - tick.timestamp) > 300:
                     stale_symbols.append(symbol)
 
             if stale_symbols:
@@ -405,7 +420,7 @@ class HealthChecker:
                     status=HealthStatus.DEGRADED,
                     response_time_ms=0,
                     message=f"Stale data for {len(stale_symbols)} symbols",
-                    details={"stale_symbols": stale_symbols[:5]},  # Limit to 5
+                    details={"stale_symbols": stale_symbols[:5]},
                 )
 
             return HealthCheck(
@@ -426,7 +441,8 @@ class HealthChecker:
 
     async def _check_brain(self) -> HealthCheck:
         """Check brain health"""
-        if not self.app or not self.app.brain:
+        s = _resolve_app_state(self.app)
+        if not s or not getattr(s, "brain", None):
             return HealthCheck(
                 name="brain",
                 status=HealthStatus.UNKNOWN,
@@ -435,7 +451,7 @@ class HealthChecker:
             )
 
         try:
-            health = self.app.brain.get_health()
+            health = s.brain.get_health()
 
             if not health["running"]:
                 return HealthCheck(
@@ -594,3 +610,27 @@ def get_health_checker(app=None) -> HealthChecker:
     if _health_checker is None:
         _health_checker = HealthChecker(app)
     return _health_checker
+
+
+def _resolve_app_state(app):
+    """Return the AppState from a FastAPI app instance.
+
+    app_state lives on app.state.app_state (set during startup).
+    Falls back to the module-level app_state imported from app.py.
+    Returns None if neither is available.
+    """
+    if app is None:
+        return None
+    # Primary: set by app.py startup after all components are initialized
+    state = getattr(app, "state", None)
+    if state is not None:
+        app_state = getattr(state, "app_state", None)
+        if app_state is not None:
+            return app_state
+    # Fallback: module-level app_state (same process, same object)
+    try:
+        import importlib
+        _app_mod = importlib.import_module("app")
+        return getattr(_app_mod, "app_state", None)
+    except Exception:
+        return None

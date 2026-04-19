@@ -544,6 +544,10 @@ async def startup_event():
         _tasks_done.append("api_gateway")
 
         app_state.initialized = True
+        # Expose app_state on app.state so health checker and other middleware
+        # can reach db_engine, cache, broker, price_engine, brain without
+        # importing the module-level app_state directly.
+        app.state.app_state = app_state
         log_activity("API server ready")
         logger.info("=" * 70)
         logger.info("API SERVER READY")
