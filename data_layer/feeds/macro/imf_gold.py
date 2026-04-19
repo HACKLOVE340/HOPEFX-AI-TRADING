@@ -223,6 +223,24 @@ class IMFGoldFeed:
             except Exception as exc:
                 logger.warning("IMF: CSV save failed for %s: %s", name, exc)
 
+    def _neutral_series(self) -> dict[str, pd.Series]:
+        """
+        Return zero-valued monthly series spanning the last 10 years.
+
+        Used when both IMF API and local cache are unavailable so the ML
+        feature pipeline always has the expected column names.  A value of
+        zero for imf_cb_gold_tonnes is physically implausible but signals
+        "data unavailable" to downstream consumers without crashing them.
+        """
+        end = pd.Timestamp.now(tz="UTC").normalize()
+        start = end - pd.DateOffset(years=10)
+        idx = pd.date_range(start=start, end=end, freq="ME", tz="UTC")
+        zeros = pd.Series(0.0, index=idx)
+        return {
+            "imf_cb_gold_tonnes": zeros.rename("imf_cb_gold_tonnes"),
+            "imf_cb_gold_chg_qoq": zeros.rename("imf_cb_gold_chg_qoq"),
+        }
+
     # ── Public API ────────────────────────────────────────────────────────────
 
     async def fetch_and_inject(self, years: int | None = None) -> dict[str, int]:
@@ -251,10 +269,15 @@ class IMFGoldFeed:
             if not self._offline_warned:
                 logger.warning(
                     "IMF: no data available — dataservices.imf.org unreachable and no local cache. "
-                    "MacroStore not updated. Ensure outbound HTTPS access to dataservices.imf.org."
+                    "Injecting neutral zero-valued series into MacroStore. "
+                    "Place cached CSVs in %s or ensure outbound HTTPS access to dataservices.imf.org.",
+                    str(_CACHE_DIR.resolve()),
                 )
                 self._offline_warned = True
-            return {}
+            neutral = self._neutral_series()
+            self._inject_into_macro_store(neutral)
+            self._last_fetch = datetime.now(UTC)
+            return {k: len(v) for k, v in neutral.items()}
 
         series_dict = self._compute_series(tonnes)
         self._inject_into_macro_store(series_dict)
