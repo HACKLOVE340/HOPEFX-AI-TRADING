@@ -40,6 +40,16 @@ def _serve_template(name: str, fallback_html: str) -> HTMLResponse:
 def register_page_routes(app: FastAPI) -> None:
     """Mount all HTML page routes and the React dashboard on *app*."""
 
+    @app.get("/docs/", include_in_schema=False)
+    async def docs_trailing_slash():
+        """Redirect /docs/ → /docs so the Swagger UI loads correctly."""
+        return RedirectResponse(url="/docs", status_code=301)
+
+    @app.get("/redoc/", include_in_schema=False)
+    async def redoc_trailing_slash():
+        """Redirect /redoc/ → /redoc so the ReDoc UI loads correctly."""
+        return RedirectResponse(url="/redoc", status_code=301)
+
     @app.get("/favicon.ico", include_in_schema=False)
     async def favicon():
         """Return the favicon from dashboard/dist or a minimal 1×1 transparent ICO."""

@@ -11,6 +11,7 @@ Comprehensive health monitoring with dependency checks
 import asyncio
 import logging
 import os
+import socket
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -23,6 +24,18 @@ from typing import Any
 import psutil
 
 logger = logging.getLogger(__name__)
+
+
+def _get_hostname() -> str:
+    """Return the machine hostname cross-platform.
+
+    os.uname() is POSIX-only and raises AttributeError on Windows.
+    socket.gethostname() works on all platforms.
+    """
+    try:
+        return socket.gethostname()
+    except Exception:
+        return "unknown"
 
 try:
     from aiohttp import web
@@ -70,7 +83,7 @@ class SystemHealth:
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     version: str = "2.1.0"
     uptime_seconds: float = 0.0
-    hostname: str = field(default_factory=lambda: os.uname().nodename)
+    hostname: str = field(default_factory=lambda: _get_hostname())
 
     def to_dict(self) -> dict:
         return {
