@@ -164,7 +164,9 @@ class LoginRequest(BaseModel):
 
 
 class RefreshRequest(BaseModel):
-    refresh_token: str
+    # Optional in the body — the token may also be sent via the
+    # hopefx_refresh_token cookie (set on login for cookie-only clients).
+    refresh_token: str | None = None
 
 
 class LogoutRequest(BaseModel):
@@ -385,8 +387,10 @@ async def login(body: LoginRequest, request: Request, response: Response):
     # Not HttpOnly — the React SPA reads it to populate the auth store on
     # page refresh. Secure flag is set in production/staging only.
     access_token = tokens.get("access_token", "")
+    refresh_token_val = tokens.get("refresh_token", "")
+    _secure = os.getenv("ENVIRONMENT", "development").lower() in ("production", "staging")
+
     if access_token:
-        _secure = os.getenv("ENVIRONMENT", "development").lower() in ("production", "staging")
         # Access tokens are short-lived (15 min); match cookie max_age to that.
         _max_age = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15")) * 60
         response.set_cookie(
@@ -399,15 +403,41 @@ async def login(body: LoginRequest, request: Request, response: Response):
             path="/",
         )
 
+    if refresh_token_val:
+        # Refresh token cookie — HttpOnly so JS cannot read it (XSS protection).
+        # Used by the /refresh endpoint as a fallback when the body is empty.
+        _refresh_max_age = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30")) * 86400
+        response.set_cookie(
+            key="hopefx_refresh_token",
+            value=refresh_token_val,
+            max_age=_refresh_max_age,
+            httponly=True,
+            samesite="strict",
+            secure=_secure,
+            path="/api/auth/refresh",  # Scope to refresh endpoint only
+        )
+
     return tokens
 
 
 @router.post("/refresh")
 async def refresh(body: RefreshRequest, request: Request, response: Response):
-    """Rotate refresh token. Returns new access + refresh token pair."""
+    """Rotate refresh token. Returns new access + refresh token pair.
+
+    The refresh token is read from the request body (``refresh_token`` field)
+    or, as a fallback, from the ``hopefx_refresh_token`` cookie so that
+    cookie-only clients (e.g. server-side rendering) work without JS.
+    """
     _check_ip_rate_limit(_get_client_ip(request))
+    # Resolve token: body → cookie → 401
+    refresh_token = body.refresh_token or request.cookies.get("hopefx_refresh_token")
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="refresh_token is required (body or cookie)",
+        )
     ok, msg, tokens = await asyncio.to_thread(
-        functools.partial(_svc().refresh, body.refresh_token, ip_address=_client_ip(request))
+        functools.partial(_svc().refresh, refresh_token, ip_address=_client_ip(request))
     )
     if not ok:
         raise HTTPException(status_code=401, detail=msg)
@@ -437,8 +467,9 @@ async def logout(
     """Revoke the current session and blacklist the access token."""
     access_token = body.access_token or (credentials.credentials if credentials else None)
     await asyncio.to_thread(functools.partial(_svc().logout, body.refresh_token, access_token=access_token))
-    # Clear the access token cookie set on login
+    # Clear both auth cookies set on login
     response.delete_cookie(key="hopefx_access_token", path="/", samesite="strict")
+    response.delete_cookie(key="hopefx_refresh_token", path="/api/auth/refresh", samesite="strict")
     return {"message": "Logged out successfully"}
 
 
