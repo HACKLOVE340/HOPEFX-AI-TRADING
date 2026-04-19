@@ -81,6 +81,9 @@ logger = logging.getLogger(__name__)
 
 UTC = timezone.utc
 
+# Suppress repeated "all sources unavailable" warnings — log once per process.
+_offline_warned: bool = False
+
 # CFTC disaggregated futures COT — current year and historical
 _CFTC_CURRENT_URL = "https://www.cftc.gov/files/dea/history/fut_disagg_txt_{year}.zip"
 _CFTC_HIST_BASE = "https://www.cftc.gov/files/dea/history/"
@@ -141,33 +144,40 @@ class CFTCCOTFeed:
 
     # ── Download ──────────────────────────────────────────────────────────────
 
-    async def _download_year(self, year: int) -> pd.DataFrame:
-        """Download and parse one year of disaggregated COT data."""
+    async def _download_year(self, year: int, retries: int = 2) -> pd.DataFrame:
+        """Download and parse one year of disaggregated COT data with retry."""
         url = _CFTC_CURRENT_URL.format(year=year)
-        logger.info("COT: downloading %s", url)
-        try:
-            session = await self._get_session()
-            async with session.get(url) as resp:
-                if resp.status == 404:
-                    logger.debug("COT: %d data not available (404)", year)
-                    return pd.DataFrame()
-                resp.raise_for_status()
-                raw = await resp.read()
+        logger.debug("COT: downloading %s", url)
+        last_exc: Exception | None = None
+        for attempt in range(retries + 1):
+            try:
+                session = await self._get_session()
+                async with session.get(url) as resp:
+                    if resp.status == 404:
+                        logger.debug("COT: %d data not available (404)", year)
+                        return pd.DataFrame()
+                    resp.raise_for_status()
+                    raw = await resp.read()
 
-            with zipfile.ZipFile(io.BytesIO(raw)) as zf:
-                # The ZIP contains a single .txt (CSV) file
-                txt_files = [n for n in zf.namelist() if n.endswith(".txt")]
-                if not txt_files:
-                    logger.warning("COT: no .txt in ZIP for year %d", year)
-                    return pd.DataFrame()
-                with zf.open(txt_files[0]) as f:
-                    df = pd.read_csv(f, low_memory=False)
+                with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+                    txt_files = [n for n in zf.namelist() if n.endswith(".txt")]
+                    if not txt_files:
+                        logger.warning("COT: no .txt in ZIP for year %d", year)
+                        return pd.DataFrame()
+                    with zf.open(txt_files[0]) as f:
+                        df = pd.read_csv(f, low_memory=False)
 
-            return self._filter_gold(df)
+                return self._filter_gold(df)
 
-        except Exception as exc:
-            logger.debug("COT: download failed for year %d: %s", year, exc)
-            return pd.DataFrame()
+            except Exception as exc:
+                last_exc = exc
+                if attempt < retries:
+                    wait = 2 ** attempt  # 1s, 2s
+                    logger.debug("COT: download attempt %d failed for year %d, retrying in %ds: %s", attempt + 1, year, wait, exc)
+                    await asyncio.sleep(wait)
+
+        logger.debug("COT: download failed for year %d after %d attempts: %s", year, retries + 1, last_exc)
+        return pd.DataFrame()
 
     def _filter_gold(self, df: pd.DataFrame) -> pd.DataFrame:
         """Keep only COMEX gold rows and extract relevant columns."""
@@ -333,25 +343,27 @@ class CFTCCOTFeed:
             # All years failed — try loading from local CSV cache before giving up.
             cached = self._load_from_cache()
             if cached:
-                logger.warning(
-                    "COT: CFTC unreachable (years %s) — loaded %d series from local cache.",
-                    failed_years,
+                logger.info(
+                    "COT: CFTC unreachable — loaded %d series from local cache.",
                     len(cached),
                 )
                 self._inject_into_macro_store(cached)
                 self._last_fetch = datetime.now(UTC)
                 return {k: len(v) for k, v in cached.items()}
 
-            # No cache either — inject neutral zero-valued series so the ML
-            # pipeline has all expected feature columns (avoids KeyError in
-            # macro_features.py) and log a clear actionable warning.
-            logger.warning(
-                "COT: CFTC unreachable (years %s) and no local cache — "
-                "injecting neutral zero-valued COT series into MacroStore. "
-                "Place cached CSVs in %s or ensure outbound HTTPS access to www.cftc.gov.",
-                failed_years,
-                str(_CACHE_DIR.resolve()),
-            )
+            # No cache either — inject neutral zeros and warn once per process.
+            global _offline_warned
+            if not _offline_warned:
+                logger.warning(
+                    "COT: CFTC unreachable (years %s) and no local cache — "
+                    "injecting neutral zero-valued COT series into MacroStore. "
+                    "Place cached CSVs in %s or ensure outbound HTTPS access to www.cftc.gov.",
+                    failed_years,
+                    str(_CACHE_DIR.resolve()),
+                )
+                _offline_warned = True
+            else:
+                logger.debug("COT: CFTC still unreachable — using neutral series (warning suppressed).")
             neutral = self._neutral_series()
             self._inject_into_macro_store(neutral)
             self._last_fetch = datetime.now(UTC)
