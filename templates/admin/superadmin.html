@@ -527,16 +527,20 @@
 <script src="/auth.js"></script>
 <script>
 // ── Auth guard ────────────────────────────────────────────────────────────────
-requireAuth();
+// requireRole() checks token presence, expiry, AND role >= superadmin.
+// Admin-role users are redirected to /dashboard instead of seeing 401s.
+requireRole('superadmin');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 // TOKEN is a live getter so it always reflects the latest refreshed token
 function TOKEN() { return getAccessToken(); }
 
 async function api(method, path, body) {
+  // Authorization header is injected by authFetch() — do not set it here.
+  // authFetch also handles 401 → silent refresh → retry automatically.
   const opts = {
     method,
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN() },
+    headers: { 'Content-Type': 'application/json' },
   };
   if (body !== undefined) opts.body = JSON.stringify(body);
   const r = await authFetch(path, opts);

@@ -197,6 +197,47 @@ function requireAuth() {
   scheduleRefresh();
 }
 
+/**
+ * Call at the top of role-restricted pages.
+ * Verifies the token is present, not expired, and carries the required role.
+ * Redirects to /login if unauthenticated, or /dashboard if role is insufficient.
+ *
+ * Role hierarchy: user < trader < admin < superadmin
+ */
+const _ROLE_RANK = { user: 0, trader: 1, admin: 2, superadmin: 3 };
+
+function requireRole(requiredRole) {
+  const token = getAccessToken();
+  if (!token) { redirectToLogin(); return; }
+
+  const expiresAt = tokenExpiresAt(token);
+  if (expiresAt && Date.now() > expiresAt) {
+    silentRefresh().then(ok => {
+      if (ok) {
+        // Re-check role after refresh
+        const freshRole = tokenRole(getAccessToken());
+        if ((_ROLE_RANK[freshRole] ?? 0) < (_ROLE_RANK[requiredRole] ?? 99)) {
+          window.location.replace('/dashboard');
+        } else {
+          scheduleRefresh();
+        }
+      } else {
+        redirectToLogin();
+      }
+    });
+    return;
+  }
+
+  const role = tokenRole(token);
+  if ((_ROLE_RANK[role] ?? 0) < (_ROLE_RANK[requiredRole] ?? 99)) {
+    // Authenticated but insufficient role — send to dashboard, not login
+    window.location.replace('/dashboard');
+    return;
+  }
+
+  scheduleRefresh();
+}
+
 // ── Role-based redirect (used by login page) ──────────────────────────────────
 
 function roleRedirect(token, explicitNext) {
