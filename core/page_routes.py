@@ -20,8 +20,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 logger = logging.getLogger(__name__)
@@ -132,6 +132,75 @@ def register_page_routes(app: FastAPI) -> None:
     _dashboard_dist = _root / "dashboard" / "dist"  # legacy dashboard build
 
     if _frontend_dist.exists() and (_frontend_dist / "index.html").exists():
+        _index_html = _frontend_dist / "index.html"
+
+        # ── SPA catch-all: serve index.html for every React Router path ──────
+        #
+        # Starlette's StaticFiles(html=True) only serves index.html for the
+        # exact root path ("/") and for paths that match real files on disk.
+        # SPA routes like /dashboard, /trade, /superadmin have no corresponding
+        # file, so StaticFiles returns 404. Fix: register explicit GET routes
+        # for every known SPA path BEFORE the StaticFiles mount, all returning
+        # index.html. React Router then handles the path client-side.
+        #
+        # The wildcard catch-all below handles any path not matched by an
+        # earlier /api/* or static-asset route.
+
+        _SPA_ROUTES = [
+            "/dashboard", "/trade", "/trading", "/portfolio", "/profile",
+            "/settings", "/admin", "/superadmin", "/onboarding",
+            "/login", "/register", "/forgot-password", "/reset-password",
+            "/2fa-setup", "/wallet", "/watchlist", "/leaderboard",
+            "/copy-trading", "/social", "/marketplace", "/affiliate",
+            "/performance", "/risk-calculator", "/economic-calendar",
+            "/price-alerts", "/trade-journal", "/custom-indicators",
+            "/ai-strategy", "/backtest", "/walk-forward", "/prop-firm",
+            "/nuclear", "/whitelabel", "/audit-log", "/status",
+            "/privacy", "/terms", "/security-dashboard", "/tca",
+            "/correlation", "/geopolitical", "/sub-accounts",
+            "/ab-testing", "/auto-heal", "/crypto-checkout",
+        ]
+
+        async def _spa_index(_req: Request) -> FileResponse:
+            return FileResponse(str(_index_html))
+
+        for _spa_path in _SPA_ROUTES:
+            app.add_api_route(
+                _spa_path,
+                _spa_index,
+                methods=["GET"],
+                include_in_schema=False,
+            )
+
+        # Catch-all for any other SPA sub-path not listed above.
+        # Must NOT intercept API routes, WebSocket paths, or static assets.
+        @app.get("/{full_path:path}", include_in_schema=False, response_model=None)
+        async def _spa_catchall(full_path: str, request: Request) -> Response:
+            # Paths that belong to real server-side handlers — pass through
+            # by returning 404 here so Starlette tries the next matching route.
+            # Note: StaticFiles mount is registered AFTER this route, so assets
+            # under /assets/ are served by the StaticFiles handler, not here.
+            _passthrough_prefixes = (
+                "api/", "ws/", "godmode/", "godmode",
+                "docs", "redoc",
+                "health", "health/",
+                "metrics",
+                "kyc", "kyc/",
+                "decision", "decision/",
+                "replay", "replay/",
+                "mobile", "mobile/",
+                "favicon.ico",
+            )
+            if any(full_path == p or full_path.startswith(p + "/") or full_path.startswith(p)
+                   for p in _passthrough_prefixes):
+                return Response(status_code=404)
+            # Serve real static assets (JS/CSS/images) from the build output
+            _asset = _frontend_dist / full_path
+            if _asset.exists() and _asset.is_file():
+                return FileResponse(str(_asset))
+            # Everything else is a React Router path → serve index.html
+            return FileResponse(str(_index_html))
+
         app.mount(
             "/",
             StaticFiles(directory=str(_frontend_dist), html=True),
