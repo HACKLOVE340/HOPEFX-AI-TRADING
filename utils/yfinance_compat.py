@@ -66,10 +66,23 @@ def suppress_yfinance_warnings() -> None:
     warnings.filterwarnings("ignore", message=".*auto_adjust.*", category=FutureWarning)
     warnings.filterwarnings("ignore", message=".*actions.*", category=FutureWarning)
 
-    # yfinance also logs via the logging module — silence those loggers.
-    for _name in ("yfinance", "yfinance.base", "yfinance.utils", "yfinance.ticker",
-                  "yfinance.multi", "yfinance.scrapers.history"):
-        logging.getLogger(_name).setLevel(logging.ERROR)
+    # yfinance logs "possibly delisted" and roll-window errors at ERROR level
+    # via the logging module. Silence all yfinance sub-loggers to CRITICAL so
+    # only genuine fatal errors surface. Our own fallback logic logs the
+    # outcome at INFO/WARNING level with actionable context.
+    for _name in (
+        "yfinance",
+        "yfinance.base",
+        "yfinance.utils",
+        "yfinance.ticker",
+        "yfinance.multi",
+        "yfinance.scrapers.history",
+        "yfinance.scrapers.quote",
+        "yfinance.scrapers.fundamentals",
+        "yfinance.cache",
+        "peewee",  # yfinance uses peewee for its SQLite cache
+    ):
+        logging.getLogger(_name).setLevel(logging.CRITICAL)
 
     _SUPPRESSED = True
 

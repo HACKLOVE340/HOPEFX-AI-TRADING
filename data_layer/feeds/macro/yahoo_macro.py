@@ -112,12 +112,21 @@ class YahooMacroFeed:
                 try:
                     df = yf.download(candidate, start=start, progress=False, auto_adjust=True)
                     if df is None or (hasattr(df, "empty") and df.empty):
-                        if candidate == ticker:
-                            logger.warning(
+                        fallbacks = _TICKER_FALLBACKS.get(ticker, [])
+                        if candidate == ticker and fallbacks:
+                            # Primary empty but fallbacks exist — log at DEBUG,
+                            # the fallback attempt will log the outcome.
+                            logger.debug(
                                 "Yahoo: no data for %s (%s) — trying fallbacks %s",
                                 ticker,
                                 name,
-                                _TICKER_FALLBACKS.get(ticker, []),
+                                fallbacks,
+                            )
+                        elif candidate == ticker:
+                            logger.warning(
+                                "Yahoo: no data for %s (%s) and no fallbacks configured",
+                                ticker,
+                                name,
                             )
                         else:
                             logger.debug("Yahoo: fallback %s also empty for %s", candidate, name)
