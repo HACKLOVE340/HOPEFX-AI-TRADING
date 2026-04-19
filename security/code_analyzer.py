@@ -897,3 +897,347 @@ def summarize_issues(issues: list[CodeIssue]) -> dict[str, Any]:
         "critical_files": list({i.file for i in issues if i.severity == SEVERITY_CRITICAL})[:20],
         "scanned_at": datetime.now(UTC).isoformat(),
     }
+
+
+# ── Extended checks: SPA routing, cookie auth, import chain, env vars ─────────
+
+# SPA routes that must be served by the FastAPI app (catch-all or static mount)
+_SPA_ROUTE_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r'"/dashboard"'),
+    re.compile(r'"/superadmin"'),
+    re.compile(r'"/login"'),
+    re.compile(r'"/register"'),
+    re.compile(r'"/settings"'),
+]
+
+# Cookie/session auth patterns that indicate missing security flags
+_COOKIE_INSECURE_RE = re.compile(
+    r"""response\.set_cookie\s*\((?![^)]*httponly\s*=\s*True)""",
+    re.IGNORECASE,
+)
+_COOKIE_NO_SAMESITE_RE = re.compile(
+    r"""response\.set_cookie\s*\((?![^)]*samesite)""",
+    re.IGNORECASE,
+)
+
+# Env var access without a default — will raise KeyError if var is missing
+_ENV_NO_DEFAULT_RE = re.compile(r"""os\.environ\[['"][A-Z_]+['"]\]""")
+
+# Startup check patterns — functions that should be called at startup
+_STARTUP_VALIDATOR_RE = re.compile(r"""validate_environment\s*\(""")
+
+# Router registration patterns
+_INCLUDE_ROUTER_RE = re.compile(r"""app\.include_router\s*\(|_include_router_deduped\s*\(""")
+_ROUTER_IMPORT_RE = re.compile(r"""from\s+api\.\w+\s+import\s+router|import\s+.*router""")
+
+
+def check_spa_routing(py_file: Path) -> list[CodeIssue]:
+    """
+    Check that SPA frontend routes are properly handled.
+
+    Detects:
+    - app.py missing a catch-all route for SPA navigation
+    - Missing StaticFiles mount for the frontend build
+    """
+    issues: list[CodeIssue] = []
+    rel = _rel(py_file)
+
+    # Only check app.py and main entry points
+    if py_file.name not in ("app.py", "main.py", "run.py", "server.py"):
+        return issues
+
+    lines = _read_lines(py_file)
+    source = "\n".join(lines)
+
+    has_static_mount = bool(re.search(r"StaticFiles|mount.*static", source, re.IGNORECASE))
+    has_catchall = bool(re.search(r'@app\.get\s*\(\s*["\']/{path[^}]*}["\']|catch.?all', source, re.IGNORECASE))
+    has_spa_fallback = bool(re.search(r'index\.html|FileResponse.*index', source, re.IGNORECASE))
+
+    if not has_static_mount and not has_spa_fallback:
+        issues.append(CodeIssue(
+            file=rel,
+            line=1,
+            category="spa_routing",
+            severity=SEVERITY_HIGH,
+            description=(
+                f"{py_file.name} has no StaticFiles mount or SPA fallback route. "
+                "Frontend routes like /dashboard will return 404."
+            ),
+            snippet="",
+            suggestion=(
+                "Add: app.mount('/static', StaticFiles(directory='static'), name='static') "
+                "and a catch-all GET route that returns FileResponse('static/index.html')"
+            ),
+        ))
+
+    return issues
+
+
+def check_cookie_auth_security(py_file: Path) -> list[CodeIssue]:
+    """
+    Detect insecure cookie/session auth patterns:
+    - set_cookie without httponly=True
+    - set_cookie without samesite parameter
+    - JWT stored in localStorage (XSS-vulnerable)
+    """
+    issues: list[CodeIssue] = []
+    rel = _rel(py_file)
+
+    # Skip test files
+    if "/test" in rel or rel.startswith("test"):
+        return issues
+
+    lines = _read_lines(py_file)
+
+    for i, line in enumerate(lines, 1):
+        # Cookie without httponly
+        if "set_cookie" in line and "httponly" not in line.lower():
+            issues.append(CodeIssue(
+                file=rel,
+                line=i,
+                category="cookie_security",
+                severity=SEVERITY_HIGH,
+                description="set_cookie called without httponly=True — cookie accessible via JavaScript (XSS risk)",
+                snippet=line.strip(),
+                suggestion="Add httponly=True to set_cookie() call",
+            ))
+        # Cookie without samesite
+        elif "set_cookie" in line and "samesite" not in line.lower():
+            issues.append(CodeIssue(
+                file=rel,
+                line=i,
+                category="cookie_security",
+                severity=SEVERITY_MEDIUM,
+                description="set_cookie called without samesite parameter — CSRF risk",
+                snippet=line.strip(),
+                suggestion="Add samesite='lax' or samesite='strict' to set_cookie() call",
+            ))
+
+        # localStorage JWT storage (in JS/TS files embedded in Python templates)
+        if "localStorage" in line and ("token" in line.lower() or "jwt" in line.lower()):
+            issues.append(CodeIssue(
+                file=rel,
+                line=i,
+                category="cookie_security",
+                severity=SEVERITY_HIGH,
+                description="JWT stored in localStorage — vulnerable to XSS attacks",
+                snippet=line.strip(),
+                suggestion="Store JWT in httpOnly cookie instead of localStorage",
+            ))
+
+    return issues
+
+
+def check_env_var_access(py_file: Path) -> list[CodeIssue]:
+    """
+    Detect unsafe environment variable access patterns:
+    - os.environ['VAR'] without try/except — raises KeyError if var missing
+    - Hardcoded fallback values for security-sensitive vars
+    """
+    issues: list[CodeIssue] = []
+    rel = _rel(py_file)
+
+    if "/test" in rel or rel.startswith("test"):
+        return issues
+
+    lines = _read_lines(py_file)
+
+    _sensitive_vars = frozenset({
+        "SECRET_KEY", "DATABASE_URL", "REDIS_URL", "API_KEY",
+        "PRIVATE_KEY", "PASSWORD", "TOKEN", "OANDA_API_KEY",
+        "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
+    })
+
+    for i, line in enumerate(lines, 1):
+        # os.environ['VAR'] without default
+        m = re.search(r"""os\.environ\[['"]([A-Z_]+)['"]\]""", line)
+        if m:
+            var_name = m.group(1)
+            # Check if it's inside a try block (look back 5 lines)
+            context = "\n".join(lines[max(0, i - 6):i])
+            if "try:" not in context:
+                issues.append(CodeIssue(
+                    file=rel,
+                    line=i,
+                    category="env_var_unsafe",
+                    severity=SEVERITY_HIGH,
+                    description=(
+                        f"os.environ['{var_name}'] will raise KeyError if the variable is not set. "
+                        "Use os.getenv() with a default or wrap in try/except."
+                    ),
+                    snippet=line.strip(),
+                    suggestion=f"Replace with: os.getenv('{var_name}') or raise a clear RuntimeError",
+                ))
+
+        # Hardcoded fallback for sensitive vars
+        m2 = re.search(
+            r"""os\.getenv\s*\(\s*['"]([A-Z_]+)['"]\s*,\s*['"]([^'"]{4,})['"]\s*\)""",
+            line,
+        )
+        if m2:
+            var_name = m2.group(1)
+            fallback = m2.group(2)
+            if var_name in _sensitive_vars and not fallback.startswith("$"):
+                issues.append(CodeIssue(
+                    file=rel,
+                    line=i,
+                    category="env_var_hardcoded_secret",
+                    severity=SEVERITY_CRITICAL,
+                    description=(
+                        f"Hardcoded fallback value for sensitive env var '{var_name}'. "
+                        "This will silently use the hardcoded value in production if the var is unset."
+                    ),
+                    snippet=line.strip(),
+                    suggestion=f"Remove the hardcoded default; raise RuntimeError if '{var_name}' is not set",
+                ))
+
+    return issues
+
+
+def check_startup_validators(py_file: Path) -> list[CodeIssue]:
+    """
+    Verify that app entry points call validate_environment() at startup.
+    Missing startup validation means broken config is only discovered at runtime.
+    """
+    issues: list[CodeIssue] = []
+    rel = _rel(py_file)
+
+    if py_file.name not in ("app.py", "main.py", "run.py"):
+        return issues
+
+    lines = _read_lines(py_file)
+    source = "\n".join(lines)
+
+    if not _STARTUP_VALIDATOR_RE.search(source):
+        issues.append(CodeIssue(
+            file=rel,
+            line=1,
+            category="missing_startup_validation",
+            severity=SEVERITY_HIGH,
+            description=(
+                f"{py_file.name} does not call validate_environment() at startup. "
+                "Misconfigured environment variables will only be discovered at runtime."
+            ),
+            snippet="",
+            suggestion=(
+                "Add: from config.startup_validator import validate_environment; "
+                "validate_environment(strict=True)"
+            ),
+        ))
+
+    return issues
+
+
+def check_router_registration(py_file: Path) -> list[CodeIssue]:
+    """
+    Detect routers that are defined but never registered with the app.
+    An unregistered router means all its endpoints return 404 silently.
+    """
+    issues: list[CodeIssue] = []
+    rel = _rel(py_file)
+
+    # Only check api/*.py files (not test files, not __init__)
+    if not rel.startswith("api/") or "/test" in rel or py_file.name == "__init__.py":
+        return issues
+
+    lines = _read_lines(py_file)
+    source = "\n".join(lines)
+
+    has_router_def = bool(re.search(r"^router\s*=\s*APIRouter\(", source, re.MULTILINE))
+    if not has_router_def:
+        return issues
+
+    # Check if this router is imported anywhere in the app
+    router_module = rel.replace("/", ".").replace(".py", "")
+    registry_file = PROJECT_ROOT / "core" / "router_registry.py"
+    app_file = PROJECT_ROOT / "app.py"
+
+    registered = False
+    for check_file in [registry_file, app_file]:
+        if check_file.exists():
+            content = check_file.read_text(encoding="utf-8", errors="replace")
+            if py_file.stem in content or router_module in content:
+                registered = True
+                break
+
+    if not registered:
+        issues.append(CodeIssue(
+            file=rel,
+            line=1,
+            category="unregistered_router",
+            severity=SEVERITY_HIGH,
+            description=(
+                f"{rel} defines an APIRouter but it does not appear to be registered "
+                "in core/router_registry.py or app.py. All its endpoints will return 404."
+            ),
+            snippet="router = APIRouter(...)",
+            suggestion=(
+                "Register the router: add it to core/router_registry.py using "
+                "_include_router_deduped(app, router, prefix='/api/...')"
+            ),
+        ))
+
+    return issues
+
+
+def scan_extended(py_file: Path) -> list[CodeIssue]:
+    """
+    Run all extended checks (SPA routing, cookie auth, env vars, startup,
+    router registration) on a single file.
+    """
+    issues: list[CodeIssue] = []
+    issues.extend(check_spa_routing(py_file))
+    issues.extend(check_cookie_auth_security(py_file))
+    issues.extend(check_env_var_access(py_file))
+    issues.extend(check_startup_validators(py_file))
+    issues.extend(check_router_registration(py_file))
+    return issues
+
+
+def scan_codebase_extended(
+    *,
+    include_tests: bool = False,
+    max_files: int = 2000,
+) -> list[CodeIssue]:
+    """
+    Run both the original scan_codebase() checks AND the new extended checks.
+    Returns a deduplicated, severity-sorted list of all issues.
+    """
+    # Original checks
+    base_issues = scan_codebase(include_tests=include_tests, max_files=max_files)
+
+    # Extended checks
+    ext_issues: list[CodeIssue] = []
+    _TEST_PREFIXES_EXT = ("tests/", "test_", "conftest")
+    scanned = 0
+    for py_file in sorted(PROJECT_ROOT.rglob("*.py")):
+        if scanned >= max_files:
+            break
+        rel = _rel(py_file)
+        if not include_tests and any(
+            rel.startswith(p) or f"/{p}" in rel for p in _TEST_PREFIXES_EXT
+        ):
+            continue
+        ext_issues.extend(scan_extended(py_file))
+        scanned += 1
+
+    all_issues = base_issues + ext_issues
+
+    # Deduplicate
+    seen: set[tuple[str, int, str]] = set()
+    unique: list[CodeIssue] = []
+    for issue in all_issues:
+        key = (issue.file, issue.line, issue.category)
+        if key not in seen:
+            seen.add(key)
+            unique.append(issue)
+
+    _sev_order = {SEVERITY_CRITICAL: 0, SEVERITY_HIGH: 1, SEVERITY_MEDIUM: 2, SEVERITY_LOW: 3}
+    unique.sort(key=lambda x: (_sev_order.get(x.severity, 9), x.file, x.line))
+
+    logger.info(
+        "CodeAnalyzer (extended): %d total issues (%d from extended checks)",
+        len(unique),
+        len(ext_issues),
+    )
+    return unique
