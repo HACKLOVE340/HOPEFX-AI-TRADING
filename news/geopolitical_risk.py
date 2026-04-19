@@ -542,7 +542,11 @@ class GeopoliticalRiskProvider:
         # ── 1. World Monitor (self-hosted) — only when explicitly configured ──
         # worldmonitor.app is not a public API; attempting it without a key or a
         # custom endpoint just produces DNS failures and noisy log spam.
-        custom_endpoint = self.config.get("api_endpoint", "")
+        # WORLDMONITOR_API_URL env var overrides the config dict api_endpoint.
+        custom_endpoint = (
+            os.getenv("WORLDMONITOR_API_URL", "")
+            or self.config.get("api_endpoint", "")
+        )
         wm_enabled = bool(api_key or (custom_endpoint and custom_endpoint != "https://worldmonitor.app"))
 
         if wm_enabled:
