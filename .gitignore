@@ -198,7 +198,16 @@ kill_switch.state.json
 data/*Y.csv
 !data/XAUUSD_50Y.csv
 !data/XAUUSD_40Y.csv
+# Runtime market data fetched by the scheduler — not source files
+data/*_M1.csv
+data/*_M5.csv
+data/*_M15.csv
+data/*_M30.csv
 data/*_H1.csv
+data/*_H4.csv
+data/*_D.csv
+data/av_last_scan.json
+data/macro/*.csv
 frontend/coverage/
 
 # Data layer runtime artifacts (generated at runtime, not source)
