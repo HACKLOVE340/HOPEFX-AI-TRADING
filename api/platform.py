@@ -746,32 +746,58 @@ async def override_flag_for_user(
 
 
 def setup_rate_limiting(app):
-    """
-    Attach Redis-backed slowapi rate limiter to the FastAPI app.
-    Falls back to in-memory if Redis is unavailable.
+    """Attach Redis-backed slowapi rate limiter to the FastAPI app.
+
+    Falls back to an in-memory backend when Redis is unavailable (single-process
+    only — not suitable for multi-worker deployments).
+
+    ``slowapi`` is a declared dependency in requirements.txt.  An ImportError
+    means the environment is broken (incomplete install), not that the feature
+    is optional.  We raise loudly in production so the misconfiguration is
+    caught immediately at startup rather than silently running unprotected.
+    In development we log a critical warning and continue so local work is not
+    blocked by a missing package, but the log message is unmissable.
     """
     try:
         from slowapi import Limiter, _rate_limit_exceeded_handler
         from slowapi.errors import RateLimitExceeded
         from slowapi.util import get_remote_address
-
-        redis_url = f"redis://{os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_PORT', '6379')}"
-        try:
-            limiter = Limiter(key_func=get_remote_address, storage_uri=redis_url)
-            logger.info("Rate limiter: Redis backend at %s", redis_url)
-        except Exception:  # nosec B110 — Redis optional for rate limiter
-            limiter = Limiter(key_func=get_remote_address)
-            logger.info("Rate limiter: in-memory backend (Redis unavailable)")
-
-        app.state.limiter = limiter
-        app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-        logger.info("slowapi rate limiting configured")
-        return limiter
-    except ImportError:
-        logger.warning(
-            "slowapi not installed — rate limiting disabled. Run: pip install slowapi",
+    except ImportError as exc:
+        is_prod = os.getenv("APP_ENV", "development").lower() == "production"
+        msg = (
+            "slowapi is not installed but is required for rate limiting. "
+            "Fix: pip install 'slowapi>=0.1.9'  (it is listed in requirements.txt). "
+            f"Original error: {exc}"
+        )
+        if is_prod:
+            # Fail-loud in production — an unprotected API is a security risk.
+            raise RuntimeError(msg) from exc
+        # Development: log at CRITICAL so it is impossible to miss, but do not
+        # crash so engineers can still run the server without a full install.
+        logger.critical(
+            "RATE LIMITING DISABLED — %s  "
+            "All endpoints are unprotected against brute-force and DoS attacks.",
+            msg,
         )
         return None
+
+    redis_url = (
+        f"redis://{os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_PORT', '6379')}"
+    )
+    try:
+        limiter = Limiter(key_func=get_remote_address, storage_uri=redis_url)
+        logger.info("Rate limiter: Redis backend at %s", redis_url)
+    except Exception:  # nosec B110 — Redis is optional; in-memory is the fallback
+        limiter = Limiter(key_func=get_remote_address)
+        logger.warning(
+            "Rate limiter: Redis unavailable — using in-memory backend. "
+            "This is NOT suitable for multi-worker deployments (limits are per-process).",
+        )
+
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    logger.info("slowapi rate limiting configured")
+    return limiter
 
 
 def init_sentry():
