@@ -553,6 +553,12 @@ class SelfHealer:
         self._log_issues: list[dict[str, Any]] = []  # recent log errors
         self._claude_fix_queue: list[dict[str, Any]] = []  # pending Claude fixes
 
+        # ── Advanced diagnostics engine state ─────────────────────────────────
+        self._diag_interval: int = int(os.getenv("HEAL_DIAG_INTERVAL", "300"))  # 5 min
+        self._last_diag_ts: float = 0.0
+        self._last_diag_report: dict[str, Any] = {}
+        self._diag_remediation_log: list[dict[str, Any]] = []
+
         # Ensure all log output goes to logs/app.log
         _ensure_file_logging()
 
@@ -681,6 +687,14 @@ class SelfHealer:
             else None,
             "claude_fix_queue_depth": len(self._claude_fix_queue),
             "log_file": str(_LOG_FILE),
+            # Advanced diagnostics
+            "last_diag_ts": datetime.fromtimestamp(self._last_diag_ts, UTC).isoformat()
+            if self._last_diag_ts
+            else None,
+            "diag_has_critical": self._last_diag_report.get("has_critical", False),
+            "diag_has_errors": self._last_diag_report.get("has_errors", False),
+            "diag_counts": self._last_diag_report.get("counts", {}),
+            "diag_remediation_actions": len(self._diag_remediation_log),
         }
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -705,7 +719,8 @@ class SelfHealer:
         code_task = asyncio.create_task(self._code_analysis_loop(), name="heal-code-analysis")
         log_task = asyncio.create_task(self._log_analysis_loop(), name="heal-log-analysis")
         claude_task = asyncio.create_task(self._claude_fix_loop(), name="heal-claude-fix")
-        await asyncio.gather(scan_task, patch_task, sched_task, code_task, log_task, claude_task)
+        diag_task = asyncio.create_task(self._diagnostics_loop(), name="heal-diagnostics")
+        await asyncio.gather(scan_task, patch_task, sched_task, code_task, log_task, claude_task, diag_task)
 
     async def _load_saved_config(self) -> None:
         """Pull config saved by the SuperAdmin panel and apply it."""
@@ -1465,6 +1480,150 @@ Return the complete fixed file:"""
                 logger.warning("SelfHealer: llm_wrapper fallback also failed: %s", fallback_exc)
                 return ""
 
+    # ── Advanced diagnostics loop ─────────────────────────────────────────────
+
+    async def _diagnostics_loop(self) -> None:
+        """
+        Periodically run the full DiagnosticsEngine check suite.
+
+        Runs every HEAL_DIAG_INTERVAL seconds (default 300s / 5 min).
+        Critical findings are auto-remediated and pushed to Redis for the
+        superadmin dashboard.
+        """
+        # Stagger startup so it doesn't compete with the initial baseline build
+        await asyncio.sleep(30)
+        while self._running:
+            try:
+                if self._enabled:
+                    await self._run_diagnostics()
+                else:
+                    self._log("debug", "SelfHealer: diagnostics loop skipped — disabled")
+            except Exception as exc:
+                logger.warning("SelfHealer: diagnostics loop error: %s", exc)
+            await asyncio.sleep(self._diag_interval)
+
+    async def _run_diagnostics(self) -> dict[str, Any]:
+        """
+        Execute the full DiagnosticsEngine suite and act on findings.
+
+        Actions taken:
+        - Critical env-var issues → logged as CRITICAL alerts
+        - Import chain failures → enqueued for Claude fix
+        - Log pattern hits → enqueued for Claude fix
+        - All results → persisted to Redis for the dashboard
+        - Auto-remediation attempted for actionable findings
+        """
+        try:
+            from security.diagnostics import get_diagnostics_engine
+        except ImportError:
+            logger.warning("SelfHealer: diagnostics module not available — skipping")
+            return {}
+
+        self._log("info", "SelfHealer: running advanced diagnostics suite")
+        engine = get_diagnostics_engine()
+
+        try:
+            report = await engine.run_full_diagnostic(parallel=True)
+        except Exception as exc:
+            logger.warning("SelfHealer: diagnostics run failed: %s", exc)
+            return {}
+
+        self._last_diag_ts = time.time()
+        self._last_diag_report = report.to_dict()
+
+        # Persist to Redis for the dashboard
+        redis = await _get_redis()
+        if redis:
+            with contextlib.suppress(Exception):
+                await redis.set(
+                    "heal:diagnostics:last_report",
+                    json.dumps(self._last_diag_report),
+                    ex=3600,
+                )
+
+        # Act on critical/error findings
+        critical_results = [r for r in report.results if r.status in ("critical", "error")]
+        for result in critical_results:
+            # Push to alerts:critical
+            if redis:
+                with contextlib.suppress(Exception):
+                    await redis.rpush(
+                        "alerts:critical",
+                        json.dumps({
+                            "type": "diagnostic_failure",
+                            "check": result.check_name,
+                            "ts": result.checked_at,
+                            "detail": result.to_dict(),
+                        }),
+                    )
+                    await redis.ltrim("alerts:critical", -1000, -1)
+
+            # Enqueue import chain failures for Claude fix
+            if result.check_name == "import_chain":
+                for broken in result.details.get("broken", [])[:5]:
+                    await self._enqueue_claude_fix({
+                        "category": "import_error",
+                        "severity": "critical",
+                        "description": f"Import chain broken: {broken.get('package')} — {broken.get('error', '')}",
+                        "file": broken.get("package", "").replace(".", "/") + ".py",
+                        "line": 0,
+                        "snippet": broken.get("error", "")[:200],
+                        "suggestion": "Fix the import error; run pip install -r requirements.txt",
+                    })
+
+            # Enqueue log pattern hits for Claude fix
+            if result.check_name.startswith("log_pattern_"):
+                await self._enqueue_claude_fix({
+                    "category": result.check_name.replace("log_pattern_", ""),
+                    "severity": result.status,
+                    "description": result.message,
+                    "file": "logs/app.log",
+                    "line": 0,
+                    "snippet": result.details.get("sample", "")[:200],
+                    "suggestion": result.remediation,
+                })
+
+        # Auto-remediate if aggressiveness allows
+        if self._aggressiveness in ("aggressive", "nuclear") and report.has_errors():
+            try:
+                actions = await engine.auto_remediate(report)
+                if actions:
+                    self._diag_remediation_log.extend(actions)
+                    self._diag_remediation_log = self._diag_remediation_log[-100:]
+                    self._log(
+                        "info",
+                        "SelfHealer: diagnostics auto-remediation — %d action(s) taken",
+                        len(actions),
+                    )
+                    if redis:
+                        with contextlib.suppress(Exception):
+                            await redis.set(
+                                "heal:diagnostics:remediation_log",
+                                json.dumps(self._diag_remediation_log[-50:]),
+                                ex=86400,
+                            )
+            except Exception as exc:
+                logger.warning("SelfHealer: diagnostics auto-remediation error: %s", exc)
+
+        self._log(
+            "info" if not report.has_errors() else "warning",
+            "SelfHealer: diagnostics complete — %s",
+            report.summary(),
+        )
+        return self._last_diag_report
+
+    async def run_diagnostics_now(self) -> dict[str, Any]:
+        """Trigger an immediate full diagnostics run and return the report."""
+        return await self._run_diagnostics()
+
+    def get_last_diagnostic_report(self) -> dict[str, Any]:
+        """Return the most recent diagnostics report."""
+        return dict(self._last_diag_report)
+
+    def get_diagnostics_remediation_log(self) -> list[dict[str, Any]]:
+        """Return the diagnostics auto-remediation action log."""
+        return list(self._diag_remediation_log)
+
     # ── Public API for deep analysis ──────────────────────────────────────────
 
     async def run_code_analysis_now(self) -> dict[str, Any]:
@@ -2056,6 +2215,39 @@ def _build_eager_heal_router() -> APIRouter:
         count = len(h._claude_fix_queue)
         h._claude_fix_queue.clear()
         return {"cleared": count}
+
+    @r.post("/diagnostics/now", summary="Trigger immediate full diagnostics run")
+    async def _diagnostics_now():
+        h = get_healer()
+        report = await h.run_diagnostics_now()
+        return report
+
+    @r.get("/diagnostics/report", summary="Get the last diagnostics report")
+    async def _diagnostics_report():
+        h = get_healer()
+        report = h.get_last_diagnostic_report()
+        if not report:
+            return {"message": "No diagnostics report available yet — trigger one via POST /diagnostics/now"}
+        return report
+
+    @r.get("/diagnostics/remediation-log", summary="Get diagnostics auto-remediation log")
+    async def _diagnostics_remediation_log():
+        h = get_healer()
+        return {
+            "entries": h.get_diagnostics_remediation_log(),
+            "total": len(h._diag_remediation_log),
+        }
+
+    @r.get("/full-status", summary="Complete healer + diagnostics status")
+    async def _full_status():
+        h = get_healer()
+        status = h.get_full_status()
+        status["last_diagnostic_report"] = h.get_last_diagnostic_report()
+        status["last_diag_ts"] = (
+            datetime.fromtimestamp(h._last_diag_ts, UTC).isoformat()
+            if h._last_diag_ts else None
+        )
+        return status
 
     return r
 
