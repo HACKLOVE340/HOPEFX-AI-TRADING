@@ -516,6 +516,102 @@ class FillRecorder:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# EMA crossover signal engine — real implementation, no mocks
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TickSignalEngine:
+    """Real-time EMA crossover signal generator.
+
+    Computes fast and slow exponential moving averages on each tick.
+    Emits a signal dict when the fast EMA crosses the slow EMA and the
+    crossover magnitude exceeds *threshold* (expressed as a fraction of price).
+
+    Signal dict keys: type, symbol, direction, confidence, fast_ema,
+    slow_ema, mid, timestamp.
+    """
+
+    def __init__(
+        self,
+        symbol: str,
+        fast_period: int = 9,
+        slow_period: int = 21,
+        threshold: float = 0.0,
+    ) -> None:
+        if fast_period >= slow_period:
+            raise ValueError("fast_period must be less than slow_period")
+        self.symbol = symbol
+        self.fast_period = fast_period
+        self.slow_period = slow_period
+        self.threshold = threshold
+
+        self._fast_k = 2.0 / (fast_period + 1)
+        self._slow_k = 2.0 / (slow_period + 1)
+
+        self._fast_ema: float | None = None
+        self._slow_ema: float | None = None
+        self._prev_fast: float | None = None
+        self._prev_slow: float | None = None
+        self._tick_count: int = 0
+
+    def on_tick(self, mid: float, ts: float | None = None) -> dict | None:
+        """Process one price tick; return a signal dict or None."""
+        import time as _time
+
+        self._tick_count += 1
+
+        if self._fast_ema is None:
+            # Seed both EMAs on the first tick
+            self._fast_ema = mid
+            self._slow_ema = mid
+            return None
+
+        prev_fast = self._fast_ema
+        prev_slow = self._slow_ema
+
+        self._fast_ema = mid * self._fast_k + self._fast_ema * (1 - self._fast_k)
+        self._slow_ema = mid * self._slow_k + self._slow_ema * (1 - self._slow_k)
+
+        # Detect crossover: sign change in (fast - slow)
+        prev_diff = prev_fast - prev_slow
+        curr_diff = self._fast_ema - self._slow_ema
+
+        if prev_diff == 0.0 or curr_diff == 0.0:
+            return None
+        if (prev_diff > 0) == (curr_diff > 0):
+            return None  # No crossover
+
+        direction = "BUY" if curr_diff > 0 else "SELL"
+        # Confidence: magnitude of crossover relative to price, clamped to [0, 1]
+        confidence = min(abs(curr_diff) / max(mid, 1e-9) * 1000, 1.0)
+
+        if confidence < self.threshold:
+            return None
+
+        return {
+            "type": "signal",
+            "symbol": self.symbol,
+            "direction": direction,
+            "confidence": confidence,
+            "fast_ema": self._fast_ema,
+            "slow_ema": self._slow_ema,
+            "mid": mid,
+            "timestamp": ts if ts is not None else _time.time(),
+        }
+
+    def status(self) -> dict:
+        """Return current engine state."""
+        return {
+            "symbol": self.symbol,
+            "tick_count": self._tick_count,
+            "fast_ema": self._fast_ema,
+            "slow_ema": self._slow_ema,
+            "fast_period": self.fast_period,
+            "slow_period": self.slow_period,
+        }
+
+
 # Paper runner — orchestrates all components
 # ─────────────────────────────────────────────────────────────────────────────
 

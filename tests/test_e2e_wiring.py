@@ -62,7 +62,7 @@ def _auth_headers(secret: str = "x" * 48, role: str = "admin") -> dict[str, str]
     import jwt as _jwt
 
     token = _jwt.encode(
-        {"sub": "test-user", "role": role, "exp": int(time.time()) + 3600},
+        {"sub": "test-user", "role": role, "type": "access", "exp": int(time.time()) + 3600},
         secret,
         algorithm="HS256",
     )

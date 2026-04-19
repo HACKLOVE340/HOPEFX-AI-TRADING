@@ -35,7 +35,7 @@ _SECRET = os.environ["SECURITY_JWT_SECRET"]
 
 def _auth(role: str = "admin") -> dict[str, str]:
     token = jwt.encode(
-        {"sub": "test-user", "role": role, "exp": int(time.time()) + 3600},
+        {"sub": "test-user", "role": role, "type": "access", "exp": int(time.time()) + 3600},
         _SECRET,
         algorithm="HS256",
     )

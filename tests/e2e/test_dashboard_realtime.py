@@ -53,7 +53,7 @@ def _get_jwt_secret() -> str:
 
 def _mint_token(role: str = "trader") -> str:
     return jwt.encode(
-        {"sub": "test-trader", "role": role, "exp": int(time.time()) + 3600},
+        {"sub": "test-trader", "role": role, "type": "access", "exp": int(time.time()) + 3600},
         _get_jwt_secret(),
         algorithm="HS256",
     )
