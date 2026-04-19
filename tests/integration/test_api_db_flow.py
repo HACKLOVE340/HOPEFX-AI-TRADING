@@ -190,19 +190,19 @@ class TestTradingFlow:
     """Strategy CRUD: create → read → start → stop → delete."""
 
     def test_list_strategies_returns_list(self, trading_client):
-        r = trading_client.get("/api/trading/strategies")
+        r = trading_client.get("/api/trading/strategies", headers=_auth())
         assert r.status_code == 200
         assert isinstance(r.json(), list)
 
     def test_create_strategy_returns_id(self, trading_client):
         payload = {"name": "int-test-ma", "symbol": "XAUUSD"}
-        r = trading_client.post("/api/trading/strategies", json=payload)
+        r = trading_client.post("/api/trading/strategies", json=payload, headers=_auth())
         assert r.status_code in (200, 201), r.text
         body = r.json()
         assert "id" in body or "strategy_id" in body
 
     def test_get_nonexistent_strategy_returns_404(self, trading_client):
-        r = trading_client.get("/api/trading/strategies/does-not-exist-xyz")
+        r = trading_client.get("/api/trading/strategies/does-not-exist-xyz", headers=_auth())
         assert r.status_code == 404
 
     def test_position_size_calculation(self, trading_client):
@@ -211,17 +211,17 @@ class TestTradingFlow:
             "stop_loss_price": 2030.0,
             "confidence": 0.8,
         }
-        r = trading_client.post("/api/trading/position-size", json=payload)
+        r = trading_client.post("/api/trading/position-size", json=payload, headers=_auth())
         assert r.status_code == 200
         body = r.json()
         assert "recommended_size" in body or "size" in body or "position_size" in body
 
     def test_risk_metrics_endpoint_responds(self, trading_client):
-        r = trading_client.get("/api/trading/risk-metrics")
+        r = trading_client.get("/api/trading/risk-metrics", headers=_auth())
         assert r.status_code == 200
 
     def test_performance_summary_endpoint_responds(self, trading_client):
-        r = trading_client.get("/api/trading/performance/summary")
+        r = trading_client.get("/api/trading/performance/summary", headers=_auth())
         assert r.status_code == 200
 
 

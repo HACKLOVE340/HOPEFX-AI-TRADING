@@ -40,6 +40,9 @@ os.environ.setdefault(
     "SECURITY_JWT_SECRET",
     "test-only-jwt-secret-key-minimum-32-chars!!",
 )
+# Disable CSRF in integration tests — these tests verify auth/role enforcement,
+# not CSRF protection. CSRF is tested separately in test_csrf.py.
+os.environ.setdefault("CSRF_PROTECTION", "false")
 
 try:
     from fastapi.testclient import TestClient

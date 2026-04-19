@@ -223,10 +223,17 @@ class TestFallbackChain:
         assert len(result) == 1
 
     @pytest.mark.asyncio
-    async def test_production_raises_when_all_fail_and_cache_empty(self):
-        """RuntimeError is raised in production when all sources fail and cache is empty."""
+    async def test_production_logs_critical_when_all_fail_and_cache_empty(self):
+        """In production, CRITICAL is logged and [] is returned when all sources fail.
+
+        RuntimeError is no longer raised — doing so in an async poll task silently
+        kills the task. The system logs at CRITICAL level and returns [] so callers
+        can continue operating.
+        """
         provider = _make_provider()
         provider._cache = {}
+
+        import logging
 
         with (
             patch.object(provider, "_fetch_from_worldmonitor", new=AsyncMock(return_value=[])),
@@ -234,9 +241,15 @@ class TestFallbackChain:
             patch.object(provider, "_fetch_events_from_acled", new=AsyncMock(return_value=[])),
             patch.object(provider, "_fetch_events_from_reliefweb", new=AsyncMock(return_value=[])),
             patch.dict("os.environ", {"APP_ENV": "production"}, clear=False),
+            patch.object(
+                logging.getLogger("news.geopolitical_risk"), "critical"
+            ) as mock_critical,
         ):
-            with pytest.raises(RuntimeError, match="All geopolitical data sources unreachable"):
-                await provider._fetch_events_from_source()
+            result = await provider._fetch_events_from_source()
+
+        assert result == [], "Expected empty list when all sources fail in production"
+        mock_critical.assert_called_once()
+        assert "unavailable" in mock_critical.call_args[0][0].lower()
 
 
 # ---------------------------------------------------------------------------

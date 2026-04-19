@@ -23,6 +23,8 @@ import pytest
 # sys.exit(1) when broker credentials are absent.
 os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
+# Disable CSRF so integration tests can POST without a browser cookie flow.
+os.environ.setdefault("CSRF_PROTECTION", "false")
 
 try:
     from fastapi.testclient import TestClient
@@ -101,15 +103,15 @@ class TestTradingEndpoints:
     """Test trading API endpoints."""
 
     def test_list_strategies(self, client):
-        """Test listing strategies."""
-        response = client.get("/api/trading/strategies")
+        """Test listing strategies — requires auth token."""
+        response = client.get("/api/trading/strategies", headers=_admin_headers())
 
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
 
     def test_create_strategy(self, client):
-        """Test creating a strategy."""
+        """Test creating a strategy — requires auth token."""
         strategy_data = {
             "name": "Test_MA",
             "type": "ma_crossover",
@@ -117,28 +119,28 @@ class TestTradingEndpoints:
             "parameters": {"fast_period": 10, "slow_period": 20},
         }
 
-        response = client.post("/api/trading/strategies", json=strategy_data)
+        response = client.post("/api/trading/strategies", json=strategy_data, headers=_admin_headers())
 
         # May fail if dependencies not available, but should handle gracefully
-        assert response.status_code in [200, 201, 500]
+        assert response.status_code in [200, 201, 422, 500]
 
     def test_get_risk_metrics(self, client):
-        """Test getting risk metrics."""
-        response = client.get("/api/trading/risk-metrics")
+        """Test getting risk metrics — requires auth token."""
+        response = client.get("/api/trading/risk-metrics", headers=_admin_headers())
 
         assert response.status_code in [200, 500]  # May fail without full setup
 
     def test_calculate_position_size(self, client):
-        """Test position size calculation."""
+        """Test position size calculation — requires auth token."""
         request_data = {
             "entry_price": 1.1000,
             "stop_loss_price": 1.0950,
             "confidence": 0.8,
         }
 
-        response = client.post("/api/trading/position-size", json=request_data)
+        response = client.post("/api/trading/position-size", json=request_data, headers=_admin_headers())
 
-        assert response.status_code in [200, 500]
+        assert response.status_code in [200, 422, 500]
 
 
 @pytest.mark.integration

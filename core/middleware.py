@@ -241,8 +241,12 @@ _CSRF_EXEMPT_PREFIXES: tuple[str, ...] = (
 # Methods that mutate state and require CSRF validation
 _CSRF_PROTECTED_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
-# Disable CSRF in test/CI environments where no browser is involved
-_CSRF_ENABLED: bool = os.getenv("CSRF_PROTECTION", "true").lower() == "true"
+# Disable CSRF in test/CI environments where no browser is involved.
+# Evaluated at request time (not module import time) so that test modules
+# can set CSRF_PROTECTION=false after the module is imported and have it
+# take effect without reloading the module.
+def _csrf_enabled() -> bool:
+    return os.getenv("CSRF_PROTECTION", "true").lower() not in ("false", "0", "no")
 
 
 class CSRFMiddleware(BaseHTTPMiddleware):
@@ -263,7 +267,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
-        if not _CSRF_ENABLED:
+        if not _csrf_enabled():
             return await call_next(request)
 
         if request.method not in _CSRF_PROTECTED_METHODS:
@@ -309,7 +313,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
 
 def setup_csrf_middleware(app: FastAPI) -> None:
     """Add CSRF double-submit cookie middleware."""
-    if _CSRF_ENABLED:
+    if _csrf_enabled():
         app.add_middleware(CSRFMiddleware)
         logger.info("CSRF middleware enabled (cookie=%s header=%s)", _CSRF_COOKIE, _CSRF_HEADER)
     else:
