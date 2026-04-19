@@ -583,21 +583,17 @@ class GeopoliticalRiskProvider:
             return cached
 
         # ── 6. Graceful degradation ────────────────────────────────────────────
-        if _is_production:
-            raise RuntimeError(
-                "All geopolitical data sources unreachable and cache is empty. "
-                "Ensure outbound HTTPS access to api.gdeltproject.org, "
-                "api.acleddata.com, or api.reliefweb.int. "
-                "World Monitor (self-hosted): https://worldmonitor.app/"
-            )
-        # Warn once — subsequent identical failures are downgraded to DEBUG so
-        # the log is not flooded every poll interval.
+        # Never raise RuntimeError — doing so in an async poll task silently
+        # kills the task and leaves the system without geopolitical data.
+        # Log at CRITICAL in production so operators are alerted, but always
+        # return an empty list so callers can continue operating.
+        _log_fn = logger.critical if _is_production else logger.warning
         if not self._all_sources_warned:
-            logger.warning(
+            _log_fn(
                 "All geopolitical data sources unavailable and cache empty — "
                 "returning no events. Ensure outbound HTTPS access to "
                 "api.gdeltproject.org, api.acleddata.com, or api.reliefweb.int. "
-                "World Monitor: https://worldmonitor.app/"
+                "World Monitor: https://worldmonitor.app/."
             )
             self._all_sources_warned = True
         else:
