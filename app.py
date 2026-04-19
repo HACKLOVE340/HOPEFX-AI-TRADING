@@ -793,21 +793,26 @@ register_page_routes(app)  # mounts React dashboard LAST
 
 def run_server():
     """Run the API server."""
-    # Default to localhost for security; set API_HOST=0.0.0.0 in production.
-    host = os.getenv("API_HOST", "127.0.0.1")
+    # Bind to all interfaces so the Gitpod preview tunnel can reach the server.
+    # Override with API_HOST env var if needed.
+    host = os.getenv("API_HOST", "0.0.0.0")
     port = int(os.getenv("API_PORT", "8000"))
-    reload = os.getenv("ENVIRONMENT", "development") == "development"
+    # Reload only when explicitly requested — the file watcher adds ~15s to
+    # startup time by scanning the entire project tree, which causes the
+    # Gitpod preview tunnel to time out before the server is ready.
+    reload = os.getenv("UVICORN_RELOAD", "false").lower() in ("1", "true", "yes")
 
     # On Windows, uvicorn must use a single worker with SelectorEventLoop.
     # Multiple workers via fork() are not supported on Windows.
-    if platform.system() == "Windows":
+    # Reload mode also requires a single worker.
+    if platform.system() == "Windows" or reload:
         workers = 1
-        loop = "asyncio"
+        loop = "asyncio" if platform.system() == "Windows" else "auto"
     else:
-        workers = int(os.getenv("API_WORKERS", "4"))
+        workers = int(os.getenv("API_WORKERS", "1"))
         loop = "auto"
 
-    logger.info("Starting API server on %s:%s (workers=%d)", host, port, workers)
+    logger.info("Starting API server on %s:%s (workers=%d reload=%s)", host, port, workers, reload)
 
     uvicorn.run(
         "app:app",
