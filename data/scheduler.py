@@ -514,13 +514,39 @@ async def _update_timeframe(
         logger.info("No bars fetched for %s/%s", symbol, granularity)
         return 0
 
-    # Validate before persisting
+    # Validate before persisting.
+    # Bars with close/open slightly outside [low, high] due to yfinance
+    # floating-point precision artifacts are clamped rather than dropped.
+    # Bars with structural errors (high < low, negative prices) are dropped.
     try:
         from data.validator import DataValidator
 
         validator = DataValidator(symbol=symbol.replace("_", ""))
         valid_bars: ClassVar[list[dict]] = []
         for i, bar in enumerate(bars):
+            # Pre-clamp close and open to [low, high] when within 3% of the
+            # price level.  yfinance gold futures data has a known artifact
+            # where settlement close and intraday OHLC come from different CME
+            # feeds and can disagree by up to ~3%.  Clamping preserves the bar
+            # rather than dropping it; violations beyond 3% are left for the
+            # validator to reject as genuine data corruption.
+            try:
+                _l = float(bar["low"])
+                _h = float(bar["high"])
+                if _h >= _l:
+                    _mid = (_h + _l) / 2
+                    _tol = _mid * 0.03  # 3% of price level
+                    _c = float(bar["close"])
+                    _o = float(bar["open"])
+                    if _l - _tol <= _c <= _h + _tol and not (_l <= _c <= _h):
+                        bar = dict(bar)
+                        bar["close"] = max(_l, min(_h, _c))
+                    if _l - _tol <= _o <= _h + _tol and not (_l <= _o <= _h):
+                        bar = dict(bar)
+                        bar["open"] = max(_l, min(_h, _o))
+            except (KeyError, TypeError, ValueError):
+                pass
+
             result = validator.validate_bar(bar)
             if result.ok:
                 valid_bars.append(bar)
