@@ -93,6 +93,14 @@ class YahooMacroFeed:
             logger.warning("yfinance not installed — Yahoo macro feed disabled. Install with: pip install yfinance")
             return {}
 
+        # Suppress yfinance "possibly delisted" / roll-window warnings so
+        # CL=F roll-window noise doesn't pollute the log at ERROR level.
+        try:
+            from utils.yfinance_compat import suppress_yfinance_warnings
+            suppress_yfinance_warnings()
+        except ImportError:
+            pass
+
         start = (datetime.now(UTC) - timedelta(days=365 * years)).strftime("%Y-%m-%d")
         results: dict[str, pd.Series] = {}
 
