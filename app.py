@@ -490,6 +490,15 @@ async def startup_event():
         _push_state_to_api_modules(app_state)
         _tasks_done.append("component_registry")
 
+        # Wire the global health checker to the running app so /api/status/json
+        # can report real component states instead of "not configured".
+        try:
+            from infrastructure.health import get_health_checker as _get_hc
+            _get_hc(app)
+            logger.info("Health checker wired to app")
+        except Exception as _hc_wire_err:
+            logger.warning("Health checker wiring failed (non-fatal): %s", _hc_wire_err)
+
         if getattr(app_state, "alert_engine", None) is not None:
             app.state.alert_engine = app_state.alert_engine
 

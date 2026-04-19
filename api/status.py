@@ -457,7 +457,7 @@ async def _run_checks() -> dict[str, Any]:
             result[check.name] = {
                 "status": check.status.value,
                 "message": check.message or "",
-                "response_time_ms": round(check.response_time * 1000, 1) if check.response_time else None,
+                "response_time_ms": round(check.response_time_ms, 1) if check.response_time_ms else None,
             }
         return result
     except Exception as exc:
