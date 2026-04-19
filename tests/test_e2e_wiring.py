@@ -55,6 +55,20 @@ def _set_jwt(monkeypatch, value: str = "x" * 48) -> None:
     monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
 
 
+def _auth_headers(secret: str = "x" * 48, role: str = "admin") -> dict[str, str]:
+    """Mint a short-lived JWT for test requests."""
+    import time
+
+    import jwt as _jwt
+
+    token = _jwt.encode(
+        {"sub": "test-user", "role": role, "exp": int(time.time()) + 3600},
+        secret,
+        algorithm="HS256",
+    )
+    return {"Authorization": f"Bearer {token}"}
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # 1-4  Startup validator
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -210,7 +224,8 @@ class TestMacroStoreWiring:
 
     def test_macro_store_api_endpoint(self, monkeypatch):
         """GET /api/macro/store returns store state via TestClient."""
-        _set_jwt(monkeypatch)
+        secret = "x" * 48
+        _set_jwt(monkeypatch, secret)
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
@@ -227,7 +242,7 @@ class TestMacroStoreWiring:
 
         try:
             client = TestClient(app)
-            resp = client.get("/api/macro/store")
+            resp = client.get("/api/macro/store", headers=_auth_headers(secret))
             assert resp.status_code == 200
             data = resp.json()
             assert data["status"] == "ok"
@@ -238,7 +253,8 @@ class TestMacroStoreWiring:
 
     def test_macro_store_update_endpoint(self, monkeypatch):
         """POST /api/macro/store/update upserts a value."""
-        _set_jwt(monkeypatch)
+        secret = "x" * 48
+        _set_jwt(monkeypatch, secret)
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
@@ -261,6 +277,7 @@ class TestMacroStoreWiring:
                     "date": "2026-01-02",
                     "value": 4.25,
                 },
+                headers=_auth_headers(secret),
             )
             assert resp.status_code == 200
             data = resp.json()
@@ -272,7 +289,8 @@ class TestMacroStoreWiring:
 
     def test_macro_features_prefers_store(self, monkeypatch):
         """GET /api/macro/features returns store values when populated."""
-        _set_jwt(monkeypatch)
+        secret = "x" * 48
+        _set_jwt(monkeypatch, secret)
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
@@ -290,7 +308,7 @@ class TestMacroStoreWiring:
 
         try:
             client = TestClient(app)
-            resp = client.get("/api/macro/features")
+            resp = client.get("/api/macro/features", headers=_auth_headers(secret))
             assert resp.status_code == 200
             data = resp.json()
             assert "macro_dxy" in data

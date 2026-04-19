@@ -17,9 +17,29 @@ Verifies that MacroStore → live inference wiring is correct:
 
 from __future__ import annotations
 
+import os
+import time
+
+import jwt
 import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
+
+# Must be set before any api.auth import so JWT verification uses this secret.
+os.environ.setdefault("APP_ENV", "test")
+os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
+os.environ.setdefault("CSRF_PROTECTION", "false")
+
+_SECRET = os.environ["SECURITY_JWT_SECRET"]
+
+
+def _auth(role: str = "admin") -> dict[str, str]:
+    token = jwt.encode(
+        {"sub": "test-user", "role": role, "exp": int(time.time()) + 3600},
+        _SECRET,
+        algorithm="HS256",
+    )
+    return {"Authorization": f"Bearer {token}"}
 
 # ── unit: MacroStore ──────────────────────────────────────────────────────────
 
@@ -111,7 +131,7 @@ def client():
 
 
 def test_macro_store_endpoint_returns_ok(client):
-    resp = client.get("/api/macro/store")
+    resp = client.get("/api/macro/store", headers=_auth())
     assert resp.status_code == 200
     data = resp.json()
     assert "status" in data
@@ -122,6 +142,7 @@ def test_macro_store_update_endpoint(client):
     resp = client.post(
         "/api/macro/store/update",
         json={"series_name": "vix", "date": "2026-03-26", "value": 18.5},
+        headers=_auth(),
     )
     assert resp.status_code == 200
     data = resp.json()
@@ -135,8 +156,9 @@ def test_macro_features_returns_dict(client):
     client.post(
         "/api/macro/store/update",
         json={"series_name": "dxy", "date": "2026-03-26", "value": 104.1},
+        headers=_auth(),
     )
-    resp = client.get("/api/macro/features")
+    resp = client.get("/api/macro/features", headers=_auth())
     assert resp.status_code == 200
     data = resp.json()
     # At least one macro_ key should be present

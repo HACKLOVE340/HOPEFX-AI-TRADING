@@ -28,6 +28,8 @@ import pytest
 
 os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
+# Disable CSRF so integration tests can POST without a browser cookie flow.
+os.environ.setdefault("CSRF_PROTECTION", "false")
 
 try:
     from fastapi.testclient import TestClient
