@@ -694,16 +694,27 @@ class AuthService:
         from database.user_models import User
 
         with self._sf() as session:
-            return session.query(User).filter_by(id=user_id).first()
+            user = session.query(User).filter_by(id=user_id).first()
+            if user is not None:
+                # Expunge so the object can be accessed after the session closes
+                # without triggering DetachedInstanceError on column attributes.
+                session.expunge(user)
+            return user
 
     def get_user_by_email(self, email: str):
         from database.user_models import User
 
         with self._sf() as session:
-            return session.query(User).filter_by(email=email.lower().strip()).first()
+            user = session.query(User).filter_by(email=email.lower().strip()).first()
+            if user is not None:
+                session.expunge(user)
+            return user
 
     def get_user_by_username(self, username: str):
         from database.user_models import User
 
         with self._sf() as session:
-            return session.query(User).filter_by(username=username.strip()).first()
+            user = session.query(User).filter_by(username=username.strip()).first()
+            if user is not None:
+                session.expunge(user)
+            return user
