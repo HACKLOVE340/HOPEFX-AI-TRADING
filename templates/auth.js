@@ -217,7 +217,9 @@ function requireRole(requiredRole) {
         // Re-check role after refresh
         const freshRole = tokenRole(getAccessToken());
         if ((_ROLE_RANK[freshRole] ?? 0) < (_ROLE_RANK[requiredRole] ?? 99)) {
-          window.location.replace('/dashboard');
+          // Redirect to the user's own landing page (not /login — they are authenticated)
+          if (freshRole === 'admin') { window.location.replace('/audit'); }
+          else { window.location.replace('/dashboard'); }
         } else {
           scheduleRefresh();
         }
@@ -230,7 +232,9 @@ function requireRole(requiredRole) {
 
   const role = tokenRole(token);
   if ((_ROLE_RANK[role] ?? 0) < (_ROLE_RANK[requiredRole] ?? 99)) {
-    // Authenticated but insufficient role — send to dashboard, not login
+    // Authenticated but insufficient role — redirect to the user's own landing
+    // page rather than /login (they are logged in, just not privileged enough).
+    if (role === 'admin') { window.location.replace('/audit'); return; }
     window.location.replace('/dashboard');
     return;
   }
@@ -240,13 +244,23 @@ function requireRole(requiredRole) {
 
 // ── Role-based redirect (used by login page) ──────────────────────────────────
 
+/**
+ * Redirect to the correct post-login landing page for the token's role.
+ *
+ * Role → destination mapping (must stay in sync with React Login.tsx
+ * resolveDestination() and the React Router in App.tsx):
+ *
+ *   superadmin → /superadmin   (SuperAdmin React dashboard)
+ *   admin      → /audit        (Admin audit log — AdminGuard-protected React page)
+ *   trader/user → /dashboard   (Trader React dashboard)
+ *
+ * If an explicit `next` URL is provided (from ?next= query param) it is used
+ * instead, so users land back on the page they were trying to reach.
+ */
 function roleRedirect(token, explicitNext) {
   if (explicitNext) { window.location.replace(explicitNext); return; }
   const role = tokenRole(token);
-  // superadmin and admin both land on /dashboard (the React app).
-  // superadmin gets the SuperAdmin dashboard link in the sidebar.
-  // /api/superadmin/ is a backend API route, not a frontend page.
   if (role === 'superadmin') { window.location.replace('/superadmin'); return; }
-  if (role === 'admin')      { window.location.replace('/dashboard');  return; }
+  if (role === 'admin')      { window.location.replace('/audit');      return; }
   window.location.replace('/dashboard');
 }
