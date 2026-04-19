@@ -270,14 +270,78 @@
         const API_BASE = window.location.origin;
 
         // ── Auth helpers ──────────────────────────────────────────────────
+        // The React app persists the JWT inside the Zustand store blob under
+        // the key 'hopefx-store'. On initial login the token is NOT written
+        // to 'hopefx_access_token' — it only lands there after a silent
+        // refresh. Read from the Zustand blob directly so the token is always
+        // available immediately after login.
         function getToken() {
+            // Primary: Zustand persist blob (set on every login).
+            try {
+                const store = JSON.parse(localStorage.getItem('hopefx-store') || '{}');
+                const tok = store?.state?.token;
+                if (tok) return tok;
+            } catch (_) { /* ignore parse errors */ }
+            // Fallback: raw key written by silent-refresh path in useApi.ts.
             return localStorage.getItem('hopefx_access_token') || '';
         }
 
-        function authHeaders(extra) {
+        // ── CSRF helpers ──────────────────────────────────────────────────
+        // The backend requires X-CSRF-Token on every POST/PUT/PATCH/DELETE.
+        // We fetch the token once on page load and cache it in memory.
+        // The server also sets a SameSite=Strict cookie (hopefx_csrf) which
+        // we can read as a fallback if the fetch fails.
+        const CSRF_HEADER  = 'X-CSRF-Token';
+        const CSRF_COOKIE  = 'hopefx_csrf';
+        const CSRF_TTL_MS  = 55 * 60 * 1000; // 55 min — before server 1-hour TTL
+        let _csrfToken     = null;
+        let _csrfFetchedAt = 0;
+        let _csrfPromise   = null;
+
+        function readCsrfCookie() {
+            const match = document.cookie.split(';')
+                .map(c => c.trim())
+                .find(c => c.startsWith(CSRF_COOKIE + '='));
+            return match ? decodeURIComponent(match.slice(CSRF_COOKIE.length + 1)) : null;
+        }
+
+        function fetchCsrfToken() {
+            if (_csrfPromise) return _csrfPromise;
+            _csrfPromise = fetch(`${API_BASE}/api/auth/csrf-token`, { credentials: 'include' })
+                .then(r => r.ok ? r.json() : Promise.reject(r.status))
+                .then(data => {
+                    _csrfToken     = data.csrf_token || readCsrfCookie();
+                    _csrfFetchedAt = Date.now();
+                    return _csrfToken;
+                })
+                .catch(() => {
+                    _csrfToken = readCsrfCookie();
+                    return _csrfToken;
+                })
+                .finally(() => { _csrfPromise = null; });
+            return _csrfPromise;
+        }
+
+        async function getCsrfToken() {
+            const cookie = readCsrfCookie();
+            if (!cookie) { _csrfToken = null; _csrfFetchedAt = 0; }
+            if (_csrfToken && cookie === _csrfToken && Date.now() - _csrfFetchedAt < CSRF_TTL_MS) {
+                return _csrfToken;
+            }
+            return fetchCsrfToken();
+        }
+
+        async function authHeaders(extra) {
             const h = Object.assign({ 'Content-Type': 'application/json' }, extra || {});
             const tok = getToken();
             if (tok) h['Authorization'] = 'Bearer ' + tok;
+            return h;
+        }
+
+        async function mutationHeaders(extra) {
+            const h = await authHeaders(extra);
+            const csrf = await getCsrfToken();
+            if (csrf) h[CSRF_HEADER] = csrf;
             return h;
         }
 
@@ -286,9 +350,12 @@
             window.location.replace('/login?next=' + encodeURIComponent(window.location.pathname));
         }
 
+        // Pre-fetch CSRF token on page load so the first order doesn't wait.
+        fetchCsrfToken();
+
         async function fetchPrices() {
             try {
-                const res = await fetch(`${API_BASE}/api/trading/prices`, { headers: authHeaders() });
+                const res = await fetch(`${API_BASE}/api/trading/prices`, { headers: await authHeaders() });
                 const prices = await res.json();
                 updatePrices(prices);
             } catch (e) {
@@ -298,7 +365,7 @@
 
         async function fetchAccount() {
             try {
-                const res = await fetch(`${API_BASE}/api/trading/account`, { headers: authHeaders() });
+                const res = await fetch(`${API_BASE}/api/trading/account`, { headers: await authHeaders() });
                 const account = await res.json();
                 updateAccount(account);
             } catch (e) {
@@ -308,7 +375,7 @@
 
         async function fetchPositions() {
             try {
-                const res = await fetch(`${API_BASE}/api/trading/positions`, { headers: authHeaders() });
+                const res = await fetch(`${API_BASE}/api/trading/positions`, { headers: await authHeaders() });
                 const positions = await res.json();
                 updatePositions(positions);
             } catch (e) {
@@ -372,20 +439,20 @@
         }
 
         async function placeOrder(side) {
-            const symbol = document.getElementById('symbol').value;
-            const quantity = parseFloat(document.getElementById('quantity').value);
+            const symbol    = document.getElementById('symbol').value;
+            const quantity  = parseFloat(document.getElementById('quantity').value);
             const orderType = document.getElementById('order-type').value;
 
             try {
                 const res = await fetch(`${API_BASE}/api/trading/order`, {
                     method: 'POST',
-                    headers: authHeaders(),
+                    headers: await mutationHeaders(),
                     body: JSON.stringify({
-                        symbol: symbol,
-                        side: side,
-                        quantity: quantity,
-                        order_type: orderType
-                    })
+                        symbol:     symbol,
+                        side:       side,
+                        quantity:   quantity,
+                        order_type: orderType,
+                    }),
                 });
 
                 const result = await res.json();
@@ -394,7 +461,7 @@
                     fetchPositions();
                     fetchAccount();
                 } else {
-                    alert('Order failed: ' + result.detail);
+                    alert('Order failed: ' + (result.detail || JSON.stringify(result)));
                 }
             } catch (e) {
                 alert('Order error: ' + e.message);
@@ -404,13 +471,16 @@
         async function closePosition(positionId) {
             try {
                 const res = await fetch(`${API_BASE}/api/trading/positions/${positionId}`, {
-                    method: 'DELETE',
-                    headers: authHeaders(),
+                    method:  'DELETE',
+                    headers: await mutationHeaders(),
                 });
                 if (res.ok) {
                     logActivity(`Position closed: ${positionId}`);
                     fetchPositions();
                     fetchAccount();
+                } else {
+                    const result = await res.json().catch(() => ({}));
+                    alert('Close failed: ' + (result.detail || res.status));
                 }
             } catch (e) {
                 alert('Close error: ' + e.message);
@@ -422,12 +492,15 @@
 
             try {
                 const res = await fetch(`${API_BASE}/api/trading/emergency-stop`, {
-                    method: 'POST',
-                    headers: authHeaders(),
+                    method:  'POST',
+                    headers: await mutationHeaders(),
                 });
                 if (res.ok) {
                     alert('Emergency stop triggered!');
                     fetchPositions();
+                } else {
+                    const result = await res.json().catch(() => ({}));
+                    alert('Emergency stop failed: ' + (result.detail || res.status));
                 }
             } catch (e) {
                 alert('Emergency stop failed: ' + e.message);
