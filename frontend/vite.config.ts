@@ -58,6 +58,10 @@ export default defineConfig({
   build: {
     outDir: '../static',
     emptyOutDir: true,
+    // Disable crossorigin attributes on script/link tags — all assets are
+    // same-origin so crossorigin is unnecessary and causes module load failures
+    // when served behind a reverse proxy (e.g. Gitpod preview tunnel).
+    modulePreload: { polyfill: false },
     // Vite 8 / Rolldown hoists shared modules (panels, UI primitives, store)
     // into the first chunk that imports them. The app-account chunk includes
     // the full shared component library because SubAccounts.tsx imports from
