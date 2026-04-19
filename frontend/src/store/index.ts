@@ -306,6 +306,10 @@ export const useStore = create<AppStore>()(
           token:           state.token,
           user:            state.user,
           isAuthenticated: state.isAuthenticated,
+          // Persist plan so SubscriptionGate doesn't flash the upgrade wall
+          // on every page load while usePlan waits for the billing API.
+          // usePlan will overwrite this with the authoritative server value.
+          plan:            state.plan,
         }),
         onRehydrateStorage: () => () => {
           // Called once localStorage rehydration is complete.

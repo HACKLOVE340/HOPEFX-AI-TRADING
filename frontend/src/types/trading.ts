@@ -271,10 +271,17 @@ export interface OrderBook {
 // ── User ──────────────────────────────────────────────────────────────────────
 
 export interface User {
-  readonly id:       string;
-  readonly email:    string;
-  readonly username: string;
-  readonly role:     UserRole;
+  readonly id:               string;
+  readonly email:            string;
+  readonly username:         string;
+  readonly role:             UserRole;
+  // Fields returned by /api/auth/login and /api/auth/me
+  readonly kyc_status?:      string;
+  readonly totp_enabled?:    boolean;
+  readonly status?:          string;
+  readonly is_email_verified?: boolean;
+  readonly created_at?:      string;
+  readonly last_login_at?:   string;
 }
 
 // ── WebSocket message envelope ────────────────────────────────────────────────

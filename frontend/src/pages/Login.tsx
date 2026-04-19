@@ -82,12 +82,27 @@ const Login: React.FC = () => {
   }, []);
 
   function resolveDestination(role: UserRole): string {
+    // If the user was redirected here from a protected page, send them back —
+    // but only if their role actually has access to that page.
     if (requestedFrom && requestedFrom !== '/login') {
-      const isSuperAdmin = requestedFrom.startsWith('/superadmin');
-      if (!isSuperAdmin || role === 'superadmin') return requestedFrom;
+      const isSuperAdminRoute = requestedFrom.startsWith('/superadmin');
+      const isAdminRoute      = ['/audit', '/security', '/auto-heal'].some(
+        (p) => requestedFrom.startsWith(p),
+      );
+
+      const canAccess =
+        (isSuperAdminRoute && role === 'superadmin') ||
+        (isAdminRoute      && (role === 'admin' || role === 'superadmin')) ||
+        (!isSuperAdminRoute && !isAdminRoute);
+
+      if (canAccess) return requestedFrom;
     }
+
+    // Default landing page per role.
+    // /admin is a <Navigate to="/superadmin"> in App.tsx — admins must NOT be
+    // sent there or SuperAdminGuard will block them with "Access Denied".
     if (role === 'superadmin') return '/superadmin';
-    if (role === 'admin')      return '/admin';
+    if (role === 'admin')      return '/dashboard';
     return '/dashboard';
   }
 

@@ -20,7 +20,23 @@ const SubscriptionGate: React.FC<Props> = ({ featureKey, children }) => {
   const plan    = useStore(selectPlan);
   const navigate = useNavigate();
 
-  if (!user) return null;
+  // user is null while AuthGuard is syncing the role from /api/auth/me.
+  // Return a spinner rather than null (blank) or the upgrade wall (wrong role).
+  if (!user) {
+    return (
+      <div style={{
+        minHeight: '60vh', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', background: '#0f172a',
+      }}>
+        <div style={{
+          width: 28, height: 28, borderRadius: '50%',
+          border: '3px solid #1e293b', borderTopColor: '#3b82f6',
+          animation: 'spin 0.7s linear infinite',
+        }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
 
   if (hasFeatureAccess(user.role, plan, featureKey)) {
     return <>{children}</>;

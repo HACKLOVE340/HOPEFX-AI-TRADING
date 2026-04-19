@@ -33,30 +33,32 @@ export const ROLE_RANK: Record<UserRole, number> = {
   superadmin: 3,
 };
 
-/** Features gated by subscription plan */
+/** Features gated by subscription plan.
+ *
+ * Every featureKey used in App.tsx gated() must appear here.
+ * Missing keys fall through to 'free' (safe default) but are listed
+ * explicitly so the gate is intentional and auditable.
+ */
 export const PLAN_FEATURES: Record<string, Plan> = {
-  // Free — available to all authenticated users
+  // ── Free — available to all authenticated users ───────────────────────────
   dashboard:    'free',
-  trade:        'free',   // basic order entry / paper trading terminal
-  portfolio:    'free',   // portfolio overview
+  trade:        'free',   // paper trading terminal (paper mode always available)
+  portfolio:    'free',
   watchlist:    'free',
   calendar:     'free',
-  leaderboard:  'free',
-  marketplace:  'free',
-  affiliate:    'free',
   profile:      'free',
   settings:     'free',
-  status:       'free',
 
-  // Starter
+  // ── Starter ───────────────────────────────────────────────────────────────
   journal:      'starter',
   performance:  'starter',
   alerts:       'starter',
   'risk-calc':  'starter',
   wallet:       'starter',
 
-  // Pro
-  trading:        'pro',   // advanced charting terminal
+  // ── Pro ───────────────────────────────────────────────────────────────────
+  trading:        'pro',   // advanced AI charting terminal
+  geopolitical:   'pro',   // geopolitical risk intelligence + World Monitor map
   'ai-strategy':  'pro',
   'copy-trading': 'pro',
   'prop-firm':    'pro',
@@ -68,9 +70,8 @@ export const PLAN_FEATURES: Record<string, Plan> = {
   nuclear:        'pro',
   feed:           'pro',
 
-  // Elite
+  // ── Elite ─────────────────────────────────────────────────────────────────
   'sub-accounts': 'elite',
-  whitelabel:     'elite',
 };
 
 /** Routes that require admin or above */
