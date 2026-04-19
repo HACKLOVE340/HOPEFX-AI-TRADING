@@ -124,6 +124,16 @@ _FILLS_RING_SIZE = int(os.getenv("STANDBY_FILLS_RING_SIZE", "500"))
 _POD_ID = os.getenv("STANDBY_POD_ID", socket.gethostname())
 _ROLE_ENV = os.getenv("STANDBY_ROLE", "auto").lower()
 
+
+def _decode(value: "str | bytes | None") -> "str | None":
+    """Return a str from a Redis value regardless of decode_responses setting."""
+    if value is None:
+        return None
+    if isinstance(value, bytes):
+        return value.decode()
+    return value  # already str when decode_responses=True
+
+
 # ── Redis key constants ───────────────────────────────────────────────────────
 _KEY_LEADER = "hopefx:leader"
 _KEY_HEARTBEAT = f"hopefx:heartbeat:{_POD_ID}"
@@ -349,7 +359,7 @@ class HotStandbyReplicator:
             try:
                 # GETSET pattern: only refresh if we still own the key
                 current = await self._redis.get(_KEY_LEADER)
-                if current and current.decode() == self._pod_id:
+                if current and _decode(current) == self._pod_id:
                     await self._redis.pexpire(_KEY_LEADER, int(_LEADER_TTL_S * 1000))
                 else:
                     # Lost the leader key — demote
@@ -387,7 +397,7 @@ class HotStandbyReplicator:
                     self._stats.missed_heartbeats += 1
                     age_s = _HEARTBEAT_INTERVAL_S * self._stats.missed_heartbeats
                 else:
-                    last_ts = float(raw.decode())
+                    last_ts = float(_decode(raw))
                     age_s = time.time() - last_ts
                     if age_s < _HEARTBEAT_INTERVAL_S * 1.5:
                         self._stats.missed_heartbeats = 0
@@ -446,7 +456,7 @@ class HotStandbyReplicator:
             if initial:
                 # Key exists — check if it's ours (restart scenario)
                 current = await self._redis.get(_KEY_LEADER)
-                if current and current.decode() == self._pod_id:
+                if current and _decode(current) == self._pod_id:
                     # We already own it (e.g. pod restart with same hostname)
                     await self._redis.pexpire(_KEY_LEADER, ttl_ms)
                     return True
@@ -551,10 +561,10 @@ class HotStandbyReplicator:
                 logger.warning("HotStandbyReplicator: no state snapshot in Redis — starting with empty state")
                 return None
 
-            positions = json.loads(pos_raw.decode())
-            equity_data = json.loads(equity_raw.decode())
-            fills = json.loads(fills_raw.decode()) if fills_raw else []
-            version = int(ver_raw.decode()) if ver_raw else 0
+            positions = json.loads(_decode(pos_raw))
+            equity_data = json.loads(_decode(equity_raw))
+            fills = json.loads(_decode(fills_raw)) if fills_raw else []
+            version = int(_decode(ver_raw)) if ver_raw else 0
 
             snapshot = StateSnapshot(
                 positions=positions,

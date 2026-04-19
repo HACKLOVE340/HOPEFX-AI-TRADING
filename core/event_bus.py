@@ -44,6 +44,7 @@ from pathlib import Path
 from typing import Any
 
 import redis.asyncio as aioredis  # redis-py >= 4.2  # pylint: disable=no-name-in-module
+import redis.exceptions as _redis_exc
 
 logger = logging.getLogger(__name__)
 
@@ -279,7 +280,42 @@ def _make_redis() -> aioredis.Redis:
             logger.warning("EventBus: Sentinel init failed (%s) — falling back to REDIS_URL", exc)
 
     url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-    return aioredis.from_url(url, decode_responses=True, socket_timeout=5)
+    return aioredis.from_url(url, decode_responses=True, socket_timeout=5, socket_connect_timeout=5)
+
+
+def _make_redis_pubsub() -> aioredis.Redis:
+    """Create a Redis client for pubsub use — no socket_timeout so listen() blocks cleanly."""
+    sentinel_hosts_str = os.environ.get("REDIS_SENTINEL_HOSTS", "").strip()
+    password = os.environ.get("REDIS_PASSWORD", "") or None
+    master_name = os.environ.get("REDIS_SENTINEL_MASTER", "hopefx-master")
+
+    if sentinel_hosts_str:
+        try:
+            from redis.asyncio.sentinel import Sentinel as _Sentinel  # pylint: disable=no-name-in-module
+
+            hosts = []
+            for _entry in sentinel_hosts_str.split(","):
+                entry = _entry.strip()
+                if ":" in entry:
+                    h, p = entry.rsplit(":", 1)
+                    hosts.append((h.strip(), int(p.strip())))
+                else:
+                    hosts.append((entry, 26379))
+
+            sentinel = _Sentinel(
+                hosts,
+                sentinel_kwargs={"password": password, "socket_timeout": 2.0},
+                password=password,
+                decode_responses=True,
+            )
+            return sentinel.master_for(master_name)
+        except Exception as exc:
+            logger.warning("EventBus pubsub: Sentinel init failed (%s) — falling back to REDIS_URL", exc)
+
+    url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+    # socket_timeout=None: pubsub listen() must block indefinitely waiting for messages.
+    # socket_connect_timeout still set so initial connection fails fast if Redis is down.
+    return aioredis.from_url(url, decode_responses=True, socket_timeout=None, socket_connect_timeout=5)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -435,10 +471,13 @@ class EventBus:
             return  # unreachable; satisfies type checker
 
         # Redis path with auto-reconnect
+        _pubsub_redis: aioredis.Redis | None = None
         while True:
             pubsub = None
             try:
-                pubsub = self._redis.pubsub()
+                if _pubsub_redis is None:
+                    _pubsub_redis = _make_redis_pubsub()
+                pubsub = _pubsub_redis.pubsub()
                 await pubsub.subscribe(*channels)
                 logger.info("EventBus subscribed to channels: %s", channels)
 
@@ -466,9 +505,15 @@ class EventBus:
                 if pubsub:
                     await pubsub.unsubscribe()
                 return
+            except (TimeoutError, asyncio.TimeoutError, _redis_exc.TimeoutError):
+                # Idle pubsub timeout — no messages received within socket_timeout.
+                # This is normal on quiet channels; just re-subscribe without logging.
+                _pubsub_redis = None
+                continue
             except Exception as exc:
                 self._metrics["errors"] += 1
                 logger.error("EventBus subscribe error: %s — reconnecting in 5 s", exc)
+                _pubsub_redis = None
                 await asyncio.sleep(5)
                 try:
                     self._redis = _make_redis()
