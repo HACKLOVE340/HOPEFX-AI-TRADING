@@ -41,17 +41,34 @@ class TestAuthShims:
     def test_schemas_token_payload(self):
         from auth.schemas import TokenPayload
 
-        tp = TokenPayload(sub="user123", exp=9999999999, role="admin")
+        # Simulate a decoded JWT that carries all claims written by _create_access_token.
+        tp = TokenPayload(
+            sub="user123",
+            exp=9999999999,
+            role="admin",
+            type="access",
+            jti="abc123",
+            email="user@hopefx.io",
+            username="user123",
+        )
         assert tp.sub == "user123"
         assert tp.role == "admin"
         assert tp.type == "access"
+        assert tp.jti == "abc123"
+        assert tp.email == "user@hopefx.io"
+        assert tp.username == "user123"
 
     def test_schemas_token_payload_defaults(self):
         from auth.schemas import TokenPayload
 
+        # Only sub is required; all other fields are optional (None when absent from JWT).
         tp = TokenPayload(sub="u1")
         assert tp.exp is None
-        assert tp.type == "access"
+        assert tp.iat is None
+        assert tp.jti is None
+        assert tp.type is None
+        assert tp.email is None
+        assert tp.username is None
         assert tp.role == "user"
 
 

@@ -15,9 +15,19 @@ from pydantic import BaseModel
 
 
 class TokenPayload(BaseModel):
-    """Decoded JWT access-token payload."""
+    """Decoded JWT access-token payload.
 
-    sub: str
-    exp: int | None = None
-    type: str = "access"
+    Mirrors ``api.auth.TokenPayload`` exactly — all fields written by
+    ``AuthService._create_access_token()`` are declared here.
+    Pydantic ignores extra claims, so adding new JWT fields does not break
+    existing tokens.
+    """
+
+    sub: str                    # user_id (UUID string)
     role: str = "user"
+    exp: int | None = None
+    iat: int | None = None
+    jti: str | None = None      # JWT ID — used for blacklist revocation on logout
+    type: str | None = None     # "access" discriminator
+    email: str | None = None
+    username: str | None = None

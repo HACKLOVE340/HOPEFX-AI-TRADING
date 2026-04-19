@@ -128,10 +128,16 @@ _REQUIRE_EMAIL_VERIFICATION: bool = os.getenv(
 
 
 def _get_secret() -> str:
-    s = os.getenv("SECURITY_JWT_SECRET")
-    if not s or len(s) < 32:
-        raise RuntimeError("SECURITY_JWT_SECRET not set or too short")
-    return s
+    """Return the JWT signing secret.
+
+    Delegates to ``auth.jwt._get_secret()`` — the single source of truth for
+    env-var fallback order (SECURITY_JWT_SECRET → JWT_SECRET_KEY) and
+    validation (length, CHANGE_ME guard).  Previously this function only read
+    SECURITY_JWT_SECRET with no fallback, diverging from auth/jwt.py.
+    """
+    from auth.jwt import _get_secret as _jwt_get_secret
+
+    return _jwt_get_secret()
 
 
 def _hash_token(raw: str) -> str:
@@ -659,6 +665,7 @@ class AuthService:
         payload = {
             "sub": user.id,
             "email": user.email,
+            "username": user.username,
             "role": user.role,
             "jti": secrets.token_hex(16),  # unique token ID for blacklisting
             "iat": int(now.timestamp()),
