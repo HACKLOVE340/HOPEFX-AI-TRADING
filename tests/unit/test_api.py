@@ -51,7 +51,7 @@ _os_top.environ.setdefault("CSRF_PROTECTION", "false")
 def _trading_token() -> str:
     secret = _os_top.environ.get("SECURITY_JWT_SECRET", "unit-test-trading-secret-key-32chars!!")
     return _jwt_top.encode(
-        {"sub": "test-trader", "role": "admin", "exp": int(_time_top.time()) + 3600},
+        {"sub": "test-trader", "role": "admin", "type": "access", "exp": int(_time_top.time()) + 3600},
         secret,
         algorithm="HS256",
     )
@@ -1363,7 +1363,7 @@ class TestWebSocketManager:
         _os.environ.setdefault("SECURITY_JWT_SECRET", secret)
         now = int(_time.time())
         token = _jwt.encode(
-            {"sub": "ws-test-user", "role": "trader", "iat": now, "exp": now + 3600},
+            {"sub": "ws-test-user", "role": "trader", "type": "access", "iat": now, "exp": now + 3600},
             secret,
             algorithm="HS256",
         )

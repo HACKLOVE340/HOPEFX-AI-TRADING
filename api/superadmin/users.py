@@ -25,6 +25,17 @@ from ._shared import (
 
 logger = logging.getLogger(__name__)
 
+# Module-level imports so tests can patch "api.superadmin.users.SessionLocal"
+# and "api.superadmin.users.User" without needing to reach into database.*
+try:
+    from database.connection import SessionLocal
+    from database.user_models import User
+    from database.models import Account, Trade, WalletTransaction, AuditLogEntry
+except Exception:  # pragma: no cover — database package absent in unit-test venv
+    SessionLocal = None  # type: ignore[assignment,misc]
+    User = None  # type: ignore[assignment,misc]
+    Account = Trade = WalletTransaction = AuditLogEntry = None  # type: ignore[assignment,misc]
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -37,7 +48,6 @@ def _user_stats(db, user_id: str) -> dict:
     available without a broker connection.  Trade P&L (Trade.total_pnl) is
     summed separately and returned as realized_pnl.
     """
-    from database.models import Account, Trade, WalletTransaction
 
     # Accounts belonging to this user (cast str UUID → int for the FK join)
     try:
@@ -102,8 +112,6 @@ async def list_users(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict[str, Any]:
     try:
-        from database.connection import SessionLocal
-        from database.user_models import User
 
         db = SessionLocal()
         try:
@@ -149,8 +157,6 @@ async def list_users(
 @router.get("/users/{user_id}")
 async def get_user(user_id: str, user: TokenPayload = Depends(_require_superadmin)) -> dict[str, Any]:
     try:
-        from database.connection import SessionLocal
-        from database.user_models import User
 
         db = SessionLocal()
         try:
@@ -185,8 +191,6 @@ async def update_user(
     user_id: str, body: UpdateUserBody, user: TokenPayload = Depends(_require_superadmin)
 ) -> dict[str, Any]:
     try:
-        from database.connection import SessionLocal
-        from database.user_models import User
 
         db = SessionLocal()
         try:
@@ -215,8 +219,6 @@ async def delete_user(user_id: str, user: TokenPayload = Depends(_require_supera
     if user_id == user.sub:
         raise HTTPException(status_code=400, detail="Cannot delete your own account")
     try:
-        from database.connection import SessionLocal
-        from database.user_models import User
 
         db = SessionLocal()
         try:
@@ -245,8 +247,6 @@ async def set_user_role(
     if body.role not in valid_roles:
         raise HTTPException(status_code=400, detail=f"Invalid role. Must be one of: {valid_roles}")
     try:
-        from database.connection import SessionLocal
-        from database.user_models import User
 
         db = SessionLocal()
         try:
@@ -283,8 +283,6 @@ async def set_user_plan(
             detail=f"Invalid plan. Must be one of: {sorted(valid_plans)}",
         )
     try:
-        from database.connection import SessionLocal
-        from database.user_models import User
 
         db = SessionLocal()
         try:
@@ -309,8 +307,6 @@ async def ban_user(
     user_id: str, body: BanUserBody, user: TokenPayload = Depends(_require_superadmin)
 ) -> dict[str, Any]:
     try:
-        from database.connection import SessionLocal
-        from database.user_models import User
 
         db = SessionLocal()
         try:
@@ -334,8 +330,6 @@ async def ban_user(
 @router.post("/users/{user_id}/unban")
 async def unban_user(user_id: str, user: TokenPayload = Depends(_require_superadmin)) -> dict[str, Any]:
     try:
-        from database.connection import SessionLocal
-        from database.user_models import User
 
         db = SessionLocal()
         try:
@@ -370,8 +364,6 @@ async def reset_user_password(user_id: str, user: TokenPayload = Depends(_requir
         import secrets
 
         from auth.jwt import hash_password
-        from database.connection import SessionLocal
-        from database.user_models import User
 
         db = SessionLocal()
         try:
@@ -408,8 +400,6 @@ async def impersonate_user(user_id: str, user: TokenPayload = Depends(_require_s
         import jwt as pyjwt
 
         from auth.jwt import _get_secret
-        from database.connection import SessionLocal
-        from database.user_models import User
 
         db = SessionLocal()
         try:
@@ -455,8 +445,6 @@ async def impersonate_user(user_id: str, user: TokenPayload = Depends(_require_s
 @router.get("/users/{user_id}/activity")
 async def get_user_activity(user_id: str, user: TokenPayload = Depends(_require_superadmin)) -> dict[str, Any]:
     try:
-        from database.connection import SessionLocal
-        from database.models import AuditLogEntry
 
         db = SessionLocal()
         try:
@@ -492,8 +480,6 @@ async def get_user_activity(user_id: str, user: TokenPayload = Depends(_require_
 @router.post("/users/bulk/ban")
 async def bulk_ban_users(body: BulkUserBody, user: TokenPayload = Depends(_require_superadmin)) -> dict:
     """Ban multiple users in a single request. Skips superadmins."""
-    from database.connection import SessionLocal
-    from database.user_models import User
 
     succeeded: list[str] = []
     failed: list[dict] = []
@@ -522,8 +508,6 @@ async def bulk_ban_users(body: BulkUserBody, user: TokenPayload = Depends(_requi
 @router.post("/users/bulk/unban")
 async def bulk_unban_users(body: BulkUserBody, user: TokenPayload = Depends(_require_superadmin)) -> dict:
     """Unban multiple users in a single request."""
-    from database.connection import SessionLocal
-    from database.user_models import User
 
     succeeded: list[str] = []
     failed: list[dict] = []
@@ -552,8 +536,6 @@ async def bulk_export_users(body: BulkUserBody, user: TokenPayload = Depends(_re
     import csv
     import io
 
-    from database.connection import SessionLocal
-    from database.user_models import User
 
     db = SessionLocal()
     try:

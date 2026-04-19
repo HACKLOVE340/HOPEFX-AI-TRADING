@@ -113,6 +113,17 @@ class User(Base):
         Index("idx_users_status", "status"),
     )
 
+    def __init__(self, **kwargs):
+        # Apply Python-level defaults for columns whose SQLAlchemy `default=`
+        # only fires at INSERT time (not on object construction).
+        kwargs.setdefault("plan", "free")
+        kwargs.setdefault("role", UserRole.TRADER.value)
+        kwargs.setdefault("status", UserStatus.PENDING_VERIFICATION.value)
+        kwargs.setdefault("is_email_verified", False)
+        kwargs.setdefault("totp_enabled", False)
+        kwargs.setdefault("kyc_status", "unverified")
+        super().__init__(**kwargs)
+
     def __repr__(self):
         return f"<User id={self.id} email={self.email} role={self.role}>"
 
