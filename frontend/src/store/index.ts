@@ -170,9 +170,12 @@ export const useStore = create<AppStore>()(
           set({ token, user, isAuthenticated: true }, false, 'auth/setAuth'),
 
         clearAuth: () => {
-          // Remove refresh token from localStorage so silent refresh cannot
-          // succeed after an explicit logout or session expiry.
-          try { localStorage.removeItem('hopefx_refresh_token'); } catch { /* ignore */ }
+          // Remove all token keys so neither the React app nor backend HTML
+          // templates (auth.js reads hopefx_access_token) can use stale tokens.
+          try {
+            localStorage.removeItem('hopefx_access_token');
+            localStorage.removeItem('hopefx_refresh_token');
+          } catch { /* ignore */ }
           set({ token: null, user: null, isAuthenticated: false, plan: 'free' }, false, 'auth/clearAuth');
         },
 

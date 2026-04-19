@@ -17,9 +17,36 @@ const AUTH_KEYS = {
 
 // ── Token storage ─────────────────────────────────────────────────────────────
 
-function getAccessToken()  { return localStorage.getItem(AUTH_KEYS.accessToken)  || ''; }
-function getRefreshToken() { return localStorage.getItem(AUTH_KEYS.refreshToken) || ''; }
-function getUser()         { try { return JSON.parse(localStorage.getItem(AUTH_KEYS.user) || '{}'); } catch { return {}; } }
+// The React app (Zustand) persists state to 'hopefx-store' as a JSON blob.
+// Backend HTML templates read the flat 'hopefx_access_token' key instead.
+// Login.tsx now writes both, but this fallback covers sessions that were
+// established before that fix — reads the token out of the Zustand blob
+// and back-fills the flat key so subsequent calls work without re-login.
+function getAccessToken() {
+  const flat = localStorage.getItem(AUTH_KEYS.accessToken);
+  if (flat) return flat;
+  try {
+    const store = JSON.parse(localStorage.getItem('hopefx-store') || '{}');
+    const token = store?.state?.token || '';
+    if (token) {
+      // Back-fill so future calls use the fast path.
+      localStorage.setItem(AUTH_KEYS.accessToken, token);
+    }
+    return token;
+  } catch { return ''; }
+}
+
+function getRefreshToken() {
+  const flat = localStorage.getItem(AUTH_KEYS.refreshToken);
+  if (flat) return flat;
+  try {
+    // Zustand does not persist the refresh token in the store blob —
+    // it is stored separately under hopefx_refresh_token by Login.tsx.
+    return '';
+  } catch { return ''; }
+}
+
+function getUser() { try { return JSON.parse(localStorage.getItem(AUTH_KEYS.user) || '{}'); } catch { return {}; } }
 
 function setTokens(accessToken, refreshToken) {
   localStorage.setItem(AUTH_KEYS.accessToken,  accessToken);

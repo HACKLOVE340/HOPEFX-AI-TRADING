@@ -112,6 +112,9 @@ const Login: React.FC = () => {
     setLoading(true);
     try {
       const res = await authApi.login({ email: email.trim().toLowerCase(), password });
+      // Write flat keys so backend HTML templates (auth.js) can read the token.
+      // Zustand persists to 'hopefx-store' but auth.js reads 'hopefx_access_token'.
+      localStorage.setItem('hopefx_access_token', res.data.access_token);
       if (res.data.refresh_token) {
         localStorage.setItem('hopefx_refresh_token', res.data.refresh_token);
       }
