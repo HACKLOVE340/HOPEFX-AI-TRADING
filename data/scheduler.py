@@ -515,27 +515,44 @@ async def _update_timeframe(
         return 0
 
     # Validate before persisting.
-    # Bars with close/open slightly outside [low, high] due to yfinance
-    # floating-point precision artifacts are clamped rather than dropped.
-    # Bars with structural errors (high < low, negative prices) are dropped.
+    # yfinance gold/oil futures data has two known CME roll-window artifacts:
+    #
+    #   1. close/open slightly outside [low, high] by up to ~3% — settlement
+    #      price and intraday OHLC come from different CME data feeds.
+    #      Fix: clamp close/open to [low, high].
+    #
+    #   2. high < low by up to ~0.5% — the two CME feeds can also disagree on
+    #      which extreme is the true high vs low for the session.
+    #      Fix: swap high and low when the inversion is within 0.5% of the
+    #      mid-price.  Inversions beyond 0.5% indicate genuine data corruption
+    #      and are rejected.
     try:
         from data.validator import DataValidator
 
         validator = DataValidator(symbol=symbol.replace("_", ""))
         valid_bars: ClassVar[list[dict]] = []
         for i, bar in enumerate(bars):
-            # Pre-clamp close and open to [low, high] when within 3% of the
-            # price level.  yfinance gold futures data has a known artifact
-            # where settlement close and intraday OHLC come from different CME
-            # feeds and can disagree by up to ~3%.  Clamping preserves the bar
-            # rather than dropping it; violations beyond 3% are left for the
-            # validator to reject as genuine data corruption.
             try:
                 _l = float(bar["low"])
                 _h = float(bar["high"])
+                _mid = (abs(_h) + abs(_l)) / 2 or 1.0
+
+                # Fix inverted high/low within 0.5% tolerance (CME roll artifact).
+                if _h < _l:
+                    _inversion_pct = (_l - _h) / _mid
+                    if _inversion_pct <= 0.005:
+                        bar = dict(bar)
+                        bar["high"], bar["low"] = _l, _h
+                        _h, _l = _l, _h
+                        logger.debug(
+                            "Swapped inverted high/low on bar %d (%s/%s): "
+                            "high=%.4f low=%.4f (%.3f%% inversion)",
+                            i, symbol, granularity, _h, _l, _inversion_pct * 100,
+                        )
+
+                # Clamp close/open to [low, high] within 3% tolerance.
                 if _h >= _l:
-                    _mid = (_h + _l) / 2
-                    _tol = _mid * 0.03  # 3% of price level
+                    _tol = _mid * 0.03
                     _c = float(bar["close"])
                     _o = float(bar["open"])
                     if _l - _tol <= _c <= _h + _tol and not (_l <= _c <= _h):
