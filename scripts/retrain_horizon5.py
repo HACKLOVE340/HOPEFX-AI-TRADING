@@ -590,9 +590,14 @@ def main() -> None:
 
     # Smoke-test overrides
     if args.smoke:
-        logger.info("Smoke-test mode: overriding years=2, oos_years=0, no_macro, splits=2")
+        # oos_years=0.0 was the original smoke default, which caused
+        # horizon5_training_report.json to record oos_years=0.0 and
+        # oos_sample_count=0 — making the report useless for validation.
+        # Fix: smoke mode uses 1 year of OOS (≈20% of 2Y data) so the
+        # report always contains real OOS metrics, even in CI.
+        logger.info("Smoke-test mode: overriding years=2, oos_years=1, no_macro, splits=2")
         args.years = 2
-        args.oos_years = 0.0
+        args.oos_years = 1.0   # was 0.0 — now enforces a real OOS split
         args.no_macro = True
         args.splits = 2
         args.use_cached = True
