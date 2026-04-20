@@ -139,26 +139,100 @@ function scheduleRefresh() {
   }, delay);
 }
 
+// ── CSRF token management ─────────────────────────────────────────────────────
+
+const _CSRF_COOKIE   = 'hopefx_csrf';
+const _CSRF_HEADER   = 'X-CSRF-Token';
+const _CSRF_TTL_MS   = 55 * 60 * 1000; // 55 min — refresh before the 1-hour server TTL
+const _CSRF_METHODS  = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+// Paths that are exempt from CSRF (must mirror _CSRF_EXEMPT_PREFIXES in core/middleware.py)
+const _CSRF_EXEMPT   = [
+  '/api/auth/csrf-token',
+  '/api/auth/login',
+  '/api/auth/register',
+  '/api/auth/activate-free-tier',
+  '/api/auth/refresh',
+  '/api/auth/forgot-password',
+  '/api/auth/reset-password',
+  '/api/auth/verify-email',
+  '/api/auth/resend-verification',
+  '/api/email/webhook',
+  '/api/health',
+];
+
+let _csrfToken     = null;
+let _csrfFetchedAt = 0;
+let _csrfFetchProm = null;
+
+function _readCsrfCookie() {
+  const match = document.cookie.split(';')
+    .map(c => c.trim())
+    .find(c => c.startsWith(_CSRF_COOKIE + '='));
+  return match ? decodeURIComponent(match.slice(_CSRF_COOKIE.length + 1)) : null;
+}
+
+async function _fetchCsrfToken() {
+  if (_csrfFetchProm) return _csrfFetchProm;
+  _csrfFetchProm = (async () => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch('/api/auth/csrf-token', { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          const token = data.csrf_token || _readCsrfCookie();
+          if (token) { _csrfToken = token; _csrfFetchedAt = Date.now(); return token; }
+        }
+      } catch { /* fall through to cookie read */ }
+      const cookie = _readCsrfCookie();
+      if (cookie) { _csrfToken = cookie; _csrfFetchedAt = Date.now(); return cookie; }
+      if (attempt === 0) await new Promise(r => setTimeout(r, 300));
+    }
+    return _csrfToken;
+  })().finally(() => { _csrfFetchProm = null; });
+  return _csrfFetchProm;
+}
+
+async function _getCsrfToken() {
+  const cookie = _readCsrfCookie();
+  if (!cookie) { _csrfToken = null; _csrfFetchedAt = 0; }
+  if (_csrfToken && cookie === _csrfToken && Date.now() - _csrfFetchedAt < _CSRF_TTL_MS) {
+    return _csrfToken;
+  }
+  return _fetchCsrfToken();
+}
+
 // ── Authenticated fetch ───────────────────────────────────────────────────────
 
 /**
  * Drop-in replacement for fetch() that:
  * 1. Injects Authorization: Bearer <token>
- * 2. On 401, attempts a silent refresh and retries once
- * 3. On second 401, redirects to /login
+ * 2. Injects X-CSRF-Token for state-changing requests (POST/PUT/PATCH/DELETE)
+ * 3. On 401, attempts a silent refresh and retries once
+ * 4. On second 401, redirects to /login
  */
 async function authFetch(url, options = {}) {
-  const makeHeaders = () => ({
-    ...options.headers,
-    'Authorization': `Bearer ${getAccessToken()}`,
-  });
+  const method = (options.method || 'GET').toUpperCase();
+  const isExempt = _CSRF_EXEMPT.some(p => url.startsWith(p));
 
-  let res = await fetch(url, { ...options, headers: makeHeaders() });
+  const makeHeaders = async () => {
+    const headers = {
+      ...options.headers,
+      'Authorization': `Bearer ${getAccessToken()}`,
+    };
+    if (_CSRF_METHODS.has(method) && !isExempt) {
+      const csrf = await _getCsrfToken();
+      if (csrf) headers[_CSRF_HEADER] = csrf;
+    }
+    return headers;
+  };
+
+  let res = await fetch(url, { ...options, headers: await makeHeaders() });
 
   if (res.status === 401) {
     const ok = await silentRefresh();
     if (ok) {
-      res = await fetch(url, { ...options, headers: makeHeaders() });
+      res = await fetch(url, { ...options, headers: await makeHeaders() });
     }
     if (res.status === 401) {
       redirectToLogin();
