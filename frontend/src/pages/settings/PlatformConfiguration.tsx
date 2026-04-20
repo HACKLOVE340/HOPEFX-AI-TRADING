@@ -266,6 +266,36 @@ interface PlatformConfig {
   gdpr_data_retention_days: number;
   gdpr_erasure_grace_days: number;
   regulatory_reporting_enabled: boolean;
+  // Paper trading slippage model
+  paper_slippage_model: string;
+  paper_fixed_slippage_pct: number;
+  paper_impact_factor: number;
+  paper_noise_sigma_pct: number;
+  paper_fallback_spread_pct: number;
+  // Online learner
+  online_learner_enabled: boolean;
+  online_learner_lr: number;
+  online_learner_batch_size: number;
+  online_learner_update_interval_s: number;
+  online_learner_max_buffer: number;
+  // Drift monitor
+  drift_monitor_enabled: boolean;
+  drift_monitor_window: number;
+  drift_monitor_threshold: number;
+  drift_monitor_check_interval_s: number;
+  drift_monitor_auto_retrain: boolean;
+  // Decision engine
+  decision_engine_enabled: boolean;
+  decision_engine_min_confidence: number;
+  decision_engine_max_positions: number;
+  decision_engine_cooldown_s: number;
+  decision_engine_use_regime: boolean;
+  decision_engine_use_sentiment: boolean;
+  decision_engine_use_macro: boolean;
+  // Smart router
+  router_max_spread_bps: number;
+  router_primary_broker: string;
+  router_secondary_broker: string;
   // General
   env: string;
   debug: boolean;
@@ -414,6 +444,21 @@ const DEFAULT_PLATFORM: PlatformConfig = {
   aml_daily_volume_threshold: 50000, sanctions_check_enabled: true,
   gdpr_data_retention_days: 365, gdpr_erasure_grace_days: 30,
   regulatory_reporting_enabled: false,
+  // Paper trading slippage model
+  paper_slippage_model: 'fixed', paper_fixed_slippage_pct: 0.0005,
+  paper_impact_factor: 0.1, paper_noise_sigma_pct: 0.0001, paper_fallback_spread_pct: 0.0002,
+  // Online learner
+  online_learner_enabled: false, online_learner_lr: 0.001, online_learner_batch_size: 32,
+  online_learner_update_interval_s: 300, online_learner_max_buffer: 10000,
+  // Drift monitor
+  drift_monitor_enabled: true, drift_monitor_window: 200, drift_monitor_threshold: 0.05,
+  drift_monitor_check_interval_s: 300, drift_monitor_auto_retrain: false,
+  // Decision engine
+  decision_engine_enabled: true, decision_engine_min_confidence: 0.55,
+  decision_engine_max_positions: 3, decision_engine_cooldown_s: 30,
+  decision_engine_use_regime: true, decision_engine_use_sentiment: true, decision_engine_use_macro: true,
+  // Smart router
+  router_max_spread_bps: 50.0, router_primary_broker: 'oanda', router_secondary_broker: 'paper',
   // General
   env: 'production', debug: false, log_level: 'INFO',
   initial_balance: 100000, trading_mode: 'paper', broker_default: 'paper', cme_enabled: false,
@@ -485,9 +530,11 @@ const TABS = [
   { id: 'database',       label: '🗄️ Database & Cache', },
   { id: 'security',       label: '🔒 Security',         },
   { id: 'ml',             label: '🧠 ML / AI',          },
+  { id: 'decision',       label: '🎯 Decision Engine',  },
   { id: 'risk',           label: '⚖️ Risk Engine',      },
   { id: 'execution',      label: '⚡ Execution',        },
   { id: 'brokers',        label: '🏦 Brokers',          },
+  { id: 'paper',          label: '📄 Paper Trading',    },
   { id: 'ratelimit',      label: '🚦 Rate Limiting',    },
   { id: 'notify',         label: '🔔 Notifications',    },
   { id: 'smtp',           label: '📧 SMTP / Email',     },
@@ -895,6 +942,80 @@ const NotifyTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig
       <SectionHeader icon="🎮" title="Discord" desc="notifications/discord_bot.py" />
       <Num label="Signal Cooldown (s)" desc="DISCORD_SIGNAL_COOLDOWN_SECONDS" value={cfg.discord_signal_cooldown_seconds} min={0} onChange={(v) => set({ discord_signal_cooldown_seconds: v })} />
       <Txt label="Bot Username" desc="DISCORD_BOT_USERNAME" value={cfg.discord_bot_username} onChange={(v) => set({ discord_bot_username: v })} />
+    </Card>
+  </>
+);
+
+// ── Decision Engine Tab ───────────────────────────────────────────────────────
+
+const DecisionTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
+  <>
+    <Card>
+      <SectionHeader icon="🎯" title="Decision Engine" desc="core/decision/HOPEFXDecisionEngine.py — master signal routing brain" />
+      <Tog id="de_en" label="Enable Decision Engine" desc="DECISION_ENGINE_ENABLED" checked={cfg.decision_engine_enabled} onChange={(v) => set({ decision_engine_enabled: v })} />
+      <Num label="Min Signal Confidence" desc="DECISION_ENGINE_MIN_CONFIDENCE" value={cfg.decision_engine_min_confidence} step={0.01} min={0} max={1} onChange={(v) => set({ decision_engine_min_confidence: v })} />
+      <Num label="Max Concurrent Positions" desc="DECISION_ENGINE_MAX_POSITIONS" value={cfg.decision_engine_max_positions} min={1} max={50} onChange={(v) => set({ decision_engine_max_positions: v })} />
+      <Num label="Signal Cooldown (s)" desc="DECISION_ENGINE_COOLDOWN_S" value={cfg.decision_engine_cooldown_s} step={1} min={0} onChange={(v) => set({ decision_engine_cooldown_s: v })} />
+      <Divider />
+      <SectionHeader icon="🔀" title="Feature Gating" desc="Which data sources feed the decision" />
+      <Tog id="de_regime" label="Use Regime Filter" desc="Blocks signals in unfavourable market regimes" checked={cfg.decision_engine_use_regime} onChange={(v) => set({ decision_engine_use_regime: v })} />
+      <Tog id="de_sent" label="Use Sentiment Scaling" desc="Scales position size by news sentiment score" checked={cfg.decision_engine_use_sentiment} onChange={(v) => set({ decision_engine_use_sentiment: v })} />
+      <Tog id="de_macro" label="Use Macro Impact" desc="Blocks/scales on macro event impact score" checked={cfg.decision_engine_use_macro} onChange={(v) => set({ decision_engine_use_macro: v })} />
+    </Card>
+    <Card>
+      <SectionHeader icon="🔀" title="Smart Router" desc="execution/smart_router.py — broker routing and spread gate" />
+      <Num label="Max Spread (bps)" desc="ROUTER_MAX_SPREAD_BPS" value={cfg.router_max_spread_bps} step={0.5} min={0} onChange={(v) => set({ router_max_spread_bps: v })} />
+      <Sel label="Primary Broker" desc="BROKER_PRIMARY" value={cfg.router_primary_broker}
+        options={['oanda','ibkr','cme','cpp_shim','paper'].map((v) => ({ value: v, label: v.toUpperCase() }))}
+        onChange={(v) => set({ router_primary_broker: v })} />
+      <Sel label="Secondary / Fallback Broker" desc="BROKER_SECONDARY" value={cfg.router_secondary_broker}
+        options={['paper','oanda','ibkr','cme'].map((v) => ({ value: v, label: v.toUpperCase() }))}
+        onChange={(v) => set({ router_secondary_broker: v })} />
+    </Card>
+    <Card>
+      <SectionHeader icon="📡" title="Online Learner" desc="ml/online_learner.py — continuous model adaptation" />
+      <Tog id="ol_en" label="Enable Online Learning" desc="ONLINE_LEARNER_ENABLED — adapts model weights on live fills" checked={cfg.online_learner_enabled} onChange={(v) => set({ online_learner_enabled: v })} />
+      <Num label="Learning Rate" desc="ONLINE_LEARNER_LR" value={cfg.online_learner_lr} step={0.0001} min={0.00001} max={0.1} onChange={(v) => set({ online_learner_lr: v })} />
+      <Num label="Batch Size" desc="ONLINE_LEARNER_BATCH_SIZE" value={cfg.online_learner_batch_size} min={1} max={512} onChange={(v) => set({ online_learner_batch_size: v })} />
+      <Num label="Update Interval (s)" desc="ONLINE_LEARNER_UPDATE_INTERVAL_S" value={cfg.online_learner_update_interval_s} min={10} onChange={(v) => set({ online_learner_update_interval_s: v })} />
+      <Num label="Max Buffer Size" desc="ONLINE_LEARNER_MAX_BUFFER" value={cfg.online_learner_max_buffer} min={100} onChange={(v) => set({ online_learner_max_buffer: v })} />
+    </Card>
+    <Card>
+      <SectionHeader icon="📉" title="Drift Monitor" desc="ml/drift_monitor.py — detects model distribution shift" />
+      <Tog id="dm_en" label="Enable Drift Monitor" desc="DRIFT_MONITOR_ENABLED" checked={cfg.drift_monitor_enabled} onChange={(v) => set({ drift_monitor_enabled: v })} />
+      <Num label="Detection Window (samples)" desc="DRIFT_MONITOR_WINDOW" value={cfg.drift_monitor_window} min={10} onChange={(v) => set({ drift_monitor_window: v })} />
+      <Num label="Drift Threshold" desc="DRIFT_MONITOR_THRESHOLD — PSI/KL divergence threshold" value={cfg.drift_monitor_threshold} step={0.005} min={0.001} max={1} onChange={(v) => set({ drift_monitor_threshold: v })} />
+      <Num label="Check Interval (s)" desc="DRIFT_MONITOR_CHECK_INTERVAL_S" value={cfg.drift_monitor_check_interval_s} min={30} onChange={(v) => set({ drift_monitor_check_interval_s: v })} />
+      <Tog id="dm_retrain" label="Auto-Retrain on Drift" desc="Triggers full retrain when drift exceeds threshold" checked={cfg.drift_monitor_auto_retrain} onChange={(v) => set({ drift_monitor_auto_retrain: v })} />
+    </Card>
+  </>
+);
+
+// ── Paper Trading Tab ─────────────────────────────────────────────────────────
+
+const PaperTradingTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
+  <>
+    <Card>
+      <SectionHeader icon="📄" title="Paper Trading Slippage Model" desc="brokers/paper_trading.py — realistic fill simulation" />
+      <Sel label="Slippage Model" desc="PAPER_SLIPPAGE_MODEL" value={cfg.paper_slippage_model}
+        options={[
+          { value: 'fixed', label: 'Fixed (constant slippage %)' },
+          { value: 'market_impact', label: 'Market Impact (size-dependent)' },
+          { value: 'random', label: 'Random (Gaussian noise)' },
+          { value: 'zero', label: 'Zero (no slippage)' },
+        ]}
+        onChange={(v) => set({ paper_slippage_model: v })} />
+      <Num label="Fixed Slippage (%)" desc="PAPER_FIXED_SLIPPAGE_PCT — used when model=fixed" value={cfg.paper_fixed_slippage_pct} step={0.00001} min={0} max={0.01} onChange={(v) => set({ paper_fixed_slippage_pct: v })} />
+      <Num label="Market Impact Factor" desc="PAPER_IMPACT_FACTOR — scales impact with order size" value={cfg.paper_impact_factor} step={0.01} min={0} max={1} onChange={(v) => set({ paper_impact_factor: v })} />
+      <Num label="Noise Sigma (%)" desc="PAPER_NOISE_SIGMA_PCT — Gaussian noise std dev" value={cfg.paper_noise_sigma_pct} step={0.00001} min={0} max={0.01} onChange={(v) => set({ paper_noise_sigma_pct: v })} />
+      <Num label="Fallback Spread (%)" desc="PAPER_FALLBACK_SPREAD_PCT — used when no live spread available" value={cfg.paper_fallback_spread_pct} step={0.00001} min={0} max={0.01} onChange={(v) => set({ paper_fallback_spread_pct: v })} />
+    </Card>
+    <Card>
+      <SectionHeader icon="📊" title="OHLCV Store" desc="brokers/ohlcv_store.py — historical bar cache" />
+      <Sel label="Default Timeframe" desc="OHLCV_STORE_TIMEFRAME" value={cfg.ohlcv_store_timeframe}
+        options={['M1','M5','M15','M30','H1','H4','D1'].map((v) => ({ value: v, label: v }))}
+        onChange={(v) => set({ ohlcv_store_timeframe: v })} />
+      <Num label="Max Bars in Cache" desc="OHLCV_STORE_MAX_BARS" value={cfg.ohlcv_store_max_bars} min={50} max={10000} onChange={(v) => set({ ohlcv_store_max_bars: v })} />
     </Card>
   </>
 );
@@ -1711,9 +1832,11 @@ const PlatformConfiguration: React.FC = () => {
       {activeTab === 'database'   && <><DatabaseTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
       {activeTab === 'security'   && <><SecurityTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
       {activeTab === 'ml'         && <><MLTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
+      {activeTab === 'decision'   && <><DecisionTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
       {activeTab === 'risk'       && <><RiskTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
       {activeTab === 'execution'  && <><ExecutionTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
       {activeTab === 'brokers'    && <><BrokersTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
+      {activeTab === 'paper'      && <><PaperTradingTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
       {activeTab === 'ratelimit'  && <><RateLimitTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
       {activeTab === 'notify'      && <><NotifyTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
       {activeTab === 'smtp'        && <><SmtpTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
