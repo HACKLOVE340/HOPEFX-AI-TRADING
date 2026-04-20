@@ -678,11 +678,22 @@ export const superadminApi = {
   diagnosticsRunCheck:  (name: string)         => api.post(`/superadmin/diagnostics/checks/${name}/run`),
   diagnosticsSummary:   ()                     => api.get('/superadmin/diagnostics/summary'),
 
-  // ── GDPR ─────────────────────────────────────────────────────────────────
-  gdprRequests:         (params?: Record<string, string>) => api.get('/superadmin/gdpr/requests', { params }),
+  // ── Additional GDPR endpoints ─────────────────────────────────────────────
   gdprSubmitRequest:    (body: object)         => api.post('/superadmin/gdpr/requests', body),
   gdprProcessRequest:   (id: string, body: object) => api.post(`/superadmin/gdpr/requests/${id}/process`, body),
-  gdprEraseUser:        (userId: string, body: object) => api.post(`/superadmin/gdpr/users/${userId}/erase`, body),
+
+  // ── Diagnostics remediation log ───────────────────────────────────────────
+  diagnosticsRemediationLog: (limit?: number)  => api.get('/superadmin/diagnostics/remediation-log', { params: limit ? { limit } : {} }),
+
+  // ── Auto-healing audit log ────────────────────────────────────────────────
+  autoHealAuditLog:    (limit?: number)        => api.get('/superadmin/auto-healing/audit-log', { params: limit ? { limit } : {} }),
+
+  // ── Infrastructure extended ───────────────────────────────────────────────
+  infraScheduledJobs:  ()                      => api.get('/superadmin/system/scheduled-jobs'),
+  infraBackups:        ()                      => api.get('/superadmin/system/backups'),
+  infraTriggerBackup:  (type?: string)         => api.post('/superadmin/system/backups/trigger', { type: type ?? 'incremental' }),
+  infraApiKeys:        ()                      => api.get('/superadmin/system/api-keys'),
+  infraRevokeApiKey:   (keyId: string, reason?: string) => api.delete(`/superadmin/system/api-keys/${keyId}`, { data: { reason } }),
 };
 
 // ── Research ──────────────────────────────────────────────────────────────────
