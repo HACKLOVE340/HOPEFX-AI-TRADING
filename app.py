@@ -334,6 +334,51 @@ try:
 except Exception as _replay_router_err:
     logger.warning("Replay router failed to register: %s", _replay_router_err)
 
+# ── Research notebook router (/api/research) ─────────────────────────────────
+try:
+    from research import router as _research_router
+
+    app.include_router(_research_router)
+    logger.info("Research router registered at /api/research")
+except Exception as _research_router_err:
+    logger.warning("Research router failed to register: %s", _research_router_err)
+
+# ── Teams router (/api/teams) ─────────────────────────────────────────────────
+try:
+    from teams import router as _teams_router
+
+    app.include_router(_teams_router)
+    logger.info("Teams router registered at /api/teams")
+except Exception as _teams_router_err:
+    logger.warning("Teams router failed to register: %s", _teams_router_err)
+
+# ── AI Explainability router (/api/explainability) ───────────────────────────
+try:
+    from explainability import AIExplainer, create_explainability_router as _create_expl_router
+
+    app.include_router(_create_expl_router(AIExplainer()))
+    logger.info("Explainability router registered at /api/explainability")
+except Exception as _expl_router_err:
+    logger.warning("Explainability router failed to register: %s", _expl_router_err)
+
+# ── No-Code Strategy Builder router (/api/nocode) ────────────────────────────
+try:
+    from nocode import NoCodeStrategyBuilder, create_nocode_router as _create_nocode_router
+
+    app.include_router(_create_nocode_router(NoCodeStrategyBuilder()))
+    logger.info("No-code builder router registered at /api/nocode")
+except Exception as _nocode_router_err:
+    logger.warning("No-code builder router failed to register: %s", _nocode_router_err)
+
+# ── Execution Transparency router (/api/transparency) ────────────────────────
+try:
+    from transparency import ExecutionTransparencyEngine, create_transparency_router as _create_transp_router
+
+    app.include_router(_create_transp_router(ExecutionTransparencyEngine()))
+    logger.info("Transparency router registered at /api/transparency")
+except Exception as _transp_router_err:
+    logger.warning("Transparency router failed to register: %s", _transp_router_err)
+
 # Prometheus /metrics endpoint + background sync to MetricsRegistry
 try:
     from prometheus_monitoring import setup_prometheus_monitoring
