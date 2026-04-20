@@ -127,6 +127,203 @@ const TraceRow: React.FC<{ span: TraceSpan }> = ({ span }) => (
   </div>
 );
 
+// ── Health Engine Panel ───────────────────────────────────────────────────────
+
+interface HeProbe { name: string; label: string; status: string; latency_ms: number; detail: string; extra?: Record<string, unknown>; checked_at?: string; }
+interface HeReport { overall: string; components: HeProbe[]; checked_at: string; probe_duration_ms: number; total_components: number; ok_count: number; warning_count: number; error_count: number; }
+
+const HealthEnginePanel: React.FC = () => {
+  const [report, setReport]       = useState<HeReport | null>(null);
+  const [history, setHistory]     = useState<HeReport[]>([]);
+  const [probes, setProbes]       = useState<string[]>([]);
+  const [loading, setLoading]     = useState(false);
+  const [probing, setProbing]     = useState<string | null>(null);
+  const [probeResult, setProbeResult] = useState<HeProbe | null>(null);
+  const [tab, setTab]             = useState<'report' | 'history' | 'probes'>('report');
+  const [customUrl, setCustomUrl] = useState('');
+  const [customName, setCustomName] = useState('');
+  const [registerMsg, setRegisterMsg] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [r, p, h] = await Promise.allSettled([
+        superadminApi.healthEngineStatus(),
+        superadminApi.healthEngineProbes(),
+        superadminApi.healthEngineHistory(5),
+      ]);
+      if (r.status === 'fulfilled') setReport(r.value.data as HeReport);
+      if (p.status === 'fulfilled') setProbes((p.value.data as { probes: string[] }).probes ?? []);
+      if (h.status === 'fulfilled') setHistory((h.value.data as { entries: HeReport[] }).entries ?? []);
+    } catch { /* non-fatal */ }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const runProbe = async (name: string) => {
+    setProbing(name); setProbeResult(null);
+    try {
+      const res = await superadminApi.healthEngineRunProbe(name);
+      setProbeResult(res.data as HeProbe);
+    } catch { /* non-fatal */ }
+    finally { setProbing(null); }
+  };
+
+  const registerProbe = async () => {
+    if (!customName.trim() || !customUrl.trim()) return;
+    setRegisterMsg('');
+    try {
+      await superadminApi.healthEngineRegister({ name: customName.trim(), label: customName.trim(), url: customUrl.trim() });
+      setRegisterMsg(`Probe "${customName}" registered`);
+      setCustomName(''); setCustomUrl('');
+      load();
+    } catch { setRegisterMsg('Registration failed'); }
+  };
+
+  const statusColor = (s: string) =>
+    s === 'ok' ? '#22c55e' : s === 'warning' || s === 'degraded' ? '#f59e0b' : '#ef4444';
+
+  const overallColor = report ? statusColor(report.overall) : '#64748b';
+
+  const HTABS = [
+    { id: 'report',  label: '📊 Live Report' },
+    { id: 'history', label: '📜 History' },
+    { id: 'probes',  label: '⚙️ Probes' },
+  ] as const;
+
+  return (
+    <Card>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+        <div>
+          <SectionHeader icon="🏥" title="Auto-Discovering Health Engine" />
+          <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+            {report ? `${report.total_components} components probed in ${report.probe_duration_ms}ms` : 'Probes all registered components concurrently'}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {report && (
+            <div style={{ padding: '6px 14px', borderRadius: 20, background: overallColor + '22', border: `1px solid ${overallColor}44`, fontSize: 13, fontWeight: 700, color: overallColor }}>
+              {report.overall.toUpperCase()}
+            </div>
+          )}
+          <Button onClick={load} disabled={loading} size="sm" variant="secondary">{loading ? '…' : '↻ Refresh'}</Button>
+        </div>
+      </div>
+
+      {/* KPI row */}
+      {report && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 16 }}>
+          {[
+            { label: 'Total', value: report.total_components, color: '#94a3b8' },
+            { label: 'OK', value: report.ok_count, color: '#22c55e' },
+            { label: 'Warnings', value: report.warning_count, color: '#f59e0b' },
+            { label: 'Errors', value: report.error_count, color: '#ef4444' },
+          ].map(m => (
+            <div key={m.label} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 0', textAlign: 'center' }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: m.color }}>{m.value}</div>
+              <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', marginTop: 2 }}>{m.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Sub-tabs */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+        {HTABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{
+            padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12,
+            fontWeight: tab === t.id ? 700 : 500,
+            background: tab === t.id ? '#1e3a5f' : '#1e293b',
+            color: tab === t.id ? '#60a5fa' : '#94a3b8',
+          }}>{t.label}</button>
+        ))}
+      </div>
+
+      {/* Live Report */}
+      {tab === 'report' && report && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {report.components.map(c => (
+            <div key={c.name} style={{
+              display: 'flex', alignItems: 'center', gap: 12, padding: '9px 14px', borderRadius: 8,
+              background: '#0f172a', border: `1px solid ${statusColor(c.status)}22`,
+            }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor(c.status), flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{c.label}</span>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+                    <span style={{ fontSize: 11, color: '#475569' }}>{c.latency_ms}ms</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: statusColor(c.status), textTransform: 'uppercase' }}>{c.status}</span>
+                    <Button onClick={() => runProbe(c.name)} disabled={probing === c.name} size="sm" variant="secondary" style={{ padding: '2px 8px', fontSize: 11 }}>
+                      {probing === c.name ? '…' : '▶'}
+                    </Button>
+                  </div>
+                </div>
+                <div style={{ fontSize: 11, color: '#64748b', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.detail}</div>
+              </div>
+            </div>
+          ))}
+          {probeResult && (
+            <div style={{ marginTop: 8, padding: '12px 14px', borderRadius: 8, background: '#0f172a', border: `1px solid ${statusColor(probeResult.status)}44` }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#60a5fa', marginBottom: 6 }}>Single probe result: {probeResult.label}</div>
+              <div style={{ fontSize: 12, color: statusColor(probeResult.status), fontWeight: 700 }}>{probeResult.status.toUpperCase()} — {probeResult.detail}</div>
+              {probeResult.extra && Object.keys(probeResult.extra).length > 0 && (
+                <pre style={{ fontSize: 11, color: '#64748b', marginTop: 6, overflow: 'auto', maxHeight: 120 }}>
+                  {JSON.stringify(probeResult.extra, null, 2)}
+                </pre>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* History */}
+      {tab === 'history' && (
+        <>
+          {history.length === 0 && <div style={{ color: '#475569', fontSize: 13 }}>No history yet. Run the health engine first.</div>}
+          {history.map((h, i) => (
+            <div key={i} style={{ padding: '10px 14px', borderRadius: 8, background: '#0f172a', border: '1px solid #1e293b', marginBottom: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: statusColor(h.overall) }}>{h.overall.toUpperCase()}</span>
+                <span style={{ fontSize: 11, color: '#475569' }}>{h.checked_at}</span>
+              </div>
+              <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                {h.total_components} components — ✅ {h.ok_count} OK / ⚠️ {h.warning_count} warn / ❌ {h.error_count} err — {h.probe_duration_ms}ms
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+
+      {/* Probes management */}
+      {tab === 'probes' && (
+        <>
+          <div style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>
+            {probes.length} probes registered. Add a custom HTTP probe below.
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+            {probes.map(p => (
+              <span key={p} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: '#1e293b', color: '#94a3b8', fontFamily: 'monospace' }}>{p}</span>
+            ))}
+          </div>
+          <div style={{ padding: '14px 16px', borderRadius: 8, background: '#0f172a', border: '1px solid #334155' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#f1f5f9', marginBottom: 10 }}>Register Custom HTTP Probe</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+              <input type="text" value={customName} onChange={e => setCustomName(e.target.value)} placeholder="probe-name"
+                style={{ flex: 1, minWidth: 120, padding: '7px 10px', background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: '#f1f5f9', fontSize: 12 }} />
+              <input type="text" value={customUrl} onChange={e => setCustomUrl(e.target.value)} placeholder="https://service/health"
+                style={{ flex: 2, minWidth: 200, padding: '7px 10px', background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: '#f1f5f9', fontSize: 12 }} />
+              <Button onClick={registerProbe} disabled={!customName.trim() || !customUrl.trim()} size="sm">Register</Button>
+            </div>
+            {registerMsg && <div style={{ fontSize: 12, color: '#94a3b8' }}>{registerMsg}</div>}
+          </div>
+        </>
+      )}
+    </Card>
+  );
+};
+
 // ── Diagnostics Panel ─────────────────────────────────────────────────────────
 
 const DiagnosticsPanel: React.FC = () => {
@@ -547,7 +744,7 @@ const SystemReliabilitySection: React.FC = () => {
   const [traceTestResult, setTraceTestResult] = useState<Record<string, unknown> | null>(null);
   const [metrics, setMetrics] = useState<Record<string, unknown> | null>(null);
   const [envAudit, setEnvAudit] = useState<Record<string, unknown> | null>(null);
-  const [activeTab, setActiveTab] = useState<'components' | 'traces' | 'selftest' | 'env' | 'metrics' | 'diagnostics' | 'routes' | 'validate'>('components');
+  const [activeTab, setActiveTab] = useState<'components' | 'health-engine' | 'traces' | 'selftest' | 'env' | 'metrics' | 'diagnostics' | 'routes' | 'validate'>('components');
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<string | null>(null);
 
@@ -658,14 +855,15 @@ const SystemReliabilitySection: React.FC = () => {
   };
 
   const TABS = [
-    { id: 'components',  label: '🔌 Components' },
-    { id: 'traces',      label: '🔍 Traces' },
-    { id: 'selftest',    label: '🧪 Self-Test' },
-    { id: 'diagnostics', label: '🔬 Diagnostics' },
-    { id: 'routes',      label: '🗺️ Routes' },
-    { id: 'validate',    label: '✅ Validate' },
-    { id: 'env',         label: '🌍 Env Audit' },
-    { id: 'metrics',     label: '📊 Metrics' },
+    { id: 'components',   label: '🔌 Components' },
+    { id: 'health-engine', label: '🏥 Health Engine' },
+    { id: 'traces',       label: '🔍 Traces' },
+    { id: 'selftest',     label: '🧪 Self-Test' },
+    { id: 'diagnostics',  label: '🔬 Diagnostics' },
+    { id: 'routes',       label: '🗺️ Routes' },
+    { id: 'validate',     label: '✅ Validate' },
+    { id: 'env',          label: '🌍 Env Audit' },
+    { id: 'metrics',      label: '📊 Metrics' },
   ] as const;
 
   const overall = status?.overall ?? 'unknown';
@@ -895,6 +1093,10 @@ const SystemReliabilitySection: React.FC = () => {
       )}
 
       {/* Diagnostics tab */}
+      {activeTab === 'health-engine' && (
+        <HealthEnginePanel />
+      )}
+
       {activeTab === 'diagnostics' && (
         <DiagnosticsPanel />
       )}

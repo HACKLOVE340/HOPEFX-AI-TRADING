@@ -678,6 +678,20 @@ export const superadminApi = {
   diagnosticsRunCheck:  (name: string)         => api.post(`/superadmin/diagnostics/checks/${name}/run`),
   diagnosticsSummary:   ()                     => api.get('/superadmin/diagnostics/summary'),
 
+  // ── Health Engine (auto-discovering) ─────────────────────────────────────
+  healthEngineStatus:      ()                  => api.get('/superadmin/health-engine/status'),
+  healthEngineProbes:      ()                  => api.get('/superadmin/health-engine/probes'),
+  healthEngineRunProbe:    (name: string)      => api.post(`/superadmin/health-engine/probe/${name}`),
+  healthEngineRun:         (probes?: string[]) => api.post('/superadmin/health-engine/run', { probes: probes ?? [] }),
+  healthEngineHistory:     (limit?: number)    => api.get('/superadmin/health-engine/history', { params: limit ? { limit } : {} }),
+  healthEngineRegister:    (body: object)      => api.post('/superadmin/health-engine/register', body),
+
+  // ── ML extended (superadmin) ──────────────────────────────────────────────
+  mlFilterStats:           ()                  => api.get('/ml/signal-filter/stats'),
+  mlOnlineLearnerStatus:   ()                  => api.get('/online-learner/status'),
+  mlDriftStatus:           ()                  => api.get('/ml/drift/status'),
+  mlSharpeCircuitBreaker:  ()                  => api.get('/ml/sharpe-circuit-breaker/status'),
+
   // ── Additional GDPR endpoints ─────────────────────────────────────────────
   gdprSubmitRequest:    (body: object)         => api.post('/superadmin/gdpr/requests', body),
   gdprProcessRequest:   (id: string, body: object) => api.post(`/superadmin/gdpr/requests/${id}/process`, body),

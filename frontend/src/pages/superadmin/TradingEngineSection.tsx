@@ -266,14 +266,107 @@ const TradingEngineSection: React.FC = () => {
       {msg && (
         <div style={{
           padding: '12px 16px', borderRadius: 8, marginTop: 4,
-          background: msg.includes('failed') || msg.includes('ACTIVATED') ? (msg.includes('ACTIVATED') ? '#450a0a' : '#450a0a') : '#052e16',
-          color: msg.includes('failed') ? '#f87171' : msg.includes('ACTIVATED') ? '#f87171' : '#4ade80',
+          background: msg.includes('failed') || msg.includes('ACTIVATED') ? '#450a0a' : '#052e16',
+          color: msg.includes('failed') || msg.includes('ACTIVATED') ? '#f87171' : '#4ade80',
           fontSize: 13, fontWeight: 600,
         }}>
           {msg}
         </div>
       )}
+
+      {/* ── Decision Engine & Gatekeeper Status ── */}
+      <DecisionEnginePanel />
     </div>
+  );
+};
+
+// ── Decision Engine & Gatekeeper Panel ───────────────────────────────────────
+
+const DecisionEnginePanel: React.FC = () => {
+  const [status, setStatus] = useState<Record<string, unknown> | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await superadminApi.engineStatus();
+      setStatus(res.data);
+    } catch { /* non-fatal */ }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const phases = [
+    { id: 1, name: 'StrategyBrain Consensus', desc: 'Multi-strategy signal aggregation' },
+    { id: 2, name: 'ML Enrichment', desc: 'XGBoost + LightGBM + LSTM ensemble + anomaly weighting + online blend' },
+    { id: 3, name: 'Gatekeeper (11 checks)', desc: 'Kill switch, news blackout, spread, data quality, sentiment, macro, FIA compliance' },
+    { id: 4, name: 'Trade Execution', desc: 'Smart broker router with circuit breaker + failover' },
+    { id: 5, name: 'Post-Trade', desc: 'EventBus broadcast + compliance audit + online learner feedback' },
+  ];
+
+  const gatekeeperChecks = [
+    'Kill switch active', 'Post-breach pause', 'News blackout window', 'Spread limit exceeded',
+    'Data quality gate', 'Sentiment blackout', 'Macro impact gate', 'Max daily trades',
+    'FIA 2024 compliance', 'Confidence threshold', 'Position correlation',
+  ];
+
+  return (
+    <>
+      <SectionCard title="Decision Engine Pipeline" icon="⚡" accent="#f59e0b">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ fontSize: 13, color: '#64748b' }}>5-phase HOPEFXDecisionEngine — runs on every market tick</div>
+          <button onClick={load} disabled={loading} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #334155', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: 12 }}>
+            {loading ? '…' : '↻'}
+          </button>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {phases.map(p => (
+            <div key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 14px', borderRadius: 8, background: '#0f172a', border: '1px solid #1e293b' }}>
+              <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1e3a5f', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#60a5fa', flexShrink: 0 }}>
+                {p.id}
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>{p.name}</div>
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{p.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        {status && (
+          <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
+            {Object.entries(status as Record<string, unknown>).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
+              <div key={key} style={{ background: '#1e293b', borderRadius: 6, padding: '8px 12px' }}>
+                <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', marginBottom: 2 }}>{key.replace(/_/g, ' ')}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>{String(val)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </SectionCard>
+
+      <SectionCard title="Gatekeeper Checks (11)" icon="🛡️" accent="#22c55e">
+        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>
+          All 11 checks must pass before any trade is executed. Failures are logged to the audit trail.
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 6 }}>
+          {gatekeeperChecks.map((check, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 6, background: '#0f172a', border: '1px solid #1e293b' }}>
+              <span style={{ color: '#22c55e', fontSize: 14 }}>✓</span>
+              <span style={{ fontSize: 12, color: '#94a3b8' }}>{check}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 8, background: '#0f172a', border: '1px solid #1e293b' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#f1f5f9', marginBottom: 6 }}>Decision Outcomes</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {['NO_SIGNAL', 'ML_FILTERED', 'RISK_BLOCKED', 'SIZING_REJECTED', 'EXECUTED', 'EXECUTION_ERROR'].map(o => (
+              <span key={o} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: '#1e293b', color: '#94a3b8', fontFamily: 'monospace' }}>{o}</span>
+            ))}
+          </div>
+        </div>
+      </SectionCard>
+    </>
   );
 };
 

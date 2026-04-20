@@ -249,7 +249,123 @@ const MLAISection: React.FC = () => {
           {actionMsg}
         </div>
       )}
+
+      {/* ── Advanced ML Subsystems ── */}
+      <MLSubsystemsPanel />
     </div>
+  );
+};
+
+// ── Advanced ML Subsystems Panel ──────────────────────────────────────────────
+
+const MLSubsystemsPanel: React.FC = () => {
+  const [filterStats, setFilterStats]   = useState<Record<string, unknown> | null>(null);
+  const [onlineStatus, setOnlineStatus] = useState<Record<string, unknown> | null>(null);
+  const [loading, setLoading]           = useState(false);
+  const [tab, setTab]                   = useState<'filter' | 'online' | 'features'>('filter');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [f, o] = await Promise.allSettled([
+        superadminApi.mlFilterStats ? superadminApi.mlFilterStats() : Promise.reject('no method'),
+        superadminApi.mlOnlineLearnerStatus ? superadminApi.mlOnlineLearnerStatus() : Promise.reject('no method'),
+      ]);
+      if (f.status === 'fulfilled') setFilterStats(f.value.data);
+      if (o.status === 'fulfilled') setOnlineStatus(o.value.data);
+    } catch { /* non-fatal */ }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const STABS = [
+    { id: 'filter',  label: '🎯 Signal Filter' },
+    { id: 'online',  label: '📡 Online Learner' },
+    { id: 'features', label: '🔢 ML Metrics' },
+  ] as const;
+
+  return (
+    <SectionCard title="Advanced ML Subsystems" icon="⚙️" accent="#a78bfa">
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+        {STABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{
+            padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12,
+            fontWeight: tab === t.id ? 700 : 500,
+            background: tab === t.id ? '#2e1065' : '#1e293b',
+            color: tab === t.id ? '#c084fc' : '#94a3b8',
+          }}>{t.label}</button>
+        ))}
+        <button onClick={load} disabled={loading} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #334155', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: 12 }}>
+          {loading ? '…' : '↻'}
+        </button>
+      </div>
+
+      {tab === 'filter' && filterStats && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+          {Object.entries(filterStats as Record<string, unknown>).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
+            <div key={key} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
+              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4, textTransform: 'uppercase' }}>{key.replace(/_/g, ' ')}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#c084fc' }}>{String(val)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {tab === 'filter' && !filterStats && (
+        <div style={{ color: '#475569', fontSize: 13 }}>Signal filter stats not available. Ensure the ML engine is running.</div>
+      )}
+
+      {tab === 'online' && onlineStatus && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+          {Object.entries(onlineStatus as Record<string, unknown>).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
+            <div key={key} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
+              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4, textTransform: 'uppercase' }}>{key.replace(/_/g, ' ')}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#60a5fa' }}>{String(val)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {tab === 'online' && !onlineStatus && (
+        <div style={{ color: '#475569', fontSize: 13 }}>Online learner status not available. Enable FEATURE_ONLINE_LEARNING to activate.</div>
+      )}
+
+      {tab === 'features' && (
+        <div style={{ color: '#64748b', fontSize: 13 }}>
+          <p>The HOPEFX ML pipeline uses <strong style={{ color: '#f1f5f9' }}>176 engineered features</strong> including:</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8, marginTop: 12 }}>
+            {[
+              'MTF Fusion (M1/M5/M15/H1/H4/D1)', 'Anomaly Weighting', 'Macro Calendar Features',
+              'Sentiment Features (DL + rule)', 'Technical Indicators (50+)', 'Microstructure Features',
+              'Regime Detection Features', 'Geopolitical Risk Score', 'Order Flow Imbalance',
+              'GARCH Volatility Estimate', 'Correlation Features', 'COT Positioning',
+            ].map(f => (
+              <div key={f} style={{ padding: '8px 12px', borderRadius: 6, background: '#0f172a', border: '1px solid #1e293b', fontSize: 12, color: '#94a3b8' }}>
+                ✓ {f}
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 16, padding: '12px 14px', borderRadius: 8, background: '#0f172a', border: '1px solid #1e293b' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#f1f5f9', marginBottom: 8 }}>Model Ensemble Architecture</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {[
+                { name: 'XGBoost', role: 'Primary signal classifier', weight: '40%' },
+                { name: 'LightGBM', role: 'Secondary classifier', weight: '30%' },
+                { name: 'Random Forest', role: 'Ensemble diversity', weight: '20%' },
+                { name: 'LSTM Signal Layer', role: 'Temporal patterns', weight: '10%' },
+                { name: 'Online SGD', role: 'Real-time adaptation', weight: 'blend' },
+                { name: 'RL Agent (PPO/SAC)', role: 'Position sizing', weight: 'overlay' },
+              ].map(m => (
+                <div key={m.name} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', borderRadius: 6, background: '#1e293b' }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9' }}>{m.name}</span>
+                  <span style={{ fontSize: 12, color: '#64748b' }}>{m.role}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#a78bfa' }}>{m.weight}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </SectionCard>
   );
 };
 
