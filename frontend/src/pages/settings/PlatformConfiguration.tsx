@@ -231,6 +231,41 @@ interface PlatformConfig {
   k8s_ks_namespace: string;
   k8s_ks_configmap_name: string;
   k8s_ks_poll_interval_s: number;
+  // SMTP / Email
+  smtp_host: string;
+  smtp_port: number;
+  smtp_user: string;
+  smtp_password: string;
+  smtp_from: string;
+  smtp_from_name: string;
+  smtp_tls: boolean;
+  smtp_enabled: boolean;
+  // Monitoring / Observability
+  sentry_dsn: string;
+  sentry_environment: string;
+  sentry_traces_sample_rate: number;
+  sentry_profiles_sample_rate: number;
+  prometheus_port: number;
+  prometheus_scrape_interval_seconds: number;
+  prometheus_url: string;
+  alertmanager_smtp_host: string;
+  alertmanager_smtp_from: string;
+  alertmanager_smtp_to: string;
+  // Celery / Task Queue
+  celery_broker_url: string;
+  celery_result_backend: string;
+  celery_task_serializer: string;
+  celery_result_expires: number;
+  celery_worker_concurrency: number;
+  celery_max_tasks_per_child: number;
+  // Compliance thresholds
+  kyc_required_for_live: boolean;
+  aml_transaction_threshold: number;
+  aml_daily_volume_threshold: number;
+  sanctions_check_enabled: boolean;
+  gdpr_data_retention_days: number;
+  gdpr_erasure_grace_days: number;
+  regulatory_reporting_enabled: boolean;
   // General
   env: string;
   debug: boolean;
@@ -359,6 +394,27 @@ const DEFAULT_PLATFORM: PlatformConfig = {
   discord_signal_cooldown_seconds: 300, discord_bot_username: 'HOPEFX Signals',
   hopefx_kill_switch: false, k8s_ks_namespace: 'hopefx',
   k8s_ks_configmap_name: 'hopefx-kill-switch', k8s_ks_poll_interval_s: 5,
+  // SMTP
+  smtp_host: '', smtp_port: 587, smtp_user: '', smtp_password: '',
+  smtp_from: 'noreply@hopefx.ai', smtp_from_name: 'HOPEFX Trading',
+  smtp_tls: true, smtp_enabled: false,
+  // Monitoring
+  sentry_dsn: '', sentry_environment: 'production',
+  sentry_traces_sample_rate: 0.1, sentry_profiles_sample_rate: 0.1,
+  prometheus_port: 9090, prometheus_scrape_interval_seconds: 15,
+  prometheus_url: 'http://prometheus:9090',
+  alertmanager_smtp_host: 'localhost:587', alertmanager_smtp_from: 'alerts@hopefx.ai',
+  alertmanager_smtp_to: '',
+  // Celery
+  celery_broker_url: 'redis://redis:6379/1', celery_result_backend: 'redis://redis:6379/2',
+  celery_task_serializer: 'json', celery_result_expires: 3600,
+  celery_worker_concurrency: 4, celery_max_tasks_per_child: 1000,
+  // Compliance
+  kyc_required_for_live: true, aml_transaction_threshold: 10000,
+  aml_daily_volume_threshold: 50000, sanctions_check_enabled: true,
+  gdpr_data_retention_days: 365, gdpr_erasure_grace_days: 30,
+  regulatory_reporting_enabled: false,
+  // General
   env: 'production', debug: false, log_level: 'INFO',
   initial_balance: 100000, trading_mode: 'paper', broker_default: 'paper', cme_enabled: false,
 };
@@ -434,6 +490,10 @@ const TABS = [
   { id: 'brokers',     label: '🏦 Brokers',          },
   { id: 'ratelimit',   label: '🚦 Rate Limiting',    },
   { id: 'notify',      label: '🔔 Notifications',    },
+  { id: 'smtp',        label: '📧 SMTP / Email',     },
+  { id: 'monitoring',  label: '📊 Monitoring',       },
+  { id: 'celery',      label: '⚙️ Task Queue',       },
+  { id: 'compliance',  label: '⚖️ Compliance',       },
   { id: 'killswitch',  label: '🛑 Kill Switch',      },
   { id: 'healing',     label: '🩺 Auto-Healing',     },
   { id: 'diagnostics', label: '🔬 Diagnostics',      },
@@ -1064,6 +1124,137 @@ const HealingTab: React.FC<{
 };
 
 
+// ── SMTP / Email tab ──────────────────────────────────────────────────────────
+
+const SmtpTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => {
+  const [testing, setTesting] = React.useState(false);
+  const [testResult, setTestResult] = React.useState<'ok' | 'fail' | null>(null);
+  const [testMsg, setTestMsg] = React.useState('');
+
+  const testSmtp = async () => {
+    setTesting(true); setTestResult(null); setTestMsg('');
+    try {
+      const { api } = await import('../../hooks/useApi');
+      await api.post('/admin/settings/test-smtp', {
+        host: cfg.smtp_host, port: cfg.smtp_port,
+        user: cfg.smtp_user, password: cfg.smtp_password,
+        from: cfg.smtp_from, tls: cfg.smtp_tls,
+      });
+      setTestResult('ok'); setTestMsg('SMTP connection successful');
+    } catch (e: unknown) {
+      setTestResult('fail');
+      setTestMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'SMTP test failed');
+    } finally { setTesting(false); }
+  };
+
+  return (
+    <>
+      <Card>
+        <SectionHeader icon="📧" title="SMTP Configuration" desc="Outbound email for notifications, password resets, and alerts." />
+        <Tog id="smtp_en" label="Enable SMTP" desc="Send transactional emails via SMTP" checked={cfg.smtp_enabled} onChange={(v) => set({ smtp_enabled: v })} />
+        <Divider />
+        <Txt label="SMTP Host" desc="SMTP_HOST" value={cfg.smtp_host} placeholder="smtp.gmail.com" onChange={(v) => set({ smtp_host: v })} />
+        <Num label="SMTP Port" desc="SMTP_PORT" value={cfg.smtp_port} min={1} max={65535} onChange={(v) => set({ smtp_port: v })} />
+        <Txt label="SMTP Username" desc="SMTP_USER" value={cfg.smtp_user} placeholder="user@domain.com" onChange={(v) => set({ smtp_user: v })} />
+        <Txt label="SMTP Password" desc="SMTP_PASSWORD" value={cfg.smtp_password} password onChange={(v) => set({ smtp_password: v })} />
+        <Txt label="From Address" desc="EMAIL_FROM" value={cfg.smtp_from} placeholder="noreply@hopefx.ai" onChange={(v) => set({ smtp_from: v })} />
+        <Txt label="From Name" desc="EMAIL_FROM_NAME" value={cfg.smtp_from_name} placeholder="HOPEFX Trading" onChange={(v) => set({ smtp_from_name: v })} />
+        <Tog id="smtp_tls" label="Use TLS (STARTTLS)" desc="SMTP_TLS" checked={cfg.smtp_tls} onChange={(v) => set({ smtp_tls: v })} />
+        <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Button onClick={testSmtp} disabled={testing} variant="secondary">
+            {testing ? 'Testing…' : '🔌 Test SMTP Connection'}
+          </Button>
+          {testResult && (
+            <span style={{ fontSize: 13, fontWeight: 600, color: testResult === 'ok' ? '#22c55e' : '#ef4444' }}>
+              {testResult === 'ok' ? '✓' : '✗'} {testMsg}
+            </span>
+          )}
+        </div>
+      </Card>
+      <Card>
+        <SectionHeader icon="🚨" title="Alertmanager SMTP" desc="SMTP relay used by Prometheus Alertmanager for alert emails." />
+        <Txt label="Alertmanager SMTP Host" desc="ALERTMANAGER_SMTP_HOST" value={cfg.alertmanager_smtp_host} placeholder="localhost:587" onChange={(v) => set({ alertmanager_smtp_host: v })} />
+        <Txt label="Alert From Address" desc="ALERTMANAGER_SMTP_FROM" value={cfg.alertmanager_smtp_from} placeholder="alerts@hopefx.ai" onChange={(v) => set({ alertmanager_smtp_from: v })} />
+        <Txt label="Alert To Address" desc="ALERTMANAGER_SMTP_TO" value={cfg.alertmanager_smtp_to} placeholder="ops@hopefx.ai" onChange={(v) => set({ alertmanager_smtp_to: v })} />
+      </Card>
+    </>
+  );
+};
+
+// ── Monitoring / Observability tab ────────────────────────────────────────────
+
+const MonitoringTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
+  <>
+    <Card>
+      <SectionHeader icon="🐛" title="Sentry Error Tracking" desc="Distributed error tracking and performance monitoring." />
+      <Txt label="Sentry DSN" desc="SENTRY_DSN — leave blank to disable" value={cfg.sentry_dsn} placeholder="https://xxx@sentry.io/yyy" onChange={(v) => set({ sentry_dsn: v })} />
+      <Sel label="Sentry Environment" desc="SENTRY_ENVIRONMENT" value={cfg.sentry_environment}
+        options={[
+          { value: 'production', label: 'Production' },
+          { value: 'staging', label: 'Staging' },
+          { value: 'development', label: 'Development' },
+        ]}
+        onChange={(v) => set({ sentry_environment: v })} />
+      <Num label="Traces Sample Rate" desc="SENTRY_TRACES_SAMPLE_RATE (0.0–1.0)" value={cfg.sentry_traces_sample_rate} step={0.01} min={0} max={1} onChange={(v) => set({ sentry_traces_sample_rate: v })} />
+      <Num label="Profiles Sample Rate" desc="SENTRY_PROFILES_SAMPLE_RATE (0.0–1.0)" value={cfg.sentry_profiles_sample_rate} step={0.01} min={0} max={1} onChange={(v) => set({ sentry_profiles_sample_rate: v })} />
+    </Card>
+    <Card>
+      <SectionHeader icon="📈" title="Prometheus Metrics" desc="Metrics scraping and alerting configuration." />
+      <Txt label="Prometheus URL" desc="PROMETHEUS_URL" value={cfg.prometheus_url} placeholder="http://prometheus:9090" onChange={(v) => set({ prometheus_url: v })} />
+      <Num label="Prometheus Port" desc="PROMETHEUS_PORT" value={cfg.prometheus_port} min={1} max={65535} onChange={(v) => set({ prometheus_port: v })} />
+      <Num label="Scrape Interval (seconds)" desc="PROMETHEUS_SCRAPE_INTERVAL_SECONDS" value={cfg.prometheus_scrape_interval_seconds} min={5} max={300} onChange={(v) => set({ prometheus_scrape_interval_seconds: v })} />
+    </Card>
+  </>
+);
+
+// ── Celery / Task Queue tab ───────────────────────────────────────────────────
+
+const CeleryTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
+  <>
+    <Card>
+      <SectionHeader icon="⚙️" title="Celery Task Queue" desc="Async task processing for ML retraining, reports, and background jobs." />
+      <Txt label="Broker URL" desc="CELERY_BROKER_URL — Redis or RabbitMQ" value={cfg.celery_broker_url} placeholder="redis://redis:6379/1" onChange={(v) => set({ celery_broker_url: v })} />
+      <Txt label="Result Backend" desc="CELERY_RESULT_BACKEND" value={cfg.celery_result_backend} placeholder="redis://redis:6379/2" onChange={(v) => set({ celery_result_backend: v })} />
+      <Sel label="Task Serializer" desc="CELERY_TASK_SERIALIZER" value={cfg.celery_task_serializer}
+        options={[
+          { value: 'json', label: 'JSON' },
+          { value: 'msgpack', label: 'MessagePack' },
+          { value: 'pickle', label: 'Pickle (not recommended)' },
+        ]}
+        onChange={(v) => set({ celery_task_serializer: v })} />
+      <Num label="Result Expiry (seconds)" desc="CELERY_RESULT_EXPIRES" value={cfg.celery_result_expires} min={60} onChange={(v) => set({ celery_result_expires: v })} />
+      <Num label="Worker Concurrency" desc="CELERY_WORKER_CONCURRENCY — parallel task slots" value={cfg.celery_worker_concurrency} min={1} max={64} onChange={(v) => set({ celery_worker_concurrency: v })} />
+      <Num label="Max Tasks Per Child" desc="CELERY_MAX_TASKS_PER_CHILD — restart worker after N tasks" value={cfg.celery_max_tasks_per_child} min={100} onChange={(v) => set({ celery_max_tasks_per_child: v })} />
+    </Card>
+  </>
+);
+
+// ── Compliance thresholds tab ─────────────────────────────────────────────────
+
+const ComplianceTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
+  <>
+    <Card>
+      <SectionHeader icon="🪪" title="KYC Requirements" desc="Know Your Customer verification gates." />
+      <Tog id="kyc_live" label="Require KYC for Live Trading" desc="Block live trading until KYC is approved" checked={cfg.kyc_required_for_live} onChange={(v) => set({ kyc_required_for_live: v })} />
+    </Card>
+    <Card>
+      <SectionHeader icon="🔍" title="AML Thresholds" desc="Anti-Money Laundering transaction monitoring limits." />
+      <Num label="Single Transaction Threshold (USD)" desc="Transactions above this trigger AML review" value={cfg.aml_transaction_threshold} min={1000} step={1000} onChange={(v) => set({ aml_transaction_threshold: v })} />
+      <Num label="Daily Volume Threshold (USD)" desc="Daily volume above this triggers AML review" value={cfg.aml_daily_volume_threshold} min={5000} step={5000} onChange={(v) => set({ aml_daily_volume_threshold: v })} />
+      <Tog id="sanctions" label="Enable Sanctions Screening" desc="Screen all users against OFAC/UN sanctions lists" checked={cfg.sanctions_check_enabled} onChange={(v) => set({ sanctions_check_enabled: v })} />
+    </Card>
+    <Card>
+      <SectionHeader icon="🔒" title="GDPR / Data Privacy" desc="Data retention and erasure policy configuration." />
+      <Num label="Data Retention (days)" desc="How long to retain user data after account closure" value={cfg.gdpr_data_retention_days} min={30} max={3650} onChange={(v) => set({ gdpr_data_retention_days: v })} />
+      <Num label="Erasure Grace Period (days)" desc="Days before erasure request is executed" value={cfg.gdpr_erasure_grace_days} min={0} max={90} onChange={(v) => set({ gdpr_erasure_grace_days: v })} />
+    </Card>
+    <Card>
+      <SectionHeader icon="📋" title="Regulatory Reporting" desc="Automated regulatory report generation." />
+      <Tog id="reg_report" label="Enable Regulatory Reporting" desc="Auto-generate CFTC/FCA/MiFID II reports" checked={cfg.regulatory_reporting_enabled} onChange={(v) => set({ regulatory_reporting_enabled: v })} />
+    </Card>
+  </>
+);
+
 // ── Diagnostics tab ───────────────────────────────────────────────────────────
 
 const DiagnosticsTab: React.FC = () => {
@@ -1326,8 +1517,12 @@ const PlatformConfiguration: React.FC = () => {
       {activeTab === 'execution'  && <><ExecutionTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
       {activeTab === 'brokers'    && <><BrokersTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
       {activeTab === 'ratelimit'  && <><RateLimitTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
-      {activeTab === 'notify'     && <><NotifyTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
-      {activeTab === 'killswitch' && <><KillSwitchTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
+      {activeTab === 'notify'      && <><NotifyTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
+      {activeTab === 'smtp'        && <><SmtpTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
+      {activeTab === 'monitoring'  && <><MonitoringTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
+      {activeTab === 'celery'      && <><CeleryTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
+      {activeTab === 'compliance'  && <><ComplianceTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
+      {activeTab === 'killswitch'  && <><KillSwitchTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
       {activeTab === 'healing'    && (
         <HealingTab
           healer={healer} setHealer={setHealer}
