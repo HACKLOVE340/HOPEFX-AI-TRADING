@@ -439,8 +439,9 @@ export const superadminApi = {
   bulkExportUsers:   (userIds: string[])       => api.post('/superadmin/users/bulk/export', { user_ids: userIds }, { responseType: 'blob' }),
 
   // Platform settings
-  platformConfig:    ()                        => api.get('/superadmin/platform/config'),
+  platformConfig:       ()                     => api.get('/superadmin/platform/config'),
   updatePlatformConfig: (p: object)            => api.patch('/superadmin/platform/config', p),
+  savePlatformConfigFull: (p: object)          => api.put('/superadmin/platform/config/full', p),
   maintenanceMode:   (enabled: boolean, msg?: string) =>
     api.post('/superadmin/platform/maintenance', { enabled, message: msg }),
   broadcastMessage:  (p: object)               => api.post('/superadmin/platform/broadcast', p),

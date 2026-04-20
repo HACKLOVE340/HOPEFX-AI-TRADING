@@ -425,17 +425,18 @@ const Tog: React.FC<{
 // ── Tab bar ───────────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: 'platform',   label: '🌐 Platform',        },
-  { id: 'database',   label: '🗄️ Database & Cache', },
-  { id: 'security',   label: '🔒 Security',         },
-  { id: 'ml',         label: '🧠 ML / AI',          },
-  { id: 'risk',       label: '⚖️ Risk Engine',      },
-  { id: 'execution',  label: '⚡ Execution',        },
-  { id: 'brokers',    label: '🏦 Brokers',          },
-  { id: 'ratelimit',  label: '🚦 Rate Limiting',    },
-  { id: 'notify',     label: '🔔 Notifications',    },
-  { id: 'killswitch', label: '🛑 Kill Switch',      },
-  { id: 'healing',    label: '🩺 Auto-Healing',     },
+  { id: 'platform',    label: '🌐 Platform',        },
+  { id: 'database',    label: '🗄️ Database & Cache', },
+  { id: 'security',    label: '🔒 Security',         },
+  { id: 'ml',          label: '🧠 ML / AI',          },
+  { id: 'risk',        label: '⚖️ Risk Engine',      },
+  { id: 'execution',   label: '⚡ Execution',        },
+  { id: 'brokers',     label: '🏦 Brokers',          },
+  { id: 'ratelimit',   label: '🚦 Rate Limiting',    },
+  { id: 'notify',      label: '🔔 Notifications',    },
+  { id: 'killswitch',  label: '🛑 Kill Switch',      },
+  { id: 'healing',     label: '🩺 Auto-Healing',     },
+  { id: 'diagnostics', label: '🔬 Diagnostics',      },
 ];
 
 const TabBar: React.FC<{ active: string; onChange: (t: string) => void }> = ({ active, onChange }) => (
@@ -1063,6 +1064,124 @@ const HealingTab: React.FC<{
 };
 
 
+// ── Diagnostics tab ───────────────────────────────────────────────────────────
+
+const DiagnosticsTab: React.FC = () => {
+  const [summary, setSummary] = React.useState<Record<string, unknown> | null>(null);
+  const [report, setReport] = React.useState<Record<string, unknown> | null>(null);
+  const [running, setRunning] = React.useState(false);
+  const [remediating, setRemediating] = React.useState(false);
+  const [msg, setMsg] = React.useState('');
+
+  const loadSummary = React.useCallback(async () => {
+    try {
+      const res = await superadminApi.diagnosticsSummary();
+      setSummary(res.data);
+    } catch { /* non-fatal */ }
+  }, []);
+
+  React.useEffect(() => { loadSummary(); }, [loadSummary]);
+
+  const runDiag = async () => {
+    setRunning(true); setMsg('');
+    try {
+      await superadminApi.diagnosticsRun();
+      setMsg('Diagnostic run started — polling for results…');
+      setTimeout(async () => {
+        const res = await superadminApi.diagnosticsReport();
+        setReport(res.data);
+        loadSummary();
+        setMsg('');
+      }, 4000);
+    } catch { setMsg('Failed to start diagnostic run'); }
+    finally { setRunning(false); }
+  };
+
+  const remediate = async () => {
+    setRemediating(true); setMsg('');
+    try {
+      const res = await superadminApi.diagnosticsRemediate();
+      setMsg(`Remediation complete — ${res.data.actions_taken} action(s) taken`);
+      loadSummary();
+    } catch { setMsg('Remediation failed'); }
+    finally { setRemediating(false); }
+  };
+
+  const score = summary ? Number(summary.health_score ?? 0) : null;
+  const scoreColor = score === null ? '#94a3b8' : score >= 90 ? '#22c55e' : score >= 70 ? '#f59e0b' : '#ef4444';
+
+  return (
+    <>
+      <Card>
+        <SectionHeader icon="🔬" title="Platform Diagnostics" />
+        <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+          Run the full diagnostic suite across all 12 check categories. Auto-remediates critical findings.
+        </p>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+          <Button onClick={runDiag} disabled={running}>{running ? 'Running…' : '▶ Run Full Diagnostics'}</Button>
+          <Button onClick={remediate} disabled={remediating} variant="secondary">{remediating ? 'Remediating…' : '🔧 Auto-Remediate'}</Button>
+          <Button onClick={loadSummary} variant="secondary">↻ Refresh</Button>
+        </div>
+        {msg && <div style={{ padding: '8px 12px', borderRadius: 6, background: '#1e293b', color: '#94a3b8', fontSize: 13, marginBottom: 12 }}>{msg}</div>}
+        {summary && (
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            {[
+              { label: 'Health Score', value: score !== null ? `${score}%` : '—', color: scoreColor },
+              { label: 'Total Checks', value: String(summary.total_checks ?? 0), color: '#94a3b8' },
+              { label: 'OK', value: String((summary.counts as Record<string,number>)?.ok ?? 0), color: '#22c55e' },
+              { label: 'Warnings', value: String((summary.counts as Record<string,number>)?.warning ?? 0), color: '#f59e0b' },
+              { label: 'Errors', value: String((summary.counts as Record<string,number>)?.error ?? 0), color: '#ef4444' },
+              { label: 'Critical', value: String((summary.counts as Record<string,number>)?.critical ?? 0), color: '#dc2626' },
+            ].map((m) => (
+              <div key={m.label} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 16px', textAlign: 'center', minWidth: 80 }}>
+                <div style={{ fontSize: 20, fontWeight: 800, color: m.color }}>{m.value}</div>
+                <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>{m.label}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+      {summary?.top_issues && (Array.isArray(summary.top_issues) && summary.top_issues.length > 0) && (
+        <Card>
+          <SectionHeader icon="⚠️" title="Top Issues" />
+          {(summary.top_issues as Array<Record<string,string>>).map((issue, i) => (
+            <div key={i} style={{ padding: '10px 14px', borderRadius: 8, background: '#450a0a', border: '1px solid #dc262633', marginBottom: 8 }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: '#fca5a5' }}>{issue.check_name}</div>
+              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{issue.message}</div>
+              {issue.remediation && <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Fix: {issue.remediation}</div>}
+            </div>
+          ))}
+        </Card>
+      )}
+      {report && (
+        <Card>
+          <SectionHeader icon="📋" title="Last Diagnostic Report" />
+          <div style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
+            Completed: {String(report.completed_at ?? 'N/A')}
+          </div>
+          {(report.results as Array<Record<string,string>> ?? []).map((r, i) => (
+            <div key={i} style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '8px 12px', borderRadius: 6, marginBottom: 4,
+              background: r.status === 'ok' ? '#052e16' : r.status === 'warning' ? '#451a03' : '#450a0a',
+              border: `1px solid ${r.status === 'ok' ? '#16a34a33' : r.status === 'warning' ? '#d9770633' : '#dc262633'}`,
+            }}>
+              <div>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{r.check_name}</span>
+                <div style={{ fontSize: 12, color: '#94a3b8' }}>{r.message}</div>
+              </div>
+              <span style={{ fontSize: 11, fontWeight: 700, color: r.status === 'ok' ? '#22c55e' : r.status === 'warning' ? '#f59e0b' : '#ef4444', textTransform: 'uppercase', flexShrink: 0, marginLeft: 12 }}>
+                {r.status}
+              </span>
+            </div>
+          ))}
+        </Card>
+      )}
+    </>
+  );
+};
+
+
 // ── Root component ────────────────────────────────────────────────────────────
 
 const PlatformConfiguration: React.FC = () => {
@@ -1124,11 +1243,11 @@ const PlatformConfiguration: React.FC = () => {
     loadHealer();
   }, [loadConfig, loadHealer]);
 
-  // Save platform config
+  // Save platform config — uses full-config PUT so all 200+ fields persist
   const handleSave = async () => {
     setSaving(true); setSaveError('');
     try {
-      await superadminApi.updatePlatformConfig(cfg);
+      await superadminApi.savePlatformConfigFull(cfg);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e: unknown) {
@@ -1221,6 +1340,7 @@ const PlatformConfiguration: React.FC = () => {
           actionMsg={actionMsg}
         />
       )}
+      {activeTab === 'diagnostics' && <DiagnosticsTab />}
     </div>
   );
 };

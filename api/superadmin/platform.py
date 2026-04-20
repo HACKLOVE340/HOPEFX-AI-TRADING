@@ -260,6 +260,26 @@ async def resume_trading(user: TokenPayload = Depends(_require_superadmin)) -> d
     return {"ok": True, "engine_status": "running"}
 
 
+@router.put("/platform/config/full")
+async def save_full_platform_config(
+    body: dict,
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    """Accept and persist the complete platform config (all 200+ fields).
+
+    Uses a free-form dict so new fields added to the frontend don't require
+    a backend schema change.  Merges with existing config so partial updates
+    are safe.
+    """
+    import json as _json
+
+    cfg = _load_platform_config()
+    cfg.update(body)
+    _save_platform_config(cfg)
+    _log_superadmin_action(user, "full_platform_config_save", f"keys={len(body)}")
+    return {"ok": True, "saved_keys": len(body), "saved_at": _utcnow().isoformat()}
+
+
 @router.get("/engine/metrics")
 async def get_engine_metrics(user: TokenPayload = Depends(_require_superadmin)) -> dict:
     metrics: dict = {
