@@ -10,6 +10,7 @@ Prevents overfitting with rolling train/test splits
 """
 
 import logging
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -147,44 +148,77 @@ class WalkForwardEngine:
         return best_params, best_perf
 
     def _evaluate_strategy(self, data: pd.DataFrame, strategy: Any) -> dict[str, Any]:
-        """Evaluate strategy performance."""
-        trades = []
-        position = 0
+        """
+        Evaluate strategy performance using trade-level metrics.
+
+        Sharpe is computed at trade level — mean(net_pnl) / std(net_pnl) *
+        sqrt(252 / avg_hold_days) — not at bar level.  Bar-level Sharpe is
+        inflated 3-5x on daily-bar strategies because flat no-trade bars
+        suppress the return standard deviation.
+        """
+        completed_trades: list[dict] = []
+        open_trades: list[dict] = []   # stack of open positions
         equity = [1.0]
+        position = 0
+        bar_idx = 0
 
         for i, row in data.iterrows():
-            # Generate signal
             signal = strategy.on_tick(row)
 
             if signal and signal["action"] in ["BUY", "SELL"]:
-                # Simulate execution
-                trade = {
-                    "timestamp": i,
-                    "action": signal["action"],
-                    "price": row["close"],
-                    "size": 1.0,
-                }
-                trades.append(trade)
+                price = float(row["close"])
 
-                # Update position
                 if signal["action"] == "BUY":
+                    open_trades.append({"entry_price": price, "entry_bar": bar_idx, "side": "long"})
                     position += 1
                 else:
+                    # Close the oldest open long, or open a short
+                    long_open = [t for t in open_trades if t["side"] == "long"]
+                    if long_open:
+                        entry = long_open[0]
+                        open_trades.remove(entry)
+                        hold_bars = max(1, bar_idx - entry["entry_bar"])
+                        pnl_pct = (price - entry["entry_price"]) / entry["entry_price"]
+                        completed_trades.append(
+                            {
+                                "pnl_pct": pnl_pct,
+                                "hold_bars": hold_bars,
+                                "win": pnl_pct > 0,
+                            }
+                        )
+                    else:
+                        open_trades.append({"entry_price": price, "entry_bar": bar_idx, "side": "short"})
                     position -= 1
 
-            # Mark to market
-            pnl = position * (row["close"] - data.iloc[0]["close"]) / data.iloc[0]["close"]
+            # Mark to market for equity curve and drawdown
+            ref_price = float(data.iloc[0]["close"])
+            cur_price = float(row["close"])
+            pnl = position * (cur_price - ref_price) / ref_price
             equity.append(1.0 + pnl)
+            bar_idx += 1
 
-        # Calculate metrics
-        returns = pd.Series(equity).pct_change().dropna()
+        # Force-close any remaining open positions at last bar price
+        last_price = float(data.iloc[-1]["close"])
+        for entry in open_trades:
+            hold_bars = max(1, bar_idx - entry["entry_bar"])
+            if entry["side"] == "long":
+                pnl_pct = (last_price - entry["entry_price"]) / entry["entry_price"]
+            else:
+                pnl_pct = (entry["entry_price"] - last_price) / entry["entry_price"]
+            completed_trades.append({"pnl_pct": pnl_pct, "hold_bars": hold_bars, "win": pnl_pct > 0})
+
+        # ── Trade-level Sharpe (corrected) ────────────────────────────────
+        sharpe = _trade_level_sharpe(completed_trades)
+
+        n = len(completed_trades)
+        win_rate = sum(1 for t in completed_trades if t["win"]) / n if n > 0 else 0.0
 
         return {
-            "total_return": equity[-1] - 1,
-            "sharpe_ratio": returns.mean() / returns.std() * np.sqrt(252) if len(returns) > 1 else 0,
+            "total_return": equity[-1] - 1.0,
+            "sharpe_ratio": sharpe,
             "max_drawdown": self._calculate_max_drawdown(equity),
-            "num_trades": len(trades),
-            "win_rate": len([t for t in trades if t.get("pnl", 0) > 0]) / len(trades) if trades else 0,
+            "num_trades": n,
+            "win_rate": win_rate,
         }
 
     def _calculate_max_drawdown(self, equity: list[float]) -> float:
@@ -231,6 +265,31 @@ class WalkForwardEngine:
             "is_robust": np.mean(test_sharpes) > 0.5
             and sum(1 for r in self.results if r.is_overfit) < len(self.results) * 0.3,
         }
+
+
+def _trade_level_sharpe(trades: list[dict], bars_per_day: int = 1) -> float:
+    """
+    Compute annualised trade-level Sharpe ratio.
+
+    Formula: mean(pnl_pct) / std(pnl_pct) * sqrt(252 / avg_hold_days)
+
+    Uses pnl_pct (return per trade) rather than absolute PnL so the ratio
+    is position-size independent.  avg_hold_days is derived from hold_bars
+    and bars_per_day so the annualisation factor is correct for any bar
+    frequency (D1, H4, H1, etc.).
+
+    Returns 0.0 when fewer than 2 trades are available.
+    """
+    if len(trades) < 2:
+        return 0.0
+    pnls = np.array([t["pnl_pct"] for t in trades], dtype=float)
+    std = float(np.std(pnls, ddof=1))
+    if abs(std) < 1e-12:
+        return 0.0
+    hold_bars = np.array([t.get("hold_bars", bars_per_day) for t in trades], dtype=float)
+    avg_hold_days = float(np.mean(hold_bars)) / max(bars_per_day, 1)
+    ann_factor = math.sqrt(252.0 / max(avg_hold_days, 1.0 / 252))
+    return float(np.mean(pnls) / std * ann_factor)
 
 
 WalkForwardAnalysis = WalkForwardEngine
