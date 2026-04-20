@@ -88,5 +88,6 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/auto-heal',    label: 'Auto-Heal',      icon: '🩺', group: 'admin',      adminOnly: true },
 
   // ── Super Admin (superadmin only) ─────────────────────────────────────────
-  { path: '/superadmin',   label: 'Master Control', icon: '⚡', group: 'superadmin', superAdminOnly: true },
+  { path: '/superadmin',          label: 'Master Control', icon: '⚡', group: 'superadmin', superAdminOnly: true },
+  { path: '/system-reliability',  label: 'Reliability',    icon: '🔬', group: 'superadmin', superAdminOnly: true },
 ];

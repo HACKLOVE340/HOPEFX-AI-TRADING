@@ -92,7 +92,8 @@ const AutoHealDashboard = React.lazy(() => import('./pages/AutoHealDashboard'));
 const WhitelabelAdmin   = React.lazy(() => import('./pages/WhitelabelAdmin'));
 
 // ── Superadmin-only ───────────────────────────────────────────────────────────
-const SuperAdminDashboard = React.lazy(() => import('./pages/SuperAdminDashboard'));
+const SuperAdminDashboard  = React.lazy(() => import('./pages/SuperAdminDashboard'));
+const SystemReliability    = React.lazy(() => import('./pages/SystemReliability'));
 
 // ── React Query ───────────────────────────────────────────────────────────────
 const queryClient = new QueryClient({
@@ -392,7 +393,8 @@ const AppShell: React.FC = () => {
             <Route path="/whitelabel"   element={<Navigate to="/audit" replace />} />
 
             {/* Superadmin-only */}
-            <Route path="/superadmin"   element={wrap(superAdminOnly(<SuperAdminDashboard />))} />
+            <Route path="/superadmin"          element={wrap(superAdminOnly(<SuperAdminDashboard />))} />
+            <Route path="/system-reliability"  element={wrap(superAdminOnly(<SystemReliability />))} />
 
             {/* Fallback — authenticated users go to /dashboard, others to /login */}
             <Route

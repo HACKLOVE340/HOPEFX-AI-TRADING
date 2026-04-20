@@ -7,7 +7,7 @@ import logging
 import sys
 import time
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from api.auth import TokenPayload
 
@@ -262,7 +262,7 @@ async def resume_trading(user: TokenPayload = Depends(_require_superadmin)) -> d
 
 @router.put("/platform/config/full")
 async def save_full_platform_config(
-    body: dict,
+    request: Request,
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     """Accept and persist the complete platform config (all 200+ fields).
@@ -271,8 +271,7 @@ async def save_full_platform_config(
     a backend schema change.  Merges with existing config so partial updates
     are safe.
     """
-    import json as _json
-
+    body: dict = await request.json()
     cfg = _load_platform_config()
     cfg.update(body)
     _save_platform_config(cfg)
