@@ -356,19 +356,24 @@ class TransactionCostModel:
     use_adaptive_spread: bool = True
 
     # ── Overnight financing (swap) ────────────────────────────────────────────
-    # Charged every bar on open position notional.  Expressed as an annual rate
-    # and scaled to the bar frequency by the engine.
+    # Charged every bar on open positions.  The engine calls OvernightSwapModel
+    # directly (USD per lot per night) rather than using these annual-rate fields
+    # when use_swap_model=True (the default).
     #
-    # XAUUSD typical swap rates (2024):
-    #   Long  (buy gold): ~−0.40% p.a. (you pay the carry)
-    #   Short (sell gold): ~+0.20% p.a. (you receive, but less than you pay on long)
+    # Correct XAUUSD rates (industry-standard, April 2026):
+    #   Long  (buy gold): −$4.10/night per 100oz lot = −0.749% p.a. on notional
+    #   Short (sell gold): +$0.60/night per 100oz lot = +0.110% p.a. on notional
     #
-    # The default 0.40% p.a. is the long-side cost.  For a more accurate model
-    # pass separate long/short rates via overnight_rate_long_annual and
-    # overnight_rate_short_annual.
-    overnight_rate_annual: float = 0.004  # 0.40% p.a. — XAUUSD long swap (default)
-    overnight_rate_long_annual: float = 0.004  # 0.40% p.a. — long position carry cost
-    overnight_rate_short_annual: float = -0.002  # −0.20% p.a. — short position (receive)
+    # The old 0.40% p.a. long rate undercharged by ~47%.
+    # These annual-rate fields are kept for backward compatibility and are used
+    # only when use_swap_model=False.
+    overnight_rate_annual: float = 0.00749   # −0.749% p.a. — XAUUSD long (corrected)
+    overnight_rate_long_annual: float = 0.00749   # −0.749% p.a. — long carry cost
+    overnight_rate_short_annual: float = -0.00110  # +0.110% p.a. — short (receive)
+    # use_swap_model: when True (default), OvernightSwapModel is used for all
+    # overnight financing calculations (USD/lot/night with Wednesday triple-swap).
+    # Set False only to reproduce legacy results for comparison.
+    use_swap_model: bool = True
 
     def calculate_market_impact(
         self,
@@ -432,10 +437,13 @@ class TransactionCostModel:
         model.decay_exponent = 0.55
         # Spread: XAUUSD OTC spot is typically 2–5 bps; use 3 bps as default
         model.spread_markup_bps = 0.3
-        # Overnight: XAUUSD long swap ~0.40% p.a.
-        model.overnight_rate_annual = 0.004
-        model.overnight_rate_long_annual = 0.004
-        model.overnight_rate_short_annual = -0.002
+        # Overnight: corrected XAUUSD rates (−$4.10/night per 100oz lot long)
+        # = −0.749% p.a. on notional.  OvernightSwapModel is used directly
+        # when use_swap_model=True (the default); these fields are fallback only.
+        model.overnight_rate_annual = 0.00749
+        model.overnight_rate_long_annual = 0.00749
+        model.overnight_rate_short_annual = -0.00110
+        model.use_swap_model = True
         return model
 
     def calibrate_from_executions(
@@ -1730,28 +1738,73 @@ class EnhancedBacktestEngine:
         return history[-1] if history else position.avg_entry_price
 
     def _annual_financing_rate(self, position: "Position") -> float:
-        """Return the annual overnight financing rate for a position side."""
+        """
+        Return the annual overnight financing rate for a position side.
+
+        Used only when cost_model.use_swap_model=False (legacy path).
+        """
         is_long = position.side.name == "BUY" if hasattr(position.side, "name") else str(position.side) == "BUY"
-        default_annual = getattr(self.cost_model, "overnight_rate_annual", 0.004)
+        default_annual = getattr(self.cost_model, "overnight_rate_annual", 0.00749)
         if is_long:
             return getattr(self.cost_model, "overnight_rate_long_annual", default_annual)
-        return getattr(self.cost_model, "overnight_rate_short_annual", -default_annual * 0.5)
+        return getattr(self.cost_model, "overnight_rate_short_annual", -default_annual * 0.147)
 
     def _charge_overnight_financing(self, tick: "TickData", bars_per_day: float) -> float:
         """
         Charge overnight financing on all open positions for one bar.
 
-        Returns the total financing cost charged this bar (positive = cost).
+        When cost_model.use_swap_model=True (default), uses OvernightSwapModel
+        (USD per standard lot per night) with Wednesday triple-swap applied
+        from tick.timestamp.weekday().
+
+        When use_swap_model=False, falls back to the legacy annual-rate model
+        (notional × annual_rate / 365 / bars_per_day).
+
+        Returns the total financing cost charged this bar (positive = cost paid).
         """
+        from backtesting.transaction_costs import get_swap_model
+
+        use_swap = getattr(self.cost_model, "use_swap_model", True)
+        swap_model = get_swap_model() if use_swap else None
+
+        # Extract weekday for Wednesday triple-swap
+        weekday: int | None = None
+        if use_swap and tick.timestamp is not None:
+            try:
+                weekday = int(tick.timestamp.weekday())
+            except Exception:  # nosec B110 — non-fatal; fall back to no triple-swap
+                pass
+
         total_financing = 0.0
         for symbol, position in self.positions.items():
             if position.size == 0:
                 continue
             current_price = self._get_position_price(symbol, tick, position)
-            notional = abs(position.size) * current_price
-            annual_rate = self._annual_financing_rate(position)
-            per_bar_rate = annual_rate / 365.0 / bars_per_day
-            financing_cost = notional * per_bar_rate
+            is_long = (
+                position.side.name == "BUY"
+                if hasattr(position.side, "name")
+                else str(position.side) == "BUY"
+            )
+            side = "long" if is_long else "short"
+
+            if use_swap and swap_model is not None:
+                # OvernightSwapModel: USD per standard lot per night.
+                # Distribute evenly across bars_per_day so total per calendar
+                # day equals exactly one nightly charge.
+                lots = abs(position.size) / 100.0  # 100 oz per standard lot
+                financing_cost = abs(
+                    swap_model.cost_usd_per_night(
+                        symbol or "XAUUSD",
+                        lots=lots,
+                        side=side,
+                        weekday=weekday,
+                    )
+                ) / max(bars_per_day, 1.0)
+            else:
+                # Legacy: annualised rate on notional
+                notional = abs(position.size) * current_price
+                annual_rate = self._annual_financing_rate(position)
+                financing_cost = notional * annual_rate / 365.0 / max(bars_per_day, 1.0)
 
             if financing_cost != 0.0:
                 self.capital -= financing_cost
