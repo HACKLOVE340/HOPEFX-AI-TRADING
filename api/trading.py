@@ -14,6 +14,7 @@ authenticated user ("user" role or higher).
 Auth is enforced via Depends(require_role(...)) from api.auth.
 """
 
+import asyncio
 import csv
 import io
 import json as _json
@@ -1115,7 +1116,16 @@ async def get_ohlcv(
             detail="Price engine not available",
         )
 
-    data = await app_state.price_engine.get_ohlcv(symbol, timeframe, limit)
+    try:
+        data = await asyncio.wait_for(
+            app_state.price_engine.get_ohlcv(symbol, timeframe, limit),
+            timeout=25.0,  # yfinance fallback can be slow; 25s < frontend 30s timeout
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="OHLCV data fetch timed out — market data source is slow",
+        )
 
     return [
         {

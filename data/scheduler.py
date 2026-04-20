@@ -333,20 +333,32 @@ async def _fetch_yfinance(
             # Capture loop-local copies for the lambda closures below.
             _start = from_dt.strftime("%Y-%m-%d")
             _end = end_dt.strftime("%Y-%m-%d")
-            hist = await loop.run_in_executor(
-                None,
-                lambda: yf.download(
-                    yf_symbol,
-                    start=_start,
-                    end=_end,
-                    interval=interval,
-                    progress=False,
-                    auto_adjust=True,
+            hist = await asyncio.wait_for(
+                loop.run_in_executor(
+                    None,
+                    lambda: yf.download(
+                        yf_symbol,
+                        start=_start,
+                        end=_end,
+                        interval=interval,
+                        progress=False,
+                        auto_adjust=True,
+                    ),
                 ),
+                timeout=12.0,
             )
         else:
-            ticker = await loop.run_in_executor(None, lambda: yf.Ticker(yf_symbol))
-            hist = await loop.run_in_executor(None, lambda: ticker.history(period=period, interval=interval))
+            ticker = await asyncio.wait_for(
+                loop.run_in_executor(None, lambda: yf.Ticker(yf_symbol)),
+                timeout=12.0,
+            )
+            hist = await asyncio.wait_for(
+                loop.run_in_executor(None, lambda: ticker.history(period=period, interval=interval)),
+                timeout=12.0,
+            )
+    except asyncio.TimeoutError:
+        logger.warning("yfinance fetch timed out for %s/%s after 12s", yf_symbol, interval)
+        return []
     except Exception as exc:
         logger.error("yfinance fetch error for %s/%s: %s", yf_symbol, interval, exc)
         return []

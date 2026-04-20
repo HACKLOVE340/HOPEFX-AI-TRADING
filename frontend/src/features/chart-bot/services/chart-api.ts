@@ -42,8 +42,10 @@ export async function fetchOHLCV(params: OHLCVParams): Promise<OHLCVBar[]> {
     ...(from ? { from: String(from) } : {}),
     ...(to   ? { to:   String(to)   } : {}),
   });
+  // OHLCV may fetch from yfinance on the backend — allow up to 30s
   const res = await api.get<OHLCVBar[] | { data?: OHLCVBar[] }>(
-    `/trading/ohlcv/${encodeURIComponent(symbol)}?${query}`
+    `/trading/ohlcv/${encodeURIComponent(symbol)}?${query}`,
+    { timeout: 30_000 },
   );
   const raw = res.data;
   const bars: OHLCVBar[] = Array.isArray(raw) ? raw : (raw.data ?? []);
@@ -170,7 +172,8 @@ function buildDefaultMicro(): MicrostructureSnapshot {
 // ─── AI Analysis ──────────────────────────────────────────────────────────────
 
 export async function requestAIAnalysis(context: ChartClickContext): Promise<AIAnalysis> {
-  const res = await api.post<AIAnalysis | { data?: AIAnalysis }>('/trading/ai-analysis', context);
+  // AI analysis involves regime detection + signal lookup — allow up to 30s
+  const res = await api.post<AIAnalysis | { data?: AIAnalysis }>('/trading/ai-analysis', context, { timeout: 30_000 });
   const raw = res.data;
   if ('summary' in raw) return raw as AIAnalysis;
   return (raw as { data?: AIAnalysis }).data ?? buildDefaultAnalysis(context);

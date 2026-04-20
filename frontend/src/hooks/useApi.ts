@@ -269,8 +269,9 @@ export const tradingApi = {
   signals:        ()              => api.get('/trading/signals'),
   account:        ()              => api.get('/trading/account'),
   prices:         ()              => api.get<Record<string, { bid: number; ask: number; last: number; timestamp: number }>>('/trading/prices'),
+  // OHLCV may fetch from yfinance — allow up to 30s before giving up
   ohlcv:          (symbol: string, timeframe = '1h', limit = 200) =>
-    api.get(`/trading/ohlcv/${encodeURIComponent(symbol)}`, { params: { timeframe, limit } }),
+    api.get(`/trading/ohlcv/${encodeURIComponent(symbol)}`, { params: { timeframe, limit }, timeout: 30_000 }),
   placeOrder:     (order: object) => api.post('/trading/orders', order),
   closePosition:  (id: string)    => api.delete(`/trading/positions/${id}`),
   closeAllPositions: ()           => api.delete('/trading/positions'),
@@ -282,8 +283,9 @@ export const tradingApi = {
   regime:         (symbol?: string) => api.get('/trading/regime', { params: symbol ? { symbol } : {} }),
   brainState:     ()              => api.get('/trading/brain-state'),
   emergencyStop:  ()              => api.post('/trading/emergency-stop'),
+  // AI analysis involves regime detection + signal lookup — allow up to 30s
   aiAnalysis:     (payload: { symbol: string; price?: number; timeframe?: string }) =>
-    api.post('/trading/ai-analysis', payload),
+    api.post('/trading/ai-analysis', payload, { timeout: 30_000 }),
   riskMetrics:    ()              => api.get('/trading/risk'),
 };
 
@@ -298,7 +300,8 @@ export const backtestApi = {
 // ── ML ────────────────────────────────────────────────────────────────────────
 
 export const mlApi = {
-  predict:  (symbol: string, payload?: object) => api.post(`/ml/predict/${encodeURIComponent(symbol)}`, payload ?? {}),
+  // ML predict loads OHLCV + runs inference — allow up to 30s
+  predict:  (symbol: string, payload?: object) => api.post(`/ml/predict/${encodeURIComponent(symbol)}`, payload ?? {}, { timeout: 30_000 }),
   accuracy: ()               => api.get('/ml/accuracy'),
   models:   ()               => api.get('/ml/models'),
   features: ()               => api.get('/ml/features'),
