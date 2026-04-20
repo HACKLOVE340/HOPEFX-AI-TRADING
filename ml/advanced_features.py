@@ -564,12 +564,27 @@ def build_filtered_target(
 
     Bars below the threshold are labelled NaN and dropped from training.
     This forces the model to learn high-conviction setups rather than noise.
+
+    Entry price: open[t+1] — the realistic fill price on the next bar's open.
+    Exit price:  close[t+horizon] — close at the prediction horizon.
+
+    Using close[t] as entry (the old approach) introduces optimism bias:
+    the model learns to predict close-to-close returns but in live trading
+    you always enter at the next bar's open, which may gap against you.
     """
     c = df["close"]
+    o = df["open"]
     atr = _atr(df, 14)
 
-    future_ret = c.pct_change(horizon).shift(-horizon)
-    future_move = (c.shift(-horizon) - c).abs()
+    # Entry at next bar's open; exit at close[t+horizon]
+    entry_price = o.shift(-1)                          # open[t+1]
+    exit_price = c.shift(-horizon)                     # close[t+horizon]
+
+    # Return from realistic entry to exit
+    future_ret = (exit_price - entry_price) / entry_price.replace(0, np.nan)
+
+    # Move magnitude from entry to exit (for ATR filter)
+    future_move = (exit_price - entry_price).abs()
     threshold = min_move_atr * atr
 
     y = pd.Series(np.nan, index=df.index)
@@ -650,7 +665,11 @@ def build_advanced_features(
     if use_filtered_target:
         y_raw = build_filtered_target(d, horizon=horizon, min_move_atr=min_move_atr)
     else:
-        future_ret = d["close"].pct_change(horizon).shift(-horizon)
+        # Unfiltered path: same entry/exit convention as build_filtered_target.
+        # Entry at open[t+1], exit at close[t+horizon].
+        entry_price = d["open"].shift(-1)
+        exit_price = d["close"].shift(-horizon)
+        future_ret = (exit_price - entry_price) / entry_price.replace(0, np.nan)
         y_raw = (future_ret > 0).astype(float)
         y_raw[y_raw.isna()] = np.nan
 

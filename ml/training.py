@@ -237,13 +237,17 @@ class FeatureEngineer:
                     _reg_exc,
                 )
 
-        # Target variable - future returns
-        future_returns = data[target_col].pct_change(prediction_horizon).shift(-prediction_horizon)
+        # Target variable — entry at open[t+1], exit at close[t+horizon].
+        # Using close[t] as entry introduces optimism bias: in live trading
+        # you always fill at the next bar's open, not the current close.
+        entry_price = data["open"].shift(-1)
+        exit_price = data[target_col].shift(-prediction_horizon)
+        future_returns = (exit_price - entry_price) / entry_price.replace(0, float("nan"))
 
-        # Classification target: 1 if price goes up, 0 if down
+        # Classification target: 1 if price goes up from entry, 0 if down
         data["target_class"] = (future_returns > 0).astype(int)
 
-        # Regression target: actual returns
+        # Regression target: actual return from realistic entry
         data["target_reg"] = future_returns
 
         # Drop NaN values
