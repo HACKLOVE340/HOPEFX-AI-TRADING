@@ -14,7 +14,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useStore } from '../store';
-import { authApi } from '../hooks/useApi';
+import { authApi, prefetchCsrfToken } from '../hooks/useApi';
 import type { UserRole } from '../store';
 import { Eye, EyeOff, Activity, AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
 
@@ -139,6 +139,9 @@ const Login: React.FC = () => {
 
       setLoading(false);
       setAuth(res.data.access_token, res.data.user);
+      // Eagerly warm the CSRF cache so the first POST after login doesn't
+      // incur an extra round-trip to fetch the token.
+      void prefetchCsrfToken();
       navigate(resolveDestination(res.data.user.role as UserRole), { replace: true });
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;

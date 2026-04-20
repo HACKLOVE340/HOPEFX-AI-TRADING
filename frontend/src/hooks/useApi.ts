@@ -44,26 +44,38 @@ async function _fetchCsrfToken(): Promise<string | null> {
   if (_csrfFetchPromise) return _csrfFetchPromise;
 
   _csrfFetchPromise = (async () => {
-    try {
-      // Use a bare axios call — not the intercepted `api` instance — to avoid
-      // a circular dependency where the interceptor waits on itself.
-      const res = await axios.get<{ csrf_token: string }>(`${BASE_URL}/auth/csrf-token`, {
-        withCredentials: true,
-      });
-      const token = res.data?.csrf_token ?? _readCsrfCookie();
-      if (token) {
-        _csrfToken     = token;
-        _csrfFetchedAt = Date.now();
+    // Attempt up to 2 fetches before giving up so transient network errors
+    // don't permanently break CSRF injection for the session lifetime.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        // Use a bare axios call — not the intercepted `api` instance — to avoid
+        // a circular dependency where the interceptor waits on itself.
+        const res = await axios.get<{ csrf_token: string }>(`${BASE_URL}/auth/csrf-token`, {
+          withCredentials: true,
+          timeout: 5000,
+        });
+        const token = res.data?.csrf_token ?? _readCsrfCookie();
+        if (token) {
+          _csrfToken     = token;
+          _csrfFetchedAt = Date.now();
+          return _csrfToken;
+        }
+      } catch {
+        // Fall back to reading the cookie directly (server may have set it already).
+        const cookieVal = _readCsrfCookie();
+        if (cookieVal) {
+          _csrfToken     = cookieVal;
+          _csrfFetchedAt = Date.now();
+          return _csrfToken;
+        }
+        // Brief pause before retry
+        if (attempt === 0) await new Promise((r) => setTimeout(r, 300));
       }
-      return _csrfToken;
-    } catch {
-      // Fall back to reading the cookie directly (server may have set it already).
-      _csrfToken = _readCsrfCookie();
-      return _csrfToken;
-    } finally {
-      _csrfFetchPromise = null;
     }
-  })();
+    return _csrfToken; // return whatever we have (may be null)
+  })().finally(() => {
+    _csrfFetchPromise = null;
+  });
 
   return _csrfFetchPromise;
 }
@@ -71,6 +83,15 @@ async function _fetchCsrfToken(): Promise<string | null> {
 /** Return a valid CSRF token, fetching one if the cache is stale or empty. */
 export async function getCsrfToken(): Promise<string | null> {
   return _getCsrfToken();
+}
+
+/**
+ * Eagerly fetch and cache a CSRF token.
+ * Call this immediately after login so the token is ready before the first
+ * state-changing request, avoiding a round-trip delay on the first POST.
+ */
+export async function prefetchCsrfToken(): Promise<void> {
+  await _fetchCsrfToken();
 }
 
 /**
@@ -109,10 +130,12 @@ const CSRF_EXEMPT_PREFIXES = [
   '/auth/csrf-token',
   '/auth/login',
   '/auth/register',
+  '/auth/activate-free-tier',  // post-registration setup, called before session cookie exists
   '/auth/refresh',
   '/auth/forgot-password',
   '/auth/reset-password',
   '/auth/verify-email',
+  '/auth/resend-verification',
   '/email/webhook',
   '/health',
 ];

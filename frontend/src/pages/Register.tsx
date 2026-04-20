@@ -12,7 +12,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useStore } from '../store';
-import { authApi } from '../hooks/useApi';
+import { authApi, prefetchCsrfToken } from '../hooks/useApi';
 import { Eye, EyeOff, Activity, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 
 // ── Plan badge ────────────────────────────────────────────────────────────────
@@ -193,6 +193,8 @@ const Register: React.FC = () => {
       try {
         const loginRes = await authApi.login({ email: email.trim().toLowerCase(), password });
         setAuth(loginRes.data.access_token, loginRes.data.user);
+        // Warm CSRF cache immediately so the first dashboard POST doesn't fail.
+        void prefetchCsrfToken();
         navigate('/dashboard', { replace: true });
         return;
       } catch (loginErr: unknown) {
