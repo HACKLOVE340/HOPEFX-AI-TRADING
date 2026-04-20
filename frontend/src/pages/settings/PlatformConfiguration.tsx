@@ -481,22 +481,23 @@ const Tog: React.FC<{
 // ── Tab bar ───────────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: 'platform',    label: '🌐 Platform',        },
-  { id: 'database',    label: '🗄️ Database & Cache', },
-  { id: 'security',    label: '🔒 Security',         },
-  { id: 'ml',          label: '🧠 ML / AI',          },
-  { id: 'risk',        label: '⚖️ Risk Engine',      },
-  { id: 'execution',   label: '⚡ Execution',        },
-  { id: 'brokers',     label: '🏦 Brokers',          },
-  { id: 'ratelimit',   label: '🚦 Rate Limiting',    },
-  { id: 'notify',      label: '🔔 Notifications',    },
-  { id: 'smtp',        label: '📧 SMTP / Email',     },
-  { id: 'monitoring',  label: '📊 Monitoring',       },
-  { id: 'celery',      label: '⚙️ Task Queue',       },
-  { id: 'compliance',  label: '⚖️ Compliance',       },
-  { id: 'killswitch',  label: '🛑 Kill Switch',      },
-  { id: 'healing',     label: '🩺 Auto-Healing',     },
-  { id: 'diagnostics', label: '🔬 Diagnostics',      },
+  { id: 'platform',       label: '🌐 Platform',        },
+  { id: 'database',       label: '🗄️ Database & Cache', },
+  { id: 'security',       label: '🔒 Security',         },
+  { id: 'ml',             label: '🧠 ML / AI',          },
+  { id: 'risk',           label: '⚖️ Risk Engine',      },
+  { id: 'execution',      label: '⚡ Execution',        },
+  { id: 'brokers',        label: '🏦 Brokers',          },
+  { id: 'ratelimit',      label: '🚦 Rate Limiting',    },
+  { id: 'notify',         label: '🔔 Notifications',    },
+  { id: 'smtp',           label: '📧 SMTP / Email',     },
+  { id: 'monitoring',     label: '📊 Monitoring',       },
+  { id: 'celery',         label: '⚙️ Task Queue',       },
+  { id: 'compliance',     label: '⚖️ Compliance',       },
+  { id: 'killswitch',     label: '🛑 Kill Switch',      },
+  { id: 'healing',        label: '🩺 Auto-Healing',     },
+  { id: 'infrastructure', label: '🏗️ Infrastructure',   },
+  { id: 'diagnostics',    label: '🔬 Diagnostics',      },
 ];
 
 const TabBar: React.FC<{ active: string; onChange: (t: string) => void }> = ({ active, onChange }) => (
@@ -1256,6 +1257,155 @@ const ComplianceTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformCo
 
 // ── Diagnostics tab ───────────────────────────────────────────────────────────
 
+// ── Infrastructure Tab ────────────────────────────────────────────────────────
+
+const InfrastructureTab: React.FC = () => {
+  const [infraHealth, setInfraHealth] = React.useState<Record<string, unknown> | null>(null);
+  const [cacheStats, setCacheStats]   = React.useState<Record<string, unknown> | null>(null);
+  const [dbStats, setDbStats]         = React.useState<Record<string, unknown> | null>(null);
+  const [queueStats, setQueueStats]   = React.useState<Record<string, unknown> | null>(null);
+  const [loading, setLoading]         = React.useState(false);
+  const [flushPattern, setFlushPattern] = React.useState('');
+  const [flushing, setFlushing]       = React.useState(false);
+  const [msg, setMsg]                 = React.useState('');
+
+  const load = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const [h, c, d, q] = await Promise.allSettled([
+        superadminApi.infraHealth(),
+        superadminApi.cacheStats(),
+        superadminApi.dbStats(),
+        superadminApi.queueStats(),
+      ]);
+      if (h.status === 'fulfilled') setInfraHealth(h.value.data);
+      if (c.status === 'fulfilled') setCacheStats(c.value.data);
+      if (d.status === 'fulfilled') setDbStats(d.value.data);
+      if (q.status === 'fulfilled') setQueueStats(q.value.data);
+    } catch { /* non-fatal */ }
+    finally { setLoading(false); }
+  }, []);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  const flushCache = async () => {
+    setFlushing(true); setMsg('');
+    try {
+      await superadminApi.flushCache(flushPattern || undefined);
+      setMsg(`Cache flushed${flushPattern ? ` (pattern: ${flushPattern})` : ' (all keys)'}`);
+      setTimeout(load, 500);
+    } catch { setMsg('Cache flush failed'); }
+    finally { setFlushing(false); }
+  };
+
+  const statusColor = (s: string) =>
+    s === 'healthy' || s === 'ok' ? '#22c55e' : s === 'degraded' || s === 'warning' ? '#f59e0b' : '#ef4444';
+
+  return (
+    <>
+      <Card>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <SectionHeader icon="🏗️" title="Infrastructure Health" />
+          <Button onClick={load} disabled={loading} variant="secondary" size="sm">
+            {loading ? '…' : '↻ Refresh'}
+          </Button>
+        </div>
+        {infraHealth && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+            {Object.entries(infraHealth as Record<string, { status?: string; latency_ms?: number; detail?: string }>).map(([key, val]) => {
+              if (typeof val !== 'object' || !val) return null;
+              const s = val.status ?? 'unknown';
+              return (
+                <div key={key} style={{
+                  background: '#0f172a', border: `1px solid ${statusColor(s)}33`,
+                  borderRadius: 8, padding: '12px 14px',
+                }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>
+                    {key.replace(/_/g, ' ')}
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: statusColor(s) }}>{s.toUpperCase()}</div>
+                  {val.latency_ms !== undefined && (
+                    <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>{val.latency_ms}ms</div>
+                  )}
+                  {val.detail && (
+                    <div style={{ fontSize: 11, color: '#475569', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {val.detail}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      <Card>
+        <SectionHeader icon="⚡" title="Redis Cache Stats" />
+        {cacheStats && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10, marginBottom: 16 }}>
+            {[
+              { label: 'Connected Clients', value: String(cacheStats.connected_clients ?? '—') },
+              { label: 'Used Memory', value: `${cacheStats.used_memory_mb ?? '—'} MB` },
+              { label: 'Total Keys', value: String(cacheStats.total_keys ?? '—') },
+              { label: 'Keyspace Hits', value: String(cacheStats.keyspace_hits ?? '—') },
+              { label: 'Keyspace Misses', value: String(cacheStats.keyspace_misses ?? '—') },
+              { label: 'Commands/sec', value: String(cacheStats.instantaneous_ops_per_sec ?? '—') },
+            ].map((m) => (
+              <div key={m.label} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
+                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{m.label}</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>{m.value}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        <Divider />
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <Field label="Flush Pattern (optional)" description="e.g. 'hopefx:orders:*' — leave blank to flush all">
+            <Input
+              type="text" value={flushPattern} placeholder="key:pattern:*"
+              onChange={(e) => setFlushPattern(e.target.value)}
+            />
+          </Field>
+          <Button onClick={flushCache} disabled={flushing} variant="danger" style={{ marginBottom: 20 }}>
+            {flushing ? 'Flushing…' : '🗑️ Flush Cache'}
+          </Button>
+        </div>
+        {msg && <div style={{ fontSize: 13, color: '#94a3b8', padding: '8px 12px', background: '#1e293b', borderRadius: 6 }}>{msg}</div>}
+      </Card>
+
+      <Card>
+        <SectionHeader icon="🗄️" title="Database Stats" />
+        {dbStats && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
+            {Object.entries(dbStats as Record<string, unknown>).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
+              <div key={key} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
+                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{key.replace(/_/g, ' ')}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>{String(val)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <Card>
+        <SectionHeader icon="📬" title="Task Queue Stats" />
+        {queueStats && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
+            {Object.entries(queueStats as Record<string, unknown>).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
+              <div key={key} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
+                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{key.replace(/_/g, ' ')}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>{String(val)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+    </>
+  );
+};
+
+// ── Diagnostics Tab ───────────────────────────────────────────────────────────
+
 const DiagnosticsTab: React.FC = () => {
   const [summary, setSummary] = React.useState<Record<string, unknown> | null>(null);
   const [report, setReport] = React.useState<Record<string, unknown> | null>(null);
@@ -1583,6 +1733,7 @@ const PlatformConfiguration: React.FC = () => {
           actionMsg={actionMsg}
         />
       )}
+      {activeTab === 'infrastructure' && <InfrastructureTab />}
       {activeTab === 'diagnostics' && <DiagnosticsTab />}
     </div>
   );
