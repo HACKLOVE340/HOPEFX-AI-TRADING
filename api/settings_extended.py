@@ -219,11 +219,47 @@ async def save_trading_prefs(body: TradingPrefsBody, user: TokenPayload = Depend
 
     if body.kill_switch_enabled:
         try:
-            from risk.risk_manager import RiskManager
+            # Activate the app-level kill switch singleton directly so the halt
+            # reaches the running risk manager and all subsystems.  Creating a
+            # new RiskManager() instance would apply the halt to a throwaway
+            # object that has no effect on the live trading engine.
+            import sys as _sys
 
-            RiskManager().activate_kill_switch(reason="user settings")
+            _app = _sys.modules.get("app")
+            _ks = getattr(_app, "kill_switch", None)
+            if _ks is not None and callable(getattr(_ks, "activate", None)):
+                if not _ks.is_active():
+                    _ks.activate(reason="user settings")
+                    logger.warning("Kill switch activated via user settings for user %s", uid)
+            else:
+                # Fallback: reach the live risk manager via app_state
+                from core.app_state import app_state as _state
+
+                _rm = getattr(_state, "risk_manager", None)
+                if _rm is not None and callable(getattr(_rm, "_halt_trading", None)):
+                    _rm._halt_trading("user settings")
+                    logger.warning("RiskManager halted via user settings for user %s", uid)
         except Exception as exc:
-            logger.debug("Kill switch propagation to RiskManager failed: %s", exc)
+            logger.debug("Kill switch propagation failed: %s", exc)
+
+    elif not body.kill_switch_enabled:
+        # User explicitly disabled the kill switch — resume trading if halted.
+        try:
+            import sys as _sys
+
+            _app = _sys.modules.get("app")
+            _ks = getattr(_app, "kill_switch", None)
+            if _ks is not None and _ks.is_active():
+                _ks.deactivate()
+                logger.info("Kill switch deactivated via user settings for user %s", uid)
+            # Also resume the live risk manager if it was halted.
+            from core.app_state import app_state as _state
+
+            _rm = getattr(_state, "risk_manager", None)
+            if _rm is not None and callable(getattr(_rm, "resume_trading", None)):
+                _rm.resume_trading()
+        except Exception as exc:
+            logger.debug("Kill switch deactivation failed: %s", exc)
 
     return {"status": "saved"}
 
