@@ -683,19 +683,160 @@ class ChartPatternDetector:
 
     def detect_flags_pennants(self, df: "pd.DataFrame") -> list[ChartPattern]:
         """
-        Detect flag and pennant patterns.
+        Detect bull/bear flag and pennant patterns.
+
+        Algorithm:
+          1. Scan for a strong pole: a directional move of ≥ pole_pct in
+             ≤ pole_bars consecutive bars.
+          2. After the pole, look for a consolidation window of
+             consol_bars bars where the price range is ≤ consol_range_pct
+             of the pole height.
+          3. Classify the consolidation:
+             - Flag:    high and low trendlines are roughly parallel
+               (|high_slope - low_slope| < slope_tol).
+             - Pennant: trendlines converge (high_slope < 0 and low_slope > 0
+               for bull pennant; reversed for bear pennant).
 
         Args:
-            df: OHLCV DataFrame.
+            df: OHLCV DataFrame with open, high, low, close columns.
 
         Returns:
-            List of detected ChartPattern objects (empty — not yet implemented).
+            List of detected ChartPattern objects.
         """
-        closes = self._get_closes(df)
-        if closes is None or len(closes) < self.min_bars:
+        if not HAS_PANDAS:
+            logger.warning("pandas not available; detect_flags_pennants skipped.")
             return []
-        # Flags/pennants require pole detection; return empty for now
-        return []
+        if not isinstance(df, pd.DataFrame) or df.empty:
+            return []
+
+        cols = {c.lower(): c for c in df.columns}
+        required = {"open", "high", "low", "close"}
+        if not required.issubset(cols):
+            return []
+
+        closes = df[cols["close"]].tolist()
+        highs  = df[cols["high"]].tolist()
+        lows   = df[cols["low"]].tolist()
+        n = len(closes)
+
+        if n < self.min_bars:
+            return []
+
+        # Tuning parameters
+        pole_bars       = max(5, self.swing_window * 2)   # max bars for the pole
+        pole_pct        = 0.02                             # min pole move (2 %)
+        consol_bars     = max(5, self.swing_window * 2)   # consolidation window
+        consol_range_pct = 0.50                           # consol range ≤ 50 % of pole
+        slope_tol       = 0.0002                          # parallel-slope tolerance
+
+        results: list[ChartPattern] = []
+        seen_ends: set[int] = set()  # deduplicate overlapping patterns
+
+        for pole_start in range(0, n - pole_bars - consol_bars):
+            for pole_end in range(pole_start + 2, pole_start + pole_bars + 1):
+                if pole_end >= n:
+                    break
+
+                pole_move = closes[pole_end] - closes[pole_start]
+                pole_pct_move = pole_move / closes[pole_start] if closes[pole_start] != 0 else 0.0
+
+                # Must be a strong directional move
+                if abs(pole_pct_move) < pole_pct:
+                    continue
+
+                bullish_pole = pole_pct_move > 0
+
+                # Consolidation window immediately after the pole
+                c_start = pole_end
+                c_end   = min(c_start + consol_bars, n - 1)
+                if c_end <= c_start + 2:
+                    continue
+
+                c_highs  = highs[c_start : c_end + 1]
+                c_lows   = lows[c_start  : c_end + 1]
+                c_range  = max(c_highs) - min(c_lows)
+                pole_height = abs(pole_move)
+
+                # Consolidation must be tight relative to the pole
+                if pole_height == 0 or c_range > consol_range_pct * pole_height:
+                    continue
+
+                # Deduplicate: skip if we already emitted a pattern ending here
+                if c_end in seen_ends:
+                    continue
+
+                # Fit trendlines through consolidation highs and lows
+                xs = list(range(len(c_highs)))
+                high_slope, high_intercept = _linear_slope(
+                    [float(x) for x in xs], c_highs
+                )
+                low_slope, low_intercept = _linear_slope(
+                    [float(x) for x in xs], c_lows
+                )
+
+                # Classify: flag vs pennant
+                slope_diff = abs(high_slope - low_slope)
+                is_parallel  = slope_diff < slope_tol
+                is_converging = (
+                    (bullish_pole and high_slope < 0 and low_slope > 0)
+                    or (not bullish_pole and high_slope > 0 and low_slope < 0)
+                )
+
+                if not (is_parallel or is_converging):
+                    continue
+
+                pattern_type = (
+                    ("bull_flag"    if bullish_pole else "bear_flag")
+                    if is_parallel else
+                    ("bull_pennant" if bullish_pole else "bear_pennant")
+                )
+                direction = "bullish" if bullish_pole else "bearish"
+
+                # Breakout target: pole height projected from consolidation end
+                entry_price = c_highs[-1] if bullish_pole else c_lows[-1]
+                target      = entry_price + pole_height if bullish_pole else entry_price - pole_height
+                stop_loss   = min(c_lows) if bullish_pole else max(c_highs)
+
+                rr = (
+                    abs(target - entry_price) / abs(entry_price - stop_loss)
+                    if abs(entry_price - stop_loss) > 0 else 0.0
+                )
+
+                # Confidence: higher for tighter consolidation and stronger pole
+                tightness  = 1.0 - (c_range / (consol_range_pct * pole_height))
+                pole_strength = min(abs(pole_pct_move) / 0.05, 1.0)  # cap at 5 %
+                confidence = round(min(0.55 + 0.20 * tightness + 0.10 * pole_strength, 0.85), 3)
+
+                results.append(
+                    ChartPattern(
+                        pattern_type=pattern_type,
+                        direction=direction,
+                        confidence=confidence,
+                        start_index=pole_start,
+                        end_index=c_end,
+                        key_levels={
+                            "pole_start":  round(closes[pole_start], 5),
+                            "pole_end":    round(closes[pole_end], 5),
+                            "consol_high": round(max(c_highs), 5),
+                            "consol_low":  round(min(c_lows), 5),
+                            "entry":       round(entry_price, 5),
+                            "target":      round(target, 5),
+                            "stop_loss":   round(stop_loss, 5),
+                        },
+                        description=(
+                            f"{'Bull' if bullish_pole else 'Bear'} "
+                            f"{'flag' if is_parallel else 'pennant'}: "
+                            f"pole {pole_pct_move:+.1%}, "
+                            f"R:R {rr:.1f}"
+                        ),
+                    )
+                )
+                seen_ends.add(c_end)
+                break  # one pattern per pole_start
+
+        # Return highest-confidence patterns, capped to avoid noise
+        results.sort(key=lambda p: p.confidence, reverse=True)
+        return results[:10]
 
     def detect_wedges(self, df: "pd.DataFrame") -> list[ChartPattern]:
         """
