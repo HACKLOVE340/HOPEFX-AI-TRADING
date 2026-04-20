@@ -166,6 +166,29 @@ class StatusHistoryResponse(BaseModel):
 
 
 @router.get(
+    "/api/status",
+    response_model=StatusJsonResponse,
+    summary="System status (alias for /api/status/json)",
+)
+async def status_root():
+    """
+    Bare /api/status endpoint — returns the same payload as /api/status/json.
+    Exists so monitoring tools that probe /api/status get a valid response.
+    """
+    checks = await _run_checks()
+    overall = _overall(checks)
+    uptime_seconds = time.time() - _start_time
+
+    return {
+        "status": overall,
+        "uptime_seconds": round(uptime_seconds),
+        "uptime_human": _fmt_uptime(uptime_seconds),
+        "checked_at": datetime.now(UTC).isoformat(),
+        "components": checks,
+    }
+
+
+@router.get(
     "/api/status/json",
     response_model=StatusJsonResponse,
     summary="Machine-readable system status",
