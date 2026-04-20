@@ -43,7 +43,9 @@ const NotFound                = React.lazy(() => import('./pages/NotFound'));
 const TermsAndRiskDisclosure  = React.lazy(() => import('./pages/TermsAndRiskDisclosure'));
 
 // ── Core ──────────────────────────────────────────────────────────────────────
+const Dashboard        = React.lazy(() => import('./pages/Dashboard'));
 const TradingDashboard = React.lazy(() => import('./pages/TradingDashboard'));
+const TradingTerminal  = React.lazy(() => import('./pages/Trading'));
 const Trade            = React.lazy(() => import('./pages/Trade'));
 const Portfolio        = React.lazy(() => import('./pages/Portfolio'));
 const WatchlistPage    = React.lazy(() => import('./pages/Watchlist'));
@@ -350,6 +352,7 @@ const AppShell: React.FC = () => {
           <Routes>
             {/* Core */}
             <Route path="/dashboard"    element={wrap(gated('dashboard',    <TradingDashboard />))} />
+            <Route path="/home"         element={wrap(gated('dashboard',    <Dashboard />))} />
             <Route path="/trade"        element={wrap(gated('trade',        <Trade />))} />
             <Route path="/portfolio"    element={wrap(gated('portfolio',    <Portfolio />))} />
             <Route path="/watchlist"    element={wrap(gated('watchlist',    <WatchlistPage />))} />
@@ -359,6 +362,7 @@ const AppShell: React.FC = () => {
 
             {/* Trading */}
             <Route path="/trading"      element={wrap(gated('trading',      <ChartDashboard />))} />
+            <Route path="/terminal"     element={wrap(gated('trading',      <TradingTerminal />))} />
             <Route path="/nuclear"      element={wrap(gated('nuclear',      <NuclearDashboard />))} />
             <Route path="/geopolitical" element={wrap(gated('geopolitical', <GeopoliticalRiskPage />))} />
             <Route path="/journal"      element={wrap(gated('journal',      <TradeJournal />))} />
@@ -397,11 +401,11 @@ const AppShell: React.FC = () => {
 
             {/* Legacy admin routes — redirect to /superadmin (single system) */}
             {/* /admin → /audit for admin role; superadmin users see /superadmin in their sidebar */}
-            <Route path="/admin"        element={<Navigate to="/audit" replace />} />
+            <Route path="/admin"        element={wrap(adminOnly(<AdminPanel />))} />
             <Route path="/audit"        element={wrap(adminOnly(<AuditLog />))} />
             <Route path="/security"     element={wrap(adminOnly(<SecurityDashboard />))} />
             <Route path="/auto-heal"    element={wrap(adminOnly(<AutoHealDashboard />))} />
-            <Route path="/whitelabel"   element={<Navigate to="/audit" replace />} />
+            <Route path="/whitelabel"   element={wrap(adminOnly(<WhitelabelAdmin />))} />
 
             {/* Superadmin-only */}
             <Route path="/superadmin"          element={wrap(superAdminOnly(<SuperAdminDashboard />))} />

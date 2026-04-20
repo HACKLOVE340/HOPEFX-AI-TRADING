@@ -77,13 +77,6 @@ interface PlatformConfig {
   ml_monitor_check_interval: number;
   ml_monitor_rollback_thresh: number;
   ml_monitor_min_trades: number;
-  // Sharpe circuit breaker
-  sharpe_cb_window_trades: number;
-  sharpe_cb_min_sharpe: number;
-  sharpe_cb_consecutive: number;
-  sharpe_cb_eval_interval_s: number;
-  sharpe_cb_min_trades: number;
-  sharpe_cb_reset_after_s: number;
   // Risk
   risk_account_equity: number;
   risk_max_position_pct: number;
@@ -167,12 +160,6 @@ interface PlatformConfig {
   sltp_poll_interval_ms: number;
   sltp_max_retries: number;
   sltp_retry_delay_s: number;
-  // TCA
-  tca_alert_threshold_bps: number;
-  tca_alert_window: number;
-  tca_persist_redis: boolean;
-  tca_persist_db: boolean;
-  tca_max_memory_records: number;
   // FIX router
   fix_host: string;
   fix_port: number;
@@ -272,12 +259,6 @@ interface PlatformConfig {
   paper_impact_factor: number;
   paper_noise_sigma_pct: number;
   paper_fallback_spread_pct: number;
-  // Online learner
-  online_learner_enabled: boolean;
-  online_learner_lr: number;
-  online_learner_batch_size: number;
-  online_learner_update_interval_s: number;
-  online_learner_max_buffer: number;
   // Drift monitor
   drift_monitor_enabled: boolean;
   drift_monitor_window: number;
@@ -573,8 +554,6 @@ const DEFAULT_PLATFORM: PlatformConfig = {
   registry_min_oos_acc: 0.60, registry_max_oos_pval: 0.05, registry_require_sharpe_gate: true,
   ml_monitor_window_trades: 100, ml_monitor_check_interval: 300,
   ml_monitor_rollback_thresh: 0.20, ml_monitor_min_trades: 20,
-  sharpe_cb_window_trades: 50, sharpe_cb_min_sharpe: 0.0, sharpe_cb_consecutive: 3,
-  sharpe_cb_eval_interval_s: 60, sharpe_cb_min_trades: 20, sharpe_cb_reset_after_s: 3600,
   risk_account_equity: 1000000, risk_max_position_pct: 0.05, risk_min_position_pct: 0.001,
   risk_kelly_fraction: 0.25, risk_max_daily_loss_pct: 0.05, risk_max_drawdown_pct: 0.10,
   risk_max_open_positions: 3, risk_min_data_quality: 0.40,
@@ -602,8 +581,6 @@ const DEFAULT_PLATFORM: PlatformConfig = {
   ac_eta: 0.3, ac_gamma: 0.1, ac_max_participation: 0.10, ac_min_spread_bps: 1.0, ac_queue_factor: 0.5,
   spread_spike_multiplier: 3.0, spread_baseline_window: 50, spread_min_ticks: 20, spread_abs_limit_usd: 5.0,
   sltp_poll_interval_ms: 200, sltp_max_retries: 3, sltp_retry_delay_s: 1.0,
-  tca_alert_threshold_bps: 5.0, tca_alert_window: 100, tca_persist_redis: true,
-  tca_persist_db: true, tca_max_memory_records: 10000,
   fix_host: '127.0.0.1', fix_port: 9876, fix_sender_comp_id: 'HOPEFX',
   fix_target_comp_id: 'BROKER', fix_latency_warn_ms: 50, fix_default_units: 1000,
   oanda_timeout_s: 10, oanda_max_retries: 3, oanda_retry_backoff_s: 0.5, oanda_environment: 'practice',
@@ -645,9 +622,6 @@ const DEFAULT_PLATFORM: PlatformConfig = {
   // Paper trading slippage model
   paper_slippage_model: 'fixed', paper_fixed_slippage_pct: 0.0005,
   paper_impact_factor: 0.1, paper_noise_sigma_pct: 0.0001, paper_fallback_spread_pct: 0.0002,
-  // Online learner
-  online_learner_enabled: false, online_learner_lr: 0.001, online_learner_batch_size: 32,
-  online_learner_update_interval_s: 300, online_learner_max_buffer: 10000,
   // Drift monitor
   drift_monitor_enabled: true, drift_monitor_window: 200, drift_monitor_threshold: 0.05,
   drift_monitor_check_interval_s: 300, drift_monitor_auto_retrain: false,
