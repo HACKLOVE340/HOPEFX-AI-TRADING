@@ -8,22 +8,25 @@ System Reliability & End-to-End Connectivity API.
 
 Routes
 ------
-GET  /superadmin/reliability/status          — full system status snapshot
-GET  /superadmin/reliability/components      — per-component health
-POST /superadmin/reliability/probe           — run a live connectivity probe
-GET  /superadmin/reliability/traces          — recent OTel spans
-POST /superadmin/reliability/trace/test      — emit end-to-end test trace
-GET  /superadmin/reliability/validate/{key}  — validate a specific setting was persisted
-GET  /superadmin/reliability/env             — environment variable audit
-GET  /superadmin/reliability/routes          — registered API route inventory
-POST /superadmin/reliability/self-test       — full end-to-end self-test suite
-GET  /superadmin/reliability/metrics         — Prometheus-style text metrics
+GET  /superadmin/reliability/status              — full system status snapshot (auto-records to history)
+GET  /superadmin/reliability/components          — per-component health
+POST /superadmin/reliability/probe               — run a live connectivity probe
+GET  /superadmin/reliability/traces              — recent OTel spans
+POST /superadmin/reliability/trace/test          — emit end-to-end test trace
+GET  /superadmin/reliability/validate/{key}      — validate a specific setting was persisted
+GET  /superadmin/reliability/env                 — environment variable audit
+GET  /superadmin/reliability/routes              — registered API route inventory
+POST /superadmin/reliability/self-test           — full end-to-end self-test suite
+GET  /superadmin/reliability/metrics             — system + Redis metrics for dashboard widgets
+GET  /superadmin/reliability/history             — last N status snapshots (Redis ring buffer)
+POST /superadmin/reliability/history/record      — manually push current snapshot into history
 """
 
 from __future__ import annotations
 
 import asyncio
 import importlib
+import json
 import logging
 import os
 import time
@@ -577,7 +580,7 @@ async def get_reliability_status(
     warn_count = sum(1 for r in results_raw.values() if r.get("status") == "warning")
     err_count = sum(1 for r in results_raw.values() if r.get("status") in ("error", "critical", "degraded"))
 
-    return {
+    snapshot = {
         "overall": overall,
         "components": components,
         "checked_at": now,
@@ -587,6 +590,18 @@ async def get_reliability_status(
         "error_count": err_count,
         "probe_duration_ms": round((time.perf_counter() - t0) * 1000, 2),
     }
+
+    # Persist to history ring in Redis (non-blocking best-effort)
+    try:
+        from cache.redis_client import get_redis_client
+        rc = get_redis_client()
+        if rc:
+            rc.lpush(_RELIABILITY_HISTORY_KEY, json.dumps(snapshot))
+            rc.ltrim(_RELIABILITY_HISTORY_KEY, 0, _RELIABILITY_HISTORY_MAX - 1)
+    except Exception:
+        pass
+
+    return snapshot
 
 
 @router.get("/reliability/components")
@@ -959,3 +974,59 @@ async def get_reliability_metrics(
         "redis": redis_info,
         "collected_at": _utcnow().isoformat(),
     }
+
+
+# ── Reliability status history ────────────────────────────────────────────────
+
+_RELIABILITY_HISTORY_KEY = "reliability:status_history"
+_RELIABILITY_HISTORY_MAX = 200
+
+
+@router.get("/reliability/history")
+async def get_reliability_history(
+    limit: int = 50,
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    """Return the last N reliability snapshots stored in Redis.
+
+    Each snapshot is written by ``get_reliability_status`` whenever it is
+    called.  The list is capped at ``_RELIABILITY_HISTORY_MAX`` entries so
+    Redis memory stays bounded.
+    """
+    limit = max(1, min(limit, _RELIABILITY_HISTORY_MAX))
+    items: list[dict] = []
+    try:
+        from cache.redis_client import get_redis_client
+        rc = get_redis_client()
+        if rc:
+            raw_list = rc.lrange(_RELIABILITY_HISTORY_KEY, 0, limit - 1)
+            for raw in raw_list:
+                try:
+                    items.append(json.loads(raw))
+                except Exception:
+                    pass
+    except Exception as exc:
+        logger.warning("reliability_history: %s", exc)
+
+    return {"history": items, "count": len(items)}
+
+
+@router.post("/reliability/history/record")
+async def record_reliability_snapshot(
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    """Manually push the current reliability status into the history ring.
+
+    The ``get_reliability_status`` endpoint also calls this automatically,
+    so this endpoint is mainly useful for testing the history pipeline.
+    """
+    snapshot = await get_reliability_status(user=user)
+    try:
+        from cache.redis_client import get_redis_client
+        rc = get_redis_client()
+        if rc:
+            rc.lpush(_RELIABILITY_HISTORY_KEY, json.dumps(snapshot))
+            rc.ltrim(_RELIABILITY_HISTORY_KEY, 0, _RELIABILITY_HISTORY_MAX - 1)
+    except Exception as exc:
+        logger.warning("record_reliability_snapshot: %s", exc)
+    return {"ok": True, "snapshot": snapshot}

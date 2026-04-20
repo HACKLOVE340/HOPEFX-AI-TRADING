@@ -744,7 +744,9 @@ const SystemReliabilitySection: React.FC = () => {
   const [traceTestResult, setTraceTestResult] = useState<Record<string, unknown> | null>(null);
   const [metrics, setMetrics] = useState<Record<string, unknown> | null>(null);
   const [envAudit, setEnvAudit] = useState<Record<string, unknown> | null>(null);
-  const [activeTab, setActiveTab] = useState<'components' | 'health-engine' | 'traces' | 'selftest' | 'env' | 'metrics' | 'diagnostics' | 'routes' | 'validate'>('components');
+  const [statusHistory, setStatusHistory] = useState<Record<string, unknown>[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'components' | 'health-engine' | 'traces' | 'selftest' | 'env' | 'metrics' | 'diagnostics' | 'routes' | 'validate' | 'history'>('components');
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<string | null>(null);
 
@@ -792,18 +794,32 @@ const SystemReliabilitySection: React.FC = () => {
     }
   }, []);
 
+  const fetchHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await superadminApi.reliabilityHistory(100);
+      setStatusHistory(res.data.history || []);
+    } catch {
+      // non-fatal
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchStatus();
     fetchTraces();
     fetchMetrics();
     fetchEnv();
+    fetchHistory();
     const interval = setInterval(() => {
       fetchStatus();
       fetchTraces();
       fetchMetrics();
+      fetchHistory();
     }, 30000);
     return () => clearInterval(interval);
-  }, [fetchStatus, fetchTraces, fetchMetrics]);
+  }, [fetchStatus, fetchTraces, fetchMetrics, fetchEnv, fetchHistory]);
 
   const handleProbe = async (component: string) => {
     setProbingComp(component);
@@ -855,15 +871,16 @@ const SystemReliabilitySection: React.FC = () => {
   };
 
   const TABS = [
-    { id: 'components',   label: '🔌 Components' },
+    { id: 'components',    label: '🔌 Components' },
     { id: 'health-engine', label: '🏥 Health Engine' },
-    { id: 'traces',       label: '🔍 Traces' },
-    { id: 'selftest',     label: '🧪 Self-Test' },
-    { id: 'diagnostics',  label: '🔬 Diagnostics' },
-    { id: 'routes',       label: '🗺️ Routes' },
-    { id: 'validate',     label: '✅ Validate' },
-    { id: 'env',          label: '🌍 Env Audit' },
-    { id: 'metrics',      label: '📊 Metrics' },
+    { id: 'history',       label: '📈 Status History' },
+    { id: 'traces',        label: '🔍 Traces' },
+    { id: 'selftest',      label: '🧪 Self-Test' },
+    { id: 'diagnostics',   label: '🔬 Diagnostics' },
+    { id: 'routes',        label: '🗺️ Routes' },
+    { id: 'validate',      label: '✅ Validate' },
+    { id: 'env',           label: '🌍 Env Audit' },
+    { id: 'metrics',       label: '📊 Metrics' },
   ] as const;
 
   const overall = status?.overall ?? 'unknown';
@@ -1046,6 +1063,91 @@ const SystemReliabilitySection: React.FC = () => {
           {!selfTest && !selfTestRunning && (
             <div style={{ textAlign: 'center', color: '#475569', padding: '32px 0', fontSize: 13 }}>
               Click "Run All Tests" to execute the full end-to-end connectivity suite.
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Status history tab */}
+      {activeTab === 'history' && (
+        <Card>
+          <SectionHeader icon="📈" title="Status History" desc="Last 100 reliability snapshots — auto-recorded on every status poll" />
+          <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+            <Button onClick={fetchHistory} disabled={historyLoading} size="sm">
+              {historyLoading ? '…' : '🔄 Refresh'}
+            </Button>
+            <Button
+              onClick={async () => {
+                try {
+                  await superadminApi.reliabilityHistoryRecord();
+                  await fetchHistory();
+                } catch { /* non-fatal */ }
+              }}
+              size="sm"
+              variant="secondary"
+            >
+              📸 Snapshot Now
+            </Button>
+          </div>
+          {statusHistory.length === 0 && !historyLoading && (
+            <div style={{ color: '#64748b', fontSize: 13, padding: '16px 0' }}>
+              No history yet. Trigger a status poll or click "Snapshot Now".
+            </div>
+          )}
+          {historyLoading && (
+            <div style={{ color: '#64748b', fontSize: 13 }}>Loading history…</div>
+          )}
+          {statusHistory.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {/* Summary sparkline row */}
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
+                {statusHistory.slice(0, 60).map((snap, i) => {
+                  const overall = snap.overall as string;
+                  const color = overall === 'ok' ? '#22c55e' : overall === 'warning' ? '#f59e0b' : '#ef4444';
+                  return (
+                    <div
+                      key={i}
+                      title={`${snap.checked_at as string} — ${overall} (${snap.ok_count as number}✅ ${snap.warning_count as number}⚠️ ${snap.error_count as number}❌)`}
+                      style={{ width: 10, height: 28, background: color, borderRadius: 2, opacity: 0.85, cursor: 'default' }}
+                    />
+                  );
+                })}
+              </div>
+              {/* Table */}
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid #1e293b', color: '#64748b' }}>
+                      <th style={{ textAlign: 'left', padding: '6px 10px' }}>Timestamp</th>
+                      <th style={{ textAlign: 'left', padding: '6px 10px' }}>Overall</th>
+                      <th style={{ textAlign: 'right', padding: '6px 10px' }}>✅ OK</th>
+                      <th style={{ textAlign: 'right', padding: '6px 10px' }}>⚠️ Warn</th>
+                      <th style={{ textAlign: 'right', padding: '6px 10px' }}>❌ Error</th>
+                      <th style={{ textAlign: 'right', padding: '6px 10px' }}>Probe ms</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {statusHistory.map((snap, i) => {
+                      const overall = snap.overall as string;
+                      const color = overall === 'ok' ? '#22c55e' : overall === 'warning' ? '#f59e0b' : '#ef4444';
+                      return (
+                        <tr key={i} style={{ borderBottom: '1px solid #0f172a' }}>
+                          <td style={{ padding: '5px 10px', color: '#94a3b8', fontFamily: 'monospace' }}>
+                            {String(snap.checked_at ?? '').replace('T', ' ').slice(0, 19)}
+                          </td>
+                          <td style={{ padding: '5px 10px' }}>
+                            <span style={{ color, fontWeight: 600 }}>{overall.toUpperCase()}</span>
+                          </td>
+                          <td style={{ padding: '5px 10px', textAlign: 'right', color: '#22c55e' }}>{String(snap.ok_count ?? 0)}</td>
+                          <td style={{ padding: '5px 10px', textAlign: 'right', color: '#f59e0b' }}>{String(snap.warning_count ?? 0)}</td>
+                          <td style={{ padding: '5px 10px', textAlign: 'right', color: '#ef4444' }}>{String(snap.error_count ?? 0)}</td>
+                          <td style={{ padding: '5px 10px', textAlign: 'right', color: '#64748b' }}>{String(snap.probe_duration_ms ?? '—')}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </Card>

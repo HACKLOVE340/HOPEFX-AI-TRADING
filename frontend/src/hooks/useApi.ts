@@ -668,6 +668,8 @@ export const superadminApi = {
   reliabilityMetrics:   ()                     => api.get('/superadmin/reliability/metrics'),
   reliabilityValidateToggle: (key: string, expectedValue: unknown) =>
     api.post('/superadmin/reliability/validate-toggle', { key, expected_value: expectedValue }),
+  reliabilityHistory:       (limit?: number)       => api.get('/superadmin/reliability/history', { params: limit ? { limit } : {} }),
+  reliabilityHistoryRecord: ()                     => api.post('/superadmin/reliability/history/record'),
 
   // ── Diagnostics ───────────────────────────────────────────────────────────
   diagnosticsRun:       ()                     => api.post('/superadmin/diagnostics/run'),
