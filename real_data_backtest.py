@@ -88,6 +88,16 @@ POSITION_SIZE = 1.0  # 1 lot — Kelly sizing applied in BacktestEngine
 # Target trade count for Sharpe SE ≤ ±0.03
 TARGET_TRADE_COUNT = 600
 
+# Overnight financing: charged every bar on open positions.
+# Uses OvernightSwapModel (USD/lot/night) — broker-independent constants.
+# XAU/USDT is treated as XAUUSD for swap purposes (same underlying).
+_SYMBOL_TO_SWAP_TICKER: dict[str, str] = {
+    "XAU/USDT": "XAUUSD",
+    "BTC/USDT": "BTCUSD",
+    "ETH/USDT": "ETHUSD",
+}
+_BARS_PER_DAY_H1 = 24  # hourly bars
+
 
 # ---------------------------------------------------------------------------
 # Data fetching
@@ -229,6 +239,7 @@ def _pip_value_for_price(price: float) -> float:
 def run_backtest(
     df: pd.DataFrame,
     initial_capital: float = INITIAL_CAPITAL,
+    symbol: str = SYMBOL,
 ) -> tuple[pd.DataFrame, list[float]]:
     """
     Event-driven bar-by-bar backtest with ATR stops/TP and realistic cost model.
@@ -236,6 +247,9 @@ def run_backtest(
     Cost model (corrected):
       - Slippage: SLIPPAGE_PIPS × pip_value (gold: $0.10/pip, crypto: $0.01/pip)
       - Commission: COMMISSION_USD flat round-trip ($7)
+      - Overnight financing: OvernightSwapModel (USD/lot/night) charged every
+        bar on open positions.  Wednesday triple-swap applied from bar timestamp.
+        XAU/USDT long: −$4.10/night per 100oz lot (was missing entirely).
 
     Returns
     -------
@@ -243,6 +257,9 @@ def run_backtest(
       equity_df  : DataFrame with columns [equity, trade_pnl, in_trade, ...]
       trade_pnls : list of net PnL per completed trade (for trade-level Sharpe)
     """
+    from backtesting.transaction_costs import get_swap_model as _get_swap_model
+    _swap = _get_swap_model()
+    _swap_ticker = _SYMBOL_TO_SWAP_TICKER.get(symbol, "XAUUSD")
     df = generate_signals(df).dropna()
 
     equity = initial_capital
@@ -294,6 +311,24 @@ def run_backtest(
             entry_price = fill_price
             entry_bar_idx = bar_idx
             position = direction
+
+        # ── Overnight financing — charged every bar on open positions ─────────
+        if position != 0:
+            side = "long" if position == 1 else "short"
+            lots = POSITION_SIZE  # 1 lot = 100 oz for gold
+            # Extract weekday for Wednesday triple-swap when index is datetime
+            weekday: int | None = None
+            try:
+                weekday = int(_ts.weekday())
+            except Exception:  # nosec B110 — non-fatal; fall back to no triple-swap
+                pass
+            overnight_cost = abs(
+                _swap.cost_usd_per_night(
+                    _swap_ticker, lots=lots, side=side, weekday=weekday
+                )
+            ) / _BARS_PER_DAY_H1
+            equity -= overnight_cost
+        # ─────────────────────────────────────────────────────────────────────
 
         records.append(
             {
