@@ -23,7 +23,8 @@ export type SuperAdminTab =
   | 'rate-limiting'
   | 'audit-trail'
   | 'security-infra'
-  | 'auto-healing';
+  | 'auto-healing'
+  | 'reliability';
 
 export interface PlatformOverview {
   total_users: number;

@@ -651,4 +651,25 @@ export const superadminApi = {
   resumeJob:         (jobId: string)           => api.post(`/superadmin/system/jobs/${jobId}/resume`),
   apiKeyAudit:       (params?: Record<string, string>) => api.get('/superadmin/system/api-keys', { params }),
   revokeApiKey:      (keyId: string)           => api.delete(`/superadmin/system/api-keys/${keyId}`),
+
+  // ── System Reliability & Connectivity ────────────────────────────────────
+  reliabilityStatus:    ()                     => api.get('/superadmin/reliability/status'),
+  reliabilityComponents: ()                    => api.get('/superadmin/reliability/components'),
+  reliabilityProbe:     (component: string)    => api.post('/superadmin/reliability/probe', { component }),
+  reliabilityTraces:    (limit?: number)       => api.get('/superadmin/reliability/traces', { params: limit ? { limit } : {} }),
+  reliabilityTraceTest: ()                     => api.post('/superadmin/reliability/trace/test'),
+  reliabilityValidate:  (key: string)          => api.get(`/superadmin/reliability/validate/${key}`),
+  reliabilityEnv:       ()                     => api.get('/superadmin/reliability/env'),
+  reliabilityRoutes:    ()                     => api.get('/superadmin/reliability/routes'),
+  reliabilitySelfTest:  ()                     => api.post('/superadmin/reliability/self-test'),
+  reliabilityMetrics:   ()                     => api.get('/superadmin/reliability/metrics'),
+
+  // ── Diagnostics ───────────────────────────────────────────────────────────
+  diagnosticsRun:       ()                     => api.post('/superadmin/diagnostics/run'),
+  diagnosticsReport:    ()                     => api.get('/superadmin/diagnostics/report'),
+  diagnosticsResults:   (params?: Record<string, string>) => api.get('/superadmin/diagnostics/results', { params }),
+  diagnosticsRemediate: ()                     => api.post('/superadmin/diagnostics/remediate'),
+  diagnosticsChecks:    ()                     => api.get('/superadmin/diagnostics/checks'),
+  diagnosticsRunCheck:  (name: string)         => api.post(`/superadmin/diagnostics/checks/${name}/run`),
+  diagnosticsSummary:   ()                     => api.get('/superadmin/diagnostics/summary'),
 };

@@ -24,7 +24,8 @@ export type SettingsTab =
   | 'sa-security'
   | 'sa-logs'
   | 'sa-feature-flags'
-  | 'platform-config';
+  | 'platform-config'
+  | 'sa-reliability';
 
 export interface ProfileSettings {
   username: string;

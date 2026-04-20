@@ -53,6 +53,7 @@ const SASecuritySection        = lazy(() => import('./superadmin/SecuritySection
 const SALogsSection            = lazy(() => import('./superadmin/LogsSection'));
 const SAFeatureFlagsSection    = lazy(() => import('./superadmin/FeatureFlagsSection'));
 const PlatformConfigSection    = lazy(() => import('./settings/PlatformConfiguration'));
+const SystemReliabilitySection = lazy(() => import('./superadmin/SystemReliabilitySection'));
 
 // ── Tab definitions ───────────────────────────────────────────────────────────
 
@@ -117,6 +118,7 @@ const TAB_GROUPS: TabGroup[] = [
       { id: 'sa-logs',           label: 'Logs',            icon: '📋',  superAdminOnly: true },
       { id: 'sa-feature-flags',  label: 'Feature Flags',   icon: '🚩',  superAdminOnly: true },
       { id: 'platform-config',   label: 'Platform Config', icon: '🛠️',  superAdminOnly: true },
+      { id: 'sa-reliability',    label: 'System Reliability', icon: '🔬', superAdminOnly: true },
     ],
   },
   {
@@ -227,7 +229,8 @@ const Settings: React.FC = () => {
       case 'sa-security':       return superAdmin ? <SASecuritySection />      : null;
       case 'sa-logs':           return superAdmin ? <SALogsSection />          : null;
       case 'sa-feature-flags':  return superAdmin ? <SAFeatureFlagsSection />  : null;
-      case 'platform-config':   return superAdmin ? <PlatformConfigSection />  : null;
+      case 'platform-config':   return superAdmin ? <PlatformConfigSection />       : null;
+      case 'sa-reliability':    return superAdmin ? <SystemReliabilitySection />    : null;
 
       // ── Danger Zone ───────────────────────────────────────────────────────
       case 'danger':            return <DangerSection />;
