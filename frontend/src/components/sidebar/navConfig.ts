@@ -68,6 +68,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/ab-testing',   label: 'A/B Testing',    icon: '⚗️', group: 'analytics', plan: 'professional', featureKey: 'ab-testing'   },
   { path: '/tca',          label: 'TCA',            icon: '📊', group: 'analytics', plan: 'professional', featureKey: 'tca'          },
   { path: '/research',     label: 'Research',       icon: '🔬', group: 'analytics', plan: 'enterprise',   featureKey: 'research'     },
+  { path: '/replay',       label: 'Market Replay',  icon: '⏪', group: 'analytics', plan: 'enterprise',   featureKey: 'replay'       },
 
   // ── Community ─────────────────────────────────────────────────────────────
   { path: '/leaderboard',  label: 'Leaderboard',    icon: '🥇', group: 'community', plan: 'free',         featureKey: 'leaderboard'  },

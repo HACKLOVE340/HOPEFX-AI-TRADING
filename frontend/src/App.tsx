@@ -76,11 +76,17 @@ const SocialFeed   = React.lazy(() => import('./pages/SocialFeed'));
 const Marketplace  = React.lazy(() => import('./pages/Marketplace'));
 const Affiliate    = React.lazy(() => import('./pages/Affiliate'));
 
+// ── Enterprise features ───────────────────────────────────────────────────────
+const ResearchPage = React.lazy(() => import('./pages/ResearchPage'));
+const TeamsPage    = React.lazy(() => import('./pages/TeamsPage'));
+const ReplayPage   = React.lazy(() => import('./pages/ReplayPage'));
+
 // ── Account ───────────────────────────────────────────────────────────────────
 const Profile        = React.lazy(() => import('./pages/Profile'));
 const Wallet         = React.lazy(() => import('./pages/Wallet'));
 const SubAccounts    = React.lazy(() => import('./pages/SubAccounts'));
 const CryptoCheckout = React.lazy(() => import('./pages/CryptoCheckout'));
+const PricingPage    = React.lazy(() => import('./pages/PricingPage'));
 const Settings       = React.lazy(() => import('./pages/Settings'));
 const TwoFactorSetup = React.lazy(() => import('./pages/TwoFactorSetup'));
 
@@ -375,6 +381,11 @@ const AppShell: React.FC = () => {
             <Route path="/marketplace"  element={wrap(<Marketplace />)} />
             <Route path="/affiliate"    element={wrap(<Affiliate />)} />
 
+            {/* Enterprise features */}
+            <Route path="/research"     element={wrap(gated('research',     <ResearchPage />))} />
+            <Route path="/teams"        element={wrap(gated('teams',        <TeamsPage />))} />
+            <Route path="/replay"       element={wrap(gated('replay',       <ReplayPage />))} />
+
             {/* Account */}
             <Route path="/profile"      element={wrap(gated('profile',      <Profile />))} />
             <Route path="/profile/:id"  element={wrap(<Profile />)} />
@@ -426,7 +437,8 @@ const App: React.FC = () => (
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password"  element={<ResetPassword />} />
             <Route path="/onboarding"      element={<Onboarding />} />
-            {/* Public legal pages — no auth required */}
+            {/* Public pages — no auth required */}
+            <Route path="/pricing"         element={<PricingPage />} />
             <Route path="/terms"           element={<TermsAndRiskDisclosure />} />
             <Route path="/risk-disclosure" element={<TermsAndRiskDisclosure />} />
             <Route path="/privacy"         element={<PrivacyPolicy />} />
