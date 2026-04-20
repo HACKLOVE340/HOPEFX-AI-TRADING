@@ -1089,7 +1089,7 @@ async def get_prices(
 
 
 @router.get(
-    "/ohlcv/{symbol}",
+    "/ohlcv/{symbol:path}",
     response_model=list[OHLCVBar],
     summary="Get OHLCV candlestick data for a symbol",
 )
@@ -1099,7 +1099,14 @@ async def get_ohlcv(
     limit: int = 100,
     user: TokenPayload = Depends(get_current_user),
 ):
-    """Get OHLCV data. Requires: any authenticated user. Symbol validated server-side."""
+    """Get OHLCV data. Requires: any authenticated user. Symbol validated server-side.
+
+    Accepts both slash-separated (XAU/USD) and concatenated (XAUUSD) forms.
+    The :path converter captures the full path segment including any '/' characters
+    so that un-encoded slashes in the URL are handled gracefully.
+    """
+    # Normalise XAU/USD → XAUUSD before validation so both forms are accepted.
+    symbol = symbol.replace("/", "").replace("%2F", "").upper()
     symbol = validate_order_symbol(symbol)
 
     if not app_state or not app_state.price_engine:
