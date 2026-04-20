@@ -10,7 +10,7 @@ interface Tenant {
   id: string
   name: string
   domain: string
-  plan: 'starter' | 'pro' | 'enterprise'
+  plan: 'starter' | 'professional' | 'enterprise' | 'elite'
   users: number
   revenue_usd: number
   status: 'active' | 'suspended' | 'trial'
@@ -18,12 +18,11 @@ interface Tenant {
   branding: { primary_color: string; logo_url: string }
 }
 
-
-
 const PLAN_COLORS: Record<string, string> = {
-  starter:    'bg-slate-500/20 text-slate-400 border-slate-500/30',
-  pro:        'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  enterprise: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+  starter:      'bg-slate-500/20 text-slate-400 border-slate-500/30',
+  professional: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  enterprise:   'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+  elite:        'bg-amber-500/20 text-amber-400 border-amber-500/30',
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -39,7 +38,7 @@ export default function WhitelabelAdmin() {
   const [showAdd, setShowAdd] = useState(false)
   const [newName, setNewName] = useState('')
   const [newDomain, setNewDomain] = useState('')
-  const [newPlan, setNewPlan] = useState<'starter' | 'pro' | 'enterprise'>('starter')
+  const [newPlan, setNewPlan] = useState<'starter' | 'professional' | 'enterprise' | 'elite'>('starter')
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
   const load = async () => {
@@ -136,8 +135,9 @@ export default function WhitelabelAdmin() {
               <select value={newPlan} onChange={e => setNewPlan(e.target.value as typeof newPlan)}
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none">
                 <option value="starter">Starter</option>
-                <option value="pro">Pro</option>
+                <option value="professional">Professional</option>
                 <option value="enterprise">Enterprise</option>
+                <option value="elite">Elite</option>
               </select>
             </div>
           </div>
