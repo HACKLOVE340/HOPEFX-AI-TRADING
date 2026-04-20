@@ -1,25 +1,16 @@
 /**
- * Settings.tsx
- * Full settings hub — tabs covering every aspect of the platform.
+ * Settings.tsx — Full settings hub wired to every backend endpoint.
  *
- * Tab visibility rules:
- *   - All authenticated users: profile, security, broker, trading,
- *     appearance, notifications, api-keys, billing, integrations,
- *     privacy, accessibility, danger
- *   - Subscription-gated tabs:
- *       starter+:      integrations
- *       professional+: api-keys, trading (advanced)
- *   - Admin / superadmin only: system, admin
- *   - Super Admin only: sa-users, sa-platform, sa-ml-ai, sa-trading-engine,
- *       sa-financial, sa-security, sa-logs, sa-feature-flags, platform-config
+ * Tab visibility:
+ *   All users:      profile, security, billing, api-keys, broker, trading,
+ *                   integrations, appearance, notifications, accessibility,
+ *                   privacy, danger
+ *   admin+:         system, admin
+ *   superadmin:     all 24 SA tabs below
  *
- * Subscription tiers (monetization/pricing.py):
- *   free | starter | professional | enterprise | elite
- *
- * Role hierarchy (lib/subscription.ts):
- *   user < trader < admin < superadmin
- *
- * Super Admin bypasses ALL gates — plan, role, feature flag, everything.
+ * Subscription gates (non-admin):
+ *   starter+:      integrations
+ *   professional+: api-keys, trading
  */
 
 import React, { useState, Suspense, lazy } from 'react';
@@ -27,7 +18,7 @@ import { useStore, selectUser } from '../store';
 import { isAdmin, isSuperAdmin } from '../lib/subscription';
 import type { SettingsTab } from './settings/types';
 
-// ── Lazy-load every section ───────────────────────────────────────────────────
+// ── User-facing sections ──────────────────────────────────────────────────────
 const ProfileSection           = lazy(() => import('./settings/ProfileSection'));
 const SecuritySection          = lazy(() => import('./settings/SecuritySection'));
 const BrokerSection            = lazy(() => import('./settings/BrokerSection'));
@@ -43,15 +34,29 @@ const AccessibilitySection     = lazy(() => import('./settings/AccessibilitySect
 const AdminSettingsSection     = lazy(() => import('./settings/AdminSettingsSection'));
 const DangerSection            = lazy(() => import('./settings/DangerSection'));
 
-// Superadmin-only sections
+// ── Superadmin sections (all 24) ──────────────────────────────────────────────
+const SAOverviewSection        = lazy(() => import('./superadmin/OverviewSection'));
 const SAUsersSection           = lazy(() => import('./superadmin/UsersSection'));
 const SAPlatformSection        = lazy(() => import('./superadmin/PlatformSection'));
 const SAMLAISection            = lazy(() => import('./superadmin/MLAISection'));
 const SATradingEngineSection   = lazy(() => import('./superadmin/TradingEngineSection'));
+const SARiskSection            = lazy(() => import('./superadmin/RiskManagementSection'));
 const SAFinancialSection       = lazy(() => import('./superadmin/FinancialSection'));
 const SASecuritySection        = lazy(() => import('./superadmin/SecuritySection'));
+const SASecurityInfraSection   = lazy(() => import('./superadmin/SecurityInfraSection'));
 const SALogsSection            = lazy(() => import('./superadmin/LogsSection'));
+const SAAuditTrailSection      = lazy(() => import('./superadmin/AuditTrailSection'));
 const SAFeatureFlagsSection    = lazy(() => import('./superadmin/FeatureFlagsSection'));
+const SAAlertingSection        = lazy(() => import('./superadmin/AlertingSection'));
+const SARateLimitingSection    = lazy(() => import('./superadmin/RateLimitingSection'));
+const SABrokerMgmtSection      = lazy(() => import('./superadmin/BrokerManagementSection'));
+const SAComplianceSection      = lazy(() => import('./superadmin/ComplianceSection'));
+const SAGDPRSection            = lazy(() => import('./superadmin/GDPRSection'));
+const SANuclearSection         = lazy(() => import('./superadmin/NuclearControlsSection'));
+const SAReportingSection       = lazy(() => import('./superadmin/ReportingSection'));
+const SAWhitelabelSection      = lazy(() => import('./superadmin/WhiteLabelSection'));
+const SASystemHealthSection    = lazy(() => import('./superadmin/SystemHealthSection'));
+const SAAutoHealingSection     = lazy(() => import('./superadmin/AutoHealingSection'));
 const PlatformConfigSection    = lazy(() => import('./settings/PlatformConfiguration'));
 const SystemReliabilitySection = lazy(() => import('./superadmin/SystemReliabilitySection'));
 
@@ -64,7 +69,7 @@ interface TabDef {
   adminOnly?: boolean;
   superAdminOnly?: boolean;
   danger?: boolean;
-  minPlan?: string; // minimum subscription tier required (non-admin users)
+  minPlan?: string;
 }
 
 interface TabGroup {
@@ -107,18 +112,57 @@ const TAB_GROUPS: TabGroup[] = [
     ],
   },
   {
-    label: 'Super Admin',
+    label: 'SA — Overview',
     tabs: [
-      { id: 'sa-users',          label: 'Users',           icon: '👥',  superAdminOnly: true },
-      { id: 'sa-platform',       label: 'Platform',        icon: '🌐',  superAdminOnly: true },
-      { id: 'sa-ml-ai',          label: 'ML / AI',         icon: '🧠',  superAdminOnly: true },
-      { id: 'sa-trading-engine', label: 'Trading Engine',  icon: '📈',  superAdminOnly: true },
-      { id: 'sa-financial',      label: 'Financial',       icon: '💰',  superAdminOnly: true },
-      { id: 'sa-security',       label: 'Security',        icon: '🛡️',  superAdminOnly: true },
-      { id: 'sa-logs',           label: 'Logs',            icon: '📋',  superAdminOnly: true },
-      { id: 'sa-feature-flags',  label: 'Feature Flags',   icon: '🚩',  superAdminOnly: true },
-      { id: 'platform-config',   label: 'Platform Config', icon: '🛠️',  superAdminOnly: true },
-      { id: 'sa-reliability',    label: 'System Reliability', icon: '🔬', superAdminOnly: true },
+      { id: 'sa-overview',       label: 'Overview',         icon: '📊',  superAdminOnly: true },
+    ],
+  },
+  {
+    label: 'SA — Users & Access',
+    tabs: [
+      { id: 'sa-users',          label: 'Users',            icon: '👥',  superAdminOnly: true },
+      { id: 'sa-feature-flags',  label: 'Feature Flags',    icon: '🚩',  superAdminOnly: true },
+      { id: 'sa-audit-trail',    label: 'Audit Trail',      icon: '📜',  superAdminOnly: true },
+      { id: 'sa-logs',           label: 'Logs',             icon: '📋',  superAdminOnly: true },
+    ],
+  },
+  {
+    label: 'SA — Platform',
+    tabs: [
+      { id: 'sa-platform',       label: 'Platform',         icon: '🌐',  superAdminOnly: true },
+      { id: 'platform-config',   label: 'Platform Config',  icon: '🛠️',  superAdminOnly: true },
+      { id: 'sa-rate-limiting',  label: 'Rate Limiting',    icon: '🚦',  superAdminOnly: true },
+      { id: 'sa-alerting',       label: 'Alerting',         icon: '🔔',  superAdminOnly: true },
+      { id: 'sa-whitelabel',     label: 'White Label',      icon: '🏷️',  superAdminOnly: true },
+      { id: 'sa-reporting',      label: 'Reporting',        icon: '📑',  superAdminOnly: true },
+    ],
+  },
+  {
+    label: 'SA — Trading Engine',
+    tabs: [
+      { id: 'sa-trading-engine', label: 'Trading Engine',   icon: '⚡',  superAdminOnly: true },
+      { id: 'sa-ml-ai',          label: 'ML / AI',          icon: '🧠',  superAdminOnly: true },
+      { id: 'sa-risk',           label: 'Risk Management',  icon: '⚖️',  superAdminOnly: true },
+      { id: 'sa-broker-mgmt',    label: 'Broker Mgmt',      icon: '🏦',  superAdminOnly: true },
+      { id: 'sa-nuclear',        label: 'Nuclear Controls', icon: '☢️',  superAdminOnly: true },
+    ],
+  },
+  {
+    label: 'SA — Finance & Compliance',
+    tabs: [
+      { id: 'sa-financial',      label: 'Financial',        icon: '💰',  superAdminOnly: true },
+      { id: 'sa-compliance',     label: 'Compliance',       icon: '📋',  superAdminOnly: true },
+      { id: 'sa-gdpr',           label: 'GDPR / Privacy',   icon: '🔏',  superAdminOnly: true },
+    ],
+  },
+  {
+    label: 'SA — Security & Infra',
+    tabs: [
+      { id: 'sa-security',       label: 'Security',         icon: '🛡️',  superAdminOnly: true },
+      { id: 'sa-security-infra', label: 'Security Infra',   icon: '🔐',  superAdminOnly: true },
+      { id: 'sa-auto-healing',   label: 'Auto-Healing',     icon: '🩺',  superAdminOnly: true },
+      { id: 'sa-system-health',  label: 'System Health',    icon: '💓',  superAdminOnly: true },
+      { id: 'sa-reliability',    label: 'Reliability',      icon: '🔬',  superAdminOnly: true },
     ],
   },
   {
@@ -129,7 +173,7 @@ const TAB_GROUPS: TabGroup[] = [
   },
 ];
 
-// ── Section fallback ──────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 const SectionFallback: React.FC = () => (
   <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#64748b', padding: '32px 0' }}>
@@ -141,8 +185,6 @@ const SectionFallback: React.FC = () => (
     Loading…
   </div>
 );
-
-// ── Upgrade notice ────────────────────────────────────────────────────────────
 
 const UpgradeNotice: React.FC<{ requiredPlan: string }> = ({ requiredPlan }) => (
   <div style={{
@@ -156,20 +198,15 @@ const UpgradeNotice: React.FC<{ requiredPlan: string }> = ({ requiredPlan }) => 
     <div style={{ fontSize: 14, color: '#64748b', maxWidth: 360, margin: '0 auto 20px' }}>
       Upgrade your subscription to unlock this feature.
     </div>
-    <a
-      href="/billing"
-      style={{
-        display: 'inline-block', padding: '10px 24px',
-        background: '#3b82f6', color: '#fff', borderRadius: 8,
-        fontWeight: 600, fontSize: 14, textDecoration: 'none',
-      }}
-    >
+    <a href="/billing" style={{
+      display: 'inline-block', padding: '10px 24px',
+      background: '#3b82f6', color: '#fff', borderRadius: 8,
+      fontWeight: 600, fontSize: 14, textDecoration: 'none',
+    }}>
       View Plans
     </a>
   </div>
 );
-
-// ── Plan rank helper ──────────────────────────────────────────────────────────
 
 const PLAN_RANK: Record<string, number> = {
   free: 0, starter: 1, professional: 2, enterprise: 3, elite: 4,
@@ -182,16 +219,13 @@ const Settings: React.FC = () => {
   const admin      = user ? isAdmin(user.role) : false;
   const superAdmin = user ? isSuperAdmin(user.role) : false;
 
-  // superadmin bypasses all plan gates — treat as elite
   const storePlan  = useStore((s) => s.plan) ?? 'free';
   const plan       = superAdmin ? 'elite' : storePlan;
   const planRank   = PLAN_RANK[plan] ?? 0;
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
 
-  /** Return the section component, gating by plan where required. */
   const renderSection = () => {
-    // Plan gate helper — admins and superadmins bypass
     const gate = (minPlan: string, node: React.ReactNode) => {
       if (superAdmin || admin) return node;
       if (planRank >= (PLAN_RANK[minPlan] ?? 0)) return node;
@@ -199,42 +233,55 @@ const Settings: React.FC = () => {
     };
 
     switch (activeTab) {
-      // ── Account ──────────────────────────────────────────────────────────
+      // Account
       case 'profile':           return <ProfileSection />;
       case 'security':          return <SecuritySection />;
       case 'billing':           return <BillingSection />;
       case 'api-keys':          return gate('professional', <ApiKeysSection />);
-
-      // ── Trading ──────────────────────────────────────────────────────────
+      // Trading
       case 'broker':            return <BrokerSection />;
       case 'trading':           return gate('professional', <TradingSection />);
       case 'integrations':      return gate('starter', <IntegrationsSection />);
-
-      // ── Preferences ──────────────────────────────────────────────────────
+      // Preferences
       case 'appearance':        return <AppearanceSection />;
       case 'notifications':     return <NotificationsSection />;
       case 'accessibility':     return <AccessibilitySection />;
       case 'privacy':           return <PrivacySection />;
-
-      // ── Administration ────────────────────────────────────────────────────
+      // Administration
       case 'system':            return admin      ? <SystemSection />          : null;
       case 'admin':             return admin      ? <AdminSettingsSection />   : null;
-
-      // ── Super Admin ───────────────────────────────────────────────────────
+      // SA — Overview
+      case 'sa-overview':       return superAdmin ? <SAOverviewSection />      : null;
+      // SA — Users & Access
       case 'sa-users':          return superAdmin ? <SAUsersSection />         : null;
-      case 'sa-platform':       return superAdmin ? <SAPlatformSection />      : null;
-      case 'sa-ml-ai':          return superAdmin ? <SAMLAISection />          : null;
-      case 'sa-trading-engine': return superAdmin ? <SATradingEngineSection /> : null;
-      case 'sa-financial':      return superAdmin ? <SAFinancialSection />     : null;
-      case 'sa-security':       return superAdmin ? <SASecuritySection />      : null;
-      case 'sa-logs':           return superAdmin ? <SALogsSection />          : null;
       case 'sa-feature-flags':  return superAdmin ? <SAFeatureFlagsSection />  : null;
-      case 'platform-config':   return superAdmin ? <PlatformConfigSection />       : null;
-      case 'sa-reliability':    return superAdmin ? <SystemReliabilitySection />    : null;
-
-      // ── Danger Zone ───────────────────────────────────────────────────────
+      case 'sa-audit-trail':    return superAdmin ? <SAAuditTrailSection />    : null;
+      case 'sa-logs':           return superAdmin ? <SALogsSection />          : null;
+      // SA — Platform
+      case 'sa-platform':       return superAdmin ? <SAPlatformSection />      : null;
+      case 'platform-config':   return superAdmin ? <PlatformConfigSection />  : null;
+      case 'sa-rate-limiting':  return superAdmin ? <SARateLimitingSection />  : null;
+      case 'sa-alerting':       return superAdmin ? <SAAlertingSection />      : null;
+      case 'sa-whitelabel':     return superAdmin ? <SAWhitelabelSection />    : null;
+      case 'sa-reporting':      return superAdmin ? <SAReportingSection />     : null;
+      // SA — Trading Engine
+      case 'sa-trading-engine': return superAdmin ? <SATradingEngineSection /> : null;
+      case 'sa-ml-ai':          return superAdmin ? <SAMLAISection />          : null;
+      case 'sa-risk':           return superAdmin ? <SARiskSection />          : null;
+      case 'sa-broker-mgmt':    return superAdmin ? <SABrokerMgmtSection />    : null;
+      case 'sa-nuclear':        return superAdmin ? <SANuclearSection />       : null;
+      // SA — Finance & Compliance
+      case 'sa-financial':      return superAdmin ? <SAFinancialSection />     : null;
+      case 'sa-compliance':     return superAdmin ? <SAComplianceSection />    : null;
+      case 'sa-gdpr':           return superAdmin ? <SAGDPRSection />          : null;
+      // SA — Security & Infra
+      case 'sa-security':       return superAdmin ? <SASecuritySection />      : null;
+      case 'sa-security-infra': return superAdmin ? <SASecurityInfraSection /> : null;
+      case 'sa-auto-healing':   return superAdmin ? <SAAutoHealingSection />   : null;
+      case 'sa-system-health':  return superAdmin ? <SASystemHealthSection />  : null;
+      case 'sa-reliability':    return superAdmin ? <SystemReliabilitySection /> : null;
+      // Danger
       case 'danger':            return <DangerSection />;
-
       default:                  return null;
     }
   };
@@ -246,17 +293,19 @@ const Settings: React.FC = () => {
         @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
 
-      <div style={styles.page}>
-        <div style={styles.header}>
-          <h1 style={styles.heading}>Settings</h1>
-          <p style={styles.subheading}>
+      <div style={S.page}>
+        <div style={S.header}>
+          <h1 style={S.heading}>Settings</h1>
+          <p style={S.subheading}>
             Manage your account, trading preferences, integrations, and platform configuration.
+            {superAdmin && (
+              <span style={S.saBadge}>SUPER ADMIN — Full Platform Control</span>
+            )}
           </p>
         </div>
 
-        <div style={styles.layout}>
-          {/* ── Sidebar nav ─────────────────────────────────────────────── */}
-          <nav style={styles.sidebar}>
+        <div style={S.layout}>
+          <nav style={S.sidebar}>
             {TAB_GROUPS.map((group) => {
               const visibleTabs = group.tabs.filter((t) => {
                 if (t.superAdminOnly) return superAdmin;
@@ -266,8 +315,8 @@ const Settings: React.FC = () => {
               if (visibleTabs.length === 0) return null;
 
               return (
-                <div key={group.label} style={{ marginBottom: 4 }}>
-                  <div style={styles.groupLabel}>{group.label}</div>
+                <div key={group.label} style={{ marginBottom: 2 }}>
+                  <div style={S.groupLabel}>{group.label}</div>
                   {visibleTabs.map((tab) => {
                     const active   = activeTab === tab.id;
                     const isSA     = !!tab.superAdminOnly;
@@ -285,27 +334,19 @@ const Settings: React.FC = () => {
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
                         style={{
-                          ...styles.tabBtn,
+                          ...S.tabBtn,
                           background: active ? '#1e293b' : 'transparent',
                           color: active ? activeColor : inactiveColor,
-                          borderLeft: active
-                            ? `3px solid ${borderColor}`
-                            : '3px solid transparent',
+                          borderLeft: active ? `3px solid ${borderColor}` : '3px solid transparent',
                           fontWeight: active ? 600 : 400,
                           opacity: locked ? 0.6 : 1,
                         }}
                       >
-                        <span style={styles.tabIcon}>{tab.icon}</span>
+                        <span style={S.tabIcon}>{tab.icon}</span>
                         <span style={{ flex: 1 }}>{tab.label}</span>
-                        {locked && (
-                          <span style={{ fontSize: 11, color: '#475569' }}>🔒</span>
-                        )}
-                        {isSA && (
-                          <span style={styles.superAdminBadge}>SA</span>
-                        )}
-                        {tab.adminOnly && !isSA && (
-                          <span style={styles.adminBadge}>ADMIN</span>
-                        )}
+                        {locked && <span style={{ fontSize: 10, color: '#475569' }}>🔒</span>}
+                        {isSA && <span style={S.saBadgeSmall}>SA</span>}
+                        {tab.adminOnly && !isSA && <span style={S.adminBadge}>ADM</span>}
                       </button>
                     );
                   })}
@@ -314,8 +355,7 @@ const Settings: React.FC = () => {
             })}
           </nav>
 
-          {/* Content */}
-          <main style={styles.content}>
+          <main style={S.content}>
             <Suspense fallback={<SectionFallback />}>
               <div key={activeTab} style={{ animation: 'fadeIn 0.2s ease' }}>
                 {renderSection()}
@@ -328,108 +368,38 @@ const Settings: React.FC = () => {
   );
 };
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-
-const styles: Record<string, React.CSSProperties> = {
+const S: Record<string, React.CSSProperties> = {
   page: {
-    minHeight: '100vh',
-    background: '#0f172a',
-    color: '#f1f5f9',
+    minHeight: '100vh', background: '#0f172a', color: '#f1f5f9',
     fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
-    padding: '32px 24px',
-    boxSizing: 'border-box',
+    padding: '32px 24px', boxSizing: 'border-box',
   },
-  header: {
-    maxWidth: 1200,
-    margin: '0 auto 28px',
-  },
-  heading: {
-    fontSize: 28,
-    fontWeight: 800,
-    color: '#f8fafc',
-    margin: 0,
-    letterSpacing: '-0.02em',
-  },
-  subheading: {
-    fontSize: 14,
-    color: '#64748b',
-    marginTop: 6,
-    marginBottom: 0,
-  },
-  layout: {
-    maxWidth: 1200,
-    margin: '0 auto',
-    display: 'flex',
-    gap: 28,
-    alignItems: 'flex-start',
-  },
+  header:    { maxWidth: 1400, margin: '0 auto 28px' },
+  heading:   { fontSize: 28, fontWeight: 800, color: '#f8fafc', margin: 0, letterSpacing: '-0.02em' },
+  subheading: { fontSize: 14, color: '#64748b', marginTop: 6, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  saBadge:   { fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: '#450a0a', color: '#fca5a5', border: '1px solid #dc2626' },
+  layout:    { maxWidth: 1400, margin: '0 auto', display: 'flex', gap: 28, alignItems: 'flex-start' },
   sidebar: {
-    width: 220,
-    flexShrink: 0,
-    background: '#0f172a',
-    borderRadius: 12,
-    border: '1px solid #1e293b',
-    padding: '10px 0',
-    position: 'sticky' as const,
-    top: 24,
-    maxHeight: 'calc(100vh - 48px)',
-    overflowY: 'auto' as const,
+    width: 230, flexShrink: 0, background: '#0f172a', borderRadius: 12,
+    border: '1px solid #1e293b', padding: '10px 0',
+    position: 'sticky' as const, top: 24,
+    maxHeight: 'calc(100vh - 48px)', overflowY: 'auto' as const,
   },
   groupLabel: {
-    fontSize: 10,
-    fontWeight: 700,
-    color: '#334155',
-    textTransform: 'uppercase' as const,
-    letterSpacing: '0.08em',
-    padding: '10px 16px 4px',
+    fontSize: 10, fontWeight: 700, color: '#334155',
+    textTransform: 'uppercase' as const, letterSpacing: '0.08em',
+    padding: '8px 16px 3px',
   },
   tabBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 9,
-    width: '100%',
-    padding: '9px 16px',
-    border: 'none',
-    borderLeft: '3px solid transparent',
-    background: 'transparent',
-    cursor: 'pointer',
-    fontSize: 13,
-    textAlign: 'left' as const,
-    transition: 'background 0.15s, color 0.15s',
-    borderRadius: 0,
+    display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+    padding: '7px 14px', border: 'none', borderLeft: '3px solid transparent',
+    background: 'transparent', cursor: 'pointer', fontSize: 12,
+    textAlign: 'left' as const, transition: 'background 0.15s, color 0.15s', borderRadius: 0,
   },
-  tabIcon: {
-    fontSize: 15,
-    flexShrink: 0,
-    width: 18,
-    textAlign: 'center' as const,
-  },
-  adminBadge: {
-    marginLeft: 'auto',
-    fontSize: 9,
-    fontWeight: 700,
-    padding: '2px 5px',
-    borderRadius: 4,
-    background: '#1e3a5f',
-    color: '#60a5fa',
-    border: '1px solid #1e3a5f',
-    letterSpacing: '0.05em',
-  },
-  superAdminBadge: {
-    marginLeft: 'auto',
-    fontSize: 9,
-    fontWeight: 700,
-    padding: '2px 5px',
-    borderRadius: 4,
-    background: '#450a0a',
-    color: '#fca5a5',
-    border: '1px solid #dc2626',
-    letterSpacing: '0.05em',
-  },
-  content: {
-    flex: 1,
-    minWidth: 0,
-  },
+  tabIcon:     { fontSize: 13, flexShrink: 0, width: 16, textAlign: 'center' as const },
+  adminBadge:  { fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: '#1e3a5f', color: '#60a5fa', border: '1px solid #1e3a5f' },
+  saBadgeSmall: { fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: '#450a0a', color: '#fca5a5', border: '1px solid #dc2626' },
+  content:     { flex: 1, minWidth: 0 },
 };
 
 export default Settings;

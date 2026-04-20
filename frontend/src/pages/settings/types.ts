@@ -1,6 +1,7 @@
 // settings/types.ts — shared types for all Settings sections
 
 export type SettingsTab =
+  // User-facing
   | 'profile'
   | 'security'
   | 'broker'
@@ -15,16 +16,35 @@ export type SettingsTab =
   | 'accessibility'
   | 'admin'
   | 'danger'
-  // Superadmin-only tabs
+  // SA — Overview
+  | 'sa-overview'
+  // SA — Users & Access
   | 'sa-users'
-  | 'sa-platform'
-  | 'sa-ml-ai'
-  | 'sa-trading-engine'
-  | 'sa-financial'
-  | 'sa-security'
-  | 'sa-logs'
   | 'sa-feature-flags'
+  | 'sa-audit-trail'
+  | 'sa-logs'
+  // SA — Platform
+  | 'sa-platform'
   | 'platform-config'
+  | 'sa-rate-limiting'
+  | 'sa-alerting'
+  | 'sa-whitelabel'
+  | 'sa-reporting'
+  // SA — Trading Engine
+  | 'sa-trading-engine'
+  | 'sa-ml-ai'
+  | 'sa-risk'
+  | 'sa-broker-mgmt'
+  | 'sa-nuclear'
+  // SA — Finance & Compliance
+  | 'sa-financial'
+  | 'sa-compliance'
+  | 'sa-gdpr'
+  // SA — Security & Infra
+  | 'sa-security'
+  | 'sa-security-infra'
+  | 'sa-auto-healing'
+  | 'sa-system-health'
   | 'sa-reliability';
 
 export interface ProfileSettings {
