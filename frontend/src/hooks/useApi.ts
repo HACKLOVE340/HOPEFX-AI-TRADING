@@ -767,10 +767,10 @@ export const whitelabelApi = {
 // ── Explainability ────────────────────────────────────────────────────────────
 
 export const explainabilityApi = {
-  explain:        (symbol: string, params?: object) => api.post(`/explainability/explain/${encodeURIComponent(symbol)}`, params ?? {}),
-  featureImportance: (symbol: string)          => api.get(`/explainability/features/${encodeURIComponent(symbol)}`),
-  shapValues:     (symbol: string)             => api.get(`/explainability/shap/${encodeURIComponent(symbol)}`),
-  history:        (limit = 20)                 => api.get('/explainability/history', { params: { limit } }),
+  explain:        (symbol: string, params?: object) => api.post(`/explain/${encodeURIComponent(symbol)}`, params ?? {}),
+  featureImportance: (symbol: string)          => api.get(`/explain/${encodeURIComponent(symbol)}`),
+  shapValues:     (symbol: string)             => api.get(`/explain/${encodeURIComponent(symbol)}`),
+  history:        (limit = 20)                 => api.get('/explain/latest', { params: { limit } }),
 };
 
 // ── No-Code Strategy Builder ──────────────────────────────────────────────────
@@ -883,20 +883,22 @@ export const backtestExtApi = {
 };
 
 // ── Anomaly Detection ─────────────────────────────────────────────────────────
+// Anomaly detection is configured via platform config; ML status via /ml/health
 
 export const anomalyApi = {
-  status:       ()              => api.get('/ml/anomaly/status'),
-  alerts:       (params?: object) => api.get('/ml/anomaly/alerts', { params }),
-  retrain:      (payload?: object) => api.post('/ml/anomaly/retrain', payload ?? {}),
+  status:       ()              => api.get('/ml/health'),
+  alerts:       (params?: object) => api.get('/signals/analytics', { params }),
+  retrain:      (payload?: object) => api.post('/ml/retrain', payload ?? {}),
 };
 
 // ── Allocator ─────────────────────────────────────────────────────────────────
+// Portfolio allocator is configured via platform config; status via /portfolio
 
 export const allocatorApi = {
-  status:       ()              => api.get('/portfolio/allocator/status'),
-  weights:      ()              => api.get('/portfolio/allocator/weights'),
-  rebalance:    (payload?: object) => api.post('/portfolio/allocator/rebalance', payload ?? {}),
-  history:      (limit = 50)   => api.get('/portfolio/allocator/history', { params: { limit } }),
+  status:       ()              => api.get('/portfolio/summary'),
+  weights:      ()              => api.get('/portfolio/positions'),
+  rebalance:    (payload?: object) => api.post('/trading/orders', payload ?? {}),
+  history:      (limit = 50)   => api.get('/performance/equity-curve', { params: { limit } }),
 };
 
 // ── LLM / AI Provider ─────────────────────────────────────────────────────────
