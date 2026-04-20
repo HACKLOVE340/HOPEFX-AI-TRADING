@@ -14,7 +14,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../hooks/useApi';
+import { teamsApi } from '../hooks/useApi';
 import { useStore } from '../store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -49,18 +49,7 @@ interface TeamPerformance {
   period: string;
 }
 
-// ── API helpers ───────────────────────────────────────────────────────────────
-
-const teamsApi = {
-  list:          () => api.get<{ teams: Team[]; total: number }>('/teams'),
-  create:        (body: { name: string; description: string }) => api.post<Team>('/teams', body),
-  get:           (id: string) => api.get<Team>(`/teams/${id}`),
-  getPerf:       (id: string) => api.get<TeamPerformance>(`/teams/${id}/performance`),
-  invite:        (id: string, email: string, role: string) =>
-                   api.post(`/teams/${id}/members`, { email, role }),
-  removeMember:  (id: string, uid: string) => api.delete(`/teams/${id}/members/${uid}`),
-  deleteTeam:    (id: string) => api.delete(`/teams/${id}`),
-};
+// teamsApi is imported from hooks/useApi
 
 // ── Role badge ────────────────────────────────────────────────────────────────
 
@@ -103,17 +92,17 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
 
   const { data: perfData } = useQuery({
     queryKey: ['team-perf', team.team_id],
-    queryFn: () => teamsApi.getPerf(team.team_id).then(r => r.data),
+    queryFn: () => teamsApi.getPerformance(team.team_id).then(r => r.data as TeamPerformance),
   });
 
   const { data: detailData } = useQuery({
     queryKey: ['team-detail', team.team_id],
-    queryFn: () => teamsApi.get(team.team_id).then(r => r.data),
+    queryFn: () => teamsApi.get(team.team_id).then(r => r.data as Team),
     initialData: team,
   });
 
   const inviteMut = useMutation({
-    mutationFn: () => teamsApi.invite(team.team_id, inviteEmail, inviteRole),
+    mutationFn: () => teamsApi.invite(team.team_id, { email: inviteEmail, role: inviteRole }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['team-detail', team.team_id] });
       setInviteEmail('');
@@ -251,7 +240,7 @@ const TeamsPage: React.FC = () => {
 
   const { data, isLoading } = useQuery({
     queryKey: ['teams'],
-    queryFn: () => teamsApi.list().then(r => r.data),
+    queryFn: () => teamsApi.list().then(r => r.data as { teams: Team[]; total: number }),
     refetchInterval: 15_000,
   });
 
@@ -262,12 +251,12 @@ const TeamsPage: React.FC = () => {
       setShowCreate(false);
       setNewName('');
       setNewDesc('');
-      setSelected(res.data);
+      setSelected(res.data as Team);
     },
   });
 
   const deleteMut = useMutation({
-    mutationFn: teamsApi.deleteTeam,
+    mutationFn: (id: string) => teamsApi.delete(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['teams'] }); setSelected(null); },
   });
 

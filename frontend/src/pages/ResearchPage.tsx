@@ -13,7 +13,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../hooks/useApi';
+import { researchApi } from '../hooks/useApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -59,16 +59,7 @@ interface Template {
   required_inputs: string[];
 }
 
-// ── API helpers ───────────────────────────────────────────────────────────────
-
-const researchApi = {
-  listNotebooks: () => api.get<{ notebooks: Notebook[]; total: number }>('/research/notebooks'),
-  createNotebook: (body: { title: string; template: string; symbol: string; timeframe: string; description?: string }) =>
-    api.post<Notebook>('/research/notebooks', body),
-  runNotebook: (id: string) => api.post<Notebook>(`/research/notebooks/${id}/run`, {}),
-  getTemplates: () => api.get<{ templates: Template[] }>('/research/templates'),
-  deleteNotebook: (id: string) => api.delete(`/research/notebooks/${id}`),
-};
+// researchApi is imported from hooks/useApi
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -245,17 +236,18 @@ const ResearchPage: React.FC = () => {
 
   const { data: nbData, isLoading: nbLoading } = useQuery({
     queryKey: ['research-notebooks'],
-    queryFn: () => researchApi.listNotebooks().then(r => r.data),
+    queryFn: () => researchApi.listNotebooks().then(r => r.data as { notebooks: Notebook[]; total: number }),
     refetchInterval: 10_000,
   });
 
   const { data: tplData } = useQuery({
     queryKey: ['research-templates'],
-    queryFn: () => researchApi.getTemplates().then(r => r.data),
+    queryFn: () => researchApi.getTemplates().then(r => r.data as { templates: Template[] }),
   });
 
   const createMut = useMutation({
-    mutationFn: researchApi.createNotebook,
+    mutationFn: (body: { title: string; template: string; symbol: string; timeframe: string; description: string }) =>
+      researchApi.createNotebook(body),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['research-notebooks'] }); setShowCreate(false); },
   });
 
@@ -263,12 +255,12 @@ const ResearchPage: React.FC = () => {
     mutationFn: (id: string) => researchApi.runNotebook(id),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['research-notebooks'] });
-      setSelected(res.data);
+      setSelected(res.data as Notebook);
     },
   });
 
   const deleteMut = useMutation({
-    mutationFn: researchApi.deleteNotebook,
+    mutationFn: (id: string) => researchApi.deleteNotebook(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['research-notebooks'] }); setSelected(null); },
   });
 

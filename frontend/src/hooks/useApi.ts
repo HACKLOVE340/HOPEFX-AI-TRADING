@@ -673,4 +673,95 @@ export const superadminApi = {
   diagnosticsChecks:    ()                     => api.get('/superadmin/diagnostics/checks'),
   diagnosticsRunCheck:  (name: string)         => api.post(`/superadmin/diagnostics/checks/${name}/run`),
   diagnosticsSummary:   ()                     => api.get('/superadmin/diagnostics/summary'),
+
+  // ── GDPR ─────────────────────────────────────────────────────────────────
+  gdprRequests:         (params?: Record<string, string>) => api.get('/superadmin/gdpr/requests', { params }),
+  gdprSubmitRequest:    (body: object)         => api.post('/superadmin/gdpr/requests', body),
+  gdprProcessRequest:   (id: string, body: object) => api.post(`/superadmin/gdpr/requests/${id}/process`, body),
+  gdprEraseUser:        (userId: string, body: object) => api.post(`/superadmin/gdpr/users/${userId}/erase`, body),
+};
+
+// ── Research ──────────────────────────────────────────────────────────────────
+
+export const researchApi = {
+  listNotebooks:  ()                           => api.get('/research/notebooks'),
+  createNotebook: (body: object)               => api.post('/research/notebooks', body),
+  getNotebook:    (id: string)                 => api.get(`/research/notebooks/${id}`),
+  runNotebook:    (id: string)                 => api.post(`/research/notebooks/${id}/run`, {}),
+  deleteNotebook: (id: string)                 => api.delete(`/research/notebooks/${id}`),
+  getTemplates:   ()                           => api.get('/research/templates'),
+};
+
+// ── Teams ─────────────────────────────────────────────────────────────────────
+
+export const teamsApi = {
+  list:           ()                           => api.get('/teams'),
+  create:         (body: object)               => api.post('/teams', body),
+  get:            (id: string)                 => api.get(`/teams/${id}`),
+  getPerformance: (id: string)                 => api.get(`/teams/${id}/performance`),
+  invite:         (id: string, body: object)   => api.post(`/teams/${id}/members`, body),
+  removeMember:   (id: string, uid: string)    => api.delete(`/teams/${id}/members/${uid}`),
+  updateMember:   (id: string, uid: string, body: object) => api.patch(`/teams/${id}/members/${uid}`, body),
+  delete:         (id: string)                 => api.delete(`/teams/${id}`),
+};
+
+// ── Replay ────────────────────────────────────────────────────────────────────
+
+export const replayApi = {
+  listSessions:   ()                           => api.get('/replay/sessions'),
+  createSession:  (body: object)               => api.post('/replay/sessions', body),
+  getSession:     (id: string)                 => api.get(`/replay/sessions/${id}`),
+  stepSession:    (id: string)                 => api.post(`/replay/sessions/${id}/step`, {}),
+  runSession:     (id: string, bars: number)   => api.post(`/replay/sessions/${id}/run`, { bars }),
+  deleteSession:  (id: string)                 => api.delete(`/replay/sessions/${id}`),
+};
+
+// ── Whitelabel ────────────────────────────────────────────────────────────────
+
+export const whitelabelApi = {
+  listTenants:    (statusFilter?: string)      => api.get('/whitelabel/tenants', { params: statusFilter ? { status_filter: statusFilter } : {} }),
+  createTenant:   (body: object)               => api.post('/whitelabel/tenants', body),
+  getTenant:      (id: string)                 => api.get(`/whitelabel/tenants/${id}`),
+  updateTenant:   (id: string, body: object)   => api.patch(`/whitelabel/tenants/${id}`, body),
+  activateTenant: (id: string)                 => api.post(`/whitelabel/tenants/${id}/activate`),
+  suspendTenant:  (id: string)                 => api.post(`/whitelabel/tenants/${id}/suspend`),
+  deleteTenant:   (id: string)                 => api.delete(`/whitelabel/tenants/${id}`),
+  enableFeature:  (id: string, feature: string) => api.post(`/whitelabel/tenants/${id}/features/${feature}`),
+  disableFeature: (id: string, feature: string) => api.delete(`/whitelabel/tenants/${id}/features/${feature}`),
+  generateApiKey: (id: string)                 => api.post(`/whitelabel/tenants/${id}/api-key`),
+  previewTenant:  (id: string)                 => api.get(`/whitelabel/tenants/${id}/preview`),
+  listFeatures:   ()                           => api.get('/whitelabel/features'),
+};
+
+// ── Explainability ────────────────────────────────────────────────────────────
+
+export const explainabilityApi = {
+  explain:        (symbol: string, params?: object) => api.post(`/explainability/explain/${encodeURIComponent(symbol)}`, params ?? {}),
+  featureImportance: (symbol: string)          => api.get(`/explainability/features/${encodeURIComponent(symbol)}`),
+  shapValues:     (symbol: string)             => api.get(`/explainability/shap/${encodeURIComponent(symbol)}`),
+  history:        (limit = 20)                 => api.get('/explainability/history', { params: { limit } }),
+};
+
+// ── No-Code Strategy Builder ──────────────────────────────────────────────────
+
+export const nocodeApi = {
+  listStrategies:   ()                         => api.get('/nocode/strategies'),
+  createStrategy:   (body: object)             => api.post('/nocode/strategies', body),
+  getStrategy:      (id: string)               => api.get(`/nocode/strategies/${id}`),
+  updateStrategy:   (id: string, body: object) => api.patch(`/nocode/strategies/${id}`, body),
+  deleteStrategy:   (id: string)               => api.delete(`/nocode/strategies/${id}`),
+  compileStrategy:  (id: string)               => api.post(`/nocode/strategies/${id}/compile`),
+  backtestStrategy: (id: string, params: object) => api.post(`/nocode/strategies/${id}/backtest`, params),
+  listBlocks:       ()                         => api.get('/nocode/blocks'),
+};
+
+// ── Execution Transparency ────────────────────────────────────────────────────
+
+export const transparencyApi = {
+  executionReport:  (orderId: string)          => api.get(`/transparency/orders/${orderId}`),
+  bestExecution:    (params?: object)          => api.get('/transparency/best-execution', { params }),
+  slippageReport:   (params?: object)          => api.get('/transparency/slippage', { params }),
+  venueAnalysis:    ()                         => api.get('/transparency/venues'),
+  auditTrail:       (orderId: string)          => api.get(`/transparency/audit/${orderId}`),
+  summary:          ()                         => api.get('/transparency/summary'),
 };

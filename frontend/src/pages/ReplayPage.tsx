@@ -14,7 +14,7 @@
 
 import React, { useState, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../hooks/useApi';
+import { replayApi } from '../hooks/useApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -55,17 +55,7 @@ interface ReplayTrade {
   bar_closed: number | null;
 }
 
-// ── API helpers ───────────────────────────────────────────────────────────────
-
-const replayApi = {
-  list:    () => api.get<{ sessions: ReplaySession[] }>('/replay/sessions'),
-  create:  (body: { symbol: string; timeframe: string; start_date: string; end_date: string }) =>
-             api.post<ReplaySession>('/replay/sessions', body),
-  get:     (id: string) => api.get<ReplaySession>(`/replay/sessions/${id}`),
-  step:    (id: string) => api.post<ReplaySession>(`/replay/sessions/${id}/step`, {}),
-  run:     (id: string, bars: number) => api.post<ReplaySession>(`/replay/sessions/${id}/run`, { bars }),
-  delete:  (id: string) => api.delete(`/replay/sessions/${id}`),
-};
+// replayApi is imported from hooks/useApi
 
 // ── Mini OHLC chart ───────────────────────────────────────────────────────────
 
@@ -169,30 +159,30 @@ const ReplayPage: React.FC = () => {
 
   const { data, isLoading } = useQuery({
     queryKey: ['replay-sessions'],
-    queryFn: () => replayApi.list().then(r => r.data),
+    queryFn: () => replayApi.listSessions().then(r => r.data as { sessions: ReplaySession[] }),
   });
 
   const createMut = useMutation({
-    mutationFn: () => replayApi.create({ symbol, timeframe, start_date: startDate, end_date: endDate }),
+    mutationFn: () => replayApi.createSession({ symbol, timeframe, start_date: startDate, end_date: endDate }),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['replay-sessions'] });
-      setSelected(res.data);
+      setSelected(res.data as ReplaySession);
       setShowCreate(false);
     },
   });
 
   const stepMut = useMutation({
-    mutationFn: (id: string) => replayApi.step(id),
-    onSuccess: (res) => setSelected(res.data),
+    mutationFn: (id: string) => replayApi.stepSession(id),
+    onSuccess: (res) => setSelected(res.data as ReplaySession),
   });
 
   const runMut = useMutation({
-    mutationFn: ({ id, bars }: { id: string; bars: number }) => replayApi.run(id, bars),
-    onSuccess: (res) => setSelected(res.data),
+    mutationFn: ({ id, bars }: { id: string; bars: number }) => replayApi.runSession(id, bars),
+    onSuccess: (res) => setSelected(res.data as ReplaySession),
   });
 
   const deleteMut = useMutation({
-    mutationFn: replayApi.delete,
+    mutationFn: (id: string) => replayApi.deleteSession(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['replay-sessions'] }); setSelected(null); },
   });
 
