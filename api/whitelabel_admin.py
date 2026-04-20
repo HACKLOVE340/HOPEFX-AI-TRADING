@@ -6,58 +6,75 @@
 """
 Whitelabel Tenant Management API
 
+All tenant records are persisted to the ``whitelabel_tenants`` database table
+(migration i1j2k3l4m5n6).  The in-memory WhiteLabelManager is kept only for
+feature-flag enum validation.
+
 Endpoints:
-  GET    /api/whitelabel/tenants              — list all tenants
-  POST   /api/whitelabel/tenants              — create new tenant
-  GET    /api/whitelabel/tenants/{id}         — get tenant detail
-  PATCH  /api/whitelabel/tenants/{id}         — update theme / domain
+  GET    /api/whitelabel/tenants
+  POST   /api/whitelabel/tenants
+  GET    /api/whitelabel/tenants/{id}
+  PATCH  /api/whitelabel/tenants/{id}
   POST   /api/whitelabel/tenants/{id}/activate
   POST   /api/whitelabel/tenants/{id}/suspend
   DELETE /api/whitelabel/tenants/{id}
-  POST   /api/whitelabel/tenants/{id}/features/{feature}   — enable feature
-  DELETE /api/whitelabel/tenants/{id}/features/{feature}   — disable feature
-  POST   /api/whitelabel/tenants/{id}/api-key              — generate API key
-  GET    /api/whitelabel/tenants/{id}/preview              — branded preview data
+  POST   /api/whitelabel/tenants/{id}/features/{feature}
+  DELETE /api/whitelabel/tenants/{id}/features/{feature}
+  POST   /api/whitelabel/tenants/{id}/api-key
+  GET    /api/whitelabel/tenants/{id}/preview
+  GET    /api/whitelabel/features
 """
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
+import json
 import logging
 import secrets
+import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
-from whitelabel import (
-    FeatureFlag,
-    TenantStatus,
-    WhiteLabelManager,
-)
+from whitelabel import FeatureFlag
 
+UTC = timezone.utc
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/whitelabel", tags=["Whitelabel"])
 
-_manager = WhiteLabelManager()
+
+# ── DB helpers ────────────────────────────────────────────────────────────────
+
+def _db_session():
+    try:
+        from database.connection import SessionLocal
+        return SessionLocal()
+    except Exception:
+        return None
 
 
-# In-memory API key store: tenant_id → hashed key (shown once at creation)
-_api_keys: dict[str, str] = {}
+def _get_model():
+    try:
+        from database.models import WhitelabelTenant
+        return WhitelabelTenant
+    except Exception:
+        return None
 
 
-# ── Models ────────────────────────────────────────────────────────────────────
-
+# ── Pydantic models ───────────────────────────────────────────────────────────
 
 class CreateTenantBody(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
     owner_email: str
-    trial_days: int = Field(0, ge=0, le=365)
+    plan: str = Field("starter")
+    trial_days: int = Field(30, ge=0, le=365)
     features: list[str] = []
     primary_color: str | None = None
     logo_url: str | None = None
+    custom_domain: str | None = None
 
 
 class UpdateTenantBody(BaseModel):
@@ -65,46 +82,63 @@ class UpdateTenantBody(BaseModel):
     logo_url: str | None = None
     company_name: str | None = None
     custom_domain: str | None = None
+    plan: str | None = None
 
 
-def _tenant_to_dict(t: Any) -> dict:
+# ── Serialisation ─────────────────────────────────────────────────────────────
+
+def _row_to_dict(row: Any) -> dict:
+    if hasattr(row, "to_dict"):
+        d = row.to_dict()
+        d["has_api_key"] = bool(getattr(row, "api_key_hash", None))
+        return d
+    features: list = []
+    try:
+        features = json.loads(getattr(row, "features_json", "[]") or "[]")
+    except Exception:
+        pass
     return {
-        "tenant_id": t.tenant_id,
-        "name": t.name,
-        "owner_email": t.owner_email,
-        "status": t.status.value if hasattr(t.status, "value") else str(t.status),
-        "features": [f.value if hasattr(f, "value") else str(f) for f in t.features],
+        "tenant_id": row.id,
+        "name": row.name,
+        "owner_email": row.owner_email,
+        "status": row.status,
+        "tier": getattr(row, "tier", "starter"),
+        "features": features,
         "theme": {
-            "primary_color": getattr(t.theme, "primary_color", "#3b82f6"),
-            "logo_url": getattr(t.theme, "logo_url", ""),
-            "company_name": getattr(t.theme, "company_name", t.name),
+            "primary_color": row.primary_color or "#3b82f6",
+            "logo_url": row.logo_url or "",
+            "company_name": row.company_name or row.name,
         },
-        "custom_domain": getattr(t, "custom_domain", None),
-        "created_at": t.created_at.isoformat() if getattr(t, "created_at", None) else None,
-        "expires_at": t.expires_at.isoformat() if getattr(t, "expires_at", None) else None,
-        "has_api_key": t.tenant_id in _api_keys,
+        "custom_domain": row.custom_domain,
+        "revenue_usd": float(row.revenue_usd or 0.0),
+        "user_count": int(row.user_count or 0),
+        "has_api_key": bool(getattr(row, "api_key_hash", None)),
+        "trial_ends_at": row.trial_ends_at.isoformat() if row.trial_ends_at else None,
+        "expires_at": row.expires_at.isoformat() if row.expires_at else None,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
     }
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
-
 
 @router.get("/tenants")
 async def list_tenants(
     status_filter: str | None = None,
     user: TokenPayload = Depends(get_current_user),
 ):
-    status_enum = None
-    if status_filter:
-        try:
-            status_enum = TenantStatus(status_filter)
-        except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid status: {status_filter}",
-            ) from None
-    tenants = _manager.list_tenants(status=status_enum)
-    return {"tenants": [_tenant_to_dict(t) for t in tenants], "total": len(tenants)}
+    Model = _get_model()
+    db = _db_session()
+    if Model is None or db is None:
+        return {"tenants": [], "total": 0}
+    try:
+        q = db.query(Model)
+        if status_filter:
+            q = q.filter(Model.status == status_filter)
+        rows = q.order_by(Model.created_at.desc()).all()
+        result = [_row_to_dict(r) for r in rows]
+        return {"tenants": result, "total": len(result)}
+    finally:
+        db.close()
 
 
 @router.post("/tenants", status_code=status.HTTP_201_CREATED)
@@ -112,42 +146,62 @@ async def create_tenant(
     body: CreateTenantBody,
     user: TokenPayload = Depends(get_current_user),
 ):
-    features = []
-    for f in body.features:
-        with contextlib.suppress(ValueError):
-            features.append(FeatureFlag(f))
+    Model = _get_model()
+    db = _db_session()
+    if Model is None or db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        valid_features: list[str] = []
+        for f in body.features:
+            try:
+                valid_features.append(FeatureFlag(f).value)
+            except ValueError:
+                pass
 
-    tenant = _manager.create_tenant(
-        name=body.name,
-        owner_email=body.owner_email,
-        trial_days=body.trial_days,
-        features=features,
-    )
-    if body.primary_color or body.logo_url:
-        _manager.update_theme(
-            tenant.tenant_id,
-            {
-                k: v
-                for k, v in {
-                    "primary_color": body.primary_color,
-                    "logo_url": body.logo_url,
-                    "company_name": body.name,
-                }.items()
-                if v is not None
-            },
+        now = datetime.now(UTC)
+        trial_ends = (now + timedelta(days=body.trial_days)) if body.trial_days > 0 else None
+        row = Model(
+            id=str(uuid.uuid4()),
+            name=body.name,
+            owner_email=body.owner_email,
+            status="trial" if body.trial_days > 0 else "active",
+            tier=body.plan,
+            features_json=json.dumps(valid_features),
+            primary_color=body.primary_color or "#3b82f6",
+            logo_url=body.logo_url or "",
+            company_name=body.name,
+            custom_domain=body.custom_domain,
+            revenue_usd=0.0,
+            user_count=0,
+            trial_ends_at=trial_ends,
+            created_at=now,
+            updated_at=now,
         )
-    return _tenant_to_dict(_manager.get_tenant(tenant.tenant_id))
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        return _row_to_dict(row)
+    except Exception as exc:
+        db.rollback()
+        logger.error("create_tenant error: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to create tenant") from None
+    finally:
+        db.close()
 
 
 @router.get("/tenants/{tenant_id}")
-async def get_tenant(
-    tenant_id: str,
-    user: TokenPayload = Depends(get_current_user),
-):
-    t = _manager.get_tenant(tenant_id)
-    if not t:
-        raise HTTPException(status_code=404, detail="Tenant not found")
-    return _tenant_to_dict(t)
+async def get_tenant(tenant_id: str, user: TokenPayload = Depends(get_current_user)):
+    Model = _get_model()
+    db = _db_session()
+    if Model is None or db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        row = db.query(Model).filter(Model.id == tenant_id).first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        return _row_to_dict(row)
+    finally:
+        db.close()
 
 
 @router.patch("/tenants/{tenant_id}")
@@ -156,117 +210,201 @@ async def update_tenant(
     body: UpdateTenantBody,
     user: TokenPayload = Depends(get_current_user),
 ):
-    t = _manager.get_tenant(tenant_id)
-    if not t:
-        raise HTTPException(status_code=404, detail="Tenant not found")
-
-    theme_updates = {
-        k: v
-        for k, v in body.model_dump().items()
-        if k in ("primary_color", "logo_url", "company_name") and v is not None
-    }
-    if theme_updates:
-        _manager.update_theme(tenant_id, theme_updates)
-
-    if body.custom_domain:
-        _manager.set_custom_domain(tenant_id, body.custom_domain)
-
-    return _tenant_to_dict(_manager.get_tenant(tenant_id))
+    Model = _get_model()
+    db = _db_session()
+    if Model is None or db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        row = db.query(Model).filter(Model.id == tenant_id).first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        if body.primary_color is not None:
+            row.primary_color = body.primary_color
+        if body.logo_url is not None:
+            row.logo_url = body.logo_url
+        if body.company_name is not None:
+            row.company_name = body.company_name
+        if body.custom_domain is not None:
+            row.custom_domain = body.custom_domain
+        if body.plan is not None:
+            row.tier = body.plan
+        row.updated_at = datetime.now(UTC)
+        db.commit()
+        db.refresh(row)
+        return _row_to_dict(row)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        logger.error("update_tenant error: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to update tenant") from None
+    finally:
+        db.close()
 
 
 @router.post("/tenants/{tenant_id}/activate")
-async def activate_tenant(
-    tenant_id: str,
-    user: TokenPayload = Depends(get_current_user),
-):
-    if not _manager.activate_tenant(tenant_id):
-        raise HTTPException(status_code=404, detail="Tenant not found")
-    return {"activated": True, "tenant_id": tenant_id}
+async def activate_tenant(tenant_id: str, user: TokenPayload = Depends(get_current_user)):
+    Model = _get_model()
+    db = _db_session()
+    if Model is None or db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        row = db.query(Model).filter(Model.id == tenant_id).first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        row.status = "active"
+        row.updated_at = datetime.now(UTC)
+        db.commit()
+        return {"activated": True, "tenant_id": tenant_id}
+    finally:
+        db.close()
 
 
 @router.post("/tenants/{tenant_id}/suspend")
-async def suspend_tenant(
-    tenant_id: str,
-    user: TokenPayload = Depends(get_current_user),
-):
-    if not _manager.suspend_tenant(tenant_id):
-        raise HTTPException(status_code=404, detail="Tenant not found")
-    return {"suspended": True, "tenant_id": tenant_id}
+async def suspend_tenant(tenant_id: str, user: TokenPayload = Depends(get_current_user)):
+    Model = _get_model()
+    db = _db_session()
+    if Model is None or db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        row = db.query(Model).filter(Model.id == tenant_id).first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        row.status = "suspended"
+        row.updated_at = datetime.now(UTC)
+        db.commit()
+        return {"suspended": True, "tenant_id": tenant_id}
+    finally:
+        db.close()
 
 
 @router.delete("/tenants/{tenant_id}")
 async def delete_tenant(tenant_id: str, user: TokenPayload = Depends(get_current_user)):
-    if not _manager.delete_tenant(tenant_id):
-        raise HTTPException(status_code=404, detail="Tenant not found")
-    _api_keys.pop(tenant_id, None)
-    return {"deleted": True, "tenant_id": tenant_id}
+    Model = _get_model()
+    db = _db_session()
+    if Model is None or db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        row = db.query(Model).filter(Model.id == tenant_id).first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        db.delete(row)
+        db.commit()
+        return {"deleted": True, "tenant_id": tenant_id}
+    finally:
+        db.close()
 
 
 @router.post("/tenants/{tenant_id}/features/{feature}")
 async def enable_feature(
-    tenant_id: str,
-    feature: str,
-    user: TokenPayload = Depends(get_current_user),
+    tenant_id: str, feature: str, user: TokenPayload = Depends(get_current_user)
 ):
     try:
-        flag = FeatureFlag(feature)
+        flag_val = FeatureFlag(feature).value
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Unknown feature: {feature}") from None
-    if not _manager.enable_feature(tenant_id, flag):
-        raise HTTPException(status_code=404, detail="Tenant not found")
-    return {"enabled": True, "feature": feature, "tenant_id": tenant_id}
+    Model = _get_model()
+    db = _db_session()
+    if Model is None or db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        row = db.query(Model).filter(Model.id == tenant_id).first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        features: list = []
+        try:
+            features = json.loads(row.features_json or "[]")
+        except Exception:
+            pass
+        if flag_val not in features:
+            features.append(flag_val)
+        row.features_json = json.dumps(features)
+        row.updated_at = datetime.now(UTC)
+        db.commit()
+        return {"enabled": True, "feature": feature, "tenant_id": tenant_id}
+    finally:
+        db.close()
 
 
 @router.delete("/tenants/{tenant_id}/features/{feature}")
 async def disable_feature(
-    tenant_id: str,
-    feature: str,
-    user: TokenPayload = Depends(get_current_user),
+    tenant_id: str, feature: str, user: TokenPayload = Depends(get_current_user)
 ):
     try:
-        flag = FeatureFlag(feature)
+        flag_val = FeatureFlag(feature).value
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Unknown feature: {feature}") from None
-    if not _manager.disable_feature(tenant_id, flag):
-        raise HTTPException(status_code=404, detail="Tenant not found")
-    return {"disabled": True, "feature": feature, "tenant_id": tenant_id}
+    Model = _get_model()
+    db = _db_session()
+    if Model is None or db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        row = db.query(Model).filter(Model.id == tenant_id).first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        features: list = []
+        try:
+            features = json.loads(row.features_json or "[]")
+        except Exception:
+            pass
+        row.features_json = json.dumps([f for f in features if f != flag_val])
+        row.updated_at = datetime.now(UTC)
+        db.commit()
+        return {"disabled": True, "feature": feature, "tenant_id": tenant_id}
+    finally:
+        db.close()
 
 
 @router.post("/tenants/{tenant_id}/api-key")
-async def generate_api_key(
-    tenant_id: str,
-    user: TokenPayload = Depends(get_current_user),
-):
-    """Generate a new API key for a tenant. Shown once — stored as hash."""
-    t = _manager.get_tenant(tenant_id)
-    if not t:
-        raise HTTPException(status_code=404, detail="Tenant not found")
-    raw_key = f"hfx_{secrets.token_urlsafe(32)}"
-    _api_keys[tenant_id] = hashlib.sha256(raw_key.encode()).hexdigest()
-    return {
-        "api_key": raw_key,
-        "tenant_id": tenant_id,
-        "note": "Store this key securely — it will not be shown again.",
-    }
+async def generate_api_key(tenant_id: str, user: TokenPayload = Depends(get_current_user)):
+    """Generate a new API key. Shown once — stored as SHA-256 hash."""
+    Model = _get_model()
+    db = _db_session()
+    if Model is None or db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        row = db.query(Model).filter(Model.id == tenant_id).first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        raw_key = f"hfx_{secrets.token_urlsafe(32)}"
+        row.api_key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+        row.updated_at = datetime.now(UTC)
+        db.commit()
+        return {
+            "api_key": raw_key,
+            "tenant_id": tenant_id,
+            "note": "Store this key securely — it will not be shown again.",
+        }
+    finally:
+        db.close()
 
 
 @router.get("/tenants/{tenant_id}/preview")
-async def preview_tenant(
-    tenant_id: str,
-    user: TokenPayload = Depends(get_current_user),
-):
+async def preview_tenant(tenant_id: str, user: TokenPayload = Depends(get_current_user)):
     """Return branded theme data for dashboard preview."""
-    t = _manager.get_tenant(tenant_id)
-    if not t:
-        raise HTTPException(status_code=404, detail="Tenant not found")
-    return {
-        "tenant_id": tenant_id,
-        "company_name": getattr(t.theme, "company_name", t.name),
-        "primary_color": getattr(t.theme, "primary_color", "#3b82f6"),
-        "logo_url": getattr(t.theme, "logo_url", ""),
-        "features": [f.value if hasattr(f, "value") else str(f) for f in t.features],
-        "status": t.status.value if hasattr(t.status, "value") else str(t.status),
-    }
+    Model = _get_model()
+    db = _db_session()
+    if Model is None or db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        row = db.query(Model).filter(Model.id == tenant_id).first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        features: list = []
+        try:
+            features = json.loads(row.features_json or "[]")
+        except Exception:
+            pass
+        return {
+            "tenant_id": tenant_id,
+            "company_name": row.company_name or row.name,
+            "primary_color": row.primary_color or "#3b82f6",
+            "logo_url": row.logo_url or "",
+            "features": features,
+            "status": row.status,
+        }
+    finally:
+        db.close()
 
 
 @router.get("/features")
@@ -277,48 +415,59 @@ async def list_available_features(user: TokenPayload = Depends(get_current_user)
 
 # ── Internal helpers called by api/superadmin/infrastructure.py ──────────────
 
-
 def _get_tenants() -> list[dict]:
-    """Return all tenants as plain dicts (superadmin helper).
-
-    Returns:
-        List of tenant dicts from the WhiteLabelManager.
-    """
-    return [_tenant_to_dict(t) for t in _manager.list_tenants()]
+    Model = _get_model()
+    db = _db_session()
+    if Model is None or db is None:
+        return []
+    try:
+        return [_row_to_dict(r) for r in db.query(Model).order_by(Model.created_at.desc()).all()]
+    finally:
+        db.close()
 
 
 def _get_tenant_by_id(tenant_id: str) -> dict | None:
-    """Look up a single tenant by *tenant_id* (superadmin helper).
-
-    Args:
-        tenant_id: UUID string of the tenant to retrieve.
-
-    Returns:
-        Tenant dict, or ``None`` if not found.
-    """
-    tenant = _manager.get_tenant(tenant_id)
-    return _tenant_to_dict(tenant) if tenant else None
+    Model = _get_model()
+    db = _db_session()
+    if Model is None or db is None:
+        return None
+    try:
+        row = db.query(Model).filter(Model.id == tenant_id).first()
+        return _row_to_dict(row) if row else None
+    finally:
+        db.close()
 
 
 def _create_tenant(tenant_data: dict) -> None:
-    """Persist a tenant record that was already constructed externally.
-
-    The superadmin endpoint builds the full tenant dict itself and calls this
-    to propagate it into the WhiteLabelManager's store.
-
-    Args:
-        tenant_data: Fully-formed tenant dict (must include ``tenant_id``).
-    """
-    tid = tenant_data.get("tenant_id", "")
-    if not tid:
+    Model = _get_model()
+    db = _db_session()
+    if Model is None or db is None:
         return
-    # Only persist if not already tracked
-    if _manager.get_tenant(tid) is None:
-        try:
-            _manager.create_tenant(
-                name=tenant_data.get("name", ""),
-                owner_email=tenant_data.get("domain", ""),
-                features=[],
-            )
-        except Exception as exc:
-            logger.debug("_create_tenant delegation error: %s", exc)
+    try:
+        tid = tenant_data.get("tenant_id") or str(uuid.uuid4())
+        if db.query(Model).filter(Model.id == tid).first():
+            return
+        now = datetime.now(UTC)
+        row = Model(
+            id=tid,
+            name=tenant_data.get("name", ""),
+            owner_email=tenant_data.get("domain", tenant_data.get("owner_email", "")),
+            status=tenant_data.get("status", "trial"),
+            tier=tenant_data.get("plan", "starter"),
+            features_json=json.dumps(tenant_data.get("features", [])),
+            primary_color=tenant_data.get("primary_color", "#3b82f6"),
+            logo_url=tenant_data.get("logo_url", ""),
+            company_name=tenant_data.get("name", ""),
+            custom_domain=tenant_data.get("custom_domain"),
+            revenue_usd=float(tenant_data.get("revenue_usd", 0.0)),
+            user_count=int(tenant_data.get("users", 0)),
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(row)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.debug("_create_tenant error: %s", exc)
+    finally:
+        db.close()

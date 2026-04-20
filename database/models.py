@@ -1215,3 +1215,136 @@ else:
     class BrokerConnection:  # type: ignore[no-redef]
         __tablename__ = "broker_connections"
         __table__ = type("T", (), {"columns": []})()
+
+
+# ── WhitelabelTenant — durable white-label tenant records ────────────────────
+if SQLALCHEMY_AVAILABLE:
+
+    class WhitelabelTenant(Base):
+        """Persistent white-label tenant record (replaces in-memory WhiteLabelManager store)."""
+
+        __tablename__ = "whitelabel_tenants"
+
+        id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+        name = Column(String(200), nullable=False)
+        owner_email = Column(String(255), nullable=False, index=True)
+        # status: active | suspended | trial | cancelled
+        status = Column(String(20), nullable=False, default="trial", index=True)
+        # reseller tier: starter | growth | enterprise
+        tier = Column(String(30), nullable=False, default="starter")
+        # JSON-encoded list of enabled FeatureFlag values
+        features_json = Column(Text, nullable=False, default="[]")
+        # Branding
+        primary_color = Column(String(20), nullable=True, default="#3b82f6")
+        logo_url = Column(Text, nullable=True)
+        company_name = Column(String(200), nullable=True)
+        custom_domain = Column(String(255), nullable=True, unique=True)
+        # Hashed API key (shown once at creation, stored as SHA-256 hex)
+        api_key_hash = Column(String(64), nullable=True)
+        # Revenue tracking
+        revenue_usd = Column(Float, nullable=False, default=0.0)
+        user_count = Column(Integer, nullable=False, default=0)
+        # Lifecycle
+        trial_ends_at = Column(DateTime(timezone=True), nullable=True)
+        expires_at = Column(DateTime(timezone=True), nullable=True)
+        created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+        updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+        __table_args__ = (
+            Index("idx_wl_tenant_status", "status"),
+            Index("idx_wl_tenant_owner", "owner_email"),
+        )
+
+        def to_dict(self) -> dict:
+            import json as _json
+            features: list = []
+            try:
+                features = _json.loads(self.features_json or "[]")
+            except Exception:
+                pass
+            return {
+                "tenant_id": self.id,
+                "name": self.name,
+                "owner_email": self.owner_email,
+                "status": self.status,
+                "tier": self.tier,
+                "features": features,
+                "theme": {
+                    "primary_color": self.primary_color or "#3b82f6",
+                    "logo_url": self.logo_url or "",
+                    "company_name": self.company_name or self.name,
+                },
+                "custom_domain": self.custom_domain,
+                "revenue_usd": float(self.revenue_usd or 0.0),
+                "user_count": int(self.user_count or 0),
+                "trial_ends_at": self.trial_ends_at.isoformat() if self.trial_ends_at else None,
+                "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+                "created_at": self.created_at.isoformat() if self.created_at else None,
+                "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            }
+
+else:
+
+    class WhitelabelTenant:  # type: ignore[no-redef]
+        __tablename__ = "whitelabel_tenants"
+        __table__ = type("T", (), {"columns": []})()
+
+
+# ── GDPRRequest — durable GDPR data-subject request records ──────────────────
+if SQLALCHEMY_AVAILABLE:
+
+    class GDPRRequest(Base):
+        """
+        Persistent GDPR data-subject request (Art. 15–22).
+
+        Replaces the Redis-only store so requests survive restarts and are
+        included in database backups / audit exports.
+        """
+
+        __tablename__ = "gdpr_requests"
+
+        id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+        user_id = Column(String(36), nullable=False, index=True)
+        user_email = Column(String(255), nullable=True)
+        # request_type: access | erasure | portability | rectification | restriction | objection
+        request_type = Column(String(30), nullable=False, index=True)
+        # status: pending | in_progress | completed | rejected
+        status = Column(String(20), nullable=False, default="pending", index=True)
+        # Free-text description from the data subject
+        description = Column(Text, nullable=True)
+        # Admin notes added during processing
+        notes = Column(Text, nullable=True)
+        # Who processed this request
+        processed_by = Column(String(128), nullable=True)
+        # Timestamps
+        submitted_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+        completed_at = Column(DateTime(timezone=True), nullable=True)
+        created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+        updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+        __table_args__ = (
+            Index("idx_gdpr_user", "user_id"),
+            Index("idx_gdpr_status", "status"),
+            Index("idx_gdpr_type", "request_type"),
+        )
+
+        def to_dict(self) -> dict:
+            return {
+                "request_id": self.id,
+                "user_id": self.user_id,
+                "user_email": self.user_email or "",
+                "request_type": self.request_type,
+                "status": self.status,
+                "description": self.description or "",
+                "notes": self.notes or "",
+                "processed_by": self.processed_by,
+                "submitted_at": self.submitted_at.isoformat() if self.submitted_at else None,
+                "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+                "created_at": self.created_at.isoformat() if self.created_at else None,
+            }
+
+else:
+
+    class GDPRRequest:  # type: ignore[no-redef]
+        __tablename__ = "gdpr_requests"
+        __table__ = type("T", (), {"columns": []})()

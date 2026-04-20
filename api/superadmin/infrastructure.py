@@ -1306,31 +1306,62 @@ async def get_tenant_usage(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+def _gdpr_db_session():
+    """Return a DB session or None."""
+    try:
+        from database.connection import SessionLocal
+        return SessionLocal()
+    except Exception:
+        return None
+
+
+def _gdpr_model():
+    """Return the GDPRRequest ORM class or None."""
+    try:
+        from database.models import GDPRRequest
+        return GDPRRequest
+    except Exception:
+        return None
+
+
 def _gdpr_store() -> dict:
+    """Load GDPR requests from DB (primary) with Redis fallback."""
+    Model = _gdpr_model()
+    db = _gdpr_db_session()
+    if Model is not None and db is not None:
+        try:
+            rows = db.query(Model).all()
+            return {r.id: r.to_dict() for r in rows}
+        except Exception as exc:
+            logger.debug("GDPR DB read error: %s", exc)
+        finally:
+            db.close()
+    # Redis fallback
     try:
         from cache.redis_client import get_redis_client
         import json as _json
-
         rc = get_redis_client()
         if rc:
             raw = rc.get("gdpr:requests")
             if raw:
                 return _json.loads(raw)
     except Exception:
-        logger.debug("Suppressed exception (no detail) in %s", __name__)
+        pass
     return {}
 
 
 def _gdpr_save(store: dict) -> None:
+    """Persist GDPR requests to DB (primary) and Redis (secondary cache)."""
+    # DB is the source of truth — individual saves happen in the endpoint.
+    # This function keeps Redis in sync for fast reads.
     try:
         from cache.redis_client import get_redis_client
         import json as _json
-
         rc = get_redis_client()
         if rc:
-            rc.set("gdpr:requests", _json.dumps(store))
+            rc.set("gdpr:requests", _json.dumps(store), ex=86400)
     except Exception as exc:
-        logger.warning("GDPR store save error: %s", exc)
+        logger.debug("GDPR Redis sync error: %s", exc)
 
 
 @router.get("/gdpr/requests")
@@ -1342,6 +1373,29 @@ async def get_gdpr_requests(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     """Data subject requests (GDPR Art. 15–22)."""
+    Model = _gdpr_model()
+    db = _gdpr_db_session()
+    if Model is not None and db is not None:
+        try:
+            q = db.query(Model)
+            if status:
+                q = q.filter(Model.status == status)
+            if request_type:
+                q = q.filter(Model.request_type == request_type)
+            total = q.count()
+            offset = (page - 1) * limit
+            rows = q.order_by(Model.submitted_at.desc()).offset(offset).limit(limit).all()
+            return {
+                "requests": [r.to_dict() for r in rows],
+                "total": total,
+                "page": page,
+                "limit": limit,
+            }
+        except Exception as exc:
+            logger.warning("GDPR DB query error: %s", exc)
+        finally:
+            db.close()
+    # Fallback to Redis store
     store = _gdpr_store()
     requests = list(store.values())
     if status:
@@ -1351,7 +1405,57 @@ async def get_gdpr_requests(
     requests.sort(key=lambda r: r.get("submitted_at", ""), reverse=True)
     total = len(requests)
     offset = (page - 1) * limit
-    return {"requests": requests[offset : offset + limit], "total": total, "page": page, "limit": limit}
+    return {"requests": requests[offset: offset + limit], "total": total, "page": page, "limit": limit}
+
+
+@router.post("/gdpr/requests")
+async def submit_gdpr_request(
+    body: GDPREraseBody,
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    """Submit a new GDPR data-subject request (Art. 15–22)."""
+    Model = _gdpr_model()
+    db = _gdpr_db_session()
+    now = _utcnow()
+    req_id = str(uuid.uuid4())
+    req_dict = {
+        "request_id": req_id,
+        "user_id": body.user_id,
+        "user_email": getattr(body, "user_email", ""),
+        "request_type": getattr(body, "request_type", "erasure"),
+        "status": "pending",
+        "description": getattr(body, "reason", ""),
+        "notes": "",
+        "processed_by": None,
+        "submitted_at": now.isoformat(),
+        "completed_at": None,
+    }
+    if Model is not None and db is not None:
+        try:
+            row = Model(
+                id=req_id,
+                user_id=body.user_id,
+                user_email=getattr(body, "user_email", ""),
+                request_type=getattr(body, "request_type", "erasure"),
+                status="pending",
+                description=getattr(body, "reason", ""),
+                submitted_at=now,
+                created_at=now,
+                updated_at=now,
+            )
+            db.add(row)
+            db.commit()
+            return row.to_dict()
+        except Exception as exc:
+            db.rollback()
+            logger.warning("GDPR DB insert error: %s", exc)
+        finally:
+            db.close()
+    # Redis fallback
+    store = _gdpr_store()
+    store[req_id] = req_dict
+    _gdpr_save(store)
+    return req_dict
 
 
 @router.post("/gdpr/requests/{request_id}/process")
@@ -1361,17 +1465,43 @@ async def process_gdpr_request(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     _log_superadmin_action(user, f"gdpr_request_{body.action}", f"request={request_id}")
-    store = _gdpr_store()
-    req = store.get(request_id)
-    if not req:
-        raise HTTPException(status_code=404, detail="GDPR request not found")
-    req["status"] = "completed" if body.action == "approve" else "rejected"
-    req["completed_at"] = _utcnow().isoformat()
-    req["processed_by"] = user.sub
-    req["notes"] = body.notes
-    store[request_id] = req
-    _gdpr_save(store)
-    # If erasure approved, trigger actual erasure
+    now = _utcnow()
+    new_status = "completed" if body.action == "approve" else "rejected"
+
+    Model = _gdpr_model()
+    db = _gdpr_db_session()
+    if Model is not None and db is not None:
+        try:
+            row = db.query(Model).filter(Model.id == request_id).first()
+            if not row:
+                raise HTTPException(status_code=404, detail="GDPR request not found")
+            row.status = new_status
+            row.completed_at = now
+            row.processed_by = user.sub
+            row.notes = body.notes
+            row.updated_at = now
+            db.commit()
+            req = row.to_dict()
+        except HTTPException:
+            raise
+        except Exception as exc:
+            db.rollback()
+            logger.warning("GDPR DB update error: %s", exc)
+            raise HTTPException(status_code=500, detail="Failed to process GDPR request") from None
+        finally:
+            db.close()
+    else:
+        store = _gdpr_store()
+        req = store.get(request_id)
+        if not req:
+            raise HTTPException(status_code=404, detail="GDPR request not found")
+        req["status"] = new_status
+        req["completed_at"] = now.isoformat()
+        req["processed_by"] = user.sub
+        req["notes"] = body.notes
+        store[request_id] = req
+        _gdpr_save(store)
+
     if body.action == "approve" and req.get("request_type") == "erasure":
         try:
             await _execute_gdpr_erasure(req["user_id"], user.sub)
@@ -1444,25 +1574,64 @@ async def gdpr_erase_user(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     _log_superadmin_action(user, "gdpr_erase", f"user={target_user_id} reason={body.reason}")
-    # Create a GDPR erasure request and immediately process it
+    now = _utcnow()
     request_id = str(uuid.uuid4())
-    store = _gdpr_store()
-    store[request_id] = {
-        "request_id": request_id,
-        "user_id": target_user_id,
-        "username": "",
-        "email": "",
-        "request_type": "erasure",
-        "status": "processing",
-        "submitted_at": _utcnow().isoformat(),
-        "completed_at": None,
-        "notes": body.reason,
-    }
-    _gdpr_save(store)
+
+    # Persist to DB first
+    Model = _gdpr_model()
+    db = _gdpr_db_session()
+    if Model is not None and db is not None:
+        try:
+            row = Model(
+                id=request_id,
+                user_id=target_user_id,
+                user_email=getattr(body, "user_email", ""),
+                request_type="erasure",
+                status="processing",
+                description=body.reason,
+                processed_by=user.sub,
+                submitted_at=now,
+                created_at=now,
+                updated_at=now,
+            )
+            db.add(row)
+            db.commit()
+        except Exception as exc:
+            db.rollback()
+            logger.warning("GDPR erase DB insert error: %s", exc)
+        finally:
+            db.close()
+    else:
+        store = _gdpr_store()
+        store[request_id] = {
+            "request_id": request_id,
+            "user_id": target_user_id,
+            "request_type": "erasure",
+            "status": "processing",
+            "submitted_at": now.isoformat(),
+            "completed_at": None,
+            "notes": body.reason,
+        }
+        _gdpr_save(store)
+
     await _execute_gdpr_erasure(target_user_id, user.sub)
-    store[request_id]["status"] = "completed"
-    store[request_id]["completed_at"] = _utcnow().isoformat()
-    _gdpr_save(store)
+
+    # Mark completed
+    db2 = _gdpr_db_session()
+    if Model is not None and db2 is not None:
+        try:
+            row2 = db2.query(Model).filter(Model.id == request_id).first()
+            if row2:
+                row2.status = "completed"
+                row2.completed_at = _utcnow()
+                row2.updated_at = _utcnow()
+                db2.commit()
+        except Exception as exc:
+            db2.rollback()
+            logger.warning("GDPR erase DB update error: %s", exc)
+        finally:
+            db2.close()
+
     return {"user_id": target_user_id, "status": "erased", "request_id": request_id}
 
 

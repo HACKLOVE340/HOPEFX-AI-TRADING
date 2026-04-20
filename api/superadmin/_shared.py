@@ -281,7 +281,11 @@ class GDPRProcessBody(BaseModel):
 
 
 class GDPREraseBody(BaseModel):
-    reason: str
+    user_id: str
+    user_email: str = ""
+    # request_type: access | erasure | portability | rectification | restriction | objection
+    request_type: str = "erasure"
+    reason: str = ""
 
 
 class RetentionPolicyBody(BaseModel):
