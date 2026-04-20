@@ -296,6 +296,204 @@ interface PlatformConfig {
   router_max_spread_bps: number;
   router_primary_broker: string;
   router_secondary_broker: string;
+  // LSTM model
+  lstm_enabled: boolean;
+  lstm_sequence_length: number;
+  lstm_hidden_size: number;
+  lstm_num_layers: number;
+  lstm_dropout: number;
+  lstm_learning_rate: number;
+  lstm_batch_size: number;
+  lstm_epochs: number;
+  lstm_retrain_interval_hours: number;
+  lstm_min_train_samples: number;
+  lstm_use_attention: boolean;
+  lstm_bidirectional: boolean;
+  lstm_clip_grad_norm: number;
+  lstm_weight_decay: number;
+  lstm_scheduler: string;
+  // AI Brain / strategy generator
+  brain_enabled: boolean;
+  brain_model: string;
+  brain_temperature: number;
+  brain_max_tokens: number;
+  brain_strategy_timeout_s: number;
+  brain_max_strategies_per_day: number;
+  brain_auto_deploy: boolean;
+  brain_min_backtest_sharpe: number;
+  brain_min_backtest_winrate: number;
+  brain_sandbox_enabled: boolean;
+  // Portfolio allocator
+  allocator_enabled: boolean;
+  allocator_method: string;
+  allocator_rebalance_interval_hours: number;
+  allocator_min_weight: number;
+  allocator_max_weight: number;
+  allocator_risk_budget: number;
+  allocator_lookback_days: number;
+  allocator_transaction_cost_bps: number;
+  allocator_target_volatility: number;
+  allocator_use_black_litterman: boolean;
+  allocator_use_hrp: boolean;
+  // Anomaly detection
+  anomaly_enabled: boolean;
+  anomaly_model: string;
+  anomaly_contamination: number;
+  anomaly_window: number;
+  anomaly_threshold: number;
+  anomaly_action: string;
+  anomaly_retrain_interval_hours: number;
+  anomaly_min_samples: number;
+  anomaly_alert_cooldown_s: number;
+  // Macro overlay
+  macro_enabled: boolean;
+  macro_fred_api_key: string;
+  macro_refresh_interval_hours: number;
+  macro_lookback_days: number;
+  macro_weight_in_signal: number;
+  macro_vix_threshold: number;
+  macro_dxy_threshold: number;
+  macro_yield_spread_threshold: number;
+  macro_wgc_enabled: boolean;
+  macro_wgc_refresh_hours: number;
+  // Online learner
+  online_learner_enabled: boolean;
+  online_learner_lr: number;
+  online_learner_batch_size: number;
+  online_learner_update_interval_s: number;
+  online_learner_max_buffer: number;
+  online_learner_algorithm: string;
+  online_learner_forgetting_factor: number;
+  online_learner_min_samples_before_update: number;
+  online_learner_feature_drift_check: boolean;
+  // Sharpe circuit breaker
+  sharpe_cb_window_trades: number;
+  sharpe_cb_min_sharpe: number;
+  sharpe_cb_consecutive: number;
+  sharpe_cb_eval_interval_s: number;
+  sharpe_cb_min_trades: number;
+  sharpe_cb_reset_after_s: number;
+  // Regime detection
+  regime_enabled: boolean;
+  regime_model: string;
+  regime_lookback_bars: number;
+  regime_n_states: number;
+  regime_retrain_interval_hours: number;
+  regime_confidence_threshold: number;
+  regime_use_hmm: boolean;
+  regime_use_kmeans: boolean;
+  regime_feature_set: string;
+  regime_transition_smoothing: number;
+  // Signal engine
+  signal_engine_enabled: boolean;
+  signal_engine_mode: string;
+  signal_engine_ensemble_method: string;
+  signal_engine_min_model_agreement: number;
+  signal_engine_use_lstm: boolean;
+  signal_engine_use_xgb: boolean;
+  signal_engine_use_rf: boolean;
+  signal_engine_use_lgbm: boolean;
+  signal_engine_use_regime: boolean;
+  signal_engine_use_macro: boolean;
+  signal_engine_use_sentiment: boolean;
+  signal_engine_cooldown_s: number;
+  signal_engine_max_signals_per_hour: number;
+  // TCA (Transaction Cost Analysis)
+  tca_enabled: boolean;
+  tca_alert_threshold_bps: number;
+  tca_alert_window: number;
+  tca_persist_redis: boolean;
+  tca_persist_db: boolean;
+  tca_max_memory_records: number;
+  tca_benchmark: string;
+  tca_slippage_model: string;
+  tca_impact_model: string;
+  tca_report_interval_hours: number;
+  tca_min_records_for_report: number;
+  // Backtest engine
+  backtest_engine: string;
+  backtest_default_initial_capital: number;
+  backtest_default_commission_pct: number;
+  backtest_default_slippage_pct: number;
+  backtest_default_spread_pct: number;
+  backtest_max_duration_s: number;
+  backtest_max_concurrent: number;
+  backtest_data_source: string;
+  backtest_use_tick_data: boolean;
+  backtest_walk_forward_folds: number;
+  backtest_oos_ratio: number;
+  backtest_min_trades_for_validity: number;
+  backtest_min_sharpe_for_deploy: number;
+  // Feature flags
+  feature_nuclear_enabled: boolean;
+  feature_copy_trading_enabled: boolean;
+  feature_social_feed_enabled: boolean;
+  feature_marketplace_enabled: boolean;
+  feature_affiliate_enabled: boolean;
+  feature_whitelabel_enabled: boolean;
+  feature_ai_strategy_enabled: boolean;
+  feature_walk_forward_enabled: boolean;
+  feature_ab_testing_enabled: boolean;
+  feature_tca_enabled: boolean;
+  feature_replay_enabled: boolean;
+  feature_research_enabled: boolean;
+  feature_geopolitical_enabled: boolean;
+  feature_prop_firm_enabled: boolean;
+  feature_teams_enabled: boolean;
+  feature_leaderboard_enabled: boolean;
+  feature_crypto_checkout_enabled: boolean;
+  feature_2fa_enabled: boolean;
+  feature_kyc_enabled: boolean;
+  feature_sub_accounts_enabled: boolean;
+  // LLM / AI provider
+  llm_provider: string;
+  llm_model: string;
+  llm_api_key: string;
+  llm_base_url: string;
+  llm_temperature: number;
+  llm_max_tokens: number;
+  llm_timeout_s: number;
+  llm_max_retries: number;
+  llm_fallback_provider: string;
+  llm_fallback_model: string;
+  llm_embedding_model: string;
+  llm_embedding_dimensions: number;
+  // Drawdown controls
+  drawdown_hard_stop_pct: number;
+  drawdown_soft_warn_pct: number;
+  drawdown_trailing_enabled: boolean;
+  drawdown_trailing_lookback_bars: number;
+  drawdown_recovery_mode: string;
+  drawdown_recovery_size_scale: number;
+  drawdown_daily_reset: boolean;
+  drawdown_notify_on_breach: boolean;
+  drawdown_auto_reduce_on_warn: boolean;
+  drawdown_reduce_factor: number;
+  // Prop firm mode
+  prop_firm_enabled: boolean;
+  prop_firm_provider: string;
+  prop_firm_account_size: number;
+  prop_firm_daily_loss_limit_pct: number;
+  prop_firm_max_drawdown_pct: number;
+  prop_firm_profit_target_pct: number;
+  prop_firm_min_trading_days: number;
+  prop_firm_max_position_size_pct: number;
+  prop_firm_news_trading_allowed: boolean;
+  prop_firm_weekend_holding_allowed: boolean;
+  prop_firm_consistency_rule_pct: number;
+  prop_firm_scaling_enabled: boolean;
+  // Position sizing
+  position_sizing_method: string;
+  position_sizing_fixed_lots: number;
+  position_sizing_risk_pct: number;
+  position_sizing_kelly_fraction: number;
+  position_sizing_max_lots: number;
+  position_sizing_min_lots: number;
+  position_sizing_atr_multiplier: number;
+  position_sizing_atr_period: number;
+  position_sizing_volatility_target: number;
+  position_sizing_use_correlation_scaling: boolean;
+  position_sizing_max_correlated_exposure: number;
   // General
   env: string;
   debug: boolean;
@@ -459,6 +657,95 @@ const DEFAULT_PLATFORM: PlatformConfig = {
   decision_engine_use_regime: true, decision_engine_use_sentiment: true, decision_engine_use_macro: true,
   // Smart router
   router_max_spread_bps: 50.0, router_primary_broker: 'oanda', router_secondary_broker: 'paper',
+  // LSTM model
+  lstm_enabled: false, lstm_sequence_length: 60, lstm_hidden_size: 128, lstm_num_layers: 2,
+  lstm_dropout: 0.2, lstm_learning_rate: 0.001, lstm_batch_size: 64, lstm_epochs: 50,
+  lstm_retrain_interval_hours: 24, lstm_min_train_samples: 500, lstm_use_attention: true,
+  lstm_bidirectional: false, lstm_clip_grad_norm: 1.0, lstm_weight_decay: 1e-5,
+  lstm_scheduler: 'cosine',
+  // AI Brain
+  brain_enabled: false, brain_model: 'gpt-4o', brain_temperature: 0.3, brain_max_tokens: 4096,
+  brain_strategy_timeout_s: 120, brain_max_strategies_per_day: 10, brain_auto_deploy: false,
+  brain_min_backtest_sharpe: 1.0, brain_min_backtest_winrate: 0.52, brain_sandbox_enabled: true,
+  // Portfolio allocator
+  allocator_enabled: false, allocator_method: 'equal_weight',
+  allocator_rebalance_interval_hours: 24, allocator_min_weight: 0.05, allocator_max_weight: 0.40,
+  allocator_risk_budget: 0.02, allocator_lookback_days: 252, allocator_transaction_cost_bps: 2.0,
+  allocator_target_volatility: 0.10, allocator_use_black_litterman: false, allocator_use_hrp: false,
+  // Anomaly detection
+  anomaly_enabled: false, anomaly_model: 'isolation_forest', anomaly_contamination: 0.05,
+  anomaly_window: 100, anomaly_threshold: 0.80, anomaly_action: 'alert',
+  anomaly_retrain_interval_hours: 24, anomaly_min_samples: 200, anomaly_alert_cooldown_s: 300,
+  // Macro overlay
+  macro_enabled: true, macro_fred_api_key: '', macro_refresh_interval_hours: 6,
+  macro_lookback_days: 252, macro_weight_in_signal: 0.15, macro_vix_threshold: 30.0,
+  macro_dxy_threshold: 105.0, macro_yield_spread_threshold: 0.5, macro_wgc_enabled: true,
+  macro_wgc_refresh_hours: 24,
+  // Online learner
+  online_learner_enabled: false, online_learner_lr: 0.001, online_learner_batch_size: 32,
+  online_learner_update_interval_s: 300, online_learner_max_buffer: 10000,
+  online_learner_algorithm: 'sgd', online_learner_forgetting_factor: 0.99,
+  online_learner_min_samples_before_update: 50, online_learner_feature_drift_check: true,
+  // Sharpe circuit breaker
+  sharpe_cb_window_trades: 50, sharpe_cb_min_sharpe: 0.0, sharpe_cb_consecutive: 3,
+  sharpe_cb_eval_interval_s: 60, sharpe_cb_min_trades: 20, sharpe_cb_reset_after_s: 3600,
+  // Regime detection
+  regime_enabled: true, regime_model: 'hmm', regime_lookback_bars: 200, regime_n_states: 3,
+  regime_retrain_interval_hours: 24, regime_confidence_threshold: 0.60, regime_use_hmm: true,
+  regime_use_kmeans: false, regime_feature_set: 'default', regime_transition_smoothing: 0.3,
+  // Signal engine
+  signal_engine_enabled: true, signal_engine_mode: 'ensemble', signal_engine_ensemble_method: 'weighted_vote',
+  signal_engine_min_model_agreement: 0.60, signal_engine_use_lstm: false, signal_engine_use_xgb: true,
+  signal_engine_use_rf: true, signal_engine_use_lgbm: true, signal_engine_use_regime: true,
+  signal_engine_use_macro: true, signal_engine_use_sentiment: true,
+  signal_engine_cooldown_s: 30, signal_engine_max_signals_per_hour: 12,
+  // TCA
+  tca_enabled: true, tca_alert_threshold_bps: 5.0, tca_alert_window: 100,
+  tca_persist_redis: true, tca_persist_db: true, tca_max_memory_records: 10000,
+  tca_benchmark: 'arrival_price', tca_slippage_model: 'linear', tca_impact_model: 'square_root',
+  tca_report_interval_hours: 24, tca_min_records_for_report: 10,
+  // Backtest engine
+  backtest_engine: 'vectorbt', backtest_default_initial_capital: 100000,
+  backtest_default_commission_pct: 0.0002, backtest_default_slippage_pct: 0.0001,
+  backtest_default_spread_pct: 0.0002, backtest_max_duration_s: 300, backtest_max_concurrent: 4,
+  backtest_data_source: 'ohlcv_store', backtest_use_tick_data: false,
+  backtest_walk_forward_folds: 5, backtest_oos_ratio: 0.20,
+  backtest_min_trades_for_validity: 30, backtest_min_sharpe_for_deploy: 0.80,
+  // Feature flags
+  feature_nuclear_enabled: true, feature_copy_trading_enabled: true,
+  feature_social_feed_enabled: true, feature_marketplace_enabled: true,
+  feature_affiliate_enabled: true, feature_whitelabel_enabled: false,
+  feature_ai_strategy_enabled: true, feature_walk_forward_enabled: true,
+  feature_ab_testing_enabled: true, feature_tca_enabled: true,
+  feature_replay_enabled: true, feature_research_enabled: true,
+  feature_geopolitical_enabled: true, feature_prop_firm_enabled: true,
+  feature_teams_enabled: true, feature_leaderboard_enabled: true,
+  feature_crypto_checkout_enabled: true, feature_2fa_enabled: true,
+  feature_kyc_enabled: true, feature_sub_accounts_enabled: true,
+  // LLM / AI provider
+  llm_provider: 'openai', llm_model: 'gpt-4o', llm_api_key: '', llm_base_url: '',
+  llm_temperature: 0.3, llm_max_tokens: 4096, llm_timeout_s: 60, llm_max_retries: 3,
+  llm_fallback_provider: 'anthropic', llm_fallback_model: 'claude-3-5-sonnet-20241022',
+  llm_embedding_model: 'text-embedding-3-small', llm_embedding_dimensions: 1536,
+  // Drawdown controls
+  drawdown_hard_stop_pct: 0.10, drawdown_soft_warn_pct: 0.07, drawdown_trailing_enabled: true,
+  drawdown_trailing_lookback_bars: 100, drawdown_recovery_mode: 'reduce_size',
+  drawdown_recovery_size_scale: 0.50, drawdown_daily_reset: true, drawdown_notify_on_breach: true,
+  drawdown_auto_reduce_on_warn: true, drawdown_reduce_factor: 0.75,
+  // Prop firm mode
+  prop_firm_enabled: false, prop_firm_provider: 'ftmo', prop_firm_account_size: 100000,
+  prop_firm_daily_loss_limit_pct: 0.05, prop_firm_max_drawdown_pct: 0.10,
+  prop_firm_profit_target_pct: 0.10, prop_firm_min_trading_days: 10,
+  prop_firm_max_position_size_pct: 0.05, prop_firm_news_trading_allowed: false,
+  prop_firm_weekend_holding_allowed: false, prop_firm_consistency_rule_pct: 0.50,
+  prop_firm_scaling_enabled: false,
+  // Position sizing
+  position_sizing_method: 'risk_pct', position_sizing_fixed_lots: 0.01,
+  position_sizing_risk_pct: 0.01, position_sizing_kelly_fraction: 0.25,
+  position_sizing_max_lots: 10.0, position_sizing_min_lots: 0.001,
+  position_sizing_atr_multiplier: 1.5, position_sizing_atr_period: 14,
+  position_sizing_volatility_target: 0.01, position_sizing_use_correlation_scaling: false,
+  position_sizing_max_correlated_exposure: 0.10,
   // General
   env: 'production', debug: false, log_level: 'INFO',
   initial_balance: 100000, trading_mode: 'paper', broker_default: 'paper', cme_enabled: false,
@@ -530,6 +817,22 @@ const TABS = [
   { id: 'database',       label: '🗄️ Database & Cache', },
   { id: 'security',       label: '🔒 Security',         },
   { id: 'ml',             label: '🧠 ML / AI',          },
+  { id: 'lstm',           label: '🔁 LSTM',             },
+  { id: 'brain',          label: '💡 AI Brain',         },
+  { id: 'allocator',      label: '📊 Allocator',        },
+  { id: 'anomaly',        label: '🚨 Anomaly',          },
+  { id: 'macro',          label: '🌍 Macro',            },
+  { id: 'online',         label: '📡 Online Learner',   },
+  { id: 'sharpe',         label: '📈 Sharpe CB',        },
+  { id: 'regime',         label: '🗺️ Regime',           },
+  { id: 'signal_engine',  label: '⚡ Signal Engine',    },
+  { id: 'tca',            label: '💹 TCA',              },
+  { id: 'backtest',       label: '🔄 Backtest',         },
+  { id: 'feature_flags',  label: '🚩 Feature Flags',    },
+  { id: 'llm',            label: '🤖 LLM / AI',         },
+  { id: 'drawdown',       label: '📉 Drawdown',         },
+  { id: 'prop_firm',      label: '🏆 Prop Firm',        },
+  { id: 'position_sizing',label: '📐 Position Sizing',  },
   { id: 'decision',       label: '🎯 Decision Engine',  },
   { id: 'risk',           label: '⚖️ Risk Engine',      },
   { id: 'execution',      label: '⚡ Execution',        },
@@ -1239,6 +1542,408 @@ const HealingTab: React.FC<{
 };
 
 
+
+
+// ── LSTM tab ──────────────────────────────────────────────────────────────────
+
+const LstmTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
+  <>
+    <Card>
+      <SectionHeader icon="🔁" title="LSTM Model" desc="Long Short-Term Memory sequence model. LSTM_*" />
+      <Tog id="lstm_en" label="Enable LSTM" desc="LSTM_ENABLED" checked={cfg.lstm_enabled} onChange={(v) => set({ lstm_enabled: v })} />
+      <Divider />
+      <Num label="Sequence Length" desc="LSTM_SEQUENCE_LENGTH" value={cfg.lstm_sequence_length} min={10} max={500} onChange={(v) => set({ lstm_sequence_length: v })} />
+      <Num label="Hidden Size" desc="LSTM_HIDDEN_SIZE" value={cfg.lstm_hidden_size} min={16} max={1024} onChange={(v) => set({ lstm_hidden_size: v })} />
+      <Num label="Num Layers" desc="LSTM_NUM_LAYERS" value={cfg.lstm_num_layers} min={1} max={8} onChange={(v) => set({ lstm_num_layers: v })} />
+      <Num label="Dropout" desc="LSTM_DROPOUT" value={cfg.lstm_dropout} step={0.01} min={0} max={0.9} onChange={(v) => set({ lstm_dropout: v })} />
+      <Num label="Learning Rate" desc="LSTM_LEARNING_RATE" value={cfg.lstm_learning_rate} step={0.0001} min={0.00001} onChange={(v) => set({ lstm_learning_rate: v })} />
+      <Num label="Batch Size" desc="LSTM_BATCH_SIZE" value={cfg.lstm_batch_size} min={8} max={512} onChange={(v) => set({ lstm_batch_size: v })} />
+      <Num label="Epochs" desc="LSTM_EPOCHS" value={cfg.lstm_epochs} min={1} max={500} onChange={(v) => set({ lstm_epochs: v })} />
+      <Num label="Retrain Interval (hours)" desc="LSTM_RETRAIN_INTERVAL_HOURS" value={cfg.lstm_retrain_interval_hours} min={1} onChange={(v) => set({ lstm_retrain_interval_hours: v })} />
+      <Num label="Min Train Samples" desc="LSTM_MIN_TRAIN_SAMPLES" value={cfg.lstm_min_train_samples} min={100} onChange={(v) => set({ lstm_min_train_samples: v })} />
+      <Num label="Clip Grad Norm" desc="LSTM_CLIP_GRAD_NORM" value={cfg.lstm_clip_grad_norm} step={0.1} min={0} onChange={(v) => set({ lstm_clip_grad_norm: v })} />
+      <Num label="Weight Decay" desc="LSTM_WEIGHT_DECAY" value={cfg.lstm_weight_decay} step={0.00001} min={0} onChange={(v) => set({ lstm_weight_decay: v })} />
+      <Sel label="LR Scheduler" desc="LSTM_SCHEDULER" value={cfg.lstm_scheduler}
+        options={['cosine','step','plateau','none'].map((v) => ({ value: v, label: v }))}
+        onChange={(v) => set({ lstm_scheduler: v })} />
+      <Tog id="lstm_attn" label="Use Attention" desc="LSTM_USE_ATTENTION" checked={cfg.lstm_use_attention} onChange={(v) => set({ lstm_use_attention: v })} />
+      <Tog id="lstm_bi" label="Bidirectional" desc="LSTM_BIDIRECTIONAL" checked={cfg.lstm_bidirectional} onChange={(v) => set({ lstm_bidirectional: v })} />
+    </Card>
+  </>
+);
+
+// ── Brain tab ─────────────────────────────────────────────────────────────────
+
+const BrainTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
+  <>
+    <Card>
+      <SectionHeader icon="💡" title="AI Brain / Strategy Generator" desc="LLM-powered strategy generation engine. BRAIN_*" />
+      <Tog id="brain_en" label="Enable AI Brain" desc="BRAIN_ENABLED" checked={cfg.brain_enabled} onChange={(v) => set({ brain_enabled: v })} />
+      <Divider />
+      <Txt label="LLM Model" desc="BRAIN_MODEL" value={cfg.brain_model} placeholder="gpt-4o" onChange={(v) => set({ brain_model: v })} />
+      <Num label="Temperature" desc="BRAIN_TEMPERATURE" value={cfg.brain_temperature} step={0.05} min={0} max={2} onChange={(v) => set({ brain_temperature: v })} />
+      <Num label="Max Tokens" desc="BRAIN_MAX_TOKENS" value={cfg.brain_max_tokens} min={256} max={32768} onChange={(v) => set({ brain_max_tokens: v })} />
+      <Num label="Strategy Timeout (s)" desc="BRAIN_STRATEGY_TIMEOUT_S" value={cfg.brain_strategy_timeout_s} min={10} onChange={(v) => set({ brain_strategy_timeout_s: v })} />
+      <Num label="Max Strategies/Day" desc="BRAIN_MAX_STRATEGIES_PER_DAY" value={cfg.brain_max_strategies_per_day} min={1} onChange={(v) => set({ brain_max_strategies_per_day: v })} />
+      <Num label="Min Backtest Sharpe" desc="BRAIN_MIN_BACKTEST_SHARPE" value={cfg.brain_min_backtest_sharpe} step={0.1} min={0} onChange={(v) => set({ brain_min_backtest_sharpe: v })} />
+      <Num label="Min Backtest Win Rate" desc="BRAIN_MIN_BACKTEST_WINRATE" value={cfg.brain_min_backtest_winrate} step={0.01} min={0} max={1} onChange={(v) => set({ brain_min_backtest_winrate: v })} />
+      <Tog id="brain_auto" label="Auto-Deploy Strategies" desc="BRAIN_AUTO_DEPLOY" checked={cfg.brain_auto_deploy} onChange={(v) => set({ brain_auto_deploy: v })} />
+      <Tog id="brain_sandbox" label="Sandbox Mode" desc="BRAIN_SANDBOX_ENABLED — paper-test before live" checked={cfg.brain_sandbox_enabled} onChange={(v) => set({ brain_sandbox_enabled: v })} />
+    </Card>
+  </>
+);
+
+// ── Allocator tab ─────────────────────────────────────────────────────────────
+
+const AllocatorTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
+  <>
+    <Card>
+      <SectionHeader icon="📊" title="Portfolio Allocator" desc="Multi-asset portfolio allocation engine. ALLOCATOR_*" />
+      <Tog id="alloc_en" label="Enable Allocator" desc="ALLOCATOR_ENABLED" checked={cfg.allocator_enabled} onChange={(v) => set({ allocator_enabled: v })} />
+      <Divider />
+      <Sel label="Method" desc="ALLOCATOR_METHOD" value={cfg.allocator_method}
+        options={['equal_weight','risk_parity','mean_variance','hrp','black_litterman'].map((v) => ({ value: v, label: v }))}
+        onChange={(v) => set({ allocator_method: v })} />
+      <Num label="Rebalance Interval (hours)" desc="ALLOCATOR_REBALANCE_INTERVAL_HOURS" value={cfg.allocator_rebalance_interval_hours} min={1} onChange={(v) => set({ allocator_rebalance_interval_hours: v })} />
+      <Num label="Min Weight" desc="ALLOCATOR_MIN_WEIGHT" value={cfg.allocator_min_weight} step={0.01} min={0} max={1} onChange={(v) => set({ allocator_min_weight: v })} />
+      <Num label="Max Weight" desc="ALLOCATOR_MAX_WEIGHT" value={cfg.allocator_max_weight} step={0.01} min={0} max={1} onChange={(v) => set({ allocator_max_weight: v })} />
+      <Num label="Risk Budget" desc="ALLOCATOR_RISK_BUDGET" value={cfg.allocator_risk_budget} step={0.001} min={0} onChange={(v) => set({ allocator_risk_budget: v })} />
+      <Num label="Lookback Days" desc="ALLOCATOR_LOOKBACK_DAYS" value={cfg.allocator_lookback_days} min={30} onChange={(v) => set({ allocator_lookback_days: v })} />
+      <Num label="Transaction Cost (bps)" desc="ALLOCATOR_TRANSACTION_COST_BPS" value={cfg.allocator_transaction_cost_bps} step={0.1} min={0} onChange={(v) => set({ allocator_transaction_cost_bps: v })} />
+      <Num label="Target Volatility" desc="ALLOCATOR_TARGET_VOLATILITY" value={cfg.allocator_target_volatility} step={0.01} min={0} onChange={(v) => set({ allocator_target_volatility: v })} />
+      <Tog id="alloc_bl" label="Use Black-Litterman" desc="ALLOCATOR_USE_BLACK_LITTERMAN" checked={cfg.allocator_use_black_litterman} onChange={(v) => set({ allocator_use_black_litterman: v })} />
+      <Tog id="alloc_hrp" label="Use HRP" desc="ALLOCATOR_USE_HRP — Hierarchical Risk Parity" checked={cfg.allocator_use_hrp} onChange={(v) => set({ allocator_use_hrp: v })} />
+    </Card>
+  </>
+);
+
+// ── Anomaly tab ───────────────────────────────────────────────────────────────
+
+const AnomalyTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
+  <>
+    <Card>
+      <SectionHeader icon="🚨" title="Anomaly Detection" desc="Detects abnormal market conditions and trading patterns. ANOMALY_*" />
+      <Tog id="anom_en" label="Enable Anomaly Detection" desc="ANOMALY_ENABLED" checked={cfg.anomaly_enabled} onChange={(v) => set({ anomaly_enabled: v })} />
+      <Divider />
+      <Sel label="Model" desc="ANOMALY_MODEL" value={cfg.anomaly_model}
+        options={['isolation_forest','lof','autoencoder','one_class_svm'].map((v) => ({ value: v, label: v }))}
+        onChange={(v) => set({ anomaly_model: v })} />
+      <Num label="Contamination" desc="ANOMALY_CONTAMINATION — expected outlier fraction" value={cfg.anomaly_contamination} step={0.01} min={0.001} max={0.5} onChange={(v) => set({ anomaly_contamination: v })} />
+      <Num label="Window" desc="ANOMALY_WINDOW — rolling bars" value={cfg.anomaly_window} min={10} onChange={(v) => set({ anomaly_window: v })} />
+      <Num label="Threshold" desc="ANOMALY_THRESHOLD — score above this triggers action" value={cfg.anomaly_threshold} step={0.01} min={0} max={1} onChange={(v) => set({ anomaly_threshold: v })} />
+      <Sel label="Action on Anomaly" desc="ANOMALY_ACTION" value={cfg.anomaly_action}
+        options={['alert','pause','reduce_size','close_all'].map((v) => ({ value: v, label: v }))}
+        onChange={(v) => set({ anomaly_action: v })} />
+      <Num label="Retrain Interval (hours)" desc="ANOMALY_RETRAIN_INTERVAL_HOURS" value={cfg.anomaly_retrain_interval_hours} min={1} onChange={(v) => set({ anomaly_retrain_interval_hours: v })} />
+      <Num label="Min Samples" desc="ANOMALY_MIN_SAMPLES" value={cfg.anomaly_min_samples} min={50} onChange={(v) => set({ anomaly_min_samples: v })} />
+      <Num label="Alert Cooldown (s)" desc="ANOMALY_ALERT_COOLDOWN_S" value={cfg.anomaly_alert_cooldown_s} min={0} onChange={(v) => set({ anomaly_alert_cooldown_s: v })} />
+    </Card>
+  </>
+);
+
+// ── Macro tab ─────────────────────────────────────────────────────────────────
+
+const MacroTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
+  <>
+    <Card>
+      <SectionHeader icon="🌍" title="Macro Overlay" desc="FRED / WGC macro data integration for signal weighting. MACRO_*" />
+      <Tog id="macro_en" label="Enable Macro Overlay" desc="MACRO_ENABLED" checked={cfg.macro_enabled} onChange={(v) => set({ macro_enabled: v })} />
+      <Divider />
+      <Txt label="FRED API Key" desc="MACRO_FRED_API_KEY" value={cfg.macro_fred_api_key} password placeholder="your-fred-api-key" onChange={(v) => set({ macro_fred_api_key: v })} />
+      <Num label="Refresh Interval (hours)" desc="MACRO_REFRESH_INTERVAL_HOURS" value={cfg.macro_refresh_interval_hours} min={1} onChange={(v) => set({ macro_refresh_interval_hours: v })} />
+      <Num label="Lookback Days" desc="MACRO_LOOKBACK_DAYS" value={cfg.macro_lookback_days} min={30} onChange={(v) => set({ macro_lookback_days: v })} />
+      <Num label="Weight in Signal" desc="MACRO_WEIGHT_IN_SIGNAL (0–1)" value={cfg.macro_weight_in_signal} step={0.01} min={0} max={1} onChange={(v) => set({ macro_weight_in_signal: v })} />
+      <Num label="VIX Threshold" desc="MACRO_VIX_THRESHOLD — above this reduces position size" value={cfg.macro_vix_threshold} step={0.5} min={0} onChange={(v) => set({ macro_vix_threshold: v })} />
+      <Num label="DXY Threshold" desc="MACRO_DXY_THRESHOLD" value={cfg.macro_dxy_threshold} step={0.5} min={0} onChange={(v) => set({ macro_dxy_threshold: v })} />
+      <Num label="Yield Spread Threshold" desc="MACRO_YIELD_SPREAD_THRESHOLD" value={cfg.macro_yield_spread_threshold} step={0.1} min={0} onChange={(v) => set({ macro_yield_spread_threshold: v })} />
+      <Tog id="macro_wgc" label="Enable WGC Gold Data" desc="MACRO_WGC_ENABLED" checked={cfg.macro_wgc_enabled} onChange={(v) => set({ macro_wgc_enabled: v })} />
+      <Num label="WGC Refresh (hours)" desc="MACRO_WGC_REFRESH_HOURS" value={cfg.macro_wgc_refresh_hours} min={1} onChange={(v) => set({ macro_wgc_refresh_hours: v })} />
+    </Card>
+  </>
+);
+
+// ── Online Learner tab ────────────────────────────────────────────────────────
+
+const OnlineTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
+  <>
+    <Card>
+      <SectionHeader icon="📡" title="Online Learner" desc="Continuous incremental model updates from live trade outcomes. ONLINE_LEARNER_*" />
+      <Tog id="ol_en" label="Enable Online Learner" desc="ONLINE_LEARNER_ENABLED" checked={cfg.online_learner_enabled} onChange={(v) => set({ online_learner_enabled: v })} />
+      <Divider />
+      <Sel label="Algorithm" desc="ONLINE_LEARNER_ALGORITHM" value={cfg.online_learner_algorithm}
+        options={['sgd','adam','rmsprop','passive_aggressive','perceptron'].map((v) => ({ value: v, label: v }))}
+        onChange={(v) => set({ online_learner_algorithm: v })} />
+      <Num label="Learning Rate" desc="ONLINE_LEARNER_LR" value={cfg.online_learner_lr} step={0.0001} min={0.00001} onChange={(v) => set({ online_learner_lr: v })} />
+      <Num label="Batch Size" desc="ONLINE_LEARNER_BATCH_SIZE" value={cfg.online_learner_batch_size} min={1} max={512} onChange={(v) => set({ online_learner_batch_size: v })} />
+      <Num label="Update Interval (s)" desc="ONLINE_LEARNER_UPDATE_INTERVAL_S" value={cfg.online_learner_update_interval_s} min={10} onChange={(v) => set({ online_learner_update_interval_s: v })} />
+      <Num label="Max Buffer Size" desc="ONLINE_LEARNER_MAX_BUFFER" value={cfg.online_learner_max_buffer} min={100} onChange={(v) => set({ online_learner_max_buffer: v })} />
+      <Num label="Forgetting Factor" desc="ONLINE_LEARNER_FORGETTING_FACTOR (0–1)" value={cfg.online_learner_forgetting_factor} step={0.01} min={0} max={1} onChange={(v) => set({ online_learner_forgetting_factor: v })} />
+      <Num label="Min Samples Before Update" desc="ONLINE_LEARNER_MIN_SAMPLES_BEFORE_UPDATE" value={cfg.online_learner_min_samples_before_update} min={1} onChange={(v) => set({ online_learner_min_samples_before_update: v })} />
+      <Tog id="ol_drift" label="Feature Drift Check" desc="ONLINE_LEARNER_FEATURE_DRIFT_CHECK" checked={cfg.online_learner_feature_drift_check} onChange={(v) => set({ online_learner_feature_drift_check: v })} />
+    </Card>
+  </>
+);
+
+// ── Sharpe CB tab ─────────────────────────────────────────────────────────────
+
+const SharpeTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
+  <>
+    <Card>
+      <SectionHeader icon="📈" title="Sharpe Circuit Breaker" desc="Halts trading when rolling Sharpe ratio falls below threshold. SHARPE_CB_*" />
+      <Num label="Window Trades" desc="SHARPE_CB_WINDOW_TRADES" value={cfg.sharpe_cb_window_trades} min={5} onChange={(v) => set({ sharpe_cb_window_trades: v })} />
+      <Num label="Min Sharpe" desc="SHARPE_CB_MIN_SHARPE — halt below this" value={cfg.sharpe_cb_min_sharpe} step={0.1} onChange={(v) => set({ sharpe_cb_min_sharpe: v })} />
+      <Num label="Consecutive Breaches" desc="SHARPE_CB_CONSECUTIVE — N consecutive before halt" value={cfg.sharpe_cb_consecutive} min={1} onChange={(v) => set({ sharpe_cb_consecutive: v })} />
+      <Num label="Eval Interval (s)" desc="SHARPE_CB_EVAL_INTERVAL_S" value={cfg.sharpe_cb_eval_interval_s} min={10} onChange={(v) => set({ sharpe_cb_eval_interval_s: v })} />
+      <Num label="Min Trades" desc="SHARPE_CB_MIN_TRADES — minimum before evaluating" value={cfg.sharpe_cb_min_trades} min={1} onChange={(v) => set({ sharpe_cb_min_trades: v })} />
+      <Num label="Reset After (s)" desc="SHARPE_CB_RESET_AFTER_S — auto-reset cooldown" value={cfg.sharpe_cb_reset_after_s} min={60} onChange={(v) => set({ sharpe_cb_reset_after_s: v })} />
+    </Card>
+  </>
+);
+
+// ── Regime tab ────────────────────────────────────────────────────────────────
+
+const RegimeTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
+  <>
+    <Card>
+      <SectionHeader icon="🗺️" title="Regime Detection" desc="Market regime classification (trending/ranging/volatile). REGIME_*" />
+      <Tog id="regime_en" label="Enable Regime Detection" desc="REGIME_ENABLED" checked={cfg.regime_enabled} onChange={(v) => set({ regime_enabled: v })} />
+      <Divider />
+      <Sel label="Model" desc="REGIME_MODEL" value={cfg.regime_model}
+        options={['hmm','kmeans','gmm','threshold'].map((v) => ({ value: v, label: v }))}
+        onChange={(v) => set({ regime_model: v })} />
+      <Num label="Lookback Bars" desc="REGIME_LOOKBACK_BARS" value={cfg.regime_lookback_bars} min={20} onChange={(v) => set({ regime_lookback_bars: v })} />
+      <Num label="N States" desc="REGIME_N_STATES — number of regime classes" value={cfg.regime_n_states} min={2} max={10} onChange={(v) => set({ regime_n_states: v })} />
+      <Num label="Retrain Interval (hours)" desc="REGIME_RETRAIN_INTERVAL_HOURS" value={cfg.regime_retrain_interval_hours} min={1} onChange={(v) => set({ regime_retrain_interval_hours: v })} />
+      <Num label="Confidence Threshold" desc="REGIME_CONFIDENCE_THRESHOLD" value={cfg.regime_confidence_threshold} step={0.01} min={0} max={1} onChange={(v) => set({ regime_confidence_threshold: v })} />
+      <Num label="Transition Smoothing" desc="REGIME_TRANSITION_SMOOTHING — EMA factor" value={cfg.regime_transition_smoothing} step={0.05} min={0} max={1} onChange={(v) => set({ regime_transition_smoothing: v })} />
+      <Sel label="Feature Set" desc="REGIME_FEATURE_SET" value={cfg.regime_feature_set}
+        options={['default','extended','minimal'].map((v) => ({ value: v, label: v }))}
+        onChange={(v) => set({ regime_feature_set: v })} />
+      <Tog id="regime_hmm" label="Use HMM" desc="REGIME_USE_HMM" checked={cfg.regime_use_hmm} onChange={(v) => set({ regime_use_hmm: v })} />
+      <Tog id="regime_km" label="Use K-Means" desc="REGIME_USE_KMEANS" checked={cfg.regime_use_kmeans} onChange={(v) => set({ regime_use_kmeans: v })} />
+    </Card>
+  </>
+);
+
+// ── Signal Engine tab ─────────────────────────────────────────────────────────
+
+const SignalEngineTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
+  <>
+    <Card>
+      <SectionHeader icon="⚡" title="Signal Engine" desc="Ensemble signal generation pipeline. SIGNAL_ENGINE_*" />
+      <Tog id="se_en" label="Enable Signal Engine" desc="SIGNAL_ENGINE_ENABLED" checked={cfg.signal_engine_enabled} onChange={(v) => set({ signal_engine_enabled: v })} />
+      <Divider />
+      <Sel label="Mode" desc="SIGNAL_ENGINE_MODE" value={cfg.signal_engine_mode}
+        options={['ensemble','single','voting'].map((v) => ({ value: v, label: v }))}
+        onChange={(v) => set({ signal_engine_mode: v })} />
+      <Sel label="Ensemble Method" desc="SIGNAL_ENGINE_ENSEMBLE_METHOD" value={cfg.signal_engine_ensemble_method}
+        options={['weighted_vote','majority_vote','stacking','average'].map((v) => ({ value: v, label: v }))}
+        onChange={(v) => set({ signal_engine_ensemble_method: v })} />
+      <Num label="Min Model Agreement" desc="SIGNAL_ENGINE_MIN_MODEL_AGREEMENT" value={cfg.signal_engine_min_model_agreement} step={0.05} min={0} max={1} onChange={(v) => set({ signal_engine_min_model_agreement: v })} />
+      <Num label="Cooldown (s)" desc="SIGNAL_ENGINE_COOLDOWN_S" value={cfg.signal_engine_cooldown_s} min={0} onChange={(v) => set({ signal_engine_cooldown_s: v })} />
+      <Num label="Max Signals/Hour" desc="SIGNAL_ENGINE_MAX_SIGNALS_PER_HOUR" value={cfg.signal_engine_max_signals_per_hour} min={1} onChange={(v) => set({ signal_engine_max_signals_per_hour: v })} />
+    </Card>
+    <Card>
+      <SectionHeader icon="🧩" title="Model Components" desc="Which models contribute to the ensemble." />
+      <Tog id="se_lstm" label="Use LSTM" desc="SIGNAL_ENGINE_USE_LSTM" checked={cfg.signal_engine_use_lstm} onChange={(v) => set({ signal_engine_use_lstm: v })} />
+      <Tog id="se_xgb" label="Use XGBoost" desc="SIGNAL_ENGINE_USE_XGB" checked={cfg.signal_engine_use_xgb} onChange={(v) => set({ signal_engine_use_xgb: v })} />
+      <Tog id="se_rf" label="Use Random Forest" desc="SIGNAL_ENGINE_USE_RF" checked={cfg.signal_engine_use_rf} onChange={(v) => set({ signal_engine_use_rf: v })} />
+      <Tog id="se_lgbm" label="Use LightGBM" desc="SIGNAL_ENGINE_USE_LGBM" checked={cfg.signal_engine_use_lgbm} onChange={(v) => set({ signal_engine_use_lgbm: v })} />
+      <Tog id="se_regime" label="Use Regime Filter" desc="SIGNAL_ENGINE_USE_REGIME" checked={cfg.signal_engine_use_regime} onChange={(v) => set({ signal_engine_use_regime: v })} />
+      <Tog id="se_macro" label="Use Macro Overlay" desc="SIGNAL_ENGINE_USE_MACRO" checked={cfg.signal_engine_use_macro} onChange={(v) => set({ signal_engine_use_macro: v })} />
+      <Tog id="se_sent" label="Use Sentiment" desc="SIGNAL_ENGINE_USE_SENTIMENT" checked={cfg.signal_engine_use_sentiment} onChange={(v) => set({ signal_engine_use_sentiment: v })} />
+    </Card>
+  </>
+);
+
+// ── TCA Config tab ────────────────────────────────────────────────────────────
+
+const TcaConfigTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
+  <>
+    <Card>
+      <SectionHeader icon="💹" title="Transaction Cost Analysis" desc="TCA engine configuration and reporting. TCA_*" />
+      <Tog id="tca_en" label="Enable TCA" desc="TCA_ENABLED" checked={cfg.tca_enabled} onChange={(v) => set({ tca_enabled: v })} />
+      <Divider />
+      <Num label="Alert Threshold (bps)" desc="TCA_ALERT_THRESHOLD_BPS" value={cfg.tca_alert_threshold_bps} step={0.5} min={0} onChange={(v) => set({ tca_alert_threshold_bps: v })} />
+      <Num label="Alert Window (trades)" desc="TCA_ALERT_WINDOW" value={cfg.tca_alert_window} min={1} onChange={(v) => set({ tca_alert_window: v })} />
+      <Num label="Max Memory Records" desc="TCA_MAX_MEMORY_RECORDS" value={cfg.tca_max_memory_records} min={100} onChange={(v) => set({ tca_max_memory_records: v })} />
+      <Num label="Report Interval (hours)" desc="TCA_REPORT_INTERVAL_HOURS" value={cfg.tca_report_interval_hours} min={1} onChange={(v) => set({ tca_report_interval_hours: v })} />
+      <Num label="Min Records for Report" desc="TCA_MIN_RECORDS_FOR_REPORT" value={cfg.tca_min_records_for_report} min={1} onChange={(v) => set({ tca_min_records_for_report: v })} />
+      <Sel label="Benchmark" desc="TCA_BENCHMARK" value={cfg.tca_benchmark}
+        options={['arrival_price','vwap','twap','close'].map((v) => ({ value: v, label: v }))}
+        onChange={(v) => set({ tca_benchmark: v })} />
+      <Sel label="Slippage Model" desc="TCA_SLIPPAGE_MODEL" value={cfg.tca_slippage_model}
+        options={['linear','square_root','fixed'].map((v) => ({ value: v, label: v }))}
+        onChange={(v) => set({ tca_slippage_model: v })} />
+      <Sel label="Impact Model" desc="TCA_IMPACT_MODEL" value={cfg.tca_impact_model}
+        options={['square_root','linear','almgren_chriss'].map((v) => ({ value: v, label: v }))}
+        onChange={(v) => set({ tca_impact_model: v })} />
+      <Tog id="tca_redis" label="Persist to Redis" desc="TCA_PERSIST_REDIS" checked={cfg.tca_persist_redis} onChange={(v) => set({ tca_persist_redis: v })} />
+      <Tog id="tca_db" label="Persist to DB" desc="TCA_PERSIST_DB" checked={cfg.tca_persist_db} onChange={(v) => set({ tca_persist_db: v })} />
+    </Card>
+  </>
+);
+
+// ── Backtest Config tab ───────────────────────────────────────────────────────
+
+const BacktestConfigTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
+  <>
+    <Card>
+      <SectionHeader icon="🔄" title="Backtest Engine" desc="Backtesting engine parameters and defaults. BACKTEST_*" />
+      <Sel label="Engine" desc="BACKTEST_ENGINE" value={cfg.backtest_engine}
+        options={['vectorbt','backtesting_py','custom'].map((v) => ({ value: v, label: v }))}
+        onChange={(v) => set({ backtest_engine: v })} />
+      <Sel label="Data Source" desc="BACKTEST_DATA_SOURCE" value={cfg.backtest_data_source}
+        options={['ohlcv_store','csv','broker_api'].map((v) => ({ value: v, label: v }))}
+        onChange={(v) => set({ backtest_data_source: v })} />
+      <Num label="Default Initial Capital" desc="BACKTEST_DEFAULT_INITIAL_CAPITAL" value={cfg.backtest_default_initial_capital} min={1000} step={1000} onChange={(v) => set({ backtest_default_initial_capital: v })} />
+      <Num label="Default Commission (%)" desc="BACKTEST_DEFAULT_COMMISSION_PCT" value={cfg.backtest_default_commission_pct} step={0.0001} min={0} onChange={(v) => set({ backtest_default_commission_pct: v })} />
+      <Num label="Default Slippage (%)" desc="BACKTEST_DEFAULT_SLIPPAGE_PCT" value={cfg.backtest_default_slippage_pct} step={0.0001} min={0} onChange={(v) => set({ backtest_default_slippage_pct: v })} />
+      <Num label="Default Spread (%)" desc="BACKTEST_DEFAULT_SPREAD_PCT" value={cfg.backtest_default_spread_pct} step={0.0001} min={0} onChange={(v) => set({ backtest_default_spread_pct: v })} />
+      <Num label="Max Duration (s)" desc="BACKTEST_MAX_DURATION_S — timeout per run" value={cfg.backtest_max_duration_s} min={10} onChange={(v) => set({ backtest_max_duration_s: v })} />
+      <Num label="Max Concurrent Runs" desc="BACKTEST_MAX_CONCURRENT" value={cfg.backtest_max_concurrent} min={1} max={32} onChange={(v) => set({ backtest_max_concurrent: v })} />
+      <Num label="Walk-Forward Folds" desc="BACKTEST_WALK_FORWARD_FOLDS" value={cfg.backtest_walk_forward_folds} min={2} max={20} onChange={(v) => set({ backtest_walk_forward_folds: v })} />
+      <Num label="OOS Ratio" desc="BACKTEST_OOS_RATIO — out-of-sample fraction" value={cfg.backtest_oos_ratio} step={0.05} min={0.1} max={0.5} onChange={(v) => set({ backtest_oos_ratio: v })} />
+      <Num label="Min Trades for Validity" desc="BACKTEST_MIN_TRADES_FOR_VALIDITY" value={cfg.backtest_min_trades_for_validity} min={5} onChange={(v) => set({ backtest_min_trades_for_validity: v })} />
+      <Num label="Min Sharpe for Deploy" desc="BACKTEST_MIN_SHARPE_FOR_DEPLOY" value={cfg.backtest_min_sharpe_for_deploy} step={0.1} min={0} onChange={(v) => set({ backtest_min_sharpe_for_deploy: v })} />
+      <Tog id="bt_tick" label="Use Tick Data" desc="BACKTEST_USE_TICK_DATA — higher fidelity, slower" checked={cfg.backtest_use_tick_data} onChange={(v) => set({ backtest_use_tick_data: v })} />
+    </Card>
+  </>
+);
+
+// ── Feature Flags Config tab ──────────────────────────────────────────────────
+
+const FeatureFlagsConfigTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
+  <>
+    <Card>
+      <SectionHeader icon="🚩" title="Feature Flags" desc="Enable or disable platform features globally. FEATURE_*" />
+      <Tog id="ff_nuclear" label="Nuclear Dashboard" desc="FEATURE_NUCLEAR_ENABLED" checked={cfg.feature_nuclear_enabled} onChange={(v) => set({ feature_nuclear_enabled: v })} />
+      <Tog id="ff_copy" label="Copy Trading" desc="FEATURE_COPY_TRADING_ENABLED" checked={cfg.feature_copy_trading_enabled} onChange={(v) => set({ feature_copy_trading_enabled: v })} />
+      <Tog id="ff_social" label="Social Feed" desc="FEATURE_SOCIAL_FEED_ENABLED" checked={cfg.feature_social_feed_enabled} onChange={(v) => set({ feature_social_feed_enabled: v })} />
+      <Tog id="ff_market" label="Marketplace" desc="FEATURE_MARKETPLACE_ENABLED" checked={cfg.feature_marketplace_enabled} onChange={(v) => set({ feature_marketplace_enabled: v })} />
+      <Tog id="ff_aff" label="Affiliate Program" desc="FEATURE_AFFILIATE_ENABLED" checked={cfg.feature_affiliate_enabled} onChange={(v) => set({ feature_affiliate_enabled: v })} />
+      <Tog id="ff_wl" label="White-Label" desc="FEATURE_WHITELABEL_ENABLED" checked={cfg.feature_whitelabel_enabled} onChange={(v) => set({ feature_whitelabel_enabled: v })} />
+      <Tog id="ff_ai" label="AI Strategy Generator" desc="FEATURE_AI_STRATEGY_ENABLED" checked={cfg.feature_ai_strategy_enabled} onChange={(v) => set({ feature_ai_strategy_enabled: v })} />
+      <Tog id="ff_wf" label="Walk-Forward Testing" desc="FEATURE_WALK_FORWARD_ENABLED" checked={cfg.feature_walk_forward_enabled} onChange={(v) => set({ feature_walk_forward_enabled: v })} />
+      <Tog id="ff_ab" label="A/B Testing" desc="FEATURE_AB_TESTING_ENABLED" checked={cfg.feature_ab_testing_enabled} onChange={(v) => set({ feature_ab_testing_enabled: v })} />
+      <Tog id="ff_tca" label="TCA Dashboard" desc="FEATURE_TCA_ENABLED" checked={cfg.feature_tca_enabled} onChange={(v) => set({ feature_tca_enabled: v })} />
+      <Tog id="ff_replay" label="Trade Replay" desc="FEATURE_REPLAY_ENABLED" checked={cfg.feature_replay_enabled} onChange={(v) => set({ feature_replay_enabled: v })} />
+      <Tog id="ff_research" label="Research Page" desc="FEATURE_RESEARCH_ENABLED" checked={cfg.feature_research_enabled} onChange={(v) => set({ feature_research_enabled: v })} />
+      <Tog id="ff_geo" label="Geopolitical Risk" desc="FEATURE_GEOPOLITICAL_ENABLED" checked={cfg.feature_geopolitical_enabled} onChange={(v) => set({ feature_geopolitical_enabled: v })} />
+      <Tog id="ff_prop" label="Prop Firm Tracker" desc="FEATURE_PROP_FIRM_ENABLED" checked={cfg.feature_prop_firm_enabled} onChange={(v) => set({ feature_prop_firm_enabled: v })} />
+      <Tog id="ff_teams" label="Teams" desc="FEATURE_TEAMS_ENABLED" checked={cfg.feature_teams_enabled} onChange={(v) => set({ feature_teams_enabled: v })} />
+      <Tog id="ff_lb" label="Leaderboard" desc="FEATURE_LEADERBOARD_ENABLED" checked={cfg.feature_leaderboard_enabled} onChange={(v) => set({ feature_leaderboard_enabled: v })} />
+      <Tog id="ff_crypto" label="Crypto Checkout" desc="FEATURE_CRYPTO_CHECKOUT_ENABLED" checked={cfg.feature_crypto_checkout_enabled} onChange={(v) => set({ feature_crypto_checkout_enabled: v })} />
+      <Tog id="ff_2fa" label="Two-Factor Auth" desc="FEATURE_2FA_ENABLED" checked={cfg.feature_2fa_enabled} onChange={(v) => set({ feature_2fa_enabled: v })} />
+      <Tog id="ff_kyc" label="KYC Verification" desc="FEATURE_KYC_ENABLED" checked={cfg.feature_kyc_enabled} onChange={(v) => set({ feature_kyc_enabled: v })} />
+      <Tog id="ff_sub" label="Sub-Accounts" desc="FEATURE_SUB_ACCOUNTS_ENABLED" checked={cfg.feature_sub_accounts_enabled} onChange={(v) => set({ feature_sub_accounts_enabled: v })} />
+    </Card>
+  </>
+);
+
+// ── LLM tab ───────────────────────────────────────────────────────────────────
+
+const LlmTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
+  <>
+    <Card>
+      <SectionHeader icon="🤖" title="LLM / AI Provider" desc="Primary LLM provider for AI features. LLM_*" />
+      <Sel label="Provider" desc="LLM_PROVIDER" value={cfg.llm_provider}
+        options={['openai','anthropic','google','mistral','local'].map((v) => ({ value: v, label: v }))}
+        onChange={(v) => set({ llm_provider: v })} />
+      <Txt label="Model" desc="LLM_MODEL" value={cfg.llm_model} placeholder="gpt-4o" onChange={(v) => set({ llm_model: v })} />
+      <Txt label="API Key" desc="LLM_API_KEY" value={cfg.llm_api_key} password placeholder="sk-..." onChange={(v) => set({ llm_api_key: v })} />
+      <Txt label="Base URL" desc="LLM_BASE_URL — override for local/proxy" value={cfg.llm_base_url} placeholder="https://api.openai.com/v1" onChange={(v) => set({ llm_base_url: v })} />
+      <Num label="Temperature" desc="LLM_TEMPERATURE" value={cfg.llm_temperature} step={0.05} min={0} max={2} onChange={(v) => set({ llm_temperature: v })} />
+      <Num label="Max Tokens" desc="LLM_MAX_TOKENS" value={cfg.llm_max_tokens} min={256} max={128000} onChange={(v) => set({ llm_max_tokens: v })} />
+      <Num label="Timeout (s)" desc="LLM_TIMEOUT_S" value={cfg.llm_timeout_s} min={5} onChange={(v) => set({ llm_timeout_s: v })} />
+      <Num label="Max Retries" desc="LLM_MAX_RETRIES" value={cfg.llm_max_retries} min={0} max={10} onChange={(v) => set({ llm_max_retries: v })} />
+    </Card>
+    <Card>
+      <SectionHeader icon="🔄" title="Fallback Provider" desc="Used when primary LLM is unavailable." />
+      <Sel label="Fallback Provider" desc="LLM_FALLBACK_PROVIDER" value={cfg.llm_fallback_provider}
+        options={['openai','anthropic','google','mistral','none'].map((v) => ({ value: v, label: v }))}
+        onChange={(v) => set({ llm_fallback_provider: v })} />
+      <Txt label="Fallback Model" desc="LLM_FALLBACK_MODEL" value={cfg.llm_fallback_model} placeholder="claude-3-5-sonnet-20241022" onChange={(v) => set({ llm_fallback_model: v })} />
+    </Card>
+    <Card>
+      <SectionHeader icon="🔢" title="Embeddings" desc="Vector embedding model for semantic search and RAG." />
+      <Txt label="Embedding Model" desc="LLM_EMBEDDING_MODEL" value={cfg.llm_embedding_model} placeholder="text-embedding-3-small" onChange={(v) => set({ llm_embedding_model: v })} />
+      <Num label="Embedding Dimensions" desc="LLM_EMBEDDING_DIMENSIONS" value={cfg.llm_embedding_dimensions} min={64} max={4096} onChange={(v) => set({ llm_embedding_dimensions: v })} />
+    </Card>
+  </>
+);
+
+// ── Drawdown tab ──────────────────────────────────────────────────────────────
+
+const DrawdownTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
+  <>
+    <Card>
+      <SectionHeader icon="📉" title="Drawdown Controls" desc="Hard/soft drawdown limits and recovery behaviour. DRAWDOWN_*" />
+      <Num label="Hard Stop (%)" desc="DRAWDOWN_HARD_STOP_PCT — halt all trading" value={cfg.drawdown_hard_stop_pct} step={0.01} min={0.01} max={1} onChange={(v) => set({ drawdown_hard_stop_pct: v })} />
+      <Num label="Soft Warn (%)" desc="DRAWDOWN_SOFT_WARN_PCT — trigger warning + size reduction" value={cfg.drawdown_soft_warn_pct} step={0.01} min={0.01} max={1} onChange={(v) => set({ drawdown_soft_warn_pct: v })} />
+      <Num label="Trailing Lookback Bars" desc="DRAWDOWN_TRAILING_LOOKBACK_BARS" value={cfg.drawdown_trailing_lookback_bars} min={10} onChange={(v) => set({ drawdown_trailing_lookback_bars: v })} />
+      <Num label="Recovery Size Scale" desc="DRAWDOWN_RECOVERY_SIZE_SCALE — position size multiplier during recovery" value={cfg.drawdown_recovery_size_scale} step={0.05} min={0.1} max={1} onChange={(v) => set({ drawdown_recovery_size_scale: v })} />
+      <Num label="Reduce Factor" desc="DRAWDOWN_REDUCE_FACTOR — size multiplier on soft warn" value={cfg.drawdown_reduce_factor} step={0.05} min={0.1} max={1} onChange={(v) => set({ drawdown_reduce_factor: v })} />
+      <Sel label="Recovery Mode" desc="DRAWDOWN_RECOVERY_MODE" value={cfg.drawdown_recovery_mode}
+        options={['reduce_size','pause','close_all','none'].map((v) => ({ value: v, label: v }))}
+        onChange={(v) => set({ drawdown_recovery_mode: v })} />
+      <Tog id="dd_trail" label="Trailing Drawdown" desc="DRAWDOWN_TRAILING_ENABLED — track from equity peak" checked={cfg.drawdown_trailing_enabled} onChange={(v) => set({ drawdown_trailing_enabled: v })} />
+      <Tog id="dd_reset" label="Daily Reset" desc="DRAWDOWN_DAILY_RESET — reset drawdown counter each day" checked={cfg.drawdown_daily_reset} onChange={(v) => set({ drawdown_daily_reset: v })} />
+      <Tog id="dd_notify" label="Notify on Breach" desc="DRAWDOWN_NOTIFY_ON_BREACH" checked={cfg.drawdown_notify_on_breach} onChange={(v) => set({ drawdown_notify_on_breach: v })} />
+      <Tog id="dd_reduce" label="Auto-Reduce on Warn" desc="DRAWDOWN_AUTO_REDUCE_ON_WARN" checked={cfg.drawdown_auto_reduce_on_warn} onChange={(v) => set({ drawdown_auto_reduce_on_warn: v })} />
+    </Card>
+  </>
+);
+
+// ── Prop Firm Config tab ──────────────────────────────────────────────────────
+
+const PropFirmConfigTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
+  <>
+    <Card>
+      <SectionHeader icon="🏆" title="Prop Firm Mode" desc="Enforce prop firm challenge rules automatically. PROP_FIRM_*" />
+      <Tog id="pf_en" label="Enable Prop Firm Mode" desc="PROP_FIRM_ENABLED" checked={cfg.prop_firm_enabled} onChange={(v) => set({ prop_firm_enabled: v })} />
+      <Divider />
+      <Sel label="Provider" desc="PROP_FIRM_PROVIDER" value={cfg.prop_firm_provider}
+        options={['ftmo','mff','e8','the5ers','topstep','custom'].map((v) => ({ value: v, label: v }))}
+        onChange={(v) => set({ prop_firm_provider: v })} />
+      <Num label="Account Size (USD)" desc="PROP_FIRM_ACCOUNT_SIZE" value={cfg.prop_firm_account_size} min={1000} step={1000} onChange={(v) => set({ prop_firm_account_size: v })} />
+      <Num label="Daily Loss Limit (%)" desc="PROP_FIRM_DAILY_LOSS_LIMIT_PCT" value={cfg.prop_firm_daily_loss_limit_pct} step={0.005} min={0.001} max={0.2} onChange={(v) => set({ prop_firm_daily_loss_limit_pct: v })} />
+      <Num label="Max Drawdown (%)" desc="PROP_FIRM_MAX_DRAWDOWN_PCT" value={cfg.prop_firm_max_drawdown_pct} step={0.005} min={0.001} max={0.5} onChange={(v) => set({ prop_firm_max_drawdown_pct: v })} />
+      <Num label="Profit Target (%)" desc="PROP_FIRM_PROFIT_TARGET_PCT" value={cfg.prop_firm_profit_target_pct} step={0.005} min={0.001} max={1} onChange={(v) => set({ prop_firm_profit_target_pct: v })} />
+      <Num label="Min Trading Days" desc="PROP_FIRM_MIN_TRADING_DAYS" value={cfg.prop_firm_min_trading_days} min={1} max={60} onChange={(v) => set({ prop_firm_min_trading_days: v })} />
+      <Num label="Max Position Size (%)" desc="PROP_FIRM_MAX_POSITION_SIZE_PCT" value={cfg.prop_firm_max_position_size_pct} step={0.005} min={0.001} max={1} onChange={(v) => set({ prop_firm_max_position_size_pct: v })} />
+      <Num label="Consistency Rule (%)" desc="PROP_FIRM_CONSISTENCY_RULE_PCT — max % of profit from single day" value={cfg.prop_firm_consistency_rule_pct} step={0.05} min={0} max={1} onChange={(v) => set({ prop_firm_consistency_rule_pct: v })} />
+      <Tog id="pf_news" label="News Trading Allowed" desc="PROP_FIRM_NEWS_TRADING_ALLOWED" checked={cfg.prop_firm_news_trading_allowed} onChange={(v) => set({ prop_firm_news_trading_allowed: v })} />
+      <Tog id="pf_wknd" label="Weekend Holding Allowed" desc="PROP_FIRM_WEEKEND_HOLDING_ALLOWED" checked={cfg.prop_firm_weekend_holding_allowed} onChange={(v) => set({ prop_firm_weekend_holding_allowed: v })} />
+      <Tog id="pf_scale" label="Scaling Plan Enabled" desc="PROP_FIRM_SCALING_ENABLED" checked={cfg.prop_firm_scaling_enabled} onChange={(v) => set({ prop_firm_scaling_enabled: v })} />
+    </Card>
+  </>
+);
+
+// ── Position Sizing tab ───────────────────────────────────────────────────────
+
+const PositionSizingTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
+  <>
+    <Card>
+      <SectionHeader icon="📐" title="Position Sizing" desc="How trade size is calculated for each signal. POSITION_SIZING_*" />
+      <Sel label="Method" desc="POSITION_SIZING_METHOD" value={cfg.position_sizing_method}
+        options={['risk_pct','fixed_lots','kelly','volatility_target','atr_based'].map((v) => ({ value: v, label: v }))}
+        onChange={(v) => set({ position_sizing_method: v })} />
+      <Num label="Fixed Lots" desc="POSITION_SIZING_FIXED_LOTS — used when method=fixed_lots" value={cfg.position_sizing_fixed_lots} step={0.001} min={0.001} onChange={(v) => set({ position_sizing_fixed_lots: v })} />
+      <Num label="Risk % per Trade" desc="POSITION_SIZING_RISK_PCT — used when method=risk_pct" value={cfg.position_sizing_risk_pct} step={0.001} min={0.001} max={0.5} onChange={(v) => set({ position_sizing_risk_pct: v })} />
+      <Num label="Kelly Fraction" desc="POSITION_SIZING_KELLY_FRACTION — fractional Kelly multiplier" value={cfg.position_sizing_kelly_fraction} step={0.05} min={0.05} max={1} onChange={(v) => set({ position_sizing_kelly_fraction: v })} />
+      <Num label="Max Lots" desc="POSITION_SIZING_MAX_LOTS — hard cap" value={cfg.position_sizing_max_lots} step={0.1} min={0.001} onChange={(v) => set({ position_sizing_max_lots: v })} />
+      <Num label="Min Lots" desc="POSITION_SIZING_MIN_LOTS — minimum viable size" value={cfg.position_sizing_min_lots} step={0.001} min={0.001} onChange={(v) => set({ position_sizing_min_lots: v })} />
+      <Num label="ATR Multiplier" desc="POSITION_SIZING_ATR_MULTIPLIER — stop distance in ATRs" value={cfg.position_sizing_atr_multiplier} step={0.1} min={0.1} onChange={(v) => set({ position_sizing_atr_multiplier: v })} />
+      <Num label="ATR Period" desc="POSITION_SIZING_ATR_PERIOD" value={cfg.position_sizing_atr_period} min={5} max={100} onChange={(v) => set({ position_sizing_atr_period: v })} />
+      <Num label="Volatility Target" desc="POSITION_SIZING_VOLATILITY_TARGET — daily vol target" value={cfg.position_sizing_volatility_target} step={0.001} min={0.001} max={0.5} onChange={(v) => set({ position_sizing_volatility_target: v })} />
+      <Num label="Max Correlated Exposure" desc="POSITION_SIZING_MAX_CORRELATED_EXPOSURE — total exposure to correlated assets" value={cfg.position_sizing_max_correlated_exposure} step={0.01} min={0} max={1} onChange={(v) => set({ position_sizing_max_correlated_exposure: v })} />
+      <Tog id="ps_corr" label="Correlation Scaling" desc="POSITION_SIZING_USE_CORRELATION_SCALING — reduce size when correlated positions exist" checked={cfg.position_sizing_use_correlation_scaling} onChange={(v) => set({ position_sizing_use_correlation_scaling: v })} />
+    </Card>
+  </>
+);
+
+
 // ── SMTP / Email tab ──────────────────────────────────────────────────────────
 
 const SmtpTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => {
@@ -1836,6 +2541,22 @@ const PlatformConfiguration: React.FC = () => {
       {activeTab === 'monitoring'  && <><MonitoringTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
       {activeTab === 'celery'      && <><CeleryTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
       {activeTab === 'compliance'  && <><ComplianceTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
+      {activeTab === 'lstm'          && <><LstmTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
+      {activeTab === 'brain'         && <><BrainTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
+      {activeTab === 'allocator'     && <><AllocatorTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
+      {activeTab === 'anomaly'       && <><AnomalyTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
+      {activeTab === 'macro'         && <><MacroTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
+      {activeTab === 'online'        && <><OnlineTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
+      {activeTab === 'sharpe'        && <><SharpeTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
+      {activeTab === 'regime'        && <><RegimeTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
+      {activeTab === 'signal_engine' && <><SignalEngineTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
+      {activeTab === 'tca'           && <><TcaConfigTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
+      {activeTab === 'backtest'      && <><BacktestConfigTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
+      {activeTab === 'feature_flags' && <><FeatureFlagsConfigTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
+      {activeTab === 'llm'           && <><LlmTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
+      {activeTab === 'drawdown'      && <><DrawdownTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
+      {activeTab === 'prop_firm'     && <><PropFirmConfigTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
+      {activeTab === 'position_sizing' && <><PositionSizingTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
       {activeTab === 'killswitch'  && <><KillSwitchTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
       {activeTab === 'healing'    && (
         <HealingTab
