@@ -384,13 +384,22 @@ class EventBus:
         # binary protocol such as MessagePack (already used in DomainEvent above)
         # or FlatBuffers/SBE, which can reduce serialisation overhead ~10×.
         # That optimisation is tracked as a future improvement.
+
+        # Fast-path: if already in degraded mode skip Redis entirely and go
+        # straight to the local fallback.  This prevents the log from being
+        # flooded with "attempt N/5 failed" lines when Redis is persistently
+        # unavailable — the degraded state is already logged at connect time.
+        if self._degraded or self._redis is None:
+            self._metrics["errors"] += 1
+            logger.debug("EventBus: Redis degraded — routing %s to local fallback.", channel)
+            await _local_bus.publish_local(channel, message)
+            return
+
         attempt = 0
         backoff = BASE_BACKOFF_S
 
         while attempt < MAX_RETRIES:
             try:
-                if self._degraded or self._redis is None:
-                    raise ConnectionError("Redis degraded")
                 await self._redis.publish(channel, payload)
                 self._metrics["published"] += 1
                 return
@@ -409,9 +418,15 @@ class EventBus:
                 await asyncio.sleep(min(backoff, MAX_BACKOFF_S))
                 backoff *= 2  # exponential back-off
 
-        # Exhausted retries — route through local fallback
+        # Exhausted retries — mark degraded so future publishes skip Redis
+        # immediately, then route through local fallback.
+        self._degraded = True
         self._metrics["errors"] += 1
-        logger.error("EventBus: all retries exhausted for %s — using local fallback.", channel)
+        logger.error(
+            "EventBus: all retries exhausted for %s — switching to local fallback. "
+            "Redis will be retried on next connect() call.",
+            channel,
+        )
         await _local_bus.publish_local(channel, message)
 
     # ── subscribe ─────────────────────────────────────────────────────────────
