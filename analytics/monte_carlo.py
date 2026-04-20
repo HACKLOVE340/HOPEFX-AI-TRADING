@@ -56,6 +56,149 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+
+def _ljung_box_p(pnls: np.ndarray, lags: int = 5) -> float:
+    """
+    Ljung-Box portmanteau test for serial autocorrelation.
+
+    Returns the p-value for the null hypothesis that the first `lags`
+    autocorrelations are jointly zero.  A small p-value (< 0.05) means
+    significant autocorrelation is present and block bootstrap should be used.
+
+    Implemented without scipy to avoid an optional dependency.  Uses the
+    standard Ljung-Box Q statistic:
+        Q = n*(n+2) * sum_{k=1}^{lags} rho_k^2 / (n-k)
+    which is chi-squared distributed with `lags` degrees of freedom under H0.
+    """
+    n = len(pnls)
+    if n < lags + 2:
+        return 1.0  # not enough data — assume no autocorrelation
+
+    mu = float(np.mean(pnls))
+    demeaned = pnls - mu
+    var = float(np.dot(demeaned, demeaned))
+    if var == 0.0:
+        return 1.0
+
+    q_stat = 0.0
+    for k in range(1, lags + 1):
+        rho_k = float(np.dot(demeaned[k:], demeaned[:-k])) / var
+        q_stat += rho_k ** 2 / (n - k)
+    q_stat *= n * (n + 2)
+
+    # Chi-squared CDF via regularised incomplete gamma (pure Python)
+    # P(chi2 > Q | df=lags) = 1 - regularised_gamma(lags/2, Q/2)
+    p_value = _chi2_sf(q_stat, df=lags)
+    return p_value
+
+
+def _chi2_sf(x: float, df: int) -> float:
+    """
+    Survival function of the chi-squared distribution (1 - CDF).
+
+    Returns the regularised upper incomplete gamma Q(df/2, x/2), which
+    equals P(chi2(df) > x).  Implemented without scipy via a continued-
+    fraction / series expansion (Numerical Recipes §6.2).
+    Accurate to ~1e-7 for the parameter ranges used here.
+    """
+    if x <= 0.0:
+        return 1.0
+    a = df / 2.0
+    x2 = x / 2.0
+    # Q(a, x) = regularised upper incomplete gamma = Gamma(a,x) / Gamma(a)
+    return _regularised_upper_gamma(a, x2)
+
+
+def _regularised_upper_gamma(a: float, x: float) -> float:
+    """
+    Regularised upper incomplete gamma Q(a, x) = Gamma(a, x) / Gamma(a).
+
+    Uses series expansion for x < a+1, continued fraction for x >= a+1.
+    """
+    if x < a + 1.0:
+        # Q = 1 - P  where P is the regularised lower incomplete gamma
+        return 1.0 - _regularised_lower_gamma_series(a, x)
+    return _regularised_upper_gamma_cf(a, x)
+
+
+def _regularised_lower_gamma_series(a: float, x: float) -> float:
+    """Regularised lower incomplete gamma P(a, x) via series expansion."""
+    if x == 0.0:
+        return 0.0
+    ap = a
+    delta = 1.0 / a
+    total = delta
+    for _ in range(300):
+        ap += 1.0
+        delta *= x / ap
+        total += delta
+        if abs(delta) < abs(total) * 1e-12:
+            break
+    # P(a,x) = e^{-x} * x^a / Gamma(a) * series_sum
+    log_factor = -x + a * math.log(x) - math.lgamma(a)
+    return math.exp(log_factor) * total
+
+
+def _regularised_upper_gamma_cf(a: float, x: float) -> float:
+    """Regularised upper incomplete gamma Q(a, x) via Lentz continued fraction."""
+    fpmin = 1e-300
+    b = x + 1.0 - a
+    c = 1.0 / fpmin
+    d = 1.0 / b if abs(b) > fpmin else 1.0 / fpmin
+    h = d
+    for i in range(1, 301):
+        an = -i * (i - a)
+        b += 2.0
+        d = an * d + b
+        if abs(d) < fpmin:
+            d = fpmin
+        c = b + an / c
+        if abs(c) < fpmin:
+            c = fpmin
+        d = 1.0 / d
+        delta = d * c
+        h *= delta
+        if abs(delta - 1.0) < 1e-12:
+            break
+    # Q(a,x) = e^{-x} * x^a / Gamma(a) * h
+    log_factor = -x + a * math.log(x) - math.lgamma(a)
+    return math.exp(log_factor) * h
+
+
+def choose_bootstrap_method(
+    pnls: np.ndarray,
+    autocorr_p_threshold: float = 0.05,
+    lags: int = 5,
+) -> str:
+    """
+    Automatically choose between IID and block bootstrap.
+
+    Runs a Ljung-Box test on the trade PnL sequence.  If the p-value is
+    below `autocorr_p_threshold`, significant serial autocorrelation is
+    present and block bootstrap is used.  Otherwise IID bootstrap is used.
+
+    Parameters
+    ----------
+    pnls                  : Array of per-trade P&L values.
+    autocorr_p_threshold  : Significance level for the Ljung-Box test.
+                            Default 0.05 (5%).
+    lags                  : Number of lags to test. Default 5.
+
+    Returns
+    -------
+    "block" if autocorrelation is detected, "iid" otherwise.
+    """
+    if len(pnls) < lags + 2:
+        # Not enough trades to test — default to block (conservative)
+        return "block"
+    p = _ljung_box_p(pnls, lags=lags)
+    method = "block" if p < autocorr_p_threshold else "iid"
+    logger.debug(
+        "choose_bootstrap_method: Ljung-Box p=%.4f (threshold=%.2f) -> %s",
+        p, autocorr_p_threshold, method,
+    )
+    return method
+
 # ── Configuration ─────────────────────────────────────────────────────────────
 MC_N_PATHS: int = int(os.getenv("MC_N_PATHS", "5000"))
 MC_RUIN_THRESHOLD: float = float(os.getenv("MC_RUIN_THRESHOLD", "0.5"))
@@ -166,7 +309,8 @@ class MonteCarloEngine:
         self,
         trade_pnls: list[float],
         initial_capital: float = 100_000.0,
-        method: str = "iid",
+        method: str = "auto",
+        avg_hold_bars: int | None = None,
     ) -> BootstrapResult:
         """
         Run bootstrap Monte Carlo simulation.
@@ -175,7 +319,18 @@ class MonteCarloEngine:
         ----------
         trade_pnls      : List of per-trade net P&L values in USD.
         initial_capital : Starting equity for each path.
-        method          : "iid" (independent) or "block" (block bootstrap).
+        method          : Resampling method:
+                          "auto"  — run Ljung-Box autocorrelation test and
+                                    choose "block" or "iid" automatically.
+                                    This is the default and recommended choice.
+                          "block" — block bootstrap (preserves autocorrelation).
+                                    Use for trend-following strategies.
+                          "iid"   — IID bootstrap (assumes independent trades).
+                                    Only use when autocorrelation is confirmed absent.
+        avg_hold_bars   : Average trade hold period in bars.  When provided and
+                          method="block" or "auto" selects block, the block size
+                          is set to avg_hold_bars (aligns with the natural
+                          autocorrelation horizon).  Overrides self.block_size.
 
         Returns
         -------
@@ -188,6 +343,21 @@ class MonteCarloEngine:
         pnls = np.array(trade_pnls, dtype=float)
         n_trades = len(pnls)
 
+        # ── Resolve method ────────────────────────────────────────────────────
+        if method == "auto":
+            resolved_method = choose_bootstrap_method(pnls)
+        else:
+            resolved_method = method
+
+        # ── Resolve block size ────────────────────────────────────────────────
+        # When avg_hold_bars is provided, use it as the block size so the
+        # resampling block aligns with the strategy's natural autocorrelation
+        # horizon.  Minimum block size is 2.
+        if avg_hold_bars is not None and avg_hold_bars > 0:
+            effective_block_size = max(2, int(round(avg_hold_bars)))
+        else:
+            effective_block_size = self.block_size
+
         # ── Point estimates from original sequence ────────────────────────────
         orig_sharpe = self._sharpe(pnls)
         orig_max_dd = self._max_drawdown(pnls, initial_capital)
@@ -197,6 +367,11 @@ class MonteCarloEngine:
         gross_loss = float(abs(np.sum(pnls[pnls < 0])))
         orig_pf = gross_profit / gross_loss if gross_loss > 0 else float("inf")
 
+        logger.info(
+            "MonteCarloEngine.run: method=%s (resolved=%s) block_size=%d n_trades=%d",
+            method, resolved_method, effective_block_size, n_trades,
+        )
+
         # ── Bootstrap paths ───────────────────────────────────────────────────
         sharpe_dist: list[float] = []
         max_dd_dist: list[float] = []
@@ -205,8 +380,8 @@ class MonteCarloEngine:
         ruin_count = 0
 
         for _ in range(self.n_paths):
-            if method == "block":
-                sampled = self._block_resample(pnls, n_trades)
+            if resolved_method == "block":
+                sampled = self._block_resample(pnls, n_trades, effective_block_size)
             else:
                 sampled = self._rng.choice(pnls, size=n_trades, replace=True)
 
@@ -292,14 +467,28 @@ class MonteCarloEngine:
         )
         return result
 
-    def _block_resample(self, pnls: np.ndarray, n_trades: int) -> np.ndarray:
-        """Resample contiguous blocks of trades (preserves autocorrelation)."""
+    def _block_resample(
+        self,
+        pnls: np.ndarray,
+        n_trades: int,
+        block_size: int | None = None,
+    ) -> np.ndarray:
+        """
+        Resample contiguous blocks of trades (preserves autocorrelation).
+
+        Parameters
+        ----------
+        pnls       : Source trade PnL array.
+        n_trades   : Number of trades in the resampled path.
+        block_size : Block length.  None = use self.block_size.
+        """
+        bs = block_size if block_size is not None else self.block_size
         n = len(pnls)
         blocks = []
         total = 0
         while total < n_trades:
             start = int(self._rng.integers(0, n))
-            end = min(start + self.block_size, n)
+            end = min(start + bs, n)
             blocks.append(pnls[start:end])
             total += end - start
         return np.concatenate(blocks)[:n_trades]
@@ -353,7 +542,8 @@ def run_bootstrap(
     trade_pnls: list[float],
     initial_capital: float = 100_000.0,
     n_paths: int = MC_N_PATHS,
-    method: str = "iid",
+    method: str = "auto",
+    avg_hold_bars: int | None = None,
 ) -> BootstrapResult:
     """
     Run bootstrap Monte Carlo on a list of trade P&L values.
@@ -363,11 +553,20 @@ def run_bootstrap(
     trade_pnls      : Per-trade net P&L in USD.
     initial_capital : Starting equity.
     n_paths         : Number of bootstrap paths.
-    method          : "iid" or "block".
+    method          : "auto" (default) — Ljung-Box test selects "block" or
+                      "iid" automatically.  Pass "block" or "iid" to override.
+    avg_hold_bars   : Average trade hold period in bars.  When provided and
+                      block bootstrap is used, sets the block size to match
+                      the strategy's natural autocorrelation horizon.
 
     Returns
     -------
     BootstrapResult with confidence intervals on Sharpe, drawdown, CAGR.
     """
     engine = MonteCarloEngine(n_paths=n_paths)
-    return engine.run(trade_pnls, initial_capital=initial_capital, method=method)
+    return engine.run(
+        trade_pnls,
+        initial_capital=initial_capital,
+        method=method,
+        avg_hold_bars=avg_hold_bars,
+    )
