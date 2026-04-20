@@ -514,7 +514,7 @@ class DiagnosticsEngine:
                     for m in methods:
                         if m in ("GET", "POST"):
                             routes_to_test.append((m, path))
-        except Exception:
+        except Exception:  # nosec B110 — app not initialised yet; route list stays empty
             pass
         routes_to_test = list(dict.fromkeys(routes_to_test))[:30]
         try:
@@ -666,7 +666,7 @@ class DiagnosticsEngine:
                         for key in keys[:5]:
                             ttl = await client.ttl(key)
                             (found_feeds if ttl != 0 else stale_feeds).append(key)
-                    except asyncio.TimeoutError:
+                    except asyncio.TimeoutError:  # nosec B110 — Redis key scan timed out; skip this pattern
                         pass
                 dur = (time.monotonic() - t0) * 1000
                 if stale_feeds:

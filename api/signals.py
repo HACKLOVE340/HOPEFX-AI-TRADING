@@ -1137,14 +1137,14 @@ def _register_signal_alias_routes(router) -> None:
                 "geopoliticalScore": float(result.get("geopolitical_score", 0)),
                 "updatedAt": result.get("updated_at", None),
             }
-        except Exception:
+        except Exception:  # nosec B110 — primary sentiment source unavailable; try fallback below
             pass
 
         try:
             from data_layer.sentiment import get_sentiment
             result = await get_sentiment(symbol)
             return result
-        except Exception:
+        except Exception:  # nosec B110 — fallback sentiment source unavailable; return neutral default
             pass
 
         from datetime import datetime, timezone
@@ -1175,7 +1175,7 @@ def _register_signal_alias_routes(router) -> None:
             from api.news import get_news_for_symbol
             items = await get_news_for_symbol(symbol, limit=limit)
             return {"items": items, "count": len(items)}
-        except Exception:
+        except Exception:  # nosec B110 — primary news source unavailable; try fallback below
             pass
 
         try:
@@ -1194,7 +1194,7 @@ def _register_signal_alias_routes(router) -> None:
                 for i, n in enumerate(raw or [])
             ]
             return {"items": items, "count": len(items)}
-        except Exception:
+        except Exception:  # nosec B110 — fallback news aggregator unavailable; return empty list
             pass
 
         return {"items": [], "count": 0}

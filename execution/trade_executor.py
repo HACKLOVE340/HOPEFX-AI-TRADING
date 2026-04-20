@@ -305,7 +305,7 @@ class TradeExecutor:
                 import sentry_sdk
 
                 sentry_sdk.capture_exception(exc)
-            except (RuntimeError, AttributeError) as _exc:
+            except (ImportError, RuntimeError, AttributeError) as _exc:
                 logger.debug("Suppressed exception: %s", _exc)
             return ExecutionResult(
                 success=False,

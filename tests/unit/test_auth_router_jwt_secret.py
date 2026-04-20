@@ -74,7 +74,10 @@ class TestJWTSecretMisconfiguration:
     """Misconfigured secret must surface as 503, not silently accept tokens."""
 
     def test_unset_secret_returns_503(self, monkeypatch):
+        # Remove all JWT secret aliases so _load_secret() raises RuntimeError
         monkeypatch.delenv("SECURITY_JWT_SECRET", raising=False)
+        monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
+        monkeypatch.delenv("JWT_SECRET", raising=False)
         forged = _make_token(secret="")  # old bypass vector  # nosec B106 - test file
         with pytest.raises(HTTPException) as exc_info:
             _call(forged)

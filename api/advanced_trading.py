@@ -105,7 +105,7 @@ def _get_sync_redis():
         from cache.redis_pool import get_sync_client
 
         return get_sync_client()
-    except Exception:
+    except Exception:  # nosec B110 — Redis is optional; return None to use in-process fallback
         return None
 
 
@@ -943,7 +943,7 @@ async def get_cot_gold(user: TokenPayload = Depends(get_current_user)):
                 raw = r.get(_cot_cache_key)
                 if raw:
                     return _json.loads(raw)
-        except Exception:
+        except Exception:  # nosec B110 — Redis unavailable; fall through to in-process cache
             pass
         return _cot_cache
 
@@ -954,7 +954,7 @@ async def get_cot_gold(user: TokenPayload = Depends(get_current_user)):
             r = _get_sync_redis()
             if r:
                 r.setex(_cot_cache_key, _COT_CACHE_TTL, _json.dumps(data))
-        except Exception:
+        except Exception:  # nosec B110 — Redis write failure is non-fatal; in-process cache updated above
             pass
 
     try:

@@ -28,7 +28,7 @@ import pytest
 
 def _run(coro):
     """Run a coroutine in a fresh event loop (pytest-asyncio not required)."""
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 # ---------------------------------------------------------------------------

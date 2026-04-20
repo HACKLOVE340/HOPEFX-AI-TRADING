@@ -68,7 +68,7 @@ def _get_kill_switch():
 
         _kill_switch_instance = _app_ks
         return _kill_switch_instance
-    except Exception:
+    except Exception:  # nosec B110 — app not yet initialised; kill switch checks disabled
         logger.debug("Kill switch singleton unavailable — kill switch checks disabled")
         return None
 
@@ -1648,7 +1648,7 @@ def _make_strategy_router():
 # Register the sub-router on the module-level router
 try:
     router.include_router(_make_strategy_router())
-except Exception:
+except Exception:  # nosec B110 — strategy sub-router registration failure is non-fatal at import time
     logger.exception("Failed to register strategy sub-router: %s")
 
 
@@ -2132,7 +2132,7 @@ async def get_microstructure_alias(
         norm = _normalise_symbol(symbol)
         snap = await get_microstructure_snapshot(norm)
         return snap
-    except Exception:
+    except Exception:  # nosec B110 — data-layer microstructure unavailable; build from tick data below
         pass
 
     # Fallback: build from price engine tick data
