@@ -123,6 +123,7 @@ def register_routers(
     from api.pages import router as pages_router
     from api.macro import router as macro_router
     from api.ml import router as ml_router
+    from api.ml_anomaly import router as ml_anomaly_router
     from api.mobile import router as mobile_router
     from api.monetization import router as monetization_router
     from api.online_learner import router as online_learner_router
@@ -130,6 +131,7 @@ def register_routers(
     from api.performance import router as performance_router
     from api.platform import router as platform_router
     from api.portfolio import router as portfolio_router
+    from api.portfolio_allocator import router as portfolio_allocator_router
     from api.profiles import router as profiles_router
     from api.prop_firm import router as prop_firm_router
     from api.settings import router as settings_router
@@ -177,8 +179,10 @@ def register_routers(
         whitelabel_router,
         platform_router,
         ml_router,
+        ml_anomaly_router,
         accounts_router,
         portfolio_router,
+        portfolio_allocator_router,
         health_router,
         tracing_router,
         pages_router,
@@ -188,6 +192,8 @@ def register_routers(
     logger.info("Health router registered (/api/health)")
     logger.info("Analysis router registered (/api/analysis)")
     logger.info("Tracing router registered (/api/tracing)")
+    logger.info("ML anomaly router registered (/api/ml/anomaly)")
+    logger.info("Portfolio allocator router registered (/api/portfolio/allocator)")
     logger.info("Pages router registered (/login, /register, /about, /privacy, /terms, /security, /marketplace, /affiliate, /docs/*)")
 
     # ── Feature-gated routers ─────────────────────────────────────────────────
