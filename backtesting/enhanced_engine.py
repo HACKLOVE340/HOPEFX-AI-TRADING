@@ -2515,15 +2515,13 @@ def run_comprehensive_backtest(use_real_data: bool = True):
 
     logger.info(f"    Data source: {data_source}")
 
-    # Initialize engine with institutional settings
+    # Initialize engine with XAUUSD-calibrated institutional settings.
+    # Parameters are derived from Almgren-Chriss (2001) adjusted for gold
+    # market microstructure (see TransactionCostModel.calibrate_xauusd()).
+    # The old equity defaults (η=0.142, γ=0.314, spread=0.8 bps) overstated
+    # costs by ~3× for XAUUSD — replaced with gold-specific calibration.
     logger.info("\n[2] Initializing backtest engine...")
-    cost_model = TransactionCostModel(
-        commission_per_lot=7.0,
-        spread_markup_bps=0.8,
-        slippage_model=SlippageModel.SQUARE_ROOT,
-        temporary_impact_coefficient=0.142,
-        permanent_impact_coefficient=0.314,
-    )
+    cost_model = TransactionCostModel.calibrate_xauusd()
 
     risk_manager = InstitutionalRiskManager(
         initial_capital=1_000_000.0,
