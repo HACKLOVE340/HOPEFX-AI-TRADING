@@ -521,12 +521,18 @@ class DiagnosticsEngine:
             import httpx
             unhealthy: list[dict[str, Any]] = []
             ok_count = 0
+            # Internal health-check header allows loopback probes to bypass CSRF
+            # validation on POST/PUT/PATCH/DELETE endpoints without a browser session.
+            _internal_headers = {"X-Internal-Health-Check": "1"}
             async with httpx.AsyncClient(base_url=_APP_BASE_URL, timeout=_DIAG_HTTP_TIMEOUT, follow_redirects=True) as client:
                 for method, path in routes_to_test:
                     if "{" in path:
                         continue
                     try:
-                        resp = await (client.get(path) if method == "GET" else client.post(path, json={}))
+                        if method == "GET":
+                            resp = await client.get(path)
+                        else:
+                            resp = await client.post(path, json={}, headers=_internal_headers)
                         if resp.status_code in (200, 201, 401, 403, 405, 422):
                             ok_count += 1
                         elif resp.status_code >= 500:

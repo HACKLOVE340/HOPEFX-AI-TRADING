@@ -270,7 +270,15 @@ class CSRFMiddleware(BaseHTTPMiddleware):
     SameSite=Strict prevents the cookie from being sent cross-origin.
 
     Set CSRF_PROTECTION=false to disable in dev/test environments.
+
+    Internal health-check probes from loopback addresses that carry the
+    ``X-Internal-Health-Check: 1`` header are exempt — they are not
+    browser-initiated and cannot carry a CSRF cookie.
     """
+
+    # Loopback addresses allowed to use the internal health-check bypass.
+    _LOOPBACK_ADDRS: frozenset[str] = frozenset({"127.0.0.1", "::1", "localhost"})
+    _INTERNAL_HEADER = "X-Internal-Health-Check"
 
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
         if not _csrf_enabled():
@@ -283,11 +291,25 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         if any(path.startswith(prefix) for prefix in _CSRF_EXEMPT_PREFIXES):
             return await call_next(request)
 
+        # Internal health-check bypass: loopback-only, explicit opt-in header.
+        # This allows the diagnostic runner and self-healer to probe CSRF-protected
+        # endpoints without a browser session while keeping the protection intact
+        # for all external requests.
+        client_ip = request.client.host if request.client else ""
+        if (
+            client_ip in self._LOOPBACK_ADDRS
+            and request.headers.get(self._INTERNAL_HEADER) == "1"
+        ):
+            return await call_next(request)
+
         cookie_token = request.cookies.get(_CSRF_COOKIE, "")
         header_token = request.headers.get(_CSRF_HEADER, "")
 
         if not cookie_token or not header_token:
-            logger.warning(
+            # Log at DEBUG — missing tokens are expected from health probes,
+            # API clients, and server-side callers that don't carry a browser
+            # session.  Token *mismatch* (below) is the real attack signal.
+            logger.debug(
                 "CSRF validation failed — missing token: path=%s method=%s "
                 "cookie_present=%s header_present=%s",
                 path,
@@ -303,11 +325,12 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         # Constant-time comparison to prevent timing attacks
         import hmac as _hmac
         if not _hmac.compare_digest(cookie_token, header_token):
+            # Token mismatch IS a warning — it indicates a forged or replayed token.
             logger.warning(
                 "CSRF validation failed — token mismatch: path=%s method=%s ip=%s",
                 path,
                 request.method,
-                request.client.host if request.client else "unknown",
+                client_ip or "unknown",
             )
             return JSONResponse(
                 status_code=403,
