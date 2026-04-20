@@ -533,18 +533,19 @@ class OandaBroker:
 
         return {"success": False, "comment": last_error}
 
-    async def cancel_all_orders(self) -> bool:
+    async def cancel_all_orders(self) -> list[str]:
         """
         Cancel all pending orders and close all open positions.
 
         Called by the kill switch on activation. Uses OANDA's bulk
         position-close endpoint (PUT /positions/{instrument}/close) for
         each open position, then cancels all pending orders individually.
+        Returns list of successfully closed/cancelled IDs.
         """
+        cancelled: list[str] = []
         if not self._assert_connected("cancel_all_orders") or self._session is None:
-            return False
+            return cancelled
 
-        all_ok = True
         session = self._session  # narrowed — not None past this point
 
         # 1. Close all open positions
@@ -567,6 +568,7 @@ class OandaBroker:
                 try:
                     async with session.put(url, json=body) as resp:
                         if resp.status == 200:
+                            cancelled.append(instrument)
                             logger.warning("OandaBroker.cancel_all_orders: closed position %s", instrument)
                         else:
                             data = await resp.json()
@@ -576,13 +578,10 @@ class OandaBroker:
                                 resp.status,
                                 data.get("errorMessage", ""),
                             )
-                            all_ok = False
                 except Exception as exc:
                     logger.error("OandaBroker.cancel_all_orders: close %s raised: %s", instrument, exc)
-                    all_ok = False
         except Exception as exc:
             logger.error("OandaBroker.cancel_all_orders: get_positions failed: %s", exc)
-            all_ok = False
 
         # 2. Cancel all pending orders
         try:
@@ -592,19 +591,19 @@ class OandaBroker:
                 if not order_id:
                     continue
                 result = await self.cancel_order(order_id)
-                if not result.get("success"):
+                if result.get("success"):
+                    cancelled.append(str(order_id))
+                else:
                     logger.warning(
                         "OandaBroker.cancel_all_orders: cancel order %s failed: %s",
                         order_id,
                         result.get("comment"),
                     )
-                    all_ok = False
         except Exception as exc:
             logger.error("OandaBroker.cancel_all_orders: cancel orders failed: %s", exc)
-            all_ok = False
 
-        logger.warning("OandaBroker.cancel_all_orders: complete (all_ok=%s)", all_ok)
-        return all_ok
+        logger.warning("OandaBroker.cancel_all_orders: complete (cancelled=%d)", len(cancelled))
+        return cancelled
 
     async def get_tick(self, instrument: str = "XAU_USD") -> dict[str, Any] | None:
         """Return the latest bid/ask for *instrument*."""

@@ -693,24 +693,33 @@ class HOPEFXBrain:
             self.state.system_state = SystemState.EMERGENCY_STOP
 
         # Close all positions (with retries)
+        # Broker implementations vary: the abstract base returns list[str],
+        # but some concrete brokers (e.g. PaperTradingBroker) return int.
+        # Normalise to a count so len() is never called on a non-sequence.
         if self.broker:
             for attempt in range(3):
                 try:
-                    closed_positions = await asyncio.wait_for(self.broker.close_all_positions(), timeout=10.0)
-                    logger.info("Closed %s positions", len(closed_positions))
-
+                    result = self.broker.close_all_positions()
+                    # Await if the broker returns a coroutine.
+                    if asyncio.iscoroutine(result):
+                        result = await asyncio.wait_for(result, timeout=10.0)
+                    closed_count = result if isinstance(result, int) else len(result) if hasattr(result, "__len__") else 0
+                    logger.info("Closed %s positions", closed_count)
                     break
                 except Exception as e:
                     logger.error("Attempt %s failed to close positions: %s", attempt + 1, e)
-
                     await asyncio.sleep(1)
 
         # Cancel all orders
+        # Same normalisation: some brokers return bool (sync), others return
+        # list[str] (async). Await only when the result is a coroutine.
         if self.broker:
             try:
-                cancelled_orders = await asyncio.wait_for(self.broker.cancel_all_orders(), timeout=5.0)
-                logger.info("Cancelled %s orders", len(cancelled_orders))
-
+                result = self.broker.cancel_all_orders()
+                if asyncio.iscoroutine(result):
+                    result = await asyncio.wait_for(result, timeout=5.0)
+                cancelled_count = result if isinstance(result, int) else len(result) if hasattr(result, "__len__") else int(bool(result))
+                logger.info("Cancelled %s orders", cancelled_count)
             except Exception as e:
                 logger.error("Error cancelling orders: %s", e)
 

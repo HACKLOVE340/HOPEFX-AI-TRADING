@@ -581,11 +581,15 @@ class IBKRConnector(BrokerConnector):
             self._capture_sentry(exc)
             return False
 
-    def cancel_all_orders(self) -> bool:
-        """Cancel all open orders and close all positions via reqGlobalCancel."""
+    async def cancel_all_orders(self) -> list[str]:
+        """Cancel all open orders and close all positions via reqGlobalCancel.
+
+        Returns list of successfully closed position symbols.
+        """
+        cancelled: list[str] = []
         if not self.connected or not self._ib:
             logger.error("IBKRConnector.cancel_all_orders: not connected.")
-            return False
+            return cancelled
         try:
             # reqGlobalCancel cancels all open orders for this account at the
             # broker level — does not depend on the Python process staying alive.
@@ -593,21 +597,20 @@ class IBKRConnector(BrokerConnector):
             logger.warning("IBKRConnector.cancel_all_orders: reqGlobalCancel sent")
 
             # Also close all open positions at market
-            all_ok = True
             for pos in self.get_positions():
                 try:
                     ok = self.close_position(pos.symbol)
-                    if not ok:
-                        all_ok = False
+                    if ok:
+                        cancelled.append(pos.symbol)
+                    else:
                         logger.warning("IBKRConnector.cancel_all_orders: close_position(%s) failed", pos.symbol)
                 except Exception as exc:
                     logger.error("IBKRConnector.cancel_all_orders: close_position(%s) raised: %s", pos.symbol, exc)
-                    all_ok = False
-            return all_ok
+            return cancelled
         except Exception as exc:
             logger.error("IBKRConnector.cancel_all_orders error: %s", exc)
             self._capture_sentry(exc)
-            return False
+            return cancelled
 
     # ------------------------------------------------------------------
     # Account info

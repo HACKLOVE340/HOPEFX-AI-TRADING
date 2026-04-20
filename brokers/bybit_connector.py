@@ -226,8 +226,20 @@ class ByBitConnector(BrokerConnector):
         """Return order details by ID."""
         return self._ccxt.get_order(order_id)
 
-    def cancel_all_orders(self) -> bool:
-        return self._ccxt.cancel_all_orders()
+    async def cancel_all_orders(self) -> list[str]:
+        """Cancel all open orders via the CCXT connector.
+
+        Returns list of cancelled order IDs (empty list on failure).
+        """
+        try:
+            result = self._ccxt.cancel_all_orders()
+            # CCXT may return a list of order dicts or a bool depending on version.
+            if isinstance(result, list):
+                return [str(o.get("id", o)) if isinstance(o, dict) else str(o) for o in result]
+            return [] if not result else ["all"]
+        except Exception as exc:
+            logger.error("ByBitConnector.cancel_all_orders failed: %s", exc)
+            return []
 
     # ── Positions ─────────────────────────────────────────────────────────────
 

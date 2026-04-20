@@ -367,7 +367,7 @@ class BrokerConnector(ABC):
             List of OHLCV dictionaries
         """
 
-    def cancel_all_orders(self) -> bool:
+    async def cancel_all_orders(self) -> list[str]:
         """
         Cancel all open/pending orders and close all positions at market.
 
@@ -376,34 +376,37 @@ class BrokerConnector(ABC):
         Brokers with a native mass-cancel API (IBKR reqGlobalCancel,
         OANDA bulk close) should override this method.
 
-        Returns True if all cancellations succeeded (or there was nothing
-        to cancel). Returns False if any individual cancel failed.
+        Returns list of successfully cancelled/closed position IDs.
         """
-        all_ok = True
+        cancelled: list[str] = []
         try:
             positions = self.get_positions()
+            # Support both sync and async get_positions implementations.
+            if asyncio.iscoroutine(positions):
+                positions = await asyncio.wait_for(positions, timeout=10.0)
         except Exception as exc:
             logger.warning("%s.cancel_all_orders: get_positions failed: %s", self.name, exc)
-            return False
+            return cancelled
 
         if not positions:
             logger.info("%s.cancel_all_orders: no open positions", self.name)
-            return True
+            return cancelled
 
         for pos in positions:
             symbol = pos.symbol if hasattr(pos, "symbol") else str(pos)
             try:
-                ok = self.close_position(symbol)
-                if not ok:
-                    logger.warning("%s.cancel_all_orders: close_position(%s) returned False", self.name, symbol)
-                    all_ok = False
-                else:
+                result = self.close_position(symbol)
+                if asyncio.iscoroutine(result):
+                    result = await asyncio.wait_for(result, timeout=5.0)
+                if result:
+                    cancelled.append(symbol)
                     logger.info("%s.cancel_all_orders: closed %s", self.name, symbol)
+                else:
+                    logger.warning("%s.cancel_all_orders: close_position(%s) returned False", self.name, symbol)
             except Exception as exc:
                 logger.error("%s.cancel_all_orders: close_position(%s) raised: %s", self.name, symbol, exc)
-                all_ok = False
 
-        return all_ok
+        return cancelled
 
     def is_connected(self) -> bool:
         """

@@ -718,13 +718,13 @@ class PaperTradingBroker(BrokerConnector):
             quantity=quantity,
         )
 
-    async def close_all_positions(self) -> int:
-        """Close all open positions. Returns number closed."""
-        closed = 0
+    async def close_all_positions(self) -> list[str]:
+        """Close all open positions. Returns list of successfully closed position IDs."""
+        closed: list[str] = []
         for symbol in list(self.positions.keys()):
             try:
                 if self.close_position(symbol):
-                    closed += 1
+                    closed.append(symbol)
             except Exception as exc:
                 logger.warning("Failed to close position %s: %s", symbol, exc)
         return closed
