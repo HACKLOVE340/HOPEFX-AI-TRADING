@@ -300,6 +300,149 @@ async def _probe_env_vars() -> dict[str, Any]:
     }
 
 
+async def _probe_celery() -> dict[str, Any]:
+    """Check Celery worker availability via Redis broker ping."""
+    t0 = time.perf_counter()
+    try:
+        from celery_app import celery_app
+        inspect = celery_app.control.inspect(timeout=3.0)
+        stats = inspect.stats()
+        if stats:
+            worker_count = len(stats)
+            return {
+                "status": "ok",
+                "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+                "detail": f"workers={worker_count} active",
+                "worker_count": worker_count,
+                "workers": list(stats.keys()),
+            }
+        return {
+            "status": "warning",
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+            "detail": "No Celery workers responded",
+            "worker_count": 0,
+        }
+    except Exception as exc:
+        return {
+            "status": "warning",
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+            "detail": f"Celery inspect failed: {exc}",
+        }
+
+
+async def _probe_event_bus() -> dict[str, Any]:
+    """Check the internal EventBus is operational."""
+    t0 = time.perf_counter()
+    try:
+        from core.event_bus import bus
+        subscriber_count = len(getattr(bus, "_subscribers", {}))
+        return {
+            "status": "ok",
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+            "detail": f"event_bus active channels={subscriber_count}",
+            "channels": subscriber_count,
+        }
+    except Exception as exc:
+        return {
+            "status": "warning",
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+            "detail": str(exc),
+        }
+
+
+async def _probe_config_store() -> dict[str, Any]:
+    """Verify the shared config store (Redis-backed) is readable/writable."""
+    t0 = time.perf_counter()
+    try:
+        from core.config_store import config_store
+        test_key = "_reliability_probe_test"
+        config_store.set(test_key, "1")
+        val = config_store.get(test_key)
+        config_store.delete(test_key) if hasattr(config_store, "delete") else None
+        ok = val is not None
+        return {
+            "status": "ok" if ok else "error",
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+            "detail": "Config store read/write OK" if ok else "Config store write-then-read failed",
+        }
+    except Exception as exc:
+        return {
+            "status": "error",
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+            "detail": str(exc),
+        }
+
+
+async def _probe_decision_engine() -> dict[str, Any]:
+    """Check the HOPEFXDecisionEngine is accessible."""
+    t0 = time.perf_counter()
+    try:
+        from api.admin import app_state
+        if app_state and hasattr(app_state, "decision_engine"):
+            de = app_state.decision_engine
+            ready = getattr(de, "_ready", True)
+            return {
+                "status": "ok" if ready else "warning",
+                "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+                "detail": f"decision_engine ready={ready}",
+            }
+    except Exception:
+        pass
+    try:
+        from core.decision.HOPEFXDecisionEngine import HOPEFXDecisionEngine
+        return {
+            "status": "ok",
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+            "detail": "DecisionEngine module importable",
+        }
+    except Exception as exc:
+        return {
+            "status": "warning",
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+            "detail": str(exc),
+        }
+
+
+async def _probe_signal_engine() -> dict[str, Any]:
+    """Check the signal engine / signal filter is operational."""
+    t0 = time.perf_counter()
+    try:
+        from core.signal_engine import get_signal_engine
+        se = get_signal_engine()
+        active = getattr(se, "_active", True)
+        return {
+            "status": "ok" if active else "warning",
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+            "detail": f"signal_engine active={active}",
+        }
+    except Exception as exc:
+        return {
+            "status": "warning",
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+            "detail": str(exc),
+        }
+
+
+async def _probe_api_server() -> dict[str, Any]:
+    """Verify the FastAPI app itself is healthy (internal self-check)."""
+    t0 = time.perf_counter()
+    try:
+        from app import app as _app
+        route_count = len(_app.routes)
+        return {
+            "status": "ok",
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+            "detail": f"FastAPI app running routes={route_count}",
+            "route_count": route_count,
+        }
+    except Exception as exc:
+        return {
+            "status": "error",
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+            "detail": str(exc),
+        }
+
+
 # ---------------------------------------------------------------------------
 # All probes registry
 # ---------------------------------------------------------------------------
@@ -317,21 +460,33 @@ _PROBES: dict[str, Any] = {
     "risk_manager":    _probe_risk_manager,
     "kill_switch":     _probe_kill_switch,
     "env_vars":        _probe_env_vars,
+    "celery":          _probe_celery,
+    "event_bus":       _probe_event_bus,
+    "config_store":    _probe_config_store,
+    "decision_engine": _probe_decision_engine,
+    "signal_engine":   _probe_signal_engine,
+    "api_server":      _probe_api_server,
 }
 
 _COMPONENT_LABELS: dict[str, str] = {
-    "database":       "PostgreSQL Database",
-    "redis":          "Redis Cache",
-    "broker":         "Broker Connection",
-    "ml_engine":      "ML / AI Engine",
-    "trading_engine": "Trading Engine",
-    "self_healer":    "Self-Healer",
-    "websocket":      "WebSocket Server",
-    "otel_tracing":   "OpenTelemetry Tracing",
-    "data_feed":      "Live Data Feed",
-    "risk_manager":   "Risk Manager",
-    "kill_switch":    "Kill Switch",
-    "env_vars":       "Environment Variables",
+    "database":        "PostgreSQL Database",
+    "redis":           "Redis Cache",
+    "broker":          "Broker Connection",
+    "ml_engine":       "ML / AI Engine",
+    "trading_engine":  "Trading Engine",
+    "self_healer":     "Self-Healer",
+    "websocket":       "WebSocket Server",
+    "otel_tracing":    "OpenTelemetry Tracing",
+    "data_feed":       "Live Data Feed",
+    "risk_manager":    "Risk Manager",
+    "kill_switch":     "Kill Switch",
+    "env_vars":        "Environment Variables",
+    "celery":          "Celery Task Queue",
+    "event_bus":       "Internal Event Bus",
+    "config_store":    "Config Store",
+    "decision_engine": "Decision Engine",
+    "signal_engine":   "Signal Engine",
+    "api_server":      "API Server",
 }
 
 _STATUS_RANK = {"ok": 0, "warning": 1, "degraded": 2, "error": 3, "critical": 4}
@@ -670,6 +825,95 @@ async def run_self_test(
         "duration_ms": round((time.perf_counter() - t0) * 1000, 2),
         "ran_at": _utcnow().isoformat(),
     }
+
+
+@router.post("/reliability/validate-toggle")
+async def validate_toggle_persisted(
+    request: Any,
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    """
+    Validate that a toggle/setting change was persisted end-to-end.
+
+    Body: { "key": "maintenance_mode", "expected_value": true }
+
+    Checks: Redis config store → DB config table → live app_state.
+    Returns a per-layer validation result so the UI can show exactly
+    where a discrepancy exists.
+    """
+    from fastapi import Request as _Request
+    body: dict[str, Any] = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+
+    key = body.get("key", "")
+    expected = body.get("expected_value")
+    results: dict[str, Any] = {
+        "key": key,
+        "expected": expected,
+        "layers": {},
+        "consistent": False,
+        "checked_at": _utcnow().isoformat(),
+    }
+
+    # Layer 1: Redis config store
+    try:
+        import json as _json
+        from cache.redis_client import get_redis_client
+        rc = get_redis_client()
+        if rc:
+            raw = rc.get("superadmin_platform_config")
+            if raw:
+                cfg = _json.loads(raw)
+                val = cfg.get(key)
+                results["layers"]["redis"] = {
+                    "found": key in cfg,
+                    "value": val,
+                    "match": val == expected,
+                }
+            else:
+                results["layers"]["redis"] = {"found": False, "value": None, "match": False}
+        else:
+            results["layers"]["redis"] = {"found": False, "error": "Redis unavailable"}
+    except Exception as exc:
+        results["layers"]["redis"] = {"found": False, "error": str(exc)}
+
+    # Layer 2: Core config store
+    try:
+        from core.config_store import config_store
+        val = config_store.get(key)
+        results["layers"]["config_store"] = {
+            "found": val is not None,
+            "value": val,
+            "match": val == expected or (val is not None and str(val) == str(expected)),
+        }
+    except Exception as exc:
+        results["layers"]["config_store"] = {"found": False, "error": str(exc)}
+
+    # Layer 3: Live app_state (for engine-level settings)
+    try:
+        from api.admin import app_state
+        if app_state:
+            live_val = getattr(app_state, key, None)
+            if live_val is not None:
+                results["layers"]["app_state"] = {
+                    "found": True,
+                    "value": live_val,
+                    "match": live_val == expected,
+                }
+    except Exception:
+        pass
+
+    # Determine overall consistency
+    layer_matches = [
+        v.get("match", False)
+        for v in results["layers"].values()
+        if "error" not in v and v.get("found", False)
+    ]
+    results["consistent"] = bool(layer_matches) and all(layer_matches)
+    return results
 
 
 @router.get("/reliability/metrics")

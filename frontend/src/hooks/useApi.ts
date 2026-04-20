@@ -664,6 +664,8 @@ export const superadminApi = {
   reliabilityRoutes:    ()                     => api.get('/superadmin/reliability/routes'),
   reliabilitySelfTest:  ()                     => api.post('/superadmin/reliability/self-test'),
   reliabilityMetrics:   ()                     => api.get('/superadmin/reliability/metrics'),
+  reliabilityValidateToggle: (key: string, expectedValue: unknown) =>
+    api.post('/superadmin/reliability/validate-toggle', { key, expected_value: expectedValue }),
 
   // ── Diagnostics ───────────────────────────────────────────────────────────
   diagnosticsRun:       ()                     => api.post('/superadmin/diagnostics/run'),
