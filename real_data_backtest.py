@@ -8,13 +8,32 @@ real_data_backtest.py
 =====================
 Walk-forward backtest on real XAUUSD 1h OHLCV data fetched from Binance via ccxt.
 
-Pipeline:
+Pipeline
+--------
   1. Paginate all available 1h bars (>500) from ccxt Binance.
-  2. Compute ATR(14) stops (1.5×ATR) and take-profit (2.5×ATR).
-  3. Apply realistic slippage ($0.30 for gold = 3 pips × $0.10/pip) and
+  2. Generate signals via one of two modes:
+       a. ML model (default): load ml/saved_models/current.pkl, build the
+          production feature matrix (ml/features_extended.py), predict
+          5-bar forward-return direction.  Signal = +1 when P(up) ≥ threshold,
+          -1 when P(up) ≤ 1-threshold, 0 (abstain) otherwise.
+       b. Heuristic fallback: SMA20/SMA50 crossover + RSI(14) + ATR expansion
+          composite score.  Used when the ML model or feature builder is
+          unavailable (e.g. CI without model artefacts).
+  3. Compute ATR(14) stops (1.5×ATR) and take-profit (2.5×ATR).
+  4. Apply realistic slippage ($0.30 for gold = 3 pips × $0.10/pip) and
      $7 round-trip commission on every fill.
-  4. Walk-forward split: 70% in-sample train, 30% out-of-sample test.
-  5. Return equity curve DataFrame and trade-level Sharpe ratio.
+  5. Walk-forward split: 70% in-sample train, 30% out-of-sample test.
+  6. Return equity curve DataFrame and trade-level Sharpe ratio.
+
+Target construction
+-------------------
+The ML model target is:
+    y[t] = 1  if  close[t + HORIZON] > close[t]  else  0
+
+where HORIZON = 5 bars (matching the execution engine hold period).
+This is a forward-return label, NOT a close-to-close (1-bar) label.
+Using horizon=5 aligns the model's optimisation objective with the actual
+hold period, eliminating the accuracy/P&L disconnect from horizon=1 training.
 
 Sharpe note
 -----------
@@ -222,6 +241,116 @@ def generate_signals(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def generate_ml_signals(
+    df: pd.DataFrame,
+    model_path: str | None = None,
+    horizon: int = 5,
+    abstain_threshold: float = ABSTAIN_THRESHOLD,
+) -> pd.DataFrame:
+    """
+    Generate trading signals from the production ML model (current.pkl).
+
+    The model predicts 5-bar forward-return direction:
+        y[t] = 1  if  close[t + horizon] > close[t]  else  0
+
+    This is a forward-return label (NOT close-to-close / 1-bar).
+    Using horizon=5 aligns with the execution engine hold period.
+
+    Signal assignment:
+        +1 (long)  when P(up) >= abstain_threshold
+        -1 (short) when P(up) <= 1 - abstain_threshold
+         0 (flat)  otherwise (abstain)
+
+    Falls back to generate_signals() (heuristic) if:
+      - The model file does not exist
+      - The feature builder (ml/features_extended.py) is unavailable
+      - Any other import or inference error occurs
+
+    Parameters
+    ----------
+    df               : OHLCV DataFrame with columns [open, high, low, close, volume]
+    model_path       : Path to the pkl model file. Defaults to ml/saved_models/current.pkl
+    horizon          : Forward-return horizon in bars (must match model training)
+    abstain_threshold: Minimum confidence to take a position (default 0.52)
+
+    Returns
+    -------
+    df with added columns: [atr, signal, ml_proba, signal_source]
+    """
+    import sys
+    from pathlib import Path as _Path
+
+    _root = _Path(__file__).resolve().parent
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
+
+    _model_path = _Path(model_path) if model_path else (_root / "ml" / "saved_models" / "current.pkl")
+
+    if not _model_path.exists():
+        logger.warning(
+            "ML model not found at %s — falling back to heuristic signals", _model_path
+        )
+        result = generate_signals(df)
+        result["ml_proba"] = np.nan
+        result["signal_source"] = "heuristic_fallback"
+        return result
+
+    try:
+        import joblib
+
+        model = joblib.load(_model_path)
+        logger.info("Loaded ML model from %s", _model_path)
+
+        # Build production feature matrix
+        from ml.features_extended import build_extended_features
+
+        X, _y = build_extended_features(df, horizon=horizon, min_move_atr=0.0)
+        logger.info("ML feature matrix: %d rows × %d features", len(X), X.shape[1])
+
+        # Align X to df index (build_extended_features may drop leading NaN rows)
+        df_out = df.copy()
+        df_out["atr"] = compute_atr(df_out)
+        df_out["ml_proba"] = np.nan
+        df_out["signal"] = 0
+        df_out["signal_source"] = "ml_model"
+
+        # Predict probabilities for the aligned rows
+        proba = model.predict_proba(X)[:, 1]
+        df_out.loc[X.index, "ml_proba"] = proba
+
+        # Assign signals based on confidence threshold
+        long_mask = df_out["ml_proba"] >= abstain_threshold
+        short_mask = df_out["ml_proba"] <= (1.0 - abstain_threshold)
+        df_out.loc[long_mask, "signal"] = 1
+        df_out.loc[short_mask, "signal"] = -1
+
+        # Rows without ML predictions (leading NaN) use heuristic fallback
+        no_pred = df_out["ml_proba"].isna()
+        if no_pred.any():
+            heuristic = generate_signals(df_out[no_pred].copy())
+            df_out.loc[no_pred, "signal"] = heuristic["signal"].values
+            df_out.loc[no_pred, "signal_source"] = "heuristic_fallback"
+
+        n_long = int((df_out["signal"] == 1).sum())
+        n_short = int((df_out["signal"] == -1).sum())
+        n_flat = int((df_out["signal"] == 0).sum())
+        logger.info(
+            "ML signals: long=%d  short=%d  flat=%d  abstain_rate=%.1f%%",
+            n_long, n_short, n_flat,
+            100.0 * n_flat / max(len(df_out), 1),
+        )
+        return df_out
+
+    except Exception as exc:
+        logger.warning(
+            "ML signal generation failed (%s) — falling back to heuristic signals", exc
+        )
+        result = generate_signals(df)
+        result["ml_proba"] = np.nan
+        result["signal_source"] = "heuristic_fallback"
+        return result
+
+
 def _pip_value_for_price(price: float) -> float:
     """Return pip value in USD based on instrument price.
 
@@ -240,16 +369,28 @@ def run_backtest(
     df: pd.DataFrame,
     initial_capital: float = INITIAL_CAPITAL,
     symbol: str = SYMBOL,
+    use_ml_signals: bool = True,
+    model_path: str | None = None,
 ) -> tuple[pd.DataFrame, list[float]]:
     """
     Event-driven bar-by-bar backtest with ATR stops/TP and realistic cost model.
 
-    Cost model (corrected):
+    Signal source
+    -------------
+    When use_ml_signals=True (default), signals come from the production ML
+    model (ml/saved_models/current.pkl) which predicts 5-bar forward-return
+    direction.  This is the correct target: y[t] = 1 if close[t+5] > close[t].
+
+    When use_ml_signals=False, or when the model is unavailable, falls back
+    to the SMA/RSI heuristic (generate_signals()).
+
+    Cost model
+    ----------
       - Slippage: SLIPPAGE_PIPS × pip_value (gold: $0.10/pip, crypto: $0.01/pip)
       - Commission: COMMISSION_USD flat round-trip ($7)
       - Overnight financing: OvernightSwapModel (USD/lot/night) charged every
         bar on open positions.  Wednesday triple-swap applied from bar timestamp.
-        XAU/USDT long: −$4.10/night per 100oz lot (was missing entirely).
+        XAU/USDT long: −$4.10/night per 100oz lot.
 
     Returns
     -------
@@ -260,7 +401,15 @@ def run_backtest(
     from backtesting.transaction_costs import get_swap_model as _get_swap_model
     _swap = _get_swap_model()
     _swap_ticker = _SYMBOL_TO_SWAP_TICKER.get(symbol, "XAUUSD")
-    df = generate_signals(df).dropna()
+
+    if use_ml_signals:
+        df = generate_ml_signals(df, model_path=model_path).dropna(subset=["close", "atr"])
+    else:
+        df = generate_signals(df).dropna()
+
+    # Ensure signal column exists (generate_ml_signals always adds it)
+    if "signal" not in df.columns:
+        df["signal"] = 0
 
     equity = initial_capital
     position = 0  # 0 = flat, 1 = long, -1 = short
@@ -372,10 +521,19 @@ def walk_forward_backtest(
     df: pd.DataFrame,
     train_ratio: float = TRAIN_RATIO,
     initial_capital: float = INITIAL_CAPITAL,
+    use_ml_signals: bool = True,
+    model_path: str | None = None,
 ) -> dict:
     """
     Single walk-forward split: train on first `train_ratio` of data,
     evaluate on the remaining out-of-sample window.
+
+    Parameters
+    ----------
+    use_ml_signals : When True (default), signals come from the production ML
+                     model (5-bar forward-return target). When False, uses the
+                     SMA/RSI heuristic.
+    model_path     : Override path to the pkl model file.
 
     Returns
     -------
@@ -393,15 +551,22 @@ def walk_forward_backtest(
       test_pnls         : list[float]
       bar_sharpe_train  : float  — bar-level Sharpe (kept for reference only)
       bar_sharpe_test   : float
+      signal_source     : str   — 'ml_model' or 'heuristic_fallback'
     """
     split_idx = int(len(df) * train_ratio)
     train_df = df.iloc[:split_idx]
     test_df = df.iloc[split_idx:]
 
-    train_equity, train_pnls = run_backtest(train_df, initial_capital)
+    train_equity, train_pnls = run_backtest(
+        train_df, initial_capital,
+        use_ml_signals=use_ml_signals, model_path=model_path,
+    )
     # Carry forward ending capital from train into test
-    test_start_capital = float(train_equity["equity"].iloc[-1])
-    test_equity, test_pnls = run_backtest(test_df, test_start_capital)
+    test_start_capital = float(train_equity["equity"].iloc[-1]) if len(train_equity) > 0 else initial_capital
+    test_equity, test_pnls = run_backtest(
+        test_df, test_start_capital,
+        use_ml_signals=use_ml_signals, model_path=model_path,
+    )
 
     full_equity = pd.concat([train_equity, test_equity]).ffill().fillna(0.0)
 
@@ -422,8 +587,9 @@ def walk_forward_backtest(
         "train_pnls": train_pnls,
         "test_pnls": test_pnls,
         # Bar-level Sharpe kept for reference — NOT the primary metric
-        "bar_sharpe_train": annualised_sharpe(train_equity["equity"]),
-        "bar_sharpe_test": annualised_sharpe(test_equity["equity"]),
+        "bar_sharpe_train": annualised_sharpe(train_equity["equity"]) if len(train_equity) > 0 else 0.0,
+        "bar_sharpe_test": annualised_sharpe(test_equity["equity"]) if len(test_equity) > 0 else 0.0,
+        "signal_source": "ml_model" if use_ml_signals else "heuristic",
     }
 
 
@@ -498,12 +664,21 @@ def run_multi_symbol_backtest(
     symbols: list[str] | None = None,
     since_iso: str = "2021-01-01T00:00:00Z",
     max_bars: int = 30_000,
+    use_ml_signals: bool = True,
+    model_path: str | None = None,
 ) -> dict:
     """
     Run walk-forward backtest across multiple symbols and pool results.
 
     Pooling trade PnLs across symbols accumulates trade count faster,
     reaching the N=600 target for Sharpe SE ≤ ±0.029.
+
+    Parameters
+    ----------
+    use_ml_signals : When True (default), signals come from the production ML
+                     model (5-bar forward-return target, horizon=5). When False,
+                     uses the SMA/RSI heuristic.
+    model_path     : Override path to the pkl model file.
 
     Returns a combined results dict with pooled trade_count, sharpe, and SE.
     """
@@ -565,7 +740,7 @@ def run_multi_symbol_backtest(
             logger.info(f"  {sym}: SKIP — {exc}")
             continue
 
-        res = walk_forward_backtest(df)
+        res = walk_forward_backtest(df, use_ml_signals=use_ml_signals, model_path=model_path)
         symbol_results[sym] = res
         all_train_pnls.extend(res["train_pnls"])
         all_test_pnls.extend(res["test_pnls"])
@@ -614,8 +789,47 @@ def run_multi_symbol_backtest(
 def main() -> dict:
     """
     Fetch data, run multi-symbol walk-forward backtest, print summary.
+
+    Flags
+    -----
+    --heuristic   : Use SMA/RSI heuristic signals instead of the ML model.
+    --model PATH  : Override the ML model pkl path (default: ml/saved_models/current.pkl).
+    --since DATE  : ISO-8601 start date for data fetch (default: 2021-01-01).
+    --max-bars N  : Maximum bars to fetch per symbol (default: 30000).
     """
-    return run_multi_symbol_backtest()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="HOPEFX real-data walk-forward backtest")
+    parser.add_argument(
+        "--heuristic", action="store_true",
+        help="Use SMA/RSI heuristic signals instead of the production ML model",
+    )
+    parser.add_argument(
+        "--model", type=str, default=None,
+        help="Path to the ML model pkl file (default: ml/saved_models/current.pkl)",
+    )
+    parser.add_argument(
+        "--since", type=str, default="2021-01-01T00:00:00Z",
+        help="ISO-8601 start date for data fetch",
+    )
+    parser.add_argument(
+        "--max-bars", type=int, default=30_000,
+        help="Maximum bars to fetch per symbol",
+    )
+    args = parser.parse_args()
+
+    use_ml = not args.heuristic
+    if use_ml:
+        logger.info("Signal source: production ML model (5-bar forward-return, horizon=5)")
+    else:
+        logger.info("Signal source: SMA/RSI heuristic (--heuristic flag set)")
+
+    return run_multi_symbol_backtest(
+        since_iso=args.since,
+        max_bars=args.max_bars,
+        use_ml_signals=use_ml,
+        model_path=args.model,
+    )
 
 
 if __name__ == "__main__":
