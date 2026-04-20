@@ -796,3 +796,125 @@ export const transparencyApi = {
   auditTrail:       (orderId: string)          => api.get(`/transparency/audit/${orderId}`),
   summary:          ()                         => api.get('/transparency/summary'),
 };
+
+// ── AI Brain ──────────────────────────────────────────────────────────────────
+
+export const brainApi = {
+  generateStrategy: (payload: object)          => api.post('/brain/generate-strategy', payload, { timeout: 180_000 }),
+  deployStrategy:   (payload: object)          => api.post('/brain/deploy-strategy', payload),
+};
+
+// ── Macro Data ────────────────────────────────────────────────────────────────
+
+export const macroApi = {
+  snapshot:     ()              => api.get('/macro/snapshot'),
+  refresh:      ()              => api.get('/macro/refresh'),
+  features:     ()              => api.get('/macro/features'),
+  store:        ()              => api.get('/macro/store'),
+  storeUpdate:  (body: object)  => api.post('/macro/store/update', body),
+  wgc:          ()              => api.get('/macro/wgc'),
+  wgcRefresh:   ()              => api.post('/macro/wgc/refresh', {}),
+  wgcHealth:    ()              => api.get('/macro/wgc/health'),
+};
+
+// ── Online Learner ────────────────────────────────────────────────────────────
+
+export const onlineLearnerApi = {
+  status:       (symbol?: string)              => api.get('/online-learner/status', { params: symbol ? { symbol } : {} }),
+  partialFit:   (payload: object)              => api.post('/online-learner/partial-fit', payload),
+  diagnostics:  (symbol?: string)              => api.get('/online-learner/diagnostics', { params: symbol ? { symbol } : {} }),
+  reset:        (payload: object)              => api.post('/online-learner/reset', payload),
+};
+
+// ── Prop Firm ─────────────────────────────────────────────────────────────────
+
+export const propFirmApi = {
+  status:       ()              => api.get('/risk/prop-firm-status'),
+};
+
+// ── TCA (Transaction Cost Analysis) ──────────────────────────────────────────
+
+export const tcaApi = {
+  report:       (params?: object)              => api.get('/tca/report', { params }),
+  brokerReport: (broker: string)               => api.get(`/tca/report/${broker}`),
+  records:      (params?: object)              => api.get('/tca/records', { params }),
+  alerts:       ()                             => api.get('/tca/alerts'),
+  stats:        (params?: object)              => api.get('/tca/stats', { params }),
+  flushRecords: ()                             => api.delete('/tca/records'),
+};
+
+// ── Regime ────────────────────────────────────────────────────────────────────
+
+export const regimeApi = {
+  current:      (symbol?: string)              => api.get('/trading/regime', { params: symbol ? { symbol } : {} }),
+  history:      (limit = 50)                   => api.get('/trading/regime/history', { params: { limit } }),
+};
+
+// ── Position Sizing ───────────────────────────────────────────────────────────
+
+export const positionSizingApi = {
+  calculate:    (payload: object)              => api.post('/trading/position-size', payload),
+  riskMetrics:  ()                             => api.get('/trading/risk'),
+};
+
+// ── Drawdown ──────────────────────────────────────────────────────────────────
+
+export const drawdownApi = {
+  curve:        (params?: object)              => api.get('/pnl/drawdown-curve', { params }),
+  stats:        ()                             => api.get('/trading/risk'),
+  superadmin:   ()                             => api.get('/superadmin/risk/drawdown'),
+};
+
+// ── Backtest Extended ─────────────────────────────────────────────────────────
+
+export const backtestExtApi = {
+  strategies:       ()                         => api.get('/backtesting/strategies'),
+  run:              (params: object)           => api.post('/backtesting/run', params),
+  results:          (params?: object)          => api.get('/backtesting/results', { params }),
+  getResult:        (id: string)               => api.get(`/backtesting/results/${id}`),
+  list:             ()                         => api.get('/backtesting/list'),
+  walkForwardList:  ()                         => api.get('/backtesting/walk-forward'),
+  walkForwardLatest: ()                        => api.get('/backtesting/walk-forward/latest'),
+  walkForwardGet:   (id: string)               => api.get(`/backtesting/walk-forward/${id}`),
+  walkForwardRun:   (params: object)           => api.post('/backtesting/walk-forward/run', params),
+  replayRun:        (params: object)           => api.post('/backtesting/replay/run', params, { timeout: 300_000 }),
+  replayStress:     (params: object)           => api.post('/backtesting/replay/stress', params, { timeout: 300_000 }),
+  replayRegimes:    ()                         => api.get('/backtesting/replay/regimes'),
+};
+
+// ── Anomaly Detection ─────────────────────────────────────────────────────────
+
+export const anomalyApi = {
+  status:       ()              => api.get('/ml/anomaly/status'),
+  alerts:       (params?: object) => api.get('/ml/anomaly/alerts', { params }),
+  retrain:      (payload?: object) => api.post('/ml/anomaly/retrain', payload ?? {}),
+};
+
+// ── Allocator ─────────────────────────────────────────────────────────────────
+
+export const allocatorApi = {
+  status:       ()              => api.get('/portfolio/allocator/status'),
+  weights:      ()              => api.get('/portfolio/allocator/weights'),
+  rebalance:    (payload?: object) => api.post('/portfolio/allocator/rebalance', payload ?? {}),
+  history:      (limit = 50)   => api.get('/portfolio/allocator/history', { params: { limit } }),
+};
+
+// ── LLM / AI Provider ─────────────────────────────────────────────────────────
+
+export const llmApi = {
+  health:       ()              => api.get('/brain/health'),
+  complete:     (payload: object) => api.post('/brain/complete', payload, { timeout: 120_000 }),
+  embed:        (payload: object) => api.post('/brain/embed', payload, { timeout: 60_000 }),
+};
+
+// ── Signal Engine ─────────────────────────────────────────────────────────────
+
+export const signalEngineApi = {
+  status:       ()              => api.get('/signals/summary'),
+  active:       ()              => api.get('/signals/active'),
+  latest:       ()              => api.get('/signals/latest'),
+  history:      (limit = 50)   => api.get('/signals/history', { params: { limit } }),
+  analytics:    ()              => api.get('/signals/analytics'),
+  generate:     (payload: object) => api.post('/signals/generate', payload),
+  filterStats:  ()              => api.get('/ml/signal-filter/stats'),
+};
