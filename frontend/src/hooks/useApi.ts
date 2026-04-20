@@ -141,7 +141,9 @@ const CSRF_EXEMPT_PREFIXES = [
 ];
 
 api.interceptors.request.use(async (config) => {
-  const token = useStore.getState().token;
+  // Prefer the Zustand store token; fall back to localStorage for the window
+  // between page load and Zustand persist rehydration completing.
+  const token = useStore.getState().token ?? localStorage.getItem('hopefx_access_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
 
   // Inject CSRF header on state-changing requests to non-exempt paths.
@@ -210,20 +212,17 @@ api.interceptors.response.use(
                            original?.url?.includes('/auth/refresh') ||
                            original?.url?.includes('/auth/logout');
 
-    if (err?.response?.status === 401 && !original._retried && !isAuthEndpoint) {
-      original._retried = true;
-      const newToken = await _silentRefresh();
-      if (newToken) {
-        // Retry the original request with the new token
-        original.headers = { ...original.headers, Authorization: `Bearer ${newToken}` };
-        return api(original);
-      }
-      // Refresh failed — clear session and send user to login immediately.
-      useStore.getState().clearAuth();
-      _redirectToLogin();
-    }
-
     if (err?.response?.status === 401 && !isAuthEndpoint) {
+      if (!original._retried) {
+        original._retried = true;
+        const newToken = await _silentRefresh();
+        if (newToken) {
+          // Retry the original request with the new token.
+          original.headers = { ...original.headers, Authorization: `Bearer ${newToken}` };
+          return api(original);
+        }
+      }
+      // Either already retried or refresh failed — clear session and redirect.
       useStore.getState().clearAuth();
       _redirectToLogin();
     }
