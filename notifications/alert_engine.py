@@ -849,6 +849,48 @@ class AlertEngine:
         self._monitoring = False
         logger.info("Alert monitoring stopped")
 
+    # ================================================================
+    # NOTIFICATION DISPATCH
+    # ================================================================
+
+    async def send_alert(
+        self,
+        level: str,
+        message: str,
+        data: dict | None = None,
+    ) -> None:
+        """Send a system-level alert through all registered notification handlers.
+
+        Called by HOPEFXBrain._safe_notify() and RiskManager._send_telegram_alert()
+        to dispatch critical events (emergency stop, drawdown breach, etc.).
+
+        Args:
+            level:   Severity string — 'debug', 'info', 'warning', 'error', 'critical'.
+            message: Human-readable alert text.
+            data:    Optional structured payload attached to the alert.
+        """
+        logger.log(
+            getattr(__import__("logging"), level.upper(), __import__("logging").INFO),
+            "AlertEngine [%s]: %s",
+            level,
+            message,
+        )
+
+        # Delegate to the notifications singleton when available so the alert
+        # reaches Telegram / Discord / email channels in addition to the log.
+        try:
+            from notifications import get_alert_engine as _get_singleton
+
+            singleton = _get_singleton()
+            # Avoid infinite recursion — only delegate if the singleton is a
+            # different object (NotificationManager, not this AlertEngine).
+            if singleton is not None and singleton is not self and hasattr(singleton, "send_alert"):
+                coro = singleton.send_alert(level, message, data)
+                if __import__("asyncio").iscoroutine(coro):
+                    await coro
+        except Exception as exc:  # nosec B110 — notification must never crash the caller
+            logger.debug("AlertEngine.send_alert delegation failed: %s", exc)
+
 
 # ================================================================
 # FASTAPI INTEGRATION
