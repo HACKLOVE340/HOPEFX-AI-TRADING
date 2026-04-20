@@ -144,6 +144,7 @@ class BroadcastBody(BaseModel):
 
 
 class PlatformConfigBody(BaseModel):
+    # Platform identity
     platform_name: str | None = None
     support_email: str | None = None
     max_users: int | None = None
@@ -162,6 +163,239 @@ class PlatformConfigBody(BaseModel):
     force_2fa_for_admins: bool | None = None
     ip_whitelist_enabled: bool | None = None
     ip_whitelist: str | None = None
+    # SMTP
+    smtp_host: str | None = None
+    smtp_port: int | None = None
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str | None = None
+    smtp_from_name: str | None = None
+    smtp_tls: bool | None = None
+    smtp_enabled: bool | None = None
+    # Monitoring
+    sentry_dsn: str | None = None
+    sentry_environment: str | None = None
+    sentry_traces_sample_rate: float | None = None
+    sentry_profiles_sample_rate: float | None = None
+    prometheus_port: int | None = None
+    prometheus_scrape_interval_seconds: int | None = None
+    prometheus_url: str | None = None
+    alertmanager_smtp_host: str | None = None
+    alertmanager_smtp_from: str | None = None
+    alertmanager_smtp_to: str | None = None
+    # Celery
+    celery_broker_url: str | None = None
+    celery_result_backend: str | None = None
+    celery_task_serializer: str | None = None
+    celery_result_expires: int | None = None
+    celery_worker_concurrency: int | None = None
+    celery_max_tasks_per_child: int | None = None
+    # Compliance
+    kyc_required_for_live: bool | None = None
+    aml_transaction_threshold: float | None = None
+    aml_daily_volume_threshold: float | None = None
+    sanctions_check_enabled: bool | None = None
+    gdpr_data_retention_days: int | None = None
+    gdpr_erasure_grace_days: int | None = None
+    regulatory_reporting_enabled: bool | None = None
+    # LSTM
+    lstm_enabled: bool | None = None
+    lstm_sequence_length: int | None = None
+    lstm_hidden_size: int | None = None
+    lstm_num_layers: int | None = None
+    lstm_dropout: float | None = None
+    lstm_learning_rate: float | None = None
+    lstm_batch_size: int | None = None
+    lstm_epochs: int | None = None
+    lstm_retrain_interval_hours: int | None = None
+    lstm_min_train_samples: int | None = None
+    lstm_use_attention: bool | None = None
+    lstm_bidirectional: bool | None = None
+    lstm_clip_grad_norm: float | None = None
+    lstm_weight_decay: float | None = None
+    lstm_scheduler: str | None = None
+    # AI Brain
+    brain_enabled: bool | None = None
+    brain_model: str | None = None
+    brain_temperature: float | None = None
+    brain_max_tokens: int | None = None
+    brain_strategy_timeout_s: int | None = None
+    brain_max_strategies_per_day: int | None = None
+    brain_auto_deploy: bool | None = None
+    brain_min_backtest_sharpe: float | None = None
+    brain_min_backtest_winrate: float | None = None
+    brain_sandbox_enabled: bool | None = None
+    # Allocator
+    allocator_enabled: bool | None = None
+    allocator_method: str | None = None
+    allocator_rebalance_interval_hours: int | None = None
+    allocator_min_weight: float | None = None
+    allocator_max_weight: float | None = None
+    allocator_risk_budget: float | None = None
+    allocator_lookback_days: int | None = None
+    allocator_transaction_cost_bps: float | None = None
+    allocator_target_volatility: float | None = None
+    allocator_use_black_litterman: bool | None = None
+    allocator_use_hrp: bool | None = None
+    # Anomaly detection
+    anomaly_enabled: bool | None = None
+    anomaly_model: str | None = None
+    anomaly_contamination: float | None = None
+    anomaly_window: int | None = None
+    anomaly_threshold: float | None = None
+    anomaly_action: str | None = None
+    anomaly_retrain_interval_hours: int | None = None
+    anomaly_min_samples: int | None = None
+    anomaly_alert_cooldown_s: int | None = None
+    # Macro overlay
+    macro_enabled: bool | None = None
+    macro_fred_api_key: str | None = None
+    macro_refresh_interval_hours: int | None = None
+    macro_lookback_days: int | None = None
+    macro_weight_in_signal: float | None = None
+    macro_vix_threshold: float | None = None
+    macro_dxy_threshold: float | None = None
+    macro_yield_spread_threshold: float | None = None
+    macro_wgc_enabled: bool | None = None
+    macro_wgc_refresh_hours: int | None = None
+    # Online learner
+    online_learner_enabled: bool | None = None
+    online_learner_lr: float | None = None
+    online_learner_batch_size: int | None = None
+    online_learner_update_interval_s: int | None = None
+    online_learner_max_buffer: int | None = None
+    online_learner_algorithm: str | None = None
+    online_learner_forgetting_factor: float | None = None
+    online_learner_min_samples_before_update: int | None = None
+    online_learner_feature_drift_check: bool | None = None
+    # Sharpe circuit breaker
+    sharpe_cb_window_trades: int | None = None
+    sharpe_cb_min_sharpe: float | None = None
+    sharpe_cb_consecutive: int | None = None
+    sharpe_cb_eval_interval_s: int | None = None
+    sharpe_cb_min_trades: int | None = None
+    sharpe_cb_reset_after_s: int | None = None
+    # Regime detection
+    regime_enabled: bool | None = None
+    regime_model: str | None = None
+    regime_lookback_bars: int | None = None
+    regime_n_states: int | None = None
+    regime_retrain_interval_hours: int | None = None
+    regime_confidence_threshold: float | None = None
+    regime_use_hmm: bool | None = None
+    regime_use_kmeans: bool | None = None
+    regime_feature_set: str | None = None
+    regime_transition_smoothing: float | None = None
+    # Signal engine
+    signal_engine_enabled: bool | None = None
+    signal_engine_mode: str | None = None
+    signal_engine_ensemble_method: str | None = None
+    signal_engine_min_model_agreement: float | None = None
+    signal_engine_use_lstm: bool | None = None
+    signal_engine_use_xgb: bool | None = None
+    signal_engine_use_rf: bool | None = None
+    signal_engine_use_lgbm: bool | None = None
+    signal_engine_use_regime: bool | None = None
+    signal_engine_use_macro: bool | None = None
+    signal_engine_use_sentiment: bool | None = None
+    signal_engine_cooldown_s: int | None = None
+    signal_engine_max_signals_per_hour: int | None = None
+    # TCA
+    tca_enabled: bool | None = None
+    tca_alert_threshold_bps: float | None = None
+    tca_alert_window: int | None = None
+    tca_persist_redis: bool | None = None
+    tca_persist_db: bool | None = None
+    tca_max_memory_records: int | None = None
+    tca_benchmark: str | None = None
+    tca_slippage_model: str | None = None
+    tca_impact_model: str | None = None
+    tca_report_interval_hours: int | None = None
+    tca_min_records_for_report: int | None = None
+    # Backtest engine
+    backtest_engine: str | None = None
+    backtest_default_initial_capital: float | None = None
+    backtest_default_commission_pct: float | None = None
+    backtest_default_slippage_pct: float | None = None
+    backtest_default_spread_pct: float | None = None
+    backtest_max_duration_s: int | None = None
+    backtest_max_concurrent: int | None = None
+    backtest_data_source: str | None = None
+    backtest_use_tick_data: bool | None = None
+    backtest_walk_forward_folds: int | None = None
+    backtest_oos_ratio: float | None = None
+    backtest_min_trades_for_validity: int | None = None
+    backtest_min_sharpe_for_deploy: float | None = None
+    # Feature flags
+    feature_nuclear_enabled: bool | None = None
+    feature_copy_trading_enabled: bool | None = None
+    feature_social_feed_enabled: bool | None = None
+    feature_marketplace_enabled: bool | None = None
+    feature_affiliate_enabled: bool | None = None
+    feature_whitelabel_enabled: bool | None = None
+    feature_ai_strategy_enabled: bool | None = None
+    feature_walk_forward_enabled: bool | None = None
+    feature_ab_testing_enabled: bool | None = None
+    feature_tca_enabled: bool | None = None
+    feature_replay_enabled: bool | None = None
+    feature_research_enabled: bool | None = None
+    feature_geopolitical_enabled: bool | None = None
+    feature_prop_firm_enabled: bool | None = None
+    feature_teams_enabled: bool | None = None
+    feature_leaderboard_enabled: bool | None = None
+    feature_crypto_checkout_enabled: bool | None = None
+    feature_2fa_enabled: bool | None = None
+    feature_kyc_enabled: bool | None = None
+    feature_sub_accounts_enabled: bool | None = None
+    # LLM / AI provider
+    llm_provider: str | None = None
+    llm_model: str | None = None
+    llm_api_key: str | None = None
+    llm_base_url: str | None = None
+    llm_temperature: float | None = None
+    llm_max_tokens: int | None = None
+    llm_timeout_s: int | None = None
+    llm_max_retries: int | None = None
+    llm_fallback_provider: str | None = None
+    llm_fallback_model: str | None = None
+    llm_embedding_model: str | None = None
+    llm_embedding_dimensions: int | None = None
+    # Drawdown controls
+    drawdown_hard_stop_pct: float | None = None
+    drawdown_soft_warn_pct: float | None = None
+    drawdown_trailing_enabled: bool | None = None
+    drawdown_trailing_lookback_bars: int | None = None
+    drawdown_recovery_mode: str | None = None
+    drawdown_recovery_size_scale: float | None = None
+    drawdown_daily_reset: bool | None = None
+    drawdown_notify_on_breach: bool | None = None
+    drawdown_auto_reduce_on_warn: bool | None = None
+    drawdown_reduce_factor: float | None = None
+    # Prop firm mode
+    prop_firm_enabled: bool | None = None
+    prop_firm_provider: str | None = None
+    prop_firm_account_size: float | None = None
+    prop_firm_daily_loss_limit_pct: float | None = None
+    prop_firm_max_drawdown_pct: float | None = None
+    prop_firm_profit_target_pct: float | None = None
+    prop_firm_min_trading_days: int | None = None
+    prop_firm_max_position_size_pct: float | None = None
+    prop_firm_news_trading_allowed: bool | None = None
+    prop_firm_weekend_holding_allowed: bool | None = None
+    prop_firm_consistency_rule_pct: float | None = None
+    prop_firm_scaling_enabled: bool | None = None
+    # Position sizing
+    position_sizing_method: str | None = None
+    position_sizing_fixed_lots: float | None = None
+    position_sizing_risk_pct: float | None = None
+    position_sizing_kelly_fraction: float | None = None
+    position_sizing_max_lots: float | None = None
+    position_sizing_min_lots: float | None = None
+    position_sizing_atr_multiplier: float | None = None
+    position_sizing_atr_period: int | None = None
+    position_sizing_volatility_target: float | None = None
+    position_sizing_use_correlation_scaling: bool | None = None
+    position_sizing_max_correlated_exposure: float | None = None
 
 
 class EngineConfigBody(BaseModel):
