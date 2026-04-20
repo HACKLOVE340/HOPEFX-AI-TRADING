@@ -468,9 +468,14 @@ async def status_page():
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
+_STATUS_CHECK_TIMEOUT_SEC: float = 8.0  # max time for all health checks combined
+
+
 async def _run_checks() -> dict[str, Any]:
-    """Run all health checks, falling back gracefully if checker unavailable."""
-    try:
+    """Run all health checks with a hard timeout, falling back gracefully."""
+    import asyncio
+
+    async def _do_checks() -> dict[str, Any]:
         from infrastructure.health import get_health_checker
 
         checker = get_health_checker()
@@ -483,6 +488,20 @@ async def _run_checks() -> dict[str, Any]:
                 "response_time_ms": round(check.response_time_ms, 1) if check.response_time_ms else None,
             }
         return result
+
+    try:
+        return await asyncio.wait_for(_do_checks(), timeout=_STATUS_CHECK_TIMEOUT_SEC)
+    except asyncio.TimeoutError:
+        logger.warning(
+            "Health checks timed out after %.1fs — returning degraded status",
+            _STATUS_CHECK_TIMEOUT_SEC,
+        )
+        return {
+            "api": {
+                "status": "degraded",
+                "message": f"Health checks timed out after {_STATUS_CHECK_TIMEOUT_SEC:.0f}s",
+            },
+        }
     except Exception as exc:
         # Log the full exception server-side; return a generic message to callers
         # to avoid leaking internal error details through the status endpoint.
