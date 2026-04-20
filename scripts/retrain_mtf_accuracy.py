@@ -362,34 +362,73 @@ def train_lightgbm(X_train, y_train, X_test, y_test):
         return None
 
 
-def train_stacking_ensemble(X_train, y_train, X_test, y_test):
-    """Train XGB + RF + LGB base learners, then a logistic meta-learner."""
+def train_stacking_ensemble(X_train, y_train, X_cal, y_cal):
+    """
+    Train XGB + RF + LGB base learners, then a logistic meta-learner.
+
+    Leakage-free stacking protocol
+    --------------------------------
+    The original bug: base learners were calibrated on X_cal/y_cal, then the
+    meta-learner was also trained on meta_X derived from those same calibrated
+    models evaluated on X_cal/y_cal.  This means the meta-learner's training
+    data was produced by models that had already seen y_cal — leakage.
+
+    Fix: three-way split within the training data:
+      X_fit   (60%) — base learner training
+      X_oof   (20%) — base learner OOF predictions → meta-learner training
+      X_cal   (20%) — meta-learner calibration (passed in from caller)
+
+    Base learners are trained on X_fit only, then predict on X_oof to produce
+    clean out-of-fold (OOF) meta-features.  The meta-learner trains on those
+    OOF predictions.  Calibration of the meta-learner uses X_cal (held out
+    from both base learner training and meta-learner training).
+
+    This eliminates the leakage that inflated walk-forward CV accuracy to ~99%.
+    """
     from sklearn.calibration import CalibratedClassifierCV
     from sklearn.linear_model import LogisticRegression
 
-    logger.info("Training XGBoost base learner…")
-    xgb = train_xgboost(X_train, y_train, X_test, y_test)
+    # Split training data into fit (60%) and OOF (20%) portions.
+    # X_cal (20%) is passed in from the caller and is never seen here.
+    oof_split = max(1, int(len(X_train) * 0.75))  # 75% fit, 25% OOF within X_train
+    X_fit, y_fit = X_train.iloc[:oof_split], y_train.iloc[:oof_split]
+    X_oof, y_oof = X_train.iloc[oof_split:], y_train.iloc[oof_split:]
 
-    logger.info("Training RandomForest base learner…")
-    rf = train_random_forest(X_train, y_train)
+    logger.info(
+        "Stacking split: fit=%d  oof=%d  cal=%d",
+        len(X_fit), len(X_oof), len(X_cal),
+    )
 
-    logger.info("Training LightGBM base learner…")
-    lgb = train_lightgbm(X_train, y_train, X_test, y_test)
+    # Train base learners on X_fit only — they never see X_oof or X_cal
+    logger.info("Training XGBoost base learner (fit set)…")
+    xgb_model = train_xgboost(X_fit, y_fit, X_oof, y_oof)
 
-    base_learners = [m for m in [xgb, rf, lgb] if m is not None]
+    logger.info("Training RandomForest base learner (fit set)…")
+    rf_model = train_random_forest(X_fit, y_fit)
 
-    # Build meta-features from base learner OOF predictions
-    meta_X = np.column_stack([m.predict_proba(X_test)[:, 1] for m in base_learners])
+    logger.info("Training LightGBM base learner (fit set)…")
+    lgb_model = train_lightgbm(X_fit, y_fit, X_oof, y_oof)
 
-    meta = LogisticRegression(C=1.0, random_state=42)
-    meta.fit(meta_X, y_test)
+    base_learners = [m for m in [xgb_model, rf_model, lgb_model] if m is not None]
 
-    # cv='prefit': meta is already fitted; calibrates probability outputs without
-    # re-training the logistic regression.  Previously cv=3 caused the meta-learner
-    # to be re-fitted on sub-splits of meta_X, inflating walk-forward CV to ~99%.
+    # Build OOF meta-features: base learners predict on X_oof (unseen during training)
+    meta_X_oof = np.column_stack([m.predict_proba(X_oof)[:, 1] for m in base_learners])
+
+    # Train meta-learner on clean OOF predictions
+    meta = LogisticRegression(C=1.0, max_iter=500, random_state=42)
+    meta.fit(meta_X_oof, y_oof)
+
+    # Calibrate meta-learner on X_cal (held out from both base and meta training)
+    meta_X_cal = np.column_stack([m.predict_proba(X_cal)[:, 1] for m in base_learners])
+    # cv='prefit': meta is already fitted; calibrator runs on meta_X_cal/y_cal
+    # without re-training the logistic regression.
     cal_meta = CalibratedClassifierCV(meta, method="isotonic", cv="prefit")
-    cal_meta.fit(meta_X, y_test)
+    cal_meta.fit(meta_X_cal, y_cal)
 
+    logger.info(
+        "Stacking ensemble trained: %d base learners + calibrated meta-LR",
+        len(base_learners),
+    )
     return base_learners, cal_meta
 
 

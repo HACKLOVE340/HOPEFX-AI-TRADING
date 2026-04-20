@@ -174,7 +174,10 @@
         "pa_gap_pct",
         "dist_ma_10"
       ],
-      "notes": "MTF stacking ensemble (XGB+RF+LGB+meta-LR). 58Y XAUUSD, 164 features (base+extended+MTF), horizon=5. OOS accuracy=61.4% (p=0.0, N=1687) vs xgb_horizon5_v1=59.9% (+1.5pp). Staged: awaiting Sharpe-gate reconciliation and calibration-leakage fix. pkl_format=stacking_dict \u2014 not a plain sklearn estimator."
+      "notes": "MTF stacking ensemble (XGB+RF+LGB+meta-LR). 58Y XAUUSD, 164 features (base+extended+MTF), horizon=5. OOS accuracy=61.4% (p=0.0, N=1687) vs xgb_horizon5_v1=59.9% (+1.5pp). Staged: awaiting Sharpe-gate reconciliation. LEAKAGE BUG FIXED (2026-04-20): base learners now trained on X_fit (60%), OOF meta-features built on X_oof (20%), meta-LR calibrated on X_cal (20%). Previously cv=3 on CalibratedClassifierCV caused base models to re-train on the test fold, inflating walk-forward CV to ~99%. Fixed to cv=prefit with three-way split. pkl_format=stacking_dict \u2014 not a plain sklearn estimator. Regenerate pkl by running: python scripts/retrain_mtf_accuracy.py",
+      "leakage_bug_fixed": true,
+      "leakage_fix_date": "2026-04-20",
+      "leakage_fix_description": "Three-way split: X_fit (60%) for base learner training, X_oof (20%) for OOF meta-features, X_cal (20%) for meta-LR calibration. All CalibratedClassifierCV calls use cv=prefit (no re-training on test data)."
     }
   }
 }
