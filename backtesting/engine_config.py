@@ -46,6 +46,8 @@ except ImportError:
     _scipy_stats = None  # type: ignore[assignment]
     SCIPY_AVAILABLE = False
 
+from backtesting.transaction_costs import OvernightSwapModel, TransactionCostModel, get_swap_model, get_tc_model
+
 logger = logging.getLogger(__name__)
 
 
@@ -57,16 +59,27 @@ class BacktestConfig:
     end_date: datetime
     symbols: list[str]
     initial_capital: float = 100000.0
-    # Commission: $7 round-trip is realistic for XAUUSD CFD/futures (was $5)
+    # Primary instrument ticker — used for cost model lookups.
+    # Accepts any alias: "XAUUSD", "GC=F", "XAU/USD", "EURUSD", etc.
+    ticker: str = "XAUUSD"
+    # commission_per_trade is kept for backward compatibility but is IGNORED
+    # when use_unified_costs=True (the default).  The unified TransactionCostModel
+    # computes the correct bps-of-notional cost per instrument automatically.
     commission_per_trade: float = 7.0
+    # use_unified_costs: when True (default), TransactionCostModel and
+    # OvernightSwapModel are used for all cost calculations.  Set False only
+    # to reproduce legacy results for comparison.
+    use_unified_costs: bool = True
     slippage_model: str = "almgren_chriss"  # almgren_chriss, variable, fixed, none
     # Gold spread: ~$0.30 typical, $0.50 conservative.  1 pip for gold = $0.10.
-    # 3 pips = $0.30 spread — realistic for OANDA XAU_USD practice account.
+    # 3 pips = $0.30 spread — realistic for XAU/USD.
     slippage_pips: float = 3.0
     allow_short: bool = True
     max_positions: int = 10
-    # Overnight financing: annualised swap rate charged per bar on open notional.
-    # ~0.4% p.a. is typical for XAUUSD long positions.
+    # overnight_rate_annual is kept for backward compatibility but is IGNORED
+    # when use_unified_costs=True.  The OvernightSwapModel uses real USD/lot/night
+    # rates (-$4.10/night per 100oz lot for XAU/USD long) which is ~47% higher
+    # than the old 0.4% p.a. annualised-notional approximation.
     overnight_rate_annual: float = 0.004
     bars_per_day: float = 24.0  # 24 for H1, 6 for H4, 1 for D
     # Kelly-based position sizing.  0 = use fixed lot from signal.
@@ -236,23 +249,61 @@ class SimulatedBroker:
         self.current_time: datetime | None = None
         self.total_overnight_cost: float = 0.0
 
-        # Per-bar overnight financing rate
-        bars_per_day = getattr(config, "bars_per_day", 24.0)
-        annual_rate = getattr(config, "overnight_rate_annual", 0.004)
-        self._overnight_rate_per_bar = annual_rate / 365.0 / bars_per_day
+        use_unified = getattr(config, "use_unified_costs", True)
+        bars_per_day = float(getattr(config, "bars_per_day", 24.0))
+        ticker = getattr(config, "ticker", "XAUUSD")
+
+        if use_unified:
+            # Unified cost models — broker-independent, calibrated to real rates
+            self._tc: TransactionCostModel = get_tc_model()
+            self._swap: OvernightSwapModel = get_swap_model()
+            self._use_unified = True
+        else:
+            # Legacy path: annualised-rate model (kept for comparison only)
+            annual_rate = getattr(config, "overnight_rate_annual", 0.004)
+            self._overnight_rate_per_bar = annual_rate / 365.0 / bars_per_day
+            self._use_unified = False
+
+        self._bars_per_day = bars_per_day
+        self._ticker = ticker
 
     def update_time(self, timestamp: datetime):
         """Update current simulation time and apply overnight financing."""
         self.current_time = timestamp
 
-        # Overnight financing: charged every bar on open position notional.
-        if self._overnight_rate_per_bar > 0 and self.positions:
-            for pos in self.positions.values():
+        # Overnight financing: charged every bar on open positions.
+        if self.positions:
+            weekday: int | None = None
+            try:
+                weekday = int(timestamp.weekday())
+            except Exception:  # nosec B110 — non-fatal; fall back to no triple-swap
+                pass
+
+            for symbol, pos in self.positions.items():
                 price = pos.get("current_price", pos.get("avg_price", 0.0))
-                notional = abs(pos.get("quantity", 0.0) * price)
-                cost = notional * self._overnight_rate_per_bar
-                self.cash -= cost
-                self.total_overnight_cost += cost
+                qty = pos.get("quantity", 0.0)
+                if qty == 0 or price == 0:
+                    continue
+                side = "long" if qty > 0 else "short"
+                ticker = symbol if symbol else self._ticker
+
+                if self._use_unified:
+                    # OvernightSwapModel: USD per standard lot per night.
+                    # Distribute evenly across bars_per_day bars so the total
+                    # per calendar day equals exactly one nightly charge.
+                    lots = abs(qty) / 100.0  # 100 oz per standard lot for gold
+                    cost_per_bar = abs(
+                        self._swap.cost_usd_per_night(
+                            ticker, lots=lots, side=side, weekday=weekday
+                        )
+                    ) / max(self._bars_per_day, 1.0)
+                else:
+                    # Legacy: annualised rate on notional
+                    notional = abs(qty * price)
+                    cost_per_bar = notional * self._overnight_rate_per_bar
+
+                self.cash -= cost_per_bar
+                self.total_overnight_cost += cost_per_bar
 
         # Record equity
         equity = self.get_equity()
@@ -285,9 +336,15 @@ class SimulatedBroker:
 
         fill_price = current_price * (1 + slippage) if side == "buy" else current_price * (1 - slippage)
 
-        # Calculate cost
+        # Calculate cost — unified TransactionCostModel (bps of notional)
+        # or legacy flat commission depending on config.use_unified_costs.
         cost = quantity * fill_price
-        commission = self.config.commission_per_trade
+        if self._use_unified:
+            # Half the round-trip cost on entry, half on exit (symmetric).
+            rt_frac = self._tc.round_trip_cost_frac(self._ticker)
+            commission = cost * rt_frac / 2.0
+        else:
+            commission = self.config.commission_per_trade
 
         # Check funds
         if side == "buy" and cost + commission > self.cash:
