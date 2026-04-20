@@ -917,6 +917,30 @@ async def ws_live(websocket: WebSocket) -> None:
                 await websocket.close(code=4001)
                 _manager.disconnect(cid)
                 return
+
+            # Register the authenticated user and notify the client.
+            user_id = str(payload.get("sub", payload.get("user_id", "unknown")))
+            _manager.authenticate(cid, user_id)
+            await _manager.send(
+                cid,
+                {
+                    "type": "auth_ok",
+                    "user_id": user_id,
+                    "role": payload.get("role", "trader"),
+                },
+            )
+        except asyncio.TimeoutError:
+            await _manager.send(
+                cid,
+                {
+                    "type": "error",
+                    "code": "AUTH_TIMEOUT",
+                    "message": f"Auth required within {AUTH_TIMEOUT_SECONDS}s",
+                },
+            )
+            await websocket.close(code=4001)
+            _manager.disconnect(cid)
+            return
         except Exception:
             _manager.disconnect(cid)
             return

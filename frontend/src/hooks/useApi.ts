@@ -267,6 +267,7 @@ export const tradingApi = {
   positions:      ()              => api.get('/trading/positions'),
   signals:        ()              => api.get('/trading/signals'),
   account:        ()              => api.get('/trading/account'),
+  prices:         ()              => api.get<Record<string, { bid: number; ask: number; last: number; timestamp: number }>>('/trading/prices'),
   ohlcv:          (symbol: string, timeframe = '1h', limit = 200) =>
     api.get(`/trading/ohlcv/${encodeURIComponent(symbol)}`, { params: { timeframe, limit } }),
   placeOrder:     (order: object) => api.post('/trading/orders', order),
