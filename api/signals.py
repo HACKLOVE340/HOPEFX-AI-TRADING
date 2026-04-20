@@ -815,6 +815,32 @@ def _register_signal_read_routes(router: Any) -> None:
     from api.auth import TokenPayload as _TokenPayload
     from api.auth import get_current_user as _get_current_user
 
+    @router.get(
+        "",
+        summary="List active signals, optionally filtered by symbol",
+    )
+    async def list_signals(
+        symbol: str | None = None,
+        limit: int = 20,
+        user: _TokenPayload = _Depends(_get_current_user),
+    ):
+        """Root endpoint: returns active signals filtered by symbol and capped at limit.
+
+        Mirrors /active but accepts ``symbol`` and ``limit`` query params so
+        chart-bot and other consumers can call GET /api/signals?symbol=XAUUSD.
+        """
+        # Normalise XAU/USD → XAUUSD so both forms match stored signals.
+        if symbol:
+            symbol = symbol.replace("/", "").replace("%2F", "").upper()
+        signals = _get_signal_service().get_active_signals(symbol=symbol)
+        return _with_disclaimer(
+            {
+                "signals": [s.to_dict() for s in signals[:limit]],
+                "count": min(len(signals), limit),
+                "symbol_filter": symbol,
+            }
+        )
+
     @router.get("/summary")
     async def get_signal_summary(user: _TokenPayload = _Depends(_get_current_user)):
         return _with_disclaimer(_get_signal_service().get_signal_summary())
