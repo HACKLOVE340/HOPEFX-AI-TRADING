@@ -731,7 +731,7 @@ class MarketplaceAPI:
             description=description,
             price_monthly=price_monthly,
             price_yearly=price_yearly,
-            tier=SubscriptionTier.BASIC if price_monthly > 0 else SubscriptionTier.FREE,
+            tier=SubscriptionTier.STARTER if price_monthly > 0 else SubscriptionTier.FREE,
             status=StrategyStatus.PENDING,
             category=category,
             tags=tags,
