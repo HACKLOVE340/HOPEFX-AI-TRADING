@@ -15,10 +15,12 @@ interface Transaction {
 }
 
 const PLAN_COLORS: Record<string, string> = {
-  free:    '#475569',
-  starter: '#3b82f6',
-  pro:     '#8b5cf6',
-  elite:   '#f59e0b',
+  free:         '#475569',
+  starter:      '#3b82f6',
+  professional: '#8b5cf6',
+  pro:          '#8b5cf6',  // legacy alias
+  enterprise:   '#06b6d4',
+  elite:        '#f59e0b',
 };
 
 const BillingSection: React.FC = () => {

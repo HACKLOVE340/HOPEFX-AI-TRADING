@@ -41,7 +41,7 @@ async def get_revenue_stats(
     mrr = arr = revenue_today = revenue_mtd = revenue_ytd = 0.0
     churn_rate_pct = ltv_avg = 0.0
     new_subs_mtd = cancelled_mtd = 0
-    plan_breakdown: dict = {"free": 0.0, "starter": 0.0, "pro": 0.0, "elite": 0.0}
+    plan_breakdown: dict = {"free": 0.0, "starter": 0.0, "professional": 0.0, "enterprise": 0.0, "elite": 0.0}
 
     try:
         from monetization.analytics import revenue_analytics
@@ -103,7 +103,7 @@ async def get_revenue_stats(
 
 @router.get("/financial/subscriptions")
 async def get_subscription_stats(user: TokenPayload = Depends(_require_superadmin)) -> dict:
-    stats: dict = {"free": 0, "starter": 0, "pro": 0, "elite": 0, "total": 0}
+    stats: dict = {"free": 0, "starter": 0, "professional": 0, "enterprise": 0, "elite": 0, "total": 0}
     try:
         from database.connection import SessionLocal
         from database.user_models import User

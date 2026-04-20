@@ -11,20 +11,49 @@
  *                   settings sections. Cannot be impersonated or demoted by admins.
  *   - admin       → bypasses plan gates but NOT superadmin-only gates.
  *                   Can access /admin, /audit, /security, /auto-heal, /whitelabel.
- *   - trader      → plan-gated features at starter/pro/elite tiers.
+ *   - trader      → plan-gated features at starter/pro/enterprise/elite tiers.
  *   - user        → free tier only.
+ *
+ * Canonical 5-tier system (matches backend monetization/pricing.py):
+ *   free | starter | professional | enterprise | elite
+ *
+ * The frontend uses 'pro' as a short alias for 'professional' in UI labels
+ * and nav config. normalisePlan() maps API responses to the canonical set.
  */
 
 import type { UserRole } from '../store';
 
-export type Plan = 'free' | 'starter' | 'pro' | 'elite';
+/** Canonical plan IDs — must match backend SubscriptionTier values. */
+export type Plan = 'free' | 'starter' | 'professional' | 'enterprise' | 'elite';
+
+/** Short UI alias accepted in nav config and feature gates. */
+export type PlanAlias = Plan | 'pro';
 
 export const PLAN_RANK: Record<Plan, number> = {
-  free:    0,
-  starter: 1,
-  pro:     2,
-  elite:   3,
+  free:         0,
+  starter:      1,
+  professional: 2,
+  enterprise:   3,
+  elite:        4,
 };
+
+/**
+ * Normalise any plan string (including legacy 'pro', 'basic') to a canonical Plan.
+ * Called on every API response so the rest of the app always sees canonical values.
+ */
+export function normalisePlan(raw: string | undefined | null): Plan {
+  const lower = (raw ?? 'free').toLowerCase();
+  // Map legacy / alias values
+  if (lower === 'pro') return 'professional';
+  if (lower === 'basic') return 'starter';
+  const valid: Plan[] = ['free', 'starter', 'professional', 'enterprise', 'elite'];
+  return valid.includes(lower as Plan) ? (lower as Plan) : 'free';
+}
+
+/** Resolve a PlanAlias (including 'pro') to a canonical Plan rank. */
+function aliasRank(alias: PlanAlias): number {
+  return PLAN_RANK[normalisePlan(alias)];
+}
 
 export const ROLE_RANK: Record<UserRole, number> = {
   user:       0,
@@ -38,6 +67,8 @@ export const ROLE_RANK: Record<UserRole, number> = {
  * Every featureKey used in App.tsx gated() must appear here.
  * Missing keys fall through to 'free' (safe default) but are listed
  * explicitly so the gate is intentional and auditable.
+ *
+ * Uses canonical Plan values (no 'pro' alias here).
  */
 export const PLAN_FEATURES: Record<string, Plan> = {
   // ── Free — available to all authenticated users ───────────────────────────
@@ -48,6 +79,10 @@ export const PLAN_FEATURES: Record<string, Plan> = {
   calendar:     'free',
   profile:      'free',
   settings:     'free',
+  leaderboard:  'free',
+  marketplace:  'free',
+  affiliate:    'free',
+  status:       'free',
 
   // ── Starter ───────────────────────────────────────────────────────────────
   journal:      'starter',
@@ -56,19 +91,24 @@ export const PLAN_FEATURES: Record<string, Plan> = {
   'risk-calc':  'starter',
   wallet:       'starter',
 
-  // ── Pro ───────────────────────────────────────────────────────────────────
-  trading:        'pro',   // advanced AI charting terminal
-  geopolitical:   'pro',   // geopolitical risk intelligence + World Monitor map
-  'ai-strategy':  'pro',
-  'copy-trading': 'pro',
-  'prop-firm':    'pro',
-  correlation:    'pro',
-  indicators:     'pro',
-  'walk-forward': 'pro',
-  'ab-testing':   'pro',
-  tca:            'pro',
-  nuclear:        'pro',
-  feed:           'pro',
+  // ── Professional ──────────────────────────────────────────────────────────
+  trading:        'professional',   // advanced AI charting terminal
+  geopolitical:   'professional',   // geopolitical risk intelligence
+  'ai-strategy':  'professional',
+  'copy-trading': 'professional',
+  'prop-firm':    'professional',
+  correlation:    'professional',
+  indicators:     'professional',
+  'walk-forward': 'professional',
+  'ab-testing':   'professional',
+  tca:            'professional',
+  nuclear:        'professional',
+  feed:           'professional',
+
+  // ── Enterprise ────────────────────────────────────────────────────────────
+  research:       'enterprise',
+  teams:          'enterprise',
+  replay:         'enterprise',
 
   // ── Elite ─────────────────────────────────────────────────────────────────
   'sub-accounts': 'elite',
@@ -121,8 +161,8 @@ export function hasFeatureAccess(
 ): boolean {
   if (isSuperAdmin(role)) return true;
   if (isAdmin(role)) return true;
-  const required = PLAN_FEATURES[featureKey] ?? 'free';
-  return PLAN_RANK[userPlan] >= PLAN_RANK[required];
+  const requiredAlias = (PLAN_FEATURES[featureKey] ?? 'free') as PlanAlias;
+  return PLAN_RANK[userPlan] >= aliasRank(requiredAlias);
 }
 
 /**
@@ -141,17 +181,28 @@ export function requiredPlan(featureKey: string): Plan {
 // ── Display metadata ──────────────────────────────────────────────────────────
 
 export const PLAN_LABELS: Record<Plan, string> = {
-  free:    'Free',
-  starter: 'Starter',
-  pro:     'Pro',
-  elite:   'Elite',
+  free:         'Free',
+  starter:      'Starter',
+  professional: 'Professional',
+  enterprise:   'Enterprise',
+  elite:        'Elite',
 };
 
 export const PLAN_COLORS: Record<Plan, string> = {
-  free:    '#475569',
-  starter: '#3b82f6',
-  pro:     '#8b5cf6',
-  elite:   '#f59e0b',
+  free:         '#475569',
+  starter:      '#3b82f6',
+  professional: '#8b5cf6',
+  enterprise:   '#06b6d4',
+  elite:        '#f59e0b',
+};
+
+/** Monthly prices in USD — matches backend monetization/pricing.py */
+export const PLAN_PRICES: Record<Plan, number> = {
+  free:         0,
+  starter:      1800,
+  professional: 4500,
+  enterprise:   7500,
+  elite:        10000,
 };
 
 export const ROLE_LABELS: Record<UserRole, string> = {

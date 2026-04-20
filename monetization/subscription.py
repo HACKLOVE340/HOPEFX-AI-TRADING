@@ -57,7 +57,8 @@ except ImportError:
     logger_init.warning("stripe package not installed — payment processing disabled. pip install stripe")
 
 # ---------------------------------------------------------------------------
-# Tier feature gates (mirrors pricing.py, adds RL/live flags)
+# Tier feature gates — canonical 5-tier system
+# Mirrors pricing.py TierFeatures; adds RL/live execution flags.
 # ---------------------------------------------------------------------------
 _TIER_FEATURES: dict[SubscriptionTier, dict[str, Any]] = {
     SubscriptionTier.FREE: {
@@ -65,36 +66,94 @@ _TIER_FEATURES: dict[SubscriptionTier, dict[str, Any]] = {
         "rl_agent": False,
         "ml_features": False,
         "max_strategies": 1,
+        "max_brokers": 1,
         "api_access": False,
         "news_rag": False,
         "paper_trading": True,
+        "backtesting_unlimited": False,
+        "pattern_recognition": False,
+        "news_integration": False,
+        "priority_support": False,
+        "white_label": False,
+        "dedicated_support": False,
+        "custom_development": False,
+    },
+    SubscriptionTier.STARTER: {
+        "live_trading": True,
+        "rl_agent": False,
+        "ml_features": False,
+        "max_strategies": 3,
+        "max_brokers": 1,
+        "api_access": False,
+        "news_rag": False,
+        "paper_trading": True,
+        "backtesting_unlimited": False,
+        "pattern_recognition": False,
+        "news_integration": False,
+        "priority_support": False,
+        "white_label": False,
+        "dedicated_support": False,
+        "custom_development": False,
     },
     SubscriptionTier.PROFESSIONAL: {
         "live_trading": True,
         "rl_agent": True,
         "ml_features": True,
-        "max_strategies": 10,
+        "max_strategies": 7,
+        "max_brokers": 3,
         "api_access": True,
         "news_rag": True,
         "paper_trading": True,
+        "backtesting_unlimited": True,
+        "pattern_recognition": True,
+        "news_integration": False,
+        "priority_support": True,
+        "white_label": False,
+        "dedicated_support": False,
+        "custom_development": False,
     },
     SubscriptionTier.ENTERPRISE: {
         "live_trading": True,
         "rl_agent": True,
         "ml_features": True,
         "max_strategies": -1,
+        "max_brokers": -1,
         "api_access": True,
         "news_rag": True,
         "paper_trading": True,
+        "backtesting_unlimited": True,
+        "pattern_recognition": True,
+        "news_integration": True,
+        "priority_support": True,
+        "white_label": True,
+        "dedicated_support": False,
+        "custom_development": False,
+    },
+    SubscriptionTier.ELITE: {
+        "live_trading": True,
+        "rl_agent": True,
+        "ml_features": True,
+        "max_strategies": -1,
+        "max_brokers": -1,
+        "api_access": True,
+        "news_rag": True,
+        "paper_trading": True,
+        "backtesting_unlimited": True,
+        "pattern_recognition": True,
+        "news_integration": True,
+        "priority_support": True,
         "white_label": True,
         "dedicated_support": True,
+        "custom_development": True,
     },
 }
 
 # Stripe Price IDs — override via environment variables
 _STRIPE_PRICE_IDS: dict[SubscriptionTier, str] = {
+    SubscriptionTier.STARTER: os.getenv("STRIPE_PRICE_STARTER", "price_starter"),
     SubscriptionTier.PROFESSIONAL: os.getenv("STRIPE_PRICE_PROFESSIONAL", "price_professional"),
     SubscriptionTier.ENTERPRISE: os.getenv("STRIPE_PRICE_ENTERPRISE", "price_enterprise"),
+    SubscriptionTier.ELITE: os.getenv("STRIPE_PRICE_ELITE", "price_elite"),
 }
 
 

@@ -14,13 +14,15 @@ export type NavGroup =
   | 'admin'
   | 'superadmin';
 
+import type { Plan } from '../../lib/subscription';
+
 export interface NavItem {
   path: string;
   label: string;
   icon: string;
   group: NavGroup;
   /** Minimum plan required. Admins always bypass. */
-  plan?: 'free' | 'starter' | 'pro' | 'elite';
+  plan?: Plan;
   /** If true, only admin/superadmin can see this item */
   adminOnly?: boolean;
   /** If true, only superadmin can see this item */
@@ -50,34 +52,36 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/status',       label: 'System Status',  icon: '🟢', group: 'core',      plan: 'free',    featureKey: 'status'       },
 
   // ── Trading ───────────────────────────────────────────────────────────────
-  { path: '/trading',      label: 'AI Chart Bot',   icon: '🧠', group: 'trading',   plan: 'pro',     featureKey: 'trading'      },
-  { path: '/nuclear',      label: 'Nuclear AI',     icon: '☢️', group: 'trading',   plan: 'pro',     featureKey: 'nuclear'      },
-  { path: '/journal',      label: 'Trade Journal',  icon: '📓', group: 'trading',   plan: 'starter', featureKey: 'journal'      },
-  { path: '/prop-firm',    label: 'Prop Firm',      icon: '🛡️', group: 'trading',   plan: 'pro',     featureKey: 'prop-firm'    },
-  { path: '/copy-trading', label: 'Copy Trading',   icon: '🔁', group: 'trading',   plan: 'pro',     featureKey: 'copy-trading' },
-  { path: '/risk-calc',    label: 'Risk Calculator',icon: '🧮', group: 'trading',   plan: 'starter', featureKey: 'risk-calc'    },
+  { path: '/trading',      label: 'AI Chart Bot',   icon: '🧠', group: 'trading',   plan: 'professional', featureKey: 'trading'      },
+  { path: '/nuclear',      label: 'Nuclear AI',     icon: '☢️', group: 'trading',   plan: 'professional', featureKey: 'nuclear'      },
+  { path: '/journal',      label: 'Trade Journal',  icon: '📓', group: 'trading',   plan: 'starter',      featureKey: 'journal'      },
+  { path: '/prop-firm',    label: 'Prop Firm',      icon: '🛡️', group: 'trading',   plan: 'professional', featureKey: 'prop-firm'    },
+  { path: '/copy-trading', label: 'Copy Trading',   icon: '🔁', group: 'trading',   plan: 'professional', featureKey: 'copy-trading' },
+  { path: '/risk-calc',    label: 'Risk Calculator',icon: '🧮', group: 'trading',   plan: 'starter',      featureKey: 'risk-calc'    },
 
   // ── Analytics ─────────────────────────────────────────────────────────────
-  { path: '/performance',  label: 'Performance',    icon: '🏆', group: 'analytics', plan: 'starter', featureKey: 'performance'  },
-  { path: '/ai-strategy',  label: 'AI Strategy',    icon: '🤖', group: 'analytics', plan: 'pro',     featureKey: 'ai-strategy'  },
-  { path: '/correlation',  label: 'Correlation',    icon: '🔗', group: 'analytics', plan: 'pro',     featureKey: 'correlation'  },
-  { path: '/indicators',   label: 'Indicators',     icon: '📐', group: 'analytics', plan: 'pro',     featureKey: 'indicators'   },
-  { path: '/walk-forward', label: 'Walk-Forward',   icon: '📈', group: 'analytics', plan: 'pro',     featureKey: 'walk-forward' },
-  { path: '/ab-testing',   label: 'A/B Testing',    icon: '⚗️', group: 'analytics', plan: 'pro',     featureKey: 'ab-testing'   },
-  { path: '/tca',          label: 'TCA',            icon: '📊', group: 'analytics', plan: 'pro',     featureKey: 'tca'          },
+  { path: '/performance',  label: 'Performance',    icon: '🏆', group: 'analytics', plan: 'starter',      featureKey: 'performance'  },
+  { path: '/ai-strategy',  label: 'AI Strategy',    icon: '🤖', group: 'analytics', plan: 'professional', featureKey: 'ai-strategy'  },
+  { path: '/correlation',  label: 'Correlation',    icon: '🔗', group: 'analytics', plan: 'professional', featureKey: 'correlation'  },
+  { path: '/indicators',   label: 'Indicators',     icon: '📐', group: 'analytics', plan: 'professional', featureKey: 'indicators'   },
+  { path: '/walk-forward', label: 'Walk-Forward',   icon: '📈', group: 'analytics', plan: 'professional', featureKey: 'walk-forward' },
+  { path: '/ab-testing',   label: 'A/B Testing',    icon: '⚗️', group: 'analytics', plan: 'professional', featureKey: 'ab-testing'   },
+  { path: '/tca',          label: 'TCA',            icon: '📊', group: 'analytics', plan: 'professional', featureKey: 'tca'          },
+  { path: '/research',     label: 'Research',       icon: '🔬', group: 'analytics', plan: 'enterprise',   featureKey: 'research'     },
 
   // ── Community ─────────────────────────────────────────────────────────────
-  { path: '/leaderboard',  label: 'Leaderboard',    icon: '🥇', group: 'community', plan: 'free',    featureKey: 'leaderboard'  },
-  { path: '/feed',         label: 'Signal Feed',    icon: '📡', group: 'community', plan: 'pro',     featureKey: 'feed'         },
-  { path: '/marketplace',  label: 'Marketplace',    icon: '🛒', group: 'community', plan: 'free',    featureKey: 'marketplace'  },
-  { path: '/affiliate',    label: 'Affiliate',      icon: '🤝', group: 'community', plan: 'free',    featureKey: 'affiliate'    },
+  { path: '/leaderboard',  label: 'Leaderboard',    icon: '🥇', group: 'community', plan: 'free',         featureKey: 'leaderboard'  },
+  { path: '/feed',         label: 'Signal Feed',    icon: '📡', group: 'community', plan: 'professional', featureKey: 'feed'         },
+  { path: '/marketplace',  label: 'Marketplace',    icon: '🛒', group: 'community', plan: 'free',         featureKey: 'marketplace'  },
+  { path: '/affiliate',    label: 'Affiliate',      icon: '🤝', group: 'community', plan: 'free',         featureKey: 'affiliate'    },
+  { path: '/teams',        label: 'Teams',          icon: '👥', group: 'community', plan: 'enterprise',   featureKey: 'teams'        },
 
   // ── Account ───────────────────────────────────────────────────────────────
-  { path: '/profile',      label: 'Profile',        icon: '👤', group: 'account',   plan: 'free',    featureKey: 'profile'      },
-  { path: '/wallet',       label: 'Wallet',         icon: '💰', group: 'account',   plan: 'starter', featureKey: 'wallet'       },
-  { path: '/sub-accounts', label: 'Sub-Accounts',   icon: '👥', group: 'account',   plan: 'elite',   featureKey: 'sub-accounts' },
-  { path: '/checkout',     label: 'Upgrade Plan',   icon: '💳', group: 'account',   plan: 'free',    featureKey: 'settings'     },
-  { path: '/settings',     label: 'Settings',       icon: '⚙️', group: 'account',   plan: 'free',    featureKey: 'settings'     },
+  { path: '/profile',      label: 'Profile',        icon: '👤', group: 'account',   plan: 'free',         featureKey: 'profile'      },
+  { path: '/wallet',       label: 'Wallet',         icon: '💰', group: 'account',   plan: 'starter',      featureKey: 'wallet'       },
+  { path: '/sub-accounts', label: 'Sub-Accounts',   icon: '👥', group: 'account',   plan: 'elite',        featureKey: 'sub-accounts' },
+  { path: '/pricing',      label: 'Upgrade Plan',   icon: '💳', group: 'account',   plan: 'free',         featureKey: 'settings'     },
+  { path: '/settings',     label: 'Settings',       icon: '⚙️', group: 'account',   plan: 'free',         featureKey: 'settings'     },
 
   // ── Admin (admin + superadmin) ────────────────────────────────────────────
   // These routes are guarded by AdminGuard (role >= admin).

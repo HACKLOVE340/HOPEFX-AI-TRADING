@@ -30,9 +30,10 @@ except ImportError:
 
 class SubscriptionTier(Enum):
     FREE = "free"
-    BASIC = "basic"
-    PRO = "pro"
+    STARTER = "starter"
+    PROFESSIONAL = "professional"
     ENTERPRISE = "enterprise"
+    ELITE = "elite"
 
 
 class StrategyStatus(Enum):
@@ -367,10 +368,11 @@ class PricingEngine:
 
         # Tier-based discount
         tier_discounts = {
-            SubscriptionTier.FREE: 1.0,  # 100% off
-            SubscriptionTier.BASIC: 0.0,
-            SubscriptionTier.PRO: 0.1,  # 10% off
-            SubscriptionTier.ENTERPRISE: 0.2,  # 20% off
+            SubscriptionTier.FREE: 0.0,
+            SubscriptionTier.STARTER: 0.05,       # 5% off
+            SubscriptionTier.PROFESSIONAL: 0.10,  # 10% off
+            SubscriptionTier.ENTERPRISE: 0.20,    # 20% off
+            SubscriptionTier.ELITE: 0.30,         # 30% off
         }
         discount += base_price * tier_discounts.get(tier, 0.0)
 
@@ -395,11 +397,13 @@ class PricingEngine:
         """Recommend subscription tier based on user profile"""
         if account_balance < 1000:
             return SubscriptionTier.FREE
-        if trading_volume < 100000:
-            return SubscriptionTier.BASIC
-        if trading_volume < 1000000:
-            return SubscriptionTier.PRO
-        return SubscriptionTier.ENTERPRISE
+        if trading_volume < 100_000:
+            return SubscriptionTier.STARTER
+        if trading_volume < 1_000_000:
+            return SubscriptionTier.PROFESSIONAL
+        if trading_volume < 10_000_000:
+            return SubscriptionTier.ENTERPRISE
+        return SubscriptionTier.ELITE
 
 
 class LicenseManager:

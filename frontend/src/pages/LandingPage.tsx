@@ -125,7 +125,7 @@ const PLANS: Plan[] = [
   {
     name: 'Pro', monthly: 79, annual: 55, featured: true, badge: 'Most popular',
     features: ['10 active strategies', '20 symbols', 'Live trading', 'Full backtesting + PDF', 'Discord / Slack / Telegram', 'Marketplace access', 'Crypto payments'],
-    cta: 'Start free trial', href: '/register?plan=pro',
+    cta: 'Start free trial', href: '/register?plan=professional',
   },
   {
     name: 'Elite', monthly: 199, annual: 139,

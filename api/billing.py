@@ -66,37 +66,113 @@ def _get_flutterwave():
 # GET /api/billing/plans — available subscription plans
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Canonical 5-tier plan catalogue — prices match monetization/pricing.py.
+# Annual price = monthly × 10 (2 months free).
 _PLANS = [
     {
         "id": "free",
         "name": "Free",
         "price_usd_monthly": 0,
         "price_usd_annual": 0,
+        "commission_rate": 0.010,
         "features": ["paper_trading"],
-        "limits": {"signals_per_day": 5, "backtests_per_month": 3, "live_accounts": 0},
+        "limits": {
+            "signals_per_day": 5,
+            "backtests_per_month": 3,
+            "live_accounts": 0,
+            "max_strategies": 1,
+            "max_brokers": 1,
+        },
+    },
+    {
+        "id": "starter",
+        "name": "Starter",
+        "price_usd_monthly": 1800,
+        "price_usd_annual": 18000,
+        "commission_rate": 0.005,
+        "features": ["paper_trading", "live_trading"],
+        "limits": {
+            "signals_per_day": 20,
+            "backtests_per_month": 10,
+            "live_accounts": 1,
+            "max_strategies": 3,
+            "max_brokers": 1,
+        },
     },
     {
         "id": "professional",
         "name": "Professional",
-        "price_usd_monthly": 49,
-        "price_usd_annual": 470,
-        "features": ["paper_trading", "live_trading", "ai_signals", "backtesting"],
-        "limits": {"signals_per_day": 100, "backtests_per_month": 50, "live_accounts": 3},
-    },
-    {
-        "id": "enterprise",
-        "name": "Enterprise",
-        "price_usd_monthly": 199,
-        "price_usd_annual": 1990,
+        "price_usd_monthly": 4500,
+        "price_usd_annual": 45000,
+        "commission_rate": 0.003,
         "features": [
             "paper_trading",
             "live_trading",
             "ai_signals",
             "backtesting",
+            "pattern_recognition",
             "api_access",
+            "priority_support",
+        ],
+        "limits": {
+            "signals_per_day": 100,
+            "backtests_per_month": 50,
+            "live_accounts": 3,
+            "max_strategies": 7,
+            "max_brokers": 3,
+        },
+    },
+    {
+        "id": "enterprise",
+        "name": "Enterprise",
+        "price_usd_monthly": 7500,
+        "price_usd_annual": 75000,
+        "commission_rate": 0.002,
+        "features": [
+            "paper_trading",
+            "live_trading",
+            "ai_signals",
+            "backtesting",
+            "pattern_recognition",
+            "api_access",
+            "priority_support",
+            "news_integration",
             "white_label",
         ],
-        "limits": {"signals_per_day": -1, "backtests_per_month": -1, "live_accounts": -1},
+        "limits": {
+            "signals_per_day": -1,
+            "backtests_per_month": -1,
+            "live_accounts": -1,
+            "max_strategies": -1,
+            "max_brokers": -1,
+        },
+    },
+    {
+        "id": "elite",
+        "name": "Elite",
+        "price_usd_monthly": 10000,
+        "price_usd_annual": 100000,
+        "commission_rate": 0.001,
+        "features": [
+            "paper_trading",
+            "live_trading",
+            "ai_signals",
+            "backtesting",
+            "pattern_recognition",
+            "api_access",
+            "priority_support",
+            "news_integration",
+            "white_label",
+            "dedicated_support",
+            "custom_development",
+        ],
+        "limits": {
+            "signals_per_day": -1,
+            "backtests_per_month": -1,
+            "live_accounts": -1,
+            "max_strategies": -1,
+            "max_brokers": -1,
+        },
     },
 ]
 
@@ -130,13 +206,14 @@ async def get_subscription(user: TokenPayload = Depends(get_current_user)):
     if sub is None:
         return {
             "tier": "free",
+            "plan": "free",
             "status": "active",
             "subscription_id": None,
             "start_date": None,
             "end_date": None,
             "auto_renew": False,
             "features": ["paper_trading"],
-            "upgrade_url": "/subscription",
+            "upgrade_url": "/checkout",
         }
 
     tier_val = sub.tier.value if hasattr(sub.tier, "value") else str(sub.tier)
@@ -144,31 +221,24 @@ async def get_subscription(user: TokenPayload = Depends(get_current_user)):
 
     return {
         "tier": tier_val,
+        "plan": tier_val,
         "status": status_val,
         "subscription_id": sub.subscription_id,
         "start_date": sub.start_date.isoformat() if sub.start_date else None,
         "end_date": sub.end_date.isoformat() if sub.end_date else None,
         "auto_renew": sub.auto_renew,
         "features": _tier_features(tier_val),
-        "upgrade_url": "/subscription" if tier_val == "free" else None,
+        "upgrade_url": "/checkout" if tier_val == "free" else None,
     }
 
 
 def _tier_features(tier: str) -> list:
-    """Map tier name to its feature list."""
-    _map = {
-        "free": ["paper_trading"],
-        "professional": ["paper_trading", "live_trading", "ai_signals", "backtesting"],
-        "enterprise": [
-            "paper_trading",
-            "live_trading",
-            "ai_signals",
-            "backtesting",
-            "api_access",
-            "white_label",
-        ],
-    }
-    return _map.get(tier.lower(), ["paper_trading"])
+    """Return the feature list for a tier by looking it up in _PLANS."""
+    t = tier.lower()
+    for plan in _PLANS:
+        if plan["id"] == t:
+            return list(plan["features"])
+    return ["paper_trading"]
 
 
 # ─────────────────────────────────────────────────────────────────────────────

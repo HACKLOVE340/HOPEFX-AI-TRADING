@@ -173,7 +173,7 @@ vi.mock('../hooks/useApi', () => ({
         return Promise.resolve({ data: { transactions: [] } });
       }
       if (typeof url === 'string' && url.includes('/billing/subscription')) {
-        return Promise.resolve({ data: { plan: 'pro', status: 'active', next_billing: '2025-02-01' } });
+        return Promise.resolve({ data: { plan: 'professional', status: 'active', next_billing: '2025-02-01' } });
       }
       if (typeof url === 'string' && url.includes('/billing/payment-methods')) {
         return Promise.resolve({ data: { methods: [] } });

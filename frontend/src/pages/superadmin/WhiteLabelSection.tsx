@@ -185,7 +185,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
               <Select label="Status" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as 'active' | 'suspended' | 'trial' }))}
                 options={[{ value: 'active', label: 'Active' }, { value: 'trial', label: 'Trial' }, { value: 'suspended', label: 'Suspended' }]} />
               <Select label="Plan" value={form.plan} onChange={e => setForm(f => ({ ...f, plan: e.target.value }))}
-                options={[{ value: 'starter', label: 'Starter' }, { value: 'pro', label: 'Pro' }, { value: 'enterprise', label: 'Enterprise' }]} />
+                options={[{ value: 'starter', label: 'Starter' }, { value: 'professional', label: 'Professional' }, { value: 'enterprise', label: 'Enterprise' }]} />
             </div>
 
             {/* Branding */}
@@ -315,7 +315,7 @@ const CreateTenantForm: React.FC<CreateTenantFormProps> = ({ onClose, onCreated 
           <Input label="Domain *"        value={form.domain}       onChange={e => set('domain', e.target.value)}       placeholder="app.acmecapital.com" />
           <Input label="Company Name"    value={form.company_name} onChange={e => set('company_name', e.target.value)} placeholder="Acme Capital Ltd" />
           <Select label="Plan" value={form.plan} onChange={e => set('plan', e.target.value)}
-            options={[{ value: 'starter', label: 'Starter' }, { value: 'pro', label: 'Pro' }, { value: 'enterprise', label: 'Enterprise' }]} />
+            options={[{ value: 'starter', label: 'Starter' }, { value: 'professional', label: 'Professional' }, { value: 'enterprise', label: 'Enterprise' }]} />
           <div>
             <label style={{ fontSize: 12, color: '#94a3b8', display: 'block', marginBottom: 5 }}>Primary Colour</label>
             <div style={{ display: 'flex', gap: 8 }}>

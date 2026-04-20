@@ -200,8 +200,11 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user: initialUser, 
               <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 8 }}>Change Plan</div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <Select value={plan} onChange={e => setPlan(e.target.value)} options={[
-                  { value: 'free', label: 'Free' }, { value: 'starter', label: 'Starter' },
-                  { value: 'pro', label: 'Pro' }, { value: 'elite', label: 'Elite' },
+                  { value: 'free',         label: 'Free' },
+                  { value: 'starter',      label: 'Starter' },
+                  { value: 'professional', label: 'Professional' },
+                  { value: 'enterprise',   label: 'Enterprise' },
+                  { value: 'elite',        label: 'Elite' },
                 ]} style={{ flex: 1 }} />
                 <ActionBtn label="Apply" onClick={() => setConfirm({ action: 'set-plan', label: 'Change Plan' })} variant="primary" size="sm" loading={saving} />
               </div>
@@ -423,9 +426,12 @@ const UsersSection: React.FC = () => {
             ]} style={{ width: 140 }} />
           <Select value={planFilter} onChange={e => { setPlanFilter(e.target.value); setPage(1); }}
             options={[
-              { value: '', label: 'All Plans' }, { value: 'free', label: 'Free' },
-              { value: 'starter', label: 'Starter' }, { value: 'pro', label: 'Pro' },
-              { value: 'elite', label: 'Elite' },
+              { value: '',             label: 'All Plans' },
+              { value: 'free',         label: 'Free' },
+              { value: 'starter',      label: 'Starter' },
+              { value: 'professional', label: 'Professional' },
+              { value: 'enterprise',   label: 'Enterprise' },
+              { value: 'elite',        label: 'Elite' },
             ]} style={{ width: 130 }} />
           <Select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
             options={[

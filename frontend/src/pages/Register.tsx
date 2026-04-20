@@ -18,9 +18,12 @@ import { Eye, EyeOff, Activity, AlertCircle, CheckCircle2, Loader2 } from 'lucid
 // ── Plan badge ────────────────────────────────────────────────────────────────
 
 const PLAN_LABELS: Record<string, { label: string; color: string }> = {
-  starter: { label: 'Starter — Free',   color: '#22c55e' },
-  pro:     { label: 'Pro — $79/mo',     color: '#3b82f6' },
-  elite:   { label: 'Elite — $199/mo',  color: '#a855f7' },
+  starter:      { label: 'Starter — $1,800/mo',      color: '#22c55e' },
+  professional: { label: 'Professional — $4,500/mo', color: '#3b82f6' },
+  // legacy alias kept for URL backward-compat (?plan=pro)
+  pro:          { label: 'Professional — $4,500/mo', color: '#3b82f6' },
+  enterprise:   { label: 'Enterprise — $7,500/mo',   color: '#06b6d4' },
+  elite:        { label: 'Elite — $10,000/mo',        color: '#a855f7' },
 };
 
 // ── Password strength ─────────────────────────────────────────────────────────

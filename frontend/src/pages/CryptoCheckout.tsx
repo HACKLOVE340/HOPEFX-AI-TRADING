@@ -27,10 +27,13 @@ interface DepositAddress {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
+// Plans loaded from /api/billing/plans at runtime; these are the fallback
+// defaults used only while the API call is in-flight.
 const PLANS: Plan[] = [
-  { id: 'starter',  name: 'Starter',  price_usd: 29,  features: ['1 strategy', '5 symbols', 'Paper trading'] },
-  { id: 'pro',      name: 'Pro',      price_usd: 79,  features: ['10 strategies', '20 symbols', 'Live trading', 'Backtesting'] },
-  { id: 'elite',    name: 'Elite',    price_usd: 199, features: ['Unlimited strategies', 'All symbols', 'Priority support', 'API access'] },
+  { id: 'starter',      name: 'Starter',      price_usd: 1800,  features: ['3 strategies', '1 broker', 'Live trading'] },
+  { id: 'professional', name: 'Professional', price_usd: 4500,  features: ['7 strategies', '3 brokers', 'AI signals', 'Backtesting', 'API access'] },
+  { id: 'enterprise',   name: 'Enterprise',   price_usd: 7500,  features: ['Unlimited strategies', 'All brokers', 'White-label', 'News integration'] },
+  { id: 'elite',        name: 'Elite',        price_usd: 10000, features: ['Everything in Enterprise', 'Dedicated support', 'Custom development'] },
 ];
 
 const CRYPTO_META: Record<CryptoOption, { name: string; color: string; icon: string; networks?: USDTNetwork[] }> = {

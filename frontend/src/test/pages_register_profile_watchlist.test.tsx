@@ -275,9 +275,9 @@ describe('Register page', () => {
     expect(screen.getByText(/starter/i)).toBeInTheDocument();
   });
 
-  it('shows pro plan badge when ?plan=pro', async () => {
-    await renderRegister('?plan=pro');
-    expect(screen.getByText(/pro/i)).toBeInTheDocument();
+  it('shows professional plan badge when ?plan=professional', async () => {
+    await renderRegister('?plan=professional');
+    expect(screen.getByText(/professional/i)).toBeInTheDocument();
   });
 
   it('shows elite plan badge when ?plan=elite', async () => {

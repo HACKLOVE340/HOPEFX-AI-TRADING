@@ -15,18 +15,12 @@
 import { useEffect, useRef } from 'react';
 import { api } from './useApi';
 import { useStore, selectIsAuth, useHasHydrated } from '../store';
-import type { Plan } from '../lib/subscription';
+import { normalisePlan } from '../lib/subscription';
 
 interface BillingResponse {
   plan:   string;
+  tier?:  string;
   status: string;
-}
-
-const VALID_PLANS: Plan[] = ['free', 'starter', 'pro', 'elite'];
-
-function normalisePlan(raw: string | undefined): Plan {
-  const lower = (raw ?? 'free').toLowerCase() as Plan;
-  return VALID_PLANS.includes(lower) ? lower : 'free';
 }
 
 export function usePlan(): void {
@@ -45,7 +39,8 @@ export function usePlan(): void {
     api.get<BillingResponse>('/billing/subscription')
       .then((r) => {
         if (cancelled) return;
-        setPlan(normalisePlan(r.data.plan));
+        // Accept either 'plan' or 'tier' key from the API response
+        setPlan(normalisePlan(r.data.plan ?? r.data.tier));
       })
       .catch((err: unknown) => {
         if (cancelled) return;
