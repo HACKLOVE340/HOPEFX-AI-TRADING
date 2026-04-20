@@ -228,19 +228,20 @@ _CSRF_HEADER = "X-CSRF-Token"
 
 # Paths exempt from CSRF validation (public endpoints, token issuance, webhooks)
 _CSRF_EXEMPT_PREFIXES: tuple[str, ...] = (
-    "/api/auth/csrf-token",        # token issuance — no token yet
-    "/api/auth/login",             # pre-auth — no session cookie yet
-    "/api/auth/register",          # pre-auth
-    "/api/auth/activate-free-tier",# post-registration setup, called before session cookie exists
-    "/api/auth/refresh",           # uses refresh token, not session
+    "/api/auth/csrf-token",              # token issuance — no token yet
+    "/api/auth/login",                   # pre-auth — no session cookie yet
+    "/api/auth/register",                # pre-auth
+    "/api/auth/activate-free-tier",      # post-registration setup, called before session cookie exists
+    "/api/billing/auth/activate-free-tier",  # billing router alias — same semantics
+    "/api/auth/refresh",                 # uses refresh token, not session
     "/api/auth/forgot-password",
     "/api/auth/reset-password",
     "/api/auth/verify-email",
     "/api/auth/resend-verification",
-    "/api/email/webhook",          # SendGrid webhook — uses HMAC signature
-    "/api/health",                 # health checks
-    "/ws",                         # WebSocket — uses JWT auth
-    "/metrics",                    # Prometheus scrape
+    "/api/email/webhook",                # SendGrid webhook — uses HMAC signature
+    "/api/health",                       # health checks
+    "/ws",                               # WebSocket — uses JWT auth
+    "/metrics",                          # Prometheus scrape
 )
 
 # Methods that mutate state and require CSRF validation

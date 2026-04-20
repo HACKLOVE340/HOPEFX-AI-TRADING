@@ -130,7 +130,8 @@ const CSRF_EXEMPT_PREFIXES = [
   '/auth/csrf-token',
   '/auth/login',
   '/auth/register',
-  '/auth/activate-free-tier',  // post-registration setup, called before session cookie exists
+  '/auth/activate-free-tier',          // post-registration setup, called before session cookie exists
+  '/billing/auth/activate-free-tier',  // billing router alias — same semantics
   '/auth/refresh',
   '/auth/forgot-password',
   '/auth/reset-password',
