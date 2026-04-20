@@ -1,8 +1,22 @@
 // settings/SecuritySection.tsx — Password, 2FA, active sessions
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../../hooks/useApi';
+import { api, prefetchCsrfToken, resetCsrfCache } from '../../hooks/useApi';
 import type { SessionInfo } from './types';
+
+/** Retry once after a 403 by refreshing the CSRF token. */
+async function withCsrfRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err: unknown) {
+    if ((err as { response?: { status?: number } })?.response?.status === 403) {
+      resetCsrfCache();
+      await prefetchCsrfToken();
+      return fn();
+    }
+    throw err;
+  }
+}
 import { Card, SectionHeader, Button, StatusBadge, Divider, Input, Field } from './ui';
 
 const SecuritySection: React.FC = () => {
@@ -46,10 +60,10 @@ const SecuritySection: React.FC = () => {
     setPwSaving(true);
     setPwMsg(null);
     try {
-      await api.post('/auth/change-password', {
+      await withCsrfRetry(() => api.post('/auth/change-password', {
         current_password: pwForm.current,
         new_password: pwForm.next,
-      });
+      }));
       setPwMsg({ type: 'ok', text: 'Password updated successfully.' });
       setPwForm({ current: '', next: '', confirm: '' });
     } catch (err: unknown) {
@@ -63,7 +77,7 @@ const SecuritySection: React.FC = () => {
   const revokeSession = async (sessionId: string) => {
     setRevokingId(sessionId);
     try {
-      await api.delete(`/auth/sessions/${sessionId}`);
+      await withCsrfRetry(() => api.delete(`/auth/sessions/${sessionId}`));
       setSessions((prev) => prev.filter((s) => s.session_id !== sessionId));
     } catch (err: unknown) {
       console.warn('[Settings/Security] revoke session:', err);
@@ -75,7 +89,7 @@ const SecuritySection: React.FC = () => {
   const revokeAllSessions = async () => {
     if (!window.confirm('Revoke all other sessions? You will remain logged in on this device.')) return;
     try {
-      await api.delete('/auth/sessions');
+      await withCsrfRetry(() => api.delete('/auth/sessions'));
       setSessions((prev) => prev.filter((s) => s.current));
     } catch (err: unknown) {
       console.warn('[Settings/Security] revoke all sessions:', err);

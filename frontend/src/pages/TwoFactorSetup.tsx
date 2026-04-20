@@ -17,7 +17,27 @@
 
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../store';
-import { api } from '../hooks/useApi';
+import { api, prefetchCsrfToken, resetCsrfCache } from '../hooks/useApi';
+
+/**
+ * Retry a POST/PUT/PATCH/DELETE once after a 403 by refreshing the CSRF token.
+ * Covers the race where the user navigates to this page before the CSRF cache
+ * is warm (e.g. immediately after login).
+ */
+async function withCsrfRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 403) {
+      // Stale or missing CSRF token — fetch a fresh one and retry once.
+      resetCsrfCache();
+      await prefetchCsrfToken();
+      return fn();
+    }
+    throw err;
+  }
+}
 
 type Step = 'idle' | 'setup' | 'verify' | 'active' | 'backup';
 
@@ -55,7 +75,7 @@ const TwoFactorSetup: React.FC = () => {
     setError('');
     try {
       // Backend derives user identity from JWT — no body needed
-      const res = await api.post<SetupData>('/2fa/setup');
+      const res = await withCsrfRetry(() => api.post<SetupData>('/2fa/setup'));
       setSetupData(res.data);
       setStep('setup');
     } catch (e: unknown) {
@@ -71,7 +91,7 @@ const TwoFactorSetup: React.FC = () => {
     setError('');
     try {
       // Backend uses JWT for user identity; only the TOTP code is needed in the body
-      const res = await api.post<{ success: boolean; message?: string }>('/2fa/verify', { code });
+      const res = await withCsrfRetry(() => api.post<{ success: boolean; message?: string }>('/2fa/verify', { code }));
       if (res.data.success) {
         set2FAEnabled(true);
         setStep('active');
@@ -107,7 +127,7 @@ const TwoFactorSetup: React.FC = () => {
     setError('');
     try {
       // Backend uses JWT for user identity; only the TOTP code is needed in the body
-      const res = await api.post<{ success: boolean; message?: string }>('/2fa/disable', { code: disableCode });
+      const res = await withCsrfRetry(() => api.post<{ success: boolean; message?: string }>('/2fa/disable', { code: disableCode }));
       if (res.data.success) {
         set2FAEnabled(false);
         setStep('idle');

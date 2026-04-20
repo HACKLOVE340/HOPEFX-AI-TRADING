@@ -193,8 +193,9 @@ const Register: React.FC = () => {
       try {
         const loginRes = await authApi.login({ email: email.trim().toLowerCase(), password });
         setAuth(loginRes.data.access_token, loginRes.data.user);
-        // Warm CSRF cache immediately so the first dashboard POST doesn't fail.
-        void prefetchCsrfToken();
+        // Warm CSRF cache before navigating so the first POST after registration
+        // (e.g. 2FA setup, onboarding) never races against a cold CSRF fetch.
+        await prefetchCsrfToken();
         navigate('/dashboard', { replace: true });
         return;
       } catch (loginErr: unknown) {

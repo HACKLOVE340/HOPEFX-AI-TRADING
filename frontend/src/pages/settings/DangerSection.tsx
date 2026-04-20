@@ -1,8 +1,18 @@
 // settings/DangerSection.tsx — Export data, close account, emergency stop
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../../hooks/useApi';
+import { api, prefetchCsrfToken, resetCsrfCache } from '../../hooks/useApi';
 import { useStore } from '../../store';
+
+async function withCsrfRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try { return await fn(); }
+  catch (err: unknown) {
+    if ((err as { response?: { status?: number } })?.response?.status === 403) {
+      resetCsrfCache(); await prefetchCsrfToken(); return fn();
+    }
+    throw err;
+  }
+}
 import { Card, SectionHeader, Button, Divider } from './ui';
 
 const DangerSection: React.FC = () => {
@@ -37,7 +47,7 @@ const DangerSection: React.FC = () => {
     if (!window.confirm('Activate emergency stop? This will halt all automated trading and close all open positions immediately.')) return;
     setEmergencyLoading(true);
     try {
-      await api.post('/trading/emergency-stop');
+      await withCsrfRetry(() => api.post('/trading/emergency-stop'));
       setEmergencyDone(true);
     } catch (err: unknown) {
       console.warn('[Settings/Danger] emergency stop:', err);
@@ -54,7 +64,7 @@ const DangerSection: React.FC = () => {
     setDeleteLoading(true);
     setDeleteError('');
     try {
-      await api.delete('/auth/account');
+      await withCsrfRetry(() => api.delete('/auth/account'));
       clearAuth();
       navigate('/');
     } catch (err: unknown) {
