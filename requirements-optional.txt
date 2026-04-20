@@ -55,9 +55,11 @@
 # binance-connector>=3.8.0
 
 # ── Celery ────────────────────────────────────────────────────────────────────
-# Distributed task queue. Required only when running async worker processes.
-# pip install celery>=5.4.0
-# celery>=5.4.0
+# Distributed task queue for periodic background jobs (ML retraining,
+# subscription expiry, affiliate payouts, DB backups, self-healer scans).
+# Required only when running dedicated Celery worker + Beat processes.
+# The FastAPI app falls back to asyncio tasks when Celery is absent.
+celery[redis]>=5.4.0
 
 # ── asyncio-mqtt ──────────────────────────────────────────────────────────────
 # MQTT async client. Required only for IoT/signal integrations.

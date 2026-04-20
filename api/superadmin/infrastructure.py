@@ -2881,12 +2881,24 @@ async def _check_celery_service() -> dict:
 
         rc = get_redis_client()
         if rc:
-            workers = rc.get("celery:active_workers")
+            workers_raw = rc.get("celery:active_workers")
+            worker_count = int(workers_raw or 0)
+            # Also try the Celery inspect API for a live count
+            try:
+                from celery_app import app as _celery_app
+                inspect = _celery_app.control.inspect(timeout=1.0)
+                active = inspect.active()
+                if active is not None:
+                    worker_count = len(active)
+                    # Refresh the Redis heartbeat
+                    rc.set("celery:active_workers", str(worker_count), ex=300)
+            except Exception:
+                pass  # Celery not installed or no workers — use Redis value
             return {
-                "status": "healthy" if workers else "unknown",
+                "status": "healthy" if worker_count > 0 else "no_workers",
                 "latency_ms": round((time.time() - start) * 1000),
                 "last_check": _utcnow().isoformat(),
-                "workers": int(workers or 0),
+                "workers": worker_count,
             }
     except Exception as exc:
         return {"status": "unknown", "latency_ms": 0, "last_check": _utcnow().isoformat(), "error": str(exc)}
