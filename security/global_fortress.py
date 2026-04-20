@@ -815,21 +815,15 @@ def _build_eager_router() -> APIRouter:
     Unlike _build_router() (which closes over a specific HOPEFXBrain instance),
     every handler here calls get_brain() at request time, so the live instance
     created by start_brain() is used automatically once startup completes.
+
+    NOTE: /attacks, /alerts, /lockdown, /lockdown/clear, and /blocked-ips are
+    intentionally omitted here — they are registered by api/security_dashboard.py
+    with proper authentication and richer data sources. This router only exposes
+    the /fixes endpoints that are unique to the HOPEFXBrain.
     """
     from fastapi import APIRouter as _APIRouter
 
     r = _APIRouter(prefix="/api/security", tags=["Security"])
-
-    @r.get("/attacks")
-    async def _attacks():
-        brain = get_brain()
-        if brain is None:
-            return {}
-        redis = await _get_redis()
-        if redis:
-            raw = await redis.hgetall("brain:attack_log")
-            return {ip: json.loads(v) for ip, v in raw.items()}
-        return brain.attack_log
 
     @r.get("/fixes")
     async def _fixes():
@@ -880,47 +874,6 @@ def _build_eager_router() -> APIRouter:
                 except json.JSONDecodeError:
                     continue
         return {"status": "declined", "endpoint": endpoint}
-
-    @r.get("/alerts")
-    async def _alerts():
-        redis = await _get_redis()
-        if not redis:
-            return []
-        raw = await redis.lrange("alerts:critical", -50, -1)
-        try:
-            return [json.loads(x) for x in raw]
-        except (ValueError, TypeError):
-            return []
-
-    @r.get("/lockdown")
-    async def _lockdown():
-        redis = await _get_redis()
-        active = False
-        if redis:
-            val = await redis.get("lockdown:active")
-            active = val == "true"
-        else:
-            brain = get_brain()
-            active = brain._lockdown_active if brain else False
-        return {"lockdown_active": active}
-
-    @r.post("/lockdown/clear")
-    async def _lockdown_clear():
-        redis = await _get_redis()
-        if redis:
-            await redis.delete("lockdown:active")
-        brain = get_brain()
-        if brain:
-            brain._lockdown_active = False
-        return {"status": "cleared"}
-
-    @r.get("/blocked-ips")
-    async def _blocked_ips():
-        redis = await _get_redis()
-        if not redis:
-            return []
-        ips = await redis.lrange("security:blocked_ips", 0, -1)
-        return list(set(ips))
 
     return r
 

@@ -189,10 +189,22 @@ async def get_lockdown_status(
         from security.lockdown import get_lockdown_manager
 
         mgr = get_lockdown_manager()
-        return mgr.status()
+        state = mgr.status()
+        # Normalise to the shape the frontend expects: lockdown_active (bool)
+        return {
+            "lockdown_active": bool(state.get("active", False)),
+            "reason": state.get("reason"),
+            "triggered_at": state.get("triggered_at"),
+            "triggered_by": state.get("triggered_by"),
+        }
     except Exception as _exc:
         logger.debug("Lockdown manager unavailable: %s", _exc)
-    return _lockdown_state
+    # In-memory fallback — also normalised
+    return {
+        "lockdown_active": bool(_lockdown_state.get("active", False)),
+        "reason": _lockdown_state.get("reason"),
+        "activated_at": _lockdown_state.get("activated_at"),
+    }
 
 
 @router.post(
@@ -249,11 +261,21 @@ async def list_blocked_ips(
             socket_connect_timeout=1,
             decode_responses=True,
         )
-        members = r.smembers("hopefx:security:blocked_ips")
-        return {"blocked_ips": sorted(members), "count": len(members)}
+        # Try both the set key and the list key used by global_fortress
+        members: set[str] = set()
+        try:
+            members.update(r.smembers("hopefx:security:blocked_ips"))
+        except Exception:
+            pass
+        try:
+            members.update(r.lrange("security:blocked_ips", 0, -1))
+        except Exception:
+            pass
+        # Return plain list — matches frontend expectation (string[])
+        return sorted(members)
     except Exception as exc:
         logger.debug("Redis blocked-IP lookup failed: %s", exc)
-    return {"blocked_ips": list(_blocked_ips), "count": len(_blocked_ips)}
+    return sorted(_blocked_ips)
 
 
 # =============================================================================

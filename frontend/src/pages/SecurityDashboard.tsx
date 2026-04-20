@@ -14,7 +14,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../hooks/useApi';
-import { GlobalAttackMap, type AttackLog } from '../components/GlobalAttackMap';
+import { GlobalAttackMap, type AttackLog, type AttackRecord } from '../components/GlobalAttackMap';
 import { FixApprovalQueue } from '../components/FixApprovalQueue';
 import { MetricCard } from '../components/MetricCard';
 import { PageHeader } from '../components/PageHeader';
@@ -34,8 +34,26 @@ interface Alert {
 // ── API helpers ───────────────────────────────────────────────────────────────
 
 async function fetchAttacks(): Promise<AttackLog> {
-  const { data } = await api.get<AttackLog>('/security/attacks');
-  return data ?? {};
+  const { data } = await api.get<
+    // Backend may return either a map (IP → record) or { events: [...], total: N }
+    AttackLog | { events: Array<{ ip?: string; event_type?: string; timestamp?: string; details?: Record<string, unknown> }>; total?: number }
+  >('/security/attacks');
+  if (!data) return {};
+  // Already a map format
+  if (!('events' in data)) return data as AttackLog;
+  // Convert array format → map keyed by IP
+  const map: AttackLog = {};
+  for (const ev of (data as { events: Array<{ ip?: string; event_type?: string; timestamp?: string; details?: Record<string, unknown> }> }).events) {
+    const ip = ev.ip ?? 'unknown';
+    map[ip] = {
+      geo:      (ev.details?.geo as AttackRecord['geo']) ?? {},
+      intent:   (ev.details?.intent as AttackRecord['intent']) ?? 'unknown',
+      severity: (ev.details?.severity as number) ?? 0.5,
+      time:     ev.timestamp ?? new Date().toISOString(),
+      raw:      ev.event_type,
+    };
+  }
+  return map;
 }
 
 async function fetchLockdown(): Promise<LockdownStatus> {
@@ -44,14 +62,19 @@ async function fetchLockdown(): Promise<LockdownStatus> {
 }
 
 async function fetchBlockedIPs(): Promise<string[]> {
-  const { data } = await api.get<string[]>('/security/blocked-ips');
-  return data ?? [];
+  const { data } = await api.get<string[] | { blocked_ips?: string[] }>('/security/blocked-ips');
+  if (!data) return [];
+  // Handle both plain array and { blocked_ips: [...] } shapes
+  if (Array.isArray(data)) return data;
+  return (data as { blocked_ips?: string[] }).blocked_ips ?? [];
 }
 
 async function fetchAlerts(): Promise<Alert[]> {
   try {
-    const { data } = await api.get<Alert[]>('/security/alerts');
-    return data ?? [];
+    const { data } = await api.get<Alert[] | { alerts?: Alert[] }>('/security/alerts');
+    if (!data) return [];
+    if (Array.isArray(data)) return data;
+    return (data as { alerts?: Alert[] }).alerts ?? [];
   } catch {
     return [];
   }
