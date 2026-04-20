@@ -501,9 +501,32 @@ class DiagnosticsEngine:
 
     async def _check_route_health(self) -> list[DiagnosticResult]:
         t0 = time.monotonic()
+
+        # Only probe GET endpoints and a small set of POST endpoints that
+        # accept empty bodies or have known-safe minimal payloads.
+        # POST endpoints that require a request body (register, login, etc.)
+        # are excluded — probing them with {} generates 422 log noise and
+        # provides no signal beyond "the route exists".
+        _PROBE_GET_ONLY_PREFIXES: tuple[str, ...] = (
+            "/api/auth/register",
+            "/api/auth/login",
+            "/api/auth/resend-verification",
+            "/api/auth/forgot-password",
+            "/api/auth/reset-password",
+            "/api/auth/activate-free-tier",
+            "/api/auth/verify-email",
+            "/api/auth/refresh",
+            "/api/auth/logout",
+            "/api/auth/logout-all",
+            "/api/auth/2fa/",
+            "/api/trading/order",
+            "/api/trading/orders",
+        )
+
         routes_to_test: list[tuple[str, str]] = [
-            ("GET", "/api/health"), ("GET", "/api/status"),
-            ("GET", "/api/auth/me"), ("POST", "/api/auth/login"),
+            ("GET", "/api/health/ready"),
+            ("GET", "/api/status"),
+            ("GET", "/api/auth/csrf-token"),
         ]
         try:
             from app import app as _app
@@ -512,11 +535,15 @@ class DiagnosticsEngine:
                 methods = getattr(route, "methods", None)
                 if path and methods:
                     for m in methods:
-                        if m in ("GET", "POST"):
-                            routes_to_test.append((m, path))
+                        if m == "GET":
+                            routes_to_test.append(("GET", path))
+                        elif m == "POST" and not any(
+                            path.startswith(p) for p in _PROBE_GET_ONLY_PREFIXES
+                        ):
+                            routes_to_test.append(("POST", path))
         except Exception:  # nosec B110 — app not initialised yet; route list stays empty
             pass
-        routes_to_test = list(dict.fromkeys(routes_to_test))[:30]
+        routes_to_test = list(dict.fromkeys(routes_to_test))[:50]
         try:
             import httpx
             unhealthy: list[dict[str, Any]] = []
