@@ -144,6 +144,10 @@ def test_validate_fails_when_placeholder(tmp_path, monkeypatch):
     env_file = tmp_path / ".env"
     env_file.write_text("SECURITY_JWT_SECRET=CHANGE_ME_generate_a_random_48_char_secret\n")  # pragma: allowlist secret  # healer: ignore
     monkeypatch.setattr("scripts.manage_secrets.ENV_FILE", env_file)
+    # Remove all required secrets from the process env so cmd_validate reads
+    # only from the temp file (conftest.py sets SECURITY_JWT_SECRET globally).
+    for var, _, _ in REQUIRED_SECRETS:
+        monkeypatch.delenv(var, raising=False)
 
     rc = cmd_validate(_FakeArgs())
     assert rc == 1
@@ -153,6 +157,10 @@ def test_validate_fails_when_missing(tmp_path, monkeypatch):
     env_file = tmp_path / ".env"
     env_file.write_text("")
     monkeypatch.setattr("scripts.manage_secrets.ENV_FILE", env_file)
+    # Remove all required secrets from the process env so cmd_validate reads
+    # only from the temp file (conftest.py sets SECURITY_JWT_SECRET globally).
+    for var, _, _ in REQUIRED_SECRETS:
+        monkeypatch.delenv(var, raising=False)
 
     rc = cmd_validate(_FakeArgs())
     assert rc == 1

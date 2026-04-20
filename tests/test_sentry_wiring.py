@@ -130,7 +130,10 @@ class TestInitSentryWithDSN:
     def test_sdk_init_called_with_dsn(self, monkeypatch):
         dsn = "https://abc123@sentry.io/12345"
         monkeypatch.setenv("SENTRY_DSN", dsn)
-        monkeypatch.setenv("APP_ENV", "production")
+        # Use SENTRY_ENVIRONMENT (takes precedence over APP_ENV) so the test
+        # is not affected by APP_ENV state set by other tests in the suite.
+        monkeypatch.setenv("SENTRY_ENVIRONMENT", "production")
+        monkeypatch.delenv("APP_ENV", raising=False)
 
         sdk_mock = _make_sentry_mock()
         integration_mocks = {
