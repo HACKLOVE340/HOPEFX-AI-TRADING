@@ -38,3 +38,37 @@ tasks:
       echo "  superadmin  superadmin@hopefx.io  $(grep BOOTSTRAP_SUPERADMIN_PASSWORD .env | cut -d= -f2)" &&
       echo "  admin       admin@hopefx.io        $(grep BOOTSTRAP_ADMIN_PASSWORD .env | cut -d= -f2)" &&
       echo "  trader      trader@hopefx.io       $(grep BOOTSTRAP_TRADER_PASSWORD .env | cut -d= -f2)"
+
+  retrain-smoke:
+    name: "ML retrain smoke test"
+    description: "Validate the retrain pipeline without downloading 50Y of data (< 5 min)"
+    command: >
+      cd /workspaces/HOPEFX-AI-TRADING &&
+      PYTHONPATH=. python3 scripts/retrain_horizon5.py --smoke &&
+      PYTHONPATH=. python3 -m ml.verify_model
+
+  retrain-quarterly:
+    name: "Quarterly walk-forward retrain"
+    description: >
+      Full production retrain: 50Y XAUUSD, 8Y OOS, 6-fold walk-forward.
+      Runs feature stability analysis first, then trains the stacking ensemble.
+      Requires network access to yfinance (GC=F). Takes 60-120 minutes.
+    command: >
+      cd /workspaces/HOPEFX-AI-TRADING &&
+      PYTHONPATH=. python3 scripts/feature_stability_analysis.py
+        --output ml/saved_models/feature_stability.json &&
+      PYTHONPATH=. python3 scripts/retrain_model.py
+        --advanced --years 50 --oos-years 8 &&
+      PYTHONPATH=. python3 -m ml.verify_model &&
+      echo "Quarterly retrain complete. Review ml/saved_models/advanced_oos_meta.json for OOS metrics."
+
+  feature-stability:
+    name: "Feature stability analysis"
+    description: >
+      Analyse which of the 222 features are stable across walk-forward folds.
+      Writes ml/saved_models/feature_stability.json with stable/unstable lists.
+    command: >
+      cd /workspaces/HOPEFX-AI-TRADING &&
+      PYTHONPATH=. python3 scripts/feature_stability_analysis.py
+        --output ml/saved_models/feature_stability.json &&
+      echo "Feature stability report written to ml/saved_models/feature_stability.json"
