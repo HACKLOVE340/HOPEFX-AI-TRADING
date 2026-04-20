@@ -62,6 +62,41 @@ _PLATFORM_CONFIG_DEFAULTS: dict = {
     "force_2fa_for_admins": False,
     "ip_whitelist_enabled": False,
     "ip_whitelist": "",
+    # SMTP / Email
+    "smtp_host": "",
+    "smtp_port": 587,
+    "smtp_user": "",
+    "smtp_password": "",
+    "smtp_from": "noreply@hopefx.ai",
+    "smtp_from_name": "HOPEFX Trading",
+    "smtp_tls": True,
+    "smtp_enabled": False,
+    # Monitoring / Observability
+    "sentry_dsn": "",
+    "sentry_environment": "production",
+    "sentry_traces_sample_rate": 0.1,
+    "sentry_profiles_sample_rate": 0.1,
+    "prometheus_port": 9090,
+    "prometheus_scrape_interval_seconds": 15,
+    "prometheus_url": "http://prometheus:9090",
+    "alertmanager_smtp_host": "localhost:587",
+    "alertmanager_smtp_from": "alerts@hopefx.ai",
+    "alertmanager_smtp_to": "",
+    # Celery / Task Queue
+    "celery_broker_url": "redis://redis:6379/1",
+    "celery_result_backend": "redis://redis:6379/2",
+    "celery_task_serializer": "json",
+    "celery_result_expires": 3600,
+    "celery_worker_concurrency": 4,
+    "celery_max_tasks_per_child": 1000,
+    # Compliance thresholds
+    "kyc_required_for_live": True,
+    "aml_transaction_threshold": 10000,
+    "aml_daily_volume_threshold": 50000,
+    "sanctions_check_enabled": True,
+    "gdpr_data_retention_days": 365,
+    "gdpr_erasure_grace_days": 30,
+    "regulatory_reporting_enabled": False,
 }
 
 
@@ -277,6 +312,120 @@ async def save_full_platform_config(
     _save_platform_config(cfg)
     _log_superadmin_action(user, "full_platform_config_save", f"keys={len(body)}")
     return {"ok": True, "saved_keys": len(body), "saved_at": _utcnow().isoformat()}
+
+
+@router.post("/platform/test-smtp")
+async def test_smtp_config(
+    request: Request,
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    """Test SMTP connectivity using the current platform config or a provided override."""
+    import smtplib
+    import socket
+
+    body: dict = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+
+    cfg = _load_platform_config()
+    host = body.get("host") or cfg.get("smtp_host", "")
+    port = int(body.get("port") or cfg.get("smtp_port", 587))
+    user_val = body.get("user") or cfg.get("smtp_user", "")
+    password = body.get("password") or cfg.get("smtp_password", "")
+    use_tls = body.get("tls", cfg.get("smtp_tls", True))
+
+    if not host:
+        return {"ok": False, "error": "SMTP host not configured"}
+
+    try:
+        if use_tls:
+            server = smtplib.SMTP(host, port, timeout=10)
+            server.starttls()
+        else:
+            server = smtplib.SMTP(host, port, timeout=10)
+        if user_val and password:
+            server.login(user_val, password)
+        server.quit()
+        _log_superadmin_action(user, "smtp_test", f"host={host}:{port} ok")
+        return {"ok": True, "host": host, "port": port}
+    except (smtplib.SMTPException, socket.error, OSError) as exc:
+        _log_superadmin_action(user, "smtp_test_failed", f"host={host}:{port} err={exc}")
+        return {"ok": False, "error": str(exc)}
+
+
+@router.get("/platform/config/validate")
+async def validate_platform_config(
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    """
+    Validate the current platform config for consistency and completeness.
+
+    Checks required fields, value ranges, and cross-field constraints.
+    Returns a list of warnings and errors without modifying any state.
+    """
+    cfg = _load_platform_config()
+    issues: list[dict] = []
+
+    def warn(field: str, msg: str) -> None:
+        issues.append({"severity": "warning", "field": field, "message": msg})
+
+    def error(field: str, msg: str) -> None:
+        issues.append({"severity": "error", "field": field, "message": msg})
+
+    # Platform identity
+    if not cfg.get("support_email"):
+        warn("support_email", "Support email not configured")
+    if not cfg.get("platform_name"):
+        error("platform_name", "Platform name is required")
+
+    # Security
+    if cfg.get("debug") and cfg.get("env") == "production":
+        error("debug", "Debug mode must not be enabled in production")
+    if cfg.get("access_token_expire_minutes", 30) > 1440:
+        warn("access_token_expire_minutes", "Access token expiry > 24h is a security risk")
+
+    # ML
+    if cfg.get("ml_drift_threshold", 0.05) > 0.2:
+        warn("ml_drift_threshold", "Drift threshold > 0.2 may miss significant model degradation")
+    if cfg.get("signal_threshold_long", 0.58) < 0.5:
+        error("signal_threshold_long", "Long signal threshold below 0.5 means random signals")
+
+    # Risk
+    if cfg.get("risk_max_daily_loss_pct", 0.05) > 0.2:
+        warn("risk_max_daily_loss_pct", "Daily loss limit > 20% is extremely high risk")
+    if cfg.get("risk_max_drawdown_pct", 0.10) > 0.5:
+        error("risk_max_drawdown_pct", "Max drawdown > 50% will likely cause account wipeout")
+    if cfg.get("risk_kelly_fraction", 0.25) > 0.5:
+        warn("risk_kelly_fraction", "Kelly fraction > 0.5 is aggressive; consider 0.25 or less")
+
+    # Execution
+    if cfg.get("engine_tick_loop_hz", 1.0) > 100:
+        warn("engine_tick_loop_hz", "Tick loop > 100 Hz may overload the system")
+
+    # Kill switch
+    if cfg.get("hopefx_kill_switch") and cfg.get("trading_mode") == "live":
+        warn("hopefx_kill_switch", "Kill switch is active but trading mode is live — all trades blocked")
+
+    # SMTP
+    if cfg.get("smtp_enabled") and not cfg.get("smtp_host"):
+        error("smtp_host", "SMTP enabled but host not configured")
+
+    # Compliance
+    if cfg.get("trading_mode") == "live" and not cfg.get("kyc_required_for_live"):
+        warn("kyc_required_for_live", "Live trading without KYC requirement is a compliance risk")
+
+    errors = [i for i in issues if i["severity"] == "error"]
+    warnings = [i for i in issues if i["severity"] == "warning"]
+
+    return {
+        "valid": len(errors) == 0,
+        "error_count": len(errors),
+        "warning_count": len(warnings),
+        "issues": issues,
+        "checked_at": _utcnow().isoformat(),
+    }
 
 
 @router.get("/engine/metrics")

@@ -1134,8 +1134,7 @@ const SmtpTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>)
   const testSmtp = async () => {
     setTesting(true); setTestResult(null); setTestMsg('');
     try {
-      const { api } = await import('../../hooks/useApi');
-      await api.post('/admin/settings/test-smtp', {
+      await superadminApi.testSmtpConfig({
         host: cfg.smtp_host, port: cfg.smtp_port,
         user: cfg.smtp_user, password: cfg.smtp_password,
         from: cfg.smtp_from, tls: cfg.smtp_tls,
@@ -1385,6 +1384,13 @@ const PlatformConfiguration: React.FC = () => {
   const [saved, setSaved]     = useState(false);
   const [saveError, setSaveError] = useState('');
 
+  // Config validation state
+  const [validating, setValidating] = useState(false);
+  const [validationResult, setValidationResult] = useState<{
+    valid: boolean; error_count: number; warning_count: number;
+    issues: Array<{ severity: string; field: string; message: string }>;
+  } | null>(null);
+
   // Healer state
   const [healer, setHealerState]   = useState<HealerConfig>(DEFAULT_HEALER);
   const [healerStatus, setHealerStatus] = useState<HealerStatus | null>(null);
@@ -1466,6 +1472,16 @@ const PlatformConfiguration: React.FC = () => {
 
   const flash = (msg: string) => { setActionMsg(msg); setTimeout(() => setActionMsg(''), 5000); };
 
+  const handleValidate = async () => {
+    setValidating(true); setValidationResult(null);
+    try {
+      const res = await superadminApi.validatePlatformConfig();
+      setValidationResult(res.data);
+    } catch (e) {
+      console.warn('[PlatformConfig] validate failed:', e);
+    } finally { setValidating(false); }
+  };
+
   const handleRebuildBaseline = async () => {
     try {
       await superadminApi.autoHealRebuildBaseline();
@@ -1501,11 +1517,43 @@ const PlatformConfiguration: React.FC = () => {
 
   return (
     <div>
-      <SectionHeader
-        icon="🛠️"
-        title="Platform Configuration"
-        description="Every setting, parameter, threshold, and flag across the entire HOPEFX platform. Super Admin only."
-      />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+        <SectionHeader
+          icon="🛠️"
+          title="Platform Configuration"
+          description="Every setting, parameter, threshold, and flag across the entire HOPEFX platform. Super Admin only."
+        />
+        <Button onClick={handleValidate} disabled={validating} variant="secondary" style={{ marginTop: 4, flexShrink: 0 }}>
+          {validating ? '⏳ Validating…' : '✅ Validate Config'}
+        </Button>
+      </div>
+
+      {/* Validation result banner */}
+      {validationResult && (
+        <div style={{
+          marginBottom: 16, padding: '12px 16px', borderRadius: 10,
+          background: validationResult.valid ? '#052e16' : '#450a0a',
+          border: `1px solid ${validationResult.valid ? '#16a34a' : '#dc2626'}`,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: validationResult.issues.length > 0 ? 10 : 0 }}>
+            <span style={{ fontWeight: 700, fontSize: 13, color: validationResult.valid ? '#4ade80' : '#f87171' }}>
+              {validationResult.valid ? '✓ Config valid' : `✗ ${validationResult.error_count} error(s), ${validationResult.warning_count} warning(s)`}
+            </span>
+            <button onClick={() => setValidationResult(null)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 16 }}>×</button>
+          </div>
+          {validationResult.issues.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {validationResult.issues.map((issue, i) => (
+                <div key={i} style={{ fontSize: 12, color: issue.severity === 'error' ? '#fca5a5' : '#fde68a' }}>
+                  <span style={{ fontWeight: 700, textTransform: 'uppercase', marginRight: 6 }}>[{issue.severity}]</span>
+                  <span style={{ color: '#94a3b8', marginRight: 4 }}>{issue.field}:</span>
+                  {issue.message}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <TabBar active={activeTab} onChange={setActiveTab} />
 

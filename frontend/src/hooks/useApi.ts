@@ -442,6 +442,8 @@ export const superadminApi = {
   platformConfig:       ()                     => api.get('/superadmin/platform/config'),
   updatePlatformConfig: (p: object)            => api.patch('/superadmin/platform/config', p),
   savePlatformConfigFull: (p: object)          => api.put('/superadmin/platform/config/full', p),
+  validatePlatformConfig: ()                   => api.get('/superadmin/platform/config/validate'),
+  testSmtpConfig:    (p?: object)              => api.post('/superadmin/platform/test-smtp', p ?? {}),
   maintenanceMode:   (enabled: boolean, msg?: string) =>
     api.post('/superadmin/platform/maintenance', { enabled, message: msg }),
   broadcastMessage:  (p: object)               => api.post('/superadmin/platform/broadcast', p),
