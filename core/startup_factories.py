@@ -503,9 +503,20 @@ async def init_news_router(s: Any, app: Any) -> Any:
 
 async def init_auth(s: Any) -> Any:
     from api.admin import log_activity
+    from auth.jwt import _get_secret as _jwt_get_secret
     from auth.router import set_auth_service
     from auth.service import AuthService
     from database.user_models import LoginAttempt, User, UserSession
+
+    # Validate JWT secret at startup — fail loud rather than returning 503
+    # on the first token decode attempt.
+    try:
+        _jwt_get_secret()
+    except RuntimeError as exc:
+        raise RuntimeError(
+            f"Auth service startup blocked — JWT secret invalid: {exc}. "
+            "Set SECURITY_JWT_SECRET to a random string of ≥32 characters."
+        ) from exc
 
     User.__table__.create(s.db_engine, checkfirst=True)
     UserSession.__table__.create(s.db_engine, checkfirst=True)
@@ -513,6 +524,10 @@ async def init_auth(s: Any) -> Any:
     svc = AuthService(session_factory=s.db_session_factory)
     set_auth_service(svc)
     log_activity("Auth Service initialized")
+    logger.info(
+        "Auth service ready (JWT secret: %d chars, DB tables: User/UserSession/LoginAttempt)",
+        len(_jwt_get_secret()),
+    )
     return svc
 
 
@@ -1806,7 +1821,10 @@ def build_component_registry(app, feature_flags):
         )
         .register("news_router", _app(F.init_news_router), required=False, deps=["config"])
         # ── Auth / risk / trading ─────────────────────────────────────────────
-        .register("auth_service", F.init_auth, required=False, deps=["database"])
+        # auth_service is required=True: without it every auth endpoint returns
+        # 503 and no user can log in.  It depends on database (already required),
+        # so a DB failure will surface as a database error, not a silent auth skip.
+        .register("auth_service", F.init_auth, required=True, deps=["database"])
         .register("risk_manager", F.init_risk_manager, required=False, deps=["config"])
         .register("broker", F.init_broker, required=False, deps=["database"])
         .register("price_engine", F.init_price_engine, required=False, deps=["broker"])
