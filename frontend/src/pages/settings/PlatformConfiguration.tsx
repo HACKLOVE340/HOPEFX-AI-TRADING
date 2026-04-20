@@ -1010,13 +1010,6 @@ const PaperTradingTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<Platform
       <Num label="Noise Sigma (%)" desc="PAPER_NOISE_SIGMA_PCT — Gaussian noise std dev" value={cfg.paper_noise_sigma_pct} step={0.00001} min={0} max={0.01} onChange={(v) => set({ paper_noise_sigma_pct: v })} />
       <Num label="Fallback Spread (%)" desc="PAPER_FALLBACK_SPREAD_PCT — used when no live spread available" value={cfg.paper_fallback_spread_pct} step={0.00001} min={0} max={0.01} onChange={(v) => set({ paper_fallback_spread_pct: v })} />
     </Card>
-    <Card>
-      <SectionHeader icon="📊" title="OHLCV Store" desc="brokers/ohlcv_store.py — historical bar cache" />
-      <Sel label="Default Timeframe" desc="OHLCV_STORE_TIMEFRAME" value={cfg.ohlcv_store_timeframe}
-        options={['M1','M5','M15','M30','H1','H4','D1'].map((v) => ({ value: v, label: v }))}
-        onChange={(v) => set({ ohlcv_store_timeframe: v })} />
-      <Num label="Max Bars in Cache" desc="OHLCV_STORE_MAX_BARS" value={cfg.ohlcv_store_max_bars} min={50} max={10000} onChange={(v) => set({ ohlcv_store_max_bars: v })} />
-    </Card>
   </>
 );
 
