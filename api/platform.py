@@ -58,7 +58,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from api.auth import TokenPayload, get_current_user
+from api.auth import TokenPayload, get_current_user, require_role
+
+_require_admin_dep = require_role("admin")
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Platform"])
@@ -244,23 +246,10 @@ def _api_key_hash_set(key_hash: str, key_id: str) -> None:
 
 # ── Admin role guard ──────────────────────────────────────────────────────────
 
-_ADMIN_USERS: set = {u.strip() for u in os.getenv("ADMIN_USER_IDS", "admin").split(",") if u.strip()}
-
-
-def _require_admin(user: TokenPayload) -> TokenPayload:
-    """
-    Raise 403 if the authenticated user is not an admin.
-
-    Admin user IDs are configured via the ADMIN_USER_IDS environment variable
-    (comma-separated). Defaults to 'admin' for development.
-    """
-    role = getattr(user, "role", "") or ""
-    if user.sub not in _ADMIN_USERS and role.lower() != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required",
-        )
-    return user
+# ADMIN_USER_IDS was used by the removed _require_admin() helper which checked
+# a comma-separated env var instead of the JWT role claim. All admin routes now
+# use require_role("admin") via _require_admin_dep, which enforces the role
+# hierarchy defined in api/auth.py. ADMIN_USER_IDS is no longer consulted.
 
 
 def _client_ip(request: Request) -> str:
@@ -383,10 +372,9 @@ async def list_users(
     page: int = 1,
     limit: int = 20,
     status_filter: str | None = Query(None, alias="status"),
-    admin: TokenPayload = Depends(get_current_user),
+    admin: TokenPayload = Depends(_require_admin_dep),
 ):
     """List all users with subscription status. Admin only."""
-    _require_admin(admin)
     users = list(_get_users_from_subscriptions().values())
     if status_filter:
         users = [u for u in users if u.get("status") == status_filter]
@@ -400,9 +388,8 @@ async def list_users(
 
 
 @router.post("/api/admin/users/{user_id}/ban")
-async def ban_user(user_id: str, request: Request, admin: TokenPayload = Depends(get_current_user)):
+async def ban_user(user_id: str, request: Request, admin: TokenPayload = Depends(_require_admin_dep)):
     """Ban a user. Cancels their subscription and blocks login. Admin only."""
-    _require_admin(admin)
     users = _get_users_from_subscriptions()
     if user_id not in users:
         raise HTTPException(status_code=404, detail="User not found")
@@ -421,9 +408,8 @@ async def ban_user(user_id: str, request: Request, admin: TokenPayload = Depends
 
 
 @router.post("/api/admin/users/{user_id}/unban")
-async def unban_user(user_id: str, request: Request, admin: TokenPayload = Depends(get_current_user)):
+async def unban_user(user_id: str, request: Request, admin: TokenPayload = Depends(_require_admin_dep)):
     """Unban a user. Admin only."""
-    _require_admin(admin)
     users = _get_users_from_subscriptions()
     if user_id not in users:
         raise HTTPException(status_code=404, detail="User not found")
@@ -433,9 +419,8 @@ async def unban_user(user_id: str, request: Request, admin: TokenPayload = Depen
 
 
 @router.post("/api/admin/users/{user_id}/reset-password")
-async def reset_password(user_id: str, request: Request, admin: TokenPayload = Depends(get_current_user)):
+async def reset_password(user_id: str, request: Request, admin: TokenPayload = Depends(_require_admin_dep)):
     """Trigger a password reset email for a user. Admin only."""
-    _require_admin(admin)
     try:
         from notifications.email_triggers import send_risk_halt_email
 
@@ -458,10 +443,9 @@ async def reset_password(user_id: str, request: Request, admin: TokenPayload = D
 @router.get("/api/admin/users/{user_id}/trades")
 async def get_user_trades(
     user_id: str,
-    admin: TokenPayload = Depends(get_current_user),
+    admin: TokenPayload = Depends(_require_admin_dep),
 ):
     """View a user's trade history from the database. Admin only."""
-    _require_admin(admin)
     trades: list[dict] = []
     try:
         from database.connection import get_db
@@ -494,7 +478,7 @@ async def get_user_trades(
 async def impersonate_user(
     user_id: str,
     request: Request,
-    admin: TokenPayload = Depends(get_current_user),
+    admin: TokenPayload = Depends(_require_admin_dep),
 ):
     """
     Generate a short-lived JWT impersonation token for support purposes.
@@ -503,7 +487,6 @@ async def impersonate_user(
     are attributed to the admin in the audit log.
     Admin only. Token expires in 5 minutes.
     """
-    _require_admin(admin)
     _log_audit(admin.sub, "user.impersonated", f"Admin {admin.sub} impersonating {user_id}", ip=_client_ip(request))
 
     try:
@@ -548,10 +531,9 @@ async def get_audit_log(
     limit: int = 50,
     user_id: str | None = None,
     event_type: str | None = None,
-    admin: TokenPayload = Depends(get_current_user),
+    admin: TokenPayload = Depends(_require_admin_dep),
 ):
     """Return paginated audit log with optional filters. Admin only."""
-    _require_admin(admin)
     # Fetch enough events to support filtering; cap at audit log max
     all_events = _audit_list(limit=_REDIS_AUDIT_MAX, offset=0)
     if user_id:
@@ -568,9 +550,8 @@ async def get_audit_log(
 
 
 @router.get("/api/admin/audit-log/export")
-async def export_audit_log(admin: TokenPayload = Depends(get_current_user)):
+async def export_audit_log(admin: TokenPayload = Depends(_require_admin_dep)):
     """Export full audit log as CSV. Admin only."""
-    _require_admin(admin)
     output = io.StringIO()
     writer = csv.DictWriter(
         output,
@@ -664,9 +645,8 @@ async def revoke_api_key(key_id: str, request: Request, user: TokenPayload = Dep
 
 
 @router.get("/api/admin/feature-flags")
-async def list_feature_flags(admin: TokenPayload = Depends(get_current_user)):
+async def list_feature_flags(admin: TokenPayload = Depends(_require_admin_dep)):
     """Return all feature flags with their current state and metadata. Admin only."""
-    _require_admin(admin)
     from config.feature_flags import flags as _flags
 
     registry = _flags.registry()
@@ -686,9 +666,8 @@ async def list_feature_flags(admin: TokenPayload = Depends(get_current_user)):
 
 
 @router.post("/api/admin/feature-flags/{flag_name}/enable")
-async def enable_flag(flag_name: str, request: Request, admin: TokenPayload = Depends(get_current_user)):
+async def enable_flag(flag_name: str, request: Request, admin: TokenPayload = Depends(_require_admin_dep)):
     """Enable a feature flag at runtime (sets env var for this process). Admin only."""
-    _require_admin(admin)
     from config.feature_flags import flags as _flags
 
     registry = _flags.registry()
@@ -701,9 +680,8 @@ async def enable_flag(flag_name: str, request: Request, admin: TokenPayload = De
 
 
 @router.post("/api/admin/feature-flags/{flag_name}/disable")
-async def disable_flag(flag_name: str, request: Request, admin: TokenPayload = Depends(get_current_user)):
+async def disable_flag(flag_name: str, request: Request, admin: TokenPayload = Depends(_require_admin_dep)):
     """Disable a feature flag at runtime. Admin only."""
-    _require_admin(admin)
     from config.feature_flags import flags as _flags
 
     registry = _flags.registry()
@@ -725,10 +703,9 @@ async def override_flag_for_user(
     flag_name: str,
     body: FlagOverrideBody,
     request: Request,
-    admin: TokenPayload = Depends(get_current_user),
+    admin: TokenPayload = Depends(_require_admin_dep),
 ):
     """Set a per-user feature flag override (e.g. give beta users early access). Admin only."""
-    _require_admin(admin)
     from config.feature_flags import flags as _flags
 
     if flag_name not in _flags.registry():
