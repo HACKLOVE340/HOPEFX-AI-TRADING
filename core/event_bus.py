@@ -284,7 +284,14 @@ def _make_redis() -> aioredis.Redis:
             logger.warning("EventBus: Sentinel init failed (%s) — falling back to REDIS_URL", exc)
 
     url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-    return aioredis.from_url(url, decode_responses=True, socket_timeout=5)
+    # socket_timeout=None: pub/sub connections must not time out on idle channels.
+    # socket_connect_timeout=5: fail fast if Redis is unreachable at connect time.
+    return aioredis.from_url(
+        url,
+        decode_responses=True,
+        socket_connect_timeout=5,
+        socket_timeout=None,
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -462,9 +469,29 @@ class EventBus:
                 await pubsub.subscribe(*channels)
                 logger.info("EventBus subscribed to channels: %s", channels)
 
-                async for raw in pubsub.listen():
-                    if raw["type"] != "message":
+                while True:
+                    try:
+                        # get_message with a timeout avoids blocking the event loop
+                        # indefinitely and prevents spurious "Timeout reading" errors
+                        # that occur when socket_timeout fires on an idle connection.
+                        raw = await pubsub.get_message(
+                            ignore_subscribe_messages=True,
+                            timeout=1.0,
+                        )
+                    except (TimeoutError, asyncio.TimeoutError):
+                        # No message within the poll window — normal for idle channels
                         continue
+                    except Exception:
+                        raise  # propagate real errors to the outer except
+
+                    if raw is None:
+                        # No message ready — yield control and poll again
+                        await asyncio.sleep(0.01)
+                        continue
+
+                    if raw.get("type") != "message":
+                        continue
+
                     try:
                         msg = json.loads(raw["data"])
                         # Restore trace context from publisher so this consumer's
