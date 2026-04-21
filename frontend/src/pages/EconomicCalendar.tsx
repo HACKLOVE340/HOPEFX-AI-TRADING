@@ -318,7 +318,7 @@ const s: Record<string, React.CSSProperties> = {
   toggleBtn:     { border: 'none', borderRadius: 6, cursor: 'pointer', padding: '6px 14px', fontWeight: 700, fontSize: 13 },
   tabs:          { display: 'flex', gap: 8, marginBottom: 20 },
   tab:           { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#64748b', cursor: 'pointer', padding: '8px 16px', fontSize: 13 },
-  tabActive:     { background: '#1e3a5f', borderColor: '#3b82f6', color: '#60a5fa' },
+  tabActive:     { background: '#1e3a5f', border: '1px solid #3b82f6', color: '#60a5fa' },
   dayGroup:      { marginBottom: 24 },
   dayHeader:     { fontSize: 13, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid #1e293b' },
   eventRow:      { display: 'flex', alignItems: 'center', gap: 16, background: '#1e293b', borderRadius: 8, padding: '12px 16px', marginBottom: 6 },

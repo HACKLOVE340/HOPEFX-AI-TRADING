@@ -401,7 +401,7 @@ const s: Record<string, React.CSSProperties> = {
   title:       { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: '0 0 6px' },
   subtitle:    { fontSize: 14, color: '#64748b', margin: 0 },
   tabBtn:      { background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: '#64748b', cursor: 'pointer', fontSize: 12, padding: '6px 12px' },
-  tabBtnActive:{ background: '#1e3a5f', borderColor: '#3b82f6', color: '#60a5fa' },
+  tabBtnActive:{ background: '#1e3a5f', border: '1px solid #3b82f6', color: '#60a5fa' },
   refreshBtn:  { background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: '#94a3b8', cursor: 'pointer', fontSize: 13, padding: '6px 12px' },
   errorBox:    { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, color: '#f87171', fontSize: 13, padding: '12px 16px', marginBottom: 16 },
   statsGrid:   { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 20 },

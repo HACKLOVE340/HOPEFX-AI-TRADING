@@ -179,7 +179,7 @@ const s: Record<string, React.CSSProperties> = {
   cotRow: { display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px solid #0f172a', fontSize:14 },
   cotLabel: { color:'#64748b', fontSize:13 },
   wBtn: { background:'#1e293b', border:'1px solid #334155', borderRadius:6, color:'#64748b', padding:'5px 10px', fontSize:12, cursor:'pointer' },
-  wBtnActive: { background:'#3b82f6', borderColor:'#3b82f6', color:'#fff' },
+  wBtnActive: { background:'#3b82f6', border:'1px solid #3b82f6', color:'#fff' },
   dim: { color:'#475569', textAlign:'center', padding:48 },
 };
 

@@ -124,7 +124,7 @@ const PodiumCard: React.FC<{
   return (
     <div style={{
       ...s.podiumCard,
-      borderColor: `${medalColor}55`,
+      border: `1px solid ${medalColor}55`,
       order,
       marginTop: tall ? 0 : 24,
     }}>
@@ -156,9 +156,9 @@ const s: Record<string, React.CSSProperties> = {
   header:        { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 },
   title:         { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: 0 },
   periodBtn:     { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#64748b', cursor: 'pointer', fontSize: 13, padding: '7px 14px' },
-  periodBtnActive: { background: '#1e3a5f', borderColor: '#3b82f6', color: '#60a5fa' },
+  periodBtnActive: { background: '#1e3a5f', border: '1px solid #3b82f6', color: '#60a5fa' },
   podium:        { display: 'flex', gap: 16, marginBottom: 32, alignItems: 'flex-end' },
-  podiumCard:    { flex: 1, background: '#1e293b', border: '1px solid', borderRadius: 12, padding: '24px 16px' },
+  podiumCard:    { flex: 1, background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: '24px 16px' },
   tableCard:     { background: '#1e293b', border: '1px solid #334155', borderRadius: 12, overflow: 'hidden' },
   table:         { width: '100%', borderCollapse: 'collapse' },
   th:            { textAlign: 'left', color: '#475569', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', padding: '12px 20px', background: '#0f172a', letterSpacing: 0.5 },

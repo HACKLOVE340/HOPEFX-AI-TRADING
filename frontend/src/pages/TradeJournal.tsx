@@ -276,7 +276,7 @@ const TradeJournal: React.FC = () => {
       {tab === 'mistakes' && (
         mistakes.length === 0 ? <div style={s.empty}>No rule deviations recorded. Keep it up!</div> :
         mistakes.map((entry) => (
-          <div key={entry.trade_id} style={{ ...s.tradeCard, borderColor: '#7f1d1d' }}>
+          <div key={entry.trade_id} style={{ ...s.tradeCard, border: '1px solid #7f1d1d' }}>
             <div style={s.tradeHeader}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ ...s.sideBadge, background: '#450a0a', color: '#f87171' }}>{entry.side.toUpperCase()}</span>
@@ -325,7 +325,7 @@ const s: Record<string, React.CSSProperties> = {
   subtitle:        { fontSize: 14, color: '#64748b', margin: 0 },
   tabs:            { display: 'flex', gap: 8, marginBottom: 20 },
   tab:             { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#64748b', cursor: 'pointer', padding: '8px 16px', fontSize: 13 },
-  tabActive:       { background: '#1e3a5f', borderColor: '#3b82f6', color: '#60a5fa' },
+  tabActive:       { background: '#1e3a5f', border: '1px solid #3b82f6', color: '#60a5fa' },
   filterRow:       { marginBottom: 16 },
   select:          { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '8px 12px', fontSize: 14 },
   tradeCard:       { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '14px 16px', marginBottom: 10 },
@@ -344,7 +344,7 @@ const s: Record<string, React.CSSProperties> = {
   input:           { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '8px 12px', fontSize: 13, boxSizing: 'border-box' },
   tagPicker:       { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 },
   tagPickerBtn:    { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#64748b', cursor: 'pointer', fontSize: 12, padding: '4px 10px' },
-  tagPickerBtnActive: { background: '#1e3a5f', borderColor: '#3b82f6', color: '#60a5fa' },
+  tagPickerBtnActive: { background: '#1e3a5f', border: '1px solid #3b82f6', color: '#60a5fa' },
   saveBtn:         { background: '#059669', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '8px 20px', marginTop: 8 },
   saveErrBox:      { background: 'rgba(248,113,113,0.1)', border: '1px solid #f87171', borderRadius: 6, padding: '6px 10px', fontSize: 12, color: '#f87171', marginTop: 8 },
   statsGrid:       { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12, marginBottom: 24 },
