@@ -5,6 +5,7 @@
  */
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useStore } from '../store/useStore'
 import { ChevronRight, ChevronLeft, Check, X, Zap, Shield, BarChart2, Play, TrendingUp } from 'lucide-react'
 
 const STORAGE_KEY = 'hopefx_onboarding_step'
@@ -282,6 +283,17 @@ function Step5Paper({ state, setState }: { state: WizardState; setState: (s: Wiz
 
 export default function Onboarding() {
   const navigate = useNavigate()
+  const user = useStore((s) => s.user)
+
+  // Route each role to their natural home page after onboarding.
+  const homeForRole = (): string => {
+    switch (user?.role) {
+      case 'superadmin': return '/superadmin'
+      case 'admin':      return '/admin'
+      default:           return '/dashboard'
+    }
+  }
+
   const savedStep = parseInt(localStorage.getItem(STORAGE_KEY) ?? '0', 10)
   const [step, setStep] = useState(Math.min(savedStep, STEPS.length - 1))
   const [state, setState] = useState<WizardState>({
@@ -295,12 +307,12 @@ export default function Onboarding() {
 
   const finish = () => {
     localStorage.setItem(STORAGE_KEY, 'done')
-    navigate('/')
+    navigate(homeForRole(), { replace: true })
   }
 
   const skip = () => {
     localStorage.setItem(STORAGE_KEY, 'done')
-    navigate('/')
+    navigate(homeForRole(), { replace: true })
   }
 
   const canAdvance = () => {

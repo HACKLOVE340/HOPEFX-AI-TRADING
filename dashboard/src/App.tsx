@@ -47,11 +47,23 @@ function App() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  // Redirect to onboarding on first visit (unless already done or on a public page)
+  // Redirect to onboarding on first visit (unless already done or on a public/admin page)
   useEffect(() => {
-    const publicPaths = ['/', '/landing', '/login', '/register', '/status', '/marketplace', '/affiliate', '/checkout']
+    const skipOnboarding = [
+      // Public pages
+      '/', '/landing', '/login', '/register', '/status',
+      '/marketplace', '/affiliate', '/checkout',
+      // Admin/superadmin home pages — these users don't need the trader onboarding wizard
+      '/admin', '/superadmin', '/whitelabel',
+    ]
     const done = localStorage.getItem('hopefx_onboarding_step')
-    if (!done && !publicPaths.includes(location.pathname) && location.pathname !== '/onboarding') {
+    if (
+      !done &&
+      !skipOnboarding.includes(location.pathname) &&
+      !location.pathname.startsWith('/admin') &&
+      !location.pathname.startsWith('/superadmin') &&
+      location.pathname !== '/onboarding'
+    ) {
       navigate('/onboarding', { replace: true })
     }
   }, [])
