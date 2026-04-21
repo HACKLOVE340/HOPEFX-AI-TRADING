@@ -38,8 +38,12 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from api.auth import TokenPayload, get_current_user
+from api.auth import TokenPayload, require_role
 from whitelabel import FeatureFlag
+
+# All whitelabel management endpoints require superadmin — tenant CRUD, API key
+# generation, and feature-flag control are platform-level operations.
+_superadmin = require_role("superadmin")
 
 UTC = timezone.utc
 logger = logging.getLogger(__name__)
@@ -124,7 +128,7 @@ def _row_to_dict(row: Any) -> dict:
 @router.get("/tenants")
 async def list_tenants(
     status_filter: str | None = None,
-    user: TokenPayload = Depends(get_current_user),
+    _user: TokenPayload = Depends(_superadmin),
 ):
     Model = _get_model()
     db = _db_session()
@@ -144,7 +148,7 @@ async def list_tenants(
 @router.post("/tenants", status_code=status.HTTP_201_CREATED)
 async def create_tenant(
     body: CreateTenantBody,
-    user: TokenPayload = Depends(get_current_user),
+    _user: TokenPayload = Depends(_superadmin),
 ):
     Model = _get_model()
     db = _db_session()
@@ -190,7 +194,7 @@ async def create_tenant(
 
 
 @router.get("/tenants/{tenant_id}")
-async def get_tenant(tenant_id: str, user: TokenPayload = Depends(get_current_user)):
+async def get_tenant(tenant_id: str, _user: TokenPayload = Depends(_superadmin)):
     Model = _get_model()
     db = _db_session()
     if Model is None or db is None:
@@ -208,7 +212,7 @@ async def get_tenant(tenant_id: str, user: TokenPayload = Depends(get_current_us
 async def update_tenant(
     tenant_id: str,
     body: UpdateTenantBody,
-    user: TokenPayload = Depends(get_current_user),
+    _user: TokenPayload = Depends(_superadmin),
 ):
     Model = _get_model()
     db = _db_session()
@@ -243,7 +247,7 @@ async def update_tenant(
 
 
 @router.post("/tenants/{tenant_id}/activate")
-async def activate_tenant(tenant_id: str, user: TokenPayload = Depends(get_current_user)):
+async def activate_tenant(tenant_id: str, _user: TokenPayload = Depends(_superadmin)):
     Model = _get_model()
     db = _db_session()
     if Model is None or db is None:
@@ -261,7 +265,7 @@ async def activate_tenant(tenant_id: str, user: TokenPayload = Depends(get_curre
 
 
 @router.post("/tenants/{tenant_id}/suspend")
-async def suspend_tenant(tenant_id: str, user: TokenPayload = Depends(get_current_user)):
+async def suspend_tenant(tenant_id: str, _user: TokenPayload = Depends(_superadmin)):
     Model = _get_model()
     db = _db_session()
     if Model is None or db is None:
@@ -279,7 +283,7 @@ async def suspend_tenant(tenant_id: str, user: TokenPayload = Depends(get_curren
 
 
 @router.delete("/tenants/{tenant_id}")
-async def delete_tenant(tenant_id: str, user: TokenPayload = Depends(get_current_user)):
+async def delete_tenant(tenant_id: str, _user: TokenPayload = Depends(_superadmin)):
     Model = _get_model()
     db = _db_session()
     if Model is None or db is None:
@@ -297,7 +301,7 @@ async def delete_tenant(tenant_id: str, user: TokenPayload = Depends(get_current
 
 @router.post("/tenants/{tenant_id}/features/{feature}")
 async def enable_feature(
-    tenant_id: str, feature: str, user: TokenPayload = Depends(get_current_user)
+    tenant_id: str, feature: str, _user: TokenPayload = Depends(_superadmin)
 ):
     try:
         flag_val = FeatureFlag(feature).value
@@ -328,7 +332,7 @@ async def enable_feature(
 
 @router.delete("/tenants/{tenant_id}/features/{feature}")
 async def disable_feature(
-    tenant_id: str, feature: str, user: TokenPayload = Depends(get_current_user)
+    tenant_id: str, feature: str, _user: TokenPayload = Depends(_superadmin)
 ):
     try:
         flag_val = FeatureFlag(feature).value
@@ -356,7 +360,7 @@ async def disable_feature(
 
 
 @router.post("/tenants/{tenant_id}/api-key")
-async def generate_api_key(tenant_id: str, user: TokenPayload = Depends(get_current_user)):
+async def generate_api_key(tenant_id: str, _user: TokenPayload = Depends(_superadmin)):
     """Generate a new API key. Shown once — stored as SHA-256 hash."""
     Model = _get_model()
     db = _db_session()
@@ -380,7 +384,7 @@ async def generate_api_key(tenant_id: str, user: TokenPayload = Depends(get_curr
 
 
 @router.get("/tenants/{tenant_id}/preview")
-async def preview_tenant(tenant_id: str, user: TokenPayload = Depends(get_current_user)):
+async def preview_tenant(tenant_id: str, _user: TokenPayload = Depends(_superadmin)):
     """Return branded theme data for dashboard preview."""
     Model = _get_model()
     db = _db_session()
@@ -408,7 +412,7 @@ async def preview_tenant(tenant_id: str, user: TokenPayload = Depends(get_curren
 
 
 @router.get("/features")
-async def list_available_features(user: TokenPayload = Depends(get_current_user)):
+async def list_available_features(_user: TokenPayload = Depends(_superadmin)):
     """Return all available feature flags."""
     return {"features": [f.value for f in FeatureFlag]}
 
