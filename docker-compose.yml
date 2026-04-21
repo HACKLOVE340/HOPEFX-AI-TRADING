@@ -178,6 +178,126 @@ services:
       retries: 3
       start_period: 30s
 
+  # ── Celery worker — processes background tasks from the queue ────────────────
+  # Queues: ml (ML training), billing (subscriptions/payouts), risk (P&L),
+  #         infra (DB backup, self-healer).
+  # Scale horizontally: docker compose up --scale celery-worker=4
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command:
+      - celery
+      - -A
+      - celery_app
+      - worker
+      - --loglevel=info
+      - --concurrency=4
+      - --queues=ml,billing,risk,infra,celery
+      - --hostname=worker@%h
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-hopefx}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-hopefx}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      IS_FORCE_TLS: ${IS_FORCE_TLS:-true}
+      REDIS_FORCE_TLS: ${REDIS_FORCE_TLS:-true}
+      APP_ENV: ${APP_ENV:-production}
+      # Celery broker/backend — use Redis DB 1/2 to avoid collision with app DB 0
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/2
+      # ML / LLM vars needed by ml_hourly_online_update and ml_daily_full_retrain
+      LLM_BACKEND: ${LLM_BACKEND:-anthropic}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-5}
+      OPENAI_MODEL: ${OPENAI_MODEL:-o4-mini}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-8192}
+      LLM_MAX_RETRIES: ${LLM_MAX_RETRIES:-3}
+      LLM_RETRY_BASE_DELAY: ${LLM_RETRY_BASE_DELAY:-1.0}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OANDA_PRACTICE: ${OANDA_PRACTICE:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      app:
+        condition: service_healthy
+    volumes:
+      # Read-write: worker writes retrained model artifacts to saved_models
+      - ./ml/saved_models:/app/ml/saved_models
+      - trading_state:/app/state
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    healthcheck:
+      # celery inspect ping returns "pong" when the worker is alive.
+      test: ["CMD-SHELL", "celery -A celery_app inspect ping -d worker@$$HOSTNAME --timeout 5 2>/dev/null | grep -q pong || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ── Celery Beat — periodic task scheduler ────────────────────────────────────
+  # Only ONE beat instance must run at a time (it owns the schedule database).
+  # Do NOT scale this service — use celery-worker for parallelism instead.
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command:
+      - celery
+      - -A
+      - celery_app
+      - beat
+      - --loglevel=info
+      - --scheduler=celery.beat:PersistentScheduler
+      - --schedule=/app/state/celerybeat-schedule
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-hopefx}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-hopefx}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      IS_FORCE_TLS: ${IS_FORCE_TLS:-true}
+      REDIS_FORCE_TLS: ${REDIS_FORCE_TLS:-true}
+      APP_ENV: ${APP_ENV:-production}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      celery-worker:
+        condition: service_healthy
+    volumes:
+      # Beat persists its schedule database here so it survives restarts
+      # without re-firing all tasks immediately on startup.
+      - trading_state:/app/state
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+        reservations:
+          cpus: "0.05"
+          memory: 64M
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1 2>/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
