@@ -352,34 +352,12 @@ try:
 except Exception as _teams_router_err:
     logger.warning("Teams router failed to register: %s", _teams_router_err)
 
-# ── AI Explainability router (/api/explainability) ───────────────────────────
-try:
-    from explainability import AIExplainer, create_explainability_router as _create_expl_router
-
-    app.include_router(_create_expl_router(AIExplainer()))
-    logger.info("Explainability router registered at /api/explainability")
-except Exception as _expl_router_err:
-    logger.warning("Explainability router failed to register: %s", _expl_router_err)
-
-# ── No-Code Strategy Builder router (/api/nocode) ────────────────────────────
-try:
-    from nocode import NoCodeStrategyBuilder, create_nocode_router as _create_nocode_router
-
-    app.include_router(_create_nocode_router(NoCodeStrategyBuilder()))
-    logger.info("No-code builder router registered at /api/nocode")
-except Exception as _nocode_router_err:
-    logger.warning("No-code builder router failed to register: %s", _nocode_router_err)
-
-# ── Execution Transparency router (/api/transparency) ────────────────────────
-try:
-    from transparency import ExecutionTransparencyEngine, create_transparency_router as _create_transp_router
-
-    app.include_router(_create_transp_router(ExecutionTransparencyEngine()))
-    logger.info("Transparency router registered at /api/transparency")
-except Exception as _transp_router_err:
-    logger.warning("Transparency router failed to register: %s", _transp_router_err)
-
 # Prometheus /metrics endpoint + background sync to MetricsRegistry
+# NOTE: Explainability (/api/explainability), No-Code Builder (/api/nocode),
+# and Transparency (/api/transparency) routers are registered by
+# core/router_registry.py under their respective feature flags
+# (EXPLAINABILITY, NOCODE_BUILDER, TRANSPARENCY_REPORTS).  Do not add them
+# here — duplicate registration causes FastAPI route-matching conflicts.
 try:
     from prometheus_monitoring import setup_prometheus_monitoring
 

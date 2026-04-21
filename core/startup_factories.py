@@ -1539,63 +1539,119 @@ async def init_research(s: Any, app: Any, flags: Any) -> Any:
 
 
 async def init_explainability(s: Any, app: Any, flags: Any) -> Any:
+    """Instantiate AIExplainer and attach to app_state.
+
+    Router registration is handled by router_registry.py (EXPLAINABILITY flag).
+    This factory only creates the engine so other components can reference it
+    via app_state.explainer.
+    """
     if not flags.EXPLAINABILITY:
         return None
-    from explainability import AIExplainer, create_explainability_router
+    try:
+        from explainability import AIExplainer
 
-    e = AIExplainer()
-    app.include_router(create_explainability_router(e))
-    return e
+        e = AIExplainer()
+        s.explainer = e
+        logger.info("AIExplainer initialised")
+        return e
+    except Exception as exc:
+        logger.warning("AIExplainer init failed (non-fatal): %s", exc)
+        return None
 
 
 async def init_transparency(s: Any, app: Any, flags: Any) -> Any:
+    """Instantiate ExecutionTransparencyEngine and attach to app_state.
+
+    Router registration is handled by router_registry.py (TRANSPARENCY_REPORTS flag).
+    """
     if not flags.TRANSPARENCY_REPORTS:
         return None
-    from transparency import ExecutionTransparencyEngine, create_transparency_router
+    try:
+        from transparency import ExecutionTransparencyEngine
 
-    e = ExecutionTransparencyEngine()
-    app.include_router(create_transparency_router(e))
-    return e
+        e = ExecutionTransparencyEngine()
+        s.transparency_engine = e
+        logger.info("ExecutionTransparencyEngine initialised")
+        return e
+    except Exception as exc:
+        logger.warning("ExecutionTransparencyEngine init failed (non-fatal): %s", exc)
+        return None
 
 
 async def init_teams(s: Any, app: Any, flags: Any) -> Any:
+    """Instantiate TeamManager and attach to app_state.
+
+    Router registration is handled by router_registry.py (TEAMS_MODULE flag).
+    """
     if not flags.TEAMS_MODULE:
         return None
-    from teams import TeamManager, create_teams_router
+    try:
+        from teams import TeamManager
 
-    tm = TeamManager()
-    app.include_router(create_teams_router(tm))
-    return tm
+        tm = TeamManager()
+        s.teams_manager = tm
+        logger.info("TeamManager initialised")
+        return tm
+    except Exception as exc:
+        logger.warning("TeamManager init failed (non-fatal): %s", exc)
+        return None
 
 
 async def init_nocode(s: Any, app: Any, flags: Any) -> Any:
+    """Instantiate NoCodeStrategyBuilder and attach to app_state.
+
+    Router registration is handled by router_registry.py (NOCODE_BUILDER flag).
+    """
     if not flags.NOCODE_BUILDER:
         return None
-    from nocode import NoCodeStrategyBuilder, create_nocode_router
+    try:
+        from nocode import NoCodeStrategyBuilder
 
-    nb = NoCodeStrategyBuilder()
-    app.include_router(create_nocode_router(nb))
-    return nb
+        nb = NoCodeStrategyBuilder()
+        s.nocode_builder = nb
+        logger.info("NoCodeStrategyBuilder initialised")
+        return nb
+    except Exception as exc:
+        logger.warning("NoCodeStrategyBuilder init failed (non-fatal): %s", exc)
+        return None
 
 
 async def init_replay(s: Any, app: Any, flags: Any) -> Any:
+    """Instantiate ChartReplayEngine and attach to app_state.
+
+    Router registration is handled by router_registry.py (REPLAY_ENGINE flag).
+    """
     if not flags.REPLAY_ENGINE:
         return None
-    from replay import ChartReplayEngine, create_replay_router
+    try:
+        from replay import ChartReplayEngine
 
-    re = ChartReplayEngine()
-    app.include_router(create_replay_router(re))
-    return re
+        re = ChartReplayEngine()
+        s.replay_engine = re
+        logger.info("ChartReplayEngine initialised")
+        return re
+    except Exception as exc:
+        logger.warning("ChartReplayEngine init failed (non-fatal): %s", exc)
+        return None
 
 
 async def init_ml_predictions(s: Any, app: Any, flags: Any) -> Any:
+    """Instantiate TechnicalFeatureEngineer and attach to app_state.
+
+    Router registration is handled by router_registry.py (ML_PREDICTIONS flag).
+    """
     if not flags.ML_PREDICTIONS:
         return None
-    from ml import TechnicalFeatureEngineer, create_ml_router
+    try:
+        from ml import TechnicalFeatureEngineer
 
-    fe = TechnicalFeatureEngineer()
-    app.include_router(create_ml_router(fe))
-    return fe
+        fe = TechnicalFeatureEngineer()
+        s.ml_feature_engineer = fe
+        logger.info("TechnicalFeatureEngineer initialised")
+        return fe
+    except Exception as exc:
+        logger.warning("TechnicalFeatureEngineer init failed (non-fatal): %s", exc)
+        return None
 
 
 async def init_daily_online_learner(s: Any) -> Any:
@@ -1896,6 +1952,15 @@ def build_component_registry(app, feature_flags):
             F.init_signal_engine,
             required=False,
             deps=["risk_manager", "broker", "macro_store", "mtf_store"],
+        )
+        # Deep Ensemble (Phase 4) — loads LSTM/Transformer/TCN model from disk,
+        # validates OOS gates, and wires into signal_engine._deep_ensemble_store.
+        # Only active when FEATURE_DEEP_ENSEMBLE=true and model files exist.
+        .register(
+            "deep_ensemble_store",
+            F.init_deep_ensemble_store,
+            required=False,
+            deps=["signal_engine"],
         )
         .register(
             "feature_engineer",
